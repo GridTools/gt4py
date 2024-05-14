@@ -124,17 +124,17 @@ class GTIRToTasklet(eve.NodeVisitor):
 
             else:
                 assert all(dim in it.indices.keys() for dim in it.dimensions)
+                field_indices = [(dim, it.indices[dim]) for dim in it.dimensions]
                 index_connectors = [
                     INDEX_CONNECTOR_FMT.format(dim=dim)
-                    for dim, index in it.indices.items()
+                    for dim, index in field_indices
                     if not isinstance(index, SymbolExpr)
                 ]
-                sorted_indices = [(dim, it.indices[dim]) for dim in it.dimensions]
                 index_internals = ",".join(
                     str(index.value)
                     if isinstance(index, SymbolExpr)
                     else INDEX_CONNECTOR_FMT.format(dim=dim)
-                    for dim, index in sorted_indices
+                    for dim, index in field_indices
                 )
                 deref_node = self.state.add_tasklet(
                     "deref_field_indirection",
@@ -147,7 +147,7 @@ class GTIRToTasklet(eve.NodeVisitor):
                 field_fullset = sbs.Range.from_array(field_desc)
                 self.input_connections.append((it.field, field_fullset, deref_node, "field"))
 
-                for dim, index_expr in it.indices.items():
+                for dim, index_expr in field_indices:
                     deref_connector = INDEX_CONNECTOR_FMT.format(dim=dim)
                     if isinstance(index_expr, MemletExpr):
                         self.input_connections.append(
@@ -224,10 +224,11 @@ class GTIRToTasklet(eve.NodeVisitor):
             # shift in unstructured domain by means of a neighbor table
             neighbor_dim = offset_provider.neighbor_axis.value
             assert neighbor_dim in it.dimensions
-            offset_table = connectivity_identifier(offset)
+
             # initially, the storage for the connectivty tables is created as transient
             # when the tables are used, the storage is changed to non-transient,
             # so the corresponding arrays are supposed to be allocated by the SDFG caller
+            offset_table = connectivity_identifier(offset)
             self.sdfg.arrays[offset_table].transient = False
             offset_table_node = self.state.add_access(offset_table)
 
@@ -235,32 +236,23 @@ class GTIRToTasklet(eve.NodeVisitor):
             if origin_dim in it.indices:
                 origin_index = it.indices[origin_dim]
                 assert isinstance(origin_index, SymbolExpr)
-                if neighbor_dim in it.indices:
-                    neighbor_index = it.indices[neighbor_dim]
-                    assert isinstance(neighbor_index, TaskletExpr)
+                neighbor_expr = it.indices.get(neighbor_dim, None)
+                if neighbor_expr is not None:
+                    assert isinstance(neighbor_expr, TaskletExpr)
                     self.input_connections.append(
                         (
                             offset_table_node,
                             sbs.Indices([origin_index.value, offset_value]),
-                            neighbor_index.node,
+                            neighbor_expr.node,
                             INDEX_CONNECTOR_FMT.format(dim=neighbor_dim),
                         )
                     )
                     shifted_indices = {
-                        dim: index
-                        for dim, index in it.indices.items()
-                        if dim != origin_dim and dim != neighbor_dim
-                    } | {
-                        origin_dim: TaskletExpr(
-                            neighbor_index.node,
-                            INDEX_CONNECTOR_FMT.format(dim=origin_dim),
-                        )
-                    }
+                        dim: index for dim, index in it.indices.items() if dim != neighbor_dim
+                    } | {origin_dim: it.indices[neighbor_dim]}
                 else:
-                    shifted_indices = {
-                        dim: index for dim, index in it.indices.items() if dim != origin_dim
-                    } | {
-                        origin_dim: MemletExpr(
+                    shifted_indices = it.indices | {
+                        neighbor_dim: MemletExpr(
                             offset_table_node,
                             sbs.Indices([origin_index.value, offset_value]),
                         )
@@ -274,6 +266,10 @@ class GTIRToTasklet(eve.NodeVisitor):
                     {neighbor_index_connector},
                     f"{neighbor_index_connector} = table[{origin_index_connector}, {offset_value}]",
                 )
+                neighbor_expr = TaskletExpr(
+                    tasklet_node,
+                    neighbor_index_connector,
+                )
                 table_desc = offset_table_node.desc(self.sdfg)
                 self.input_connections.append(
                     (
@@ -283,15 +279,14 @@ class GTIRToTasklet(eve.NodeVisitor):
                         "table",
                     )
                 )
-                shifted_indices = it.indices | {
-                    origin_dim: TaskletExpr(
-                        tasklet_node,
-                        neighbor_index_connector,
-                    )
-                }
+                shifted_indices = it.indices | {origin_dim: neighbor_expr}
+
             shifted_it = IteratorExpr(
                 it.field,
-                [origin_dim if dim == neighbor_dim else dim for dim in it.dimensions],
+                [
+                    origin_dim if neighbor_expr and dim == neighbor_dim else dim
+                    for dim in it.dimensions
+                ],
                 it.offset,
                 shifted_indices,
             )
