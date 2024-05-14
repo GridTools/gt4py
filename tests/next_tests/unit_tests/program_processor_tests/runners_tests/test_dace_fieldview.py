@@ -431,7 +431,7 @@ def test_gtir_cartesian_shift():
         im.call("named_range")(itir.AxisLiteral(value=IDim.value), 0, "size")
     )
     testee = itir.Program(
-        id="caresian_shift",
+        id="cartesian_shift",
         function_definitions=[],
         params=[itir.Sym(id="x"), itir.Sym(id="y"), itir.Sym(id="size")],
         declarations=[],
