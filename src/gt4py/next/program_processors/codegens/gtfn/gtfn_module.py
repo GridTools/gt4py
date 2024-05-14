@@ -243,6 +243,9 @@ class GTFNTranslationStep(
              column_axis,
              runtime_lift_mode))
 
+        if not os.path.exists(gt4py.next.config.BUILD_CACHE_DIR):
+            os.mkdir(gt4py.next.config.BUILD_CACHE_DIR)
+
         cache_path = gt4py.next.config.BUILD_CACHE_DIR / ("gtfn_" + program.id + "_" + program_hash)
 
         if os.path.exists(cache_path):
