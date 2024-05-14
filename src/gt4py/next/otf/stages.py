@@ -17,9 +17,14 @@ from __future__ import annotations
 import dataclasses
 from typing import Any, Generic, Optional, Protocol, TypeVar
 
+import numpy as np
+
+from gt4py.eve.extended_typing import Self
+from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import languages
 from gt4py.next.otf.binding import interface
+from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
 SrcL = TypeVar("SrcL", bound=languages.LanguageTag)
@@ -31,12 +36,82 @@ SettingT_co = TypeVar("SettingT_co", bound=languages.LanguageSettings, covariant
 
 
 @dataclasses.dataclass(frozen=True)
+class CompileArg:
+    gt_type: ts.TypeSpec
+
+    def __gt_type__(self) -> ts.TypeSpec:
+        return self.gt_type
+
+
+@dataclasses.dataclass(frozen=True)
+class CompileConnectivity(common.Connectivity):
+    max_neighbors: int
+    has_skip_values: bool
+    origin_axis: common.Dimension
+    neighbor_axis: common.Dimension
+    index_type: type[int] | type[np.int32] | type[np.int64]
+
+    @classmethod
+    def from_connectivity(cls, connectivity: common.Connectivity) -> Self:
+        return cls(
+            max_neighbors=connectivity.max_neighbors,
+            has_skip_values=connectivity.has_skip_values,
+            origin_axis=connectivity.origin_axis,
+            neighbor_axis=connectivity.neighbor_axis,
+            index_type=connectivity.index_type,
+        )
+
+
+def connectivity_or_dimension(
+    some_offset_provider: common.Connectivity | common.Dimension,
+) -> CompileConnectivity | common.Dimension:
+    match some_offset_provider:
+        case common.Dimension():
+            return some_offset_provider
+        case common.Connectivity():
+            return CompileConnectivity.from_connectivity(some_offset_provider)
+        case _:
+            raise ValueError
+
+
+@dataclasses.dataclass(frozen=True)
+class CompileArgSpec:
+    args: tuple[CompileArg, ...]
+    offset_provider: dict[str, common.Connectivity | common.Dimension]
+    column_axis: Optional[common.Dimension]
+
+    @classmethod
+    def from_concrete(cls, *args: Any, **kwargs: Any) -> Self:
+        return cls(
+            args=tuple(CompileArg(type_translation.from_value(arg)) for arg in args),
+            offset_provider={
+                k: connectivity_or_dimension(v)
+                for k, v in kwargs.get("offset_provider", {}).items()
+            },
+            column_axis=kwargs.get("column_axis", None),
+        )
+
+
+@dataclasses.dataclass(frozen=True)
+class AOTProgram:
+    program: itir.FencilDefinition
+    argspec: CompileArgSpec
+
+
+@dataclasses.dataclass(frozen=True)
 class ProgramCall:
     """Iterator IR representaion of a program together with arguments to be passed to it."""
 
     program: itir.FencilDefinition
     args: tuple[Any, ...]
     kwargs: dict[str, Any]
+
+
+def program_call_to_aot_program(program_call: ProgramCall) -> AOTProgram:
+    return AOTProgram(
+        program=program_call.program,
+        argspec=CompileArgSpec.from_concrete(*program_call.args, **program_call.kwargs),
+    )
 
 
 @dataclasses.dataclass(frozen=True)

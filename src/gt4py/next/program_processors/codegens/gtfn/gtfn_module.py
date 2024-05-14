@@ -43,13 +43,13 @@ def get_param_description(name: str, obj: Any) -> interface.Parameter:
     return interface.Parameter(name, type_translation.from_value(obj))
 
 
+# TODO(ricoh): rename back when the whole toolchain is AOT capable
 @dataclasses.dataclass(frozen=True)
-class GTFNTranslationStep(
+class GTFNAotTranslationStep(
     workflow.ChainableWorkflowMixin[
-        stages.ProgramCall,
+        stages.AOTProgram,
         stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
     ],
-    step_types.TranslationStep[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
 ):
     language_settings: Optional[languages.LanguageWithHeaderFilesSettings] = None
     # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
@@ -231,7 +231,7 @@ class GTFNTranslationStep(
         return codegen.format_source("cpp", generated_code, style="LLVM")
 
     def __call__(
-        self, inp: stages.ProgramCall
+        self, inp: stages.AOTProgram
     ) -> stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings]:
         """Generate GTFN C++ code from the ITIR definition."""
         program: itir.FencilDefinition = inp.program
@@ -239,13 +239,13 @@ class GTFNTranslationStep(
         # handle regular parameters and arguments of the program (i.e. what the user defined in
         #  the program)
         regular_parameters, regular_args_expr = self._process_regular_arguments(
-            program, inp.args, inp.kwargs["offset_provider"]
+            program, inp.argspec.args, inp.argspec.offset_provider
         )
 
         # handle connectivity parameters and arguments (i.e. what the user provided in the offset
         #  provider)
         connectivity_parameters, connectivity_args_expr = self._process_connectivity_args(
-            inp.kwargs["offset_provider"]
+            inp.argspec.offset_provider
         )
 
         # combine into a format that is aligned with what the backend expects
@@ -261,8 +261,8 @@ class GTFNTranslationStep(
         decl_src = cpp_interface.render_function_declaration(function, body=decl_body)
         stencil_src = self.generate_stencil_source(
             program,
-            inp.kwargs["offset_provider"],
-            inp.kwargs.get("column_axis", None),
+            inp.argspec.offset_provider,
+            inp.argspec.column_axis,
         )
         source_code = interface.format_source(
             self._language_settings(),
@@ -336,13 +336,60 @@ class GTFNTranslationStep(
         )
 
 
+# TODO(ricoh): remove when the whole toolchain is AOT capable
+@dataclasses.dataclass(frozen=True)
+class GTFNTranslationStep(
+    workflow.NamedStepSequence[
+        stages.ProgramCall,
+        stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
+    ],
+    step_types.TranslationStep[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
+):
+    inner: GTFNAotTranslationStep
+
+    def __call__(
+        self, inp: stages.ProgramCall
+    ) -> stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings]:
+        return self.inner(stages.program_call_to_aot_program(inp))
+
+
+# TODO(ricoh): rename when the whole toolchain is AOT capable
+class GTFNAotTranslationStepFactory(factory.Factory):
+    class Meta:
+        model = GTFNAotTranslationStep
+
+
+# TODO(ricoh): remove when the whole toolchain is AOT capable
 class GTFNTranslationStepFactory(factory.Factory):
     class Meta:
         model = GTFNTranslationStep
 
+    class Params:
+        # Note: this duplication is only here to avoid changing calls to the factory
+        #   while the rest of the toolchain becomes AOT capable. Then this level of indirection will
+        #   go away again.
+        language_settings: Optional[languages.LanguageWithHeaderFilesSettings] = None
+        enable_itir_transforms: bool = True
+        use_imperative_backend: bool = False
+        lift_mode: Optional[LiftMode] = None
+        device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
+        symbolic_domain_sizes: Optional[dict[str, str]] = None
+        temporary_extraction_heuristics: Optional[
+            Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
+        ] = None
 
-translate_program_cpu: Final[step_types.TranslationStep] = GTFNTranslationStep()
+    inner = factory.SubFactory(
+        GTFNAotTranslationStepFactory,
+        **{
+            name: factory.SelfAttribute(f"..{name}")
+            for name in dir(Params)
+            if not name.startswith("_")
+        },
+    )
 
-translate_program_gpu: Final[step_types.TranslationStep] = GTFNTranslationStep(
+
+translate_program_cpu: Final[step_types.TranslationStep] = GTFNTranslationStepFactory()
+
+translate_program_gpu: Final[step_types.TranslationStep] = GTFNTranslationStepFactory(
     device_type=core_defs.DeviceType.CUDA
 )
