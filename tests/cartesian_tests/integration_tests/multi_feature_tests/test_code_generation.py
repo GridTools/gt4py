@@ -33,7 +33,7 @@ from gt4py.cartesian.gtscript import (
 )
 from gt4py.storage.cartesian import utils as storage_utils
 
-from cartesian_tests.definitions import ALL_BACKENDS, CPU_BACKENDS, _get_array_library
+from cartesian_tests.definitions import ALL_BACKENDS, CPU_BACKENDS, get_array_library
 from cartesian_tests.integration_tests.multi_feature_tests.stencil_definitions import (
     EXTERNALS_REGISTRY as externals_registry,
     REGISTRY as stencil_definitions,
@@ -595,7 +595,7 @@ def test_K_offset_write(backend):
     if backend == "cuda":
         pytest.skip("cuda K-offset write generates bad code")
 
-    arraylib = _get_array_library(backend)
+    arraylib = get_array_library(backend)
     array_shape = (1, 1, 4)
     K_values = arraylib.arange(start=40, stop=44)
 
@@ -663,11 +663,10 @@ def test_K_offset_write(backend):
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_K_offset_write_conditional(backend):
-    # While loop have a bug in `dace:X` backends where
     if backend == "cuda":
         pytest.skip("Cuda backend is not capable of K offset write")
 
-    arraylib = _get_array_library(backend)
+    arraylib = get_array_library(backend)
     array_shape = (1, 1, 4)
     K_values = arraylib.arange(start=40, stop=44)
 

@@ -63,7 +63,8 @@ def id_version():
     return gt_utils.shashed_id(str(datetime.datetime.now()))
 
 
-def _get_array_library(backend: str):
+def get_array_library(backend: str):
+    """Return device ready array maker library"""
     backend_cls = gt4pyc.backend.from_name(backend)
     assert backend_cls is not None
     if backend_cls.storage_info["device"] == "gpu":
