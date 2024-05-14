@@ -140,7 +140,7 @@ class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator):
         me, mx = self.head_state.add_map(unique_name("map"), map_ranges)
 
         for data_node, data_subset, lambda_node, lambda_connector in input_connections:
-            memlet = dace.Memlet(data=data_node.data, subset=data_subset, volume=1)
+            memlet = dace.Memlet(data=data_node.data, subset=data_subset)
             self.head_state.add_memlet_path(
                 data_node,
                 me,
@@ -149,7 +149,11 @@ class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator):
                 memlet=memlet,
             )
         self.head_state.add_memlet_path(
-            output_expr.node, mx, field_node, src_conn=output_expr.connector, memlet=output_memlet
+            output_expr.node,
+            mx,
+            field_node,
+            src_conn=output_expr.connector,
+            memlet=output_memlet,
         )
 
         return [(field_node, self.field_type)]

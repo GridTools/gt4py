@@ -49,12 +49,6 @@ EFTYPE = ts.FieldType(dims=[Edge], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT6
 VFTYPE = ts.FieldType(dims=[Vertex], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
 SIMPLE_MESH: MeshDescriptor = simple_mesh()
 FSYMBOLS = dict(
-    __edges_size_0=SIMPLE_MESH.num_edges,
-    __edges_stride_0=1,
-    __vertices_size_0=SIMPLE_MESH.num_vertices,
-    __vertices_stride_0=1,
-    nedges=SIMPLE_MESH.num_edges,
-    nvertices=SIMPLE_MESH.num_vertices,
     __w_size_0=N,
     __w_stride_0=1,
     __x_size_0=N,
@@ -64,6 +58,22 @@ FSYMBOLS = dict(
     __z_size_0=N,
     __z_stride_0=1,
     size=N,
+)
+CSYMBOLS = dict(
+    nedges=SIMPLE_MESH.num_edges,
+    nvertices=SIMPLE_MESH.num_vertices,
+    __edges_size_0=SIMPLE_MESH.num_edges,
+    __edges_stride_0=1,
+    __vertices_size_0=SIMPLE_MESH.num_vertices,
+    __vertices_stride_0=1,
+    __connectivity_E2V_size_0=SIMPLE_MESH.num_edges,
+    __connectivity_E2V_size_1=SIMPLE_MESH.offset_provider["E2V"].max_neighbors,
+    __connectivity_E2V_stride_0=SIMPLE_MESH.offset_provider["E2V"].max_neighbors,
+    __connectivity_E2V_stride_1=1,
+    __connectivity_V2E_size_0=SIMPLE_MESH.num_vertices,
+    __connectivity_V2E_size_1=SIMPLE_MESH.offset_provider["V2E"].max_neighbors,
+    __connectivity_V2E_stride_0=SIMPLE_MESH.offset_provider["V2E"].max_neighbors,
+    __connectivity_V2E_stride_1=1,
 )
 
 
@@ -496,9 +506,72 @@ def test_gtir_connectivity_shift():
         vertices=v,
         connectivity_V2E=connectivity_V2E.table,
         **FSYMBOLS,
-        __connectivity_V2E_size_0=SIMPLE_MESH.num_vertices,
-        __connectivity_V2E_size_1=SIMPLE_MESH.offset_provider["V2E"].max_neighbors,
-        __connectivity_V2E_stride_0=SIMPLE_MESH.offset_provider["V2E"].max_neighbors,
-        __connectivity_V2E_stride_1=1,
+        **CSYMBOLS,
     )
     assert np.allclose(v, e[connectivity_V2E.table[:, 1]])
+
+
+def test_gtir_connectivity_shift_chain():
+    E2V_neighbor_idx = 1
+    V2E_neighbor_idx = 2
+    edge_domain = im.call("unstructured_domain")(
+        im.call("named_range")(itir.AxisLiteral(value=Edge.value), 0, "nedges")
+    )
+    testee = itir.Program(
+        id="connectivity_shift_chain",
+        function_definitions=[],
+        params=[
+            itir.Sym(id="edges"),
+            itir.Sym(id="edges_out"),
+            itir.Sym(id="nedges"),
+        ],
+        declarations=[],
+        body=[
+            itir.SetAt(
+                expr=im.call(
+                    im.call("as_fieldop")(
+                        im.lambda_("it")(
+                            im.deref(
+                                im.shift("E2V", E2V_neighbor_idx)(
+                                    im.shift("V2E", V2E_neighbor_idx)("it")
+                                )
+                            )
+                        ),
+                        edge_domain,
+                    )
+                )("edges"),
+                domain=edge_domain,
+                target=itir.SymRef(id="edges_out"),
+            )
+        ],
+    )
+
+    e = np.random.rand(SIMPLE_MESH.num_edges)
+    e_out = np.empty_like(e)
+
+    sdfg_genenerator = FieldviewGtirToSDFG(
+        [EFTYPE, EFTYPE, ts.ScalarType(ts.ScalarKind.INT32)],
+        offset_provider=SIMPLE_MESH.offset_provider,
+    )
+    sdfg = sdfg_genenerator.visit(testee)
+
+    assert isinstance(sdfg, dace.SDFG)
+    connectivity_E2V = SIMPLE_MESH.offset_provider["E2V"]
+    assert isinstance(connectivity_E2V, NeighborTable)
+    connectivity_V2E = SIMPLE_MESH.offset_provider["V2E"]
+    assert isinstance(connectivity_V2E, NeighborTable)
+
+    sdfg(
+        edges=e,
+        edges_out=e_out,
+        connectivity_E2V=connectivity_E2V.table,
+        connectivity_V2E=connectivity_V2E.table,
+        **FSYMBOLS,
+        **CSYMBOLS,
+        __edges_out_size_0=CSYMBOLS["__edges_size_0"],
+        __edges_out_stride_0=CSYMBOLS["__edges_stride_0"],
+    )
+    assert np.allclose(
+        e_out,
+        e[connectivity_V2E.table[connectivity_E2V.table[:, E2V_neighbor_idx], V2E_neighbor_idx]],
+    )

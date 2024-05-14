@@ -75,6 +75,8 @@ InputConnection: TypeAlias = tuple[
     str,
 ]
 
+INDEX_CONNECTOR_FMT = "__index_{dim}"
+
 
 class GTIRToTasklet(eve.NodeVisitor):
     """Generates the dataflow subgraph for the `as_field_op` builtin function."""
@@ -121,19 +123,18 @@ class GTIRToTasklet(eve.NodeVisitor):
                 return MemletExpr(it.field, data_index)
 
             else:
-                input_connector_fmt = "__inp_{dim}"
                 assert all(dim in it.indices.keys() for dim in it.dimensions)
                 index_connectors = [
-                    input_connector_fmt.format(dim=dim)
+                    INDEX_CONNECTOR_FMT.format(dim=dim)
                     for dim, index in it.indices.items()
                     if not isinstance(index, SymbolExpr)
                 ]
-                sorted_indices = [it.indices[dim] for dim in it.dimensions]
+                sorted_indices = [(dim, it.indices[dim]) for dim in it.dimensions]
                 index_internals = ",".join(
-                    index.value
+                    str(index.value)
                     if isinstance(index, SymbolExpr)
-                    else input_connector_fmt.format(dim=dim)
-                    for dim, index in zip(it.dimensions, sorted_indices)
+                    else INDEX_CONNECTOR_FMT.format(dim=dim)
+                    for dim, index in sorted_indices
                 )
                 deref_node = self.state.add_tasklet(
                     "deref_field_indirection",
@@ -147,7 +148,7 @@ class GTIRToTasklet(eve.NodeVisitor):
                 self.input_connections.append((it.field, field_fullset, deref_node, "field"))
 
                 for dim, index_expr in it.indices.items():
-                    deref_connector = input_connector_fmt.format(dim=dim)
+                    deref_connector = INDEX_CONNECTOR_FMT.format(dim=dim)
                     if isinstance(index_expr, MemletExpr):
                         self.input_connections.append(
                             (
@@ -221,10 +222,6 @@ class GTIRToTasklet(eve.NodeVisitor):
             shifted_it = IteratorExpr(it.field, it.dimensions, new_offset, it.indices)
         else:
             # shift in unstructured domain by means of a neighbor table
-            origin_dim = offset_provider.origin_axis.value
-            assert origin_dim in it.indices
-            origin_index = it.indices[origin_dim]
-            assert isinstance(origin_index, SymbolExpr)
             neighbor_dim = offset_provider.neighbor_axis.value
             assert neighbor_dim in it.dimensions
             offset_table = connectivity_identifier(offset)
@@ -233,16 +230,70 @@ class GTIRToTasklet(eve.NodeVisitor):
             # so the corresponding arrays are supposed to be allocated by the SDFG caller
             self.sdfg.arrays[offset_table].transient = False
             offset_table_node = self.state.add_access(offset_table)
+
+            origin_dim = offset_provider.origin_axis.value
+            if origin_dim in it.indices:
+                origin_index = it.indices[origin_dim]
+                assert isinstance(origin_index, SymbolExpr)
+                if neighbor_dim in it.indices:
+                    neighbor_index = it.indices[neighbor_dim]
+                    assert isinstance(neighbor_index, TaskletExpr)
+                    self.input_connections.append(
+                        (
+                            offset_table_node,
+                            sbs.Indices([origin_index.value, offset_value]),
+                            neighbor_index.node,
+                            INDEX_CONNECTOR_FMT.format(dim=neighbor_dim),
+                        )
+                    )
+                    shifted_indices = {
+                        dim: index
+                        for dim, index in it.indices.items()
+                        if dim != origin_dim and dim != neighbor_dim
+                    } | {
+                        origin_dim: TaskletExpr(
+                            neighbor_index.node,
+                            INDEX_CONNECTOR_FMT.format(dim=origin_dim),
+                        )
+                    }
+                else:
+                    shifted_indices = {
+                        dim: index for dim, index in it.indices.items() if dim != origin_dim
+                    } | {
+                        origin_dim: MemletExpr(
+                            offset_table_node,
+                            sbs.Indices([origin_index.value, offset_value]),
+                        )
+                    }
+            else:
+                origin_index_connector = INDEX_CONNECTOR_FMT.format(dim=origin_dim)
+                neighbor_index_connector = INDEX_CONNECTOR_FMT.format(dim=neighbor_dim)
+                tasklet_node = self.state.add_tasklet(
+                    "shift",
+                    {"table", origin_index_connector},
+                    {neighbor_index_connector},
+                    f"{neighbor_index_connector} = table[{origin_index_connector}, {offset_value}]",
+                )
+                table_desc = offset_table_node.desc(self.sdfg)
+                self.input_connections.append(
+                    (
+                        offset_table_node,
+                        sbs.Range.from_array(table_desc),
+                        tasklet_node,
+                        "table",
+                    )
+                )
+                shifted_indices = it.indices | {
+                    origin_dim: TaskletExpr(
+                        tasklet_node,
+                        neighbor_index_connector,
+                    )
+                }
             shifted_it = IteratorExpr(
                 it.field,
                 [origin_dim if dim == neighbor_dim else dim for dim in it.dimensions],
                 it.offset,
-                {
-                    origin_dim: MemletExpr(
-                        offset_table_node,
-                        sbs.Indices([origin_index.value, offset_value]),
-                    )
-                },
+                shifted_indices,
             )
 
         return shifted_it
