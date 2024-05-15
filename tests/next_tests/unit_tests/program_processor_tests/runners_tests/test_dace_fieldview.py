@@ -458,7 +458,7 @@ def test_gtir_cartesian_shift():
 
     for i, stencil in enumerate([stencil1, stencil2, stencil3]):
         testee = itir.Program(
-            id=f"dynamic_offset_{i}",
+            id=f"cartesian_shift_{i}",
             function_definitions=[],
             params=[
                 itir.Sym(id="x"),
