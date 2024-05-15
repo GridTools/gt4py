@@ -349,11 +349,6 @@ class ProgramLowering(
             domain_builtin = "cartesian_domain"
         elif self.grid_type == common.GridType.UNSTRUCTURED:
             domain_builtin = "unstructured_domain"
-            # for no good reason, the domain arguments for unstructured need to be in order (horizontal, vertical)
-            if domain_args_kind[0] == common.DimensionKind.VERTICAL:
-                assert len(domain_args) == 2
-                assert domain_args_kind[1] == common.DimensionKind.HORIZONTAL
-                domain_args[0], domain_args[1] = domain_args[1], domain_args[0]
         else:
             raise AssertionError()
 
