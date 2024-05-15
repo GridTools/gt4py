@@ -108,7 +108,6 @@ class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator):
                 iterator_arg = IteratorExpr(
                     data_node,
                     [dim.value for dim in arg_type.dims],
-                    sbs.Indices([0] * len(arg_type.dims)),
                     indices,
                 )
                 stencil_args.append(iterator_arg)

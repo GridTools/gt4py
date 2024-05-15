@@ -427,19 +427,21 @@ def test_gtir_select_nested():
 
 
 def test_gtir_cartesian_shift():
+    DELTA = 3
+    OFFSET = 1
     domain = im.call("cartesian_domain")(
         im.call("named_range")(itir.AxisLiteral(value=IDim.value), 0, "size")
     )
-    testee = itir.Program(
+    testee1 = itir.Program(
         id="cartesian_shift",
         function_definitions=[],
-        params=[itir.Sym(id="x"), itir.Sym(id="y"), itir.Sym(id="size")],
+        params=[itir.Sym(id="x"), itir.Sym(id="x_offset"), itir.Sym(id="y"), itir.Sym(id="size")],
         declarations=[],
         body=[
             itir.SetAt(
                 expr=im.call(
                     im.call("as_fieldop")(
-                        im.lambda_("a")(im.plus(im.deref(im.shift("IDim", 1)("a")), 1)),
+                        im.lambda_("a")(im.plus(im.deref(im.shift("IDim", OFFSET)("a")), DELTA)),
                         domain,
                     )
                 )("x"),
@@ -448,20 +450,69 @@ def test_gtir_cartesian_shift():
             )
         ],
     )
+    testee2 = itir.Program(
+        id="dynamic_offset",
+        function_definitions=[],
+        params=[itir.Sym(id="x"), itir.Sym(id="x_offset"), itir.Sym(id="y"), itir.Sym(id="size")],
+        declarations=[],
+        body=[
+            itir.SetAt(
+                expr=im.call(
+                    im.call("as_fieldop")(
+                        im.lambda_("a", "off")(
+                            im.plus(im.deref(im.shift("IDim", im.deref("off"))("a")), DELTA)
+                        ),
+                        domain,
+                    )
+                )("x", "x_offset"),
+                domain=domain,
+                target=itir.SymRef(id="y"),
+            )
+        ],
+    )
+    testee3 = itir.Program(
+        id="dynamic_offset",
+        function_definitions=[],
+        params=[itir.Sym(id="x"), itir.Sym(id="x_offset"), itir.Sym(id="y"), itir.Sym(id="size")],
+        declarations=[],
+        body=[
+            itir.SetAt(
+                expr=im.call(
+                    im.call("as_fieldop")(
+                        im.lambda_("a", "off")(
+                            im.plus(
+                                im.deref(im.shift("IDim", im.plus(im.deref("off"), 0))("a")), DELTA
+                            )
+                        ),
+                        domain,
+                    )
+                )("x", "x_offset"),
+                domain=domain,
+                target=itir.SymRef(id="y"),
+            )
+        ],
+    )
 
-    a = np.random.rand(N + 1)
+    a = np.random.rand(N + OFFSET)
+    a_offset = np.full(N, OFFSET, dtype=np.int32)
     b = np.empty(N)
 
-    sdfg_genenerator = FieldviewGtirToSDFG(
-        [IFTYPE, IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)], offset_provider={"IDim": IDim}
-    )
-    sdfg = sdfg_genenerator.visit(testee)
-    assert isinstance(sdfg, dace.SDFG)
+    INDEX_FTYPE = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
 
-    FSYMBOLS_tmp = FSYMBOLS.copy()
-    FSYMBOLS_tmp["__x_size_0"] = N + 1
-    sdfg(x=a, y=b, **FSYMBOLS_tmp)
-    assert np.allclose(a[1:] + 1, b)
+    sdfg_genenerator = FieldviewGtirToSDFG(
+        [IFTYPE, INDEX_FTYPE, IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)],
+        offset_provider={"IDim": IDim},
+    )
+
+    for testee in [testee1, testee2, testee3]:
+        sdfg = sdfg_genenerator.visit(testee)
+        assert isinstance(sdfg, dace.SDFG)
+
+        FSYMBOLS_tmp = FSYMBOLS.copy()
+        FSYMBOLS_tmp["__x_size_0"] = N + OFFSET
+        FSYMBOLS_tmp["__x_offset_stride_0"] = 1
+        sdfg(x=a, x_offset=a_offset, y=b, **FSYMBOLS_tmp)
+        assert np.allclose(a[OFFSET:] + DELTA, b)
 
 
 def test_gtir_connectivity_shift():
