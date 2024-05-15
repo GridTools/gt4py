@@ -432,6 +432,7 @@ def test_gtir_cartesian_shift():
     domain = im.call("cartesian_domain")(
         im.call("named_range")(itir.AxisLiteral(value=IDim.value), 0, "size")
     )
+    # cartesian shift with literal integer offset
     testee1 = itir.Program(
         id="cartesian_shift",
         function_definitions=[],
@@ -450,6 +451,7 @@ def test_gtir_cartesian_shift():
             )
         ],
     )
+    # use dynamic offset retrieved from field
     testee2 = itir.Program(
         id="dynamic_offset",
         function_definitions=[],
@@ -470,6 +472,7 @@ def test_gtir_cartesian_shift():
             )
         ],
     )
+    # use the result of an arithmetic field operation as dynamic offset
     testee3 = itir.Program(
         id="dynamic_offset",
         function_definitions=[],
@@ -497,10 +500,10 @@ def test_gtir_cartesian_shift():
     a_offset = np.full(N, OFFSET, dtype=np.int32)
     b = np.empty(N)
 
-    INDEX_FTYPE = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
+    IOFFSET_FTYPE = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
 
     sdfg_genenerator = FieldviewGtirToSDFG(
-        [IFTYPE, INDEX_FTYPE, IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)],
+        [IFTYPE, IOFFSET_FTYPE, IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)],
         offset_provider={"IDim": IDim},
     )
 
@@ -527,6 +530,8 @@ def test_gtir_connectivity_shift():
         function_definitions=[],
         params=[
             itir.Sym(id="ve_field"),
+            itir.Sym(id="c2e_offset"),
+            itir.Sym(id="c2v_offset"),
             itir.Sym(id="cells"),
             itir.Sym(id="ncells"),
         ],
@@ -556,6 +561,8 @@ def test_gtir_connectivity_shift():
         function_definitions=[],
         params=[
             itir.Sym(id="ve_field"),
+            itir.Sym(id="c2e_offset"),
+            itir.Sym(id="c2v_offset"),
             itir.Sym(id="cells"),
             itir.Sym(id="ncells"),
         ],
@@ -584,13 +591,52 @@ def test_gtir_connectivity_shift():
             )
         ],
     )
+    # again multi-dimensional shift in one function call, but this time with dynamic offset values
+    testee3 = itir.Program(
+        id="connectivity_shift_2d_dynamic_offset",
+        function_definitions=[],
+        params=[
+            itir.Sym(id="ve_field"),
+            itir.Sym(id="c2e_offset"),
+            itir.Sym(id="c2v_offset"),
+            itir.Sym(id="cells"),
+            itir.Sym(id="ncells"),
+        ],
+        declarations=[],
+        body=[
+            itir.SetAt(
+                expr=im.call(
+                    im.call("as_fieldop")(
+                        im.lambda_("it", "c2e_off", "c2v_off")(
+                            im.deref(
+                                im.call(
+                                    im.call("shift")(
+                                        im.ensure_offset("C2V"),
+                                        im.deref("c2v_off"),
+                                        im.ensure_offset("C2E"),
+                                        im.plus(im.deref("c2e_off"), 0),
+                                    )
+                                )("it")
+                            )
+                        ),
+                        cell_domain,
+                    )
+                )("ve_field", "c2e_offset", "c2v_offset"),
+                domain=cell_domain,
+                target=itir.SymRef(id="cells"),
+            )
+        ],
+    )
 
     ve = np.random.rand(SIMPLE_MESH.num_vertices, SIMPLE_MESH.num_edges)
     VE_FTYPE = ts.FieldType(dims=[Vertex, Edge], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+    CELL_OFFSET_FTYPE = ts.FieldType(dims=[Cell], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
 
     sdfg_genenerator = FieldviewGtirToSDFG(
         [
             VE_FTYPE,
+            CELL_OFFSET_FTYPE,
+            CELL_OFFSET_FTYPE,
             CFTYPE,
             ts.ScalarType(ts.ScalarKind.INT32),
         ],
@@ -605,7 +651,7 @@ def test_gtir_connectivity_shift():
         connectivity_C2V.table[:, C2V_neighbor_idx], connectivity_C2E.table[:, C2E_neighbor_idx]
     ]
 
-    for testee in [testee1, testee2]:
+    for testee in [testee1, testee2, testee3]:
         sdfg = sdfg_genenerator.visit(testee)
         assert isinstance(sdfg, dace.SDFG)
 
@@ -613,6 +659,8 @@ def test_gtir_connectivity_shift():
 
         sdfg(
             ve_field=ve,
+            c2e_offset=np.full(SIMPLE_MESH.num_cells, C2E_neighbor_idx, dtype=np.int32),
+            c2v_offset=np.full(SIMPLE_MESH.num_cells, C2V_neighbor_idx, dtype=np.int32),
             cells=c,
             connectivity_C2E=connectivity_C2E.table,
             connectivity_C2V=connectivity_C2V.table,
@@ -622,6 +670,8 @@ def test_gtir_connectivity_shift():
             __ve_field_size_1=SIMPLE_MESH.num_edges,
             __ve_field_stride_0=SIMPLE_MESH.num_edges,
             __ve_field_stride_1=1,
+            __c2e_offset_stride_0=1,
+            __c2v_offset_stride_0=1,
         )
         assert np.allclose(c, ref)
 
