@@ -114,15 +114,7 @@ class GTIRToTasklet(eve.NodeVisitor):
         assert len(node.args) == 1
         it = self.visit(node.args[0])
 
-        if isinstance(it, SymbolExpr):
-            cast_sym = str(it.dtype)
-            cast_fmt = MATH_BUILTINS_MAPPING[cast_sym]
-            deref_node = self.state.add_tasklet(
-                "deref_symbol", {}, {"val"}, code=f"val = {cast_fmt.format(it.value)}"
-            )
-            return TaskletExpr(deref_node, "val")
-
-        elif isinstance(it, IteratorExpr):
+        if isinstance(it, IteratorExpr):
             if all(isinstance(index, SymbolExpr) for index in it.indices.values()):
                 # use direct field access through memlet subset
                 data_index = sbs.Indices([it.indices[dim].value for dim in it.dimensions])  # type: ignore[union-attr]
