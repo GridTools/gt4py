@@ -200,64 +200,28 @@ def test_gtir_sum3():
     domain = im.call("cartesian_domain")(
         im.call("named_range")(itir.AxisLiteral(value=IDim.value), 0, "size")
     )
-    testee_fieldview = itir.Program(
-        id="sum_3fields",
-        function_definitions=[],
-        params=[
-            itir.Sym(id="x"),
-            itir.Sym(id="y"),
-            itir.Sym(id="w"),
-            itir.Sym(id="z"),
-            itir.Sym(id="size"),
-        ],
-        declarations=[],
-        body=[
-            itir.SetAt(
-                expr=im.call(
-                    im.call("as_fieldop")(
-                        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-                        domain,
-                    )
-                )(
-                    "x",
-                    im.call(
-                        im.call("as_fieldop")(
-                            im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-                            domain,
-                        )
-                    )("y", "w"),
-                ),
-                domain=domain,
-                target=itir.SymRef(id="z"),
+    stencil1 = im.call(
+        im.call("as_fieldop")(
+            im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+            domain,
+        )
+    )(
+        "x",
+        im.call(
+            im.call("as_fieldop")(
+                im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+                domain,
             )
-        ],
+        )("y", "w"),
     )
-    testee_inlined = itir.Program(
-        id="sum_3fields",
-        function_definitions=[],
-        params=[
-            itir.Sym(id="x"),
-            itir.Sym(id="y"),
-            itir.Sym(id="w"),
-            itir.Sym(id="z"),
-            itir.Sym(id="size"),
-        ],
-        declarations=[],
-        body=[
-            itir.SetAt(
-                expr=im.call(
-                    im.call("as_fieldop")(
-                        im.lambda_("a", "b", "c")(
-                            im.plus(im.deref("a"), im.plus(im.deref("b"), im.deref("c")))
-                        ),
-                        domain,
-                    )
-                )("x", "y", "w"),
-                domain=domain,
-                target=itir.SymRef(id="z"),
-            )
-        ],
-    )
+    stencil2 = im.call(
+        im.call("as_fieldop")(
+            im.lambda_("a", "b", "c")(
+                im.plus(im.deref("a"), im.plus(im.deref("b"), im.deref("c")))
+            ),
+            domain,
+        )
+    )("x", "y", "w")
 
     a = np.random.rand(N)
     b = np.random.rand(N)
@@ -268,7 +232,27 @@ def test_gtir_sum3():
         offset_provider={},
     )
 
-    for testee in [testee_fieldview, testee_inlined]:
+    for i, stencil in enumerate([stencil1, stencil2]):
+        testee = itir.Program(
+            id=f"sum_3fields_{i}",
+            function_definitions=[],
+            params=[
+                itir.Sym(id="x"),
+                itir.Sym(id="y"),
+                itir.Sym(id="w"),
+                itir.Sym(id="z"),
+                itir.Sym(id="size"),
+            ],
+            declarations=[],
+            body=[
+                itir.SetAt(
+                    expr=stencil,
+                    domain=domain,
+                    target=itir.SymRef(id="z"),
+                )
+            ],
+        )
+
         sdfg = sdfg_genenerator.visit(testee)
         assert isinstance(sdfg, dace.SDFG)
 
@@ -432,69 +416,34 @@ def test_gtir_cartesian_shift():
     domain = im.call("cartesian_domain")(
         im.call("named_range")(itir.AxisLiteral(value=IDim.value), 0, "size")
     )
+
     # cartesian shift with literal integer offset
-    testee1 = itir.Program(
-        id="cartesian_shift",
-        function_definitions=[],
-        params=[itir.Sym(id="x"), itir.Sym(id="x_offset"), itir.Sym(id="y"), itir.Sym(id="size")],
-        declarations=[],
-        body=[
-            itir.SetAt(
-                expr=im.call(
-                    im.call("as_fieldop")(
-                        im.lambda_("a")(im.plus(im.deref(im.shift("IDim", OFFSET)("a")), DELTA)),
-                        domain,
-                    )
-                )("x"),
-                domain=domain,
-                target=itir.SymRef(id="y"),
-            )
-        ],
-    )
+    stencil1 = im.call(
+        im.call("as_fieldop")(
+            im.lambda_("a")(im.plus(im.deref(im.shift("IDim", OFFSET)("a")), DELTA)),
+            domain,
+        )
+    )("x")
+
     # use dynamic offset retrieved from field
-    testee2 = itir.Program(
-        id="dynamic_offset",
-        function_definitions=[],
-        params=[itir.Sym(id="x"), itir.Sym(id="x_offset"), itir.Sym(id="y"), itir.Sym(id="size")],
-        declarations=[],
-        body=[
-            itir.SetAt(
-                expr=im.call(
-                    im.call("as_fieldop")(
-                        im.lambda_("a", "off")(
-                            im.plus(im.deref(im.shift("IDim", im.deref("off"))("a")), DELTA)
-                        ),
-                        domain,
-                    )
-                )("x", "x_offset"),
-                domain=domain,
-                target=itir.SymRef(id="y"),
-            )
-        ],
-    )
+    stencil2 = im.call(
+        im.call("as_fieldop")(
+            im.lambda_("a", "off")(
+                im.plus(im.deref(im.shift("IDim", im.deref("off"))("a")), DELTA)
+            ),
+            domain,
+        )
+    )("x", "x_offset")
+
     # use the result of an arithmetic field operation as dynamic offset
-    testee3 = itir.Program(
-        id="dynamic_offset",
-        function_definitions=[],
-        params=[itir.Sym(id="x"), itir.Sym(id="x_offset"), itir.Sym(id="y"), itir.Sym(id="size")],
-        declarations=[],
-        body=[
-            itir.SetAt(
-                expr=im.call(
-                    im.call("as_fieldop")(
-                        im.lambda_("a", "off")(
-                            im.plus(
-                                im.deref(im.shift("IDim", im.plus(im.deref("off"), 0))("a")), DELTA
-                            )
-                        ),
-                        domain,
-                    )
-                )("x", "x_offset"),
-                domain=domain,
-                target=itir.SymRef(id="y"),
-            )
-        ],
-    )
+    stencil3 = im.call(
+        im.call("as_fieldop")(
+            im.lambda_("a", "off")(
+                im.plus(im.deref(im.shift("IDim", im.plus(im.deref("off"), 0))("a")), DELTA)
+            ),
+            domain,
+        )
+    )("x", "x_offset")
 
     a = np.random.rand(N + OFFSET)
     a_offset = np.full(N, OFFSET, dtype=np.int32)
@@ -507,7 +456,26 @@ def test_gtir_cartesian_shift():
         offset_provider={"IDim": IDim},
     )
 
-    for testee in [testee1, testee2, testee3]:
+    for i, stencil in enumerate([stencil1, stencil2, stencil3]):
+        testee = itir.Program(
+            id=f"dynamic_offset_{i}",
+            function_definitions=[],
+            params=[
+                itir.Sym(id="x"),
+                itir.Sym(id="x_offset"),
+                itir.Sym(id="y"),
+                itir.Sym(id="size"),
+            ],
+            declarations=[],
+            body=[
+                itir.SetAt(
+                    expr=stencil,
+                    domain=domain,
+                    target=itir.SymRef(id="y"),
+                )
+            ],
+        )
+
         sdfg = sdfg_genenerator.visit(testee)
         assert isinstance(sdfg, dace.SDFG)
 
@@ -525,108 +493,52 @@ def test_gtir_connectivity_shift():
         im.call("named_range")(itir.AxisLiteral(value=Cell.value), 0, "ncells"),
     )
     # apply shift 2 times along different dimensions
-    testee1 = itir.Program(
-        id="connectivity_shift_1d",
-        function_definitions=[],
-        params=[
-            itir.Sym(id="ve_field"),
-            itir.Sym(id="c2e_offset"),
-            itir.Sym(id="c2v_offset"),
-            itir.Sym(id="cells"),
-            itir.Sym(id="ncells"),
-        ],
-        declarations=[],
-        body=[
-            itir.SetAt(
-                expr=im.call(
-                    im.call("as_fieldop")(
-                        im.lambda_("it")(
-                            im.deref(
-                                im.shift("C2V", C2V_neighbor_idx)(
-                                    im.shift("C2E", C2E_neighbor_idx)("it")
-                                )
-                            )
-                        ),
-                        cell_domain,
-                    )
-                )("ve_field"),
-                domain=cell_domain,
-                target=itir.SymRef(id="cells"),
-            )
-        ],
-    )
+    stencil1 = im.call(
+        im.call("as_fieldop")(
+            im.lambda_("it")(
+                im.deref(im.shift("C2V", C2V_neighbor_idx)(im.shift("C2E", C2E_neighbor_idx)("it")))
+            ),
+            cell_domain,
+        )
+    )("ve_field")
+
     # multi-dimensional shift in one function call
-    testee2 = itir.Program(
-        id="connectivity_shift_2d",
-        function_definitions=[],
-        params=[
-            itir.Sym(id="ve_field"),
-            itir.Sym(id="c2e_offset"),
-            itir.Sym(id="c2v_offset"),
-            itir.Sym(id="cells"),
-            itir.Sym(id="ncells"),
-        ],
-        declarations=[],
-        body=[
-            itir.SetAt(
-                expr=im.call(
-                    im.call("as_fieldop")(
-                        im.lambda_("it")(
-                            im.deref(
-                                im.call(
-                                    im.call("shift")(
-                                        im.ensure_offset("C2V"),
-                                        im.ensure_offset(C2V_neighbor_idx),
-                                        im.ensure_offset("C2E"),
-                                        im.ensure_offset(C2E_neighbor_idx),
-                                    )
-                                )("it")
-                            )
-                        ),
-                        cell_domain,
-                    )
-                )("ve_field"),
-                domain=cell_domain,
-                target=itir.SymRef(id="cells"),
-            )
-        ],
-    )
+    stencil2 = im.call(
+        im.call("as_fieldop")(
+            im.lambda_("it")(
+                im.deref(
+                    im.call(
+                        im.call("shift")(
+                            im.ensure_offset("C2V"),
+                            im.ensure_offset(C2V_neighbor_idx),
+                            im.ensure_offset("C2E"),
+                            im.ensure_offset(C2E_neighbor_idx),
+                        )
+                    )("it")
+                )
+            ),
+            cell_domain,
+        )
+    )("ve_field")
+
     # again multi-dimensional shift in one function call, but this time with dynamic offset values
-    testee3 = itir.Program(
-        id="connectivity_shift_2d_dynamic_offset",
-        function_definitions=[],
-        params=[
-            itir.Sym(id="ve_field"),
-            itir.Sym(id="c2e_offset"),
-            itir.Sym(id="c2v_offset"),
-            itir.Sym(id="cells"),
-            itir.Sym(id="ncells"),
-        ],
-        declarations=[],
-        body=[
-            itir.SetAt(
-                expr=im.call(
-                    im.call("as_fieldop")(
-                        im.lambda_("it", "c2e_off", "c2v_off")(
-                            im.deref(
-                                im.call(
-                                    im.call("shift")(
-                                        im.ensure_offset("C2V"),
-                                        im.deref("c2v_off"),
-                                        im.ensure_offset("C2E"),
-                                        im.plus(im.deref("c2e_off"), 0),
-                                    )
-                                )("it")
-                            )
-                        ),
-                        cell_domain,
-                    )
-                )("ve_field", "c2e_offset", "c2v_offset"),
-                domain=cell_domain,
-                target=itir.SymRef(id="cells"),
-            )
-        ],
-    )
+    stencil3 = im.call(
+        im.call("as_fieldop")(
+            im.lambda_("it", "c2e_off", "c2v_off")(
+                im.deref(
+                    im.call(
+                        im.call("shift")(
+                            im.ensure_offset("C2V"),
+                            im.deref("c2v_off"),
+                            im.ensure_offset("C2E"),
+                            im.plus(im.deref("c2e_off"), 0),
+                        )
+                    )("it")
+                )
+            ),
+            cell_domain,
+        )
+    )("ve_field", "c2e_offset", "c2v_offset")
 
     ve = np.random.rand(SIMPLE_MESH.num_vertices, SIMPLE_MESH.num_edges)
     VE_FTYPE = ts.FieldType(dims=[Vertex, Edge], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
@@ -651,7 +563,27 @@ def test_gtir_connectivity_shift():
         connectivity_C2V.table[:, C2V_neighbor_idx], connectivity_C2E.table[:, C2E_neighbor_idx]
     ]
 
-    for testee in [testee1, testee2, testee3]:
+    for i, stencil in enumerate([stencil1, stencil2, stencil3]):
+        testee = itir.Program(
+            id=f"connectivity_shift_2d_{i}",
+            function_definitions=[],
+            params=[
+                itir.Sym(id="ve_field"),
+                itir.Sym(id="c2e_offset"),
+                itir.Sym(id="c2v_offset"),
+                itir.Sym(id="cells"),
+                itir.Sym(id="ncells"),
+            ],
+            declarations=[],
+            body=[
+                itir.SetAt(
+                    expr=stencil,
+                    domain=cell_domain,
+                    target=itir.SymRef(id="cells"),
+                )
+            ],
+        )
+
         sdfg = sdfg_genenerator.visit(testee)
         assert isinstance(sdfg, dace.SDFG)
 
