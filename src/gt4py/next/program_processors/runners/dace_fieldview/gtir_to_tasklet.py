@@ -27,6 +27,7 @@ from gt4py.next.program_processors.runners.dace_fieldview import utility as dace
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_python_codegen import (
     MATH_BUILTINS_MAPPING,
 )
+from gt4py.next.type_system import type_specifications as ts
 
 
 @dataclass(frozen=True)
@@ -46,14 +47,13 @@ class SymbolExpr:
 
 
 @dataclass(frozen=True)
-class TaskletExpr:
+class ValueExpr:
     """Result of the computation provided by a tasklet node."""
 
-    node: dace.nodes.Tasklet
-    connector: str
+    node: dace.nodes.AccessNode
 
 
-IteratorIndexExpr: TypeAlias = MemletExpr | SymbolExpr | TaskletExpr
+IteratorIndexExpr: TypeAlias = MemletExpr | SymbolExpr | ValueExpr
 
 
 @dataclass(frozen=True)
@@ -80,7 +80,7 @@ class GTIRToTasklet(eve.NodeVisitor):
     state: dace.SDFGState
     input_connections: list[InputConnection]
     offset_provider: dict[str, Connectivity | Dimension]
-    symbol_map: dict[str, SymbolExpr | IteratorExpr | MemletExpr]
+    symbol_map: dict[str, IteratorExpr | MemletExpr | SymbolExpr]
 
     def __init__(
         self,
@@ -103,7 +103,21 @@ class GTIRToTasklet(eve.NodeVisitor):
     ) -> None:
         self.input_connections.append((src, subset, dst, dst_connector))
 
-    def _visit_deref(self, node: itir.FunCall) -> MemletExpr | TaskletExpr:
+    def _get_tasklet_result(
+        self, dtype: dace.typeclass, src_node: dace.nodes.Tasklet, src_connector: str
+    ) -> ValueExpr:
+        scalar_name, _ = self.sdfg.add_scalar("var", dtype, transient=True, find_new_name=True)
+        scalar_node = self.state.add_access(scalar_name)
+        self.state.add_edge(
+            src_node,
+            src_connector,
+            scalar_node,
+            None,
+            dace.Memlet(data=scalar_node.data, subset="0"),
+        )
+        return ValueExpr(scalar_node)
+
+    def _visit_deref(self, node: itir.FunCall) -> MemletExpr | ValueExpr:
         assert len(node.args) == 1
         it = self.visit(node.args[0])
 
@@ -123,7 +137,7 @@ class GTIRToTasklet(eve.NodeVisitor):
     def _visit_shift(self, node: itir.FunCall) -> IteratorExpr:
         raise NotImplementedError
 
-    def visit_FunCall(self, node: itir.FunCall) -> IteratorExpr | TaskletExpr | MemletExpr:
+    def visit_FunCall(self, node: itir.FunCall) -> IteratorExpr | MemletExpr | ValueExpr:
         if cpm.is_call_to(node, "deref"):
             return self._visit_deref(node)
 
@@ -134,10 +148,10 @@ class GTIRToTasklet(eve.NodeVisitor):
             assert isinstance(node.fun, itir.SymRef)
 
         node_internals = []
-        node_connections: dict[str, MemletExpr | TaskletExpr] = {}
+        node_connections: dict[str, MemletExpr | ValueExpr] = {}
         for i, arg in enumerate(node.args):
             arg_expr = self.visit(arg)
-            if isinstance(arg_expr, MemletExpr | TaskletExpr):
+            if isinstance(arg_expr, MemletExpr | ValueExpr):
                 # the argument value is the result of a tasklet node or direct field access
                 connector = f"__inp_{i}"
                 node_connections[connector] = arg_expr
@@ -164,40 +178,48 @@ class GTIRToTasklet(eve.NodeVisitor):
         )
 
         for connector, arg_expr in node_connections.items():
-            if isinstance(arg_expr, TaskletExpr):
+            if isinstance(arg_expr, ValueExpr):
                 self.state.add_edge(
-                    arg_expr.node, arg_expr.connector, tasklet_node, connector, dace.Memlet()
+                    arg_expr.node,
+                    None,
+                    tasklet_node,
+                    connector,
+                    dace.Memlet(data=arg_expr.node.data, subset="0"),
                 )
             else:
                 self._add_input_connection(
                     arg_expr.source, arg_expr.subset, tasklet_node, connector
                 )
 
-        return TaskletExpr(tasklet_node, "result")
+        # TODO: use type inference to determine the result type
+        if len(node_connections) == 1 and isinstance(node_connections["__inp_0"], MemletExpr):
+            dtype = node_connections["__inp_0"].source.desc(self.sdfg).dtype
+        else:
+            node_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+            dtype = dace_fieldview_util.as_dace_type(node_type)
+
+        return self._get_tasklet_result(dtype, tasklet_node, "result")
 
     def visit_Lambda(
-        self, node: itir.Lambda, args: list[SymbolExpr | IteratorExpr | MemletExpr]
-    ) -> tuple[
-        list[InputConnection],
-        TaskletExpr,
-    ]:
+        self, node: itir.Lambda, args: list[IteratorExpr | MemletExpr | SymbolExpr]
+    ) -> tuple[list[InputConnection], ValueExpr]:
         for p, arg in zip(node.params, args, strict=True):
             self.symbol_map[str(p.id)] = arg
-        output_expr = self.visit(node.expr)
-        if isinstance(output_expr, TaskletExpr):
+        output_expr: MemletExpr | ValueExpr = self.visit(node.expr)
+        if isinstance(output_expr, ValueExpr):
             return self.input_connections, output_expr
 
         # special case where the field operator is simply copying data from source to destination node
-        assert isinstance(output_expr, MemletExpr)
+        output_dtype = output_expr.source.desc(self.sdfg).dtype
         tasklet_node = self.state.add_tasklet("copy", {"__inp"}, {"__out"}, "__out = __inp")
         self._add_input_connection(output_expr.source, output_expr.subset, tasklet_node, "__inp")
-        return self.input_connections, TaskletExpr(tasklet_node, "__out")
+        return self.input_connections, self._get_tasklet_result(output_dtype, tasklet_node, "__out")
 
     def visit_Literal(self, node: itir.Literal) -> SymbolExpr:
         dtype = dace_fieldview_util.as_dace_type(node.type)
         return SymbolExpr(node.value, dtype)
 
-    def visit_SymRef(self, node: itir.SymRef) -> SymbolExpr | IteratorExpr | MemletExpr:
+    def visit_SymRef(self, node: itir.SymRef) -> IteratorExpr | MemletExpr | SymbolExpr:
         param = str(node.id)
         assert param in self.symbol_map
         return self.symbol_map[param]

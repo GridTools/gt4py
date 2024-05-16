@@ -32,7 +32,7 @@ from gt4py.next.program_processors.runners.dace_fieldview.gtir_to_tasklet import
     IteratorExpr,
     MemletExpr,
     SymbolExpr,
-    TaskletExpr,
+    ValueExpr,
 )
 from gt4py.next.type_system import type_specifications as ts
 
@@ -100,7 +100,7 @@ class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator):
                 stencil_args.append(scalar_arg)
             else:
                 assert isinstance(arg_type, ts.FieldType)
-                indices: dict[str, MemletExpr | SymbolExpr | TaskletExpr] = {
+                indices: dict[str, MemletExpr | SymbolExpr | ValueExpr] = {
                     dim.value: SymbolExpr(
                         dace.symbolic.SymExpr(dimension_index_fmt.format(dim=dim.value)),
                         _INDEX_DTYPE,
@@ -117,7 +117,14 @@ class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator):
         # represent the field operator as a mapped tasklet graph, which will range over the field domain
         taskgen = GTIRToTasklet(self.sdfg, self.head_state, self.offset_provider)
         input_connections, output_expr = taskgen.visit(self.stencil_expr, args=stencil_args)
-        assert isinstance(output_expr, TaskletExpr)
+        assert isinstance(output_expr, ValueExpr)
+
+        # retrieve the tasklet node which writes the result
+        output_tasklet_node = self.head_state.in_edges(output_expr.node)[0].src
+        output_tasklet_connector = self.head_state.in_edges(output_expr.node)[0].src_conn
+
+        # the last transient node can be deleted
+        self.head_state.remove_node(output_expr.node)
 
         # allocate local temporary storage for the result field
         field_shape = [
@@ -150,10 +157,10 @@ class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator):
                 memlet=memlet,
             )
         self.head_state.add_memlet_path(
-            output_expr.node,
+            output_tasklet_node,
             mx,
             field_node,
-            src_conn=output_expr.connector,
+            src_conn=output_tasklet_connector,
             memlet=output_memlet,
         )
 

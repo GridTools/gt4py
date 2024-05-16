@@ -54,7 +54,7 @@ class GTIRBuiltinTranslator(abc.ABC):
         else:
             assert len(shape) == 0
             dtype = dace_fieldview_util.as_dace_type(data_type)
-            name, _ = self.sdfg.add_scalar(name, dtype, find_new_name=True, transient=True)
+            name, _ = self.sdfg.add_scalar("var", dtype, find_new_name=True, transient=True)
         return self.head_state.add_access(name)
 
     @abc.abstractmethod

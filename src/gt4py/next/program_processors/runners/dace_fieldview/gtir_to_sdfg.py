@@ -129,7 +129,7 @@ class GTIRToSDFG(eve.NodeVisitor):
 
         TODO: do we need to return the GT4Py `FieldType`/`ScalarType`?
         """
-        expr_builder = self.visit(node, sdfg=sdfg, head_state=head_state)
+        expr_builder: SDFGFieldBuilder = self.visit(node, sdfg=sdfg, head_state=head_state)
         results = expr_builder()
 
         expressions_nodes = []
@@ -226,7 +226,7 @@ class GTIRToSDFG(eve.NodeVisitor):
         # first visit the argument nodes
         arg_builders: list[SDFGFieldBuilder] = []
         for arg in node.args:
-            arg_builder = self.visit(arg, sdfg=sdfg, head_state=head_state)
+            arg_builder: SDFGFieldBuilder = self.visit(arg, sdfg=sdfg, head_state=head_state)
             arg_builders.append(arg_builder)
 
         if cpm.is_call_to(node.fun, "as_fieldop"):
