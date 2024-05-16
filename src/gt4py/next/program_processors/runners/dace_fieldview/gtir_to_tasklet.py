@@ -24,13 +24,9 @@ from gt4py import eve
 from gt4py.next.common import Connectivity, Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.program_processors.runners.dace_fieldview import utility as dace_fieldview_util
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_python_codegen import (
     MATH_BUILTINS_MAPPING,
-)
-from gt4py.next.program_processors.runners.dace_fieldview.utility import (
-    as_dace_type,
-    connectivity_identifier,
-    unique_name,
 )
 
 
@@ -428,7 +424,7 @@ class GTIRToTasklet(eve.NodeVisitor):
             # initially, the storage for the connectivty tables is created as transient
             # when the tables are used, the storage is changed to non-transient,
             # so the corresponding arrays are supposed to be allocated by the SDFG caller
-            offset_table = connectivity_identifier(offset)
+            offset_table = dace_fieldview_util.connectivity_identifier(offset)
             self.sdfg.arrays[offset_table].transient = False
             offset_table_node = self.state.add_access(offset_table)
 
@@ -470,7 +466,7 @@ class GTIRToTasklet(eve.NodeVisitor):
 
         out_connector = "result"
         tasklet_node = self.state.add_tasklet(
-            unique_name("tasklet"),
+            builtin_name,
             node_connections.keys(),
             {out_connector},
             "{} = {}".format(out_connector, code),
@@ -507,7 +503,7 @@ class GTIRToTasklet(eve.NodeVisitor):
         return self.input_connections, TaskletExpr(tasklet_node, "__out")
 
     def visit_Literal(self, node: itir.Literal) -> SymbolExpr:
-        dtype = as_dace_type(node.type)
+        dtype = dace_fieldview_util.as_dace_type(node.type)
         return SymbolExpr(node.value, dtype)
 
     def visit_SymRef(self, node: itir.SymRef) -> SymbolExpr | IteratorExpr | MemletExpr:

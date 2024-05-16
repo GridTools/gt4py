@@ -89,12 +89,3 @@ def get_domain(
 
 def get_symbolic_expr(node: itir.Expr) -> str:
     return GTIRPythonCodegen().visit(node)
-
-
-def unique_name(prefix: str) -> str:
-    """Generate a string containing a unique integer id, which is updated incrementally."""
-
-    unique_id = getattr(unique_name, "_unique_id", 0)  # static variable
-    setattr(unique_name, "_unique_id", unique_id + 1)  # noqa: B010 [set-attr-with-constant]
-
-    return f"{prefix}_{unique_id}"
