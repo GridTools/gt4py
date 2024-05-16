@@ -214,7 +214,7 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
     @property
     def dtype(self) -> np.dtype:
         # not directly dtype of `self.data` as that might be a structured type containing `None`
-        return np.dtype(type(self.data[self.kstart]))
+        return _elem_dtype(self.data[self.kstart])
 
     def __getitem__(self, i: int) -> Any:
         result = self.data[i - self.kstart]
