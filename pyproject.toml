@@ -233,10 +233,6 @@ module = 'gt4py.next.iterator.runtime'
 [tool.pytest]
 
 [tool.pytest.ini_options]
-addopts = "--instafail"
-filterwarnings = [
-  "ignore::UserWarning"
-]
 markers = [
   'requires_atlas: tests that require `atlas4py` bindings package',
   'requires_dace: tests that require `dace` package',
