@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from typing import Callable, TypeAlias
+from typing import TypeAlias
 
 import dace
 import dace.subsets as sbs
@@ -21,8 +21,11 @@ import dace.subsets as sbs
 from gt4py.next.common import Connectivity, Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.program_processors.runners.dace_fieldview import utility as dace_fieldview_util
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_translator import (
     GTIRBuiltinTranslator,
+    SDFGField,
+    SDFGFieldBuilder,
 )
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_to_tasklet import (
     GTIRToTasklet,
@@ -31,7 +34,6 @@ from gt4py.next.program_processors.runners.dace_fieldview.gtir_to_tasklet import
     SymbolExpr,
     TaskletExpr,
 )
-from gt4py.next.program_processors.runners.dace_fieldview.utility import get_domain, unique_name
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -45,7 +47,7 @@ class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator):
     TaskletConnector: TypeAlias = tuple[dace.nodes.Tasklet, str]
 
     stencil_expr: itir.Lambda
-    stencil_args: list[Callable]
+    stencil_args: list[SDFGFieldBuilder]
     field_domain: dict[Dimension, tuple[dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]]
     field_type: ts.FieldType
     offset_provider: dict[str, Connectivity | Dimension]
@@ -55,7 +57,7 @@ class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator):
         sdfg: dace.SDFG,
         state: dace.SDFGState,
         node: itir.FunCall,
-        stencil_args: list[Callable],
+        stencil_args: list[SDFGFieldBuilder],
         offset_provider: dict[str, Connectivity | Dimension],
     ):
         super().__init__(sdfg, state)
@@ -69,7 +71,7 @@ class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator):
         # the domain of the field operator is passed as second argument
         assert isinstance(domain_expr, itir.FunCall)
 
-        domain = get_domain(domain_expr)
+        domain = dace_fieldview_util.get_domain(domain_expr)
         # define field domain with all dimensions in alphabetical order
         sorted_domain_dims = sorted(domain.keys(), key=lambda x: x.value)
 
@@ -82,7 +84,7 @@ class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator):
         self.stencil_expr = stencil_expr
         self.stencil_args = stencil_args
 
-    def build(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
+    def build(self) -> list[SDFGField]:
         dimension_index_fmt = "i_{dim}"
         # first visit the list of arguments and build a symbol map
         stencil_args: list[IteratorExpr | MemletExpr] = []
@@ -136,7 +138,7 @@ class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator):
             dimension_index_fmt.format(dim=dim.value): f"{lb}:{ub}"
             for dim, (lb, ub) in self.field_domain.items()
         }
-        me, mx = self.head_state.add_map(unique_name("map"), map_ranges)
+        me, mx = self.head_state.add_map("field_op", map_ranges)
 
         for data_node, data_subset, lambda_node, lambda_connector in input_connections:
             memlet = dace.Memlet(data=data_node.data, subset=data_subset)

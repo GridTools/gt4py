@@ -19,6 +19,7 @@ import dace
 
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_translator import (
     GTIRBuiltinTranslator,
+    SDFGField,
 )
 from gt4py.next.type_system import type_specifications as ts
 
@@ -52,29 +53,31 @@ class GTIRBuiltinSymbolRef(GTIRBuiltinTranslator):
         assert len(access_nodes) == 1
         return access_nodes[0]
 
-    def build(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
+    def build(self) -> list[SDFGField]:
+        # check if access node is already present in current state
         sym_node = self._get_access_node()
-        if sym_node:
-            # if already present in current state, share access node
-            pass
+        if sym_node is None:
+            if isinstance(self.sym_type, ts.FieldType):
+                # add access node to current state
+                sym_node = self.head_state.add_access(self.sym_name)
 
-        elif isinstance(self.sym_type, ts.FieldType):
-            # add access node to current state
-            sym_node = self.head_state.add_access(self.sym_name)
-
-        else:
-            # scalar symbols are passed to the SDFG as symbols: build tasklet node
-            # to write the symbol to a scalar access node
-            assert self.sym_name in self.sdfg.symbols
-            tasklet_node = self.head_state.add_tasklet(
-                f"get_{self.sym_name}",
-                {},
-                {"__out"},
-                f"__out = {self.sym_name}",
-            )
-            sym_node = self.add_local_storage(self.sym_type, shape=[])
-            self.head_state.add_edge(
-                tasklet_node, "__out", sym_node, None, dace.Memlet(data=sym_node.data, subset="0")
-            )
+            else:
+                # scalar symbols are passed to the SDFG as symbols: build tasklet node
+                # to write the symbol to a scalar access node
+                assert self.sym_name in self.sdfg.symbols
+                tasklet_node = self.head_state.add_tasklet(
+                    f"get_{self.sym_name}",
+                    {},
+                    {"__out"},
+                    f"__out = {self.sym_name}",
+                )
+                sym_node = self.add_local_storage(self.sym_type, shape=[])
+                self.head_state.add_edge(
+                    tasklet_node,
+                    "__out",
+                    sym_node,
+                    None,
+                    dace.Memlet(data=sym_node.data, subset="0"),
+                )
 
         return [(sym_node, self.sym_type)]

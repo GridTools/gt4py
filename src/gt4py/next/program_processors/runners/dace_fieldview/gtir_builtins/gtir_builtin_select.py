@@ -13,25 +13,24 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from typing import Callable
-
 import dace
 
 from gt4py import eve
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.program_processors.runners.dace_fieldview import utility as dace_fieldview_util
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_translator import (
     GTIRBuiltinTranslator,
+    SDFGField,
+    SDFGFieldBuilder,
 )
-from gt4py.next.program_processors.runners.dace_fieldview.utility import get_symbolic_expr
-from gt4py.next.type_system import type_specifications as ts
 
 
 class GTIRBuiltinSelect(GTIRBuiltinTranslator):
     """Generates the dataflow subgraph for the `select` builtin function."""
 
-    true_br_builder: Callable
-    false_br_builder: Callable
+    true_br_builder: SDFGFieldBuilder
+    false_br_builder: SDFGFieldBuilder
 
     def __init__(
         self,
@@ -47,7 +46,7 @@ class GTIRBuiltinSelect(GTIRBuiltinTranslator):
         cond_expr, true_expr, false_expr = node.fun.args
 
         # expect condition as first argument
-        cond = get_symbolic_expr(cond_expr)
+        cond = dace_fieldview_util.get_symbolic_expr(cond_expr)
 
         # use current head state to terminate the dataflow, and add a entry state
         # to connect the true/false branch states as follows:
@@ -81,7 +80,7 @@ class GTIRBuiltinSelect(GTIRBuiltinTranslator):
             false_expr, sdfg=sdfg, head_state=false_state
         )
 
-    def build(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
+    def build(self) -> list[SDFGField]:
         # retrieve true/false states as predecessors of head state
         branch_states = tuple(edge.src for edge in self.sdfg.in_edges(self.head_state))
         assert len(branch_states) == 2
