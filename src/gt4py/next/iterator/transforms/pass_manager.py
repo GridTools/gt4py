@@ -87,6 +87,7 @@ def apply_common_transforms(
 ) -> itir.FencilDefinition | FencilWithTemporaries | itir.Program:
     if isinstance(ir, itir.Program):
         # TODO(havogt): during refactoring to GTIR, we bypass transformations in case we already translated to itir.Program
+        # (currently the case when using the roundtrip backend)
         return ir
     icdlv_uids = eve_utils.UIDGenerator()
 

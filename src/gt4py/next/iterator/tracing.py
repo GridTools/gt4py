@@ -209,7 +209,9 @@ iterator.runtime.FundefDispatcher.register_hook(FundefTracer())
 
 class TracerContext:
     fundefs: ClassVar[List[FunctionDefinition]] = []
-    closures: ClassVar[List[StencilClosure]] = []
+    closures: ClassVar[
+        List[StencilClosure]
+    ] = []  # TODO(havogt): remove after refactoring to `Program` is complete, currently handles both programs and fencils
     body: ClassVar[List[itir.Stmt]] = []
 
     @classmethod

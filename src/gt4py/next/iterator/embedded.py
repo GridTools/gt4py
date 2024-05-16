@@ -1518,8 +1518,7 @@ def _validate_domain(domain: Domain, offset_provider: OffsetProvider) -> None:
 
 
 @runtime.set_at.register(EMBEDDED)
-def set_at(expr, domain, target) -> None:
-    # TODO we can't set the column_range here, because it's too late: `expr` already evaluated
+def set_at(expr: common.Field, domain: common.DomainLike, target: common.MutableField) -> None:
     operators._tuple_assign_field(target, expr, common.domain(domain))
 
 
@@ -1588,13 +1587,9 @@ def as_fieldop(fun: Callable, domain: runtime.CartesianDomain | runtime.Unstruct
         type_ = _get_output_type(fun, domain, args)
         out = field_utils.field_from_typespec(common.domain(domain), xp)(type_)
 
-        # TODO `out` gets allocated in the order of domain_, but might not match the order of `target` in set_at
-        closure(
-            _dimension_to_tag(domain),
-            fun,
-            out,
-            list(args),
-        )
+        # TODO(havogt): after updating all tests to use the new program,
+        # we should get rid of closure and move the implementation to this function
+        closure(_dimension_to_tag(domain), fun, out, list(args))
         return out
 
     return impl
