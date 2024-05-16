@@ -19,6 +19,7 @@ import numpy as np
 import pytest
 
 from gt4py.cartesian.backend import REGISTRY as backend_registry
+from gt4py.cartesian.backend import from_name as backend_from_name
 from gt4py.cartesian.backend.module_generator import make_args_data_from_gtir
 from gt4py.cartesian.definitions import AccessKind
 from gt4py.cartesian.gtc import gtir, utils
@@ -191,6 +192,14 @@ def test_deprecation_gtc_cuda(backend_name: str):
     )
     with pytest.raises(NotImplementedError):
         builder.build()
+
+
+def test_bad_backend_feedback():
+    existing_backend = backend_from_name("numpy")
+    assert existing_backend
+
+    with pytest.raises(NotImplementedError):
+        backend_from_name("xxxxx")
 
 
 if __name__ == "__main__":
