@@ -413,15 +413,6 @@ def test_domain_slice_at():
         NamedRange(KDim, UnitRange(20, 30)),
     )
 
-    # Test indexing with integers
-    result = domain.slice_at[2, 5, 7]
-    expected_result = Domain(
-        NamedRange(IDim, UnitRange(2, 3)),
-        NamedRange(JDim, UnitRange(10, 11)),
-        NamedRange(KDim, UnitRange(27, 28)),
-    )
-    assert result == expected_result
-
     # Test indexing with slices
     result = domain.slice_at[slice(2, 5), slice(5, 7), slice(7, 10)]
     expected_result = Domain(
@@ -431,12 +422,12 @@ def test_domain_slice_at():
     )
     assert result == expected_result
 
-    # Test indexing with mixed integers and slices
-    result = domain.slice_at[2, slice(5, 7), 9]
+    # Test indexing with out-of-range slices
+    result = domain.slice_at[slice(2, 15), slice(5, 7), slice(7, 10)]
     expected_result = Domain(
-        NamedRange(IDim, UnitRange(2, 3)),
+        NamedRange(IDim, UnitRange(2, 10)),
         NamedRange(JDim, UnitRange(10, 12)),
-        NamedRange(KDim, UnitRange(29, 30)),
+        NamedRange(KDim, UnitRange(27, 30)),
     )
     assert result == expected_result
 
@@ -446,7 +437,7 @@ def test_domain_slice_at():
 
     # Test indexing with incorrect number of indices
     with pytest.raises(ValueError, match="not match the number of dimensions"):
-        domain.slice_at[2, 7]
+        domain.slice_at[slice(2, 5), slice(7, 10)]
 
 
 def test_domain_dim_index():

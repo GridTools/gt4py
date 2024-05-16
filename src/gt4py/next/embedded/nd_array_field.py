@@ -258,7 +258,7 @@ class NdArrayField(
                 - for reshuffling operations, all connectivities must have the same domain
                 (Note that remapping operations only support a single connectivity argument.)
 
-        """  # noqa: RUF002  # TODO(egparedes): move this docstring to a proper place
+        """  # noqa: RUF002  # TODO(egparedes): move docstring to the `premap` builtin function when it exists
 
         conn_fields: list[common.ConnectivityField] = []
         codomains_counter: collections.Counter[common.Dimension] = collections.Counter()
@@ -542,6 +542,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
 
 
 def _domain_premap(data: NdArrayField, *connectivities: common.ConnectivityField) -> NdArrayField:
+    """`premap` implementation transforming only the field domain not the data (i.e. translation and relocation)."""
     new_domain = data.domain
     for connectivity in connectivities:
         dim = connectivity.codomain

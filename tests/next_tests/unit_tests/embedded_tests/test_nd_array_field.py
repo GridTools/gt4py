@@ -320,18 +320,46 @@ def test_non_dispatched_function():
 
 
 def test_domain_premap():
+    # Translation case
     I = Dimension("I")
+    J = Dimension("J")
 
     N = 10
     data_field = common._field(
-        -0.1 * np.arange(N), domain=common.Domain(common.NamedRange(I, common.unit_range(N)))
+        0.1 * np.arange(N * N).reshape((N, N)),
+        domain=common.Domain(
+            common.NamedRange(I, common.unit_range(N)), common.NamedRange(J, common.unit_range(N))
+        ),
     )
-    conn = common.CartesianConnectivity(I, +1)
+    conn = common.CartesianConnectivity.for_translation(J, +1)
 
     result = data_field.premap(conn)
     expected = common._field(
         data_field.ndarray,
-        domain=common.Domain(common.NamedRange(I, common.unit_range((-1, N - 1)))),
+        domain=common.Domain(
+            common.NamedRange(I, common.unit_range(N)),
+            common.NamedRange(J, common.unit_range((-1, N - 1))),
+        ),
+    )
+
+    assert result.domain == expected.domain
+    assert np.all(result.ndarray == expected.ndarray)
+
+    # Relocation case
+    I_half = Dimension("I_half")
+
+    conn = common.CartesianConnectivity.for_relocation(I, I_half)
+
+    result = data_field.premap(conn)
+    expected = common._field(
+        data_field.ndarray,
+        domain=common.Domain(
+            dims=(
+                I_half,
+                J,
+            ),
+            ranges=(data_field.domain[I].unit_range, data_field.domain[J].unit_range),
+        ),
     )
 
     assert result.domain == expected.domain

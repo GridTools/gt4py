@@ -308,8 +308,7 @@ class NamedIndex(NamedTuple):
 
 
 FiniteNamedRange: TypeAlias = NamedRange[FiniteUnitRange]
-RelativeIndexItem: TypeAlias = IntIndex | slice
-RelativeIndexElement: TypeAlias = RelativeIndexItem | types.EllipsisType
+RelativeIndexElement: TypeAlias = IntIndex | slice | types.EllipsisType
 NamedSlice: TypeAlias = slice  # once slice is generic we should do: slice[NamedIndex, NamedIndex, Literal[1]], see https://peps.python.org/pep-0696/
 AbsoluteIndexElement: TypeAlias = NamedIndex | NamedRange | NamedSlice
 AnyIndexElement: TypeAlias = RelativeIndexElement | AbsoluteIndexElement
@@ -480,29 +479,25 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
         return Domain(dims=broadcast_dims, ranges=intersected_ranges)
 
     @functools.cached_property
-    def slice_at(self) -> utils.IndexerCallable[RelativeIndexItem, Domain]:
+    def slice_at(self) -> utils.IndexerCallable[slice, Domain]:
         """
         Create a new domain by slicing the domain ranges at the provided relative slices.
 
         Examples:
             >>> I, J = Dimension("I"), Dimension("J")
             >>> domain = Domain(NamedRange(I, UnitRange(0, 10)), NamedRange(J, UnitRange(5, 15)))
-            >>> domain.slice_at[2, 2:5]
+            >>> domain.slice_at[2:3, 2:5]
             Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(2, 3), UnitRange(7, 10)))
-
         """
 
-        def _domain_slicer(*args: RelativeIndexItem) -> Domain:
-            if not all(isinstance(a, RelativeIndexItem) for a in args):  # type: ignore[misc,arg-type]  # mypy doesn't understand RelativeIndexItem
-                raise TypeError(f"Indices must be either 'int' or 'slice' but got '{args}'")
-            slices: tuple[slice, ...] = tuple(
-                a if isinstance(a, slice) else slice(int(a), int(a) + 1) for a in args
-            )
+        def _domain_slicer(*args: slice) -> Domain:
+            if not all(isinstance(a, slice) for a in args):
+                raise TypeError(f"Indices must be 'slice's but got '{args}'")
             if len(args) != len(self):
                 raise ValueError(
                     f"Number of provided slices ({len(args)}) does not match the number of dimensions ({len(self)})."
                 )
-            return Domain(dims=self.dims, ranges=[r[s] for r, s in zip(self.ranges, slices)])
+            return Domain(dims=self.dims, ranges=[r[s] for r, s in zip(self.ranges, args)])
 
         return utils.IndexerCallable(_domain_slicer)
 
@@ -793,7 +788,7 @@ class ConnectivityKind(enum.Flag):
 
 
 @runtime_checkable
-# type: ignore[misc] # DimT should be covariant, but breaks in another place
+# type: ignore[misc] # DimT should be covariant, but then it breaks in other places
 class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT]):
     @property
     @abc.abstractmethod
