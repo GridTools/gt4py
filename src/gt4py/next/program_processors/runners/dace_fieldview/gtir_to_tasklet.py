@@ -53,14 +53,16 @@ class TaskletExpr:
     connector: str
 
 
+IteratorIndexExpr: TypeAlias = MemletExpr | SymbolExpr | TaskletExpr
+
+
 @dataclass(frozen=True)
 class IteratorExpr:
     """Iterator for field access to be consumed by `deref` or `shift` builtin functions."""
 
     field: dace.nodes.AccessNode
     dimensions: list[str]
-    offset: list[dace.symbolic.SymExpr]
-    indices: dict[str, MemletExpr | SymbolExpr | TaskletExpr]
+    indices: dict[str, IteratorIndexExpr]
 
 
 InputConnection: TypeAlias = tuple[
@@ -92,27 +94,23 @@ class GTIRToTasklet(eve.NodeVisitor):
         self.offset_provider = offset_provider
         self.symbol_map = {}
 
+    def _add_input_connection(
+        self,
+        src: dace.nodes.AccessNode,
+        subset: sbs.Range,
+        dst: dace.nodes.Tasklet,
+        dst_connector: str,
+    ) -> None:
+        self.input_connections.append((src, subset, dst, dst_connector))
+
     def _visit_deref(self, node: itir.FunCall) -> MemletExpr | TaskletExpr:
         assert len(node.args) == 1
         it = self.visit(node.args[0])
 
-        if isinstance(it, SymbolExpr):
-            cast_sym = str(it.dtype)
-            cast_fmt = MATH_BUILTINS_MAPPING[cast_sym]
-            deref_node = self.state.add_tasklet(
-                "deref_symbol", {}, {"val"}, code=f"val = {cast_fmt.format(it.value)}"
-            )
-            return TaskletExpr(deref_node, "val")
-
-        elif isinstance(it, IteratorExpr):
+        if isinstance(it, IteratorExpr):
             if all(isinstance(index, SymbolExpr) for index in it.indices.values()):
                 # use direct field access through memlet subset
-                data_index = sbs.Indices(
-                    [
-                        it.indices[dim].value + off  # type: ignore[union-attr]
-                        for dim, off in zip(it.dimensions, it.offset, strict=True)
-                    ]
-                )
+                data_index = sbs.Indices([it.indices[dim].value for dim in it.dimensions])  # type: ignore[union-attr]
                 return MemletExpr(it.field, data_index)
 
             else:
@@ -171,8 +169,8 @@ class GTIRToTasklet(eve.NodeVisitor):
                     arg_expr.node, arg_expr.connector, tasklet_node, connector, dace.Memlet()
                 )
             else:
-                self.input_connections.append(
-                    (arg_expr.source, arg_expr.subset, tasklet_node, connector)
+                self._add_input_connection(
+                    arg_expr.source, arg_expr.subset, tasklet_node, connector
                 )
 
         return TaskletExpr(tasklet_node, "result")
@@ -192,9 +190,7 @@ class GTIRToTasklet(eve.NodeVisitor):
         # special case where the field operator is simply copying data from source to destination node
         assert isinstance(output_expr, MemletExpr)
         tasklet_node = self.state.add_tasklet("copy", {"__inp"}, {"__out"}, "__out = __inp")
-        self.input_connections.append(
-            (output_expr.source, output_expr.subset, tasklet_node, "__inp")
-        )
+        self._add_input_connection(output_expr.source, output_expr.subset, tasklet_node, "__inp")
         return self.input_connections, TaskletExpr(tasklet_node, "__out")
 
     def visit_Literal(self, node: itir.Literal) -> SymbolExpr:
