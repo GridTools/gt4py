@@ -18,15 +18,15 @@ from typing import TypeAlias
 
 import dace
 import dace.subsets as sbs
+import numpy as np
 
 from gt4py import eve
+from gt4py.eve import codegen
+from gt4py.eve.codegen import FormatTemplate as as_fmt
 from gt4py.next.common import Connectivity, Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.program_processors.runners.dace_fieldview import utility as dace_fieldview_util
-from gt4py.next.program_processors.runners.dace_fieldview.gtir_python_codegen import (
-    MATH_BUILTINS_MAPPING,
-)
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -48,7 +48,7 @@ class SymbolExpr:
 
 @dataclass(frozen=True)
 class ValueExpr:
-    """Result of the computation provided by a tasklet node."""
+    """Result of the computation implemented by a tasklet node."""
 
     node: dace.nodes.AccessNode
 
@@ -65,6 +65,7 @@ class IteratorExpr:
     indices: dict[str, IteratorIndexExpr]
 
 
+# Define alias for the elements needed to setup input connections to a map scope
 InputConnection: TypeAlias = tuple[
     dace.nodes.AccessNode,
     sbs.Range,
@@ -73,8 +74,68 @@ InputConnection: TypeAlias = tuple[
 ]
 
 
-class GTIRToTasklet(eve.NodeVisitor):
-    """Generates the dataflow subgraph for the `as_field_op` builtin function."""
+MATH_BUILTINS_MAPPING = {
+    "abs": "abs({})",
+    "sin": "math.sin({})",
+    "cos": "math.cos({})",
+    "tan": "math.tan({})",
+    "arcsin": "asin({})",
+    "arccos": "acos({})",
+    "arctan": "atan({})",
+    "sinh": "math.sinh({})",
+    "cosh": "math.cosh({})",
+    "tanh": "math.tanh({})",
+    "arcsinh": "asinh({})",
+    "arccosh": "acosh({})",
+    "arctanh": "atanh({})",
+    "sqrt": "math.sqrt({})",
+    "exp": "math.exp({})",
+    "log": "math.log({})",
+    "gamma": "tgamma({})",
+    "cbrt": "cbrt({})",
+    "isfinite": "isfinite({})",
+    "isinf": "isinf({})",
+    "isnan": "isnan({})",
+    "floor": "math.ifloor({})",
+    "ceil": "ceil({})",
+    "trunc": "trunc({})",
+    "minimum": "min({}, {})",
+    "maximum": "max({}, {})",
+    "fmod": "fmod({}, {})",
+    "power": "math.pow({}, {})",
+    "float": "dace.float64({})",
+    "float32": "dace.float32({})",
+    "float64": "dace.float64({})",
+    "int": "dace.int32({})" if np.dtype(int).itemsize == 4 else "dace.int64({})",
+    "int32": "dace.int32({})",
+    "int64": "dace.int64({})",
+    "bool": "dace.bool_({})",
+    "plus": "({} + {})",
+    "minus": "({} - {})",
+    "multiplies": "({} * {})",
+    "divides": "({} / {})",
+    "floordiv": "({} // {})",
+    "eq": "({} == {})",
+    "not_eq": "({} != {})",
+    "less": "({} < {})",
+    "less_equal": "({} <= {})",
+    "greater": "({} > {})",
+    "greater_equal": "({} >= {})",
+    "and_": "({} & {})",
+    "or_": "({} | {})",
+    "xor_": "({} ^ {})",
+    "mod": "({} % {})",
+    "not_": "(not {})",  # ~ is not bitwise in numpy
+}
+
+
+class LambdaToTasklet(eve.NodeVisitor):
+    """Translates an `ir.Lambda` expression to a dataflow graph.
+
+    Lambda functions should only be encountered as argument to the `as_field_op`
+    builtin function, therefore the dataflow graph generated here typically
+    represents the stencil function of a field operator.
+    """
 
     sdfg: dace.SDFG
     state: dace.SDFGState
@@ -223,3 +284,37 @@ class GTIRToTasklet(eve.NodeVisitor):
         param = str(node.id)
         assert param in self.symbol_map
         return self.symbol_map[param]
+
+
+class PythonCodegen(codegen.TemplatedGenerator):
+    """Helper class to visit a symbolic expression and translate it to Python code.
+
+    The generated Python code can be use either as the body of a tasklet node or,
+    as in the case of field domain definitions, for sybolic array shape and map range.
+    """
+
+    SymRef = as_fmt("{id}")
+    Literal = as_fmt("{value}")
+
+    def _visit_deref(self, node: itir.FunCall) -> str:
+        assert len(node.args) == 1
+        if isinstance(node.args[0], itir.SymRef):
+            return self.visit(node.args[0])
+        raise NotImplementedError(f"Unexpected deref with arg type '{type(node.args[0])}'.")
+
+    def _visit_numeric_builtin(self, node: itir.FunCall) -> str:
+        assert isinstance(node.fun, itir.SymRef)
+        fmt = MATH_BUILTINS_MAPPING[str(node.fun.id)]
+        args = self.visit(node.args)
+        return fmt.format(*args)
+
+    def visit_FunCall(self, node: itir.FunCall) -> str:
+        if cpm.is_call_to(node, "deref"):
+            return self._visit_deref(node)
+        elif isinstance(node.fun, itir.SymRef):
+            builtin_name = str(node.fun.id)
+            if builtin_name in MATH_BUILTINS_MAPPING:
+                return self._visit_numeric_builtin(node)
+            else:
+                raise NotImplementedError(f"'{builtin_name}' not implemented.")
+        raise NotImplementedError(f"Unexpected 'FunCall' node ({node}).")

@@ -19,9 +19,7 @@ Note: this test module covers the fieldview flavour of ITIR.
 
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.program_processors.runners.dace_fieldview.gtir_to_sdfg import (
-    GTIRToSDFG as FieldviewGtirToSDFG,
-)
+from gt4py.next.program_processors.runners import dace_fieldview as dace_backend
 from gt4py.next.type_system import type_specifications as ts
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import IDim
 
@@ -72,11 +70,8 @@ def test_gtir_copy():
     a = np.random.rand(N)
     b = np.empty_like(a)
 
-    sdfg_genenerator = FieldviewGtirToSDFG(
-        [IFTYPE, IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)], offset_provider={}
-    )
-    sdfg = sdfg_genenerator.visit(testee)
-    assert isinstance(sdfg, dace.SDFG)
+    arg_types = [IFTYPE, IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)]
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, {})
 
     sdfg(x=a, y=b, **FSYMBOLS)
     assert np.allclose(a, b)
@@ -108,11 +103,8 @@ def test_gtir_update():
     a = np.random.rand(N)
     ref = a + 1.0
 
-    sdfg_genenerator = FieldviewGtirToSDFG(
-        [IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)], offset_provider={}
-    )
-    sdfg = sdfg_genenerator.visit(testee)
-    assert isinstance(sdfg, dace.SDFG)
+    arg_types = [IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)]
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, {})
 
     sdfg(x=a, **FSYMBOLS)
     assert np.allclose(a, ref)
@@ -145,11 +137,8 @@ def test_gtir_sum2():
     b = np.random.rand(N)
     c = np.empty_like(a)
 
-    sdfg_genenerator = FieldviewGtirToSDFG(
-        [IFTYPE, IFTYPE, IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)], offset_provider={}
-    )
-    sdfg = sdfg_genenerator.visit(testee)
-    assert isinstance(sdfg, dace.SDFG)
+    arg_types = [IFTYPE, IFTYPE, IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)]
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, {})
 
     sdfg(x=a, y=b, z=c, **FSYMBOLS)
     assert np.allclose(c, (a + b))
@@ -181,12 +170,8 @@ def test_gtir_sum2_sym():
     a = np.random.rand(N)
     b = np.empty_like(a)
 
-    sdfg_genenerator = FieldviewGtirToSDFG(
-        [IFTYPE, IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)],
-        offset_provider={},
-    )
-    sdfg = sdfg_genenerator.visit(testee)
-    assert isinstance(sdfg, dace.SDFG)
+    arg_types = [IFTYPE, IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)]
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, {})
 
     sdfg(x=a, z=b, **FSYMBOLS)
     assert np.allclose(b, (a + a))
@@ -223,10 +208,7 @@ def test_gtir_sum3():
     b = np.random.rand(N)
     c = np.random.rand(N)
 
-    sdfg_genenerator = FieldviewGtirToSDFG(
-        [IFTYPE, IFTYPE, IFTYPE, IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)],
-        offset_provider={},
-    )
+    arg_types = [IFTYPE, IFTYPE, IFTYPE, IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)]
 
     for i, stencil in enumerate([stencil1, stencil2]):
         testee = itir.Program(
@@ -249,8 +231,7 @@ def test_gtir_sum3():
             ],
         )
 
-        sdfg = sdfg_genenerator.visit(testee)
-        assert isinstance(sdfg, dace.SDFG)
+        sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, {})
 
         d = np.empty_like(a)
 
@@ -312,20 +293,16 @@ def test_gtir_select():
     b = np.random.rand(N)
     c = np.random.rand(N)
 
-    sdfg_genenerator = FieldviewGtirToSDFG(
-        [
-            IFTYPE,
-            IFTYPE,
-            IFTYPE,
-            IFTYPE,
-            ts.ScalarType(ts.ScalarKind.BOOL),
-            ts.ScalarType(ts.ScalarKind.FLOAT64),
-            ts.ScalarType(ts.ScalarKind.INT32),
-        ],
-        offset_provider={},
-    )
-    sdfg = sdfg_genenerator.visit(testee)
-    assert isinstance(sdfg, dace.SDFG)
+    arg_types = [
+        IFTYPE,
+        IFTYPE,
+        IFTYPE,
+        IFTYPE,
+        ts.ScalarType(ts.ScalarKind.BOOL),
+        ts.ScalarType(ts.ScalarKind.FLOAT64),
+        ts.ScalarType(ts.ScalarKind.INT32),
+    ]
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, {})
 
     for s in [False, True]:
         d = np.empty_like(a)
@@ -386,18 +363,14 @@ def test_gtir_select_nested():
 
     a = np.random.rand(N)
 
-    sdfg_genenerator = FieldviewGtirToSDFG(
-        [
-            IFTYPE,
-            IFTYPE,
-            ts.ScalarType(ts.ScalarKind.BOOL),
-            ts.ScalarType(ts.ScalarKind.BOOL),
-            ts.ScalarType(ts.ScalarKind.INT32),
-        ],
-        offset_provider={},
-    )
-    sdfg = sdfg_genenerator.visit(testee)
-    assert isinstance(sdfg, dace.SDFG)
+    arg_types = [
+        IFTYPE,
+        IFTYPE,
+        ts.ScalarType(ts.ScalarKind.BOOL),
+        ts.ScalarType(ts.ScalarKind.BOOL),
+        ts.ScalarType(ts.ScalarKind.INT32),
+    ]
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, {})
 
     for s1 in [False, True]:
         for s2 in [False, True]:
