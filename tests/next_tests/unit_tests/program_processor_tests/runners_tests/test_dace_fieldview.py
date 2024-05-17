@@ -31,6 +31,7 @@ dace = pytest.importorskip("dace")
 
 N = 10
 IFTYPE = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+SIZE_TYPE = ts.ScalarType(ts.ScalarKind.INT32)
 FSYMBOLS = dict(
     __w_size_0=N,
     __w_stride_0=1,
@@ -70,7 +71,7 @@ def test_gtir_copy():
     a = np.random.rand(N)
     b = np.empty_like(a)
 
-    arg_types = [IFTYPE, IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)]
+    arg_types = [IFTYPE, IFTYPE, SIZE_TYPE]
     sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, {})
 
     sdfg(x=a, y=b, **FSYMBOLS)
@@ -103,7 +104,7 @@ def test_gtir_update():
     a = np.random.rand(N)
     ref = a + 1.0
 
-    arg_types = [IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)]
+    arg_types = [IFTYPE, SIZE_TYPE]
     sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, {})
 
     sdfg(x=a, **FSYMBOLS)
@@ -137,7 +138,7 @@ def test_gtir_sum2():
     b = np.random.rand(N)
     c = np.empty_like(a)
 
-    arg_types = [IFTYPE, IFTYPE, IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)]
+    arg_types = [IFTYPE, IFTYPE, IFTYPE, SIZE_TYPE]
     sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, {})
 
     sdfg(x=a, y=b, z=c, **FSYMBOLS)
@@ -170,7 +171,7 @@ def test_gtir_sum2_sym():
     a = np.random.rand(N)
     b = np.empty_like(a)
 
-    arg_types = [IFTYPE, IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)]
+    arg_types = [IFTYPE, IFTYPE, SIZE_TYPE]
     sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, {})
 
     sdfg(x=a, z=b, **FSYMBOLS)
@@ -208,7 +209,7 @@ def test_gtir_sum3():
     b = np.random.rand(N)
     c = np.random.rand(N)
 
-    arg_types = [IFTYPE, IFTYPE, IFTYPE, IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)]
+    arg_types = [IFTYPE, IFTYPE, IFTYPE, IFTYPE, SIZE_TYPE]
 
     for i, stencil in enumerate([stencil1, stencil2]):
         testee = itir.Program(
@@ -300,7 +301,7 @@ def test_gtir_select():
         IFTYPE,
         ts.ScalarType(ts.ScalarKind.BOOL),
         ts.ScalarType(ts.ScalarKind.FLOAT64),
-        ts.ScalarType(ts.ScalarKind.INT32),
+        SIZE_TYPE,
     ]
     sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, {})
 
@@ -368,7 +369,7 @@ def test_gtir_select_nested():
         IFTYPE,
         ts.ScalarType(ts.ScalarKind.BOOL),
         ts.ScalarType(ts.ScalarKind.BOOL),
-        ts.ScalarType(ts.ScalarKind.INT32),
+        SIZE_TYPE,
     ]
     sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, {})
 

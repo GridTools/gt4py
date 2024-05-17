@@ -40,6 +40,15 @@ def as_dace_type(type_: ts.ScalarType) -> dace.typeclass:
             raise ValueError(f"Scalar type '{type_}' not supported.")
 
 
+def as_scalar_type(typestr: str) -> ts.ScalarType:
+    """Obtain GT4Py scalar type from generic numpy string representation."""
+    try:
+        kind = getattr(ts.ScalarKind, typestr.upper())
+    except AttributeError as ex:
+        raise ValueError(f"Data type {typestr} not supported.") from ex
+    return ts.ScalarType(kind)
+
+
 def filter_connectivities(offset_provider: Mapping[str, Any]) -> dict[str, Connectivity]:
     """
     Filter offset providers of type `Connectivity`.

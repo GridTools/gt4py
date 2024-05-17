@@ -158,6 +158,11 @@ class GTIRToSDFG(eve.NodeVisitor):
         if node.function_definitions:
             raise NotImplementedError("Functions expected to be inlined as lambda calls.")
 
+        if len(node.params) != len(self.param_types):
+            raise RuntimeError(
+                "The provided list of parameter types has different length than SDFG parameter list."
+            )
+
         sdfg = dace.SDFG(node.id)
         entry_state = sdfg.add_state("program_entry", is_start_block=True)
 

@@ -266,14 +266,23 @@ class LambdaToTasklet(eve.NodeVisitor):
     ) -> tuple[list[InputConnection], ValueExpr]:
         for p, arg in zip(node.params, args, strict=True):
             self.symbol_map[str(p.id)] = arg
-        output_expr: MemletExpr | ValueExpr = self.visit(node.expr)
+        output_expr: MemletExpr | SymbolExpr | ValueExpr = self.visit(node.expr)
         if isinstance(output_expr, ValueExpr):
             return self.input_connections, output_expr
 
-        # special case where the field operator is simply copying data from source to destination node
-        output_dtype = output_expr.source.desc(self.sdfg).dtype
-        tasklet_node = self.state.add_tasklet("copy", {"__inp"}, {"__out"}, "__out = __inp")
-        self._add_input_connection(output_expr.source, output_expr.subset, tasklet_node, "__inp")
+        if isinstance(output_expr, MemletExpr):
+            # special case where the field operator is simply copying data from source to destination node
+            output_dtype = output_expr.source.desc(self.sdfg).dtype
+            tasklet_node = self.state.add_tasklet("copy", {"__inp"}, {"__out"}, "__out = __inp")
+            self._add_input_connection(
+                output_expr.source, output_expr.subset, tasklet_node, "__inp"
+            )
+        else:
+            # even simpler case, where a constant value is written to destination node
+            output_dtype = output_expr.dtype
+            tasklet_node = self.state.add_tasklet(
+                "write", {}, {"__out"}, f"__out = {output_expr.value}"
+            )
         return self.input_connections, self._get_tasklet_result(output_dtype, tasklet_node, "__out")
 
     def visit_Literal(self, node: itir.Literal) -> SymbolExpr:
