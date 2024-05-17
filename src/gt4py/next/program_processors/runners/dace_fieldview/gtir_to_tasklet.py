@@ -187,11 +187,12 @@ class LambdaToTasklet(eve.NodeVisitor):
 
         if isinstance(it, IteratorExpr):
             if all(isinstance(index, SymbolExpr) for index in it.indices.values()):
-                # use direct field access through memlet subset
+                # when all indices are symblic expressions, we can perform direct field access through a memlet
                 data_index = sbs.Indices([it.indices[dim].value for dim in it.dimensions])  # type: ignore[union-attr]
                 return MemletExpr(it.field, data_index)
 
             else:
+                # we use a tasklet to perform dereferencing of a generic iterator
                 assert all(dim in it.indices.keys() for dim in it.dimensions)
                 field_indices = [(dim, it.indices[dim]) for dim in it.dimensions]
                 index_connectors = [
@@ -247,12 +248,17 @@ class LambdaToTasklet(eve.NodeVisitor):
     def _split_shift_args(
         self, args: list[itir.Expr]
     ) -> tuple[list[itir.Expr], Optional[list[itir.Expr]]]:
+        """
+        Splits the arguments to `shift` builtin function as pairs, each pair containing
+        the offset provider and the offset value in one dimension.
+        """
         pairs = [args[i : i + 2] for i in range(0, len(args), 2)]
         assert len(pairs) >= 1
         assert all(len(pair) == 2 for pair in pairs)
         return pairs[-1], list(itertools.chain(*pairs[0:-1])) if len(pairs) > 1 else None
 
     def _make_shift_for_rest(self, rest: list[itir.Expr], iterator: itir.Expr) -> itir.FunCall:
+        """Transforms a multi-dimensional shift into recursive shift calls, each in a single dimension."""
         return itir.FunCall(
             fun=itir.FunCall(fun=itir.SymRef(id="shift"), args=rest),
             args=[iterator],
@@ -261,12 +267,13 @@ class LambdaToTasklet(eve.NodeVisitor):
     def _make_cartesian_shift(
         self, it: IteratorExpr, offset_dim: Dimension, offset_expr: IteratorIndexExpr
     ) -> IteratorExpr:
-        """Implements cartesian offset along one dimension."""
+        """Implements cartesian shift along one dimension."""
         assert offset_dim.value in it.dimensions
         new_index: SymbolExpr | ValueExpr
         assert offset_dim.value in it.indices
         index_expr = it.indices[offset_dim.value]
         if isinstance(index_expr, SymbolExpr) and isinstance(offset_expr, SymbolExpr):
+            # purely symbolic expression which can be interpreted at compile time
             new_index = SymbolExpr(index_expr.value + offset_expr.value, index_expr.dtype)
         else:
             # the offset needs to be calculate by means of a tasklet
@@ -319,6 +326,7 @@ class LambdaToTasklet(eve.NodeVisitor):
 
             new_index = self._get_tasklet_result(dtype, dynamic_offset_tasklet, new_index_connector)
 
+        # a new iterator with a shifted index along one dimension
         return IteratorExpr(
             it.field,
             it.dimensions,
@@ -328,6 +336,50 @@ class LambdaToTasklet(eve.NodeVisitor):
             },
         )
 
+    def _make_dynamic_neighbor_offset(
+        self,
+        offset_expr: MemletExpr | ValueExpr,
+        offset_table_node: dace.nodes.AccessNode,
+        origin_index: SymbolExpr,
+    ) -> ValueExpr:
+        """
+        Implements access to neighbor connectivity table by means of a tasklet node.
+
+        It requires a dynamic offset value, either obtained from a field (`MemletExpr`)
+        or computed byanother tasklet (`ValueExpr`).
+        """
+        new_index_connector = "neighbor_index"
+        tasklet_node = self.state.add_tasklet(
+            "dynamic_neighbor_offset",
+            {"table", "offset"},
+            {new_index_connector},
+            f"{new_index_connector} = table[{origin_index.value}, offset]",
+        )
+        self._add_input_connection(
+            offset_table_node,
+            sbs.Range.from_array(offset_table_node.desc(self.sdfg)),
+            tasklet_node,
+            "table",
+        )
+        if isinstance(offset_expr, MemletExpr):
+            self._add_input_connection(
+                offset_expr.source,
+                offset_expr.subset,
+                tasklet_node,
+                "offset",
+            )
+        else:
+            self.state.add_edge(
+                offset_expr.node,
+                None,
+                tasklet_node,
+                "offset",
+                dace.Memlet(data=offset_expr.node.data, subset="0"),
+            )
+
+        dtype = offset_table_node.desc(self.sdfg).dtype
+        return self._get_tasklet_result(dtype, tasklet_node, new_index_connector)
+
     def _make_unstructured_shift(
         self,
         it: IteratorExpr,
@@ -335,18 +387,23 @@ class LambdaToTasklet(eve.NodeVisitor):
         offset_table_node: dace.nodes.AccessNode,
         offset_expr: IteratorIndexExpr,
     ) -> IteratorExpr:
-        # shift in unstructured domain by means of a neighbor table
+        """Implements shift in unstructured domain by means of a neighbor table."""
         neighbor_dim = connectivity.neighbor_axis.value
         assert neighbor_dim in it.dimensions
 
         origin_dim = connectivity.origin_axis.value
         if origin_dim in it.indices:
+            # this is the regular case, where the index in the origin dimension is known
             origin_index = it.indices[origin_dim]
             assert isinstance(origin_index, SymbolExpr)
             neighbor_expr = it.indices.get(neighbor_dim, None)
             if neighbor_expr is not None:
+                # This branch should be executed for chained shift, like `as_fieldop(λ(it) → ·⟪E2Vₒ, 1ₒ⟫(⟪V2Eₒ, 2ₒ⟫(it)))(edges)`
+                # More specifically, here we are visiting the E2V shift of this example. We have already built the tasklet node to perform
+                # V2E neighbor table access but we are missing the value in the origin dimension (the `Vertex` dimension in this example).
+                # TODO: This branch can be deleted in pure fieldview GTIR
                 assert isinstance(neighbor_expr, ValueExpr)
-                # retrieve the tasklet that perform the neighbor table access
+                # retrieve the tasklet that performs the neighbor table access
                 neighbor_tasklet_node = self.state.in_edges(neighbor_expr.node)[0].src
                 if isinstance(offset_expr, SymbolExpr):
                     # use memlet to retrieve the neighbor index and pass it to the index connector of tasklet for neighbor access
@@ -392,6 +449,11 @@ class LambdaToTasklet(eve.NodeVisitor):
                 shifted_indices = it.indices | {neighbor_dim: dynamic_offset_value}
 
         else:
+            # Here the index in the origin dimension is not known: this case should only be encountered with chianed indirection,
+            # for example `as_fieldop(λ(it) → ·⟪E2Vₒ, 1ₒ⟫(⟪V2Eₒ, 2ₒ⟫(it)))(edges)`
+            # More precisely, we are visiting the shift expression for V2E offset: we build a tasklet to compute the neighbor index
+            # but we leave `origin_index_connector` pending (for `Vertex` dimension in this example).
+            # TODO: This branch can be deleted in pure fieldview GTIR
             origin_index_connector = INDEX_CONNECTOR_FMT.format(dim=origin_dim)
             neighbor_index_connector = INDEX_CONNECTOR_FMT.format(dim=neighbor_dim)
             if isinstance(offset_expr, SymbolExpr):
@@ -443,53 +505,17 @@ class LambdaToTasklet(eve.NodeVisitor):
             shifted_indices,
         )
 
-    def _make_dynamic_neighbor_offset(
-        self,
-        offset_expr: MemletExpr | ValueExpr,
-        offset_table_node: dace.nodes.AccessNode,
-        origin_index: SymbolExpr,
-    ) -> ValueExpr:
-        new_index_connector = "neighbor_index"
-        tasklet_node = self.state.add_tasklet(
-            "dynamic_neighbor_offset",
-            {"table", "offset"},
-            {new_index_connector},
-            f"{new_index_connector} = table[{origin_index.value}, offset]",
-        )
-        self._add_input_connection(
-            offset_table_node,
-            sbs.Range.from_array(offset_table_node.desc(self.sdfg)),
-            tasklet_node,
-            "table",
-        )
-        if isinstance(offset_expr, MemletExpr):
-            self._add_input_connection(
-                offset_expr.source,
-                offset_expr.subset,
-                tasklet_node,
-                "offset",
-            )
-        else:
-            self.state.add_edge(
-                offset_expr.node,
-                None,
-                tasklet_node,
-                "offset",
-                dace.Memlet(data=offset_expr.node.data, subset="0"),
-            )
-
-        dtype = offset_table_node.desc(self.sdfg).dtype
-        return self._get_tasklet_result(dtype, tasklet_node, new_index_connector)
-
     def _visit_shift(self, node: itir.FunCall) -> IteratorExpr:
         shift_node = node.fun
         assert isinstance(shift_node, itir.FunCall)
 
-        # the iterator to be shifted is the argument to the function node
+        # here we check the arguments to the `shift` builtin function: the offset provider and the offset value
         head, tail = self._split_shift_args(shift_node.args)
         if tail:
+            # we visit a multi-dimensional shift as recursive shift function calls, each returning a new iterator
             it = self.visit(self._make_shift_for_rest(tail, node.args[0]))
         else:
+            # the iterator to be shifted is the argument to the function node
             it = self.visit(node.args[0])
         assert isinstance(it, IteratorExpr)
 
@@ -510,7 +536,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         if isinstance(offset_provider, Dimension):
             return self._make_cartesian_shift(it, offset_provider, offset_expr)
         else:
-            # initially, the storage for the connectivty tables is created as transient
+            # initially, the storage for the connectivty tables is created as transient;
             # when the tables are used, the storage is changed to non-transient,
             # so the corresponding arrays are supposed to be allocated by the SDFG caller
             offset_table = dace_fieldview_util.connectivity_identifier(offset)
