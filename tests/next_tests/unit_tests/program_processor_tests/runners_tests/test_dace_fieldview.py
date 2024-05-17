@@ -43,8 +43,8 @@ IFTYPE = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT6
 CFTYPE = ts.FieldType(dims=[Cell], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
 EFTYPE = ts.FieldType(dims=[Edge], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
 VFTYPE = ts.FieldType(dims=[Vertex], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
-SIZE_TYPE = ts.ScalarType(ts.ScalarKind.INT32)
 SIMPLE_MESH: MeshDescriptor = simple_mesh()
+SIZE_TYPE = ts.ScalarType(ts.ScalarKind.INT32)
 FSYMBOLS = dict(
     __w_size_0=N,
     __w_stride_0=1,
