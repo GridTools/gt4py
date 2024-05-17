@@ -82,10 +82,10 @@ class DaCeBackendFactory(GTFNBackendFactory):
         )
         use_field_canonical_representation: bool = False
 
-    transforms_fop = next_backend.DEFAULT_FIELDOP_TRANSFORMS.replace(
+    transforms_fop = next_backend.FieldopTransformWorkflow(
         past_transform_args=past_process_args.PastProcessArgs(aot_off=True)
     )
-    transforms_prog = next_backend.DEFAULT_PROG_TRANSFORMS.replace(
+    transforms_prog = next_backend.ProgramTransformWorkflow(
         past_transform_args=past_process_args.PastProcessArgs(aot_off=True)
     )
 

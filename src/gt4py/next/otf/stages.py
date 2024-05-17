@@ -74,11 +74,11 @@ def connectivity_or_dimension(
             raise ValueError
 
 
-def iter_size_args(args: Iterable[CompileArg]) -> Iterator[CompileArg]:
+def iter_size_compile_args(args: Iterable[CompileArg]) -> Iterator[CompileArg]:
     for arg in args:
         match argt := arg.__gt_type__():
             case ts.TupleType():
-                yield from iter_size_args((CompileArg(t) for t in argt))
+                yield from iter_size_compile_args((CompileArg(t) for t in argt))
             case ts.FieldType():
                 yield from [
                     CompileArg(ts.ScalarType(kind=ts.ScalarKind.INT32)) for dim in argt.dims
@@ -97,7 +97,7 @@ class CompileArgSpec:
     @classmethod
     def from_concrete(cls, *args: Any, **kwargs: Any) -> Self:
         compile_args = tuple(CompileArg(type_translation.from_value(arg)) for arg in args)
-        size_args = tuple(iter_size_args(compile_args))
+        size_args = tuple(iter_size_compile_args(compile_args))
         return cls(
             args=(*compile_args, *size_args),
             offset_provider={
