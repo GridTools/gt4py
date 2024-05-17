@@ -408,7 +408,7 @@ class SymbolicRange:
 @dataclasses.dataclass
 class SymbolicDomain:
     grid_type: Literal["unstructured_domain", "cartesian_domain"]
-    ranges: dict[str, SymbolicRange]
+    ranges: dict[ir.AxisLiteral, SymbolicRange]
 
     @classmethod
     def from_expr(cls, node: ir.Node):
@@ -417,7 +417,7 @@ class SymbolicDomain:
             im.ref("cartesian_domain"),
         ]
 
-        ranges: dict[str, SymbolicRange] = {}
+        ranges: dict[ir.AxisLiteral, SymbolicRange] = {}
         for named_range in node.args:
             assert (
                 isinstance(named_range, ir.FunCall)
@@ -427,13 +427,13 @@ class SymbolicDomain:
             axis_literal, lower_bound, upper_bound = named_range.args
             assert isinstance(axis_literal, ir.AxisLiteral)
 
-            ranges[axis_literal.value] = SymbolicRange(lower_bound, upper_bound)
+            ranges[axis_literal] = SymbolicRange(lower_bound, upper_bound)
         return cls(node.fun.id, ranges)  # type: ignore[attr-defined]  # ensure by assert above
 
     def as_expr(self):
         return im.call(self.grid_type)(
             *[
-                im.call("named_range")(ir.AxisLiteral(value=d), r.start, r.stop)
+                im.call("named_range")(ir.AxisLiteral(value=d.value, kind=d.kind), r.start, r.stop)
                 for d, r in self.ranges.items()
             ]
         )
