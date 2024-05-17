@@ -12,19 +12,27 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_field_operator import (
+from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtin_translators.gtir_builtin import (
+    GTIRPrimitiveTranslator as PrimitiveTranslator,
+    SDFGField,
+    SDFGFieldBuilder,
+)
+from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtin_translators.gtir_builtin_field_operator import (
     GTIRBuiltinAsFieldOp as AsFieldOp,
 )
-from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_select import (
+from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtin_translators.gtir_builtin_select import (
     GTIRBuiltinSelect as Select,
 )
-from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_symbol_ref import (
+from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtin_translators.gtir_builtin_symbol_ref import (
     GTIRBuiltinSymbolRef as SymbolRef,
 )
 
 
 # export short names of translation classes for GTIR builtin functions
 __all__ = [
+    "PrimitiveTranslator",
+    "SDFGField",
+    "SDFGFieldBuilder",
     "AsFieldOp",
     "Select",
     "SymbolRef",

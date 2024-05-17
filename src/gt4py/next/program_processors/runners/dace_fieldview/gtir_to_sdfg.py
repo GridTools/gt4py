@@ -26,11 +26,8 @@ from gt4py.next.common import Connectivity, Dimension, DimensionKind
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.program_processors.runners.dace_fieldview import (
-    gtir_builtins,
+    gtir_builtin_translators,
     utility as dace_fieldview_util,
-)
-from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_translator import (
-    SDFGFieldBuilder,
 )
 from gt4py.next.type_system import type_specifications as ts
 
@@ -129,7 +126,9 @@ class GTIRToSDFG(eve.NodeVisitor):
 
         TODO: do we need to return the GT4Py `FieldType`/`ScalarType`?
         """
-        expr_builder: SDFGFieldBuilder = self.visit(node, sdfg=sdfg, head_state=head_state)
+        expr_builder: gtir_builtin_translators.SDFGFieldBuilder = self.visit(
+            node, sdfg=sdfg, head_state=head_state
+        )
         results = expr_builder()
 
         expressions_nodes = []
@@ -222,21 +221,23 @@ class GTIRToSDFG(eve.NodeVisitor):
 
     def visit_FunCall(
         self, node: itir.FunCall, sdfg: dace.SDFG, head_state: dace.SDFGState
-    ) -> SDFGFieldBuilder:
+    ) -> gtir_builtin_translators.SDFGFieldBuilder:
         # first visit the argument nodes
-        arg_builders: list[SDFGFieldBuilder] = []
+        arg_builders = []
         for arg in node.args:
-            arg_builder: SDFGFieldBuilder = self.visit(arg, sdfg=sdfg, head_state=head_state)
+            arg_builder: gtir_builtin_translators.SDFGFieldBuilder = self.visit(
+                arg, sdfg=sdfg, head_state=head_state
+            )
             arg_builders.append(arg_builder)
 
         if cpm.is_call_to(node.fun, "as_fieldop"):
-            return gtir_builtins.AsFieldOp(
+            return gtir_builtin_translators.AsFieldOp(
                 sdfg, head_state, node, arg_builders, self.offset_provider
             )
 
         elif cpm.is_call_to(node.fun, "select"):
             assert len(arg_builders) == 0
-            return gtir_builtins.Select(sdfg, head_state, self, node)
+            return gtir_builtin_translators.Select(sdfg, head_state, self, node)
 
         else:
             raise NotImplementedError(f"Unexpected 'FunCall' expression ({node}).")
@@ -251,8 +252,8 @@ class GTIRToSDFG(eve.NodeVisitor):
 
     def visit_SymRef(
         self, node: itir.SymRef, sdfg: dace.SDFG, head_state: dace.SDFGState
-    ) -> SDFGFieldBuilder:
+    ) -> gtir_builtin_translators.SDFGFieldBuilder:
         symbol_name = str(node.id)
         assert symbol_name in self.symbol_types
         symbol_type = self.symbol_types[symbol_name]
-        return gtir_builtins.SymbolRef(sdfg, head_state, symbol_name, symbol_type)
+        return gtir_builtin_translators.SymbolRef(sdfg, head_state, symbol_name, symbol_type)

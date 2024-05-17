@@ -19,9 +19,7 @@ import dace
 from gt4py.next.common import Connectivity, Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
-from gt4py.next.program_processors.runners.dace_fieldview.gtir_python_codegen import (
-    GTIRPythonCodegen,
-)
+from gt4py.next.program_processors.runners.dace_fieldview import gtir_to_tasklet
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -84,4 +82,4 @@ def get_domain(
 
 
 def get_symbolic_expr(node: itir.Expr) -> str:
-    return GTIRPythonCodegen().visit(node)
+    return gtir_to_tasklet.PythonCodegen().visit(node)

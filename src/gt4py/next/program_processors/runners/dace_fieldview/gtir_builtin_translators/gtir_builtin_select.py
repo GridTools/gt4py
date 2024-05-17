@@ -19,18 +19,16 @@ from gt4py import eve
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.program_processors.runners.dace_fieldview import utility as dace_fieldview_util
-from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_translator import (
-    GTIRBuiltinTranslator,
-    SDFGField,
-    SDFGFieldBuilder,
+from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtin_translators import (
+    gtir_builtin,
 )
 
 
-class GTIRBuiltinSelect(GTIRBuiltinTranslator):
+class GTIRBuiltinSelect(gtir_builtin.GTIRPrimitiveTranslator):
     """Generates the dataflow subgraph for the `select` builtin function."""
 
-    true_br_builder: SDFGFieldBuilder
-    false_br_builder: SDFGFieldBuilder
+    true_br_builder: gtir_builtin.SDFGFieldBuilder
+    false_br_builder: gtir_builtin.SDFGFieldBuilder
 
     def __init__(
         self,
@@ -80,7 +78,7 @@ class GTIRBuiltinSelect(GTIRBuiltinTranslator):
             false_expr, sdfg=sdfg, head_state=false_state
         )
 
-    def build(self) -> list[SDFGField]:
+    def build(self) -> list[gtir_builtin.SDFGField]:
         # retrieve true/false states as predecessors of head state
         branch_states = tuple(edge.src for edge in self.sdfg.in_edges(self.head_state))
         assert len(branch_states) == 2

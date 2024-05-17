@@ -21,33 +21,23 @@ import dace.subsets as sbs
 from gt4py.next.common import Connectivity, Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
-from gt4py.next.program_processors.runners.dace_fieldview import utility as dace_fieldview_util
-from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_translator import (
-    GTIRBuiltinTranslator,
-    SDFGField,
-    SDFGFieldBuilder,
+from gt4py.next.program_processors.runners.dace_fieldview import (
+    gtir_to_tasklet,
+    utility as dace_fieldview_util,
 )
-from gt4py.next.program_processors.runners.dace_fieldview.gtir_to_tasklet import (
-    GTIRToTasklet,
-    IteratorExpr,
-    MemletExpr,
-    SymbolExpr,
-    ValueExpr,
+from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtin_translators import (
+    gtir_builtin,
 )
 from gt4py.next.type_system import type_specifications as ts
 
 
-# Define type of variables used for field indexing
-_INDEX_DTYPE = dace.int64
-
-
-class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator):
+class GTIRBuiltinAsFieldOp(gtir_builtin.GTIRPrimitiveTranslator):
     """Generates the dataflow subgraph for the `as_field_op` builtin function."""
 
     TaskletConnector: TypeAlias = tuple[dace.nodes.Tasklet, str]
 
     stencil_expr: itir.Lambda
-    stencil_args: list[SDFGFieldBuilder]
+    stencil_args: list[gtir_builtin.SDFGFieldBuilder]
     field_domain: dict[Dimension, tuple[dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]]
     field_type: ts.FieldType
     offset_provider: dict[str, Connectivity | Dimension]
@@ -57,7 +47,7 @@ class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator):
         sdfg: dace.SDFG,
         state: dace.SDFGState,
         node: itir.FunCall,
-        stencil_args: list[SDFGFieldBuilder],
+        stencil_args: list[gtir_builtin.SDFGFieldBuilder],
         offset_provider: dict[str, Connectivity | Dimension],
     ):
         super().__init__(sdfg, state)
@@ -84,10 +74,10 @@ class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator):
         self.stencil_expr = stencil_expr
         self.stencil_args = stencil_args
 
-    def build(self) -> list[SDFGField]:
+    def build(self) -> list[gtir_builtin.SDFGField]:
         dimension_index_fmt = "i_{dim}"
         # first visit the list of arguments and build a symbol map
-        stencil_args: list[IteratorExpr | MemletExpr] = []
+        stencil_args: list[gtir_to_tasklet.IteratorExpr | gtir_to_tasklet.MemletExpr] = []
         for arg in self.stencil_args:
             arg_nodes = arg()
             assert len(arg_nodes) == 1
@@ -96,18 +86,18 @@ class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator):
             assert isinstance(data_node, dace.nodes.AccessNode)
 
             if isinstance(arg_type, ts.ScalarType):
-                scalar_arg = MemletExpr(data_node, sbs.Indices([0]))
+                scalar_arg = gtir_to_tasklet.MemletExpr(data_node, sbs.Indices([0]))
                 stencil_args.append(scalar_arg)
             else:
                 assert isinstance(arg_type, ts.FieldType)
-                indices: dict[str, MemletExpr | SymbolExpr | ValueExpr] = {
-                    dim.value: SymbolExpr(
+                indices: dict[str, gtir_to_tasklet.IteratorIndexExpr] = {
+                    dim.value: gtir_to_tasklet.SymbolExpr(
                         dace.symbolic.SymExpr(dimension_index_fmt.format(dim=dim.value)),
-                        _INDEX_DTYPE,
+                        gtir_to_tasklet.INDEX_DTYPE,
                     )
                     for dim in self.field_domain.keys()
                 }
-                iterator_arg = IteratorExpr(
+                iterator_arg = gtir_to_tasklet.IteratorExpr(
                     data_node,
                     [dim.value for dim in arg_type.dims],
                     indices,
@@ -115,9 +105,9 @@ class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator):
                 stencil_args.append(iterator_arg)
 
         # represent the field operator as a mapped tasklet graph, which will range over the field domain
-        taskgen = GTIRToTasklet(self.sdfg, self.head_state, self.offset_provider)
+        taskgen = gtir_to_tasklet.LambdaToTasklet(self.sdfg, self.head_state, self.offset_provider)
         input_connections, output_expr = taskgen.visit(self.stencil_expr, args=stencil_args)
-        assert isinstance(output_expr, ValueExpr)
+        assert isinstance(output_expr, gtir_to_tasklet.ValueExpr)
 
         # retrieve the tasklet node which writes the result
         output_tasklet_node = self.head_state.in_edges(output_expr.node)[0].src

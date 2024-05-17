@@ -19,16 +19,19 @@ from typing import Callable, TypeAlias, final
 
 import dace
 
-from gt4py.next.program_processors.runners.dace_fieldview import utility as dace_fieldview_util
+from gt4py.next.program_processors.runners.dace_fieldview import (
+    utility as dace_fieldview_util,
+)
 from gt4py.next.type_system import type_specifications as ts
 
 
+# Define aliases for return types
 SDFGField: TypeAlias = tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]
 SDFGFieldBuilder: TypeAlias = Callable[[], list[SDFGField]]
 
 
 @dataclass(frozen=True)
-class GTIRBuiltinTranslator(abc.ABC):
+class GTIRPrimitiveTranslator(abc.ABC):
     sdfg: dace.SDFG
     head_state: dace.SDFGState
 
