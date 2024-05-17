@@ -24,6 +24,31 @@ from gt4py import eve
 from gt4py.eve.utils import XIterable
 
 
+def test_first():
+    from gt4py.eve.utils import first
+
+    # Test case 1: Non-empty iterable
+    iterable = [1, 2, 3, 4, 5]
+    result = first(iterable)
+    assert result == 1
+
+    # Test case 2: Empty iterable with default value
+    iterable = []
+    default = "default"
+    result = first(iterable, default=default)
+    assert result == default
+
+    # Test case 3: Empty iterable without default value
+    iterable = []
+    with pytest.raises(StopIteration):
+        first(iterable)
+
+    # Test case 4: Iterable with single element
+    iterable = [42]
+    result = first(iterable)
+    assert result == 42
+
+
 def test_getitem_():
     from gt4py.eve.utils import getitem_
 
