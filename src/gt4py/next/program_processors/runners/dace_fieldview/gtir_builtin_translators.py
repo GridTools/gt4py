@@ -169,6 +169,8 @@ class AsFieldOp(PrimitiveTranslator):
         output_tasklet_connector = self.head_state.in_edges(output_expr.node)[0].src_conn
 
         # the last transient node can be deleted
+        # TODO: not needed to store the node `dtype` after type inference is in place
+        dtype = output_expr.node.desc(self.sdfg).dtype
         self.head_state.remove_node(output_expr.node)
 
         # allocate local temporary storage for the result field
@@ -177,7 +179,11 @@ class AsFieldOp(PrimitiveTranslator):
             self.field_domain[dim][1] - self.field_domain[dim][0]
             for dim in self.field_type.dims
         ]
-        field_node = self.add_local_storage(self.field_type, field_shape)
+        # TODO: use `self.field_type` without overriding `dtype` when type inference is in place
+        field_dtype = dace_fieldview_util.as_scalar_type(str(dtype.as_numpy_dtype()))
+        field_node = self.add_local_storage(
+            ts.FieldType(self.field_type.dims, field_dtype), field_shape
+        )
 
         # assume tasklet with single output
         output_index = ",".join(
@@ -192,15 +198,19 @@ class AsFieldOp(PrimitiveTranslator):
         }
         me, mx = self.head_state.add_map("field_op", map_ranges)
 
-        for data_node, data_subset, lambda_node, lambda_connector in input_connections:
-            memlet = dace.Memlet(data=data_node.data, subset=data_subset)
-            self.head_state.add_memlet_path(
-                data_node,
-                me,
-                lambda_node,
-                dst_conn=lambda_connector,
-                memlet=memlet,
-            )
+        if len(input_connections) == 0:
+            # dace requires an empty edge from map entry node to tasklet node, in case there no input memlets
+            self.head_state.add_nedge(me, output_tasklet_node, dace.Memlet())
+        else:
+            for data_node, data_subset, lambda_node, lambda_connector in input_connections:
+                memlet = dace.Memlet(data=data_node.data, subset=data_subset)
+                self.head_state.add_memlet_path(
+                    data_node,
+                    me,
+                    lambda_node,
+                    dst_conn=lambda_connector,
+                    memlet=memlet,
+                )
         self.head_state.add_memlet_path(
             output_tasklet_node,
             mx,
