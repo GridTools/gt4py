@@ -20,9 +20,7 @@ Note: this test module covers the fieldview flavour of ITIR.
 from gt4py.next.common import NeighborTable
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.program_processors.runners.dace_fieldview.gtir_to_sdfg import (
-    GTIRToSDFG as FieldviewGtirToSDFG,
-)
+from gt4py.next.program_processors.runners import dace_fieldview as dace_backend
 from gt4py.next.type_system import type_specifications as ts
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     Cell,
@@ -112,14 +110,44 @@ def test_gtir_copy():
     a = np.random.rand(N)
     b = np.empty_like(a)
 
-    sdfg_genenerator = FieldviewGtirToSDFG(
-        [IFTYPE, IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)], offset_provider={}
-    )
-    sdfg = sdfg_genenerator.visit(testee)
-    assert isinstance(sdfg, dace.SDFG)
+    arg_types = [IFTYPE, IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)]
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, {})
 
     sdfg(x=a, y=b, **FSYMBOLS)
     assert np.allclose(a, b)
+
+
+def test_gtir_update():
+    domain = im.call("cartesian_domain")(
+        im.call("named_range")(itir.AxisLiteral(value=IDim.value), 0, "size")
+    )
+    testee = itir.Program(
+        id="gtir_copy",
+        function_definitions=[],
+        params=[itir.Sym(id="x"), itir.Sym(id="size")],
+        declarations=[],
+        body=[
+            itir.SetAt(
+                expr=im.call(
+                    im.call("as_fieldop")(
+                        im.lambda_("a")(im.plus(im.deref("a"), 1.0)),
+                        domain,
+                    )
+                )("x"),
+                domain=domain,
+                target=itir.SymRef(id="x"),
+            )
+        ],
+    )
+
+    a = np.random.rand(N)
+    ref = a + 1.0
+
+    arg_types = [IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)]
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, {})
+
+    sdfg(x=a, **FSYMBOLS)
+    assert np.allclose(a, ref)
 
 
 def test_gtir_sum2():
@@ -149,11 +177,8 @@ def test_gtir_sum2():
     b = np.random.rand(N)
     c = np.empty_like(a)
 
-    sdfg_genenerator = FieldviewGtirToSDFG(
-        [IFTYPE, IFTYPE, IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)], offset_provider={}
-    )
-    sdfg = sdfg_genenerator.visit(testee)
-    assert isinstance(sdfg, dace.SDFG)
+    arg_types = [IFTYPE, IFTYPE, IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)]
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, {})
 
     sdfg(x=a, y=b, z=c, **FSYMBOLS)
     assert np.allclose(c, (a + b))
@@ -185,12 +210,8 @@ def test_gtir_sum2_sym():
     a = np.random.rand(N)
     b = np.empty_like(a)
 
-    sdfg_genenerator = FieldviewGtirToSDFG(
-        [IFTYPE, IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)],
-        offset_provider={},
-    )
-    sdfg = sdfg_genenerator.visit(testee)
-    assert isinstance(sdfg, dace.SDFG)
+    arg_types = [IFTYPE, IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)]
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, {})
 
     sdfg(x=a, z=b, **FSYMBOLS)
     assert np.allclose(b, (a + a))
@@ -227,10 +248,7 @@ def test_gtir_sum3():
     b = np.random.rand(N)
     c = np.random.rand(N)
 
-    sdfg_genenerator = FieldviewGtirToSDFG(
-        [IFTYPE, IFTYPE, IFTYPE, IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)],
-        offset_provider={},
-    )
+    arg_types = [IFTYPE, IFTYPE, IFTYPE, IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)]
 
     for i, stencil in enumerate([stencil1, stencil2]):
         testee = itir.Program(
@@ -253,8 +271,7 @@ def test_gtir_sum3():
             ],
         )
 
-        sdfg = sdfg_genenerator.visit(testee)
-        assert isinstance(sdfg, dace.SDFG)
+        sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, {})
 
         d = np.empty_like(a)
 
@@ -316,20 +333,16 @@ def test_gtir_select():
     b = np.random.rand(N)
     c = np.random.rand(N)
 
-    sdfg_genenerator = FieldviewGtirToSDFG(
-        [
-            IFTYPE,
-            IFTYPE,
-            IFTYPE,
-            IFTYPE,
-            ts.ScalarType(ts.ScalarKind.BOOL),
-            ts.ScalarType(ts.ScalarKind.FLOAT64),
-            ts.ScalarType(ts.ScalarKind.INT32),
-        ],
-        offset_provider={},
-    )
-    sdfg = sdfg_genenerator.visit(testee)
-    assert isinstance(sdfg, dace.SDFG)
+    arg_types = [
+        IFTYPE,
+        IFTYPE,
+        IFTYPE,
+        IFTYPE,
+        ts.ScalarType(ts.ScalarKind.BOOL),
+        ts.ScalarType(ts.ScalarKind.FLOAT64),
+        ts.ScalarType(ts.ScalarKind.INT32),
+    ]
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, {})
 
     for s in [False, True]:
         d = np.empty_like(a)
@@ -390,18 +403,14 @@ def test_gtir_select_nested():
 
     a = np.random.rand(N)
 
-    sdfg_genenerator = FieldviewGtirToSDFG(
-        [
-            IFTYPE,
-            IFTYPE,
-            ts.ScalarType(ts.ScalarKind.BOOL),
-            ts.ScalarType(ts.ScalarKind.BOOL),
-            ts.ScalarType(ts.ScalarKind.INT32),
-        ],
-        offset_provider={},
-    )
-    sdfg = sdfg_genenerator.visit(testee)
-    assert isinstance(sdfg, dace.SDFG)
+    arg_types = [
+        IFTYPE,
+        IFTYPE,
+        ts.ScalarType(ts.ScalarKind.BOOL),
+        ts.ScalarType(ts.ScalarKind.BOOL),
+        ts.ScalarType(ts.ScalarKind.INT32),
+    ]
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, {})
 
     for s1 in [False, True]:
         for s2 in [False, True]:
@@ -451,10 +460,8 @@ def test_gtir_cartesian_shift():
 
     IOFFSET_FTYPE = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
 
-    sdfg_genenerator = FieldviewGtirToSDFG(
-        [IFTYPE, IOFFSET_FTYPE, IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)],
-        offset_provider={"IDim": IDim},
-    )
+    arg_types = [IFTYPE, IOFFSET_FTYPE, IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)]
+    offset_provider = {"IDim": IDim}
 
     for i, stencil in enumerate([stencil1, stencil2, stencil3]):
         testee = itir.Program(
@@ -476,8 +483,7 @@ def test_gtir_cartesian_shift():
             ],
         )
 
-        sdfg = sdfg_genenerator.visit(testee)
-        assert isinstance(sdfg, dace.SDFG)
+        sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, offset_provider)
 
         FSYMBOLS_tmp = FSYMBOLS.copy()
         FSYMBOLS_tmp["__x_size_0"] = N + OFFSET
@@ -544,16 +550,13 @@ def test_gtir_connectivity_shift():
     VE_FTYPE = ts.FieldType(dims=[Vertex, Edge], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
     CELL_OFFSET_FTYPE = ts.FieldType(dims=[Cell], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
 
-    sdfg_genenerator = FieldviewGtirToSDFG(
-        [
-            VE_FTYPE,
-            CELL_OFFSET_FTYPE,
-            CELL_OFFSET_FTYPE,
-            CFTYPE,
-            ts.ScalarType(ts.ScalarKind.INT32),
-        ],
-        offset_provider=SIMPLE_MESH.offset_provider,
-    )
+    arg_types = [
+        VE_FTYPE,
+        CELL_OFFSET_FTYPE,
+        CELL_OFFSET_FTYPE,
+        CFTYPE,
+        ts.ScalarType(ts.ScalarKind.INT32),
+    ]
 
     connectivity_C2E = SIMPLE_MESH.offset_provider["C2E"]
     assert isinstance(connectivity_C2E, NeighborTable)
@@ -584,8 +587,7 @@ def test_gtir_connectivity_shift():
             ],
         )
 
-        sdfg = sdfg_genenerator.visit(testee)
-        assert isinstance(sdfg, dace.SDFG)
+        sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, SIMPLE_MESH.offset_provider)
 
         c = np.empty(SIMPLE_MESH.num_cells)
 
@@ -646,11 +648,8 @@ def test_gtir_connectivity_shift_chain():
     e = np.random.rand(SIMPLE_MESH.num_edges)
     e_out = np.empty_like(e)
 
-    sdfg_genenerator = FieldviewGtirToSDFG(
-        [EFTYPE, EFTYPE, ts.ScalarType(ts.ScalarKind.INT32)],
-        offset_provider=SIMPLE_MESH.offset_provider,
-    )
-    sdfg = sdfg_genenerator.visit(testee)
+    arg_types = [EFTYPE, EFTYPE, ts.ScalarType(ts.ScalarKind.INT32)]
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, SIMPLE_MESH.offset_provider)
 
     assert isinstance(sdfg, dace.SDFG)
     connectivity_E2V = SIMPLE_MESH.offset_provider["E2V"]
