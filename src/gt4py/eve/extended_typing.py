@@ -127,10 +127,15 @@ def __dir__() -> List[str]:
     return self_func.__cached_dir
 
 
-_T = TypeVar("_T")
-
 # -- Common type aliases --
 NoArgsCallable = Callable[[], Any]
+
+_A = TypeVar("_A", contravariant=True)
+_R = TypeVar("_R", covariant=True)
+
+
+class ArgsOnlyCallable(Protocol[_A, _R]):
+    def __call__(self, *args: _A) -> _R: ...
 
 
 # -- Typing annotations --
@@ -365,6 +370,9 @@ else:
 def has_type_parameters(cls: Type) -> bool:
     """Return ``True`` if obj is a generic class with type parameters."""
     return issubclass(cls, Generic) and len(getattr(cls, "__parameters__", [])) > 0  # type: ignore[arg-type]  # Generic not considered as a class
+
+
+_T = TypeVar("_T")
 
 
 def get_actual_type(obj: _T) -> Type[_T]:
