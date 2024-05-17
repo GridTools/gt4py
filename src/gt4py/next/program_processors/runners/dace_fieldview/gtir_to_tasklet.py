@@ -48,7 +48,7 @@ class SymbolExpr:
 
 @dataclass(frozen=True)
 class ValueExpr:
-    """Result of the computation provided by a tasklet node."""
+    """Result of the computation implemented by a tasklet node."""
 
     node: dace.nodes.AccessNode
 
@@ -65,6 +65,7 @@ class IteratorExpr:
     indices: dict[str, IteratorIndexExpr]
 
 
+# Define alias for the elements needed to setup input connections to a map scope
 InputConnection: TypeAlias = tuple[
     dace.nodes.AccessNode,
     sbs.Range,
@@ -129,7 +130,12 @@ MATH_BUILTINS_MAPPING = {
 
 
 class LambdaToTasklet(eve.NodeVisitor):
-    """Generates the dataflow subgraph for the `as_field_op` builtin function."""
+    """Translates an `ir.Lambda` expression to a dataflow graph.
+
+    Lambda functions should only be encountered as argument to the `as_field_op`
+    builtin function, therefore the dataflow graph generated here typically
+    represents the stencil function of a field operator.
+    """
 
     sdfg: dace.SDFG
     state: dace.SDFGState
@@ -281,6 +287,12 @@ class LambdaToTasklet(eve.NodeVisitor):
 
 
 class PythonCodegen(codegen.TemplatedGenerator):
+    """Helper class to visit a symbolic expression and translate it to Python code.
+
+    The generated Python code can be use either as the body of a tasklet node or,
+    as in the case of field domain definitions, for sybolic array shape and map range.
+    """
+
     SymRef = as_fmt("{id}")
     Literal = as_fmt("{value}")
 

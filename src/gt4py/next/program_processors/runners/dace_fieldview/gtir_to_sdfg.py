@@ -21,7 +21,7 @@ from typing import Any, Sequence
 
 import dace
 
-import gt4py.eve as eve
+from gt4py import eve
 from gt4py.next.common import Connectivity, Dimension, DimensionKind
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
@@ -68,7 +68,7 @@ class GTIRToSDFG(eve.NodeVisitor):
         the corresponding array shape dimension is set to an integer literal value.
 
         Returns:
-            Two list of symbols, one for the shape and another for the strides of the array.
+            Two lists of symbols, one for the shape and the other for the strides of the array.
         """
         dtype = dace.int32
         neighbor_tables = dace_fieldview_util.filter_connectivities(self.offset_provider)
@@ -121,20 +121,22 @@ class GTIRToSDFG(eve.NodeVisitor):
         """
         Specialized visit method for fieldview expressions.
 
-        This method represents the entry point to visit 'Stmt' expressions.
+        This method represents the entry point to visit `ir.Stmt` expressions.
         As such, it must preserve the property of single exit state in the SDFG.
+
+        Returns a list of array nodes containing the result fields.
 
         TODO: do we need to return the GT4Py `FieldType`/`ScalarType`?
         """
-        expr_builder: gtir_builtin_translators.SDFGFieldBuilder = self.visit(
+        field_builder: gtir_builtin_translators.SDFGFieldBuilder = self.visit(
             node, sdfg=sdfg, head_state=head_state
         )
-        results = expr_builder()
+        results = field_builder()
 
-        expressions_nodes = []
+        field_nodes = []
         for node, _ in results:
             assert isinstance(node, dace.nodes.AccessNode)
-            expressions_nodes.append(node)
+            field_nodes.append(node)
 
         # sanity check: each statement should preserve the property of single exit state (aka head state),
         # i.e. eventually only introduce internal branches, and keep the same head state
@@ -142,7 +144,7 @@ class GTIRToSDFG(eve.NodeVisitor):
         assert len(sink_states) == 1
         assert sink_states[0] == head_state
 
-        return expressions_nodes
+        return field_nodes
 
     def visit_Program(self, node: itir.Program) -> dace.SDFG:
         """Translates `ir.Program` to `dace.SDFG`.
@@ -166,7 +168,7 @@ class GTIRToSDFG(eve.NodeVisitor):
                 temp_symbols |= self._add_storage_for_temporary(decl)
 
             # define symbols for shape and offsets of temporary arrays as interstate edge symbols
-            # TODO(edopao): use new `add_state_after` function in next dace release
+            # TODO(edopao): use new `add_state_after` function available in next dace release
             head_state = sdfg.add_state_after(entry_state, "init_temps")
             sdfg.edges_between(entry_state, head_state)[0].assignments = temp_symbols
         else:
@@ -188,7 +190,7 @@ class GTIRToSDFG(eve.NodeVisitor):
         """Visits a `SetAt` statement expression and writes the local result to some external storage.
 
         Each statement expression results in some sort of dataflow gragh writing to temporary storage.
-        The translation of `SetAt` ensures that the result is written back to some global storage.
+        The translation of `SetAt` ensures that the result is written back to the target external storage.
         """
 
         expr_nodes = self._visit_expression(stmt.expr, sdfg, state)
@@ -230,15 +232,14 @@ class GTIRToSDFG(eve.NodeVisitor):
             )
             arg_builders.append(arg_builder)
 
+        # use specialized dataflow builder classes for each builtin function
         if cpm.is_call_to(node.fun, "as_fieldop"):
             return gtir_builtin_translators.AsFieldOp(
                 sdfg, head_state, node, arg_builders, self.offset_provider
             )
-
         elif cpm.is_call_to(node.fun, "select"):
             assert len(arg_builders) == 0
             return gtir_builtin_translators.Select(sdfg, head_state, self, node)
-
         else:
             raise NotImplementedError(f"Unexpected 'FunCall' expression ({node}).")
 

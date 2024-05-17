@@ -60,7 +60,7 @@ def get_domain(
     """
     Specialized visit method for domain expressions.
 
-    Returns a list of dimensions and the corresponding range.
+    Returns for each domain dimension the corresponding range.
     """
     assert cpm.is_call_to(node, ("cartesian_domain", "unstructured_domain"))
 
@@ -82,4 +82,10 @@ def get_domain(
 
 
 def get_symbolic_expr(node: itir.Expr) -> str:
+    """
+    Specialized visit method for symbolic expressions.
+
+    Returns a string containong the corresponding Python code, which as tasklet body
+    or symbolic array shape.
+    """
     return gtir_to_tasklet.PythonCodegen().visit(node)
