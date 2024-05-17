@@ -408,7 +408,9 @@ class SymbolicRange:
 @dataclasses.dataclass
 class SymbolicDomain:
     grid_type: Literal["unstructured_domain", "cartesian_domain"]
-    ranges: dict[ir.AxisLiteral, SymbolicRange]
+    ranges: dict[
+        common.Dimension, SymbolicRange
+    ]  # TODO(havogt): remove `AxisLiteral` by `Dimension` everywhere
 
     @classmethod
     def from_expr(cls, node: ir.Node):
@@ -417,7 +419,7 @@ class SymbolicDomain:
             im.ref("cartesian_domain"),
         ]
 
-        ranges: dict[ir.AxisLiteral, SymbolicRange] = {}
+        ranges: dict[common.Dimension, SymbolicRange] = {}
         for named_range in node.args:
             assert (
                 isinstance(named_range, ir.FunCall)
@@ -427,7 +429,9 @@ class SymbolicDomain:
             axis_literal, lower_bound, upper_bound = named_range.args
             assert isinstance(axis_literal, ir.AxisLiteral)
 
-            ranges[axis_literal] = SymbolicRange(lower_bound, upper_bound)
+            ranges[common.Dimension(value=axis_literal.value, kind=axis_literal.kind)] = (
+                SymbolicRange(lower_bound, upper_bound)
+            )
         return cls(node.fun.id, ranges)  # type: ignore[attr-defined]  # ensure by assert above
 
     def as_expr(self):
@@ -514,7 +518,7 @@ def update_domains(
                 for offset_name, offset in _group_offsets(shift_chain):
                     if isinstance(offset_provider[offset_name], gtx.Dimension):
                         # cartesian shift
-                        dim = offset_provider[offset_name].value
+                        dim = offset_provider[offset_name]
                         consumed_domain.ranges[dim] = consumed_domain.ranges[dim].translate(offset)
                     elif isinstance(offset_provider[offset_name], common.Connectivity):
                         # unstructured shift
