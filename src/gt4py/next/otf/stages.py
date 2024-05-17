@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Generic, Optional, Protocol, TypeVar
+from typing import Any, Generic, Iterable, Iterator, Optional, Protocol, TypeVar
 
 import numpy as np
 
@@ -74,21 +74,42 @@ def connectivity_or_dimension(
             raise ValueError
 
 
+def iter_size_args(args: Iterable[CompileArg]) -> Iterator[CompileArg]:
+    for arg in args:
+        match argt := arg.__gt_type__():
+            case ts.TupleType():
+                yield from iter_size_args((CompileArg(t) for t in argt))
+            case ts.FieldType():
+                yield from [
+                    CompileArg(ts.ScalarType(kind=ts.ScalarKind.INT32)) for dim in argt.dims
+                ]
+            case _:
+                pass
+
+
 @dataclasses.dataclass(frozen=True)
 class CompileArgSpec:
     args: tuple[CompileArg, ...]
+    kwargs: dict[str, CompileArg]
     offset_provider: dict[str, common.Connectivity | common.Dimension]
     column_axis: Optional[common.Dimension]
 
     @classmethod
     def from_concrete(cls, *args: Any, **kwargs: Any) -> Self:
+        compile_args = tuple(CompileArg(type_translation.from_value(arg)) for arg in args)
+        size_args = tuple(iter_size_args(compile_args))
         return cls(
-            args=tuple(CompileArg(type_translation.from_value(arg)) for arg in args),
+            args=(*compile_args, *size_args),
             offset_provider={
                 k: connectivity_or_dimension(v)
-                for k, v in kwargs.get("offset_provider", {}).items()
+                for k, v in kwargs.pop("offset_provider", {}).items()
             },
-            column_axis=kwargs.get("column_axis", None),
+            column_axis=kwargs.pop("column_axis", None),
+            kwargs={
+                k: CompileArg(type_translation.from_value(v))
+                for k, v in kwargs.items()
+                if v is not None
+            },
         )
 
 
