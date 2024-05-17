@@ -72,7 +72,7 @@ class FieldopTransformWorkflow(workflow.NamedStepSequence):
         )
     )
     past_transform_args: workflow.Workflow[ffront_stages.PastClosure, ffront_stages.PastClosure] = (
-        dataclasses.field(default=past_process_args.past_process_args)
+        dataclasses.field(default=past_process_args.PastProcessArgs(aot_off=False))
     )
     past_to_itir: workflow.Workflow[ffront_stages.PastClosure, stages.ProgramCall] = (
         dataclasses.field(default_factory=past_to_itir.PastToItirFactory)
@@ -132,7 +132,7 @@ class ProgramTransformWorkflow(workflow.NamedStepSequence):
         ffront_stages.PastProgramDefinition, ffront_stages.PastClosure
     ] = dataclasses.field(default_factory=ProgArgsInjector)
     past_transform_args: workflow.Workflow[ffront_stages.PastClosure, ffront_stages.PastClosure] = (
-        dataclasses.field(default=past_process_args.past_process_args)
+        dataclasses.field(default=past_process_args.PastProcessArgs(aot_off=False))
     )
     past_to_itir: workflow.Workflow[ffront_stages.PastClosure, stages.ProgramCall] = (
         dataclasses.field(default_factory=past_to_itir.PastToItirFactory)

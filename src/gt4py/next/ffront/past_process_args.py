@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import dataclasses
 from typing import Any, Iterator, Optional
 
 from gt4py.next import common, errors
@@ -20,25 +21,27 @@ from gt4py.next.ffront import (
     stages as ffront_stages,
     type_specifications as ts_ffront,
 )
-from gt4py.next.otf import workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
-@workflow.make_step
-def past_process_args(inp: ffront_stages.PastClosure) -> ffront_stages.PastClosure:
-    extra_kwarg_names = ["offset_provider", "column_axis"]
-    extra_kwargs = {k: v for k, v in inp.kwargs.items() if k in extra_kwarg_names}
-    kwargs = {k: v for k, v in inp.kwargs.items() if k not in extra_kwarg_names}
-    rewritten_args, size_args, kwargs = _process_args(
-        past_node=inp.past_node, args=list(inp.args), kwargs=kwargs
-    )
-    return ffront_stages.PastClosure(
-        past_node=inp.past_node,
-        closure_vars=inp.closure_vars,
-        grid_type=inp.grid_type,
-        args=tuple([*rewritten_args, *size_args]),
-        kwargs=kwargs | extra_kwargs,
-    )
+@dataclasses.dataclass(frozen=True)
+class PastProcessArgs:
+    aot_off: bool = False
+
+    def __call__(self, inp: ffront_stages.PastClosure) -> ffront_stages.PastClosure:
+        extra_kwarg_names = ["offset_provider", "column_axis"]
+        extra_kwargs = {k: v for k, v in inp.kwargs.items() if k in extra_kwarg_names}
+        kwargs = {k: v for k, v in inp.kwargs.items() if k not in extra_kwarg_names}
+        rewritten_args, size_args, kwargs = _process_args(
+            past_node=inp.past_node, args=list(inp.args), kwargs=kwargs
+        )
+        return ffront_stages.PastClosure(
+            past_node=inp.past_node,
+            closure_vars=inp.closure_vars,
+            grid_type=inp.grid_type,
+            args=(*rewritten_args, *(size_args if self.aot_off else tuple())),
+            kwargs=kwargs | extra_kwargs,
+        )
 
 
 def _validate_args(past_node: past.Program, args: list, kwargs: dict[str, Any]) -> None:

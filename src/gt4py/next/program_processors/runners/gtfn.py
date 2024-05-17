@@ -14,7 +14,7 @@
 
 import functools
 import warnings
-from typing import Any
+from typing import Any, Iterator
 
 import factory
 import numpy.typing as npt
@@ -46,6 +46,17 @@ def convert_arg(arg: Any) -> Any:
         return arg
 
 
+def iter_size_args(args: tuple[Any, ...]) -> Iterator[int]:
+    for arg in args:
+        match arg:
+            case tuple():
+                yield from iter_size_args(arg)
+            case common.Field():
+                yield from arg.ndarray.shape
+            case _:
+                pass
+
+
 def convert_args(
     inp: stages.CompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
 ) -> stages.CompiledProgram:
@@ -54,7 +65,7 @@ def convert_args(
     ) -> None:
         converted_args = [convert_arg(arg) for arg in args]
         conn_args = extract_connectivity_args(offset_provider, device)
-        return inp(*converted_args, *conn_args)
+        return inp(*converted_args, *iter_size_args(args), *conn_args)
 
     return decorated_program
 
