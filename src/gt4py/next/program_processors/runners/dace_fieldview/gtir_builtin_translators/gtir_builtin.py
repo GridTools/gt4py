@@ -19,9 +19,7 @@ from typing import Callable, TypeAlias, final
 
 import dace
 
-from gt4py.next.program_processors.runners.dace_fieldview import (
-    utility as dace_fieldview_util,
-)
+from gt4py.next.program_processors.runners.dace_fieldview import utility as dace_fieldview_util
 from gt4py.next.type_system import type_specifications as ts
 
 

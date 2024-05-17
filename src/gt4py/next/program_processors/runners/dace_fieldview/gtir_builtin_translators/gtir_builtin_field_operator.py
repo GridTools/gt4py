@@ -76,6 +76,8 @@ class GTIRBuiltinAsFieldOp(gtir_builtin.GTIRPrimitiveTranslator):
 
     def build(self) -> list[gtir_builtin.SDFGField]:
         dimension_index_fmt = "i_{dim}"
+        # type of variables used for field indexing
+        index_dtype = dace.int32
         # first visit the list of arguments and build a symbol map
         stencil_args: list[gtir_to_tasklet.IteratorExpr | gtir_to_tasklet.MemletExpr] = []
         for arg in self.stencil_args:
@@ -93,7 +95,7 @@ class GTIRBuiltinAsFieldOp(gtir_builtin.GTIRPrimitiveTranslator):
                 indices: dict[str, gtir_to_tasklet.IteratorIndexExpr] = {
                     dim.value: gtir_to_tasklet.SymbolExpr(
                         dace.symbolic.SymExpr(dimension_index_fmt.format(dim=dim.value)),
-                        gtir_to_tasklet.INDEX_DTYPE,
+                        index_dtype,
                     )
                     for dim in self.field_domain.keys()
                 }
