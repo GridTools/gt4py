@@ -233,7 +233,8 @@ class GTIRToSDFG(eve.NodeVisitor):
 
             if isinstance(target_symbol_type, ts.FieldType):
                 subset = ",".join(
-                    f"{domain[dim][0]}:{domain[dim][1]}" for dim in target_symbol_type.dims
+                    f"{domain[dim.value][0]}:{domain[dim.value][1]}"
+                    for dim in target_symbol_type.dims
                 )
             else:
                 assert len(domain) == 0

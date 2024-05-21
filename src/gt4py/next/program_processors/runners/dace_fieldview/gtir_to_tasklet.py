@@ -70,7 +70,7 @@ class IteratorExpr:
 InputConnection: TypeAlias = tuple[
     dace.nodes.AccessNode,
     sbs.Range,
-    dace.nodes.Tasklet,
+    dace.nodes.NestedSDFG | dace.nodes.Tasklet,
     str,
 ]
 
@@ -132,6 +132,56 @@ MATH_BUILTINS_MAPPING = {
 }
 
 
+def build_neighbors_sdfg(
+    field_dtype: dace.typeclass,
+    field_shape: tuple[int],
+    neighbors_shape: tuple[int],
+    index_dtype: dace.typeclass,
+) -> tuple[dace.SDFG, str, str, str]:
+    assert len(field_shape) == len(neighbors_shape)
+
+    sdfg = dace.SDFG("neighbors")
+    state = sdfg.add_state()
+    me, mx = state.add_map(
+        "neighbors",
+        {f"__idx_{i}": sbs.Range([(0, size - 1, 1)]) for i, size in enumerate(neighbors_shape)},
+    )
+    neighbor_index = ",".join(f"__idx_{i}" for i in range(len(neighbors_shape)))
+
+    field_name, field_array = sdfg.add_array("field", field_shape, field_dtype)
+    index_name, _ = sdfg.add_array("indexes", neighbors_shape, index_dtype)
+    var_name, _ = sdfg.add_array("values", neighbors_shape, field_dtype)
+    tasklet_node = state.add_tasklet(
+        "gather_neighbors",
+        {"__field", "__index"},
+        {"__val"},
+        "__val = __field[__index]",
+    )
+    state.add_memlet_path(
+        state.add_access(field_name),
+        me,
+        tasklet_node,
+        dst_conn="__field",
+        memlet=dace.Memlet.from_array(field_name, field_array),
+    )
+    state.add_memlet_path(
+        state.add_access(index_name),
+        me,
+        tasklet_node,
+        dst_conn="__index",
+        memlet=dace.Memlet(data=index_name, subset=neighbor_index),
+    )
+    state.add_memlet_path(
+        tasklet_node,
+        mx,
+        state.add_access(var_name),
+        src_conn="__val",
+        memlet=dace.Memlet(data=var_name, subset=neighbor_index),
+    )
+
+    return sdfg, field_name, index_name, var_name
+
+
 class LambdaToTasklet(eve.NodeVisitor):
     """Translates an `ir.Lambda` expression to a dataflow graph.
 
@@ -168,18 +218,29 @@ class LambdaToTasklet(eve.NodeVisitor):
         self.input_connections.append((src, subset, dst, dst_connector))
 
     def _get_tasklet_result(
-        self, dtype: dace.typeclass, src_node: dace.nodes.Tasklet, src_connector: str
+        self,
+        dtype: dace.typeclass,
+        src_node: dace.nodes.NestedSDFG | dace.nodes.Tasklet,
+        src_connector: str,
+        shape: Optional[tuple[int,]] = None,
     ) -> ValueExpr:
-        scalar_name, _ = self.sdfg.add_scalar("var", dtype, transient=True, find_new_name=True)
-        scalar_node = self.state.add_access(scalar_name)
+        if shape:
+            var_name, _ = self.sdfg.add_array(
+                "var", shape, dtype, transient=True, find_new_name=True
+            )
+            subset = ",".join(f"0:{size}" for size in shape)
+        else:
+            var_name, _ = self.sdfg.add_scalar("var", dtype, transient=True, find_new_name=True)
+            subset = "0"
+        var_node = self.state.add_access(var_name)
         self.state.add_edge(
             src_node,
             src_connector,
-            scalar_node,
+            var_node,
             None,
-            dace.Memlet(data=scalar_node.data, subset="0"),
+            dace.Memlet(data=var_node.data, subset=subset),
         )
-        return ValueExpr(scalar_node)
+        return ValueExpr(var_node)
 
     def _visit_deref(self, node: itir.FunCall) -> MemletExpr | ValueExpr:
         assert len(node.args) == 1
@@ -244,6 +305,82 @@ class LambdaToTasklet(eve.NodeVisitor):
         else:
             assert isinstance(it, MemletExpr)
             return it
+
+    def _visit_neighbors(self, node: itir.FunCall) -> ValueExpr:
+        assert len(node.args) == 2
+
+        assert isinstance(node.args[0], itir.OffsetLiteral)
+        offset = node.args[0].value
+        assert isinstance(offset, str)
+        offset_provider = self.offset_provider[offset]
+        assert isinstance(offset_provider, Connectivity)
+
+        it = self.visit(node.args[1])
+        assert isinstance(it, IteratorExpr)
+        assert offset_provider.neighbor_axis.value in it.dimensions
+        assert offset_provider.origin_axis.value in it.indices
+        origin_index = it.indices[offset_provider.origin_axis.value]
+        assert isinstance(origin_index, SymbolExpr)
+        assert offset_provider.origin_axis.value not in it.dimensions
+        assert all(isinstance(index, SymbolExpr) for index in it.indices.values())
+
+        field_desc = it.field.desc(self.sdfg)
+        offset_table = dace_fieldview_util.connectivity_identifier(offset)
+        # initially, the storage for the connectivty tables is created as transient;
+        # when the tables are used, the storage is changed to non-transient,
+        # so the corresponding arrays are supposed to be allocated by the SDFG caller
+        self.sdfg.arrays[offset_table].transient = False
+        offset_table_node = self.state.add_access(offset_table)
+
+        field_array_shape = tuple(
+            shape
+            for dim, shape in zip(it.dimensions, field_desc.shape, strict=True)
+            if dim == offset_provider.neighbor_axis.value
+        )
+        assert len(field_array_shape) == 1
+
+        # we build a nested SDFG to gather all neighbors for each point in the field domain
+        # it can be seen as a library node
+        nsdfg, field_name, index_name, output_name = build_neighbors_sdfg(
+            field_desc.dtype,
+            field_array_shape,
+            (offset_provider.max_neighbors,),
+            self.sdfg.arrays[offset_table].dtype,
+        )
+
+        neighbors_node = self.state.add_nested_sdfg(
+            nsdfg, self.sdfg, {field_name, index_name}, {output_name}
+        )
+
+        self._add_input_connection(
+            it.field,
+            sbs.Range(
+                [
+                    (0, size - 1, 1)
+                    if dim == offset_provider.neighbor_axis.value
+                    else (it.indices[dim].value, it.indices[dim].value, 1)  # type: ignore[union-attr]
+                    for dim, size in zip(it.dimensions, field_desc.shape, strict=True)
+                ]
+            ),
+            neighbors_node,
+            field_name,
+        )
+
+        self._add_input_connection(
+            offset_table_node,
+            sbs.Range(
+                [
+                    (origin_index.value, origin_index.value, 1),
+                    (0, offset_provider.max_neighbors - 1, 1),
+                ]
+            ),
+            neighbors_node,
+            index_name,
+        )
+
+        return self._get_tasklet_result(
+            field_desc.dtype, neighbors_node, output_name, shape=(offset_provider.max_neighbors,)
+        )
 
     def _split_shift_args(
         self, args: list[itir.Expr]
@@ -461,11 +598,21 @@ class LambdaToTasklet(eve.NodeVisitor):
         if cpm.is_call_to(node, "deref"):
             return self._visit_deref(node)
 
+        elif cpm.is_call_to(node, "neighbors"):
+            return self._visit_neighbors(node)
+
         elif cpm.is_call_to(node.fun, "shift"):
             return self._visit_shift(node)
 
         else:
             assert isinstance(node.fun, itir.SymRef)
+
+        # create a tasklet node implementing the builtin function
+        builtin_name = str(node.fun.id)
+        if builtin_name in MATH_BUILTINS_MAPPING:
+            fmt = MATH_BUILTINS_MAPPING[builtin_name]
+        else:
+            raise NotImplementedError(f"'{builtin_name}' not implemented.")
 
         node_internals = []
         node_connections: dict[str, MemletExpr | ValueExpr] = {}
@@ -481,13 +628,8 @@ class LambdaToTasklet(eve.NodeVisitor):
                 # use the argument value without adding any connector
                 node_internals.append(arg_expr.value)
 
-        # create a tasklet node implementing the builtin function
-        builtin_name = str(node.fun.id)
-        if builtin_name in MATH_BUILTINS_MAPPING:
-            fmt = MATH_BUILTINS_MAPPING[builtin_name]
-            code = fmt.format(*node_internals)
-        else:
-            raise NotImplementedError(f"'{builtin_name}' not implemented.")
+        # use tasklet connectors as expression arguments
+        code = fmt.format(*node_internals)
 
         out_connector = "result"
         tasklet_node = self.state.add_tasklet(

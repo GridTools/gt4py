@@ -16,7 +16,7 @@ from typing import Any, Mapping
 
 import dace
 
-from gt4py.next.common import Connectivity, Dimension
+from gt4py.next.common import Connectivity
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.program_processors.runners.dace_fieldview import gtir_to_tasklet
@@ -69,7 +69,7 @@ def filter_connectivities(offset_provider: Mapping[str, Any]) -> dict[str, Conne
 
 def get_domain(
     node: itir.Expr,
-) -> dict[Dimension, tuple[dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]]:
+) -> dict[str, tuple[dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]]:
     """
     Specialized visit method for domain expressions.
 
@@ -83,13 +83,12 @@ def get_domain(
         assert len(named_range.args) == 3
         axis = named_range.args[0]
         assert isinstance(axis, itir.AxisLiteral)
-        dim = Dimension(axis.value)
         bounds = []
         for arg in named_range.args[1:3]:
             sym_str = get_symbolic_expr(arg)
             sym_val = dace.symbolic.SymExpr(sym_str)
             bounds.append(sym_val)
-        domain[dim] = (bounds[0], bounds[1])
+        domain[axis.value] = (bounds[0], bounds[1])
 
     return domain
 

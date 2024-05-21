@@ -91,7 +91,7 @@ class AsFieldOp(PrimitiveTranslator):
 
     stencil_expr: itir.Lambda
     stencil_args: list[SDFGFieldBuilder]
-    field_domain: dict[Dimension, tuple[dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]]
+    field_domain: dict[str, tuple[dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]]
     field_type: ts.FieldType
     offset_provider: dict[str, Connectivity | Dimension]
 
@@ -116,7 +116,9 @@ class AsFieldOp(PrimitiveTranslator):
 
         domain = dace_fieldview_util.get_domain(domain_expr)
         # define field domain with all dimensions in alphabetical order
-        sorted_domain_dims = sorted(domain.keys(), key=lambda x: x.value)
+        sorted_domain_dims = sorted(
+            [Dimension(dim) for dim in domain.keys()], key=lambda x: x.value
+        )
 
         # add local storage to compute the field operator over the given domain
         # TODO: use type inference to determine the result type
@@ -146,8 +148,8 @@ class AsFieldOp(PrimitiveTranslator):
             else:
                 assert isinstance(arg_type, ts.FieldType)
                 indices: dict[str, gtir_to_tasklet.IteratorIndexExpr] = {
-                    dim.value: gtir_to_tasklet.SymbolExpr(
-                        dace.symbolic.SymExpr(dimension_index_fmt.format(dim=dim.value)),
+                    dim: gtir_to_tasklet.SymbolExpr(
+                        dace.symbolic.SymExpr(dimension_index_fmt.format(dim=dim)),
                         index_dtype,
                     )
                     for dim in self.field_domain.keys()
@@ -170,30 +172,34 @@ class AsFieldOp(PrimitiveTranslator):
 
         # the last transient node can be deleted
         # TODO: not needed to store the node `dtype` after type inference is in place
-        dtype = output_expr.node.desc(self.sdfg).dtype
+        output_desc = output_expr.node.desc(self.sdfg)
         self.head_state.remove_node(output_expr.node)
 
         # allocate local temporary storage for the result field
+        field_dims = self.field_type.dims.copy()
         field_shape = [
             # diff between upper and lower bound
-            self.field_domain[dim][1] - self.field_domain[dim][0]
+            self.field_domain[dim.value][1] - self.field_domain[dim.value][0]
             for dim in self.field_type.dims
         ]
+        if isinstance(output_desc, dace.data.Array):
+            # extend the result arrays with the local dimensions added by the field operator e.g. `neighbors`)
+            field_dims.extend(Dimension(f"local_dim{i}") for i in range(len(output_desc.shape)))
+            field_shape.extend(output_desc.shape)
+
         # TODO: use `self.field_type` without overriding `dtype` when type inference is in place
-        field_dtype = dace_fieldview_util.as_scalar_type(str(dtype.as_numpy_dtype()))
-        field_node = self.add_local_storage(
-            ts.FieldType(self.field_type.dims, field_dtype), field_shape
-        )
+        field_dtype = dace_fieldview_util.as_scalar_type(str(output_desc.dtype.as_numpy_dtype()))
+        field_node = self.add_local_storage(ts.FieldType(field_dims, field_dtype), field_shape)
 
         # assume tasklet with single output
-        output_index = ",".join(
-            dimension_index_fmt.format(dim=dim.value) for dim in self.field_type.dims
-        )
-        output_memlet = dace.Memlet(data=field_node.data, subset=output_index)
+        output_subset = [dimension_index_fmt.format(dim=dim.value) for dim in self.field_type.dims]
+        if isinstance(output_desc, dace.data.Array):
+            output_subset.extend(f"0:{size}" for size in output_desc.shape)
+        output_memlet = dace.Memlet(data=field_node.data, subset=",".join(output_subset))
 
         # create map range corresponding to the field operator domain
         map_ranges = {
-            dimension_index_fmt.format(dim=dim.value): f"{lb}:{ub}"
+            dimension_index_fmt.format(dim=dim): f"{lb}:{ub}"
             for dim, (lb, ub) in self.field_domain.items()
         }
         me, mx = self.head_state.add_map("field_op", map_ranges)
