@@ -265,3 +265,26 @@ class SkippableStep(
 
     def skip_condition(self, inp: StartT) -> bool:
         raise NotImplementedError()
+
+
+@dataclasses.dataclass
+class InputWithArgs(Generic[StartT]):
+    data: StartT
+    args: tuple[Any]
+    kwargs: dict[str, Any]
+
+
+@dataclasses.dataclass(frozen=True)
+class NamedStepSequenceWithArgs(NamedStepSequence[InputWithArgs[StartT], EndT]):
+    def __call__(self, inp: InputWithArgs[StartT]) -> EndT:
+        args = inp.args
+        kwargs = inp.kwargs
+        step_result: Any = inp.data
+        fields = {f.name: f for f in dataclasses.fields(self)}
+        for step_name in self.step_order:
+            step = getattr(self, step_name)
+            if fields[step_name].metadata.get("takes_args", False):
+                step_result = step(InputWithArgs(step_result, args, kwargs))
+            else:
+                step_result = step(step_result)
+        return step_result
