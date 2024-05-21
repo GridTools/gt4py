@@ -23,6 +23,7 @@ import numpy as np
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import codegen, trees, utils
+from gt4py.eve.extended_typing import Self
 from gt4py.next import common
 from gt4py.next.common import Connectivity, Dimension
 from gt4py.next.ffront import fbuiltins
@@ -43,9 +44,12 @@ def get_param_description(name: str, obj: Any) -> interface.Parameter:
     return interface.Parameter(name, type_translation.from_value(obj))
 
 
-# TODO(ricoh): rename back when the whole toolchain is AOT capable
 @dataclasses.dataclass(frozen=True)
-class GTFNAotTranslationStep(
+class GTFNTranslationStep(
+    workflow.ReplaceEnabledWorkflowMixin[
+        stages.AOTProgram,
+        stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
+    ],
     workflow.ChainableWorkflowMixin[
         stages.AOTProgram,
         stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
@@ -338,31 +342,40 @@ class GTFNAotTranslationStep(
 
 # TODO(ricoh): remove when the whole toolchain is AOT capable
 @dataclasses.dataclass(frozen=True)
-class GTFNTranslationStep(
+class GTFNJitTranslationStep(
     workflow.NamedStepSequence[
         stages.ProgramCall,
         stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
     ],
     step_types.TranslationStep[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
 ):
-    inner: GTFNAotTranslationStep
+    inner: GTFNTranslationStep
 
     def __call__(
         self, inp: stages.ProgramCall
     ) -> stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings]:
         return self.inner(stages.program_call_to_aot_program(inp))
 
+    def replace(self, **kwargs: Any) -> Self:
+        """Pass through to the inner step."""
+        return super().replace(inner=self.inner.replace(**kwargs))
 
-# TODO(ricoh): rename when the whole toolchain is AOT capable
-class GTFNAotTranslationStepFactory(factory.Factory):
-    class Meta:
-        model = GTFNAotTranslationStep
+    def __getattr__(self, name: str) -> Any:
+        if name == "inner":
+            return self.inner
+        else:
+            return getattr(self.inner, name)
 
 
-# TODO(ricoh): remove when the whole toolchain is AOT capable
 class GTFNTranslationStepFactory(factory.Factory):
     class Meta:
         model = GTFNTranslationStep
+
+
+# TODO(ricoh): remove when the whole toolchain is AOT capable
+class GTFNJitTranslationStepFactory(factory.Factory):
+    class Meta:
+        model = GTFNJitTranslationStep
 
     class Params:
         # Note: this duplication is only here to avoid changing calls to the factory
@@ -379,7 +392,7 @@ class GTFNTranslationStepFactory(factory.Factory):
         ] = None
 
     inner = factory.SubFactory(
-        GTFNAotTranslationStepFactory,
+        GTFNTranslationStepFactory,
         **{
             name: factory.SelfAttribute(f"..{name}")
             for name in dir(Params)

@@ -84,10 +84,7 @@ class CompileArgSpec:
     def from_concrete(cls, *args: Any, **kwargs: Any) -> Self:
         return cls(
             args=tuple(CompileArg(type_translation.from_value(arg)) for arg in args),
-            offset_provider={
-                k: connectivity_or_dimension(v)
-                for k, v in kwargs.get("offset_provider", {}).items()
-            },
+            offset_provider=kwargs.get("offset_provider", {}),
             column_axis=kwargs.get("column_axis", None),
         )
 

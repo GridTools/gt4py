@@ -127,7 +127,8 @@ class GTFNCompileWorkflowFactory(factory.Factory):
         )
 
     translation = factory.SubFactory(
-        gtfn_module.GTFNTranslationStepFactory, device_type=factory.SelfAttribute("..device_type")
+        gtfn_module.GTFNJitTranslationStepFactory,
+        device_type=factory.SelfAttribute("..device_type"),
     )
     bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableSource] = (
         nanobind.bind_source
