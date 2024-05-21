@@ -744,34 +744,42 @@ def test_gtir_connectivity_shift_chain():
     edge_domain = im.call("unstructured_domain")(
         im.call("named_range")(itir.AxisLiteral(value=Edge.value), 0, "nedges")
     )
-    temp_domain = im.call("unstructured_domain")(
-        im.call("named_range")(itir.AxisLiteral(value=Vertex.value), 0, "nedges")
+    vertex_domain = im.call("unstructured_domain")(
+        im.call("named_range")(itir.AxisLiteral(value=Vertex.value), 0, "nvertices")
     )
-    # double indirection using fieldview representation
-    stencil_fieldview = im.call(
-        im.call("as_fieldop")(
-            im.lambda_("it")(im.deref(im.shift("E2V", E2V_neighbor_idx)("it"))),
-            edge_domain,
-        )
-    )(
-        im.call(
-            im.call("as_fieldop")(
-                im.lambda_("it")(im.deref(im.shift("V2E", V2E_neighbor_idx)("it"))),
-                temp_domain,
+    testee = itir.Program(
+        id="connectivity_shift_chain",
+        function_definitions=[],
+        params=[
+            itir.Sym(id="edges"),
+            itir.Sym(id="edges_out"),
+            itir.Sym(id="nedges"),
+            itir.Sym(id="nvertices"),
+        ],
+        declarations=[],
+        body=[
+            itir.SetAt(
+                expr=im.call(
+                    im.call("as_fieldop")(
+                        im.lambda_("it")(im.deref(im.shift("E2V", E2V_neighbor_idx)("it"))),
+                        edge_domain,
+                    )
+                )(
+                    im.call(
+                        im.call("as_fieldop")(
+                            im.lambda_("it")(im.deref(im.shift("V2E", V2E_neighbor_idx)("it"))),
+                            vertex_domain,
+                        )
+                    )("edges")
+                ),
+                domain=edge_domain,
+                target=itir.SymRef(id="edges_out"),
             )
-        )("edges")
+        ],
     )
-    # iterator flavor of same stencil
-    stencil_inlined = im.call(
-        im.call("as_fieldop")(
-            im.lambda_("it")(
-                im.deref(im.shift("E2V", E2V_neighbor_idx)(im.shift("V2E", V2E_neighbor_idx)("it")))
-            ),
-            edge_domain,
-        )
-    )("edges")
 
-    arg_types = [EFTYPE, EFTYPE, SIZE_TYPE]
+    arg_types = [EFTYPE, EFTYPE, SIZE_TYPE, SIZE_TYPE]
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, SIMPLE_MESH.offset_provider)
 
     connectivity_E2V = SIMPLE_MESH.offset_provider["E2V"]
     assert isinstance(connectivity_E2V, NeighborTable)
@@ -781,37 +789,17 @@ def test_gtir_connectivity_shift_chain():
     e = np.random.rand(SIMPLE_MESH.num_edges)
     ref = e[connectivity_V2E.table[connectivity_E2V.table[:, E2V_neighbor_idx], V2E_neighbor_idx]]
 
-    for stencil in [stencil_fieldview, stencil_inlined]:
-        testee = itir.Program(
-            id="connectivity_shift_chain",
-            function_definitions=[],
-            params=[
-                itir.Sym(id="edges"),
-                itir.Sym(id="edges_out"),
-                itir.Sym(id="nedges"),
-            ],
-            declarations=[],
-            body=[
-                itir.SetAt(
-                    expr=stencil,
-                    domain=edge_domain,
-                    target=itir.SymRef(id="edges_out"),
-                )
-            ],
-        )
-        sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, SIMPLE_MESH.offset_provider)
+    # new empty output field
+    e_out = np.empty_like(e)
 
-        # new empty output field
-        e_out = np.empty_like(e)
-
-        sdfg(
-            edges=e,
-            edges_out=e_out,
-            connectivity_E2V=connectivity_E2V.table,
-            connectivity_V2E=connectivity_V2E.table,
-            **FSYMBOLS,
-            **CSYMBOLS,
-            __edges_out_size_0=CSYMBOLS["__edges_size_0"],
-            __edges_out_stride_0=CSYMBOLS["__edges_stride_0"],
-        )
-        assert np.allclose(e_out, ref)
+    sdfg(
+        edges=e,
+        edges_out=e_out,
+        connectivity_E2V=connectivity_E2V.table,
+        connectivity_V2E=connectivity_V2E.table,
+        **FSYMBOLS,
+        **CSYMBOLS,
+        __edges_out_size_0=CSYMBOLS["__edges_size_0"],
+        __edges_out_stride_0=CSYMBOLS["__edges_stride_0"],
+    )
+    assert np.allclose(e_out, ref)

@@ -390,120 +390,30 @@ class LambdaToTasklet(eve.NodeVisitor):
         """Implements shift in unstructured domain by means of a neighbor table."""
         neighbor_dim = connectivity.neighbor_axis.value
         assert neighbor_dim in it.dimensions
+        assert neighbor_dim not in it.indices
 
         origin_dim = connectivity.origin_axis.value
-        if origin_dim in it.indices:
-            # this is the regular case, where the index in the origin dimension is known
-            origin_index = it.indices[origin_dim]
-            assert isinstance(origin_index, SymbolExpr)
-            neighbor_expr = it.indices.get(neighbor_dim, None)
-            if neighbor_expr is not None:
-                # This branch should be executed for chained shift, like `as_fieldop(λ(it) → ·⟪E2Vₒ, 1ₒ⟫(⟪V2Eₒ, 2ₒ⟫(it)))(edges)`
-                # More specifically, here we are visiting the E2V shift of this example. We have already built the tasklet node to perform
-                # V2E neighbor table access but we are missing the value in the origin dimension (the `Vertex` dimension in this example).
-                # TODO: This branch can be deleted in pure fieldview GTIR
-                assert isinstance(neighbor_expr, ValueExpr)
-                # retrieve the tasklet that performs the neighbor table access
-                neighbor_tasklet_node = self.state.in_edges(neighbor_expr.node)[0].src
-                if isinstance(offset_expr, SymbolExpr):
-                    # use memlet to retrieve the neighbor index and pass it to the index connector of tasklet for neighbor access
-                    self._add_input_connection(
-                        offset_table_node,
-                        sbs.Indices([origin_index.value, offset_expr.value]),
-                        neighbor_tasklet_node,
-                        INDEX_CONNECTOR_FMT.format(dim=neighbor_dim),
-                    )
-                else:
-                    # dynamic offset: we cannot use a memlet to retrieve the offset value, use a tasklet node
-                    dynamic_offset_value = self._make_dynamic_neighbor_offset(
-                        offset_expr, offset_table_node, origin_index
-                    )
+        assert origin_dim in it.indices
+        origin_index = it.indices[origin_dim]
+        assert isinstance(origin_index, SymbolExpr)
 
-                    # write result to the index connector of tasklet for neighbor access
-                    self.state.add_edge(
-                        dynamic_offset_value.node,
-                        None,
-                        neighbor_tasklet_node,
-                        INDEX_CONNECTOR_FMT.format(dim=neighbor_dim),
-                        memlet=dace.Memlet(data=dynamic_offset_value.node.data, subset="0"),
-                    )
-
-                shifted_indices = {
-                    dim: index for dim, index in it.indices.items() if dim != neighbor_dim
-                } | {origin_dim: it.indices[neighbor_dim]}
-
-            elif isinstance(offset_expr, SymbolExpr):
-                # use memlet to retrieve the neighbor index
-                shifted_indices = it.indices | {
-                    neighbor_dim: MemletExpr(
-                        offset_table_node,
-                        sbs.Indices([origin_index.value, offset_expr.value]),
-                    )
-                }
-            else:
-                # dynamic offset: we cannot use a memlet to retrieve the offset value, use a tasklet node
-                dynamic_offset_value = self._make_dynamic_neighbor_offset(
-                    offset_expr, offset_table_node, origin_index
+        if isinstance(offset_expr, SymbolExpr):
+            # use memlet to retrieve the neighbor index
+            shifted_indices = it.indices | {
+                neighbor_dim: MemletExpr(
+                    offset_table_node,
+                    sbs.Indices([origin_index.value, offset_expr.value]),
                 )
-
-                shifted_indices = it.indices | {neighbor_dim: dynamic_offset_value}
-
+            }
         else:
-            # Here the index in the origin dimension is not known: this case should only be encountered with chianed indirection,
-            # for example `as_fieldop(λ(it) → ·⟪E2Vₒ, 1ₒ⟫(⟪V2Eₒ, 2ₒ⟫(it)))(edges)`
-            # More precisely, we are visiting the shift expression for V2E offset: we build a tasklet to compute the neighbor index
-            # but we leave `origin_index_connector` pending (for `Vertex` dimension in this example).
-            # TODO: This branch can be deleted in pure fieldview GTIR
-            origin_index_connector = INDEX_CONNECTOR_FMT.format(dim=origin_dim)
-            neighbor_index_connector = INDEX_CONNECTOR_FMT.format(dim=neighbor_dim)
-            if isinstance(offset_expr, SymbolExpr):
-                tasklet_node = self.state.add_tasklet(
-                    "shift",
-                    {"table", origin_index_connector},
-                    {neighbor_index_connector},
-                    f"{neighbor_index_connector} = table[{origin_index_connector}, {offset_expr.value}]",
-                )
-            else:
-                tasklet_node = self.state.add_tasklet(
-                    "shift",
-                    {"table", origin_index_connector, "offset"},
-                    {neighbor_index_connector},
-                    f"{neighbor_index_connector} = table[{origin_index_connector}, offset]",
-                )
-                if isinstance(offset_expr, MemletExpr):
-                    self._add_input_connection(
-                        offset_expr.source,
-                        offset_expr.subset,
-                        tasklet_node,
-                        "offset",
-                    )
-                else:
-                    self.state.add_edge(
-                        offset_expr.node,
-                        None,
-                        tasklet_node,
-                        "offset",
-                        dace.Memlet(data=offset_expr.node.data, subset="0"),
-                    )
-            table_desc = offset_table_node.desc(self.sdfg)
-            neighbor_expr = self._get_tasklet_result(
-                table_desc.dtype,
-                tasklet_node,
-                neighbor_index_connector,
+            # dynamic offset: we cannot use a memlet to retrieve the offset value, use a tasklet node
+            dynamic_offset_value = self._make_dynamic_neighbor_offset(
+                offset_expr, offset_table_node, origin_index
             )
-            self._add_input_connection(
-                offset_table_node,
-                sbs.Range.from_array(table_desc),
-                tasklet_node,
-                "table",
-            )
-            shifted_indices = it.indices | {origin_dim: neighbor_expr}
 
-        return IteratorExpr(
-            it.field,
-            [origin_dim if neighbor_expr and dim == neighbor_dim else dim for dim in it.dimensions],
-            shifted_indices,
-        )
+            shifted_indices = it.indices | {neighbor_dim: dynamic_offset_value}
+
+        return IteratorExpr(it.field, it.dimensions, shifted_indices)
 
     def _visit_shift(self, node: itir.FunCall) -> IteratorExpr:
         shift_node = node.fun
