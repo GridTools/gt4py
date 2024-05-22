@@ -33,6 +33,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 )
 from next_tests.integration_tests.cases import EField, IFloatField, VField
 
+from functools import reduce
 import numpy as np
 import pytest
 
@@ -864,3 +865,66 @@ def test_gtir_neighbors():
         __v2e_field_stride_1=1,
     )
     assert np.allclose(v2e_field, e[connectivity_V2E.table])
+
+
+def test_gtir_reduce():
+    vertex_domain = im.call("unstructured_domain")(
+        im.call("named_range")(itir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
+    )
+    testee = itir.Program(
+        id=f"neighbors_sum",
+        function_definitions=[],
+        params=[
+            itir.Sym(id="edges"),
+            itir.Sym(id="vertices"),
+            itir.Sym(id="nvertices"),
+        ],
+        declarations=[],
+        body=[
+            itir.SetAt(
+                expr=im.call(
+                    im.call("as_fieldop")(
+                        im.lambda_("it")(
+                            im.call("reduce")("plus", im.literal_from_value(0), im.deref("it"))
+                        ),
+                        vertex_domain,
+                    )
+                )(
+                    im.call(
+                        im.call("as_fieldop")(
+                            im.lambda_("it")(im.neighbors("V2E", "it")),
+                            vertex_domain,
+                        )
+                    )("edges")
+                ),
+                domain=vertex_domain,
+                target=itir.SymRef(id="vertices"),
+            )
+        ],
+    )
+
+    arg_types = [EFTYPE, VFTYPE, SIZE_TYPE]
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, SIMPLE_MESH.offset_provider)
+
+    connectivity_V2E = SIMPLE_MESH.offset_provider["V2E"]
+    assert isinstance(connectivity_V2E, NeighborTable)
+
+    e = np.random.rand(SIMPLE_MESH.num_edges)
+    v = np.empty(SIMPLE_MESH.num_vertices, dtype=e.dtype)
+    v_ref = [
+        reduce(lambda x, y: x + y, e[v2e_neighbors], 0.0)
+        for v2e_neighbors in connectivity_V2E.table
+    ]
+
+    sdfg(
+        edges=e,
+        vertices=v,
+        connectivity_V2E=connectivity_V2E.table,
+        **FSYMBOLS,
+        **CSYMBOLS,
+        __v2e_field_size_0=SIMPLE_MESH.num_vertices,
+        __v2e_field_size_1=connectivity_V2E.max_neighbors,
+        __v2e_field_stride_0=connectivity_V2E.max_neighbors,
+        __v2e_field_stride_1=1,
+    )
+    assert np.allclose(v, v_ref)

@@ -35,6 +35,8 @@ from gt4py.next.type_system import type_specifications as ts
 SDFGField: TypeAlias = tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]
 SDFGFieldBuilder: TypeAlias = Callable[[], list[SDFGField]]
 
+DIMENSION_INDEX_FMT = "i_{dim}"
+
 
 @dataclass(frozen=True)
 class PrimitiveTranslator(abc.ABC):
@@ -129,38 +131,73 @@ class AsFieldOp(PrimitiveTranslator):
         self.stencil_expr = stencil_expr
         self.stencil_args = stencil_args
 
-    def build(self) -> list[SDFGField]:
-        dimension_index_fmt = "i_{dim}"
-        # type of variables used for field indexing
-        index_dtype = dace.int32
-        # first visit the list of arguments and build a symbol map
-        stencil_args: list[gtir_to_tasklet.IteratorExpr | gtir_to_tasklet.MemletExpr] = []
-        for arg in self.stencil_args:
-            arg_nodes = arg()
-            assert len(arg_nodes) == 1
-            data_node, arg_type = arg_nodes[0]
-            # require all argument nodes to be data access nodes (no symbols)
-            assert isinstance(data_node, dace.nodes.AccessNode)
+    def build_reduce_node(
+        self, stencil_args: list[gtir_to_tasklet.IteratorExpr | gtir_to_tasklet.MemletExpr]
+    ) -> list[SDFGField]:
+        """Use dace library node for reduction."""
+        node = self.stencil_expr.expr
+        assert isinstance(node, itir.FunCall)
 
-            if isinstance(arg_type, ts.ScalarType):
-                scalar_arg = gtir_to_tasklet.MemletExpr(data_node, sbs.Indices([0]))
-                stencil_args.append(scalar_arg)
-            else:
-                assert isinstance(arg_type, ts.FieldType)
-                indices: dict[str, gtir_to_tasklet.IteratorIndexExpr] = {
-                    dim: gtir_to_tasklet.SymbolExpr(
-                        dace.symbolic.SymExpr(dimension_index_fmt.format(dim=dim)),
-                        index_dtype,
-                    )
-                    for dim in self.field_domain.keys()
-                }
-                iterator_arg = gtir_to_tasklet.IteratorExpr(
-                    data_node,
-                    [dim.value for dim in arg_type.dims],
-                    indices,
-                )
-                stencil_args.append(iterator_arg)
+        assert len(node.args) == 3
+        op_name = node.args[0]
+        assert isinstance(op_name, itir.SymRef)
+        reduce_identity = node.args[1]
+        assert isinstance(reduce_identity, itir.Literal)
+        field_arg = node.args[2]
+        assert isinstance(field_arg, itir.FunCall)
 
+        assert len(self.stencil_expr.params) == 1
+        it_param = str(self.stencil_expr.params[0].id)
+        assert len(stencil_args) == 1
+        it = stencil_args[0]
+        assert isinstance(it, gtir_to_tasklet.IteratorExpr)
+
+        taskgen = gtir_to_tasklet.LambdaToTasklet(
+            self.sdfg, self.head_state, self.offset_provider, symbol_map={it_param: it}
+        )
+        field_expr: gtir_to_tasklet.MemletExpr | gtir_to_tasklet.ValueExpr = taskgen.visit(
+            field_arg
+        )
+
+        input_desc = field_expr.node.desc(self.sdfg)
+        assert isinstance(input_desc, dace.data.Array)
+
+        # TODO: use type inference to determine the result type
+        node_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+
+        if len(input_desc.shape) > 1:
+            ndims = len(input_desc.shape) - 1
+            assert ndims == len(it.dimensions)
+            reduce_axes = [ndims]
+        else:
+            ndims = 0
+            reduce_axes = None
+
+        reduce_wcr = "lambda x, y: " + gtir_to_tasklet.MATH_BUILTINS_MAPPING[str(op_name)].format(
+            "x", "y"
+        )
+        reduce_node = self.head_state.add_reduce(reduce_wcr, reduce_axes, reduce_identity)
+
+        self.head_state.add_nedge(
+            field_expr.node, reduce_node, dace.Memlet.from_array(field_expr.node.data, input_desc)
+        )
+
+        field_type: ts.FieldType | ts.ScalarType
+        if ndims > 0:
+            field_type = ts.FieldType([Dimension(dim) for dim in it.dimensions], node_type)
+            output_node = self.add_local_storage(field_type, input_desc.shape[0:ndims])
+            output_memlet = dace.Memlet.from_array(output_node.data, output_node.desc(self.sdfg))
+        else:
+            field_type = node_type
+            output_node = self.add_local_storage(node_type, [])
+            output_memlet = dace.Memlet(data=output_node.data, subset="0")
+
+        self.head_state.add_nedge(reduce_node, output_node, output_memlet)
+        return [(output_node, field_type)]
+
+    def build_tasklet_node(
+        self, stencil_args: list[gtir_to_tasklet.IteratorExpr | gtir_to_tasklet.MemletExpr]
+    ) -> list[SDFGField]:
         # represent the field operator as a mapped tasklet graph, which will range over the field domain
         taskgen = gtir_to_tasklet.LambdaToTasklet(self.sdfg, self.head_state, self.offset_provider)
         input_connections, output_expr = taskgen.visit(self.stencil_expr, args=stencil_args)
@@ -192,14 +229,14 @@ class AsFieldOp(PrimitiveTranslator):
         field_node = self.add_local_storage(ts.FieldType(field_dims, field_dtype), field_shape)
 
         # assume tasklet with single output
-        output_subset = [dimension_index_fmt.format(dim=dim.value) for dim in self.field_type.dims]
+        output_subset = [DIMENSION_INDEX_FMT.format(dim=dim.value) for dim in self.field_type.dims]
         if isinstance(output_desc, dace.data.Array):
             output_subset.extend(f"0:{size}" for size in output_desc.shape)
         output_memlet = dace.Memlet(data=field_node.data, subset=",".join(output_subset))
 
         # create map range corresponding to the field operator domain
         map_ranges = {
-            dimension_index_fmt.format(dim=dim): f"{lb}:{ub}"
+            DIMENSION_INDEX_FMT.format(dim=dim): f"{lb}:{ub}"
             for dim, (lb, ub) in self.field_domain.items()
         }
         me, mx = self.head_state.add_map("field_op", map_ranges)
@@ -226,6 +263,43 @@ class AsFieldOp(PrimitiveTranslator):
         )
 
         return [(field_node, self.field_type)]
+
+    def build(self) -> list[SDFGField]:
+        # type of variables used for field indexing
+        index_dtype = dace.int32
+        # first visit the list of arguments and build a symbol map
+        stencil_args: list[gtir_to_tasklet.IteratorExpr | gtir_to_tasklet.MemletExpr] = []
+        for arg in self.stencil_args:
+            arg_nodes = arg()
+            assert len(arg_nodes) == 1
+            data_node, arg_type = arg_nodes[0]
+            # require all argument nodes to be data access nodes (no symbols)
+            assert isinstance(data_node, dace.nodes.AccessNode)
+
+            if isinstance(arg_type, ts.ScalarType):
+                scalar_arg = gtir_to_tasklet.MemletExpr(data_node, sbs.Indices([0]))
+                stencil_args.append(scalar_arg)
+            else:
+                assert isinstance(arg_type, ts.FieldType)
+                indices: dict[str, gtir_to_tasklet.IteratorIndexExpr] = {
+                    dim: gtir_to_tasklet.SymbolExpr(
+                        dace.symbolic.SymExpr(DIMENSION_INDEX_FMT.format(dim=dim)),
+                        index_dtype,
+                    )
+                    for dim in self.field_domain.keys()
+                }
+                iterator_arg = gtir_to_tasklet.IteratorExpr(
+                    data_node,
+                    [dim.value for dim in arg_type.dims],
+                    indices,
+                )
+                stencil_args.append(iterator_arg)
+
+        if cpm.is_call_to(self.stencil_expr.expr, "reduce"):
+            return self.build_reduce_node(stencil_args)
+
+        else:
+            return self.build_tasklet_node(stencil_args)
 
 
 class Select(PrimitiveTranslator):
