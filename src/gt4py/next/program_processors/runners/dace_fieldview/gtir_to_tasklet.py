@@ -71,7 +71,7 @@ InputConnection: TypeAlias = tuple[
     dace.nodes.AccessNode,
     sbs.Range,
     dace.nodes.Node,
-    str,
+    Optional[str],
 ]
 
 INDEX_CONNECTOR_FMT = "__index_{dim}"
@@ -214,7 +214,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         src: dace.nodes.AccessNode,
         subset: sbs.Range,
         dst: dace.nodes.Node,
-        dst_connector: str,
+        dst_connector: Optional[str] = None,
     ) -> None:
         self.input_connections.append((src, subset, dst, dst_connector))
 
@@ -384,6 +384,41 @@ class LambdaToTasklet(eve.NodeVisitor):
             output_name,
             subset=sbs.Range([(0, offset_provider.max_neighbors - 1, 1)]),
         )
+
+    def _visit_reduce(self, node: itir.FunCall) -> ValueExpr:
+        assert isinstance(node.fun, itir.FunCall)
+        assert len(node.fun.args) == 2
+        op_name = node.fun.args[0]
+        assert isinstance(op_name, itir.SymRef)
+        reduce_identity = node.fun.args[1]
+        assert isinstance(reduce_identity, itir.Literal)
+
+        assert len(node.args) == 1
+        input_expr = self.visit(node.args[0])
+        assert isinstance(input_expr, MemletExpr | ValueExpr)
+        input_desc = input_expr.node.desc(self.sdfg)
+
+        assert isinstance(input_desc, dace.data.Array)
+        if len(input_desc.shape) > 1:
+            ndims = len(input_desc.shape) - 1
+            reduce_axes = [ndims]
+        else:
+            ndims = 0
+            reduce_axes = None
+
+        reduce_wcr = "lambda x, y: " + MATH_BUILTINS_MAPPING[str(op_name)].format("x", "y")
+        reduce_node = self.state.add_reduce(reduce_wcr, reduce_axes, reduce_identity)
+
+        input_subset = sbs.Range([(0, dim_size - 1, 1) for dim_size in input_desc.shape])
+        if ndims > 0:
+            result_subset = sbs.Range(input_subset[0:ndims])
+        else:
+            result_subset = None
+
+        self._add_input_connection(input_expr.node, input_subset, reduce_node)
+
+        # TODO: use type inference to determine the result type
+        return self._get_tasklet_result(input_desc.dtype, reduce_node, None, result_subset)
 
     def _split_shift_args(
         self, args: list[itir.Expr]
@@ -604,7 +639,10 @@ class LambdaToTasklet(eve.NodeVisitor):
         elif cpm.is_call_to(node, "neighbors"):
             return self._visit_neighbors(node)
 
-        elif cpm.is_call_to(node.fun, "shift"):
+        elif cpm.is_applied_reduce(node):
+            return self._visit_reduce(node)
+
+        elif cpm.is_applied_shift(node.fun):
             return self._visit_shift(node)
 
         else:

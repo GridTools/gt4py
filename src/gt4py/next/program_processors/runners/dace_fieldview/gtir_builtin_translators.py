@@ -132,76 +132,30 @@ class AsFieldOp(PrimitiveTranslator):
         self.stencil_args = stencil_args
 
     def build_reduce_node(
-        self, stencil_args: list[gtir_to_tasklet.IteratorExpr | gtir_to_tasklet.MemletExpr]
+        self,
+        input_connections: list[gtir_to_tasklet.InputConnection],
+        output_expr: gtir_to_tasklet.ValueExpr,
     ) -> list[SDFGField]:
         """Use dace library node for reduction."""
-        node = self.stencil_expr.expr
-        assert isinstance(node, itir.FunCall)
 
-        assert len(node.args) == 3
-        op_name = node.args[0]
-        assert isinstance(op_name, itir.SymRef)
-        reduce_identity = node.args[1]
-        assert isinstance(reduce_identity, itir.Literal)
-        field_arg = node.args[2]
-        assert isinstance(field_arg, itir.FunCall)
-
-        assert len(self.stencil_expr.params) == 1
-        it_param = str(self.stencil_expr.params[0].id)
-        assert len(stencil_args) == 1
-        it = stencil_args[0]
-        assert isinstance(it, gtir_to_tasklet.IteratorExpr)
-
-        taskgen = gtir_to_tasklet.LambdaToTasklet(
-            self.sdfg, self.head_state, self.offset_provider, symbol_map={it_param: it}
-        )
-        field_expr: gtir_to_tasklet.MemletExpr | gtir_to_tasklet.ValueExpr = taskgen.visit(
-            field_arg
-        )
-
-        input_desc = field_expr.node.desc(self.sdfg)
-        assert isinstance(input_desc, dace.data.Array)
-
-        # TODO: use type inference to determine the result type
-        node_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
-
-        if len(input_desc.shape) > 1:
-            ndims = len(input_desc.shape) - 1
-            assert ndims == len(it.dimensions)
-            reduce_axes = [ndims]
-        else:
-            ndims = 0
-            reduce_axes = None
-
-        reduce_wcr = "lambda x, y: " + gtir_to_tasklet.MATH_BUILTINS_MAPPING[str(op_name)].format(
-            "x", "y"
-        )
-        reduce_node = self.head_state.add_reduce(reduce_wcr, reduce_axes, reduce_identity)
+        assert len(input_connections) == 1
+        source_node, source_subset, reduce_node, reduce_connector = input_connections[0]
+        assert reduce_connector is None
 
         self.head_state.add_nedge(
-            field_expr.node, reduce_node, dace.Memlet.from_array(field_expr.node.data, input_desc)
+            source_node,
+            reduce_node,
+            dace.Memlet(data=source_node.data, subset=source_subset),
         )
 
-        field_type: ts.FieldType | ts.ScalarType
-        if ndims > 0:
-            field_type = ts.FieldType([Dimension(dim) for dim in it.dimensions], node_type)
-            output_node = self.add_local_storage(field_type, input_desc.shape[0:ndims])
-            output_memlet = dace.Memlet.from_array(output_node.data, output_node.desc(self.sdfg))
-        else:
-            field_type = node_type
-            output_node = self.add_local_storage(node_type, [])
-            output_memlet = dace.Memlet(data=output_node.data, subset="0")
-
-        self.head_state.add_nedge(reduce_node, output_node, output_memlet)
-        return [(output_node, field_type)]
+        return [(output_expr.node, self.field_type)]
 
     def build_tasklet_node(
-        self, stencil_args: list[gtir_to_tasklet.IteratorExpr | gtir_to_tasklet.MemletExpr]
+        self,
+        input_connections: list[gtir_to_tasklet.InputConnection],
+        output_expr: gtir_to_tasklet.ValueExpr,
     ) -> list[SDFGField]:
-        # represent the field operator as a mapped tasklet graph, which will range over the field domain
-        taskgen = gtir_to_tasklet.LambdaToTasklet(self.sdfg, self.head_state, self.offset_provider)
-        input_connections, output_expr = taskgen.visit(self.stencil_expr, args=stencil_args)
-        assert isinstance(output_expr, gtir_to_tasklet.ValueExpr)
+        """Translates the field operator to a mapped tasklet graph, which will range over the field domain."""
 
         # retrieve the tasklet node which writes the result
         output_tasklet_node = self.head_state.in_edges(output_expr.node)[0].src
@@ -295,11 +249,15 @@ class AsFieldOp(PrimitiveTranslator):
                 )
                 stencil_args.append(iterator_arg)
 
-        if cpm.is_call_to(self.stencil_expr.expr, "reduce"):
-            return self.build_reduce_node(stencil_args)
+        taskgen = gtir_to_tasklet.LambdaToTasklet(self.sdfg, self.head_state, self.offset_provider)
+        input_connections, output_expr = taskgen.visit(self.stencil_expr, args=stencil_args)
+        assert isinstance(output_expr, gtir_to_tasklet.ValueExpr)
+
+        if cpm.is_applied_reduce(self.stencil_expr.expr):
+            return self.build_reduce_node(input_connections, output_expr)
 
         else:
-            return self.build_tasklet_node(stencil_args)
+            return self.build_tasklet_node(input_connections, output_expr)
 
 
 class Select(PrimitiveTranslator):

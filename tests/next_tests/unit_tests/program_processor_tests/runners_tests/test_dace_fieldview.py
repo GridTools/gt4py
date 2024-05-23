@@ -885,7 +885,9 @@ def test_gtir_reduce():
                 expr=im.call(
                     im.call("as_fieldop")(
                         im.lambda_("it")(
-                            im.call("reduce")("plus", im.literal_from_value(0), im.deref("it"))
+                            im.call(im.call("reduce")("plus", im.literal_from_value(0)))(
+                                im.deref("it")
+                            )
                         ),
                         vertex_domain,
                     )
