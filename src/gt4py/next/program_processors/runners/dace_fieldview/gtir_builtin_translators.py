@@ -253,7 +253,9 @@ class AsFieldOp(PrimitiveTranslator):
         input_connections, output_expr = taskgen.visit(self.stencil_expr, args=stencil_args)
         assert isinstance(output_expr, gtir_to_tasklet.ValueExpr)
 
-        if cpm.is_applied_reduce(self.stencil_expr.expr):
+        if cpm.is_applied_reduce(self.stencil_expr.expr) and cpm.is_call_to(
+            self.stencil_expr.expr.args[0], "deref"
+        ):
             return self.build_reduce_node(input_connections, output_expr)
 
         else:

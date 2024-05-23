@@ -415,7 +415,14 @@ class LambdaToTasklet(eve.NodeVisitor):
         else:
             result_subset = None
 
-        self._add_input_connection(input_expr.node, input_subset, reduce_node)
+        if isinstance(input_expr, MemletExpr):
+            self._add_input_connection(input_expr.node, input_subset, reduce_node)
+        else:
+            self.state.add_nedge(
+                input_expr.node,
+                reduce_node,
+                dace.Memlet(data=input_expr.node.data, subset=input_subset),
+            )
 
         # TODO: use type inference to determine the result type
         return self._get_tasklet_result(input_desc.dtype, reduce_node, None, result_subset)
