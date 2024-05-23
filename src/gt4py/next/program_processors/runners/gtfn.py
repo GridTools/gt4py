@@ -50,7 +50,7 @@ def iter_size_args(args: tuple[Any, ...]) -> Iterator[int]:
     for arg in args:
         match arg:
             case tuple():
-                yield from iter_size_args(arg)
+                yield from iter_size_args((arg[0],))
             case common.Field():
                 yield from arg.ndarray.shape
             case _:
@@ -138,7 +138,8 @@ class GTFNCompileWorkflowFactory(factory.Factory):
         )
 
     translation = factory.SubFactory(
-        gtfn_module.GTFNTranslationStepFactory, device_type=factory.SelfAttribute("..device_type")
+        gtfn_module.GTFNJitTranslationStepFactory,
+        device_type=factory.SelfAttribute("..device_type"),
     )
     bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableSource] = (
         nanobind.bind_source

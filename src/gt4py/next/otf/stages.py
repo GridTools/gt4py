@@ -100,10 +100,7 @@ class CompileArgSpec:
         size_args = tuple(iter_size_compile_args(compile_args))
         return cls(
             args=(*compile_args, *size_args),
-            offset_provider={
-                k: connectivity_or_dimension(v)
-                for k, v in kwargs.pop("offset_provider", {}).items()
-            },
+            offset_provider=kwargs.pop("offset_provider", {}),
             column_axis=kwargs.pop("column_axis", None),
             kwargs={
                 k: CompileArg(type_translation.from_value(v))

@@ -23,7 +23,7 @@ from gt4py.next.program_processors.runners import gtfn
 @program_formatter
 def format_cpp(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> str:
     # TODO(tehrengruber): This is a little ugly. Revisit.
-    gtfn_translation = gtfn.GTFNBackendFactory().executor.otf_workflow.translation
+    gtfn_translation = gtfn.GTFNBackendFactory().executor.otf_workflow.translation.inner
     assert isinstance(gtfn_translation, GTFNTranslationStep)
     return gtfn_translation.generate_stencil_source(
         program,
