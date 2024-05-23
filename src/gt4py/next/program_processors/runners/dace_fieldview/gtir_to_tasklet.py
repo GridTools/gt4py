@@ -201,13 +201,12 @@ class LambdaToTasklet(eve.NodeVisitor):
         sdfg: dace.SDFG,
         state: dace.SDFGState,
         offset_provider: dict[str, Connectivity | Dimension],
-        symbol_map: Optional[dict[str, IteratorExpr | MemletExpr | SymbolExpr]] = None,
     ):
         self.sdfg = sdfg
         self.state = state
         self.input_connections = []
         self.offset_provider = offset_provider
-        self.symbol_map = symbol_map if symbol_map is not None else {}
+        self.symbol_map = {}
 
     def _add_input_connection(
         self,

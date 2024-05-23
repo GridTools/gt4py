@@ -118,9 +118,7 @@ class AsFieldOp(PrimitiveTranslator):
 
         domain = dace_fieldview_util.get_domain(domain_expr)
         # define field domain with all dimensions in alphabetical order
-        sorted_domain_dims = sorted(
-            [Dimension(dim) for dim in domain.keys()], key=lambda x: x.value
-        )
+        sorted_domain_dims = [Dimension(dim) for dim in sorted(domain.keys())]
 
         # add local storage to compute the field operator over the given domain
         # TODO: use type inference to determine the result type
