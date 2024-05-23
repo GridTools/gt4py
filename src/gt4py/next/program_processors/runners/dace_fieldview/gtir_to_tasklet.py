@@ -24,7 +24,7 @@ import numpy as np
 from gt4py import eve
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt
-from gt4py.next.common import Connectivity, Dimension
+from gt4py.next.common import _DEFAULT_SKIP_VALUE as neighbor_skip_value, Connectivity, Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.program_processors.runners.dace_fieldview import utility as dace_fieldview_util
@@ -137,6 +137,7 @@ def build_neighbors_sdfg(
     field_shape: tuple[int],
     neighbors_shape: tuple[int],
     index_dtype: dace.typeclass,
+    reduce_identity: Optional[SymbolExpr] = None,
 ) -> tuple[dace.SDFG, str, str, str]:
     assert len(field_shape) == len(neighbors_shape)
 
@@ -151,11 +152,17 @@ def build_neighbors_sdfg(
     field_name, field_array = sdfg.add_array("field", field_shape, field_dtype)
     index_name, _ = sdfg.add_array("indexes", neighbors_shape, index_dtype)
     var_name, _ = sdfg.add_array("values", neighbors_shape, field_dtype)
+
+    if reduce_identity is not None:
+        typed_identity_value = f"{reduce_identity.dtype}({reduce_identity.value})"
+        skip_value_code = f" if __index != {neighbor_skip_value} else {typed_identity_value}"
+    else:
+        skip_value_code = ""
     tasklet_node = state.add_tasklet(
         "gather_neighbors",
         {"__field", "__index"},
         {"__val"},
-        "__val = __field[__index]",
+        "__val = __field[__index]" + skip_value_code,
     )
     state.add_memlet_path(
         state.add_access(field_name),
@@ -195,18 +202,21 @@ class LambdaToTasklet(eve.NodeVisitor):
     input_connections: list[InputConnection]
     offset_provider: dict[str, Connectivity | Dimension]
     symbol_map: dict[str, IteratorExpr | MemletExpr | SymbolExpr]
+    reduce_identity: Optional[SymbolExpr]
 
     def __init__(
         self,
         sdfg: dace.SDFG,
         state: dace.SDFGState,
         offset_provider: dict[str, Connectivity | Dimension],
+        reduce_identity: Optional[SymbolExpr] = None,
     ):
         self.sdfg = sdfg
         self.state = state
         self.input_connections = []
         self.offset_provider = offset_provider
         self.symbol_map = {}
+        self.reduce_identity = reduce_identity
 
     def _add_input_connection(
         self,
@@ -313,6 +323,8 @@ class LambdaToTasklet(eve.NodeVisitor):
         assert isinstance(offset, str)
         offset_provider = self.offset_provider[offset]
         assert isinstance(offset_provider, Connectivity)
+        if offset_provider.has_skip_values:
+            assert self.reduce_identity is not None
 
         it = self.visit(node.args[1])
         assert isinstance(it, IteratorExpr)
@@ -345,6 +357,7 @@ class LambdaToTasklet(eve.NodeVisitor):
             field_array_shape,
             (offset_provider.max_neighbors,),
             self.sdfg.arrays[offset_table].dtype,
+            self.reduce_identity,
         )
 
         neighbors_node = self.state.add_nested_sdfg(
@@ -392,9 +405,17 @@ class LambdaToTasklet(eve.NodeVisitor):
         reduce_identity = node.fun.args[1]
         assert isinstance(reduce_identity, itir.Literal)
 
+        # TODO: use type inference to determine the result type
+        dtype = dace.float64
+
+        # we store the value of reduce identity in the visitor context while visiting the input to reduction
+        # this value will be returned by the neighbors builtin function for skip values
+        prev_reduce_identity = self.reduce_identity
+        self.reduce_identity = SymbolExpr(reduce_identity.value, dtype)
         assert len(node.args) == 1
         input_expr = self.visit(node.args[0])
         assert isinstance(input_expr, MemletExpr | ValueExpr)
+        self.reduce_identity = prev_reduce_identity
         input_desc = input_expr.node.desc(self.sdfg)
 
         assert isinstance(input_desc, dace.data.Array)
@@ -420,8 +441,7 @@ class LambdaToTasklet(eve.NodeVisitor):
                 dace.Memlet(data=input_expr.node.data, subset=input_subset),
             )
 
-        # TODO: use type inference to determine the result type
-        return self._get_tasklet_result(input_desc.dtype, reduce_node, None, result_subset)
+        return self._get_tasklet_result(dtype, reduce_node, None, result_subset)
 
     def _split_shift_args(
         self, args: list[itir.Expr]
