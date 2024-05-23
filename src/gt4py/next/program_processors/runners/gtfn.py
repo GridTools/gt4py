@@ -50,7 +50,7 @@ def iter_size_args(args: tuple[Any, ...]) -> Iterator[int]:
     for arg in args:
         match arg:
             case tuple():
-                yield from iter_size_args(arg)
+                yield from iter_size_args((arg[0],))
             case common.Field():
                 yield from arg.ndarray.shape
             case _:
@@ -65,7 +65,7 @@ def convert_args(
     ) -> None:
         converted_args = [convert_arg(arg) for arg in args]
         conn_args = extract_connectivity_args(offset_provider, device)
-        return inp(*converted_args, *iter_size_args(args), *conn_args)
+        return inp(*converted_args, *(iter_size_args(args)), *conn_args)
 
     return decorated_program
 
