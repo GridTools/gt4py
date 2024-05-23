@@ -398,21 +398,18 @@ class LambdaToTasklet(eve.NodeVisitor):
         input_desc = input_expr.node.desc(self.sdfg)
 
         assert isinstance(input_desc, dace.data.Array)
+        input_subset = sbs.Range([(0, dim_size - 1, 1) for dim_size in input_desc.shape])
+
         if len(input_desc.shape) > 1:
             ndims = len(input_desc.shape) - 1
             reduce_axes = [ndims]
+            result_subset = sbs.Range(input_subset[0:ndims])
         else:
-            ndims = 0
             reduce_axes = None
+            result_subset = None
 
         reduce_wcr = "lambda x, y: " + MATH_BUILTINS_MAPPING[str(op_name)].format("x", "y")
         reduce_node = self.state.add_reduce(reduce_wcr, reduce_axes, reduce_identity)
-
-        input_subset = sbs.Range([(0, dim_size - 1, 1) for dim_size in input_desc.shape])
-        if ndims > 0:
-            result_subset = sbs.Range(input_subset[0:ndims])
-        else:
-            result_subset = None
 
         if isinstance(input_expr, MemletExpr):
             self._add_input_connection(input_expr.node, input_subset, reduce_node)
@@ -648,7 +645,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         elif cpm.is_applied_reduce(node):
             return self._visit_reduce(node)
 
-        elif cpm.is_applied_shift(node.fun):
+        elif cpm.is_applied_shift(node):
             return self._visit_shift(node)
 
         else:
