@@ -105,6 +105,7 @@ class DaCeTranslator(
                 library_deps=tuple(),
                 language=languages.SDFG,
                 language_settings=self._language_settings(),
+                implicit_domain=inp.program.implicit_domain,
             )
         )
         return module

@@ -40,12 +40,14 @@ from gt4py.next.type_system import type_info, type_specifications as ts
 @dataclasses.dataclass(frozen=True)
 class PastToItir(workflow.ChainableWorkflowMixin):
     def __call__(self, inp: ffront_stages.PastClosure) -> stages.ProgramCall:
-        all_closure_vars = transform_utils._get_closure_vars_recursively(inp.closure_vars)
+        all_closure_vars = transform_utils._get_closure_vars_recursively(
+            inp.definition.closure_vars
+        )
         offsets_and_dimensions = transform_utils._filter_closure_vars_by_type(
             all_closure_vars, fbuiltins.FieldOffset, common.Dimension
         )
         grid_type = transform_utils._deduce_grid_type(
-            inp.grid_type, offsets_and_dimensions.values()
+            inp.definition.grid_type, offsets_and_dimensions.values()
         )
 
         gt_callables = transform_utils._filter_closure_vars_by_type(
@@ -54,7 +56,9 @@ class PastToItir(workflow.ChainableWorkflowMixin):
         lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
 
         itir_program = ProgramLowering.apply(
-            inp.past_node, function_definitions=lowered_funcs, grid_type=grid_type
+            inp.definition.past_node,
+            function_definitions=lowered_funcs,
+            grid_type=grid_type,
         )
 
         if config.DEBUG or "debug" in inp.kwargs:
@@ -193,15 +197,21 @@ class ProgramLowering(
 
         params = self.visit(node.params)
 
+        implicit_domain = False
         if any("domain" not in body_entry.kwargs for body_entry in node.body):
             params = params + self._gen_size_params_from_program(node)
+            implicit_domain = True
 
         closures: list[itir.StencilClosure] = []
         for stmt in node.body:
             closures.append(self._visit_stencil_call(stmt, **kwargs))
 
         return itir.FencilDefinition(
-            id=node.id, function_definitions=function_definitions, params=params, closures=closures
+            id=node.id,
+            function_definitions=function_definitions,
+            params=params,
+            closures=closures,
+            implicit_domain=implicit_domain,
         )
 
     def _visit_stencil_call(self, node: past.Call, **kwargs: Any) -> itir.StencilClosure:

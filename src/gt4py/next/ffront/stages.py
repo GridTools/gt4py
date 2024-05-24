@@ -85,9 +85,7 @@ class PastProgramDefinition:
 
 @dataclasses.dataclass(frozen=True)
 class PastClosure:
-    closure_vars: dict[str, Any]
-    past_node: past.Program
-    grid_type: Optional[common.GridType]
+    definition: PastProgramDefinition
     args: tuple[Any, ...]
     kwargs: dict[str, Any]
 

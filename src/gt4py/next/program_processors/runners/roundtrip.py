@@ -19,6 +19,7 @@ import importlib.util
 import pathlib
 import tempfile
 import textwrap
+import typing
 from collections.abc import Callable, Iterable
 from typing import Any, Optional
 
@@ -112,7 +113,7 @@ def fencil_generator(
     lift_mode: itir_transforms.LiftMode,
     use_embedded: bool,
     offset_provider: dict[str, embedded.NeighborTableOffsetProvider],
-) -> Callable:
+) -> stages.CompiledProgram:
     """
     Generate a directly executable fencil from an ITIR node.
 
@@ -131,7 +132,7 @@ def fencil_generator(
     if cache_key in _FENCIL_CACHE:
         if debug:
             print(f"Using cached fencil for key {cache_key}")
-        return _FENCIL_CACHE[cache_key]
+        return typing.cast(stages.CompiledProgram, _FENCIL_CACHE[cache_key])
 
     ir = itir_transforms.apply_common_transforms(
         ir, lift_mode=lift_mode, offset_provider=offset_provider
@@ -200,7 +201,7 @@ def fencil_generator(
 
     _FENCIL_CACHE[cache_key] = fencil
 
-    return fencil
+    return typing.cast(stages.CompiledProgram, fencil)
 
 
 @ppi.program_executor  # type: ignore[arg-type]

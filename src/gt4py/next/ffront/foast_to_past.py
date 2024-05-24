@@ -121,9 +121,7 @@ class FoastToPastClosure(workflow.NamedStepSequence):
         )
 
         return ffront_stages.PastClosure(
-            past_node=past_def.past_node,
-            closure_vars=past_def.closure_vars,
-            grid_type=past_def.grid_type,
+            definition=past_def,
             args=inp.args,
             kwargs=inp.kwargs,
         )

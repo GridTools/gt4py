@@ -58,14 +58,16 @@ def iter_size_args(args: tuple[Any, ...]) -> Iterator[int]:
 
 
 def convert_args(
-    inp: stages.CompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
+    inp: stages.ExtendedCompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
 ) -> stages.CompiledProgram:
     def decorated_program(
         *args: Any, offset_provider: dict[str, common.Connectivity | common.Dimension]
     ) -> None:
         converted_args = [convert_arg(arg) for arg in args]
         conn_args = extract_connectivity_args(offset_provider, device)
-        return inp(*converted_args, *iter_size_args(args), *conn_args)
+        return inp(
+            *converted_args, *(iter_size_args(args) if inp.implicit_domain else ()), *conn_args
+        )
 
     return decorated_program
 

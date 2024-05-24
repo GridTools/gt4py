@@ -115,9 +115,7 @@ class ProgramTransformWorkflow(workflow.NamedStepSequenceWithArgs):
         ffront_stages.PastProgramDefinition, ffront_stages.PastClosure
     ] = dataclasses.field(
         default=lambda inp: ffront_stages.PastClosure(
-            past_node=inp.data.past_node,
-            closure_vars=inp.data.closure_vars,
-            grid_type=inp.data.grid_type,
+            definition=inp.data,
             args=inp.args,
             kwargs=inp.kwargs,
         ),

@@ -173,9 +173,11 @@ class Program:
     @functools.cached_property
     def itir(self) -> itir.FencilDefinition:
         no_args_past = ffront_stages.PastClosure(
-            past_node=self.past_stage.past_node,
-            closure_vars=self.past_stage.closure_vars,
-            grid_type=self.definition_stage.grid_type,
+            definition=ffront_stages.PastProgramDefinition(
+                past_node=self.past_stage.past_node,
+                closure_vars=self.past_stage.closure_vars,
+                grid_type=self.definition_stage.grid_type,
+            ),
             args=[],
             kwargs={},
         )

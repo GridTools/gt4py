@@ -287,6 +287,7 @@ class GTFNTranslationStep(
             source_code=source_code,
             language=self._language(),
             language_settings=self._language_settings(),
+            implicit_domain=inp.program.implicit_domain,
         )
         return module
 

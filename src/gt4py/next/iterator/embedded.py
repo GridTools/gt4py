@@ -1566,10 +1566,15 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
             common.UnitRange(0, 0),  # empty: indicates column operation, will update later
         )
 
-    from gt4py.next.program_processors.runners import gtfn
+    import inspect
+
+    if len(args) < len(inspect.getfullargspec(fun).args):
+        from gt4py.next.program_processors.runners import gtfn
+
+        args = (*args, *gtfn.iter_size_args(args))
 
     with embedded_context.new_context(**context_vars) as ctx:
-        ctx.run(fun, *args, *gtfn.iter_size_args(args))
+        ctx.run(fun, *args)
 
 
 runtime.fendef_embedded = fendef_embedded

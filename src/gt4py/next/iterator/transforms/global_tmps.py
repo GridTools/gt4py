@@ -342,6 +342,7 @@ def split_closures(
             + [ir.Sym(id=AUTO_DOMAIN.fun.id)],  # type: ignore[attr-defined]  # value is a global constant
             closures=list(reversed(closures)),
             location=node.location,
+            implicit_domain=node.implicit_domain,
         ),
         params=node.params,
         tmps=[ir.Temporary(id=tmp.id) for tmp in tmps],
@@ -564,6 +565,7 @@ def update_domains(
             params=node.fencil.params[:-1],  # remove `_gtmp_auto_domain` param again
             closures=list(reversed(closures)),
             location=node.fencil.location,
+            implicit_domain=node.fencil.implicit_domain,
         ),
         params=node.params,
         tmps=node.tmps,

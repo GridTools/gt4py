@@ -33,12 +33,10 @@ class PastProcessArgs:
         extra_kwargs = {k: v for k, v in inp.kwargs.items() if k in extra_kwarg_names}
         kwargs = {k: v for k, v in inp.kwargs.items() if k not in extra_kwarg_names}
         rewritten_args, size_args, kwargs = _process_args(
-            past_node=inp.past_node, args=list(inp.args), kwargs=kwargs
+            past_node=inp.definition.past_node, args=list(inp.args), kwargs=kwargs
         )
         return ffront_stages.PastClosure(
-            past_node=inp.past_node,
-            closure_vars=inp.closure_vars,
-            grid_type=inp.grid_type,
+            definition=inp.definition,
             args=(*rewritten_args, *(size_args if self.aot_off else tuple())),
             kwargs=kwargs | extra_kwargs,
         )
