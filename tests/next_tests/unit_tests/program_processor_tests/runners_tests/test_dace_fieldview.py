@@ -985,7 +985,7 @@ def test_gtir_reduce_with_skip_values():
         for v2e_neighbors in connectivity_V2E.table
     ]
 
-    for stencil in [stencil_inlined]:
+    for stencil in [stencil_inlined, stencil_fieldview]:
         testee = itir.Program(
             id=f"neighbors_sum",
             function_definitions=[],

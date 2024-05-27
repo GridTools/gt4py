@@ -15,7 +15,7 @@
 
 import abc
 from dataclasses import dataclass
-from typing import Callable, TypeAlias, final
+from typing import Callable, Optional, TypeAlias, final
 
 import dace
 import dace.subsets as sbs
@@ -33,7 +33,7 @@ from gt4py.next.type_system import type_specifications as ts
 
 # Define aliases for return types
 SDFGField: TypeAlias = tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]
-SDFGFieldBuilder: TypeAlias = Callable[[], list[SDFGField]]
+SDFGFieldBuilder: TypeAlias = Callable[[], tuple[list[SDFGField], Optional[dace.nodes.AccessNode]]]
 
 DIMENSION_INDEX_FMT = "i_{dim}"
 
@@ -44,7 +44,7 @@ class PrimitiveTranslator(abc.ABC):
     head_state: dace.SDFGState
 
     @final
-    def __call__(self) -> list[SDFGField]:
+    def __call__(self) -> tuple[list[SDFGField], Optional[dace.nodes.AccessNode]]:
         """The callable interface is used to build the dataflow graph.
 
         It allows to build the dataflow graph inside a given state starting
@@ -73,7 +73,7 @@ class PrimitiveTranslator(abc.ABC):
         return self.head_state.add_access(name)
 
     @abc.abstractmethod
-    def build(self) -> list[SDFGField]:
+    def build(self) -> tuple[list[SDFGField], Optional[dace.nodes.AccessNode]]:
         """Creates the dataflow subgraph representing a GTIR builtin function.
 
         This method is used by derived classes to build a specialized subgraph
@@ -129,31 +129,41 @@ class AsFieldOp(PrimitiveTranslator):
         self.stencil_expr = stencil_expr
         self.stencil_args = stencil_args
 
-    def build_reduce_node(
-        self,
-        input_connections: list[gtir_to_tasklet.InputConnection],
-        output_expr: gtir_to_tasklet.ValueExpr,
-    ) -> list[SDFGField]:
-        """Use dace library node for reduction."""
+    def build(self) -> tuple[list[SDFGField], Optional[dace.nodes.AccessNode]]:
+        # type of variables used for field indexing
+        index_dtype = dace.int32
+        # first visit the list of arguments and build a symbol map
+        stencil_args: list[gtir_to_tasklet.IteratorExpr | gtir_to_tasklet.MemletExpr] = []
+        for arg in self.stencil_args:
+            arg_nodes, mask_node = arg()
+            assert len(arg_nodes) == 1
+            data_node, arg_type = arg_nodes[0]
+            # require all argument nodes to be data access nodes (no symbols)
+            assert isinstance(data_node, dace.nodes.AccessNode)
 
-        assert len(input_connections) == 1
-        source_node, source_subset, reduce_node, reduce_connector = input_connections[0]
-        assert reduce_connector is None
+            if isinstance(arg_type, ts.ScalarType):
+                scalar_arg = gtir_to_tasklet.MemletExpr(data_node, sbs.Indices([0]))
+                stencil_args.append(scalar_arg)
+            else:
+                assert isinstance(arg_type, ts.FieldType)
+                indices: dict[str, gtir_to_tasklet.IteratorIndexExpr] = {
+                    dim: gtir_to_tasklet.SymbolExpr(
+                        dace.symbolic.SymExpr(DIMENSION_INDEX_FMT.format(dim=dim)),
+                        index_dtype,
+                    )
+                    for dim in self.field_domain.keys()
+                }
+                iterator_arg = gtir_to_tasklet.IteratorExpr(
+                    data_node,
+                    mask_node,
+                    [dim.value for dim in arg_type.dims],
+                    indices,
+                )
+                stencil_args.append(iterator_arg)
 
-        self.head_state.add_nedge(
-            source_node,
-            reduce_node,
-            dace.Memlet(data=source_node.data, subset=source_subset),
-        )
-
-        return [(output_expr.node, self.field_type)]
-
-    def build_tasklet_node(
-        self,
-        input_connections: list[gtir_to_tasklet.InputConnection],
-        output_expr: gtir_to_tasklet.ValueExpr,
-    ) -> list[SDFGField]:
-        """Translates the field operator to a mapped tasklet graph, which will range over the field domain."""
+        taskgen = gtir_to_tasklet.LambdaToTasklet(self.sdfg, self.head_state, self.offset_provider)
+        input_connections, output_expr = taskgen.visit(self.stencil_expr, args=stencil_args)
+        assert isinstance(output_expr, gtir_to_tasklet.ValueExpr)
 
         # retrieve the tasklet node which writes the result
         output_tasklet_node = self.head_state.in_edges(output_expr.node)[0].src
@@ -176,15 +186,15 @@ class AsFieldOp(PrimitiveTranslator):
             field_dims.extend(Dimension(f"local_dim{i}") for i in range(len(output_desc.shape)))
             field_shape.extend(output_desc.shape)
 
-        # TODO: use `self.field_type` without overriding `dtype` when type inference is in place
+        # TODO: use `self.field_type.field_dtype` without overriding `dtype` when type inference is in place
         field_dtype = dace_fieldview_util.as_scalar_type(str(output_desc.dtype.as_numpy_dtype()))
-        field_node = self.add_local_storage(ts.FieldType(field_dims, field_dtype), field_shape)
+        field_type = ts.FieldType(field_dims, field_dtype)
+        field_node = self.add_local_storage(field_type, field_shape)
 
         # assume tasklet with single output
         output_subset = [DIMENSION_INDEX_FMT.format(dim=dim.value) for dim in self.field_type.dims]
         if isinstance(output_desc, dace.data.Array):
             output_subset.extend(f"0:{size}" for size in output_desc.shape)
-        output_memlet = dace.Memlet(data=field_node.data, subset=",".join(output_subset))
 
         # create map range corresponding to the field operator domain
         map_ranges = {
@@ -211,53 +221,26 @@ class AsFieldOp(PrimitiveTranslator):
             mx,
             field_node,
             src_conn=output_tasklet_connector,
-            memlet=output_memlet,
+            memlet=dace.Memlet(data=field_node.data, subset=",".join(output_subset)),
         )
 
-        return [(field_node, self.field_type)]
+        if isinstance(output_expr, gtir_to_tasklet.MaskedValueExpr):
+            # this is the case of neighbors with skip values: the value expression also contains the neighbor indices
+            mask_numpy_dtype = self.sdfg.arrays[output_expr.mask.data].dtype.as_numpy_dtype()
+            mask_dtype = dace_fieldview_util.as_scalar_type(str(mask_numpy_dtype))
+            mask_node = self.add_local_storage(ts.FieldType(field_dims, mask_dtype), field_shape)
 
-    def build(self) -> list[SDFGField]:
-        # type of variables used for field indexing
-        index_dtype = dace.int32
-        # first visit the list of arguments and build a symbol map
-        stencil_args: list[gtir_to_tasklet.IteratorExpr | gtir_to_tasklet.MemletExpr] = []
-        for arg in self.stencil_args:
-            arg_nodes = arg()
-            assert len(arg_nodes) == 1
-            data_node, arg_type = arg_nodes[0]
-            # require all argument nodes to be data access nodes (no symbols)
-            assert isinstance(data_node, dace.nodes.AccessNode)
-
-            if isinstance(arg_type, ts.ScalarType):
-                scalar_arg = gtir_to_tasklet.MemletExpr(data_node, sbs.Indices([0]))
-                stencil_args.append(scalar_arg)
-            else:
-                assert isinstance(arg_type, ts.FieldType)
-                indices: dict[str, gtir_to_tasklet.IteratorIndexExpr] = {
-                    dim: gtir_to_tasklet.SymbolExpr(
-                        dace.symbolic.SymExpr(DIMENSION_INDEX_FMT.format(dim=dim)),
-                        index_dtype,
-                    )
-                    for dim in self.field_domain.keys()
-                }
-                iterator_arg = gtir_to_tasklet.IteratorExpr(
-                    data_node,
-                    [dim.value for dim in arg_type.dims],
-                    indices,
-                )
-                stencil_args.append(iterator_arg)
-
-        taskgen = gtir_to_tasklet.LambdaToTasklet(self.sdfg, self.head_state, self.offset_provider)
-        input_connections, output_expr = taskgen.visit(self.stencil_expr, args=stencil_args)
-        assert isinstance(output_expr, gtir_to_tasklet.ValueExpr)
-
-        if cpm.is_applied_reduce(self.stencil_expr.expr) and cpm.is_call_to(
-            self.stencil_expr.expr.args[0], "deref"
-        ):
-            return self.build_reduce_node(input_connections, output_expr)
+            self.head_state.add_memlet_path(
+                output_expr.mask,
+                mx,
+                mask_node,
+                memlet=dace.Memlet(data=mask_node.data, subset=",".join(output_subset)),
+            )
 
         else:
-            return self.build_tasklet_node(input_connections, output_expr)
+            mask_node = None
+
+        return [(field_node, self.field_type)], mask_node
 
 
 class Select(PrimitiveTranslator):
@@ -314,7 +297,7 @@ class Select(PrimitiveTranslator):
             false_expr, sdfg=sdfg, head_state=false_state
         )
 
-    def build(self) -> list[SDFGField]:
+    def build(self) -> tuple[list[SDFGField], Optional[dace.nodes.AccessNode]]:
         # retrieve true/false states as predecessors of head state
         branch_states = tuple(edge.src for edge in self.sdfg.in_edges(self.head_state))
         assert len(branch_states) == 2
@@ -323,8 +306,8 @@ class Select(PrimitiveTranslator):
         else:
             false_state, true_state = branch_states
 
-        true_br_args = self.true_br_builder()
-        false_br_args = self.false_br_builder()
+        true_br_args, true_br_mask = self.true_br_builder()
+        false_br_args, false_br_mask = self.false_br_builder()
 
         output_nodes = []
         for true_br, false_br in zip(true_br_args, false_br_args, strict=True):
@@ -355,7 +338,11 @@ class Select(PrimitiveTranslator):
                     false_br_output_node.data, false_br_output_node.desc(self.sdfg)
                 ),
             )
-        return output_nodes
+
+        # TODO: add support for masked array values in select statements, if this lowering path is needed
+        assert not (true_br_mask or false_br_mask)
+
+        return output_nodes, None
 
 
 class SymbolRef(PrimitiveTranslator):
@@ -375,7 +362,7 @@ class SymbolRef(PrimitiveTranslator):
         self.sym_name = sym_name
         self.sym_type = sym_type
 
-    def build(self) -> list[SDFGField]:
+    def build(self) -> tuple[list[SDFGField], Optional[dace.nodes.AccessNode]]:
         if isinstance(self.sym_type, ts.FieldType):
             # add access node to current state
             sym_node = self.head_state.add_access(self.sym_name)
@@ -399,4 +386,4 @@ class SymbolRef(PrimitiveTranslator):
                 dace.Memlet(data=sym_node.data, subset="0"),
             )
 
-        return [(sym_node, self.sym_type)]
+        return [(sym_node, self.sym_type)], None

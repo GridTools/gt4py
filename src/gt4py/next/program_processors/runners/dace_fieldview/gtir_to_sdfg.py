@@ -133,7 +133,8 @@ class GTIRToSDFG(eve.NodeVisitor):
         field_builder: gtir_builtin_translators.SDFGFieldBuilder = self.visit(
             node, sdfg=sdfg, head_state=head_state
         )
-        results = field_builder()
+        results, mask_node = field_builder()
+        assert mask_node is None
 
         field_nodes = []
         for node, _ in results:

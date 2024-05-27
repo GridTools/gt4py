@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import dace
+from dace.sdfg import utils as sdutils
 
 from gt4py.next.common import Connectivity, Dimension
 from gt4py.next.iterator import ir as itir
@@ -30,6 +31,9 @@ def build_sdfg_from_gtir(
     sdfg_genenerator = gtir_dace_translator.GTIRToSDFG(arg_types, offset_provider)
     sdfg = sdfg_genenerator.visit(program)
     assert isinstance(sdfg, dace.SDFG)
+
+    # TODO(edopao): remove `inline_loop_blocks` when DaCe transformations support LoopRegion construct
+    sdutils.inline_loop_blocks(sdfg)
 
     sdfg.simplify()
     return sdfg
