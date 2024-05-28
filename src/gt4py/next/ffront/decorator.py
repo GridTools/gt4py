@@ -183,13 +183,13 @@ class Program:
         )
         if self.backend is not None and self.backend.transforms_prog is not None:
             return self.backend.transforms_prog.past_to_itir(no_args_past).program
-        return past_to_itir.PastToItirFactory()(no_args_past).program
+        return past_to_itir.JITPastToItirFactory()(no_args_past).program
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs: Any) -> None:
         if self.backend is None:
             warnings.warn(
                 UserWarning(
-                    f"Field View Program '{self.itir.id}': Using Python execution, consider selecting a perfomance backend."
+                    f"Field View Program '{self.definition_stage.definition.__name__}': Using Python execution, consider selecting a perfomance backend."
                 ),
                 stacklevel=2,
             )

@@ -18,7 +18,7 @@ import factory
 
 import gt4py._core.definitions as core_defs
 from gt4py.next import backend as next_backend, config
-from gt4py.next.ffront import past_process_args
+from gt4py.next.ffront import past_process_args, past_to_itir
 from gt4py.next.otf import recipes, stages
 from gt4py.next.program_processors.runners.dace_iterator.workflow import (
     DaCeCompilationStepFactory,
@@ -83,10 +83,12 @@ class DaCeBackendFactory(GTFNBackendFactory):
         use_field_canonical_representation: bool = False
 
     transforms_fop = next_backend.FieldopTransformWorkflow(
-        past_transform_args=past_process_args.PastProcessArgs(aot_off=True)
+        past_transform_args=past_process_args.PastProcessArgs(aot_off=True),
+        past_to_itir=past_to_itir.JITPastToItirFactory(),
     )
     transforms_prog = next_backend.ProgramTransformWorkflow(
-        past_transform_args=past_process_args.PastProcessArgs(aot_off=True)
+        past_transform_args=past_process_args.PastProcessArgs(aot_off=True),
+        past_to_itir=past_to_itir.JITPastToItirFactory(),
     )
 
 

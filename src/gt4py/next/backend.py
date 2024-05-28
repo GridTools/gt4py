@@ -39,8 +39,9 @@ def foast_to_foast_closure(
     inp: workflow.InputWithArgs[ffront_stages.FoastOperatorDefinition],
 ) -> ffront_stages.FoastClosure:
     from_fieldop = inp.kwargs.pop("from_fieldop")
+    debug = inp.kwargs.pop("debug", inp.data.debug)
     return ffront_stages.FoastClosure(
-        foast_op_def=inp.data,
+        foast_op_def=dataclasses.replace(inp.data, debug=debug),
         args=inp.args,
         kwargs=inp.kwargs,
         closure_vars={inp.data.foast_node.id: from_fieldop},
@@ -73,7 +74,7 @@ class FieldopTransformWorkflow(workflow.NamedStepSequenceWithArgs):
         dataclasses.field(default=past_process_args.PastProcessArgs(aot_off=False))
     )
     past_to_itir: workflow.Workflow[ffront_stages.PastClosure, stages.ProgramCall] = (
-        dataclasses.field(default_factory=past_to_itir.PastToItirFactory)
+        dataclasses.field(default_factory=past_to_itir.JITPastToItirFactory)
     )
 
     foast_to_itir: workflow.Workflow[ffront_stages.FoastOperatorDefinition, itir.Expr] = (
@@ -115,7 +116,7 @@ class ProgramTransformWorkflow(workflow.NamedStepSequenceWithArgs):
         ffront_stages.PastProgramDefinition, ffront_stages.PastClosure
     ] = dataclasses.field(
         default=lambda inp: ffront_stages.PastClosure(
-            definition=inp.data,
+            definition=dataclasses.replace(inp.data, debug=inp.kwargs.pop("debug", inp.data.debug)),
             args=inp.args,
             kwargs=inp.kwargs,
         ),
@@ -125,7 +126,7 @@ class ProgramTransformWorkflow(workflow.NamedStepSequenceWithArgs):
         dataclasses.field(default=past_process_args.PastProcessArgs(aot_off=False))
     )
     past_to_itir: workflow.Workflow[ffront_stages.PastClosure, stages.ProgramCall] = (
-        dataclasses.field(default_factory=past_to_itir.PastToItirFactory)
+        dataclasses.field(default_factory=past_to_itir.JITPastToItirFactory)
     )
 
 

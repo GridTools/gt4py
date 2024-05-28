@@ -98,13 +98,14 @@ class CompileArgSpec:
     def from_concrete(cls, *args: Any, **kwargs: Any) -> Self:
         compile_args = tuple(CompileArg(type_translation.from_value(arg)) for arg in args)
         size_args = tuple(iter_size_compile_args(compile_args))
+        kwargs_copy = kwargs.copy()
         return cls(
             args=(*compile_args, *size_args),
-            offset_provider=kwargs.pop("offset_provider", {}),
-            column_axis=kwargs.pop("column_axis", None),
+            offset_provider=kwargs_copy.pop("offset_provider", {}),
+            column_axis=kwargs_copy.pop("column_axis", None),
             kwargs={
                 k: CompileArg(type_translation.from_value(v))
-                for k, v in kwargs.items()
+                for k, v in kwargs_copy.items()
                 if v is not None
             },
         )

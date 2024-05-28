@@ -44,6 +44,7 @@ class FieldOperatorDefinition(Generic[OperatorNodeT]):
     grid_type: Optional[common.GridType] = None
     node_class: type[OperatorNodeT] = dataclasses.field(default=foast.FieldOperator)  # type: ignore[assignment] # TODO(ricoh): understand why mypy complains
     attributes: dict[str, Any] = dataclasses.field(default_factory=dict)
+    debug: bool = False
 
 
 @dataclasses.dataclass(frozen=True)
@@ -52,6 +53,7 @@ class FoastOperatorDefinition(Generic[OperatorNodeT]):
     closure_vars: dict[str, Any]
     grid_type: Optional[common.GridType] = None
     attributes: dict[str, Any] = dataclasses.field(default_factory=dict)
+    debug: bool = False
 
 
 @dataclasses.dataclass(frozen=True)
@@ -74,6 +76,7 @@ class FoastClosure(Generic[OperatorNodeT]):
 class ProgramDefinition:
     definition: types.FunctionType
     grid_type: Optional[common.GridType] = None
+    debug: bool = False
 
 
 @dataclasses.dataclass(frozen=True)
@@ -81,6 +84,7 @@ class PastProgramDefinition:
     past_node: past.Program
     closure_vars: dict[str, Any]
     grid_type: Optional[common.GridType] = None
+    debug: bool = False
 
 
 @dataclasses.dataclass(frozen=True)

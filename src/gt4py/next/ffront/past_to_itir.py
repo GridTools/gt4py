@@ -39,7 +39,7 @@ from gt4py.next.type_system import type_info, type_specifications as ts
 
 @dataclasses.dataclass(frozen=True)
 class PastToItir(workflow.ChainableWorkflowMixin):
-    def __call__(self, inp: ffront_stages.PastClosure) -> stages.ProgramCall:
+    def __call__(self, inp: ffront_stages.AOTFieldviewProgramAst) -> stages.AOTProgram:
         all_closure_vars = transform_utils._get_closure_vars_recursively(
             inp.definition.closure_vars
         )
@@ -61,17 +61,41 @@ class PastToItir(workflow.ChainableWorkflowMixin):
             grid_type=grid_type,
         )
 
-        if config.DEBUG or "debug" in inp.kwargs:
+        if config.DEBUG or inp.definition.debug:
             devtools.debug(itir_program)
 
-        return stages.ProgramCall(
-            itir_program, inp.args, inp.kwargs | {"column_axis": _column_axis(all_closure_vars)}
+        return stages.AOTProgram(
+            program=itir_program,
+            argspec=dataclasses.replace(inp.argspec, column_axis=_column_axis(all_closure_vars)),
         )
 
 
 class PastToItirFactory(factory.Factory):
     class Meta:
         model = PastToItir
+
+
+@dataclasses.dataclass(frozen=True)
+class JITPastToItir(workflow.ChainableWorkflowMixin):
+    inner: PastToItir = dataclasses.field(default_factory=PastToItir)
+
+    def __call__(self, inp: ffront_stages.PastClosure) -> stages.ProgramCall:
+        aot_program = self.inner(
+            ffront_stages.AOTFieldviewProgramAst(
+                definition=inp.definition,
+                argspec=stages.CompileArgSpec.from_concrete(*inp.args, **inp.kwargs),
+            )
+        )
+        return stages.ProgramCall(
+            program=aot_program.program,
+            args=inp.args,
+            kwargs=inp.kwargs | {"column_axis": aot_program.argspec.column_axis},
+        )
+
+
+class JITPastToItirFactory(factory.Factory):
+    class Meta:
+        model = JITPastToItir
 
 
 def _column_axis(all_closure_vars: dict[str, Any]) -> Optional[common.Dimension]:

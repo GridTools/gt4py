@@ -45,6 +45,7 @@ def func_to_past(inp: ffront_stages.ProgramDefinition) -> ffront_stages.PastProg
         past_node=ProgramParser.apply(source_def, closure_vars, annotations),
         closure_vars=closure_vars,
         grid_type=inp.grid_type,
+        debug=inp.debug,
     )
 
 

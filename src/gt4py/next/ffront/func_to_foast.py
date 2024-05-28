@@ -74,6 +74,7 @@ def func_to_foast(
         closure_vars=closure_vars,
         grid_type=inp.grid_type,
         attributes=inp.attributes,
+        debug=inp.debug,
     )
 
 
