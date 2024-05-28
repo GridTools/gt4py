@@ -52,6 +52,7 @@ class ValueExpr:
     """Result of the computation implemented by a tasklet node."""
 
     node: dace.nodes.AccessNode
+    field_type: ts.FieldType | ts.ScalarType
 
 
 IteratorIndexExpr: TypeAlias = MemletExpr | SymbolExpr | ValueExpr
@@ -63,8 +64,8 @@ class IteratorExpr:
 
     field: dace.nodes.AccessNode
     mask: Optional[dace.nodes.AccessNode]
-    dimensions: list[str]
-    indices: dict[str, IteratorIndexExpr]
+    dimensions: list[Dimension]
+    indices: dict[Dimension, IteratorIndexExpr]
 
 
 # Define alias for the elements needed to setup input connections to a map scope
@@ -343,37 +344,52 @@ class LambdaToTasklet(eve.NodeVisitor):
         dtype: dace.typeclass,
         src_node: dace.nodes.Node,
         src_connector: Optional[str] = None,
-        subset: Optional[sbs.Range] = None,
+        offset: Optional[str] = None,
     ) -> ValueExpr:
-        if subset:
+        data_type: ts.FieldType | ts.ScalarType
+        if offset:
+            offset_provider = self.offset_provider[offset]
+            assert isinstance(offset_provider, Connectivity)
             var_name, _ = self.sdfg.add_array(
-                "var", subset.size(), dtype, transient=True, find_new_name=True
+                "var", (offset_provider.max_neighbors,), dtype, transient=True, find_new_name=True
             )
+            var_subset = f"0:{offset_provider.max_neighbors}"
+            data_type = dace_fieldview_util.get_neighbors_field_type(offset, dtype)
         else:
             var_name, _ = self.sdfg.add_scalar("var", dtype, transient=True, find_new_name=True)
-            subset = "0"
+            var_subset = "0"
+            data_type = dace_fieldview_util.as_scalar_type(str(dtype.as_numpy_dtype()))
         var_node = self.state.add_access(var_name)
         self.state.add_edge(
             src_node,
             src_connector,
             var_node,
             None,
-            dace.Memlet(data=var_node.data, subset=subset),
+            dace.Memlet(data=var_node.data, subset=var_subset),
         )
-        return ValueExpr(var_node)
+        return ValueExpr(var_node, data_type)
 
     def _visit_deref(self, node: itir.FunCall) -> MemletExpr | ValueExpr:
         assert len(node.args) == 1
         it = self.visit(node.args[0])
 
         if isinstance(it, IteratorExpr):
+            field_desc = it.field.desc(self.sdfg)
+            assert len(field_desc.shape) == len(it.dimensions)
             if all(isinstance(index, SymbolExpr) for index in it.indices.values()):
                 # when all indices are symblic expressions, we can perform direct field access through a memlet
-                data_index = sbs.Indices([it.indices[dim].value for dim in it.dimensions])  # type: ignore[union-attr]
+                field_subset = sbs.Range(
+                    [
+                        (it.indices[dim].value, it.indices[dim].value, 1)  # type: ignore[union-attr]
+                        if dim in it.indices
+                        else (0, size - 1, 1)
+                        for dim, size in zip(it.dimensions, field_desc.shape)
+                    ]
+                )
                 return (
-                    MemletExpr(it.field, data_index)
+                    MemletExpr(it.field, field_subset)
                     if it.mask is None
-                    else MaskedMemletExpr(it.field, data_index, it.mask)
+                    else MaskedMemletExpr(it.field, field_subset, it.mask)
                 )
 
             else:
@@ -381,17 +397,17 @@ class LambdaToTasklet(eve.NodeVisitor):
                 assert it.mask is None
 
                 # we use a tasklet to perform dereferencing of a generic iterator
-                assert all(dim in it.indices.keys() for dim in it.dimensions)
+                assert all(dim in it.indices for dim in it.dimensions)
                 field_indices = [(dim, it.indices[dim]) for dim in it.dimensions]
                 index_connectors = [
-                    INDEX_CONNECTOR_FMT.format(dim=dim)
+                    INDEX_CONNECTOR_FMT.format(dim=dim.value)
                     for dim, index in field_indices
                     if not isinstance(index, SymbolExpr)
                 ]
                 index_internals = ",".join(
                     str(index.value)
                     if isinstance(index, SymbolExpr)
-                    else INDEX_CONNECTOR_FMT.format(dim=dim)
+                    else INDEX_CONNECTOR_FMT.format(dim=dim.value)
                     for dim, index in field_indices
                 )
                 deref_node = self.state.add_tasklet(
@@ -401,12 +417,11 @@ class LambdaToTasklet(eve.NodeVisitor):
                     code=f"val = field[{index_internals}]",
                 )
                 # add new termination point for this field parameter
-                field_desc = it.field.desc(self.sdfg)
                 field_fullset = sbs.Range.from_array(field_desc)
                 self._add_input_connection(it.field, field_fullset, deref_node, "field")
 
                 for dim, index_expr in field_indices:
-                    deref_connector = INDEX_CONNECTOR_FMT.format(dim=dim)
+                    deref_connector = INDEX_CONNECTOR_FMT.format(dim=dim.value)
                     if isinstance(index_expr, MemletExpr):
                         self._add_input_connection(
                             index_expr.node,
@@ -444,11 +459,11 @@ class LambdaToTasklet(eve.NodeVisitor):
 
         it = self.visit(node.args[1])
         assert isinstance(it, IteratorExpr)
-        assert offset_provider.neighbor_axis.value in it.dimensions
-        assert offset_provider.origin_axis.value in it.indices
-        origin_index = it.indices[offset_provider.origin_axis.value]
+        assert offset_provider.neighbor_axis in it.dimensions
+        assert offset_provider.origin_axis in it.indices
+        origin_index = it.indices[offset_provider.origin_axis]
         assert isinstance(origin_index, SymbolExpr)
-        assert offset_provider.origin_axis.value not in it.dimensions
+        assert offset_provider.origin_axis not in it.dimensions
         assert all(isinstance(index, SymbolExpr) for index in it.indices.values())
 
         field_desc = it.field.desc(self.sdfg)
@@ -463,7 +478,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         field_array_shape = tuple(
             shape
             for dim, shape in zip(it.dimensions, field_desc.shape, strict=True)
-            if dim == offset_provider.neighbor_axis.value
+            if dim == offset_provider.neighbor_axis
         )
         assert len(field_array_shape) == 1
 
@@ -486,8 +501,8 @@ class LambdaToTasklet(eve.NodeVisitor):
             sbs.Range(
                 [
                     (0, size - 1, 1)
-                    if dim == offset_provider.neighbor_axis.value
-                    else (it.indices[dim].value, it.indices[dim].value, 1)  # type: ignore[union-attr]
+                    if dim == offset_provider.neighbor_axis
+                    else sbs.Indices(it.indices[dim].value)  # type: ignore[union-attr]
                     for dim, size in zip(it.dimensions, field_desc.shape, strict=True)
                 ]
             ),
@@ -530,7 +545,7 @@ class LambdaToTasklet(eve.NodeVisitor):
                 output_name,
                 neighbor_val_node,
                 None,
-                dace.Memlet(data=neighbor_val_name, subset=f"0:{offset_provider.max_neighbors}"),
+                dace.Memlet.from_array(neighbor_val_name, neighbor_val_array),
             )
 
             neighbor_idx_node = self.state.add_access(neighbor_idx_name)
@@ -540,14 +555,17 @@ class LambdaToTasklet(eve.NodeVisitor):
                 neighbor_idx_node,
             )
 
-            return MaskedValueExpr(neighbor_val_node, neighbor_idx_node)
+            neighbors_field_type = dace_fieldview_util.get_neighbors_field_type(
+                offset, field_desc.dtype
+            )
+            return MaskedValueExpr(neighbor_val_node, neighbors_field_type, neighbor_idx_node)
 
         else:
             return self._get_tasklet_result(
                 field_desc.dtype,
                 neighbors_node,
                 output_name,
-                subset=sbs.Range([(0, offset_provider.max_neighbors - 1, 1)]),
+                offset=offset,
             )
 
     def _visit_reduce(self, node: itir.FunCall) -> ValueExpr:
@@ -611,16 +629,10 @@ class LambdaToTasklet(eve.NodeVisitor):
 
         for sdfg_connector, (_, reduce_expr) in zip(sdfg_inputs, reduce_args, strict=True):
             if isinstance(reduce_expr, MemletExpr):
-                assert isinstance(reduce_expr.subset, sbs.Indices)
-                ndims = len(reduce_expr.subset)
-                assert len(values_desc.shape) == ndims + 1
-                local_size = values_desc.shape[ndims]
-                input_subset = sbs.Range.from_indices(reduce_expr.subset) + sbs.Range.from_string(
-                    f"0:{local_size}"
-                )
+                assert isinstance(reduce_expr.subset, sbs.Subset)
                 self._add_input_connection(
                     reduce_expr.node,
-                    input_subset,
+                    reduce_expr.subset,
                     reduce_node,
                     sdfg_connector,
                 )
@@ -636,7 +648,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         if isinstance(first_expr, MaskedMemletExpr):
             self._add_input_connection(
                 first_expr.mask,
-                input_subset,
+                first_expr.subset,
                 reduce_node,
                 mask_input,
             )
@@ -674,10 +686,10 @@ class LambdaToTasklet(eve.NodeVisitor):
         self, it: IteratorExpr, offset_dim: Dimension, offset_expr: IteratorIndexExpr
     ) -> IteratorExpr:
         """Implements cartesian shift along one dimension."""
-        assert offset_dim.value in it.dimensions
+        assert offset_dim in it.dimensions
         new_index: SymbolExpr | ValueExpr
-        assert offset_dim.value in it.indices
-        index_expr = it.indices[offset_dim.value]
+        assert offset_dim in it.indices
+        index_expr = it.indices[offset_dim]
         if isinstance(index_expr, SymbolExpr) and isinstance(offset_expr, SymbolExpr):
             # purely symbolic expression which can be interpreted at compile time
             new_index = SymbolExpr(index_expr.value + offset_expr.value, index_expr.dtype)
@@ -737,10 +749,7 @@ class LambdaToTasklet(eve.NodeVisitor):
             it.field,
             it.mask,
             it.dimensions,
-            {
-                dim: (new_index if dim == offset_dim.value else index)
-                for dim, index in it.indices.items()
-            },
+            {dim: (new_index if dim == offset_dim else index) for dim, index in it.indices.items()},
         )
 
     def _make_dynamic_neighbor_offset(
@@ -795,11 +804,11 @@ class LambdaToTasklet(eve.NodeVisitor):
         offset_expr: IteratorIndexExpr,
     ) -> IteratorExpr:
         """Implements shift in unstructured domain by means of a neighbor table."""
-        neighbor_dim = connectivity.neighbor_axis.value
-        assert neighbor_dim in it.dimensions
+        assert connectivity.neighbor_axis in it.dimensions
+        neighbor_dim = connectivity.neighbor_axis
         assert neighbor_dim not in it.indices
 
-        origin_dim = connectivity.origin_axis.value
+        origin_dim = connectivity.origin_axis
         assert origin_dim in it.indices
         origin_index = it.indices[origin_dim]
         assert isinstance(origin_index, SymbolExpr)

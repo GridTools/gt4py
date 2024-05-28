@@ -16,7 +16,7 @@ from typing import Any, Mapping
 
 import dace
 
-from gt4py.next.common import Connectivity
+from gt4py.next.common import Connectivity, Dimension, DimensionKind
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.program_processors.runners.dace_fieldview import gtir_to_tasklet
@@ -67,9 +67,9 @@ def filter_connectivities(offset_provider: Mapping[str, Any]) -> dict[str, Conne
     }
 
 
-def get_domain(
+def get_field_domain(
     node: itir.Expr,
-) -> dict[str, tuple[dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]]:
+) -> list[tuple[Dimension, dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]]:
     """
     Specialized visit method for domain expressions.
 
@@ -77,7 +77,7 @@ def get_domain(
     """
     assert cpm.is_call_to(node, ("cartesian_domain", "unstructured_domain"))
 
-    domain = {}
+    domain = []
     for named_range in node.args:
         assert cpm.is_call_to(named_range, "named_range")
         assert len(named_range.args) == 3
@@ -88,9 +88,25 @@ def get_domain(
             sym_str = get_symbolic_expr(arg)
             sym_val = dace.symbolic.SymExpr(sym_str)
             bounds.append(sym_val)
-        domain[axis.value] = (bounds[0], bounds[1])
+        size_value = str(bounds[1] - bounds[0])
+        if size_value.isdigit():
+            dim = Dimension(axis.value, DimensionKind.LOCAL)
+        else:
+            dim = Dimension(axis.value, DimensionKind.HORIZONTAL)
+        domain.append((dim, bounds[0], bounds[1]))
 
     return domain
+
+
+def get_domain(
+    node: itir.Expr,
+) -> dict[str, tuple[dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]]:
+    """
+    Returns domain represented in dictionary form.
+    """
+    field_domain = get_field_domain(node)
+
+    return {dim.value: (lb, ub) for dim, lb, ub in field_domain}
 
 
 def get_symbolic_expr(node: itir.Expr) -> str:
@@ -101,3 +117,12 @@ def get_symbolic_expr(node: itir.Expr) -> str:
     or symbolic array shape.
     """
     return gtir_to_tasklet.PythonCodegen().visit(node)
+
+
+def get_neighbors_field_type(offset: str, dtype: dace.typeclass) -> ts.FieldType:
+    """Utility function to obtain the descriptor for a local field of neighbors."""
+    scalar_type = as_scalar_type(str(dtype.as_numpy_dtype()))
+    return ts.FieldType(
+        [Dimension(offset, DimensionKind.LOCAL)],
+        scalar_type,
+    )

@@ -93,8 +93,8 @@ class AsFieldOp(PrimitiveTranslator):
 
     stencil_expr: itir.Lambda
     stencil_args: list[SDFGFieldBuilder]
-    field_domain: dict[str, tuple[dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]]
-    field_type: ts.FieldType
+    field_domain: list[tuple[Dimension, dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]]
+    field_dtype: ts.ScalarType
     offset_provider: dict[str, Connectivity | Dimension]
 
     def __init__(
@@ -116,16 +116,12 @@ class AsFieldOp(PrimitiveTranslator):
         # the domain of the field operator is passed as second argument
         assert isinstance(domain_expr, itir.FunCall)
 
-        domain = dace_fieldview_util.get_domain(domain_expr)
-        # define field domain with all dimensions in alphabetical order
-        sorted_domain_dims = [Dimension(dim) for dim in sorted(domain.keys())]
-
         # add local storage to compute the field operator over the given domain
         # TODO: use type inference to determine the result type
         node_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
 
-        self.field_domain = domain
-        self.field_type = ts.FieldType(sorted_domain_dims, node_type)
+        self.field_domain = dace_fieldview_util.get_field_domain(domain_expr)
+        self.field_dtype = node_type
         self.stencil_expr = stencil_expr
         self.stencil_args = stencil_args
 
@@ -146,17 +142,17 @@ class AsFieldOp(PrimitiveTranslator):
                 stencil_args.append(scalar_arg)
             else:
                 assert isinstance(arg_type, ts.FieldType)
-                indices: dict[str, gtir_to_tasklet.IteratorIndexExpr] = {
+                indices: dict[Dimension, gtir_to_tasklet.IteratorIndexExpr] = {
                     dim: gtir_to_tasklet.SymbolExpr(
-                        dace.symbolic.SymExpr(DIMENSION_INDEX_FMT.format(dim=dim)),
+                        dace.symbolic.SymExpr(DIMENSION_INDEX_FMT.format(dim=dim.value)),
                         index_dtype,
                     )
-                    for dim in self.field_domain.keys()
+                    for dim, _, _ in self.field_domain
                 }
                 iterator_arg = gtir_to_tasklet.IteratorExpr(
                     data_node,
                     mask_node,
-                    [dim.value for dim in arg_type.dims],
+                    arg_type.dims,
                     indices,
                 )
                 stencil_args.append(iterator_arg)
@@ -175,31 +171,39 @@ class AsFieldOp(PrimitiveTranslator):
         self.head_state.remove_node(output_expr.node)
 
         # allocate local temporary storage for the result field
-        field_dims = self.field_type.dims.copy()
+        field_dims = [dim for dim, _, _ in self.field_domain]
         field_shape = [
             # diff between upper and lower bound
-            self.field_domain[dim.value][1] - self.field_domain[dim.value][0]
-            for dim in self.field_type.dims
+            (ub - lb)
+            for _, lb, ub in self.field_domain
         ]
         if isinstance(output_desc, dace.data.Array):
             # extend the result arrays with the local dimensions added by the field operator e.g. `neighbors`)
-            field_dims.extend(Dimension(f"local_dim{i}") for i in range(len(output_desc.shape)))
+            assert isinstance(output_expr.field_type, ts.FieldType)
+            # TODO: enable `assert output_expr.field_type.dtype == self.field_dtype`, remove variable `dtype`
+            dtype = output_expr.field_type.dtype
+            field_dims.extend(output_expr.field_type.dims)
             field_shape.extend(output_desc.shape)
+        else:
+            assert isinstance(output_expr.field_type, ts.ScalarType)
+            # TODO: enable `assert output_expr.field_type == self.field_dtype`, remove variable `dtype`
+            dtype = output_expr.field_type
 
-        # TODO: use `self.field_type.field_dtype` without overriding `dtype` when type inference is in place
-        field_dtype = dace_fieldview_util.as_scalar_type(str(output_desc.dtype.as_numpy_dtype()))
-        field_type = ts.FieldType(field_dims, field_dtype)
+        # TODO: use `self.field_dtype` directly, without passing through `dtype`
+        field_type = ts.FieldType(field_dims, dtype)
         field_node = self.add_local_storage(field_type, field_shape)
 
         # assume tasklet with single output
-        output_subset = [DIMENSION_INDEX_FMT.format(dim=dim.value) for dim in self.field_type.dims]
+        output_subset = [
+            DIMENSION_INDEX_FMT.format(dim=dim.value) for dim, _, _ in self.field_domain
+        ]
         if isinstance(output_desc, dace.data.Array):
             output_subset.extend(f"0:{size}" for size in output_desc.shape)
 
         # create map range corresponding to the field operator domain
         map_ranges = {
-            DIMENSION_INDEX_FMT.format(dim=dim): f"{lb}:{ub}"
-            for dim, (lb, ub) in self.field_domain.items()
+            DIMENSION_INDEX_FMT.format(dim=dim.value): f"{lb}:{ub}"
+            for dim, lb, ub in self.field_domain
         }
         me, mx = self.head_state.add_map("field_op", map_ranges)
 
@@ -240,7 +244,7 @@ class AsFieldOp(PrimitiveTranslator):
         else:
             mask_node = None
 
-        return [(field_node, self.field_type)], mask_node
+        return [(field_node, field_type)], mask_node
 
 
 class Select(PrimitiveTranslator):
