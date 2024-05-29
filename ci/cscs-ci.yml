@@ -19,7 +19,7 @@ stages:
 - test
 
 
-build baseimage:
+.build_baseimage:
   stage: baseimage
   # we create a tag that depends on the SHA value of ci/base.Dockerfile, this way
   # a new base image is only built when the SHA of this file changes
@@ -39,40 +39,40 @@ build baseimage:
     CSCS_REBUILD_POLICY: if-not-exists
     DOCKERFILE: ci/base.Dockerfile
     DOCKER_BUILD_ARGS: '["PYVERSION=$PYVERSION", "CI_PROJECT_DIR=$CI_PROJECT_DIR"]'
-build baseimage x86_64:
-  extends: [.container-builder-cscs-zen2, "build baseimage"]
-build baseimage aarch64:
-  extends: [.container-builder-cscs-gh200, "build baseimage"]
+.build_baseimage_x86_64:
+  extends: [.container-builder-cscs-zen2, .build_baseimage]
+.build_baseimage_aarch64:
+  extends: [.container-builder-cscs-gh200, .build_baseimage]
 
-build py38 baseimage x86_64:
-  extends: build baseimage x86_64
+build_py38_baseimage_x86_64:
+  extends: .build_baseimage_x86_64
   variables:
     <<: *py38
-build py38 baseimage aarch64:
-  extends: build baseimage aarch64
+build_py38_baseimage_aarch64:
+  extends: .build_baseimage_aarch64
   variables:
     <<: *py38
 
-build py39 baseimage x86_64:
-  extends: build baseimage x86_64
+build_py39_baseimage_x86_64:
+  extends: .build_baseimage_x86_64
   variables:
     <<: *py39
-build py39 baseimage aarch64:
-  extends: build baseimage aarch64
+build_py39_baseimage_aarch64:
+  extends: .build_baseimage_aarch64
   variables:
     <<: *py39
 
-build py310 baseimage x86_64:
-  extends: build baseimage x86_64
+build_py310_baseimage_x86_64:
+  extends: .build_baseimage_x86_64
   variables:
     <<: *py310
-build py310 baseimage aarch64:
-  extends: build baseimage aarch64
+build_py310_baseimage_aarch64:
+  extends: .build_baseimage_aarch64
   variables:
     <<: *py310
 
 
-build image:
+.build_image:
   stage: image
   variables:
     # make sure we use a unique name here, otherwise we could create a race condition, when multiple pipelines
@@ -80,46 +80,46 @@ build image:
     PERSIST_IMAGE_NAME: $CSCS_REGISTRY_PATH/$ARCH/gt4py/gt4py-ci:$CI_COMMIT_SHA-$PYVERSION
     DOCKERFILE: ci/checkout.Dockerfile
     DOCKER_BUILD_ARGS: '["PYVERSION=$PYVERSION", "BASE_IMAGE=${BASE_IMAGE_${PYVERSION_PREFIX}}"]'
-build image x86_64:
-  extends: [.container-builder-cscs-zen2, "build image"]
-build image aarch64:
-  extends: [.container-builder-cscs-gh200, "build image"]
+.build_image_x86_64:
+  extends: [.container-builder-cscs-zen2, .build_image]
+.build_image_aarch64:
+  extends: [.container-builder-cscs-gh200, .build_image]
 
-build py38 image x86_64:
-  extends: build image x86_64
-  needs: ["build py38 baseimage x86_64"]
+build_py38_image_x86_64:
+  extends: .build_image_x86_64
+  needs: build_py38_baseimage_x86_64
   variables:
     <<: *py38
-build py38 image aarch64:
-  extends: build image aarch64
-  needs: ["build py38 baseimage aarch64"]
+build_py38_image_aarch64:
+  extends: .build_image_aarch64
+  needs: build_py38_baseimage_aarch64
   variables:
     <<: *py38
 
-build py39 image x86_64:
-  extends: build image x86_64
-  needs: ["build py39 baseimage x86_64"]
+build_py39_image_x86_64:
+  extends: .build_image_x86_64
+  needs: build_py39_baseimage_x86_64
   variables:
     <<: *py39
-build py39 image aarch64:
-  extends: build image aarch64
-  needs: ["build py39 baseimage aarch64"]
+build_py39_image_aarch64:
+  extends: .build_image_aarch64
+  needs: build_py39_baseimage_aarch64
   variables:
     <<: *py39
 
-build py310 image x86_64:
-  extends: build image x86_64
-  needs: ["build py310 baseimage x86_64"]
+build_py310_image_x86_64:
+  extends: .build_image_x86_64
+  needs: build_py310_baseimage_x86_64
   variables:
     <<: *py310
-build py310 image aarch64:
-  extends: build image aarch64
-  needs: ["build py310 baseimage aarch64"]
+build_py310_image_aarch64:
+  extends: .build_image_aarch64
+  needs: build_py310_baseimage_aarch64
   variables:
     <<: *py310
 
 
-test helper:
+.test_helper:
   stage: test
   image: $CSCS_REGISTRY_PATH/$ARCH/gt4py/gt4py-ci:$CI_COMMIT_SHA-$PYVERSION
   script:
@@ -139,29 +139,29 @@ test helper:
     NUM_PROCESSES: auto
     VIRTUALENV_SYSTEM_SITE_PACKAGES: 1
 
-test py38 x86_64:
-  extends: [.container-runner-daint, "test helper"]
-  needs: ["build py38 image x86_64"]
+test_py38_x86_64:
+  extends: [.container-runner-daint, .test_helper]
+  needs: build_py38_image_x86_64
   variables:
     <<: *py38
-test py38 aarch64:
-  extends: [.container-runner-santis-gh200, "test helper"]
-  needs: ["build py38 image aarch64"]
+test_py38_aarch64:
+  extends: [.container-runner-santis-gh200, .test_helper]
+  needs: build_py38_image_aarch64
   variables:
     <<: *py38
 
-test py39 x86_64:
-  extends: [.container-runner-daint, "test helper"]
-  needs: ["build py39 image x86_64"]
+test_py39_x86_64:
+  extends: [.container-runner-daint, .test_helper]
+  needs: build_py39_image_x86_64
   variables:
     <<: *py39
-test py39 aarch64:
-  extends: [.container-runner-santis-gh200, "test helper"]
-  needs: ["build py39 image aarch64"]
+test_py39_aarch64:
+  extends: [.container-runner-santis-gh200, .test_helper]
+  needs: build_py39_image_aarch64
   variables:
     <<: *py39
 
-test py310:
+.test_py310:
   extends: test helper
   variables:
     <<: *py310
@@ -174,9 +174,9 @@ test py310:
     - SUBPACKAGE: next
       VARIANT: [-nomesh, -atlas]
       SUBVARIANT: [-cuda11x, -cpu]
-test py310 x86_64:
-  extends: [.container-runner-daint, "test py310"]
-  needs: ["build py310 image x86_64"]
-test py310 aarch64:
-  extends: [.container-runner-santis-gh200, "test py310"]
-  needs: ["build py310 image aarch64"]
+test_py310_x86_64:
+  extends: [.container-runner-daint, .test_py310]
+  needs: build_py310_image_x86_64
+test_py310_aarch64:
+  extends: [.container-runner-santis-gh200, .test_py310]
+  needs: build_py310_image_aarch64
