@@ -162,7 +162,7 @@ test_py39_aarch64:
     <<: *py39
 
 .test_py310:
-  extends: test helper
+  extends: .test_helper
   variables:
     <<: *py310
   parallel:
