@@ -140,7 +140,7 @@ build_py310_image_aarch64:
     VIRTUALENV_SYSTEM_SITE_PACKAGES: 1
 
 test_py38_x86_64:
-  extends: [.container-runner-daint, .test_helper]
+  extends: [.container-runner-daint-gpu, .test_helper]
   needs: [build_py38_image_x86_64]
   variables:
     <<: *py38
@@ -151,7 +151,7 @@ test_py38_aarch64:
     <<: *py38
 
 test_py39_x86_64:
-  extends: [.container-runner-daint, .test_helper]
+  extends: [.container-runner-daint-gpu, .test_helper]
   needs: [build_py39_image_x86_64]
   variables:
     <<: *py39
@@ -175,7 +175,7 @@ test_py39_aarch64:
       VARIANT: [-nomesh, -atlas]
       SUBVARIANT: [-cuda11x, -cpu]
 test_py310_x86_64:
-  extends: [.container-runner-daint, .test_py310]
+  extends: [.container-runner-daint-gpu, .test_py310]
   needs: [build_py310_image_x86_64]
 test_py310_aarch64:
   extends: [.container-runner-santis-gh200, .test_py310]
