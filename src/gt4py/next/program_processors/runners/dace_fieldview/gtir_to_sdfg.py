@@ -188,7 +188,7 @@ class GTIRToSDFG(eve.NodeVisitor):
         for i, stmt in enumerate(node.body):
             # include `debuginfo` only for `ir.Program` and `ir.Stmt` nodes: finer granularity would be too messy
             head_state = sdfg.add_state_after(head_state, f"stmt_{i}")
-            head_state._debuginfo = dace_fieldview_util.debuginfo(stmt)
+            head_state._debuginfo = dace_fieldview_util.debuginfo(stmt, sdfg.debuginfo)
             self.visit(stmt, sdfg=sdfg, state=head_state)
 
         sdfg.validate()
