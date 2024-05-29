@@ -27,6 +27,16 @@ def is_applied_lift(arg: itir.Node) -> TypeGuard[itir.FunCall]:
     )
 
 
+def is_applied_shift(arg: itir.Node) -> TypeGuard[itir.FunCall]:
+    """Match expressions of the form `shift(λ(...) → ...)(...)`."""
+    return (
+        isinstance(arg, itir.FunCall)
+        and isinstance(arg.fun, itir.FunCall)
+        and isinstance(arg.fun.fun, itir.SymRef)
+        and arg.fun.fun.id == "shift"
+    )
+
+
 def is_let(node: itir.Node) -> TypeGuard[itir.FunCall]:
     """Match expression of the form `(λ(...) → ...)(...)`."""
     return isinstance(node, itir.FunCall) and isinstance(node.fun, itir.Lambda)

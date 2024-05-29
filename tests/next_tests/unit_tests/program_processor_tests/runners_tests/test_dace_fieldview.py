@@ -30,8 +30,6 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     Vertex,
     simple_mesh,
 )
-from next_tests.integration_tests.cases import EField, IFloatField, VField
-
 import numpy as np
 import pytest
 
@@ -56,33 +54,36 @@ FSYMBOLS = dict(
     __z_stride_0=1,
     size=N,
 )
-CSYMBOLS = dict(
-    ncells=SIMPLE_MESH.num_cells,
-    nedges=SIMPLE_MESH.num_edges,
-    nvertices=SIMPLE_MESH.num_vertices,
-    __cells_size_0=SIMPLE_MESH.num_cells,
-    __cells_stride_0=1,
-    __edges_size_0=SIMPLE_MESH.num_edges,
-    __edges_stride_0=1,
-    __vertices_size_0=SIMPLE_MESH.num_vertices,
-    __vertices_stride_0=1,
-    __connectivity_C2E_size_0=SIMPLE_MESH.num_cells,
-    __connectivity_C2E_size_1=SIMPLE_MESH.offset_provider["C2E"].max_neighbors,
-    __connectivity_C2E_stride_0=SIMPLE_MESH.offset_provider["C2E"].max_neighbors,
-    __connectivity_C2E_stride_1=1,
-    __connectivity_C2V_size_0=SIMPLE_MESH.num_cells,
-    __connectivity_C2V_size_1=SIMPLE_MESH.offset_provider["C2V"].max_neighbors,
-    __connectivity_C2V_stride_0=SIMPLE_MESH.offset_provider["C2V"].max_neighbors,
-    __connectivity_C2V_stride_1=1,
-    __connectivity_E2V_size_0=SIMPLE_MESH.num_edges,
-    __connectivity_E2V_size_1=SIMPLE_MESH.offset_provider["E2V"].max_neighbors,
-    __connectivity_E2V_stride_0=SIMPLE_MESH.offset_provider["E2V"].max_neighbors,
-    __connectivity_E2V_stride_1=1,
-    __connectivity_V2E_size_0=SIMPLE_MESH.num_vertices,
-    __connectivity_V2E_size_1=SIMPLE_MESH.offset_provider["V2E"].max_neighbors,
-    __connectivity_V2E_stride_0=SIMPLE_MESH.offset_provider["V2E"].max_neighbors,
-    __connectivity_V2E_stride_1=1,
-)
+
+
+def make_mesh_symbols(mesh: MeshDescriptor):
+    return dict(
+        ncells=mesh.num_cells,
+        nedges=mesh.num_edges,
+        nvertices=mesh.num_vertices,
+        __cells_size_0=mesh.num_cells,
+        __cells_stride_0=1,
+        __edges_size_0=mesh.num_edges,
+        __edges_stride_0=1,
+        __vertices_size_0=mesh.num_vertices,
+        __vertices_stride_0=1,
+        __connectivity_C2E_size_0=mesh.num_cells,
+        __connectivity_C2E_size_1=mesh.offset_provider["C2E"].max_neighbors,
+        __connectivity_C2E_stride_0=mesh.offset_provider["C2E"].max_neighbors,
+        __connectivity_C2E_stride_1=1,
+        __connectivity_C2V_size_0=mesh.num_cells,
+        __connectivity_C2V_size_1=mesh.offset_provider["C2V"].max_neighbors,
+        __connectivity_C2V_stride_0=mesh.offset_provider["C2V"].max_neighbors,
+        __connectivity_C2V_stride_1=1,
+        __connectivity_E2V_size_0=mesh.num_edges,
+        __connectivity_E2V_size_1=mesh.offset_provider["E2V"].max_neighbors,
+        __connectivity_E2V_stride_0=mesh.offset_provider["E2V"].max_neighbors,
+        __connectivity_E2V_stride_1=1,
+        __connectivity_V2E_size_0=mesh.num_vertices,
+        __connectivity_V2E_size_1=mesh.offset_provider["V2E"].max_neighbors,
+        __connectivity_V2E_stride_0=mesh.offset_provider["V2E"].max_neighbors,
+        __connectivity_V2E_stride_1=1,
+    )
 
 
 def test_gtir_copy():
@@ -727,7 +728,7 @@ def test_gtir_connectivity_shift():
             connectivity_C2E=connectivity_C2E.table,
             connectivity_C2V=connectivity_C2V.table,
             **FSYMBOLS,
-            **CSYMBOLS,
+            **make_mesh_symbols(SIMPLE_MESH),
             __ve_field_size_0=SIMPLE_MESH.num_vertices,
             __ve_field_size_1=SIMPLE_MESH.num_edges,
             __ve_field_stride_0=SIMPLE_MESH.num_edges,
@@ -798,8 +799,8 @@ def test_gtir_connectivity_shift_chain():
         connectivity_E2V=connectivity_E2V.table,
         connectivity_V2E=connectivity_V2E.table,
         **FSYMBOLS,
-        **CSYMBOLS,
-        __edges_out_size_0=CSYMBOLS["__edges_size_0"],
-        __edges_out_stride_0=CSYMBOLS["__edges_stride_0"],
+        **make_mesh_symbols(SIMPLE_MESH),
+        __edges_out_size_0=SIMPLE_MESH.num_edges,
+        __edges_out_stride_0=1,
     )
     assert np.allclose(e_out, ref)

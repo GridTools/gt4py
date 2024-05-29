@@ -204,17 +204,17 @@ class LambdaToTasklet(eve.NodeVisitor):
 
             else:
                 # we use a tasklet to perform dereferencing of a generic iterator
-                assert all(dim in it.indices.keys() for dim in it.dimensions)
+                assert all(dim in it.indices for dim in it.dimensions)
                 field_indices = [(dim, it.indices[dim]) for dim in it.dimensions]
                 index_connectors = [
-                    INDEX_CONNECTOR_FMT.format(dim=dim)
+                    INDEX_CONNECTOR_FMT.format(dim=dim.value)
                     for dim, index in field_indices
                     if not isinstance(index, SymbolExpr)
                 ]
                 index_internals = ",".join(
                     str(index.value)
                     if isinstance(index, SymbolExpr)
-                    else INDEX_CONNECTOR_FMT.format(dim=dim)
+                    else INDEX_CONNECTOR_FMT.format(dim=dim.value)
                     for dim, index in field_indices
                 )
                 deref_node = self.state.add_tasklet(
@@ -224,15 +224,14 @@ class LambdaToTasklet(eve.NodeVisitor):
                     code=f"val = field[{index_internals}]",
                 )
                 # add new termination point for this field parameter
-                field_desc = it.field.desc(self.sdfg)
                 field_fullset = sbs.Range.from_array(field_desc)
                 self._add_input_connection(it.field, field_fullset, deref_node, "field")
 
                 for dim, index_expr in field_indices:
-                    deref_connector = INDEX_CONNECTOR_FMT.format(dim=dim)
+                    deref_connector = INDEX_CONNECTOR_FMT.format(dim=dim.value)
                     if isinstance(index_expr, MemletExpr):
                         self._add_input_connection(
-                            index_expr.source,
+                            index_expr.node,
                             index_expr.subset,
                             deref_node,
                             deref_connector,
@@ -279,10 +278,10 @@ class LambdaToTasklet(eve.NodeVisitor):
         self, it: IteratorExpr, offset_dim: Dimension, offset_expr: IteratorIndexExpr
     ) -> IteratorExpr:
         """Implements cartesian shift along one dimension."""
-        assert offset_dim.value in it.dimensions
+        assert offset_dim in it.dimensions
         new_index: SymbolExpr | ValueExpr
-        assert offset_dim.value in it.indices
-        index_expr = it.indices[offset_dim.value]
+        assert offset_dim in it.indices
+        index_expr = it.indices[offset_dim]
         if isinstance(index_expr, SymbolExpr) and isinstance(offset_expr, SymbolExpr):
             # purely symbolic expression which can be interpreted at compile time
             new_index = SymbolExpr(index_expr.value + offset_expr.value, index_expr.dtype)
@@ -313,9 +312,9 @@ class LambdaToTasklet(eve.NodeVisitor):
             for input_expr, input_connector in [(index_expr, "index"), (offset_expr, "offset")]:
                 if isinstance(input_expr, MemletExpr):
                     if input_connector == "index":
-                        dtype = input_expr.source.desc(self.sdfg).dtype
+                        dtype = input_expr.node.desc(self.sdfg).dtype
                     self._add_input_connection(
-                        input_expr.source,
+                        input_expr.node,
                         input_expr.subset,
                         dynamic_offset_tasklet,
                         input_connector,
@@ -341,10 +340,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         return IteratorExpr(
             it.field,
             it.dimensions,
-            {
-                dim: (new_index if dim == offset_dim.value else index)
-                for dim, index in it.indices.items()
-            },
+            {dim: (new_index if dim == offset_dim else index) for dim, index in it.indices.items()},
         )
 
     def _make_dynamic_neighbor_offset(
@@ -374,7 +370,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         )
         if isinstance(offset_expr, MemletExpr):
             self._add_input_connection(
-                offset_expr.source,
+                offset_expr.node,
                 offset_expr.subset,
                 tasklet_node,
                 "offset",
@@ -399,11 +395,11 @@ class LambdaToTasklet(eve.NodeVisitor):
         offset_expr: IteratorIndexExpr,
     ) -> IteratorExpr:
         """Implements shift in unstructured domain by means of a neighbor table."""
-        neighbor_dim = connectivity.neighbor_axis.value
-        assert neighbor_dim in it.dimensions
+        assert connectivity.neighbor_axis in it.dimensions
+        neighbor_dim = connectivity.neighbor_axis
         assert neighbor_dim not in it.indices
 
-        origin_dim = connectivity.origin_axis.value
+        origin_dim = connectivity.origin_axis
         assert origin_dim in it.indices
         origin_index = it.indices[origin_dim]
         assert isinstance(origin_index, SymbolExpr)
@@ -471,6 +467,9 @@ class LambdaToTasklet(eve.NodeVisitor):
     def visit_FunCall(self, node: itir.FunCall) -> IteratorExpr | MemletExpr | ValueExpr:
         if cpm.is_call_to(node, "deref"):
             return self._visit_deref(node)
+
+        elif cpm.is_applied_shift(node):
+            return self._visit_shift(node)
 
         else:
             assert isinstance(node.fun, itir.SymRef)
