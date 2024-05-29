@@ -164,6 +164,7 @@ class GTIRToSDFG(eve.NodeVisitor):
             )
 
         sdfg = dace.SDFG(node.id)
+        sdfg.debuginfo = dace_fieldview_util.debuginfo(node)
         entry_state = sdfg.add_state("program_entry", is_start_block=True)
 
         # declarations of temporaries result in transient array definitions in the SDFG
@@ -185,7 +186,9 @@ class GTIRToSDFG(eve.NodeVisitor):
 
         # visit one statement at a time and expand the SDFG from the current head state
         for i, stmt in enumerate(node.body):
+            # include `debuginfo` only for `ir.Program` and `ir.Stmt` nodes: finer granularity would be too messy
             head_state = sdfg.add_state_after(head_state, f"stmt_{i}")
+            head_state._debuginfo = dace_fieldview_util.debuginfo(stmt)
             self.visit(stmt, sdfg=sdfg, state=head_state)
 
         sdfg.validate()
