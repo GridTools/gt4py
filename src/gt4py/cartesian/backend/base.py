@@ -50,7 +50,12 @@ REGISTRY = gt_utils.Registry()
 
 
 def from_name(name: str) -> Optional[Type["Backend"]]:
-    return REGISTRY.get(name, None)
+    backend = REGISTRY.get(name, None)
+    if not backend:
+        raise NotImplementedError(
+            f"Backend {name} is not implemented, options are: {REGISTRY.names}"
+        )
+    return backend
 
 
 def register(backend_cls: Type["Backend"]) -> Type["Backend"]:
