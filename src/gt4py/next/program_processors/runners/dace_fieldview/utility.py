@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Mapping
+from typing import Any, Mapping, Optional
 
 import dace
 
@@ -51,6 +51,21 @@ def as_scalar_type(typestr: str) -> ts.ScalarType:
 
 def connectivity_identifier(name: str) -> str:
     return f"connectivity_{name}"
+
+
+def debuginfo(
+    node: itir.Node, debuginfo: Optional[dace.dtypes.DebugInfo] = None
+) -> Optional[dace.dtypes.DebugInfo]:
+    location = node.location
+    if location:
+        return dace.dtypes.DebugInfo(
+            start_line=location.line,
+            start_column=location.column if location.column else 0,
+            end_line=location.end_line if location.end_line else -1,
+            end_column=location.end_column if location.end_column else 0,
+            filename=location.filename,
+        )
+    return debuginfo
 
 
 def filter_connectivities(offset_provider: Mapping[str, Any]) -> dict[str, Connectivity]:
