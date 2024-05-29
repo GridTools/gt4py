@@ -35,7 +35,7 @@ from gt4py.next.type_system import type_specifications as ts
 class MemletExpr:
     """Scalar or array data access thorugh a memlet."""
 
-    source: dace.nodes.AccessNode
+    node: dace.nodes.AccessNode
     subset: sbs.Indices | sbs.Range
 
 
@@ -52,6 +52,7 @@ class ValueExpr:
     """Result of the computation implemented by a tasklet node."""
 
     node: dace.nodes.AccessNode
+    field_type: ts.FieldType | ts.ScalarType
 
 
 IteratorIndexExpr: TypeAlias = MemletExpr | SymbolExpr | ValueExpr
@@ -62,8 +63,8 @@ class IteratorExpr:
     """Iterator for field access to be consumed by `deref` or `shift` builtin functions."""
 
     field: dace.nodes.AccessNode
-    dimensions: list[str]
-    indices: dict[str, IteratorIndexExpr]
+    dimensions: list[Dimension]
+    indices: dict[Dimension, IteratorIndexExpr]
 
 
 # Define alias for the elements needed to setup input connections to a map scope
@@ -73,6 +74,9 @@ InputConnection: TypeAlias = tuple[
     dace.nodes.Tasklet,
     str,
 ]
+
+INDEX_CONNECTOR_FMT = "__index_{dim}"
+
 
 INDEX_CONNECTOR_FMT = "__index_{dim}"
 
@@ -168,28 +172,35 @@ class LambdaToTasklet(eve.NodeVisitor):
         self.input_connections.append((src, subset, dst, dst_connector))
 
     def _get_tasklet_result(
-        self, dtype: dace.typeclass, src_node: dace.nodes.Tasklet, src_connector: str
+        self,
+        dtype: dace.typeclass,
+        src_node: dace.nodes.Tasklet,
+        src_connector: str,
     ) -> ValueExpr:
-        scalar_name, _ = self.sdfg.add_scalar("var", dtype, transient=True, find_new_name=True)
-        scalar_node = self.state.add_access(scalar_name)
+        var_name, _ = self.sdfg.add_scalar("var", dtype, transient=True, find_new_name=True)
+        var_subset = "0"
+        data_type = dace_fieldview_util.as_scalar_type(str(dtype.as_numpy_dtype()))
+        var_node = self.state.add_access(var_name)
         self.state.add_edge(
             src_node,
             src_connector,
-            scalar_node,
+            var_node,
             None,
-            dace.Memlet(data=scalar_node.data, subset="0"),
+            dace.Memlet(data=var_node.data, subset=var_subset),
         )
-        return ValueExpr(scalar_node)
+        return ValueExpr(var_node, data_type)
 
     def _visit_deref(self, node: itir.FunCall) -> MemletExpr | ValueExpr:
         assert len(node.args) == 1
         it = self.visit(node.args[0])
 
         if isinstance(it, IteratorExpr):
+            field_desc = it.field.desc(self.sdfg)
+            assert len(field_desc.shape) == len(it.dimensions)
             if all(isinstance(index, SymbolExpr) for index in it.indices.values()):
                 # when all indices are symblic expressions, we can perform direct field access through a memlet
-                data_index = sbs.Indices([it.indices[dim].value for dim in it.dimensions])  # type: ignore[union-attr]
-                return MemletExpr(it.field, data_index)
+                field_subset = sbs.Indices([it.indices[dim].value for dim in it.dimensions])  # type: ignore[union-attr]
+                return MemletExpr(it.field, field_subset)
 
             else:
                 # we use a tasklet to perform dereferencing of a generic iterator
@@ -461,11 +472,15 @@ class LambdaToTasklet(eve.NodeVisitor):
         if cpm.is_call_to(node, "deref"):
             return self._visit_deref(node)
 
-        elif cpm.is_call_to(node.fun, "shift"):
-            return self._visit_shift(node)
-
         else:
             assert isinstance(node.fun, itir.SymRef)
+
+        # create a tasklet node implementing the builtin function
+        builtin_name = str(node.fun.id)
+        if builtin_name in MATH_BUILTINS_MAPPING:
+            fmt = MATH_BUILTINS_MAPPING[builtin_name]
+        else:
+            raise NotImplementedError(f"'{builtin_name}' not implemented.")
 
         node_internals = []
         node_connections: dict[str, MemletExpr | ValueExpr] = {}
@@ -481,13 +496,8 @@ class LambdaToTasklet(eve.NodeVisitor):
                 # use the argument value without adding any connector
                 node_internals.append(arg_expr.value)
 
-        # create a tasklet node implementing the builtin function
-        builtin_name = str(node.fun.id)
-        if builtin_name in MATH_BUILTINS_MAPPING:
-            fmt = MATH_BUILTINS_MAPPING[builtin_name]
-            code = fmt.format(*node_internals)
-        else:
-            raise NotImplementedError(f"'{builtin_name}' not implemented.")
+        # use tasklet connectors as expression arguments
+        code = fmt.format(*node_internals)
 
         out_connector = "result"
         tasklet_node = self.state.add_tasklet(
@@ -507,13 +517,11 @@ class LambdaToTasklet(eve.NodeVisitor):
                     dace.Memlet(data=arg_expr.node.data, subset="0"),
                 )
             else:
-                self._add_input_connection(
-                    arg_expr.source, arg_expr.subset, tasklet_node, connector
-                )
+                self._add_input_connection(arg_expr.node, arg_expr.subset, tasklet_node, connector)
 
         # TODO: use type inference to determine the result type
         if len(node_connections) == 1 and isinstance(node_connections["__inp_0"], MemletExpr):
-            dtype = node_connections["__inp_0"].source.desc(self.sdfg).dtype
+            dtype = node_connections["__inp_0"].node.desc(self.sdfg).dtype
         else:
             node_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
             dtype = dace_fieldview_util.as_dace_type(node_type)
@@ -531,11 +539,9 @@ class LambdaToTasklet(eve.NodeVisitor):
 
         if isinstance(output_expr, MemletExpr):
             # special case where the field operator is simply copying data from source to destination node
-            output_dtype = output_expr.source.desc(self.sdfg).dtype
+            output_dtype = output_expr.node.desc(self.sdfg).dtype
             tasklet_node = self.state.add_tasklet("copy", {"__inp"}, {"__out"}, "__out = __inp")
-            self._add_input_connection(
-                output_expr.source, output_expr.subset, tasklet_node, "__inp"
-            )
+            self._add_input_connection(output_expr.node, output_expr.subset, tasklet_node, "__inp")
         else:
             # even simpler case, where a constant value is written to destination node
             output_dtype = output_expr.dtype
