@@ -35,6 +35,8 @@ from gt4py.next.type_system import type_specifications as ts
 SDFGField: TypeAlias = tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]
 SDFGFieldBuilder: TypeAlias = Callable[[], list[SDFGField]]
 
+DIMENSION_INDEX_FMT = "i_{dim}"
+
 
 @dataclass(frozen=True)
 class PrimitiveTranslator(abc.ABC):
@@ -91,8 +93,8 @@ class AsFieldOp(PrimitiveTranslator):
 
     stencil_expr: itir.Lambda
     stencil_args: list[SDFGFieldBuilder]
-    field_domain: dict[Dimension, tuple[dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]]
-    field_type: ts.FieldType
+    field_domain: list[tuple[Dimension, dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]]
+    field_dtype: ts.ScalarType
     offset_provider: dict[str, Connectivity | Dimension]
 
     def __init__(
@@ -114,21 +116,16 @@ class AsFieldOp(PrimitiveTranslator):
         # the domain of the field operator is passed as second argument
         assert isinstance(domain_expr, itir.FunCall)
 
-        domain = dace_fieldview_util.get_domain(domain_expr)
-        # define field domain with all dimensions in alphabetical order
-        sorted_domain_dims = sorted(domain.keys(), key=lambda x: x.value)
-
         # add local storage to compute the field operator over the given domain
         # TODO: use type inference to determine the result type
         node_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
 
-        self.field_domain = domain
-        self.field_type = ts.FieldType(sorted_domain_dims, node_type)
+        self.field_domain = dace_fieldview_util.get_field_domain(domain_expr)
+        self.field_dtype = node_type
         self.stencil_expr = stencil_expr
         self.stencil_args = stencil_args
 
     def build(self) -> list[SDFGField]:
-        dimension_index_fmt = "i_{dim}"
         # type of variables used for field indexing
         index_dtype = dace.int32
         # first visit the list of arguments and build a symbol map
@@ -145,16 +142,16 @@ class AsFieldOp(PrimitiveTranslator):
                 stencil_args.append(scalar_arg)
             else:
                 assert isinstance(arg_type, ts.FieldType)
-                indices: dict[str, gtir_to_tasklet.IteratorIndexExpr] = {
-                    dim.value: gtir_to_tasklet.SymbolExpr(
-                        dace.symbolic.SymExpr(dimension_index_fmt.format(dim=dim.value)),
+                indices: dict[Dimension, gtir_to_tasklet.IteratorIndexExpr] = {
+                    dim: gtir_to_tasklet.SymbolExpr(
+                        dace.symbolic.SymExpr(DIMENSION_INDEX_FMT.format(dim=dim.value)),
                         index_dtype,
                     )
-                    for dim in self.field_domain.keys()
+                    for dim, _, _ in self.field_domain
                 }
                 iterator_arg = gtir_to_tasklet.IteratorExpr(
                     data_node,
-                    [dim.value for dim in arg_type.dims],
+                    arg_type.dims,
                     indices,
                 )
                 stencil_args.append(iterator_arg)
@@ -170,31 +167,36 @@ class AsFieldOp(PrimitiveTranslator):
 
         # the last transient node can be deleted
         # TODO: not needed to store the node `dtype` after type inference is in place
-        dtype = output_expr.node.desc(self.sdfg).dtype
+        output_desc = output_expr.node.desc(self.sdfg)
         self.head_state.remove_node(output_expr.node)
 
         # allocate local temporary storage for the result field
+        field_dims = [dim for dim, _, _ in self.field_domain]
         field_shape = [
             # diff between upper and lower bound
-            self.field_domain[dim][1] - self.field_domain[dim][0]
-            for dim in self.field_type.dims
+            (ub - lb)
+            for _, lb, ub in self.field_domain
         ]
-        # TODO: use `self.field_type` without overriding `dtype` when type inference is in place
-        field_dtype = dace_fieldview_util.as_scalar_type(str(dtype.as_numpy_dtype()))
-        field_node = self.add_local_storage(
-            ts.FieldType(self.field_type.dims, field_dtype), field_shape
-        )
+        if isinstance(output_desc, dace.data.Array):
+            raise NotImplementedError
+        else:
+            assert isinstance(output_expr.field_type, ts.ScalarType)
+            # TODO: enable `assert output_expr.field_type == self.field_dtype`, remove variable `dtype`
+            dtype = output_expr.field_type
+
+        # TODO: use `self.field_dtype` directly, without passing through `dtype`
+        field_type = ts.FieldType(field_dims, dtype)
+        field_node = self.add_local_storage(field_type, field_shape)
 
         # assume tasklet with single output
-        output_index = ",".join(
-            dimension_index_fmt.format(dim=dim.value) for dim in self.field_type.dims
-        )
-        output_memlet = dace.Memlet(data=field_node.data, subset=output_index)
+        output_subset = [
+            DIMENSION_INDEX_FMT.format(dim=dim.value) for dim, _, _ in self.field_domain
+        ]
 
         # create map range corresponding to the field operator domain
         map_ranges = {
-            dimension_index_fmt.format(dim=dim.value): f"{lb}:{ub}"
-            for dim, (lb, ub) in self.field_domain.items()
+            DIMENSION_INDEX_FMT.format(dim=dim.value): f"{lb}:{ub}"
+            for dim, lb, ub in self.field_domain
         }
         me, mx = self.head_state.add_map("field_op", map_ranges)
 
@@ -216,10 +218,10 @@ class AsFieldOp(PrimitiveTranslator):
             mx,
             field_node,
             src_conn=output_tasklet_connector,
-            memlet=output_memlet,
+            memlet=dace.Memlet(data=field_node.data, subset=",".join(output_subset)),
         )
 
-        return [(field_node, self.field_type)]
+        return [(field_node, field_type)]
 
 
 class Select(PrimitiveTranslator):
@@ -294,9 +296,9 @@ class Select(PrimitiveTranslator):
             assert isinstance(true_br_node, dace.nodes.AccessNode)
             false_br_node, false_br_type = false_br
             assert isinstance(false_br_node, dace.nodes.AccessNode)
-            assert true_br_type == false_br_type
-            array_type = self.sdfg.arrays[true_br_node.data]
-            access_node = self.add_local_storage(true_br_type, array_type.shape)
+            desc = true_br_node.desc(self.sdfg)
+            assert false_br_node.desc(self.sdfg) == desc
+            access_node = self.add_local_storage(true_br_type, desc.shape)
             output_nodes.append((access_node, true_br_type))
 
             data_name = access_node.data

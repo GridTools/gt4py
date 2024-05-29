@@ -83,7 +83,7 @@ def test_gtir_update():
         im.call("named_range")(itir.AxisLiteral(value=IDim.value), 0, "size")
     )
     testee = itir.Program(
-        id="gtir_copy",
+        id="gtir_update",
         function_definitions=[],
         params=[itir.Sym(id="x"), itir.Sym(id="size")],
         declarations=[],
@@ -150,7 +150,7 @@ def test_gtir_sum2_sym():
         im.call("named_range")(itir.AxisLiteral(value=IDim.value), 0, "size")
     )
     testee = itir.Program(
-        id="sum_2fields",
+        id="sum_2fields_sym",
         function_definitions=[],
         params=[itir.Sym(id="x"), itir.Sym(id="z"), itir.Sym(id="size")],
         declarations=[],
