@@ -157,6 +157,7 @@ class AsFieldOp(PrimitiveTranslator):
                 )
                 stencil_args.append(iterator_arg)
 
+        # represent the field operator as a mapped tasklet graph, which will range over the field domain
         taskgen = gtir_to_tasklet.LambdaToTasklet(self.sdfg, self.head_state, self.offset_provider)
         input_connections, output_expr = taskgen.visit(self.stencil_expr, args=stencil_args)
         assert isinstance(output_expr, gtir_to_tasklet.ValueExpr)
