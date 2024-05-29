@@ -52,6 +52,7 @@ from boltons.strutils import (
 from . import extended_typing as xtyping
 from .extended_typing import (
     Any,
+    ArgsOnlyCallable,
     Callable,
     Collection,
     Dict,
@@ -82,6 +83,15 @@ except ModuleNotFoundError:
 
 
 T = TypeVar("T")
+
+
+def first(iterable: Iterable[T], *, default: Union[T, NothingType] = NOTHING) -> T:
+    try:
+        return next(iter(iterable))
+    except StopIteration as error:
+        if default is not NOTHING:
+            return cast(T, default)
+        raise error
 
 
 def isinstancechecker(type_info: Union[Type, Iterable[Type]]) -> Callable[[Any], bool]:
@@ -227,7 +237,29 @@ def itemgetter_(key: Any, default: Any = NOTHING) -> Callable[[Any], Any]:
 
 
 _P = ParamSpec("_P")
+_S = TypeVar("_S")
 _T = TypeVar("_T")
+
+
+@dataclasses.dataclass(frozen=True)
+class IndexerCallable(Generic[_S, _T]):
+    """
+    An indexer class applying the wrapped function to the index arguments.
+
+    Examples:
+        >>> indexer = IndexerCallable(lambda x: x**2)
+        >>> indexer[3]
+        9
+
+        >>> indexer = IndexerCallable(lambda a, b: a + b)
+        >>> indexer[3, 4]
+        7
+    """
+
+    func: ArgsOnlyCallable[_S, _T]
+
+    def __getitem__(self, key: _S | Tuple[_S, ...]) -> _T:
+        return self.func(*key) if isinstance(key, tuple) else self.func(key)
 
 
 class fluid_partial(functools.partial):
