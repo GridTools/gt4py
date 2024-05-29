@@ -19,7 +19,7 @@ stages:
 - test
 
 
-.build_baseimage:
+build baseimage:
   stage: baseimage
   # we create a tag that depends on the SHA value of ci/base.Dockerfile, this way
   # a new base image is only built when the SHA of this file changes
@@ -40,9 +40,9 @@ stages:
     DOCKERFILE: ci/base.Dockerfile
     DOCKER_BUILD_ARGS: '["PYVERSION=$PYVERSION", "CI_PROJECT_DIR=$CI_PROJECT_DIR"]'
 build baseimage x86_64:
-  extends: [.container-builder-cscs-zen2, .build_baseimage]
+  extends: [.container-builder-cscs-zen2, "build baseimage"]
 build baseimage aarch64:
-  extends: [.container-builder-cscs-gh200, .build_baseimage]
+  extends: [.container-builder-cscs-gh200, "build baseimage"]
 
 build py38 baseimage x86_64:
   extends: build baseimage x86_64
@@ -81,9 +81,9 @@ build image:
     DOCKERFILE: ci/checkout.Dockerfile
     DOCKER_BUILD_ARGS: '["PYVERSION=$PYVERSION", "BASE_IMAGE=${BASE_IMAGE_${PYVERSION_PREFIX}}"]'
 build image x86_64:
-  extends: .container-builder-cscs-zen2
+  extends: [.container-builder-cscs-zen2, "build image"]
 build image aarch64:
-  extends: .container-builder-cscs-gh200
+  extends: [.container-builder-cscs-gh200, "build image"]
 
 build py38 image x86_64:
   extends: build image x86_64
