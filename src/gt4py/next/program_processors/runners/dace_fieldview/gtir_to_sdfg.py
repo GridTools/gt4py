@@ -167,7 +167,7 @@ class GTIRToSDFG(eve.NodeVisitor):
             )
 
         sdfg = dace.SDFG(node.id)
-        sdfg.debuginfo = dace_fieldview_util.debuginfo(node)
+        sdfg.debuginfo = dace_fieldview_util.debuginfo(node, sdfg.debuginfo)
         entry_state = sdfg.add_state("program_entry", is_start_block=True)
 
         # declarations of temporaries result in transient array definitions in the SDFG
