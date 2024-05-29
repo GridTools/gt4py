@@ -87,34 +87,34 @@ build_py310_baseimage_aarch64:
 
 build_py38_image_x86_64:
   extends: .build_image_x86_64
-  needs: build_py38_baseimage_x86_64
+  needs: [build_py38_baseimage_x86_64]
   variables:
     <<: *py38
 build_py38_image_aarch64:
   extends: .build_image_aarch64
-  needs: build_py38_baseimage_aarch64
+  needs: [build_py38_baseimage_aarch64]
   variables:
     <<: *py38
 
 build_py39_image_x86_64:
   extends: .build_image_x86_64
-  needs: build_py39_baseimage_x86_64
+  needs: [build_py39_baseimage_x86_64]
   variables:
     <<: *py39
 build_py39_image_aarch64:
   extends: .build_image_aarch64
-  needs: build_py39_baseimage_aarch64
+  needs: [build_py39_baseimage_aarch64]
   variables:
     <<: *py39
 
 build_py310_image_x86_64:
   extends: .build_image_x86_64
-  needs: build_py310_baseimage_x86_64
+  needs: [build_py310_baseimage_x86_64]
   variables:
     <<: *py310
 build_py310_image_aarch64:
   extends: .build_image_aarch64
-  needs: build_py310_baseimage_aarch64
+  needs: [build_py310_baseimage_aarch64]
   variables:
     <<: *py310
 
@@ -141,23 +141,23 @@ build_py310_image_aarch64:
 
 test_py38_x86_64:
   extends: [.container-runner-daint, .test_helper]
-  needs: build_py38_image_x86_64
+  needs: [build_py38_image_x86_64]
   variables:
     <<: *py38
 test_py38_aarch64:
   extends: [.container-runner-santis-gh200, .test_helper]
-  needs: build_py38_image_aarch64
+  needs: [build_py38_image_aarch64]
   variables:
     <<: *py38
 
 test_py39_x86_64:
   extends: [.container-runner-daint, .test_helper]
-  needs: build_py39_image_x86_64
+  needs: [build_py39_image_x86_64]
   variables:
     <<: *py39
 test_py39_aarch64:
   extends: [.container-runner-santis-gh200, .test_helper]
-  needs: build_py39_image_aarch64
+  needs: [build_py39_image_aarch64]
   variables:
     <<: *py39
 
@@ -176,7 +176,7 @@ test_py39_aarch64:
       SUBVARIANT: [-cuda11x, -cpu]
 test_py310_x86_64:
   extends: [.container-runner-daint, .test_py310]
-  needs: build_py310_image_x86_64
+  needs: [build_py310_image_x86_64]
 test_py310_aarch64:
   extends: [.container-runner-santis-gh200, .test_py310]
-  needs: build_py310_image_aarch64
+  needs: [build_py310_image_aarch64]
