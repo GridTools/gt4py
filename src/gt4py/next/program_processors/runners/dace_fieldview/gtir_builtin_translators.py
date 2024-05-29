@@ -247,6 +247,23 @@ class AsFieldOp(PrimitiveTranslator):
         return [(field_node, field_type)], mask_node
 
 
+def _add_full_mask(mask_var: str, mask_desc: dace.data.Array, state: dace.SDFGState) -> None:
+    """Fill a connectivity table with a valid neighbor index, to mimic full connectivity mask."""
+    state.add_mapped_tasklet(
+        "set_full_mask",
+        map_ranges={f"_i{i}": f"0:{size}" for i, size in enumerate(mask_desc.shape)},
+        inputs={},
+        code="val = 0",
+        outputs={
+            "val": dace.Memlet(
+                data=mask_var,
+                subset=",".join(f"_i{i}" for i in range(len(mask_desc.shape))),
+            )
+        },
+        external_edges=True,
+    )
+
+
 class Select(PrimitiveTranslator):
     """Generates the dataflow subgraph for the `select` builtin function."""
 
@@ -319,9 +336,9 @@ class Select(PrimitiveTranslator):
             assert isinstance(true_br_node, dace.nodes.AccessNode)
             false_br_node, false_br_type = false_br
             assert isinstance(false_br_node, dace.nodes.AccessNode)
-            assert true_br_type == false_br_type
-            array_type = self.sdfg.arrays[true_br_node.data]
-            access_node = self.add_local_storage(true_br_type, array_type.shape)
+            desc = true_br_node.desc(self.sdfg)
+            assert false_br_node.desc(self.sdfg) == desc
+            access_node = self.add_local_storage(true_br_type, desc.shape)
             output_nodes.append((access_node, true_br_type))
 
             data_name = access_node.data
@@ -343,10 +360,41 @@ class Select(PrimitiveTranslator):
                 ),
             )
 
-        # TODO: add support for masked array values in select statements, if this lowering path is needed
-        assert not (true_br_mask or false_br_mask)
+        # Check if any of the true/false branches produces a mask array for neighbors with skip values;
+        # if only one branch produces the mask array, add a mapped tasklet on the other branch to produce
+        # a mask array filled with 0s to mimic all valid neighbor values.
+        if true_br_mask:
+            mask_desc = true_br_mask.desc(self.sdfg)
+            mask_var, _ = self.sdfg.add_temp_transient_like(mask_desc)
+            if false_br_mask:
+                assert mask_desc == false_br_mask.desc(self.sdfg)
+                false_state.add_nedge(
+                    false_br_mask,
+                    false_state.add_access(mask_var),
+                    dace.Memlet.from_array(false_br_mask.data, mask_desc),
+                )
+            else:
+                _add_full_mask(mask_var, mask_desc, false_state)
+            true_state.add_nedge(
+                true_br_mask,
+                true_state.add_access(mask_var),
+                dace.Memlet.from_array(true_br_mask.data, mask_desc),
+            )
+            return output_nodes, self.head_state.add_access(mask_var)
 
-        return output_nodes, None
+        elif false_br_mask:
+            mask_desc = false_br_mask.desc(self.sdfg)
+            mask_var, _ = self.sdfg.add_temp_transient_like(mask_desc)
+            _add_full_mask(mask_var, mask_desc, true_state)
+            false_state.add_nedge(
+                false_br_mask,
+                false_state.add_access(mask_var),
+                dace.Memlet.from_array(false_br_mask.data, mask_desc),
+            )
+            return output_nodes, self.head_state.add_access(mask_var)
+
+        else:
+            return output_nodes, None
 
 
 class SymbolRef(PrimitiveTranslator):
