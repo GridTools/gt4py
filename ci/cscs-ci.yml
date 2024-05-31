@@ -117,28 +117,31 @@ build_py311_image_aarch64:
     SLURM_TIMELIMIT: 120
     NUM_PROCESSES: auto
     VIRTUALENV_SYSTEM_SITE_PACKAGES: 1
-
-test_py310_x86_64:
+.test_helper_x86_64:
   extends: [.container-runner-daint-gpu, .test_helper]
   needs: [build_py310_image_x86_64]
-  variables:
-    <<: *py310
-
-test_py310_aarch64:
+.test_helper_aarch64:
   extends: [.container-runner-santis-gh200, .test_helper]
   needs: [build_py310_image_aarch64]
+  variables:
+    # limit test parallelism to avoid "OSError: too many open files"
+    NUM_PROCESSES: 64
+
+test_py310_x86_64:
+  extends: [.test_helper_x86_64]
+  variables:
+    <<: *py310
+test_py310_aarch64:
+  extends: [.test_helper_aarch64]
   variables:
     <<: *py310
 
 test_py311_x86_64:
-  extends: [.container-runner-daint-gpu, .test_helper]
-  needs: [build_py311_image_x86_64]
+  extends: [.test_helper_x86_64]
   variables:
     <<: *py311
-
 test_py311_aarch64:
-  extends: [.container-runner-santis-gh200, .test_helper]
-  needs: [build_py311_image_aarch64]
+  extends: [.test_helper_aarch64]
   variables:
     <<: *py311
 
