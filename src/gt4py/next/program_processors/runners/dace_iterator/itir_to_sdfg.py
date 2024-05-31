@@ -455,14 +455,11 @@ class ItirToSDFG(eve.NodeVisitor):
                     program_arg_syms[name] = SymbolExpr(name, dtype)
             else:
                 assert isinstance(type_, ts.FieldType)
-                # make shape and stride symbols available as arguments to domain visitor
+                # make shape symbols (corresponding to field size) available as arguments to domain visitor
                 if name in input_names or name in output_names:
                     field_symbols = [
                         val
-                        for val in [
-                            *closure_sdfg.arrays[name].shape,
-                            *closure_sdfg.arrays[name].strides,
-                        ]
+                        for val in closure_sdfg.arrays[name].shape
                         if isinstance(val, dace.symbol) and str(val) not in input_names
                     ]
                     for sym in field_symbols:
