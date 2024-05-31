@@ -36,11 +36,11 @@ stages:
     DOCKER_BUILD_ARGS: '["PYVERSION=$PYVERSION", "CI_PROJECT_DIR=$CI_PROJECT_DIR"]'
 .build_baseimage_x86_64:
   extends: [.container-builder-cscs-zen2, .build_baseimage]
-  variable:
+  variables:
     DOCKERFILE: ci/base_cuda11.Dockerfile
 .build_baseimage_aarch64:
   extends: [.container-builder-cscs-gh200, .build_baseimage]
-  variable:
+  variables:
     DOCKERFILE: ci/base_cuda12.Dockerfile
 
 build_py310_baseimage_x86_64:
