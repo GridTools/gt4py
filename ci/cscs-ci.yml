@@ -5,13 +5,9 @@ include:
   PYVERSION_PREFIX: py310
   PYVERSION: 3.10.9
 
-.py39: &py39
-  PYVERSION_PREFIX: py39
-  PYVERSION: 3.9.1
-
-.py38: &py38
-  PYVERSION_PREFIX: py38
-  PYVERSION: 3.8.5
+.py311: &py311
+  PYVERSION_PREFIX: py311
+  PYVERSION: 3.11.9
 
 stages:
 - baseimage
@@ -44,24 +40,6 @@ stages:
 .build_baseimage_aarch64:
   extends: [.container-builder-cscs-gh200, .build_baseimage]
 
-build_py38_baseimage_x86_64:
-  extends: .build_baseimage_x86_64
-  variables:
-    <<: *py38
-build_py38_baseimage_aarch64:
-  extends: .build_baseimage_aarch64
-  variables:
-    <<: *py38
-
-build_py39_baseimage_x86_64:
-  extends: .build_baseimage_x86_64
-  variables:
-    <<: *py39
-build_py39_baseimage_aarch64:
-  extends: .build_baseimage_aarch64
-  variables:
-    <<: *py39
-
 build_py310_baseimage_x86_64:
   extends: .build_baseimage_x86_64
   variables:
@@ -70,6 +48,15 @@ build_py310_baseimage_aarch64:
   extends: .build_baseimage_aarch64
   variables:
     <<: *py310
+
+build_py311_baseimage_x86_64:
+  extends: .build_baseimage_x86_64
+  variables:
+    <<: *py311
+build_py311_baseimage_aarch64:
+  extends: .build_baseimage_aarch64
+  variables:
+    <<: *py311
 
 
 .build_image:
@@ -85,28 +72,6 @@ build_py310_baseimage_aarch64:
 .build_image_aarch64:
   extends: [.container-builder-cscs-gh200, .build_image]
 
-build_py38_image_x86_64:
-  extends: .build_image_x86_64
-  needs: [build_py38_baseimage_x86_64]
-  variables:
-    <<: *py38
-build_py38_image_aarch64:
-  extends: .build_image_aarch64
-  needs: [build_py38_baseimage_aarch64]
-  variables:
-    <<: *py38
-
-build_py39_image_x86_64:
-  extends: .build_image_x86_64
-  needs: [build_py39_baseimage_x86_64]
-  variables:
-    <<: *py39
-build_py39_image_aarch64:
-  extends: .build_image_aarch64
-  needs: [build_py39_baseimage_aarch64]
-  variables:
-    <<: *py39
-
 build_py310_image_x86_64:
   extends: .build_image_x86_64
   needs: [build_py310_baseimage_x86_64]
@@ -117,6 +82,17 @@ build_py310_image_aarch64:
   needs: [build_py310_baseimage_aarch64]
   variables:
     <<: *py310
+
+build_py311_image_x86_64:
+  extends: .build_image_x86_64
+  needs: [build_py311_baseimage_x86_64]
+  variables:
+    <<: *py311
+build_py311_image_aarch64:
+  extends: .build_image_aarch64
+  needs: [build_py311_baseimage_aarch64]
+  variables:
+    <<: *py311
 
 
 .test_helper:
@@ -132,6 +108,9 @@ build_py310_image_aarch64:
       VARIANT: [-internal, -dace]
       SUBVARIANT: [-cuda11x, -cpu]
     - SUBPACKAGE: eve
+    - SUBPACKAGE: next
+      VARIANT: [-nomesh, -atlas]
+      SUBVARIANT: [-cuda11x, -cpu]
   variables:
     CRAY_CUDA_MPS: 1
     SLURM_JOB_NUM_NODES: 1
@@ -139,44 +118,27 @@ build_py310_image_aarch64:
     NUM_PROCESSES: auto
     VIRTUALENV_SYSTEM_SITE_PACKAGES: 1
 
-test_py38_x86_64:
+test_py310_x86_64:
   extends: [.container-runner-daint-gpu, .test_helper]
-  needs: [build_py38_image_x86_64]
-  variables:
-    <<: *py38
-test_py38_aarch64:
-  extends: [.container-runner-santis-gh200, .test_helper]
-  needs: [build_py38_image_aarch64]
-  variables:
-    <<: *py38
-
-test_py39_x86_64:
-  extends: [.container-runner-daint-gpu, .test_helper]
-  needs: [build_py39_image_x86_64]
-  variables:
-    <<: *py39
-test_py39_aarch64:
-  extends: [.container-runner-santis-gh200, .test_helper]
-  needs: [build_py39_image_aarch64]
-  variables:
-    <<: *py39
-
-.test_py310:
-  extends: .test_helper
+  needs: [build_py310_image_x86_64]
   variables:
     <<: *py310
-  parallel:
-    matrix:
-    - SUBPACKAGE: [cartesian, storage]
-      VARIANT: [-internal, -dace]
-      SUBVARIANT: [-cuda11x, -cpu]
-    - SUBPACKAGE: eve
-    - SUBPACKAGE: next
-      VARIANT: [-nomesh, -atlas]
-      SUBVARIANT: [-cuda11x, -cpu]
-test_py310_x86_64:
-  extends: [.container-runner-daint-gpu, .test_py310]
-  needs: [build_py310_image_x86_64]
+
 test_py310_aarch64:
-  extends: [.container-runner-santis-gh200, .test_py310]
+  extends: [.container-runner-santis-gh200, .test_helper]
   needs: [build_py310_image_aarch64]
+  variables:
+    <<: *py310
+
+test_py311_x86_64:
+  extends: [.container-runner-daint-gpu, .test_helper]
+  needs: [build_py311_image_x86_64]
+  variables:
+    <<: *py311
+
+test_py311_aarch64:
+  extends: [.container-runner-santis-gh200, .test_helper]
+  needs: [build_py311_image_aarch64]
+  variables:
+    <<: *py311
+
