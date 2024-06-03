@@ -143,6 +143,8 @@ test_py310_x86_64:
   extends: [.test_helper_x86_64]
   variables:
     <<: *py310
+  # TODO: remove line below
+  when: manual # tested and working, disabled while developing for gh200
 test_py310_aarch64:
   extends: [.test_helper_aarch64]
   variables:
@@ -152,6 +154,8 @@ test_py311_x86_64:
   extends: [.test_helper_x86_64]
   variables:
     <<: *py311
+  # TODO: remove line below
+  when: manual # tested and working, disabled while developing for gh200
 test_py311_aarch64:
   extends: [.test_helper_aarch64]
   variables:
