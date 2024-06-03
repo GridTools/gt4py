@@ -147,7 +147,8 @@ build_py311_image_aarch64:
   - tox run -e $SUBPACKAGE-$PYVERSION_PREFIX$VARIANT$SUBVARIANT
   variables:
     # limit test parallelism to avoid "OSError: too many open files"
-    NUM_PROCESSES: 64
+    NUM_PROCESSES: 32
+    CUDAARCHS: "80"
 
 test_py310_x86_64:
   extends: [.test_helper_x86_64]
