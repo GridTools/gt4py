@@ -139,11 +139,15 @@ build_py311_image_aarch64:
     - SUBPACKAGE: next
       VARIANT: [-nomesh, -atlas]
       SUBVARIANT: [-cuda12x, -cpu]
+  script:
+  - cd /gt4py.src
+  - python -c "import cupy"
+  # TODO: remove start of CUDA MPS daemon once CI-CD can handle CRAY_CUDA_MPS
+  - CUDA_MPS_PIPE_DIRECTORY="/tmp/nvidia-mps" nvidia-cuda-mps-control -d
+  - tox run -e $SUBPACKAGE-$PYVERSION_PREFIX$VARIANT$SUBVARIANT
   variables:
     # limit test parallelism to avoid "OSError: too many open files"
-    # further limit to 1, for now, because the CUDA MPS daemon is not running
-    # TODO: consider using a wrapper to manually start the CUDA MPS daemon on the compute node
-    NUM_PROCESSES: 1
+    NUM_PROCESSES: 64
 
 test_py310_x86_64:
   extends: [.test_helper_x86_64]
