@@ -143,6 +143,8 @@ build_py311_image_aarch64:
   variables:
     # limit test parallelism to avoid "OSError: too many open files"
     NUM_PROCESSES: 32
+    # GH gpu architecture is not enabled by default in CUDA build
+    CUDAARCHS: "90"
 
 test_py310_x86_64:
   extends: [.test_helper_x86_64]
