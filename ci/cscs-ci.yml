@@ -140,11 +140,11 @@ build_py311_image_aarch64:
   before_script:
   # TODO: remove start of CUDA MPS daemon once CI-CD can handle CRAY_CUDA_MPS
   - CUDA_MPS_PIPE_DIRECTORY="/tmp/nvidia-mps" nvidia-cuda-mps-control -d
+  # GH gpu architecture is not enabled by default in CUDA build
+  - export CUDAARCHS="90"
   variables:
     # limit test parallelism to avoid "OSError: too many open files"
     NUM_PROCESSES: 32
-    # GH gpu architecture is not enabled by default in CUDA build
-    CUDAARCHS: 90
 
 test_py310_x86_64:
   extends: [.test_helper_x86_64]
