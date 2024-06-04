@@ -54,5 +54,4 @@ RUN pyenv update && \
 ENV PATH="/root/.pyenv/shims:${PATH}"
 
 
-# TODO: adding cmake here but it should be a requirement for atlas4py build-system
-RUN pip install --upgrade pip cmake setuptools wheel tox cupy-cuda12x==12.3.0
+RUN pip install --upgrade pip setuptools wheel tox cupy-cuda12x==12.3.0

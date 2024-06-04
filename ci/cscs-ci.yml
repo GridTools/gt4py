@@ -106,13 +106,13 @@ build_py311_image_aarch64:
   script:
   - cd /gt4py.src
   - python -c "import cupy"
-  - export VIRTUALENV_SYSTEM_SITE_PACKAGES=1
   - tox run -e $SUBPACKAGE-$PYVERSION_PREFIX$VARIANT$SUBVARIANT
   variables:
     CRAY_CUDA_MPS: 1
     NUM_PROCESSES: auto
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 120
+    VIRTUALENV_SYSTEM_SITE_PACKAGES: 1
 .test_helper_x86_64:
   extends: [.container-runner-daint-gpu, .test_helper]
   parallel:
