@@ -112,6 +112,7 @@ build_py311_image_aarch64:
     NUM_PROCESSES: auto
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 120
+    VIRTUALENV_SYSTEM_SITE_PACKAGES: 1
 .test_helper_x86_64:
   extends: [.container-runner-daint-gpu, .test_helper]
   parallel:
