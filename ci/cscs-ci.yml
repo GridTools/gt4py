@@ -112,7 +112,6 @@ build_py311_image_aarch64:
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 120
     NUM_PROCESSES: auto
-    VIRTUALENV_SYSTEM_SITE_PACKAGES: 1
 .test_helper_x86_64:
   extends: [.container-runner-daint-gpu, .test_helper]
   needs: [build_py310_image_x86_64]
@@ -148,7 +147,6 @@ build_py311_image_aarch64:
   variables:
     # limit test parallelism to avoid "OSError: too many open files"
     NUM_PROCESSES: 32
-    CUDAARCHS: "80"
 
 test_py310_x86_64:
   extends: [.test_helper_x86_64]
