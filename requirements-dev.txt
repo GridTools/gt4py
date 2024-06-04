@@ -66,7 +66,7 @@ flask==3.0.3              # via -c constraints.txt, dace
 fonttools==4.52.4         # via -c constraints.txt, matplotlib
 fparser==0.1.4            # via -c constraints.txt, dace
 frozendict==2.4.4         # via -c constraints.txt, gt4py (pyproject.toml)
-gridtools-cpp==2.3.2      # via -c constraints.txt, gt4py (pyproject.toml)
+git+https://github.com/edopao/gridtools@ci-gh200#egg=gridtools-cpp
 hypothesis==6.103.0       # via -c constraints.txt, -r requirements-dev.in, gt4py (pyproject.toml)
 identify==2.5.36          # via -c constraints.txt, pre-commit
 idna==3.7                 # via -c constraints.txt, requests
