@@ -384,33 +384,18 @@ class ItirToSDFG(eve.NodeVisitor):
         output_names = [k for k, _ in output_nodes.items()]
 
         # Add DaCe arrays for inputs, outputs and connectivities to closure SDFG.
-        input_transients_mapping = {}
         for name in [*input_names, *connectivity_names, *output_names]:
-            if name in closure_sdfg.arrays:
-                assert name in input_names and name in output_names
-                # In case of closures with in/out fields, there is risk of race condition
-                # between read/write access nodes in the (asynchronous) map tasklet.
-                transient_name = unique_var_name()
-                closure_sdfg.add_array(
-                    transient_name,
-                    shape=array_table[name].shape,
-                    strides=array_table[name].strides,
-                    dtype=array_table[name].dtype,
-                    transient=True,
-                )
-                closure_init_state.add_nedge(
-                    closure_init_state.add_access(name, debuginfo=closure_sdfg.debuginfo),
-                    closure_init_state.add_access(transient_name, debuginfo=closure_sdfg.debuginfo),
-                    dace.Memlet.from_array(name, closure_sdfg.arrays[name]),
-                )
-                input_transients_mapping[name] = transient_name
-            elif isinstance(self.storage_types[name], ts.FieldType):
-                closure_sdfg.add_array(
-                    name,
-                    shape=array_table[name].shape,
-                    strides=array_table[name].strides,
-                    dtype=array_table[name].dtype,
-                )
+            if isinstance(self.storage_types[name], ts.FieldType):
+                if name in closure_sdfg.arrays:
+                    # stencil closure with inout field: the program should ensure no race condition, so double-buffering is not needed
+                    assert name in input_names and name in output_names
+                else:
+                    closure_sdfg.add_array(
+                        name,
+                        shape=array_table[name].shape,
+                        strides=array_table[name].strides,
+                        dtype=array_table[name].dtype,
+                    )
             else:
                 assert isinstance(self.storage_types[name], ts.ScalarType)
 
@@ -455,15 +440,9 @@ class ItirToSDFG(eve.NodeVisitor):
 
         # Map SDFG tasklet arguments to parameters
         input_local_names = [
-            (
-                input_transients_mapping[input_name]
-                if input_name in input_transients_mapping
-                else (
-                    input_name
-                    if input_name in input_field_names
-                    else cast(ValueExpr, program_arg_syms[input_name]).value.data
-                )
-            )
+            input_name
+            if input_name in input_field_names
+            else cast(ValueExpr, program_arg_syms[input_name]).value.data
             for input_name in input_names
         ]
         input_memlets = [
