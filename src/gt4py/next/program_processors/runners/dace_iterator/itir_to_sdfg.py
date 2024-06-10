@@ -435,7 +435,7 @@ class ItirToSDFG(eve.NodeVisitor):
                     program_arg_syms[name] = value
                 else:
                     program_arg_syms[name] = SymbolExpr(name, dtype)
-        closure_ctx = Context(closure_sdfg, closure_state, program_arg_syms)
+        closure_ctx = Context(closure_sdfg, closure_init_state, program_arg_syms)
         closure_domain = self._visit_domain(node.domain, closure_ctx)
 
         # Map SDFG tasklet arguments to parameters
