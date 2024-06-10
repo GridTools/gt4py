@@ -127,7 +127,7 @@ build_py311_image_aarch64:
   # TODO: remove line below
   when: manual # tested and working, disabled while developing for gh200
 .test_helper_aarch64:
-  extends: [.container-runner-santis-gh200, .test_helper]
+  extends: [.container-runner-todi-gh200, .test_helper]
   parallel:
     matrix:
     - SUBPACKAGE: [cartesian, storage]
