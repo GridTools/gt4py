@@ -11,7 +11,8 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
+import dataclasses
+import inspect
 
 from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import Iterable, Optional, Union
@@ -21,12 +22,10 @@ from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
-TypeSpecOrTypeInferenceRule = Union[ts.TypeSpec, "TypeInferenceRule"]
+TypeOrTypeSynthesizer = Union[ts.TypeSpec, "TypeSynthesizer"]
 
-TypeInferenceRule = xtyping.Callable[..., TypeSpecOrTypeInferenceRule]
-
-#: dictionary from function name to its type inference rule
-type_inference_rules: dict[str, TypeInferenceRule] = {}
+#: dictionary from name of a builtin to its type synthesizer
+builtin_type_synthesizers: dict[str, "TypeSynthesizer"] = {}
 
 
 def _is_derefable_iterator_type(it_type: it_ts.IteratorType) -> bool:
@@ -37,58 +36,85 @@ def _is_derefable_iterator_type(it_type: it_ts.IteratorType) -> bool:
     return set(it_type.defined_dims).issubset(set(it_type.position_dims))
 
 
-def _register_type_inference_rule(
-    rule: Optional[TypeInferenceRule] = None, *, fun_names: Optional[Iterable[str]] = None
+def _register_builtin_type_synthesizer(
+    synthesizer: Optional[xtyping.Callable[..., TypeOrTypeSynthesizer]] = None,
+    *,
+    fun_names: Optional[Iterable[str]] = None,
 ):
-    def wrapper(rule):
+    def wrapper(synthesizer):
         # store names in function object for better debuggability
-        rule.fun_names = fun_names or [rule.__name__]
-        for f in rule.fun_names:
-            type_inference_rules[f] = rule
+        synthesizer.fun_names = fun_names or [synthesizer.__name__]
+        for f in synthesizer.fun_names:
+            builtin_type_synthesizers[f] = TypeSynthesizer(type_synthesizer=synthesizer)
 
-    return wrapper(rule) if rule else wrapper
+    return wrapper(synthesizer) if synthesizer else wrapper
 
 
-@_register_type_inference_rule(
+@dataclasses.dataclass
+class TypeSynthesizer:
+    """
+    Callable that given the type of the arguments to a function derives its return type.
+
+    In case the function is a higher-order function the returned value is not a type, but another
+    function type-synthesizer.
+
+    In addition to the derivation of the return type a function type-synthesizer can perform checks
+    on the argument types.
+    """
+
+    type_synthesizer: xtyping.Callable[..., TypeOrTypeSynthesizer]
+
+    def __post_init__(self):
+        if "offset_provider" not in inspect.signature(self.type_synthesizer).parameters:
+            synthesizer = self.type_synthesizer
+            self.type_synthesizer = lambda *args, offset_provider: synthesizer(*args)
+
+    def __call__(
+        self, *args: TypeOrTypeSynthesizer, offset_provider: common.OffsetProvider
+    ) -> TypeOrTypeSynthesizer:
+        return self.type_synthesizer(*args, offset_provider=offset_provider)
+
+
+@_register_builtin_type_synthesizer(
     fun_names=itir.UNARY_MATH_NUMBER_BUILTINS | itir.UNARY_MATH_FP_BUILTINS
 )
 def _(val: ts.ScalarType) -> ts.ScalarType:
     return val
 
 
-@_register_type_inference_rule
+@_register_builtin_type_synthesizer
 def power(base: ts.ScalarType, exponent: ts.ScalarType) -> ts.ScalarType:
     return base
 
 
-@_register_type_inference_rule(fun_names=itir.BINARY_MATH_NUMBER_BUILTINS)
+@_register_builtin_type_synthesizer(fun_names=itir.BINARY_MATH_NUMBER_BUILTINS)
 def _(lhs: ts.ScalarType, rhs: ts.ScalarType) -> ts.ScalarType:
     assert lhs == rhs
     return lhs
 
 
-@_register_type_inference_rule(
+@_register_builtin_type_synthesizer(
     fun_names=itir.UNARY_MATH_FP_PREDICATE_BUILTINS | itir.UNARY_LOGICAL_BUILTINS
 )
 def _(arg: ts.ScalarType) -> ts.ScalarType:
     return ts.ScalarType(kind=ts.ScalarKind.BOOL)
 
 
-@_register_type_inference_rule(
+@_register_builtin_type_synthesizer(
     fun_names=itir.BINARY_MATH_COMPARISON_BUILTINS | itir.BINARY_LOGICAL_BUILTINS
 )
 def _(lhs: ts.ScalarType, rhs: ts.ScalarType) -> ts.ScalarType | ts.TupleType:
     return ts.ScalarType(kind=ts.ScalarKind.BOOL)
 
 
-@_register_type_inference_rule
+@_register_builtin_type_synthesizer
 def deref(it: it_ts.IteratorType) -> ts.DataType:
     assert isinstance(it, it_ts.IteratorType)
     assert _is_derefable_iterator_type(it)
     return it.element_type
 
 
-@_register_type_inference_rule
+@_register_builtin_type_synthesizer
 def can_deref(it: it_ts.IteratorType) -> ts.ScalarType:
     assert isinstance(it, it_ts.IteratorType)
     # note: We don't check if the iterator is derefable here as the iterator only needs to
@@ -103,7 +129,7 @@ def can_deref(it: it_ts.IteratorType) -> ts.ScalarType:
     return ts.ScalarType(kind=ts.ScalarKind.BOOL)
 
 
-@_register_type_inference_rule
+@_register_builtin_type_synthesizer
 def if_(cond: ts.ScalarType, true_branch: ts.DataType, false_branch: ts.DataType) -> ts.DataType:
     assert isinstance(cond, ts.ScalarType) and cond.kind == ts.ScalarKind.BOOL
     # TODO(tehrengruber): Enable this or a similar check. In case the true- and false-branch are
@@ -113,13 +139,13 @@ def if_(cond: ts.ScalarType, true_branch: ts.DataType, false_branch: ts.DataType
     return true_branch
 
 
-@_register_type_inference_rule
+@_register_builtin_type_synthesizer
 def make_const_list(scalar: ts.ScalarType) -> it_ts.ListType:
     assert isinstance(scalar, ts.ScalarType)
     return it_ts.ListType(element_type=scalar)
 
 
-@_register_type_inference_rule
+@_register_builtin_type_synthesizer
 def list_get(index: ts.ScalarType | it_ts.OffsetLiteralType, list_: it_ts.ListType) -> ts.DataType:
     if isinstance(index, it_ts.OffsetLiteralType):
         assert isinstance(index.value, ts.ScalarType)
@@ -129,7 +155,7 @@ def list_get(index: ts.ScalarType | it_ts.OffsetLiteralType, list_: it_ts.ListTy
     return list_.element_type
 
 
-@_register_type_inference_rule
+@_register_builtin_type_synthesizer
 def named_range(
     dim: ts.DimensionType, start: ts.ScalarType, stop: ts.ScalarType
 ) -> it_ts.NamedRangeType:
@@ -137,18 +163,18 @@ def named_range(
     return it_ts.NamedRangeType(dim=dim.dim)
 
 
-@_register_type_inference_rule(fun_names=["cartesian_domain", "unstructured_domain"])
+@_register_builtin_type_synthesizer(fun_names=["cartesian_domain", "unstructured_domain"])
 def _(*args: it_ts.NamedRangeType) -> it_ts.DomainType:
     assert all(isinstance(arg, it_ts.NamedRangeType) for arg in args)
     return it_ts.DomainType(dims=[arg.dim for arg in args])
 
 
-@_register_type_inference_rule
+@_register_builtin_type_synthesizer
 def make_tuple(*args: ts.DataType) -> ts.TupleType:
     return ts.TupleType(types=list(args))
 
 
-@_register_type_inference_rule
+@_register_builtin_type_synthesizer
 def neighbors(offset_literal: it_ts.OffsetLiteralType, it: it_ts.IteratorType) -> it_ts.ListType:
     assert (
         isinstance(offset_literal, it_ts.OffsetLiteralType)
@@ -159,9 +185,12 @@ def neighbors(offset_literal: it_ts.OffsetLiteralType, it: it_ts.IteratorType) -
     return it_ts.ListType(element_type=it.element_type)
 
 
-@_register_type_inference_rule
-def lift(stencil: TypeInferenceRule) -> TypeInferenceRule:
-    def apply_lift(*its: it_ts.IteratorType) -> it_ts.IteratorType:
+@_register_builtin_type_synthesizer
+def lift(stencil: TypeSynthesizer) -> TypeSynthesizer:
+    @TypeSynthesizer
+    def apply_lift(
+        *its: it_ts.IteratorType, offset_provider: common.OffsetProvider
+    ) -> it_ts.IteratorType:
         stencil_args = []
         for it in its:
             assert isinstance(it, it_ts.IteratorType)
@@ -173,7 +202,7 @@ def lift(stencil: TypeInferenceRule) -> TypeInferenceRule:
                     element_type=it.element_type,
                 )
             )
-        stencil_return_type = stencil(*stencil_args)
+        stencil_return_type = stencil(*stencil_args, offset_provider=offset_provider)
         assert isinstance(stencil_return_type, ts.DataType)
 
         position_dims = its[0].position_dims if its else []
@@ -226,11 +255,15 @@ def _convert_as_fieldop_input_to_iterator(
     )
 
 
-@_register_type_inference_rule
-def as_fieldop(stencil: TypeInferenceRule, domain: it_ts.DomainType) -> TypeInferenceRule:
+@_register_builtin_type_synthesizer
+def as_fieldop(
+    stencil: TypeSynthesizer, domain: it_ts.DomainType, offset_provider: common.OffsetProvider
+) -> TypeSynthesizer:
+    @TypeSynthesizer
     def applied_as_fieldop(*fields) -> ts.FieldType:
         stencil_return = stencil(
-            *(_convert_as_fieldop_input_to_iterator(domain, field) for field in fields)
+            *(_convert_as_fieldop_input_to_iterator(domain, field) for field in fields),
+            offset_provider=offset_provider,
         )
         assert isinstance(stencil_return, ts.DataType)
         return type_info.apply_to_primitive_constituents(
@@ -240,44 +273,50 @@ def as_fieldop(stencil: TypeInferenceRule, domain: it_ts.DomainType) -> TypeInfe
     return applied_as_fieldop
 
 
-@_register_type_inference_rule
+@_register_builtin_type_synthesizer
 def scan(
-    scan_pass: TypeInferenceRule, direction: ts.ScalarType, init: ts.ScalarType
-) -> TypeInferenceRule:
+    scan_pass: TypeSynthesizer, direction: ts.ScalarType, init: ts.ScalarType
+) -> TypeSynthesizer:
     assert isinstance(direction, ts.ScalarType) and direction.kind == ts.ScalarKind.BOOL
 
-    def apply_scan(*its: it_ts.IteratorType) -> ts.DataType:
-        result = scan_pass(init, *its)
+    @TypeSynthesizer
+    def apply_scan(*its: it_ts.IteratorType, offset_provider: common.OffsetProvider) -> ts.DataType:
+        result = scan_pass(init, *its, offset_provider=offset_provider)
         assert isinstance(result, ts.DataType)
         return result
 
     return apply_scan
 
 
-@_register_type_inference_rule
-def map_(op: TypeInferenceRule) -> TypeInferenceRule:
-    def applied_map(*args: it_ts.ListType) -> it_ts.ListType:
+@_register_builtin_type_synthesizer
+def map_(op: TypeSynthesizer) -> TypeSynthesizer:
+    @TypeSynthesizer
+    def applied_map(
+        *args: it_ts.ListType, offset_provider: common.OffsetProvider
+    ) -> it_ts.ListType:
         assert len(args) > 0
         assert all(isinstance(arg, it_ts.ListType) for arg in args)
         arg_el_types = [arg.element_type for arg in args]
-        el_type = op(*arg_el_types)
+        el_type = op(*arg_el_types, offset_provider=offset_provider)
         assert isinstance(el_type, ts.DataType)
         return it_ts.ListType(element_type=el_type)
 
     return applied_map
 
 
-@_register_type_inference_rule
-def reduce(op: TypeInferenceRule, init: ts.TypeSpec) -> TypeInferenceRule:
-    def applied_reduce(*args: it_ts.ListType):
+@_register_builtin_type_synthesizer
+def reduce(op: TypeSynthesizer, init: ts.TypeSpec) -> TypeSynthesizer:
+    @TypeSynthesizer
+    def applied_reduce(*args: it_ts.ListType, offset_provider: common.OffsetProvider):
         assert all(isinstance(arg, it_ts.ListType) for arg in args)
-        return op(init, *(arg.element_type for arg in args))
+        return op(init, *(arg.element_type for arg in args), offset_provider=offset_provider)
 
     return applied_reduce
 
 
-@_register_type_inference_rule
-def shift(*offset_literals, offset_provider) -> TypeInferenceRule:
+@_register_builtin_type_synthesizer
+def shift(*offset_literals, offset_provider) -> TypeSynthesizer:
+    @TypeSynthesizer
     def apply_shift(it: it_ts.IteratorType) -> it_ts.IteratorType:
         assert isinstance(it, it_ts.IteratorType)
         if it.position_dims == "unknown":  # nothing to do here
