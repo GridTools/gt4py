@@ -23,6 +23,7 @@ import numpy as np
 from gt4py.eve.utils import XIterable, xiter
 from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts
+from gt4py.next import utils
 
 
 def _number_to_ordinal_number(number: int) -> str:
@@ -182,6 +183,7 @@ def apply_to_primitive_constituents(
     else:
         return fun(symbol_type)  # type: ignore[call-arg] # mypy not aware of `with_path_arg`
 
+type_tree_map=utils.tree_map(collection_type=ts.TupleType, result_collection_constructor=lambda x: ts.TupleType(types=[*x]))
 
 def extract_dtype(symbol_type: ts.TypeSpec) -> ts.ScalarType:
     """

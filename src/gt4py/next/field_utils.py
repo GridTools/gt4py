@@ -30,7 +30,7 @@ def asnumpy(field: common.Field | np.ndarray) -> np.ndarray:
 def field_from_typespec(
     domain: common.Domain, xp: ModuleType
 ) -> Callable[..., common.MutableField | tuple[common.MutableField | tuple, ...]]:
-    @utils.tree_map(collection_type=ts.TupleType, result_collection_type=tuple)
+    @utils.tree_map(collection_type=ts.TupleType, result_collection_constructor=tuple)
     def impl(type_: ts.ScalarType) -> common.MutableField:
         res = common._field(
             xp.empty(domain.shape, dtype=xp.dtype(type_translation.as_dtype(type_).scalar_type)),

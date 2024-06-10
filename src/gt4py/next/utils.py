@@ -75,14 +75,14 @@ def tree_map(fun: Callable[_P, _R], /) -> Callable[..., _R | tuple[_R | tuple, .
 
 @overload
 def tree_map(
-    *, collection_type: type | tuple[type, ...], result_collection_type: Optional[type] = None
+    *, collection_type: type | tuple[type, ...], result_collection_constructor: Optional[type] = None
 ) -> Callable[[Callable[_P, _R]], Callable[..., _R | tuple[_R | tuple, ...]]]: ...
 
 
 def tree_map(
     *args: Callable[_P, _R],
     collection_type: type | tuple[type, ...] = tuple,
-    result_collection_type: Optional[type] = None,
+    result_collection_constructor: Optional[type] = None, # Todo: check name with Enrique
 ) -> (
     Callable[..., _R | tuple[_R | tuple, ...]]
     | Callable[[Callable[_P, _R]], Callable[..., _R | tuple[_R | tuple, ...]]]
@@ -93,10 +93,10 @@ def tree_map(
     Args:
         fun: Function to apply to each entry of the collection.
         collection_type: Type of the collection to be traversed. Can be a single type or a tuple of types.
-        result_collection_type: Type of the collection to be returned. If `None` the same type as `collection_type` is used.
+        result_collection_constructor: Constructor of the collection to be returned. If `None` the same type as `collection_type` is used.
 
     Examples:
-        >>> tree_map(lambda x: x + 1)(((1, 2), 3))
+        >>> tree_map(lambda x: x + 1)(((1, 2), 3)) # TODO: tree_map(lambda x: x + 1,((1, 2), 3)) like map/reduce, decorator and original way should also work
         ((2, 3), 4)
 
         >>> tree_map(lambda x, y: x + y)(((1, 2), 3), ((4, 5), 6))
@@ -105,16 +105,16 @@ def tree_map(
         >>> tree_map(collection_type=list)(lambda x: x + 1)([[1, 2], 3])
         [[2, 3], 4]
 
-        >>> tree_map(collection_type=list, result_collection_type=tuple)(lambda x: x + 1)([[1, 2], 3])
+        >>> tree_map(collection_type=list, result_collection_constructor=tuple)(lambda x: x + 1)([[1, 2], 3])
         ((2, 3), 4)
     """
 
-    if result_collection_type is None:
+    if result_collection_constructor is None:
         if isinstance(collection_type, tuple):
             raise TypeError(
-                "tree_map() requires `result_collection_type` when `collection_type` is a tuple."
+                "tree_map() requires `result_collection_constructor` when `collection_type` is a tuple."
             )
-        result_collection_type = collection_type
+        result_collection_constructor = collection_type
 
     if len(args) == 1:
         fun = args[0]
@@ -125,8 +125,8 @@ def tree_map(
                 assert all(
                     isinstance(arg, collection_type) and len(args[0]) == len(arg) for arg in args
                 )
-                assert result_collection_type is not None
-                return result_collection_type(impl(*arg) for arg in zip(*args))
+                assert result_collection_constructor is not None
+                return result_collection_constructor(impl(*arg) for arg in zip(*args))
 
             return fun(
                 *cast(_P.args, args)
@@ -137,8 +137,8 @@ def tree_map(
         return functools.partial(
             tree_map,
             collection_type=collection_type,
-            result_collection_type=result_collection_type,
+            result_collection_constructor=result_collection_constructor,
         )
     raise TypeError(
-        "tree_map() can be used as decorator with optional kwarg `collection_type` and `result_collection_type`."
+        "tree_map() can be used as decorator with optional kwarg `collection_type` and `result_collection_constructor`."
     )

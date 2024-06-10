@@ -15,7 +15,35 @@
 import pytest
 
 from gt4py.next import utils
+from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.type_system import type_info
+from gt4py.next.common import Field
+from numpy import int64
 
+def test_tree_map_scalar():
+    @utils.tree_map(collection_type=ts.ScalarType,result_collection_constructor=tuple)
+    def testee(x):
+        return x + 1
+
+    assert testee(1) == (2)
+
+def test_apply_to_primitive_constituents():
+    int_type = ts.ScalarType(kind=ts.ScalarKind.INT64)
+    tuple_type = ts.TupleType(types=[ts.TupleType(types=[int_type, int_type]), int_type])
+
+    # @type_info.type_tree_map
+    # def tmp(x):
+    #     return  ts.FieldType(dims=[], dtype=x)
+    #
+    # tree = tmp(tuple_type)
+
+    tree = type_info.type_tree_map(lambda primitive_type: ts.FieldType(dims=[], dtype=primitive_type))(tuple_type)
+
+    prim = type_info.apply_to_primitive_constituents(
+       tuple_type, lambda primitive_type: ts.FieldType(dims=[], dtype=primitive_type)
+    )
+
+    assert tree == prim
 
 def test_tree_map_default():
     @utils.tree_map
@@ -45,7 +73,7 @@ def test_tree_map_custom_input_type():
 
 
 def test_tree_map_custom_output_type():
-    @utils.tree_map(result_collection_type=list)
+    @utils.tree_map(result_collection_constructor=list)
     def testee(x):
         return x + 1
 
@@ -53,7 +81,7 @@ def test_tree_map_custom_output_type():
 
 
 def test_tree_map_multiple_input_types():
-    @utils.tree_map(collection_type=(list, tuple), result_collection_type=tuple)
+    @utils.tree_map(collection_type=(list, tuple), result_collection_constructor=tuple)
     def testee(x):
         return x + 1
 
