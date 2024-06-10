@@ -344,15 +344,19 @@ class Program(Program, SDFGConvertible):  # type: ignore[no-redef]
         sdfg.arg_names.extend(self.__sdfg_signature__()[0])
         sdfg.arg_names.extend(list(self.__sdfg_closure__().keys()))
 
-        # Gather the input fields : DaCe performs halo exchange on them (if needed)
-        sdfg.GT4Py_Program_input_fields = [
+        input_fields = [
             str(inpt.id)
             for closure in self.itir.closures
             for inpt in closure.inputs
             if str(inpt.id) in sdfg.arrays
         ]
+        sdfg.GT4Py_Program_input_fields = {
+            inpt: dim
+            for inpt in input_fields
+            for dim in fields[inpt].dims
+            if dim.kind == common.DimensionKind.HORIZONTAL
+        }
 
-        # Gather the output/modified fields : DaCe performs halo exchange on them (if needed)
         output_fields = []
         for closure in self.itir.closures:
             output = closure.output
@@ -363,21 +367,24 @@ class Program(Program, SDFGConvertible):  # type: ignore[no-redef]
                 for arg in output.args:
                     if str(arg.id) in sdfg.arrays:  # type: ignore[attr-defined]
                         output_fields.append(str(arg.id))  # type: ignore[attr-defined]
-        sdfg.GT4Py_Program_output_fields = {output: fields[output].dims for output in output_fields}
+        sdfg.GT4Py_Program_output_fields = {
+            output: dim
+            for output in output_fields
+            for dim in fields[output].dims
+            if dim.kind == common.DimensionKind.HORIZONTAL
+        }
 
-        # TODO: update once Till optimizes TraceShifts class
-        # Fields that do not access neighbors, do not need updated halos
-        sdfg.neighbor_access = {}  # per field
+        sdfg.offset_providers_per_input_field = {}
         itir_tmp = apply_common_transforms(self.itir)
         for closure in itir_tmp.closures:  # type: ignore[union-attr]
             shifts = TraceShifts.apply(closure)
             for k, v in shifts.items():
                 if k not in sdfg.GT4Py_Program_input_fields:
                     continue
-                list_v = list(v)
-                sdfg.neighbor_access[k] = (
-                    False if len(list_v) == 1 and len(list_v[0]) == 0 else True
-                )
+                sdfg.offset_providers_per_input_field.setdefault(k, []).extend(list(v))
+
+        sdfg.stencil_horizontal_start = kwargs.get("horizontal_start", None)
+        sdfg.stencil_horizontal_end = kwargs.get("horizontal_end", None)
 
         return sdfg
 
