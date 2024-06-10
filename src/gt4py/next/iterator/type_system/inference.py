@@ -223,8 +223,8 @@ class ObservableTypeSynthesizer(type_synthesizer.TypeSynthesizer):
         offset_provider: common.OffsetProvider,
     ) -> Union[ts.TypeSpec, "ObservableTypeSynthesizer"]:
         assert all(
-            isinstance(arg, ObservableTypeSynthesizer) for arg in args
-        ), "ObservableTypeSynthesizer can only be used with arguments that are ObservableTypeSynthesizer"
+            isinstance(arg, (ts.TypeSpec, ObservableTypeSynthesizer)) for arg in args
+        ), "ObservableTypeSynthesizer can only be used with arguments that are TypeSpec or ObservableTypeSynthesizer"
 
         return_type_or_synthesizer = self.type_synthesizer(*args, offset_provider=offset_provider)
 
