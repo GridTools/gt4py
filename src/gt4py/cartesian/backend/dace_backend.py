@@ -61,8 +61,9 @@ if TYPE_CHECKING:
     from gt4py.cartesian.stencil_object import StencilObject
 
 
-def _serialize_sdfg(sdfg: dace.SDFG):
-    return dumps(sdfg)
+# force dace representation of bool type to be compatible with pybind11
+dace.dtypes.bool.ctype = dace.dtypes.uint8.ctype
+dace.dtypes.bool.ctype_unaligned = dace.dtypes.uint8.ctype
 
 
 def _specialize_transient_strides(sdfg: dace.SDFG, layout_map):
