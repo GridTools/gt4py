@@ -66,7 +66,7 @@ build_settings: Dict[str, Any] = {
     "openmp_cppflags": os.environ.get("OPENMP_CPPFLAGS", "-fopenmp").split(),
     "openmp_ldflags": os.environ.get("OPENMP_LDFLAGS", "-fopenmp").split(),
     "extra_compile_args": {"cxx": extra_compile_args, "cuda": extra_compile_args},
-    "extra_link_args": {"cxx": extra_link_args, "cuda": extra_link_args},
+    "extra_link_args": extra_link_args,
     "parallel_jobs": multiprocessing.cpu_count(),
     "cpp_template_depth": os.environ.get("GT_CPP_TEMPLATE_DEPTH", GT_CPP_TEMPLATE_DEPTH),
 }
