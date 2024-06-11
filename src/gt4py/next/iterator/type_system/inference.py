@@ -160,7 +160,6 @@ class ObservableTypeSynthesizer(type_synthesizer.TypeSynthesizer):
 
     >>> o_type_synthesizer = ObservableTypeSynthesizer(
     ...     type_synthesizer=square_func_type_synthesizer,
-    ...     offset_provider={},
     ...     node=square_func,
     ...     store_inferred_type_in_node=True,
     ... )
