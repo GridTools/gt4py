@@ -18,6 +18,7 @@ from typing import Dict
 import dace
 import dace.properties
 import dace.subsets
+import dace.data
 
 import gt4py.cartesian.gtc.oir as oir
 from gt4py import eve
@@ -144,14 +145,15 @@ class OirSDFGBuilder(eve.NodeVisitor):
                 dim_strs = [d for i, d in enumerate("IJK") if param.dimensions[i]] + [
                     f"d{d}" for d in range(len(param.data_dims))
                 ]
+                shape = ctx.make_shape(param.name)
+                strides = [dace.symbolic.pystr_to_symbolic(f"__{param.name}_{dim}_stride") for dim in dim_strs]
+                total_size = dace.data._prod([dace.symbolic.pystr_to_symbolic(s) for s in shape])
                 ctx.sdfg.add_array(
                     param.name,
-                    shape=ctx.make_shape(param.name),
-                    strides=[
-                        dace.symbolic.pystr_to_symbolic(f"__{param.name}_{dim}_stride")
-                        for dim in dim_strs
-                    ],
+                    shape=shape,
+                    strides=strides,
                     dtype=data_type_to_dace_typeclass(param.dtype),
+                    total_size=total_size,
                     transient=False,
                     debuginfo=dace.DebugInfo(0),
                 )
@@ -162,14 +164,15 @@ class OirSDFGBuilder(eve.NodeVisitor):
             dim_strs = [d for i, d in enumerate("IJK") if decl.dimensions[i]] + [
                 f"d{d}" for d in range(len(decl.data_dims))
             ]
+            shape = ctx.make_shape(decl.name)
+            strides = [dace.symbolic.pystr_to_symbolic(f"__{decl.name}_{dim}_stride") for dim in dim_strs]
+            total_size = dace.data._prod([dace.symbolic.pystr_to_symbolic(s) for s in shape])
             ctx.sdfg.add_array(
                 decl.name,
-                shape=ctx.make_shape(decl.name),
-                strides=[
-                    dace.symbolic.pystr_to_symbolic(f"__{decl.name}_{dim}_stride")
-                    for dim in dim_strs
-                ],
+                shape=shape,
+                strides=strides,
                 dtype=data_type_to_dace_typeclass(decl.dtype),
+                total_size=total_size,
                 transient=True,
                 debuginfo=dace.DebugInfo(0),
             )

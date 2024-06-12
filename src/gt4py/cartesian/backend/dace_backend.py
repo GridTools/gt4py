@@ -206,9 +206,9 @@ def _sdfg_add_arrays_and_edges(
             shape = [f"__{name}_{axis}_size" for axis in axes] + [
                 d for d in field_info[name].data_dims
             ]
-
+            total_size = dace.data._prod([dace.symbolic.pystr_to_symbolic(s) for s in shape])
             wrapper_sdfg.add_array(
-                name, dtype=array.dtype, strides=array.strides, shape=shape, storage=array.storage
+                name, dtype=array.dtype, strides=array.strides, shape=shape, total_size=total_size, storage=array.storage
             )
             if isinstance(origins, tuple):
                 origin = [o for a, o in zip("IJK", origins) if a in axes]

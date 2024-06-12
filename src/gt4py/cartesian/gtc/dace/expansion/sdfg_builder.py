@@ -302,6 +302,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
             strides=[dace.symbolic.pystr_to_symbolic(s) for s in node.strides],
             dtype=data_type_to_dace_typeclass(node.dtype),
             storage=node.storage.to_dace_storage(),
+            total_size=dace.data._prod([dace.symbolic.pystr_to_symbolic(s) for s in node.shape]),
             transient=node.name not in non_transients,
             debuginfo=dace.DebugInfo(0),
         )
