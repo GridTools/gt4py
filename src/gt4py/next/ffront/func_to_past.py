@@ -65,6 +65,9 @@ class OptionalFuncToPast(workflow.SkippableStep):
                 return True
 
 
+def my_hash(program_def):
+    return id(program_def)
+
 class OptionalFuncToPastFactory(factory.Factory):
     class Meta:
         model = OptionalFuncToPast
@@ -73,11 +76,11 @@ class OptionalFuncToPastFactory(factory.Factory):
         workflow = func_to_past
         cached = factory.Trait(
             step=factory.LazyAttribute(
-                lambda o: workflow.CachedStep(step=o.workflow, hash_function=eve_utils.content_hash)
+                lambda o: workflow.CachedStep(step=o.workflow, hash_function=my_hash)
             )
         )
 
-        step = factory.LazyAttribute(lambda o: o.workflow)
+        #step = factory.LazyAttribute(lambda o: o.workflow)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)

@@ -37,25 +37,39 @@ from gt4py.next.otf import stages, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
+_CACHE = {}
+
+closure_vars: dict[str, Any]
+past_node: past.Program
+grid_type: Optional[common.GridType]
+
 @dataclasses.dataclass(frozen=True)
 class PastToItir(workflow.ChainableWorkflowMixin):
     def __call__(self, inp: ffront_stages.PastClosure) -> stages.ProgramCall:
-        all_closure_vars = transform_utils._get_closure_vars_recursively(inp.closure_vars)
-        offsets_and_dimensions = transform_utils._filter_closure_vars_by_type(
-            all_closure_vars, fbuiltins.FieldOffset, common.Dimension
-        )
-        grid_type = transform_utils._deduce_grid_type(
-            inp.grid_type, offsets_and_dimensions.values()
-        )
+        cache_key = (id(inp.closure_vars), id(inp.past_node), inp.grid_type)
 
-        gt_callables = transform_utils._filter_closure_vars_by_type(
-            all_closure_vars, gtcallable.GTCallable
-        ).values()
-        lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
+        if cache_key in _CACHE:
+            itir_program, all_closure_vars = _CACHE[cache_key]
+        else:
+            print(f"RECOMPILE {inp.past_node.id}")
+            all_closure_vars = transform_utils._get_closure_vars_recursively(inp.closure_vars)
+            offsets_and_dimensions = transform_utils._filter_closure_vars_by_type(
+                all_closure_vars, fbuiltins.FieldOffset, common.Dimension
+            )
+            grid_type = transform_utils._deduce_grid_type(
+                inp.grid_type, offsets_and_dimensions.values()
+            )
 
-        itir_program = ProgramLowering.apply(
-            inp.past_node, function_definitions=lowered_funcs, grid_type=grid_type
-        )
+            gt_callables = transform_utils._filter_closure_vars_by_type(
+                all_closure_vars, gtcallable.GTCallable
+            ).values()
+            lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
+
+            itir_program = ProgramLowering.apply(
+                inp.past_node, function_definitions=lowered_funcs, grid_type=grid_type
+            )
+
+            _CACHE[cache_key] = (itir_program, all_closure_vars)
 
         if config.DEBUG or "debug" in inp.kwargs:
             devtools.debug(itir_program)

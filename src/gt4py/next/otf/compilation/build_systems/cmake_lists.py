@@ -52,7 +52,7 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
 
         # Languages
         if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-            set(CMAKE_CUDA_ARCHITECTURES 60)
+            set(CMAKE_CUDA_ARCHITECTURES 89)
         endif()
         {{"\\n".join(languages)}}
 
