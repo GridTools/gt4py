@@ -198,7 +198,7 @@ def daa_10(in_field: Field[float], cond_field: Field[float], mask: bool, out_fie
 
 @pytest.mark.parametrize("definition,valid", [(stencil, valid) for stencil, valid in test_data])
 def test_daa(definition, valid, clear_gtir_caches):
-    builder = StencilBuilder(definition, backend=from_name("debug"))
+    builder = StencilBuilder(definition, backend=None)
     gtir_stencil_expr = builder.gtir_pipeline.full()
     invalid_accesses = daa.analyze(gtir_stencil_expr)
     if valid:

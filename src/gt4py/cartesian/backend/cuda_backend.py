@@ -15,7 +15,7 @@
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 
 from gt4py import storage as gt_storage
-from gt4py.cartesian.backend.base import CLIBackendMixin, register
+from gt4py.cartesian.backend.base import CLIBackendMixin, disabled, register
 from gt4py.cartesian.backend.gtc_common import (
     BackendCodegen,
     bindings_main_template,
@@ -125,12 +125,19 @@ class CudaBindingsCodegen(codegen.TemplatedGenerator):
         return generated_code
 
 
+@disabled(
+    message="CUDA backend is deprecated. New features developed after February 2024 are not available.",
+    enabled_env_var="GT4PY_GTC_ENABLE_CUDA",
+)
 @register
 class CudaBackend(BaseGTBackend, CLIBackendMixin):
     """CUDA backend using gtc."""
 
     name = "cuda"
-    options = {**BaseGTBackend.GT_BACKEND_OPTS, "device_sync": {"versioning": True, "type": bool}}
+    options = {
+        **BaseGTBackend.GT_BACKEND_OPTS,
+        "device_sync": {"versioning": True, "type": bool},
+    }
     languages = {"computation": "cuda", "bindings": ["python"]}
     storage_info = gt_storage.layout.CUDALayout
     PYEXT_GENERATOR_CLASS = CudaExtGenerator  # type: ignore
