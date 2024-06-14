@@ -68,15 +68,6 @@ class IteratorExpr:
     indices: dict[Dimension, IteratorIndexExpr]
 
 
-# Define alias for the elements needed to setup input connections to a map scope
-InputConnection: TypeAlias = tuple[
-    dace.nodes.AccessNode,
-    sbs.Range,
-    dace.nodes.Node,
-    Optional[str],
-]
-
-
 @dataclass(frozen=True)
 class MaskedMemletExpr(MemletExpr):
     """Scalar or array data access thorugh a memlet."""
@@ -147,63 +138,6 @@ MATH_BUILTINS_MAPPING = {
     "mod": "({} % {})",
     "not_": "(not {})",  # ~ is not bitwise in numpy
 }
-
-
-def build_neighbors_sdfg(
-    field_dtype: dace.typeclass,
-    field_shape: tuple[int],
-    neighbors_shape: tuple[int],
-    index_dtype: dace.typeclass,
-    with_skip_values: bool,
-) -> tuple[dace.SDFG, str, str, str]:
-    assert len(field_shape) == len(neighbors_shape)
-
-    sdfg = dace.SDFG("neighbors")
-    state = sdfg.add_state()
-    me, mx = state.add_map(
-        "neighbors",
-        {f"__idx_{i}": sbs.Range([(0, size - 1, 1)]) for i, size in enumerate(neighbors_shape)},
-    )
-    neighbor_index = ",".join(f"__idx_{i}" for i in range(len(neighbors_shape)))
-
-    field_name, field_array = sdfg.add_array("field", field_shape, field_dtype)
-    index_name, _ = sdfg.add_array("indexes", neighbors_shape, index_dtype)
-    var_name, _ = sdfg.add_array("values", neighbors_shape, field_dtype)
-    index_node = state.add_access(index_name)
-
-    if with_skip_values:
-        skip_value_code = f" if __index != {neighbor_skip_value} else {field_dtype}(0)"
-    else:
-        skip_value_code = ""
-    tasklet_node = state.add_tasklet(
-        "gather_neighbors",
-        {"__field", "__index"},
-        {"__val"},
-        "__val = __field[__index]" + skip_value_code,
-    )
-    state.add_memlet_path(
-        state.add_access(field_name),
-        me,
-        tasklet_node,
-        dst_conn="__field",
-        memlet=dace.Memlet.from_array(field_name, field_array),
-    )
-    state.add_memlet_path(
-        index_node,
-        me,
-        tasklet_node,
-        dst_conn="__index",
-        memlet=dace.Memlet(data=index_name, subset=neighbor_index),
-    )
-    state.add_memlet_path(
-        tasklet_node,
-        mx,
-        state.add_access(var_name),
-        src_conn="__val",
-        memlet=dace.Memlet(data=var_name, subset=neighbor_index),
-    )
-
-    return sdfg, field_name, index_name, var_name
 
 
 def build_reduce_sdfg(
@@ -314,7 +248,6 @@ class LambdaToTasklet(eve.NodeVisitor):
 
     sdfg: dace.SDFG
     state: dace.SDFGState
-    input_connections: list[InputConnection]
     offset_provider: dict[str, Connectivity | Dimension]
     symbol_map: dict[str, IteratorExpr | MemletExpr | SymbolExpr]
 
@@ -322,22 +255,30 @@ class LambdaToTasklet(eve.NodeVisitor):
         self,
         sdfg: dace.SDFG,
         state: dace.SDFGState,
+        map_entry: dace.nodes.MapEntry,
         offset_provider: dict[str, Connectivity | Dimension],
     ):
         self.sdfg = sdfg
         self.state = state
-        self.input_connections = []
+        self.map_entry = map_entry
         self.offset_provider = offset_provider
         self.symbol_map = {}
 
-    def _add_input_connection(
+    def _add_entry_memlet_path(
         self,
-        src: dace.nodes.AccessNode,
-        subset: sbs.Range,
-        dst: dace.nodes.Node,
-        dst_connector: Optional[str] = None,
+        *path_nodes: dace.nodes.Node,
+        memlet: Optional[dace.Memlet] = None,
+        src_conn: Optional[str] = None,
+        dst_conn: Optional[str] = None,
     ) -> None:
-        self.input_connections.append((src, subset, dst, dst_connector))
+        self.state.add_memlet_path(
+            path_nodes[0],
+            self.map_entry,
+            *path_nodes[1:],
+            memlet=memlet,
+            src_conn=src_conn,
+            dst_conn=dst_conn,
+        )
 
     def _get_tasklet_result(
         self,
@@ -417,17 +358,21 @@ class LambdaToTasklet(eve.NodeVisitor):
                     code=f"val = field[{index_internals}]",
                 )
                 # add new termination point for this field parameter
-                field_fullset = sbs.Range.from_array(field_desc)
-                self._add_input_connection(it.field, field_fullset, deref_node, "field")
+                self._add_entry_memlet_path(
+                    it.field,
+                    deref_node,
+                    dst_conn="field",
+                    memlet=dace.Memlet.from_array(it.field.data, field_desc),
+                )
 
                 for dim, index_expr in field_indices:
                     deref_connector = INDEX_CONNECTOR_FMT.format(dim=dim.value)
                     if isinstance(index_expr, MemletExpr):
-                        self._add_input_connection(
+                        self._add_entry_memlet_path(
                             index_expr.node,
-                            index_expr.subset,
                             deref_node,
-                            deref_connector,
+                            dst_conn=deref_connector,
+                            memlet=dace.Memlet(data=index_expr.node.data, subset=index_expr.subset),
                         )
 
                     elif isinstance(index_expr, ValueExpr):
@@ -460,10 +405,11 @@ class LambdaToTasklet(eve.NodeVisitor):
         it = self.visit(node.args[1])
         assert isinstance(it, IteratorExpr)
         assert offset_provider.neighbor_axis in it.dimensions
+        assert offset_provider.neighbor_axis not in it.indices
+        assert offset_provider.origin_axis not in it.dimensions
         assert offset_provider.origin_axis in it.indices
         origin_index = it.indices[offset_provider.origin_axis]
         assert isinstance(origin_index, SymbolExpr)
-        assert offset_provider.origin_axis not in it.dimensions
         assert all(isinstance(index, SymbolExpr) for index in it.indices.values())
 
         field_desc = it.field.desc(self.sdfg)
@@ -475,62 +421,65 @@ class LambdaToTasklet(eve.NodeVisitor):
         connectivity_desc.transient = False
         connectivity_node = self.state.add_access(connectivity)
 
-        field_array_shape = tuple(
-            shape
-            for dim, shape in zip(it.dimensions, field_desc.shape, strict=True)
-            if dim == offset_provider.neighbor_axis
+        me, mx = self.state.add_map(
+            "neighbors",
+            dict(__neighbor_idx=f"0:{offset_provider.max_neighbors}"),
         )
-        assert len(field_array_shape) == 1
-
-        # we build a nested SDFG to gather all neighbors for each point in the field domain
-        # it can be seen as a library node
-        nsdfg, field_name, index_name, output_name = build_neighbors_sdfg(
-            field_desc.dtype,
-            field_array_shape,
-            (offset_provider.max_neighbors,),
-            connectivity_desc.dtype,
-            offset_provider.has_skip_values,
+        index_connector = "__index"
+        if offset_provider.has_skip_values:
+            skip_value_code = (
+                f" if {index_connector} != {neighbor_skip_value} else {field_desc.dtype}(0)"
+            )
+        else:
+            skip_value_code = ""
+        index_internals = ",".join(
+            [
+                it.indices[dim].value if dim != offset_provider.neighbor_axis else index_connector  # type: ignore[union-attr]
+                for dim in it.dimensions
+            ]
         )
-
-        neighbors_node = self.state.add_nested_sdfg(
-            nsdfg, self.sdfg, {field_name, index_name}, {output_name}
+        tasklet_node = self.state.add_tasklet(
+            "gather_neighbors",
+            {"__field", index_connector},
+            {"__val"},
+            f"__val = __field[{index_internals}]" + skip_value_code,
         )
-
-        self._add_input_connection(
+        self._add_entry_memlet_path(
             it.field,
-            sbs.Range(
-                [
-                    (0, size - 1, 1)
-                    if dim == offset_provider.neighbor_axis
-                    else sbs.Indices(it.indices[dim].value)  # type: ignore[union-attr]
-                    for dim, size in zip(it.dimensions, field_desc.shape, strict=True)
-                ]
-            ),
-            neighbors_node,
-            field_name,
+            me,
+            tasklet_node,
+            dst_conn="__field",
+            memlet=dace.Memlet.from_array(it.field.data, field_desc),
         )
-
-        self._add_input_connection(
+        self._add_entry_memlet_path(
             connectivity_node,
-            sbs.Range(
-                [
-                    (origin_index.value, origin_index.value, 1),
-                    (0, offset_provider.max_neighbors - 1, 1),
-                ]
+            me,
+            tasklet_node,
+            dst_conn=index_connector,
+            memlet=dace.Memlet(
+                data=connectivity, subset=sbs.Indices([origin_index.value, "__neighbor_idx"])
             ),
-            neighbors_node,
-            index_name,
         )
-
+        neighbor_val_name, neighbor_val_array = self.sdfg.add_array(
+            "neighbor_val",
+            (offset_provider.max_neighbors,),
+            field_desc.dtype,
+            transient=True,
+            find_new_name=True,
+        )
+        neighbor_val_node = self.state.add_access(neighbor_val_name)
+        self.state.add_memlet_path(
+            tasklet_node,
+            mx,
+            neighbor_val_node,
+            src_conn="__val",
+            memlet=dace.Memlet(data=neighbor_val_name, subset="__neighbor_idx"),
+        )
+        neighbors_field_type = dace_fieldview_util.get_neighbors_field_type(
+            offset, field_desc.dtype
+        )
         if offset_provider.has_skip_values:
             # simulate pattern of masked array, using the connctivity table as a mask
-            neighbor_val_name, neighbor_val_array = self.sdfg.add_array(
-                "neighbor_val",
-                (offset_provider.max_neighbors,),
-                field_desc.dtype,
-                transient=True,
-                find_new_name=True,
-            )
             neighbor_idx_name, neighbor_idx_array = self.sdfg.add_array(
                 "neighbor_idx",
                 (offset_provider.max_neighbors,),
@@ -538,35 +487,19 @@ class LambdaToTasklet(eve.NodeVisitor):
                 transient=True,
                 find_new_name=True,
             )
-
-            neighbor_val_node = self.state.add_access(neighbor_val_name)
-            self.state.add_edge(
-                neighbors_node,
-                output_name,
-                neighbor_val_node,
-                None,
-                dace.Memlet.from_array(neighbor_val_name, neighbor_val_array),
-            )
-
             neighbor_idx_node = self.state.add_access(neighbor_idx_name)
-            self._add_input_connection(
+            self._add_entry_memlet_path(
                 connectivity_node,
-                sbs.Range.from_string(f"{origin_index.value}, 0:{offset_provider.max_neighbors}"),
                 neighbor_idx_node,
-            )
-
-            neighbors_field_type = dace_fieldview_util.get_neighbors_field_type(
-                offset, field_desc.dtype
+                memlet=dace.Memlet(
+                    data=connectivity,
+                    subset=f"{origin_index.value}, 0:{offset_provider.max_neighbors}",
+                ),
             )
             return MaskedValueExpr(neighbor_val_node, neighbors_field_type, neighbor_idx_node)
 
         else:
-            return self._get_tasklet_result(
-                field_desc.dtype,
-                neighbors_node,
-                output_name,
-                offset=offset,
-            )
+            return ValueExpr(neighbor_val_node, neighbors_field_type)
 
     def _visit_reduce(self, node: itir.FunCall) -> ValueExpr:
         # TODO: use type inference to determine the result type
@@ -630,11 +563,11 @@ class LambdaToTasklet(eve.NodeVisitor):
         for sdfg_connector, (_, reduce_expr) in zip(sdfg_inputs, reduce_args, strict=True):
             if isinstance(reduce_expr, MemletExpr):
                 assert isinstance(reduce_expr.subset, sbs.Subset)
-                self._add_input_connection(
+                self._add_entry_memlet_path(
                     reduce_expr.node,
-                    reduce_expr.subset,
                     reduce_node,
-                    sdfg_connector,
+                    dst_conn=sdfg_connector,
+                    memlet=dace.Memlet(data=reduce_expr.node.data, subset=reduce_expr.subset),
                 )
             else:
                 self.state.add_edge(
@@ -646,11 +579,11 @@ class LambdaToTasklet(eve.NodeVisitor):
                 )
 
         if isinstance(first_expr, MaskedMemletExpr):
-            self._add_input_connection(
+            self._add_entry_memlet_path(
                 first_expr.mask,
-                first_expr.subset,
                 reduce_node,
-                mask_input,
+                dst_conn=mask_input,
+                memlet=dace.Memlet(data=first_expr.mask.data, subset=first_expr.subset),
             )
         elif isinstance(first_expr, MaskedValueExpr):
             self.state.add_edge(
@@ -721,11 +654,11 @@ class LambdaToTasklet(eve.NodeVisitor):
                 if isinstance(input_expr, MemletExpr):
                     if input_connector == "index":
                         dtype = input_expr.node.desc(self.sdfg).dtype
-                    self._add_input_connection(
+                    self._add_entry_memlet_path(
                         input_expr.node,
-                        input_expr.subset,
                         dynamic_offset_tasklet,
-                        input_connector,
+                        dst_conn=input_connector,
+                        memlet=dace.Memlet(data=input_expr.node.data, subset=input_expr.subset),
                     )
                 elif isinstance(input_expr, ValueExpr):
                     if input_connector == "index":
@@ -771,18 +704,20 @@ class LambdaToTasklet(eve.NodeVisitor):
             {new_index_connector},
             f"{new_index_connector} = table[{origin_index.value}, offset]",
         )
-        self._add_input_connection(
+        self._add_entry_memlet_path(
             offset_table_node,
-            sbs.Range.from_array(offset_table_node.desc(self.sdfg)),
             tasklet_node,
-            "table",
+            dst_conn="table",
+            memlet=dace.Memlet.from_array(
+                offset_table_node.data, offset_table_node.desc(self.sdfg)
+            ),
         )
         if isinstance(offset_expr, MemletExpr):
-            self._add_input_connection(
+            self._add_entry_memlet_path(
                 offset_expr.node,
-                offset_expr.subset,
                 tasklet_node,
-                "offset",
+                dst_conn="offset",
+                memlet=dace.Memlet(data=offset_expr.node.data, subset=offset_expr.subset),
             )
         else:
             self.state.add_edge(
@@ -933,7 +868,12 @@ class LambdaToTasklet(eve.NodeVisitor):
                     dace.Memlet(data=arg_expr.node.data, subset="0"),
                 )
             else:
-                self._add_input_connection(arg_expr.node, arg_expr.subset, tasklet_node, connector)
+                self._add_entry_memlet_path(
+                    arg_expr.node,
+                    tasklet_node,
+                    dst_conn=connector,
+                    memlet=dace.Memlet(data=arg_expr.node.data, subset=arg_expr.subset),
+                )
 
         # TODO: use type inference to determine the result type
         if len(node_connections) == 1 and isinstance(node_connections["__inp_0"], MemletExpr):
@@ -946,25 +886,32 @@ class LambdaToTasklet(eve.NodeVisitor):
 
     def visit_Lambda(
         self, node: itir.Lambda, args: list[IteratorExpr | MemletExpr | SymbolExpr]
-    ) -> tuple[list[InputConnection], ValueExpr]:
+    ) -> ValueExpr:
         for p, arg in zip(node.params, args, strict=True):
             self.symbol_map[str(p.id)] = arg
         output_expr: MemletExpr | SymbolExpr | ValueExpr = self.visit(node.expr)
         if isinstance(output_expr, ValueExpr):
-            return self.input_connections, output_expr
+            return output_expr
 
         if isinstance(output_expr, MemletExpr):
             # special case where the field operator is simply copying data from source to destination node
-            output_dtype = output_expr.node.desc(self.sdfg).dtype
-            tasklet_node = self.state.add_tasklet("copy", {"__inp"}, {"__out"}, "__out = __inp")
-            self._add_input_connection(output_expr.node, output_expr.subset, tasklet_node, "__inp")
+            dtype = self.sdfg.arrays[output_expr.node.data].dtype
+            scalar_type = dace_fieldview_util.as_scalar_type(str(dtype.as_numpy_dtype()))
+            var, _ = self.sdfg.add_scalar("var", dtype, find_new_name=True, transient=True)
+            result_node = self.state.add_access(var)
+            self._add_entry_memlet_path(
+                output_expr.node,
+                result_node,
+                memlet=dace.Memlet(data=output_expr.node.data, subset=output_expr.subset),
+            )
+            return ValueExpr(result_node, scalar_type)
         else:
             # even simpler case, where a constant value is written to destination node
             output_dtype = output_expr.dtype
             tasklet_node = self.state.add_tasklet(
                 "write", {}, {"__out"}, f"__out = {output_expr.value}"
             )
-        return self.input_connections, self._get_tasklet_result(output_dtype, tasklet_node, "__out")
+            return self._get_tasklet_result(output_dtype, tasklet_node, "__out")
 
     def visit_Literal(self, node: itir.Literal) -> SymbolExpr:
         dtype = dace_fieldview_util.as_dace_type(node.type)

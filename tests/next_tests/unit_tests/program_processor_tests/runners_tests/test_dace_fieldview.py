@@ -62,6 +62,18 @@ FSYMBOLS = dict(
 
 
 def make_mesh_symbols(mesh: MeshDescriptor):
+    C2E_size_0, C2E_size_1 = mesh.offset_provider["C2E"].table.shape
+    C2E_stride_0, C2E_stride_1 = C2E_size_1, 1  # mesh.offset_provider["C2E"].table.strides
+
+    C2V_size_0, C2V_size_1 = mesh.offset_provider["C2V"].table.shape
+    C2V_stride_0, C2V_stride_1 = C2V_size_1, 1  # mesh.offset_provider["C2V"].table.strides
+
+    E2V_size_0, E2V_size_1 = mesh.offset_provider["E2V"].table.shape
+    E2V_stride_0, E2V_stride_1 = E2V_size_1, 1  # mesh.offset_provider["E2V"].table.strides
+
+    V2E_size_0, V2E_size_1 = mesh.offset_provider["V2E"].table.shape
+    V2E_stride_0, V2E_stride_1 = V2E_size_1, 1  # mesh.offset_provider["V2E"].table.strides
+
     return dict(
         ncells=mesh.num_cells,
         nedges=mesh.num_edges,
@@ -72,22 +84,22 @@ def make_mesh_symbols(mesh: MeshDescriptor):
         __edges_stride_0=1,
         __vertices_size_0=mesh.num_vertices,
         __vertices_stride_0=1,
-        __connectivity_C2E_size_0=mesh.num_cells,
-        __connectivity_C2E_size_1=mesh.offset_provider["C2E"].max_neighbors,
-        __connectivity_C2E_stride_0=mesh.offset_provider["C2E"].max_neighbors,
-        __connectivity_C2E_stride_1=1,
-        __connectivity_C2V_size_0=mesh.num_cells,
-        __connectivity_C2V_size_1=mesh.offset_provider["C2V"].max_neighbors,
-        __connectivity_C2V_stride_0=mesh.offset_provider["C2V"].max_neighbors,
-        __connectivity_C2V_stride_1=1,
-        __connectivity_E2V_size_0=mesh.num_edges,
-        __connectivity_E2V_size_1=mesh.offset_provider["E2V"].max_neighbors,
-        __connectivity_E2V_stride_0=mesh.offset_provider["E2V"].max_neighbors,
-        __connectivity_E2V_stride_1=1,
-        __connectivity_V2E_size_0=mesh.num_vertices,
-        __connectivity_V2E_size_1=mesh.offset_provider["V2E"].max_neighbors,
-        __connectivity_V2E_stride_0=mesh.offset_provider["V2E"].max_neighbors,
-        __connectivity_V2E_stride_1=1,
+        __connectivity_C2E_size_0=C2E_size_0,
+        __connectivity_C2E_size_1=C2E_size_1,
+        __connectivity_C2E_stride_0=C2E_stride_0,
+        __connectivity_C2E_stride_1=C2E_stride_1,
+        __connectivity_C2V_size_0=C2V_size_0,
+        __connectivity_C2V_size_1=C2V_size_1,
+        __connectivity_C2V_stride_0=C2V_stride_0,
+        __connectivity_C2V_stride_1=C2V_stride_1,
+        __connectivity_E2V_size_0=E2V_size_0,
+        __connectivity_E2V_size_1=E2V_size_1,
+        __connectivity_E2V_stride_0=E2V_stride_0,
+        __connectivity_E2V_stride_1=E2V_stride_1,
+        __connectivity_V2E_size_0=V2E_size_0,
+        __connectivity_V2E_size_1=V2E_size_1,
+        __connectivity_V2E_stride_0=V2E_stride_0,
+        __connectivity_V2E_stride_1=V2E_stride_1,
     )
 
 
