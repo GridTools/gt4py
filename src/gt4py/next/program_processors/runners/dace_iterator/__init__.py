@@ -344,8 +344,8 @@ class Program(Program, SDFGConvertible):  # type: ignore[no-redef]
         sdfg.arg_names.extend(self.__sdfg_signature__()[0])
         sdfg.arg_names.extend(list(self.__sdfg_closure__().keys()))
 
-        # TODO : Keep this metadata here or somewhere else ?
-        # Halo Exchange related info (focus on HORIZONTAL dim)
+        # TODO(kotsaloscv): Keep halo exchange related metadata (for horizontal dimension) here?
+        # Could possibly be computed directly from the SDFG.
 
         input_fields = [
             str(inpt.id)
