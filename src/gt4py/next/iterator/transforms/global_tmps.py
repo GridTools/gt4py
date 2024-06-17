@@ -523,8 +523,8 @@ def update_domains(
                     elif isinstance(offset_provider[offset_name], common.Connectivity):
                         # unstructured shift
                         nbt_provider = offset_provider[offset_name]
-                        old_axis = nbt_provider.origin_axis.value
-                        new_axis = nbt_provider.neighbor_axis.value
+                        old_axis = nbt_provider.origin_axis
+                        new_axis = nbt_provider.neighbor_axis
 
                         assert new_axis not in consumed_domain.ranges or old_axis == new_axis
 
@@ -532,13 +532,13 @@ def update_domains(
                             new_range = SymbolicRange(
                                 im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                                 im.literal(
-                                    str(horizontal_sizes[new_axis]), ir.INTEGER_INDEX_BUILTIN
+                                    str(horizontal_sizes[new_axis.value]), ir.INTEGER_INDEX_BUILTIN
                                 ),
                             )
                         else:
                             new_range = SymbolicRange(
                                 im.literal("0", ir.INTEGER_INDEX_BUILTIN),
-                                im.ref(symbolic_sizes[new_axis]),
+                                im.ref(symbolic_sizes[new_axis.value]),
                             )
                         consumed_domain.ranges = dict(
                             (axis, range_) if axis != old_axis else (new_axis, new_range)
