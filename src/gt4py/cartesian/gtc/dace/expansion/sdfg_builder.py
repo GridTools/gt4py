@@ -26,7 +26,7 @@ from gt4py.cartesian.gtc import daceir as dcir
 from gt4py.cartesian.gtc.dace.expansion.tasklet_codegen import TaskletCodegen
 from gt4py.cartesian.gtc.dace.expansion.utils import get_dace_debuginfo
 from gt4py.cartesian.gtc.dace.symbol_utils import data_type_to_dace_typeclass
-from gt4py.cartesian.gtc.dace.utils import make_dace_subset
+from gt4py.cartesian.gtc.dace.utils import array_total_size, make_dace_subset
 
 
 class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
@@ -302,7 +302,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
             strides=[dace.symbolic.pystr_to_symbolic(s) for s in node.strides],
             dtype=data_type_to_dace_typeclass(node.dtype),
             storage=node.storage.to_dace_storage(),
-            total_size=dace.data._prod([dace.symbolic.pystr_to_symbolic(s) for s in node.shape]),
+            total_size=array_total_size(node.shape),
             transient=node.name not in non_transients,
             debuginfo=dace.DebugInfo(0),
         )

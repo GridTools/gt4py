@@ -16,16 +16,21 @@ from dataclasses import dataclass
 from typing import Dict
 
 import dace
+import dace.data
 import dace.properties
 import dace.subsets
-import dace.data
 
 import gt4py.cartesian.gtc.oir as oir
 from gt4py import eve
 from gt4py.cartesian.gtc import daceir as dcir
 from gt4py.cartesian.gtc.dace.nodes import StencilComputation
 from gt4py.cartesian.gtc.dace.symbol_utils import data_type_to_dace_typeclass
-from gt4py.cartesian.gtc.dace.utils import compute_dcir_access_infos, make_dace_subset
+from gt4py.cartesian.gtc.dace.utils import (
+    array_strides,
+    array_total_size,
+    compute_dcir_access_infos,
+    make_dace_subset,
+)
 from gt4py.cartesian.gtc.definitions import Extent
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import (
     AccessCollector,
@@ -146,8 +151,8 @@ class OirSDFGBuilder(eve.NodeVisitor):
                     f"d{d}" for d in range(len(param.data_dims))
                 ]
                 shape = ctx.make_shape(param.name)
-                strides = [dace.symbolic.pystr_to_symbolic(f"__{param.name}_{dim}_stride") for dim in dim_strs]
-                total_size = dace.data._prod([dace.symbolic.pystr_to_symbolic(s) for s in shape])
+                strides = array_strides(param.name, dim_strs)
+                total_size = array_total_size(shape)
                 ctx.sdfg.add_array(
                     param.name,
                     shape=shape,
@@ -165,8 +170,8 @@ class OirSDFGBuilder(eve.NodeVisitor):
                 f"d{d}" for d in range(len(decl.data_dims))
             ]
             shape = ctx.make_shape(decl.name)
-            strides = [dace.symbolic.pystr_to_symbolic(f"__{decl.name}_{dim}_stride") for dim in dim_strs]
-            total_size = dace.data._prod([dace.symbolic.pystr_to_symbolic(s) for s in shape])
+            strides = array_strides(decl.name, dim_strs)
+            total_size = array_total_size(shape)
             ctx.sdfg.add_array(
                 decl.name,
                 shape=shape,

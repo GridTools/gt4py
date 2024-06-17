@@ -26,6 +26,14 @@ from gt4py.cartesian.gtc.common import CartesianOffset
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
 
 
+def array_strides(fld: str, dims: List[str]):
+    return [dace.symbolic.pystr_to_symbolic(f"__{fld}_{dim}_stride") for dim in dims]
+
+
+def array_total_size(shape: List[str]):
+    return dace.data._prod([dace.symbolic.pystr_to_symbolic(s) for s in shape])
+
+
 def array_dimensions(array: dace.data.Array):
     dims = [
         any(
