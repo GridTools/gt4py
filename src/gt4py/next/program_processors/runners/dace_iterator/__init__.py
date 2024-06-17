@@ -344,6 +344,8 @@ class Program(Program, SDFGConvertible):  # type: ignore[no-redef]
         sdfg.arg_names.extend(self.__sdfg_signature__()[0])
         sdfg.arg_names.extend(list(self.__sdfg_closure__().keys()))
 
+        # Halo Exchange related info (focus on HORIZONTAL dim)
+
         input_fields = [
             str(inpt.id)
             for closure in self.itir.closures
