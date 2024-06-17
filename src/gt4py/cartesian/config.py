@@ -54,9 +54,8 @@ extra_compile_args: List[str] = (
     list(GT4PY_EXTRA_COMPILE_ARGS.split(" ")) if GT4PY_EXTRA_COMPILE_ARGS else []
 )
 GT4PY_EXTRA_LINK_ARGS: str = os.environ.get("GT4PY_EXTRA_LINK_ARGS", "")
-extra_link_args: List[str] = (
-    list(GT4PY_EXTRA_LINK_ARGS.split(" ")) if GT4PY_EXTRA_LINK_ARGS else []
-)
+extra_link_args: List[str] = list(GT4PY_EXTRA_LINK_ARGS.split(" ")) if GT4PY_EXTRA_LINK_ARGS else []
+
 build_settings: Dict[str, Any] = {
     "boost_include_path": os.path.join(BOOST_ROOT, "include"),
     "cuda_bin_path": os.path.join(CUDA_ROOT, "bin"),
