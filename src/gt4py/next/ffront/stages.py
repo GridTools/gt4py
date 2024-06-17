@@ -99,6 +99,8 @@ def fingerprint_past_closure_noargs(
             "closure_vars": past_closure.closure_vars,
             "past_node": past_closure.past_node,
             "grid_type": past_closure.grid_type,
+            "args": past_closure.args,
+            "kwargs": past_closure.kwargs,
         },
         algorithm=algorithm,
     )

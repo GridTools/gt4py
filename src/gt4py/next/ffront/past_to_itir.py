@@ -37,37 +37,55 @@ from gt4py.next.otf import stages, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
+@workflow.make_step
+def past_to_itir(inp: ffront_stages.PastProgramDefinition) -> stages.ProgramCall:
+    all_closure_vars = transform_utils._get_closure_vars_recursively(inp.closure_vars)
+    offsets_and_dimensions = transform_utils._filter_closure_vars_by_type(
+        all_closure_vars, fbuiltins.FieldOffset, common.Dimension
+    )
+    grid_type = transform_utils._deduce_grid_type(inp.grid_type, offsets_and_dimensions.values())
+
+    gt_callables = transform_utils._filter_closure_vars_by_type(
+        all_closure_vars, gtcallable.GTCallable
+    ).values()
+    lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
+
+    itir_program = ProgramLowering.apply(
+        inp.past_node, function_definitions=lowered_funcs, grid_type=grid_type
+    )
+
+    return stages.ProgramCall(
+        program=itir_program, args=tuple(), kwargs={"column_axis": _column_axis(all_closure_vars)}
+    )
+
+
 @dataclasses.dataclass(frozen=True)
 class PastToItir(workflow.ChainableWorkflowMixin):
+    inner: workflow.Workflow[ffront_stages.PastProgramDefinition, stages.ProgramCall] = past_to_itir
+
     def __call__(self, inp: ffront_stages.PastClosure) -> stages.ProgramCall:
-        all_closure_vars = transform_utils._get_closure_vars_recursively(inp.closure_vars)
-        offsets_and_dimensions = transform_utils._filter_closure_vars_by_type(
-            all_closure_vars, fbuiltins.FieldOffset, common.Dimension
-        )
-        grid_type = transform_utils._deduce_grid_type(
-            inp.grid_type, offsets_and_dimensions.values()
-        )
-
-        gt_callables = transform_utils._filter_closure_vars_by_type(
-            all_closure_vars, gtcallable.GTCallable
-        ).values()
-        lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
-
-        itir_program = ProgramLowering.apply(
-            inp.past_node, function_definitions=lowered_funcs, grid_type=grid_type
+        program_call = self.inner(
+            ffront_stages.PastProgramDefinition(inp.past_node, inp.closure_vars, inp.grid_type)
         )
 
         if config.DEBUG or "debug" in inp.kwargs:
-            devtools.debug(itir_program)
+            devtools.debug(program_call.program)
 
-        return stages.ProgramCall(
-            itir_program, inp.args, inp.kwargs | {"column_axis": _column_axis(all_closure_vars)}
+        return dataclasses.replace(
+            program_call, args=inp.args, kwargs=inp.kwargs | program_call.kwargs
         )
 
 
 class PastToItirFactory(factory.Factory):
     class Meta:
         model = PastToItir
+
+    class Params:
+        cached = factory.Trait(
+            inner=workflow.CachedStep(past_to_itir, hash_function=ffront_stages.fingerprint_stage)
+        )
+
+    inner = past_to_itir
 
 
 def _column_axis(all_closure_vars: dict[str, Any]) -> Optional[common.Dimension]:
