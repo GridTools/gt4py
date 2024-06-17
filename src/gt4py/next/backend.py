@@ -135,7 +135,8 @@ class ProgramTransformWorkflow(workflow.NamedStepSequenceWithArgs):
     past_to_itir: workflow.Workflow[ffront_stages.PastClosure, stages.ProgramCall] = (
         dataclasses.field(
             default_factory=lambda: workflow.CachedStep(
-                past_to_itir.PastToItirFactory(), hash_function=ffront_stages.fingerprint_stage
+                past_to_itir.PastToItirFactory(),
+                hash_function=ffront_stages.fingerprint_past_closure_noargs,
             )
         )
     )
