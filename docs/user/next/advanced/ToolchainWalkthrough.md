@@ -33,16 +33,16 @@ pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
 past -->|past_lint| past
 pasta -->|past_to_past_closure| pclos(ProgramClosure)
 
-fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
+fdefa(DataWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
 fuwr --> fargs(args, kwargs)
 
-foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
+foast --> fiwr{{"internal wrapping"}} --> foasta(DataWithArgs)
 fargs --> foasta
 
-pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
+pdefa(DataWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
 puwr --> pargs(args, kwargs)
 
-past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
+past --> piwr{{"internal wrapping"}} --> pasta(DataWithArgs)
 pargs --> pasta
 ```
 
@@ -92,16 +92,16 @@ pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
 past -->|past_lint| past
 pasta -->|past_to_past_closure| pclos(ProgramClosure)
 
-fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
+fdefa(DataWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
 fuwr --> fargs(args, kwargs)
 
-foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
+foast --> fiwr{{"internal wrapping"}} --> foasta(DataWithArgs)
 fargs --> foasta
 
-pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
+pdefa(DataWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
 puwr --> pargs(args, kwargs)
 
-past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
+past --> piwr{{"internal wrapping"}} --> pasta(DataWithArgs)
 pargs --> pasta
 
 style fdef fill:red
@@ -147,16 +147,16 @@ pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
 past -->|past_lint| past
 pasta -->|past_to_past_closure| pclos(ProgramClosure)
 
-fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
+fdefa(DataWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
 fuwr --> fargs(args, kwargs)
 
-foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
+foast --> fiwr{{"internal wrapping"}} --> foasta(DataWithArgs)
 fargs --> foasta
 
-pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
+pdefa(DataWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
 puwr --> pargs(args, kwargs)
 
-past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
+past --> piwr{{"internal wrapping"}} --> pasta(DataWithArgs)
 pargs --> pasta
 
 style foast fill:red
@@ -192,16 +192,16 @@ pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
 past -->|past_lint| past
 pasta -->|past_to_past_closure| pclos(ProgramClosure)
 
-fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
+fdefa(DataWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
 fuwr --> fargs(args, kwargs)
 
-foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
+foast --> fiwr{{"internal wrapping"}} --> foasta(DataWithArgs)
 fargs --> foasta
 
-pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
+pdefa(DataWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
 puwr --> pargs(args, kwargs)
 
-past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
+past --> piwr{{"internal wrapping"}} --> pasta(DataWithArgs)
 pargs --> pasta
 
 style foasta fill:red
@@ -213,13 +213,15 @@ Here we have to manually combine the previous result with the call arguments. Wh
 
 ```python
 fclos = backend.DEFAULT_FIELDOP_TRANSFORMS.foast_to_foast_closure(
-    gtx.otf.workflow.InputWithArgs(
+    gtx.otf.workflow.DataWithArgs(
         data=foast,
-        args=(gtx.ones(domain={I: 10}, dtype=gtx.float64),),
-        kwargs={
-            "out": gtx.zeros(domain={I: 10}, dtype=gtx.float64),
-            "from_fieldop": example_fo
-        },
+        args=gtx.otf.stages.JITArgs(
+            args=(gtx.ones(domain={I: 10}, dtype=gtx.float64),),
+            kwargs={
+                "out": gtx.zeros(domain={I: 10}, dtype=gtx.float64),
+                "from_fieldop": example_fo
+            }
+        ),
     )
 )
 ```
@@ -269,16 +271,16 @@ pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
 past -->|past_lint| past
 pasta -->|past_to_past_closure| pclos(ProgramClosure)
 
-fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
+fdefa(DataWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
 fuwr --> fargs(args, kwargs)
 
-foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
+foast --> fiwr{{"internal wrapping"}} --> foasta(DataWithArgs)
 fargs --> foasta
 
-pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
+pdefa(DataWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
 puwr --> pargs(args, kwargs)
 
-past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
+past --> piwr{{"internal wrapping"}} --> pasta(DataWithArgs)
 pargs --> pasta
 
 style fclos fill:red
@@ -325,16 +327,16 @@ pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
 past -->|past_lint| past
 pasta -->|past_to_past_closure| pclos(ProgramClosure)
 
-fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
+fdefa(DataWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
 fuwr --> fargs(args, kwargs)
 
-foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
+foast --> fiwr{{"internal wrapping"}} --> foasta(DataWithArgs)
 fargs --> foasta
 
-pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
+pdefa(DataWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
 puwr --> pargs(args, kwargs)
 
-past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
+past --> piwr{{"internal wrapping"}} --> pasta(DataWithArgs)
 pargs --> pasta
 
 style pclos fill:red
@@ -370,16 +372,16 @@ pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
 past -->|past_lint| past
 pasta -->|past_to_past_closure| pclos(ProgramClosure)
 
-fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
+fdefa(DataWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
 fuwr --> fargs(args, kwargs)
 
-foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
+foast --> fiwr{{"internal wrapping"}} --> foasta(DataWithArgs)
 fargs --> foasta
 
-pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
+pdefa(DataWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
 puwr --> pargs(args, kwargs)
 
-past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
+past --> piwr{{"internal wrapping"}} --> pasta(DataWithArgs)
 pargs --> pasta
 
 style pclos fill:red
@@ -439,16 +441,16 @@ pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
 past -->|past_lint| past
 pasta -->|past_to_past_closure| pclos(ProgramClosure)
 
-fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
+fdefa(DataWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
 fuwr --> fargs(args, kwargs)
 
-foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
+foast --> fiwr{{"internal wrapping"}} --> foasta(DataWithArgs)
 fargs --> foasta
 
-pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
+pdefa(DataWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
 puwr --> pargs(args, kwargs)
 
-past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
+past --> piwr{{"internal wrapping"}} --> pasta(DataWithArgs)
 pargs --> pasta
 
 style fdefa fill:red
@@ -468,7 +470,9 @@ linkStyle 0,2,3,4,5,9,10,11,12,13,14 stroke:red,stroke-width:4px,color:pink
 
 ```python
 pitir2 = backend.DEFAULT_FIELDOP_TRANSFORMS(
-    gtx.otf.workflow.InputWithArgs(data=start, args=fclos.args, kwargs=fclos.kwargs | {"from_fieldop": example_fo})
+    gtx.otf.workflow.DataWithArgs(data=start, args=gtx.otf.stages.JITArgs(
+        args=fclos.args, kwargs=fclos.kwargs | {"from_fieldop": example_fo}
+    )
 )
 assert pitir2 == pitir
 ```
@@ -512,10 +516,12 @@ Note that it is the exact same call but with a different input stage
 
 ```python
 pitir3 = backend.DEFAULT_FIELDOP_TRANSFORMS(
-    gtx.otf.workflow.InputWithArgs(
+    gtx.otf.workflow.DataWithArgs(
         data=foast,
-        args=fclos.args,
-        kwargs=fclos.kwargs | {"from_fieldop": example_fo}
+        args=gtx.otf.stages.JITArgs(
+            args=fclos.args,
+            kwargs=fclos.kwargs | {"from_fieldop": example_fo}
+        )
     )
 )
 assert pitir3 == pitir
@@ -565,16 +571,16 @@ pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
 past -->|past_lint| past
 pasta -->|past_to_past_closure| pclos(ProgramClosure)
 
-fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
+fdefa(DataWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
 fuwr --> fargs(args, kwargs)
 
-foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
+foast --> fiwr{{"internal wrapping"}} --> foasta(DataWithArgs)
 fargs --> foasta
 
-pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
+pdefa(DataWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
 puwr --> pargs(args, kwargs)
 
-past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
+past --> piwr{{"internal wrapping"}} --> pasta(DataWithArgs)
 pargs --> pasta
 
 style pdef fill:red
@@ -602,16 +608,16 @@ pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
 past -->|past_lint| past
 pasta -->|past_to_past_closure| pclos(ProgramClosure)
 
-fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
+fdefa(DataWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
 fuwr --> fargs(args, kwargs)
 
-foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
+foast --> fiwr{{"internal wrapping"}} --> foasta(DataWithArgs)
 fargs --> foasta
 
-pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
+pdefa(DataWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
 puwr --> pargs(args, kwargs)
 
-past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
+past --> piwr{{"internal wrapping"}} --> pasta(DataWithArgs)
 pargs --> pasta
 
 style pasta fill:red
@@ -621,10 +627,12 @@ linkStyle 8 stroke:red,stroke-width:4px,color:pink
 
 ```python
 pclos = backend.DEFAULT_PROG_TRANSFORMS(
-    gtx.otf.workflow.InputWithArgs(
+    gtx.otf.workflow.DataWithArgs(
         data=p_past,
-        args=fclos.args,
-        kwargs=fclos.kwargs
+        args=gtx.otf.stages.JITArgs(
+            args=fclos.args,
+            kwargs=fclos.kwargs
+        )
     )
 )
 ```
@@ -645,16 +653,16 @@ pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
 past -->|past_lint| past
 pasta -->|past_to_past_closure| pclos(ProgramClosure)
 
-fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
+fdefa(DataWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
 fuwr --> fargs(args, kwargs)
 
-foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
+foast --> fiwr{{"internal wrapping"}} --> foasta(DataWithArgs)
 fargs --> foasta
 
-pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
+pdefa(DataWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
 puwr --> pargs(args, kwargs)
 
-past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
+past --> piwr{{"internal wrapping"}} --> pasta(DataWithArgs)
 pargs --> pasta
 
 style pdefa fill:red
@@ -673,20 +681,24 @@ linkStyle 4,5,6,7,8,15,16,17,18,19,20 stroke:red,stroke-width:4px,color:pink
 
 ```python
 p_itir1 = backend.DEFAULT_PROG_TRANSFORMS(
-    gtx.otf.workflow.InputWithArgs(
+    gtx.otf.workflow.DataWithArgs(
         data=p_start,
-        args=fclos.args,
-        kwargs=fclos.kwargs
+        args=gtx.otf.stages.JITArgs(
+            args=fclos.args,
+            kwargs=fclos.kwargs
+        )
     )
 )
 ```
 
 ```python
 p_itir2 = backend.DEFAULT_PROG_TRANSFORMS(
-    gtx.otf.workflow.InputWithArgs(
+    gtx.otf.workflow.DataWithArgs(
         data=p_past,
-        args=fclos.args,
-        kwargs=fclos.kwargs
+        args=gtx.otf.stages.JITArgs(
+            args=fclos.args,
+            kwargs=fclos.kwargs
+        )
     )
 )
 ```

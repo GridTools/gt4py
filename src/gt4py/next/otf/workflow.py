@@ -29,6 +29,8 @@ EndT_co = TypeVar("EndT_co", covariant=True)
 NewEndT = TypeVar("NewEndT")
 IntermediateT = TypeVar("IntermediateT")
 HashT = TypeVar("HashT")
+DataT = TypeVar("DataT")
+ArgT = TypeVar("ArgT")
 
 
 def make_step(function: Workflow[StartT, EndT]) -> ChainableWorkflowMixin[StartT, EndT]:
@@ -267,24 +269,48 @@ class SkippableStep(
         raise NotImplementedError()
 
 
-@dataclasses.dataclass
-class InputWithArgs(Generic[StartT]):
-    data: StartT
-    args: tuple[Any]
-    kwargs: dict[str, Any]
+@dataclasses.dataclass(frozen=True)
+class DataWithArgs(Generic[DataT, ArgT]):
+    data: DataT
+    args: ArgT
 
 
 @dataclasses.dataclass(frozen=True)
-class NamedStepSequenceWithArgs(NamedStepSequence[InputWithArgs[StartT], EndT]):
-    def __call__(self, inp: InputWithArgs[StartT]) -> EndT:
+class DataOnlyAdapter(
+    ChainableWorkflowMixin,
+    ReplaceEnabledWorkflowMixin,
+    Workflow[DataWithArgs[StartT, ArgT], DataWithArgs[EndT, ArgT]],
+    Generic[ArgT, StartT, EndT],
+):
+    step: Workflow[StartT, EndT]
+
+    def __call__(self, inp: DataWithArgs[StartT, ArgT]) -> DataWithArgs[EndT, ArgT]:
+        return DataWithArgs(data=self.step(inp.data), args=inp.args)
+
+
+@dataclasses.dataclass(frozen=True)
+class ArgsOnlyAdapter(
+    ChainableWorkflowMixin,
+    ReplaceEnabledWorkflowMixin,
+    Workflow[DataWithArgs[DataT, StartT], DataWithArgs[DataT, EndT]],
+    Generic[DataT, StartT, EndT],
+):
+    step: Workflow[StartT, EndT]
+
+    def __call__(self, inp: DataWithArgs[DataT, StartT]) -> DataWithArgs[DataT, EndT]:
+        return DataWithArgs(data=inp.data, args=self.step(inp.args))
+
+
+@dataclasses.dataclass(frozen=True)
+class NamedStepSequenceWithArgs(NamedStepSequence[DataWithArgs[StartT, ArgT], EndT]):
+    def __call__(self, inp: DataWithArgs[StartT, ArgT]) -> EndT:
         args = inp.args
-        kwargs = inp.kwargs
         step_result: Any = inp.data
         fields = {f.name: f for f in dataclasses.fields(self)}
         for step_name in self.step_order:
             step = getattr(self, step_name)
             if fields[step_name].metadata.get("takes_args", False):
-                step_result = step(InputWithArgs(step_result, args, kwargs))
+                step_result = step(DataWithArgs(step_result, args))
             else:
                 step_result = step(step_result)
         return step_result

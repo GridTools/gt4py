@@ -36,30 +36,36 @@ from gt4py.next.program_processors import processor_interface as ppi
 
 @workflow.make_step
 def foast_to_foast_closure(
-    inp: workflow.InputWithArgs[ffront_stages.FoastOperatorDefinition],
+    inp: workflow.DataWithArgs[ffront_stages.FoastOperatorDefinition, stages.JITArgs],
 ) -> ffront_stages.FoastClosure:
-    from_fieldop = inp.kwargs.pop("from_fieldop")
-    debug = inp.kwargs.pop("debug", inp.data.debug)
+    from_fieldop = inp.args.kwargs.pop("from_fieldop")
+    debug = inp.args.kwargs.pop("debug", inp.data.debug)
     return ffront_stages.FoastClosure(
         foast_op_def=dataclasses.replace(inp.data, debug=debug),
-        args=inp.args,
-        kwargs=inp.kwargs,
+        args=inp.args.args,
+        kwargs=inp.args.kwargs,
         closure_vars={inp.data.foast_node.id: from_fieldop},
     )
 
 
 @dataclasses.dataclass(frozen=True)
-class FieldopTransformWorkflow(workflow.NamedStepSequenceWithArgs):
+class FieldopTransformWorkflow(workflow.NamedStepSequence):
     """Modular workflow for transformations with access to intermediates."""
 
-    func_to_foast: workflow.SkippableStep[
-        ffront_stages.FieldOperatorDefinition | ffront_stages.FoastOperatorDefinition,
-        ffront_stages.FoastOperatorDefinition,
+    func_to_foast: workflow.Workflow[
+        workflow.DataWithArgs[
+            ffront_stages.FieldOperatorDefinition | ffront_stages.FoastOperatorDefinition,
+            stages.CompileArgSpec,
+        ],
+        workflow.DataWithArgs[ffront_stages.FoastOperatorDefinition, stages.CompileArgSpec],
     ] = dataclasses.field(
-        default_factory=lambda: func_to_foast.OptionalFuncToFoastFactory(cached=True)
+        default_factory=lambda: workflow.DataOnlyAdapter(
+            func_to_foast.OptionalFuncToFoastFactory(cached=True)
+        )
     )
     foast_to_foast_closure: workflow.Workflow[
-        workflow.InputWithArgs[ffront_stages.FoastOperatorDefinition], ffront_stages.FoastClosure
+        workflow.DataWithArgs[ffront_stages.FoastOperatorDefinition, stages.JITArgs],
+        ffront_stages.FoastClosure,
     ] = dataclasses.field(default=foast_to_foast_closure, metadata={"takes_args": True})
     foast_to_past_closure: workflow.Workflow[
         ffront_stages.FoastClosure, ffront_stages.PastClosure
@@ -113,12 +119,15 @@ class ProgramTransformWorkflow(workflow.NamedStepSequenceWithArgs):
         ffront_stages.PastProgramDefinition, ffront_stages.PastProgramDefinition
     ] = dataclasses.field(default_factory=past_linters.LinterFactory)
     past_to_past_closure: workflow.Workflow[
-        ffront_stages.PastProgramDefinition, ffront_stages.PastClosure
+        workflow.DataWithArgs[ffront_stages.PastProgramDefinition, stages.JITArgs],
+        ffront_stages.PastClosure,
     ] = dataclasses.field(
         default=lambda inp: ffront_stages.PastClosure(
-            definition=dataclasses.replace(inp.data, debug=inp.kwargs.pop("debug", inp.data.debug)),
-            args=inp.args,
-            kwargs=inp.kwargs,
+            definition=dataclasses.replace(
+                inp.data, debug=inp.args.kwargs.pop("debug", inp.data.debug)
+            ),
+            args=inp.args.args,
+            kwargs=inp.args.kwargs,
         ),
         metadata={"takes_args": True},
     )
@@ -152,13 +161,17 @@ class Backend(Generic[core_defs.DeviceTypeT]):
             offset_provider = kwargs.pop("offset_provider")
             from_fieldop = kwargs.pop("from_fieldop")
             program_call = self.transforms_fop(
-                workflow.InputWithArgs(program, args, kwargs | {"from_fieldop": from_fieldop})
+                workflow.DataWithArgs(
+                    program, args=stages.JITArgs(args, kwargs | {"from_fieldop": from_fieldop})
+                )
             )
             program_call = dataclasses.replace(
                 program_call, kwargs=program_call.kwargs | {"offset_provider": offset_provider}
             )
         else:
-            program_call = self.transforms_prog(workflow.InputWithArgs(program, args, kwargs))
+            program_call = self.transforms_prog(
+                workflow.DataWithArgs(program, stages.JITArgs(args, kwargs))
+            )
         self.executor(program_call.program, *program_call.args, **program_call.kwargs)
 
     @property

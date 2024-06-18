@@ -53,6 +53,7 @@ from gt4py.next.iterator.ir_utils.ir_makers import (
     ref,
     sym,
 )
+from gt4py.next.otf import workflow
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
@@ -412,8 +413,12 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     @functools.cached_property
     def foast_stage(self) -> ffront_stages.FoastOperatorDefinition:
         if self.backend is not None and self.backend.transforms_fop is not None:
-            return self.backend.transforms_fop.func_to_foast(self.definition_stage)
-        return next_backend.DEFAULT_FIELDOP_TRANSFORMS.func_to_foast(self.definition_stage)
+            return self.backend.transforms_fop.func_to_foast(
+                workflow.DataWithArgs(self.definition_stage, args=None)
+            ).data
+        return next_backend.DEFAULT_FIELDOP_TRANSFORMS.func_to_foast(
+            workflow.DataWithArgs(self.definition_stage, None)
+        ).data
 
     @property
     def __name__(self) -> str:

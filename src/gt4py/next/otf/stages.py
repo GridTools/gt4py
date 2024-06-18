@@ -95,6 +95,21 @@ class CompileArgSpec:
     column_axis: Optional[common.Dimension]
 
     @classmethod
+    def from_concrete_no_size(cls, *args: Any, **kwargs: Any) -> Self:
+        compile_args = tuple(CompileArg(type_translation.from_value(arg)) for arg in args)
+        kwargs_copy = kwargs.copy()
+        return cls(
+            args=compile_args,
+            offset_provider=kwargs_copy.pop("offset_provider", {}),
+            column_axis=kwargs_copy.pop("column_axis", None),
+            kwargs={
+                k: CompileArg(type_translation.from_value(v))
+                for k, v in kwargs_copy.items()
+                if v is not None
+            },
+        )
+
+    @classmethod
     def from_concrete(cls, *args: Any, **kwargs: Any) -> Self:
         compile_args = tuple(CompileArg(type_translation.from_value(arg)) for arg in args)
         size_args = tuple(iter_size_compile_args(compile_args))
@@ -109,6 +124,12 @@ class CompileArgSpec:
                 if v is not None
             },
         )
+
+
+@dataclasses.dataclass(frozen=True)
+class JITArgs:
+    args: tuple[Any, ...]
+    kwargs: dict[str, Any]
 
 
 @dataclasses.dataclass(frozen=True)
