@@ -55,9 +55,9 @@ class FieldopTransformWorkflow(workflow.NamedStepSequence):
     func_to_foast: workflow.Workflow[
         workflow.DataWithArgs[
             ffront_stages.FieldOperatorDefinition | ffront_stages.FoastOperatorDefinition,
-            stages.CompileArgSpec,
+            stages.JITArgs,
         ],
-        workflow.DataWithArgs[ffront_stages.FoastOperatorDefinition, stages.CompileArgSpec],
+        workflow.DataWithArgs[ffront_stages.FoastOperatorDefinition, stages.JITArgs],
     ] = dataclasses.field(
         default_factory=lambda: workflow.DataOnlyAdapter(
             func_to_foast.OptionalFuncToFoastFactory(cached=True)

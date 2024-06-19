@@ -1,6 +1,7 @@
 ```python
 import dataclasses
 import inspect
+import pprint
 
 import gt4py.next as gtx
 from gt4py.next import backend
@@ -64,18 +65,6 @@ start = example_fo.definition_stage
 gtx.ffront.stages.FieldOperatorDefinition?
 ```
 
-    [0;31mInit signature:[0m
-    [0mgtx[0m[0;34m.[0m[0mffront[0m[0;34m.[0m[0mstages[0m[0;34m.[0m[0mFieldOperatorDefinition[0m[0;34m([0m[0;34m[0m
-    [0;34m[0m    [0mdefinition[0m[0;34m:[0m [0;34m'types.FunctionType'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0mgrid_type[0m[0;34m:[0m [0;34m'Optional[common.GridType]'[0m [0;34m=[0m [0;32mNone[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0mnode_class[0m[0;34m:[0m [0;34m'type[OperatorNodeT]'[0m [0;34m=[0m [0;34m<[0m[0;32mclass[0m [0;34m'gt4py.next.ffront.field_operator_ast.FieldOperator'[0m[0;34m>[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0mattributes[0m[0;34m:[0m [0;34m'dict[str, Any]'[0m [0;34m=[0m [0;34m<[0m[0mfactory[0m[0;34m>[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m[0;34m)[0m [0;34m->[0m [0;32mNone[0m[0;34m[0m[0;34m[0m[0m
-    [0;31mDocstring:[0m      FieldOperatorDefinition(definition: 'types.FunctionType', grid_type: 'Optional[common.GridType]' = None, node_class: 'type[OperatorNodeT]' = <class 'gt4py.next.ffront.field_operator_ast.FieldOperator'>, attributes: 'dict[str, Any]' = <factory>)
-    [0;31mFile:[0m           ~/Code/gt4py/src/gt4py/next/ffront/stages.py
-    [0;31mType:[0m           type
-    [0;31mSubclasses:[0m
-
 ## DSL -> FOAST
 
 ```mermaid
@@ -110,24 +99,14 @@ linkStyle 0 stroke:red,stroke-width:4px,color:pink
 ```
 
 ```python
-foast = backend.DEFAULT_FIELDOP_TRANSFORMS.func_to_foast(start)
+foast = backend.DEFAULT_FIELDOP_TRANSFORMS.func_to_foast(
+    gtx.otf.workflow.DataWithArgs(start, gtx.otf.stages.CompileArgSpec(tuple(), {}, {}, None))
+)
 ```
 
 ```python
 gtx.ffront.stages.FoastOperatorDefinition?
 ```
-
-    [0;31mInit signature:[0m
-    [0mgtx[0m[0;34m.[0m[0mffront[0m[0;34m.[0m[0mstages[0m[0;34m.[0m[0mFoastOperatorDefinition[0m[0;34m([0m[0;34m[0m
-    [0;34m[0m    [0mfoast_node[0m[0;34m:[0m [0;34m'OperatorNodeT'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0mclosure_vars[0m[0;34m:[0m [0;34m'dict[str, Any]'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0mgrid_type[0m[0;34m:[0m [0;34m'Optional[common.GridType]'[0m [0;34m=[0m [0;32mNone[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0mattributes[0m[0;34m:[0m [0;34m'dict[str, Any]'[0m [0;34m=[0m [0;34m<[0m[0mfactory[0m[0;34m>[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m[0;34m)[0m [0;34m->[0m [0;32mNone[0m[0;34m[0m[0;34m[0m[0m
-    [0;31mDocstring:[0m      FoastOperatorDefinition(foast_node: 'OperatorNodeT', closure_vars: 'dict[str, Any]', grid_type: 'Optional[common.GridType]' = None, attributes: 'dict[str, Any]' = <factory>)
-    [0;31mFile:[0m           ~/Code/gt4py/src/gt4py/next/ffront/stages.py
-    [0;31mType:[0m           type
-    [0;31mSubclasses:[0m
 
 ## FOAST -> ITIR
 
@@ -165,7 +144,7 @@ linkStyle 1 stroke:red,stroke-width:4px,color:pink
 ```
 
 ```python
-fitir = backend.DEFAULT_FIELDOP_TRANSFORMS.foast_to_itir(foast)
+fitir = gtx.otf.workflow.DataOnlyAdapter(backend.DEFAULT_FIELDOP_TRANSFORMS.foast_to_itir)(foast).data
 ```
 
 ```python
@@ -214,7 +193,7 @@ Here we have to manually combine the previous result with the call arguments. Wh
 ```python
 fclos = backend.DEFAULT_FIELDOP_TRANSFORMS.foast_to_foast_closure(
     gtx.otf.workflow.DataWithArgs(
-        data=foast,
+        data=foast.data,
         args=gtx.otf.stages.JITArgs(
             args=(gtx.ones(domain={I: 10}, dtype=gtx.float64),),
             kwargs={
@@ -233,25 +212,6 @@ fclos.closure_vars["example_fo"].backend
 ```python
 gtx.ffront.stages.FoastClosure??
 ```
-
-    [0;31mInit signature:[0m
-    [0mgtx[0m[0;34m.[0m[0mffront[0m[0;34m.[0m[0mstages[0m[0;34m.[0m[0mFoastClosure[0m[0;34m([0m[0;34m[0m
-    [0;34m[0m    [0mfoast_op_def[0m[0;34m:[0m [0;34m'FoastOperatorDefinition[OperatorNodeT]'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0margs[0m[0;34m:[0m [0;34m'tuple[Any, ...]'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0mkwargs[0m[0;34m:[0m [0;34m'dict[str, Any]'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0mclosure_vars[0m[0;34m:[0m [0;34m'dict[str, Any]'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m[0;34m)[0m [0;34m->[0m [0;32mNone[0m[0;34m[0m[0;34m[0m[0m
-    [0;31mDocstring:[0m      FoastClosure(foast_op_def: 'FoastOperatorDefinition[OperatorNodeT]', args: 'tuple[Any, ...]', kwargs: 'dict[str, Any]', closure_vars: 'dict[str, Any]')
-    [0;31mSource:[0m
-    [0;34m@[0m[0mdataclasses[0m[0;34m.[0m[0mdataclass[0m[0;34m([0m[0mfrozen[0m[0;34m=[0m[0;32mTrue[0m[0;34m)[0m[0;34m[0m
-    [0;34m[0m[0;32mclass[0m [0mFoastClosure[0m[0;34m([0m[0mGeneric[0m[0;34m[[0m[0mOperatorNodeT[0m[0;34m][0m[0;34m)[0m[0;34m:[0m[0;34m[0m
-    [0;34m[0m    [0mfoast_op_def[0m[0;34m:[0m [0mFoastOperatorDefinition[0m[0;34m[[0m[0mOperatorNodeT[0m[0;34m][0m[0;34m[0m
-    [0;34m[0m    [0margs[0m[0;34m:[0m [0mtuple[0m[0;34m[[0m[0mAny[0m[0;34m,[0m [0;34m...[0m[0;34m][0m[0;34m[0m
-    [0;34m[0m    [0mkwargs[0m[0;34m:[0m [0mdict[0m[0;34m[[0m[0mstr[0m[0;34m,[0m [0mAny[0m[0;34m][0m[0;34m[0m
-    [0;34m[0m    [0mclosure_vars[0m[0;34m:[0m [0mdict[0m[0;34m[[0m[0mstr[0m[0;34m,[0m [0mAny[0m[0;34m][0m[0;34m[0m[0;34m[0m[0m
-    [0;31mFile:[0m           ~/Code/gt4py/src/gt4py/next/ffront/stages.py
-    [0;31mType:[0m           type
-    [0;31mSubclasses:[0m
 
 ## FOAST with args -> PAST closure
 
@@ -296,19 +256,6 @@ pclos = backend.DEFAULT_FIELDOP_TRANSFORMS.foast_to_past_closure(fclos)
 gtx.ffront.stages.PastClosure?
 ```
 
-    [0;31mInit signature:[0m
-    [0mgtx[0m[0;34m.[0m[0mffront[0m[0;34m.[0m[0mstages[0m[0;34m.[0m[0mPastClosure[0m[0;34m([0m[0;34m[0m
-    [0;34m[0m    [0mclosure_vars[0m[0;34m:[0m [0;34m'dict[str, Any]'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0mpast_node[0m[0;34m:[0m [0;34m'past.Program'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0mgrid_type[0m[0;34m:[0m [0;34m'Optional[common.GridType]'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0margs[0m[0;34m:[0m [0;34m'tuple[Any, ...]'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0mkwargs[0m[0;34m:[0m [0;34m'dict[str, Any]'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m[0;34m)[0m [0;34m->[0m [0;32mNone[0m[0;34m[0m[0;34m[0m[0m
-    [0;31mDocstring:[0m      PastClosure(closure_vars: 'dict[str, Any]', past_node: 'past.Program', grid_type: 'Optional[common.GridType]', args: 'tuple[Any, ...]', kwargs: 'dict[str, Any]')
-    [0;31mFile:[0m           ~/Code/gt4py/src/gt4py/next/ffront/stages.py
-    [0;31mType:[0m           type
-    [0;31mSubclasses:[0m
-
 ## Transform PAST closure arguments
 
 Don't ask me, seems to be necessary though
@@ -349,10 +296,14 @@ pclost = backend.DEFAULT_PROG_TRANSFORMS.past_transform_args(pclos)
 ```
 
 ```python
-pclost.kwargs
+pprint.pprint(pclos.args)
+pprint.pprint(pclos.kwargs)
 ```
 
-    {}
+```python
+pprint.pprint(pclost.args)
+pprint.pprint(pclost.kwargs)
+```
 
 ## Lower PAST -> ITIR
 
@@ -397,17 +348,6 @@ pitir = backend.DEFAULT_PROG_TRANSFORMS.past_to_itir(pclost)
 gtx.otf.stages.ProgramCall?
 ```
 
-    [0;31mInit signature:[0m
-    [0mgtx[0m[0;34m.[0m[0motf[0m[0;34m.[0m[0mstages[0m[0;34m.[0m[0mProgramCall[0m[0;34m([0m[0;34m[0m
-    [0;34m[0m    [0mprogram[0m[0;34m:[0m [0;34m'itir.FencilDefinition'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0margs[0m[0;34m:[0m [0;34m'tuple[Any, ...]'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0mkwargs[0m[0;34m:[0m [0;34m'dict[str, Any]'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m[0;34m)[0m [0;34m->[0m [0;32mNone[0m[0;34m[0m[0;34m[0m[0m
-    [0;31mDocstring:[0m      Iterator IR representaion of a program together with arguments to be passed to it.
-    [0;31mFile:[0m           ~/Code/gt4py/src/gt4py/next/otf/stages.py
-    [0;31mType:[0m           type
-    [0;31mSubclasses:[0m
-
 ## Executing The Result
 
 ```python
@@ -415,13 +355,8 @@ gtx.program_processors.runners.roundtrip.executor(pitir.program, *pitir.args, of
 ```
 
 ```python
-pitir.args
+pprint.pprint(pitir.args)
 ```
-
-    (NumPyArrayField(_domain=Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>),), ranges=(UnitRange(0, 10),)), _ndarray=array([1., 1., 1., 1., 1., 1., 1., 1., 1., 1.])),
-     NumPyArrayField(_domain=Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>),), ranges=(UnitRange(0, 10),)), _ndarray=array([2., 2., 2., 2., 2., 2., 2., 2., 2., 2.])),
-     10,
-     10)
 
 ## Full Field Operator Toolchain
 
@@ -472,7 +407,7 @@ linkStyle 0,2,3,4,5,9,10,11,12,13,14 stroke:red,stroke-width:4px,color:pink
 pitir2 = backend.DEFAULT_FIELDOP_TRANSFORMS(
     gtx.otf.workflow.DataWithArgs(data=start, args=gtx.otf.stages.JITArgs(
         args=fclos.args, kwargs=fclos.kwargs | {"from_fieldop": example_fo}
-    )
+    ))
 )
 assert pitir2 == pitir
 ```
@@ -496,19 +431,8 @@ example_compiled(pitir2.args[1], *pitir2.args[1:], offset_provider=OFFSET_PROVID
 ```
 
 ```python
-pitir2.args[2]
+pprint.pprint(pitir.args)
 ```
-
-    10
-
-```python
-pitir.args
-```
-
-    (NumPyArrayField(_domain=Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>),), ranges=(UnitRange(0, 10),)), _ndarray=array([1., 1., 1., 1., 1., 1., 1., 1., 1., 1.])),
-     NumPyArrayField(_domain=Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>),), ranges=(UnitRange(0, 10),)), _ndarray=array([3., 3., 3., 3., 3., 3., 3., 3., 3., 3.])),
-     10,
-     10)
 
 ### Starting from FOAST
 
@@ -517,7 +441,7 @@ Note that it is the exact same call but with a different input stage
 ```python
 pitir3 = backend.DEFAULT_FIELDOP_TRANSFORMS(
     gtx.otf.workflow.DataWithArgs(
-        data=foast,
+        data=foast.data,
         args=gtx.otf.stages.JITArgs(
             args=fclos.args,
             kwargs=fclos.kwargs | {"from_fieldop": example_fo}
@@ -544,16 +468,6 @@ p_start = example_prog.definition_stage
 ```python
 gtx.ffront.stages.ProgramDefinition?
 ```
-
-    [0;31mInit signature:[0m
-    [0mgtx[0m[0;34m.[0m[0mffront[0m[0;34m.[0m[0mstages[0m[0;34m.[0m[0mProgramDefinition[0m[0;34m([0m[0;34m[0m
-    [0;34m[0m    [0mdefinition[0m[0;34m:[0m [0;34m'types.FunctionType'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0mgrid_type[0m[0;34m:[0m [0;34m'Optional[common.GridType]'[0m [0;34m=[0m [0;32mNone[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m[0;34m)[0m [0;34m->[0m [0;32mNone[0m[0;34m[0m[0;34m[0m[0m
-    [0;31mDocstring:[0m      ProgramDefinition(definition: 'types.FunctionType', grid_type: 'Optional[common.GridType]' = None)
-    [0;31mFile:[0m           ~/Code/gt4py/src/gt4py/next/ffront/stages.py
-    [0;31mType:[0m           type
-    [0;31mSubclasses:[0m
 
 ## DSL -> PAST
 
