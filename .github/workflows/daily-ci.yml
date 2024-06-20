@@ -7,8 +7,8 @@ on:
 
   ## COMMENTED OUT: only for testing CI action changes
   # pull_request:
-  #  branches:
-  #  - main
+  #   branches:
+  #   - main
   ## END
 
 jobs:https://github.com/GridTools/gt4py/pull/1544
