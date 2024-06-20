@@ -11,7 +11,7 @@ on:
   #   - main
   ## END
 
-jobs:https://github.com/GridTools/gt4py/pull/1544
+jobs:
   daily-ci:
     strategy:
       matrix:
