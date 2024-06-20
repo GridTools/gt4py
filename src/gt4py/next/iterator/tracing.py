@@ -250,7 +250,7 @@ def closure(domain, stencil, output, inputs):
 
 
 @iterator.runtime.set_at.register(TRACING)
-def set_at(expr, domain, target):
+def set_at(expr: itir.Expr, domain: itir.Expr, target: itir.Expr) -> None:
     TracerContext.add_stmt(itir.SetAt(expr=expr, domain=domain, target=target))
 
 

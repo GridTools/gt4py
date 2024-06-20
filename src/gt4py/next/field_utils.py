@@ -30,6 +30,27 @@ def asnumpy(field: common.Field | np.ndarray) -> np.ndarray:
 def field_from_typespec(
     domain: common.Domain, xp: ModuleType
 ) -> Callable[..., common.MutableField | tuple[common.MutableField | tuple, ...]]:
+    """
+    Allocate a field or (arbitrarily nested) tuple(s) of fields.
+
+    The tuple structure and dtype is taken from a type_specifications.DataType,
+    which is either ScalarType or TupleType of ScalarType (possibly nested).
+
+    >>> field_from_typespec(common.domain({common.Dimension("I"): 1}), np)(
+    ...     ts.ScalarType(kind=ts.ScalarKind.INT32)
+    ... )  # doctest: +ELLIPSIS
+    NumPyArrayField(... dtype=int32...)
+    >>> field_from_typespec(common.domain({common.Dimension("I"): 1}), np)(
+    ...     ts.TupleType(
+    ...         types=[
+    ...             ts.ScalarType(kind=ts.ScalarKind.INT32),
+    ...             ts.ScalarType(kind=ts.ScalarKind.FLOAT32),
+    ...         ]
+    ...     )
+    ... )  # doctest: +ELLIPSIS
+    (NumPyArrayField(... dtype=int32...), NumPyArrayField(... dtype=float32...))
+    """
+
     @utils.tree_map(collection_type=ts.TupleType, result_collection_type=tuple)
     def impl(type_: ts.ScalarType) -> common.MutableField:
         res = common._field(
