@@ -6,12 +6,12 @@ on:
   workflow_dispatch:
 
   ## COMMENTED OUT: only for testing CI action changes
-  pull_request:
-    branches:
-    - main
+  # pull_request:
+  #  branches:
+  #  - main
   ## END
 
-jobs:
+jobs:https://github.com/GridTools/gt4py/pull/1544
   daily-ci:
     strategy:
       matrix:
