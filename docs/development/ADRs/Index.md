@@ -31,6 +31,7 @@ Writing a new ADR is simple:
 
 - [0003 - Iterator View Tuple Support for Fields](0003-Iterator_View_Tuple_Support_for_Fields.md)
 - [0004 - Lifted Stencils with Tuple Return](0004-Lifted_Stencils_with_Tuple_Return.md)
+- [0014 - No Generic Tuples in Iterator IR](0014-No_Generic_Tuples_in_Iterator_IR.md)
 
 ### Embedded Execution
 
