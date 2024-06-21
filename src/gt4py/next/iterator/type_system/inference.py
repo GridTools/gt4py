@@ -11,6 +11,9 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+
+from __future__ import annotations
+
 import collections.abc
 import copy
 import dataclasses
@@ -99,7 +102,7 @@ def _set_node_type(node: itir.Node, type_: ts.TypeSpec) -> None:
     node.type = type_
 
 
-def on_inferred(callback: Callable, *args: Union[ts.TypeSpec, "ObservableTypeSynthesizer"]) -> None:
+def on_inferred(callback: Callable, *args: Union[ts.TypeSpec, ObservableTypeSynthesizer]) -> None:
     """
     Execute `callback` as soon as all `args` have a type.
     """
@@ -220,7 +223,7 @@ class ObservableTypeSynthesizer(type_synthesizer.TypeSynthesizer):
         self,
         *args: type_synthesizer.TypeOrTypeSynthesizer,
         offset_provider: common.OffsetProvider,
-    ) -> Union[ts.TypeSpec, "ObservableTypeSynthesizer"]:
+    ) -> Union[ts.TypeSpec, ObservableTypeSynthesizer]:
         assert all(
             isinstance(arg, (ts.TypeSpec, ObservableTypeSynthesizer)) for arg in args
         ), "ObservableTypeSynthesizer can only be used with arguments that are TypeSpec or ObservableTypeSynthesizer"
@@ -414,6 +417,8 @@ class ITIRTypeInference(eve.NodeTranslator):
             elif isinstance(result, ObservableTypeSynthesizer) or result is None:
                 pass
             elif isinstance(result, type_synthesizer.TypeSynthesizer):
+                # this case occurs either when a Lambda node is visited or TypeSynthesizer returns
+                # another type synthesizer.
                 return ObservableTypeSynthesizer(
                     node=node,
                     type_synthesizer=result,
@@ -579,17 +584,14 @@ class ITIRTypeInference(eve.NodeTranslator):
 
     def visit_Lambda(
         self, node: itir.Lambda | itir.FunctionDefinition, *, ctx: dict[str, ts.TypeSpec]
-    ) -> ObservableTypeSynthesizer:
+    ) -> type_synthesizer.TypeSynthesizer:
+        @type_synthesizer.TypeSynthesizer
         def fun(*args):
             return self.visit(
                 node.expr, ctx=ctx | {p.id: a for p, a in zip(node.params, args, strict=True)}
             )
 
-        return ObservableTypeSynthesizer(
-            node=node,
-            type_synthesizer=type_synthesizer.TypeSynthesizer(fun),
-            store_inferred_type_in_node=True,
-        )
+        return fun
 
     visit_FunctionDefinition = visit_Lambda
 

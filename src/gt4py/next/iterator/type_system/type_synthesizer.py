@@ -11,43 +11,17 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+
+from __future__ import annotations
+
 import dataclasses
 import inspect
 
-from gt4py.eve import extended_typing as xtyping
-from gt4py.eve.extended_typing import Iterable, Optional, Union
+from gt4py.eve.extended_typing import Callable, Iterable, Optional, Union
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_info, type_specifications as ts
-
-
-TypeOrTypeSynthesizer = Union[ts.TypeSpec, "TypeSynthesizer"]
-
-#: dictionary from name of a builtin to its type synthesizer
-builtin_type_synthesizers: dict[str, "TypeSynthesizer"] = {}
-
-
-def _is_derefable_iterator_type(it_type: it_ts.IteratorType) -> bool:
-    # for an iterator with unknown position we can not tell if it is derefable, we just assume
-    #  yes here.
-    if it_type.position_dims == "unknown":
-        return True
-    return set(it_type.defined_dims).issubset(set(it_type.position_dims))
-
-
-def _register_builtin_type_synthesizer(
-    synthesizer: Optional[xtyping.Callable[..., TypeOrTypeSynthesizer]] = None,
-    *,
-    fun_names: Optional[Iterable[str]] = None,
-):
-    def wrapper(synthesizer):
-        # store names in function object for better debuggability
-        synthesizer.fun_names = fun_names or [synthesizer.__name__]
-        for f in synthesizer.fun_names:
-            builtin_type_synthesizers[f] = TypeSynthesizer(type_synthesizer=synthesizer)
-
-    return wrapper(synthesizer) if synthesizer else wrapper
 
 
 @dataclasses.dataclass
@@ -60,9 +34,15 @@ class TypeSynthesizer:
 
     In addition to the derivation of the return type a function type-synthesizer can perform checks
     on the argument types.
+
+    The motivation for this class instead of a simple callable is to allow
+     - isinstance checks to determine if an object is actually (meant to be) a type
+       synthesizer and not just any callable.
+     - writing simple type synthesizers without cluttering the signature with the additional
+       offset_provider argument that is only needed by some.
     """
 
-    type_synthesizer: xtyping.Callable[..., TypeOrTypeSynthesizer]
+    type_synthesizer: Callable[..., TypeOrTypeSynthesizer]
 
     def __post_init__(self):
         if "offset_provider" not in inspect.signature(self.type_synthesizer).parameters:
@@ -73,6 +53,34 @@ class TypeSynthesizer:
         self, *args: TypeOrTypeSynthesizer, offset_provider: common.OffsetProvider
     ) -> TypeOrTypeSynthesizer:
         return self.type_synthesizer(*args, offset_provider=offset_provider)
+
+
+TypeOrTypeSynthesizer = Union[ts.TypeSpec, TypeSynthesizer]
+
+#: dictionary from name of a builtin to its type synthesizer
+builtin_type_synthesizers: dict[str, TypeSynthesizer] = {}
+
+
+def _is_derefable_iterator_type(it_type: it_ts.IteratorType, *, default: bool = True) -> bool:
+    # for an iterator with unknown position we can not tell if it is derefable,
+    # so we just return the default
+    if it_type.position_dims == "unknown":
+        return default
+    return set(it_type.defined_dims).issubset(set(it_type.position_dims))
+
+
+def _register_builtin_type_synthesizer(
+    synthesizer: Optional[Callable[..., TypeOrTypeSynthesizer]] = None,
+    *,
+    fun_names: Optional[Iterable[str]] = None,
+):
+    def wrapper(synthesizer: Callable[..., TypeOrTypeSynthesizer]) -> None:
+        # store names in function object for better debuggability
+        synthesizer.fun_names = fun_names or [synthesizer.__name__]  # type: ignore[attr-defined]
+        for f in synthesizer.fun_names:  # type: ignore[attr-defined]
+            builtin_type_synthesizers[f] = TypeSynthesizer(type_synthesizer=synthesizer)
+
+    return wrapper(synthesizer) if synthesizer else wrapper
 
 
 @_register_builtin_type_synthesizer(
@@ -191,17 +199,16 @@ def lift(stencil: TypeSynthesizer) -> TypeSynthesizer:
     def apply_lift(
         *its: it_ts.IteratorType, offset_provider: common.OffsetProvider
     ) -> it_ts.IteratorType:
-        stencil_args = []
-        for it in its:
-            assert isinstance(it, it_ts.IteratorType)
-            stencil_args.append(
-                it_ts.IteratorType(
-                    # the positions are only known when we deref
-                    position_dims="unknown",
-                    defined_dims=it.defined_dims,
-                    element_type=it.element_type,
-                )
+        assert all(isinstance(it, it_ts.IteratorType) for it in its)
+        stencil_args = [
+            it_ts.IteratorType(
+                # the positions are only known when we deref
+                position_dims="unknown",
+                defined_dims=it.defined_dims,
+                element_type=it.element_type,
             )
+            for it in its
+        ]
         stencil_return_type = stencil(*stencil_args, offset_provider=offset_provider)
         assert isinstance(stencil_return_type, ts.DataType)
 
