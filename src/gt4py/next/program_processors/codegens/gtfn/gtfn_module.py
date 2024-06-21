@@ -225,6 +225,7 @@ class GTFNTranslationStep(
         offset_provider: dict[str, Connectivity | Dimension],
         column_axis: Optional[common.Dimension],
     ) -> str:
+        # TODO(tehrengruber): write a propery caching mechanism
         program_hash = utils.content_hash(
             (
                 program,
