@@ -14,14 +14,13 @@
 
 """Generic interface and implementations of run-time type validation for arbitrary values."""
 
-
 from __future__ import annotations
 
 import abc
 import collections.abc
 import dataclasses
 import functools
-import typing as _typing
+import typing
 
 from . import exceptions, extended_typing as xtyping, utils
 from .extended_typing import (
@@ -79,11 +78,7 @@ class TypeValidator(Protocol):
 
 class FixedTypeValidator(Protocol):
     @abc.abstractmethod
-    def __call__(
-        self,
-        value: Any,
-        **kwargs: Any,
-    ) -> None:
+    def __call__(self, value: Any, **kwargs: Any) -> None:
         """Protocol for callables checking that ``value`` matches a fixed type_annotation.
 
         Arguments:
@@ -113,7 +108,7 @@ class TypeValidatorFactory(Protocol):
     ) -> FixedTypeValidator: ...
 
     @overload
-    def __call__(  # noqa: F811  # redefinion of unused member
+    def __call__(
         self,
         type_annotation: TypeAnnotation,
         name: Optional[str] = None,
@@ -125,7 +120,7 @@ class TypeValidatorFactory(Protocol):
     ) -> Optional[FixedTypeValidator]: ...
 
     @abc.abstractmethod
-    def __call__(  # noqa: F811  # redefinion of unused member
+    def __call__(
         self,
         type_annotation: TypeAnnotation,
         name: Optional[str] = None,
@@ -170,7 +165,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
     ) -> FixedTypeValidator: ...
 
     @overload
-    def __call__(  # noqa: F811  # redefinion of unused member
+    def __call__(
         self,
         type_annotation: TypeAnnotation,
         name: Optional[str] = None,
@@ -181,7 +176,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
         **kwargs: Any,
     ) -> Optional[FixedTypeValidator]: ...
 
-    def __call__(  # noqa: F811,C901  # redefinion of unused member / complex but well organized in cases
+    def __call__(
         self,
         type_annotation: TypeAnnotation,
         name: Optional[str] = None,
@@ -212,7 +207,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
                 else:
                     return self.make_is_instance_of(name, type_annotation)
 
-            if isinstance(type_annotation, _typing.TypeVar):
+            if isinstance(type_annotation, typing.TypeVar):
                 if type_annotation.__bound__:
                     return self.make_is_instance_of(name, type_annotation.__bound__)
                 else:
@@ -230,7 +225,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
             origin_type = xtyping.get_origin(type_annotation)
             type_args = xtyping.get_args(type_annotation)
 
-            if origin_type is Literal:
+            if origin_type in {typing.Literal, xtyping.Literal}:
                 if len(type_args) == 1:
                     return self.make_is_literal(name, type_args[0])
                 else:
@@ -486,8 +481,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
 
 
 simple_type_validator_factory: Final = cast(
-    TypeValidatorFactory,
-    utils.optional_lru_cache(SimpleTypeValidatorFactory(), typed=True),
+    TypeValidatorFactory, utils.optional_lru_cache(SimpleTypeValidatorFactory(), typed=True)
 )
 """Public (with optional cache) entry point for :class:`SimpleTypeValidatorFactory`."""
 

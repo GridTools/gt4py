@@ -19,20 +19,19 @@ import functools
 import hashlib
 import os
 import pickle
-import warnings
 from typing import Any, Callable, Final, Optional
 
 import factory
 import numpy as np
 
+import gt4py.next.config
 from gt4py._core import definitions as core_defs
 from gt4py.eve import codegen, trees, utils
 from gt4py.next import common
-import gt4py.next.config
-from gt4py.next.common import Connectivity, Dimension, NeighborTable
+from gt4py.next.common import Connectivity, Dimension
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.transforms import LiftMode, pass_manager
+from gt4py.next.iterator.transforms import LiftMode, fencil_to_program, global_tmps, pass_manager
 from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
 from gt4py.next.program_processors.codegens.gtfn.codegen import GTFNCodegen, GTFNIMCodegen
@@ -40,16 +39,19 @@ from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_to_gtfn_im_ir import GT
 from gt4py.next.program_processors.codegens.gtfn.itir_to_gtfn_ir import GTFN_lowering
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
+
 GENERATED_CONNECTIVITY_PARAM_PREFIX = "gt_conn_"
 
 
 def get_param_description(name: str, obj: Any) -> interface.Parameter:
     return interface.Parameter(name, type_translation.from_value(obj))
 
-def get_hash(obj: bytes):
+
+def get_hash(obj: bytes) -> str:
     m = hashlib.sha1()
     m.update(obj)
     return m.hexdigest()
+
 
 @dataclasses.dataclass(frozen=True)
 class GTFNTranslationStep(
@@ -140,8 +142,7 @@ class GTFNTranslationStep(
         return parameters, arg_exprs
 
     def _process_connectivity_args(
-        self,
-        offset_provider: dict[str, Connectivity | Dimension],
+        self, offset_provider: dict[str, Connectivity | Dimension]
     ) -> tuple[list[interface.Parameter], list[str]]:
         parameters: list[interface.Parameter] = []
         arg_exprs: list[str] = []
@@ -190,25 +191,13 @@ class GTFNTranslationStep(
         self,
         program: itir.FencilDefinition,
         offset_provider: dict[str, Connectivity | Dimension],
-        runtime_lift_mode: Optional[LiftMode],
-    ) -> itir.FencilDefinition:
-        # TODO(tehrengruber): Remove `lift_mode` from call interface. It has been implicitly added
-        #  to the interface of all (or at least all of concern) backends, but instead should be
-        #  configured in the backend itself (like it is here), until then we respect the argument
-        #  here and warn the user if it differs from the one configured.
-        lift_mode = runtime_lift_mode or self.lift_mode
-        if runtime_lift_mode and runtime_lift_mode != self.lift_mode:
-            warnings.warn(
-                f"GTFN Backend was configured for LiftMode `{str(self.lift_mode)}`, but "
-                f"overriden to be {str(runtime_lift_mode)} at runtime."
-            )
-
+    ) -> itir.FencilDefinition | global_tmps.FencilWithTemporaries:
         if not self.enable_itir_transforms:
             return program
 
         apply_common_transforms = functools.partial(
             pass_manager.apply_common_transforms,
-            lift_mode=lift_mode,
+            lift_mode=self.lift_mode,
             offset_provider=offset_provider,
             # sid::composite (via hymap) supports assigning from tuple with more elements to tuple with fewer elements
             unconditionally_collapse_tuples=True,
@@ -235,13 +224,14 @@ class GTFNTranslationStep(
         program: itir.FencilDefinition,
         offset_provider: dict[str, Connectivity | Dimension],
         column_axis: Optional[common.Dimension],
-        runtime_lift_mode: Optional[LiftMode] = None,
     ) -> str:
         program_hash = utils.content_hash(
-            (program,
-             sorted(offset_provider.items(), key=lambda el: el[0]),
-             column_axis,
-             runtime_lift_mode))
+            (
+                program,
+                sorted(offset_provider.items(), key=lambda el: el[0]),
+                column_axis,
+            )
+        )
 
         if not os.path.exists(gt4py.next.config.BUILD_CACHE_DIR):
             os.mkdir(gt4py.next.config.BUILD_CACHE_DIR)
@@ -252,11 +242,12 @@ class GTFNTranslationStep(
             with open(cache_path, "rb") as f:
                 return pickle.load(f)
 
-        new_program = self._preprocess_program(program, offset_provider, runtime_lift_mode)
+        new_program = self._preprocess_program(program, offset_provider)
+        program_itir = fencil_to_program.FencilToProgram().apply(
+            new_program
+        )  # TODO(havogt): should be removed after refactoring to combined IR
         gtfn_ir = GTFN_lowering.apply(
-            new_program,
-            offset_provider=offset_provider,
-            column_axis=column_axis,
+            program_itir, offset_provider=offset_provider, column_axis=column_axis
         )
 
         if self.use_imperative_backend:
@@ -271,8 +262,7 @@ class GTFNTranslationStep(
         return result
 
     def __call__(
-        self,
-        inp: stages.ProgramCall,
+        self, inp: stages.ProgramCall
     ) -> stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings]:
         """Generate GTFN C++ code from the ITIR definition."""
         program: itir.FencilDefinition = inp.program
@@ -304,7 +294,6 @@ class GTFNTranslationStep(
             program,
             inp.kwargs["offset_provider"],
             inp.kwargs.get("column_axis", None),
-            inp.kwargs.get("lift_mode", None),
         )
         source_code = interface.format_source(
             self._language_settings(),

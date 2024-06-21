@@ -16,9 +16,9 @@ import pytest
 from numpy import int32, int64
 
 from gt4py import next as gtx
-from gt4py.next import common
+from gt4py.next import backend, common
 from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms
-from gt4py.next.program_processors import otf_compile_executor
+from gt4py.next.program_processors import modular_executor
 from gt4py.next.program_processors.runners.gtfn import run_gtfn_with_temporaries
 
 from next_tests.integration_tests import cases
@@ -38,8 +38,8 @@ from next_tests.toy_connectivity import Cell, Edge
 
 @pytest.fixture
 def run_gtfn_with_temporaries_and_symbolic_sizes():
-    return otf_compile_executor.OTFBackend(
-        executor=otf_compile_executor.OTFCompileExecutor(
+    return backend.Backend(
+        executor=modular_executor.ModularExecutor(
             name="run_gtfn_with_temporaries_and_sizes",
             otf_workflow=run_gtfn_with_temporaries.executor.otf_workflow.replace(
                 translation=run_gtfn_with_temporaries.executor.otf_workflow.translation.replace(
@@ -47,8 +47,8 @@ def run_gtfn_with_temporaries_and_symbolic_sizes():
                         "Cell": "num_cells",
                         "Edge": "num_edges",
                         "Vertex": "num_vertices",
-                    },
-                ),
+                    }
+                )
             ),
         ),
         allocator=run_gtfn_with_temporaries.allocator,
@@ -64,11 +64,7 @@ def testee():
 
     @gtx.program
     def prog(
-        a: cases.VField,
-        out: cases.EField,
-        num_vertices: int32,
-        num_edges: int32,
-        num_cells: int32,
+        a: cases.VField, out: cases.EField, num_vertices: int32, num_edges: int32, num_cells: int32
     ):
         testee_op(a, out=out)
 
@@ -77,7 +73,7 @@ def testee():
 
 def test_verification(testee, run_gtfn_with_temporaries_and_symbolic_sizes, mesh_descriptor):
     unstructured_case = Case(
-        run_gtfn_with_temporaries_and_symbolic_sizes.executor,
+        run_gtfn_with_temporaries_and_symbolic_sizes,
         offset_provider=mesh_descriptor.offset_provider,
         default_sizes={
             Vertex: mesh_descriptor.num_vertices,

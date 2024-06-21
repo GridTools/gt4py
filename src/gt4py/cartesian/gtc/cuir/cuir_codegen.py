@@ -127,10 +127,7 @@ class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     Cast = as_fmt("static_cast<{dtype}>({expr})")
 
-    BUILTIN_LITERAL_TO_CODE = {
-        BuiltInLiteral.TRUE: "true",
-        BuiltInLiteral.FALSE: "false",
-    }
+    BUILTIN_LITERAL_TO_CODE = {BuiltInLiteral.TRUE: "true", BuiltInLiteral.FALSE: "false"}
 
     def visit_BuiltInLiteral(self, builtin: BuiltInLiteral, **kwargs: Any) -> str:
         try:

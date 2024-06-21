@@ -49,10 +49,8 @@ except ImportError:
 
 
 _NDBuffer: TypeAlias = Union[
-    # xtyping.Buffer,  # TODO: add once we update typing_extensions
-    xtyping.ArrayInterface,
-    xtyping.CUDAArrayInterface,
-    xtyping.DLPackBuffer,
+    # TODO: add `xtyping.Buffer` once we update typing_extensions
+    xtyping.ArrayInterface, xtyping.CUDAArrayInterface, xtyping.DLPackBuffer
 ]
 
 #: Tuple of positive integers encoding a permutation of the dimensions, such that
@@ -350,11 +348,7 @@ class NDArrayBufferAllocator(_BaseNDArrayBufferAllocator[core_defs.DeviceTypeT])
     _device_type: core_defs.DeviceTypeT
     _array_ns: ValidNumPyLikeAllocationNS
 
-    def __init__(
-        self,
-        device_type: core_defs.DeviceTypeT,
-        array_ns: ValidNumPyLikeAllocationNS,
-    ):
+    def __init__(self, device_type: core_defs.DeviceTypeT, array_ns: ValidNumPyLikeAllocationNS):
         object.__setattr__(self, "_device_type", device_type)
         object.__setattr__(self, "_array_ns", array_ns)
 

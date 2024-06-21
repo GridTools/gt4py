@@ -19,14 +19,10 @@ from dace.sdfg.state import LoopRegion
 
 import gt4py.eve as eve
 from gt4py.next import Dimension, DimensionKind, type_inference as next_typing
-from gt4py.next.common import NeighborTable
-from gt4py.next.iterator import (
-    ir as itir,
-    transforms as itir_transforms,
-    type_inference as itir_typing,
-)
+from gt4py.next.common import Connectivity
+from gt4py.next.iterator import ir as itir, type_inference as itir_typing
 from gt4py.next.iterator.ir import Expr, FunCall, Literal, Sym, SymRef
-from gt4py.next.type_system import type_specifications as ts, type_translation
+from gt4py.next.type_system import type_info, type_specifications as ts, type_translation as tt
 
 from .itir_to_tasklet import (
     Context,
@@ -43,15 +39,13 @@ from .utility import (
     as_dace_type,
     as_scalar_type,
     connectivity_identifier,
-    create_memlet_at,
-    create_memlet_full,
     dace_debuginfo,
-    filter_neighbor_tables,
+    filter_connectivities,
     flatten_list,
     get_sorted_dims,
+    get_used_connectivities,
     map_nested_sdfg_symbols,
     new_array_symbols,
-    unique_name,
     unique_var_name,
 )
 
@@ -69,7 +63,7 @@ def _get_scan_args(stencil: Expr) -> tuple[bool, Literal]:
     """
     stencil_fobj = cast(FunCall, stencil)
     is_forward = stencil_fobj.args[1]
-    assert isinstance(is_forward, Literal) and is_forward.type == "bool"
+    assert isinstance(is_forward, Literal) and type_info.is_logical(is_forward.type)
     init_carry = stencil_fobj.args[2]
     assert isinstance(init_carry, Literal)
     return is_forward.value == "True", init_carry
@@ -79,6 +73,7 @@ def _get_scan_dim(
     column_axis: Dimension,
     storage_types: dict[str, ts.TypeSpec],
     output: SymRef,
+    use_field_canonical_representation: bool,
 ) -> tuple[str, int, ts.ScalarType]:
     """
     Extract information about the scan dimension.
@@ -92,19 +87,19 @@ def _get_scan_dim(
             - scan_dim_dtype: data type along the scan dimension
     """
     output_type = cast(ts.FieldType, storage_types[output.id])
-    sorted_dims = [dim for _, dim in get_sorted_dims(output_type.dims)]
-    return (
-        column_axis.value,
-        sorted_dims.index(column_axis),
-        output_type.dtype,
-    )
+    sorted_dims = [
+        dim
+        for _, dim in (
+            get_sorted_dims(output_type.dims)
+            if use_field_canonical_representation
+            else enumerate(output_type.dims)
+        )
+    ]
+    return (column_axis.value, sorted_dims.index(column_axis), output_type.dtype)
 
 
 def _make_array_shape_and_strides(
-    name: str,
-    dims: Sequence[Dimension],
-    neighbor_tables: Mapping[str, NeighborTable],
-    sort_dims: bool,
+    name: str, dims: Sequence[Dimension], offset_provider: Mapping[str, Any], sort_dims: bool
 ) -> tuple[list[dace.symbol], list[dace.symbol]]:
     """
     Parse field dimensions and allocate symbols for array shape and strides.
@@ -118,7 +113,8 @@ def _make_array_shape_and_strides(
         The output tuple fields are arrays of dace symbolic expressions.
     """
     dtype = dace.int32
-    sorted_dims = get_sorted_dims(dims) if sort_dims else enumerate(dims)
+    sorted_dims = get_sorted_dims(dims) if sort_dims else list(enumerate(dims))
+    neighbor_tables = filter_connectivities(offset_provider)
     shape = [
         (
             neighbor_tables[dim.value].max_neighbors
@@ -128,7 +124,7 @@ def _make_array_shape_and_strides(
         )
         for i, dim in sorted_dims
     ]
-    strides = [dace.symbol(unique_name(f"{name}_stride{i}"), dtype) for i, _ in sorted_dims]
+    strides = [dace.symbol(f"__{name}_stride_{i}", dtype) for i, _ in sorted_dims]
     return shape, strides
 
 
@@ -157,12 +153,14 @@ class ItirToSDFG(eve.NodeVisitor):
     offset_provider: dict[str, Any]
     node_types: dict[int, next_typing.Type]
     unique_id: int
+    use_field_canonical_representation: bool
 
     def __init__(
         self,
         param_types: list[ts.TypeSpec],
-        offset_provider: dict[str, NeighborTable],
-        tmps: list[itir_transforms.global_tmps.Temporary],
+        offset_provider: dict[str, Connectivity | Dimension],
+        tmps: list[itir.Temporary],
+        use_field_canonical_representation: bool,
         column_axis: Optional[Dimension] = None,
     ):
         self.param_types = param_types
@@ -170,26 +168,15 @@ class ItirToSDFG(eve.NodeVisitor):
         self.offset_provider = offset_provider
         self.storage_types = {}
         self.tmps = tmps
+        self.use_field_canonical_representation = use_field_canonical_representation
 
-    def add_storage(
-        self,
-        sdfg: dace.SDFG,
-        name: str,
-        type_: ts.TypeSpec,
-        neighbor_tables: Mapping[str, NeighborTable],
-        sort_dimensions: bool = True,
-    ):
+    def add_storage(self, sdfg: dace.SDFG, name: str, type_: ts.TypeSpec, sort_dimensions: bool):
         if isinstance(type_, ts.FieldType):
             shape, strides = _make_array_shape_and_strides(
-                name, type_.dims, neighbor_tables, sort_dimensions
+                name, type_.dims, self.offset_provider, sort_dimensions
             )
             dtype = as_dace_type(type_.dtype)
-            sdfg.add_array(
-                name,
-                shape=shape,
-                strides=strides,
-                dtype=dtype,
-            )
+            sdfg.add_array(name, shape=shape, strides=strides, dtype=dtype)
 
         elif isinstance(type_, ts.ScalarType):
             dtype = as_dace_type(type_)
@@ -253,10 +240,7 @@ class ItirToSDFG(eve.NodeVisitor):
 
             # Loop through all dimensions to visit the symbolic expressions for array shape and offset.
             # These expressions are later mapped to interstate symbols.
-            for (_, (begin, end)), shape_sym in zip(
-                tmp_domain,
-                tmp_array.shape,
-            ):
+            for (_, (begin, end)), shape_sym in zip(tmp_domain, tmp_array.shape):
                 """
                 The temporary field has a dimension range defined by `begin` and `end` values.
                 Therefore, the actual size is given by the difference `end.value - begin.value`.
@@ -266,10 +250,21 @@ class ItirToSDFG(eve.NodeVisitor):
                 of the array.
                 """
                 if not (isinstance(begin, SymbolExpr) and begin.value == "0"):
-                    warnings.warn(f"Domain start offset for temporary {tmp_name} is ignored.")
+                    warnings.warn(
+                        f"Domain start offset for temporary {tmp_name} is ignored.", stacklevel=2
+                    )
                 tmp_symbols[str(shape_sym)] = end.value
 
         return tmp_symbols
+
+    def create_memlet_at(self, field_name: str, index: dict[str, str]):
+        field_type = cast(ts.FieldType, self.storage_types[field_name])
+        if self.use_field_canonical_representation:
+            field_index = [index[dim.value] for _, dim in get_sorted_dims(field_type.dims)]
+        else:
+            field_index = [index[dim.value] for dim in field_type.dims]
+        subset = ", ".join(field_index)
+        return dace.Memlet(data=field_name, subset=subset)
 
     def get_output_nodes(
         self, closure: itir.StencilClosure, sdfg: dace.SDFG, state: dace.SDFGState
@@ -279,7 +274,9 @@ class ItirToSDFG(eve.NodeVisitor):
         output_symbols_pass.visit(closure.output)
         # Visit output node again to generate the corresponding tasklet
         context = Context(sdfg, state, output_symbols_pass.symbol_refs)
-        translator = PythonTaskletCodegen(self.offset_provider, context, self.node_types)
+        translator = PythonTaskletCodegen(
+            self.offset_provider, context, self.node_types, self.use_field_canonical_representation
+        )
         output_nodes = flatten_list(translator.visit(closure.output))
         return {node.value.data: node.value for node in output_nodes}
 
@@ -290,39 +287,33 @@ class ItirToSDFG(eve.NodeVisitor):
         self.node_types = itir_typing.infer_all(node)
 
         # Filter neighbor tables from offset providers.
-        neighbor_tables = filter_neighbor_tables(self.offset_provider)
+        neighbor_tables = get_used_connectivities(node, self.offset_provider)
 
         # Add program parameters as SDFG storages.
         for param, type_ in zip(node.params, self.param_types):
-            self.add_storage(program_sdfg, str(param.id), type_, neighbor_tables)
+            self.add_storage(
+                program_sdfg, str(param.id), type_, self.use_field_canonical_representation
+            )
 
         if self.tmps:
             tmp_symbols = self.add_storage_for_temporaries(node.params, entry_state, program_sdfg)
             # on the first interstate edge define symbols for shape and offsets of temporary arrays
             last_state = program_sdfg.add_state("init_symbols_for_temporaries")
             program_sdfg.add_edge(
-                entry_state,
-                last_state,
-                dace.InterstateEdge(
-                    assignments=tmp_symbols,
-                ),
+                entry_state, last_state, dace.InterstateEdge(assignments=tmp_symbols)
             )
         else:
             last_state = entry_state
 
         # Add connectivities as SDFG storages.
         for offset, offset_provider in neighbor_tables.items():
-            scalar_kind = type_translation.get_scalar_kind(offset_provider.table.dtype)
+            scalar_kind = tt.get_scalar_kind(offset_provider.index_type)
             local_dim = Dimension(offset, kind=DimensionKind.LOCAL)
             type_ = ts.FieldType(
                 [offset_provider.origin_axis, local_dim], ts.ScalarType(scalar_kind)
             )
             self.add_storage(
-                program_sdfg,
-                connectivity_identifier(offset),
-                type_,
-                neighbor_tables,
-                sort_dimensions=False,
+                program_sdfg, connectivity_identifier(offset), type_, sort_dimensions=False
             )
 
         # Create a nested SDFG for all stencil closures.
@@ -337,10 +328,12 @@ class ItirToSDFG(eve.NodeVisitor):
 
             # Create memlets to transfer the program parameters
             input_mapping = {
-                name: create_memlet_full(name, program_sdfg.arrays[name]) for name in input_names
+                name: dace.Memlet.from_array(name, program_sdfg.arrays[name])
+                for name in input_names
             }
             output_mapping = {
-                name: create_memlet_full(name, program_sdfg.arrays[name]) for name in output_names
+                name: dace.Memlet.from_array(name, program_sdfg.arrays[name])
+                for name in output_names
             }
 
             symbol_mapping = map_nested_sdfg_symbols(program_sdfg, closure_sdfg, input_mapping)
@@ -384,7 +377,7 @@ class ItirToSDFG(eve.NodeVisitor):
         closure_init_state = closure_sdfg.add_state_before(closure_state, "closure_init", True)
 
         input_names = [str(inp.id) for inp in node.inputs]
-        neighbor_tables = filter_neighbor_tables(self.offset_provider)
+        neighbor_tables = get_used_connectivities(node, self.offset_provider)
         connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
 
         output_nodes = self.get_output_nodes(node, closure_sdfg, closure_state)
@@ -408,7 +401,7 @@ class ItirToSDFG(eve.NodeVisitor):
                 closure_init_state.add_nedge(
                     closure_init_state.add_access(name, debuginfo=closure_sdfg.debuginfo),
                     closure_init_state.add_access(transient_name, debuginfo=closure_sdfg.debuginfo),
-                    create_memlet_full(name, closure_sdfg.arrays[name]),
+                    dace.Memlet.from_array(name, closure_sdfg.arrays[name]),
                 )
                 input_transients_mapping[name] = transient_name
             elif isinstance(self.storage_types[name], ts.FieldType):
@@ -474,7 +467,7 @@ class ItirToSDFG(eve.NodeVisitor):
             for input_name in input_names
         ]
         input_memlets = [
-            create_memlet_full(name, closure_sdfg.arrays[name])
+            dace.Memlet.from_array(name, closure_sdfg.arrays[name])
             for name in [*input_local_names, *connectivity_names]
         ]
 
@@ -494,19 +487,15 @@ class ItirToSDFG(eve.NodeVisitor):
             _, (scan_lb, scan_ub) = closure_domain[scan_dim_index]
             output_subset = f"{scan_lb.value}:{scan_ub.value}"
 
-            output_memlets = [
-                create_memlet_at(
-                    output_name,
-                    tuple(
-                        (
-                            f"i_{dim}"
-                            if f"i_{dim}" in map_ranges
-                            else f"0:{closure_sdfg.arrays[output_name].shape[scan_dim_index]}"
-                        )
-                        for dim, _ in closure_domain
-                    ),
+            domain_subset = {
+                dim: (
+                    f"i_{dim}"
+                    if f"i_{dim}" in map_ranges
+                    else f"0:{closure_sdfg.arrays[output_name].shape[scan_dim_index]}"
                 )
-            ]
+                for dim, _ in closure_domain
+            }
+            output_memlets = [self.create_memlet_at(output_name, domain_subset)]
         else:
             nsdfg, map_ranges, results = self._visit_parallel_stencil_closure(
                 node, closure_sdfg.arrays, closure_domain
@@ -515,7 +504,7 @@ class ItirToSDFG(eve.NodeVisitor):
             output_subset = "0"
 
             output_memlets = [
-                create_memlet_at(output_name, tuple(idx for idx in map_ranges.keys()))
+                self.create_memlet_at(output_name, {dim: f"i_{dim}" for dim, _ in closure_domain})
                 for output_name in output_connectors_mapping.values()
             ]
 
@@ -576,10 +565,11 @@ class ItirToSDFG(eve.NodeVisitor):
             self.column_axis,
             self.storage_types,
             node.output,
+            self.use_field_canonical_representation,
         )
 
         assert isinstance(node.output, SymRef)
-        neighbor_tables = filter_neighbor_tables(self.offset_provider)
+        neighbor_tables = get_used_connectivities(node, self.offset_provider)
         input_names = [str(inp.id) for inp in node.inputs]
         connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
 
@@ -681,16 +671,17 @@ class ItirToSDFG(eve.NodeVisitor):
             input_arrays,
             connectivity_arrays,
             self.node_types,
+            self.use_field_canonical_representation,
         )
 
         lambda_input_names = [name for name, _ in input_arrays]
         lambda_output_names = [connector.value.data for connector in lambda_outputs]
 
         input_memlets = [
-            create_memlet_full(name, scan_sdfg.arrays[name]) for name in lambda_input_names
+            dace.Memlet.from_array(name, scan_sdfg.arrays[name]) for name in lambda_input_names
         ]
         connectivity_memlets = [
-            create_memlet_full(name, scan_sdfg.arrays[name]) for name in connectivity_names
+            dace.Memlet.from_array(name, scan_sdfg.arrays[name]) for name in connectivity_names
         ]
         input_mapping = {param: arg for param, arg in zip(lambda_input_names, input_memlets)}
         connectivity_mapping = {
@@ -741,7 +732,7 @@ class ItirToSDFG(eve.NodeVisitor):
             tuple[str, tuple[ValueExpr | SymbolExpr, ValueExpr | SymbolExpr]], ...
         ],
     ) -> tuple[dace.SDFG, dict[str, str | dace.subsets.Subset], list[str]]:
-        neighbor_tables = filter_neighbor_tables(self.offset_provider)
+        neighbor_tables = get_used_connectivities(node, self.offset_provider)
         input_names = [str(inp.id) for inp in node.inputs]
         connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
 
@@ -765,6 +756,7 @@ class ItirToSDFG(eve.NodeVisitor):
             input_arrays,
             connectivity_arrays,
             self.node_types,
+            self.use_field_canonical_representation,
         )
 
         return context.body, map_ranges, [r.value.data for r in results]
@@ -785,12 +777,17 @@ class ItirToSDFG(eve.NodeVisitor):
             assert isinstance(dimension, itir.AxisLiteral)
             lower_bound = named_range.args[1]
             upper_bound = named_range.args[2]
-            translator = PythonTaskletCodegen(self.offset_provider, context, self.node_types)
+            translator = PythonTaskletCodegen(
+                self.offset_provider,
+                context,
+                self.node_types,
+                self.use_field_canonical_representation,
+            )
             lb = translator.visit(lower_bound)[0]
             ub = translator.visit(upper_bound)[0]
             bounds.append((dimension.value, (lb, ub)))
 
-        return tuple(sorted(bounds, key=lambda item: item[0]))
+        return tuple(bounds)
 
     @staticmethod
     def _check_shift_offsets_are_literals(node: itir.StencilClosure):

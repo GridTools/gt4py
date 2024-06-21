@@ -28,13 +28,18 @@ import gt4py.next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import Self
-from gt4py.next import allocators as next_allocators, common, constructors, field_utils
+from gt4py.next import (
+    allocators as next_allocators,
+    backend as next_backend,
+    common,
+    constructors,
+    field_utils,
+)
 from gt4py.next.ffront import decorator
-from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 from next_tests import definitions as test_definitions
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (  # noqa: F401 #  fixture and aliases
+from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (  # noqa: F401 [unused-import]
     C2E,
     C2V,
     E2V,
@@ -139,10 +144,7 @@ class ConstInitializer(DataInitializer):
         dtype: np.typing.DTypeLike,
     ) -> FieldValue:
         return constructors.full(
-            domain=common.domain(sizes),
-            fill_value=self.value,
-            dtype=dtype,
-            allocator=allocator,
+            domain=common.domain(sizes), fill_value=self.value, dtype=dtype, allocator=allocator
         )
 
 
@@ -417,13 +419,7 @@ def verify(
     Else, ``inout`` will not be passed and compared to ``ref``.
     """
     if out:
-        run(
-            case,
-            fieldview_prog,
-            *args,
-            out=out,
-            offset_provider=offset_provider,
-        )
+        run(case, fieldview_prog, *args, out=out, offset_provider=offset_provider)
     else:
         run(case, fieldview_prog, *args, offset_provider=offset_provider)
 
@@ -460,7 +456,7 @@ def verify_with_default_data(
             ``comparison(ref, <out | inout>)`` and should return a boolean.
     """
     inps, kwfields = get_default_data(case, fieldop)
-    ref_args = tuple(i.asnumpy() if common.is_field(i) else i for i in inps)
+    ref_args = tuple(i.asnumpy() if isinstance(i, common.Field) else i for i in inps)
     verify(
         case,
         fieldop,
@@ -473,11 +469,9 @@ def verify_with_default_data(
 
 
 @pytest.fixture
-def cartesian_case(
-    exec_alloc_descriptor: test_definitions.ExecutionAndAllocatorDescriptor,  # noqa: F811 # fixtures
-):
+def cartesian_case(exec_alloc_descriptor: test_definitions.ExecutionAndAllocatorDescriptor):
     yield Case(
-        exec_alloc_descriptor.executor,
+        exec_alloc_descriptor if exec_alloc_descriptor.executor else None,
         offset_provider={"Ioff": IDim, "Joff": JDim, "Koff": KDim},
         default_sizes={IDim: 10, JDim: 10, KDim: 10},
         grid_type=common.GridType.CARTESIAN,
@@ -487,11 +481,10 @@ def cartesian_case(
 
 @pytest.fixture
 def unstructured_case(
-    mesh_descriptor,  # noqa: F811 # fixtures
-    exec_alloc_descriptor: test_definitions.ExecutionAndAllocatorDescriptor,  # noqa: F811 # fixtures
+    mesh_descriptor, exec_alloc_descriptor: test_definitions.ExecutionAndAllocatorDescriptor
 ):
     yield Case(
-        exec_alloc_descriptor.executor,
+        exec_alloc_descriptor if exec_alloc_descriptor.executor else None,
         offset_provider=mesh_descriptor.offset_provider,
         default_sizes={
             Vertex: mesh_descriptor.num_vertices,
@@ -563,8 +556,7 @@ def get_param_size(param_type: ts.TypeSpec, sizes: dict[gtx.Dimension, int]) -> 
 
 
 def extend_sizes(
-    sizes: dict[gtx.Dimension, int],
-    extend: Optional[dict[gtx.Dimension, tuple[int, int]]] = None,
+    sizes: dict[gtx.Dimension, int], extend: Optional[dict[gtx.Dimension, tuple[int, int]]] = None
 ) -> dict[gtx.Dimension, int]:
     """Calculate the sizes per dimension given a set of extensions."""
     sizes = sizes.copy()
@@ -575,8 +567,7 @@ def extend_sizes(
 
 
 def get_default_data(
-    case: Case,
-    fieldview_prog: decorator.FieldOperator | decorator.Program,
+    case: Case, fieldview_prog: decorator.FieldOperator | decorator.Program
 ) -> tuple[tuple[gtx.Field | ScalarValue | tuple, ...], dict[str, gtx.Field]]:
     """
     Allocate default data for a fieldview code object given a test case.
@@ -601,7 +592,7 @@ def get_default_data(
 class Case:
     """Parametrizable components for single feature integration tests."""
 
-    executor: Optional[ppi.ProgramProcessor]
+    executor: Optional[next_backend.Backend]
     offset_provider: dict[str, common.Connectivity | gtx.Dimension]
     default_sizes: dict[gtx.Dimension, int]
     grid_type: common.GridType

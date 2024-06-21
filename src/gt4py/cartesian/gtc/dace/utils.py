@@ -100,13 +100,7 @@ class AccessInfoCollector(eve.NodeVisitor):
         return ctx.access_infos
 
     def visit_VerticalLoopSection(
-        self,
-        node: oir.VerticalLoopSection,
-        *,
-        block_extents,
-        ctx,
-        grid_subset=None,
-        **kwargs: Any,
+        self, node: oir.VerticalLoopSection, *, block_extents, ctx, grid_subset=None, **kwargs: Any
     ) -> Dict[str, "dcir.FieldAccessInfo"]:
         inner_ctx = self.Context(axes=ctx.axes)
 
@@ -419,7 +413,7 @@ def flatten_list(list_or_node: Union[List[Any], eve.Node]):
 
 
 def collect_toplevel_computation_nodes(
-    list_or_node: Union[List[Any], eve.Node]
+    list_or_node: Union[List[Any], eve.Node],
 ) -> List["dcir.ComputationNode"]:
     class ComputationNodeCollector(eve.NodeVisitor):
         def visit_ComputationNode(self, node: dcir.ComputationNode, *, collection: List):
@@ -431,7 +425,7 @@ def collect_toplevel_computation_nodes(
 
 
 def collect_toplevel_iteration_nodes(
-    list_or_node: Union[List[Any], eve.Node]
+    list_or_node: Union[List[Any], eve.Node],
 ) -> List["dcir.IterationNode"]:
     class IterationNodeCollector(eve.NodeVisitor):
         def visit_IterationNode(self, node: dcir.IterationNode, *, collection: List):

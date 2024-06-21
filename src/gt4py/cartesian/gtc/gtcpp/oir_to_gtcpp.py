@@ -17,7 +17,7 @@ import itertools
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Set, Union, cast
 
-from devtools import debug  # noqa: F401
+from devtools import debug  # noqa: F401 [unused-import]
 from typing_extensions import Protocol
 
 from gt4py import eve
@@ -162,9 +162,7 @@ class OIRToGTCpp(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     def visit_BinaryOp(self, node: oir.BinaryOp, **kwargs: Any) -> gtcpp.BinaryOp:
         return gtcpp.BinaryOp(
-            op=node.op,
-            left=self.visit(node.left, **kwargs),
-            right=self.visit(node.right, **kwargs),
+            op=node.op, left=self.visit(node.left, **kwargs), right=self.visit(node.right, **kwargs)
         )
 
     def visit_TernaryOp(self, node: oir.TernaryOp, **kwargs: Any) -> gtcpp.TernaryOp:
@@ -329,11 +327,7 @@ class OIRToGTCpp(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         return gtcpp.GTStage(functor=functor_name, args=stage_args)
 
     def visit_VerticalLoop(
-        self,
-        node: oir.VerticalLoop,
-        *,
-        comp_ctx: GTComputationContext,
-        **kwargs: Any,
+        self, node: oir.VerticalLoop, *, comp_ctx: GTComputationContext, **kwargs: Any
     ) -> gtcpp.GTMultiStage:
         # the following visit assumes that temporaries are already available in comp_ctx
         stages = list(

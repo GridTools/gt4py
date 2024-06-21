@@ -30,7 +30,7 @@ from cartesian_tests.utils import OriginWrapper
 
 
 dace = pytest.importorskip("dace")
-from gt4py.cartesian.backend.dace_lazy_stencil import (  # noqa: E402 (needs to be guarded by above importorskip)
+from gt4py.cartesian.backend.dace_lazy_stencil import (  # noqa: E402 [import-shadowed-by-loop-var]  'importorskip' is needed
     DaCeLazyStencil,
 )
 
@@ -69,14 +69,13 @@ def tuple_st(min_value, max_value):
 
 
 @pytest.mark.parametrize(
-    "backend",
-    ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])],
+    "backend", ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])]
 )
 def test_basic(decorator, backend):
     @decorator(backend=backend)
     def defn(outp: gtscript.Field[np.float64], par: np.float64):
         with computation(PARALLEL), interval(...):
-            outp = par  # noqa F841: local variable 'outp' is assigned to but never used
+            outp = par  # noqa: F841 [unused-variable]
 
     outp = OriginWrapper(
         array=gt_storage.zeros(
@@ -105,7 +104,7 @@ def test_origin_offsetting_frozen(domain, outp_origin):
     @gtscript.stencil(backend=backend)
     def dace_stencil(inp: gtscript.Field[np.float64], outp: gtscript.Field[np.float64]):
         with computation(PARALLEL), interval(...):
-            outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
+            outp = inp  # noqa: F841 [unused-variable]
 
     frozen_stencil = dace_stencil.freeze(
         domain=domain, origin={"inp": (0, 0, 0), "outp": outp_origin}
@@ -156,7 +155,7 @@ def test_origin_offsetting_nofrozen(domain, outp_origin):
     @gtscript.stencil(backend=backend)
     def dace_stencil(inp: gtscript.Field[np.float64], outp: gtscript.Field[np.float64]):
         with computation(PARALLEL), interval(...):
-            outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
+            outp = inp  # noqa: F841 [unused-variable]
 
     inp = OriginWrapper(
         array=gt_storage.full(
@@ -204,7 +203,7 @@ def test_origin_offsetting_nofrozen_default_origin(domain, outp_origin):
     @gtscript.stencil(backend=backend)
     def dace_stencil(inp: gtscript.Field[np.float64], outp: gtscript.Field[np.float64]):
         with computation(PARALLEL), interval(...):
-            outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
+            outp = inp  # noqa: F841 [unused-variable]
 
     inp = OriginWrapper(
         array=gt_storage.full(
@@ -252,11 +251,10 @@ def test_optional_arg_noprovide():
         unused_par: float,
     ):
         with computation(PARALLEL), interval(...):
-            outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
+            outp = inp  # noqa: F841 [unused-variable]
 
     frozen_stencil = stencil.freeze(
-        domain=(3, 3, 10),
-        origin={"inp": (2, 2, 0), "outp": (2, 2, 0), "unused_field": (0, 0, 0)},
+        domain=(3, 3, 10), origin={"inp": (2, 2, 0), "outp": (2, 2, 0), "unused_field": (0, 0, 0)}
     )
 
     inp = OriginWrapper(
@@ -298,7 +296,7 @@ def test_optional_arg_provide(decorator):
         unused_par: float,
     ):
         with computation(PARALLEL), interval(...):
-            outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
+            outp = inp  # noqa: F841 [unused-variable]
 
     inp = OriginWrapper(
         array=gt_storage.full(
@@ -352,7 +350,7 @@ def test_optional_arg_provide_aot(decorator):
         unused_par: float,
     ):
         with computation(PARALLEL), interval(...):
-            outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
+            outp = inp  # noqa: F841 [unused-variable]
 
     inp = OriginWrapper(
         array=gt_storage.full(
@@ -405,7 +403,7 @@ def test_nondace_raises(decorator):
     @decorator(backend="numpy")
     def numpy_stencil(inp: gtscript.Field[np.float64], outp: gtscript.Field[np.float64]):
         with computation(PARALLEL), interval(...):
-            outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
+            outp = inp  # noqa: F841 [unused-variable]
 
     inp = OriginWrapper(
         array=gt_storage.full(
@@ -419,10 +417,7 @@ def test_nondace_raises(decorator):
     )
     outp = OriginWrapper(
         array=gt_storage.zeros(
-            dtype=np.float64,
-            shape=(10, 10, 10),
-            aligned_index=(0, 0, 0),
-            backend="numpy",
+            dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend="numpy"
         ),
         origin=(0, 0, 0),
     )
@@ -445,7 +440,7 @@ def test_nondace_raises(decorator):
 @typing.no_type_check
 def simple_stencil_defn(outp: gtscript.Field[np.float64], par: np.float64):
     with computation(PARALLEL), interval(...):
-        outp = par  # noqa F841: local variable 'outp' is assigned to but never used
+        outp = par  # noqa: F841 [unused-variable]
 
 
 def test_lazy_sdfg():

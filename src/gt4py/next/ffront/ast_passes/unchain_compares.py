@@ -46,9 +46,7 @@ class UnchainComparesPass(ast.NodeTransformer):
         # left leaf of the new tree: ``a < b``
         # example: ``a < b > c > d``
         left_leaf = ast.Compare(
-            ops=node.ops[0:1],
-            left=node.left,
-            comparators=node.comparators[0:1],
+            ops=node.ops[0:1], left=node.left, comparators=node.comparators[0:1]
         )
         ast.copy_location(left_leaf, node)
 

@@ -36,10 +36,7 @@ def test_invalid_syntax_error_empty_return():
     def wrong_syntax(inp: gtx.Field[[TDim], float]):
         return  # <-- this line triggers the syntax error
 
-    with pytest.raises(
-        f2f.errors.DSLError,
-        match=(r".*return.*"),
-    ) as exc_info:
+    with pytest.raises(f2f.errors.DSLError, match=(r".*return.*")) as exc_info:
         _ = f2f.FieldOperatorParser.apply_to_function(wrong_syntax)
 
     assert exc_info.value.location
@@ -80,7 +77,7 @@ def test_fo_type_deduction_error():
     line = inspect.getframeinfo(inspect.currentframe()).lineno
 
     def field_operator_with_undeclared_symbol():
-        return undeclared_symbol  # noqa: F821  # undefined on purpose
+        return undeclared_symbol  # noqa: F821 [undefined-name]
 
     with pytest.raises(errors.DSLError) as exc_info:
         _ = f2f.FieldOperatorParser.apply_to_function(field_operator_with_undeclared_symbol)

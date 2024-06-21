@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # GT4Py - GridTools Framework
 #
 # Copyright (c) 2014-2023, ETH Zurich
@@ -21,7 +20,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import common
+from gt4py.next import backend as next_backend, common
 from gt4py.next.ffront import decorator
 from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors import processor_interface as ppi
@@ -40,19 +39,30 @@ import next_tests
 
 
 @ppi.program_executor
-def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
+def no_exec(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
     """Temporary default backend to not accidentally test the wrong backend."""
     raise ValueError("No backend selected! Backend selection is mandatory in tests.")
+
+
+class NoBackend(next_backend.Backend):
+    def __call__(self, program, *args, **kwargs) -> None:
+        raise ValueError("No backend selected! Backend selection is mandatory in tests.")
+
+
+no_backend = NoBackend(executor=no_exec, transforms_prog=None, allocator=None)
 
 
 OPTIONAL_PROCESSORS = []
 if dace_iterator:
     OPTIONAL_PROCESSORS.append(next_tests.definitions.OptionalProgramBackendId.DACE_CPU)
-    OPTIONAL_PROCESSORS.append(
-        pytest.param(
-            next_tests.definitions.OptionalProgramBackendId.DACE_GPU, marks=pytest.mark.requires_gpu
-        )
-    ),
+    (
+        OPTIONAL_PROCESSORS.append(
+            pytest.param(
+                next_tests.definitions.OptionalProgramBackendId.DACE_GPU,
+                marks=pytest.mark.requires_gpu,
+            )
+        ),
+    )
 
 
 @pytest.fixture(
@@ -269,15 +279,7 @@ def skip_value_mesh() -> MeshDescriptor:
     )
 
     c2v_arr = np.array(
-        [
-            [0, 6, 5],
-            [0, 2, 6],
-            [0, 1, 2],
-            [2, 3, 6],
-            [3, 4, 6],
-            [4, 5, 6],
-        ],
-        dtype=gtx.IndexType,
+        [[0, 6, 5], [0, 2, 6], [0, 1, 2], [2, 3, 6], [3, 4, 6], [4, 5, 6]], dtype=gtx.IndexType
     )
 
     c2e_arr = np.array(

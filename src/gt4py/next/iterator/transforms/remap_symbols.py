@@ -19,7 +19,8 @@ from gt4py.next.iterator import ir
 
 
 class RemapSymbolRefs(PreserveLocationVisitor, NodeTranslator):
-    PRESERVED_ANNEX_ATTRS = ("type",)
+    # This pass preserves, but doesn't use the `type` and `recorded_shifts` annex.
+    PRESERVED_ANNEX_ATTRS = ("type", "recorded_shifts")
 
     def visit_SymRef(self, node: ir.SymRef, *, symbol_map: Dict[str, ir.Node]):
         return symbol_map.get(str(node.id), node)
@@ -27,10 +28,7 @@ class RemapSymbolRefs(PreserveLocationVisitor, NodeTranslator):
     def visit_Lambda(self, node: ir.Lambda, *, symbol_map: Dict[str, ir.Node]):
         params = {str(p.id) for p in node.params}
         new_symbol_map = {k: v for k, v in symbol_map.items() if k not in params}
-        return ir.Lambda(
-            params=node.params,
-            expr=self.visit(node.expr, symbol_map=new_symbol_map),
-        )
+        return ir.Lambda(params=node.params, expr=self.visit(node.expr, symbol_map=new_symbol_map))
 
     def generic_visit(self, node: ir.Node, **kwargs: Any):  # type: ignore[override]
         assert isinstance(node, SymbolTableTrait) == isinstance(
@@ -40,7 +38,8 @@ class RemapSymbolRefs(PreserveLocationVisitor, NodeTranslator):
 
 
 class RenameSymbols(PreserveLocationVisitor, NodeTranslator):
-    PRESERVED_ANNEX_ATTRS = ("type",)
+    # This pass preserves, but doesn't use the `type` and `recorded_shifts` annex.
+    PRESERVED_ANNEX_ATTRS = ("type", "recorded_shifts")
 
     def visit_Sym(
         self, node: ir.Sym, *, name_map: Dict[str, str], active: Optional[Set[str]] = None

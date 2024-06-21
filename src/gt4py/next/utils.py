@@ -21,10 +21,10 @@ class RecursionGuard:
     Context manager to guard against inifinite recursion.
 
     >>> def foo(i):
-    ...    with RecursionGuard(i):
-    ...        if i % 2 == 0:
-    ...            foo(i)
-    ...    return i
+    ...     with RecursionGuard(i):
+    ...         if i % 2 == 0:
+    ...             foo(i)
+    ...     return i
     >>> foo(3)
     3
     >>> foo(2)  # doctest:+ELLIPSIS
@@ -43,12 +43,12 @@ class RecursionGuard:
     def __init__(self, obj: Any):
         self.obj = obj
 
-    def __enter__(self):
+    def __enter__(self) -> None:
         if id(self.obj) in self.guarded_objects:
             raise self.RecursionDetected()
         self.guarded_objects.add(id(self.obj))
 
-    def __exit__(self, *exc):
+    def __exit__(self, *exc: Any) -> None:
         self.guarded_objects.remove(id(self.obj))
 
 

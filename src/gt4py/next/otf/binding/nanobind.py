@@ -14,7 +14,6 @@
 
 """Python bindings generator for C++ functions."""
 
-
 from __future__ import annotations
 
 from typing import Any, Sequence, TypeVar, Union
@@ -41,8 +40,8 @@ class BufferSID(Expr):
     source_buffer: str
     dimensions: Sequence[DimensionType]
     scalar_type: ts.ScalarType
-    # strides_kind: int # TODO(havogt): implement strides_kind once we have the "frozen stencil" mechanism
-    # unit_stride_dim: int # TODO(havogt): we can fix the dimension with unity stride once we have the "frozen stencil" mechanism
+    # TODO(havogt): implement `strides_kind: int` once we have the "frozen stencil" mechanism
+    # TODO(havogt): we can fix the dimension with `unit_stride_dim: int` once we have the "frozen stencil" mechanism
 
 
 class CompositeSID(Expr):
@@ -145,11 +144,11 @@ class BindingCodeGenerator(TemplatedGenerator):
 
     BindingFunction = as_jinja("""module.def("{{exported_name}}", &{{wrapper_name}}, "{{doc}}");""")
 
-    def visit_FunctionCall(self, call: FunctionCall):
+    def visit_FunctionCall(self, call: FunctionCall) -> str:
         args = [self.visit(arg) for arg in call.args]
         return cpp_interface.render_function_call(call.target, args)
 
-    def visit_BufferSID(self, sid: BufferSID, **kwargs):
+    def visit_BufferSID(self, sid: BufferSID, **kwargs: Any) -> str:
         pybuffer = f"{sid.source_buffer}.first"
         dims = [self.visit(dim) for dim in sid.dimensions]
         origin = f"{sid.source_buffer}.second"
@@ -159,7 +158,7 @@ class BindingCodeGenerator(TemplatedGenerator):
         renamed = f"gridtools::sid::rename_numbered_dimensions<{', '.join(dims)}>({shifted})"
         return renamed
 
-    def visit_CompositeSID(self, node: CompositeSID, **kwargs):
+    def visit_CompositeSID(self, node: CompositeSID, **kwargs: Any) -> str:
         kwargs["composite_ids"] = (
             f"gridtools::integral_constant<int,{i}>" for i in range(len(node.elems))
         )
@@ -247,23 +246,17 @@ def create_bindings(
             doc="",
             functions=[
                 BindingFunction(
-                    exported_name=program_source.entry_point.name,
-                    wrapper_name=wrapper_name,
-                    doc="",
+                    exported_name=program_source.entry_point.name, wrapper_name=wrapper_name, doc=""
                 )
             ],
         ),
     )
 
     src = interface.format_source(
-        program_source.language_settings,
-        BindingCodeGenerator.apply(file_binding),
+        program_source.language_settings, BindingCodeGenerator.apply(file_binding)
     )
 
-    return stages.BindingSource(
-        src,
-        (interface.LibraryDependency("nanobind", "1.4.0"),),
-    )
+    return stages.BindingSource(src, (interface.LibraryDependency("nanobind", "1.4.0"),))
 
 
 @workflow.make_step

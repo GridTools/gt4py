@@ -117,12 +117,7 @@ class NumpyBackend(BaseBackend, CLIBackendMixin):
         oir_pipeline = self.builder.options.backend_opts.get(
             "oir_pipeline",
             DefaultPipeline(
-                skip=[
-                    IJCacheDetection,
-                    KCacheDetection,
-                    PruneKCacheFills,
-                    PruneKCacheFlushes,
-                ]
+                skip=[IJCacheDetection, KCacheDetection, PruneKCacheFills, PruneKCacheFlushes]
             ),
         )
         oir_node = oir_pipeline.run(base_oir)

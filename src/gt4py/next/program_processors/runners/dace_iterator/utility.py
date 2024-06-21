@@ -12,18 +12,19 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 import itertools
-from typing import Any, Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence
 
 import dace
 
+import gt4py.next.iterator.ir as itir
+from gt4py import eve
 from gt4py.next import Dimension
-from gt4py.next.common import NeighborTable
-from gt4py.next.iterator.ir import Node
+from gt4py.next.common import Connectivity
 from gt4py.next.type_system import type_specifications as ts
 
 
 def dace_debuginfo(
-    node: Node, debuginfo: Optional[dace.dtypes.DebugInfo] = None
+    node: itir.Node, debuginfo: Optional[dace.dtypes.DebugInfo] = None
 ) -> Optional[dace.dtypes.DebugInfo]:
     location = node.location
     if location:
@@ -37,7 +38,7 @@ def dace_debuginfo(
     return debuginfo
 
 
-def as_dace_type(type_: ts.ScalarType):
+def as_dace_type(type_: ts.ScalarType) -> dace.dtypes.typeclass:
     if type_.kind == ts.ScalarKind.BOOL:
         return dace.bool_
     elif type_.kind == ts.ScalarKind.INT32:
@@ -54,30 +55,29 @@ def as_dace_type(type_: ts.ScalarType):
 def as_scalar_type(typestr: str) -> ts.ScalarType:
     try:
         kind = getattr(ts.ScalarKind, typestr.upper())
-    except AttributeError:
-        raise ValueError(f"Data type {typestr} not supported.")
+    except AttributeError as ex:
+        raise ValueError(f"Data type {typestr} not supported.") from ex
     return ts.ScalarType(kind)
 
 
-def filter_neighbor_tables(offset_provider: dict[str, Any]):
+def filter_connectivities(offset_provider: Mapping[str, Any]) -> dict[str, Connectivity]:
     return {
         offset: table
         for offset, table in offset_provider.items()
-        if isinstance(table, NeighborTable)
+        if isinstance(table, Connectivity)
     }
 
 
-def connectivity_identifier(name: str):
+def get_used_connectivities(
+    node: itir.Node, offset_provider: Mapping[str, Any]
+) -> dict[str, Connectivity]:
+    connectivities = filter_connectivities(offset_provider)
+    offset_dims = set(eve.walk_values(node).if_isinstance(itir.OffsetLiteral).getattr("value"))
+    return {offset: connectivities[offset] for offset in offset_dims if offset in connectivities}
+
+
+def connectivity_identifier(name: str) -> str:
     return f"__connectivity_{name}"
-
-
-def create_memlet_full(source_identifier: str, source_array: dace.data.Array):
-    return dace.Memlet.from_array(source_identifier, source_array)
-
-
-def create_memlet_at(source_identifier: str, index: tuple[str, ...]):
-    subset = ", ".join(index)
-    return dace.Memlet(data=source_identifier, subset=subset)
 
 
 def get_sorted_dims(dims: Sequence[Dimension]) -> Sequence[tuple[int, Dimension]]:
@@ -180,8 +180,9 @@ def add_mapped_nested_sdfg(
 
 
 def unique_name(prefix):
-    unique_id = getattr(unique_name, "_unique_id", 0)  # noqa: B010  # static variable
-    setattr(unique_name, "_unique_id", unique_id + 1)  # noqa: B010  # static variable
+    unique_id = getattr(unique_name, "_unique_id", 0)  # static variable
+    setattr(unique_name, "_unique_id", unique_id + 1)  # noqa: B010 [set-attr-with-constant]
+
     return f"{prefix}_{unique_id}"
 
 

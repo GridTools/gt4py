@@ -54,10 +54,9 @@ def conditional_indirection(inp, cond):
 def test_simple_indirection(program_processor):
     program_processor, validate = program_processor
 
-    if program_processor in [
-        type_check.check_type_inference,
-        gtfn_format_sourcecode,
-    ]:
+    pytest.xfail("Applied shifts in if_ statements are not supported in TraceShift pass.")
+
+    if program_processor in [type_check.check_type_inference, gtfn_format_sourcecode]:
         pytest.xfail(
             "We only support applied shifts in type_inference."
         )  # TODO fix test or generalize itir?

@@ -43,11 +43,7 @@ def mask_cond() -> BinaryOp:
 
 @pytest.fixture
 def mask_assign(mask_cond) -> AssignStmtFactory:
-    return AssignStmtFactory(
-        left__name="mask_f",
-        left__dtype=DataType.BOOL,
-        right=mask_cond,
-    )
+    return AssignStmtFactory(left__name="mask_f", left__dtype=DataType.BOOL, right=mask_cond)
 
 
 def test_mask_inlining(mask_assign):
@@ -74,9 +70,7 @@ def test_mask_inlining(mask_assign):
             ],
             caches=[IJCacheFactory(name=mask_name)],
         ),
-        declarations=[
-            TemporaryFactory(name=mask_name, dtype=DataType.BOOL),
-        ],
+        declarations=[TemporaryFactory(name=mask_name, dtype=DataType.BOOL)],
     )
 
     pre_section = pre_oir.vertical_loops[0].sections[0]
@@ -115,8 +109,7 @@ def test_mask_no_inlining(mask_assign, mask_cond):
                                     mask=FieldAccessFactory(name=mask_name, dtype=DataType.BOOL),
                                     body=[
                                         AssignStmtFactory(
-                                            left__name=cond_name,
-                                            right=LiteralFactory(),
+                                            left__name=cond_name, right=LiteralFactory()
                                         )
                                     ],
                                 )
@@ -127,9 +120,7 @@ def test_mask_no_inlining(mask_assign, mask_cond):
             ],
             caches=[IJCacheFactory(name=mask_name)],
         ),
-        declarations=[
-            TemporaryFactory(name=mask_name, dtype=DataType.BOOL),
-        ],
+        declarations=[TemporaryFactory(name=mask_name, dtype=DataType.BOOL)],
     )
 
     pre_section = pre_oir.vertical_loops[0].sections[0]

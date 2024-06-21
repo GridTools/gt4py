@@ -12,13 +12,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# flake8: noqa: F401
-
 """GridTools storages utilities."""
 
 from . import cartesian
 from .cartesian import layout
-from .cartesian.interface import empty, from_array, full, ones, zeros  # noqa: F401
+from .cartesian.interface import empty, from_array, full, ones, zeros
 from .cartesian.layout import from_name, register
 
 

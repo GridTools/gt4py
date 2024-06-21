@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # GT4Py - GridTools Framework
 #
 # Copyright (c) 2014-2023, ETH Zurich
@@ -110,14 +109,8 @@ def test_invalid_scalar_kind():
             ),
         ),
         (typing.ForwardRef("float"), ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
-        (
-            typing.Annotated[float, "foo"],
-            ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
-        ),
-        (
-            typing.Annotated["float", "foo", "bar"],
-            ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
-        ),
+        (typing.Annotated[float, "foo"], ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
+        (typing.Annotated["float", "foo", "bar"], ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
         (
             typing.Annotated[typing.ForwardRef("float"), "foo"],
             ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
@@ -167,3 +160,19 @@ def test_invalid_symbol_types():
         type_translation.from_type_hint(typing.Callable[[int], str])
     with pytest.raises(ValueError, match="Invalid callable annotations"):
         type_translation.from_type_hint(typing.Callable[[int], float])
+
+
+@pytest.mark.parametrize(
+    "value, expected_dims",
+    [
+        (common.Dims[IDim, JDim], [IDim, JDim]),
+        (common.Dims[IDim, np.float64], ValueError),
+        (common.Dims["IDim"], ValueError),
+    ],
+)
+def test_generic_variadic_dims(value, expected_dims):
+    if expected_dims == ValueError:
+        with pytest.raises(ValueError, match="Invalid field dimension definition"):
+            type_translation.from_type_hint(gtx.Field[value, np.int32])
+    else:
+        assert type_translation.from_type_hint(gtx.Field[value, np.int32]).dims == expected_dims

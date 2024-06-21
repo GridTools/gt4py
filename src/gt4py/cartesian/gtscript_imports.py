@@ -37,6 +37,7 @@ Usage Example
         import ...
 
 """
+
 import importlib
 import importlib.abc
 import pathlib
@@ -234,11 +235,7 @@ def enabled(**kwargs: Any) -> Iterator:
 
         import some_other_stencil  # in the same directory as some_stencil.gt.py raises error
     """
-    backup_import_system = (
-        sys.path.copy(),
-        sys.meta_path.copy(),
-        sys.modules.copy(),
-    )
+    backup_import_system = (sys.path.copy(), sys.meta_path.copy(), sys.modules.copy())
     try:
         yield enable(**kwargs)
     finally:

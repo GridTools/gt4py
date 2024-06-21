@@ -139,12 +139,7 @@ def _deduce_domain(domain: dict[common.Dimension, range], offset_provider: dict[
         )
 
     return domain_builtin(
-        *tuple(
-            map(
-                lambda x: builtins.named_range(x[0], x[1].start, x[1].stop),
-                domain.items(),
-            )
-        )
+        *tuple(map(lambda x: builtins.named_range(x[0], x[1].start, x[1].stop), domain.items()))
     )
 
 

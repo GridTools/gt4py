@@ -11,7 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from typing import Callable, TypeVar
+from typing import Any, Callable, TypeVar
 
 from gt4py.eve import utils as eve_utils
 from gt4py.next.ffront import type_info as ti_ffront
@@ -20,19 +20,25 @@ from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
-def to_tuples_of_iterator(expr: itir.Expr | str, arg_type: ts.TypeSpec):
+def to_tuples_of_iterator(expr: itir.Expr | str, arg_type: ts.TypeSpec) -> itir.FunCall:
     """
     Convert iterator of tuples into tuples of iterator.
 
     Supports arbitrary nesting.
 
-    >>> print(to_tuples_of_iterator("arg", ts.TupleType(types=[ts.FieldType(dims=[],
-    ...   dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))])))   # doctest: +ELLIPSIS
+    >>> print(
+    ...     to_tuples_of_iterator(
+    ...         "arg",
+    ...         ts.TupleType(
+    ...             types=[ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))]
+    ...         ),
+    ...     )
+    ... )  # doctest: +ELLIPSIS
     (λ(__toi_...) → {(↑(λ(it) → (·it)[0]))(__toi_...)})(arg)
     """
     param = f"__toi_{eve_utils.content_hash(expr)}"
 
-    def fun(primitive_type, path):
+    def fun(primitive_type: ts.TypeSpec, path: tuple[int, ...]) -> itir.Expr:
         inner_expr = im.deref("it")
         for path_part in path:
             inner_expr = im.tuple_get(path_part, inner_expr)
@@ -46,14 +52,20 @@ def to_tuples_of_iterator(expr: itir.Expr | str, arg_type: ts.TypeSpec):
     )
 
 
-def to_iterator_of_tuples(expr: itir.Expr | str, arg_type: ts.TypeSpec):
+def to_iterator_of_tuples(expr: itir.Expr | str, arg_type: ts.TypeSpec) -> itir.FunCall:
     """
     Convert tuples of iterator into iterator of tuples.
 
     Supports arbitrary nesting.
 
-    >>> print(to_iterator_of_tuples("arg", ts.TupleType(types=[ts.FieldType(dims=[],
-    ...   dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))])))  # doctest: +ELLIPSIS
+    >>> print(
+    ...     to_iterator_of_tuples(
+    ...         "arg",
+    ...         ts.TupleType(
+    ...             types=[ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))]
+    ...         ),
+    ...     )
+    ... )  # doctest: +ELLIPSIS
     (λ(__iot_...) → (↑(λ(__iot_el_0) → {·__iot_el_0}))(__iot_...[0]))(arg)
     """
     param = f"__iot_{eve_utils.content_hash(expr)}"
@@ -62,9 +74,12 @@ def to_iterator_of_tuples(expr: itir.Expr | str, arg_type: ts.TypeSpec):
         ti_ffront.promote_scalars_to_zero_dim_field(type_)
         for type_ in type_info.primitive_constituents(arg_type)
     ]
-    assert all(isinstance(type_, ts.FieldType) and type_.dims == type_constituents[0].dims for type_ in type_constituents)  # type: ignore[attr-defined]  # ensure by assert above
+    assert all(
+        isinstance(type_, ts.FieldType) and type_.dims == type_constituents[0].dims  # type: ignore[attr-defined]  # ensure by assert above
+        for type_ in type_constituents
+    )
 
-    def fun(_, path):
+    def fun(_: Any, path: tuple[int, ...]) -> itir.FunCall:
         param_name = "__iot_el"
         for path_part in path:
             param_name = f"{param_name}_{path_part}"
@@ -91,7 +106,7 @@ def process_elements(
     process_func: Callable[..., itir.Expr],
     objs: itir.Expr | list[itir.Expr],
     current_el_type: ts.TypeSpec,
-):
+) -> itir.FunCall:
     """
     Recursively applies a processing function to all primitive constituents of a tuple.
 
@@ -119,10 +134,8 @@ T = TypeVar("T", bound=itir.Expr, covariant=True)
 
 
 def _process_elements_impl(
-    process_func: Callable[..., itir.Expr],
-    _current_el_exprs: list[T],
-    current_el_type: ts.TypeSpec,
-):
+    process_func: Callable[..., itir.Expr], _current_el_exprs: list[T], current_el_type: ts.TypeSpec
+) -> itir.Expr:
     if isinstance(current_el_type, ts.TupleType):
         result = im.make_tuple(
             *[

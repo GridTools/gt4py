@@ -406,10 +406,7 @@ def _make_root_validator(impl: datamodels.RootValidator) -> datamodels.RootValid
 
 
 def assign_stmt_dtype_validation(*, strict: bool) -> datamodels.RootValidator:
-    def _impl(
-        cls: Type[datamodels.DataModel],
-        instance: datamodels.DataModel,
-    ) -> None:
+    def _impl(cls: Type[datamodels.DataModel], instance: datamodels.DataModel) -> None:
         assert isinstance(instance, AssignStmt)
         verify_and_get_common_dtype(cls, [instance.left, instance.right], strict=strict)
 
@@ -589,7 +586,7 @@ def validate_dtype_is_set() -> datamodels.RootValidator:
 
 class _LvalueDimsValidator(eve.VisitorWithSymbolTableTrait):
     def __init__(self, vertical_loop_type: Type[eve.Node], decl_type: Type[eve.Node]) -> None:
-        if not vertical_loop_type.__annotations__.get("loop_order") is LoopOrder:
+        if vertical_loop_type.__annotations__.get("loop_order") is not LoopOrder:
             raise ValueError(
                 f"Vertical loop type {vertical_loop_type} has no `loop_order` attribute"
             )
@@ -865,10 +862,7 @@ OP_TO_UFUNC_NAME: Final[
         ComparisonOperator.EQ: "equal",
         ComparisonOperator.NE: "not_equal",
     },
-    LogicalOperator: {
-        LogicalOperator.AND: "logical_and",
-        LogicalOperator.OR: "logical_or",
-    },
+    LogicalOperator: {LogicalOperator.AND: "logical_and", LogicalOperator.OR: "logical_or"},
     NativeFunction: {
         NativeFunction.ABS: "abs",
         NativeFunction.MIN: "minimum",
@@ -906,7 +900,7 @@ OP_TO_UFUNC_NAME: Final[
 def op_to_ufunc(
     op: Union[
         UnaryOperator, ArithmeticOperator, ComparisonOperator, LogicalOperator, NativeFunction
-    ]
+    ],
 ) -> np.ufunc:
     if not isinstance(
         op, (UnaryOperator, ArithmeticOperator, ComparisonOperator, LogicalOperator, NativeFunction)

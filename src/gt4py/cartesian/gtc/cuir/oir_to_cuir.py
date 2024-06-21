@@ -86,9 +86,7 @@ class OIRToCUIR(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     def visit_BinaryOp(self, node: oir.BinaryOp, **kwargs: Any) -> cuir.BinaryOp:
         return cuir.BinaryOp(
-            op=node.op,
-            left=self.visit(node.left, **kwargs),
-            right=self.visit(node.right, **kwargs),
+            op=node.op, left=self.visit(node.left, **kwargs), right=self.visit(node.right, **kwargs)
         )
 
     def visit_Temporary(self, node: oir.Temporary, **kwargs: Any) -> cuir.Temporary:
@@ -152,19 +150,9 @@ class OIRToCUIR(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         **kwargs: Any,
     ) -> Union[cuir.FieldAccess, cuir.IJCacheAccess, cuir.KCacheAccess]:
         data_index = self.visit(
-            node.data_index,
-            ij_caches=ij_caches,
-            k_caches=k_caches,
-            ctx=ctx,
-            **kwargs,
+            node.data_index, ij_caches=ij_caches, k_caches=k_caches, ctx=ctx, **kwargs
         )
-        offset = self.visit(
-            node.offset,
-            ij_caches=ij_caches,
-            k_caches=k_caches,
-            ctx=ctx,
-            **kwargs,
-        )
+        offset = self.visit(node.offset, ij_caches=ij_caches, k_caches=k_caches, ctx=ctx, **kwargs)
         if node.name in ij_caches:
             return cuir.IJCacheAccess(
                 name=ij_caches[node.name].name,
@@ -181,10 +169,7 @@ class OIRToCUIR(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             )
         ctx.accessed_fields.add(node.name)
         return cuir.FieldAccess(
-            name=node.name,
-            offset=offset,
-            data_index=data_index,
-            dtype=node.dtype,
+            name=node.name, offset=offset, data_index=data_index, dtype=node.dtype
         )
 
     def visit_ScalarAccess(
@@ -247,12 +232,7 @@ class OIRToCUIR(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         )
 
     def visit_VerticalLoop(
-        self,
-        node: oir.VerticalLoop,
-        *,
-        symtable: Dict[str, Any],
-        ctx: "Context",
-        **kwargs: Any,
+        self, node: oir.VerticalLoop, *, symtable: Dict[str, Any], ctx: "Context", **kwargs: Any
     ) -> cuir.Kernel:
         assert not any(c.fill or c.flush for c in node.caches if isinstance(c, oir.KCache))
         ij_caches = {
@@ -280,7 +260,7 @@ class OIRToCUIR(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                     ij_caches=list(ij_caches.values()),
                     k_caches=list(k_caches.values()),
                 )
-            ],
+            ]
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> cuir.Program:
@@ -288,12 +268,7 @@ class OIRToCUIR(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         ctx = self.Context(
             new_symbol_name=cast(SymbolNameCreator, symbol_name_creator(collect_symbol_names(node)))
         )
-        kernels = self.visit(
-            node.vertical_loops,
-            ctx=ctx,
-            block_extents=block_extents,
-            **kwargs,
-        )
+        kernels = self.visit(node.vertical_loops, ctx=ctx, block_extents=block_extents, **kwargs)
         temporaries = [self.visit(d) for d in node.declarations if d.name in ctx.accessed_fields]
         return cuir.Program(
             name=node.name,

@@ -28,7 +28,7 @@ from gt4py.cartesian.frontend.nodes import (
 )
 from gt4py.cartesian.gtc import common, gtir
 
-from cartesian_tests.unit_tests.frontend_tests.defir_to_gtir_definition_setup import (  # noqa: F401
+from cartesian_tests.unit_tests.frontend_tests.defir_to_gtir_definition_setup import (  # noqa: F401 [unused-import]
     BlockStmt,
     IterationOrder,
     TAssign,
@@ -45,13 +45,14 @@ def defir_to_gtir():
 
 
 def test_stencil_definition(
-    defir_to_gtir, ijk_domain  # noqa: F811 [redefinition, reason: fixture]
+    defir_to_gtir,
+    ijk_domain,  # [redefinition, reason: fixture]
 ):
     stencil_definition = (
         TDefinition(name="definition", domain=ijk_domain, fields=["a", "b"])
         .add_blocks(
             TComputationBlock(order=IterationOrder.PARALLEL).add_statements(
-                TAssign("a", "b", (0, 0, 0)),
+                TAssign("a", "b", (0, 0, 0))
             )
         )
         .build()

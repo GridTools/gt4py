@@ -74,6 +74,6 @@ def check(gtir_stencil_expr: gtir.Stencil) -> gtir.Stencil:
     """Execute definitive assignment analysis and warn on errors."""
     invalid_accesses = analyze(gtir_stencil_expr)
     for invalid_access in invalid_accesses:
-        warnings.warn(f"`{invalid_access.name}` may be uninitialized.")
+        warnings.warn(f"`{invalid_access.name}` may be uninitialized.", stacklevel=2)
 
     return gtir_stencil_expr

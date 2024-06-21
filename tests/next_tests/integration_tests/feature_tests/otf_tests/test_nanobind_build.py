@@ -32,7 +32,7 @@ def test_gtfn_cpp_with_cmake(program_source_with_name):
     build_the_program = workflow.make_step(nanobind.bind_source).chain(
         compiler.Compiler(
             cache_lifetime=config.BuildCacheLifetime.SESSION, builder_factory=cmake.CMakeFactory()
-        ),
+        )
     )
     compiled_program = build_the_program(example_program_source)
     buf = (np.zeros(shape=(6, 5), dtype=np.float32), (0, 0))
@@ -51,7 +51,7 @@ def test_gtfn_cpp_with_compiledb(program_source_with_name):
         compiler.Compiler(
             cache_lifetime=config.BuildCacheLifetime.SESSION,
             builder_factory=compiledb.CompiledbFactory(),
-        ),
+        )
     )
     compiled_program = build_the_program(example_program_source)
     buf = (np.zeros(shape=(6, 5), dtype=np.float32), (0, 0))

@@ -19,7 +19,21 @@ import os
 import pathlib
 import time
 import warnings
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Protocol, Tuple, Type, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    ClassVar,
+    Dict,
+    List,
+    Optional,
+    Protocol,
+    Tuple,
+    Type,
+    Union,
+)
+
+from typing_extensions import deprecated
 
 from gt4py import storage as gt_storage
 from gt4py.cartesian import definitions as gt_definitions, utils as gt_utils
@@ -36,10 +50,15 @@ REGISTRY = gt_utils.Registry()
 
 
 def from_name(name: str) -> Optional[Type["Backend"]]:
-    return REGISTRY.get(name, None)
+    backend = REGISTRY.get(name, None)
+    if not backend:
+        raise NotImplementedError(
+            f"Backend {name} is not implemented, options are: {REGISTRY.names}"
+        )
+    return backend
 
 
-def register(backend_cls: Type["Backend"]) -> None:
+def register(backend_cls: Type["Backend"]) -> Type["Backend"]:
     assert issubclass(backend_cls, Backend) and backend_cls.name is not None
 
     if isinstance(backend_cls.name, str):
@@ -271,13 +290,12 @@ class BaseBackend(Backend):
         unknown_options = set(options.backend_opts.keys()) - set(self.options.keys())
         if unknown_options:
             warnings.warn(
-                f"Unknown options '{unknown_options}' for backend '{self.name}'", RuntimeWarning
+                f"Unknown options '{unknown_options}' for backend '{self.name}'",
+                RuntimeWarning,
+                stacklevel=2,
             )
 
-    def make_module(
-        self,
-        **kwargs: Any,
-    ) -> Type["StencilObject"]:
+    def make_module(self, **kwargs: Any) -> Type["StencilObject"]:
         build_info = self.builder.options.build_info
         if build_info is not None:
             start_time = time.perf_counter()
@@ -414,3 +432,28 @@ class BasePyExtBackend(BaseBackend):
         )
 
         return module_name, file_path
+
+
+def disabled(message: str, *, enabled_env_var: str) -> Callable[[Type[Backend]], Type[Backend]]:
+    # We push for hard deprecation here by raising by default and warning if enabling has been forced.
+    enabled = bool(int(os.environ.get(enabled_env_var, "0")))
+    if enabled:
+        return deprecated(message)
+    else:
+
+        def _decorator(cls: Type[Backend]) -> Type[Backend]:
+            def _no_generate(obj) -> Type["StencilObject"]:
+                raise NotImplementedError(
+                    f"Disabled '{cls.name}' backend: 'f{message}'\n",
+                    f"You can still enable the backend by hand using the environment variable '{enabled_env_var}=1'",
+                )
+
+            # Replace generate method with raise
+            if not hasattr(cls, "generate"):
+                raise ValueError(f"Coding error. Expected a generate method on {cls}")
+            # Flag that it got disabled for register lookup
+            cls.disabled = True  # type: ignore
+            cls.generate = _no_generate  # type: ignore
+            return cls
+
+        return _decorator

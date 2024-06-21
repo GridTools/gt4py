@@ -13,13 +13,19 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import typing
-from typing import ClassVar, List, Optional, Union
+from typing import Any, ClassVar, List, Optional, Union
 
 import gt4py.eve as eve
 from gt4py.eve import Coerced, SymbolName, SymbolRef, datamodels
 from gt4py.eve.concepts import SourceLocation
 from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from gt4py.eve.utils import noninstantiable
+from gt4py.next.type_system import type_specifications as ts
+
+
+# TODO(havogt):
+# After completion of refactoring to GTIR, FencilDefinition and StencilClosure should be removed everywhere.
+# During transition, we lower to FencilDefinitions and apply a transformation to GTIR-style afterwards.
 
 
 @noninstantiable
@@ -41,7 +47,7 @@ class Node(eve.Node):
 
 
 class Sym(Node):  # helper
-    id: Coerced[SymbolName]  # noqa: A003
+    id: Coerced[SymbolName]
     # TODO(tehrengruber): Revisit. Using strings is a workaround to avoid coupling with the
     #   type inference.
     kind: typing.Literal["Iterator", "Value", None] = None
@@ -68,12 +74,7 @@ class Expr(Node): ...
 
 class Literal(Expr):
     value: str
-    type: str  # noqa: A003
-
-    @datamodels.validator("type")
-    def _type_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value):
-        if value not in TYPEBUILTINS:
-            raise ValueError(f"'{value}' is not a valid builtin type.")
+    type: ts.ScalarType
 
 
 class NoneLiteral(Expr):
@@ -89,7 +90,7 @@ class AxisLiteral(Expr):
 
 
 class SymRef(Expr):
-    id: Coerced[SymbolRef]  # noqa: A003
+    id: Coerced[SymbolRef]
 
 
 class Lambda(Expr, SymbolTableTrait):
@@ -103,7 +104,7 @@ class FunCall(Expr):
 
 
 class FunctionDefinition(Node, SymbolTableTrait):
-    id: Coerced[SymbolName]  # noqa: A003
+    id: Coerced[SymbolName]
     params: List[Sym]
     expr: Expr
 
@@ -156,19 +157,8 @@ BINARY_MATH_NUMBER_BUILTINS = {
     "mod",
     "floordiv",  # TODO see https://github.com/GridTools/gt4py/issues/1136
 }
-BINARY_MATH_COMPARISON_BUILTINS = {
-    "eq",
-    "less",
-    "greater",
-    "greater_equal",
-    "less_equal",
-    "not_eq",
-}
-BINARY_LOGICAL_BUILTINS = {
-    "and_",
-    "or_",
-    "xor_",
-}
+BINARY_MATH_COMPARISON_BUILTINS = {"eq", "less", "greater", "greater_equal", "less_equal", "not_eq"}
+BINARY_LOGICAL_BUILTINS = {"and_", "or_", "xor_"}
 
 ARITHMETIC_BUILTINS = {
     *UNARY_MATH_NUMBER_BUILTINS,
@@ -213,14 +203,48 @@ BUILTINS = {
     *TYPEBUILTINS,
 }
 
+# only used in `Program`` not `FencilDefinition`
+# TODO(havogt): restructure after refactoring to GTIR
+GTIR_BUILTINS = {
+    *BUILTINS,
+    "as_fieldop",  # `as_fieldop(stencil)` creates field_operator from stencil
+}
+
 
 class FencilDefinition(Node, ValidatedSymbolTableTrait):
-    id: Coerced[SymbolName]  # noqa: A003
+    id: Coerced[SymbolName]
     function_definitions: List[FunctionDefinition]
     params: List[Sym]
     closures: List[StencilClosure]
 
-    _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in sorted(BUILTINS)]  # sorted for serialization stability
+    _NODE_SYMBOLS_: ClassVar[List[Sym]] = [
+        Sym(id=name) for name in sorted(BUILTINS)
+    ]  # sorted for serialization stability
+
+
+class Stmt(Node): ...
+
+
+class SetAt(Stmt):  # from JAX array.at[...].set()
+    expr: Expr  # only `as_fieldop(stencil)(inp0, ...)` in first refactoring
+    domain: Expr
+    target: Expr  # `make_tuple` or SymRef
+
+
+class Temporary(Node):
+    id: Coerced[eve.SymbolName]
+    domain: Optional[Expr] = None
+    dtype: Optional[Any] = None  # TODO
+
+
+class Program(Node, ValidatedSymbolTableTrait):
+    id: Coerced[SymbolName]
+    function_definitions: List[FunctionDefinition]
+    params: List[Sym]
+    declarations: List[Temporary]
+    body: List[Stmt]
+
+    _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in GTIR_BUILTINS]
 
 
 # TODO(fthaler): just use hashable types in nodes (tuples instead of lists)

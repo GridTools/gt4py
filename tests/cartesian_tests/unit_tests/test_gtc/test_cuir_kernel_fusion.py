@@ -55,7 +55,7 @@ def test_forward_backward_fusion():
                     ),
                 )
             ),
-        ],
+        ]
     )
     transformed = kernel_fusion.FuseKernels().visit(testee)
     assert len(transformed.kernels) == 1
@@ -95,7 +95,7 @@ def test_no_fusion_with_parallel_offsets():
                     ),
                 )
             ),
-        ],
+        ]
     )
     transformed = kernel_fusion.FuseKernels().visit(testee)
     assert len(transformed.kernels) == 2
@@ -112,7 +112,7 @@ def test_no_fusion_with_parallel_offsets():
                     left__name="out", right__name="tmp", right__offset__k=1
                 )
             ),
-        ],
+        ]
     )
     transformed = kernel_fusion.FuseKernels().visit(testee)
     assert len(transformed.kernels) == 2

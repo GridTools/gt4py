@@ -14,23 +14,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
-
-import gt4py.next.program_processors.otf_compile_executor as otf_compile_executor
-import gt4py.next.program_processors.processor_interface as ppi
-import gt4py.next.program_processors.runners.roundtrip as roundtrip
+from gt4py.next import backend as next_backend
+from gt4py.next.program_processors.runners import roundtrip
 
 
-if TYPE_CHECKING:
-    import gt4py.next.iterator.ir as itir
-
-
-@ppi.program_executor
-def executor(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
-    roundtrip.execute_roundtrip(program, *args, dispatch_backend=roundtrip.executor, **kwargs)
-
-
-backend = otf_compile_executor.OTFBackend(
-    executor=executor,
-    allocator=roundtrip.backend.allocator,
+backend = next_backend.Backend(
+    executor=roundtrip.RoundtripExecutorFactory(dispatch_backend=roundtrip.default.executor),
+    allocator=roundtrip.default.allocator,
 )

@@ -137,7 +137,7 @@ class UnrollVectorAssignments(IRNodeMapper):
     def _nested_list_dim(self, a: List) -> List[int]:
         if not isinstance(a, list):
             return []
-        return [len(a)] + self._nested_list_dim(a[0])
+        return [len(a), *self._nested_list_dim(a[0])]
 
     def visit_Assign(
         self, node: Assign, *, fields_decls: Dict[str, FieldDecl], **kwargs
@@ -181,7 +181,7 @@ class UnrollVectorExpressions(IRNodeMapper):
         # if the expression is just a scalar broadcast to the expected dimensions
         if not isinstance(result, list):
             result = functools.reduce(
-                lambda val, len: [val for _ in range(len)], reversed(expected_dim), result
+                lambda val, len_: [val for _ in range(len_)], reversed(expected_dim), result
             )
         return result
 
@@ -196,10 +196,7 @@ class UnrollVectorExpressions(IRNodeMapper):
                     data_type = DataType.INT32
                     data_index = [ScalarLiteral(value=index, data_type=data_type)]
                     element_ref = FieldRef(
-                        name=node.name,
-                        offset=node.offset,
-                        data_index=data_index,
-                        loc=node.loc,
+                        name=node.name, offset=node.offset, data_index=data_index, loc=node.loc
                     )
                     field_list.append(element_ref)
             # matrix
@@ -398,9 +395,7 @@ class DefIRToGTIR(IRNodeVisitor):
                 stmts.append(decl_or_stmt)
         start, end = self.visit(node.interval)
         interval = gtir.Interval(
-            start=start,
-            end=end,
-            loc=location_to_source_location(node.interval.loc),
+            start=start, end=end, loc=location_to_source_location(node.interval.loc)
         )
         return gtir.VerticalLoop(
             interval=interval,
@@ -525,8 +520,7 @@ class DefIRToGTIR(IRNodeVisitor):
         }
 
         return gtir.HorizontalRestriction(
-            mask=common.HorizontalMask(**axes),
-            body=self.visit(node.body),
+            mask=common.HorizontalMask(**axes), body=self.visit(node.body)
         )
 
     def visit_While(self, node: While) -> gtir.While:

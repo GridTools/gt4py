@@ -15,10 +15,10 @@
 from typing import Any
 
 import gt4py.next.ffront.field_operator_ast as foast
-from gt4py.eve import NodeTranslator, traits
+from gt4py import eve
 
 
-class DeadClosureVarElimination(NodeTranslator, traits.VisitorWithSymbolTableTrait):
+class DeadClosureVarElimination(eve.NodeTranslator, eve.traits.VisitorWithSymbolTableTrait):
     """Remove closure variable symbols that are not referenced in the AST."""
 
     _referenced_symbols: list[foast.Symbol]
@@ -27,7 +27,9 @@ class DeadClosureVarElimination(NodeTranslator, traits.VisitorWithSymbolTableTra
     def apply(cls, node: foast.FunctionDefinition) -> foast.FunctionDefinition:
         return cls().visit(node)
 
-    def visit_Name(self, node: foast.Name, symtable, **kwargs: Any) -> foast.Name:
+    def visit_Name(
+        self, node: foast.Name, symtable: dict[str, foast.Symbol], **kwargs: Any
+    ) -> foast.Name:
         if node.id in symtable:
             self._referenced_symbols.append(symtable[node.id])
         return node

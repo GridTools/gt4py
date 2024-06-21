@@ -95,11 +95,7 @@ class AccessCollector(gt4py.eve.NodeVisitor):
             )
         )
 
-    def visit_AssignStmt(
-        self,
-        node: oir.AssignStmt,
-        **kwargs: Any,
-    ) -> None:
+    def visit_AssignStmt(self, node: oir.AssignStmt, **kwargs: Any) -> None:
         self.visit(node.right, is_write=False, **kwargs)
         self.visit(node.left, is_write=True, **kwargs)
 

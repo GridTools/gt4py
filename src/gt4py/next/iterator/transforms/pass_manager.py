@@ -15,15 +15,16 @@
 import enum
 from typing import Callable, Optional
 
-from gt4py.next.iterator import ir
-from gt4py.next.iterator.transforms import simple_inline_heuristic
+from gt4py.eve import utils as eve_utils
+from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 from gt4py.next.iterator.transforms.cse import CommonSubexpressionElimination
 from gt4py.next.iterator.transforms.eta_reduction import EtaReduction
 from gt4py.next.iterator.transforms.fuse_maps import FuseMaps
-from gt4py.next.iterator.transforms.global_tmps import CreateGlobalTmps
+from gt4py.next.iterator.transforms.global_tmps import CreateGlobalTmps, FencilWithTemporaries
+from gt4py.next.iterator.transforms.inline_center_deref_lift_vars import InlineCenterDerefLiftVars
 from gt4py.next.iterator.transforms.inline_fundefs import InlineFundefs, PruneUnreferencedFundefs
 from gt4py.next.iterator.transforms.inline_into_scan import InlineIntoScan
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
@@ -39,14 +40,11 @@ from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce
 class LiftMode(enum.Enum):
     FORCE_INLINE = enum.auto()
     USE_TEMPORARIES = enum.auto()
-    SIMPLE_HEURISTIC = enum.auto()
 
 
 def _inline_lifts(ir, lift_mode):
     if lift_mode == LiftMode.FORCE_INLINE:
         return InlineLifts().visit(ir)
-    elif lift_mode == LiftMode.SIMPLE_HEURISTIC:
-        return InlineLifts(simple_inline_heuristic.is_eligible_for_inlining).visit(ir)
     elif lift_mode == LiftMode.USE_TEMPORARIES:
         return InlineLifts(
             flags=InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT
@@ -74,7 +72,7 @@ def _inline_into_scan(ir, *, max_iter=10):
 # TODO(tehrengruber): Revisit interface to configure temporary extraction. We currently forward
 #  `lift_mode` and `temporary_extraction_heuristics` which is inconvenient.
 def apply_common_transforms(
-    ir: ir.Node,
+    ir: itir.Node,
     *,
     lift_mode=None,
     offset_provider=None,
@@ -83,10 +81,12 @@ def apply_common_transforms(
     force_inline_lambda_args=False,
     unconditionally_collapse_tuples=False,
     temporary_extraction_heuristics: Optional[
-        Callable[[ir.StencilClosure], Callable[[ir.Expr], bool]]
+        Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
     ] = None,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
-):
+) -> itir.FencilDefinition | FencilWithTemporaries:
+    icdlv_uids = eve_utils.UIDGenerator()
+
     if lift_mode is None:
         lift_mode = LiftMode.FORCE_INLINE
     assert isinstance(lift_mode, LiftMode)
@@ -99,6 +99,7 @@ def apply_common_transforms(
     for _ in range(10):
         inlined = ir
 
+        inlined = InlineCenterDerefLiftVars.apply(inlined, uids=icdlv_uids)  # type: ignore[arg-type]  # always a fencil
         inlined = _inline_lifts(inlined, lift_mode)
 
         inlined = InlineLambdas.apply(
@@ -142,9 +143,7 @@ def apply_common_transforms(
         for _ in range(10):
             inlined = InlineLifts().visit(ir)
             inlined = InlineLambdas.apply(
-                inlined,
-                opcount_preserving=True,
-                force_inline_lift_args=True,
+                inlined, opcount_preserving=True, force_inline_lift_args=True
             )
             if inlined == ir:
                 break
@@ -197,9 +196,8 @@ def apply_common_transforms(
         ir = MergeLet().visit(ir)
 
     ir = InlineLambdas.apply(
-        ir,
-        opcount_preserving=True,
-        force_inline_lambda_args=force_inline_lambda_args,
+        ir, opcount_preserving=True, force_inline_lambda_args=force_inline_lambda_args
     )
 
+    assert isinstance(ir, (itir.FencilDefinition, FencilWithTemporaries))
     return ir

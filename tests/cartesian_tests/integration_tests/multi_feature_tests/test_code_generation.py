@@ -23,6 +23,7 @@ from gt4py.cartesian.gtscript import (
     FORWARD,
     PARALLEL,
     Field,
+    GlobalTable,
     I,
     J,
     computation,
@@ -412,10 +413,7 @@ def test_variable_offsets_and_while_loop(backend):
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_nested_while_loop(backend):
     @gtscript.stencil(backend=backend)
-    def stencil(
-        field_a: gtscript.Field[np.float_],
-        field_b: gtscript.Field[np.int_],
-    ):
+    def stencil(field_a: gtscript.Field[np.float_], field_b: gtscript.Field[np.int_]):
         with computation(PARALLEL), interval(...):
             while field_a < 1:
                 add = 0
@@ -427,9 +425,7 @@ def test_nested_while_loop(backend):
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_mask_with_offset_written_in_conditional(backend):
     @gtscript.stencil(backend, externals={"mord": 5})
-    def stencil(
-        outp: gtscript.Field[np.float_],
-    ):
+    def stencil(outp: gtscript.Field[np.float_]):
         with computation(PARALLEL), interval(...):
             cond = True
             if cond[0, -1, 0] or cond[0, 0, 0]:
@@ -550,11 +546,7 @@ def test_origin_k_fields(backend):
 
     data = np.arange(10, dtype=np.float64)
     inp = gt_storage.from_array(
-        data=data,
-        aligned_index=(0,),
-        dtype=np.float64,
-        dimensions="K",
-        backend=backend,
+        data=data, aligned_index=(0,), dtype=np.float64, dimensions="K", backend=backend
     )
     outp = gt_storage.zeros(
         shape=(2, 2, 10), aligned_index=(0, 0, 0), dtype=np.float64, backend=backend
@@ -586,3 +578,19 @@ def test_pruned_args_match(backend):
         backend=backend, aligned_index=(0, 0, 0), shape=(2, 2, 2), dtype=np.float64
     )
     test(out, inp)
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_direct_datadims_index(backend):
+    F64_VEC4 = (np.float64, (2, 2, 2, 2))
+
+    @gtscript.stencil(backend=backend)
+    def test(out: Field[np.float64], inp: GlobalTable[F64_VEC4]):
+        with computation(PARALLEL), interval(...):
+            out = inp.A[1, 0, 1, 0]
+
+    inp = gt_storage.ones(backend=backend, shape=(2, 2, 2, 2), dtype=np.float64)
+    inp[1, 0, 1, 0] = 42
+    out = gt_storage.zeros(backend=backend, shape=(2, 2, 2), dtype=np.float64)
+    test(out, inp)
+    assert (out[:] == 42).all()
