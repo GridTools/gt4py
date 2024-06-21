@@ -407,7 +407,7 @@ class NdArrayField(
     def _slice(
         self, index: common.AnyIndexSpec
     ) -> tuple[common.Domain, common.RelativeIndexSequence]:
-        index = embedded_common.canonicalize_any_index_sequence(index)
+        index = embedded_common.canonicalize_any_index_sequence(index, self.domain)
         new_domain = embedded_common.sub_domain(self.domain, index)
 
         index_sequence = common.as_any_index_sequence(index)
@@ -1082,7 +1082,7 @@ NdArrayField.register_builtin_func(fbuiltins.astype, _astype)
 
 def _get_slices_from_domain_slice(
     domain: common.Domain,
-    domain_slice: common.Domain | Sequence[common.NamedRange | common.NamedIndex],
+    domain_slice: common.AbsoluteIndexSequence,
 ) -> common.RelativeIndexSequence:
     """Generate slices for sub-array extraction based on named ranges or named indices within a Domain.
 
@@ -1101,8 +1101,22 @@ def _get_slices_from_domain_slice(
     slice_indices: list[slice | common.IntIndex] = []
 
     for pos_old, (dim, _) in enumerate(domain):
-        if (pos := embedded_common._find_index_of_dim(dim, domain_slice)) is not None:
-            _, index_or_range = domain_slice[pos]
+        #if pos_old < len(domain_slice) and isinstance(domain_slice[pos_old], slice):
+        if (pos := embedded_common._find_index_of_slice(dim, domain_slice)) is not None:
+            if domain_slice[pos].start is None:  # type: ignore[union-attr]
+                index_or_range = domain_slice[pos].stop.value  # type: ignore[union-attr]
+            elif domain_slice[pos].stop is None:  # type: ignore[union-attr]
+                index_or_range = domain_slice[pos].start.value  # type: ignore[union-attr]
+            else:
+                index_or_range = common.unit_range(
+                    (domain_slice[pos].start.value, domain_slice[pos].stop.value)  # type: ignore[union-attr]
+                )
+            slice_indices.append(_compute_slice(index_or_range, domain, pos_old))
+        elif (
+            pos_old < len(domain_slice)
+            and (pos := embedded_common._find_index_of_dim(dim, domain_slice)) is not None
+        ):
+            _, index_or_range = domain_slice[pos]  # type: ignore[misc]
             slice_indices.append(_compute_slice(index_or_range, domain, pos_old))
         else:
             slice_indices.append(slice(None))
