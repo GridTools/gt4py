@@ -39,32 +39,17 @@ except ImportError:
     cp = None
 
 
-CUPY_DEVICE: Final[Literal[None, core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM]] = (
-    None
-    if not cp
-    else (core_defs.DeviceType.ROCM if cp.cuda.get_hipcc_path() else core_defs.DeviceType.CUDA)
-)
-
+CUPY_DEVICE: Final = allocators.CUPY_DEVICE
 
 FieldLike = Union["cp.ndarray", np.ndarray, ArrayInterface, CUDAArrayInterface]
 
-assert allocators.is_valid_nplike_allocation_ns(np)
+_CPUBufferAllocator = allocators.NDArrayBufferAllocator(array_handler=allocators.NumPyArrayHandler)
 
-_CPUBufferAllocator = allocators.NDArrayBufferAllocator(
-    device_type=core_defs.DeviceType.CPU, array_ns=np
+_GPUBufferAllocator: Optional[allocators.NDArrayBufferAllocator] = (
+    allocators.NDArrayBufferAllocator(array_handler=allocators.NumPyArrayHandler)
+    if CUPY_DEVICE
+    else None
 )
-
-_GPUBufferAllocator: Optional[allocators.NDArrayBufferAllocator] = None
-if cp:
-    assert allocators.is_valid_nplike_allocation_ns(cp)
-    if CUPY_DEVICE == core_defs.DeviceType.CUDA:
-        _GPUBufferAllocator = allocators.NDArrayBufferAllocator(
-            device_type=core_defs.DeviceType.CUDA, array_ns=cp
-        )
-    else:
-        _GPUBufferAllocator = allocators.NDArrayBufferAllocator(
-            device_type=core_defs.DeviceType.ROCM, array_ns=cp
-        )
 
 
 def _idx_from_order(order):

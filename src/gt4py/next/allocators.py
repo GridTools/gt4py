@@ -15,8 +15,6 @@
 import abc
 import dataclasses
 
-import numpy as np
-
 import gt4py._core.definitions as core_defs
 import gt4py.next.common as common
 import gt4py.storage.allocators as core_allocators
@@ -25,7 +23,6 @@ from gt4py.eve.extended_typing import (
     Any,
     Callable,
     Final,
-    Literal,
     Optional,
     Protocol,
     Sequence,
@@ -40,12 +37,7 @@ try:
 except ImportError:
     cp = None
 
-
-CUPY_DEVICE: Final[Literal[None, core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM]] = (
-    None
-    if not cp
-    else (core_defs.DeviceType.ROCM if cp.cuda.runtime.is_hip else core_defs.DeviceType.CUDA)
-)
+CUPY_DEVICE: Final = core_allocators.CUPY_DEVICE
 
 
 FieldLayoutMapper: TypeAlias = Callable[
@@ -148,14 +140,13 @@ def get_allocator(
 class BaseFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]):
     """Parametrizable field buffer allocator base class."""
 
-    device_type: core_defs.DeviceTypeT
-    array_ns: core_allocators.ValidNumPyLikeAllocationNS
+    buffer_allocator: core_allocators.NDArrayBufferAllocator[core_defs.DeviceTypeT]
     layout_mapper: FieldLayoutMapper
     byte_alignment: int
 
     @property
     def __gt_device_type__(self) -> core_defs.DeviceTypeT:
-        return self.device_type
+        return self.buffer_allocator.device_type
 
     def __gt_allocate__(
         self,
@@ -169,7 +160,7 @@ class BaseFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceType
         # TODO(egparedes): add support for non-empty aligned index values
         assert aligned_index is None
 
-        return core_allocators.NDArrayBufferAllocator(self.device_type, self.array_ns).allocate(
+        return self.buffer_allocator.allocate(
             shape, dtype, device_id, layout_map, self.byte_alignment, aligned_index
         )
 
@@ -210,17 +201,14 @@ if TYPE_CHECKING:
 device_allocators: dict[core_defs.DeviceType, FieldBufferAllocatorProtocol] = {}
 
 
-assert core_allocators.is_valid_nplike_allocation_ns(np)
-np_alloc_ns: core_allocators.ValidNumPyLikeAllocationNS = np  # Just for static type checking
-
-
 class StandardCPUFieldBufferAllocator(BaseFieldBufferAllocator[core_defs.CPUDeviceTyping]):
     """A field buffer allocator for CPU devices that uses a horizontal-first layout mapper and 64-byte alignment."""
 
     def __init__(self) -> None:
         super().__init__(
-            device_type=core_defs.DeviceType.CPU,
-            array_ns=np_alloc_ns,
+            buffer_allocator=core_allocators.NDArrayBufferAllocator(
+                array_handler=core_allocators.NumPyArrayHandler
+            ),
             layout_mapper=horizontal_first_layout_mapper,
             byte_alignment=64,
         )
@@ -254,34 +242,19 @@ class InvalidFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceT
 
 
 if CUPY_DEVICE is not None:
-    cp_alloc_ns: core_allocators.ValidNumPyLikeAllocationNS = cp  # Just for static type checking
-    assert core_allocators.is_valid_nplike_allocation_ns(cp_alloc_ns)
-
     if CUPY_DEVICE is core_defs.DeviceType.CUDA:
 
-        class CUDAFieldBufferAllocator(BaseFieldBufferAllocator[core_defs.CUDADeviceTyping]):
+        class GPUFieldBufferAllocator(BaseFieldBufferAllocator[CUPY_DEVICE]):
             def __init__(self) -> None:
                 super().__init__(
-                    device_type=core_defs.DeviceType.CUDA,
-                    array_ns=cp_alloc_ns,
+                    buffer_allocator=core_allocators.NDArrayBufferAllocator(
+                        array_handler=core_allocators.CuPyArrayHandler
+                    ),
                     layout_mapper=horizontal_first_layout_mapper,
                     byte_alignment=128,
                 )
 
-        device_allocators[core_defs.DeviceType.CUDA] = CUDAFieldBufferAllocator()
-
-    else:
-
-        class ROCMFieldBufferAllocator(BaseFieldBufferAllocator[core_defs.ROCMDeviceTyping]):
-            def __init__(self) -> None:
-                super().__init__(
-                    device_type=core_defs.DeviceType.ROCM,
-                    array_ns=cp_alloc_ns,
-                    layout_mapper=horizontal_first_layout_mapper,
-                    byte_alignment=128,
-                )
-
-        device_allocators[core_defs.DeviceType.ROCM] = ROCMFieldBufferAllocator()
+        device_allocators[CUPY_DEVICE] = GPUFieldBufferAllocator()
 
 else:
 

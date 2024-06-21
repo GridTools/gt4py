@@ -29,7 +29,9 @@ from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import (
     TYPE_CHECKING,
     Any,
+    Final,
     Generic,
+    Literal,
     NewType,
     Optional,
     Protocol,
@@ -39,6 +41,7 @@ from gt4py.eve.extended_typing import (
     TypeAlias,
     TypeGuard,
     Union,
+    cast,
 )
 
 
@@ -48,9 +51,18 @@ except ImportError:
     cp = None
 
 
+CUPY_DEVICE: Final[Literal[None, core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM]] = (
+    None
+    if not cp
+    else (core_defs.DeviceType.ROCM if cp.cuda.runtime.is_hip else core_defs.DeviceType.CUDA)
+)
+
+
 _NDBuffer: TypeAlias = Union[
     # TODO: add `xtyping.Buffer` once we update typing_extensions
-    xtyping.ArrayInterface, xtyping.CUDAArrayInterface, xtyping.DLPackBuffer
+    xtyping.ArrayInterface,
+    xtyping.CUDAArrayInterface,
+    xtyping.DLPackBuffer,
 ]
 
 #: Tuple of positive integers encoding a permutation of the dimensions, such that
@@ -181,14 +193,133 @@ class BufferAllocator(Protocol[core_defs.DeviceTypeT]):
         ...
 
 
-@dataclasses.dataclass(frozen=True, init=False)
-class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.DeviceTypeT]):
-    """Base class for buffer allocators using NumPy-like modules."""
-
+class NDArrayHandler(Protocol[core_defs.DeviceTypeT]):
     @property
     @abc.abstractmethod
+    def device_type(self) -> core_defs.DeviceTypeT: ...
+
+    @abc.abstractmethod
+    def address_of(self, buffer: _NDBuffer) -> int: ...
+
+    @abc.abstractmethod
+    def malloc(self, byte_size: int, device_id: int) -> _NDBuffer: ...
+
+    @abc.abstractmethod
+    def tensorize(
+        self,
+        buffer: _NDBuffer,
+        dtype: core_defs.DType[core_defs.ScalarT],
+        shape: core_defs.TensorShape,
+        allocated_shape: core_defs.TensorShape,
+        strides: Sequence[int],
+        byte_offset: int,
+    ) -> core_defs.NDArrayObject: ...
+
+
+class NumPyArrayHandler(NDArrayHandler[Literal[core_defs.DeviceType.CPU]]):
+    device_type = core_defs.DeviceType.CPU
+
+    if hasattr(np, "byte_bounds"):
+
+        @classmethod
+        def address_of(cls, buffer: _NDBuffer) -> int:
+            assert isinstance(buffer, np.ndarray)
+            return np.byte_bounds(buffer)[0]  # noqa: NPY201 # np.byte_bounds moved in NumPy >= 2.0
+
+    else:
+        assert hasattr(np.lib.array_utils, "byte_bounds")  # type: ignore [attr-defined]  # Only NumPy >= 2.0
+
+        @classmethod
+        def address_of(cls, buffer: _NDBuffer) -> int:
+            return np.lib.array_utils.byte_bounds(buffer)[0]  # type: ignore [attr-defined]  # Only NumPy >= 2.0
+
+    @classmethod
+    def malloc(cls, byte_size: int, device_id: int) -> _NDBuffer:
+        if device_id != 0:
+            raise ValueError(f"Unsupported device ID {device_id} for CPU memory allocation")
+        return np.empty(shape=(byte_size,), dtype=np.uint8)
+
+    @classmethod
+    def tensorize(
+        cls,
+        buffer: _NDBuffer,
+        dtype: core_defs.DType[core_defs.ScalarT],
+        shape: core_defs.TensorShape,
+        allocated_shape: core_defs.TensorShape,
+        strides: Sequence[int],
+        byte_offset: int,
+    ) -> core_defs.NDArrayObject:
+        assert isinstance(buffer, np.ndarray)
+        item_size = dtype.byte_size
+        aligned_buffer = buffer[byte_offset : byte_offset + math.prod(allocated_shape) * item_size]
+        flat_ndarray = aligned_buffer.view(dtype=np.dtype(dtype))
+        tensor_view = np.lib.stride_tricks.as_strided(
+            flat_ndarray, shape=allocated_shape, strides=strides
+        )
+        if len(shape) and shape != allocated_shape:
+            shape_slices = tuple(slice(0, s, None) for s in shape)
+            tensor_view = tensor_view[shape_slices]
+
+        return cast(core_defs.NDArrayObject, tensor_view)
+
+
+if CUPY_DEVICE is not None:
+
+    class CuPyArrayHandler(NDArrayHandler[CUPY_DEVICE]):
+        device_type = CUPY_DEVICE
+
+        if hasattr(cp, "byte_bounds"):
+
+            @classmethod
+            def address_of(cls, buffer: _NDBuffer) -> int:
+                assert isinstance(buffer, cp.ndarray)
+                return cp.byte_bounds(buffer)[0]
+
+        else:
+            assert hasattr(cp.lib.array_utils, "byte_bounds")
+
+            @classmethod
+            def address_of(cls, buffer: _NDBuffer) -> int:
+                return cp.lib.array_utils.byte_bounds(buffer)[0]
+
+        @classmethod
+        def malloc(cls, byte_size: int, device_id: int) -> _NDBuffer:
+            with cp.cuda.Device(device_id):
+                return cp.empty(shape=(byte_size,), dtype=np.uint8)
+
+        @classmethod
+        def tensorize(
+            cls,
+            buffer: _NDBuffer,
+            dtype: core_defs.DType[core_defs.ScalarT],
+            shape: core_defs.TensorShape,
+            allocated_shape: core_defs.TensorShape,
+            strides: Sequence[int],
+            byte_offset: int,
+        ) -> core_defs.NDArrayObject:
+            assert isinstance(buffer, cp.ndarray)
+            item_size = dtype.byte_size
+            aligned_buffer = buffer[
+                byte_offset : byte_offset + math.prod(allocated_shape) * item_size
+            ]
+            flat_ndarray = aligned_buffer.view(dtype=cp.dtype(dtype))
+            tensor_view = cp.lib.stride_tricks.as_strided(
+                flat_ndarray, shape=allocated_shape, strides=strides
+            )
+            if len(shape) and shape != allocated_shape:
+                shape_slices = tuple(slice(0, s, None) for s in shape)
+                tensor_view = tensor_view[shape_slices]
+
+            return tensor_view
+
+
+@dataclasses.dataclass(frozen=True)
+class NDArrayBufferAllocator(Generic[core_defs.DeviceTypeT]):
+    array_handler: NDArrayHandler[core_defs.DeviceTypeT]
+
+    @property
     def device_type(self) -> core_defs.DeviceTypeT:
-        pass
+        return self.array_handler.device_type
 
     def allocate(
         self,
@@ -223,7 +354,7 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.DeviceTypeT]):
             )
         padded_shape = tuple(padded_shape_lst)
         assert core_defs.is_valid_tensor_shape(padded_shape)
-        total_length = item_size * functools.reduce(operator.mul, padded_shape, 1) + (
+        byte_size = item_size * functools.reduce(operator.mul, padded_shape, 1) + (
             byte_alignment - 1
         )  # the worst case for misalignment is `byte_alignment - 1`
 
@@ -237,8 +368,8 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.DeviceTypeT]):
         strides = tuple(strides_lst)
 
         # Allocate total size
-        buffer = self.malloc(total_length, device_id)
-        memory_address = self.array_ns.byte_bounds(buffer)[0]
+        buffer = self.array_handler.malloc(byte_size, device_id)
+        memory_address = self.array_handler.address_of(buffer)
 
         # Compute final byte offset to align the requested buffer index
         aligned_index = tuple(aligned_index or ([0] * len(shape)))
@@ -259,8 +390,8 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.DeviceTypeT]):
         byte_offset = (aligned_index_offset + allocation_mismatch_offset) % byte_alignment
 
         # Create shaped view from buffer
-        ndarray = self.tensorize(
-            buffer, dtype, shape, padded_shape, item_size, strides, byte_offset
+        ndarray = self.array_handler.tensorize(
+            buffer, dtype, shape, padded_shape, strides, byte_offset
         )
 
         if self.device_type == core_defs.DeviceType.ROCM:
@@ -288,104 +419,3 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.DeviceTypeT]):
             aligned_index=aligned_index,
             ndarray=ndarray,
         )
-
-    @property
-    @abc.abstractmethod
-    def array_ns(self) -> ValidNumPyLikeAllocationNS:
-        pass
-
-    @abc.abstractmethod
-    def malloc(self, length: int, device_id: int) -> _NDBuffer:
-        pass
-
-    @abc.abstractmethod
-    def tensorize(
-        self,
-        buffer: _NDBuffer,
-        dtype: core_defs.DType[core_defs.ScalarT],
-        shape: core_defs.TensorShape,
-        allocated_shape: core_defs.TensorShape,
-        item_size: int,
-        strides: Sequence[int],
-        byte_offset: int,
-    ) -> core_defs.NDArrayObject:
-        pass
-
-
-class ValidNumPyLikeAllocationNS(Protocol):
-    class _NumPyLibModule(Protocol):
-        class _NumPyLibStridesModule(Protocol):
-            @staticmethod
-            def as_strided(
-                ndarray: core_defs.NDArrayObject, **kwargs: Any
-            ) -> core_defs.NDArrayObject: ...
-
-        stride_tricks: _NumPyLibStridesModule
-
-    lib: _NumPyLibModule
-
-    @staticmethod
-    def empty(shape: Tuple[int, ...], dtype: Any) -> _NDBuffer: ...
-
-    @staticmethod
-    def byte_bounds(ndarray: _NDBuffer) -> Tuple[int, int]: ...
-
-
-def is_valid_nplike_allocation_ns(obj: Any) -> TypeGuard[ValidNumPyLikeAllocationNS]:
-    return (
-        len(required_keys := {"empty", "byte_bounds", "lib"} & set(dir(np))) == len(required_keys)
-        and "stride_tricks" in dir(np.lib)
-        and "as_strided" in dir(np.lib.stride_tricks)
-    )
-
-
-if not TYPE_CHECKING:
-    is_valid_nplike_allocation_ns = functools.lru_cache(maxsize=None)(is_valid_nplike_allocation_ns)
-
-
-@dataclasses.dataclass(frozen=True, init=False)
-class NDArrayBufferAllocator(_BaseNDArrayBufferAllocator[core_defs.DeviceTypeT]):
-    _device_type: core_defs.DeviceTypeT
-    _array_ns: ValidNumPyLikeAllocationNS
-
-    def __init__(self, device_type: core_defs.DeviceTypeT, array_ns: ValidNumPyLikeAllocationNS):
-        object.__setattr__(self, "_device_type", device_type)
-        object.__setattr__(self, "_array_ns", array_ns)
-
-    @property
-    def device_type(self) -> core_defs.DeviceTypeT:
-        return self._device_type
-
-    @property
-    def array_ns(self) -> ValidNumPyLikeAllocationNS:
-        return self._array_ns
-
-    def malloc(self, length: int, device_id: int) -> _NDBuffer:
-        if self.device_type == core_defs.DeviceType.CPU and device_id != 0:
-            raise ValueError(f"Unsupported device ID {device_id} for CPU memory allocation")
-
-        shape = (length,)
-        assert core_defs.is_valid_tensor_shape(shape)  # for mypy
-        out = self.array_ns.empty(shape=tuple(shape), dtype=np.dtype(np.uint8))
-        return out
-
-    def tensorize(
-        self,
-        buffer: _NDBuffer,
-        dtype: core_defs.DType[core_defs.ScalarT],
-        shape: core_defs.TensorShape,
-        allocated_shape: core_defs.TensorShape,
-        item_size: int,
-        strides: Sequence[int],
-        byte_offset: int,
-    ) -> core_defs.NDArrayObject:
-        aligned_buffer = buffer[byte_offset : byte_offset + math.prod(allocated_shape) * item_size]  # type: ignore[index] # TODO(egparedes): should we extend `_NDBuffer`s to cover __getitem__?
-        flat_ndarray = aligned_buffer.view(dtype=np.dtype(dtype))
-        tensor_view = self.array_ns.lib.stride_tricks.as_strided(
-            flat_ndarray, shape=allocated_shape, strides=strides
-        )
-        if len(shape) and shape != allocated_shape:
-            shape_slices = tuple(slice(0, s, None) for s in shape)
-            tensor_view = tensor_view[shape_slices]
-
-        return tensor_view

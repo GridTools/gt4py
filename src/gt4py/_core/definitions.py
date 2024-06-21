@@ -138,9 +138,10 @@ def is_positive_integral_type(integral_type: type) -> TypeGuard[Type[PositiveInt
     return issubclass(integral_type, UINT_TYPES)
 
 
-TensorShape: TypeAlias = Sequence[
-    int
-]  # TODO(egparedes) figure out if PositiveIntegral can be made to work
+BufferStrides: TypeAlias = Sequence[IntScalar]
+
+# TODO(egparedes) figure out if PositiveIntegral can be made to work
+TensorShape: TypeAlias = Sequence[int]
 
 
 def is_valid_tensor_shape(value: Sequence[IntegralScalar]) -> TypeGuard[TensorShape]:
@@ -409,6 +410,7 @@ DeviceTypeT = TypeVar(
     MetalDeviceTyping,
     VPIDeviceTyping,
     ROCMDeviceTyping,
+    covariant=True,
 )
 
 
