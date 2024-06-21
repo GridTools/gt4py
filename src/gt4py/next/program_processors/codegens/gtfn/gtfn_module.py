@@ -47,12 +47,6 @@ def get_param_description(name: str, obj: Any) -> interface.Parameter:
     return interface.Parameter(name, type_translation.from_value(obj))
 
 
-def get_hash(obj: bytes) -> str:
-    m = hashlib.sha1()
-    m.update(obj)
-    return m.hexdigest()
-
-
 @dataclasses.dataclass(frozen=True)
 class GTFNTranslationStep(
     workflow.ChainableWorkflowMixin[
