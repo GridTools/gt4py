@@ -259,9 +259,9 @@ class JITCachingStrategy(CachingStrategy):
                     and cache_info_ns.module_shash == module_shash
                 )
                 if validate_extra:
-                    result &= all([
-                        cache_info[key] == validate_extra[key] for key in validate_extra
-                    ])
+                    result &= all(
+                        [cache_info[key] == validate_extra[key] for key in validate_extra]
+                    )
         except Exception as err:
             if not catch_exceptions:
                 raise err

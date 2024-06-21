@@ -93,8 +93,7 @@ def test_neighbors():
     testee = ir.StencilClosure(
         stencil=ir.Lambda(
             expr=ir.FunCall(
-                fun=ir.SymRef(id="neighbors"),
-                args=[ir.OffsetLiteral(value="O"), ir.SymRef(id="x")],
+                fun=ir.SymRef(id="neighbors"), args=[ir.OffsetLiteral(value="O"), ir.SymRef(id="x")]
             ),
             params=[ir.Sym(id="x")],
         ),
@@ -102,14 +101,7 @@ def test_neighbors():
         output=ir.SymRef(id="out"),
         domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
     )
-    expected = {
-        "inp": {
-            (
-                ir.OffsetLiteral(value="O"),
-                Sentinel.ALL_NEIGHBORS,
-            )
-        }
-    }
+    expected = {"inp": {(ir.OffsetLiteral(value="O"), Sentinel.ALL_NEIGHBORS)}}
 
     actual = TraceShifts.apply(testee)
     assert actual == expected

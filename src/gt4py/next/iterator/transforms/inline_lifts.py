@@ -70,9 +70,7 @@ def _is_scan(node: ir.FunCall):
 
 
 def _transform_and_extract_lift_args(
-    node: ir.FunCall,
-    symtable: dict[eve.SymbolName, ir.Sym],
-    extracted_args: dict[ir.Sym, ir.Expr],
+    node: ir.FunCall, symtable: dict[eve.SymbolName, ir.Sym], extracted_args: dict[ir.Sym, ir.Expr]
 ):
     """
     Transform and extract non-symbol arguments of a lifted stencil call.
@@ -140,7 +138,7 @@ class InlineLifts(
         #: when we see that it is not required.
         INLINE_LIFTED_ARGS = 16
 
-    predicate: Callable[[ir.Expr, bool], bool] = lambda _1, _2: True  # noqa: E731 [lambda-assignment]
+    predicate: Callable[[ir.Expr, bool], bool] = lambda _1, _2: True
 
     flags: int = (
         Flag.PROPAGATE_SHIFT
@@ -203,7 +201,7 @@ class InlineLifts(
                 assert len(node.args[0].fun.args) == 1
                 args = node.args[0].args
                 if len(args) == 0:
-                    return ir.Literal(value="True", type="bool")
+                    return im.literal_from_value(True)
 
                 res = ir.FunCall(fun=ir.SymRef(id="can_deref"), args=[args[0]])
                 for arg in args[1:]:

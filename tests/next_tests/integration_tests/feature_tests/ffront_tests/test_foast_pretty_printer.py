@@ -69,7 +69,7 @@ def test_fieldop():
         """
     ).strip()
 
-    assert pretty_format(bar.foast_node) == expected
+    assert pretty_format(bar.foast_stage.foast_node) == expected
 
 
 def test_scanop():
@@ -89,4 +89,4 @@ def test_scanop():
         """
     ).strip()
 
-    assert pretty_format(scan.foast_node) == expected
+    assert pretty_format(scan.foast_stage.foast_node) == expected

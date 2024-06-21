@@ -173,8 +173,7 @@ class TestExecInfo:
         assert "run_time" in stencil_info
         if last_called_stencil:
             assert np.isclose(
-                stencil_info["run_time"],
-                exec_info["run_end_time"] - exec_info["run_start_time"],
+                stencil_info["run_time"], exec_info["run_end_time"] - exec_info["run_start_time"]
             )
         assert stencil_info["call_time"] > stencil_info["run_time"]
         assert "total_run_time" in stencil_info

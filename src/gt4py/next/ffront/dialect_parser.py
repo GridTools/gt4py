@@ -84,7 +84,7 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         return output_ast
 
     @classmethod
-    def apply_to_function(cls, function: Callable):
+    def apply_to_function(cls, function: Callable) -> DialectRootT:
         src = SourceDefinition.from_function(function)
         closure_vars = get_closure_vars_from_function(function)
         annotations = typing.get_type_hints(function)

@@ -60,10 +60,7 @@ class BackendChoice(click.Choice):
     name = "backend"
 
     def convert(
-        self,
-        value: str,
-        param: Optional[click.Parameter],
-        ctx: Optional[click.Context],
+        self, value: str, param: Optional[click.Parameter], ctx: Optional[click.Context]
     ) -> Type[CLIBackendMixin]:
         """Convert a CLI option argument to a backend."""
         name = super().convert(value, param, ctx)
@@ -146,7 +143,7 @@ class BackendOption(click.ParamType):
     def convert(
         self, value: str, param: Optional[click.Parameter], ctx: Optional[click.Context]
     ) -> Tuple[str, Any]:
-        backend = ctx.params["backend"] if ctx else gt4pyc.backend.from_name("debug")
+        backend = ctx.params["backend"] if ctx else gt4pyc.backend.from_name("numpy")
         name, value = self._try_split(value)
         if name.strip() not in backend.options:
             self.fail(f"Backend {backend.name} received unknown option: {name}!")
@@ -239,10 +236,7 @@ class GTScriptBuilder:
                 self.reporter.echo(f"Writing source file: {file_path}")
                 file_path.write_text(content)
 
-    def generate_stencils(
-        self,
-        build_options: Optional[Dict[str, Any]] = None,
-    ) -> None:
+    def generate_stencils(self, build_options: Optional[Dict[str, Any]] = None) -> None:
         for proto_stencil in self.iterate_stencils():
             self.reporter.echo(f"Building stencil {proto_stencil.builder.options.name}")
             builder = proto_stencil.builder.with_backend(self.backend_cls.name)
@@ -314,8 +308,5 @@ def gen(
 ) -> None:
     """Generate stencils from gtscript modules or packages."""
     GTScriptBuilder(
-        input_path=input_path,
-        output_path=output_path,
-        backend=backend,
-        silent=silent,
+        input_path=input_path, output_path=output_path, backend=backend, silent=silent
     ).generate_stencils(build_options=dict(options))

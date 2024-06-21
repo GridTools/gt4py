@@ -53,7 +53,7 @@ class TypeAliasReplacement(NodeTranslator, traits.VisitorWithSymbolTableTrait):
             and node_id not in TYPE_BUILTIN_NAMES
         )
 
-    def visit_Name(self, node: foast.Name, **kwargs) -> foast.Name:
+    def visit_Name(self, node: foast.Name, **kwargs: Any) -> foast.Name:
         if self.is_type_alias(node.id):
             return foast.Name(
                 id=self.closure_vars[node.id].__name__, location=node.location, type=node.type
@@ -94,7 +94,7 @@ class TypeAliasReplacement(NodeTranslator, traits.VisitorWithSymbolTableTrait):
         return new_closure_vars
 
     def visit_FunctionDefinition(
-        self, node: foast.FunctionDefinition, **kwargs
+        self, node: foast.FunctionDefinition, **kwargs: Any
     ) -> foast.FunctionDefinition:
         return foast.FunctionDefinition(
             id=node.id,

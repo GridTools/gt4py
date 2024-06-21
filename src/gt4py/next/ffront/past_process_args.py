@@ -15,20 +15,24 @@
 from typing import Any, Iterator, Optional
 
 from gt4py.next import common, errors
-from gt4py.next.ffront import program_ast as past, type_specifications as ts_ffront
-from gt4py.next.otf import stages, workflow
+from gt4py.next.ffront import (
+    program_ast as past,
+    stages as ffront_stages,
+    type_specifications as ts_ffront,
+)
+from gt4py.next.otf import workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
 @workflow.make_step
-def past_process_args(inp: stages.PastClosure) -> stages.PastClosure:
+def past_process_args(inp: ffront_stages.PastClosure) -> ffront_stages.PastClosure:
     extra_kwarg_names = ["offset_provider", "column_axis"]
     extra_kwargs = {k: v for k, v in inp.kwargs.items() if k in extra_kwarg_names}
     kwargs = {k: v for k, v in inp.kwargs.items() if k not in extra_kwarg_names}
     rewritten_args, size_args, kwargs = _process_args(
         past_node=inp.past_node, args=list(inp.args), kwargs=kwargs
     )
-    return stages.PastClosure(
+    return ffront_stages.PastClosure(
         past_node=inp.past_node,
         closure_vars=inp.closure_vars,
         grid_type=inp.grid_type,
@@ -46,10 +50,7 @@ def _validate_args(past_node: past.Program, args: list, kwargs: dict[str, Any]) 
 
     try:
         type_info.accepts_args(
-            past_node.type,
-            with_args=arg_types,
-            with_kwargs=kwarg_types,
-            raise_exception=True,
+            past_node.type, with_args=arg_types, with_kwargs=kwarg_types, raise_exception=True
         )
     except ValueError as err:
         raise errors.DSLError(
@@ -90,7 +91,8 @@ def _process_args(
 
 
 def _field_constituents_shape_and_dims(
-    arg, arg_type: ts.DataType
+    arg: Any,  # TODO(havogt): improve typing
+    arg_type: ts.DataType,
 ) -> Iterator[tuple[tuple[int, ...], list[common.Dimension]]]:
     match arg_type:
         case ts.TupleType():

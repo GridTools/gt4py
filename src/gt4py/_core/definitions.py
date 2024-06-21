@@ -20,7 +20,6 @@ import enum
 import functools
 import math
 import numbers
-from typing import overload
 
 import numpy as np
 import numpy.typing as npt
@@ -42,6 +41,7 @@ from gt4py.eve.extended_typing import (
     TypeVar,
     Union,
     cast,
+    overload,
 )
 
 
@@ -143,9 +143,7 @@ TensorShape: TypeAlias = Sequence[
 ]  # TODO(egparedes) figure out if PositiveIntegral can be made to work
 
 
-def is_valid_tensor_shape(
-    value: Sequence[IntegralScalar],
-) -> TypeGuard[TensorShape]:
+def is_valid_tensor_shape(value: Sequence[IntegralScalar]) -> TypeGuard[TensorShape]:
     return isinstance(value, collections.abc.Sequence) and all(
         isinstance(v, numbers.Integral) and v > 0 for v in value
     )

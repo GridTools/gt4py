@@ -45,11 +45,11 @@ def no_exec(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
 
 
 class NoBackend(next_backend.Backend):
-    def __call__(self, program) -> None:
+    def __call__(self, program, *args, **kwargs) -> None:
         raise ValueError("No backend selected! Backend selection is mandatory in tests.")
 
 
-no_backend = NoBackend(executor=no_exec, transformer=None, allocator=None)
+no_backend = NoBackend(executor=no_exec, transforms_prog=None, allocator=None)
 
 
 OPTIONAL_PROCESSORS = []
@@ -279,15 +279,7 @@ def skip_value_mesh() -> MeshDescriptor:
     )
 
     c2v_arr = np.array(
-        [
-            [0, 6, 5],
-            [0, 2, 6],
-            [0, 1, 2],
-            [2, 3, 6],
-            [3, 4, 6],
-            [4, 5, 6],
-        ],
-        dtype=gtx.IndexType,
+        [[0, 6, 5], [0, 2, 6], [0, 1, 2], [2, 3, 6], [3, 4, 6], [4, 5, 6]], dtype=gtx.IndexType
     )
 
     c2e_arr = np.array(

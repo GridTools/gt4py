@@ -21,7 +21,9 @@ other errors.
 """
 
 import sys
-from typing import Callable
+import types
+from collections.abc import Callable
+from typing import Optional
 
 from gt4py.next import config
 
@@ -31,17 +33,15 @@ from . import exceptions, formatting
 def _format_uncaught_error(err: exceptions.DSLError, verbose_exceptions: bool) -> list[str]:
     if verbose_exceptions:
         return formatting.format_compilation_error(
-            type(err),
-            err.message,
-            err.location,
-            err.__traceback__,
-            err.__cause__,
+            type(err), err.message, err.location, err.__traceback__, err.__cause__
         )
     else:
         return formatting.format_compilation_error(type(err), err.message, err.location)
 
 
-def compilation_error_hook(fallback: Callable, type_: type, value: BaseException, tb) -> None:
+def compilation_error_hook(
+    fallback: Callable, type_: type, value: BaseException, tb: Optional[types.TracebackType]
+) -> None:
     """
     Format `CompilationError`s in a neat way.
 

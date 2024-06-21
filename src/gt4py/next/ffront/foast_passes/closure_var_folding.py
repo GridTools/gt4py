@@ -40,7 +40,11 @@ class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
         return cls(closure_vars=closure_vars).visit(node)
 
     def visit_Name(
-        self, node: foast.Name, current_closure_vars, symtable, **kwargs
+        self,
+        node: foast.Name,
+        current_closure_vars: dict[str, Any],
+        symtable: dict[str, foast.Symbol],
+        **kwargs: Any,
     ) -> foast.Name | foast.Constant:
         if node.id in symtable:
             definition = symtable[node.id]
@@ -50,7 +54,7 @@ class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                     return foast.Constant(value=value, location=node.location)
         return node
 
-    def visit_Attribute(self, node: foast.Attribute, **kwargs) -> foast.Constant:
+    def visit_Attribute(self, node: foast.Attribute, **kwargs: Any) -> foast.Constant:
         value = self.visit(node.value, **kwargs)
         if isinstance(value, foast.Constant):
             if hasattr(value.value, node.attr):
@@ -59,6 +63,6 @@ class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
         raise errors.DSLError(node.location, "Attribute access only applicable to constants.")
 
     def visit_FunctionDefinition(
-        self, node: foast.FunctionDefinition, **kwargs
+        self, node: foast.FunctionDefinition, **kwargs: Any
     ) -> foast.FunctionDefinition:
         return self.generic_visit(node, current_closure_vars=node.closure_vars, **kwargs)

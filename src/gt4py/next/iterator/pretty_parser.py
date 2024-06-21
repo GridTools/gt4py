@@ -23,7 +23,10 @@ from gt4py.next.iterator.ir_utils import ir_makers as im
 GRAMMAR = """
     start: fencil_definition
         | function_definition
+        | declaration
         | stencil_closure
+        | set_at
+        | program
         | prec0
 
     SYM: CNAME
@@ -64,6 +67,7 @@ GRAMMAR = """
         | "·" prec7 -> deref
         | "¬" prec7 -> bool_not
         | "↑" prec7 -> lift
+        | "⇑" prec7 -> as_fieldop
 
     ?prec8: prec9
         | prec8 "[" prec0 "]" -> tuple_get
@@ -80,8 +84,11 @@ GRAMMAR = """
 
     named_range: AXIS_NAME ":" "[" prec0 "," prec0 ")"
     function_definition: ID_NAME "=" "λ(" ( SYM "," )* SYM? ")" "→" prec0 ";"
+    declaration: ID_NAME "=" "temporary(" "domain=" prec0 "," "dtype=" prec0 ")" ";"
     stencil_closure: prec0 "←" "(" prec0 ")" "(" ( SYM_REF ", " )* SYM_REF ")" "@" prec0 ";"
+    set_at: prec0 "@" prec0 "←" prec1 ";"
     fencil_definition: ID_NAME "(" ( SYM "," )* SYM ")" "{" ( function_definition )* ( stencil_closure )+ "}"
+    program: ID_NAME "(" ( SYM "," )* SYM ")" "{" ( function_definition )* ( declaration )* ( set_at )+ "}"
 
     %import common (CNAME, SIGNED_FLOAT, SIGNED_INT, WS)
     %ignore WS
@@ -95,14 +102,14 @@ class ToIrTransformer(lark_visitors.Transformer):
 
     def SYM_REF(self, value: lark_lexer.Token) -> Union[ir.SymRef, ir.Literal]:
         if value.value in ("True", "False"):
-            return ir.Literal(value=value.value, type="bool")
+            return im.literal(value.value, "bool")
         return ir.SymRef(id=value.value)
 
     def INT_LITERAL(self, value: lark_lexer.Token) -> ir.Literal:
         return im.literal_from_value(int(value.value))
 
     def FLOAT_LITERAL(self, value: lark_lexer.Token) -> ir.Literal:
-        return ir.Literal(value=value.value, type="float64")
+        return im.literal(value.value, "float64")
 
     def OFFSET_LITERAL(self, value: lark_lexer.Token) -> ir.OffsetLiteral:
         v: Union[int, str] = value.value[:-1]
@@ -167,6 +174,9 @@ class ToIrTransformer(lark_visitors.Transformer):
     def lift(self, arg: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="lift"), args=[arg])
 
+    def as_fieldop(self, arg: ir.Expr) -> ir.FunCall:
+        return ir.FunCall(fun=ir.SymRef(id="as_fieldop"), args=[arg])
+
     def astype(self, arg: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="cast_"), args=[arg])
 
@@ -202,6 +212,15 @@ class ToIrTransformer(lark_visitors.Transformer):
         output, stencil, *inputs, domain = args
         return ir.StencilClosure(domain=domain, stencil=stencil, output=output, inputs=inputs)
 
+    def declaration(self, *args: ir.Expr) -> ir.Temporary:
+        tid, domain, dtype = args
+        return ir.Temporary(id=tid, domain=domain, dtype=dtype)
+
+    def set_at(self, *args: ir.Expr) -> ir.SetAt:
+        target, domain, expr = args
+        return ir.SetAt(expr=expr, domain=domain, target=target)
+
+    # TODO(havogt): remove after refactoring.
     def fencil_definition(self, fid: str, *args: ir.Node) -> ir.FencilDefinition:
         params = []
         function_definitions = []
@@ -216,6 +235,29 @@ class ToIrTransformer(lark_visitors.Transformer):
                 closures.append(arg)
         return ir.FencilDefinition(
             id=fid, function_definitions=function_definitions, params=params, closures=closures
+        )
+
+    def program(self, fid: str, *args: ir.Node) -> ir.Program:
+        params = []
+        function_definitions = []
+        body = []
+        declarations = []
+        for arg in args:
+            if isinstance(arg, ir.Sym):
+                params.append(arg)
+            elif isinstance(arg, ir.FunctionDefinition):
+                function_definitions.append(arg)
+            elif isinstance(arg, ir.Temporary):
+                declarations.append(arg)
+            else:
+                assert isinstance(arg, ir.SetAt)
+                body.append(arg)
+        return ir.Program(
+            id=fid,
+            function_definitions=function_definitions,
+            params=params,
+            body=body,
+            declarations=declarations,
         )
 
     def start(self, arg: ir.Node) -> ir.Node:

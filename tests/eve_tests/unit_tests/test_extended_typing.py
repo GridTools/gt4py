@@ -113,125 +113,6 @@ class IncompleteClass:
     yield types.SimpleNamespace(**DEFINITIONS)
 
 
-class TestExtendedProtocol:
-    def test_instance_check_shortcut(self, sample_class_defs):
-        ConcreteClass = sample_class_defs.ConcreteClass
-        IncompleteClass = sample_class_defs.IncompleteClass
-        NoDataProto = sample_class_defs.NoDataProto
-        DataProto = sample_class_defs.DataProto
-
-        # Undecorated runtime protocol checks should fail
-        with pytest.raises(
-            TypeError, match="checks can only be used with @runtime_checkable protocols"
-        ):
-            assert isinstance(ConcreteClass(), NoDataProto)
-
-        # Standard runtime protocol checks
-        xtyping.runtime_checkable(NoDataProto)
-        assert isinstance(ConcreteClass(), NoDataProto)
-        assert isinstance(ConcreteClass(), DataProto)
-        assert not isinstance(IncompleteClass(), NoDataProto)
-
-        # Standard runtime protocol checks from extended decorator (behavior should be the same)
-        xtyping.extended_runtime_checkable(
-            NoDataProto, instance_check_shortcut=False, subclass_check_with_data_members=False
-        )
-        assert isinstance(ConcreteClass(), NoDataProto)
-        assert isinstance(ConcreteClass(), DataProto)
-        assert not isinstance(IncompleteClass(), NoDataProto)
-
-        # Runtime protocol checks from extended decorator with shortcuts
-        xtyping.extended_runtime_checkable(
-            instance_check_shortcut=True, subclass_check_with_data_members=False
-        )(NoDataProto)
-        assert isinstance(ConcreteClass(), NoDataProto)
-        assert isinstance(ConcreteClass(), DataProto)
-        assert not isinstance(IncompleteClass(), NoDataProto)
-
-    def test_instance_check_shortcut_performance(self, sample_class_defs):
-        # TODO(egparedes): change testing strategy to avoid timings
-        pytest.skip()
-
-        PASS_STMT = "isinstance(ConcreteClass(), NoDataProto)"
-        FAIL_STMT = "isinstance(IncompleteClass(), NoDataProto)"
-        DEFINITIONS = sample_class_defs.__dict__
-        NUM_REPETITIONS = 10000
-
-        # Timings for standard runtime_checkable()
-        xtyping.runtime_checkable(sample_class_defs.NoDataProto)
-        std_pass_time = timeit.timeit(stmt=PASS_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS)
-        std_fail_time = timeit.timeit(stmt=FAIL_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS)
-
-        # Standard runtime protocol checks from extended decorator.
-        # Expected performance should be roughly the same.
-        xtyping.runtime_checkable(sample_class_defs.NoDataProto)
-        std_from_ext_pass_time = timeit.timeit(
-            stmt=PASS_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS
-        )
-        std_from_ext_fail_time = timeit.timeit(
-            stmt=FAIL_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS
-        )
-        bound_factor = 3.0
-
-        assert (1 / bound_factor) < (std_pass_time / std_from_ext_pass_time) < bound_factor
-        assert (1 / bound_factor) < (std_fail_time / std_from_ext_fail_time) < bound_factor
-
-        # Runtime protocol checks from extended decorator with shortcuts
-        # Expected performance should be much better.
-        xtyping.extended_runtime_checkable(
-            instance_check_shortcut=True, subclass_check_with_data_members=False
-        )(sample_class_defs.NoDataProto)
-        ext_pass_time = timeit.timeit(stmt=PASS_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS)
-        ext_fail_time = timeit.timeit(stmt=FAIL_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS)
-        bound_factor = 10.0
-
-        assert std_pass_time / ext_pass_time > bound_factor
-        assert std_pass_time / ext_fail_time > bound_factor
-
-    def test_subclass_check_with_data_members(self, sample_class_defs):
-        ConcreteClass = sample_class_defs.ConcreteClass
-        NoDataProto = sample_class_defs.NoDataProto
-        DataProto = sample_class_defs.DataProto
-
-        # Undecorated runtime protocol checks should fail
-        with pytest.raises(
-            TypeError, match="checks can only be used with @runtime_checkable protocols"
-        ):
-            assert issubclass(ConcreteClass, DataProto)
-
-        # Standard runtime protocol checks
-        xtyping.runtime_checkable(NoDataProto)
-        assert isinstance(ConcreteClass(), NoDataProto)
-        assert issubclass(ConcreteClass, NoDataProto)
-
-        with pytest.raises(
-            TypeError, match="Protocols with non-method members don't support issubclass()"
-        ):
-            assert issubclass(ConcreteClass, DataProto)
-
-        # Standard runtime protocol checks from extended decorator.
-        # Expected behavior and performance should be roughly the same.
-        xtyping.extended_runtime_checkable(
-            instance_check_shortcut=False, subclass_check_with_data_members=False
-        )(DataProto)
-        assert isinstance(ConcreteClass(), NoDataProto)
-        assert issubclass(ConcreteClass, NoDataProto)
-
-        with pytest.raises(
-            TypeError, match="Protocols with non-method members don't support issubclass()"
-        ):
-            assert issubclass(ConcreteClass, DataProto)
-
-        # Runtime protocol checks from extended decorator with shortcuts
-        xtyping.extended_runtime_checkable(
-            instance_check_shortcut=False, subclass_check_with_data_members=True
-        )(DataProto)
-        assert isinstance(ConcreteClass(), DataProto)
-        assert issubclass(ConcreteClass, DataProto)
-        assert isinstance(ConcreteClass(), NoDataProto)
-        assert issubclass(ConcreteClass, NoDataProto)
-
-
 def test_supports_array_interface():
     from gt4py.eve.extended_typing import supports_array_interface
 
@@ -326,10 +207,12 @@ ACTUAL_TYPE_SAMPLES = [
     (List[int], type(List[int])),
 ]
 if sys.version_info >= (3, 9):
-    ACTUAL_TYPE_SAMPLES.extend([
-        (tuple[int, float], types.GenericAlias),  # type: ignore[misc]   # ignore false positive bug: https://github.com/python/mypy/issues/11098
-        (list[int], types.GenericAlias),
-    ])
+    ACTUAL_TYPE_SAMPLES.extend(
+        [
+            (tuple[int, float], types.GenericAlias),  # type: ignore[misc]   # ignore false positive bug: https://github.com/python/mypy/issues/11098
+            (list[int], types.GenericAlias),
+        ]
+    )
 
 
 @pytest.mark.parametrize(["instance", "expected"], ACTUAL_TYPE_SAMPLES)

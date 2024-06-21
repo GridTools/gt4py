@@ -51,8 +51,7 @@ FieldLike = Union["cp.ndarray", np.ndarray, ArrayInterface, CUDAArrayInterface]
 assert allocators.is_valid_nplike_allocation_ns(np)
 
 _CPUBufferAllocator = allocators.NDArrayBufferAllocator(
-    device_type=core_defs.DeviceType.CPU,
-    array_ns=np,
+    device_type=core_defs.DeviceType.CPU, array_ns=np
 )
 
 _GPUBufferAllocator: Optional[allocators.NDArrayBufferAllocator] = None

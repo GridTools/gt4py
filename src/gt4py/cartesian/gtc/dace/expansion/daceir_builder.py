@@ -233,8 +233,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
             self, axis: dcir.Axis, interval: Union[dcir.DomainInterval, oir.Interval]
         ) -> "DaCeIRBuilder.IterationContext":
             return DaCeIRBuilder.IterationContext(
-                grid_subset=self.grid_subset.set_interval(axis, interval),
-                parent=self,
+                grid_subset=self.grid_subset.set_interval(axis, interval), parent=self
             )
 
         def push_expansion_item(self, item: Union[Map, Loop]) -> "DaCeIRBuilder.IterationContext":
@@ -310,8 +309,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
                     if bound.level == common.LevelMarker.END:
                         symbol_collector.add_symbol(axis.domain_symbol())
         return dcir.HorizontalRestriction(
-            mask=node.mask,
-            body=self.visit(node.body, symbol_collector=symbol_collector, **kwargs),
+            mask=node.mask, body=self.visit(node.body, symbol_collector=symbol_collector, **kwargs)
         )
 
     def visit_VariableKOffset(self, node: oir.VariableKOffset, **kwargs):
@@ -437,9 +435,9 @@ class DaCeIRBuilder(eve.NodeTranslator):
         )
         expansion_items = global_ctx.library_node.expansion_specification[stages_idx + 1 :]
 
-        iteration_ctx = iteration_ctx.push_axes_extents({
-            k: v for k, v in zip(dcir.Axis.dims_horizontal(), extent)
-        })
+        iteration_ctx = iteration_ctx.push_axes_extents(
+            {k: v for k, v in zip(dcir.Axis.dims_horizontal(), extent)}
+        )
         iteration_ctx = iteration_ctx.push_expansion_items(expansion_items)
 
         assert iteration_ctx.grid_subset == dcir.GridSubset.single_gridpoint()
@@ -461,10 +459,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
         )
 
         dcir_node = dcir.Tasklet(
-            decls=decls,
-            stmts=stmts,
-            read_memlets=read_memlets,
-            write_memlets=write_memlets,
+            decls=decls, stmts=stmts, read_memlets=read_memlets, write_memlets=write_memlets
         )
 
         for memlet in [*read_memlets, *write_memlets]:
@@ -648,11 +643,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
                     )
                 symbol_collector.remove_symbol(axis.tile_symbol())
                 ranges.append(
-                    dcir.Range(
-                        var=axis.tile_symbol(),
-                        interval=interval,
-                        stride=iteration.stride,
-                    )
+                    dcir.Range(var=axis.tile_symbol(), interval=interval, stride=iteration.stride)
                 )
             else:
                 if _all_stmts_same_region(scope_nodes, axis, interval):
@@ -800,11 +791,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
             raise ValueError("Invalid expansion specification set.")
 
     def visit_VerticalLoop(
-        self,
-        node: oir.VerticalLoop,
-        *,
-        global_ctx: "DaCeIRBuilder.GlobalContext",
-        **kwargs,
+        self, node: oir.VerticalLoop, *, global_ctx: "DaCeIRBuilder.GlobalContext", **kwargs
     ):
         start, end = (node.sections[0].interval.start, node.sections[0].interval.end)
 
@@ -863,8 +850,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
         read_memlets, write_memlets, field_memlets = union_inout_memlets(computations)
 
         field_decls = global_ctx.get_dcir_decls(
-            global_ctx.library_node.access_infos,
-            symbol_collector=symbol_collector,
+            global_ctx.library_node.access_infos, symbol_collector=symbol_collector
         )
 
         read_fields = set(memlet.field for memlet in read_memlets)

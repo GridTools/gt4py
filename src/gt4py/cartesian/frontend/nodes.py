@@ -190,7 +190,7 @@ class LevelMarker(enum.Enum):
     START = 0
     END = -1
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
 
@@ -251,7 +251,7 @@ class Builtin(enum.Enum):
 
         return result
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
 
@@ -268,7 +268,7 @@ class DataType(enum.Enum):
     FLOAT32 = 104
     FLOAT64 = 108
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
     @property
@@ -665,7 +665,7 @@ class IterationOrder(enum.Enum):
         elif self == self.FORWARD:
             return "->"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
     def __lshift__(self, steps: int):

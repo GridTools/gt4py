@@ -21,7 +21,6 @@ from gt4py.next.iterator.transforms.global_tmps import (
     AUTO_DOMAIN,
     FencilWithTemporaries,
     SimpleTemporaryExtractionHeuristics,
-    Temporary,
     collect_tmps_info,
     split_closures,
     update_domains,
@@ -87,7 +86,7 @@ def test_split_closures():
         ],
     )
     actual = split_closures(testee, offset_provider={})
-    assert actual.tmps == [Temporary(id="_tmp_1"), Temporary(id="_tmp_2")]
+    assert actual.tmps == [ir.Temporary(id="_tmp_1"), ir.Temporary(id="_tmp_2")]
     assert actual.fencil == expected
 
 
@@ -141,7 +140,7 @@ def test_split_closures_simple_heuristics():
     actual = split_closures(
         testee, extraction_heuristics=SimpleTemporaryExtractionHeuristics, offset_provider={}
     )
-    assert actual.tmps == [Temporary(id="_tmp_1")]
+    assert actual.tmps == [ir.Temporary(id="_tmp_1")]
     assert actual.fencil == expected
 
 
@@ -211,7 +210,7 @@ def test_split_closures_lifted_scan():
     )
 
     actual = split_closures(testee, offset_provider={})
-    assert actual.tmps == [Temporary(id="_tmp_1")]
+    assert actual.tmps == [ir.Temporary(id="_tmp_1")]
     assert actual.fencil == expected
 
 
@@ -242,7 +241,7 @@ def test_update_cartesian_domains():
                         *(
                             im.call("named_range")(
                                 ir.AxisLiteral(value=a),
-                                ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
+                                im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                                 im.ref(s),
                             )
                             for a, s in (("IDim", "i"), ("JDim", "j"), ("KDim", "k"))
@@ -254,17 +253,8 @@ def test_update_cartesian_domains():
                 ),
             ],
         ),
-        params=[
-            im.sym("i"),
-            im.sym("j"),
-            im.sym("k"),
-            im.sym("inp"),
-            im.sym("out"),
-        ],
-        tmps=[
-            Temporary(id="_gtmp_0"),
-            Temporary(id="_gtmp_1"),
-        ],
+        params=[im.sym("i"), im.sym("j"), im.sym("k"), im.sym("inp"), im.sym("out")],
+        tmps=[ir.Temporary(id="_gtmp_0"), ir.Temporary(id="_gtmp_1")],
     )
     expected = copy.deepcopy(testee)
     assert expected.fencil.params.pop() == im.sym("_gtmp_auto_domain")
@@ -279,7 +269,7 @@ def test_update_cartesian_domains():
                         im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                         im.literal("1", ir.INTEGER_INDEX_BUILTIN),
                     ),
-                    im.plus(im.ref("i"), ir.Literal(value="1", type=ir.INTEGER_INDEX_BUILTIN)),
+                    im.plus(im.ref("i"), im.literal("1", ir.INTEGER_INDEX_BUILTIN)),
                 ],
             )
         ]
@@ -306,10 +296,7 @@ def test_update_cartesian_domains():
                         im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                         im.literal("1", ir.INTEGER_INDEX_BUILTIN),
                     ),
-                    im.plus(
-                        im.ref("i"),
-                        ir.Literal(value="1", type=ir.INTEGER_INDEX_BUILTIN),
-                    ),
+                    im.plus(im.ref("i"), im.literal("1", ir.INTEGER_INDEX_BUILTIN)),
                 ],
             )
         ]
@@ -318,7 +305,7 @@ def test_update_cartesian_domains():
                 fun=im.ref("named_range"),
                 args=[
                     ir.AxisLiteral(value=a),
-                    ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
+                    im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                     im.ref(s),
                 ],
             )
@@ -337,13 +324,10 @@ def test_collect_tmps_info():
                 fun=im.ref("named_range"),
                 args=[
                     ir.AxisLiteral(value="IDim"),
-                    ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
+                    im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                     ir.FunCall(
                         fun=im.ref("plus"),
-                        args=[
-                            im.ref("i"),
-                            ir.Literal(value="1", type=ir.INTEGER_INDEX_BUILTIN),
-                        ],
+                        args=[im.ref("i"), im.literal("1", ir.INTEGER_INDEX_BUILTIN)],
                     ),
                 ],
             )
@@ -353,7 +337,7 @@ def test_collect_tmps_info():
                 fun=im.ref("named_range"),
                 args=[
                     ir.AxisLiteral(value=a),
-                    ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
+                    im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                     im.ref(s),
                 ],
             )
@@ -378,10 +362,7 @@ def test_collect_tmps_info():
                     domain=tmp_domain,
                     stencil=ir.Lambda(
                         params=[ir.Sym(id="foo_inp")],
-                        expr=ir.FunCall(
-                            fun=im.ref("deref"),
-                            args=[im.ref("foo_inp")],
-                        ),
+                        expr=ir.FunCall(fun=im.ref("deref"), args=[im.ref("foo_inp")]),
                     ),
                     output=im.ref("_gtmp_1"),
                     inputs=[im.ref("inp")],
@@ -400,7 +381,7 @@ def test_collect_tmps_info():
                                 fun=im.ref("named_range"),
                                 args=[
                                     ir.AxisLiteral(value=a),
-                                    ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
+                                    im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                                     im.ref(s),
                                 ],
                             )
@@ -430,24 +411,15 @@ def test_collect_tmps_info():
                 ),
             ],
         ),
-        params=[
-            ir.Sym(id="i"),
-            ir.Sym(id="j"),
-            ir.Sym(id="k"),
-            ir.Sym(id="inp"),
-            ir.Sym(id="out"),
-        ],
-        tmps=[
-            Temporary(id="_gtmp_0"),
-            Temporary(id="_gtmp_1"),
-        ],
+        params=[ir.Sym(id="i"), ir.Sym(id="j"), ir.Sym(id="k"), ir.Sym(id="inp"), ir.Sym(id="out")],
+        tmps=[ir.Temporary(id="_gtmp_0"), ir.Temporary(id="_gtmp_1")],
     )
     expected = FencilWithTemporaries(
         fencil=testee.fencil,
         params=testee.params,
         tmps=[
-            Temporary(id="_gtmp_0", domain=tmp_domain, dtype="float64"),
-            Temporary(id="_gtmp_1", domain=tmp_domain, dtype="float64"),
+            ir.Temporary(id="_gtmp_0", domain=tmp_domain, dtype="float64"),
+            ir.Temporary(id="_gtmp_1", domain=tmp_domain, dtype="float64"),
         ],
     )
     actual = collect_tmps_info(testee, offset_provider={})

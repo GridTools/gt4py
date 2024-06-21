@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Optional, cast
+from typing import Any, Optional, cast
 
 from gt4py.eve import NodeTranslator, traits
 from gt4py.next import errors
@@ -24,7 +24,7 @@ from gt4py.next.ffront import (
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
-def _ensure_no_sliced_field(entry: past.Expr):
+def _ensure_no_sliced_field(entry: past.Expr) -> None:
     """
     Check that all arguments are of type past.Name or past.TupleExpr.
 
@@ -44,7 +44,7 @@ def _is_integral_scalar(expr: past.Expr) -> bool:
     return isinstance(expr.type, ts.ScalarType) and type_info.is_integral(expr.type)
 
 
-def _validate_operator_call(new_func: past.Name, new_kwargs: dict):
+def _validate_operator_call(new_func: past.Name, new_kwargs: dict) -> None:
     """
     Perform checks for domain and output field types.
 
@@ -52,10 +52,7 @@ def _validate_operator_call(new_func: past.Name, new_kwargs: dict):
 
     Domain has to be of type dictionary, including dimensions with values expressed as tuples of 2 numbers.
     """
-    if not isinstance(
-        new_func.type,
-        (ts_ffront.FieldOperatorType, ts_ffront.ScanOperatorType),
-    ):
+    if not isinstance(new_func.type, (ts_ffront.FieldOperatorType, ts_ffront.ScanOperatorType)):
         raise ValueError(
             f"Only calls to 'FieldOperators' and 'ScanOperators' "
             f"allowed in 'Program', got '{new_func.type}'."
@@ -96,7 +93,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     def apply(cls, node: past.Program) -> past.Program:
         return cls().visit(node)
 
-    def visit_Program(self, node: past.Program, **kwargs):
+    def visit_Program(self, node: past.Program, **kwargs: Any) -> past.Program:
         params = self.visit(node.params, **kwargs)
 
         definition_type = ts.FunctionType(
@@ -114,7 +111,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             location=node.location,
         )
 
-    def visit_Subscript(self, node: past.Subscript, **kwargs):
+    def visit_Subscript(self, node: past.Subscript, **kwargs: Any) -> past.Subscript:
         value = self.visit(node.value, **kwargs)
         return past.Subscript(
             value=value,
@@ -123,19 +120,14 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             location=node.location,
         )
 
-    def visit_TupleExpr(self, node: past.TupleExpr, **kwargs):
+    def visit_TupleExpr(self, node: past.TupleExpr, **kwargs: Any) -> past.TupleExpr:
         elts = self.visit(node.elts, **kwargs)
         return past.TupleExpr(
             elts=elts, type=ts.TupleType(types=[el.type for el in elts]), location=node.location
         )
 
     def _deduce_binop_type(
-        self,
-        node: past.BinOp,
-        *,
-        left: past.Expr,
-        right: past.Expr,
-        **kwargs,
+        self, node: past.BinOp, *, left: past.Expr, right: past.Expr, **kwargs: Any
     ) -> Optional[ts.TypeSpec]:
         logical_ops = {
             dialect_ast_enums.BinaryOperator.BIT_AND,
@@ -173,7 +165,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 f" in call to '{node.op}'.",
             ) from ex
 
-    def visit_BinOp(self, node: past.BinOp, **kwargs) -> past.BinOp:
+    def visit_BinOp(self, node: past.BinOp, **kwargs: Any) -> past.BinOp:
         new_left = self.visit(node.left, **kwargs)
         new_right = self.visit(node.right, **kwargs)
         new_type = self._deduce_binop_type(node, left=new_left, right=new_right)
@@ -181,7 +173,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             op=node.op, left=new_left, right=new_right, location=node.location, type=new_type
         )
 
-    def visit_Call(self, node: past.Call, **kwargs):
+    def visit_Call(self, node: past.Call, **kwargs: Any) -> past.Call:
         new_func = self.visit(node.func, **kwargs)
         new_args = self.visit(node.args, **kwargs)
         new_kwargs = self.visit(node.kwargs, **kwargs)
@@ -200,10 +192,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             }
 
             type_info.accepts_args(
-                new_func.type,
-                with_args=arg_types,
-                with_kwargs=kwarg_types,
-                raise_exception=True,
+                new_func.type, with_args=arg_types, with_kwargs=kwarg_types, raise_exception=True
             )
             return_type = ts.VoidType()
             if is_operator:
@@ -239,7 +228,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             location=node.location,
         )
 
-    def visit_Name(self, node: past.Name, **kwargs) -> past.Name:
+    def visit_Name(self, node: past.Name, **kwargs: Any) -> past.Name:
         symtable = kwargs["symtable"]
         if node.id not in symtable or symtable[node.id].type is None:
             raise errors.DSLError(node.location, f"Undeclared or untyped symbol '{node.id}'.")

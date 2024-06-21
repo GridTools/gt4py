@@ -84,15 +84,16 @@ class ReplaceEnabledWorkflowMixin(Workflow[StartT_contra, EndT_co], Protocol):
         return dataclasses.replace(self, **kwargs)
 
 
-class ChainableWorkflowMixin(Workflow[StartT, EndT]):
-    def chain(self, next_step: Workflow[EndT, NewEndT]) -> ChainableWorkflowMixin[StartT, NewEndT]:
+class ChainableWorkflowMixin(Workflow[StartT, EndT_co], Protocol[StartT, EndT_co]):
+    def chain(
+        self, next_step: Workflow[EndT_co, NewEndT]
+    ) -> ChainableWorkflowMixin[StartT, NewEndT]:
         return make_step(self).chain(next_step)
 
 
 @dataclasses.dataclass(frozen=True)
 class NamedStepSequence(
-    ChainableWorkflowMixin[StartT, EndT],
-    ReplaceEnabledWorkflowMixin[StartT, EndT],
+    ChainableWorkflowMixin[StartT, EndT], ReplaceEnabledWorkflowMixin[StartT, EndT]
 ):
     """
     Workflow with linear succession of named steps.
@@ -249,3 +250,41 @@ class CachedStep(
         except KeyError:
             result = self._cache[hash_] = self.step(inp)
         return result
+
+
+@dataclasses.dataclass(frozen=True)
+class SkippableStep(
+    ChainableWorkflowMixin[StartT, EndT], ReplaceEnabledWorkflowMixin[StartT, EndT]
+):
+    step: Workflow[StartT, EndT]
+
+    def __call__(self, inp: StartT) -> EndT:
+        if not self.skip_condition(inp):
+            return self.step(inp)
+        return inp  # type: ignore[return-value]  # up to the implementer to make sure StartT == EndT
+
+    def skip_condition(self, inp: StartT) -> bool:
+        raise NotImplementedError()
+
+
+@dataclasses.dataclass
+class InputWithArgs(Generic[StartT]):
+    data: StartT
+    args: tuple[Any]
+    kwargs: dict[str, Any]
+
+
+@dataclasses.dataclass(frozen=True)
+class NamedStepSequenceWithArgs(NamedStepSequence[InputWithArgs[StartT], EndT]):
+    def __call__(self, inp: InputWithArgs[StartT]) -> EndT:
+        args = inp.args
+        kwargs = inp.kwargs
+        step_result: Any = inp.data
+        fields = {f.name: f for f in dataclasses.fields(self)}
+        for step_name in self.step_order:
+            step = getattr(self, step_name)
+            if fields[step_name].metadata.get("takes_args", False):
+                step_result = step(InputWithArgs(step_result, args, kwargs))
+            else:
+                step_result = step(step_result)
+        return step_result

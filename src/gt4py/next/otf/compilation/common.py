@@ -19,5 +19,5 @@ from __future__ import annotations
 import importlib
 
 
-def python_module_suffix():
+def python_module_suffix() -> str:
     return importlib.machinery.EXTENSION_SUFFIXES[0][1:]

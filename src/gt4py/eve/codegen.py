@@ -632,11 +632,13 @@ class TemplatedGenerator(NodeVisitor):
                 ):
                     templates.update(templated_gen_class.__templates__)
 
-        templates.update({
-            key: value
-            for key, value in cls.__dict__.items()
-            if isinstance(value, Template) and not key.startswith("_") and not key.endswith("_")
-        })
+        templates.update(
+            {
+                key: value
+                for key, value in cls.__dict__.items()
+                if isinstance(value, Template) and not key.startswith("_") and not key.endswith("_")
+            }
+        )
 
         cls.__templates__ = types.MappingProxyType(templates)
 
@@ -675,6 +677,23 @@ class TemplatedGenerator(NodeVisitor):
         This class could be redefined in the subclasses.
         """
         return str(node)
+
+    @overload
+    def generic_visit(self, node: Node, **kwargs: Any) -> str: ...
+
+    @overload
+    def generic_visit(
+        self,
+        node: Union[
+            list,
+            tuple,
+            collections.abc.Set,
+            collections.abc.Sequence,
+            dict,
+            collections.abc.Mapping,
+        ],
+        **kwargs: Any,
+    ) -> Collection[str]: ...
 
     def generic_visit(self, node: RootNode, **kwargs: Any) -> Union[str, Collection[str]]:
         if isinstance(node, Node):
