@@ -223,24 +223,35 @@ def allocate_cpu(
 
 _gpu_buffer_allocator: Final = allocators.cupy_buffer_allocator
 
+if _gpu_buffer_allocator is not None:
 
-def allocate_gpu(
-    shape: Sequence[int],
-    layout_map: allocators.BufferLayoutMap,
-    dtype: DTypeLike,
-    alignment_bytes: int,
-    aligned_index: Optional[Sequence[int]],
-) -> Tuple["cp.ndarray", "cp.ndarray"]:
-    assert _gpu_buffer_allocator is not None, "GPU allocation library or device not found"
-    device = core_defs.Device(  # type: ignore[type-var]
-        core_defs.DeviceType.ROCM if gt_config.GT4PY_USE_HIP else core_defs.DeviceType.CUDA, 0
-    )
-    buffer = _gpu_buffer_allocator.allocate(
-        shape,
-        core_defs.dtype(dtype),
-        device_id=device.device_id,
-        layout_map=layout_map,
-        byte_alignment=alignment_bytes,
-        aligned_index=aligned_index,
-    )
-    return buffer.buffer, cast("cp.ndarray", buffer.ndarray)
+    def allocate_gpu(
+        shape: Sequence[int],
+        layout_map: allocators.BufferLayoutMap,
+        dtype: DTypeLike,
+        alignment_bytes: int,
+        aligned_index: Optional[Sequence[int]],
+    ) -> Tuple["cp.ndarray", "cp.ndarray"]:
+        device = core_defs.Device(  # type: ignore[type-var]
+            core_defs.DeviceType.ROCM if gt_config.GT4PY_USE_HIP else core_defs.DeviceType.CUDA, 0
+        )
+        buffer = _gpu_buffer_allocator.allocate(  # type: ignore[union-attr]  # gpu_buffer_allocator is not None
+            shape,
+            core_defs.dtype(dtype),
+            device_id=device.device_id,
+            layout_map=layout_map,
+            byte_alignment=alignment_bytes,
+            aligned_index=aligned_index,
+        )
+        return buffer.buffer, cast("cp.ndarray", buffer.ndarray)
+
+else:
+
+    def allocate_gpu(
+        shape: Sequence[int],
+        layout_map: allocators.BufferLayoutMap,
+        dtype: DTypeLike,
+        alignment_bytes: int,
+        aligned_index: Optional[Sequence[int]],
+    ) -> Tuple["cp.ndarray", "cp.ndarray"]:
+        raise RuntimeError("GPU device or allocation library is not available")
