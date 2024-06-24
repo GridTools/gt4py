@@ -65,3 +65,6 @@ class MemoryResourceHandlerTest:
 def test_cpu_device_is_zero():
     with pytest.raises(ValueError, match="device Id"):
         NumPyMemoryResourceHandler.malloc(32, 1)
+
+
+# TODO(egparedes): refactor cartesian_tests and move them here
