@@ -37,7 +37,7 @@ try:
 except ImportError:
     cp = None
 
-CuPyDeviceType: Final = core_allocators.CuPyDeviceType
+CuPyDeviceType: Final = core_allocators.CuPyDeviceTypeLiteral
 
 
 FieldLayoutMapper: TypeAlias = Callable[

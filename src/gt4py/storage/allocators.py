@@ -407,7 +407,7 @@ cupy_buffer_allocator: Union[
     NDArrayBufferAllocator[core_defs.ROCMDeviceTypeLiteral],
 ] = None
 
-CuPyDeviceType: Literal[None, core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM] = None
+CuPyDeviceTypeLiteral: Literal[None, core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM] = None
 CuPyMemoryResourceHandler: Union[None, type[MemoryResourceHandler]] = None
 
 if cp:
@@ -463,25 +463,25 @@ if cp:
 
     if not cp.cuda.runtime.is_hip:
 
-        class CuPyMemoryResourceHandler(
+        class CuPyMemoryResourceHandler(  # type: ignore[no-redef]
             _CuPyMemoryResourceHandler[core_defs.ROCMDeviceTypeLiteral]
-        ):  # type: ignore[no-redef]
+        ):
             """Memory resource handler for allocating and managing memory on ROCm GPUs using CuPy."""
 
             device_type: Final = core_defs.DeviceType.ROCM
 
-        CuPyDeviceType = core_defs.DeviceType.ROCM
+        CuPyDeviceTypeLiteral = core_defs.DeviceType.ROCM
 
     else:
 
-        class CuPyMemoryResourceHandler(
+        class CuPyMemoryResourceHandler(  # type: ignore[no-redef]
             _CuPyMemoryResourceHandler[core_defs.CUDADeviceTypeLiteral]
-        ):  # type: ignore[no-redef]
+        ):
             """Memory resource handler for allocating and managing memory on CUDA GPUs using CuPy."""
 
             device_type: Final = core_defs.DeviceType.CUDA
 
-        CuPyDeviceType = core_defs.DeviceType.CUDA
+        CuPyDeviceTypeLiteral = core_defs.DeviceType.CUDA
 
     cupy_buffer_allocator = cast(
         Union[

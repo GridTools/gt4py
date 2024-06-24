@@ -401,7 +401,7 @@ ROCMDeviceTypeLiteral: TypeAlias = Literal[DeviceType.ROCM]
 
 
 DeviceTypeLiteralT = TypeVar(
-    "DeviceTypeT",
+    "DeviceTypeLiteralT",
     CPUDeviceTypeLiteral,
     CUDADeviceTypeLiteral,
     CPUPinnedDeviceTypeLiteral,
