@@ -12,6 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+"""Memory buffer allocation and management."""
+
 from __future__ import annotations
 
 import abc
@@ -29,6 +31,7 @@ from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import (
     TYPE_CHECKING,
     Any,
+    Final,
     Generic,
     Literal,
     NewType,
@@ -155,7 +158,7 @@ if TYPE_CHECKING:
 
 
 class BufferAllocator(Protocol[core_defs.DeviceTypeT]):
-    """Protocol for buffer allocators."""
+    """Protocol for tensor buffer allocators."""
 
     @property
     def device_type(self) -> core_defs.DeviceTypeT: ...
@@ -186,15 +189,27 @@ class BufferAllocator(Protocol[core_defs.DeviceTypeT]):
 
 
 class MemoryResourceHandler(Protocol[core_defs.DeviceTypeT]):
+    """Interface for memory resource handlers."""
+
     @property
     @abc.abstractmethod
     def device_type(self) -> core_defs.DeviceTypeT: ...
 
     @abc.abstractmethod
-    def address_of(self, buffer: _NDBuffer) -> int: ...
+    def address_of(self, buffer: _NDBuffer) -> int:
+        """Get the address of a buffer."""
 
     @abc.abstractmethod
-    def malloc(self, byte_size: int, device_id: int) -> _NDBuffer: ...
+    def malloc(self, byte_size: int, device_id: int) -> _NDBuffer:
+        """Allocate memory on a specific device.
+
+        Args:
+            byte_size: The size of the memory to allocate in bytes.
+            device_id: The ID of the device.
+
+        Returns:
+            The allocated buffer.
+        """
 
     @abc.abstractmethod
     def tensorize(
@@ -202,14 +217,30 @@ class MemoryResourceHandler(Protocol[core_defs.DeviceTypeT]):
         buffer: _NDBuffer,
         dtype: core_defs.DType[core_defs.ScalarT],
         shape: core_defs.TensorShape,
-        allocated_shape: core_defs.TensorShape,
+        padded_shape: core_defs.TensorShape,
         strides: Sequence[int],
         byte_offset: int,
-    ) -> core_defs.NDArrayObject: ...
+    ) -> core_defs.NDArrayObject:
+        """Create an NDArray object from a buffer.
+
+        Args:
+            buffer: The buffer.
+            dtype: The data type of the NDArray.
+            shape: The shape of the NDArray.
+            padded_shape: The actually allocated shape of the buffer (including padding).
+            strides: The strides to be used in the result NDArray.
+            byte_offset: The initial padding in the buffer to be ignored in the result NDArray.
+
+        Returns:
+            The created NDArray object.
+        """
 
 
 class NumPyMemoryResourceHandler(MemoryResourceHandler[Literal[core_defs.DeviceType.CPU]]):
-    device_type = core_defs.DeviceType.CPU
+    """Memory resource handler for allocating and managing memory on CPU using NumPy."""
+
+    device_type: Final = core_defs.DeviceType.CPU
+    array_ns: Final = np
 
     if hasattr(np, "byte_bounds"):
 
@@ -228,7 +259,7 @@ class NumPyMemoryResourceHandler(MemoryResourceHandler[Literal[core_defs.DeviceT
     @classmethod
     def malloc(cls, byte_size: int, device_id: int) -> _NDBuffer:
         if device_id != 0:
-            raise ValueError(f"Unsupported device ID {device_id} for CPU memory allocation")
+            raise ValueError(f"Unsupported device Id {device_id} for CPU memory allocation")
         return np.empty(shape=(byte_size,), dtype=np.uint8)
 
     @classmethod
@@ -257,6 +288,8 @@ class NumPyMemoryResourceHandler(MemoryResourceHandler[Literal[core_defs.DeviceT
 
 @dataclasses.dataclass(frozen=True)
 class NDArrayBufferAllocator(Generic[core_defs.DeviceTypeT]):
+    """BufferAllocator implementation using NDArray objects from tensor libraries."""
+
     resource_handler: MemoryResourceHandler[core_defs.DeviceTypeT]
 
     @property
@@ -375,10 +408,15 @@ cupy_buffer_allocator: Union[
 ] = None
 
 CuPyDeviceType: Literal[None, core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM] = None
+CuPyMemoryResourceHandler: Union[None, type[MemoryResourceHandler]] = None
 
 if cp:
 
     class _CuPyMemoryResourceHandler(MemoryResourceHandler[core_defs.DeviceTypeT]):
+        """Memory resource handler for allocating and managing memory on GPU using CuPy."""
+
+        array_ns: Final = cp
+
         if hasattr(cp, "byte_bounds"):
 
             @classmethod
@@ -423,16 +461,23 @@ if cp:
 
             return tensor_view
 
-    class CUDAMemoryResourceHandler(_CuPyMemoryResourceHandler[core_defs.CUDADeviceTyping]):
-        device_type = core_defs.DeviceType.CUDA
+    if not cp.cuda.runtime.is_hip:
 
-    class ROCMMemoryResourceHandler(_CuPyMemoryResourceHandler[core_defs.ROCMDeviceTyping]):
-        device_type = core_defs.DeviceType.ROCM
+        class CuPyMemoryResourceHandler(_CuPyMemoryResourceHandler[core_defs.ROCMDeviceTyping]):  # type: ignore[no-redef]
+            """Memory resource handler for allocating and managing memory on ROCm GPUs using CuPy."""
 
-    CuPyDeviceType = (
-        core_defs.DeviceType.ROCM if cp.cuda.runtime.is_hip else core_defs.DeviceType.CUDA
-    )
-    assert not isinstance(CuPyDeviceType, type(None))
+            device_type: Final = core_defs.DeviceType.ROCM
+
+        CuPyDeviceType = core_defs.DeviceType.ROCM
+
+    else:
+
+        class CuPyMemoryResourceHandler(_CuPyMemoryResourceHandler[core_defs.CUDADeviceTyping]):  # type: ignore[no-redef]
+            """Memory resource handler for allocating and managing memory on CUDA GPUs using CuPy."""
+
+            device_type: Final = core_defs.DeviceType.CUDA
+
+        CuPyDeviceType = core_defs.DeviceType.CUDA
 
     cupy_buffer_allocator = cast(
         Union[
@@ -440,8 +485,6 @@ if cp:
             NDArrayBufferAllocator[core_defs.ROCMDeviceTyping],
         ],
         NDArrayBufferAllocator[Literal[core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM]](  # type: ignore[type-var]
-            resource_handler=ROCMMemoryResourceHandler
-            if cp.cuda.runtime.is_hip
-            else CUDAMemoryResourceHandler  # type: ignore[arg-type]
+            resource_handler=CuPyMemoryResourceHandler  # type: ignore[arg-type]
         ),
     )
