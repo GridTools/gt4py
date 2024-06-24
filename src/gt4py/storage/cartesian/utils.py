@@ -39,17 +39,9 @@ except ImportError:
     cp = None
 
 
-CUPY_DEVICE: Final = allocators.CUPY_DEVICE
+CuPyDeviceType: Final = allocators.CuPyDeviceType
 
 FieldLike = Union["cp.ndarray", np.ndarray, ArrayInterface, CUDAArrayInterface]
-
-_CPUBufferAllocator = allocators.NDArrayBufferAllocator(array_handler=allocators.NumPyArrayHandler)
-
-_GPUBufferAllocator: Optional[allocators.NDArrayBufferAllocator] = (
-    allocators.NDArrayBufferAllocator(array_handler=allocators.NumPyArrayHandler)
-    if CUPY_DEVICE
-    else None
-)
 
 
 def _idx_from_order(order):
@@ -207,6 +199,9 @@ def get_origin(obj: Union[core_defs.GTDimsInterface, npt.NDArray]) -> Optional[T
     return tuple(int(o) for o in origin)
 
 
+_cpu_buffer_allocator: Final = allocators.numpy_buffer_allocator
+
+
 def allocate_cpu(
     shape: Sequence[int],
     layout_map: allocators.BufferLayoutMap,
@@ -215,7 +210,7 @@ def allocate_cpu(
     aligned_index: Optional[Sequence[int]],
 ) -> Tuple[allocators._NDBuffer, np.ndarray]:
     device = core_defs.Device(core_defs.DeviceType.CPU, 0)
-    buffer = _CPUBufferAllocator.allocate(
+    buffer = _cpu_buffer_allocator.allocate(
         shape,
         core_defs.dtype(dtype),
         device_id=device.device_id,
@@ -226,6 +221,9 @@ def allocate_cpu(
     return buffer.buffer, cast(np.ndarray, buffer.ndarray)
 
 
+_gpu_buffer_allocator: Final = allocators.cupy_buffer_allocator
+
+
 def allocate_gpu(
     shape: Sequence[int],
     layout_map: allocators.BufferLayoutMap,
@@ -233,11 +231,11 @@ def allocate_gpu(
     alignment_bytes: int,
     aligned_index: Optional[Sequence[int]],
 ) -> Tuple["cp.ndarray", "cp.ndarray"]:
-    assert _GPUBufferAllocator is not None, "GPU allocation library or device not found"
+    assert _gpu_buffer_allocator is not None, "GPU allocation library or device not found"
     device = core_defs.Device(  # type: ignore[type-var]
         core_defs.DeviceType.ROCM if gt_config.GT4PY_USE_HIP else core_defs.DeviceType.CUDA, 0
     )
-    buffer = _GPUBufferAllocator.allocate(
+    buffer = _gpu_buffer_allocator.allocate(
         shape,
         core_defs.dtype(dtype),
         device_id=device.device_id,

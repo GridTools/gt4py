@@ -37,7 +37,7 @@ try:
 except ImportError:
     cp = None
 
-CUPY_DEVICE: Final = core_allocators.CUPY_DEVICE
+CuPyDeviceType: Final = core_allocators.CuPyDeviceType
 
 
 FieldLayoutMapper: TypeAlias = Callable[
@@ -207,7 +207,7 @@ class StandardCPUFieldBufferAllocator(BaseFieldBufferAllocator[core_defs.CPUDevi
     def __init__(self) -> None:
         super().__init__(
             buffer_allocator=core_allocators.NDArrayBufferAllocator(
-                array_handler=core_allocators.NumPyArrayHandler
+                resource_handler=core_allocators.NumPyMemoryResourceHandler
             ),
             layout_mapper=horizontal_first_layout_mapper,
             byte_alignment=64,
@@ -215,8 +215,6 @@ class StandardCPUFieldBufferAllocator(BaseFieldBufferAllocator[core_defs.CPUDevi
 
 
 device_allocators[core_defs.DeviceType.CPU] = StandardCPUFieldBufferAllocator()
-
-
 assert is_field_allocator(device_allocators[core_defs.DeviceType.CPU])
 
 
@@ -241,20 +239,25 @@ class InvalidFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceT
         raise self.exception
 
 
-if CUPY_DEVICE is not None:
-    if CUPY_DEVICE is core_defs.DeviceType.CUDA:
+if CuPyDeviceType is not None:
+    assert core_allocators.cupy_buffer_allocator is not None
 
-        class GPUFieldBufferAllocator(BaseFieldBufferAllocator[CUPY_DEVICE]):
-            def __init__(self) -> None:
-                super().__init__(
-                    buffer_allocator=core_allocators.NDArrayBufferAllocator(
-                        array_handler=core_allocators.CuPyArrayHandler
-                    ),
-                    layout_mapper=horizontal_first_layout_mapper,
-                    byte_alignment=128,
-                )
+    class CuPyGPUFieldBufferAllocator(
+        BaseFieldBufferAllocator[core_defs.CUDADeviceTyping | core_defs.ROCMDeviceTyping]  # type: ignore[type-var]  # CUDA or ROCm is known only at run-time
+    ):
+        def __init__(self) -> None:
+            super().__init__(
+                buffer_allocator=cast(
+                    core_allocators.NDArrayBufferAllocator[  # type: ignore[type-var]  # CUDA or ROCm is known only at run-time
+                        core_defs.CUDADeviceTyping | core_defs.ROCMDeviceTyping
+                    ],
+                    core_allocators.cupy_buffer_allocator,
+                ),
+                layout_mapper=horizontal_first_layout_mapper,
+                byte_alignment=128,
+            )
 
-        device_allocators[CUPY_DEVICE] = GPUFieldBufferAllocator()
+    device_allocators[CuPyDeviceType] = CuPyGPUFieldBufferAllocator()
 
 else:
 
@@ -268,7 +271,7 @@ else:
 
 StandardGPUFieldBufferAllocator: Final[type[FieldBufferAllocatorProtocol]] = cast(
     type[FieldBufferAllocatorProtocol],
-    type(device_allocators[CUPY_DEVICE]) if CUPY_DEVICE else InvalidGPUFielBufferAllocator,
+    CuPyGPUFieldBufferAllocator if CuPyDeviceType else InvalidGPUFielBufferAllocator,
 )
 
 
