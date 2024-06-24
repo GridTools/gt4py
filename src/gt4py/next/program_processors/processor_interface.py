@@ -227,8 +227,8 @@ def ensure_processor_kind(
 
 class ProgramBackend(
     ProgramProcessor[None, "ProgramExecutor"],
-    next_allocators.FieldBufferAllocatorFactoryProtocol[core_defs.DeviceTypeT],
-    Protocol[core_defs.DeviceTypeT],
+    next_allocators.FieldBufferAllocatorFactoryProtocol[core_defs.DeviceTypeLiteralT],
+    Protocol[core_defs.DeviceTypeLiteralT],
 ): ...
 
 
@@ -242,8 +242,8 @@ def is_program_backend(obj: Callable) -> TypeGuard[ProgramBackend]:
 
 
 def is_program_backend_for(
-    obj: Callable, device: core_defs.DeviceTypeT
-) -> TypeGuard[ProgramBackend[core_defs.DeviceTypeT]]:
+    obj: Callable, device: core_defs.DeviceTypeLiteralT
+) -> TypeGuard[ProgramBackend[core_defs.DeviceTypeLiteralT]]:
     return is_processor_kind(
         obj,
         ProgramExecutor,  # type: ignore[type-abstract]  # ProgramExecutor is abstract

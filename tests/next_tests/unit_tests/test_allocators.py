@@ -32,7 +32,7 @@ class DummyAllocator(next_allocators.FieldBufferAllocatorProtocol):
         dtype: core_defs.DType[core_defs.ScalarT],
         device_id: int = 0,
         aligned_index: Optional[Sequence[common.NamedIndex]] = None,
-    ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]:
+    ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeLiteralT, core_defs.ScalarT]:
         pass
 
 

@@ -118,7 +118,7 @@ class Program:
     @functools.cached_property
     def __gt_allocator__(
         self,
-    ) -> next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]:
+    ) -> next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeLiteralT]:
         if self.backend:
             return self.backend.__gt_allocator__
         else:

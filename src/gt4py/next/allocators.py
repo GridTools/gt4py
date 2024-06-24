@@ -45,12 +45,12 @@ FieldLayoutMapper: TypeAlias = Callable[
 ]
 
 
-class FieldBufferAllocatorProtocol(Protocol[core_defs.DeviceTypeT]):
+class FieldBufferAllocatorProtocol(Protocol[core_defs.DeviceTypeLiteralT]):
     """Protocol for buffer allocators used to allocate memory for fields with a given domain."""
 
     @property
     @abc.abstractmethod
-    def __gt_device_type__(self) -> core_defs.DeviceTypeT: ...
+    def __gt_device_type__(self) -> core_defs.DeviceTypeLiteralT: ...
 
     @abc.abstractmethod
     def __gt_allocate__(
@@ -59,7 +59,7 @@ class FieldBufferAllocatorProtocol(Protocol[core_defs.DeviceTypeT]):
         dtype: core_defs.DType[core_defs.ScalarT],
         device_id: int = 0,
         aligned_index: Optional[Sequence[common.NamedIndex]] = None,  # absolute position
-    ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]: ...
+    ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeLiteralT, core_defs.ScalarT]: ...
 
 
 def is_field_allocator(obj: Any) -> TypeGuard[FieldBufferAllocatorProtocol]:
@@ -67,17 +67,17 @@ def is_field_allocator(obj: Any) -> TypeGuard[FieldBufferAllocatorProtocol]:
 
 
 def is_field_allocator_for(
-    obj: Any, device: core_defs.DeviceTypeT
-) -> TypeGuard[FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]]:
+    obj: Any, device: core_defs.DeviceTypeLiteralT
+) -> TypeGuard[FieldBufferAllocatorProtocol[core_defs.DeviceTypeLiteralT]]:
     return is_field_allocator(obj) and obj.__gt_device_type__ is device
 
 
-class FieldBufferAllocatorFactoryProtocol(Protocol[core_defs.DeviceTypeT]):
+class FieldBufferAllocatorFactoryProtocol(Protocol[core_defs.DeviceTypeLiteralT]):
     """Protocol for device-specific buffer allocator factories for fields."""
 
     @property
     @abc.abstractmethod
-    def __gt_allocator__(self) -> FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]: ...
+    def __gt_allocator__(self) -> FieldBufferAllocatorProtocol[core_defs.DeviceTypeLiteralT]: ...
 
 
 def is_field_allocator_factory(obj: Any) -> TypeGuard[FieldBufferAllocatorFactoryProtocol]:
@@ -85,14 +85,14 @@ def is_field_allocator_factory(obj: Any) -> TypeGuard[FieldBufferAllocatorFactor
 
 
 def is_field_allocator_factory_for(
-    obj: Any, device: core_defs.DeviceTypeT
-) -> TypeGuard[FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]]:
+    obj: Any, device: core_defs.DeviceTypeLiteralT
+) -> TypeGuard[FieldBufferAllocatorProtocol[core_defs.DeviceTypeLiteralT]]:
     return is_field_allocator_factory(obj) and obj.__gt_allocator__.__gt_device_type__ is device
 
 
 FieldBufferAllocationUtil = (
-    FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
-    | FieldBufferAllocatorFactoryProtocol[core_defs.DeviceTypeT]
+    FieldBufferAllocatorProtocol[core_defs.DeviceTypeLiteralT]
+    | FieldBufferAllocatorFactoryProtocol[core_defs.DeviceTypeLiteralT]
 )
 
 
@@ -103,9 +103,9 @@ def is_field_allocation_tool(obj: Any) -> TypeGuard[FieldBufferAllocationUtil]:
 def get_allocator(
     obj: Any,
     *,
-    default: Optional[FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]] = None,
+    default: Optional[FieldBufferAllocatorProtocol[core_defs.DeviceTypeLiteralT]] = None,
     strict: bool = False,
-) -> Optional[FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]]:
+) -> Optional[FieldBufferAllocatorProtocol[core_defs.DeviceTypeLiteralT]]:
     """
     Return a field-buffer-allocator from an object assumed to be an allocator or an allocator factory.
 
@@ -137,15 +137,15 @@ def get_allocator(
 
 
 @dataclasses.dataclass(frozen=True)
-class BaseFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]):
+class BaseFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceTypeLiteralT]):
     """Parametrizable field buffer allocator base class."""
 
-    buffer_allocator: core_allocators.NDArrayBufferAllocator[core_defs.DeviceTypeT]
+    buffer_allocator: core_allocators.NDArrayBufferAllocator[core_defs.DeviceTypeLiteralT]
     layout_mapper: FieldLayoutMapper
     byte_alignment: int
 
     @property
-    def __gt_device_type__(self) -> core_defs.DeviceTypeT:
+    def __gt_device_type__(self) -> core_defs.DeviceTypeLiteralT:
         return self.buffer_allocator.device_type
 
     def __gt_allocate__(
@@ -154,7 +154,7 @@ class BaseFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceType
         dtype: core_defs.DType[core_defs.ScalarT],
         device_id: int = 0,
         aligned_index: Optional[Sequence[common.NamedIndex]] = None,  # absolute position
-    ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]:
+    ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeLiteralT, core_defs.ScalarT]:
         shape = domain.shape
         layout_map = self.layout_mapper(domain.dims)
         # TODO(egparedes): add support for non-empty aligned index values
@@ -201,7 +201,7 @@ if TYPE_CHECKING:
 device_allocators: dict[core_defs.DeviceType, FieldBufferAllocatorProtocol] = {}
 
 
-class StandardCPUFieldBufferAllocator(BaseFieldBufferAllocator[core_defs.CPUDeviceTyping]):
+class StandardCPUFieldBufferAllocator(BaseFieldBufferAllocator[core_defs.CPUDeviceTypeLiteral]):
     """A field buffer allocator for CPU devices that uses a horizontal-first layout mapper and 64-byte alignment."""
 
     def __init__(self) -> None:
@@ -219,14 +219,14 @@ assert is_field_allocator(device_allocators[core_defs.DeviceType.CPU])
 
 
 @dataclasses.dataclass(frozen=True)
-class InvalidFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]):
+class InvalidFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceTypeLiteralT]):
     """A field buffer allocator that always raises an exception."""
 
-    device_type: core_defs.DeviceTypeT
+    device_type: core_defs.DeviceTypeLiteralT
     exception: Exception
 
     @property
-    def __gt_device_type__(self) -> core_defs.DeviceTypeT:
+    def __gt_device_type__(self) -> core_defs.DeviceTypeLiteralT:
         return self.device_type
 
     def __gt_allocate__(
@@ -235,7 +235,7 @@ class InvalidFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceT
         dtype: core_defs.DType[core_defs.ScalarT],
         device_id: int = 0,
         aligned_index: Optional[Sequence[common.NamedIndex]] = None,  # absolute position
-    ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]:
+    ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeLiteralT, core_defs.ScalarT]:
         raise self.exception
 
 
@@ -243,13 +243,13 @@ if CuPyDeviceType is not None:
     assert core_allocators.cupy_buffer_allocator is not None
 
     class CuPyGPUFieldBufferAllocator(
-        BaseFieldBufferAllocator[core_defs.CUDADeviceTyping | core_defs.ROCMDeviceTyping]  # type: ignore[type-var]  # CUDA or ROCm is known only at run-time
+        BaseFieldBufferAllocator[core_defs.CUDADeviceTypeLiteral | core_defs.ROCMDeviceTypeLiteral]  # type: ignore[type-var]  # CUDA or ROCm is known only at run-time
     ):
         def __init__(self) -> None:
             super().__init__(
                 buffer_allocator=cast(
                     core_allocators.NDArrayBufferAllocator[  # type: ignore[type-var]  # CUDA or ROCm is known only at run-time
-                        core_defs.CUDADeviceTyping | core_defs.ROCMDeviceTyping
+                        core_defs.CUDADeviceTypeLiteral | core_defs.ROCMDeviceTypeLiteral
                     ],
                     core_allocators.cupy_buffer_allocator,
                 ),
@@ -261,7 +261,9 @@ if CuPyDeviceType is not None:
 
 else:
 
-    class InvalidGPUFielBufferAllocator(InvalidFieldBufferAllocator[core_defs.CUDADeviceTyping]):
+    class InvalidGPUFielBufferAllocator(
+        InvalidFieldBufferAllocator[core_defs.CUDADeviceTypeLiteral]
+    ):
         def __init__(self) -> None:
             super().__init__(
                 device_type=core_defs.DeviceType.CUDA,

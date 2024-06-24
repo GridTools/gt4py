@@ -137,9 +137,9 @@ DEFAULT_PROG_TRANSFORMS = ProgramTransformWorkflow()
 
 
 @dataclasses.dataclass(frozen=True)
-class Backend(Generic[core_defs.DeviceTypeT]):
+class Backend(Generic[core_defs.DeviceTypeLiteralT]):
     executor: ppi.ProgramExecutor
-    allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
+    allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeLiteralT]
     transforms_fop: FieldopTransformWorkflow = DEFAULT_FIELDOP_TRANSFORMS
     transforms_prog: ProgramTransformWorkflow = DEFAULT_PROG_TRANSFORMS
 
@@ -171,5 +171,5 @@ class Backend(Generic[core_defs.DeviceTypeT]):
     @property
     def __gt_allocator__(
         self,
-    ) -> next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]:
+    ) -> next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeLiteralT]:
         return self.allocator

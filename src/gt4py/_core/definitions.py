@@ -390,32 +390,32 @@ class DeviceType(enum.IntEnum):
     ROCM = 10
 
 
-CPUDeviceTyping: TypeAlias = Literal[DeviceType.CPU]
-CUDADeviceTyping: TypeAlias = Literal[DeviceType.CUDA]
-CPUPinnedDeviceTyping: TypeAlias = Literal[DeviceType.CPU_PINNED]
-OpenCLDeviceTyping: TypeAlias = Literal[DeviceType.OPENCL]
-VulkanDeviceTyping: TypeAlias = Literal[DeviceType.VULKAN]
-MetalDeviceTyping: TypeAlias = Literal[DeviceType.METAL]
-VPIDeviceTyping: TypeAlias = Literal[DeviceType.VPI]
-ROCMDeviceTyping: TypeAlias = Literal[DeviceType.ROCM]
+CPUDeviceTypeLiteral: TypeAlias = Literal[DeviceType.CPU]
+CUDADeviceTypeLiteral: TypeAlias = Literal[DeviceType.CUDA]
+CPUPinnedDeviceTypeLiteral: TypeAlias = Literal[DeviceType.CPU_PINNED]
+OpenCLDeviceTypeLiteral: TypeAlias = Literal[DeviceType.OPENCL]
+VulkanDeviceTypeLiteral: TypeAlias = Literal[DeviceType.VULKAN]
+MetalDeviceTypeLiteral: TypeAlias = Literal[DeviceType.METAL]
+VPIDeviceTypeLiteral: TypeAlias = Literal[DeviceType.VPI]
+ROCMDeviceTypeLiteral: TypeAlias = Literal[DeviceType.ROCM]
 
 
-DeviceTypeT = TypeVar(
+DeviceTypeLiteralT = TypeVar(
     "DeviceTypeT",
-    CPUDeviceTyping,
-    CUDADeviceTyping,
-    CPUPinnedDeviceTyping,
-    OpenCLDeviceTyping,
-    VulkanDeviceTyping,
-    MetalDeviceTyping,
-    VPIDeviceTyping,
-    ROCMDeviceTyping,
+    CPUDeviceTypeLiteral,
+    CUDADeviceTypeLiteral,
+    CPUPinnedDeviceTypeLiteral,
+    OpenCLDeviceTypeLiteral,
+    VulkanDeviceTypeLiteral,
+    MetalDeviceTypeLiteral,
+    VPIDeviceTypeLiteral,
+    ROCMDeviceTypeLiteral,
     covariant=True,
 )
 
 
 @dataclasses.dataclass(frozen=True)
-class Device(Generic[DeviceTypeT]):
+class Device(Generic[DeviceTypeLiteralT]):
     """
     Representation of a computing device.
 
@@ -426,10 +426,10 @@ class Device(Generic[DeviceTypeT]):
     core number, for `DeviceType.CUDA` it could be the CUDA device number, etc.
     """
 
-    device_type: DeviceTypeT
+    device_type: DeviceTypeLiteralT
     device_id: int
 
-    def __iter__(self) -> Iterator[DeviceTypeT | int]:
+    def __iter__(self) -> Iterator[DeviceTypeLiteralT | int]:
         yield self.device_type
         yield self.device_id
 

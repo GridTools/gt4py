@@ -76,7 +76,7 @@ def is_valid_layout_map(value: Sequence[Any]) -> TypeGuard[BufferLayoutMap]:
 
 
 @dataclasses.dataclass(frozen=True)
-class TensorBuffer(Generic[core_defs.DeviceTypeT, core_defs.ScalarT]):
+class TensorBuffer(Generic[core_defs.DeviceTypeLiteralT, core_defs.ScalarT]):
     """
     N-dimensional (tensor-like) memory buffer.
 
@@ -104,7 +104,7 @@ class TensorBuffer(Generic[core_defs.DeviceTypeT, core_defs.ScalarT]):
 
     buffer: _NDBuffer = dataclasses.field(hash=False)
     memory_address: int
-    device: core_defs.Device[core_defs.DeviceTypeT]
+    device: core_defs.Device[core_defs.DeviceTypeLiteralT]
     dtype: core_defs.DType[core_defs.ScalarT]
     shape: core_defs.TensorShape
     strides: Tuple[int, ...]
@@ -157,11 +157,11 @@ if TYPE_CHECKING:
     __TensorBufferAsDLPackBufferT: Type[xtyping.DLPackBuffer] = TensorBuffer
 
 
-class BufferAllocator(Protocol[core_defs.DeviceTypeT]):
+class BufferAllocator(Protocol[core_defs.DeviceTypeLiteralT]):
     """Protocol for tensor buffer allocators."""
 
     @property
-    def device_type(self) -> core_defs.DeviceTypeT: ...
+    def device_type(self) -> core_defs.DeviceTypeLiteralT: ...
 
     def allocate(
         self,
@@ -171,7 +171,7 @@ class BufferAllocator(Protocol[core_defs.DeviceTypeT]):
         layout_map: BufferLayoutMap,
         byte_alignment: int,
         aligned_index: Optional[Sequence[int]] = None,
-    ) -> TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]:
+    ) -> TensorBuffer[core_defs.DeviceTypeLiteralT, core_defs.ScalarT]:
         """
         Allocate a TensorBuffer with the given shape, layout and alignment settings.
 
@@ -188,12 +188,12 @@ class BufferAllocator(Protocol[core_defs.DeviceTypeT]):
         ...
 
 
-class MemoryResourceHandler(Protocol[core_defs.DeviceTypeT]):
+class MemoryResourceHandler(Protocol[core_defs.DeviceTypeLiteralT]):
     """Interface for memory resource handlers."""
 
     @property
     @abc.abstractmethod
-    def device_type(self) -> core_defs.DeviceTypeT: ...
+    def device_type(self) -> core_defs.DeviceTypeLiteralT: ...
 
     @abc.abstractmethod
     def address_of(self, buffer: _NDBuffer) -> int:
@@ -287,13 +287,13 @@ class NumPyMemoryResourceHandler(MemoryResourceHandler[Literal[core_defs.DeviceT
 
 
 @dataclasses.dataclass(frozen=True)
-class NDArrayBufferAllocator(Generic[core_defs.DeviceTypeT]):
+class NDArrayBufferAllocator(Generic[core_defs.DeviceTypeLiteralT]):
     """BufferAllocator implementation using NDArray objects from tensor libraries."""
 
-    resource_handler: MemoryResourceHandler[core_defs.DeviceTypeT]
+    resource_handler: MemoryResourceHandler[core_defs.DeviceTypeLiteralT]
 
     @property
-    def device_type(self) -> core_defs.DeviceTypeT:
+    def device_type(self) -> core_defs.DeviceTypeLiteralT:
         return self.resource_handler.device_type
 
     def allocate(
@@ -304,7 +304,7 @@ class NDArrayBufferAllocator(Generic[core_defs.DeviceTypeT]):
         layout_map: BufferLayoutMap,
         byte_alignment: int,
         aligned_index: Optional[Sequence[int]] = None,
-    ) -> TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]:
+    ) -> TensorBuffer[core_defs.DeviceTypeLiteralT, core_defs.ScalarT]:
         if not core_defs.is_valid_tensor_shape(shape):
             raise ValueError(f"Invalid shape {shape}")
         ndim = len(shape)
@@ -396,15 +396,15 @@ class NDArrayBufferAllocator(Generic[core_defs.DeviceTypeT]):
         )
 
 
-numpy_buffer_allocator = NDArrayBufferAllocator[core_defs.CPUDeviceTyping](
+numpy_buffer_allocator = NDArrayBufferAllocator[core_defs.CPUDeviceTypeLiteral](
     resource_handler=NumPyMemoryResourceHandler
 )
 
 # -- CuPy / GPU allocation --
 cupy_buffer_allocator: Union[
     None,
-    NDArrayBufferAllocator[core_defs.CUDADeviceTyping],
-    NDArrayBufferAllocator[core_defs.ROCMDeviceTyping],
+    NDArrayBufferAllocator[core_defs.CUDADeviceTypeLiteral],
+    NDArrayBufferAllocator[core_defs.ROCMDeviceTypeLiteral],
 ] = None
 
 CuPyDeviceType: Literal[None, core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM] = None
@@ -412,7 +412,7 @@ CuPyMemoryResourceHandler: Union[None, type[MemoryResourceHandler]] = None
 
 if cp:
 
-    class _CuPyMemoryResourceHandler(MemoryResourceHandler[core_defs.DeviceTypeT]):
+    class _CuPyMemoryResourceHandler(MemoryResourceHandler[core_defs.DeviceTypeLiteralT]):
         """Memory resource handler for allocating and managing memory on GPU using CuPy."""
 
         array_ns: Final = cp
@@ -463,7 +463,9 @@ if cp:
 
     if not cp.cuda.runtime.is_hip:
 
-        class CuPyMemoryResourceHandler(_CuPyMemoryResourceHandler[core_defs.ROCMDeviceTyping]):  # type: ignore[no-redef]
+        class CuPyMemoryResourceHandler(
+            _CuPyMemoryResourceHandler[core_defs.ROCMDeviceTypeLiteral]
+        ):  # type: ignore[no-redef]
             """Memory resource handler for allocating and managing memory on ROCm GPUs using CuPy."""
 
             device_type: Final = core_defs.DeviceType.ROCM
@@ -472,7 +474,9 @@ if cp:
 
     else:
 
-        class CuPyMemoryResourceHandler(_CuPyMemoryResourceHandler[core_defs.CUDADeviceTyping]):  # type: ignore[no-redef]
+        class CuPyMemoryResourceHandler(
+            _CuPyMemoryResourceHandler[core_defs.CUDADeviceTypeLiteral]
+        ):  # type: ignore[no-redef]
             """Memory resource handler for allocating and managing memory on CUDA GPUs using CuPy."""
 
             device_type: Final = core_defs.DeviceType.CUDA
@@ -481,8 +485,8 @@ if cp:
 
     cupy_buffer_allocator = cast(
         Union[
-            NDArrayBufferAllocator[core_defs.CUDADeviceTyping],
-            NDArrayBufferAllocator[core_defs.ROCMDeviceTyping],
+            NDArrayBufferAllocator[core_defs.CUDADeviceTypeLiteral],
+            NDArrayBufferAllocator[core_defs.ROCMDeviceTypeLiteral],
         ],
         NDArrayBufferAllocator[Literal[core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM]](  # type: ignore[type-var]
             resource_handler=CuPyMemoryResourceHandler  # type: ignore[arg-type]
