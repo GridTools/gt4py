@@ -349,6 +349,8 @@ def test_optional_arg_provide_aot(decorator):
         inp: gtscript.Field[np.float64],
         unused_field: gtscript.Field[np.float64],
         outp: gtscript.Field[np.float64],
+        # originally it also tested unused scalar parameters, but starting from DaCe v0.16.1 it led to undefined symbols in SDFG nesting
+        # unused_par: float,
     ):
         with computation(PARALLEL), interval(...):
             outp = inp  # noqa: F841 [unused-variable]
