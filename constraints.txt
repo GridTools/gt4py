@@ -36,7 +36,7 @@ coverage==7.5.1           # via -r requirements-dev.in, pytest-cov
 cryptography==42.0.7      # via types-paramiko, types-pyopenssl, types-redis
 cycler==0.12.1            # via matplotlib
 cytoolz==0.12.3           # via gt4py (pyproject.toml)
-dace==0.16.0              # via gt4py (pyproject.toml)
+dace==0.16.1              # via gt4py (pyproject.toml)
 darglint==1.8.1           # via -r requirements-dev.in
 debugpy==1.8.1            # via ipykernel
 decorator==5.1.1          # via ipython

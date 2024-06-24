@@ -36,7 +36,7 @@ coverage[toml]==7.5.1     # via -c constraints.txt, -r requirements-dev.in, pyte
 cryptography==42.0.7      # via -c constraints.txt, types-paramiko, types-pyopenssl, types-redis
 cycler==0.12.1            # via -c constraints.txt, matplotlib
 cytoolz==0.12.3           # via -c constraints.txt, gt4py (pyproject.toml)
-dace==0.16.0              # via -c constraints.txt, gt4py (pyproject.toml)
+dace==0.16.1              # via -c constraints.txt, gt4py (pyproject.toml)
 darglint==1.8.1           # via -c constraints.txt, -r requirements-dev.in
 debugpy==1.8.1            # via -c constraints.txt, ipykernel
 decorator==5.1.1          # via -c constraints.txt, ipython
