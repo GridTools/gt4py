@@ -239,6 +239,14 @@ class InvalidFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceT
         raise self.exception
 
 
+class InvalidGPUFielBufferAllocator(InvalidFieldBufferAllocator[core_defs.CUDADeviceTypeLiteral]):
+    def __init__(self) -> None:
+        super().__init__(
+            device_type=core_defs.DeviceType.CUDA,
+            exception=RuntimeError("Missing `cupy` dependency for GPU allocation"),
+        )
+
+
 if CuPyDeviceType is not None:
     assert core_allocators.cupy_buffer_allocator is not None
 
@@ -258,17 +266,6 @@ if CuPyDeviceType is not None:
             )
 
     device_allocators[CuPyDeviceType] = CuPyGPUFieldBufferAllocator()
-
-else:
-
-    class InvalidGPUFielBufferAllocator(
-        InvalidFieldBufferAllocator[core_defs.CUDADeviceTypeLiteral]
-    ):
-        def __init__(self) -> None:
-            super().__init__(
-                device_type=core_defs.DeviceType.CUDA,
-                exception=RuntimeError("Missing `cupy` dependency for GPU allocation"),
-            )
 
 
 StandardGPUFieldBufferAllocator: Final[type[FieldBufferAllocatorProtocol]] = cast(

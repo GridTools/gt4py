@@ -39,7 +39,7 @@ except ImportError:
     cp = None
 
 
-CuPyDeviceType: Final = allocators.CuPyDeviceTypeLiteral
+CuPyDeviceTypeLiteral: Final = allocators.CuPyDeviceTypeLiteral
 
 FieldLike = Union["cp.ndarray", np.ndarray, ArrayInterface, CUDAArrayInterface]
 
