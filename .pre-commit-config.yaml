@@ -66,7 +66,7 @@ repos:
   ## version = re.search('mypy==([0-9\.]*)', open("constraints.txt").read())[1]
   ## print(f"#========= FROM constraints.txt: v{version} =========")
   ##]]]
-  #========= FROM constraints.txt: v1.10.1 =========
+  #========= FROM constraints.txt: v1.10.0 =========
   ##[[[end]]]
   rev: v1.10.0  # MUST match version ^^^^ in constraints.txt (if the mirror is up-to-date)
   hooks:
