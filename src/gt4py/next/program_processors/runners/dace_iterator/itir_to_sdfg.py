@@ -45,7 +45,6 @@ from .utility import (
     get_used_connectivities,
     map_nested_sdfg_symbols,
     new_array_symbols,
-    unique_name,
     unique_var_name,
 )
 
@@ -124,7 +123,7 @@ def _make_array_shape_and_strides(
         )
         for i, dim in sorted_dims
     ]
-    strides = [dace.symbol(unique_name(f"{name}_stride{i}"), dtype) for i, _ in sorted_dims]
+    strides = [dace.symbol(f"__{name}_stride_{i}", dtype) for i, _ in sorted_dims]
     return shape, strides
 
 

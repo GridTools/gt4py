@@ -127,10 +127,15 @@ def __dir__() -> List[str]:
     return self_func.__cached_dir
 
 
-_T = TypeVar("_T")
-
 # -- Common type aliases --
 NoArgsCallable = Callable[[], Any]
+
+_A = TypeVar("_A", contravariant=True)
+_R = TypeVar("_R", covariant=True)
+
+
+class ArgsOnlyCallable(Protocol[_A, _R]):
+    def __call__(self, *args: _A) -> _R: ...
 
 
 # -- Typing annotations --
@@ -207,15 +212,20 @@ ReadableBuffer: TypeAlias = Union[ReadOnlyBuffer, WriteableBuffer]
 class HashlibAlgorithm(Protocol):
     """Used in the hashlib module of the standard library."""
 
-    digest_size: int
-    block_size: int
-    name: str
+    @property
+    def block_size(self) -> int: ...
+
+    @property
+    def digest_size(self) -> int: ...
+
+    @property
+    def name(self) -> str: ...
 
     def __init__(self, data: ReadableBuffer = ...) -> None: ...
 
-    def copy(self) -> HashlibAlgorithm: ...
+    def copy(self) -> Self: ...
 
-    def update(self, data: ReadableBuffer) -> None: ...
+    def update(self, data: Buffer, /) -> None: ...
 
     def digest(self) -> bytes: ...
 
@@ -360,6 +370,9 @@ else:
 def has_type_parameters(cls: Type) -> bool:
     """Return ``True`` if obj is a generic class with type parameters."""
     return issubclass(cls, Generic) and len(getattr(cls, "__parameters__", [])) > 0  # type: ignore[arg-type]  # Generic not considered as a class
+
+
+_T = TypeVar("_T")
 
 
 def get_actual_type(obj: _T) -> Type[_T]:
