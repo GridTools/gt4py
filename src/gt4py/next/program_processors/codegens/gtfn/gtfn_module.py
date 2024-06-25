@@ -16,8 +16,8 @@ from __future__ import annotations
 
 import dataclasses
 import functools
-import hashlib
 import os
+import pathlib
 import pickle
 from typing import Any, Callable, Final, Optional
 
@@ -45,6 +45,27 @@ GENERATED_CONNECTIVITY_PARAM_PREFIX = "gt_conn_"
 
 def get_param_description(name: str, obj: Any) -> interface.Parameter:
     return interface.Parameter(name, type_translation.from_value(obj))
+
+
+def _generate_stencil_source_cache_file_path(
+    program: itir.FencilDefinition,
+    offset_provider: dict[str, Connectivity | Dimension],
+    column_axis: Optional[common.Dimension],
+) -> pathlib.Path:
+    program_hash = utils.content_hash(
+        (
+            program,
+            sorted(offset_provider.items(), key=lambda el: el[0]),
+            column_axis,
+        )
+    )
+
+    if not os.path.exists(gt4py.next.config.BUILD_CACHE_DIR):
+        os.mkdir(gt4py.next.config.BUILD_CACHE_DIR)
+
+    cache_path = gt4py.next.config.BUILD_CACHE_DIR / ("gtfn_" + program.id + "_" + program_hash)
+
+    return cache_path
 
 
 @dataclasses.dataclass(frozen=True)
@@ -220,18 +241,7 @@ class GTFNTranslationStep(
         column_axis: Optional[common.Dimension],
     ) -> str:
         # TODO(tehrengruber): write a proper caching mechanism
-        program_hash = utils.content_hash(
-            (
-                program,
-                sorted(offset_provider.items(), key=lambda el: el[0]),
-                column_axis,
-            )
-        )
-
-        if not os.path.exists(gt4py.next.config.BUILD_CACHE_DIR):
-            os.mkdir(gt4py.next.config.BUILD_CACHE_DIR)
-
-        cache_path = gt4py.next.config.BUILD_CACHE_DIR / ("gtfn_" + program.id + "_" + program_hash)
+        cache_path = _generate_stencil_source_cache_file_path(program, offset_provider, column_axis)
 
         if os.path.exists(cache_path):
             with open(cache_path, "rb") as f:
