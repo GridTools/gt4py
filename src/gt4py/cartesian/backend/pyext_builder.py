@@ -17,7 +17,7 @@ import copy
 import io
 import os
 import shutil
-from typing import Any, Dict, List, Optional, Tuple, Type, Union, cast, overload
+from typing import Any, Dict, List, Literal, Optional, Tuple, Type, Union, cast, overload
 
 import pybind11
 import setuptools
@@ -48,6 +48,8 @@ def get_cuda_compute_capability():
 def get_gt_pyext_build_opts(
     *,
     debug_mode: bool = False,
+    opt_level: Literal["0", "1", "2", "3", "s"] = "3",
+    extra_opt_flags: str = "",
     add_profile_info: bool = False,
     uses_openmp: bool = True,
     uses_cuda: bool = False,
@@ -112,9 +114,12 @@ def get_gt_pyext_build_opts(
             "--compiler-options",
             "-fPIC",
         ]
-    extra_link_args = gt_config.build_settings["extra_link_args"]
+    extra_link_args = copy.deepcopy(gt_config.build_settings["extra_link_args"])
 
-    mode_flags = ["-O0", "-ggdb"] if debug_mode else ["-O3", "-DNDEBUG"]
+    mode_flags = (
+        ["-O0", "-ggdb"] if debug_mode else [f"-O{opt_level}", "-DNDEBUG", *extra_opt_flags.split()]
+    )
+
     extra_compile_args["cxx"].extend(mode_flags)
     extra_compile_args["cuda"].extend(mode_flags)
     extra_link_args.extend(mode_flags)
@@ -225,7 +230,11 @@ def build_pybind_ext(
     py_extension = setuptools.Extension(
         name,
         sources,
-        include_dirs=[pybind11.get_include(), pybind11.get_include(user=True), *include_dirs],
+        include_dirs=[
+            pybind11.get_include(),
+            pybind11.get_include(user=True),
+            *include_dirs,
+        ],
         library_dirs=[*library_dirs],
         libraries=[*libraries],
         language="c++",
