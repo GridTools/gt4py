@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union
 
 import gt4py.cartesian.gtc.utils
 import gt4py.cartesian.gtc.utils as gtc_utils
-from gt4py.cartesian import backend as gt_backend, utils as gt_utils
+from gt4py.cartesian import backend as gt_backend, config as gt_config, utils as gt_utils
 from gt4py.cartesian.backend import Backend
 from gt4py.cartesian.backend.module_generator import BaseModuleGenerator, ModuleData
 from gt4py.cartesian.gtc import gtir
@@ -222,6 +222,8 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
         "add_profile_info": {"versioning": True, "type": bool},
         "clean": {"versioning": False, "type": bool},
         "debug_mode": {"versioning": True, "type": bool},
+        "opt_level": {"versioning": True, "type": str},
+        "extra_opt_flags": {"versioning": True, "type": str},
         "verbose": {"versioning": False, "type": bool},
         "oir_pipeline": {"versioning": True, "type": OirPipeline},
     }
@@ -278,7 +280,10 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
         gt_pyext_sources: Dict[str, Any]
         if not self.builder.options._impl_opts.get("disable-code-generation", False):
             gt_pyext_files = self.make_extension_sources(stencil_ir=stencil_ir)
-            gt_pyext_sources = {**gt_pyext_files["computation"], **gt_pyext_files["bindings"]}
+            gt_pyext_sources = {
+                **gt_pyext_files["computation"],
+                **gt_pyext_files["bindings"],
+            }
         else:
             # Pass NOTHING to the self.builder means try to reuse the source code files
             gt_pyext_files = {}
@@ -297,6 +302,12 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
             clean=self.builder.options.backend_opts.get("clean", False),
             **gt_backend.pyext_builder.get_gt_pyext_build_opts(
                 debug_mode=self.builder.options.backend_opts.get("debug_mode", False),
+                opt_level=self.builder.options.backend_opts.get(
+                    "opt_level", gt_config.GT4PY_COMPILE_OPT_LEVEL
+                ),
+                extra_opt_flags=self.builder.options.backend_opts.get(
+                    "extra_opt_flags", gt_config.GT4PY_EXTRA_COMPILE_OPT_FLAGS
+                ),
                 add_profile_info=self.builder.options.backend_opts.get("add_profile_info", False),
                 uses_cuda=uses_cuda,
                 gt_version=2,
