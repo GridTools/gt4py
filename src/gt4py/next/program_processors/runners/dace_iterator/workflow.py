@@ -148,6 +148,7 @@ class DaCeCompiler(
     cache_lifetime: config.BuildCacheLifetime
     device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
     cmake_build_type: config.CMakeBuildType = config.CMakeBuildType.DEBUG
+    constant_field_layout: bool = False
 
     def __call__(
         self,
@@ -171,11 +172,17 @@ class DaCeCompiler(
                 dace.config.Config.set("compiler", "cpu", "args", value=compiler_args)
             sdfg_program = sdfg.compile(validate=False)
 
+        # if field shape and strides should remain constant betweel program execution,
+        # the corresponding symbols do not need to be set each time
+        if self.constant_field_layout:
+            array_symbols = functools.reduce(
+                operator.or_, itertools.chain(x.free_symbols for x in sdfg.arrays.values())
+            )
+            array_symbols = {str(x) for x in array_symbols}
+        else:
+            array_symbols = {}
+
         # extract position of scalar arguments from program ABI
-        array_symbols = functools.reduce(
-            operator.or_, itertools.chain(x.free_symbols for x in sdfg.arrays.values())
-        )
-        array_symbols = {str(x) for x in array_symbols}
         sdfg_arglist = sdfg_program.sdfg.signature_arglist(with_types=False)
         sdfg_scalar_args = {
             param: pos
@@ -204,7 +211,8 @@ def convert_args(
     ):
         if sdfg_program._lastargs:
             # The scalar arguments should be replaced with the actual value; for field arguments,
-            # the data pointer should remain the same otherwise reconstruct the args list.
+            # the data pointer should remain the same otherwise fast-call cannot be used and
+            # the args list needs to be reconstructed.
             use_fast_call = True
             scalar_args_table: dict[str, ctypes._SimpleCData] = {}
             for pos, (param, arg) in enumerate(zip(sdfg.arg_names, args), start=1):
@@ -233,6 +241,7 @@ def convert_args(
             on_gpu=on_gpu,
             use_field_canonical_representation=use_field_canonical_representation,
         )
+
         with dace.config.temporary_config():
             dace.config.Config.set("compiler", "allow_view_arguments", value=True)
             return inp(**sdfg_args)
