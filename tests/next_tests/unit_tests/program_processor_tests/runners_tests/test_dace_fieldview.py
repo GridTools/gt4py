@@ -1035,11 +1035,8 @@ def test_gtir_reduce_with_skip_values():
         assert np.allclose(v, v_ref)
 
 
-def test_gtir_reduce_with_lambda():
+def test_gtir_reduce_dot_product():
     init_value = np.random.rand()
-    edge_domain = im.call("unstructured_domain")(
-        im.call("named_range")(itir.AxisLiteral(value=Edge.value), 0, "nedges"),
-    )
     vertex_domain = im.call("unstructured_domain")(
         im.call("named_range")(itir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
     )
@@ -1051,98 +1048,83 @@ def test_gtir_reduce_with_lambda():
             SIMPLE_MESH.offset_provider["V2E"].max_neighbors,
         ),
     )
-    reduce_lambda = im.lambda_("acc", "a", "b")(im.plus(im.multiplies_("a", "b"), "acc"))
-    stencil_inlined = im.call(
-        im.call("as_fieldop")(
-            im.lambda_("itA", "itB")(
-                im.call(im.call("reduce")(reduce_lambda, im.literal_from_value(init_value)))(
-                    im.neighbors("V2E", "itA"), im.neighbors("V2E", "itB")
-                )
-            ),
-            vertex_domain,
-        )
-    )(
-        "edges",
-        im.call(
-            im.call("as_fieldop")(
-                im.lambda_("it")(im.plus(im.deref("it"), 1)),
-                edge_domain,
+
+    testee = itir.Program(
+        id=f"reduce_dot_product",
+        function_definitions=[],
+        params=[
+            itir.Sym(id="edges"),
+            itir.Sym(id="vertices"),
+            itir.Sym(id="nedges"),
+            itir.Sym(id="nvertices"),
+        ],
+        declarations=[],
+        body=[
+            itir.SetAt(
+                expr=im.call(
+                    im.call("as_fieldop")(
+                        im.lambda_("it")(
+                            im.call(im.call("reduce")("plus", im.literal_from_value(init_value)))(
+                                im.deref("it")
+                            )
+                        ),
+                        vertex_domain,
+                    )
+                )(
+                    im.call(
+                        im.call("as_fieldop")(
+                            im.lambda_("a", "b")(im.multiplies_(im.deref("a"), im.deref("b"))),
+                            v2e_domain,
+                        )
+                    )(
+                        im.call(
+                            im.call("as_fieldop")(
+                                im.lambda_("it")(im.neighbors("V2E", "it")),
+                                vertex_domain,
+                            )
+                        )("edges"),
+                        im.call(
+                            im.call("as_fieldop")(
+                                im.lambda_("it")(im.plus(im.deref("it"), 1)),
+                                v2e_domain,
+                            )
+                        )(
+                            im.call(
+                                im.call("as_fieldop")(
+                                    im.lambda_("it")(im.neighbors("V2E", "it")),
+                                    vertex_domain,
+                                )
+                            )("edges")
+                        ),
+                    ),
+                ),
+                domain=vertex_domain,
+                target=itir.SymRef(id="vertices"),
             )
-        )("edges"),
-    )
-    stencil_fieldview = im.call(
-        im.call("as_fieldop")(
-            im.lambda_("a_it", "b_it")(
-                im.call(im.call("reduce")(reduce_lambda, im.literal_from_value(init_value)))(
-                    im.deref("a_it"), im.deref("b_it")
-                )
-            ),
-            vertex_domain,
-        )
-    )(
-        im.call(
-            im.call("as_fieldop")(
-                im.lambda_("it")(im.neighbors("V2E", "it")),
-                vertex_domain,
-            )
-        )("edges"),
-        im.call(
-            im.call("as_fieldop")(
-                im.lambda_("it")(im.plus(im.deref("it"), 1)),
-                v2e_domain,
-            )
-        )(
-            im.call(
-                im.call("as_fieldop")(
-                    im.lambda_("it")(im.neighbors("V2E", "it")),
-                    vertex_domain,
-                )
-            )("edges")
-        ),
+        ],
     )
 
     arg_types = [EFTYPE, VFTYPE, SIZE_TYPE, SIZE_TYPE]
     connectivity_V2E = SIMPLE_MESH.offset_provider["V2E"]
     assert isinstance(connectivity_V2E, NeighborTable)
 
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, SIMPLE_MESH.offset_provider)
+
     e = np.random.rand(SIMPLE_MESH.num_edges)
+    v = np.empty(SIMPLE_MESH.num_vertices, dtype=e.dtype)
     v_ref = [
         reduce(lambda x, y: x + y, e[v2e_neighbors] * (e[v2e_neighbors] + 1), init_value)
         for v2e_neighbors in connectivity_V2E.table
     ]
 
-    for i, stencil in enumerate([stencil_inlined, stencil_fieldview]):
-        testee = itir.Program(
-            id=f"reduce_with_lambda_{i}",
-            function_definitions=[],
-            params=[
-                itir.Sym(id="edges"),
-                itir.Sym(id="vertices"),
-                itir.Sym(id="nedges"),
-                itir.Sym(id="nvertices"),
-            ],
-            declarations=[],
-            body=[
-                itir.SetAt(
-                    expr=stencil,
-                    domain=vertex_domain,
-                    target=itir.SymRef(id="vertices"),
-                )
-            ],
-        )
-        sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, SIMPLE_MESH.offset_provider)
-
-        # new empty output field
-        v = np.empty(SIMPLE_MESH.num_vertices, dtype=e.dtype)
-
-        sdfg(
-            edges=e,
-            vertices=v,
-            connectivity_V2E=connectivity_V2E.table,
-            **FSYMBOLS,
-            **make_mesh_symbols(SIMPLE_MESH),
-        )
-        assert np.allclose(v, v_ref)
+    sdfg(
+        edges=e,
+        vertices=v,
+        connectivity_V2E=connectivity_V2E.table,
+        **FSYMBOLS,
+        **make_mesh_symbols(SIMPLE_MESH),
+    )
+    assert np.allclose(v, v_ref)
 
 
 def test_gtir_reduce_with_select_neighbors():
