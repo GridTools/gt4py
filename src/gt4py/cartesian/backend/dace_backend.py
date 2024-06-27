@@ -22,7 +22,6 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type
 import dace
 import dace.data
 from dace.sdfg.utils import inline_sdfgs
-from dace.serialize import dumps
 
 from gt4py import storage as gt_storage
 from gt4py.cartesian import config as gt_config
