@@ -223,6 +223,12 @@ def from_value(value: Any) -> ts.TypeSpec:
 
 
 def as_dtype(type_: ts.ScalarType) -> core_defs.DType:
+    """
+    Translate a `ts.ScalarType` to a `core_defs.DType`
+
+    >>> as_dtype(ts.ScalarType(kind=ts.ScalarKind.BOOL))  # doctest:+ELLIPSIS
+    BoolDType(...)
+    """
     if type_.kind == ts.ScalarKind.BOOL:
         return core_defs.BoolDType()
     elif type_.kind == ts.ScalarKind.INT32:
@@ -237,6 +243,12 @@ def as_dtype(type_: ts.ScalarType) -> core_defs.DType:
 
 
 def from_dtype(dtype: core_defs.DType) -> ts.ScalarType:
+    """
+    Translate a `core_defs.DType` to a `ts.ScalarType`
+
+    >>> from_dtype(core_defs.BoolDType())  # doctest:+ELLIPSIS
+    ScalarType(kind=...BOOL...)
+    """
     if dtype == core_defs.BoolDType():
         return ts.ScalarType(kind=ts.ScalarKind.BOOL)
     elif dtype == core_defs.Int32DType():
