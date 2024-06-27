@@ -54,6 +54,8 @@ _CPUBufferAllocator = allocators.NDArrayBufferAllocator(
 
 _GPUBufferAllocator: Optional[allocators.NDArrayBufferAllocator] = None
 if cp:
+    assert isinstance(allocators.cupy_array_utils, allocators.ArrayUtils)
+
     if CUPY_DEVICE == core_defs.DeviceType.CUDA:
         _GPUBufferAllocator = allocators.NDArrayBufferAllocator(
             device_type=core_defs.DeviceType.CUDA, array_utils=allocators.cupy_array_utils

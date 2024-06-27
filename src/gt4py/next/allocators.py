@@ -259,7 +259,7 @@ class InvalidFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceT
 
 if CUPY_DEVICE is not None:
     assert isinstance(core_allocators.cupy_array_utils, core_allocators.ArrayUtils)
-    cupy_array_utils = cast(core_allocators.ArrayUtils, core_allocators.cupy_array_utils)
+    cupy_array_utils = core_allocators.cupy_array_utils
 
     if CUPY_DEVICE is core_defs.DeviceType.CUDA:
 

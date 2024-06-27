@@ -326,7 +326,7 @@ numpy_array_utils = ArrayUtils(
     array_ns=np,
     empty=np.empty,
     byte_bounds=np.byte_bounds if hasattr(np, "byte_bounds") else np.lib.array_utils.byte_bounds,  # type: ignore  # noqa: NPY201
-    as_strided=np.lib.stride_tricks.as_strided,
+    as_strided=np.lib.stride_tricks.as_strided,  # type: ignore[arg-type]  # as_strided signature is just a sketch
 )
 
 cupy_array_utils = None
@@ -338,7 +338,7 @@ if cp is not None:
         byte_bounds=cp.byte_bounds
         if hasattr(cp, "byte_bounds")
         else cp.lib.array_utils.byte_bounds,
-        as_strided=cp.lib.stride_tricks.as_strided,
+        as_strided=cp.lib.stride_tricks.as_strided,  # type: ignore[arg-type]  # as_strided signature is just a sketch
     )
 
 
@@ -349,7 +349,7 @@ class NDArrayBufferAllocator(_BaseNDArrayBufferAllocator[core_defs.DeviceTypeT])
 
     def __init__(self, device_type: core_defs.DeviceTypeT, array_utils: ArrayUtils):
         object.__setattr__(self, "_device_type", device_type)
-        object.__setattr__(self, "_array_ns", array_utils)
+        object.__setattr__(self, "_array_utils", array_utils)
 
     @property
     def device_type(self) -> core_defs.DeviceTypeT:
@@ -380,7 +380,7 @@ class NDArrayBufferAllocator(_BaseNDArrayBufferAllocator[core_defs.DeviceTypeT])
     ) -> core_defs.NDArrayObject:
         aligned_buffer = buffer[byte_offset : byte_offset + math.prod(allocated_shape) * item_size]  # type: ignore[index] # TODO(egparedes): should we extend `_NDBuffer`s to cover __getitem__?
         flat_ndarray = aligned_buffer.view(dtype=np.dtype(dtype))
-        tensor_view = self._array_utils.lib.stride_tricks.as_strided(
+        tensor_view = self._array_utils.as_strided(
             flat_ndarray, shape=allocated_shape, strides=strides
         )
         if len(shape) and shape != allocated_shape:
