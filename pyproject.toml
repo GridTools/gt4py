@@ -36,14 +36,14 @@ dependencies = [
   'devtools>=0.6',
   'factory-boy>=3.3.0',
   'frozendict>=2.3',
-  'gridtools-cpp>=2.3.2,==2.*',
+  'gridtools-cpp>=2.3.4,==2.*',
   "importlib-resources>=5.0;python_version<'3.9'",
   'jinja2>=3.0.0',
   'lark>=1.1.2',
   'mako>=1.1',
   'nanobind>=1.4.0 ',
   'ninja>=1.10',
-  'numpy>=1.23.3',
+  'numpy>=1.23.3,==1.*',
   'packaging>=20.0',
   'pybind11>=2.10.1',
   'setuptools>=65.5.0',
@@ -75,7 +75,7 @@ all-cuda12 = ['gt4py[cuda12,dace,formatting,jax-cuda12,performance,testing]']
 # Other extras
 cuda11 = ['cupy-cuda11x>=12.0']
 cuda12 = ['cupy-cuda12x>=12.0']
-dace = ['dace>=0.15.1,<0.16', 'sympy>=1.9']
+dace = ['dace>=0.16.1', 'sympy>=1.9']
 formatting = ['clang-format>=9.0']
 gpu = ['cupy>=12.0']
 jax-cpu = ['jax[cpu]>=0.4.13']
@@ -293,7 +293,6 @@ docstring-code-format = true
 ignore = [
   'E501'  # [line-too-long]
 ]
-ignore-init-module-imports = true
 select = ['E', 'F', 'I', 'B', 'A', 'T10', 'ERA', 'NPY', 'RUF']
 typing-modules = ['gt4py.eve.extended_typing']
 unfixable = []
