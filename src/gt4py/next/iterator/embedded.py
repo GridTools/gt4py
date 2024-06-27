@@ -474,7 +474,7 @@ def not_eq(first, second):
     return first != second
 
 
-CompositeOfScalarOrField: TypeAlias = Scalar | LocatedField | tuple["CompositeOfScalarOrField", ...]
+CompositeOfScalarOrField: TypeAlias = Scalar | common.Field | tuple["CompositeOfScalarOrField", ...]
 
 
 def is_dtype_like(t: Any) -> TypeGuard[npt.DTypeLike]:
@@ -866,7 +866,7 @@ def _wrap_field(field: common.Field | tuple) -> NDArrayLocatedFieldWrapper | tup
 
 
 def make_in_iterator(
-    inp_: common.Field, pos: Position, *, column_axis: Optional[Tag]
+    inp_: common.Field, pos: Position, *, column_dimension: Optional[common.Dimension]
 ) -> ItIterator:
     inp = _wrap_field(inp_)
     axes = _get_axes(inp)
@@ -875,12 +875,14 @@ def make_in_iterator(
     for sparse_dim in set(sparse_dimensions):
         init = [None] * sparse_dimensions.count(sparse_dim)
         new_pos[sparse_dim] = init  # type: ignore[assignment] # looks like mypy is confused
-    if column_axis is not None:
+    if column_dimension is not None:
         column_range = embedded_context.closure_column_range.get().unit_range
         # if we deal with column stencil the column position is just an offset by which the whole column needs to be shifted
         assert column_range is not None
-        new_pos[column_axis] = column_range.start
-    it = MDIterator(inp, new_pos, column_axis=column_axis)
+        new_pos[column_dimension.value] = column_range.start
+    it = MDIterator(
+        inp, new_pos, column_axis=column_dimension.value if column_dimension is not None else None
+    )
     if len(sparse_dimensions) >= 1:
         if len(sparse_dimensions) == 1:
             return SparseListIterator(it, sparse_dimensions[0])
@@ -1522,19 +1524,19 @@ def set_at(expr: common.Field, domain: common.DomainLike, target: common.Mutable
     operators._tuple_assign_field(target, expr, common.domain(domain))
 
 
-def _compute_point(
-    sten: Callable, ins, pos, column_range: common.NamedRange | eve.NothingType = eve.NOTHING
-):
-    promoted_ins = [promote_scalars(inp) for inp in ins]
+def _compute_at_position(
+    sten: Callable,
+    ins: Sequence[common.Field],
+    pos: ConcretePosition,
+    column_dimension: Optional[common.Dimension],
+) -> Scalar | tuple[Scalar | tuple, ...]:
     ins_iters = list(
         make_in_iterator(
             inp,
             pos,
-            column_axis=column_range.dim.value
-            if isinstance(column_range, common.NamedRange)
-            else None,
+            column_dimension=column_dimension,
         )
-        for inp in promoted_ins
+        for inp in ins
     )
     return sten(*ins_iters)
 
@@ -1570,13 +1572,17 @@ def _get_output_type(
 ) -> ts.TypeSpec:
     domain = _dimension_to_tag(domain_)
     col_range = _extract_column_range(domain)
+
+    col_dim: Optional[common.Dimension] = None
     if isinstance(col_range, common.NamedRange):
+        col_dim = col_range.dim
         del domain[col_range.dim.value]
 
-    pos = next(iter(_domain_iterator(domain)))
+    # determine dtype by computing result at one point
+    pos_in_domain = next(iter(_domain_iterator(domain)))
     with embedded_context.new_context(closure_column_range=col_range) as ctx:
-        single_point_result = ctx.run(_compute_point, fun, args, pos, col_range)
-    dtype = _elem_dtype(single_point_result)
+        single_pos_result = ctx.run(_compute_at_position, fun, args, pos_in_domain, col_dim)
+    dtype = _elem_dtype(single_pos_result)
     return _structured_dtype_to_typespec(dtype)
 
 
@@ -1584,8 +1590,8 @@ def _get_output_type(
 def as_fieldop(fun: Callable, domain: runtime.CartesianDomain | runtime.UnstructuredDomain):
     def impl(*args):
         xp = field_utils.get_array_ns(*args)
-        type_ = _get_output_type(fun, domain, args)
-        out = field_utils.field_from_typespec(common.domain(domain), xp)(type_)
+        type_ = _get_output_type(fun, domain, [promote_scalars(arg) for arg in args])
+        out = field_utils.field_from_typespec(type_, common.domain(domain), xp)
 
         # TODO(havogt): after updating all tests to use the new program,
         # we should get rid of closure and move the implementation to this function
@@ -1600,7 +1606,7 @@ def closure(
     domain_: Domain,
     sten: Callable[..., Any],
     out,  #: MutableLocatedField,
-    ins: list[common.Field],
+    ins: list[common.Field | Scalar | tuple[common.Field | Scalar | tuple, ...]],
 ) -> None:
     assert embedded_context.within_valid_context()
     offset_provider = embedded_context.offset_provider.get()
@@ -1611,16 +1617,19 @@ def closure(
 
     column_range: common.NamedRange | eve.NothingType = _extract_column_range(domain)
 
+    column_dim = None
     if isinstance(column_range, common.NamedRange):
+        column_dim = column_range.dim
         del domain[column_range.dim.value]
 
     out = as_tuple_field(out) if is_tuple_of_field(out) else _wrap_field(out)
+    promoted_ins = [promote_scalars(inp) for inp in ins]
 
     with embedded_context.new_context(closure_column_range=column_range) as ctx:
 
         def _iterate():
             for pos in _domain_iterator(domain):
-                res = _compute_point(sten, ins, pos, column_range)
+                res = _compute_at_position(sten, promoted_ins, pos, column_dim)
 
                 if column_range is eve.NOTHING:
                     assert _is_concrete_position(pos)

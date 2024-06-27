@@ -13,7 +13,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from types import ModuleType
-from typing import Callable
 
 import numpy as np
 
@@ -28,25 +27,27 @@ def asnumpy(field: common.Field | np.ndarray) -> np.ndarray:
 
 
 def field_from_typespec(
-    domain: common.Domain, xp: ModuleType
-) -> Callable[..., common.MutableField | tuple[common.MutableField | tuple, ...]]:
+    type_: ts.TupleType | ts.ScalarType, domain: common.Domain, xp: ModuleType
+) -> common.MutableField | tuple[common.MutableField | tuple, ...]:
     """
     Allocate a field or (arbitrarily nested) tuple(s) of fields.
 
     The tuple structure and dtype is taken from a type_specifications.DataType,
     which is either ScalarType or TupleType of ScalarType (possibly nested).
 
-    >>> field_from_typespec(common.domain({common.Dimension("I"): 1}), np)(
-    ...     ts.ScalarType(kind=ts.ScalarKind.INT32)
+    >>> field_from_typespec(
+    ...     ts.ScalarType(kind=ts.ScalarKind.INT32), common.domain({common.Dimension("I"): 1}), np
     ... )  # doctest: +ELLIPSIS
     NumPyArrayField(... dtype=int32...)
-    >>> field_from_typespec(common.domain({common.Dimension("I"): 1}), np)(
+    >>> field_from_typespec(
     ...     ts.TupleType(
     ...         types=[
     ...             ts.ScalarType(kind=ts.ScalarKind.INT32),
     ...             ts.ScalarType(kind=ts.ScalarKind.FLOAT32),
     ...         ]
-    ...     )
+    ...     ),
+    ...     common.domain({common.Dimension("I"): 1}),
+    ...     np,
     ... )  # doctest: +ELLIPSIS
     (NumPyArrayField(... dtype=int32...), NumPyArrayField(... dtype=float32...))
     """
@@ -60,7 +61,7 @@ def field_from_typespec(
         assert isinstance(res, common.MutableField)
         return res
 
-    return impl
+    return impl(type_)
 
 
 def get_array_ns(

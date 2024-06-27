@@ -24,7 +24,6 @@ from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir import (
     AxisLiteral,
     Expr,
-    FencilDefinition,
     FunCall,
     FunctionDefinition,
     Lambda,
@@ -302,7 +301,7 @@ def _make_fencil_params(fun, args) -> list[Sym]:
 
 def trace_fencil_definition(
     fun: typing.Callable, args: typing.Iterable
-) -> FencilDefinition | itir.Program:
+) -> itir.FencilDefinition | itir.Program:
     """
     Transform fencil given as a callable into `itir.FencilDefinition` using tracing.
 
@@ -315,7 +314,7 @@ def trace_fencil_definition(
         trace_function_call(fun, args=(_s(param.id) for param in params))
 
         if TracerContext.closures:
-            return FencilDefinition(
+            return itir.FencilDefinition(
                 id=fun.__name__,
                 function_definitions=TracerContext.fundefs,
                 params=params,

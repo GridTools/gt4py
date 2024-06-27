@@ -20,7 +20,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common, errors, field_utils, utils
 from gt4py.next.embedded import common as embedded_common, context as embedded_context
 from gt4py.next.field_utils import get_array_ns
-from gt4py.next.type_system import type_translation
+from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
 _P = ParamSpec("_P")
@@ -64,9 +64,9 @@ class ScanOperator(EmbeddedOperator[core_defs.ScalarT | tuple[core_defs.ScalarT 
             out_domain = common.Domain(*out_domain, (scan_range))
 
         xp = get_array_ns(*all_args)
-        res = field_utils.field_from_typespec(out_domain, xp)(
-            type_translation.from_value(self.init)
-        )
+        init_type = type_translation.from_value(self.init)
+        assert isinstance(init_type, ts.TupleType | ts.ScalarType)
+        res = field_utils.field_from_typespec(init_type, out_domain, xp)
 
         def scan_loop(hpos: Sequence[common.NamedIndex]) -> None:
             acc: core_defs.ScalarT | tuple[core_defs.ScalarT | tuple, ...] = self.init
