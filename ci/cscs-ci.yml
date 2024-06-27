@@ -45,11 +45,11 @@ stages:
 .build_baseimage_x86_64:
   extends: [.container-builder-cscs-zen2, .build_baseimage]
   variables:
-    CUDA_VERSION: "11.2.2"
+    CUDA_VERSION: 11.2.2
 .build_baseimage_aarch64:
   extends: [.container-builder-cscs-gh200, .build_baseimage]
   variables:
-    CUDA_VERSION: "12.4.1"
+    CUDA_VERSION: 12.4.1
 
 build_py311_baseimage_x86_64:
   extends: .build_baseimage_x86_64
