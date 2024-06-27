@@ -156,9 +156,7 @@ class BaseFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceType
         object.__setattr__(
             self,
             "buffer_allocator",
-            core_allocators.NDArrayBufferAllocator(
-                self.device_type, core_allocators.numpy_array_utils
-            ),
+            core_allocators.NDArrayBufferAllocator(self.device_type, self.array_utils),
         )
 
     @property
