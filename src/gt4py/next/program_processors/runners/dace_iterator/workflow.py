@@ -148,7 +148,6 @@ class DaCeCompiler(
     cache_lifetime: config.BuildCacheLifetime
     device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
     cmake_build_type: config.CMakeBuildType = config.CMakeBuildType.DEBUG
-    constant_field_layout: bool = False
 
     def __call__(
         self,
@@ -172,22 +171,24 @@ class DaCeCompiler(
                 dace.config.Config.set("compiler", "cpu", "args", value=compiler_args)
             sdfg_program = sdfg.compile(validate=False)
 
-        # if field shape and strides should remain constant betweel program execution,
-        # the corresponding symbols do not need to be set each time
-        if self.constant_field_layout:
-            array_symbols = functools.reduce(
-                operator.or_, itertools.chain(x.free_symbols for x in sdfg.arrays.values())
-            )
-            array_symbols = {str(x) for x in array_symbols}
-        else:
-            array_symbols = {}
+        # allow field shape to change between program calls, but assume fixed strides
+        stride_symbols = functools.reduce(
+            operator.or_,
+            itertools.chain(
+                s.free_symbols
+                for x in sdfg.arrays.values()
+                for s in x.strides
+                if not isinstance(s, int)
+            ),
+        )
+        stride_symbols = {str(x) for x in stride_symbols}
 
         # extract position of scalar arguments from program ABI
         sdfg_arglist = sdfg_program.sdfg.signature_arglist(with_types=False)
         sdfg_scalar_args = {
             param: pos
             for pos, param in enumerate(sdfg_arglist)
-            if (param not in sdfg.arrays and param not in array_symbols)
+            if (param not in sdfg.arrays and param not in stride_symbols)
         }
         return CompiledDaceProgram(sdfg_program, sdfg_scalar_args)
 
