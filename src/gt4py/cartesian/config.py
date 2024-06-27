@@ -48,6 +48,9 @@ GT_INCLUDE_PATH: str = os.path.abspath(gridtools_cpp.get_include_dir())
 
 GT_CPP_TEMPLATE_DEPTH: int = 1024
 
+GT4PY_COMPILE_OPT_LEVEL: str = os.environ.get("GT4PY_COMPILE_OPT_LEVEL", "3")
+GT4PY_EXTRA_COMPILE_OPT_FLAGS: str = os.environ.get("GT4PY_EXTRA_COMPILE_OPT_FLAGS", "")
+
 # Settings dict
 GT4PY_EXTRA_COMPILE_ARGS: str = os.environ.get("GT4PY_EXTRA_COMPILE_ARGS", "")
 extra_compile_args: List[str] = (
