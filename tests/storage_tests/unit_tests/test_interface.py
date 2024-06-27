@@ -130,9 +130,10 @@ def test_allocate_cpu(param_dict):
     raw_buffer, field = allocate_cpu(shape, layout_map, dtype, alignment_bytes, aligned_index)
 
     # check that memory of field is contained in raw_buffer
+    np_byte_bounds = np.byte_bounds if hasattr(np, "byte_bounds") else np.lib.array_utils.byte_bounds
     assert (
-        np.byte_bounds(field)[0] >= np.byte_bounds(raw_buffer)[0]
-        and np.byte_bounds(field)[1] <= np.byte_bounds(raw_buffer)[1]
+        np_byte_bounds(field)[0] >= np_byte_bounds(raw_buffer)[0]
+        and np_byte_bounds(field)[1] <= np_byte_bounds(raw_buffer)[1]
     )
 
     # check if the first compute-domain point in the last dimension is aligned for 100 random "columns"
