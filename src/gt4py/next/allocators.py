@@ -15,8 +15,6 @@
 import abc
 import dataclasses
 
-import numpy as np
-
 import gt4py._core.definitions as core_defs
 import gt4py.next.common as common
 import gt4py.storage.allocators as core_allocators
@@ -149,9 +147,19 @@ class BaseFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceType
     """Parametrizable field buffer allocator base class."""
 
     device_type: core_defs.DeviceTypeT
-    array_ns: core_allocators.ValidNumPyLikeAllocationNS
+    array_utils: core_allocators.ArrayUtils
     layout_mapper: FieldLayoutMapper
     byte_alignment: int
+    buffer_allocator: core_allocators.BufferAllocator = dataclasses.field(init=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "buffer_allocator",
+            core_allocators.NDArrayBufferAllocator(
+                self.device_type, core_allocators.numpy_array_utils
+            ),
+        )
 
     @property
     def __gt_device_type__(self) -> core_defs.DeviceTypeT:
@@ -169,7 +177,7 @@ class BaseFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceType
         # TODO(egparedes): add support for non-empty aligned index values
         assert aligned_index is None
 
-        return core_allocators.NDArrayBufferAllocator(self.device_type, self.array_ns).allocate(
+        return self.buffer_allocator.allocate(
             shape, dtype, device_id, layout_map, self.byte_alignment, aligned_index
         )
 
@@ -210,17 +218,13 @@ if TYPE_CHECKING:
 device_allocators: dict[core_defs.DeviceType, FieldBufferAllocatorProtocol] = {}
 
 
-assert core_allocators.is_valid_nplike_allocation_ns(np)
-np_alloc_ns: core_allocators.ValidNumPyLikeAllocationNS = np  # Just for static type checking
-
-
 class StandardCPUFieldBufferAllocator(BaseFieldBufferAllocator[core_defs.CPUDeviceTyping]):
     """A field buffer allocator for CPU devices that uses a horizontal-first layout mapper and 64-byte alignment."""
 
     def __init__(self) -> None:
         super().__init__(
             device_type=core_defs.DeviceType.CPU,
-            array_ns=np_alloc_ns,
+            array_utils=core_allocators.numpy_array_utils,
             layout_mapper=horizontal_first_layout_mapper,
             byte_alignment=64,
         )
@@ -254,8 +258,8 @@ class InvalidFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceT
 
 
 if CUPY_DEVICE is not None:
-    cp_alloc_ns: core_allocators.ValidNumPyLikeAllocationNS = cp  # Just for static type checking
-    assert core_allocators.is_valid_nplike_allocation_ns(cp_alloc_ns)
+    assert isinstance(core_allocators.cupy_array_utils, core_allocators.ArrayUtils)
+    cupy_array_utils = cast(core_allocators.ArrayUtils, core_allocators.cupy_array_utils)
 
     if CUPY_DEVICE is core_defs.DeviceType.CUDA:
 
@@ -263,7 +267,7 @@ if CUPY_DEVICE is not None:
             def __init__(self) -> None:
                 super().__init__(
                     device_type=core_defs.DeviceType.CUDA,
-                    array_ns=cp_alloc_ns,
+                    array_utils=cupy_array_utils,
                     layout_mapper=horizontal_first_layout_mapper,
                     byte_alignment=128,
                 )
@@ -276,7 +280,7 @@ if CUPY_DEVICE is not None:
             def __init__(self) -> None:
                 super().__init__(
                     device_type=core_defs.DeviceType.ROCM,
-                    array_ns=cp_alloc_ns,
+                    array_utils=cupy_array_utils,
                     layout_mapper=horizontal_first_layout_mapper,
                     byte_alignment=128,
                 )

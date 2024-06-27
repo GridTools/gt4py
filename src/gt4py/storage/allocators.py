@@ -20,6 +20,7 @@ import dataclasses
 import functools
 import math
 import operator
+import types
 
 import numpy as np
 import numpy.typing as npt
@@ -29,6 +30,7 @@ from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import (
     TYPE_CHECKING,
     Any,
+    Callable,
     Generic,
     NewType,
     Optional,
@@ -238,7 +240,7 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.DeviceTypeT]):
 
         # Allocate total size
         buffer = self.malloc(total_length, device_id)
-        memory_address = self.array_ns.byte_bounds(buffer)[0]
+        memory_address = self.array_utils.byte_bounds(buffer)[0]
 
         # Compute final byte offset to align the requested buffer index
         aligned_index = tuple(aligned_index or ([0] * len(shape)))
@@ -291,7 +293,7 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.DeviceTypeT]):
 
     @property
     @abc.abstractmethod
-    def array_ns(self) -> ValidNumPyLikeAllocationNS:
+    def array_utils(self) -> ArrayUtils:
         pass
 
     @abc.abstractmethod
@@ -312,53 +314,50 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.DeviceTypeT]):
         pass
 
 
-class ValidNumPyLikeAllocationNS(Protocol):
-    class _NumPyLibModule(Protocol):
-        class _NumPyLibStridesModule(Protocol):
-            @staticmethod
-            def as_strided(
-                ndarray: core_defs.NDArrayObject, **kwargs: Any
-            ) -> core_defs.NDArrayObject: ...
-
-        stride_tricks: _NumPyLibStridesModule
-
-    lib: _NumPyLibModule
-
-    @staticmethod
-    def empty(shape: Tuple[int, ...], dtype: Any) -> _NDBuffer: ...
-
-    @staticmethod
-    def byte_bounds(ndarray: _NDBuffer) -> Tuple[int, int]: ...
+@dataclasses.dataclass(slots=True)
+class ArrayUtils:
+    array_ns: types.ModuleType
+    empty: Callable[..., _NDBuffer]
+    byte_bounds: Callable[[_NDBuffer], Tuple[int, int]]
+    as_strided: Callable[..., core_defs.NDArrayObject]
 
 
-def is_valid_nplike_allocation_ns(obj: Any) -> TypeGuard[ValidNumPyLikeAllocationNS]:
-    return (
-        len(required_keys := {"empty", "byte_bounds", "lib"} & set(dir(np))) == len(required_keys)
-        and "stride_tricks" in dir(np.lib)
-        and "as_strided" in dir(np.lib.stride_tricks)
+numpy_array_utils = ArrayUtils(
+    array_ns=np,
+    empty=np.empty,
+    byte_bounds=np.byte_bounds if hasattr(np, "byte_bounds") else np.lib.array_utils.byte_bounds,  # type: ignore  # noqa: NPY201
+    as_strided=np.lib.stride_tricks.as_strided,
+)
+
+cupy_array_utils = None
+
+if cp is not None:
+    cupy_array_utils = ArrayUtils(
+        array_ns=cp,
+        empty=cp.empty,
+        byte_bounds=cp.byte_bounds
+        if hasattr(cp, "byte_bounds")
+        else cp.lib.array_utils.byte_bounds,
+        as_strided=cp.lib.stride_tricks.as_strided,
     )
-
-
-if not TYPE_CHECKING:
-    is_valid_nplike_allocation_ns = functools.lru_cache(maxsize=None)(is_valid_nplike_allocation_ns)
 
 
 @dataclasses.dataclass(frozen=True, init=False)
 class NDArrayBufferAllocator(_BaseNDArrayBufferAllocator[core_defs.DeviceTypeT]):
     _device_type: core_defs.DeviceTypeT
-    _array_ns: ValidNumPyLikeAllocationNS
+    _array_utils: ArrayUtils
 
-    def __init__(self, device_type: core_defs.DeviceTypeT, array_ns: ValidNumPyLikeAllocationNS):
+    def __init__(self, device_type: core_defs.DeviceTypeT, array_utils: ArrayUtils):
         object.__setattr__(self, "_device_type", device_type)
-        object.__setattr__(self, "_array_ns", array_ns)
+        object.__setattr__(self, "_array_ns", array_utils)
 
     @property
     def device_type(self) -> core_defs.DeviceTypeT:
         return self._device_type
 
     @property
-    def array_ns(self) -> ValidNumPyLikeAllocationNS:
-        return self._array_ns
+    def array_utils(self) -> ArrayUtils:
+        return self._array_utils
 
     def malloc(self, length: int, device_id: int) -> _NDBuffer:
         if self.device_type == core_defs.DeviceType.CPU and device_id != 0:
@@ -366,7 +365,7 @@ class NDArrayBufferAllocator(_BaseNDArrayBufferAllocator[core_defs.DeviceTypeT])
 
         shape = (length,)
         assert core_defs.is_valid_tensor_shape(shape)  # for mypy
-        out = self.array_ns.empty(shape=tuple(shape), dtype=np.dtype(np.uint8))
+        out = self._array_utils.empty(shape=tuple(shape), dtype=np.dtype(np.uint8))
         return out
 
     def tensorize(
@@ -381,7 +380,7 @@ class NDArrayBufferAllocator(_BaseNDArrayBufferAllocator[core_defs.DeviceTypeT])
     ) -> core_defs.NDArrayObject:
         aligned_buffer = buffer[byte_offset : byte_offset + math.prod(allocated_shape) * item_size]  # type: ignore[index] # TODO(egparedes): should we extend `_NDBuffer`s to cover __getitem__?
         flat_ndarray = aligned_buffer.view(dtype=np.dtype(dtype))
-        tensor_view = self.array_ns.lib.stride_tricks.as_strided(
+        tensor_view = self._array_utils.lib.stride_tricks.as_strided(
             flat_ndarray, shape=allocated_shape, strides=strides
         )
         if len(shape) and shape != allocated_shape:

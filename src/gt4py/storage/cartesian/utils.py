@@ -48,22 +48,19 @@ CUPY_DEVICE: Final[Literal[None, core_defs.DeviceType.CUDA, core_defs.DeviceType
 
 FieldLike = Union["cp.ndarray", np.ndarray, ArrayInterface, CUDAArrayInterface]
 
-assert allocators.is_valid_nplike_allocation_ns(np)
-
 _CPUBufferAllocator = allocators.NDArrayBufferAllocator(
-    device_type=core_defs.DeviceType.CPU, array_ns=np
+    device_type=core_defs.DeviceType.CPU, array_utils=allocators.numpy_array_utils
 )
 
 _GPUBufferAllocator: Optional[allocators.NDArrayBufferAllocator] = None
 if cp:
-    assert allocators.is_valid_nplike_allocation_ns(cp)
     if CUPY_DEVICE == core_defs.DeviceType.CUDA:
         _GPUBufferAllocator = allocators.NDArrayBufferAllocator(
-            device_type=core_defs.DeviceType.CUDA, array_ns=cp
+            device_type=core_defs.DeviceType.CUDA, array_utils=allocators.cupy_array_utils
         )
     else:
         _GPUBufferAllocator = allocators.NDArrayBufferAllocator(
-            device_type=core_defs.DeviceType.ROCM, array_ns=cp
+            device_type=core_defs.DeviceType.ROCM, array_utils=allocators.cupy_array_utils
         )
 
 
