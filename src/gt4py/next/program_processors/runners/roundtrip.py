@@ -31,12 +31,14 @@ from gt4py.next.iterator import embedded, ir as itir, transforms as itir_transfo
 from gt4py.next.iterator.transforms import fencil_to_program
 from gt4py.next.otf import stages, workflow
 from gt4py.next.program_processors import modular_executor, processor_interface as ppi
+from gt4py.next.type_system import type_specifications as ts
 
 
-def _create_tmp(axes: str, origin: str, shape: str, dtype: Any) -> str:
-    if isinstance(dtype, tuple):
-        return f"({','.join(_create_tmp(axes, origin, shape, dt) for dt in dtype)},)"
+def _create_tmp(axes: str, origin: str, shape: str, dtype: ts.TypeSpec) -> str:
+    if isinstance(dtype, ts.TupleType):
+        return f"({','.join(_create_tmp(axes, origin, shape, dt) for dt in dtype.types)},)"
     else:
+        assert isinstance(dtype, ts.ScalarType)
         return (
             f"gtx.as_field([{axes}], np.empty({shape}, dtype=np.dtype('{dtype}')), origin={origin})"
         )
@@ -84,6 +86,7 @@ def ${id}(${','.join(params)}):
         axes = ", ".join(label for label, _, _ in domain_ranges)
         origin = "{" + ", ".join(f"{label}: -{start}" for label, start, _ in domain_ranges) + "}"
         shape = "(" + ", ".join(f"{stop}-{start}" for _, start, stop in domain_ranges) + ")"
+        assert node.dtype
         return f"{node.id} = {_create_tmp(axes, origin, shape, node.dtype)}"
 
 

@@ -163,8 +163,8 @@ def from_type_hint(
 
             # TODO(tehrengruber): print better error when no return type annotation is given
             return ts.FunctionType(
-                pos_only_args=new_args,  # type: ignore[arg-type] # checked in assert
-                pos_or_kw_args=kwargs,  # type: ignore[arg-type] # checked in assert
+                pos_only_args=new_args,
+                pos_or_kw_args=kwargs,
                 kw_only_args={},  # TODO
                 returns=returns,
             )

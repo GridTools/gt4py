@@ -24,14 +24,26 @@ graph LR
 
 fdef(FieldOperatorDefinition) -->|func_to_foast| foast(FoastOperatorDefinition)
 foast -->|foast_to_itir| itir_expr(itir.Expr)
-foast -->|foast_inject_args| fclos(FoastClosure)
+foasta -->|foast_to_foast_closure| fclos(FoastClosure)
 fclos -->|foast_to_past_closure| pclos(PastClosure)
 pclos -->|past_process_args| pclos
 pclos -->|past_to_itir| pcall(ProgramCall)
 
 pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
 past -->|past_lint| past
-past -->|past_inject_args| pclos(ProgramClosure)
+pasta -->|past_to_past_closure| pclos(ProgramClosure)
+
+fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
+fuwr --> fargs(args, kwargs)
+
+foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
+fargs --> foasta
+
+pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
+puwr --> pargs(args, kwargs)
+
+past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
+pargs --> pasta
 ```
 
 # Walkthrough from Field Operator
@@ -71,14 +83,26 @@ graph LR
 
 fdef(FieldOperatorDefinition) -->|func_to_foast| foast(FoastOperatorDefinition)
 foast -->|foast_to_itir| itir_expr(itir.Expr)
-foast -->|foast_inject_args| fclos(FoastClosure)
+foasta -->|foast_to_foast_closure| fclos(FoastClosure)
 fclos -->|foast_to_past_closure| pclos(PastClosure)
 pclos -->|past_process_args| pclos
 pclos -->|past_to_itir| pcall(ProgramCall)
 
 pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
 past -->|past_lint| past
-past -->|past_inject_args| pclos(ProgramClosure)
+pasta -->|past_to_past_closure| pclos(ProgramClosure)
+
+fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
+fuwr --> fargs(args, kwargs)
+
+foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
+fargs --> foasta
+
+pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
+puwr --> pargs(args, kwargs)
+
+past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
+pargs --> pasta
 
 style fdef fill:red
 style foast fill:red
@@ -114,14 +138,26 @@ graph LR
 
 fdef(FieldOperatorDefinition) -->|func_to_foast| foast(FoastOperatorDefinition)
 foast -->|foast_to_itir| itir_expr(itir.Expr)
-foast -->|foast_inject_args| fclos(FoastClosure)
+foasta -->|foast_to_foast_closure| fclos(FoastClosure)
 fclos -->|foast_to_past_closure| pclos(PastClosure)
 pclos -->|past_process_args| pclos
 pclos -->|past_to_itir| pcall(ProgramCall)
 
 pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
 past -->|past_lint| past
-past -->|past_inject_args| pclos(ProgramClosure)
+pasta -->|past_to_past_closure| pclos(ProgramClosure)
+
+fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
+fuwr --> fargs(args, kwargs)
+
+foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
+fargs --> foasta
+
+pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
+puwr --> pargs(args, kwargs)
+
+past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
+pargs --> pasta
 
 style foast fill:red
 style itir_expr fill:red
@@ -147,34 +183,53 @@ graph LR
 
 fdef(FieldOperatorDefinition) -->|func_to_foast| foast(FoastOperatorDefinition)
 foast -->|foast_to_itir| itir_expr(itir.Expr)
-foast -->|foast_inject_args| fclos(FoastClosure)
+foasta -->|foast_to_foast_closure| fclos(FoastClosure)
 fclos -->|foast_to_past_closure| pclos(PastClosure)
 pclos -->|past_process_args| pclos
 pclos -->|past_to_itir| pcall(ProgramCall)
 
 pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
 past -->|past_lint| past
-past -->|past_inject_args| pclos(ProgramClosure)
+pasta -->|past_to_past_closure| pclos(ProgramClosure)
 
-style foast fill:red
+fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
+fuwr --> fargs(args, kwargs)
+
+foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
+fargs --> foasta
+
+pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
+puwr --> pargs(args, kwargs)
+
+past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
+pargs --> pasta
+
+style foasta fill:red
 style fclos fill:red
 linkStyle 2 stroke:red,stroke-width:4px,color:pink
 ```
 
-Here we have to dynamically generate a workflow step, because the arguments were not known before.
+Here we have to manually combine the previous result with the call arguments. When we call the toolchain as a whole later we will only have to do this once at the beginning.
 
 ```python
-fclos = backend.DEFAULT_FIELDOP_TRANSFORMS.foast_inject_args.__class__(
-    args=(gtx.ones(domain={I: 10}, dtype=gtx.float64),),
-    kwargs={
-        "out": gtx.zeros(domain={I: 10}, dtype=gtx.float64)
-    },
-    from_fieldop=example_fo
-)(foast)
+fclos = backend.DEFAULT_FIELDOP_TRANSFORMS.foast_to_foast_closure(
+    gtx.otf.workflow.InputWithArgs(
+        data=foast,
+        args=(gtx.ones(domain={I: 10}, dtype=gtx.float64),),
+        kwargs={
+            "out": gtx.zeros(domain={I: 10}, dtype=gtx.float64),
+            "from_fieldop": example_fo
+        },
+    )
+)
 ```
 
 ```python
-gtx.ffront.stages.FoastClosure?
+fclos.closure_vars["example_fo"].backend
+```
+
+```python
+gtx.ffront.stages.FoastClosure??
 ```
 
     [0;31mInit signature:[0m
@@ -185,6 +240,13 @@ gtx.ffront.stages.FoastClosure?
     [0;34m[0m    [0mclosure_vars[0m[0;34m:[0m [0;34m'dict[str, Any]'[0m[0;34m,[0m[0;34m[0m
     [0;34m[0m[0;34m)[0m [0;34m->[0m [0;32mNone[0m[0;34m[0m[0;34m[0m[0m
     [0;31mDocstring:[0m      FoastClosure(foast_op_def: 'FoastOperatorDefinition[OperatorNodeT]', args: 'tuple[Any, ...]', kwargs: 'dict[str, Any]', closure_vars: 'dict[str, Any]')
+    [0;31mSource:[0m
+    [0;34m@[0m[0mdataclasses[0m[0;34m.[0m[0mdataclass[0m[0;34m([0m[0mfrozen[0m[0;34m=[0m[0;32mTrue[0m[0;34m)[0m[0;34m[0m
+    [0;34m[0m[0;32mclass[0m [0mFoastClosure[0m[0;34m([0m[0mGeneric[0m[0;34m[[0m[0mOperatorNodeT[0m[0;34m][0m[0;34m)[0m[0;34m:[0m[0;34m[0m
+    [0;34m[0m    [0mfoast_op_def[0m[0;34m:[0m [0mFoastOperatorDefinition[0m[0;34m[[0m[0mOperatorNodeT[0m[0;34m][0m[0;34m[0m
+    [0;34m[0m    [0margs[0m[0;34m:[0m [0mtuple[0m[0;34m[[0m[0mAny[0m[0;34m,[0m [0;34m...[0m[0;34m][0m[0;34m[0m
+    [0;34m[0m    [0mkwargs[0m[0;34m:[0m [0mdict[0m[0;34m[[0m[0mstr[0m[0;34m,[0m [0mAny[0m[0;34m][0m[0;34m[0m
+    [0;34m[0m    [0mclosure_vars[0m[0;34m:[0m [0mdict[0m[0;34m[[0m[0mstr[0m[0;34m,[0m [0mAny[0m[0;34m][0m[0;34m[0m[0;34m[0m[0m
     [0;31mFile:[0m           ~/Code/gt4py/src/gt4py/next/ffront/stages.py
     [0;31mType:[0m           type
     [0;31mSubclasses:[0m
@@ -198,14 +260,26 @@ graph LR
 
 fdef(FieldOperatorDefinition) -->|func_to_foast| foast(FoastOperatorDefinition)
 foast -->|foast_to_itir| itir_expr(itir.Expr)
-foast -->|foast_inject_args| fclos(FoastClosure)
+foasta -->|foast_to_foast_closure| fclos(FoastClosure)
 fclos -->|foast_to_past_closure| pclos(PastClosure)
 pclos -->|past_process_args| pclos
 pclos -->|past_to_itir| pcall(ProgramCall)
 
 pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
 past -->|past_lint| past
-past -->|past_inject_args| pclos(ProgramClosure)
+pasta -->|past_to_past_closure| pclos(ProgramClosure)
+
+fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
+fuwr --> fargs(args, kwargs)
+
+foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
+fargs --> foasta
+
+pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
+puwr --> pargs(args, kwargs)
+
+past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
+pargs --> pasta
 
 style fclos fill:red
 style pclos fill:red
@@ -242,14 +316,26 @@ graph LR
 
 fdef(FieldOperatorDefinition) -->|func_to_foast| foast(FoastOperatorDefinition)
 foast -->|foast_to_itir| itir_expr(itir.Expr)
-foast -->|foast_inject_args| fclos(FoastClosure)
+foasta -->|foast_to_foast_closure| fclos(FoastClosure)
 fclos -->|foast_to_past_closure| pclos(PastClosure)
 pclos -->|past_process_args| pclos
 pclos -->|past_to_itir| pcall(ProgramCall)
 
 pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
 past -->|past_lint| past
-past -->|past_inject_args| pclos(ProgramClosure)
+pasta -->|past_to_past_closure| pclos(ProgramClosure)
+
+fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
+fuwr --> fargs(args, kwargs)
+
+foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
+fargs --> foasta
+
+pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
+puwr --> pargs(args, kwargs)
+
+past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
+pargs --> pasta
 
 style pclos fill:red
 %%style pclos fill:red
@@ -260,6 +346,12 @@ linkStyle 4 stroke:red,stroke-width:4px,color:pink
 pclost = backend.DEFAULT_PROG_TRANSFORMS.past_transform_args(pclos)
 ```
 
+```python
+pclost.kwargs
+```
+
+    {}
+
 ## Lower PAST -> ITIR
 
 still forwarding the call arguments
@@ -269,14 +361,26 @@ graph LR
 
 fdef(FieldOperatorDefinition) -->|func_to_foast| foast(FoastOperatorDefinition)
 foast -->|foast_to_itir| itir_expr(itir.Expr)
-foast -->|foast_inject_args| fclos(FoastClosure)
+foasta -->|foast_to_foast_closure| fclos(FoastClosure)
 fclos -->|foast_to_past_closure| pclos(PastClosure)
 pclos -->|past_process_args| pclos
 pclos -->|past_to_itir| pcall(ProgramCall)
 
 pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
 past -->|past_lint| past
-past -->|past_inject_args| pclos(ProgramClosure)
+pasta -->|past_to_past_closure| pclos(ProgramClosure)
+
+fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
+fuwr --> fargs(args, kwargs)
+
+foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
+fargs --> foasta
+
+pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
+puwr --> pargs(args, kwargs)
+
+past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
+pargs --> pasta
 
 style pclos fill:red
 style pcall fill:red
@@ -326,30 +430,46 @@ graph LR
 
 fdef(FieldOperatorDefinition) -->|func_to_foast| foast(FoastOperatorDefinition)
 foast -->|foast_to_itir| itir_expr(itir.Expr)
-foast -->|foast_inject_args| fclos(FoastClosure)
+foasta -->|foast_to_foast_closure| fclos(FoastClosure)
 fclos -->|foast_to_past_closure| pclos(PastClosure)
 pclos -->|past_process_args| pclos
 pclos -->|past_to_itir| pcall(ProgramCall)
 
 pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
 past -->|past_lint| past
-past -->|past_inject_args| pclos(ProgramClosure)
+pasta -->|past_to_past_closure| pclos(ProgramClosure)
 
+fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
+fuwr --> fargs(args, kwargs)
+
+foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
+fargs --> foasta
+
+pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
+puwr --> pargs(args, kwargs)
+
+past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
+pargs --> pasta
+
+style fdefa fill:red
+style fuwr fill:red
 style fdef fill:red
+style fargs fill:red
 style foast fill:red
+style fiwr fill:red
+style foasta fill:red
 style fclos fill:red
 style pclos fill:red
 style pcall fill:red
-linkStyle 0,2,3,4,5 stroke:red,stroke-width:4px,color:pink
+linkStyle 0,2,3,4,5,9,10,11,12,13,14 stroke:red,stroke-width:4px,color:pink
 ```
 
 ### Starting from DSL
 
 ```python
-foast_toolchain = backend.DEFAULT_FIELDOP_TRANSFORMS.replace(
-    foast_inject_args=backend.FopArgsInjector(args=fclos.args, kwargs=fclos.kwargs, from_fieldop=example_fo)
+pitir2 = backend.DEFAULT_FIELDOP_TRANSFORMS(
+    gtx.otf.workflow.InputWithArgs(data=start, args=fclos.args, kwargs=fclos.kwargs | {"from_fieldop": example_fo})
 )
-pitir2 = foast_toolchain(start)
 assert pitir2 == pitir
 ```
 
@@ -365,22 +485,39 @@ example_compiled = gtx.program_processors.runners.roundtrip.executor.otf_workflo
 example_compiled(*pitir2.args, offset_provider=OFFSET_PROVIDER)
 ```
 
+We can re-run with the output from the previous run as in- and output.
+
 ```python
 example_compiled(pitir2.args[1], *pitir2.args[1:], offset_provider=OFFSET_PROVIDER)
 ```
 
 ```python
-pitir2.args[1].asnumpy()
+pitir2.args[2]
 ```
 
-    array([3., 3., 3., 3., 3., 3., 3., 3., 3., 3.])
+    10
+
+```python
+pitir.args
+```
+
+    (NumPyArrayField(_domain=Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>),), ranges=(UnitRange(0, 10),)), _ndarray=array([1., 1., 1., 1., 1., 1., 1., 1., 1., 1.])),
+     NumPyArrayField(_domain=Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>),), ranges=(UnitRange(0, 10),)), _ndarray=array([3., 3., 3., 3., 3., 3., 3., 3., 3., 3.])),
+     10,
+     10)
 
 ### Starting from FOAST
 
 Note that it is the exact same call but with a different input stage
 
 ```python
-pitir3 = foast_toolchain(foast)
+pitir3 = backend.DEFAULT_FIELDOP_TRANSFORMS(
+    gtx.otf.workflow.InputWithArgs(
+        data=foast,
+        args=fclos.args,
+        kwargs=fclos.kwargs | {"from_fieldop": example_fo}
+    )
+)
 assert pitir3 == pitir
 ```
 
@@ -419,14 +556,26 @@ graph LR
 
 fdef(FieldOperatorDefinition) -->|func_to_foast| foast(FoastOperatorDefinition)
 foast -->|foast_to_itir| itir_expr(itir.Expr)
-foast -->|foast_inject_args| fclos(FoastClosure)
+foasta -->|foast_to_foast_closure| fclos(FoastClosure)
 fclos -->|foast_to_past_closure| pclos(PastClosure)
 pclos -->|past_process_args| pclos
 pclos -->|past_to_itir| pcall(ProgramCall)
 
 pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
 past -->|past_lint| past
-past -->|past_inject_args| pclos(ProgramClosure)
+pasta -->|past_to_past_closure| pclos(ProgramClosure)
+
+fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
+fuwr --> fargs(args, kwargs)
+
+foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
+fargs --> foasta
+
+pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
+puwr --> pargs(args, kwargs)
+
+past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
+pargs --> pasta
 
 style pdef fill:red
 style past fill:red
@@ -444,27 +593,40 @@ graph LR
 
 fdef(FieldOperatorDefinition) -->|func_to_foast| foast(FoastOperatorDefinition)
 foast -->|foast_to_itir| itir_expr(itir.Expr)
-foast -->|foast_inject_args| fclos(FoastClosure)
+foasta -->|foast_to_foast_closure| fclos(FoastClosure)
 fclos -->|foast_to_past_closure| pclos(PastClosure)
 pclos -->|past_process_args| pclos
 pclos -->|past_to_itir| pcall(ProgramCall)
 
 pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
 past -->|past_lint| past
-past -->|past_inject_args| pclos(ProgramClosure)
+pasta -->|past_to_past_closure| pclos(ProgramClosure)
 
-style past fill:red
+fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
+fuwr --> fargs(args, kwargs)
+
+foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
+fargs --> foasta
+
+pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
+puwr --> pargs(args, kwargs)
+
+past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
+pargs --> pasta
+
+style pasta fill:red
 style pclos fill:red
-linkStyle 7 stroke:red,stroke-width:4px,color:pink
+linkStyle 8 stroke:red,stroke-width:4px,color:pink
 ```
 
 ```python
-pclos = backend.DEFAULT_PROG_TRANSFORMS.replace(
-    past_inject_args=backend.ProgArgsInjector(
+pclos = backend.DEFAULT_PROG_TRANSFORMS(
+    gtx.otf.workflow.InputWithArgs(
+        data=p_past,
         args=fclos.args,
         kwargs=fclos.kwargs
     )
-)(p_past)
+)
 ```
 
 ## Full Program Toolchain
@@ -474,27 +636,45 @@ graph LR
 
 fdef(FieldOperatorDefinition) -->|func_to_foast| foast(FoastOperatorDefinition)
 foast -->|foast_to_itir| itir_expr(itir.Expr)
-foast -->|foast_inject_args| fclos(FoastClosure)
+foasta -->|foast_to_foast_closure| fclos(FoastClosure)
 fclos -->|foast_to_past_closure| pclos(PastClosure)
 pclos -->|past_process_args| pclos
 pclos -->|past_to_itir| pcall(ProgramCall)
 
 pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
 past -->|past_lint| past
-past -->|past_inject_args| pclos(ProgramClosure)
+pasta -->|past_to_past_closure| pclos(ProgramClosure)
 
+fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
+fuwr --> fargs(args, kwargs)
+
+foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
+fargs --> foasta
+
+pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
+puwr --> pargs(args, kwargs)
+
+past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
+pargs --> pasta
+
+style pdefa fill:red
+style puwr fill:red
 style pdef fill:red
+style pargs fill:red
 style past fill:red
+style piwr fill:red
+style pasta fill:red
 style pclos fill:red
 style pcall fill:red
-linkStyle 4,5,6,7 stroke:red,stroke-width:4px,color:pink
+linkStyle 4,5,6,7,8,15,16,17,18,19,20 stroke:red,stroke-width:4px,color:pink
 ```
 
 ### Starting from DSL
 
 ```python
-toolchain = backend.DEFAULT_PROG_TRANSFORMS.replace(
-    past_inject_args=backend.ProgArgsInjector(
+p_itir1 = backend.DEFAULT_PROG_TRANSFORMS(
+    gtx.otf.workflow.InputWithArgs(
+        data=p_start,
         args=fclos.args,
         kwargs=fclos.kwargs
     )
@@ -502,11 +682,13 @@ toolchain = backend.DEFAULT_PROG_TRANSFORMS.replace(
 ```
 
 ```python
-p_itir1 = toolchain(p_start)
-```
-
-```python
-p_itir2 = toolchain(p_past)
+p_itir2 = backend.DEFAULT_PROG_TRANSFORMS(
+    gtx.otf.workflow.InputWithArgs(
+        data=p_past,
+        args=fclos.args,
+        kwargs=fclos.kwargs
+    )
+)
 ```
 
 ```python

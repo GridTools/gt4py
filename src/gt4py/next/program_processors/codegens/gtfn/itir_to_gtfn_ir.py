@@ -20,6 +20,7 @@ from gt4py.eve import utils as eve_utils
 from gt4py.eve.concepts import SymbolName
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import (
     Backend,
     BinaryExpr,
@@ -45,10 +46,12 @@ from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import (
     UnstructuredDomain,
 )
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_common import Expr, Node, Sym, SymRef
-from gt4py.next.type_system import type_info
+from gt4py.next.type_system import type_info, type_specifications as ts
 
 
-def pytype_to_cpptype(t: str) -> Optional[str]:
+def pytype_to_cpptype(t: ts.ScalarType | str) -> Optional[str]:
+    if isinstance(t, ts.ScalarType):
+        t = t.kind.name.lower()
     try:
         return {
             "float32": "float",
@@ -273,6 +276,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         if not isinstance(node, itir.Program):
             raise TypeError(f"Expected a 'Program', got '{type(node).__name__}'.")
 
+        node = itir_type_inference.infer(node, offset_provider=offset_provider)
         grid_type = _get_gridtype(node.body)
         if grid_type == common.GridType.UNSTRUCTURED:
             node = _CannonicalizeUnstructuredDomain.apply(node)
@@ -578,19 +582,16 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_Temporary(
         self, node: itir.Temporary, *, params: list, **kwargs: Any
     ) -> TemporaryAllocation:
-        def dtype_to_cpp(x: int | tuple | str) -> str:
-            if isinstance(x, int):
-                return f"std::remove_const_t<::gridtools::sid::element_type<decltype({params[x]})>>"
-            if isinstance(x, tuple):
-                return "::gridtools::tuple<" + ", ".join(dtype_to_cpp(i) for i in x) + ">"
-            assert isinstance(x, str)
+        def dtype_to_cpp(x: ts.DataType) -> str:
+            if isinstance(x, ts.TupleType):
+                assert all(isinstance(i, ts.ScalarType) for i in x.types)
+                return "::gridtools::tuple<" + ", ".join(dtype_to_cpp(i) for i in x.types) + ">"
+            assert isinstance(x, ts.ScalarType)
             res = pytype_to_cpptype(x)
             assert isinstance(res, str)
             return res
 
-        assert isinstance(
-            node.dtype, (int, tuple, str)
-        )  # TODO(havogt): this looks weird, consider refactoring
+        assert node.dtype
         return TemporaryAllocation(
             id=node.id, dtype=dtype_to_cpp(node.dtype), domain=self.visit(node.domain, **kwargs)
         )

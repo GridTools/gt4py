@@ -12,8 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import typing
-from typing import Any, ClassVar, List, Optional, Union
+from typing import ClassVar, List, Optional, Union
 
 import gt4py.eve as eve
 from gt4py.eve import Coerced, SymbolName, SymbolRef, datamodels
@@ -35,6 +34,9 @@ DimensionKind = common.DimensionKind
 class Node(eve.Node):
     location: Optional[SourceLocation] = eve.field(default=None, repr=False, compare=False)
 
+    # TODO(tehrengruber): include in comparison if value is not None
+    type: Optional[ts.TypeSpec] = eve.field(default=None, repr=False, compare=False)
+
     def __str__(self) -> str:
         from gt4py.next.iterator.pretty_printer import pformat
 
@@ -51,24 +53,6 @@ class Node(eve.Node):
 
 class Sym(Node):  # helper
     id: Coerced[SymbolName]
-    # TODO(tehrengruber): Revisit. Using strings is a workaround to avoid coupling with the
-    #   type inference.
-    kind: typing.Literal["Iterator", "Value", None] = None
-    dtype: Optional[tuple[str, bool]] = (
-        None  # format: name of primitive type, boolean indicating if it is a list
-    )
-
-    @datamodels.validator("kind")
-    def _kind_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value: str):
-        if value and value not in ["Iterator", "Value"]:
-            raise ValueError(f"Invalid kind '{value}', must be one of 'Iterator', 'Value'.")
-
-    @datamodels.validator("dtype")
-    def _dtype_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value: str):
-        if value and value[0] not in TYPEBUILTINS:
-            raise ValueError(
-                f"Invalid dtype '{value}', must be one of '{', '.join(TYPEBUILTINS)}'."
-            )
 
 
 @noninstantiable
@@ -183,18 +167,14 @@ INTEGER_BUILTINS = {"int32", "int64"}
 FLOATING_POINT_BUILTINS = {"float32", "float64"}
 TYPEBUILTINS = {*INTEGER_BUILTINS, *FLOATING_POINT_BUILTINS, "bool"}
 
-GRAMMAR_BUILTINS = {
+BUILTINS = {
+    "tuple_get",
+    "cast_",
     "cartesian_domain",
     "unstructured_domain",
     "make_tuple",
-    "tuple_get",
     "shift",
     "neighbors",
-    "cast_",
-}
-
-BUILTINS = {
-    *GRAMMAR_BUILTINS,
     "named_range",
     "list_get",
     "map_",
@@ -238,7 +218,7 @@ class SetAt(Stmt):  # from JAX array.at[...].set()
 class Temporary(Node):
     id: Coerced[eve.SymbolName]
     domain: Optional[Expr] = None
-    dtype: Optional[Any] = None  # TODO
+    dtype: Optional[ts.ScalarType | ts.TupleType] = None
 
 
 class Program(Node, ValidatedSymbolTableTrait):

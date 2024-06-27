@@ -15,6 +15,7 @@
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.pretty_printer import PrettyPrinter, pformat
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.type_system import type_specifications as ts
 
 
 def test_hmerge():
@@ -310,7 +311,9 @@ def test_function_definition():
 
 
 def test_temporary():
-    testee = ir.Temporary(id="t", domain=ir.SymRef(id="domain"), dtype="float64")
+    testee = ir.Temporary(
+        id="t", domain=ir.SymRef(id="domain"), dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    )
     expected = "t = temporary(domain=domain, dtype=float64);"
     actual = pformat(testee)
     assert actual == expected
@@ -372,7 +375,7 @@ def test_program():
             ir.Temporary(
                 id="tmp",
                 domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
-                dtype="float64",
+                dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
             ),
         ],
         body=[

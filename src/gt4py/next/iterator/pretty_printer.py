@@ -20,7 +20,7 @@ Inspired by P. Yelland, “A New Approach to Optimal Code Formatting”, 2015
 # TODO(tehrengruber): add support for printing the types of itir.Sym, itir.Literal nodes
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterator, Sequence
 from typing import Final
 
 from gt4py.eve import NodeTranslator
@@ -127,13 +127,11 @@ class PrettyPrinter(NodeTranslator):
 
     def _hinterleave(
         self, blocks: Sequence[list[str]], sep: str, *, indent: bool = False
-    ) -> Iterable[list[str]]:
-        if not blocks:
-            return blocks
-        do_indent = self._indent if indent else lambda x: x
-        for block in blocks[:-1]:
-            yield do_indent(self._hmerge(block, [sep]))
-        yield do_indent(blocks[-1])
+    ) -> Iterator[list[str]]:
+        if blocks:
+            do_indent = self._indent if indent else lambda x: x
+            yield from (do_indent(self._hmerge(block, [sep])) for block in blocks[:-1])
+            yield do_indent(blocks[-1])
 
     def visit_Sym(self, node: ir.Sym, *, prec: int) -> list[str]:
         return [node.id]

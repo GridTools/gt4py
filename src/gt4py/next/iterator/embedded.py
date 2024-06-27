@@ -523,7 +523,7 @@ def _named_range(axis: str, range_: Iterable[int]) -> Iterable[CompleteOffset]:
     return ((axis, i) for i in range_)
 
 
-def _domain_iterator(domain: dict[Tag, range]) -> Iterable[Position]:
+def _domain_iterator(domain: dict[Tag, range]) -> Iterable[ConcretePosition]:
     return (
         dict(elem)
         for elem in itertools.product(*(_named_range(axis, rang) for axis, rang in domain.items()))

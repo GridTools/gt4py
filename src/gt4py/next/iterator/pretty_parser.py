@@ -18,6 +18,7 @@ from lark import lark, lexer as lark_lexer, visitors as lark_visitors
 
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.type_system import type_specifications as ts
 
 
 GRAMMAR = """
@@ -31,6 +32,7 @@ GRAMMAR = """
 
     SYM: CNAME
     SYM_REF: CNAME
+    TYPE_LITERAL: CNAME
     INT_LITERAL: SIGNED_INT
     FLOAT_LITERAL: SIGNED_FLOAT
     OFFSET_LITERAL: ( INT_LITERAL | CNAME ) "ₒ"
@@ -84,7 +86,7 @@ GRAMMAR = """
 
     named_range: AXIS_NAME ":" "[" prec0 "," prec0 ")"
     function_definition: ID_NAME "=" "λ(" ( SYM "," )* SYM? ")" "→" prec0 ";"
-    declaration: ID_NAME "=" "temporary(" "domain=" prec0 "," "dtype=" prec0 ")" ";"
+    declaration: ID_NAME "=" "temporary(" "domain=" prec0 "," "dtype=" TYPE_LITERAL ")" ";"
     stencil_closure: prec0 "←" "(" prec0 ")" "(" ( SYM_REF ", " )* SYM_REF ")" "@" prec0 ";"
     set_at: prec0 "@" prec0 "←" prec1 ";"
     fencil_definition: ID_NAME "(" ( SYM "," )* SYM ")" "{" ( function_definition )* ( stencil_closure )+ "}"
@@ -110,6 +112,11 @@ class ToIrTransformer(lark_visitors.Transformer):
 
     def FLOAT_LITERAL(self, value: lark_lexer.Token) -> ir.Literal:
         return im.literal(value.value, "float64")
+
+    def TYPE_LITERAL(self, value: lark_lexer.Token) -> ts.TypeSpec:
+        if hasattr(ts.ScalarKind, value.upper()):
+            return ts.ScalarType(kind=getattr(ts.ScalarKind, value.upper()))
+        raise NotImplementedError(f"Type {value} not supported.")
 
     def OFFSET_LITERAL(self, value: lark_lexer.Token) -> ir.OffsetLiteral:
         v: Union[int, str] = value.value[:-1]
