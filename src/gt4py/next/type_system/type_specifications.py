@@ -11,19 +11,23 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
 from dataclasses import dataclass
-from typing import Iterator, Optional
+from typing import Iterator, Optional, Sequence, Union
 
 from gt4py.eve.type_definitions import IntEnum
+from gt4py.eve.utils import content_hash
 from gt4py.next import common as func_common
 
 
-class TypeSpec:
-    pass
-
-
 @dataclass(frozen=True)
+class TypeSpec:
+    def __hash__(self) -> int:
+        return hash(content_hash(self))
+
+    def __init_subclass__(cls) -> None:
+        cls.__hash__ = TypeSpec.__hash__  # type: ignore[method-assign]
+
+
 class DataType(TypeSpec):
     """
     A base type for all types that represent data storage.
@@ -115,10 +119,10 @@ class FieldType(DataType, CallableType):
 
 @dataclass(frozen=True)
 class FunctionType(TypeSpec, CallableType):
-    pos_only_args: list[DataType | DeferredType]
-    pos_or_kw_args: dict[str, DataType | DeferredType]
-    kw_only_args: dict[str, DataType | DeferredType]
-    returns: DataType | DeferredType | VoidType
+    pos_only_args: Sequence[TypeSpec]
+    pos_or_kw_args: dict[str, TypeSpec]
+    kw_only_args: dict[str, TypeSpec]
+    returns: Union[TypeSpec]
 
     def __str__(self) -> str:
         arg_strs = [str(arg) for arg in self.pos_only_args]

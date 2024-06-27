@@ -68,7 +68,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
     >>> lowered.id
     SymbolName('fieldop')
     >>> lowered.params  # doctest: +ELLIPSIS
-    [Sym(id=SymbolName('inp'), kind='Iterator', dtype=('float64', False))]
+    [Sym(id=SymbolName('inp'))]
     """
 
     uid_generator: UIDGenerator = dataclasses.field(default_factory=UIDGenerator)
@@ -233,12 +233,6 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         )
 
     def visit_Symbol(self, node: foast.Symbol, **kwargs: Any) -> itir.Sym:
-        # TODO(tehrengruber): extend to more types
-        if isinstance(node.type, ts.FieldType):
-            kind = "Iterator"
-            dtype = node.type.dtype.kind.name.lower()
-            is_list = type_info.is_local_field(node.type)
-            return itir.Sym(id=node.id, kind=kind, dtype=(dtype, is_list))
         return im.sym(node.id)
 
     def visit_Name(self, node: foast.Name, **kwargs: Any) -> itir.SymRef:
