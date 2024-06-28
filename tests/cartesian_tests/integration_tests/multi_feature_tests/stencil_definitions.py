@@ -83,6 +83,7 @@ def arithmetic_ops(field_a: Field3D, field_b: Field3D):
     with computation(PARALLEL), interval(...):
         field_a = (((((field_b + 42.0) - 42.0) * +42.0) / -42.0) % 42.0) ** 2
 
+
 @register
 def data_types(
     bool_field: gtscript.Field[bool],
