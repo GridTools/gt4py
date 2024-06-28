@@ -31,7 +31,7 @@ from gt4py.next.iterator import transforms as itir_transforms
 from gt4py.next.iterator.transforms.pass_manager import apply_common_transforms
 from gt4py.next.iterator.transforms.trace_shifts import TraceShifts
 from gt4py.next.iterator.type_system import inference as itir_type_inference
-from gt4py.next.type_system import type_specifications as ts, type_translation as tt
+from gt4py.next.type_system import type_specifications as ts
 
 from .itir_to_sdfg import ItirToSDFG
 from .utility import connectivity_identifier, filter_connectivities, get_sorted_dims
@@ -322,16 +322,9 @@ class Program(Program, SDFGConvertible):  # type: ignore[no-redef]
     sdfg_convertible: dict[str, Any] = field(default_factory=dict)
 
     def __sdfg__(self, *args, **kwargs) -> dace.sdfg.sdfg.SDFG:
-        params = {str(p.id): p.dtype for p in self.itir.params}  # type: ignore[attr-defined]
-        fields = {str(p.id): p.type for p in self.past_stage.past_node.params}
-        arg_types = [
-            fields[pname]
-            if pname in fields
-            else ts.ScalarType(kind=tt.get_scalar_kind(dtype))
-            if dtype is not None
-            else ts.ScalarType(kind=ts.ScalarKind.INT32)
-            for pname, dtype in params.items()
-        ]
+        params = {str(p.id): p.type for p in self.itir.params}
+        fields = {str(p.id): p.type for p in self.itir.params if hasattr(p.type, "dims")}
+        arg_types = list(params.values())
 
         # Do this because DaCe converts the offset_provider to an OrderedDict with StringLiteral keys
         offset_provider = {str(k): v for k, v in kwargs.get("offset_provider", {}).items()}
@@ -359,7 +352,7 @@ class Program(Program, SDFGConvertible):  # type: ignore[no-redef]
         sdfg.GT4Py_Program_input_fields = {
             inpt: dim
             for inpt in input_fields
-            for dim in fields[inpt].dims
+            for dim in fields[inpt].dims  # type: ignore[union-attr]
             if dim.kind == common.DimensionKind.HORIZONTAL
         }
 
@@ -376,7 +369,7 @@ class Program(Program, SDFGConvertible):  # type: ignore[no-redef]
         sdfg.GT4Py_Program_output_fields = {
             output: dim
             for output in output_fields
-            for dim in fields[output].dims
+            for dim in fields[output].dims  # type: ignore[union-attr]
             if dim.kind == common.DimensionKind.HORIZONTAL
         }
 
