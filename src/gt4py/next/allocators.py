@@ -14,6 +14,7 @@
 
 import abc
 import dataclasses
+import functools
 
 import gt4py._core.definitions as core_defs
 import gt4py.next.common as common
@@ -150,14 +151,10 @@ class BaseFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceType
     array_utils: core_allocators.ArrayUtils
     layout_mapper: FieldLayoutMapper
     byte_alignment: int
-    buffer_allocator: core_allocators.BufferAllocator = dataclasses.field(init=False)
 
-    def __post_init__(self) -> None:
-        object.__setattr__(
-            self,
-            "buffer_allocator",
-            core_allocators.NDArrayBufferAllocator(self.device_type, self.array_utils),
-        )
+    @functools.cached_property
+    def buffer_allocator(self) -> core_allocators.BufferAllocator:
+        return core_allocators.NDArrayBufferAllocator(self.device_type, self.array_utils)
 
     @property
     def __gt_device_type__(self) -> core_defs.DeviceTypeT:
