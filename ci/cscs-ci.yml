@@ -104,6 +104,8 @@ build_py311_image_x86_64:
   needs: [build_py311_baseimage_x86_64]
   variables:
     <<: *py311
+  # TODO: remove line below
+  when: manual # tested and working, disabled while developing for gh200
 build_py311_image_aarch64:
   extends: .build_image_aarch64
   needs: [build_py311_baseimage_aarch64]
@@ -163,6 +165,8 @@ build_py38_image_x86_64:
     - SUBPACKAGE: next
       VARIANT: [-nomesh, -atlas]
       SUBVARIANT: [-cuda11x, -cpu]
+  # TODO: remove line below
+  when: manual # tested and working, disabled while developing for gh200
 .test_helper_aarch64:
   extends: [.container-runner-todi-gh200, .test_helper]
   parallel:
