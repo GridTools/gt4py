@@ -24,6 +24,11 @@ class BackendNotSelectedError(RuntimeError):
 
 
 @builtin_dispatch
+def as_fieldop(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def deref(*args):
     raise BackendNotSelectedError()
 
@@ -430,6 +435,7 @@ BUILTINS = {
     "cartesian_domain",
     "unstructured_domain",
     "named_range",
+    "as_fieldop",
     *MATH_BUILTINS,
 }
 
