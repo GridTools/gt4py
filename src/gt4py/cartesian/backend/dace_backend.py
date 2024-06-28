@@ -61,8 +61,8 @@ if TYPE_CHECKING:
 
 
 # force dace representation of bool type to be compatible with pybind11
-dace.dtypes.bool.ctype = dace.dtypes.uint8.ctype
-dace.dtypes.bool.ctype_unaligned = dace.dtypes.uint8.ctype
+dace.dtypes.bool.ctype = dace.dtypes.int8.ctype
+dace.dtypes.bool.ctype_unaligned = dace.dtypes.int8.ctype
 
 
 def _specialize_transient_strides(sdfg: dace.SDFG, layout_map):
