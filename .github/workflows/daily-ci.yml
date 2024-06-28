@@ -5,11 +5,11 @@ on:
   - cron: '0 4 * * *'
   workflow_dispatch:
 
-  # COMMENTED OUT: only for testing CI action changes
-  pull_request:
-    branches:
-    - main
-  # END
+  ## COMMENTED OUT: only for testing CI action changes
+  # pull_request:
+  #   branches:
+  #   - main
+  ## END
 
 jobs:
   daily-ci:
