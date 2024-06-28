@@ -7,7 +7,6 @@
 aenum==3.1.15             # via -c constraints.txt, dace
 alabaster==0.7.13         # via -c constraints.txt, sphinx
 annotated-types==0.7.0    # via -c constraints.txt, pydantic
-appnope==0.1.4            # via -c constraints.txt, ipykernel, ipython
 asttokens==2.4.1          # via -c constraints.txt, devtools, stack-data
 astunparse==1.6.3 ; python_version < "3.9"  # via -c constraints.txt, dace, gt4py (pyproject.toml)
 attrs==23.2.0             # via -c constraints.txt, flake8-bugbear, flake8-eradicate, gt4py (pyproject.toml), hypothesis, jsonschema, referencing

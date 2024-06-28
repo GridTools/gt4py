@@ -7,7 +7,6 @@
 aenum==3.1.15             # via dace
 alabaster==0.7.13         # via sphinx
 annotated-types==0.7.0    # via pydantic
-appnope==0.1.4            # via ipykernel, ipython
 asttokens==2.4.1          # via devtools, stack-data
 astunparse==1.6.3 ; python_version < "3.9"  # via dace, gt4py (pyproject.toml)
 attrs==23.2.0             # via flake8-bugbear, flake8-eradicate, gt4py (pyproject.toml), hypothesis, jsonschema, referencing
