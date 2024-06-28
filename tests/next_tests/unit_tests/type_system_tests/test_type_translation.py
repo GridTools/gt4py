@@ -19,6 +19,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
+from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts, type_translation
@@ -176,3 +177,17 @@ def test_generic_variadic_dims(value, expected_dims):
             type_translation.from_type_hint(gtx.Field[value, np.int32])
     else:
         assert type_translation.from_type_hint(gtx.Field[value, np.int32]).dims == expected_dims
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        core_defs.BoolDType(),
+        core_defs.Int32DType(),
+        core_defs.Int64DType(),
+        core_defs.Float32DType(),
+        core_defs.Float64DType(),
+    ],
+)
+def test_as_from_dtype(dtype):
+    assert type_translation.as_dtype(type_translation.from_dtype(dtype)) == dtype
