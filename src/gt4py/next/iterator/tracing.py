@@ -20,11 +20,10 @@ from typing import ClassVar, List
 from gt4py._core import definitions as core_defs
 from gt4py.eve import Node
 from gt4py.next import common, iterator
-from gt4py.next.iterator import builtins
+from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir import (
     AxisLiteral,
     Expr,
-    FencilDefinition,
     FunCall,
     FunctionDefinition,
     Lambda,
@@ -148,7 +147,7 @@ def make_node(o):
     if isinstance(o, Node):
         return o
     if isinstance(o, common.Dimension):
-        return AxisLiteral(value=o.value)
+        return AxisLiteral(value=o.value, kind=o.kind)
     if callable(o):
         if o.__name__ == "<lambda>":
             return lambdadef(o)
@@ -209,7 +208,10 @@ iterator.runtime.FundefDispatcher.register_hook(FundefTracer())
 
 class TracerContext:
     fundefs: ClassVar[List[FunctionDefinition]] = []
-    closures: ClassVar[List[StencilClosure]] = []
+    closures: ClassVar[
+        List[StencilClosure]
+    ] = []  # TODO(havogt): remove after refactoring to `Program` is complete, currently handles both programs and fencils
+    body: ClassVar[List[itir.Stmt]] = []
 
     @classmethod
     def add_fundef(cls, fun):
@@ -220,12 +222,17 @@ class TracerContext:
     def add_closure(cls, closure):
         cls.closures.append(closure)
 
+    @classmethod
+    def add_stmt(cls, stmt):
+        cls.body.append(stmt)
+
     def __enter__(self):
         iterator.builtins.builtin_dispatch.push_key(TRACING)
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         type(self).fundefs = []
         type(self).closures = []
+        type(self).body = []
         iterator.builtins.builtin_dispatch.pop_key()
 
 
@@ -239,6 +246,11 @@ def closure(domain, stencil, output, inputs):
     TracerContext.add_closure(
         StencilClosure(domain=domain, stencil=stencil, output=output, inputs=inputs)
     )
+
+
+@iterator.runtime.set_at.register(TRACING)
+def set_at(expr: itir.Expr, domain: itir.Expr, target: itir.Expr) -> None:
+    TracerContext.add_stmt(itir.SetAt(expr=expr, domain=domain, target=target))
 
 
 def _contains_tuple_dtype_field(arg):
@@ -287,7 +299,9 @@ def _make_fencil_params(fun, args) -> list[Sym]:
     return params
 
 
-def trace_fencil_definition(fun: typing.Callable, args: typing.Iterable) -> FencilDefinition:
+def trace_fencil_definition(
+    fun: typing.Callable, args: typing.Iterable
+) -> itir.FencilDefinition | itir.Program:
     """
     Transform fencil given as a callable into `itir.FencilDefinition` using tracing.
 
@@ -299,9 +313,19 @@ def trace_fencil_definition(fun: typing.Callable, args: typing.Iterable) -> Fenc
         params = _make_fencil_params(fun, args)
         trace_function_call(fun, args=(_s(param.id) for param in params))
 
-        return FencilDefinition(
-            id=fun.__name__,
-            function_definitions=TracerContext.fundefs,
-            params=params,
-            closures=TracerContext.closures,
-        )
+        if TracerContext.closures:
+            return itir.FencilDefinition(
+                id=fun.__name__,
+                function_definitions=TracerContext.fundefs,
+                params=params,
+                closures=TracerContext.closures,
+            )
+        else:
+            assert TracerContext.body
+            return itir.Program(
+                id=fun.__name__,
+                function_definitions=TracerContext.fundefs,
+                params=params,
+                declarations=[],  # TODO
+                body=TracerContext.body,
+            )
