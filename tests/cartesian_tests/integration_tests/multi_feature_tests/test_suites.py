@@ -596,7 +596,7 @@ class TestNotSpecifiedTwoOptionalFields(TestTwoOptionalFields):
 class TestNon3DFields(gt_testing.StencilTestSuite):
     dtypes = {"field_in": np.float64, "another_field": np.float64, "field_out": np.float64}
     domain_range = [(4, 10), (4, 10), (4, 10)]
-    backends = ["gt:cpu_ifirst", "gt:cpu_kfirst", "gt:gpu", "dace:cpu", "dace:gpu"]
+    backends = ALL_BACKENDS
     symbols = {
         "field_in": gt_testing.field(
             in_range=(-10, 10), axes="K", boundary=[(0, 0), (0, 0), (0, 0)]

@@ -29,7 +29,7 @@ build py38 baseimage:
   # the following jobs via a dotenv file.
   before_script:
   - DOCKER_TAG=`sha256sum ci/base.Dockerfile | head -c 16`
-  - export PERSIST_IMAGE_NAME=$CSCS_REGISTRY_PATH/base/gt4py-ci:$DOCKER_TAG-$PYVERSION
+  - export PERSIST_IMAGE_NAME=$CSCS_REGISTRY_PATH/public/base/gt4py-ci:$DOCKER_TAG-$PYVERSION
   - echo "BASE_IMAGE_${PYVERSION_PREFIX}=$PERSIST_IMAGE_NAME" >> build.env
   artifacts:
     reports:
@@ -58,7 +58,7 @@ build py38 image:
   variables:
     # make sure we use a unique name here, otherwise we could create a race condition, when multiple pipelines
     # are running.
-    PERSIST_IMAGE_NAME: $CSCS_REGISTRY_PATH/gt4py/gt4py-ci:$CI_COMMIT_SHA-$PYVERSION
+    PERSIST_IMAGE_NAME: $CSCS_REGISTRY_PATH/public/gt4py/gt4py-ci:$CI_COMMIT_SHA-$PYVERSION
     DOCKERFILE: ci/checkout.Dockerfile
     DOCKER_BUILD_ARGS: '["PYVERSION=$PYVERSION", "BASE_IMAGE=${BASE_IMAGE_${PYVERSION_PREFIX}}"]'
     <<: *py38
@@ -79,7 +79,7 @@ test py38:
   extends: .container-runner-daint-gpu
   needs: ["build py38 image"]
   stage: test
-  image: $CSCS_REGISTRY_PATH/gt4py/gt4py-ci:$CI_COMMIT_SHA-$PYVERSION
+  image: $CSCS_REGISTRY_PATH/public/gt4py/gt4py-ci:$CI_COMMIT_SHA-$PYVERSION
   script:
   - cd /gt4py.src
   - python -c "import cupy"
