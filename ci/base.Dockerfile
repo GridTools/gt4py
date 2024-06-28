@@ -1,4 +1,5 @@
 ARG CUDA_VERSION=12.5.0
+ARG CUPY_PACKAGE=cupy-cuda12x
 FROM docker.io/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu20.04
 ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
@@ -55,4 +56,4 @@ RUN pyenv update && \
 ENV PATH="/root/.pyenv/shims:${PATH}"
 
 
-RUN pip install --upgrade pip setuptools wheel tox cupy-cuda11x==12.3.0
+RUN pip install --upgrade pip setuptools wheel tox ${CUPY_PACKAGE}==12.3.0
