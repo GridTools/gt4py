@@ -47,6 +47,8 @@ stages:
   variables:
     CUDA_VERSION: 11.2.2
     CUPY_PACKAGE: cupy-cuda11x
+  # TODO: remove line below
+  when: manual # tested and working, disabled while developing for gh200
 .build_baseimage_aarch64:
   extends: [.container-builder-cscs-gh200, .build_baseimage]
   variables:
@@ -96,6 +98,8 @@ build_py38_baseimage_x86_64:
     DOCKER_BUILD_ARGS: '["PYVERSION=$PYVERSION", "BASE_IMAGE=${BASE_IMAGE_${PYVERSION_PREFIX}}"]'
 .build_image_x86_64:
   extends: [.container-builder-cscs-zen2, .build_image]
+  # TODO: remove line below
+  when: manual # tested and working, disabled while developing for gh200
 .build_image_aarch64:
   extends: [.container-builder-cscs-gh200, .build_image]
 
@@ -104,8 +108,6 @@ build_py311_image_x86_64:
   needs: [build_py311_baseimage_x86_64]
   variables:
     <<: *py311
-  # TODO: remove line below
-  when: manual # tested and working, disabled while developing for gh200
 build_py311_image_aarch64:
   extends: .build_image_aarch64
   needs: [build_py311_baseimage_aarch64]
