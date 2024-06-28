@@ -220,17 +220,21 @@ class LambdaToTasklet(eve.NodeVisitor):
                     code=f"val = field[{index_internals}]",
                 )
                 # add new termination point for this field parameter
-                field_fullset = sbs.Range.from_array(field_desc)
-                self._add_input_connection(it.field, field_fullset, deref_node, "field")
+                self._add_entry_memlet_path(
+                    it.field,
+                    deref_node,
+                    dst_conn="field",
+                    memlet=dace.Memlet.from_array(it.field.data, field_desc),
+                )
 
                 for dim, index_expr in field_indices:
                     deref_connector = INDEX_CONNECTOR_FMT.format(dim=dim.value)
                     if isinstance(index_expr, MemletExpr):
-                        self._add_input_connection(
+                        self._add_entry_memlet_path(
                             index_expr.node,
-                            index_expr.subset,
                             deref_node,
-                            deref_connector,
+                            dst_conn=deref_connector,
+                            memlet=dace.Memlet(data=index_expr.node.data, subset=index_expr.subset),
                         )
 
                     elif isinstance(index_expr, ValueExpr):
@@ -309,11 +313,11 @@ class LambdaToTasklet(eve.NodeVisitor):
                 if isinstance(input_expr, MemletExpr):
                     if input_connector == "index":
                         dtype = input_expr.node.desc(self.sdfg).dtype
-                    self._add_input_connection(
+                    self._add_entry_memlet_path(
                         input_expr.node,
-                        input_expr.subset,
                         dynamic_offset_tasklet,
-                        input_connector,
+                        dst_conn=input_connector,
+                        memlet=dace.Memlet(data=input_expr.node.data, subset=input_expr.subset),
                     )
                 elif isinstance(input_expr, ValueExpr):
                     if input_connector == "index":
@@ -358,18 +362,20 @@ class LambdaToTasklet(eve.NodeVisitor):
             {new_index_connector},
             f"{new_index_connector} = table[{origin_index.value}, offset]",
         )
-        self._add_input_connection(
+        self._add_entry_memlet_path(
             offset_table_node,
-            sbs.Range.from_array(offset_table_node.desc(self.sdfg)),
             tasklet_node,
-            "table",
+            dst_conn="table",
+            memlet=dace.Memlet.from_array(
+                offset_table_node.data, offset_table_node.desc(self.sdfg)
+            ),
         )
         if isinstance(offset_expr, MemletExpr):
-            self._add_input_connection(
+            self._add_entry_memlet_path(
                 offset_expr.node,
-                offset_expr.subset,
                 tasklet_node,
-                "offset",
+                dst_conn="offset",
+                memlet=dace.Memlet(data=offset_expr.node.data, subset=offset_expr.subset),
             )
         else:
             self.state.add_edge(

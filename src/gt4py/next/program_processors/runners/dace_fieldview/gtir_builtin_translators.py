@@ -315,6 +315,7 @@ class Select(PrimitiveTranslator):
                     false_br_output_node.data, false_br_output_node.desc(self.sdfg)
                 ),
             )
+
         return output_nodes
 
 
