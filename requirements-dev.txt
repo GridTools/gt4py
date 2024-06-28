@@ -76,8 +76,8 @@ iniconfig==2.0.0          # via -c constraints.txt, pytest
 ipykernel==6.29.4         # via -c constraints.txt, nbmake
 ipython==8.12.3           # via -c constraints.txt, ipykernel
 isort==5.13.2             # via -c constraints.txt, -r requirements-dev.in
-jax[cpu]==0.4.13 ; python_version < "3.9"  # via -c constraints.txt, gt4py (pyproject.toml)
-jax[cpu]==0.4.18 ; python_version >= "3.9"  # via -c constraints.txt, gt4py (pyproject.toml)
+jax==0.4.13 ; python_version < "3.9"  # via -c constraints.txt, gt4py (pyproject.toml)
+jax==0.4.18 ; python_version >= "3.9"  # via -c constraints.txt, gt4py (pyproject.toml)
 jaxlib==0.4.13 ; python_version < "3.9"  # via -c constraints.txt, jax
 jaxlib==0.4.18 ; python_version >= "3.9"  # via -c constraints.txt, jax
 jedi==0.19.1              # via -c constraints.txt, ipython
