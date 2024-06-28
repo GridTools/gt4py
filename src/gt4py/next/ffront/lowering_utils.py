@@ -47,7 +47,7 @@ def to_tuples_of_iterator(expr: itir.Expr | str, arg_type: ts.TypeSpec) -> itir.
 
     return im.let(param, expr)(
         type_info.apply_to_primitive_constituents(
-            arg_type, fun, with_path_arg=True, tuple_constructor=im.make_tuple
+            fun, arg_type, with_path_arg=True, tuple_constructor=im.make_tuple
         )
     )
 
@@ -96,7 +96,7 @@ def to_iterator_of_tuples(expr: itir.Expr | str, arg_type: ts.TypeSpec) -> itir.
         lift_args.append(arg_expr)
 
     stencil_expr = type_info.apply_to_primitive_constituents(
-        arg_type, fun, with_path_arg=True, tuple_constructor=im.make_tuple
+        fun, arg_type, with_path_arg=True, tuple_constructor=im.make_tuple
     )
     return im.let(param, expr)(im.lift(im.lambda_(*lift_params)(stencil_expr))(*lift_args))
 

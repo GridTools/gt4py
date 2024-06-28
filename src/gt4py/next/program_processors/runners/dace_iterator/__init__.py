@@ -30,6 +30,7 @@ from gt4py.next.ffront.decorator import Program
 from gt4py.next.iterator import transforms as itir_transforms
 from gt4py.next.iterator.transforms.pass_manager import apply_common_transforms
 from gt4py.next.iterator.transforms.trace_shifts import TraceShifts
+from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
 
 from .itir_to_sdfg import ItirToSDFG
@@ -89,6 +90,8 @@ def preprocess_program(
         temporary_extraction_heuristics=temporary_extraction_heuristics,
         unroll_reduce=unroll_reduce,
     )
+
+    node = itir_type_inference.infer(node, offset_provider=offset_provider)
 
     if isinstance(node, itir_transforms.global_tmps.FencilWithTemporaries):
         fencil_definition = node.fencil
@@ -319,7 +322,7 @@ class Program(Program, SDFGConvertible):  # type: ignore[no-redef]
     sdfg_convertible: dict[str, Any] = field(default_factory=dict)
 
     def __sdfg__(self, *args, **kwargs) -> dace.sdfg.sdfg.SDFG:
-        params = {str(p.id): p.dtype for p in self.itir.params}
+        params = {str(p.id): p.dtype for p in self.itir.params}  # type: ignore[attr-defined]
         fields = {str(p.id): p.type for p in self.past_stage.past_node.params}
         arg_types = [
             fields[pname]
