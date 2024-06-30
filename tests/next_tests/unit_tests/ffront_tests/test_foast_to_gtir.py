@@ -28,6 +28,7 @@ from gt4py.next import float32, float64, int32, int64, neighbor_sum
 from gt4py.next.ffront import type_specifications as ts_ffront
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
+from gt4py.next.ffront.foast_to_gtir import FieldOperatorLowering
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_specifications as ts, type_translation
@@ -53,66 +54,14 @@ def debug_itir(tree):
     debug(format_python_source(EmbeddedDSL.apply(tree)))
 
 
-from gt4py.eve import PreserveLocationVisitor, NodeTranslator
-from gt4py.eve import utils
-import dataclasses
-from gt4py.next.ffront import field_operator_ast as foast
-from typing import Optional, Any
 
 
-@dataclasses.dataclass
-class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
-    """
-    Lower FieldOperator AST (FOAST) to GTIR.
-    """
-
-    uid_generator: utils.UIDGenerator = dataclasses.field(default_factory=utils.UIDGenerator)
-
-    @classmethod
-    def apply(cls, node: foast.LocatedNode) -> itir.Expr:
-        return cls().visit(node)
-
-    def visit_FunctionDefinition(
-        self, node: foast.FunctionDefinition, **kwargs
-    ) -> itir.FunctionDefinition:
-        params = self.visit(node.params)
-        return itir.FunctionDefinition(
-            id=node.id, params=params, expr=self.visit_BlockStmt(node.body, inner_expr=None)
-        )
-
-    def visit_BlockStmt(
-        self, node: foast.BlockStmt, *, inner_expr: Optional[itir.Expr], **kwargs: Any
-    ) -> itir.Expr:
-        for stmt in reversed(node.stmts):
-            inner_expr = self.visit(stmt, inner_expr=inner_expr, **kwargs)
-        assert inner_expr
-        assert isinstance(inner_expr, itir.Node)
-        return inner_expr
-
-    def visit_Symbol(self, node: foast.Symbol, **kwargs: Any) -> itir.Sym:
-        return im.sym(node.id)
-
-    def visit_Name(self, node: foast.Name, **kwargs: Any) -> itir.SymRef:
-        return im.ref(node.id)
-
-    def visit_Return(
-        self, node: foast.Return, *, inner_expr: Optional[itir.Expr], **kwargs: Any
-    ) -> itir.Expr:
-        return self.visit(node.value, **kwargs)
-
-    def visit_Node(self, node: foast.Node, **kwargs: Any):
-        raise NotImplementedError(
-            f"Translation of '{node}' of type '{type(node)}' not implemented."
-        )
-
-
-def test_copy():
+def test_return():
     def copy_field(inp: gtx.Field[[TDim], float64]):
         return inp
 
     parsed = FieldOperatorParser.apply_to_function(copy_field)
     lowered = FieldOperatorLowering.apply(parsed)
-    print(lowered)
 
     assert lowered.id == "copy_field"
     assert lowered.expr == im.ref("inp")
@@ -125,9 +74,7 @@ def test_copy():
 #     parsed = FieldOperatorParser.apply_to_function(scalar_arg)
 #     lowered = FieldOperatorLowering.apply(parsed)
 
-#     reference = im.promote_to_lifted_stencil("multiplies")(
-#         "alpha", "bar"
-#     )  # no difference to non-scalar arg
+#     reference = im.op_as_fieldop("multiplies")("alpha", "bar")  # no difference to non-scalar arg
 
 #     assert lowered.expr == reference
 
@@ -144,16 +91,17 @@ def test_copy():
 #     assert lowered.expr == reference
 
 
-# def test_arithmetic():
-#     def arithmetic(inp1: gtx.Field[[IDim], float64], inp2: gtx.Field[[IDim], float64]):
-#         return inp1 + inp2
+def test_arithmetic():
+    def arithmetic(inp1: gtx.Field[[IDim], float64], inp2: gtx.Field[[IDim], float64]):
+        return inp1 + inp2
 
-#     parsed = FieldOperatorParser.apply_to_function(arithmetic)
-#     lowered = FieldOperatorLowering.apply(parsed)
+    parsed = FieldOperatorParser.apply_to_function(arithmetic)
+    lowered = FieldOperatorLowering.apply(parsed)
+    print(lowered)
 
-#     reference = im.promote_to_lifted_stencil("plus")("inp1", "inp2")
+    reference = im.op_as_fieldop("plus")("inp1", "inp2")
 
-#     assert lowered.expr == reference
+    assert lowered.expr == reference
 
 
 # def test_shift():

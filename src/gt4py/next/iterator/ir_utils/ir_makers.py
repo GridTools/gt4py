@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import typing
-from typing import Callable, Iterable, Union
+from typing import Callable, Iterable, Union, Optional
 
 from gt4py._core import definitions as core_defs
 from gt4py.next.iterator import ir as itir
@@ -85,6 +85,8 @@ def ensure_expr(literal_or_expr: Union[str, core_defs.Scalar, itir.Expr]) -> iti
         return ref(literal_or_expr)
     elif core_defs.is_scalar_type(literal_or_expr):
         return literal_from_value(literal_or_expr)
+    elif literal_or_expr is None:
+        return itir.NoneLiteral()
     assert isinstance(literal_or_expr, itir.Expr)
     return literal_or_expr
 
@@ -253,6 +255,13 @@ def lift(expr):
     """Create a lift FunCall, shorthand for ``call(call("lift")(expr))``."""
     return call(call("lift")(expr))
 
+def as_fieldop(stencil, domain=None):
+    """Creates a field_operator from a stencil."""
+    args = [stencil]
+    if domain is not None:
+        args.append(domain)
+    return call(call("as_fieldop")(*args))
+
 
 class let:
     """
@@ -394,6 +403,33 @@ def promote_to_lifted_stencil(op: str | itir.SymRef | Callable) -> Callable[...,
             f"__arg{i}" for i in range(len(its))
         ]  # TODO: `op` must not contain `SymRef(id="__argX")`
         return lift(lambda_(*args)(op(*[deref(arg) for arg in args])))(*its)
+
+    return _impl
+
+def op_as_fieldop(
+    op: str | itir.SymRef | Callable, domain: Optional[itir.FunCall] = None
+) -> Callable[..., itir.FunCall]:
+    """
+    Promotes a function `op` to a field_operator.
+
+    `op` is a function from values to value.
+
+    Returns:
+        A function from Fields to Field.
+
+    Examples
+    --------
+    >>> str(op_as_fieldop("op")("a", "b"))
+    '(⇑(λ(__arg0, __arg1) → op(·__arg0, ·__arg1)))(a, b)'
+    """
+    if isinstance(op, (str, itir.SymRef, itir.Lambda)):
+        op = call(op)
+
+    def _impl(*its: itir.Expr) -> itir.FunCall:
+        args = [
+            f"__arg{i}" for i in range(len(its))
+        ]  # TODO: `op` must not contain `SymRef(id="__argX")`
+        return as_fieldop(lambda_(*args)(op(*[deref(arg) for arg in args])), domain)(*its)
 
     return _impl
 
