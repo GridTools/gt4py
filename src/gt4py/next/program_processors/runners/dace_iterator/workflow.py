@@ -118,16 +118,23 @@ class DaCeTranslationStepFactory(factory.Factory):
 
 class CompiledDaceProgram(stages.CompiledProgram):
     sdfg_program: dace.CompiledSDFG
-    sdfg_arg_position: dict[str, int]  # map SDFG arg to its position in program ABI
-    sdfg_used_symbols: list[dace.symbol]
+    sdfg_arg_position: list[
+        int
+    ]  # map SDFG argument to its position in program ABI, -1 if argument is not used
 
     def __init__(self, program):
-        # extract position of scalar arguments from program ABI
+        # extract position of arguments in program ABI
         sdfg_arglist = program.sdfg.signature_arglist(with_types=False)
+        sdfg_arg_pos_mapping = {param: pos for pos, param in enumerate(sdfg_arglist)}
+        sdfg_used_symbols = program.sdfg.used_symbols(all_symbols=False)
 
         self.sdfg_program = program
-        self.sdfg_arg_position = {param: pos for pos, param in enumerate(sdfg_arglist)}
-        self.sdfg_used_symbols = program.sdfg.used_symbols(all_symbols=False)
+        self.sdfg_arg_position = [
+            sdfg_arg_pos_mapping[param]
+            if param in program.sdfg.arrays or param in sdfg_used_symbols
+            else -1
+            for param in program.sdfg.arg_names
+        ]
 
     def __call__(self, *args, **kwargs) -> None:
         self.sdfg_program(*args, **kwargs)
@@ -205,11 +212,10 @@ def convert_args(
             # the data pointer should remain the same otherwise fast-call cannot be used and
             # the args list needs to be reconstructed.
             use_fast_call = True
-            for param, arg in zip(sdfg.arg_names, args, strict=True):
+            for arg, param, pos in zip(args, sdfg.arg_names, inp.sdfg_arg_position, strict=True):
                 if isinstance(arg, common.Field):
                     desc = sdfg.arrays[param]
                     assert isinstance(desc, dace.data.Array)
-                    pos = inp.sdfg_arg_position[param]
                     assert isinstance(sdfg_program._lastargs[0][pos], ctypes.c_void_p)
                     if sdfg_program._lastargs[0][pos].value != get_array_interface_ptr(
                         arg.ndarray, desc.storage
@@ -219,11 +225,10 @@ def convert_args(
                 elif param in sdfg.arrays:
                     desc = sdfg.arrays[param]
                     assert isinstance(desc, dace.data.Scalar)
-                    pos = inp.sdfg_arg_position[param]
                     sdfg_program._lastargs[0][pos] = _get_ctype_value(arg, desc.dtype)
-                elif param in inp.sdfg_used_symbols:
-                    pos = inp.sdfg_arg_position[param]
-                    sdfg_program._lastargs[0][pos] = _get_ctype_value(arg, desc.dtype)
+                elif pos >= 0:
+                    sym = sdfg.symbols[param]
+                    sdfg_program._lastargs[0][pos] = _get_ctype_value(arg, sym.stype)
 
             if use_fast_call:
                 return sdfg_program.fast_call(*sdfg_program._lastargs)
