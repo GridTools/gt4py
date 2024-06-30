@@ -227,8 +227,8 @@ def convert_args(
                     assert isinstance(desc, dace.data.Scalar)
                     sdfg_program._lastargs[0][pos] = _get_ctype_value(arg, desc.dtype)
                 elif pos >= 0:
-                    sym = sdfg.symbols[param]
-                    sdfg_program._lastargs[0][pos] = _get_ctype_value(arg, sym.stype)
+                    sym_dtype = sdfg.symbols[param]
+                    sdfg_program._lastargs[0][pos] = _get_ctype_value(arg, sym_dtype)
 
             if use_fast_call:
                 return sdfg_program.fast_call(*sdfg_program._lastargs)
