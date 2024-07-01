@@ -425,7 +425,7 @@ class NdArrayField(
         return new_domain, slice_
 
     if dace:
-        # Extension of NdArrayField : Support for SDFGConvertible GT4Py Programs
+        # Extension of NdArrayField adding SDFGConvertible support in GT4Py Programs
         def data_ptr(self) -> int:
             return self.array_ns.byte_bounds(self.ndarray)[0]
 

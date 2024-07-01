@@ -207,9 +207,7 @@ class Program:
 
 
 try:
-    from gt4py.next.program_processors.runners.dace_iterator import Program as DaCeProgram
-
-    Program = DaCeProgram
+    from gt4py.next.program_processors.runners.dace_iterator import Program
 except ImportError:
     pass
 

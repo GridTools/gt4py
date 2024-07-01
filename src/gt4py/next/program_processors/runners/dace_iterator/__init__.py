@@ -13,23 +13,21 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import dataclasses
 import warnings
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import field
 from inspect import currentframe, getframeinfo
 from pathlib import Path
-from typing import Any, Callable, Dict, Mapping, Optional, Sequence, Tuple
+from typing import Any, Optional
 
 import dace
 import numpy as np
-from dace.frontend.python.common import SDFGConvertible
 from dace.sdfg import utils as sdutils
 from dace.transformation.auto import auto_optimize as autoopt
 
 import gt4py.next.iterator.ir as itir
+from gt4py import next as gtx
 from gt4py.next import common
-from gt4py.next.ffront.decorator import Program
 from gt4py.next.iterator import transforms as itir_transforms
-from gt4py.next.iterator.transforms.pass_manager import apply_common_transforms
-from gt4py.next.iterator.transforms.trace_shifts import TraceShifts
 from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.type_system import type_specifications as ts
 
@@ -316,10 +314,10 @@ def build_sdfg_from_itir(
 
 
 @dataclasses.dataclass(frozen=True)
-class Program(Program, SDFGConvertible):  # type: ignore[no-redef]
-    """Extension of GT4Py Program : Implement SDFGConvertible interface"""
+class Program(gtx.ffront.decorator.Program, dace.frontend.python.common.SDFGConvertible):
+    """Extension of GT4Py Program implementing the SDFGConvertible interface."""
 
-    sdfg_convertible: dict[str, Any] = field(default_factory=dict)
+    sdfg_closure_vars: dict[str, Any] = field(default_factory=dict)
 
     def __sdfg__(self, *args, **kwargs) -> dace.sdfg.sdfg.SDFG:
         params = {str(p.id): p.type for p in self.itir.params}
@@ -328,7 +326,7 @@ class Program(Program, SDFGConvertible):  # type: ignore[no-redef]
 
         # Do this because DaCe converts the offset_provider to an OrderedDict with StringLiteral keys
         offset_provider = {str(k): v for k, v in kwargs.get("offset_provider", {}).items()}
-        self.sdfg_convertible["offset_provider"] = offset_provider
+        self.sdfg_closure_vars["offset_provider"] = offset_provider
 
         sdfg = self.backend.executor.otf_workflow.step.translation.generate_sdfg(  # type: ignore[union-attr]
             self.itir,
@@ -374,9 +372,9 @@ class Program(Program, SDFGConvertible):  # type: ignore[no-redef]
         }
 
         sdfg.offset_providers_per_input_field = {}
-        itir_tmp = apply_common_transforms(self.itir)
+        itir_tmp = itir_transforms.apply_common_transforms(self.itir)
         for closure in itir_tmp.closures:  # type: ignore[union-attr]
-            shifts = TraceShifts.apply(closure)
+            shifts = itir_transforms.trace_shifts.TraceShifts.apply(closure)
             for k, v in shifts.items():
                 if k not in sdfg.GT4Py_Program_input_fields:
                     continue
@@ -387,14 +385,14 @@ class Program(Program, SDFGConvertible):  # type: ignore[no-redef]
 
         return sdfg
 
-    def __sdfg_closure__(self, reevaluate: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    def __sdfg_closure__(self, reevaluate: Optional[dict[str, str]] = None) -> dict[str, Any]:
         return {
             connectivity_identifier(k): v.table
-            for k, v in self.sdfg_convertible.get("offset_provider", {}).items()
+            for k, v in self.sdfg_closure_vars.get("offset_provider", {}).items()
             if hasattr(v, "table")
         }
 
-    def __sdfg_signature__(self) -> Tuple[Sequence[str], Sequence[str]]:
+    def __sdfg_signature__(self) -> tuple[Sequence[str], Sequence[str]]:
         args = []
         for arg in self.past_stage.past_node.params:
             args.append(arg.id)
