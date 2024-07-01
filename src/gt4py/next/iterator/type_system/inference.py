@@ -378,6 +378,9 @@ class ITIRTypeInference(eve.NodeTranslator):
         if not allow_undeclared_symbols:
             node = RemoveTypes().visit(node)
 
+        if isinstance(node, (itir.FencilDefinition, itir.Program)):
+            assert all(param.type is not None for param in node.params)
+
         instance = cls(
             offset_provider=offset_provider,
             dimensions=(
