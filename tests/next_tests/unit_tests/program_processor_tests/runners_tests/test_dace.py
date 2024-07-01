@@ -11,7 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Test specific features of DaCe backend for ITIR programs."""
+"""Test specific features of DaCe backends."""
 
 import numpy as np
 import pytest
@@ -31,7 +31,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 )
 
 
-def test_dace_iterator_fastcall(cartesian_case):
+def test_dace_fastcall(cartesian_case):
     """Test reuse of arguments between program calls by means of SDFG fastcall API."""
 
     if not cartesian_case.executor or "dace" not in cartesian_case.executor.__name__:
