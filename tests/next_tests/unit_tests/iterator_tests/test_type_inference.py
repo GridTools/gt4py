@@ -223,7 +223,7 @@ def test_late_offset_axis():
 
 
 def test_type_inference_in_cast():
-    # since cast_ is a grammer builtin whose return type is given by its second argument it is
+    # since cast_ is a grammar builtin whose return type is given by its second argument it is
     # easy to forget inferring the types of the first argument and its children. Simply check
     # if the first argument has a type inferred correctly here.
     testee = im.call("cast_")(
