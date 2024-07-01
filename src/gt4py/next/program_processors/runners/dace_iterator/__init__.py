@@ -25,8 +25,8 @@ from dace.sdfg import utils as sdutils
 from dace.transformation.auto import auto_optimize as autoopt
 
 import gt4py.next.iterator.ir as itir
-from gt4py import next as gtx
 from gt4py.next import common
+from gt4py.next.ffront import decorator
 from gt4py.next.iterator import transforms as itir_transforms
 from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.type_system import type_specifications as ts
@@ -314,7 +314,7 @@ def build_sdfg_from_itir(
 
 
 @dataclasses.dataclass(frozen=True)
-class Program(gtx.ffront.decorator.Program, dace.frontend.python.common.SDFGConvertible):
+class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
     """Extension of GT4Py Program implementing the SDFGConvertible interface."""
 
     sdfg_closure_vars: dict[str, Any] = field(default_factory=dict)
