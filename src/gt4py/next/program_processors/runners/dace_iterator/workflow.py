@@ -118,9 +118,8 @@ class DaCeTranslationStepFactory(factory.Factory):
 
 class CompiledDaceProgram(stages.CompiledProgram):
     sdfg_program: dace.CompiledSDFG
-    sdfg_arg_position: list[
-        int
-    ]  # map SDFG argument to its position in program ABI, -1 if argument is not used
+    # Map SDFG argument to its position in program ABI; scalar arguments that are not used in the SDFG will not be present.
+    sdfg_arg_position: list[Optional[int]]
 
     def __init__(self, program):
         # extract position of arguments in program ABI
@@ -132,7 +131,7 @@ class CompiledDaceProgram(stages.CompiledProgram):
         self.sdfg_arg_position = [
             sdfg_arg_pos_mapping[param]
             if param in program.sdfg.arrays or param in sdfg_used_symbols
-            else -1
+            else None
             for param in program.sdfg.arg_names
         ]
 
@@ -226,7 +225,7 @@ def convert_args(
                     desc = sdfg.arrays[param]
                     assert isinstance(desc, dace.data.Scalar)
                     sdfg_program._lastargs[0][pos] = _get_ctype_value(arg, desc.dtype)
-                elif pos >= 0:
+                elif pos:
                     sym_dtype = sdfg.symbols[param]
                     sdfg_program._lastargs[0][pos] = _get_ctype_value(arg, sym_dtype)
 
