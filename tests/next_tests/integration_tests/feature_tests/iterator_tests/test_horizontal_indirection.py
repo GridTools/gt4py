@@ -30,8 +30,6 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import fundef, offset
-from gt4py.next.program_processors.formatters import type_check
-from gt4py.next.program_processors.formatters.gtfn import format_cpp as gtfn_format_sourcecode
 
 from next_tests.integration_tests.cases import IDim
 from next_tests.unit_tests.conftest import program_processor, run_processor
@@ -55,11 +53,6 @@ def test_simple_indirection(program_processor):
     program_processor, validate = program_processor
 
     pytest.xfail("Applied shifts in if_ statements are not supported in TraceShift pass.")
-
-    if program_processor in [type_check.check_type_inference, gtfn_format_sourcecode]:
-        pytest.xfail(
-            "We only support applied shifts in type_inference."
-        )  # TODO fix test or generalize itir?
 
     shape = [8]
     inp = gtx.as_field([IDim], np.arange(0, shape[0] + 2), origin={IDim: 1})

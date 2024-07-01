@@ -32,6 +32,7 @@ from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_specifications as ts, type_translation
+from gt4py.next.iterator.type_system import type_specifications as it_ts
 
 
 IDim = gtx.Dimension("IDim")
@@ -140,15 +141,13 @@ def test_temp_assignment():
     parsed = FieldOperatorParser.apply_to_function(copy_field)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.let(
-        itir.Sym(id=ssa.unique_name("tmp", 0), dtype=("float64", False), kind="Iterator"), "inp"
-    )(
+    reference = im.let(ssa.unique_name("tmp", 0), "inp")(
         im.let(
-            itir.Sym(id=ssa.unique_name("inp", 0), dtype=("float64", False), kind="Iterator"),
+            ssa.unique_name("inp", 0),
             ssa.unique_name("tmp", 0),
         )(
             im.let(
-                itir.Sym(id=ssa.unique_name("tmp2", 0), dtype=("float64", False), kind="Iterator"),
+                ssa.unique_name("tmp2", 0),
                 ssa.unique_name("inp", 0),
             )(ssa.unique_name("tmp2", 0))
         )
@@ -167,13 +166,13 @@ def test_unary_ops():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.let(
-        itir.Sym(id=ssa.unique_name("tmp", 0), dtype=("float64", False), kind="Iterator"),
+        ssa.unique_name("tmp", 0),
         im.promote_to_lifted_stencil("plus")(
             im.promote_to_const_iterator(im.literal("0", "float64")), "inp"
         ),
     )(
         im.let(
-            itir.Sym(id=ssa.unique_name("tmp", 1), dtype=("float64", False), kind="Iterator"),
+            ssa.unique_name("tmp", 1),
             im.promote_to_lifted_stencil("minus")(
                 im.promote_to_const_iterator(im.literal("0", "float64")), ssa.unique_name("tmp", 0)
             ),
@@ -201,11 +200,11 @@ def test_unpacking():
 
     reference = im.let("__tuple_tmp_0", tuple_expr)(
         im.let(
-            itir.Sym(id=ssa.unique_name("tmp1", 0), dtype=("float64", False), kind="Iterator"),
+            ssa.unique_name("tmp1", 0),
             tuple_access_0,
         )(
             im.let(
-                itir.Sym(id=ssa.unique_name("tmp2", 0), dtype=("float64", False), kind="Iterator"),
+                ssa.unique_name("tmp2", 0),
                 tuple_access_1,
             )(ssa.unique_name("tmp1", 0))
         )
@@ -503,7 +502,7 @@ def test_reduction_lowering_expr():
     )
 
     reference = im.let(
-        itir.Sym(id=ssa.unique_name("e1_nbh", 0), dtype=("float64", True), kind="Iterator"),
+        ssa.unique_name("e1_nbh", 0),
         im.lifted_neighbors("V2E", "e1"),
     )(
         im.promote_to_lifted_stencil(
