@@ -384,7 +384,7 @@ class ITIRTypeInference(eve.NodeTranslator):
             node = RemoveTypes().visit(node)
 
         if isinstance(node, (itir.FencilDefinition, itir.Program)):
-            assert all(param.type is not None for param in node.params), (
+            assert all(isinstance(param.type, ts.DataType) for param in node.params), (
                 "All parameters in 'itir.Program' and 'itir.FencilDefinition' must have a type "
                 "defined, as they are the starting point for type propagation.",
             )
