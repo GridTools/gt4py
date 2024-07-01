@@ -601,6 +601,7 @@ class ITIRTypeInference(eve.NodeTranslator):
         # grammar builtins
         if is_call_to(node, "cast_"):
             value, type_constructor = node.args
+            self.visit(value, ctx=ctx)  # ensure types in value are also inferred
             assert (
                 isinstance(type_constructor, itir.SymRef)
                 and type_constructor.id in itir.TYPEBUILTINS
