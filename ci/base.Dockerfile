@@ -54,4 +54,5 @@ RUN pyenv update && \
 
 ENV PATH="/root/.pyenv/shims:${PATH}"
 
-RUN pip install --upgrade pip setuptools wheel tox
+ARG CUPY_PACKAGE=cupy-cuda12x
+RUN pip install --upgrade pip setuptools wheel tox ${CUPY_PACKAGE}==12.3.0

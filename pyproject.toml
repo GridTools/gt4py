@@ -73,9 +73,8 @@ all-cpu = ['gt4py[dace,formatting,jax-cpu,performance,testing]']
 all-cuda11 = ['gt4py[cuda11,dace,formatting,jax-cuda11,performance,testing]']
 all-cuda12 = ['gt4py[cuda12,dace,formatting,jax-cuda12,performance,testing]']
 # Other extras
-# TODO: some issue with latest cupy>=12.0
-cuda11 = ['cupy-cuda11x==12.3.0']
-cuda12 = ['cupy-cuda12x==12.3.0']
+cuda11 = ['cupy-cuda11x>=12.0']
+cuda12 = ['cupy-cuda12x>=12.0']
 dace = ['dace>=0.16.1', 'sympy>=1.9']
 formatting = ['clang-format>=9.0']
 gpu = ['cupy>=12.0']
