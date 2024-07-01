@@ -222,7 +222,7 @@ def test_late_offset_axis():
     assert result.type == it_on_e_of_e_type
 
 
-def test_type_inference_in_cast():
+def test_cast_first_arg_inference():
     # since cast_ is a grammar builtin whose return type is given by its second argument it is
     # easy to forget inferring the types of the first argument and its children. Simply check
     # if the first argument has a type inferred correctly here.
