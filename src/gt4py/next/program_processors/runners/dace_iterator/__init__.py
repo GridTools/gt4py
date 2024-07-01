@@ -372,7 +372,9 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         }
 
         sdfg.offset_providers_per_input_field = {}
-        itir_tmp = itir_transforms.apply_common_transforms(self.itir)
+        itir_tmp = itir_transforms.apply_common_transforms(
+            self.itir, offset_provider=offset_provider
+        )
         for closure in itir_tmp.closures:  # type: ignore[union-attr]
             shifts = itir_transforms.trace_shifts.TraceShifts.apply(closure)
             for k, v in shifts.items():
