@@ -49,7 +49,7 @@ exceptiongroup==1.2.1     # via -c constraints.txt, hypothesis, pytest
 execnet==2.1.1            # via -c constraints.txt, pytest-cache, pytest-xdist
 executing==2.0.1          # via -c constraints.txt, devtools, stack-data
 factory-boy==3.3.0        # via -c constraints.txt, gt4py (pyproject.toml), pytest-factoryboy
-faker==25.9.2             # via -c constraints.txt, factory-boy
+faker==26.0.0             # via -c constraints.txt, factory-boy
 fastjsonschema==2.20.0    # via -c constraints.txt, nbformat
 filelock==3.15.4          # via -c constraints.txt, tox, virtualenv
 flake8==7.1.0             # via -c constraints.txt, -r requirements-dev.in, flake8-bugbear, flake8-builtins, flake8-debugger, flake8-docstrings, flake8-eradicate, flake8-mutable, flake8-pyproject, flake8-rst-docstrings
@@ -127,7 +127,7 @@ prompt-toolkit==3.0.36    # via -c constraints.txt, ipython, questionary
 psutil==6.0.0             # via -c constraints.txt, -r requirements-dev.in, ipykernel, pytest-xdist
 ptyprocess==0.7.0         # via -c constraints.txt, pexpect
 pure-eval==0.2.2          # via -c constraints.txt, stack-data
-pybind11==2.13.0          # via -c constraints.txt, gt4py (pyproject.toml)
+pybind11==2.13.1          # via -c constraints.txt, gt4py (pyproject.toml)
 pycodestyle==2.12.0       # via -c constraints.txt, flake8, flake8-debugger
 pycparser==2.22           # via -c constraints.txt, cffi
 pydantic==2.7.4           # via -c constraints.txt, bump-my-version, pydantic-settings
@@ -257,7 +257,7 @@ types-requests==2.32.0.20240622  # via -c constraints.txt, types-all
 types-retry==0.9.9.4      # via -c constraints.txt, types-all
 types-routes==2.5.0       # via -c constraints.txt, types-all
 types-scribe==2.0.0       # via -c constraints.txt, types-all
-types-setuptools==70.1.0.20240625  # via -c constraints.txt, types-cffi
+types-setuptools==70.1.0.20240627  # via -c constraints.txt, types-cffi
 types-simplejson==3.19.0.20240310  # via -c constraints.txt, types-all
 types-singledispatch==4.1.0.0  # via -c constraints.txt, types-all
 types-six==1.16.21.20240513  # via -c constraints.txt, types-all
@@ -282,5 +282,5 @@ xxhash==3.0.0             # via -c constraints.txt, gt4py (pyproject.toml)
 zipp==3.19.2              # via -c constraints.txt, importlib-metadata, importlib-resources
 
 # The following packages are considered to be unsafe in a requirements file:
-pip==24.1                 # via -c constraints.txt, pip-tools, pipdeptree
+pip==24.1.1               # via -c constraints.txt, pip-tools, pipdeptree
 setuptools==70.1.1        # via -c constraints.txt, gt4py (pyproject.toml), pip-tools, setuptools-scm

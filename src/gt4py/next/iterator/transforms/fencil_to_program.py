@@ -20,7 +20,9 @@ from gt4py.next.iterator.transforms import global_tmps
 
 class FencilToProgram(eve.NodeTranslator):
     @classmethod
-    def apply(cls, node: itir.FencilDefinition | global_tmps.FencilWithTemporaries) -> itir.Program:
+    def apply(
+        cls, node: itir.FencilDefinition | global_tmps.FencilWithTemporaries | itir.Program
+    ) -> itir.Program:
         return cls().visit(node)
 
     def visit_StencilClosure(self, node: itir.StencilClosure) -> itir.SetAt:

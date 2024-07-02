@@ -13,15 +13,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import dataclasses
-from types import ModuleType
 from typing import Any, Callable, Generic, Optional, ParamSpec, Sequence, TypeVar
-
-import numpy as np
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, errors, utils
+from gt4py.next import common, errors, field_utils, utils
 from gt4py.next.embedded import common as embedded_common, context as embedded_context
+from gt4py.next.field_utils import get_array_ns
+from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
 _P = ParamSpec("_P")
@@ -64,8 +63,10 @@ class ScanOperator(EmbeddedOperator[core_defs.ScalarT | tuple[core_defs.ScalarT 
             # even if the scan dimension is not in the input, we can scan over it
             out_domain = common.Domain(*out_domain, (scan_range))
 
-        xp = _get_array_ns(*all_args)
-        res = _construct_scan_array(out_domain, xp)(self.init)
+        xp = get_array_ns(*all_args)
+        init_type = type_translation.from_value(self.init)
+        assert isinstance(init_type, ts.TupleType | ts.ScalarType)
+        res = field_utils.field_from_typespec(init_type, out_domain, xp)
 
         def scan_loop(hpos: Sequence[common.NamedIndex]) -> None:
             acc: core_defs.ScalarT | tuple[core_defs.ScalarT | tuple, ...] = self.init
@@ -161,31 +162,6 @@ def _intersect_scan_args(
     return embedded_common.domain_intersection(
         *[arg.domain for arg in utils.flatten_nested_tuple(args) if isinstance(arg, common.Field)]
     )
-
-
-def _get_array_ns(
-    *args: core_defs.Scalar | common.Field | tuple[core_defs.Scalar | common.Field | tuple, ...],
-) -> ModuleType:
-    for arg in utils.flatten_nested_tuple(args):
-        if hasattr(arg, "array_ns"):
-            return arg.array_ns
-    return np
-
-
-def _construct_scan_array(
-    domain: common.Domain,
-    xp: ModuleType,  # TODO(havogt) introduce a NDArrayNamespace protocol
-) -> Callable[
-    [core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...]],
-    common.MutableField | tuple[common.MutableField | tuple, ...],
-]:
-    @utils.tree_map
-    def impl(init: core_defs.Scalar) -> common.MutableField:
-        res = common._field(xp.empty(domain.shape, dtype=type(init)), domain=domain)
-        assert isinstance(res, common.MutableField)
-        return res
-
-    return impl
 
 
 def _tuple_assign_value(

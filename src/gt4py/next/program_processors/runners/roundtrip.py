@@ -28,7 +28,7 @@ from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from gt4py.next import allocators as next_allocators, backend as next_backend, common, config
 from gt4py.next.iterator import embedded, ir as itir, transforms as itir_transforms
-from gt4py.next.iterator.transforms import global_tmps as gtmps_transform
+from gt4py.next.iterator.transforms import fencil_to_program
 from gt4py.next.otf import stages, workflow
 from gt4py.next.program_processors import modular_executor, processor_interface as ppi
 from gt4py.next.type_system import type_specifications as ts
@@ -54,14 +54,6 @@ class EmbeddedDSL(codegen.TemplatedGenerator):
     FunCall = as_fmt("{fun}({','.join(args)})")
     Lambda = as_mako("(lambda ${','.join(params)}: ${expr})")
     StencilClosure = as_mako("closure(${domain}, ${stencil}, ${output}, [${','.join(inputs)}])")
-    FencilDefinition = as_mako(
-        """
-${''.join(function_definitions)}
-@fendef
-def ${id}(${','.join(params)}):
-    ${'\\n    '.join(closures)}
-    """
-    )
     FunctionDefinition = as_mako(
         """
 @fundef
@@ -69,24 +61,16 @@ def ${id}(${','.join(params)}):
     return ${expr}
     """
     )
-
-    # extension required by global_tmps
-    def visit_FencilWithTemporaries(
-        self, node: gtmps_transform.FencilWithTemporaries, **kwargs: Any
-    ) -> str:
-        params = self.visit(node.params)
-
-        tmps = "\n    ".join(self.visit(node.tmps))
-        args = ", ".join(params + [tmp.id for tmp in node.tmps])
-        params = ", ".join(params)
-        fencil = self.visit(node.fencil)
-        return (
-            fencil
-            + "\n"
-            + f"def {node.fencil.id}_wrapper({params}, **kwargs):\n    "
-            + tmps
-            + f"\n    {node.fencil.id}({args}, **kwargs)\n"
-        )
+    Program = as_mako(
+        """
+${''.join(function_definitions)}
+@fendef
+def ${id}(${','.join(params)}):
+    ${'\\n    '.join(declarations)}
+    ${'\\n    '.join(body)}
+    """
+    )
+    SetAt = as_mako("set_at(${expr}, ${domain}, ${target})")
 
     def visit_Temporary(self, node: itir.Temporary, **kwargs: Any) -> str:
         assert (
@@ -140,6 +124,8 @@ def fencil_generator(
         ir, lift_mode=lift_mode, offset_provider=offset_provider
     )
 
+    ir = fencil_to_program.FencilToProgram.apply(ir)
+
     program = EmbeddedDSL.apply(ir)
 
     # format output in debug mode for better debuggability
@@ -154,8 +140,8 @@ def fencil_generator(
         .if_isinstance(str)
         .to_set()
     )
-    axis_literals: Iterable[str] = (
-        ir.pre_walk_values().if_isinstance(itir.AxisLiteral).getattr("value").to_set()
+    axis_literals_set: Iterable[itir.AxisLiteral] = (
+        ir.pre_walk_values().if_isinstance(itir.AxisLiteral).to_set()
     )
 
     if use_embedded:
@@ -177,7 +163,10 @@ def fencil_generator(
         if debug:
             print(source_file_name)
         offset_literals = [f'{o} = offset("{o}")' for o in offset_literals]
-        axis_literals = [f'{o} = gtx.Dimension("{o}")' for o in axis_literals]
+        axis_literals = [
+            f'{o.value} = gtx.Dimension("{o.value}", kind=gtx.DimensionKind("{o.kind}"))'
+            for o in axis_literals_set
+        ]
         source_file.write(header)
         source_file.write("\n".join(offset_literals))
         source_file.write("\n")
@@ -193,12 +182,8 @@ def fencil_generator(
         if not debug:
             pathlib.Path(source_file_name).unlink(missing_ok=True)
 
-    assert isinstance(ir, (itir.FencilDefinition, gtmps_transform.FencilWithTemporaries))
-    fencil_name = (
-        ir.fencil.id + "_wrapper"
-        if isinstance(ir, gtmps_transform.FencilWithTemporaries)
-        else ir.id
-    )
+    assert isinstance(ir, itir.Program)
+    fencil_name = ir.id
     fencil = getattr(mod, fencil_name)
 
     _FENCIL_CACHE[cache_key] = fencil
