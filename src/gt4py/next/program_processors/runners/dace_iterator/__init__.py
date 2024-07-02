@@ -338,7 +338,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         sdfg.arg_names.extend(self.__sdfg_signature__()[0])
         sdfg.arg_names.extend(list(self.__sdfg_closure__().keys()))
 
-        # TODO(kotsaloscv): Keep halo exchange related metadata (for horizontal dimension) here?
+        # TODO(kotsaloscv): Keep halo exchange related metadata here?
         # Could possibly be computed directly from the SDFG.
 
         input_fields = [
@@ -347,7 +347,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             for inpt in closure.inputs
             if str(inpt.id) in sdfg.arrays
         ]
-        sdfg.GT4Py_Program_input_fields = {
+        sdfg.gt4py_program_input_fields = {
             inpt: dim
             for inpt in input_fields
             for dim in fields[inpt].dims  # type: ignore[union-attr]
@@ -364,7 +364,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
                 for arg in output.args:
                     if str(arg.id) in sdfg.arrays:  # type: ignore[attr-defined]
                         output_fields.append(str(arg.id))  # type: ignore[attr-defined]
-        sdfg.GT4Py_Program_output_fields = {
+        sdfg.gt4py_program_output_fields = {
             output: dim
             for output in output_fields
             for dim in fields[output].dims  # type: ignore[union-attr]
@@ -378,12 +378,13 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         for closure in itir_tmp.closures:  # type: ignore[union-attr]
             shifts = itir_transforms.trace_shifts.TraceShifts.apply(closure)
             for k, v in shifts.items():
-                if k not in sdfg.GT4Py_Program_input_fields:
+                if k not in sdfg.gt4py_program_input_fields:
                     continue
                 sdfg.offset_providers_per_input_field.setdefault(k, []).extend(list(v))
 
-        sdfg.stencil_horizontal_start = kwargs.get("horizontal_start", None)
-        sdfg.stencil_horizontal_end = kwargs.get("horizontal_end", None)
+        sdfg.gt4py_program_kwargs = {
+            key: value for key, value in kwargs.items() if key != "offset_provider"
+        }
 
         return sdfg
 
