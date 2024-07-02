@@ -89,7 +89,7 @@ def data_types(
     bool_field: gtscript.Field[bool],
     npbool_field: gtscript.Field[np.bool_],
     int_field: gtscript.Field[int],
-    #   int8_field: gtscript.Field[np.int8],
+    int8_field: gtscript.Field[np.int8],
     int16_field: gtscript.Field[np.int16],
     int32_field: gtscript.Field[np.int32],
     int64_field: gtscript.Field[np.int64],
@@ -101,7 +101,7 @@ def data_types(
         bool_field = True
         npbool_field = False
         int_field = 2147483647
-        #       int8_field = 127
+        int8_field = 127
         int16_field = 32767
         int32_field = 2147483647
         int64_field = 9223372036854775807
