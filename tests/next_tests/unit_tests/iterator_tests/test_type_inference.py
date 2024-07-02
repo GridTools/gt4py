@@ -232,6 +232,7 @@ def test_cast_first_arg_inference():
     result = itir_type_inference.infer(testee, offset_provider={}, allow_undeclared_symbols=True)
 
     assert result.args[0].type == int_type
+    assert result.type == float64_type
 
 
 # TODO(tehrengruber): Rewrite tests to use itir.Program
