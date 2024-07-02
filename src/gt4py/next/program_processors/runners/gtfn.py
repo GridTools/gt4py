@@ -14,15 +14,15 @@
 
 import functools
 import warnings
-from typing import Any
+from typing import Any, Callable, Optional
 
 import factory
-import numpy.typing as npt
 
 import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
 from gt4py.eve.utils import content_hash
-from gt4py.next import backend, common, config
+from gt4py.next import NeighborTableOffsetProvider, backend, common, config
+from gt4py.next.embedded.nd_array_field import NumPyArrayField
 from gt4py.next.iterator import transforms
 from gt4py.next.iterator.transforms import global_tmps
 from gt4py.next.otf import recipes, stages, workflow
@@ -34,34 +34,83 @@ from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.type_system.type_translation import from_value
 
 
-# TODO(ricoh): Add support for the whole range of arguments that can be passed to a fencil.
+def handle_tuple(arg: Any, convert_arg: Callable) -> Any:
+    return tuple(convert_arg(a) for a in arg)
+
+
+def handle_field(arg: Any) -> tuple:
+    arr = arg.ndarray
+    origin = getattr(arg, "__gt_origin__", tuple([0] * len(arg.domain)))
+    return arr, origin
+
+
+type_handlers_convert_args = {
+    tuple: handle_tuple,
+    NumPyArrayField: handle_field,
+}
+
+try:
+    import cupy as cp
+
+    from gt4py.next.embedded.nd_array_field import CuPyArrayField
+
+    type_handlers_convert_args[CuPyArrayField] = handle_field
+except ImportError:
+    cp = None
+
+
+def handle_default(arg: Any) -> Any:
+    return arg
+
+
 def convert_arg(arg: Any) -> Any:
-    if isinstance(arg, tuple):
-        return tuple(convert_arg(a) for a in arg)
-    if isinstance(arg, common.Field):
-        arr = arg.ndarray
-        origin = getattr(arg, "__gt_origin__", tuple([0] * len(arg.domain)))
-        return arr, origin
+    handler = type_handlers_convert_args.get(type(arg), handle_default)  # type: ignore
+    if handler is handle_tuple:
+        return handler(arg, convert_arg)
     else:
-        return arg
+        return handler(arg)
 
 
 def convert_args(
     inp: stages.CompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
 ) -> stages.CompiledProgram:
     def decorated_program(
-        *args: Any, offset_provider: dict[str, common.Connectivity | common.Dimension]
+        *args: Any,
+        conn_args: Optional[list[ConnectivityArg]] = None,
+        offset_provider: dict[str, common.Connectivity | common.Dimension],
     ) -> None:
+        # If we don't pass them as in the case of a CachedProgram extract connectivities here.
+        if conn_args is None:
+            conn_args = extract_connectivity_args(offset_provider, device)
+
         converted_args = [convert_arg(arg) for arg in args]
-        conn_args = extract_connectivity_args(offset_provider, device)
         return inp(*converted_args, *conn_args)
 
     return decorated_program
 
 
+ConnectivityArg = tuple[core_defs.NDArrayObject, tuple[int, ...]]
+
+
+def handle_connectivity(
+    conn: NeighborTableOffsetProvider, zero_tuple: tuple[int, ...], device: core_defs.DeviceType
+) -> ConnectivityArg:
+    return (_ensure_is_on_device(conn.table, device), zero_tuple)
+
+
+def handle_other_type(*args: Any, **kwargs: Any) -> None:
+    return None
+
+
+type_handlers_connectivity_args = {
+    NeighborTableOffsetProvider: handle_connectivity,
+    common.Dimension: handle_other_type,
+}
+
+
 def _ensure_is_on_device(
-    connectivity_arg: npt.NDArray, device: core_defs.DeviceType
-) -> npt.NDArray:
+    connectivity_arg: core_defs.NDArrayObject, device: core_defs.DeviceType
+) -> core_defs.NDArrayObject:
     if device == core_defs.DeviceType.CUDA:
         import cupy as cp
 
@@ -75,26 +124,15 @@ def _ensure_is_on_device(
 
 
 def extract_connectivity_args(
-    offset_provider: dict[str, common.Connectivity | common.Dimension], device: core_defs.DeviceType
-) -> list[tuple[npt.NDArray, tuple[int, ...]]]:
-    # note: the order here needs to agree with the order of the generated bindings
-    args: list[tuple[npt.NDArray, tuple[int, ...]]] = []
-    for name, conn in offset_provider.items():
-        if isinstance(conn, common.Connectivity):
-            if not isinstance(conn, common.NeighborTable):
-                raise NotImplementedError(
-                    "Only 'NeighborTable' connectivities implemented at this point."
-                )
-            # copying to device here is a fallback for easy testing and might be removed later
-            conn_arg = _ensure_is_on_device(conn.table, device)
-            args.append((conn_arg, tuple([0] * 2)))
-        elif isinstance(conn, common.Dimension):
-            pass
-        else:
-            raise AssertionError(
-                f"Expected offset provider '{name}' to be a 'Connectivity' or 'Dimension', "
-                f"but got '{type(conn).__name__}'."
-            )
+    offset_provider: dict[str, Any], device: core_defs.DeviceType
+) -> list[ConnectivityArg]:
+    zero_tuple = (0, 0)
+    args = []
+    for conn in offset_provider.values():
+        handler = type_handlers_connectivity_args.get(type(conn), handle_other_type)
+        result = handler(conn, zero_tuple, device)  # type: ignore
+        if result:
+            args.append(result)
     return args
 
 
