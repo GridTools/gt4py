@@ -15,6 +15,7 @@
 
 import numpy as np
 import pytest
+import unittest
 
 import gt4py.next as gtx
 from gt4py.next import int32
@@ -26,13 +27,12 @@ from next_tests.integration_tests.cases import (
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     exec_alloc_descriptor,
 )
-from next_tests.wrap_object_util import wrap_object
 
 compiled_sdfg = pytest.importorskip("dace.codegen.compiled_sdfg")
 
 
-def test_dace_fastcall(cartesian_case):
-    """Test reuse of arguments between program calls by means of SDFG fastcall API."""
+def test_dace_fastcall(cartesian_case, monkeypatch):
+    """Test reuse of SDFG arguments between program calls by means of SDFG fastcall API."""
 
     if not cartesian_case.executor or "dace" not in cartesian_case.executor.__name__:
         pytest.skip("DaCe-specific testcase.")
@@ -60,44 +60,62 @@ def test_dace_fastcall(cartesian_case):
     unused_field = cases.allocate(cartesian_case, testee, "unused_field")()
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
-    with wrap_object(compiled_sdfg.CompiledSDFG, "fast_call") as mock_fast_call:
-        with wrap_object(compiled_sdfg.CompiledSDFG, "_construct_args") as mock_construct_args:
+    # Wrap `compiled_sdfg.CompiledSDFG.fast_call` with mock object
+    mock_fast_call = unittest.mock.MagicMock()
+    mock_fast_call_attr = getattr(compiled_sdfg.CompiledSDFG, "fast_call")
 
-            def verify_testee():
-                mock_construct_args.reset_mock()
-                mock_fast_call.reset_mock()
-                cases.verify(
-                    cartesian_case,
-                    testee,
-                    a,
-                    a_index,
-                    unused_field,
-                    *a_offset,
-                    out=out,
-                    ref=numpy_ref(a.asnumpy(), *a_offset[0:3]),
-                )
-                mock_fast_call.assert_called_once()
+    def mocked_fast_call(self, *args, **kwargs):
+        mock_fast_call.__call__(*args, **kwargs)
+        return mock_fast_call_attr(self, *args, **kwargs)
 
-            # on first run, the SDFG arguments will have to be constructed
-            verify_testee()
-            mock_construct_args.assert_called_once()
-            fast_call_args = mock_fast_call.call_args.args
+    monkeypatch.setattr(compiled_sdfg.CompiledSDFG, "fast_call", mocked_fast_call)
 
-            # modify the scalar arguments, used and unused ones: reuse previous SDFG arguments
-            for i in range(4):
-                a_offset[i] += 1
-                verify_testee()
-                mock_construct_args.assert_not_called()
-                assert mock_fast_call.call_args.args == fast_call_args
+    # Wrap `compiled_sdfg.CompiledSDFG._construct_args` with mock object
+    mock_construct_args = unittest.mock.MagicMock()
+    mock_construct_args_attr = getattr(compiled_sdfg.CompiledSDFG, "_construct_args")
 
-            # modify content of current buffer: reuse previous SDFG arguments
-            a[0] += 1
-            verify_testee()
-            mock_construct_args.assert_not_called()
-            assert mock_fast_call.call_args.args == fast_call_args
+    def mocked_construct_args(self, *args, **kwargs):
+        mock_construct_args.__call__(*args, **kwargs)
+        return mock_construct_args_attr(self, *args, **kwargs)
 
-            # pass a new buffer, which should trigger reconstruct of SDFG arguments: fastcall API will not be used
-            a = cases.allocate(cartesian_case, testee, "a")()
-            verify_testee()
-            mock_construct_args.assert_called_once()
-            assert mock_fast_call.call_args.args != fast_call_args
+    monkeypatch.setattr(compiled_sdfg.CompiledSDFG, "_construct_args", mocked_construct_args)
+
+    # Reset mock objects and run/verify GT4Py program
+    def verify_testee():
+        mock_construct_args.reset_mock()
+        mock_fast_call.reset_mock()
+        cases.verify(
+            cartesian_case,
+            testee,
+            a,
+            a_index,
+            unused_field,
+            *a_offset,
+            out=out,
+            ref=numpy_ref(a.asnumpy(), *a_offset[0:3]),
+        )
+        mock_fast_call.assert_called_once()
+
+    # On first run, the SDFG arguments will have to be constructed
+    verify_testee()
+    mock_construct_args.assert_called_once()
+    fast_call_args = mock_fast_call.call_args.args
+
+    # Now modify the scalar arguments, used and unused ones: reuse previous SDFG arguments
+    for i in range(4):
+        a_offset[i] += 1
+        verify_testee()
+        mock_construct_args.assert_not_called()
+        assert mock_fast_call.call_args.args == fast_call_args
+
+    # Modify content of current buffer: reuse previous SDFG arguments
+    a[0] += 1
+    verify_testee()
+    mock_construct_args.assert_not_called()
+    assert mock_fast_call.call_args.args == fast_call_args
+
+    # Pass a new buffer, which should trigger reconstruct of SDFG arguments: fastcall API will not be used
+    a = cases.allocate(cartesian_case, testee, "a")()
+    verify_testee()
+    mock_construct_args.assert_called_once()
+    assert mock_fast_call.call_args.args != fast_call_args
