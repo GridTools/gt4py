@@ -82,7 +82,7 @@ def get_gt_pyext_build_opts(
             "-ftemplate-depth={}".format(gt_config.build_settings["cpp_template_depth"]),
             "-fvisibility=hidden",
             "-fPIC",
-            # A compiler is allowed to choose if `char` is signed or unsigned. We forse the signed behavior
+            # A compiler is allowed to choose if `char` is signed or unsigned. We force the signed behavior
             # because `char` is used to represent the `int8` type in GT4Py programs.
             "-fsigned-char",
             "-isystem{}".format(gt_include_path),

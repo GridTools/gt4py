@@ -180,7 +180,7 @@ build_py38_image_x86_64:
   variables:
     # Grace-Hopper gpu architecture is not enabled by default in CUDA build
     CUDAARCHS: "90"
-    # limit test parallelism to avoid "OSError: too many open files"
+    # limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage
     NUM_PROCESSES: 32
 
 test_py311_x86_64:
