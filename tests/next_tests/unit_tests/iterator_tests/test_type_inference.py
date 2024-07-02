@@ -222,6 +222,19 @@ def test_late_offset_axis():
     assert result.type == it_on_e_of_e_type
 
 
+def test_cast_first_arg_inference():
+    # since cast_ is a grammar builtin whose return type is given by its second argument it is
+    # easy to forget inferring the types of the first argument and its children. Simply check
+    # if the first argument has a type inferred correctly here.
+    testee = im.call("cast_")(
+        im.plus(im.literal_from_value(1), im.literal_from_value(2)), "float64"
+    )
+    result = itir_type_inference.infer(testee, offset_provider={}, allow_undeclared_symbols=True)
+
+    assert result.args[0].type == int_type
+    assert result.type == float64_type
+
+
 # TODO(tehrengruber): Rewrite tests to use itir.Program
 def test_cartesian_fencil_definition():
     cartesian_domain = im.call("cartesian_domain")(
