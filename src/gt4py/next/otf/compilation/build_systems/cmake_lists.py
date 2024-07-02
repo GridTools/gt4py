@@ -107,8 +107,8 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
 
                 py = f"""
                 set(Python_EXECUTABLE {python_executable})
-                set(Python_LIBRARY {python_library})
-                set(Python_INCLUDE_DIR {python_include_dir})
+                #set(Python_LIBRARY {python_library})
+                #set(Python_INCLUDE_DIR {python_include_dir})
 
                 find_package(Python COMPONENTS Interpreter Development REQUIRED)
                 """
