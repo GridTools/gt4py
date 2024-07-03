@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import typing
-from typing import Callable, Iterable, Union, Optional
+from typing import Callable, Iterable, Optional, Union
 
 from gt4py._core import definitions as core_defs
 from gt4py.next.iterator import ir as itir
@@ -255,6 +255,7 @@ def lift(expr):
     """Create a lift FunCall, shorthand for ``call(call("lift")(expr))``."""
     return call(call("lift")(expr))
 
+
 def as_fieldop(stencil, domain=None):
     """Creates a field_operator from a stencil."""
     args = [stencil]
@@ -369,6 +370,18 @@ def lifted_neighbors(offset, it) -> itir.Expr:
     return lift(lambda_("it")(neighbors(offset, "it")))(it)
 
 
+def as_fieldop_neighbors(offset, it) -> itir.Expr:
+    """
+    Create a fieldop for neighbors call.
+
+    Examples
+    --------
+    >>> str(as_fieldop_neighbors("off", "a"))
+    '(⇑(λ(it) → neighbors(offₒ, it)))(a)'
+    """
+    return as_fieldop(lambda_("it")(neighbors(offset, "it")))(it)
+
+
 def promote_to_const_iterator(expr: str | itir.Expr) -> itir.Expr:
     """
     Create a lifted nullary lambda that captures `expr`.
@@ -405,6 +418,7 @@ def promote_to_lifted_stencil(op: str | itir.SymRef | Callable) -> Callable[...,
         return lift(lambda_(*args)(op(*[deref(arg) for arg in args])))(*its)
 
     return _impl
+
 
 def op_as_fieldop(
     op: str | itir.SymRef | Callable, domain: Optional[itir.FunCall] = None
