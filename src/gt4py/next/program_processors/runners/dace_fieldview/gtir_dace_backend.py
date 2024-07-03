@@ -18,6 +18,7 @@ from gt4py.next.common import Connectivity, Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_to_sdfg as gtir_dace_translator,
+    transformations,  # noqa: F401 [unused-import]  # For development.
 )
 from gt4py.next.type_system import type_specifications as ts
 
