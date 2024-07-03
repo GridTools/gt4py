@@ -13,6 +13,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Test specific features of DaCe backends."""
 
+import ctypes
+from typing import Any
 import numpy as np
 import pytest
 import unittest
@@ -29,6 +31,15 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 )
 
 compiled_sdfg = pytest.importorskip("dace.codegen.compiled_sdfg")
+
+
+def get_scalar_values_from_sdfg_args(
+    args: tuple[list[ctypes._SimpleCData], list[ctypes._SimpleCData]],
+) -> list[Any]:
+    runtime_args, init_args = args
+    return [
+        arg.value for arg in [*runtime_args, *init_args] if not isinstance(arg, ctypes.c_void_p)
+    ]
 
 
 def test_dace_fastcall(cartesian_case, monkeypatch):
@@ -99,7 +110,25 @@ def test_dace_fastcall(cartesian_case, monkeypatch):
     # On first run, the SDFG arguments will have to be constructed
     verify_testee()
     mock_construct_args.assert_called_once()
+    # here we store the reference to the tuple of arguments passed to `fast_call` on first run and compare on successive runs
     fast_call_args = mock_fast_call.call_args.args
+    # and the scalar values in the order they appear in the program ABI
+    fast_call_scalar_values = get_scalar_values_from_sdfg_args(fast_call_args)
+
+    def check_one_scalar_arg_changed(prev_scalar_args):
+        new_scalar_args = get_scalar_values_from_sdfg_args(mock_fast_call.call_args.args)
+        diff = np.array(new_scalar_args) - np.array(prev_scalar_args)
+        assert np.count_nonzero(diff) == 1
+
+    def check_scalar_args_all_same(prev_scalar_args):
+        new_scalar_args = get_scalar_values_from_sdfg_args(mock_fast_call.call_args.args)
+        diff = np.array(new_scalar_args) - np.array(prev_scalar_args)
+        assert np.count_nonzero(diff) == 0
+
+    def chack_pointer_args_all_same():
+        for arg, prev in zip(mock_fast_call.call_args.args, fast_call_args, strict=True):
+            if isinstance(arg, ctypes._Pointer):
+                assert arg == prev
 
     # Now modify the scalar arguments, used and unused ones: reuse previous SDFG arguments
     for i in range(4):
@@ -107,12 +136,25 @@ def test_dace_fastcall(cartesian_case, monkeypatch):
         verify_testee()
         mock_construct_args.assert_not_called()
         assert mock_fast_call.call_args.args == fast_call_args
+        chack_pointer_args_all_same()
+        if i < 3:
+            # same arguments tuple object but one scalar value is changed
+            check_one_scalar_arg_changed(fast_call_scalar_values)
+            # update reference scalar values
+            fast_call_scalar_values = get_scalar_values_from_sdfg_args(fast_call_args)
+        else:
+            # unused scalar argument: the symbol is removed from the SDFG arglist and therefore no change
+            check_scalar_args_all_same(fast_call_scalar_values)
 
     # Modify content of current buffer: reuse previous SDFG arguments
-    a[0] += 1
-    verify_testee()
-    mock_construct_args.assert_not_called()
-    assert mock_fast_call.call_args.args == fast_call_args
+    for buff in (a, unused_field):
+        buff[0] += 1
+        verify_testee()
+        mock_construct_args.assert_not_called()
+        # same arguments tuple object and same content
+        assert mock_fast_call.call_args.args == fast_call_args
+        chack_pointer_args_all_same()
+        check_scalar_args_all_same(fast_call_scalar_values)
 
     # Pass a new buffer, which should trigger reconstruct of SDFG arguments: fastcall API will not be used
     a = cases.allocate(cartesian_case, testee, "a")()
