@@ -20,12 +20,14 @@ from gt4py.next.type_system import type_info
 from gt4py.next.common import Field
 from numpy import int64
 
+
 def test_tree_map_scalar():
-    @utils.tree_map(collection_type=ts.ScalarType,result_collection_constructor=tuple)
+    @utils.tree_map(collection_type=ts.ScalarType, result_collection_constructor=tuple)
     def testee(x):
         return x + 1
 
     assert testee(1) == (2)
+
 
 def test_apply_to_primitive_constituents():
     int_type = ts.ScalarType(kind=ts.ScalarKind.INT64)
@@ -37,20 +39,27 @@ def test_apply_to_primitive_constituents():
     #
     # tree = tmp(tuple_type)
 
-    tree = type_info.type_tree_map(lambda primitive_type: ts.FieldType(dims=[], dtype=primitive_type))(tuple_type)
+    tree = type_info.type_tree_map(
+        lambda primitive_type: ts.FieldType(dims=[], dtype=primitive_type)
+    )(tuple_type)
 
     prim = type_info.apply_to_primitive_constituents(
-       tuple_type, lambda primitive_type: ts.FieldType(dims=[], dtype=primitive_type)
+        tuple_type, lambda primitive_type: ts.FieldType(dims=[], dtype=primitive_type)
     )
 
     assert tree == prim
 
+
 def test_tree_map_default():
+    expected_result = ((2, 3), 4)
+
     @utils.tree_map
-    def testee(x):
+    def testee1(x):
         return x + 1
 
-    assert testee(((1, 2), 3)) == ((2, 3), 4)
+    assert testee1(((1, 2), 3)) == expected_result
+    assert utils.tree_map(lambda x: x + 1)(((1, 2), 3)) == expected_result
+    assert utils.tree_map(lambda x: x + 1, ((1, 2), 3)) == expected_result
 
 
 def test_tree_map_multi_arg():

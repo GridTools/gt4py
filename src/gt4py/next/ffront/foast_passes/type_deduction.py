@@ -839,9 +839,11 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         #         primitive_type, getattr(ts.ScalarKind, new_type.id.upper())
         #     ),
         # )
-        return_type = type_info.type_tree_map(lambda primitive_type: with_altered_scalar_kind(
+        return_type = type_info.type_tree_map(
+            lambda primitive_type: with_altered_scalar_kind(
                 primitive_type, getattr(ts.ScalarKind, new_type.id.upper())
-            ))(value.type)
+            )
+        )(value.type)
         assert isinstance(return_type, (ts.TupleType, ts.ScalarType, ts.FieldType))
 
         return foast.Call(

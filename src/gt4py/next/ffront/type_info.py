@@ -17,7 +17,7 @@ from typing import Iterator, cast
 
 import gt4py.next.ffront.type_specifications as ts_ffront
 import gt4py.next.type_system.type_specifications as ts
-from gt4py.next import common, utils
+from gt4py.next import common
 from gt4py.next.type_system import type_info
 
 
@@ -40,6 +40,7 @@ def promote_scalars_to_zero_dim_field(type_: ts.TypeSpec) -> ts.TypeSpec:
     # return  type_info.apply_to_primitive_constituents(type_, promote_el)
 
     return type_info.type_tree_map(promote_el)(type_)
+
 
 def promote_zero_dims(
     function_type: ts.FunctionType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
@@ -317,6 +318,8 @@ def return_type_scanop(
     # def tmp(x):
     #     return ts.FieldType(dims=promoted_dims, dtype=x)
 
-    #return  tmp(carry_dtype)
+    # return  tmp(carry_dtype)
 
-    return type_info.type_tree_map(lambda arg: ts.FieldType(dims=promoted_dims, dtype=cast(ts.ScalarType, arg)))(carry_dtype)
+    return type_info.type_tree_map(
+        lambda arg: ts.FieldType(dims=promoted_dims, dtype=cast(ts.ScalarType, arg))
+    )(carry_dtype)

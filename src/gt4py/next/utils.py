@@ -75,17 +75,21 @@ def tree_map(fun: Callable[_P, _R], /) -> Callable[..., _R | tuple[_R | tuple, .
 
 @overload
 def tree_map(
-    *, collection_type: type | tuple[type, ...], result_collection_constructor: Optional[type] = None
+    *,
+    collection_type: type | tuple[type, ...],
+    result_collection_constructor: Optional[type] = None,
 ) -> Callable[[Callable[_P, _R]], Callable[..., _R | tuple[_R | tuple, ...]]]: ...
 
 
 def tree_map(
     *args: Callable[_P, _R],
     collection_type: type | tuple[type, ...] = tuple,
-    result_collection_constructor: Optional[type] = None, # Todo: check name with Enrique
+    result_collection_constructor: Optional[type] = None,  # Todo: check name with Enrique
 ) -> (
     Callable[..., _R | tuple[_R | tuple, ...]]
     | Callable[[Callable[_P, _R]], Callable[..., _R | tuple[_R | tuple, ...]]]
+    | _R
+    | tuple[_R | tuple, ...]
 ):
     """
     Apply `fun` to each entry of (possibly nested) collections (by default `tuple`s).
@@ -96,7 +100,10 @@ def tree_map(
         result_collection_constructor: Constructor of the collection to be returned. If `None` the same type as `collection_type` is used.
 
     Examples:
-        >>> tree_map(lambda x: x + 1)(((1, 2), 3)) # TODO: tree_map(lambda x: x + 1,((1, 2), 3)) like map/reduce, decorator and original way should also work
+        >>> tree_map(lambda x: x + 1)(((1, 2), 3))
+        ((2, 3), 4)
+
+        >>> tree_map(lambda x: x + 1, ((1, 2), 3))
         ((2, 3), 4)
 
         >>> tree_map(lambda x, y: x + y)(((1, 2), 3), ((4, 5), 6))
@@ -105,7 +112,12 @@ def tree_map(
         >>> tree_map(collection_type=list)(lambda x: x + 1)([[1, 2], 3])
         [[2, 3], 4]
 
-        >>> tree_map(collection_type=list, result_collection_constructor=tuple)(lambda x: x + 1)([[1, 2], 3])
+        >>> tree_map(collection_type=list)(lambda x: x + 1, [[1, 2], 3])
+        [[2, 3], 4]
+
+        >>> tree_map(collection_type=list, result_collection_constructor=tuple)(lambda x: x + 1)(
+        ...     [[1, 2], 3]
+        ... )
         ((2, 3), 4)
     """
 
@@ -116,8 +128,24 @@ def tree_map(
             )
         result_collection_constructor = collection_type
 
-    if len(args) == 1:
+    if len(args) == 0:
+        return functools.partial(
+            tree_map,
+            collection_type=collection_type,
+            result_collection_constructor=result_collection_constructor,
+        )
+
+    if callable(args[0]):
         fun = args[0]
+        colls = args[1:]
+
+        if len(colls) == 0:
+            return functools.partial(
+                tree_map,
+                fun,
+                collection_type=collection_type,
+                result_collection_constructor=result_collection_constructor,
+            )
 
         @functools.wraps(fun)
         def impl(*args: Any | tuple[Any | tuple, ...]) -> _R | tuple[_R | tuple, ...]:
@@ -132,13 +160,8 @@ def tree_map(
                 *cast(_P.args, args)
             )  # mypy doesn't understand that `args` at this point is of type `_P.args`
 
-        return impl
-    if len(args) == 0:
-        return functools.partial(
-            tree_map,
-            collection_type=collection_type,
-            result_collection_constructor=result_collection_constructor,
-        )
+        return impl(*colls)
+
     raise TypeError(
-        "tree_map() can be used as decorator with optional kwarg `collection_type` and `result_collection_constructor`."
+        "tree_map() can be used as decorator with optional kwarg `collection_type` and `result_collection_constructor`, or with a function and collection."
     )
