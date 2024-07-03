@@ -32,6 +32,8 @@ from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
 from gt4py.next.iterator.transforms.prune_closure_inputs import PruneClosureInputs
 from gt4py.next.iterator.transforms.symbol_ref_utils import collect_symbol_refs
 
+from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
+
 
 """Iterator IR extension for global temporaries.
 
@@ -453,7 +455,7 @@ def domain_union(domains: list[SymbolicDomain]) -> SymbolicDomain:
             lambda current_expr, el_expr: im.call("maximum")(current_expr, el_expr),
             [domain.ranges[dim].stop for domain in domains],
         )
-        new_domain_ranges[dim] = SymbolicRange(start, stop)
+        new_domain_ranges[dim] = SymbolicRange(ConstantFolding.apply(start), ConstantFolding.apply(stop))
     return SymbolicDomain(domains[0].grid_type, new_domain_ranges)
 
 
