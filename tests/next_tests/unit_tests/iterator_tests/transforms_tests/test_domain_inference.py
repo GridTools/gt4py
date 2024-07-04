@@ -17,9 +17,21 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms.infer_domain import InferDomain
 from gt4py.next.iterator.transforms.global_tmps import SymbolicDomain
 import pytest
+from gt4py.next.common import Dimension, DimensionKind
 
 
-def test_forward_difference_x():
+@pytest.fixture
+def offset_provider():
+    offset_provider = {
+        "Ioff": Dimension("IDim", DimensionKind.HORIZONTAL),
+        "Joff": Dimension("JDim", DimensionKind.HORIZONTAL),
+        "Koff": Dimension("KDim", DimensionKind.VERTICAL),
+    }
+
+    return offset_provider
+
+
+def test_forward_difference_x(offset_provider):
     stencil = im.lambda_("arg0")(
         im.minus(im.deref(im.shift(itir.SymbolRef("Ioff"), 1)("arg0")), im.deref("arg0"))
     )
@@ -30,13 +42,13 @@ def test_forward_difference_x():
     expected = im.call(im.call("as_fieldop")(stencil, domain))(im.ref("in_field"))
     expected_domains = {"in_field": SymbolicDomain.from_expr(im.cartesian_domain({"IDim": (0, 1)}))}
 
-    actual_call, actual_domains = InferDomain.infer_as_fieldop(testee, domain)
+    actual_call, actual_domains = InferDomain.infer_as_fieldop(testee, domain, offset_provider)
 
     assert actual_call == expected
     assert actual_domains == expected_domains
 
 
-def test_laplace():
+def test_laplace(offset_provider):
     stencil = im.lambda_("arg0")(
         im.plus(
             im.plus(
@@ -55,22 +67,22 @@ def test_laplace():
 
     testee = im.call(im.call("as_fieldop")(stencil))(im.ref("in_field"))
 
-    domains = im.cartesian_domain({"IDim": (0, 0), "JDim": (0, 0)})
+    domain = im.cartesian_domain({"IDim": (0, 0), "JDim": (0, 0)})
 
-    expected = im.call(im.call("as_fieldop")(stencil, domains))(im.ref("in_field"))
+    expected = im.call(im.call("as_fieldop")(stencil, domain))(im.ref("in_field"))
     expected_domains = {
         "in_field": SymbolicDomain.from_expr(
             im.cartesian_domain({"IDim": (-1, 1), "JDim": (-1, 1)})
         )
     }
 
-    actual_call, actual_domains = InferDomain.infer_as_fieldop(testee, domains)
+    actual_call, actual_domains = InferDomain.infer_as_fieldop(testee, domain, offset_provider)
 
     assert actual_call == expected
     assert actual_domains == expected_domains
 
 
-def test_shift_x_y_two_inputs():
+def test_shift_x_y_two_inputs(offset_provider):
     stencil = im.lambda_("arg0", "arg1")(
         im.plus(
             im.deref(im.shift(itir.SymbolRef("Ioff"), -1)("arg0")),
@@ -93,13 +105,13 @@ def test_shift_x_y_two_inputs():
         ),
     }
 
-    actual_call, actual_domains = InferDomain.infer_as_fieldop(testee, domain)
+    actual_call, actual_domains = InferDomain.infer_as_fieldop(testee, domain, offset_provider)
 
     assert actual_call == expected
     assert actual_domains == expected_domains
 
 
-def test_shift_x_y_z_three_inputs():
+def test_shift_x_y_z_three_inputs(offset_provider):
     stencil = im.lambda_("arg0", "arg1", "arg2")(
         im.plus(
             im.plus(
@@ -130,13 +142,13 @@ def test_shift_x_y_z_three_inputs():
         ),
     }
 
-    actual_call, actual_domains = InferDomain.infer_as_fieldop(testee, domain)
+    actual_call, actual_domains = InferDomain.infer_as_fieldop(testee, domain, offset_provider)
 
     assert actual_call == expected
     assert actual_domains == expected_domains
 
 
-def test_nested_stencils():
+def test_nested_stencils(offset_provider):
     inner_stencil = im.lambda_("arg0_tmp", "arg1_tmp")(
         im.plus(
             im.deref(im.shift(itir.SymbolRef("Ioff"), 1)("arg0_tmp")),
@@ -172,14 +184,14 @@ def test_nested_stencils():
         ),
     }
 
-    actual_call, actual_domains = InferDomain.infer_as_fieldop(testee, domain)
+    actual_call, actual_domains = InferDomain.infer_as_fieldop(testee, domain, offset_provider)
 
     assert actual_call == expected
     assert actual_domains == expected_domains
 
 
 @pytest.mark.parametrize("iterations", [3, 5])
-def test_nested_stencils_n_times(iterations):
+def test_nested_stencils_n_times(offset_provider, iterations):
     stencil = im.lambda_("arg0", "arg1")(
         im.plus(
             im.deref(im.shift(itir.SymbolRef("Ioff"), 1)("arg0")),
@@ -217,7 +229,9 @@ def test_nested_stencils_n_times(iterations):
         ),
     }
 
-    actual_call, actual_domains = InferDomain.infer_as_fieldop(testee, current_domain)
+    actual_call, actual_domains = InferDomain.infer_as_fieldop(
+        testee, current_domain, offset_provider
+    )
 
     assert actual_call == current_expected
     assert actual_domains == expected_domains

@@ -14,31 +14,15 @@
 import dataclasses
 
 from gt4py.eve.extended_typing import Dict, List, Tuple, Union
-from gt4py.next.common import Dimension, DimensionKind
+from gt4py.next.common import Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.global_tmps import SymbolicDomain, SymbolicRange, domain_union
 from gt4py.next.iterator.transforms.trace_shifts import TraceShifts
 
 
-# Define a mapping for offset values to dimension names and kinds
-OFFSET_TO_DIMENSION = {
-    itir.SymbolRef("Ioff"): ("IDim", DimensionKind.HORIZONTAL),
-    itir.SymbolRef("Joff"): ("JDim", DimensionKind.HORIZONTAL),
-    itir.SymbolRef("Koff"): ("KDim", DimensionKind.VERTICAL),
-}
-
-
 @dataclasses.dataclass(frozen=True)
 class InferDomain:
-    @staticmethod
-    def _infer_dimension_from_offset(offset: itir.OffsetLiteral) -> Dimension:
-        if offset.value in OFFSET_TO_DIMENSION:
-            name, kind = OFFSET_TO_DIMENSION[offset.value]
-            return Dimension(name, kind)
-        else:
-            raise ValueError("offset must be either Ioff, Joff, or Koff")
-
     @staticmethod
     def _extract_axis_dims(domain_expr: SymbolicDomain | itir.FunCall) -> List[str]:
         axis_dims = []
@@ -79,12 +63,16 @@ class InferDomain:
 
     @classmethod
     def _translate_domain(
-        cls, symbolic_domain: SymbolicDomain, shift: Tuple[itir.OffsetLiteral, int], dims: List[str]
+        cls,
+        symbolic_domain: SymbolicDomain,
+        shift: Tuple[itir.OffsetLiteral, int],
+        dims: List[str],
+        offset_provider: Dict[str, Dimension],
     ) -> SymbolicDomain:
         new_ranges = {dim: symbolic_domain.ranges[dim] for dim in dims}
         if shift:
             off, val = shift
-            current_dim = cls._infer_dimension_from_offset(off)
+            current_dim = offset_provider[off.value]
             new_ranges[current_dim.value] = SymbolicRange.translate(
                 symbolic_domain.ranges[current_dim.value], val.value
             )
@@ -92,7 +80,10 @@ class InferDomain:
 
     @classmethod
     def infer_as_fieldop(
-        cls, applied_fieldop: itir.FunCall, input_domain: SymbolicDomain
+        cls,
+        applied_fieldop: itir.FunCall,
+        input_domain: SymbolicDomain,
+        offset_provider: Dict[str, Dimension],
     ) -> Tuple[itir.FunCall, Dict[str, SymbolicDomain]]:  # todo: test scan operator
         assert isinstance(applied_fieldop, itir.FunCall) and isinstance(
             applied_fieldop.fun, itir.FunCall
@@ -139,7 +130,8 @@ class InferDomain:
             shifts_list = shifts_results[in_field_id]
 
             new_domains = [
-                cls._translate_domain(symbolic_domain, shift, dims) for shift in shifts_list
+                cls._translate_domain(symbolic_domain, shift, dims, offset_provider)
+                for shift in shifts_list
             ]
 
             accessed_domains[in_field_id] = domain_union(new_domains)
@@ -149,7 +141,7 @@ class InferDomain:
             # Recursively traverse inputs
             if isinstance(in_field, itir.FunCall):
                 transformed_calls_tmp, accessed_domains_tmp = cls.infer_as_fieldop(
-                    in_field, accessed_domains[str(in_field.id)]
+                    in_field, accessed_domains[str(in_field.id)], offset_provider
                 )
                 inputs_new.append(transformed_calls_tmp)
 
