@@ -85,35 +85,43 @@ def test_gtir_update():
     domain = im.call("cartesian_domain")(
         im.call("named_range")(itir.AxisLiteral(value=IDim.value), 0, "size")
     )
-    testee = itir.Program(
-        id="gtir_update",
-        function_definitions=[],
-        params=[
-            itir.Sym(id="x", type=IFTYPE),
-            itir.Sym(id="size", type=SIZE_TYPE),
-        ],
-        declarations=[],
-        body=[
-            itir.SetAt(
-                expr=im.call(
-                    im.call("as_fieldop")(
-                        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-                        domain,
-                    )
-                )("x", 1.0),
-                domain=domain,
-                target=itir.SymRef(id="x"),
-            )
-        ],
-    )
+    stencil1 = im.call(
+        im.call("as_fieldop")(
+            im.lambda_("a")(im.plus(im.deref("a"), 1.0)),
+            domain,
+        )
+    )("x")
+    stencil2 = im.call(
+        im.call("as_fieldop")(
+            im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+            domain,
+        )
+    )("x", 1.0)
 
-    a = np.random.rand(N)
-    ref = a + 1.0
+    for i, stencil in enumerate([stencil1, stencil2]):
+        testee = itir.Program(
+            id=f"gtir_update_{i}",
+            function_definitions=[],
+            params=[
+                itir.Sym(id="x", type=IFTYPE),
+                itir.Sym(id="size", type=SIZE_TYPE),
+            ],
+            declarations=[],
+            body=[
+                itir.SetAt(
+                    expr=stencil,
+                    domain=domain,
+                    target=itir.SymRef(id="x"),
+                )
+            ],
+        )
+        sdfg = dace_backend.build_sdfg_from_gtir(testee, {})
 
-    sdfg = dace_backend.build_sdfg_from_gtir(testee, {})
+        a = np.random.rand(N)
+        ref = a + 1.0
 
-    sdfg(x=a, **FSYMBOLS)
-    assert np.allclose(a, ref)
+        sdfg(x=a, **FSYMBOLS)
+        assert np.allclose(a, ref)
 
 
 def test_gtir_sum2():
@@ -334,25 +342,25 @@ def test_gtir_select_nested():
                         im.deref("cond_1"),
                         im.call(
                             im.call("as_fieldop")(
-                                im.lambda_("a")(im.plus(im.deref("a"), 1)),
+                                im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
                                 domain,
                             )
-                        )("x"),
+                        )("x", 1),
                         im.call(
                             im.call("select")(
                                 im.deref("cond_2"),
                                 im.call(
                                     im.call("as_fieldop")(
-                                        im.lambda_("a")(im.plus(im.deref("a"), 2)),
+                                        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
                                         domain,
                                     )
-                                )("x"),
+                                )("x", 2),
                                 im.call(
                                     im.call("as_fieldop")(
-                                        im.lambda_("a")(im.plus(im.deref("a"), 3)),
+                                        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
                                         domain,
                                     )
-                                )("x"),
+                                )("x", 3),
                             )
                         )(),
                     )
