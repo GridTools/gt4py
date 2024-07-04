@@ -49,7 +49,7 @@ repos:
   ## version = re.search('ruff==([0-9\.]*)', open("constraints.txt").read())[1]
   ## print(f"rev: v{version}")
   ##]]]
-  rev: v0.4.10
+  rev: v0.5.0
   ##[[[end]]]
   hooks:
     # Run the linter.
@@ -106,7 +106,7 @@ repos:
     - numpy==1.24.4
     - packaging==24.1
     - pybind11==2.13.1
-    - setuptools==70.1.1
+    - setuptools==70.2.0
     - tabulate==0.9.0
     - typing-extensions==4.12.2
     - xxhash==3.0.0
