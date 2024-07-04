@@ -21,7 +21,6 @@ from typing import Any, Sequence
 
 import dace
 
-from gt4py import eve
 from gt4py.next.common import Connectivity, Dimension, DimensionKind
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
@@ -29,10 +28,11 @@ from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_builtin_translators,
     utility as dace_fieldview_util,
 )
+from gt4py.next.program_processors.runners.dace_fieldview.sdfg_builder import SDFGBuilder
 from gt4py.next.type_system import type_specifications as ts
 
 
-class GTIRToSDFG(eve.NodeVisitor):
+class GTIRToSDFG(SDFGBuilder):
     """Provides translation capability from a GTIR program to a DaCe SDFG.
 
     This class is responsible for translation of `ir.Program`, that is the top level representation
@@ -45,15 +45,11 @@ class GTIRToSDFG(eve.NodeVisitor):
     from where to continue building the SDFG.
     """
 
-    offset_provider: dict[str, Connectivity | Dimension]
-    symbol_types: dict[str, ts.FieldType | ts.ScalarType]
-
     def __init__(
         self,
         offset_provider: dict[str, Connectivity | Dimension],
     ):
-        self.offset_provider = offset_provider
-        self.symbol_types = {}
+        super().__init__(offset_provider, symbol_types={})
 
     def _make_array_shape_and_strides(
         self, name: str, dims: Sequence[Dimension]
@@ -127,10 +123,9 @@ class GTIRToSDFG(eve.NodeVisitor):
         in case the transient arrays containing the expression result are not guaranteed
         to have the same memory layout as the target array.
         """
-        field_builder: gtir_builtin_translators.SDFGFieldBuilder = self.visit(
+        results: list[gtir_builtin_translators.SDFGField] = self.visit(
             node, sdfg=sdfg, head_state=head_state
         )
-        results = field_builder()
 
         field_nodes = []
         for node, _ in results:
@@ -225,23 +220,13 @@ class GTIRToSDFG(eve.NodeVisitor):
 
     def visit_FunCall(
         self, node: itir.FunCall, sdfg: dace.SDFG, head_state: dace.SDFGState
-    ) -> gtir_builtin_translators.SDFGFieldBuilder:
-        # first visit the argument nodes
-        arg_builders = []
-        for arg in node.args:
-            arg_builder: gtir_builtin_translators.SDFGFieldBuilder = self.visit(
-                arg, sdfg=sdfg, head_state=head_state
-            )
-            arg_builders.append(arg_builder)
-
+    ) -> list[gtir_builtin_translators.SDFGField]:
         # use specialized dataflow builder classes for each builtin function
         if cpm.is_call_to(node.fun, "as_fieldop"):
-            return gtir_builtin_translators.AsFieldOp(
-                sdfg, head_state, node, arg_builders, self.offset_provider
-            )
+            return gtir_builtin_translators.AsFieldOp(node.args)(node.fun, sdfg, head_state, self)
         elif cpm.is_call_to(node.fun, "select"):
-            assert len(arg_builders) == 0
-            return gtir_builtin_translators.Select(sdfg, head_state, self, node)
+            assert len(node.args) == 0
+            return gtir_builtin_translators.Select()(node.fun, sdfg, head_state, self)
         else:
             raise NotImplementedError(f"Unexpected 'FunCall' expression ({node}).")
 
@@ -255,13 +240,10 @@ class GTIRToSDFG(eve.NodeVisitor):
 
     def visit_Literal(
         self, node: itir.Literal, sdfg: dace.SDFG, head_state: dace.SDFGState
-    ) -> gtir_builtin_translators.SDFGFieldBuilder:
-        return gtir_builtin_translators.SymbolRef(sdfg, head_state, node.value, node.type)
+    ) -> list[gtir_builtin_translators.SDFGField]:
+        return gtir_builtin_translators.SymbolRef()(node, sdfg, head_state, self)
 
     def visit_SymRef(
         self, node: itir.SymRef, sdfg: dace.SDFG, head_state: dace.SDFGState
-    ) -> gtir_builtin_translators.SDFGFieldBuilder:
-        symbol_name = str(node.id)
-        assert symbol_name in self.symbol_types
-        symbol_type = self.symbol_types[symbol_name]
-        return gtir_builtin_translators.SymbolRef(sdfg, head_state, symbol_name, symbol_type)
+    ) -> list[gtir_builtin_translators.SDFGField]:
+        return gtir_builtin_translators.SymbolRef()(node, sdfg, head_state, self)
