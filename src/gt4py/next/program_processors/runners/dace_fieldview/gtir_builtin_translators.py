@@ -232,7 +232,7 @@ class AsFieldOp(PrimitiveTranslator):
         ]
         if isinstance(output_desc, dace.data.Array):
             # additional local dimension for neighbors
-            assert output_desc.offset is None
+            assert set(output_desc.offset) == {0}
             output_subset.extend(f"0:{size}" for size in output_desc.shape)
 
         self.head_state.add_memlet_path(
