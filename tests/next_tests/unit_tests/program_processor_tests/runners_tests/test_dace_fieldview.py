@@ -97,10 +97,10 @@ def test_gtir_update():
             itir.SetAt(
                 expr=im.call(
                     im.call("as_fieldop")(
-                        im.lambda_("a")(im.plus(im.deref("a"), 1.0)),
+                        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
                         domain,
                     )
-                )("x"),
+                )("x", 1.0),
                 domain=domain,
                 target=itir.SymRef(id="x"),
             )

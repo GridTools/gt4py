@@ -253,6 +253,11 @@ class GTIRToSDFG(eve.NodeVisitor):
         """
         raise RuntimeError("Unexpected 'itir.Lambda' node encountered in GTIR.")
 
+    def visit_Literal(
+        self, node: itir.Literal, sdfg: dace.SDFG, head_state: dace.SDFGState
+    ) -> gtir_builtin_translators.SDFGFieldBuilder:
+        return gtir_builtin_translators.SymbolRef(sdfg, head_state, node.value, node.type)
+
     def visit_SymRef(
         self, node: itir.SymRef, sdfg: dace.SDFG, head_state: dace.SDFGState
     ) -> gtir_builtin_translators.SDFGFieldBuilder:

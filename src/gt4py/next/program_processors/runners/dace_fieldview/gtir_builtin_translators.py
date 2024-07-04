@@ -351,9 +351,11 @@ class SymbolRef(PrimitiveTranslator):
         else:
             # scalar symbols are passed to the SDFG as symbols: build tasklet node
             # to write the symbol to a scalar access node
-            assert self.sym_name in self.sdfg.symbols
+            tasklet_name = (
+                f"get_{self.sym_name}" if self.sym_name in self.sdfg.symbols else "get_value"
+            )
             tasklet_node = self.head_state.add_tasklet(
-                f"get_{self.sym_name}",
+                tasklet_name,
                 {},
                 {"__out"},
                 f"__out = {self.sym_name}",
