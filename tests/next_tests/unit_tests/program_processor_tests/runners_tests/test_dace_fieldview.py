@@ -93,7 +93,11 @@ def test_gtir_copy():
     testee = itir.Program(
         id="gtir_copy",
         function_definitions=[],
-        params=[itir.Sym(id="x"), itir.Sym(id="y"), itir.Sym(id="size")],
+        params=[
+            itir.Sym(id="x", type=IFTYPE),
+            itir.Sym(id="y", type=IFTYPE),
+            itir.Sym(id="size", type=SIZE_TYPE),
+        ],
         declarations=[],
         body=[
             itir.SetAt(
@@ -112,8 +116,7 @@ def test_gtir_copy():
     a = np.random.rand(N)
     b = np.empty_like(a)
 
-    arg_types = [IFTYPE, IFTYPE, SIZE_TYPE]
-    sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, {})
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, {})
 
     sdfg(x=a, y=b, **FSYMBOLS)
     assert np.allclose(a, b)
@@ -126,7 +129,10 @@ def test_gtir_update():
     testee = itir.Program(
         id="gtir_update",
         function_definitions=[],
-        params=[itir.Sym(id="x"), itir.Sym(id="size")],
+        params=[
+            itir.Sym(id="x", type=IFTYPE),
+            itir.Sym(id="size", type=SIZE_TYPE),
+        ],
         declarations=[],
         body=[
             itir.SetAt(
@@ -145,8 +151,7 @@ def test_gtir_update():
     a = np.random.rand(N)
     ref = a + 1.0
 
-    arg_types = [IFTYPE, SIZE_TYPE]
-    sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, {})
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, {})
 
     sdfg(x=a, **FSYMBOLS)
     assert np.allclose(a, ref)
@@ -159,7 +164,12 @@ def test_gtir_sum2():
     testee = itir.Program(
         id="sum_2fields",
         function_definitions=[],
-        params=[itir.Sym(id="x"), itir.Sym(id="y"), itir.Sym(id="z"), itir.Sym(id="size")],
+        params=[
+            itir.Sym(id="x", type=IFTYPE),
+            itir.Sym(id="y", type=IFTYPE),
+            itir.Sym(id="z", type=IFTYPE),
+            itir.Sym(id="size", type=SIZE_TYPE),
+        ],
         declarations=[],
         body=[
             itir.SetAt(
@@ -179,8 +189,7 @@ def test_gtir_sum2():
     b = np.random.rand(N)
     c = np.empty_like(a)
 
-    arg_types = [IFTYPE, IFTYPE, IFTYPE, SIZE_TYPE]
-    sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, {})
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, {})
 
     sdfg(x=a, y=b, z=c, **FSYMBOLS)
     assert np.allclose(c, (a + b))
@@ -193,7 +202,11 @@ def test_gtir_sum2_sym():
     testee = itir.Program(
         id="sum_2fields_sym",
         function_definitions=[],
-        params=[itir.Sym(id="x"), itir.Sym(id="z"), itir.Sym(id="size")],
+        params=[
+            itir.Sym(id="x", type=IFTYPE),
+            itir.Sym(id="z", type=IFTYPE),
+            itir.Sym(id="size", type=SIZE_TYPE),
+        ],
         declarations=[],
         body=[
             itir.SetAt(
@@ -212,8 +225,7 @@ def test_gtir_sum2_sym():
     a = np.random.rand(N)
     b = np.empty_like(a)
 
-    arg_types = [IFTYPE, IFTYPE, SIZE_TYPE]
-    sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, {})
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, {})
 
     sdfg(x=a, z=b, **FSYMBOLS)
     assert np.allclose(b, (a + a))
@@ -250,18 +262,16 @@ def test_gtir_sum3():
     b = np.random.rand(N)
     c = np.random.rand(N)
 
-    arg_types = [IFTYPE, IFTYPE, IFTYPE, IFTYPE, SIZE_TYPE]
-
     for i, stencil in enumerate([stencil1, stencil2]):
         testee = itir.Program(
             id=f"sum_3fields_{i}",
             function_definitions=[],
             params=[
-                itir.Sym(id="x"),
-                itir.Sym(id="y"),
-                itir.Sym(id="w"),
-                itir.Sym(id="z"),
-                itir.Sym(id="size"),
+                itir.Sym(id="x", type=IFTYPE),
+                itir.Sym(id="y", type=IFTYPE),
+                itir.Sym(id="w", type=IFTYPE),
+                itir.Sym(id="z", type=IFTYPE),
+                itir.Sym(id="size", type=SIZE_TYPE),
             ],
             declarations=[],
             body=[
@@ -273,7 +283,7 @@ def test_gtir_sum3():
             ],
         )
 
-        sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, {})
+        sdfg = dace_backend.build_sdfg_from_gtir(testee, {})
 
         d = np.empty_like(a)
 
@@ -289,13 +299,13 @@ def test_gtir_select():
         id="select_2sums",
         function_definitions=[],
         params=[
-            itir.Sym(id="x"),
-            itir.Sym(id="y"),
-            itir.Sym(id="w"),
-            itir.Sym(id="z"),
-            itir.Sym(id="cond"),
-            itir.Sym(id="scalar"),
-            itir.Sym(id="size"),
+            itir.Sym(id="x", type=IFTYPE),
+            itir.Sym(id="y", type=IFTYPE),
+            itir.Sym(id="w", type=IFTYPE),
+            itir.Sym(id="z", type=IFTYPE),
+            itir.Sym(id="cond", type=ts.ScalarType(ts.ScalarKind.BOOL)),
+            itir.Sym(id="scalar", type=ts.ScalarType(ts.ScalarKind.FLOAT64)),
+            itir.Sym(id="size", type=SIZE_TYPE),
         ],
         declarations=[],
         body=[
@@ -335,16 +345,7 @@ def test_gtir_select():
     b = np.random.rand(N)
     c = np.random.rand(N)
 
-    arg_types = [
-        IFTYPE,
-        IFTYPE,
-        IFTYPE,
-        IFTYPE,
-        ts.ScalarType(ts.ScalarKind.BOOL),
-        ts.ScalarType(ts.ScalarKind.FLOAT64),
-        SIZE_TYPE,
-    ]
-    sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, {})
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, {})
 
     for s in [False, True]:
         d = np.empty_like(a)
@@ -360,11 +361,11 @@ def test_gtir_select_nested():
         id="select_nested",
         function_definitions=[],
         params=[
-            itir.Sym(id="x"),
-            itir.Sym(id="z"),
-            itir.Sym(id="cond_1"),
-            itir.Sym(id="cond_2"),
-            itir.Sym(id="size"),
+            itir.Sym(id="x", type=IFTYPE),
+            itir.Sym(id="z", type=IFTYPE),
+            itir.Sym(id="cond_1", type=ts.ScalarType(ts.ScalarKind.BOOL)),
+            itir.Sym(id="cond_2", type=ts.ScalarType(ts.ScalarKind.BOOL)),
+            itir.Sym(id="size", type=SIZE_TYPE),
         ],
         declarations=[],
         body=[
@@ -405,14 +406,7 @@ def test_gtir_select_nested():
 
     a = np.random.rand(N)
 
-    arg_types = [
-        IFTYPE,
-        IFTYPE,
-        ts.ScalarType(ts.ScalarKind.BOOL),
-        ts.ScalarType(ts.ScalarKind.BOOL),
-        SIZE_TYPE,
-    ]
-    sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, {})
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, {})
 
     for s1 in [False, True]:
         for s2 in [False, True]:
@@ -530,7 +524,6 @@ def test_gtir_cartesian_shift():
 
     IOFFSET_FTYPE = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
 
-    arg_types = [IFTYPE, IOFFSET_FTYPE, IFTYPE, SIZE_TYPE]
     offset_provider = {"IDim": IDim}
 
     for i, stencil in enumerate(
@@ -547,10 +540,10 @@ def test_gtir_cartesian_shift():
             id=f"cartesian_shift_{i}",
             function_definitions=[],
             params=[
-                itir.Sym(id="x"),
-                itir.Sym(id="x_offset"),
-                itir.Sym(id="y"),
-                itir.Sym(id="size"),
+                itir.Sym(id="x", type=IFTYPE),
+                itir.Sym(id="x_offset", type=IOFFSET_FTYPE),
+                itir.Sym(id="y", type=IFTYPE),
+                itir.Sym(id="size", type=SIZE_TYPE),
             ],
             declarations=[],
             body=[
@@ -562,7 +555,7 @@ def test_gtir_cartesian_shift():
             ],
         )
 
-        sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, offset_provider)
+        sdfg = dace_backend.build_sdfg_from_gtir(testee, offset_provider)
 
         FSYMBOLS_tmp = FSYMBOLS.copy()
         FSYMBOLS_tmp["__x_size_0"] = N + OFFSET
@@ -673,15 +666,6 @@ def test_gtir_connectivity_shift():
     VE_FTYPE = ts.FieldType(dims=[Vertex, Edge], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
     CELL_OFFSET_FTYPE = ts.FieldType(dims=[Cell], dtype=SIZE_TYPE)
 
-    arg_types = [
-        VE_FTYPE,
-        CELL_OFFSET_FTYPE,
-        CELL_OFFSET_FTYPE,
-        CFTYPE,
-        SIZE_TYPE,
-        SIZE_TYPE,
-    ]
-
     connectivity_C2E = SIMPLE_MESH.offset_provider["C2E"]
     assert isinstance(connectivity_C2E, NeighborTable)
     connectivity_C2V = SIMPLE_MESH.offset_provider["C2V"]
@@ -699,12 +683,12 @@ def test_gtir_connectivity_shift():
             id=f"connectivity_shift_2d_{i}",
             function_definitions=[],
             params=[
-                itir.Sym(id="ve_field"),
-                itir.Sym(id="c2e_offset"),
-                itir.Sym(id="c2v_offset"),
-                itir.Sym(id="cells"),
-                itir.Sym(id="ncells"),
-                itir.Sym(id="nvertices"),
+                itir.Sym(id="ve_field", type=VE_FTYPE),
+                itir.Sym(id="c2e_offset", type=CELL_OFFSET_FTYPE),
+                itir.Sym(id="c2v_offset", type=CELL_OFFSET_FTYPE),
+                itir.Sym(id="cells", type=CFTYPE),
+                itir.Sym(id="ncells", type=SIZE_TYPE),
+                itir.Sym(id="nvertices", type=SIZE_TYPE),
             ],
             declarations=[],
             body=[
@@ -716,7 +700,7 @@ def test_gtir_connectivity_shift():
             ],
         )
 
-        sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, SIMPLE_MESH.offset_provider)
+        sdfg = dace_backend.build_sdfg_from_gtir(testee, SIMPLE_MESH.offset_provider)
 
         c = np.empty(SIMPLE_MESH.num_cells)
 
@@ -752,10 +736,10 @@ def test_gtir_connectivity_shift_chain():
         id="connectivity_shift_chain",
         function_definitions=[],
         params=[
-            itir.Sym(id="edges"),
-            itir.Sym(id="edges_out"),
-            itir.Sym(id="nedges"),
-            itir.Sym(id="nvertices"),
+            itir.Sym(id="edges", type=EFTYPE),
+            itir.Sym(id="edges_out", type=EFTYPE),
+            itir.Sym(id="nedges", type=SIZE_TYPE),
+            itir.Sym(id="nvertices", type=SIZE_TYPE),
         ],
         declarations=[],
         body=[
@@ -779,8 +763,7 @@ def test_gtir_connectivity_shift_chain():
         ],
     )
 
-    arg_types = [EFTYPE, EFTYPE, SIZE_TYPE, SIZE_TYPE]
-    sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, SIMPLE_MESH.offset_provider)
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, SIMPLE_MESH.offset_provider)
 
     connectivity_E2V = SIMPLE_MESH.offset_provider["E2V"]
     assert isinstance(connectivity_E2V, NeighborTable)

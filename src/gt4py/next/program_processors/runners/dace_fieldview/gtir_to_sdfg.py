@@ -45,16 +45,13 @@ class GTIRToSDFG(eve.NodeVisitor):
     from where to continue building the SDFG.
     """
 
-    param_types: list[ts.DataType]
     offset_provider: dict[str, Connectivity | Dimension]
     symbol_types: dict[str, ts.FieldType | ts.ScalarType]
 
     def __init__(
         self,
-        param_types: list[ts.DataType],
         offset_provider: dict[str, Connectivity | Dimension],
     ):
-        self.param_types = param_types
         self.offset_provider = offset_provider
         self.symbol_types = {}
 
@@ -128,7 +125,9 @@ class GTIRToSDFG(eve.NodeVisitor):
 
         Returns a list of array nodes containing the result fields.
 
-        TODO: do we need to return the GT4Py `FieldType`/`ScalarType`?
+        TODO: Do we need to return the GT4Py `FieldType`/`ScalarType`? It is needed
+        in case the transient arrays containing the expression result are not guaranteed
+        to have the same memory layout as the target array.
         """
         field_builder: gtir_builtin_translators.SDFGFieldBuilder = self.visit(
             node, sdfg=sdfg, head_state=head_state
@@ -160,11 +159,6 @@ class GTIRToSDFG(eve.NodeVisitor):
         if node.function_definitions:
             raise NotImplementedError("Functions expected to be inlined as lambda calls.")
 
-        if len(node.params) != len(self.param_types):
-            raise RuntimeError(
-                "The provided list of parameter types has different length than SDFG parameter list."
-            )
-
         sdfg = dace.SDFG(node.id)
         sdfg.debuginfo = dace_fieldview_util.debuginfo(node, sdfg.debuginfo)
         entry_state = sdfg.add_state("program_entry", is_start_block=True)
@@ -176,15 +170,14 @@ class GTIRToSDFG(eve.NodeVisitor):
                 temp_symbols |= self._add_storage_for_temporary(decl)
 
             # define symbols for shape and offsets of temporary arrays as interstate edge symbols
-            # TODO(edopao): use new `add_state_after` function available in next dace release
-            head_state = sdfg.add_state_after(entry_state, "init_temps")
-            sdfg.edges_between(entry_state, head_state)[0].assignments = temp_symbols
+            head_state = sdfg.add_state_after(entry_state, "init_temps", assignments=temp_symbols)
         else:
             head_state = entry_state
 
         # add non-transient arrays and/or SDFG symbols for the program arguments
-        for param, type_ in zip(node.params, self.param_types, strict=True):
-            self._add_storage(sdfg, str(param.id), type_)
+        for param in node.params:
+            assert isinstance(param.type, ts.DataType)
+            self._add_storage(sdfg, str(param.id), param.type)
 
         # add SDFG storage for connectivity tables
         for offset, offset_provider in dace_fieldview_util.filter_connectivities(
