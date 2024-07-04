@@ -56,7 +56,10 @@ class PrimitiveTranslator(abc.ABC):
 
     @final
     def add_local_storage(
-        self, data_type: ts.FieldType | ts.ScalarType, shape: list[str]
+        self,
+        data_type: ts.FieldType | ts.ScalarType,
+        shape: Optional[list[dace.symbolic.SymbolicType]] = None,
+        offset: Optional[list[dace.symbolic.SymbolicType]] = None,
     ) -> dace.nodes.AccessNode:
         """
         Allocates temporary storage to be used in the local scope for intermediate results.
@@ -64,11 +67,14 @@ class PrimitiveTranslator(abc.ABC):
         The storage is allocate with unique names to enable SSA optimization in the compilation phase.
         """
         if isinstance(data_type, ts.FieldType):
+            assert shape
             assert len(data_type.dims) == len(shape)
             dtype = dace_fieldview_util.as_dace_type(data_type.dtype)
-            name, _ = self.sdfg.add_array("var", shape, dtype, find_new_name=True, transient=True)
+            name, _ = self.sdfg.add_array(
+                "var", shape, dtype, offset=offset, find_new_name=True, transient=True
+            )
         else:
-            assert len(shape) == 0
+            assert not shape
             dtype = dace_fieldview_util.as_dace_type(data_type)
             name, _ = self.sdfg.add_scalar("var", dtype, find_new_name=True, transient=True)
         return self.head_state.add_access(name)
@@ -201,6 +207,9 @@ class AsFieldOp(PrimitiveTranslator):
             (ub - lb)
             for _, lb, ub in self.field_domain
         ]
+        field_offset: Optional[list[dace.symbolic.SymbolicType]] = None
+        if any(lb != 0 for _, lb, _ in self.field_domain):
+            field_offset = [lb for _, lb, _ in self.field_domain]
         if isinstance(output_desc, dace.data.Array):
             # extend the result arrays with the local dimensions added by the field operator e.g. `neighbors`)
             assert isinstance(output_expr.field_type, ts.FieldType)
@@ -215,13 +224,15 @@ class AsFieldOp(PrimitiveTranslator):
 
         # TODO: use `self.field_dtype` directly, without passing through `dtype`
         field_type = ts.FieldType(field_dims, dtype)
-        field_node = self.add_local_storage(field_type, field_shape)
+        field_node = self.add_local_storage(field_type, field_shape, field_offset)
 
         # assume tasklet with single output
         output_subset = [
             DIMENSION_INDEX_FMT.format(dim=dim.value) for dim, _, _ in self.field_domain
         ]
         if isinstance(output_desc, dace.data.Array):
+            # additional local dimension for neighbors
+            assert output_desc.offset is None
             output_subset.extend(f"0:{size}" for size in output_desc.shape)
 
         self.head_state.add_memlet_path(
@@ -311,22 +322,21 @@ class Select(PrimitiveTranslator):
             assert isinstance(false_br_node, dace.nodes.AccessNode)
             desc = true_br_node.desc(self.sdfg)
             assert false_br_node.desc(self.sdfg) == desc
-            access_node = self.add_local_storage(true_br_type, desc.shape)
-            output_nodes.append((access_node, true_br_type))
+            data_name, _ = self.sdfg.add_temp_transient_like(desc)
+            output_nodes.append((self.head_state.add_access(data_name), true_br_type))
 
-            data_name = access_node.data
             true_br_output_node = true_state.add_access(data_name)
             true_state.add_nedge(
                 true_br_node,
                 true_br_output_node,
-                dace.Memlet.from_array(data_name, access_node.desc(self.sdfg)),
+                dace.Memlet.from_array(data_name, desc),
             )
 
             false_br_output_node = false_state.add_access(data_name)
             false_state.add_nedge(
                 false_br_node,
                 false_br_output_node,
-                dace.Memlet.from_array(data_name, access_node.desc(self.sdfg)),
+                dace.Memlet.from_array(data_name, desc),
             )
 
         return output_nodes
@@ -364,7 +374,7 @@ class SymbolRef(PrimitiveTranslator):
                 {"__out"},
                 f"__out = {self.sym_name}",
             )
-            sym_node = self.add_local_storage(self.sym_type, shape=[])
+            sym_node = self.add_local_storage(self.sym_type)
             self.head_state.add_edge(
                 tasklet_node,
                 "__out",

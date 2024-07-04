@@ -437,7 +437,11 @@ def test_gtir_cartesian_shift():
     DELTA = 3
     OFFSET = 1
     domain = im.call("cartesian_domain")(
-        im.call("named_range")(itir.AxisLiteral(value=IDim.value), 0, "size")
+        im.call("named_range")(
+            itir.AxisLiteral(value=IDim.value),
+            0,
+            im.minus(itir.SymRef(id="size"), itir.Literal(value=str(OFFSET), type=SIZE_TYPE)),
+        )
     )
 
     # cartesian shift with literal integer offset
@@ -536,7 +540,7 @@ def test_gtir_cartesian_shift():
         )(),
     )
 
-    a = np.random.rand(N + OFFSET)
+    a = np.random.rand(N)
     a_offset = np.full(N, OFFSET, dtype=np.int32)
     b = np.empty(N)
 
@@ -576,10 +580,9 @@ def test_gtir_cartesian_shift():
         sdfg = dace_backend.build_sdfg_from_gtir(testee, offset_provider)
 
         FSYMBOLS_tmp = FSYMBOLS.copy()
-        FSYMBOLS_tmp["__x_size_0"] = N + OFFSET
         FSYMBOLS_tmp["__x_offset_stride_0"] = 1
         sdfg(x=a, x_offset=a_offset, y=b, **FSYMBOLS_tmp)
-        assert np.allclose(a[OFFSET:] + DELTA, b)
+        assert np.allclose(a[OFFSET:] + DELTA, b[:-OFFSET])
 
 
 def test_gtir_connectivity_shift():
