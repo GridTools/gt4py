@@ -16,15 +16,10 @@ import typing
 from typing import Callable, Iterable, Union
 
 from gt4py._core import definitions as core_defs
+from gt4py.eve.extended_typing import Any, Dict, Tuple
 from gt4py.next.iterator import ir as itir
-from gt4py.next.type_system import type_specifications as ts, type_translation
 from gt4py.next.iterator.transforms.global_tmps import SymbolicDomain, SymbolicRange
-from gt4py.eve.extended_typing import (
-    Any,
-    Dict,
-    Tuple,
-)
-from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
+from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
 def sym(sym_or_name: Union[str, itir.Sym]) -> itir.Sym:
@@ -398,31 +393,21 @@ def map_(op):
     return call(call("map_")(op))
 
 
-def cartesian_domain(ranges: Dict[str, Tuple[Any, Any]], out_field: str,
-                     size_field: list[itir.Literal] = None) -> SymbolicDomain:
-    axis_order = ['IDim', 'JDim', 'KDim']
+def cartesian_domain(ranges: Dict[str, Tuple[Any, Any]]) -> SymbolicDomain:
+    """
+    >>> pformat(cartesian_domain({"IDim": (0, 10), "JDim": (0, 20)}))
+    'c⟨ IDim: [0, 10), JDim: [0, 20) ⟩'
 
-    if size_field is not None:
-        assert len(ranges) == len(size_field)
-    else:
-        size_field = [None] * len(ranges)
+    """
+
+    axis_order = ["IDim", "JDim", "KDim"]
 
     symbolic_ranges = {}
 
-    for index, (axis, (start, stop)) in enumerate(ranges.items()):
+    for axis, (start, stop) in ranges.items():
         if axis not in axis_order:
             raise ValueError("The ranges need to contain either IDim, JDim or KDim.")
-
-        axis_index = axis_order.index(axis)
-        start_expr = ConstantFolding.apply(start)
-
-        if size_field[index] is None:
-            size_field[index] = ref(f"__{out_field}_size_{axis_index}")
-
-        stop_expr = plus(size_field[index], ref(stop) if isinstance(stop, str) else stop)
-        stop_expr = ConstantFolding.apply(stop_expr)
-
-        symbolic_ranges[axis] = SymbolicRange(start_expr, stop_expr)
+        symbolic_ranges[axis] = SymbolicRange(start, stop)
 
     domain = SymbolicDomain(grid_type="cartesian_domain", ranges=symbolic_ranges)
 
