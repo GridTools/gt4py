@@ -80,7 +80,7 @@ gridtools-cpp==2.3.4
 hypothesis==6.0.0
 importlib-resources==5.0; python_version < "3.9"
 isort==5.10
-jax[cpu]==0.4.13
+jax[cpu]==0.4.18; python_version >= "3.10"
 jinja2==3.0.0
 jupytext==1.14
 lark==1.1.2
