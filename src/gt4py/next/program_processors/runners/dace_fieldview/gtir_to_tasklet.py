@@ -720,8 +720,14 @@ class LambdaToTasklet(eve.NodeVisitor):
                 )
 
         # TODO: use type inference to determine the result type
-        if len(node_connections) == 1 and isinstance(node_connections["__inp_0"], MemletExpr):
-            dtype = node_connections["__inp_0"].node.desc(self.sdfg).dtype
+        if len(node_connections) == 1:
+            dtype = None
+            for conn_name in ["__inp_0", "__inp_1"]:
+                if conn_name in node_connections:
+                    dtype = node_connections[conn_name].node.desc(self.sdfg).dtype
+                    break
+            if dtype is None:
+                raise ValueError("Failed to dtermine the type")
         else:
             node_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
             dtype = dace_fieldview_util.as_dace_type(node_type)
