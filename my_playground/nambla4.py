@@ -47,11 +47,15 @@ SIZE_TYPE = ts.ScalarType(ts.ScalarKind.INT32)
 
 
 def nabla4_np(
-    N: Field[[Edge, KDim], wpfloat],
-    T: Field[[Edge, KDim], wpfloat],
+    nabv_norm: Field[[Edge, KDim], wpfloat],
+    nabv_tang: Field[[Edge, KDim], wpfloat],
+    z_nabla2_e: Field[[Edge, KDim], wpfloat],
+
     **kwargs,  # Allows to use the same call argument object as for the SDFG
 ) -> Field[[Edge, KDim], wpfloat]:
-    return N + T
+    N = nabv_norm - 2 * z_nabla2_e
+    T = nabv_tang - 2 * z_nabla2_e
+    return 4 * (N + T)
 
 
 def dace_strides(
@@ -102,8 +106,10 @@ def build_nambla4_gtir():
         id="nabla4_partial",
         function_definitions=[],
         params=[
-            itir.Sym(id="T", type=EK_FTYPE),
-            itir.Sym(id="N", type=EK_FTYPE),
+            itir.Sym(id="nabv_norm", type=EK_FTYPE),
+            itir.Sym(id="nabv_tang", type=EK_FTYPE),
+            itir.Sym(id="z_nabla2_e", type=EK_FTYPE),
+
             itir.Sym(id="nab4", type=EK_FTYPE),
             itir.Sym(id="num_edges", type=SIZE_TYPE),
             itir.Sym(id="num_k_levels", type=SIZE_TYPE),
@@ -113,27 +119,101 @@ def build_nambla4_gtir():
             itir.SetAt(
                 expr=im.call(
                     im.call("as_fieldop")(
-                        im.lambda_("N_it", "T_it")(im.plus(im.deref("T_it"), im.deref("N_it"))),
+                        im.lambda_("NpT", "const_4")(
+                            im.multiplies_(im.deref("NpT"), im.deref("const_4"))
+                        ),
                         edge_k_domain,
                     )
-                )("N", "T"),
+                )(
+                    # arg: `NpT`
+                    im.call(
+                        im.call("as_fieldop")(
+                            im.lambda_("N", "T")(
+                                im.plus(im.deref("N"), im.deref("T"))
+                            ),
+                            edge_k_domain,
+                        )
+                    )(
+                        # arg: `N`
+                        im.call(
+                            im.call("as_fieldop")(
+                                im.lambda_("xn", "z_nabla2_e2")(
+                                    im.minus(im.deref("xn"), im.deref("z_nabla2_e2"))
+                                ),
+                                edge_k_domain,
+                            )
+                        )(
+                            # arg: `xn`
+                            "nabv_norm",
+
+                            # arg: `z_nabla2_e2`
+                            im.call(
+                                im.call("as_fieldop")(
+                                    im.lambda_("z_nabla2_e", "const_2")(
+                                        im.multiplies_(im.deref("z_nabla2_e"), im.deref("const_2"))
+                                    ),
+                                    edge_k_domain,
+                                )
+                            )(
+                                # arg: `z_nabla2_e`
+                                "z_nabla2_e", 
+                                # arg: `const_2`
+                                2.0
+                            ),
+                        ),
+
+                        # arg: `T`
+                        im.call(
+                            im.call("as_fieldop")(
+                                im.lambda_("xt", "z_nabla2_e2")(
+                                    im.minus(im.deref("xt"), im.deref("z_nabla2_e2"))
+                                ),
+                                edge_k_domain
+                            )
+                        )(
+                            # arg: `xt`
+                            "nabv_tang",
+
+                            # arg: `z_nabla2_e2`
+                            im.call(
+                                im.call("as_fieldop")(
+                                    im.lambda_("z_nabla2_e", "const_2")(
+                                        im.multiplies_(im.deref("z_nabla2_e"), im.deref("const_2"))
+                                    ),
+                                    edge_k_domain,
+                                )
+                            )(
+                                # arg: `z_nabla2_e`
+                                "z_nabla2_e", 
+                                # arg: `const_2`
+                                2.0
+                            ),
+                        ),
+                    ),
+
+                    # arg: `const_4`
+                    4.0,
+                ),
                 domain=edge_k_domain,
                 target=itir.SymRef(id="nab4"),
             )
+
         ],
     )
 
     offset_provider = {}
 
-    N = np.random.rand(num_edges, num_k_levels)
-    T = np.random.rand(num_edges, num_k_levels)
-    nab4 = np.empty_like(N)
+    nabv_norm = np.random.rand(num_edges, num_k_levels)
+    nabv_tang = np.random.rand(num_edges, num_k_levels)
+    z_nabla2_e = np.random.rand(num_edges, num_k_levels)
+    nab4 = np.empty((num_edges, num_k_levels), dtype=nabv_norm.dtype)
 
     sdfg = dace_backend.build_sdfg_from_gtir(nabla4prog, offset_provider)
 
     call_args = dict(
-        T=T,
-        N=N,
+        nabv_norm=nabv_norm,
+        nabv_tang=nabv_tang,
+        z_nabla2_e=z_nabla2_e,
         nab4=nab4,
         num_edges=num_edges,
         num_k_levels=num_k_levels,
@@ -149,29 +229,3 @@ def build_nambla4_gtir():
 
 if "__main__" == __name__:
     build_nambla4_gtir()
-
-    """
-        body=[
-            itir.SetAt(
-                expr=im.call(
-                    im.call("as_fieldop")(
-                        im.lambda_("NpT")(
-                            im.multiplies_(im.deref("NpT"), 4.0)
-                        ),
-                        edge_k_domain,
-                    )
-                )(
-                    im.call(
-                        im.call("as_fieldop")(
-                            im.lambda_("N", "T")(
-                                im.plus(im.deref("N"), im.deref("T"))
-                            ),
-                            edge_k_domain,
-                        )
-                    )("N", "T")
-                ),
-                domain=edge_k_domain,
-                target=itir.SymRef(id="nab4"),
-            )
-        ],
-        """
