@@ -209,19 +209,18 @@ class LambdaToTasklet(eve.NodeVisitor):
         src_node: dace.nodes.Node,
         src_connector: Optional[str] = None,
     ) -> ValueExpr:
-        data_type: ts.FieldType | ts.ScalarType
-        var_name, _ = self.sdfg.add_scalar("var", dtype, transient=True, find_new_name=True)
-        var_subset = "0"
+        temp_name = self.sdfg.temp_data_name()
+        self.sdfg.add_scalar(temp_name, dtype, transient=True)
         data_type = dace_fieldview_util.as_scalar_type(str(dtype.as_numpy_dtype()))
-        var_node = self.state.add_access(var_name)
+        temp_node = self.state.add_access(temp_name)
         self.state.add_edge(
             src_node,
             src_connector,
-            var_node,
+            temp_node,
             None,
-            dace.Memlet(data=var_node.data, subset=var_subset),
+            dace.Memlet(data=temp_name, subset="0"),
         )
-        return ValueExpr(var_node, data_type)
+        return ValueExpr(temp_node, data_type)
 
     def _visit_deref(self, node: itir.FunCall) -> MemletExpr | ValueExpr:
         assert len(node.args) == 1
@@ -433,7 +432,8 @@ class LambdaToTasklet(eve.NodeVisitor):
             reduce_axes = [ndims]
         else:
             reduce_axes = None
-        res_var, res_desc = self.sdfg.add_scalar("var", dtype, find_new_name=True, transient=True)
+
+        # TODO: use type ineference
         res_type = dace_fieldview_util.as_scalar_type(str(dtype.as_numpy_dtype()))
 
         reduce_wcr = "lambda x, y: " + MATH_BUILTINS_MAPPING[op_name].format("x", "y")
@@ -452,13 +452,16 @@ class LambdaToTasklet(eve.NodeVisitor):
                 dace.Memlet.from_array(input_expr.node.data, input_desc),
             )
 
-        res_node = self.state.add_access(res_var)
+        temp_name = self.sdfg.temp_data_name()
+        self.sdfg.add_scalar(temp_name, dtype, transient=True)
+        temp_node = self.state.add_access(temp_name)
+
         self.state.add_nedge(
             reduce_node,
-            res_node,
-            dace.Memlet.from_array(res_var, res_desc),
+            temp_node,
+            dace.Memlet(data=temp_name, subset="0"),
         )
-        return ValueExpr(res_node, res_type)
+        return ValueExpr(temp_node, res_type)
 
     def _split_shift_args(
         self, args: list[itir.Expr]
