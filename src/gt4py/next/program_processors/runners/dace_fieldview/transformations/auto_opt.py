@@ -37,10 +37,9 @@ def dace_auto_optimize(
         kwargs: Are forwarded to the underlying auto optimized exposed by DaCe.
     """
     from dace.transformation.auto.auto_optimize import auto_optimize as _auto_optimize
-    from dace.transformation.dataflow import InLocalStorage, OutLocalStorage
 
     # Now put output storages everywhere to make auto optimizer less likely to fail.
-    sdfg.apply_transformations_repeated([InLocalStorage, OutLocalStorage])
+    # sdfg.apply_transformations_repeated([InLocalStorage, OutLocalStorage])  # noqa: ERA001 [commented-out-code]
 
     # Now the optimization.
     sdfg = _auto_optimize(sdfg, device=device, **kwargs)
