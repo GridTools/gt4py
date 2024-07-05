@@ -51,18 +51,15 @@ def nabla4_np(
     nabv_tang: Field[[Edge, KDim], wpfloat],
     z_nabla2_e: Field[[Edge, KDim], wpfloat],
     inv_vert_vert_length: Field[[Edge], wpfloat],
-
     inv_primal_edge_length: Field[[Edge], wpfloat],
-
     **kwargs,  # Allows to use the same call argument object as for the SDFG
 ) -> Field[[Edge, KDim], wpfloat]:
-
     N = nabv_norm - 2 * z_nabla2_e
-    ell_v2 = inv_vert_vert_length ** 2
+    ell_v2 = inv_vert_vert_length**2
     N_ellv2 = N * ell_v2.reshape((-1, 1))
 
     T = nabv_tang - 2 * z_nabla2_e
-    ell_e2 = inv_primal_edge_length ** 2
+    ell_e2 = inv_primal_edge_length**2
     T_elle2 = T * ell_e2.reshape((-1, 1))
 
     return 4 * (N_ellv2 + T_elle2)
@@ -168,7 +165,6 @@ def build_nambla4_gtir():
                                 "inv_vert_vert_length"
                             ),
                             # end arg: `ell_v2`
-
                             # arg: `N`
                             im.call(
                                 im.call("as_fieldop")(
@@ -180,27 +176,27 @@ def build_nambla4_gtir():
                             )(
                                 # arg: `xn`
                                 "nabv_norm",
-
                                 # arg: `z_nabla2_e2`
                                 im.call(
                                     im.call("as_fieldop")(
                                         im.lambda_("z_nabla2_e", "const_2")(
-                                            im.multiplies_(im.deref("z_nabla2_e"), im.deref("const_2"))
+                                            im.multiplies_(
+                                                im.deref("z_nabla2_e"), im.deref("const_2")
+                                            )
                                         ),
                                         edge_k_domain,
                                     )
                                 )(
                                     # arg: `z_nabla2_e`
-                                    "z_nabla2_e", 
+                                    "z_nabla2_e",
                                     # arg: `const_2`
-                                    2.0
+                                    2.0,
                                 ),
                                 # end arg: `z_nabla2_e2`
                             ),
                             # end arg: `N`
                         ),
                         # end arg: `N_ell2`
-
                         # arg: `T_ell2`
                         im.call(
                             im.call("as_fieldop")(
@@ -223,32 +219,32 @@ def build_nambla4_gtir():
                                 "inv_primal_edge_length"
                             ),
                             # end arg: `ell_e2`
-
                             # arg: `T`
                             im.call(
                                 im.call("as_fieldop")(
                                     im.lambda_("xt", "z_nabla2_e2")(
                                         im.minus(im.deref("xt"), im.deref("z_nabla2_e2"))
                                     ),
-                                    edge_k_domain
+                                    edge_k_domain,
                                 )
                             )(
                                 # arg: `xt`
                                 "nabv_tang",
-
                                 # arg: `z_nabla2_e2`
                                 im.call(
                                     im.call("as_fieldop")(
                                         im.lambda_("z_nabla2_e", "const_2")(
-                                            im.multiplies_(im.deref("z_nabla2_e"), im.deref("const_2"))
+                                            im.multiplies_(
+                                                im.deref("z_nabla2_e"), im.deref("const_2")
+                                            )
                                         ),
                                         edge_k_domain,
                                     )
                                 )(
                                     # arg: `z_nabla2_e`
-                                    "z_nabla2_e", 
+                                    "z_nabla2_e",
                                     # arg: `const_2`
-                                    2.0
+                                    2.0,
                                 ),
                             ),
                             # end arg: `T`
@@ -256,14 +252,12 @@ def build_nambla4_gtir():
                         # end arg: `T_ell2`
                     ),
                     # end arg: `NpT`
-
                     # arg: `const_4`
                     4.0,
                 ),
                 domain=edge_k_domain,
                 target=itir.SymRef(id="nab4"),
             )
-
         ],
     )
 
