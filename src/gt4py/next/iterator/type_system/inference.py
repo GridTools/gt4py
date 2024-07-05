@@ -331,6 +331,11 @@ class ITIRTypeInference(eve.NodeTranslator):
             allow_undeclared_symbols: Allow references to symbols that don't have a corresponding
               declaration. This is useful for testing or inference on partially inferred sub-nodes.
 
+        Preconditions:
+
+        All parameters in :class:`itir.Program` and :class:`itir.FencilDefinition` must have a type
+        defined, as they are the starting point for type propagation.
+
         Design decisions:
         - Lamba functions are monomorphic
         Builtin functions like ``plus`` are by design polymorphic and only their argument and return
@@ -377,6 +382,12 @@ class ITIRTypeInference(eve.NodeTranslator):
         #   parts of a program.
         if not allow_undeclared_symbols:
             node = RemoveTypes().visit(node)
+
+        if isinstance(node, (itir.FencilDefinition, itir.Program)):
+            assert all(isinstance(param.type, ts.DataType) for param in node.params), (
+                "All parameters in 'itir.Program' and 'itir.FencilDefinition' must have a type "
+                "defined, as they are the starting point for type propagation.",
+            )
 
         instance = cls(
             offset_provider=offset_provider,
@@ -601,6 +612,7 @@ class ITIRTypeInference(eve.NodeTranslator):
         # grammar builtins
         if is_call_to(node, "cast_"):
             value, type_constructor = node.args
+            self.visit(value, ctx=ctx)  # ensure types in value are also inferred
             assert (
                 isinstance(type_constructor, itir.SymRef)
                 and type_constructor.id in itir.TYPEBUILTINS

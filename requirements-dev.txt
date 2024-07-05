@@ -7,6 +7,7 @@
 aenum==3.1.15             # via -c constraints.txt, dace
 alabaster==0.7.13         # via -c constraints.txt, sphinx
 annotated-types==0.7.0    # via -c constraints.txt, pydantic
+appnope==0.1.4            # via -c constraints.txt, ipykernel, ipython
 asttokens==2.4.1          # via -c constraints.txt, devtools, stack-data
 astunparse==1.6.3 ; python_version < "3.9"  # via -c constraints.txt, dace, gt4py (pyproject.toml)
 attrs==23.2.0             # via -c constraints.txt, flake8-bugbear, flake8-eradicate, gt4py (pyproject.toml), hypothesis, jsonschema, referencing
@@ -24,7 +25,7 @@ cffi==1.16.0              # via -c constraints.txt, cryptography
 cfgv==3.4.0               # via -c constraints.txt, pre-commit
 chardet==5.2.0            # via -c constraints.txt, tox
 charset-normalizer==3.3.2  # via -c constraints.txt, requests
-clang-format==18.1.7      # via -c constraints.txt, -r requirements-dev.in, gt4py (pyproject.toml)
+clang-format==18.1.8      # via -c constraints.txt, -r requirements-dev.in, gt4py (pyproject.toml)
 click==8.1.7              # via -c constraints.txt, black, bump-my-version, gt4py (pyproject.toml), pip-tools, rich-click
 cmake==3.29.6             # via -c constraints.txt, gt4py (pyproject.toml)
 cogapp==3.4.1             # via -c constraints.txt, -r requirements-dev.in
@@ -65,19 +66,17 @@ fonttools==4.53.0         # via -c constraints.txt, matplotlib
 fparser==0.1.4            # via -c constraints.txt, dace
 frozendict==2.4.4         # via -c constraints.txt, gt4py (pyproject.toml)
 gridtools-cpp==2.3.4      # via -c constraints.txt, gt4py (pyproject.toml)
-hypothesis==6.104.1       # via -c constraints.txt, -r requirements-dev.in, gt4py (pyproject.toml)
+hypothesis==6.104.2       # via -c constraints.txt, -r requirements-dev.in, gt4py (pyproject.toml)
 identify==2.5.36          # via -c constraints.txt, pre-commit
 idna==3.7                 # via -c constraints.txt, requests
 imagesize==1.4.1          # via -c constraints.txt, sphinx
-importlib-metadata==8.0.0  # via -c constraints.txt, build, jax, jupyter-client, sphinx
+importlib-metadata==8.0.0  # via -c constraints.txt, build, jupyter-client, sphinx
 importlib-resources==6.4.0 ; python_version < "3.9"  # via -c constraints.txt, gt4py (pyproject.toml), jsonschema, jsonschema-specifications, matplotlib
 inflection==0.5.1         # via -c constraints.txt, pytest-factoryboy
 iniconfig==2.0.0          # via -c constraints.txt, pytest
-ipykernel==6.29.4         # via -c constraints.txt, nbmake
+ipykernel==6.29.5         # via -c constraints.txt, nbmake
 ipython==8.12.3           # via -c constraints.txt, ipykernel
 isort==5.13.2             # via -c constraints.txt, -r requirements-dev.in
-jax[cpu]==0.4.13          # via -c constraints.txt, gt4py (pyproject.toml)
-jaxlib==0.4.13            # via -c constraints.txt, jax
 jedi==0.19.1              # via -c constraints.txt, ipython
 jinja2==3.1.4             # via -c constraints.txt, dace, gt4py (pyproject.toml), sphinx
 jsonschema==4.22.0        # via -c constraints.txt, nbformat
@@ -95,7 +94,6 @@ matplotlib-inline==0.1.7  # via -c constraints.txt, ipykernel, ipython
 mccabe==0.7.0             # via -c constraints.txt, flake8
 mdit-py-plugins==0.4.1    # via -c constraints.txt, jupytext
 mdurl==0.1.2              # via -c constraints.txt, markdown-it-py
-ml-dtypes==0.2.0          # via -c constraints.txt, jax, jaxlib
 mpmath==1.3.0             # via -c constraints.txt, sympy
 mypy==1.10.1              # via -c constraints.txt, -r requirements-dev.in
 mypy-extensions==1.0.0    # via -c constraints.txt, black, mypy
@@ -107,15 +105,14 @@ nest-asyncio==1.6.0       # via -c constraints.txt, ipykernel, nbclient
 networkx==3.1             # via -c constraints.txt, dace
 ninja==1.11.1.1           # via -c constraints.txt, gt4py (pyproject.toml)
 nodeenv==1.9.1            # via -c constraints.txt, pre-commit
-numpy==1.24.4             # via -c constraints.txt, contourpy, dace, gt4py (pyproject.toml), jax, jaxlib, matplotlib, ml-dtypes, opt-einsum, scipy, types-jack-client
-opt-einsum==3.3.0         # via -c constraints.txt, jax
+numpy==1.24.4             # via -c constraints.txt, contourpy, dace, gt4py (pyproject.toml), matplotlib, types-jack-client
 ordered-set==4.1.0        # via -c constraints.txt, deepdiff
 packaging==24.1           # via -c constraints.txt, black, build, gt4py (pyproject.toml), ipykernel, jupytext, matplotlib, pipdeptree, pyproject-api, pytest, pytest-factoryboy, setuptools-scm, sphinx, tox
 parso==0.8.4              # via -c constraints.txt, jedi
 pathspec==0.12.1          # via -c constraints.txt, black
 pexpect==4.9.0            # via -c constraints.txt, ipython
 pickleshare==0.7.5        # via -c constraints.txt, ipython
-pillow==10.3.0            # via -c constraints.txt, matplotlib
+pillow==10.4.0            # via -c constraints.txt, matplotlib
 pip-tools==7.4.1          # via -c constraints.txt, -r requirements-dev.in
 pipdeptree==2.23.0        # via -c constraints.txt, -r requirements-dev.in
 pkgutil-resolve-name==1.3.10  # via -c constraints.txt, jsonschema
@@ -130,8 +127,8 @@ pure-eval==0.2.2          # via -c constraints.txt, stack-data
 pybind11==2.13.1          # via -c constraints.txt, gt4py (pyproject.toml)
 pycodestyle==2.12.0       # via -c constraints.txt, flake8, flake8-debugger
 pycparser==2.22           # via -c constraints.txt, cffi
-pydantic==2.7.4           # via -c constraints.txt, bump-my-version, pydantic-settings
-pydantic-core==2.18.4     # via -c constraints.txt, pydantic
+pydantic==2.8.0           # via -c constraints.txt, bump-my-version, pydantic-settings
+pydantic-core==2.20.0     # via -c constraints.txt, pydantic
 pydantic-settings==2.3.4  # via -c constraints.txt, bump-my-version
 pydocstyle==6.3.0         # via -c constraints.txt, flake8-docstrings
 pyflakes==3.2.0           # via -c constraints.txt, flake8
@@ -157,8 +154,7 @@ restructuredtext-lint==1.4.0  # via -c constraints.txt, flake8-rst-docstrings
 rich==13.7.1              # via -c constraints.txt, bump-my-version, rich-click
 rich-click==1.8.3         # via -c constraints.txt, bump-my-version
 rpds-py==0.18.1           # via -c constraints.txt, jsonschema, referencing
-ruff==0.4.10              # via -c constraints.txt, -r requirements-dev.in
-scipy==1.10.1             # via -c constraints.txt, jax, jaxlib
+ruff==0.5.0               # via -c constraints.txt, -r requirements-dev.in
 setuptools-scm==8.1.0     # via -c constraints.txt, fparser
 six==1.16.0               # via -c constraints.txt, asttokens, astunparse, python-dateutil
 snowballstemmer==2.2.0    # via -c constraints.txt, pydocstyle, sphinx
@@ -283,4 +279,4 @@ zipp==3.19.2              # via -c constraints.txt, importlib-metadata, importli
 
 # The following packages are considered to be unsafe in a requirements file:
 pip==24.1.1               # via -c constraints.txt, pip-tools, pipdeptree
-setuptools==70.1.1        # via -c constraints.txt, gt4py (pyproject.toml), pip-tools, setuptools-scm
+setuptools==70.2.0        # via -c constraints.txt, gt4py (pyproject.toml), pip-tools, setuptools-scm

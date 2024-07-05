@@ -20,15 +20,17 @@ from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_to_sdfg as gtir_dace_translator,
     transformations,  # noqa: F401 [unused-import]  # For development.
 )
-from gt4py.next.type_system import type_specifications as ts
 
 
 def build_sdfg_from_gtir(
     program: itir.Program,
-    arg_types: list[ts.DataType],
     offset_provider: dict[str, Connectivity | Dimension],
 ) -> dace.SDFG:
-    sdfg_genenerator = gtir_dace_translator.GTIRToSDFG(arg_types, offset_provider)
+    """
+    TODO: enable type inference
+    program = itir_type_inference.infer(program, offset_provider=offset_provider)
+    """
+    sdfg_genenerator = gtir_dace_translator.GTIRToSDFG(offset_provider)
     sdfg = sdfg_genenerator.visit(program)
     assert isinstance(sdfg, dace.SDFG)
 
