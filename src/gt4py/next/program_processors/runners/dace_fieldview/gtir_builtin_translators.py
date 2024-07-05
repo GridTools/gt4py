@@ -125,17 +125,11 @@ class AsFieldOp(PrimitiveTranslator):
                 )
                 stencil_args.append(iterator_arg)
 
-        # create map range corresponding to the field operator domain
-        map_ranges = {
-            DIMENSION_INDEX_FMT.format(dim=dim.value): f"{lb}:{ub}" for dim, lb, ub in field_domain
-        }
-        me, mx = state.add_map("field_op", map_ranges)
-
         # represent the field operator as a mapped tasklet graph, which will range over the field domain
         taskgen = gtir_to_tasklet.LambdaToTasklet(
-            sdfg, state, me, sdfg_builder.offset_provider, reduce_identity
+            sdfg, state, sdfg_builder.offset_provider, reduce_identity
         )
-        output_expr = taskgen.visit(stencil_expr, args=stencil_args)
+        input_connections, output_expr = taskgen.visit(stencil_expr, args=stencil_args)
         assert isinstance(output_expr, gtir_to_tasklet.ValueExpr)
         output_desc = output_expr.node.desc(sdfg)
 
@@ -145,9 +139,6 @@ class AsFieldOp(PrimitiveTranslator):
             # the last transient node can be deleted
             last_node_connector = state.in_edges(output_expr.node)[0].src_conn
             state.remove_node(output_expr.node)
-            if len(last_node.in_connectors) == 0:
-                # dace requires an empty edge from map entry node to tasklet node, in case there no input memlets
-                state.add_nedge(me, last_node, dace.Memlet())
         else:
             last_node = output_expr.node
             last_node_connector = None
@@ -188,6 +179,25 @@ class AsFieldOp(PrimitiveTranslator):
             assert set(output_desc.offset) == {0}
             output_subset.extend(f"0:{size}" for size in output_desc.shape)
 
+        # create map range corresponding to the field operator domain
+        map_ranges = {
+            DIMENSION_INDEX_FMT.format(dim=dim.value): f"{lb}:{ub}" for dim, lb, ub in field_domain
+        }
+        me, mx = state.add_map("field_op", map_ranges)
+
+        if len(input_connections) == 0:
+            # dace requires an empty edge from map entry node to tasklet node, in case there no input memlets
+            state.add_nedge(me, last_node, dace.Memlet())
+        else:
+            for data_node, data_subset, lambda_node, lambda_connector in input_connections:
+                memlet = dace.Memlet(data=data_node.data, subset=data_subset)
+                state.add_memlet_path(
+                    data_node,
+                    me,
+                    lambda_node,
+                    dst_conn=lambda_connector,
+                    memlet=memlet,
+                )
         state.add_memlet_path(
             last_node,
             mx,
