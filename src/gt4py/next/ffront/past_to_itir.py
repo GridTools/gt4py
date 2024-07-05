@@ -114,6 +114,7 @@ def _flatten_tuple_expr(node: past.Expr) -> list[past.Name | past.Subscript]:
     raise ValueError("Only 'past.Name', 'past.Subscript' or 'past.TupleExpr' thereof are allowed.")
 
 
+@dataclasses.dataclass
 class ProgramLowering(
     traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrait, NodeTranslator
 ):
@@ -150,6 +151,9 @@ class ProgramLowering(
     [Sym(id=SymbolName('inp')), Sym(id=SymbolName('out')), Sym(id=SymbolName('__inp_size_0')), Sym(id=SymbolName('__out_size_0'))]
     """
 
+    grid_type: common.GridType
+    to_gtir: bool = False  # TODO(havogt): remove after refactoring to GTIR
+
     # TODO(tehrengruber): enable doctests again. For unknown / obscure reasons
     #  the above doctest fails when executed using `pytest --doctest-modules`.
 
@@ -159,11 +163,11 @@ class ProgramLowering(
         node: past.Program,
         function_definitions: list[itir.FunctionDefinition],
         grid_type: common.GridType,
+        to_gtir: bool = False,
     ) -> itir.FencilDefinition:
-        return cls(grid_type=grid_type).visit(node, function_definitions=function_definitions)
-
-    def __init__(self, grid_type: common.GridType):
-        self.grid_type = grid_type
+        return cls(grid_type=grid_type, to_gtir=to_gtir).visit(
+            node, function_definitions=function_definitions
+        )
 
     def _gen_size_params_from_program(self, node: past.Program) -> list[itir.Sym]:
         """Generate symbols for each field param and dimension."""
@@ -192,7 +196,7 @@ class ProgramLowering(
         *,
         function_definitions: list[itir.FunctionDefinition],
         **kwargs: Any,
-    ) -> itir.FencilDefinition:
+    ) -> itir.FencilDefinition | itir.Program:
         # The ITIR does not support dynamically getting the size of a field. As
         #  a workaround we add additional arguments to the fencil definition
         #  containing the size of all fields. The caller of a program is (e.g.
@@ -203,13 +207,28 @@ class ProgramLowering(
         if any("domain" not in body_entry.kwargs for body_entry in node.body):
             params = params + self._gen_size_params_from_program(node)
 
-        closures: list[itir.StencilClosure] = []
+        closures_or_set_ats: list[
+            itir.StencilClosure | itir.SetAt
+        ] = []  # TODO(havogt): fix naming after refactoring to GTIR
         for stmt in node.body:
-            closures.append(self._visit_stencil_call(stmt, **kwargs))
-
-        return itir.FencilDefinition(
-            id=node.id, function_definitions=function_definitions, params=params, closures=closures
-        )
+            closures_or_set_ats.append(self._visit_stencil_call(stmt, **kwargs))
+        if self.to_gtir:
+            assert all(isinstance(s, itir.SetAt) for s in closures_or_set_ats)
+            return itir.Program(
+                id=node.id,
+                function_definitions=function_definitions,
+                params=params,
+                declarations=[],
+                body=closures_or_set_ats,
+            )
+        else:
+            assert all(isinstance(s, itir.StencilClosure) for s in closures_or_set_ats)
+            return itir.FencilDefinition(
+                id=node.id,
+                function_definitions=function_definitions,
+                params=params,
+                closures=closures_or_set_ats,
+            )
 
     def _visit_stencil_call(self, node: past.Call, **kwargs: Any) -> itir.StencilClosure:
         assert isinstance(node.kwargs["out"].type, ts.TypeSpec)
@@ -229,34 +248,43 @@ class ProgramLowering(
 
         lowered_args, lowered_kwargs = self.visit(args, **kwargs), self.visit(node_kwargs, **kwargs)
 
-        stencil_params = []
-        stencil_args: list[itir.Expr] = []
-        for i, arg in enumerate([*args, *node_kwargs]):
-            stencil_params.append(f"__stencil_arg{i}")
-            if isinstance(arg.type, ts.TupleType):
-                # convert into tuple of iterators
-                stencil_args.append(
-                    lowering_utils.to_tuples_of_iterator(f"__stencil_arg{i}", arg.type)
-                )
-            else:
-                stencil_args.append(im.ref(f"__stencil_arg{i}"))
-
-        if isinstance(node.func.type, ts_ffront.ScanOperatorType):
-            # scan operators return an iterator of tuples, just deref directly
-            stencil_body = im.deref(im.call(node.func.id)(*stencil_args))
-        else:
-            # field operators return a tuple of iterators, deref element-wise
-            stencil_body = lowering_utils.process_elements(
-                im.deref, im.call(node.func.id)(*stencil_args), node.func.type.definition.returns
+        if self.to_gtir:
+            return itir.SetAt(
+                expr=im.call(node.func.id)(*lowered_args, *lowered_kwargs.values()),
+                domain=lowered_domain,
+                target=output,
             )
+        else:
+            stencil_params = []
+            stencil_args: list[itir.Expr] = []
+            for i, arg in enumerate([*args, *node_kwargs]):
+                stencil_params.append(f"__stencil_arg{i}")
+                if isinstance(arg.type, ts.TupleType):
+                    # convert into tuple of iterators
+                    stencil_args.append(
+                        lowering_utils.to_tuples_of_iterator(f"__stencil_arg{i}", arg.type)
+                    )
+                else:
+                    stencil_args.append(im.ref(f"__stencil_arg{i}"))
 
-        return itir.StencilClosure(
-            domain=lowered_domain,
-            stencil=im.lambda_(*stencil_params)(stencil_body),
-            inputs=[*lowered_args, *lowered_kwargs.values()],
-            output=output,
-            location=node.location,
-        )
+            if isinstance(node.func.type, ts_ffront.ScanOperatorType):
+                # scan operators return an iterator of tuples, just deref directly
+                stencil_body = im.deref(im.call(node.func.id)(*stencil_args))
+            else:
+                # field operators return a tuple of iterators, deref element-wise
+                stencil_body = lowering_utils.process_elements(
+                    im.deref,
+                    im.call(node.func.id)(*stencil_args),
+                    node.func.type.definition.returns,
+                )
+
+            return itir.StencilClosure(
+                domain=lowered_domain,
+                stencil=im.lambda_(*stencil_params)(stencil_body),
+                inputs=[*lowered_args, *lowered_kwargs.values()],
+                output=output,
+                location=node.location,
+            )
 
     def _visit_slice_bound(
         self,
