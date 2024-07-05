@@ -96,16 +96,16 @@ def make_syms(**kwargs: np.ndarray) -> dict[str, int]:
     return SYMBS
 
 
-def build_nambla4_gtir():
+def build_nambla4_gtir_fieldview(
+        num_edges: int,
+        num_k_levels: int,
+) -> itir.Program:
     edge_k_domain = im.call("unstructured_domain")(
         im.call("named_range")(itir.AxisLiteral(value=Edge.value, kind=Edge.kind), 0, "num_edges"),
         im.call("named_range")(
             itir.AxisLiteral(value=KDim.value, kind=KDim.kind), 0, "num_k_levels"
         ),
     )
-
-    num_edges = 27
-    num_k_levels = 10
 
     EK_FTYPE = ts.FieldType(dims=[Edge, KDim], dtype=wpfloat)
     E_FTYPE = ts.FieldType(dims=[Edge], dtype=wpfloat)
@@ -261,6 +261,29 @@ def build_nambla4_gtir():
         ],
     )
 
+    return nabla4prog
+
+
+
+def verify_nabla4(
+        version: str,
+):
+    num_edges = 27
+    num_k_levels = 10
+
+    if(version == "fieldview"):
+        nabla4prog = build_nambla4_gtir_fieldview(
+                num_edges=num_edges,
+                num_k_levels=num_k_levels,
+        )
+
+    elif(version == "inline"):
+        raise NotImplementedError("`inline` version is not yet implemented.")
+
+    else:
+        raise ValueError(f"The version `{version}` is now known.")
+
+
     offset_provider = {}
 
     nabv_norm = np.random.rand(num_edges, num_k_levels)
@@ -288,8 +311,8 @@ def build_nambla4_gtir():
     ref = nabla4_np(**call_args)
 
     assert np.allclose(ref, nab4)
-    print(f"Test succeeded")
+    print(f"Version({version}): Succeeded")
 
 
 if "__main__" == __name__:
-    build_nambla4_gtir()
+    verify_nabla4("fieldview")
