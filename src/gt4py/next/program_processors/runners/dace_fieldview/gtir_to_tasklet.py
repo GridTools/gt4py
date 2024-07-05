@@ -173,18 +173,18 @@ class LambdaToTasklet(eve.NodeVisitor):
         src_node: dace.nodes.Tasklet,
         src_connector: str,
     ) -> ValueExpr:
-        var_name, _ = self.sdfg.add_scalar("var", dtype, transient=True, find_new_name=True)
-        var_subset = "0"
+        temp_name = self.sdfg.temp_data_name()
+        self.sdfg.add_scalar(temp_name, dtype, transient=True)
         data_type = dace_fieldview_util.as_scalar_type(str(dtype.as_numpy_dtype()))
-        var_node = self.state.add_access(var_name)
+        temp_node = self.state.add_access(temp_name)
         self.state.add_edge(
             src_node,
             src_connector,
-            var_node,
+            temp_node,
             None,
-            dace.Memlet(data=var_node.data, subset=var_subset),
+            dace.Memlet(data=temp_name, subset="0"),
         )
-        return ValueExpr(var_node, data_type)
+        return ValueExpr(temp_node, data_type)
 
     def _visit_deref(self, node: itir.FunCall) -> MemletExpr | ValueExpr:
         assert len(node.args) == 1
