@@ -55,6 +55,14 @@ class ValueExpr:
     field_type: ts.FieldType | ts.ScalarType
 
 
+# Define alias for the elements needed to setup input connections to a map scope
+InputConnection: TypeAlias = tuple[
+    dace.nodes.AccessNode,
+    sbs.Range,
+    dace.nodes.Node,
+    Optional[str],
+]
+
 IteratorIndexExpr: TypeAlias = MemletExpr | SymbolExpr | ValueExpr
 
 
@@ -136,36 +144,29 @@ class LambdaToTasklet(eve.NodeVisitor):
     sdfg: dace.SDFG
     state: dace.SDFGState
     offset_provider: dict[str, Connectivity | Dimension]
+    input_connections: list[InputConnection]
     symbol_map: dict[str, IteratorExpr | MemletExpr | SymbolExpr]
 
     def __init__(
         self,
         sdfg: dace.SDFG,
         state: dace.SDFGState,
-        map_entry: dace.nodes.MapEntry,
         offset_provider: dict[str, Connectivity | Dimension],
     ):
         self.sdfg = sdfg
         self.state = state
-        self.map_entry = map_entry
         self.offset_provider = offset_provider
+        self.input_connections = []
         self.symbol_map = {}
 
     def _add_entry_memlet_path(
         self,
-        *path_nodes: dace.nodes.Node,
-        memlet: Optional[dace.Memlet] = None,
-        src_conn: Optional[str] = None,
+        src: dace.nodes.AccessNode,
+        src_subset: sbs.Range,
+        dst_node: dace.nodes.Node,
         dst_conn: Optional[str] = None,
     ) -> None:
-        self.state.add_memlet_path(
-            path_nodes[0],
-            self.map_entry,
-            *path_nodes[1:],
-            memlet=memlet,
-            src_conn=src_conn,
-            dst_conn=dst_conn,
-        )
+        self.input_connections.append((src, src_subset, dst_node, dst_conn))
 
     def _get_tasklet_result(
         self,
@@ -222,9 +223,9 @@ class LambdaToTasklet(eve.NodeVisitor):
                 # add new termination point for this field parameter
                 self._add_entry_memlet_path(
                     it.field,
+                    sbs.Range.from_array(field_desc),
                     deref_node,
-                    dst_conn="field",
-                    memlet=dace.Memlet.from_array(it.field.data, field_desc),
+                    "field",
                 )
 
                 for dim, index_expr in field_indices:
@@ -232,9 +233,9 @@ class LambdaToTasklet(eve.NodeVisitor):
                     if isinstance(index_expr, MemletExpr):
                         self._add_entry_memlet_path(
                             index_expr.node,
+                            index_expr.subset,
                             deref_node,
-                            dst_conn=deref_connector,
-                            memlet=dace.Memlet(data=index_expr.node.data, subset=index_expr.subset),
+                            deref_connector,
                         )
 
                     elif isinstance(index_expr, ValueExpr):
@@ -315,9 +316,9 @@ class LambdaToTasklet(eve.NodeVisitor):
                         dtype = input_expr.node.desc(self.sdfg).dtype
                     self._add_entry_memlet_path(
                         input_expr.node,
+                        input_expr.subset,
                         dynamic_offset_tasklet,
-                        dst_conn=input_connector,
-                        memlet=dace.Memlet(data=input_expr.node.data, subset=input_expr.subset),
+                        input_connector,
                     )
                 elif isinstance(input_expr, ValueExpr):
                     if input_connector == "index":
@@ -364,18 +365,16 @@ class LambdaToTasklet(eve.NodeVisitor):
         )
         self._add_entry_memlet_path(
             offset_table_node,
+            sbs.Range.from_array(offset_table_node.desc(self.sdfg)),
             tasklet_node,
-            dst_conn="table",
-            memlet=dace.Memlet.from_array(
-                offset_table_node.data, offset_table_node.desc(self.sdfg)
-            ),
+            "table",
         )
         if isinstance(offset_expr, MemletExpr):
             self._add_entry_memlet_path(
                 offset_expr.node,
+                offset_expr.subset,
                 tasklet_node,
-                dst_conn="offset",
-                memlet=dace.Memlet(data=offset_expr.node.data, subset=offset_expr.subset),
+                "offset",
             )
         else:
             self.state.add_edge(
@@ -520,9 +519,9 @@ class LambdaToTasklet(eve.NodeVisitor):
             else:
                 self._add_entry_memlet_path(
                     arg_expr.node,
+                    arg_expr.subset,
                     tasklet_node,
-                    dst_conn=connector,
-                    memlet=dace.Memlet(data=arg_expr.node.data, subset=arg_expr.subset),
+                    connector,
                 )
 
         # TODO: use type inference to determine the result type
@@ -542,32 +541,30 @@ class LambdaToTasklet(eve.NodeVisitor):
 
     def visit_Lambda(
         self, node: itir.Lambda, args: list[IteratorExpr | MemletExpr | SymbolExpr]
-    ) -> ValueExpr:
+    ) -> tuple[list[InputConnection], ValueExpr]:
         for p, arg in zip(node.params, args, strict=True):
             self.symbol_map[str(p.id)] = arg
         output_expr: MemletExpr | SymbolExpr | ValueExpr = self.visit(node.expr)
         if isinstance(output_expr, ValueExpr):
-            return output_expr
+            return self.input_connections, output_expr
 
         if isinstance(output_expr, MemletExpr):
             # special case where the field operator is simply copying data from source to destination node
-            dtype = self.sdfg.arrays[output_expr.node.data].dtype
-            scalar_type = dace_fieldview_util.as_scalar_type(str(dtype.as_numpy_dtype()))
-            var, _ = self.sdfg.add_scalar("var", dtype, find_new_name=True, transient=True)
-            result_node = self.state.add_access(var)
+            output_dtype = output_expr.node.desc(self.sdfg).dtype
+            tasklet_node = self.state.add_tasklet("copy", {"__inp"}, {"__out"}, "__out = __inp")
             self._add_entry_memlet_path(
                 output_expr.node,
-                result_node,
-                memlet=dace.Memlet(data=output_expr.node.data, subset=output_expr.subset),
+                output_expr.subset,
+                tasklet_node,
+                "__inp",
             )
-            return ValueExpr(result_node, scalar_type)
         else:
             # even simpler case, where a constant value is written to destination node
             output_dtype = output_expr.dtype
             tasklet_node = self.state.add_tasklet(
                 "write", {}, {"__out"}, f"__out = {output_expr.value}"
             )
-            return self._get_tasklet_result(output_dtype, tasklet_node, "__out")
+        return self.input_connections, self._get_tasklet_result(output_dtype, tasklet_node, "__out")
 
     def visit_Literal(self, node: itir.Literal) -> SymbolExpr:
         dtype = dace_fieldview_util.as_dace_type(node.type)

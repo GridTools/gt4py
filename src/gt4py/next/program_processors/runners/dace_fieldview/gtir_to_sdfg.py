@@ -186,7 +186,7 @@ class GTIRToSDFG(SDFGBuilder):
             # We store all connectivity tables as transient arrays here; later, while building
             # the field operator expressions, we change to non transient the tables
             # that are actually used. This way, we avoid adding SDFG arguments for
-            # the connectivity tabkes that are not used.
+            # the connectivity tables that are not used.
             self._add_storage(
                 sdfg, dace_fieldview_util.connectivity_identifier(offset), type_, transient=True
             )
