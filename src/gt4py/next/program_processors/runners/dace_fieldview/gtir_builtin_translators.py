@@ -86,7 +86,7 @@ class AsFieldOp(PrimitiveTranslator):
         # add local storage to compute the field operator over the given domain
         # TODO: use type inference to determine the result type
         node_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
-        field_domain = dace_fieldview_util.get_field_domain(domain_expr)
+        field_domain = dace_fieldview_util.get_domain(domain_expr)
 
         # first visit the list of arguments and build a symbol map
         stencil_args: list[gtir_to_tasklet.IteratorExpr | gtir_to_tasklet.MemletExpr] = []

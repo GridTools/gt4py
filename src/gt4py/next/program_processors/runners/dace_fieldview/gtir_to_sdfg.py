@@ -196,7 +196,7 @@ class GTIRToSDFG(SDFGBuilder):
         target_nodes = self._visit_expression(stmt.target, sdfg, state)
 
         # convert domain expression to dictionary to ease access to dimension boundaries
-        domain = dace_fieldview_util.get_domain(stmt.domain)
+        domain = dace_fieldview_util.get_domain_ranges(stmt.domain)
 
         for expr_node, target_node in zip(expr_nodes, target_nodes, strict=True):
             target_array = sdfg.arrays[target_node.data]
@@ -205,8 +205,7 @@ class GTIRToSDFG(SDFGBuilder):
 
             if isinstance(target_symbol_type, ts.FieldType):
                 subset = ",".join(
-                    f"{domain[dim.value][0]}:{domain[dim.value][1]}"
-                    for dim in target_symbol_type.dims
+                    f"{domain[dim][0]}:{domain[dim][1]}" for dim in target_symbol_type.dims
                 )
             else:
                 assert len(domain) == 0

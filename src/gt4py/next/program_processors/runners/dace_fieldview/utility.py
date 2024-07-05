@@ -16,7 +16,7 @@ from typing import Any, Mapping, Optional
 
 import dace
 
-from gt4py.next.common import Connectivity, Dimension, DimensionKind
+from gt4py.next.common import Connectivity, Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.program_processors.runners.dace_fieldview import gtir_to_tasklet
@@ -78,7 +78,7 @@ def filter_connectivities(offset_provider: Mapping[str, Any]) -> dict[str, Conne
     }
 
 
-def get_field_domain(
+def get_domain(
     node: itir.Expr,
 ) -> list[tuple[Dimension, dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]]:
     """
@@ -99,25 +99,21 @@ def get_field_domain(
             sym_str = get_symbolic_expr(arg)
             sym_val = dace.symbolic.SymExpr(sym_str)
             bounds.append(sym_val)
-        size_value = str(bounds[1] - bounds[0])
-        if size_value.isdigit():
-            dim = Dimension(axis.value, DimensionKind.LOCAL)
-        else:
-            dim = Dimension(axis.value, DimensionKind.HORIZONTAL)
+        dim = Dimension(axis.value, axis.kind)
         domain.append((dim, bounds[0], bounds[1]))
 
     return domain
 
 
-def get_domain(
+def get_domain_ranges(
     node: itir.Expr,
-) -> dict[str, tuple[dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]]:
+) -> dict[Dimension, tuple[dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]]:
     """
     Returns domain represented in dictionary form.
     """
-    field_domain = get_field_domain(node)
+    domain = get_domain(node)
 
-    return {dim.value: (lb, ub) for dim, lb, ub in field_domain}
+    return {dim: (lb, ub) for dim, lb, ub in domain}
 
 
 def get_symbolic_expr(node: itir.Expr) -> str:
