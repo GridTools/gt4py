@@ -96,10 +96,12 @@ def make_syms(**kwargs: np.ndarray) -> dict[str, int]:
     return SYMBS
 
 
-def build_nambla4_gtir_fieldview(
-        num_edges: int,
-        num_k_levels: int,
+def build_nambla4_gtir_inline(
+    num_edges: int,
+    num_k_levels: int,
 ) -> itir.Program:
+    """Creates the `nabla4` stencil where the computations are already inlined."""
+
     edge_k_domain = im.call("unstructured_domain")(
         im.call("named_range")(itir.AxisLiteral(value=Edge.value, kind=Edge.kind), 0, "num_edges"),
         im.call("named_range")(
@@ -111,7 +113,103 @@ def build_nambla4_gtir_fieldview(
     E_FTYPE = ts.FieldType(dims=[Edge], dtype=wpfloat)
 
     nabla4prog = itir.Program(
-        id="nabla4_partial",
+        id="nabla4_partial_inline",
+        function_definitions=[],
+        params=[
+            itir.Sym(id="nabv_norm", type=EK_FTYPE),
+            itir.Sym(id="nabv_tang", type=EK_FTYPE),
+            itir.Sym(id="z_nabla2_e", type=EK_FTYPE),
+            itir.Sym(id="inv_vert_vert_length", type=E_FTYPE),
+            itir.Sym(id="inv_primal_edge_length", type=E_FTYPE),
+            itir.Sym(id="nab4", type=EK_FTYPE),
+            itir.Sym(id="num_edges", type=SIZE_TYPE),
+            itir.Sym(id="num_k_levels", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            itir.SetAt(
+                expr=im.call(
+                    im.call("as_fieldop")(
+                        im.lambda_(
+                            "z_nabla2_e2",
+                            "const_4",
+                            "nabv_norm",
+                            "inv_vert_vert_length",
+                            "nabv_tang",
+                            "inv_primal_edge_length",
+                        )(
+                            im.multiplies_(
+                                im.plus(
+                                    im.multiplies_(
+                                        im.minus(
+                                            im.deref("nabv_norm"),
+                                            im.deref("z_nabla2_e2"),
+                                        ),
+                                        im.multiplies_(
+                                            im.deref("inv_vert_vert_length"),
+                                            im.deref("inv_vert_vert_length"),
+                                        ),
+                                    ),
+                                    im.multiplies_(
+                                        im.minus(
+                                            im.deref("nabv_tang"),
+                                            im.deref("z_nabla2_e2"),
+                                        ),
+                                        im.multiplies_(
+                                            im.deref("inv_primal_edge_length"),
+                                            im.deref("inv_primal_edge_length"),
+                                        ),
+                                    ),
+                                ),
+                                im.deref("const_4"),
+                            )
+                        ),
+                        edge_k_domain,
+                    )
+                )(
+                    # arg: `z_nabla2_e2`
+                    im.call(
+                        im.call("as_fieldop")(
+                            im.lambda_("x", "const_2")(
+                                im.multiplies_(im.deref("x"), im.deref("const_2"))
+                            ),
+                            edge_k_domain,
+                        )
+                    )("z_nabla2_e", 2.0),
+                    # end arg: `z_nabla2_e2`
+                    # arg: `const_4`
+                    4.0,
+                    # Same name as in the lambda and are argument to the program.
+                    "nabv_norm",
+                    "inv_vert_vert_length",
+                    "nabv_tang",
+                    "inv_primal_edge_length",
+                ),
+                domain=edge_k_domain,
+                target=itir.SymRef(id="nab4"),
+            )
+        ],
+    )
+    return nabla4prog
+
+
+def build_nambla4_gtir_fieldview(
+    num_edges: int,
+    num_k_levels: int,
+) -> itir.Program:
+    """Creates the `nabla4` stencil in most extreme fieldview version as possible."""
+    edge_k_domain = im.call("unstructured_domain")(
+        im.call("named_range")(itir.AxisLiteral(value=Edge.value, kind=Edge.kind), 0, "num_edges"),
+        im.call("named_range")(
+            itir.AxisLiteral(value=KDim.value, kind=KDim.kind), 0, "num_k_levels"
+        ),
+    )
+
+    EK_FTYPE = ts.FieldType(dims=[Edge, KDim], dtype=wpfloat)
+    E_FTYPE = ts.FieldType(dims=[Edge], dtype=wpfloat)
+
+    nabla4prog = itir.Program(
+        id="nabla4_partial_fieldview",
         function_definitions=[],
         params=[
             itir.Sym(id="nabv_norm", type=EK_FTYPE),
@@ -264,25 +362,26 @@ def build_nambla4_gtir_fieldview(
     return nabla4prog
 
 
-
 def verify_nabla4(
-        version: str,
+    version: str,
 ):
     num_edges = 27
     num_k_levels = 10
 
-    if(version == "fieldview"):
+    if version == "fieldview":
         nabla4prog = build_nambla4_gtir_fieldview(
-                num_edges=num_edges,
-                num_k_levels=num_k_levels,
+            num_edges=num_edges,
+            num_k_levels=num_k_levels,
         )
 
-    elif(version == "inline"):
-        raise NotImplementedError("`inline` version is not yet implemented.")
+    elif version == "inline":
+        nabla4prog = build_nambla4_gtir_inline(
+            num_edges=num_edges,
+            num_k_levels=num_k_levels,
+        )
 
     else:
         raise ValueError(f"The version `{version}` is now known.")
-
 
     offset_provider = {}
 
@@ -315,4 +414,5 @@ def verify_nabla4(
 
 
 if "__main__" == __name__:
+    #verify_nabla4("inline")
     verify_nabla4("fieldview")
