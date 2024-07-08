@@ -101,7 +101,7 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
 
                 # Get Python library path
                 python_library = (
-                    sysconfig.get_config_var("LIBDIR") + "/" + sysconfig.get_config_var("LDLIBRARY")
+                    f"{sysconfig.get_config_var('LIBDIR')}/{sysconfig.get_config_var('LDLIBRARY')}"
                 )
 
                 # Get Python include directory path
