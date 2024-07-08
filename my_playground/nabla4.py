@@ -65,7 +65,6 @@ def nabla4_np(
     inv_primal_edge_length: Field[[EdgeDim], wpfloat],
     # These are the offset providers
     E2C2V: NeighborTable,
-    nabv_tang: Field[[EdgeDim, KDim], wpfloat],  # FAKE
     **kwargs,  # Allows to use the same call argument object as for the SDFG
 ) -> Field[[EdgeDim, KDim], wpfloat]:
     primal_normal_vert_v1 = primal_normal_vert_v1.reshape(E2C2V.table.shape)
@@ -82,6 +81,12 @@ def nabla4_np(
     N = nabv_norm - 2 * z_nabla2_e
     ell_v2 = inv_vert_vert_length**2
     N_ellv2 = N * ell_v2.reshape((-1, 1))
+
+    xt_0 = u_vert_e2c2v[:, 0] * primal_normal_vert_v1[:, 0].reshape((-1, 1))
+    xt_1 = v_vert_e2c2v[:, 0] * primal_normal_vert_v2[:, 0].reshape((-1, 1))
+    xt_2 = u_vert_e2c2v[:, 1] * primal_normal_vert_v1[:, 1].reshape((-1, 1))
+    xt_3 = v_vert_e2c2v[:, 1] * primal_normal_vert_v2[:, 1].reshape((-1, 1))
+    nabv_tang = xt_0 + xt_1 + xt_2 + xt_3
 
     T = nabv_tang - 2 * z_nabla2_e
     ell_e2 = inv_primal_edge_length**2
@@ -269,7 +274,6 @@ def build_nambla4_gtir_fieldview(
             itir.Sym(id="v_vert", type=VK_FTYPE),
             itir.Sym(id="primal_normal_vert_v1", type=ECV_FTYPE),
             itir.Sym(id="primal_normal_vert_v2", type=ECV_FTYPE),
-            itir.Sym(id="nabv_tang", type=EK_FTYPE),  # FAKE
             itir.Sym(id="z_nabla2_e", type=EK_FTYPE),
             itir.Sym(id="inv_vert_vert_length", type=E_FTYPE),
             itir.Sym(id="inv_primal_edge_length", type=E_FTYPE),
@@ -376,6 +380,7 @@ def build_nambla4_gtir_fieldview(
                                     ),
                                     # end arg: `xn_2_p_3`
                                 ),
+                                # end arg: `xn`
                                 # arg: `z_nabla2_e2`
                                 im.call(
                                     im.call("as_fieldop")(
@@ -429,7 +434,54 @@ def build_nambla4_gtir_fieldview(
                                 )
                             )(
                                 # arg: `xt`
-                                "nabv_tang",
+                                #   u_vert(E2C2V[0]) * primal_normal_vert_v1(E2ECV[0])  || nx_0
+                                # + v_vert(E2C2V[0]) * primal_normal_vert_v2(E2ECV[0])  || xt_1
+                                # + u_vert(E2C2V[1]) * primal_normal_vert_v1(E2ECV[1])  || xt_2
+                                # + v_vert(E2C2V[1]) * primal_normal_vert_v2(E2ECV[1])  || xt_3
+                                im.call(
+                                    im.call("as_fieldop")(
+                                        im.lambda_("xt_0_p_1", "xn_2_p_3")(
+                                            im.plus(im.deref("xt_0_p_1"), im.deref("xn_2_p_3"))
+                                        ),
+                                        edge_k_domain,
+                                    )
+                                )(
+                                    # arg: `xt_0_p_1`
+                                    im.call(
+                                        im.call("as_fieldop")(
+                                            im.lambda_("xt_0", "xn_1")(
+                                                im.plus(im.deref("xt_0"), im.deref("xn_1"))
+                                            ),
+                                            edge_k_domain,
+                                        )
+                                    )(
+                                        shift_builder(  # arg: `xt_0`
+                                            "u_vert", 0, "primal_normal_vert_v1", 0
+                                        ),
+                                        shift_builder(  # arg: `xt_1`
+                                            "v_vert", 0, "primal_normal_vert_v2", 0
+                                        ),
+                                    ),
+                                    # end arg: `xt_0_p_1`
+                                    # arg: `xt_2_p_3`
+                                    im.call(
+                                        im.call("as_fieldop")(
+                                            im.lambda_("xt_2", "xn_3")(
+                                                im.plus(im.deref("xt_2"), im.deref("xn_3"))
+                                            ),
+                                            edge_k_domain,
+                                        )
+                                    )(
+                                        shift_builder(  # arg: `xt_2`
+                                            "u_vert", 1, "primal_normal_vert_v1", 1
+                                        ),
+                                        shift_builder(  # arg: `xt_3`
+                                            "v_vert", 1, "primal_normal_vert_v2", 1
+                                        ),
+                                    ),
+                                    # end arg: `xt_2_p_3`
+                                ),
+                                # end arg: `xt`
                                 # arg: `z_nabla2_e2`
                                 im.call(
                                     im.call("as_fieldop")(
@@ -491,9 +543,6 @@ def verify_nabla4(
         "E2ECV": E2ECV_connectivity,
     }
 
-    # This is not yet computed
-    nabv_tang = np.random.rand(num_edges, num_k_levels)
-
     u_vert = np.random.rand(num_vertices, num_k_levels)
     v_vert = np.random.rand(num_vertices, num_k_levels)
     primal_normal_vert_v1 = np.random.rand(num_edges * 4)
@@ -507,7 +556,6 @@ def verify_nabla4(
     sdfg = dace_backend.build_sdfg_from_gtir(nabla4prog, offset_provider)
 
     call_args = dict(
-        nabv_tang=nabv_tang,
         z_nabla2_e=z_nabla2_e,
         inv_vert_vert_length=inv_vert_vert_length,
         inv_primal_edge_length=inv_primal_edge_length,
