@@ -53,6 +53,10 @@ import dace
 
 wpfloat = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
 SIZE_TYPE = ts.ScalarType(ts.ScalarKind.INT32)
+VK_FTYPE = ts.FieldType(dims=[VertexDim, KDim], dtype=wpfloat)
+EK_FTYPE = ts.FieldType(dims=[EdgeDim, KDim], dtype=wpfloat)
+E_FTYPE = ts.FieldType(dims=[EdgeDim], dtype=wpfloat)
+ECV_FTYPE = ts.FieldType(dims=[ECVDim], dtype=wpfloat)
 
 
 def nabla4_np(
@@ -95,103 +99,66 @@ def nabla4_np(
     return 4 * (N_ellv2 + T_elle2)
 
 
-def build_nambla4_gtir_inline(
-    num_edges: int,
-    num_k_levels: int,
-) -> itir.Program:
-    """Creates the `nabla4` stencil where the computations are already inlined."""
+# Dimension we operate on.
+edge_k_domain = im.call("unstructured_domain")(
+    im.call("named_range")(
+        itir.AxisLiteral(value=EdgeDim.value, kind=EdgeDim.kind), 0, "num_edges"
+    ),
+    im.call("named_range")(itir.AxisLiteral(value=KDim.value, kind=KDim.kind), 0, "num_k_levels"),
+)
+edge_domain = im.call("unstructured_domain")(
+    im.call("named_range")(
+        itir.AxisLiteral(value=EdgeDim.value, kind=EdgeDim.kind), 0, "num_edges"
+    ),
+)
 
-    edge_k_domain = im.call("unstructured_domain")(
-        im.call("named_range")(
-            itir.AxisLiteral(value=EdgeDim.value, kind=EdgeDim.kind), 0, "num_edges"
-        ),
-        im.call("named_range")(
-            itir.AxisLiteral(value=KDim.value, kind=KDim.kind), 0, "num_k_levels"
-        ),
-    )
 
-    EK_FTYPE = ts.FieldType(dims=[EdgeDim, KDim], dtype=wpfloat)
-    E_FTYPE = ts.FieldType(dims=[EdgeDim], dtype=wpfloat)
+def shift_builder(
+    vert: str,
+    vert_idx: int,
+    primal: str,
+    primal_idx: int,
+) -> itir.FunCall:
+    """Used to construct the shifting calculations.
 
-    nabla4prog = itir.Program(
-        id="nabla4_partial_inline",
-        function_definitions=[],
-        params=[
-            itir.Sym(id="nabv_norm", type=EK_FTYPE),
-            itir.Sym(id="nabv_tang", type=EK_FTYPE),
-            itir.Sym(id="z_nabla2_e", type=EK_FTYPE),
-            itir.Sym(id="inv_vert_vert_length", type=E_FTYPE),
-            itir.Sym(id="inv_primal_edge_length", type=E_FTYPE),
-            itir.Sym(id="nab4", type=EK_FTYPE),
-            itir.Sym(id="num_edges", type=SIZE_TYPE),
-            itir.Sym(id="num_k_levels", type=SIZE_TYPE),
-        ],
-        declarations=[],
-        body=[
-            itir.SetAt(
-                expr=im.call(
-                    im.call("as_fieldop")(
-                        im.lambda_(
-                            "z_nabla2_e2",
-                            "const_4",
-                            "nabv_norm",
-                            "inv_vert_vert_length",
-                            "nabv_tang",
-                            "inv_primal_edge_length",
-                        )(
-                            im.multiplies_(
-                                im.plus(
-                                    im.multiplies_(
-                                        im.minus(
-                                            im.deref("nabv_norm"),
-                                            im.deref("z_nabla2_e2"),
-                                        ),
-                                        im.multiplies_(
-                                            im.deref("inv_vert_vert_length"),
-                                            im.deref("inv_vert_vert_length"),
-                                        ),
-                                    ),
-                                    im.multiplies_(
-                                        im.minus(
-                                            im.deref("nabv_tang"),
-                                            im.deref("z_nabla2_e2"),
-                                        ),
-                                        im.multiplies_(
-                                            im.deref("inv_primal_edge_length"),
-                                            im.deref("inv_primal_edge_length"),
-                                        ),
-                                    ),
-                                ),
-                                im.deref("const_4"),
-                            )
-                        ),
-                        edge_k_domain,
-                    )
-                )(
-                    # arg: `z_nabla2_e2`
-                    im.call(
-                        im.call("as_fieldop")(
-                            im.lambda_("x", "const_2")(
-                                im.multiplies_(im.deref("x"), im.deref("const_2"))
-                            ),
-                            edge_k_domain,
-                        )
-                    )("z_nabla2_e", 2.0),
-                    # end arg: `z_nabla2_e2`
-                    # arg: `const_4`
-                    4.0,
-                    # Same name as in the lambda and are argument to the program.
-                    "nabv_norm",
-                    "inv_vert_vert_length",
-                    "nabv_tang",
-                    "inv_primal_edge_length",
+    This function generates the IR for the expression:
+    ```
+    vert[E2C2V[:, vert_idx]] * primal[E2ECV[:, primal_idx]]
+    ```
+    """
+    return im.call(
+        im.call("as_fieldop")(
+            im.lambda_("vert_shifted", "primal_shifted")(
+                im.multiplies_(im.deref("vert_shifted"), im.deref("primal_shifted"))
+            ),
+            edge_k_domain,
+        )
+    )(
+        # arg: `vert_shifted`
+        im.call(
+            im.call("as_fieldop")(
+                im.lambda_("vert_no_shifted")(
+                    im.deref(im.shift("E2C2V", vert_idx)("vert_no_shifted"))
                 ),
-                domain=edge_k_domain,
-                target=itir.SymRef(id="nab4"),
+                edge_k_domain,
             )
-        ],
+        )(
+            vert,  # arg: `vert_no_shifted`
+        ),
+        # end arg: `vert_shifted`
+        # arg: `primal_shifted`
+        im.call(
+            im.call("as_fieldop")(
+                im.lambda_("primal_no_shifted")(
+                    im.deref(im.shift("E2ECV", primal_idx)("primal_no_shifted"))
+                ),
+                edge_domain,
+            )
+        )(
+            primal,  # arg: `primal_no_shifted`
+        ),
+        # end arg: `primal_shifted`
     )
-    return nabla4prog
 
 
 def build_nambla4_gtir_fieldview(
@@ -199,72 +166,6 @@ def build_nambla4_gtir_fieldview(
     num_k_levels: int,
 ) -> itir.Program:
     """Creates the `nabla4` stencil in most extreme fieldview version as possible."""
-
-    edge_domain = im.call("unstructured_domain")(
-        im.call("named_range")(
-            itir.AxisLiteral(value=EdgeDim.value, kind=EdgeDim.kind), 0, "num_edges"
-        ),
-    )
-    edge_k_domain = im.call("unstructured_domain")(
-        im.call("named_range")(
-            itir.AxisLiteral(value=EdgeDim.value, kind=EdgeDim.kind), 0, "num_edges"
-        ),
-        im.call("named_range")(
-            itir.AxisLiteral(value=KDim.value, kind=KDim.kind), 0, "num_k_levels"
-        ),
-    )
-
-    VK_FTYPE = ts.FieldType(dims=[VertexDim, KDim], dtype=wpfloat)
-    EK_FTYPE = ts.FieldType(dims=[EdgeDim, KDim], dtype=wpfloat)
-    E_FTYPE = ts.FieldType(dims=[EdgeDim], dtype=wpfloat)
-    ECV_FTYPE = ts.FieldType(dims=[ECVDim], dtype=wpfloat)
-
-    def shift_builder(
-        vert: str,
-        vert_idx: int,
-        primal: str,
-        primal_idx: int,
-    ) -> itir.FunCall:
-        """Used to construct the shifting calculations.
-
-        This function generates the IR for the expression:
-        ```
-        vert[E2C2V[:, vert_idx]] * primal[E2ECV[:, primal_idx]]
-        ```
-        """
-        return im.call(
-            im.call("as_fieldop")(
-                im.lambda_("vert_shifted", "primal_shifted")(
-                    im.multiplies_(im.deref("vert_shifted"), im.deref("primal_shifted"))
-                ),
-                edge_k_domain,
-            )
-        )(
-            # arg: `vert_shifted`
-            im.call(
-                im.call("as_fieldop")(
-                    im.lambda_("vert_no_shifted")(
-                        im.deref(im.shift("E2C2V", vert_idx)("vert_no_shifted"))
-                    ),
-                    edge_k_domain,
-                )
-            )(
-                vert,  # arg: `vert_no_shifted`
-            ),
-            # end arg: `vert_shifted`
-            # arg: `primal_shifted`
-            im.call(
-                im.call("as_fieldop")(
-                    im.lambda_("primal_no_shifted")(
-                        im.deref(im.shift("E2ECV", primal_idx)("primal_no_shifted"))
-                    ),
-                    edge_domain,
-                )
-            )(
-                primal,  # arg: `primal_no_shifted`
-            ),
-            # end arg: `primal_shifted`
-        )
 
     nabla4prog = itir.Program(
         id="nabla4_partial_fieldview",
@@ -530,10 +431,7 @@ def verify_nabla4(
         )
 
     elif version == "inline":
-        nabla4prog = build_nambla4_gtir_inline(
-            num_edges=num_edges,
-            num_k_levels=num_k_levels,
-        )
+        raise NotImplementedError("Inline version is no longer supported.")
 
     else:
         raise ValueError(f"The version `{version}` is now known.")
@@ -579,5 +477,4 @@ def verify_nabla4(
 
 
 if "__main__" == __name__:
-    # verify_nabla4("inline")
     verify_nabla4("fieldview")
