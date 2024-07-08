@@ -15,6 +15,7 @@
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.pretty_parser import pparse
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.type_system import type_specifications as ts
 
 
 def test_symref():
@@ -131,11 +132,25 @@ def test_make_tuple():
     assert actual == expected
 
 
-def test_named_range():
-    testee = "IDim: [x, y)"
+def test_named_range_horizontal():
+    testee = "IDimₕ: [x, y)"
     expected = ir.FunCall(
         fun=ir.SymRef(id="named_range"),
         args=[ir.AxisLiteral(value="IDim"), ir.SymRef(id="x"), ir.SymRef(id="y")],
+    )
+    actual = pparse(testee)
+    assert actual == expected
+
+
+def test_named_range_vertical():
+    testee = "IDimᵥ: [x, y)"
+    expected = ir.FunCall(
+        fun=ir.SymRef(id="named_range"),
+        args=[
+            ir.AxisLiteral(value="IDim", kind=ir.DimensionKind.VERTICAL),
+            ir.SymRef(id="x"),
+            ir.SymRef(id="y"),
+        ],
     )
     actual = pparse(testee)
     assert actual == expected
@@ -193,7 +208,8 @@ def test_function_definition():
 
 def test_temporary():
     testee = "t = temporary(domain=domain, dtype=float64);"
-    expected = ir.Temporary(id="t", domain=ir.SymRef(id="domain"), dtype=ir.SymRef(id="float64"))
+    float64_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    expected = ir.Temporary(id="t", domain=ir.SymRef(id="domain"), dtype=float64_type)
     actual = pparse(testee)
     assert actual == expected
 
@@ -255,7 +271,7 @@ def test_program():
             ir.Temporary(
                 id="tmp",
                 domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
-                dtype=ir.SymRef(id="float64"),
+                dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
             ),
         ],
         body=[
