@@ -82,6 +82,7 @@ def test_sdfgConvertible_laplap(cartesian_case):
     in_field = cases.allocate(cartesian_case, laplap_program, "in_field")()
     out_field = cases.allocate(cartesian_case, laplap_program, "out_field")()
 
+    # Test DaCe closure support
     @dace.program
     def sdfg():
         tmp_field = xp.empty_like(out_field)
@@ -97,4 +98,36 @@ def test_sdfgConvertible_laplap(cartesian_case):
     assert np.allclose(
         gtx.field_utils.asnumpy(out_field)[2:-2, 2:-2],
         lap_ref(lap_ref(in_field.array_ns.asarray(in_field.ndarray))),
+    )
+
+    in_field_new = 3.14 * cases.allocate(cartesian_case, laplap_program, "in_field")()
+
+    # Provide all arguments instead of using the closure
+    @dace.program
+    def sdfg_with_args(
+        in_field,
+        out_field,
+        offset_provider: dace.compiletime,
+        grid_type: dace.compiletime,
+        executor: dace.compiletime,
+    ):
+        tmp_field = xp.empty_like(out_field)
+        lap_program.with_grid_type(grid_type).with_backend(executor)(
+            in_field, tmp_field, offset_provider=offset_provider
+        )
+        lap_program.with_grid_type(grid_type).with_backend(executor)(
+            tmp_field, out_field, offset_provider=offset_provider
+        )
+
+    sdfg_with_args(
+        in_field_new,
+        out_field,
+        cartesian_case.offset_provider,
+        cartesian_case.grid_type,
+        cartesian_case.executor,
+    )
+
+    assert np.allclose(
+        gtx.field_utils.asnumpy(out_field)[2:-2, 2:-2],
+        lap_ref(lap_ref(in_field_new.array_ns.asarray(in_field.ndarray))),
     )
