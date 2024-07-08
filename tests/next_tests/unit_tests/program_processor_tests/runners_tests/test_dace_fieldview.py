@@ -444,7 +444,11 @@ def test_gtir_cartesian_shift():
     DELTA = 3
     OFFSET = 1
     domain = im.call("cartesian_domain")(
-        im.call("named_range")(itir.AxisLiteral(value=IDim.value), 0, "size")
+        im.call("named_range")(
+            itir.AxisLiteral(value=IDim.value),
+            0,
+            im.minus(itir.SymRef(id="size"), itir.Literal(value=str(OFFSET), type=SIZE_TYPE)),
+        )
     )
 
     # cartesian shift with literal integer offset
@@ -543,13 +547,12 @@ def test_gtir_cartesian_shift():
         )(),
     )
 
-    a = np.random.rand(N + OFFSET)
+    a = np.random.rand(N)
     a_offset = np.full(N, OFFSET, dtype=np.int32)
     b = np.empty(N)
 
     IOFFSET_FTYPE = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
 
-    arg_types = [IFTYPE, IOFFSET_FTYPE, IFTYPE, SIZE_TYPE]
     offset_provider = {"IDim": IDim}
 
     for i, stencil in enumerate(
@@ -566,10 +569,10 @@ def test_gtir_cartesian_shift():
             id=f"cartesian_shift_{i}",
             function_definitions=[],
             params=[
-                itir.Sym(id="x"),
-                itir.Sym(id="x_offset"),
-                itir.Sym(id="y"),
-                itir.Sym(id="size"),
+                itir.Sym(id="x", type=IFTYPE),
+                itir.Sym(id="x_offset", type=IOFFSET_FTYPE),
+                itir.Sym(id="y", type=IFTYPE),
+                itir.Sym(id="size", type=SIZE_TYPE),
             ],
             declarations=[],
             body=[
@@ -581,13 +584,12 @@ def test_gtir_cartesian_shift():
             ],
         )
 
-        sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, offset_provider)
+        sdfg = dace_backend.build_sdfg_from_gtir(testee, offset_provider)
 
         FSYMBOLS_tmp = FSYMBOLS.copy()
-        FSYMBOLS_tmp["__x_size_0"] = N + OFFSET
         FSYMBOLS_tmp["__x_offset_stride_0"] = 1
         sdfg(x=a, x_offset=a_offset, y=b, **FSYMBOLS_tmp)
-        assert np.allclose(a[OFFSET:] + DELTA, b)
+        assert np.allclose(a[OFFSET:] + DELTA, b[:-OFFSET])
 
 
 def test_gtir_connectivity_shift():
@@ -692,15 +694,6 @@ def test_gtir_connectivity_shift():
     VE_FTYPE = ts.FieldType(dims=[Vertex, Edge], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
     CELL_OFFSET_FTYPE = ts.FieldType(dims=[Cell], dtype=SIZE_TYPE)
 
-    arg_types = [
-        VE_FTYPE,
-        CELL_OFFSET_FTYPE,
-        CELL_OFFSET_FTYPE,
-        CFTYPE,
-        SIZE_TYPE,
-        SIZE_TYPE,
-    ]
-
     connectivity_C2E = SIMPLE_MESH.offset_provider["C2E"]
     assert isinstance(connectivity_C2E, NeighborTable)
     connectivity_C2V = SIMPLE_MESH.offset_provider["C2V"]
@@ -718,12 +711,12 @@ def test_gtir_connectivity_shift():
             id=f"connectivity_shift_2d_{i}",
             function_definitions=[],
             params=[
-                itir.Sym(id="ve_field"),
-                itir.Sym(id="c2e_offset"),
-                itir.Sym(id="c2v_offset"),
-                itir.Sym(id="cells"),
-                itir.Sym(id="ncells"),
-                itir.Sym(id="nvertices"),
+                itir.Sym(id="ve_field", type=VE_FTYPE),
+                itir.Sym(id="c2e_offset", type=CELL_OFFSET_FTYPE),
+                itir.Sym(id="c2v_offset", type=CELL_OFFSET_FTYPE),
+                itir.Sym(id="cells", type=CFTYPE),
+                itir.Sym(id="ncells", type=SIZE_TYPE),
+                itir.Sym(id="nvertices", type=SIZE_TYPE),
             ],
             declarations=[],
             body=[
@@ -735,7 +728,7 @@ def test_gtir_connectivity_shift():
             ],
         )
 
-        sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, SIMPLE_MESH.offset_provider)
+        sdfg = dace_backend.build_sdfg_from_gtir(testee, SIMPLE_MESH.offset_provider)
 
         c = np.empty(SIMPLE_MESH.num_cells)
 
@@ -771,10 +764,10 @@ def test_gtir_connectivity_shift_chain():
         id="connectivity_shift_chain",
         function_definitions=[],
         params=[
-            itir.Sym(id="edges"),
-            itir.Sym(id="edges_out"),
-            itir.Sym(id="nedges"),
-            itir.Sym(id="nvertices"),
+            itir.Sym(id="edges", type=EFTYPE),
+            itir.Sym(id="edges_out", type=EFTYPE),
+            itir.Sym(id="nedges", type=SIZE_TYPE),
+            itir.Sym(id="nvertices", type=SIZE_TYPE),
         ],
         declarations=[],
         body=[
@@ -798,8 +791,7 @@ def test_gtir_connectivity_shift_chain():
         ],
     )
 
-    arg_types = [EFTYPE, EFTYPE, SIZE_TYPE, SIZE_TYPE]
-    sdfg = dace_backend.build_sdfg_from_gtir(testee, arg_types, SIMPLE_MESH.offset_provider)
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, SIMPLE_MESH.offset_provider)
 
     connectivity_E2V = SIMPLE_MESH.offset_provider["E2V"]
     assert isinstance(connectivity_E2V, NeighborTable)
