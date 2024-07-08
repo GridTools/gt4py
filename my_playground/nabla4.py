@@ -25,7 +25,6 @@ from gt4py.next.ffront.fbuiltins import Field
 from gt4py.next.program_processors.runners import dace_fieldview as dace_backend
 from gt4py.next.type_system import type_specifications as ts
 
-
 from simple_icon_mesh import (
     IDim,  # Dimensions
     JDim,
@@ -57,13 +56,20 @@ SIZE_TYPE = ts.ScalarType(ts.ScalarKind.INT32)
 
 
 def nabla4_np(
-    nabv_norm: Field[[EdgeDim, KDim], wpfloat],
+    pnvertv1_0: Field[[EdgeDim], wpfloat],
+    u_vert_0: Field[[EdgeDim, KDim], wpfloat],
+
+    xn_1: Field[[EdgeDim, KDim], wpfloat],
+    xn_2: Field[[EdgeDim, KDim], wpfloat],
+    xn_3: Field[[EdgeDim, KDim], wpfloat],
     nabv_tang: Field[[EdgeDim, KDim], wpfloat],
     z_nabla2_e: Field[[EdgeDim, KDim], wpfloat],
     inv_vert_vert_length: Field[[EdgeDim], wpfloat],
     inv_primal_edge_length: Field[[EdgeDim], wpfloat],
     **kwargs,  # Allows to use the same call argument object as for the SDFG
 ) -> Field[[EdgeDim, KDim], wpfloat]:
+    nabv_norm = (u_vert_0 * pnvertv1_0.reshape((-1, 1))) + xn_1 + xn_2 + xn_3
+
     N = nabv_norm - 2 * z_nabla2_e
     ell_v2 = inv_vert_vert_length**2
     N_ellv2 = N * ell_v2.reshape((-1, 1))
@@ -75,37 +81,6 @@ def nabla4_np(
     return 4 * (N_ellv2 + T_elle2)
 
 
-def dace_strides(
-    array: np.ndarray,
-    name: None | str = None,
-) -> tuple[int, ...] | dict[str, int]:
-    if not hasattr(array, "strides"):
-        return {}
-    strides = array.strides
-    if hasattr(array, "itemsize"):
-        strides = tuple(stride // array.itemsize for stride in strides)
-    if name is not None:
-        strides = {f"__{name}_stride_{i}": stride for i, stride in enumerate(strides)}
-    return strides
-
-
-def dace_shape(
-    array: np.ndarray,
-    name: str,
-) -> dict[str, int]:
-    if not hasattr(array, "shape"):
-        return {}
-    return {f"__{name}_size_{i}": size for i, size in enumerate(array.shape)}
-
-
-def make_syms(**kwargs: np.ndarray) -> dict[str, int]:
-    SYMBS = {}
-    for name, array in kwargs.items():
-        SYMBS.update(**dace_shape(array, name))
-        SYMBS.update(**dace_strides(array, name))
-    return SYMBS
-
-
 def build_nambla4_gtir_inline(
     num_edges: int,
     num_k_levels: int,
@@ -113,7 +88,9 @@ def build_nambla4_gtir_inline(
     """Creates the `nabla4` stencil where the computations are already inlined."""
 
     edge_k_domain = im.call("unstructured_domain")(
-        im.call("named_range")(itir.AxisLiteral(value=EdgeDim.value, kind=EdgeDim.kind), 0, "num_edges"),
+        im.call("named_range")(
+            itir.AxisLiteral(value=EdgeDim.value, kind=EdgeDim.kind), 0, "num_edges"
+        ),
         im.call("named_range")(
             itir.AxisLiteral(value=KDim.value, kind=KDim.kind), 0, "num_k_levels"
         ),
@@ -209,20 +186,31 @@ def build_nambla4_gtir_fieldview(
 ) -> itir.Program:
     """Creates the `nabla4` stencil in most extreme fieldview version as possible."""
     edge_k_domain = im.call("unstructured_domain")(
-        im.call("named_range")(itir.AxisLiteral(value=EdgeDim.value, kind=EdgeDim.kind), 0, "num_edges"),
+        im.call("named_range")(
+            itir.AxisLiteral(value=EdgeDim.value, kind=EdgeDim.kind), 0, "num_edges"
+        ),
         im.call("named_range")(
             itir.AxisLiteral(value=KDim.value, kind=KDim.kind), 0, "num_k_levels"
         ),
     )
 
+    VK_TYPE = ts.FieldType(dims=[VertexDim, KDim], dtype=wpfloat)
     EK_FTYPE = ts.FieldType(dims=[EdgeDim, KDim], dtype=wpfloat)
     E_FTYPE = ts.FieldType(dims=[EdgeDim], dtype=wpfloat)
+    ECV_FTYPE = ts.FieldType(dims=[ECVDim], dtype=ts.ScalarType(kind=wpfloat))
 
     nabla4prog = itir.Program(
         id="nabla4_partial_fieldview",
         function_definitions=[],
         params=[
-            itir.Sym(id="nabv_norm", type=EK_FTYPE),
+            # itir.Sym(id="u_vert", type=VK_FTYPE),
+            # itir.Sym(id="v_vert", type=VK_FTYPE),
+            itir.Sym(id="pnvertv1_0", type=E_FTYPE),
+            itir.Sym(id="u_vert_0", type=EK_FTYPE),
+
+            itir.Sym(id="xn_1", type=EK_FTYPE),
+            itir.Sym(id="xn_2", type=EK_FTYPE),
+            itir.Sym(id="xn_3", type=EK_FTYPE),
             itir.Sym(id="nabv_tang", type=EK_FTYPE),
             itir.Sym(id="z_nabla2_e", type=EK_FTYPE),
             itir.Sym(id="inv_vert_vert_length", type=E_FTYPE),
@@ -283,7 +271,42 @@ def build_nambla4_gtir_fieldview(
                                 )
                             )(
                                 # arg: `xn`
-                                "nabv_norm",
+                                # u_vert(E2C2V[0]) * primal_normal_vert_v1(E2ECV[0])    || nx_0
+                                # + v_vert(E2C2V[0]) * primal_normal_vert_v2(E2ECV[0])  || xn_1
+                                # + u_vert(E2C2V[1]) * primal_normal_vert_v1(E2ECV[1])  || xn_2
+                                # + v_vert(E2C2V[1]) * primal_normal_vert_v2(E2ECV[1])  || xn_3
+                                im.call(
+                                    im.call("as_fieldop")(
+                                        im.lambda_("xn_0", "xn_1", "xn_2", "xn_3")(
+                                            im.plus(
+                                                im.plus(im.deref("xn_0"), im.deref("xn_1")),
+                                                im.plus(im.deref("xn_2"), im.deref("xn_3")),
+                                            )
+                                        ),
+                                        edge_k_domain,
+                                    )
+                                )(
+                                    # arg: `xn_0`
+                                    im.call(
+                                        im.call("as_fieldop")(
+                                            im.lambda_("u_vert_0", "pnvertv1_0")(
+                                                im.multiplies_(im.deref("u_vert_0"), im.deref("pnvertv1_0"))
+                                            ),
+                                            edge_k_domain,
+                                        )
+                                    )(
+                                        "u_vert_0",
+                                        "pnvertv1_0",
+                                    ),
+                                    # end arg: `xn_0`
+
+                                    "xn_1",
+
+                                    "xn_2",
+
+                                    "xn_3",
+                                ),
+
                                 # arg: `z_nabla2_e2`
                                 im.call(
                                     im.call("as_fieldop")(
@@ -395,17 +418,20 @@ def verify_nabla4(
 
     offset_provider = {}
 
-    nabv_norm = np.random.rand(num_edges, num_k_levels)
+    xn_args = {f"xn_{i}": np.random.rand(num_edges, num_k_levels) for i in range(1, 4)}
+
+    pnvertv1_0=np.random.rand(num_edges)
+    u_vert_0=np.random.rand(num_edges, num_k_levels)
+
     nabv_tang = np.random.rand(num_edges, num_k_levels)
     z_nabla2_e = np.random.rand(num_edges, num_k_levels)
     inv_vert_vert_length = np.random.rand(num_edges)
     inv_primal_edge_length = np.random.rand(num_edges)
-    nab4 = np.empty((num_edges, num_k_levels), dtype=nabv_norm.dtype)
+    nab4 = np.empty((num_edges, num_k_levels), dtype=np.float64)
 
     sdfg = dace_backend.build_sdfg_from_gtir(nabla4prog, offset_provider)
 
     call_args = dict(
-        nabv_norm=nabv_norm,
         nabv_tang=nabv_tang,
         z_nabla2_e=z_nabla2_e,
         inv_vert_vert_length=inv_vert_vert_length,
@@ -413,7 +439,12 @@ def verify_nabla4(
         nab4=nab4,
         num_edges=num_edges,
         num_k_levels=num_k_levels,
+
+        u_vert_0=u_vert_0,
+        pnvertv1_0=pnvertv1_0,
     )
+    call_args.update(xn_args)
+
     SYMBS = make_syms(**call_args)
 
     sdfg(**call_args, **SYMBS)
@@ -424,5 +455,5 @@ def verify_nabla4(
 
 
 if "__main__" == __name__:
-    verify_nabla4("inline")
+    # verify_nabla4("inline")
     verify_nabla4("fieldview")
