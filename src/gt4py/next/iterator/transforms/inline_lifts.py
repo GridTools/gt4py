@@ -14,8 +14,7 @@
 
 import dataclasses
 import enum
-from collections.abc import Callable
-from typing import Optional
+from typing import Callable, Optional
 
 import gt4py.eve as eve
 from gt4py.eve import NodeTranslator, traits
@@ -71,9 +70,7 @@ def _is_scan(node: ir.FunCall):
 
 
 def _transform_and_extract_lift_args(
-    node: ir.FunCall,
-    symtable: dict[eve.SymbolName, ir.Sym],
-    extracted_args: dict[ir.Sym, ir.Expr],
+    node: ir.FunCall, symtable: dict[eve.SymbolName, ir.Sym], extracted_args: dict[ir.Sym, ir.Expr]
 ):
     """
     Transform and extract non-symbol arguments of a lifted stencil call.
@@ -103,14 +100,18 @@ def _transform_and_extract_lift_args(
             extracted_args[new_symbol] = arg
             new_args.append(ir.SymRef(id=new_symbol.id))
 
-    return (im.lift(inner_stencil)(*new_args), extracted_args)
+    itir_node = im.lift(inner_stencil)(*new_args)
+    itir_node.location = node.location
+    return (itir_node, extracted_args)
 
 
 # TODO(tehrengruber): This pass has many different options that should be written as dedicated
 #  passes. Due to a lack of infrastructure (e.g. no pass manager) to combine passes without
 #  performance degradation we leave everything as one pass for now.
 @dataclasses.dataclass
-class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
+class InlineLifts(
+    traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrait, NodeTranslator
+):
     """Inline lifted function calls.
 
     Optionally a predicate function can be passed which can enable or disable inlining of specific
@@ -200,7 +201,7 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 assert len(node.args[0].fun.args) == 1
                 args = node.args[0].args
                 if len(args) == 0:
-                    return ir.Literal(value="True", type="bool")
+                    return im.literal_from_value(True)
 
                 res = ir.FunCall(fun=ir.SymRef(id="can_deref"), args=[args[0]])
                 for arg in args[1:]:

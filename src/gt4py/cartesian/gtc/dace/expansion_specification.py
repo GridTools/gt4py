@@ -147,35 +147,21 @@ def _order_as_spec(computation_node, expansion_order):
             expansion_specification.append(item)
         elif axis := _is_tiling(item):
             expansion_specification.append(
-                Map(
-                    iterations=[
-                        Iteration(
-                            axis=axis,
-                            kind="tiling",
-                            stride=None,
-                        )
-                    ]
-                )
+                Map(iterations=[Iteration(axis=axis, kind="tiling", stride=None)])
             )
         elif axis := _is_domain_map(item):
             expansion_specification.append(
-                Map(
-                    iterations=[
-                        Iteration(
-                            axis=axis,
-                            kind="contiguous",
-                            stride=1,
-                        )
-                    ]
-                )
+                Map(iterations=[Iteration(axis=axis, kind="contiguous", stride=1)])
             )
         elif axis := _is_domain_loop(item):
             expansion_specification.append(
                 Loop(
                     axis=axis,
-                    stride=-1
-                    if computation_node.oir_node.loop_order == common.LoopOrder.BACKWARD
-                    else 1,
+                    stride=(
+                        -1
+                        if computation_node.oir_node.loop_order == common.LoopOrder.BACKWARD
+                        else 1
+                    ),
                 )
             )
         elif item == "Sections":

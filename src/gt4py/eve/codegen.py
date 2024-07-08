@@ -14,7 +14,6 @@
 
 """Tools for source code generation."""
 
-
 from __future__ import annotations
 
 import abc
@@ -305,13 +304,13 @@ class TextBlock:
         common `indent - append - dedent` workflows.
 
         Examples:
-            >>> block = TextBlock();
-            >>> block.append('first line')  # doctest: +ELLIPSIS
+            >>> block = TextBlock()
+            >>> block.append("first line")  # doctest: +ELLIPSIS
             <...>
             >>> with block.indented():
-            ...     block.append('second line');  # doctest: +ELLIPSIS
+            ...     block.append("second line")  # doctest: +ELLIPSIS
             <...>
-            >>> block.append('third line')  # doctest: +ELLIPSIS
+            >>> block.append("third line")  # doctest: +ELLIPSIS
             <...>
             >>> print(block.text)
             first line
@@ -476,7 +475,9 @@ class StringTemplate(BaseTemplate):
                 message += f" (created at {self.definition_loc[0]}:{self.definition_loc[1]})"
             try:
                 loc_info = re.search(r"line (\d+), col (\d+)", str(e))
-                message += f" rendering error at template line: {loc_info[1]}, column {loc_info[2]}."  # type: ignore
+                message += (
+                    f" rendering error at template line: {loc_info[1]}, column {loc_info[2]}."  # type: ignore
+                )
             except Exception:
                 message += " rendering error."
 
@@ -541,7 +542,9 @@ class MakoTemplate(BaseTemplate):
             if self.definition_loc:
                 message += f" created at {self.definition_loc[0]}:{self.definition_loc[1]}"
                 try:
-                    message += f" (error likely around line {e.lineno}, column: {getattr(e, 'pos', '?')})"  # type: ignore  # assume Mako exception
+                    message += (
+                        f" (error likely around line {e.lineno}, column: {getattr(e, 'pos', '?')})"  # type: ignore  # assume Mako exception
+                    )
                 except Exception:
                     message = f"{message}:\n---\n{definition}\n---\n"
 
@@ -641,18 +644,16 @@ class TemplatedGenerator(NodeVisitor):
 
     @overload
     @classmethod
-    def apply(cls, root: LeafNode, **kwargs: Any) -> str:
-        ...
+    def apply(cls, root: LeafNode, **kwargs: Any) -> str: ...
 
     @overload
     @classmethod
-    def apply(  # noqa: F811  # redefinition of symbol
+    def apply(  # redefinition of symbol
         cls, root: CollectionNode, **kwargs: Any
-    ) -> Collection[str]:
-        ...
+    ) -> Collection[str]: ...
 
     @classmethod
-    def apply(  # noqa: F811  # redefinition of symbol
+    def apply(  # redefinition of symbol
         cls, root: RootNode, **kwargs: Any
     ) -> Union[str, Collection[str]]:
         """Public method to build a class instance and visit an IR node.
@@ -676,6 +677,23 @@ class TemplatedGenerator(NodeVisitor):
         This class could be redefined in the subclasses.
         """
         return str(node)
+
+    @overload
+    def generic_visit(self, node: Node, **kwargs: Any) -> str: ...
+
+    @overload
+    def generic_visit(
+        self,
+        node: Union[
+            list,
+            tuple,
+            collections.abc.Set,
+            collections.abc.Sequence,
+            dict,
+            collections.abc.Mapping,
+        ],
+        **kwargs: Any,
+    ) -> Collection[str]: ...
 
     def generic_visit(self, node: RootNode, **kwargs: Any) -> Union[str, Collection[str]]:
         if isinstance(node, Node):

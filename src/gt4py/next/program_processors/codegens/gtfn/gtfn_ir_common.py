@@ -22,12 +22,11 @@ class Node(eve.Node):
 
 
 class Sym(Node):  # helper
-    id: Coerced[SymbolName]  # noqa: A003
+    id: Coerced[SymbolName]
 
 
-class Expr(Node):
-    ...
+class Expr(Node): ...
 
 
 class SymRef(Expr):
-    id: Coerced[SymbolRef]  # noqa: A003
+    id: Coerced[SymbolRef]

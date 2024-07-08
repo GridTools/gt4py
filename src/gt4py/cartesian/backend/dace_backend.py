@@ -67,8 +67,7 @@ def _serialize_sdfg(sdfg: dace.SDFG):
 
 def _specialize_transient_strides(sdfg: dace.SDFG, layout_map):
     repldict = replace_strides(
-        [array for array in sdfg.arrays.values() if array.transient],
-        layout_map,
+        [array for array in sdfg.arrays.values() if array.transient], layout_map
     )
     sdfg.replace_dict(repldict)
     for state in sdfg.nodes():
@@ -221,9 +220,7 @@ def _sdfg_add_arrays_and_edges(
             ranges = [
                 (o - max(0, e), o - max(0, e) + s - 1, 1)
                 for o, e, s in zip(
-                    origin,
-                    field_info[name].boundary.lower_indices,
-                    inner_sdfg.arrays[name].shape,
+                    origin, field_info[name].boundary.lower_indices, inner_sdfg.arrays[name].shape
                 )
             ]
             ranges += [(0, d, 1) for d in field_info[name].data_dims]
@@ -520,7 +517,7 @@ class DaCeComputationCodegen:
                     break
             for i, line in enumerate(lines):
                 if "#include <dace/dace.h>" in line:
-                    cuda_code = [co.clean_code for co in code_objects if co.title == "CUDA"][0]
+                    cuda_code = next(co.clean_code for co in code_objects if co.title == "CUDA")
                     lines = lines[0:i] + cuda_code.split("\n") + lines[i + 1 :]
                     break
 
@@ -544,9 +541,14 @@ class DaCeComputationCodegen:
     def apply(cls, stencil_ir: gtir.Stencil, builder: "StencilBuilder", sdfg: dace.SDFG):
         self = cls()
         with dace.config.temporary_config():
+            # To prevent conflict with 3rd party usage of DaCe config always make sure that any
+            #  changes be under the temporary_config manager
             if gt_config.GT4PY_USE_HIP:
                 dace.config.Config.set("compiler", "cuda", "backend", value="hip")
             dace.config.Config.set("compiler", "cuda", "max_concurrent_streams", value=-1)
+            dace.config.Config.set(
+                "compiler", "cuda", "default_block_size", value=gt_config.DACE_DEFAULT_BLOCK_SIZE
+            )
             dace.config.Config.set("compiler", "cpu", "openmp_sections", value=False)
             code_objects = sdfg.generate_code()
         is_gpu = "CUDA" in {co.title for co in code_objects}
@@ -562,12 +564,6 @@ class DaCeComputationCodegen:
             omp_threads = ""
             omp_header = ""
 
-        # Backward compatible state struct name change in DaCe >=0.15.x
-        try:
-            dace_state_suffix = dace.Config.get("compiler.codegen_state_struct_suffix")
-        except (KeyError, TypeError):
-            dace_state_suffix = "_t"  # old structure name
-
         interface = cls.template.definition.render(
             name=sdfg.name,
             backend_specifics=omp_threads,
@@ -575,7 +571,7 @@ class DaCeComputationCodegen:
             functor_args=self.generate_functor_args(sdfg),
             tmp_allocs=self.generate_tmp_allocs(sdfg),
             allocator="gt::cuda_util::cuda_malloc" if is_gpu else "std::make_unique",
-            state_suffix=dace_state_suffix,
+            state_suffix=dace.Config.get("compiler.codegen_state_struct_suffix"),
         )
         generated_code = textwrap.dedent(
             f"""#include <gridtools/sid/sid_shift_origin.hpp>
@@ -690,14 +686,14 @@ class DaCeBindingsCodegen:
             if name in sdfg.arrays:
                 data = sdfg.arrays[name]
                 assert isinstance(data, dace.data.Array)
-                res[
-                    name
-                ] = "py::{pybind_type} {name}, std::array<gt::int_t,{ndim}> {name}_origin".format(
-                    pybind_type="object"
-                    if self.backend.storage_info["device"] == "gpu"
-                    else "buffer",
-                    name=name,
-                    ndim=len(data.shape),
+                res[name] = (
+                    "py::{pybind_type} {name}, std::array<gt::int_t,{ndim}> {name}_origin".format(
+                        pybind_type=(
+                            "object" if self.backend.storage_info["device"] == "gpu" else "buffer"
+                        ),
+                        name=name,
+                        ndim=len(data.shape),
+                    )
                 )
             elif name in sdfg.symbols and not name.startswith("__"):
                 assert name in sdfg.symbols
@@ -787,8 +783,7 @@ class BaseDaceBackend(BaseGTBackend, CLIBackendMixin):
 
         # Generate and return the Python wrapper class
         return self.make_module(
-            pyext_module_name=pyext_module_name,
-            pyext_file_path=pyext_file_path,
+            pyext_module_name=pyext_module_name, pyext_file_path=pyext_file_path
         )
 
 
@@ -827,10 +822,7 @@ class DaceGPUBackend(BaseDaceBackend):
         ),
     }
     MODULE_GENERATOR_CLASS = DaCeCUDAPyExtModuleGenerator
-    options = {
-        **BaseGTBackend.GT_BACKEND_OPTS,
-        "device_sync": {"versioning": True, "type": bool},
-    }
+    options = {**BaseGTBackend.GT_BACKEND_OPTS, "device_sync": {"versioning": True, "type": bool}}
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
         return self.make_extension(stencil_ir=self.builder.gtir, uses_cuda=True)

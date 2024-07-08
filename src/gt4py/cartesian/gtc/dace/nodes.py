@@ -92,14 +92,10 @@ class StencilComputation(library.LibraryNode):
         dtype=dace.DeviceType, default=dace.DeviceType.CPU, allow_none=True
     )
     expansion_specification = PickledListProperty(
-        element_type=ExpansionItem,
-        allow_none=True,
-        setter=_set_expansion_order,
+        element_type=ExpansionItem, allow_none=True, setter=_set_expansion_order
     )
     tile_sizes = PickledDictProperty(
-        key_type=dcir.Axis,
-        value_type=int,
-        default={dcir.Axis.I: 8, dcir.Axis.J: 8, dcir.Axis.K: 8},
+        key_type=dcir.Axis, value_type=int, default={dcir.Axis.I: 8, dcir.Axis.J: 8, dcir.Axis.K: 8}
     )
 
     tile_sizes_interpretation = dace.properties.Property(
@@ -121,7 +117,7 @@ class StencilComputation(library.LibraryNode):
         *args,
         **kwargs,
     ):
-        super().__init__(name=name, *args, **kwargs)
+        super().__init__(*args, name=name, **kwargs)
 
         from gt4py.cartesian.gtc.dace.utils import compute_dcir_access_infos
 

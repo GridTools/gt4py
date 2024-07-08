@@ -38,12 +38,10 @@ class AdjacentLoopMerging(NodeTranslator):
     def _merge(a: oir.VerticalLoop, b: oir.VerticalLoop) -> oir.VerticalLoop:
         sections = a.sections + b.sections
         if a.caches or b.caches:
-            warnings.warn("AdjacentLoopMerging pass removed previously declared caches")
-        return oir.VerticalLoop(
-            loop_order=a.loop_order,
-            sections=sections,
-            caches=[],
-        )
+            warnings.warn(
+                "AdjacentLoopMerging pass removed previously declared caches", stacklevel=2
+            )
+        return oir.VerticalLoop(loop_order=a.loop_order, sections=sections, caches=[])
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
         if not node.vertical_loops:

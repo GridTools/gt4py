@@ -57,8 +57,12 @@ class Python(LanguageTag):
     ...
 
 
-class NanobindSrcL(LanguageTag):
+class SDFG(LanguageTag):
+    settings_class = LanguageSettings
     ...
+
+
+class NanobindSrcL(LanguageTag): ...
 
 
 class Cpp(NanobindSrcL):

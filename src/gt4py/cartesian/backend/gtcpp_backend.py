@@ -88,9 +88,9 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
             sid_ndim = domain_ndim + data_ndim
             if kwargs["external_arg"]:
                 return "py::{pybind_type} {name}, std::array<gt::int_t,{sid_ndim}> {name}_origin".format(
-                    pybind_type="object"
-                    if self.backend.storage_info["device"] == "gpu"
-                    else "buffer",
+                    pybind_type=(
+                        "object" if self.backend.storage_info["device"] == "gpu" else "buffer"
+                    ),
                     name=node.name,
                     sid_ndim=sid_ndim,
                 )
@@ -115,12 +115,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
         assert "module_name" in kwargs
         entry_params = self.visit(node.parameters, external_arg=True, **kwargs)
         sid_params = self.visit(node.parameters, external_arg=False, **kwargs)
-        return self.generic_visit(
-            node,
-            entry_params=entry_params,
-            sid_params=sid_params,
-            **kwargs,
-        )
+        return self.generic_visit(node, entry_params=entry_params, sid_params=sid_params, **kwargs)
 
     Program = bindings_main_template()
 
@@ -151,8 +146,7 @@ class GTBaseBackend(BaseGTBackend, CLIBackendMixin):
 
         # Generate and return the Python wrapper class
         return self.make_module(
-            pyext_module_name=pyext_module_name,
-            pyext_file_path=pyext_file_path,
+            pyext_module_name=pyext_module_name, pyext_file_path=pyext_file_path
         )
 
 

@@ -14,7 +14,6 @@
 
 """Basic pattern matching utilities."""
 
-
 from __future__ import annotations
 
 from functools import singledispatch
@@ -31,9 +30,9 @@ class ObjectPattern:
 
     Examples:
         >>> class Foo:
-        ...    def __init__(self, bar, baz):
-        ...        self.bar = bar
-        ...        self.baz = baz
+        ...     def __init__(self, bar, baz):
+        ...         self.bar = bar
+        ...         self.baz = baz
         >>> assert ObjectPattern(Foo, bar=1).match(Foo(1, 2))
     """
 
@@ -62,7 +61,7 @@ class ObjectPattern:
         return next(get_differences(self, other), None) is None
 
     def __str__(self) -> str:
-        attrs_str = ", ".join([f"{str(k)}={str(v)}" for k, v in self.fields.items()])
+        attrs_str = ", ".join([f"{k!s}={v!s}" for k, v in self.fields.items()])
         return f"{self.cls.__name__}({attrs_str})"
 
 
@@ -86,10 +85,7 @@ def get_differences(a: Any, b: Any, path: str = "") -> Iterator[Tuple[str, str]]
 @get_differences.register
 def _(a: ObjectPattern, b: Any, path: str = "") -> Iterator[Tuple[str, str]]:
     if not isinstance(b, a.cls):
-        yield (
-            path,
-            f"Expected an instance of class {a.cls.__name__}, but got {type(b).__name__}",
-        )
+        yield (path, f"Expected an instance of class {a.cls.__name__}, but got {type(b).__name__}")
     else:
         for k in a.fields.keys():
             if not hasattr(b, k):

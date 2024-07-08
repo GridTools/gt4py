@@ -24,6 +24,7 @@ on the program and (optionally) input values are program formatters.
 For more information refer to
 ``gt4py/docs/functional/architecture/007-Program-Processors.md``
 """
+
 from __future__ import annotations
 
 import functools
@@ -40,14 +41,12 @@ ProcessorKindT = TypeVar("ProcessorKindT", bound="ProgramProcessor", covariant=T
 
 
 class ProgramProcessorCallable(Protocol[OutputT]):
-    def __call__(self, program: itir.FencilDefinition, *args, **kwargs) -> OutputT:
-        ...
+    def __call__(self, program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> OutputT: ...
 
 
 class ProgramProcessor(ProgramProcessorCallable[OutputT], Protocol[OutputT, ProcessorKindT]):
     @property
-    def kind(self) -> type[ProcessorKindT]:
-        ...
+    def kind(self) -> type[ProcessorKindT]: ...
 
 
 class ProgramFormatter(ProgramProcessor[str, "ProgramFormatter"], Protocol):
@@ -141,7 +140,7 @@ def make_program_processor(
     filtered_kwargs = _make_kwarg_filter(accept_kwargs)
 
     @functools.wraps(func)
-    def _wrapper(program: itir.FencilDefinition, *args, **kwargs) -> OutputT:
+    def _wrapper(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> OutputT:
         return func(program, *args_filter(args), **filtered_kwargs(kwargs))
 
     if name is not None:
@@ -208,11 +207,7 @@ def program_executor(
     return cast(
         ProgramExecutor,
         make_program_processor(
-            func,
-            ProgramExecutor,
-            name=name,
-            accept_args=accept_args,
-            accept_kwargs=accept_kwargs,
+            func, ProgramExecutor, name=name, accept_args=accept_args, accept_kwargs=accept_kwargs
         ),
     )
 
@@ -234,13 +229,15 @@ class ProgramBackend(
     ProgramProcessor[None, "ProgramExecutor"],
     next_allocators.FieldBufferAllocatorFactoryProtocol[core_defs.DeviceTypeT],
     Protocol[core_defs.DeviceTypeT],
-):
-    ...
+): ...
 
 
 def is_program_backend(obj: Callable) -> TypeGuard[ProgramBackend]:
+    if not hasattr(obj, "executor"):
+        return False
     return is_processor_kind(
-        obj, ProgramExecutor  # type: ignore[type-abstract]  # ProgramExecutor is abstract
+        obj.executor,
+        ProgramExecutor,  # type: ignore[type-abstract]  # ProgramExecutor is abstract
     ) and next_allocators.is_field_allocator_factory(obj)
 
 
@@ -248,5 +245,6 @@ def is_program_backend_for(
     obj: Callable, device: core_defs.DeviceTypeT
 ) -> TypeGuard[ProgramBackend[core_defs.DeviceTypeT]]:
     return is_processor_kind(
-        obj, ProgramExecutor  # type: ignore[type-abstract]  # ProgramExecutor is abstract
+        obj,
+        ProgramExecutor,  # type: ignore[type-abstract]  # ProgramExecutor is abstract
     ) and next_allocators.is_field_allocator_factory_for(obj, device)

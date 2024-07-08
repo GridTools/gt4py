@@ -48,7 +48,7 @@ class CastExpr(Expr):
 
 class Literal(Expr):
     value: str
-    type: str  # noqa: A003
+    type: str
 
 
 class IntegralConstant(Expr):
@@ -70,13 +70,13 @@ class FunCall(Expr):
 
 
 class FunctionDefinition(Node, SymbolTableTrait):
-    id: Coerced[SymbolName]  # noqa: A003
+    id: Coerced[SymbolName]
     params: list[Sym]
     expr: Expr
 
 
 class ScanPassDefinition(Node, SymbolTableTrait):
-    id: Coerced[SymbolName]  # noqa: A003
+    id: Coerced[SymbolName]
     params: list[Sym]
     expr: Expr
     forward: bool
@@ -128,7 +128,7 @@ class ScanExecution(Node):
 
 
 class TemporaryAllocation(Node):
-    id: SymbolName  # noqa: A003
+    id: SymbolName
     dtype: str
     domain: Union[SymRef, CartesianDomain, UnstructuredDomain]
 
@@ -147,11 +147,7 @@ GTFN_BUILTINS = [
 ARITHMETIC_BUILTINS = itir.ARITHMETIC_BUILTINS
 TYPEBUILTINS = itir.TYPEBUILTINS
 
-BUILTINS = {
-    *GTFN_BUILTINS,
-    *ARITHMETIC_BUILTINS,
-    *TYPEBUILTINS,
-}
+BUILTINS = {*GTFN_BUILTINS, *ARITHMETIC_BUILTINS, *TYPEBUILTINS}
 
 
 class TagDefinition(Node):
@@ -159,8 +155,8 @@ class TagDefinition(Node):
     alias: Optional[Union[str, SymRef]] = None
 
 
-class FencilDefinition(Node, ValidatedSymbolTableTrait):
-    id: SymbolName  # noqa: A003
+class Program(Node, ValidatedSymbolTableTrait):
+    id: SymbolName
     params: list[Sym]
     function_definitions: list[
         Union[FunctionDefinition, ScanPassDefinition, ImperativeFunctionDefinition]

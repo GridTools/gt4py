@@ -48,23 +48,21 @@ CUPY_DEVICE: Final[Literal[None, core_defs.DeviceType.CUDA, core_defs.DeviceType
 
 FieldLike = Union["cp.ndarray", np.ndarray, ArrayInterface, CUDAArrayInterface]
 
-assert allocators.is_valid_nplike_allocation_ns(np)
-
 _CPUBufferAllocator = allocators.NDArrayBufferAllocator(
-    device_type=core_defs.DeviceType.CPU,
-    array_ns=np,
+    device_type=core_defs.DeviceType.CPU, array_utils=allocators.numpy_array_utils
 )
 
 _GPUBufferAllocator: Optional[allocators.NDArrayBufferAllocator] = None
 if cp:
-    assert allocators.is_valid_nplike_allocation_ns(cp)
+    assert isinstance(allocators.cupy_array_utils, allocators.ArrayUtils)
+
     if CUPY_DEVICE == core_defs.DeviceType.CUDA:
         _GPUBufferAllocator = allocators.NDArrayBufferAllocator(
-            device_type=core_defs.DeviceType.CUDA, array_ns=cp
+            device_type=core_defs.DeviceType.CUDA, array_utils=allocators.cupy_array_utils
         )
     else:
         _GPUBufferAllocator = allocators.NDArrayBufferAllocator(
-            device_type=core_defs.DeviceType.ROCM, array_ns=cp
+            device_type=core_defs.DeviceType.ROCM, array_utils=allocators.cupy_array_utils
         )
 
 
@@ -192,6 +190,10 @@ def cpu_copy(array: Union[np.ndarray, "cp.ndarray"]) -> np.ndarray:
 def asarray(
     array: FieldLike, *, device: Literal["cpu", "gpu", None] = None
 ) -> np.ndarray | cp.ndarray:
+    if hasattr(array, "ndarray"):
+        # extract the buffer from a gt4py.next.Field
+        # TODO(havogt): probably `Field` should provide the array interface methods when applicable
+        array = array.ndarray
     if device == "gpu" or (not device and hasattr(array, "__cuda_array_interface__")):
         return cp.asarray(array)
     if device == "cpu" or (

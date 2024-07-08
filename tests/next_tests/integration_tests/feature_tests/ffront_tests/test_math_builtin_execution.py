@@ -18,9 +18,13 @@ from typing import Callable, Optional
 import numpy as np
 import pytest
 
-import gt4py.next as gtx
-from gt4py.next.ffront import dialect_ast_enums, fbuiltins, field_operator_ast as foast
-from gt4py.next.ffront.decorator import FieldOperator
+from gt4py.next.ffront import (
+    decorator,
+    dialect_ast_enums,
+    fbuiltins,
+    field_operator_ast as foast,
+    stages as ffront_stages,
+)
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_translation
@@ -28,7 +32,7 @@ from gt4py.next.type_system import type_translation
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import IDim, cartesian_case, unstructured_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    fieldview_backend,
+    exec_alloc_descriptor,
 )
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
 
@@ -107,18 +111,20 @@ def make_builtin_field_operator(builtin_name: str, backend: Optional[ppi.Program
     )
     typed_foast_node = FieldOperatorTypeDeduction.apply(foast_node)
 
-    return FieldOperator(
-        foast_node=typed_foast_node,
-        closure_vars=closure_vars,
-        definition=None,
+    return decorator.FieldOperatorFromFoast(
+        definition_stage=None,
+        foast_stage=ffront_stages.FoastOperatorDefinition(
+            foast_node=typed_foast_node,
+            closure_vars=closure_vars,
+            grid_type=None,
+        ),
         backend=backend,
-        grid_type=None,
     )
 
 
 @pytest.mark.parametrize("builtin_name, inputs", math_builtin_test_data())
 def test_math_function_builtins_execution(cartesian_case, builtin_name: str, inputs):
-    if cartesian_case.backend is None:
+    if cartesian_case.executor is None:
         # TODO(havogt) find a way that works for embedded
         pytest.xfail("Test does not have a field view program.")
     if builtin_name == "gamma":
@@ -131,7 +137,7 @@ def test_math_function_builtins_execution(cartesian_case, builtin_name: str, inp
     expected = ref_impl(*inputs)
     out = cartesian_case.as_field([IDim], np.zeros_like(expected))
 
-    builtin_field_op = make_builtin_field_operator(builtin_name, cartesian_case.backend)
+    builtin_field_op = make_builtin_field_operator(builtin_name, cartesian_case.executor)
 
     builtin_field_op(*inps, out=out, offset_provider={})
 

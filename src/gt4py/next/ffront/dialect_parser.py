@@ -39,14 +39,18 @@ def parse_source_definition(source_definition: SourceDefinition) -> ast.AST:
             line=err.lineno + source_definition.line_offset,
             column=err.offset + source_definition.column_offset,
             filename=source_definition.filename,
-            end_line=err.end_lineno + source_definition.line_offset
-            if err.end_lineno is not None
-            else None,
-            end_column=err.end_offset + source_definition.column_offset
-            if err.end_offset is not None
-            else None,
+            end_line=(
+                err.end_lineno + source_definition.line_offset
+                if err.end_lineno is not None
+                else None
+            ),
+            end_column=(
+                err.end_offset + source_definition.column_offset
+                if err.end_offset is not None
+                else None
+            ),
         )
-        raise errors.DSLError(loc, err.msg).with_traceback(err.__traceback__)
+        raise errors.DSLError(loc, err.msg).with_traceback(err.__traceback__) from err
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -80,7 +84,7 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         return output_ast
 
     @classmethod
-    def apply_to_function(cls, function: Callable):
+    def apply_to_function(cls, function: Callable) -> DialectRootT:
         src = SourceDefinition.from_function(function)
         closure_vars = get_closure_vars_from_function(function)
         annotations = typing.get_type_hints(function)

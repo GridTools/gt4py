@@ -20,7 +20,7 @@ jobs:
   test-eve:
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10"]
+        python-version: ["3.8", "3.9", "3.10", "3.11"]
         os: ["ubuntu-latest"]
       fail-fast: false
 
@@ -68,4 +68,3 @@ jobs:
     #   with:
     #     name: info-py${{ matrix.python-version }}-${{ matrix.os }}
     #     path: info.txt
-

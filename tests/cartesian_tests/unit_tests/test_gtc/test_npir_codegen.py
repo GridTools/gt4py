@@ -165,10 +165,7 @@ def test_native_function() -> None:
     result = NpirCodegen().visit(
         NativeFuncCallFactory(
             func=common.NativeFunction.MIN,
-            args=[
-                FieldSliceFactory(name="a"),
-                ParamAccessFactory(name="p"),
-            ],
+            args=[FieldSliceFactory(name="a"), ParamAccessFactory(name="p")],
         ),
         is_serial=False,
     )
@@ -226,10 +223,7 @@ def test_vector_arithmetic() -> None:
 
 def test_vector_unary_op() -> None:
     result = NpirCodegen().visit(
-        npir.VectorUnaryOp(
-            expr=FieldSliceFactory(name="a"),
-            op=common.UnaryOperator.NEG,
-        ),
+        npir.VectorUnaryOp(expr=FieldSliceFactory(name="a"), op=common.UnaryOperator.NEG),
         is_serial=False,
     )
     assert result == "(-(a[i:I, j:J, k:K]))"
@@ -277,11 +271,7 @@ def test_vertical_pass_seq() -> None:
 def test_vertical_pass_par() -> None:
     result = NpirCodegen().visit(VerticalPassFactory(direction=common.LoopOrder.PARALLEL))
     print(result)
-    match = re.match(
-        (r"(#.*?\n)?" r"k, K = _dk_, _dK_\n"),
-        result,
-        re.MULTILINE,
-    )
+    match = re.match((r"(#.*?\n)?" r"k, K = _dk_, _dK_\n"), result, re.MULTILINE)
     assert match
 
 
@@ -333,13 +323,7 @@ def test_full_computation_valid(tmp_path) -> None:
     a = np.zeros((10, 10, 10))
     b = np.ones_like(a) * 3
     p = 2
-    mod.run(
-        a=a,
-        b=b,
-        p=p,
-        _domain_=(8, 5, 9),
-        _origin_={"a": (1, 1, 0), "b": (0, 0, 0)},
-    )
+    mod.run(a=a, b=b, p=p, _domain_=(8, 5, 9), _origin_={"a": (1, 1, 0), "b": (0, 0, 0)})
     assert (a[1:9, 1:6, 0:9] == 5).all()
 
 
@@ -359,7 +343,7 @@ def test_variable_read_outside_bounds(tmp_path) -> None:
                     k=FieldSliceFactory(name="index", dtype=common.DataType.INT32)
                 ),
             ),
-        ),
+        )
     )
 
     result = NpirCodegen().visit(computation)

@@ -12,11 +12,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gt4py.eve import NodeTranslator
+from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next.iterator import ir
 
 
-class EtaReduction(NodeTranslator):
+class EtaReduction(PreserveLocationVisitor, NodeTranslator):
     """Eta reduction: simplifies `λ(args...) → f(args...)` to `f`."""
 
     def visit_Lambda(self, node: ir.Lambda) -> ir.Node:

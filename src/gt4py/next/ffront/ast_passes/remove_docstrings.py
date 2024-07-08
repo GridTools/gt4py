@@ -27,17 +27,15 @@ class RemoveDocstrings(ast.NodeTransformer):
     >>> def example_docstring():
     ...     a = 1
     ...     "This is a docstring"
+    ...
     ...     def example_docstring_2():
-    ...          a = 2.0
-    ...          "This is a new docstring"
-    ...          return a
+    ...         a = 2.0
+    ...         "This is a new docstring"
+    ...         return a
+    ...
     ...     a = example_docstring_2()
     ...     return a
-    >>> print(ast.unparse(
-    ...     RemoveDocstrings.apply(
-    ...         ast.parse(inspect.getsource(example_docstring))
-    ...     )
-    ... ))
+    >>> print(ast.unparse(RemoveDocstrings.apply(ast.parse(inspect.getsource(example_docstring)))))
     def example_docstring():
         a = 1
     <BLANKLINE>
@@ -53,12 +51,13 @@ class RemoveDocstrings(ast.NodeTransformer):
         return cls().visit(node)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.AST:
-        for obj in node.body:
-            if (
-                isinstance(obj, ast.Expr)
-                and isinstance(obj.value, ast.Constant)
-                and isinstance(obj.value.value, str)
-            ):
-                node.body.remove(obj)
-
+        node.body = [obj for obj in node.body if not _is_const_str_expr(obj)]
         return self.generic_visit(node)
+
+
+def _is_const_str_expr(obj: ast.stmt) -> bool:
+    return (
+        isinstance(obj, ast.Expr)
+        and isinstance(obj.value, ast.Constant)
+        and isinstance(obj.value.value, str)
+    )

@@ -103,9 +103,7 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         self, node: oir.BinaryOp, **kwargs: Any
     ) -> Union[npir.VectorArithmetic, npir.VectorLogic]:
         args = dict(
-            op=node.op,
-            left=self.visit(node.left, **kwargs),
-            right=self.visit(node.right, **kwargs),
+            op=node.op, left=self.visit(node.left, **kwargs), right=self.visit(node.right, **kwargs)
         )
         if isinstance(node.op, common.LogicalOperator):
             return npir.VectorLogic(**args)
@@ -135,11 +133,7 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     # --- Statements ---
     def visit_MaskStmt(
-        self,
-        node: oir.MaskStmt,
-        *,
-        mask: Optional[npir.Expr] = None,
-        **kwargs: Any,
+        self, node: oir.MaskStmt, *, mask: Optional[npir.Expr] = None, **kwargs: Any
     ) -> List[npir.Stmt]:
         mask_expr = self.visit(node.mask, **kwargs)
         if mask:
@@ -237,11 +231,7 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         ]
 
         vertical_passes = utils.flatten_list(
-            self.visit(
-                node.vertical_loops,
-                block_extents=block_extents,
-                **kwargs,
-            )
+            self.visit(node.vertical_loops, block_extents=block_extents, **kwargs)
         )
 
         return npir.Computation(

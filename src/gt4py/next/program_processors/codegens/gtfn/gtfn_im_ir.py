@@ -21,8 +21,7 @@ from gt4py.eve.traits import SymbolTableTrait
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_common import Expr, Sym, SymRef
 
 
-class Stmt(Node):
-    ...
+class Stmt(Node): ...
 
 
 class AssignStmt(Stmt):
@@ -35,8 +34,7 @@ class InitStmt(AssignStmt):
     init_type: str = "auto"
 
 
-class EmptyListInitializer(Expr):
-    ...
+class EmptyListInitializer(Expr): ...
 
 
 class Conditional(Stmt):
@@ -52,6 +50,6 @@ class ReturnStmt(Stmt):
 
 
 class ImperativeFunctionDefinition(Node, SymbolTableTrait):
-    id: Coerced[SymbolName]  # noqa: A003
+    id: Coerced[SymbolName]
     params: List[Sym]
     fun: List[Stmt]

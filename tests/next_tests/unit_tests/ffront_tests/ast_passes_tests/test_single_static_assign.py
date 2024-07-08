@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
+
 # GT4Py - GridTools Framework
 #
 # Copyright (c) 2014-2023, ETH Zurich
@@ -108,7 +108,10 @@ def test_unpacking_swap():
     lines = ast.unparse(ssa_ast).split("\n")
     assert lines[0] == f"a{SEP}0 = 5"
     assert lines[1] == f"b{SEP}0 = 1"
-    assert lines[2] == f"(b{SEP}1, a{SEP}1) = (a{SEP}0, b{SEP}0)"
+    assert lines[2] in [
+        f"(b{SEP}1, a{SEP}1) = (a{SEP}0, b{SEP}0)",
+        f"b{SEP}1, a{SEP}1 = (a{SEP}0, b{SEP}0)",
+    ]  # unparse produces different parentheses in different Python versions
 
 
 def test_annotated_assign():

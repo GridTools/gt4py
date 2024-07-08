@@ -13,16 +13,18 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
+from typing import Callable, Optional
 
-from gt4py.next.iterator import ir
-from gt4py.next.iterator.transforms import simple_inline_heuristic
+from gt4py.eve import utils as eve_utils
+from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 from gt4py.next.iterator.transforms.cse import CommonSubexpressionElimination
 from gt4py.next.iterator.transforms.eta_reduction import EtaReduction
 from gt4py.next.iterator.transforms.fuse_maps import FuseMaps
-from gt4py.next.iterator.transforms.global_tmps import CreateGlobalTmps
+from gt4py.next.iterator.transforms.global_tmps import CreateGlobalTmps, FencilWithTemporaries
+from gt4py.next.iterator.transforms.inline_center_deref_lift_vars import InlineCenterDerefLiftVars
 from gt4py.next.iterator.transforms.inline_fundefs import InlineFundefs, PruneUnreferencedFundefs
 from gt4py.next.iterator.transforms.inline_into_scan import InlineIntoScan
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
@@ -37,21 +39,16 @@ from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce
 @enum.unique
 class LiftMode(enum.Enum):
     FORCE_INLINE = enum.auto()
-    FORCE_TEMPORARIES = enum.auto()
-    SIMPLE_HEURISTIC = enum.auto()
+    USE_TEMPORARIES = enum.auto()
 
 
 def _inline_lifts(ir, lift_mode):
     if lift_mode == LiftMode.FORCE_INLINE:
         return InlineLifts().visit(ir)
-    elif lift_mode == LiftMode.SIMPLE_HEURISTIC:
-        return InlineLifts(simple_inline_heuristic.is_eligible_for_inlining).visit(ir)
-    elif lift_mode == LiftMode.FORCE_TEMPORARIES:
+    elif lift_mode == LiftMode.USE_TEMPORARIES:
         return InlineLifts(
             flags=InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT
             | InlineLifts.Flag.INLINE_DEREF_LIFT  # some tuple exprs found in FVM don't work yet.
-            | InlineLifts.Flag.INLINE_LIFTED_ARGS
-            # needed for UnrollReduce and lift args like `(↑(λ() → constant)`
         ).visit(ir)
     else:
         raise ValueError()
@@ -72,8 +69,10 @@ def _inline_into_scan(ir, *, max_iter=10):
     return ir
 
 
+# TODO(tehrengruber): Revisit interface to configure temporary extraction. We currently forward
+#  `lift_mode` and `temporary_extraction_heuristics` which is inconvenient.
 def apply_common_transforms(
-    ir: ir.Node,
+    ir: itir.Node,
     *,
     lift_mode=None,
     offset_provider=None,
@@ -81,12 +80,23 @@ def apply_common_transforms(
     common_subexpression_elimination=True,
     force_inline_lambda_args=False,
     unconditionally_collapse_tuples=False,
-):
+    temporary_extraction_heuristics: Optional[
+        Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
+    ] = None,
+    symbolic_domain_sizes: Optional[dict[str, str]] = None,
+) -> itir.FencilDefinition | FencilWithTemporaries | itir.Program:
+    if isinstance(ir, itir.Program):
+        # TODO(havogt): during refactoring to GTIR, we bypass transformations in case we already translated to itir.Program
+        # (currently the case when using the roundtrip backend)
+        return ir
+    icdlv_uids = eve_utils.UIDGenerator()
+
     if lift_mode is None:
         lift_mode = LiftMode.FORCE_INLINE
     assert isinstance(lift_mode, LiftMode)
     ir = MergeLet().visit(ir)
     ir = InlineFundefs().visit(ir)
+
     ir = PruneUnreferencedFundefs().visit(ir)
     ir = PropagateDeref.apply(ir)
     ir = NormalizeShifts().visit(ir)
@@ -94,6 +104,7 @@ def apply_common_transforms(
     for _ in range(10):
         inlined = ir
 
+        inlined = InlineCenterDerefLiftVars.apply(inlined, uids=icdlv_uids)  # type: ignore[arg-type]  # always a fencil
         inlined = _inline_lifts(inlined, lift_mode)
 
         inlined = InlineLambdas.apply(
@@ -109,9 +120,14 @@ def apply_common_transforms(
         # is constant-folded the surrounding tuple_get calls can be removed.
         inlined = CollapseTuple.apply(
             inlined,
-            # to limit number of times global type inference is executed, only in the last iterations.
-            use_global_type_inference=inlined == ir,
+            offset_provider=offset_provider,
+            # TODO(tehrengruber): disabled since it increases compile-time too much right now
+            flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
         )
+        # This pass is required such that a deref outside of a
+        # `tuple_get(make_tuple(let(...), ...))` call is propagated into the let after the
+        # `tuple_get` is removed by the `CollapseTuple` pass.
+        inlined = PropagateDeref.apply(inlined)
 
         if inlined == ir:
             break
@@ -119,11 +135,42 @@ def apply_common_transforms(
     else:
         raise RuntimeError("Inlining 'lift' and 'lambdas' did not converge.")
 
+    if lift_mode != LiftMode.FORCE_INLINE:
+        assert offset_provider is not None
+        ir = CreateGlobalTmps().visit(
+            ir,
+            offset_provider=offset_provider,
+            extraction_heuristics=temporary_extraction_heuristics,
+            symbolic_sizes=symbolic_domain_sizes,
+        )
+
+        for _ in range(10):
+            inlined = InlineLifts().visit(ir)
+            inlined = InlineLambdas.apply(
+                inlined, opcount_preserving=True, force_inline_lift_args=True
+            )
+            if inlined == ir:
+                break
+            ir = inlined
+        else:
+            raise RuntimeError("Inlining 'lift' and 'lambdas' did not converge.")
+
+        # If after creating temporaries, the scan is not at the top, we inline.
+        # The following example doesn't have a lift around the shift, i.e. temporary pass will not extract it.
+        # λ(inp) → scan(λ(state, k, kp) → state + ·k + ·kp, True, 0.0)(inp, ⟪Koffₒ, 1ₒ⟫(inp))`
+        ir = _inline_into_scan(ir)
+
     # Since `CollapseTuple` relies on the type inference which does not support returning tuples
     # larger than the number of closure outputs as given by the unconditional collapse, we can
     # only run the unconditional version here instead of in the loop above.
     if unconditionally_collapse_tuples:
-        ir = CollapseTuple.apply(ir, ignore_tuple_size=unconditionally_collapse_tuples)
+        ir = CollapseTuple.apply(
+            ir,
+            ignore_tuple_size=True,
+            offset_provider=offset_provider,
+            # TODO(tehrengruber): disabled since it increases compile-time too much right now
+            flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
+        )
 
     if lift_mode == LiftMode.FORCE_INLINE:
         ir = _inline_into_scan(ir)
@@ -132,6 +179,7 @@ def apply_common_transforms(
 
     ir = FuseMaps().visit(ir)
     ir = CollapseListGet().visit(ir)
+
     if unroll_reduce:
         for _ in range(10):
             unrolled = UnrollReduce.apply(ir, offset_provider=offset_provider)
@@ -140,19 +188,10 @@ def apply_common_transforms(
             ir = unrolled
             ir = CollapseListGet().visit(ir)
             ir = NormalizeShifts().visit(ir)
-            ir = _inline_lifts(ir, lift_mode)
+            ir = _inline_lifts(ir, LiftMode.FORCE_INLINE)
             ir = NormalizeShifts().visit(ir)
         else:
             raise RuntimeError("Reduction unrolling failed.")
-
-    if lift_mode != LiftMode.FORCE_INLINE:
-        assert offset_provider is not None
-        ir = CreateGlobalTmps().visit(ir, offset_provider=offset_provider)
-        ir = InlineLifts().visit(ir)
-        # If after creating temporaries, the scan is not at the top, we inline.
-        # The following example doesn't have a lift around the shift, i.e. temporary pass will not extract it.
-        # λ(inp) → scan(λ(state, k, kp) → state + ·k + ·kp, True, 0.0)(inp, ⟪Koffₒ, 1ₒ⟫(inp))`
-        ir = _inline_into_scan(ir)
 
     ir = EtaReduction().visit(ir)
     ir = ScanEtaReduction().visit(ir)
@@ -162,9 +201,8 @@ def apply_common_transforms(
         ir = MergeLet().visit(ir)
 
     ir = InlineLambdas.apply(
-        ir,
-        opcount_preserving=True,
-        force_inline_lambda_args=force_inline_lambda_args,
+        ir, opcount_preserving=True, force_inline_lambda_args=force_inline_lambda_args
     )
 
+    assert isinstance(ir, (itir.FencilDefinition, FencilWithTemporaries))
     return ir

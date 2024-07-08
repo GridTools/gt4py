@@ -24,6 +24,11 @@ class BackendNotSelectedError(RuntimeError):
 
 
 @builtin_dispatch
+def as_fieldop(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def deref(*args):
     raise BackendNotSelectedError()
 
@@ -184,7 +189,7 @@ def tuple_get(*args):
 
 
 @builtin_dispatch
-def abs(*args):  # noqa: A001
+def abs(*args):  # noqa: A001 [builtin-variable-shadowing]
     raise BackendNotSelectedError()
 
 
@@ -329,7 +334,7 @@ def power(*args):
 
 
 @builtin_dispatch
-def int(*args):  # noqa: A001
+def int(*args):  # noqa: A001 [builtin-variable-shadowing]
     raise BackendNotSelectedError()
 
 
@@ -344,7 +349,7 @@ def int64(*args):
 
 
 @builtin_dispatch
-def float(*args):  # noqa: A001
+def float(*args):  # noqa: A001 [builtin-variable-shadowing]
     raise BackendNotSelectedError()
 
 
@@ -359,7 +364,7 @@ def float64(*args):
 
 
 @builtin_dispatch
-def bool(*args):  # noqa: A001
+def bool(*args):  # noqa: A001 [builtin-variable-shadowing]
     raise BackendNotSelectedError()
 
 
@@ -430,6 +435,7 @@ BUILTINS = {
     "cartesian_domain",
     "unstructured_domain",
     "named_range",
+    "as_fieldop",
     *MATH_BUILTINS,
 }
 

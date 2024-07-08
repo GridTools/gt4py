@@ -23,6 +23,7 @@ from gt4py.next import errors
 from gt4py.next.ffront.func_to_past import ProgramParser
 from gt4py.next.ffront.past_to_itir import ProgramLowering
 from gt4py.next.iterator import ir as itir
+from gt4py.next.type_system import type_specifications as ts
 
 from next_tests.past_common_fixtures import (
     IDim,
@@ -59,13 +60,31 @@ def test_copy_lowering(copy_program_def, itir_identity_fundef):
                     fun=P(itir.SymRef, id=eve.SymbolRef("named_range")),
                     args=[
                         P(itir.AxisLiteral, value="IDim"),
-                        P(itir.Literal, value="0", type="int32"),
+                        P(itir.Literal, value="0", type=ts.ScalarType(kind=ts.ScalarKind.INT32)),
                         P(itir.SymRef, id=eve.SymbolRef("__out_size_0")),
                     ],
                 )
             ],
         ),
-        stencil=P(itir.SymRef, id=eve.SymbolRef("identity")),
+        stencil=P(
+            itir.Lambda,
+            params=[P(itir.Sym, id=eve.SymbolName("__stencil_arg0"))],
+            expr=P(
+                itir.FunCall,
+                fun=P(
+                    itir.Lambda,
+                    params=[P(itir.Sym)],
+                    expr=P(itir.FunCall, fun=P(itir.SymRef, id=eve.SymbolRef("deref"))),
+                ),
+                args=[
+                    P(
+                        itir.FunCall,
+                        fun=P(itir.SymRef, id=eve.SymbolRef("identity")),
+                        args=[P(itir.SymRef, id=eve.SymbolRef("__stencil_arg0"))],
+                    )
+                ],
+            ),
+        ),
         inputs=[P(itir.SymRef, id=eve.SymbolRef("in_field"))],
         output=P(itir.SymRef, id=eve.SymbolRef("out")),
     )
@@ -100,8 +119,20 @@ def test_copy_restrict_lowering(copy_restrict_program_def, itir_identity_fundef)
                     fun=P(itir.SymRef, id=eve.SymbolRef("named_range")),
                     args=[
                         P(itir.AxisLiteral, value="IDim"),
-                        P(itir.Literal, value="1", type=itir.INTEGER_INDEX_BUILTIN),
-                        P(itir.Literal, value="2", type=itir.INTEGER_INDEX_BUILTIN),
+                        P(
+                            itir.Literal,
+                            value="1",
+                            type=ts.ScalarType(
+                                kind=getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())
+                            ),
+                        ),
+                        P(
+                            itir.Literal,
+                            value="2",
+                            type=ts.ScalarType(
+                                kind=getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())
+                            ),
+                        ),
                     ],
                 )
             ],
@@ -157,8 +188,7 @@ def test_inout_prohibited(identity_def):
         identity(inout_field, out=inout_field)
 
     with pytest.raises(
-        ValueError,
-        match=(r"Call to function with field as input and output not allowed."),
+        ValueError, match=(r"Call to function with field as input and output not allowed.")
     ):
         ProgramLowering.apply(
             ProgramParser.apply_to_function(inout_field_program),
@@ -168,9 +198,7 @@ def test_inout_prohibited(identity_def):
 
 
 def test_invalid_call_sig_program(invalid_call_sig_program_def):
-    with pytest.raises(
-        errors.DSLError,
-    ) as exc_info:
+    with pytest.raises(errors.DSLError) as exc_info:
         ProgramLowering.apply(
             ProgramParser.apply_to_function(invalid_call_sig_program_def),
             function_definitions=[],

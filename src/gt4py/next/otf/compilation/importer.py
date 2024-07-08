@@ -29,7 +29,7 @@ def import_from_path(module_file: pathlib.Path) -> ModuleType:
     try:
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-    except ImportError:
-        raise ModuleNotFoundError(error_msg)
+    except ImportError as ex:
+        raise ModuleNotFoundError(error_msg) from ex
 
     return module

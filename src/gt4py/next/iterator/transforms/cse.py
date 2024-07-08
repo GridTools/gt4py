@@ -17,14 +17,20 @@ import math
 import operator
 import typing
 
-from gt4py.eve import NodeTranslator, NodeVisitor, SymbolTableTrait, VisitorWithSymbolTableTrait
+from gt4py.eve import (
+    NodeTranslator,
+    NodeVisitor,
+    PreserveLocationVisitor,
+    SymbolTableTrait,
+    VisitorWithSymbolTableTrait,
+)
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda
 
 
 @dataclasses.dataclass
-class _NodeReplacer(NodeTranslator):
+class _NodeReplacer(PreserveLocationVisitor, NodeTranslator):
     PRESERVED_ANNEX_ATTRS = ("type",)
 
     expr_map: dict[int, ir.SymRef]
@@ -72,7 +78,7 @@ def _is_collectable_expr(node: ir.Node) -> bool:
 
 
 @dataclasses.dataclass
-class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
+class CollectSubexpressions(PreserveLocationVisitor, VisitorWithSymbolTableTrait, NodeVisitor):
     @dataclasses.dataclass
     class SubexpressionData:
         #: A list of node ids with equal hash and a set of collected child subexpression ids
@@ -238,23 +244,28 @@ def extract_subexpression(
         >>> expr = im.plus(im.plus("x", "y"), im.plus(im.plus("x", "y"), "z"))
         >>> predicate = lambda subexpr, num_occurences: num_occurences > 1
         >>> new_expr, extracted_subexprs, _ = extract_subexpression(
-        ...                                     expr, predicate, UIDGenerator(prefix="_subexpr"))
+        ...     expr, predicate, UIDGenerator(prefix="_subexpr")
+        ... )
         >>> print(new_expr)
         _subexpr_1 + (_subexpr_1 + z)
         >>> for sym, subexpr in extracted_subexprs.items():
-        ...    print(f"`{sym}`: `{subexpr}`")
+        ...     print(f"`{sym}`: `{subexpr}`")
         `_subexpr_1`: `x + y`
 
         The order of the extraction can be configured using `deepest_expr_first`. By default, the nodes
         closer to the root are eliminated first:
 
-        >>> expr = im.plus(im.plus(im.plus("x", "y"), im.plus("x", "y")), im.plus(im.plus("x", "y"), im.plus("x", "y")))
-        >>> new_expr, extracted_subexprs, ignored_children = extract_subexpression(expr, predicate,
-        ...     UIDGenerator(prefix="_subexpr"), deepest_expr_first=False)
+        >>> expr = im.plus(
+        ...     im.plus(im.plus("x", "y"), im.plus("x", "y")),
+        ...     im.plus(im.plus("x", "y"), im.plus("x", "y")),
+        ... )
+        >>> new_expr, extracted_subexprs, ignored_children = extract_subexpression(
+        ...     expr, predicate, UIDGenerator(prefix="_subexpr"), deepest_expr_first=False
+        ... )
         >>> print(new_expr)
         _subexpr_1 + _subexpr_1
         >>> for sym, subexpr in extracted_subexprs.items():
-        ...    print(f"`{sym}`: `{subexpr}`")
+        ...     print(f"`{sym}`: `{subexpr}`")
         `_subexpr_1`: `x + y + (x + y)`
 
         Since `(x+y)` is a child of one of the expressions it is ignored:
@@ -264,13 +275,21 @@ def extract_subexpression(
 
         Setting `deepest_expr_first` will extract nodes deeper in the tree first:
 
-        >>> expr = im.plus(im.plus(im.plus("x", "y"), im.plus("x", "y")), im.plus(im.plus("x", "y"), im.plus("x", "y")))
-        >>> new_expr, extracted_subexprs, _ = extract_subexpression(expr, predicate,
-        ...     UIDGenerator(prefix="_subexpr"), once_only=True, deepest_expr_first=True)
+        >>> expr = im.plus(
+        ...     im.plus(im.plus("x", "y"), im.plus("x", "y")),
+        ...     im.plus(im.plus("x", "y"), im.plus("x", "y")),
+        ... )
+        >>> new_expr, extracted_subexprs, _ = extract_subexpression(
+        ...     expr,
+        ...     predicate,
+        ...     UIDGenerator(prefix="_subexpr"),
+        ...     once_only=True,
+        ...     deepest_expr_first=True,
+        ... )
         >>> print(new_expr)
         _subexpr_1 + _subexpr_1 + (_subexpr_1 + _subexpr_1)
         >>> for sym, subexpr in extracted_subexprs.items():
-        ...    print(f"`{sym}`: `{subexpr}`")
+        ...     print(f"`{sym}`: `{subexpr}`")
         `_subexpr_1`: `x + y`
 
         Note that this requires `once_only` to be set right now.
@@ -341,7 +360,7 @@ def extract_subexpression(
 
 
 @dataclasses.dataclass(frozen=True)
-class CommonSubexpressionElimination(NodeTranslator):
+class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
     """
     Perform common subexpression elimination.
 

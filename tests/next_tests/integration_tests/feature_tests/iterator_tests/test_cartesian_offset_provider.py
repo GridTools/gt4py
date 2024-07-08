@@ -34,20 +34,14 @@ def foo(inp):
 @fendef(offset_provider={"I": I_loc, "J": J_loc})
 def fencil(output, input):
     closure(
-        cartesian_domain(named_range(I_loc, 0, 1), named_range(J_loc, 0, 1)),
-        foo,
-        output,
-        [input],
+        cartesian_domain(named_range(I_loc, 0, 1), named_range(J_loc, 0, 1)), foo, output, [input]
     )
 
 
 @fendef(offset_provider={"I": J_loc, "J": I_loc})
 def fencil_swapped(output, input):
     closure(
-        cartesian_domain(named_range(I_loc, 0, 1), named_range(J_loc, 0, 1)),
-        foo,
-        output,
-        [input],
+        cartesian_domain(named_range(I_loc, 0, 1), named_range(J_loc, 0, 1)), foo, output, [input]
     )
 
 
@@ -64,5 +58,5 @@ def test_cartesian_offset_provider():
     fencil(out, inp, backend=roundtrip.executor)
     assert out[0][0] == 42
 
-    fencil(out, inp, backend=double_roundtrip.executor)
+    fencil(out, inp, backend=double_roundtrip.backend.executor)
     assert out[0][0] == 42

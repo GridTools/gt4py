@@ -49,7 +49,10 @@ class TestExecInfo:
 
     @staticmethod
     def diffusion_def(
-        in_phi: gtscript.Field[float], out_phi: gtscript.Field[float], *, alpha: float  # type: ignore
+        in_phi: gtscript.Field[float],
+        out_phi: gtscript.Field[float],
+        *,
+        alpha: float,  # type: ignore
     ):
         with computation(PARALLEL), interval(...):  # type: ignore  # noqa
             lap1 = (
@@ -170,8 +173,7 @@ class TestExecInfo:
         assert "run_time" in stencil_info
         if last_called_stencil:
             assert np.isclose(
-                stencil_info["run_time"],
-                exec_info["run_end_time"] - exec_info["run_start_time"],
+                stencil_info["run_time"], exec_info["run_end_time"] - exec_info["run_start_time"]
             )
         assert stencil_info["call_time"] > stencil_info["run_time"]
         assert "total_run_time" in stencil_info

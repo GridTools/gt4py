@@ -12,11 +12,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gt4py.eve import NodeTranslator
+from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next.iterator import ir
 
 
-class PruneClosureInputs(NodeTranslator):
+class PruneClosureInputs(PreserveLocationVisitor, NodeTranslator):
     """Removes all unused input arguments from a stencil closure."""
 
     def visit_StencilClosure(self, node: ir.StencilClosure) -> ir.StencilClosure:

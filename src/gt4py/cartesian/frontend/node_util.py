@@ -13,7 +13,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import collections
-import copy
 import operator
 from typing import Generator, Optional, Type
 
@@ -21,8 +20,6 @@ import boltons.typeutils
 
 import gt4py.cartesian.gtc.utils as gtc_utils
 from gt4py import eve
-from gt4py.cartesian import utils as gt_utils
-from gt4py.cartesian.gtc import common
 
 from .nodes import Location, Node
 
@@ -72,7 +69,7 @@ class IRNodeVisitor:
         else:
             pass
 
-        for key, value in items:
+        for _, value in items:
             self._visit(value, **kwargs)
 
 
@@ -125,7 +122,7 @@ def iter_nodes_of_type(root_node: Node, node_type: Type) -> Generator[Node, None
     """Yield an iterator over the nodes of node_type inside root_node in DFS order."""
 
     def recurse(node: Node) -> Generator[Node, None, None]:
-        for key, value in iter_attributes(node):
+        for _, value in iter_attributes(node):
             if isinstance(node, collections.abc.Iterable):
                 if isinstance(node, collections.abc.Mapping):
                     children = node.values()

@@ -16,7 +16,7 @@ import dataclasses
 from collections.abc import Iterable, Iterator
 from typing import TypeGuard
 
-from gt4py.eve import NodeTranslator
+from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
@@ -43,10 +43,7 @@ def _is_neighbors_or_lifted_and_neighbors(arg: itir.Expr) -> TypeGuard[itir.FunC
 
 
 def _get_neighbors_args(reduce_args: Iterable[itir.Expr]) -> Iterator[itir.FunCall]:
-    return filter(
-        _is_neighbors_or_lifted_and_neighbors,
-        reduce_args,
-    )
+    return filter(_is_neighbors_or_lifted_and_neighbors, reduce_args)
 
 
 def _is_list_of_funcalls(lst: list) -> TypeGuard[list[itir.FunCall]]:
@@ -100,31 +97,34 @@ def _get_connectivity(
 
 def _make_shift(offsets: list[itir.Expr], iterator: itir.Expr) -> itir.FunCall:
     return itir.FunCall(
-        fun=itir.FunCall(fun=itir.SymRef(id="shift"), args=offsets), args=[iterator]
+        fun=itir.FunCall(fun=itir.SymRef(id="shift"), args=offsets),
+        args=[iterator],
+        location=iterator.location,
     )
 
 
 def _make_deref(iterator: itir.Expr) -> itir.FunCall:
-    return itir.FunCall(fun=itir.SymRef(id="deref"), args=[iterator])
+    return itir.FunCall(fun=itir.SymRef(id="deref"), args=[iterator], location=iterator.location)
 
 
 def _make_can_deref(iterator: itir.Expr) -> itir.FunCall:
-    return itir.FunCall(fun=itir.SymRef(id="can_deref"), args=[iterator])
+    return itir.FunCall(
+        fun=itir.SymRef(id="can_deref"), args=[iterator], location=iterator.location
+    )
 
 
 def _make_if(cond: itir.Expr, true_expr: itir.Expr, false_expr: itir.Expr) -> itir.FunCall:
     return itir.FunCall(
-        fun=itir.SymRef(id="if_"),
-        args=[cond, true_expr, false_expr],
+        fun=itir.SymRef(id="if_"), args=[cond, true_expr, false_expr], location=cond.location
     )
 
 
 def _make_list_get(offset: itir.Expr, expr: itir.Expr) -> itir.FunCall:
-    return itir.FunCall(fun=itir.SymRef(id="list_get"), args=[offset, expr])
+    return itir.FunCall(fun=itir.SymRef(id="list_get"), args=[offset, expr], location=expr.location)
 
 
 @dataclasses.dataclass(frozen=True)
-class UnrollReduce(NodeTranslator):
+class UnrollReduce(PreserveLocationVisitor, NodeTranslator):
     # we use one UID generator per instance such that the generated ids are
     # stable across multiple runs (required for caching to properly work)
     uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=UIDGenerator)
@@ -148,7 +148,7 @@ class UnrollReduce(NodeTranslator):
         fun, init = node.fun.args
 
         elems = [_make_list_get(offset, arg) for arg in node.args]
-        step_fun: itir.Expr = itir.FunCall(fun=fun, args=[acc] + elems)
+        step_fun: itir.Expr = itir.FunCall(fun=fun, args=[acc, *elems])
         if has_skip_values:
             check_arg = next(_get_neighbors_args(node.args))
             offset_tag, it = check_arg.args

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # GT4Py - GridTools Framework
 #
 # Copyright (c) 2014-2023, ETH Zurich
@@ -41,7 +40,7 @@ from gt4py.next import (
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import IDim, cartesian_case, unstructured_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    fieldview_backend,
+    exec_alloc_descriptor,
 )
 
 

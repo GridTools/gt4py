@@ -31,7 +31,7 @@ def backend(request):
 def init_1(input_field: Field[float]):  # type: ignore
     """Implement simple stencil."""
     with computation(PARALLEL), interval(...):  # type: ignore
-        input_field = 1  # noqa - unused var is in/out field
+        input_field = 1  # noqa  # unused var is in/out field
 
 
 def test_generate_computation(backend, tmp_path):

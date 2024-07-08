@@ -38,7 +38,7 @@ def _is_reduce(node: ir.Node) -> TypeGuard[ir.FunCall]:
 
 
 @dataclasses.dataclass(frozen=True)
-class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
+class FuseMaps(traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrait, NodeTranslator):
     """
     Fuses nested `map_`s.
 
@@ -66,6 +66,7 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         return ir.Lambda(
             params=params,
             expr=ir.FunCall(fun=fun, args=[ir.SymRef(id=p.id) for p in params]),
+            location=fun.location,
         )
 
     def visit_FunCall(self, node: ir.FunCall, **kwargs):
@@ -99,6 +100,7 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                                 ir.FunCall(
                                     fun=inner_op,
                                     args=[ir.SymRef(id=param.id) for param in inner_op.params],
+                                    location=node.location,
                                 )
                             )
                         )
@@ -108,21 +110,14 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                         inlined_args.append(ir.SymRef(id=outer_op.params[i + first_param].id))
                         new_params.append(outer_op.params[i + first_param])
                         new_args.append(node.args[i])
-                new_body = ir.FunCall(
-                    fun=outer_op,
-                    args=inlined_args,
-                )
+                new_body = ir.FunCall(fun=outer_op, args=inlined_args)
                 new_body = inline_lambdas.inline_lambda(
                     new_body
                 )  # removes one level of nesting (the recursive inliner could simplify more, however this can also be done on the full tree later)
-                new_op = ir.Lambda(
-                    params=new_params,
-                    expr=new_body,
-                )
+                new_op = ir.Lambda(params=new_params, expr=new_body)
                 if _is_map(node):
                     return ir.FunCall(
-                        fun=ir.FunCall(fun=ir.SymRef(id="map_"), args=[new_op]),
-                        args=new_args,
+                        fun=ir.FunCall(fun=ir.SymRef(id="map_"), args=[new_op]), args=new_args
                     )
                 else:  # _is_reduce(node)
                     return ir.FunCall(

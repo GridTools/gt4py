@@ -19,6 +19,7 @@ import pytest
 from gt4py.eve.utils import UIDs
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce, _get_partial_offset_tags
+from gt4py.next.iterator.ir_utils import ir_makers as im
 
 from next_tests.unit_tests.conftest import DummyConnectivity
 
@@ -34,7 +35,7 @@ def basic_reduction():
     return ir.FunCall(
         fun=ir.FunCall(
             fun=ir.SymRef(id="reduce"),
-            args=[ir.SymRef(id="foo"), ir.Literal(value="0.0", type="float64")],
+            args=[ir.SymRef(id="foo"), im.literal("0.0", "float64")],
         ),
         args=[
             ir.FunCall(
@@ -51,7 +52,7 @@ def reduction_with_shift_on_second_arg():
     return ir.FunCall(
         fun=ir.FunCall(
             fun=ir.SymRef(id="reduce"),
-            args=[ir.SymRef(id="foo"), ir.Literal(value="0.0", type="float64")],
+            args=[ir.SymRef(id="foo"), im.literal("0.0", "float64")],
         ),
         args=[
             ir.SymRef(id="x"),
@@ -69,7 +70,7 @@ def reduction_with_incompatible_shifts():
     return ir.FunCall(
         fun=ir.FunCall(
             fun=ir.SymRef(id="reduce"),
-            args=[ir.SymRef(id="foo"), ir.Literal(value="0.0", type="float64")],
+            args=[ir.SymRef(id="foo"), im.literal("0.0", "float64")],
         ),
         args=[
             ir.FunCall(
@@ -90,7 +91,7 @@ def reduction_with_irrelevant_full_shift():
     return ir.FunCall(
         fun=ir.FunCall(
             fun=ir.SymRef(id="reduce"),
-            args=[ir.SymRef(id="foo"), ir.Literal(value="0.0", type="float64")],
+            args=[ir.SymRef(id="foo"), im.literal("0.0", "float64")],
         ),
         args=[
             ir.FunCall(
@@ -142,13 +143,7 @@ def _expected(red, dim, max_neighbors, has_skip_values, shifted_arg=0):
 
     red_fun, red_init = red.fun.args
 
-    elements = [
-        ir.FunCall(
-            fun=ir.SymRef(id="list_get"),
-            args=[offset, arg],
-        )
-        for arg in red.args
-    ]
+    elements = [ir.FunCall(fun=ir.SymRef(id="list_get"), args=[offset, arg]) for arg in red.args]
 
     step_expr = ir.FunCall(fun=red_fun, args=[acc] + elements)
     if has_skip_values:

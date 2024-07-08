@@ -12,12 +12,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gt4py.eve import NodeTranslator
+from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next.iterator import embedded, ir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 
 
-class ConstantFolding(NodeTranslator):
+class ConstantFolding(PreserveLocationVisitor, NodeTranslator):
     @classmethod
     def apply(cls, node: ir.Node) -> ir.Node:
         return cls().visit(node)
@@ -25,6 +25,13 @@ class ConstantFolding(NodeTranslator):
     def visit_FunCall(self, node: ir.FunCall):
         # visit depth-first such that nested constant expressions (e.g. `(1+2)+3`) are properly folded
         new_node = self.generic_visit(node)
+
+        if (
+            isinstance(new_node.fun, ir.SymRef)
+            and new_node.fun.id in ["minimum", "maximum"]
+            and new_node.args[0] == new_node.args[1]
+        ):  # `minimum(a, a)` -> `a`
+            return new_node.args[0]
 
         if (
             isinstance(new_node.fun, ir.SymRef)

@@ -24,15 +24,35 @@ from gt4py import eve
 from gt4py.eve.utils import XIterable
 
 
+def test_first():
+    from gt4py.eve.utils import first
+
+    # Test case 1: Non-empty iterable
+    iterable = [1, 2, 3, 4, 5]
+    result = first(iterable)
+    assert result == 1
+
+    # Test case 2: Empty iterable with default value
+    iterable = []
+    default = "default"
+    result = first(iterable, default=default)
+    assert result == default
+
+    # Test case 3: Empty iterable without default value
+    iterable = []
+    with pytest.raises(StopIteration):
+        first(iterable)
+
+    # Test case 4: Iterable with single element
+    iterable = [42]
+    result = first(iterable)
+    assert result == 42
+
+
 def test_getitem_():
     from gt4py.eve.utils import getitem_
 
-    mapping = {
-        "true": True,
-        1: True,
-        "false": False,
-        0: False,
-    }
+    mapping = {"true": True, 1: True, "false": False, 0: False}
 
     sequence = [False, True, True]
 
@@ -71,7 +91,7 @@ def test_register_subclasses():
         pass
 
     @eve.utils.register_subclasses(MyVirtualSubclassA, MyVirtualSubclassB)
-    class MyBaseClass(abc.ABC):  # noqa: B024
+    class MyBaseClass(abc.ABC):
         pass
 
     assert issubclass(MyVirtualSubclassA, MyBaseClass) and issubclass(

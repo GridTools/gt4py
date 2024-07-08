@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # GT4Py - GridTools Framework
 #
 # Copyright (c) 2014-2023, ETH Zurich
@@ -20,6 +19,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
+from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts, type_translation
@@ -110,14 +110,8 @@ def test_invalid_scalar_kind():
             ),
         ),
         (typing.ForwardRef("float"), ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
-        (
-            typing.Annotated[float, "foo"],
-            ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
-        ),
-        (
-            typing.Annotated["float", "foo", "bar"],
-            ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
-        ),
+        (typing.Annotated[float, "foo"], ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
+        (typing.Annotated["float", "foo", "bar"], ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
         (
             typing.Annotated[typing.ForwardRef("float"), "foo"],
             ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
@@ -167,3 +161,33 @@ def test_invalid_symbol_types():
         type_translation.from_type_hint(typing.Callable[[int], str])
     with pytest.raises(ValueError, match="Invalid callable annotations"):
         type_translation.from_type_hint(typing.Callable[[int], float])
+
+
+@pytest.mark.parametrize(
+    "value, expected_dims",
+    [
+        (common.Dims[IDim, JDim], [IDim, JDim]),
+        (common.Dims[IDim, np.float64], ValueError),
+        (common.Dims["IDim"], ValueError),
+    ],
+)
+def test_generic_variadic_dims(value, expected_dims):
+    if expected_dims == ValueError:
+        with pytest.raises(ValueError, match="Invalid field dimension definition"):
+            type_translation.from_type_hint(gtx.Field[value, np.int32])
+    else:
+        assert type_translation.from_type_hint(gtx.Field[value, np.int32]).dims == expected_dims
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        core_defs.BoolDType(),
+        core_defs.Int32DType(),
+        core_defs.Int64DType(),
+        core_defs.Float32DType(),
+        core_defs.Float64DType(),
+    ],
+)
+def test_as_from_dtype(dtype):
+    assert type_translation.as_dtype(type_translation.from_dtype(dtype)) == dtype

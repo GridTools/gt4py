@@ -182,9 +182,7 @@ class TComputationBlock(TObject):
                 end=AxisBound(level=LevelMarker.END, offset=self.end),
             ),
             iteration_order=self.order,
-            body=BlockStmt(
-                stmts=temp_decls + [stmt.build() for stmt in self.children],
-            ),
+            body=BlockStmt(stmts=temp_decls + [stmt.build() for stmt in self.children]),
             loc=self.loc,
         )
 
@@ -218,9 +216,7 @@ class TAssign(TStatement):
         if isinstance(self._value, str):
             value = TFieldRef(name=self._value, offset=self.offset)
         value.loc = Location(
-            line=self.loc.line,
-            column=self.loc.column + self.target.width + 3,
-            scope=self.loc.scope,
+            line=self.loc.line, column=self.loc.column + self.target.width + 3, scope=self.loc.scope
         )
         value.parent = self
         return value
@@ -267,11 +263,7 @@ class TFieldRef(TObject):
     def build(self):
         if self.parent:
             self.loc.scope = self.parent.child_scope
-        return FieldRef(
-            name=self.name,
-            offset=self.offset,
-            loc=self.loc,
-        )
+        return FieldRef(name=self.name, offset=self.offset, loc=self.loc)
 
     @property
     def height(self) -> int:
@@ -287,24 +279,14 @@ class TFieldRef(TObject):
 
 
 class TScalarLiteral(TObject):
-    def __init__(
-        self,
-        *,
-        value: Any,
-        loc: Location = None,
-        parent: TObject = None,
-    ):
+    def __init__(self, *, value: Any, loc: Location = None, parent: TObject = None):
         super().__init__(loc or Location(line=0, column=0), parent=parent)
         self.value = value
 
     def build(self):
         if self.parent:
             self.loc.scope = self.parent.child_scope
-        return ScalarLiteral(
-            value=self.value,
-            data_type=DataType.AUTO,
-            loc=self.loc,
-        )
+        return ScalarLiteral(value=self.value, data_type=DataType.AUTO, loc=self.loc)
 
     @property
     def height(self) -> int:

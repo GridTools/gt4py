@@ -73,15 +73,15 @@ def check_layout(layout_map, strides):
 
 
 def layout_maker_factory(
-    base_layout: Tuple[int, ...]
+    base_layout: Tuple[int, ...],
 ) -> Callable[[Tuple[str, ...]], Tuple[int, ...]]:
     def layout_maker(dimensions: Tuple[str, ...]) -> Tuple[int, ...]:
         mask = [dim in dimensions for dim in "IJK"]
         mask += [True] * (len(dimensions) - sum(mask))
         ranks = []
-        for m, l in zip(mask, base_layout):
+        for m, bl in zip(mask, base_layout):
             if m:
-                ranks.append(l)
+                ranks.append(bl)
         if len(mask) > 3:
             if base_layout[2] == 2:
                 ranks.extend(3 + c for c in range(len(mask) - 3))

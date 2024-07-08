@@ -3,6 +3,7 @@ name: Daily CI
 on:
   schedule:
   - cron: '0 4 * * *'
+  workflow_dispatch:
 
   ## COMMENTED OUT: only for testing CI action changes
   # pull_request:
@@ -14,7 +15,7 @@ jobs:
   daily-ci:
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10"]
+        python-version: ["3.8", "3.9", "3.10", "3.11"]
         tox-module-factor: ["cartesian", "eve", "next", "storage"]
         os: ["ubuntu-latest"]
         requirements-file: ["requirements-dev.txt", "min-requirements-test.txt", "min-extra-requirements-test.txt"]

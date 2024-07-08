@@ -25,6 +25,21 @@ def _is_zero_dim_field(field: ts.TypeSpec) -> bool:
     return isinstance(field, ts.FieldType) and len(field.dims) == 0
 
 
+def promote_scalars_to_zero_dim_field(type_: ts.TypeSpec) -> ts.TypeSpec:
+    """
+    Promote scalar primitive constituents to zero dimensional fields.
+
+    E.g. all elements of a tuple which are scalars are promoted to a zero dimensional field.
+    """
+
+    def promote_el(type_el: ts.TypeSpec) -> ts.TypeSpec:
+        if isinstance(type_el, ts.ScalarType):
+            return ts.FieldType(dims=[], dtype=type_el)
+        return type_el
+
+    return type_info.apply_to_primitive_constituents(promote_el, type_)
+
+
 def promote_zero_dims(
     function_type: ts.FunctionType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
 ) -> tuple[list, dict]:
@@ -54,11 +69,15 @@ def promote_zero_dims(
                     raise ValueError(f"'{arg_el}' is not compatible with '{param_el}'.")
             return arg_el
 
-        return type_info.apply_to_primitive_constituents(arg, _as_field, with_path_arg=True)
+        return type_info.apply_to_primitive_constituents(_as_field, arg, with_path_arg=True)
 
     new_args = [*args]
     for i, (param, arg) in enumerate(
-        zip(function_type.pos_only_args + list(function_type.pos_or_kw_args.values()), args)
+        zip(
+            list(function_type.pos_only_args) + list(function_type.pos_or_kw_args.values()),
+            args,
+            strict=True,
+        )
     ):
         new_args[i] = promote_arg(param, arg)
     new_kwargs = {**kwargs}
@@ -74,7 +93,7 @@ def return_type_fieldop(
     *,
     with_args: list[ts.TypeSpec],
     with_kwargs: dict[str, ts.TypeSpec],
-):
+) -> ts.TypeSpec:
     ret_type = type_info.return_type(
         fieldop_type.definition, with_args=with_args, with_kwargs=with_kwargs
     )
@@ -88,8 +107,8 @@ def canonicalize_program_or_fieldop_arguments(
     args: tuple | list,
     kwargs: dict,
     *,
-    ignore_errors=False,
-    use_signature_ordering=False,
+    ignore_errors: bool = False,
+    use_signature_ordering: bool = False,
 ) -> tuple[list, dict]:
     return type_info.canonicalize_arguments(
         program_type.definition,
@@ -106,8 +125,8 @@ def canonicalize_scanop_arguments(
     args: tuple | list,
     kwargs: dict,
     *,
-    ignore_errors=False,
-    use_signature_ordering=False,
+    ignore_errors: bool = False,
+    use_signature_ordering: bool = False,
 ) -> tuple[list, dict]:
     (_, *cargs), ckwargs = type_info.canonicalize_arguments(
         scanop_type.definition,
@@ -156,7 +175,7 @@ def _scan_param_promotion(param: ts.TypeSpec, arg: ts.TypeSpec) -> ts.FieldType 
     --------
     >>> _scan_param_promotion(
     ...     ts.ScalarType(kind=ts.ScalarKind.INT64),
-    ...     ts.FieldType(dims=[common.Dimension("I")], dtype=ts.ScalarKind.FLOAT64)
+    ...     ts.FieldType(dims=[common.Dimension("I")], dtype=ts.ScalarKind.FLOAT64),
     ... )
     FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.INT64: 64>, shape=None))
     """
@@ -165,7 +184,9 @@ def _scan_param_promotion(param: ts.TypeSpec, arg: ts.TypeSpec) -> ts.FieldType 
         assert isinstance(dtype, ts.ScalarType)
         try:
             el_type = reduce(
-                lambda type_, idx: type_.types[idx], path, arg  # type: ignore[attr-defined]
+                lambda type_, idx: type_.types[idx],  # type: ignore[attr-defined]
+                path,
+                arg,
             )
             return ts.FieldType(dims=type_info.extract_dims(el_type), dtype=dtype)
         except (IndexError, AttributeError):
@@ -175,7 +196,9 @@ def _scan_param_promotion(param: ts.TypeSpec, arg: ts.TypeSpec) -> ts.FieldType 
             # TODO: we want some generic field type here, but our type system does not support it yet.
             return ts.FieldType(dims=[common.Dimension("...")], dtype=dtype)
 
-    return type_info.apply_to_primitive_constituents(param, _as_field, with_path_arg=True)
+    res = type_info.apply_to_primitive_constituents(_as_field, param, with_path_arg=True)
+    assert isinstance(res, (ts.FieldType, ts.TupleType))
+    return res
 
 
 @type_info.function_signature_incompatibilities.register
@@ -277,7 +300,7 @@ def return_type_scanop(
     *,
     with_args: list[ts.TypeSpec],
     with_kwargs: dict[str, ts.TypeSpec],
-):
+) -> ts.TypeSpec:
     carry_dtype = callable_type.definition.returns
     promoted_dims = common.promote_dims(
         *(
@@ -290,5 +313,5 @@ def return_type_scanop(
         [callable_type.axis],
     )
     return type_info.apply_to_primitive_constituents(
-        carry_dtype, lambda arg: ts.FieldType(dims=promoted_dims, dtype=cast(ts.ScalarType, arg))
+        lambda arg: ts.FieldType(dims=promoted_dims, dtype=cast(ts.ScalarType, arg)), carry_dtype
     )

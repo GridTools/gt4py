@@ -12,16 +12,33 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 import itertools
-from typing import Any, Sequence
+from typing import Any, Mapping, Optional, Sequence
 
 import dace
 
+import gt4py.next.iterator.ir as itir
+from gt4py import eve
 from gt4py.next import Dimension
-from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
+from gt4py.next.common import Connectivity
 from gt4py.next.type_system import type_specifications as ts
 
 
-def as_dace_type(type_: ts.ScalarType):
+def dace_debuginfo(
+    node: itir.Node, debuginfo: Optional[dace.dtypes.DebugInfo] = None
+) -> Optional[dace.dtypes.DebugInfo]:
+    location = node.location
+    if location:
+        return dace.dtypes.DebugInfo(
+            start_line=location.line,
+            start_column=location.column if location.column else 0,
+            end_line=location.end_line if location.end_line else -1,
+            end_column=location.end_column if location.end_column else 0,
+            filename=location.filename,
+        )
+    return debuginfo
+
+
+def as_dace_type(type_: ts.ScalarType) -> dace.dtypes.typeclass:
     if type_.kind == ts.ScalarKind.BOOL:
         return dace.bool_
     elif type_.kind == ts.ScalarKind.INT32:
@@ -35,25 +52,24 @@ def as_dace_type(type_: ts.ScalarType):
     raise ValueError(f"Scalar type '{type_}' not supported.")
 
 
-def filter_neighbor_tables(offset_provider: dict[str, Any]):
-    return [
-        (offset, table)
+def filter_connectivities(offset_provider: Mapping[str, Any]) -> dict[str, Connectivity]:
+    return {
+        offset: table
         for offset, table in offset_provider.items()
-        if isinstance(table, NeighborTableOffsetProvider)
-    ]
+        if isinstance(table, Connectivity)
+    }
 
 
-def connectivity_identifier(name: str):
+def get_used_connectivities(
+    node: itir.Node, offset_provider: Mapping[str, Any]
+) -> dict[str, Connectivity]:
+    connectivities = filter_connectivities(offset_provider)
+    offset_dims = set(eve.walk_values(node).if_isinstance(itir.OffsetLiteral).getattr("value"))
+    return {offset: connectivities[offset] for offset in offset_dims if offset in connectivities}
+
+
+def connectivity_identifier(name: str) -> str:
     return f"__connectivity_{name}"
-
-
-def create_memlet_full(source_identifier: str, source_array: dace.data.Array):
-    return dace.Memlet.from_array(source_identifier, source_array)
-
-
-def create_memlet_at(source_identifier: str, index: tuple[str, ...]):
-    subset = ", ".join(index)
-    return dace.Memlet.simple(source_identifier, subset)
 
 
 def get_sorted_dims(dims: Sequence[Dimension]) -> Sequence[tuple[int, Dimension]]:
@@ -119,11 +135,13 @@ def add_mapped_nested_sdfg(
 
     if input_nodes is None:
         input_nodes = {
-            memlet.data: state.add_access(memlet.data) for name, memlet in inputs.items()
+            memlet.data: state.add_access(memlet.data, debuginfo=debuginfo)
+            for name, memlet in inputs.items()
         }
     if output_nodes is None:
         output_nodes = {
-            memlet.data: state.add_access(memlet.data) for name, memlet in outputs.items()
+            memlet.data: state.add_access(memlet.data, debuginfo=debuginfo)
+            for name, memlet in outputs.items()
         }
     if not inputs:
         state.add_edge(map_entry, None, nsdfg_node, None, dace.Memlet())
@@ -154,8 +172,9 @@ def add_mapped_nested_sdfg(
 
 
 def unique_name(prefix):
-    unique_id = getattr(unique_name, "_unique_id", 0)  # noqa: B010  # static variable
-    setattr(unique_name, "_unique_id", unique_id + 1)  # noqa: B010  # static variable
+    unique_id = getattr(unique_name, "_unique_id", 0)  # static variable
+    setattr(unique_name, "_unique_id", unique_id + 1)  # noqa: B010 [set-attr-with-constant]
+
     return f"{prefix}_{unique_id}"
 
 
@@ -173,6 +192,6 @@ def new_array_symbols(name: str, ndim: int) -> tuple[list[dace.symbol], list[dac
 def flatten_list(node_list: list[Any]) -> list[Any]:
     return list(
         itertools.chain.from_iterable(
-            [flatten_list(e) if e.__class__ == list else [e] for e in node_list]
+            [flatten_list(e) if isinstance(e, list) else [e] for e in node_list]
         )
     )
