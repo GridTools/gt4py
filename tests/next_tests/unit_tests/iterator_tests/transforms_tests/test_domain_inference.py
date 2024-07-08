@@ -18,6 +18,7 @@ from gt4py.next.iterator.transforms.infer_domain import InferDomain
 from gt4py.next.iterator.transforms.global_tmps import SymbolicDomain
 import pytest
 from gt4py.next.common import Dimension, DimensionKind
+from gt4py.next import common
 
 
 @pytest.fixture
@@ -37,12 +38,22 @@ def test_forward_difference_x(offset_provider):
     )
     testee = im.call(im.call("as_fieldop")(stencil))(im.ref("in_field"))
 
-    domain = im.cartesian_domain({"IDim": (0, 0)})
+    domain = im.cartesian_domain(
+        {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (0, 0)}
+    )
 
     expected = im.call(im.call("as_fieldop")(stencil, domain))(im.ref("in_field"))
-    expected_domains = {"in_field": SymbolicDomain.from_expr(im.cartesian_domain({"IDim": (0, 1)}))}
+    expected_domains = {
+        "in_field": SymbolicDomain.from_expr(
+            im.cartesian_domain(
+                {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (0, 1)}
+            )
+        )
+    }
 
-    actual_call, actual_domains = InferDomain.infer_as_fieldop(testee, domain, offset_provider)
+    actual_call, actual_domains = InferDomain.infer_as_fieldop(
+        testee, SymbolicDomain.from_expr(domain), offset_provider
+    )
 
     assert actual_call == expected
     assert actual_domains == expected_domains
@@ -76,7 +87,9 @@ def test_laplace(offset_provider):
         )
     }
 
-    actual_call, actual_domains = InferDomain.infer_as_fieldop(testee, domain, offset_provider)
+    actual_call, actual_domains = InferDomain.infer_as_fieldop(
+        testee, SymbolicDomain.from_expr(domain), offset_provider
+    )
 
     assert actual_call == expected
     assert actual_domains == expected_domains
@@ -105,7 +118,9 @@ def test_shift_x_y_two_inputs(offset_provider):
         ),
     }
 
-    actual_call, actual_domains = InferDomain.infer_as_fieldop(testee, domain, offset_provider)
+    actual_call, actual_domains = InferDomain.infer_as_fieldop(
+        testee, SymbolicDomain.from_expr(domain), offset_provider
+    )
 
     assert actual_call == expected
     assert actual_domains == expected_domains
@@ -125,24 +140,50 @@ def test_shift_x_y_z_three_inputs(offset_provider):
         im.ref("in_field1"), im.ref("in_field2"), im.ref("in_field3")
     )
 
-    domain = im.cartesian_domain({"IDim": (0, 0), "JDim": (0, 0), "KDim": (0, 0)})
+    domain = im.cartesian_domain(
+        {
+            "IDim": (0, 0),
+            "JDim": (0, 0),
+            common.Dimension(value="KDim", kind=common.DimensionKind.VERTICAL): (0, 0),
+        }
+    )
 
     expected = im.call(im.call("as_fieldop")(stencil, domain))(
         im.ref("in_field1"), im.ref("in_field2"), im.ref("in_field3")
     )
     expected_domains = {
         "in_field1": SymbolicDomain.from_expr(
-            im.cartesian_domain({"IDim": (1, 1), "JDim": (0, 0), "KDim": (0, 0)})
+            im.cartesian_domain(
+                {
+                    "IDim": (1, 1),
+                    "JDim": (0, 0),
+                    common.Dimension(value="KDim", kind=common.DimensionKind.VERTICAL): (0, 0),
+                }
+            )
         ),
         "in_field2": SymbolicDomain.from_expr(
-            im.cartesian_domain({"IDim": (0, 0), "JDim": (1, 1), "KDim": (0, 0)})
+            im.cartesian_domain(
+                {
+                    "IDim": (0, 0),
+                    "JDim": (1, 1),
+                    common.Dimension(value="KDim", kind=common.DimensionKind.VERTICAL): (0, 0),
+                }
+            )
         ),
         "in_field3": SymbolicDomain.from_expr(
-            im.cartesian_domain({"IDim": (0, 0), "JDim": (0, 0), "KDim": (-1, -1)})
+            im.cartesian_domain(
+                {
+                    "IDim": (0, 0),
+                    "JDim": (0, 0),
+                    common.Dimension(value="KDim", kind=common.DimensionKind.VERTICAL): (-1, -1),
+                }
+            )
         ),
     }
 
-    actual_call, actual_domains = InferDomain.infer_as_fieldop(testee, domain, offset_provider)
+    actual_call, actual_domains = InferDomain.infer_as_fieldop(
+        testee, SymbolicDomain.from_expr(domain), offset_provider
+    )
 
     assert actual_call == expected
     assert actual_domains == expected_domains
@@ -184,7 +225,9 @@ def test_nested_stencils(offset_provider):
         ),
     }
 
-    actual_call, actual_domains = InferDomain.infer_as_fieldop(testee, domain, offset_provider)
+    actual_call, actual_domains = InferDomain.infer_as_fieldop(
+        testee, SymbolicDomain.from_expr(domain), offset_provider
+    )
 
     assert actual_call == expected
     assert actual_domains == expected_domains
@@ -230,7 +273,7 @@ def test_nested_stencils_n_times(offset_provider, iterations):
     }
 
     actual_call, actual_domains = InferDomain.infer_as_fieldop(
-        testee, current_domain, offset_provider
+        testee, SymbolicDomain.from_expr(current_domain), offset_provider
     )
 
     assert actual_call == current_expected

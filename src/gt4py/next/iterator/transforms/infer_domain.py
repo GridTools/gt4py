@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import dataclasses
 
-from gt4py.eve.extended_typing import Dict, List, Tuple, Union
+from gt4py.eve.extended_typing import Dict, Tuple, Union
 from gt4py.next.common import Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
@@ -24,23 +24,6 @@ from gt4py.next.iterator.transforms.trace_shifts import TraceShifts
 @dataclasses.dataclass(frozen=True)
 class InferDomain:
     @staticmethod
-    def _extract_axis_dims(domain_expr: SymbolicDomain | itir.FunCall) -> List[str]:
-        axis_dims = []
-        if isinstance(domain_expr, SymbolicDomain) and domain_expr.grid_type == "cartesian_domain":
-            axis_dims.extend(domain_expr.ranges.keys())
-        elif isinstance(domain_expr, itir.FunCall) and domain_expr.fun == im.ref(
-            "cartesian_domain"
-        ):
-            for named_range in domain_expr.args:
-                if isinstance(named_range, itir.FunCall) and named_range.fun == im.ref(
-                    "named_range"
-                ):
-                    axis_literal = named_range.args[0]
-                    if isinstance(axis_literal, itir.AxisLiteral):
-                        axis_dims.append(axis_literal.value)
-        return axis_dims
-
-    @staticmethod
     def _get_symbolic_domain(domain: Union[SymbolicDomain, itir.FunCall]) -> SymbolicDomain:
         if isinstance(domain, SymbolicDomain):
             return domain
@@ -49,7 +32,9 @@ class InferDomain:
         raise TypeError("domain must either be a FunCall or a SymbolicDomain.")
 
     @staticmethod
-    def _merge_domains(original_domains, new_domains):
+    def _merge_domains(
+        original_domains: Dict[str, SymbolicDomain], new_domains: Dict[str, SymbolicDomain]
+    ) -> Dict[str, SymbolicDomain]:
         for key, value in new_domains.items():
             if key in original_domains:
                 original_domains[key] = domain_union([original_domains[key], value])
@@ -65,16 +50,16 @@ class InferDomain:
     def _translate_domain(
         cls,
         symbolic_domain: SymbolicDomain,
-        shift: Tuple[itir.OffsetLiteral, int],
-        dims: List[str],
+        shift: Tuple[itir.OffsetLiteral, itir.OffsetLiteral],
         offset_provider: Dict[str, Dimension],
     ) -> SymbolicDomain:
+        dims = list(symbolic_domain.ranges.keys())
         new_ranges = {dim: symbolic_domain.ranges[dim] for dim in dims}
         if shift:
             off, val = shift
             current_dim = offset_provider[off.value]
-            new_ranges[current_dim.value] = SymbolicRange.translate(
-                symbolic_domain.ranges[current_dim.value], val.value
+            new_ranges[current_dim] = SymbolicRange.translate(
+                symbolic_domain.ranges[current_dim], val.value
             )
         return SymbolicDomain("cartesian_domain", new_ranges)
 
@@ -93,7 +78,7 @@ class InferDomain:
         stencil, inputs = applied_fieldop.fun.args[0], applied_fieldop.args
 
         inputs_node = []
-        accessed_domains = {}
+        accessed_domains: Dict[str, SymbolicDomain] = {}
 
         # Set inputs for StencilClosure node by replacing FunCalls with temporary SymRefs
         tmp_counter = 0
@@ -123,14 +108,13 @@ class InferDomain:
 
         # Extract the shifts and translate the domains accordingly
         shifts_results = trace_shifts(stencil, inputs_node, SymbolicDomain.as_expr(symbolic_domain))
-        dims = cls._extract_axis_dims(SymbolicDomain.as_expr(symbolic_domain))
 
         for in_field in inputs:
             in_field_id = str(in_field.id)
             shifts_list = shifts_results[in_field_id]
 
             new_domains = [
-                cls._translate_domain(symbolic_domain, shift, dims, offset_provider)
+                cls._translate_domain(symbolic_domain, shift, offset_provider)
                 for shift in shifts_list
             ]
 

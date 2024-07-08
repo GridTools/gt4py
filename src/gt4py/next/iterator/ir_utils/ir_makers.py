@@ -17,8 +17,8 @@ from typing import Callable, Iterable, Union
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve.extended_typing import Any, Dict, Tuple
+from gt4py.next import common
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.transforms.global_tmps import SymbolicDomain, SymbolicRange
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
@@ -405,22 +405,31 @@ def map_(op):
     return call(call("map_")(op))
 
 
-def cartesian_domain(ranges: Dict[str, Tuple[Any, Any]]) -> SymbolicDomain:
+def cartesian_domain(ranges: Dict[Union[common.Dimension, str], Tuple[Any, Any]]) -> itir.FunCall:
     """
-    >>> pformat(cartesian_domain({"IDim": (0, 10), "JDim": (0, 20)}))
-    'c⟨ IDim: [0, 10), JDim: [0, 20) ⟩'
+    >>> str(
+    ...     cartesian_domain(
+    ...         {
+    ...             common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (0, 10),
+    ...             common.Dimension(value="JDim", kind=common.DimensionKind.HORIZONTAL): (0, 20),
+    ...         }
+    ...     )
+    ... )
+    'c⟨ IDimₕ: [0, 10), JDimₕ: [0, 20) ⟩'
+    >>> str(cartesian_domain({"IDim": (0, 10), "JDim": (0, 20)}))
+    'c⟨ IDimₕ: [0, 10), JDimₕ: [0, 20) ⟩'
 
     """
 
-    axis_order = ["IDim", "JDim", "KDim"]
-
-    symbolic_ranges = {}
-
-    for axis, (start, stop) in ranges.items():
-        if axis not in axis_order:
-            raise ValueError("The ranges need to contain either IDim, JDim or KDim.")
-        symbolic_ranges[axis] = SymbolicRange(start, stop)
-
-    domain = SymbolicDomain(grid_type="cartesian_domain", ranges=symbolic_ranges)
-
-    return SymbolicDomain.as_expr(domain)
+    return call("cartesian_domain")(
+        *[
+            call("named_range")(
+                itir.AxisLiteral(value=d.value, kind=d.kind)
+                if isinstance(d, common.Dimension)
+                else itir.AxisLiteral(value=d),
+                r[0],
+                r[1],
+            )
+            for d, r in ranges.items()
+        ]
+    )
