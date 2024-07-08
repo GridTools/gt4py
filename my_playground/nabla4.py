@@ -24,18 +24,28 @@ from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.ffront.fbuiltins import Field
 from gt4py.next.program_processors.runners import dace_fieldview as dace_backend
 from gt4py.next.type_system import type_specifications as ts
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    KDim,
-    Cell,
-    Edge,
-    IDim,
+
+
+from simple_icon_mesh import (
+    IDim,  # Dimensions
     JDim,
-    MeshDescriptor,
-    V2EDim,
-    Vertex,
-    simple_mesh,
-    skip_value_mesh,
+    KDim,
+    EdgeDim,
+    VertexDim,
+    CellDim,
+    ECVDim,
+    E2C2VDim,
+    NbCells,  # Constants of the size
+    NbEdges,
+    NbVertices,
+    E2C2VDim,  # Offsets
+    E2C2V,
+    SIZE_TYPE,  # Type definitions
+    E2C2V_connectivity,
+    E2ECV_connectivity,
+    make_syms,  # Helpers
 )
+
 from typing import Sequence, Any
 from functools import reduce
 import numpy as np
@@ -47,13 +57,13 @@ SIZE_TYPE = ts.ScalarType(ts.ScalarKind.INT32)
 
 
 def nabla4_np(
-    nabv_norm: Field[[Edge, KDim], wpfloat],
-    nabv_tang: Field[[Edge, KDim], wpfloat],
-    z_nabla2_e: Field[[Edge, KDim], wpfloat],
-    inv_vert_vert_length: Field[[Edge], wpfloat],
-    inv_primal_edge_length: Field[[Edge], wpfloat],
+    nabv_norm: Field[[EdgeDim, KDim], wpfloat],
+    nabv_tang: Field[[EdgeDim, KDim], wpfloat],
+    z_nabla2_e: Field[[EdgeDim, KDim], wpfloat],
+    inv_vert_vert_length: Field[[EdgeDim], wpfloat],
+    inv_primal_edge_length: Field[[EdgeDim], wpfloat],
     **kwargs,  # Allows to use the same call argument object as for the SDFG
-) -> Field[[Edge, KDim], wpfloat]:
+) -> Field[[EdgeDim, KDim], wpfloat]:
     N = nabv_norm - 2 * z_nabla2_e
     ell_v2 = inv_vert_vert_length**2
     N_ellv2 = N * ell_v2.reshape((-1, 1))
@@ -103,14 +113,14 @@ def build_nambla4_gtir_inline(
     """Creates the `nabla4` stencil where the computations are already inlined."""
 
     edge_k_domain = im.call("unstructured_domain")(
-        im.call("named_range")(itir.AxisLiteral(value=Edge.value, kind=Edge.kind), 0, "num_edges"),
+        im.call("named_range")(itir.AxisLiteral(value=EdgeDim.value, kind=EdgeDim.kind), 0, "num_edges"),
         im.call("named_range")(
             itir.AxisLiteral(value=KDim.value, kind=KDim.kind), 0, "num_k_levels"
         ),
     )
 
-    EK_FTYPE = ts.FieldType(dims=[Edge, KDim], dtype=wpfloat)
-    E_FTYPE = ts.FieldType(dims=[Edge], dtype=wpfloat)
+    EK_FTYPE = ts.FieldType(dims=[EdgeDim, KDim], dtype=wpfloat)
+    E_FTYPE = ts.FieldType(dims=[EdgeDim], dtype=wpfloat)
 
     nabla4prog = itir.Program(
         id="nabla4_partial_inline",
@@ -199,14 +209,14 @@ def build_nambla4_gtir_fieldview(
 ) -> itir.Program:
     """Creates the `nabla4` stencil in most extreme fieldview version as possible."""
     edge_k_domain = im.call("unstructured_domain")(
-        im.call("named_range")(itir.AxisLiteral(value=Edge.value, kind=Edge.kind), 0, "num_edges"),
+        im.call("named_range")(itir.AxisLiteral(value=EdgeDim.value, kind=EdgeDim.kind), 0, "num_edges"),
         im.call("named_range")(
             itir.AxisLiteral(value=KDim.value, kind=KDim.kind), 0, "num_k_levels"
         ),
     )
 
-    EK_FTYPE = ts.FieldType(dims=[Edge, KDim], dtype=wpfloat)
-    E_FTYPE = ts.FieldType(dims=[Edge], dtype=wpfloat)
+    EK_FTYPE = ts.FieldType(dims=[EdgeDim, KDim], dtype=wpfloat)
+    E_FTYPE = ts.FieldType(dims=[EdgeDim], dtype=wpfloat)
 
     nabla4prog = itir.Program(
         id="nabla4_partial_fieldview",
