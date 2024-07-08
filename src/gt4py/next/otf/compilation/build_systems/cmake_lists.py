@@ -91,9 +91,28 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
         #   Instead, design this to be extensible (refer to ADR-0016).
         match dep.name:
             case "nanobind":
+                import sys
+                import sysconfig
+
                 import nanobind
 
-                py = "find_package(Python COMPONENTS Interpreter Development REQUIRED)"
+                # Get Python executable path
+                python_executable = sys.executable
+
+                # Get Python library path
+                python_library = (
+                    sysconfig.get_config_var("LIBDIR") + "/" + sysconfig.get_config_var("LDLIBRARY")
+                )
+
+                # Get Python include directory path
+                python_include_dir = sysconfig.get_path("include")
+
+                py = f"""
+                set(Python_EXECUTABLE {python_executable})
+                #set(Python_LIBRARY {python_library})
+                #set(Python_INCLUDE_DIR {python_include_dir})
+                find_package(Python COMPONENTS Interpreter Development REQUIRED)
+                """
                 nb = f"find_package(nanobind CONFIG REQUIRED PATHS {nanobind.cmake_dir()} NO_DEFAULT_PATHS)"
                 return py + "\n" + nb
             case "gridtools_cpu" | "gridtools_gpu":
