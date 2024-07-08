@@ -56,8 +56,8 @@ SIZE_TYPE = ts.ScalarType(ts.ScalarKind.INT32)
 
 
 def nabla4_np(
-    pnvertv1_0: Field[[EdgeDim], wpfloat],
-    u_vert_0: Field[[EdgeDim, KDim], wpfloat],
+    u_vert: Field[[EdgeDim, KDim], wpfloat],
+    primal_normal_vert_v1: Field[[ECVDim], wpfloat],
 
     xn_1: Field[[EdgeDim, KDim], wpfloat],
     xn_2: Field[[EdgeDim, KDim], wpfloat],
@@ -66,8 +66,18 @@ def nabla4_np(
     z_nabla2_e: Field[[EdgeDim, KDim], wpfloat],
     inv_vert_vert_length: Field[[EdgeDim], wpfloat],
     inv_primal_edge_length: Field[[EdgeDim], wpfloat],
+
+    # These are the offset providers
+    E2C2V: NeighborTable,
+
     **kwargs,  # Allows to use the same call argument object as for the SDFG
 ) -> Field[[EdgeDim, KDim], wpfloat]:
+
+    primal_normal_vert_v1 = primal_normal_vert_v1.reshape(E2C2V.table.shape)
+
+    u_vert_0 = u_vert[E2C2V.table[:, 0]]
+    pnvertv1_0 = primal_normal_vert_v1[:, 0]
+
     nabv_norm = (u_vert_0 * pnvertv1_0.reshape((-1, 1))) + xn_1 + xn_2 + xn_3
 
     N = nabv_norm - 2 * z_nabla2_e
@@ -185,6 +195,13 @@ def build_nambla4_gtir_fieldview(
     num_k_levels: int,
 ) -> itir.Program:
     """Creates the `nabla4` stencil in most extreme fieldview version as possible."""
+
+
+    edge_domain = im.call("unstructured_domain")(
+        im.call("named_range")(
+            itir.AxisLiteral(value=EdgeDim.value, kind=EdgeDim.kind), 0, "num_edges"
+        ),
+    )
     edge_k_domain = im.call("unstructured_domain")(
         im.call("named_range")(
             itir.AxisLiteral(value=EdgeDim.value, kind=EdgeDim.kind), 0, "num_edges"
@@ -194,19 +211,18 @@ def build_nambla4_gtir_fieldview(
         ),
     )
 
-    VK_TYPE = ts.FieldType(dims=[VertexDim, KDim], dtype=wpfloat)
+    VK_FTYPE = ts.FieldType(dims=[VertexDim, KDim], dtype=wpfloat)
     EK_FTYPE = ts.FieldType(dims=[EdgeDim, KDim], dtype=wpfloat)
     E_FTYPE = ts.FieldType(dims=[EdgeDim], dtype=wpfloat)
-    ECV_FTYPE = ts.FieldType(dims=[ECVDim], dtype=ts.ScalarType(kind=wpfloat))
+    ECV_FTYPE = ts.FieldType(dims=[ECVDim], dtype=wpfloat)
 
     nabla4prog = itir.Program(
         id="nabla4_partial_fieldview",
         function_definitions=[],
         params=[
-            # itir.Sym(id="u_vert", type=VK_FTYPE),
+            itir.Sym(id="u_vert", type=VK_FTYPE),
             # itir.Sym(id="v_vert", type=VK_FTYPE),
-            itir.Sym(id="pnvertv1_0", type=E_FTYPE),
-            itir.Sym(id="u_vert_0", type=EK_FTYPE),
+            itir.Sym(id="primal_normal_vert_v1", type=ECV_FTYPE),
 
             itir.Sym(id="xn_1", type=EK_FTYPE),
             itir.Sym(id="xn_2", type=EK_FTYPE),
@@ -295,8 +311,31 @@ def build_nambla4_gtir_fieldview(
                                             edge_k_domain,
                                         )
                                     )(
-                                        "u_vert_0",
-                                        "pnvertv1_0",
+                                        # arg: `u_vert_0`
+                                        im.call(
+                                            im.call("as_fieldop")(
+                                                im.lambda_("u_vert_no_shifted")(
+                                                    im.deref(im.shift("E2C2V", 0)("u_vert_no_shifted"))
+                                                ),
+                                                edge_k_domain,
+                                            )
+                                        )(
+                                            "u_vert"    # arg: `u_vert_no_shifted`
+                                        ),
+                                        # end arg: `u_vert_0`
+
+                                        # arg: `pnvertv1_0`
+                                        im.call(
+                                            im.call("as_fieldop")(
+                                                im.lambda_("primal_normal_vert_v1_no_shifted")(
+                                                    im.deref(im.shift("E2ECV", 0)("primal_normal_vert_v1_no_shifted"))
+                                                ),
+                                                edge_domain,
+                                            )
+                                        )(
+                                            "primal_normal_vert_v1"    # arg: `primal_normal_vert_v1_no_shifted`
+                                        ),
+                                        # end arg: `pnvertv1_0`
                                     ),
                                     # end arg: `xn_0`
 
@@ -398,7 +437,8 @@ def build_nambla4_gtir_fieldview(
 def verify_nabla4(
     version: str,
 ):
-    num_edges = 27
+    num_edges = NbEdges
+    num_vertices = NbVertices
     num_k_levels = 10
 
     if version == "fieldview":
@@ -416,12 +456,15 @@ def verify_nabla4(
     else:
         raise ValueError(f"The version `{version}` is now known.")
 
-    offset_provider = {}
+    offset_provider = {
+        "E2C2V": E2C2V_connectivity,
+        "E2ECV": E2ECV_connectivity,
+    }
 
     xn_args = {f"xn_{i}": np.random.rand(num_edges, num_k_levels) for i in range(1, 4)}
 
-    pnvertv1_0=np.random.rand(num_edges)
-    u_vert_0=np.random.rand(num_edges, num_k_levels)
+    u_vert = np.random.rand(num_vertices, num_k_levels)
+    primal_normal_vert_v1 = np.random.rand(num_edges * 4)
 
     nabv_tang = np.random.rand(num_edges, num_k_levels)
     z_nabla2_e = np.random.rand(num_edges, num_k_levels)
@@ -440,15 +483,17 @@ def verify_nabla4(
         num_edges=num_edges,
         num_k_levels=num_k_levels,
 
-        u_vert_0=u_vert_0,
-        pnvertv1_0=pnvertv1_0,
+        u_vert=u_vert,
+        primal_normal_vert_v1=primal_normal_vert_v1,
     )
     call_args.update(xn_args)
+    call_args.update({f"connectivity_{k}": v.table.copy() for k, v in offset_provider.items()})
+
 
     SYMBS = make_syms(**call_args)
 
     sdfg(**call_args, **SYMBS)
-    ref = nabla4_np(**call_args)
+    ref = nabla4_np(**call_args, **offset_provider)
 
     assert np.allclose(ref, nab4)
     print(f"Version({version}): Succeeded")
