@@ -31,7 +31,11 @@ stages:
   # Since the base image name is runtime dependent, we need to carry the value of it to
   # the following jobs via a dotenv file.
   before_script:
-  - DOCKER_TAG=`sha256sum $DOCKERFILE | head -c 16`
+  - DATA_TAG=`mktemp`
+  - cat $DOCKERFILE > $DATA_TAG
+  - echo $DOCKER_BUILD_ARGS >> $DATA_TAG
+  - DOCKER_TAG=`sha256sum $DATA_TAG | head -c 16`
+  - rm -f $DATA_TAG
   - export PERSIST_IMAGE_NAME=$CSCS_REGISTRY_PATH/public/$ARCH/base/gt4py-ci:$DOCKER_TAG-$PYVERSION
   - echo "BASE_IMAGE_${PYVERSION_PREFIX}=$PERSIST_IMAGE_NAME" >> build.env
   artifacts:
