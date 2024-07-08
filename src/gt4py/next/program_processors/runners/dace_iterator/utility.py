@@ -52,14 +52,6 @@ def as_dace_type(type_: ts.ScalarType) -> dace.dtypes.typeclass:
     raise ValueError(f"Scalar type '{type_}' not supported.")
 
 
-def as_scalar_type(typestr: str) -> ts.ScalarType:
-    try:
-        kind = getattr(ts.ScalarKind, typestr.upper())
-    except AttributeError as ex:
-        raise ValueError(f"Data type {typestr} not supported.") from ex
-    return ts.ScalarType(kind)
-
-
 def filter_connectivities(offset_provider: Mapping[str, Any]) -> dict[str, Connectivity]:
     return {
         offset: table
@@ -200,6 +192,6 @@ def new_array_symbols(name: str, ndim: int) -> tuple[list[dace.symbol], list[dac
 def flatten_list(node_list: list[Any]) -> list[Any]:
     return list(
         itertools.chain.from_iterable(
-            [flatten_list(e) if e.__class__ == list else [e] for e in node_list]
+            [flatten_list(e) if isinstance(e, list) else [e] for e in node_list]
         )
     )

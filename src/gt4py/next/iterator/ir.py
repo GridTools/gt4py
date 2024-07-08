@@ -12,16 +12,18 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import typing
-from typing import Any, ClassVar, List, Optional, Union
+from typing import ClassVar, List, Optional, Union
 
 import gt4py.eve as eve
 from gt4py.eve import Coerced, SymbolName, SymbolRef, datamodels
 from gt4py.eve.concepts import SourceLocation
 from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from gt4py.eve.utils import noninstantiable
+from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts
 
+
+DimensionKind = common.DimensionKind
 
 # TODO(havogt):
 # After completion of refactoring to GTIR, FencilDefinition and StencilClosure should be removed everywhere.
@@ -31,6 +33,9 @@ from gt4py.next.type_system import type_specifications as ts
 @noninstantiable
 class Node(eve.Node):
     location: Optional[SourceLocation] = eve.field(default=None, repr=False, compare=False)
+
+    # TODO(tehrengruber): include in comparison if value is not None
+    type: Optional[ts.TypeSpec] = eve.field(default=None, repr=False, compare=False)
 
     def __str__(self) -> str:
         from gt4py.next.iterator.pretty_printer import pformat
@@ -48,24 +53,6 @@ class Node(eve.Node):
 
 class Sym(Node):  # helper
     id: Coerced[SymbolName]
-    # TODO(tehrengruber): Revisit. Using strings is a workaround to avoid coupling with the
-    #   type inference.
-    kind: typing.Literal["Iterator", "Value", None] = None
-    dtype: Optional[tuple[str, bool]] = (
-        None  # format: name of primitive type, boolean indicating if it is a list
-    )
-
-    @datamodels.validator("kind")
-    def _kind_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value: str):
-        if value and value not in ["Iterator", "Value"]:
-            raise ValueError(f"Invalid kind '{value}', must be one of 'Iterator', 'Value'.")
-
-    @datamodels.validator("dtype")
-    def _dtype_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value: str):
-        if value and value[0] not in TYPEBUILTINS:
-            raise ValueError(
-                f"Invalid dtype '{value}', must be one of '{', '.join(TYPEBUILTINS)}'."
-            )
 
 
 @noninstantiable
@@ -86,7 +73,10 @@ class OffsetLiteral(Expr):
 
 
 class AxisLiteral(Expr):
+    # TODO(havogt): Refactor to use declare Axis/Dimension at the Program level.
+    # Now every use of the literal has to provide the kind, where usually we only care of the name.
     value: str
+    kind: common.DimensionKind = common.DimensionKind.HORIZONTAL
 
 
 class SymRef(Expr):
@@ -177,18 +167,14 @@ INTEGER_BUILTINS = {"int32", "int64"}
 FLOATING_POINT_BUILTINS = {"float32", "float64"}
 TYPEBUILTINS = {*INTEGER_BUILTINS, *FLOATING_POINT_BUILTINS, "bool"}
 
-GRAMMAR_BUILTINS = {
+BUILTINS = {
+    "tuple_get",
+    "cast_",
     "cartesian_domain",
     "unstructured_domain",
     "make_tuple",
-    "tuple_get",
     "shift",
     "neighbors",
-    "cast_",
-}
-
-BUILTINS = {
-    *GRAMMAR_BUILTINS,
     "named_range",
     "list_get",
     "map_",
@@ -207,7 +193,7 @@ BUILTINS = {
 # TODO(havogt): restructure after refactoring to GTIR
 GTIR_BUILTINS = {
     *BUILTINS,
-    "as_fieldop",  # `as_fieldop(stencil)` creates field_operator from stencil
+    "as_fieldop",  # `as_fieldop(stencil, domain)` creates field_operator from stencil (domain is optional, but for now required for embedded execution)
 }
 
 
@@ -232,7 +218,7 @@ class SetAt(Stmt):  # from JAX array.at[...].set()
 class Temporary(Node):
     id: Coerced[eve.SymbolName]
     domain: Optional[Expr] = None
-    dtype: Optional[Any] = None  # TODO
+    dtype: Optional[ts.ScalarType | ts.TupleType] = None
 
 
 class Program(Node, ValidatedSymbolTableTrait):
@@ -258,3 +244,5 @@ FunCall.__hash__ = Node.__hash__  # type: ignore[method-assign]
 FunctionDefinition.__hash__ = Node.__hash__  # type: ignore[method-assign]
 StencilClosure.__hash__ = Node.__hash__  # type: ignore[method-assign]
 FencilDefinition.__hash__ = Node.__hash__  # type: ignore[method-assign]
+Program.__hash__ = Node.__hash__  # type: ignore[method-assign]
+SetAt.__hash__ = Node.__hash__  # type: ignore[method-assign]
