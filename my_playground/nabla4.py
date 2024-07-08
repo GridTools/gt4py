@@ -414,5 +414,5 @@ def verify_nabla4(
 
 
 if "__main__" == __name__:
-    #verify_nabla4("inline")
+    verify_nabla4("inline")
     verify_nabla4("fieldview")
