@@ -17,8 +17,8 @@
 from typing import Any
 
 import dace
-from dace.transformation.auto import auto_optimize as dace_aoptimize
 from dace.transformation import dataflow as dace_dataflow
+from dace.transformation.auto import auto_optimize as dace_aoptimize
 
 
 def dace_auto_optimize(
@@ -49,7 +49,6 @@ def dace_auto_optimize(
     #  This should get rid of some of teh additional transients we have added.
     sdfg.simplify()
 
-
     return sdfg
 
 
@@ -68,8 +67,6 @@ def gt_auto_optimize(
     # Initial cleaning
     sdfg.simplify()
 
-
-
     # Due to the structure of the generated SDFG getting rid of Maps,
     #  i.e. fusing them, is the best we can currently do.
     sdfg.apply_transformations_repeated([dace_dataflow.MapFusion])
@@ -82,4 +79,3 @@ def gt_auto_optimize(
     sdfg.simplify()
 
     return sdfg
-
