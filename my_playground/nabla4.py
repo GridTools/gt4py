@@ -216,6 +216,55 @@ def build_nambla4_gtir_fieldview(
     E_FTYPE = ts.FieldType(dims=[EdgeDim], dtype=wpfloat)
     ECV_FTYPE = ts.FieldType(dims=[ECVDim], dtype=wpfloat)
 
+
+    def shift_builder(
+            vert: str,
+            vert_idx: int,
+            primal: str,
+            primal_idx: int,
+    ) -> itir.FunCall:
+        """Used to construct the shifting calculations.
+
+        This function generates the IR for the expression:
+        ```
+        vert[E2C2V[:, vert_idx]] * primal[E2ECV[:, primal_idx]]
+        ```
+        """
+        return im.call(
+            im.call("as_fieldop")(
+                im.lambda_("vert_shifted", "primal_shifted")(
+                    im.multiplies_(im.deref("vert_shifted"), im.deref("primal_shifted"))
+                ),
+                edge_k_domain,
+            )
+        )(
+            # arg: `vert_shifted`
+            im.call(
+                im.call("as_fieldop")(
+                    im.lambda_("vert_no_shifted")(
+                        im.deref(im.shift("E2C2V", vert_idx)("vert_no_shifted"))
+                    ),
+                    edge_k_domain,
+                )
+            )(
+                vert,  # arg: `vert_no_shifted`
+            ),
+            # end arg: `vert_shifted`
+
+            # arg: `primal_shifted`
+            im.call(
+                im.call("as_fieldop")(
+                    im.lambda_("primal_no_shifted")(
+                        im.deref(im.shift("E2ECV", primal_idx)("primal_no_shifted"))
+                    ),
+                    edge_domain,
+                )
+            )(
+                primal,  # arg: `primal_no_shifted`
+            ),
+            # end arg: `primal_shifted`
+        )
+
     nabla4prog = itir.Program(
         id="nabla4_partial_fieldview",
         function_definitions=[],
@@ -303,40 +352,7 @@ def build_nambla4_gtir_fieldview(
                                     )
                                 )(
                                     # arg: `xn_0`
-                                    im.call(
-                                        im.call("as_fieldop")(
-                                            im.lambda_("u_vert_0", "pnvertv1_0")(
-                                                im.multiplies_(im.deref("u_vert_0"), im.deref("pnvertv1_0"))
-                                            ),
-                                            edge_k_domain,
-                                        )
-                                    )(
-                                        # arg: `u_vert_0`
-                                        im.call(
-                                            im.call("as_fieldop")(
-                                                im.lambda_("u_vert_no_shifted")(
-                                                    im.deref(im.shift("E2C2V", 0)("u_vert_no_shifted"))
-                                                ),
-                                                edge_k_domain,
-                                            )
-                                        )(
-                                            "u_vert"    # arg: `u_vert_no_shifted`
-                                        ),
-                                        # end arg: `u_vert_0`
-
-                                        # arg: `pnvertv1_0`
-                                        im.call(
-                                            im.call("as_fieldop")(
-                                                im.lambda_("primal_normal_vert_v1_no_shifted")(
-                                                    im.deref(im.shift("E2ECV", 0)("primal_normal_vert_v1_no_shifted"))
-                                                ),
-                                                edge_domain,
-                                            )
-                                        )(
-                                            "primal_normal_vert_v1"    # arg: `primal_normal_vert_v1_no_shifted`
-                                        ),
-                                        # end arg: `pnvertv1_0`
-                                    ),
+                                    shift_builder("u_vert", 0, "primal_normal_vert_v1", 0),
                                     # end arg: `xn_0`
 
                                     "xn_1",
