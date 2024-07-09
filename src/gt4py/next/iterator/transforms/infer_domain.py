@@ -155,7 +155,7 @@ class InferDomain:
                     raise ValueError("Temporaries can only be used once within a program.")
 
     @classmethod
-    def infer_program(  # refactor and make testcase more complicated
+    def infer_program(
         cls,
         program: itir.Program,
         offset_provider: Dict[str, Dimension],
