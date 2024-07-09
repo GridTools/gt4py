@@ -14,11 +14,12 @@
 
 
 import abc
-from typing import Final, Optional, Protocol, TypeAlias
+from typing import Any, Final, Optional, Protocol, TypeAlias
 
 import dace
 import dace.subsets as sbs
 
+from gt4py.eve import concepts
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
@@ -27,7 +28,6 @@ from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_to_tasklet,
     utility as dace_fieldview_util,
 )
-from gt4py.next.program_processors.runners.dace_fieldview.sdfg_builder import SDFGBuilder
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -36,6 +36,22 @@ TemporaryData: TypeAlias = tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]
 
 IteratorIndexFmt: Final[str] = "i_{dim}"
 IteratorIndexDType: TypeAlias = dace.int32  # type of iterator indexes
+
+
+class SDFGBuilder(Protocol):
+    """Visitor interface available to GTIR-primitive translators."""
+
+    @abc.abstractmethod
+    def get_offset_provider(self) -> dict[str, gtx_common.Connectivity | gtx_common.Dimension]:
+        pass
+
+    @abc.abstractmethod
+    def get_symbol_types(self) -> dict[str, ts.FieldType | ts.ScalarType]:
+        pass
+
+    @abc.abstractmethod
+    def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
+        pass
 
 
 class PrimitiveTranslator(Protocol):
@@ -137,7 +153,7 @@ class AsFieldOp(PrimitiveTranslator):
 
         # represent the field operator as a mapped tasklet graph, which will range over the field domain
         taskgen = gtir_to_tasklet.LambdaToTasklet(
-            sdfg, state, sdfg_builder.offset_provider, reduce_identity
+            sdfg, state, sdfg_builder.get_offset_provider(), reduce_identity
         )
         input_connections, output_expr = taskgen.visit(stencil_expr, args=stencil_args)
         assert isinstance(output_expr, gtir_to_tasklet.ValueExpr)
@@ -320,8 +336,8 @@ class SymbolRef(PrimitiveTranslator):
             tasklet_name = "get_literal"
         else:
             sym_value = str(node.id)
-            assert sym_value in sdfg_builder.symbol_types
-            data_type = sdfg_builder.symbol_types[sym_value]
+            assert sym_value in sdfg_builder.get_symbol_types()
+            data_type = sdfg_builder.get_symbol_types()[sym_value]
             tasklet_name = f"get_{sym_value}"
 
         if isinstance(data_type, ts.FieldType):

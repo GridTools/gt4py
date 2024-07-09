@@ -21,6 +21,7 @@ from typing import Any, Optional, Sequence
 
 import dace
 
+from gt4py import eve
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
@@ -29,11 +30,10 @@ from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_to_tasklet,
     utility as dace_fieldview_util,
 )
-from gt4py.next.program_processors.runners.dace_fieldview.sdfg_builder import SDFGBuilder
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
 
 
-class GTIRToSDFG(SDFGBuilder):
+class GTIRToSDFG(eve.NodeVisitor, gtir_builtin_translators.SDFGBuilder):
     """Provides translation capability from a GTIR program to a DaCe SDFG.
 
     This class is responsible for translation of `ir.Program`, that is the top level representation
@@ -46,11 +46,21 @@ class GTIRToSDFG(SDFGBuilder):
     from where to continue building the SDFG.
     """
 
+    offset_provider: dict[str, gtx_common.Connectivity | gtx_common.Dimension]
+    symbol_types: dict[str, ts.FieldType | ts.ScalarType]
+
     def __init__(
         self,
         offset_provider: dict[str, gtx_common.Connectivity | gtx_common.Dimension],
     ):
-        super().__init__(offset_provider, symbol_types={})
+        self.offset_provider = offset_provider
+        self.symbol_types = {}
+
+    def get_offset_provider(self) -> dict[str, gtx_common.Connectivity | gtx_common.Dimension]:
+        return self.offset_provider
+
+    def get_symbol_types(self) -> dict[str, ts.FieldType | ts.ScalarType]:
+        return self.symbol_types
 
     def _make_array_shape_and_strides(
         self, name: str, dims: Sequence[gtx_common.Dimension]
