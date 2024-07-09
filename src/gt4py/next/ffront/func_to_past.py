@@ -72,13 +72,11 @@ class OptionalFuncToPastFactory(factory.Factory):
         workflow = func_to_past
         cached = factory.Trait(
             step=factory.LazyAttribute(
-                lambda o: workflow.CachedStep(
-                    step=o.workflow, hash_function=ffront_stages.fingerprint_stage
-                )
+                lambda o: workflow.CachedStep(step=o.workflow, hash_function=id)
             )
         )
 
-        step = factory.LazyAttribute(lambda o: o.workflow)
+    step = factory.LazyAttribute(lambda o: o.workflow)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)

@@ -106,7 +106,7 @@ class ProgramTransformWorkflow(workflow.NamedStepSequenceWithArgs):
         ffront_stages.ProgramDefinition | ffront_stages.PastProgramDefinition,
         ffront_stages.PastProgramDefinition,
     ] = dataclasses.field(
-        default_factory=lambda: func_to_past.OptionalFuncToPastFactory(cached=True)
+        default_factory=lambda: func_to_past.OptionalFuncToPastFactory(cached=False, workflow="123")
     )
     past_lint: workflow.Workflow[
         ffront_stages.PastProgramDefinition, ffront_stages.PastProgramDefinition
