@@ -87,7 +87,7 @@ def _process_args(
                     "Constituents of composite arguments (e.g. the elements of a"
                     " tuple) need to have the same shape and dimensions."
                 )
-            size_args.extend(shape if shape else [None] * len(dims))
+            size_args.extend(shape if shape else [type_translation.SizeArg()] * len(dims))
     return tuple(rewritten_args), tuple(size_args), kwargs
 
 

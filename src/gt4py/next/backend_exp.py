@@ -15,14 +15,19 @@
 from __future__ import annotations
 
 import dataclasses
+import functools
+import inspect
+import types
 import typing
-from typing import Any, Generic, Optional
+from typing import Any, Callable, Generic, Optional
 
 from gt4py.next import backend
 from gt4py.next.ffront import (
+    field_operator_ast as foast,
     foast_to_itir,
     foast_to_past,
     func_to_foast,
+    past_process_args,
     past_to_itir,
     stages as ffront_stages,
     type_specifications as ffts,
@@ -61,6 +66,79 @@ class ItirShim:
         return self.foast_to_itir(self.definition)
 
 
+def should_be_positional(param: inspect.Parameter) -> bool:
+    return (param.kind is inspect.Parameter.POSITIONAL_ONLY) or (
+        param.kind is inspect.Parameter.POSITIONAL_OR_KEYWORD
+    )
+
+
+@functools.singledispatch
+def make_signature(func: Any) -> inspect.Signature:
+    """Make a signature for a Python or DSL callable, which suffices for use in 'convert_to_positional'."""
+    raise NotImplementedError(f"'make_signature' not implemented for {type(func)}.")
+
+
+@make_signature.dispatch
+def signature_from_callable(func: types.FunctionType) -> inspect.Signature:
+    return inspect.signature(func)
+
+
+@make_signature.dispatch(foast.FieldOperator)
+@make_signature.dispatch(foast.ScanOperator)
+def signature_from_fieldop(func: foast.FieldOperator | foast.ScanOperator) -> inspect.Signature:
+    fieldview_signature = func.type.definition
+    return inspect.Signature(
+        parameters={
+            **{
+                i: inspect.Parameter(name=i, kind=inspect.Parameter.POSITIONAL_ONLY)
+                for i, param in enumerate(fieldview_signature.pos_only_args)
+            },
+            **{
+                k: inspect.Parameter(name=k, kind=inspect.Parameter.POSITIONAL_OR_KEYWORD)
+                for k in fieldview_signature.pos_or_kw_args
+            },
+        }
+    )
+
+
+def convert_to_positional(
+    func: Callable | foast.FieldOperator | foast.ScanOperator, *args: Any, **kwargs: Any
+) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """
+    Convert arguments given as keyword args to positional ones where possible.
+
+    Raises en error if and only if there are clearly missing positional arguments,
+    Without awareness of the peculiarities of DSL function signatures. A more
+    thorough check on whether the signature is fulfilled is expected to happen
+    later in the toolchain.
+
+    Examples:
+    >>> def example(posonly, /, pos_or_key, pk_with_default=42, *, key_only=43):
+    ...     pass
+    >>> convert_to_positional(example, 1, pos_or_key=2, key_only=3)
+    ((1, 2), {"key_only": 3})
+    """
+    signature = make_signature(func)
+    new_args = list(args)
+    modified_kwargs = kwargs.copy()
+    missing = []
+    interesting_params = [p for p in signature.parameters.values() if should_be_positional(p)]
+
+    for param in interesting_params[len(args) :]:
+        if param.kind is inspect.Parameter.POSITIONAL_OR_KEYWORD and param.name in modified_kwargs:
+            # if keyword allowed, check if was given as kwarg
+            new_args.append(modified_kwargs.pop(param.name))
+        else:
+            # add default and report as missing if no default
+            # note: this treats POSITIONAL_ONLY params correctly, as they can not have a default.
+            new_args.append(param.default)
+            if param.default is inspect._empty:
+                missing.append(param.name)
+    if missing:
+        raise TypeError(f"Missing positional argument(s): {', '.join(missing)}.")
+    return tuple(new_args), modified_kwargs
+
+
 @dataclasses.dataclass(frozen=True)
 class FieldviewOpToFieldviewProg:
     foast_to_itir: workflow.Workflow[ffront_stages.FoastOperatorDefinition, itir.Expr] = (
@@ -70,6 +148,9 @@ class FieldviewOpToFieldviewProg:
             )
         )
     )
+    fop_args_to_prog_args: workflow.Workflow[
+        ffront_stages.PastClosure, ffront_stages.PastClosure
+    ] = dataclasses.field(default_factory=lambda: past_process_args.PastProcessArgs(aot_off=True))
 
     def __call__(
         self,
@@ -85,7 +166,15 @@ class FieldviewOpToFieldviewProg:
                 closure_vars={inp.data.foast_node.id: ItirShim(inp.data, self.foast_to_itir)},
             )
         )
-        return workflow.DataWithArgs(data=fieldview_program, args=inp.args)
+        transformed = self.fop_args_to_prog_args(
+            ffront_stages.PastClosure(
+                definition=fieldview_program, args=inp.args.args, kwargs=inp.args.kwargs
+            )
+        )
+        return workflow.DataWithArgs(
+            data=fieldview_program,
+            args=dataclasses.replace(inp.args, args=transformed.args, kwargs=transformed.kwargs),
+        )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -96,13 +185,9 @@ class PastToItirAdapter:
 
     def __call__(
         self, inp: workflow.DataWithArgs[ffront_stages.PastProgramDefinition, stages.CompileArgSpec]
-    ) -> DataWithIteratorProgramMetadata[stages.AOTProgram]:
+    ) -> stages.AOTProgram:
         aot_fvprog = ffront_stages.AOTFieldviewProgramAst(definition=inp.data, argspec=inp.args)
-        aot_itprog = self.step(aot_fvprog)
-        return DataWithIteratorProgramMetadata(
-            data=aot_itprog,
-            metadata=IteratorProgramMetadata(fieldview_program_type=inp.data.past_node.type),
-        )
+        return self.step(aot_fvprog)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -124,9 +209,10 @@ class FieldopTransformWorkflow(workflow.NamedStepSequence):
         workflow.DataWithArgs[ffront_stages.FoastOperatorDefinition, stages.CompileArgSpec],
         workflow.DataWithArgs[ffront_stages.PastProgramDefinition, stages.CompileArgSpec],
     ] = dataclasses.field(default_factory=FieldviewOpToFieldviewProg)
-    past_to_itir: workflow[
+
+    past_to_itir: workflow.Workflow[
         workflow.DataWithArgs[ffront_stages.PastProgramDefinition, stages.CompileArgSpec],
-        DataWithIteratorProgramMetadata[stages.AOTProgram],
+        stages.AOTProgram,
     ] = dataclasses.field(default_factory=PastToItirAdapter)
 
 
@@ -141,13 +227,13 @@ class ExpBackend(backend.Backend):
             program, (ffront_stages.FieldOperatorDefinition, ffront_stages.FoastOperatorDefinition)
         ):
             _ = kwargs.pop("from_fieldop")
-            kwargs_subset = kwargs.copy()
-            _ = kwargs_subset.pop("offset_provider")
+            # taking the offset provider out is not needed
             program_info = self.transforms_fop(
                 workflow.DataWithArgs(
                     data=program,
-                    args=stages.CompileArgSpec.from_concrete_no_size(*args, **kwargs_subset),
+                    args=stages.CompileArgSpec.from_concrete_no_size(*args, **kwargs),
                 )
             )
-            compiled = self.executor.otf_workflow(program_info)
-            compiled(*args, **kwargs)
+            self.executor(program_info, *args, **kwargs)
+        else:
+            super().__call__(program, *args, **kwargs)
