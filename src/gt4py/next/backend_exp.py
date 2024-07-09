@@ -27,6 +27,7 @@ from gt4py.next.ffront import (
     foast_to_itir,
     foast_to_past,
     func_to_foast,
+    func_to_past,
     past_process_args,
     past_to_itir,
     stages as ffront_stages,
@@ -62,7 +63,7 @@ class ItirShim:
     def __gt_type__(self) -> ts.CallableType:
         return self.definition.foast_node.type
 
-    def __gt_itir__(self) -> itir.FunctionDefinition:
+    def __gt_itir__(self) -> itir.Expr:
         return self.foast_to_itir(self.definition)
 
 
@@ -75,29 +76,27 @@ def should_be_positional(param: inspect.Parameter) -> bool:
 @functools.singledispatch
 def make_signature(func: Any) -> inspect.Signature:
     """Make a signature for a Python or DSL callable, which suffices for use in 'convert_to_positional'."""
+    if isinstance(func, types.FunctionType):
+        return inspect.signature(func)
     raise NotImplementedError(f"'make_signature' not implemented for {type(func)}.")
 
 
-@make_signature.dispatch
-def signature_from_callable(func: types.FunctionType) -> inspect.Signature:
-    return inspect.signature(func)
-
-
-@make_signature.dispatch(foast.FieldOperator)
 @make_signature.dispatch(foast.ScanOperator)
-def signature_from_fieldop(func: foast.FieldOperator | foast.ScanOperator) -> inspect.Signature:
+def signature_from_fieldop(func: foast.FieldOperator) -> inspect.Signature:
+    if isinstance(func.type, ts.DeferredType):
+        raise NotImplementedError(
+            f"'make_signature' not implemented for pre type deduction {type(func)}."
+        )
     fieldview_signature = func.type.definition
     return inspect.Signature(
-        parameters={
-            **{
-                i: inspect.Parameter(name=i, kind=inspect.Parameter.POSITIONAL_ONLY)
-                for i, param in enumerate(fieldview_signature.pos_only_args)
-            },
-            **{
-                k: inspect.Parameter(name=k, kind=inspect.Parameter.POSITIONAL_OR_KEYWORD)
-                for k in fieldview_signature.pos_or_kw_args
-            },
-        }
+        parameters=[
+            inspect.Parameter(name=str(i), kind=inspect.Parameter.POSITIONAL_ONLY)
+            for i, param in enumerate(fieldview_signature.pos_only_args)
+        ]
+        + [
+            inspect.Parameter(name=k, kind=inspect.Parameter.POSITIONAL_OR_KEYWORD)
+            for k in fieldview_signature.pos_or_kw_args
+        ],
     )
 
 
@@ -148,9 +147,6 @@ class FieldviewOpToFieldviewProg:
             )
         )
     )
-    fop_args_to_prog_args: workflow.Workflow[
-        ffront_stages.PastClosure, ffront_stages.PastClosure
-    ] = dataclasses.field(default_factory=lambda: past_process_args.PastProcessArgs(aot_off=True))
 
     def __call__(
         self,
@@ -166,15 +162,22 @@ class FieldviewOpToFieldviewProg:
                 closure_vars={inp.data.foast_node.id: ItirShim(inp.data, self.foast_to_itir)},
             )
         )
-        transformed = self.fop_args_to_prog_args(
-            ffront_stages.PastClosure(
-                definition=fieldview_program, args=inp.args.args, kwargs=inp.args.kwargs
-            )
-        )
         return workflow.DataWithArgs(
             data=fieldview_program,
-            args=dataclasses.replace(inp.args, args=transformed.args, kwargs=transformed.kwargs),
+            args=inp.args,
         )
+
+
+def transform_prog_args(
+    inp: workflow.DataWithArgs[ffront_stages.PastProgramDefinition, stages.CompileArgSpec],
+) -> workflow.DataWithArgs[ffront_stages.PastProgramDefinition, stages.CompileArgSpec]:
+    transformed = past_process_args.PastProcessArgs(aot_off=True)(
+        ffront_stages.PastClosure(definition=inp.data, args=inp.args.args, kwargs=inp.args.kwargs)
+    )
+    return workflow.DataWithArgs(
+        data=transformed.definition,
+        args=dataclasses.replace(inp.args, args=transformed.args, kwargs=transformed.kwargs),
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -190,30 +193,98 @@ class PastToItirAdapter:
         return self.step(aot_fvprog)
 
 
+def jit_to_aot_args(inp: stages.JITArgs) -> stages.CompileArgSpec:
+    return stages.CompileArgSpec.from_concrete_no_size(*inp.args, **inp.kwargs)
+
+
+ARGS: typing.TypeAlias = stages.JITArgs
+CARG: typing.TypeAlias = stages.CompileArgSpec
+DSL_FOP: typing.TypeAlias = ffront_stages.FieldOperatorDefinition
+FOP: typing.TypeAlias = ffront_stages.FoastOperatorDefinition
+DSL_PRG: typing.TypeAlias = ffront_stages.ProgramDefinition
+PRG: typing.TypeAlias = ffront_stages.PastProgramDefinition
+IT_PRG: typing.TypeAlias = itir.FencilDefinition
+
+
+AOT_FOP: typing.TypeAlias = workflow.DataWithArgs[FOP, CARG]
+AOT_PRG: typing.TypeAlias = workflow.DataWithArgs[PRG, CARG]
+
+
+INPUT_DATA_T: typing.TypeAlias = DSL_FOP | FOP | DSL_PRG | PRG | IT_PRG
+
+
 @dataclasses.dataclass(frozen=True)
-class FieldopTransformWorkflow(workflow.NamedStepSequence):
+class FieldopTransformWorkflow(workflow.MultiWorkflow):
     """Modular workflow for transformations with access to intermediates."""
 
-    func_to_fieldview_op: workflow.Workflow[
-        workflow.DataWithArgs[
-            ffront_stages.FieldOperatorDefinition | ffront_stages.FoastOperatorDefinition,
-            stages.CompileArgSpec,
-        ],
-        workflow.DataWithArgs[ffront_stages.FoastOperatorDefinition, stages.CompileArgSpec],
-    ] = dataclasses.field(
-        default_factory=lambda: workflow.DataOnlyAdapter(
-            func_to_foast.OptionalFuncToFoastFactory(cached=True)
+    aotify_args: workflow.Workflow[
+        workflow.DataWithArgs[INPUT_DATA_T, ARGS], workflow.DataWithArgs[INPUT_DATA_T, CARG]
+    ] = dataclasses.field(default_factory=lambda: workflow.ArgsOnlyAdapter(jit_to_aot_args))
+
+    func_to_fieldview_op: workflow.Workflow[workflow.DataWithArgs[DSL_FOP | FOP, CARG], AOT_FOP] = (
+        dataclasses.field(
+            default_factory=lambda: workflow.DataOnlyAdapter(
+                func_to_foast.OptionalFuncToFoastFactory(cached=True)
+            )
         )
     )
-    field_view_op_to_prog: workflow.Workflow[
-        workflow.DataWithArgs[ffront_stages.FoastOperatorDefinition, stages.CompileArgSpec],
-        workflow.DataWithArgs[ffront_stages.PastProgramDefinition, stages.CompileArgSpec],
-    ] = dataclasses.field(default_factory=FieldviewOpToFieldviewProg)
 
-    past_to_itir: workflow.Workflow[
-        workflow.DataWithArgs[ffront_stages.PastProgramDefinition, stages.CompileArgSpec],
-        stages.AOTProgram,
-    ] = dataclasses.field(default_factory=PastToItirAdapter)
+    func_to_fieldview_prog: workflow.Workflow[
+        workflow.DataWithArgs[DSL_PRG | PRG, CARG], AOT_PRG
+    ] = dataclasses.field(
+        default_factory=lambda: workflow.DataOnlyAdapter(
+            func_to_past.OptionalFuncToPastFactory(cached=True)
+        )
+    )
+
+    foast_to_itir: workflow.Workflow[
+        workflow.DataWithArgs[FOP, CARG],
+        itir.Expr,
+    ] = dataclasses.field(
+        default_factory=lambda: workflow.StripArgsAdapter(
+            workflow.CachedStep(
+                step=foast_to_itir.foast_to_itir, hash_function=ffront_stages.fingerprint_stage
+            )
+        )
+    )
+
+    field_view_op_to_prog: workflow.Workflow[workflow.DataWithArgs[FOP, CARG], AOT_PRG] = (
+        dataclasses.field(default_factory=FieldviewOpToFieldviewProg)
+    )
+
+    field_view_prog_args_transform: workflow.Workflow[AOT_PRG, AOT_PRG] = dataclasses.field(
+        default=transform_prog_args
+    )
+
+    past_to_itir: workflow.Workflow[AOT_PRG, stages.AOTProgram] = dataclasses.field(
+        default_factory=PastToItirAdapter
+    )
+
+    def step_order(
+        self, inp: workflow.DataWithArgs[DSL_FOP | FOP | DSL_PRG | PRG | IT_PRG, ARGS | CARG]
+    ) -> list[str]:
+        steps: list[str] = []
+        if isinstance(inp.args, ARGS):
+            steps.append("aotify_args")
+        match inp.data:
+            case DSL_FOP():
+                steps.extend(
+                    [
+                        "func_to_fieldview_op",
+                        "field_view_op_to_prog",
+                        "field_view_prog_args_transform",
+                    ]
+                )
+            case FOP():
+                steps.extend(["field_view_op_to_prog", "field_view_prog_args_transform"])
+            case DSL_PRG():
+                steps.extend(["func_to_fieldview_prog", "field_view_prog_args_transform"])
+            case PRG():
+                steps.append("field_view_prog_args_transform")
+            case _:
+                pass
+        steps.append("past_to_itir")
+        return steps
 
 
 class ExpBackend(backend.Backend):

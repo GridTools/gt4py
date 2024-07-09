@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import abc
 import dataclasses
 import functools
 import typing
@@ -161,6 +162,21 @@ class NamedStepSequence(
 
 
 @dataclasses.dataclass(frozen=True)
+class MultiWorkflow(
+    ChainableWorkflowMixin[StartT, EndT], ReplaceEnabledWorkflowMixin[StartT, EndT]
+):
+    def __call__(self, inp: StartT) -> EndT:
+        step_result: Any = inp
+        for step_name in self.step_order(inp):
+            step_result = getattr(self, step_name)(step_result)
+        return step_result
+
+    @abc.abstractmethod
+    def step_order(self, inp: StartT) -> list[str]:
+        pass
+
+
+@dataclasses.dataclass(frozen=True)
 class StepSequence(ChainableWorkflowMixin[StartT, EndT]):
     """
     Composable workflow of single input callables.
@@ -286,6 +302,19 @@ class DataOnlyAdapter(
 
     def __call__(self, inp: DataWithArgs[StartT, ArgT]) -> DataWithArgs[EndT, ArgT]:
         return DataWithArgs(data=self.step(inp.data), args=inp.args)
+
+
+@dataclasses.dataclass(frozen=True)
+class StripArgsAdapter(
+    ChainableWorkflowMixin,
+    ReplaceEnabledWorkflowMixin,
+    Workflow[DataWithArgs[StartT, ArgT], EndT],
+    Generic[ArgT, StartT, EndT],
+):
+    step: Workflow[StartT, EndT]
+
+    def __call__(self, inp: DataWithArgs[StartT, ArgT]) -> EndT:
+        return self.step(inp.data)
 
 
 @dataclasses.dataclass(frozen=True)
