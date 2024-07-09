@@ -19,15 +19,15 @@ from typing import Optional, TypeAlias
 
 import dace
 import dace.subsets as sbs
-import numpy as np
 
 from gt4py import eve
-from gt4py.eve import codegen
-from gt4py.eve.codegen import FormatTemplate as as_fmt
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
-from gt4py.next.program_processors.runners.dace_fieldview import utility as dace_fieldview_util
+from gt4py.next.program_processors.runners.dace_fieldview import (
+    gtir_python_codegen,
+    utility as dace_fieldview_util,
+)
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -76,61 +76,6 @@ class IteratorExpr:
 
 
 INDEX_CONNECTOR_FMT = "__index_{dim}"
-
-
-MATH_BUILTINS_MAPPING = {
-    "abs": "abs({})",
-    "sin": "math.sin({})",
-    "cos": "math.cos({})",
-    "tan": "math.tan({})",
-    "arcsin": "asin({})",
-    "arccos": "acos({})",
-    "arctan": "atan({})",
-    "sinh": "math.sinh({})",
-    "cosh": "math.cosh({})",
-    "tanh": "math.tanh({})",
-    "arcsinh": "asinh({})",
-    "arccosh": "acosh({})",
-    "arctanh": "atanh({})",
-    "sqrt": "math.sqrt({})",
-    "exp": "math.exp({})",
-    "log": "math.log({})",
-    "gamma": "tgamma({})",
-    "cbrt": "cbrt({})",
-    "isfinite": "isfinite({})",
-    "isinf": "isinf({})",
-    "isnan": "isnan({})",
-    "floor": "math.ifloor({})",
-    "ceil": "ceil({})",
-    "trunc": "trunc({})",
-    "minimum": "min({}, {})",
-    "maximum": "max({}, {})",
-    "fmod": "fmod({}, {})",
-    "power": "math.pow({}, {})",
-    "float": "dace.float64({})",
-    "float32": "dace.float32({})",
-    "float64": "dace.float64({})",
-    "int": "dace.int32({})" if np.dtype(int).itemsize == 4 else "dace.int64({})",
-    "int32": "dace.int32({})",
-    "int64": "dace.int64({})",
-    "bool": "dace.bool_({})",
-    "plus": "({} + {})",
-    "minus": "({} - {})",
-    "multiplies": "({} * {})",
-    "divides": "({} / {})",
-    "floordiv": "({} // {})",
-    "eq": "({} == {})",
-    "not_eq": "({} != {})",
-    "less": "({} < {})",
-    "less_equal": "({} <= {})",
-    "greater": "({} > {})",
-    "greater_equal": "({} >= {})",
-    "and_": "({} & {})",
-    "or_": "({} | {})",
-    "xor_": "({} ^ {})",
-    "mod": "({} % {})",
-    "not_": "(not {})",  # ~ is not bitwise in numpy
-}
 
 
 DACE_REDUCTION_MAPPING: dict[str, dace.dtypes.ReductionType] = {
@@ -436,7 +381,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         # TODO: use type ineference
         res_type = dace_fieldview_util.as_scalar_type(str(dtype.as_numpy_dtype()))
 
-        reduce_wcr = "lambda x, y: " + MATH_BUILTINS_MAPPING[op_name].format("x", "y")
+        reduce_wcr = "lambda x, y: " + gtir_python_codegen.format_builtin(op_name, "x", "y")
         reduce_node = self.state.add_reduce(reduce_wcr, reduce_axes, reduce_init.value)
 
         if isinstance(input_expr, MemletExpr):
@@ -688,13 +633,6 @@ class LambdaToTasklet(eve.NodeVisitor):
         else:
             assert isinstance(node.fun, gtir.SymRef)
 
-        # create a tasklet node implementing the builtin function
-        builtin_name = str(node.fun.id)
-        if builtin_name in MATH_BUILTINS_MAPPING:
-            fmt = MATH_BUILTINS_MAPPING[builtin_name]
-        else:
-            raise NotImplementedError(f"'{builtin_name}' not implemented.")
-
         node_internals = []
         node_connections: dict[str, MemletExpr | ValueExpr] = {}
         for i, arg in enumerate(node.args):
@@ -710,7 +648,8 @@ class LambdaToTasklet(eve.NodeVisitor):
                 node_internals.append(arg_expr.value)
 
         # use tasklet connectors as expression arguments
-        code = fmt.format(*node_internals)
+        builtin_name = str(node.fun.id)
+        code = gtir_python_codegen.format_builtin(builtin_name, *node_internals)
 
         out_connector = "result"
         tasklet_node = self.state.add_tasklet(
@@ -787,37 +726,3 @@ class LambdaToTasklet(eve.NodeVisitor):
         param = str(node.id)
         assert param in self.symbol_map
         return self.symbol_map[param]
-
-
-class PythonCodegen(codegen.TemplatedGenerator):
-    """Helper class to visit a symbolic expression and translate it to Python code.
-
-    The generated Python code can be use either as the body of a tasklet node or,
-    as in the case of field domain definitions, for sybolic array shape and map range.
-    """
-
-    SymRef = as_fmt("{id}")
-    Literal = as_fmt("{value}")
-
-    def _visit_deref(self, node: gtir.FunCall) -> str:
-        assert len(node.args) == 1
-        if isinstance(node.args[0], gtir.SymRef):
-            return self.visit(node.args[0])
-        raise NotImplementedError(f"Unexpected deref with arg type '{type(node.args[0])}'.")
-
-    def _visit_numeric_builtin(self, node: gtir.FunCall) -> str:
-        assert isinstance(node.fun, gtir.SymRef)
-        fmt = MATH_BUILTINS_MAPPING[str(node.fun.id)]
-        args = self.visit(node.args)
-        return fmt.format(*args)
-
-    def visit_FunCall(self, node: gtir.FunCall) -> str:
-        if cpm.is_call_to(node, "deref"):
-            return self._visit_deref(node)
-        elif isinstance(node.fun, gtir.SymRef):
-            builtin_name = str(node.fun.id)
-            if builtin_name in MATH_BUILTINS_MAPPING:
-                return self._visit_numeric_builtin(node)
-            else:
-                raise NotImplementedError(f"'{builtin_name}' not implemented.")
-        raise NotImplementedError(f"Unexpected 'FunCall' node ({node}).")

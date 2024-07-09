@@ -23,6 +23,7 @@ from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.program_processors.runners.dace_fieldview import (
+    gtir_python_codegen,
     gtir_to_tasklet,
     utility as dace_fieldview_util,
 )
@@ -234,7 +235,7 @@ class Cond(PrimitiveTranslator):
         cond_expr, true_expr, false_expr = node.args
 
         # expect condition as first argument
-        cond = dace_fieldview_util.get_symbolic_expr(cond_expr)
+        cond = gtir_python_codegen.get_source(cond_expr)
 
         # use current head state to terminate the dataflow, and add a entry state
         # to connect the true/false branch states as follows:

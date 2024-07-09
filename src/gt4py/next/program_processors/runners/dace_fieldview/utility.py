@@ -19,7 +19,7 @@ import dace
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
-from gt4py.next.program_processors.runners.dace_fieldview import gtir_to_tasklet
+from gt4py.next.program_processors.runners.dace_fieldview import gtir_python_codegen
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -100,7 +100,7 @@ def get_domain(
         assert isinstance(axis, gtir.AxisLiteral)
         bounds = []
         for arg in named_range.args[1:3]:
-            sym_str = get_symbolic_expr(arg)
+            sym_str = gtir_python_codegen.get_source(arg)
             sym_val = dace.symbolic.SymExpr(sym_str)
             bounds.append(sym_val)
         dim = gtx_common.Dimension(axis.value, axis.kind)
@@ -118,16 +118,6 @@ def get_domain_ranges(
     domain = get_domain(node)
 
     return {dim: (lb, ub) for dim, lb, ub in domain}
-
-
-def get_symbolic_expr(node: gtir.Expr) -> str:
-    """
-    Specialized visit method for symbolic expressions.
-
-    Returns a string containing the corresponding Python code, which as tasklet body
-    or symbolic array shape.
-    """
-    return gtir_to_tasklet.PythonCodegen().visit(node)
 
 
 def get_neighbors_field_type(offset: str, dtype: dace.typeclass) -> ts.FieldType:
