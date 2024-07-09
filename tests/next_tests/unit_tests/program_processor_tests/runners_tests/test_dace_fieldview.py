@@ -593,7 +593,6 @@ def test_gtir_cartesian_shift_left():
         assert np.allclose(a[OFFSET:] + DELTA, b[:-OFFSET])
 
 
-@pytest.mark.skip("Memlet with with offset not working as expected")
 def test_gtir_cartesian_shift_right():
     DELTA = 3.0
     OFFSET = 1

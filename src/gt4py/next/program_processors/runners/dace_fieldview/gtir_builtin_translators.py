@@ -161,7 +161,7 @@ class AsFieldOp(PrimitiveTranslator):
         ]
         field_offset: Optional[list[dace.symbolic.SymbolicType]] = None
         if any(domain_lbs):
-            field_offset = list(domain_lbs)
+            field_offset = [-lb for lb in domain_lbs]
         if isinstance(output_desc, dace.data.Array):
             # extend the result arrays with the local dimensions added by the field operator e.g. `neighbors`)
             assert isinstance(output_expr.field_type, ts.FieldType)
