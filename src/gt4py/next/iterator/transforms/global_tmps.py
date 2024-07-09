@@ -28,6 +28,7 @@ from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.pretty_printer import PrettyPrinter
 from gt4py.next.iterator.transforms import trace_shifts
+from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 from gt4py.next.iterator.transforms.cse import extract_subexpression
 from gt4py.next.iterator.transforms.eta_reduction import EtaReduction
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
@@ -38,8 +39,6 @@ from gt4py.next.iterator.type_system import (
     type_specifications as it_ts,
 )
 from gt4py.next.type_system import type_specifications as ts
-
-from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 
 
 """Iterator IR extension for global temporaries.
@@ -453,12 +452,20 @@ class SymbolicDomain:
         return cls(node.fun.id, ranges)  # type: ignore[attr-defined]  # ensure by assert above
 
     def as_expr(self) -> ir.FunCall:
-        return im.call(self.grid_type)(
-            *[
-                im.call("named_range")(ir.AxisLiteral(value=d.value, kind=d.kind), r.start, r.stop)
-                for d, r in self.ranges.items()
-            ]
-        )
+        if self.grid_type == "cartesian_domain":
+            converted_ranges = {
+                key: (value.start, value.stop) for key, value in self.ranges.items()
+            }
+            return im.cartesian_domain(converted_ranges)
+        else:
+            return im.call("unstructured_domain")(
+                *[
+                    im.call("named_range")(
+                        ir.AxisLiteral(value=d.value, kind=d.kind), r.start, r.stop
+                    )
+                    for d, r in self.ranges.items()
+                ]
+            )
 
 
 def domain_union(domains: list[SymbolicDomain]) -> SymbolicDomain:
@@ -475,7 +482,9 @@ def domain_union(domains: list[SymbolicDomain]) -> SymbolicDomain:
             lambda current_expr, el_expr: im.call("maximum")(current_expr, el_expr),
             [domain.ranges[dim].stop for domain in domains],
         )
-        new_domain_ranges[dim] = SymbolicRange(ConstantFolding.apply(start), ConstantFolding.apply(stop))
+        new_domain_ranges[dim] = SymbolicRange(
+            ConstantFolding.apply(start), ConstantFolding.apply(stop)
+        )
     return SymbolicDomain(domains[0].grid_type, new_domain_ranges)
 
 

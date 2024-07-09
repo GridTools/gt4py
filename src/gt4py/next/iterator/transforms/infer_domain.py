@@ -143,3 +143,64 @@ class InferDomain:
         }
 
         return transformed_call, accessed_domains_without_tmp
+
+    @staticmethod
+    def _validate_temporary_usage(body: list[itir.SetAt], temporaries: list[str]):
+        for i in range(len(body)):
+            for j in range(i + 1, len(body)):
+                if (
+                    str(body[i].target.id) == str(body[j].target.id)
+                    and str(body[i].target.id) in temporaries
+                ):
+                    raise ValueError("Temporaries can only be used once within a program.")
+
+    @classmethod
+    def infer_program(  # refactor and make testcase more complicated
+        cls,
+        program: itir.Program,
+        offset_provider: Dict[str, Dimension],
+    ) -> itir.Program:
+        fields_dict = {}
+        new_set_at_list = []
+
+        temporaries = [str(tmp.id) for tmp in program.declarations]
+
+        cls._validate_temporary_usage(program.body, temporaries)
+
+        for set_at in reversed(program.body):
+            assert isinstance(set_at, itir.SetAt)
+            assert isinstance(set_at.expr, itir.FunCall)
+            assert isinstance(set_at.expr.fun, itir.FunCall)
+            assert set_at.expr.fun.fun == im.ref("as_fieldop")
+
+            if str(set_at.target.id) not in temporaries:
+                fields_dict[set_at.target] = SymbolicDomain.from_expr(set_at.domain)
+
+            actual_call, actual_domains = InferDomain.infer_as_fieldop(
+                set_at.expr, fields_dict[set_at.target], offset_provider
+            )
+            new_set_at_list.insert(
+                0,
+                itir.SetAt(expr=actual_call, domain=actual_call.fun.args[1], target=set_at.target),
+            )
+
+            for domain in actual_domains:
+                domain_ref = itir.SymRef(id=domain)
+                if domain_ref in fields_dict:
+                    fields_dict[domain_ref] = domain_union(
+                        [fields_dict[domain_ref], actual_domains[domain]]
+                    )
+                else:
+                    fields_dict[domain_ref] = actual_domains[domain]
+
+        new_declarations = program.declarations
+        for temporary in new_declarations:
+            temporary.domain = SymbolicDomain.as_expr(fields_dict[itir.SymRef(id=temporary.id)])
+
+        return itir.Program(
+            id=program.id,
+            function_definitions=program.function_definitions,
+            params=program.params,
+            declarations=new_declarations,
+            body=new_set_at_list,
+        )
