@@ -24,8 +24,8 @@ import numpy as np
 from gt4py import eve
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt
-from gt4py.next.common import _DEFAULT_SKIP_VALUE as neighbor_skip_value, Connectivity, Dimension
-from gt4py.next.iterator import ir as itir
+from gt4py.next import common as gtx_common
+from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.program_processors.runners.dace_fieldview import utility as dace_fieldview_util
 from gt4py.next.type_system import type_specifications as ts
@@ -71,8 +71,8 @@ class IteratorExpr:
     """Iterator for field access to be consumed by `deref` or `shift` builtin functions."""
 
     field: dace.nodes.AccessNode
-    dimensions: list[Dimension]
-    indices: dict[Dimension, IteratorIndexExpr]
+    dimensions: list[gtx_common.Dimension]
+    indices: dict[gtx_common.Dimension, IteratorIndexExpr]
 
 
 INDEX_CONNECTOR_FMT = "__index_{dim}"
@@ -146,15 +146,15 @@ DACE_REDUCTION_MAPPING: dict[str, dace.dtypes.ReductionType] = {
 }
 
 
-def get_reduce_params(node: itir.FunCall) -> tuple[str, SymbolExpr, SymbolExpr]:
+def get_reduce_params(node: gtir.FunCall) -> tuple[str, SymbolExpr, SymbolExpr]:
     # TODO: use type inference to determine the result type
     dtype = dace.float64
 
-    assert isinstance(node.fun, itir.FunCall)
+    assert isinstance(node.fun, gtir.FunCall)
     assert len(node.fun.args) == 2
-    assert isinstance(node.fun.args[0], itir.SymRef)
+    assert isinstance(node.fun.args[0], gtir.SymRef)
     op_name = str(node.fun.args[0])
-    assert isinstance(node.fun.args[1], itir.Literal)
+    assert isinstance(node.fun.args[1], gtir.Literal)
     reduce_init = SymbolExpr(node.fun.args[1].value, dtype)
 
     if op_name not in DACE_REDUCTION_MAPPING:
@@ -175,7 +175,7 @@ class LambdaToTasklet(eve.NodeVisitor):
 
     sdfg: dace.SDFG
     state: dace.SDFGState
-    offset_provider: dict[str, Connectivity | Dimension]
+    offset_provider: dict[str, gtx_common.Connectivity | gtx_common.Dimension]
     reduce_identity: Optional[SymbolExpr]
     input_connections: list[InputConnection]
     symbol_map: dict[str, IteratorExpr | MemletExpr | SymbolExpr]
@@ -184,7 +184,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         self,
         sdfg: dace.SDFG,
         state: dace.SDFGState,
-        offset_provider: dict[str, Connectivity | Dimension],
+        offset_provider: dict[str, gtx_common.Connectivity | gtx_common.Dimension],
         reduce_identity: Optional[SymbolExpr],
     ):
         self.sdfg = sdfg
@@ -222,7 +222,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         )
         return ValueExpr(temp_node, data_type)
 
-    def _visit_deref(self, node: itir.FunCall) -> MemletExpr | ValueExpr:
+    def _visit_deref(self, node: gtir.FunCall) -> MemletExpr | ValueExpr:
         assert len(node.args) == 1
         it = self.visit(node.args[0])
 
@@ -298,14 +298,14 @@ class LambdaToTasklet(eve.NodeVisitor):
             assert isinstance(it, MemletExpr)
             return it
 
-    def _visit_neighbors(self, node: itir.FunCall) -> ValueExpr:
+    def _visit_neighbors(self, node: gtir.FunCall) -> ValueExpr:
         assert len(node.args) == 2
 
-        assert isinstance(node.args[0], itir.OffsetLiteral)
+        assert isinstance(node.args[0], gtir.OffsetLiteral)
         offset = node.args[0].value
         assert isinstance(offset, str)
         offset_provider = self.offset_provider[offset]
-        assert isinstance(offset_provider, Connectivity)
+        assert isinstance(offset_provider, gtx_common.Connectivity)
 
         it = self.visit(node.args[1])
         assert isinstance(it, IteratorExpr)
@@ -375,7 +375,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         if offset_provider.has_skip_values:
             assert self.reduce_identity is not None
             assert self.reduce_identity.dtype == field_desc.dtype
-            skip_value_code = f" if {index_connector} != {neighbor_skip_value} else {self.reduce_identity.dtype}({self.reduce_identity.value})"
+            skip_value_code = f" if {index_connector} != {gtx_common._DEFAULT_SKIP_VALUE} else {self.reduce_identity.dtype}({self.reduce_identity.value})"
         else:
             skip_value_code = ""
         tasklet_node = self.state.add_tasklet(
@@ -410,7 +410,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         )
         return ValueExpr(neighbors_node, neighbors_field_type)
 
-    def _visit_reduce(self, node: itir.FunCall) -> ValueExpr:
+    def _visit_reduce(self, node: gtir.FunCall) -> ValueExpr:
         op_name, reduce_init, reduce_identity = get_reduce_params(node)
         dtype = reduce_identity.dtype
 
@@ -464,8 +464,8 @@ class LambdaToTasklet(eve.NodeVisitor):
         return ValueExpr(temp_node, res_type)
 
     def _split_shift_args(
-        self, args: list[itir.Expr]
-    ) -> tuple[list[itir.Expr], Optional[list[itir.Expr]]]:
+        self, args: list[gtir.Expr]
+    ) -> tuple[list[gtir.Expr], Optional[list[gtir.Expr]]]:
         """
         Splits the arguments to `shift` builtin function as pairs, each pair containing
         the offset provider and the offset value in one dimension.
@@ -475,15 +475,15 @@ class LambdaToTasklet(eve.NodeVisitor):
         assert all(len(pair) == 2 for pair in pairs)
         return pairs[-1], list(itertools.chain(*pairs[0:-1])) if len(pairs) > 1 else None
 
-    def _make_shift_for_rest(self, rest: list[itir.Expr], iterator: itir.Expr) -> itir.FunCall:
+    def _make_shift_for_rest(self, rest: list[gtir.Expr], iterator: gtir.Expr) -> gtir.FunCall:
         """Transforms a multi-dimensional shift into recursive shift calls, each in a single dimension."""
-        return itir.FunCall(
-            fun=itir.FunCall(fun=itir.SymRef(id="shift"), args=rest),
+        return gtir.FunCall(
+            fun=gtir.FunCall(fun=gtir.SymRef(id="shift"), args=rest),
             args=[iterator],
         )
 
     def _make_cartesian_shift(
-        self, it: IteratorExpr, offset_dim: Dimension, offset_expr: IteratorIndexExpr
+        self, it: IteratorExpr, offset_dim: gtx_common.Dimension, offset_expr: IteratorIndexExpr
     ) -> IteratorExpr:
         """Implements cartesian shift along one dimension."""
         assert offset_dim in it.dimensions
@@ -598,7 +598,7 @@ class LambdaToTasklet(eve.NodeVisitor):
     def _make_unstructured_shift(
         self,
         it: IteratorExpr,
-        connectivity: Connectivity,
+        connectivity: gtx_common.Connectivity,
         offset_table_node: dace.nodes.AccessNode,
         offset_expr: IteratorIndexExpr,
     ) -> IteratorExpr:
@@ -630,9 +630,9 @@ class LambdaToTasklet(eve.NodeVisitor):
 
         return IteratorExpr(it.field, it.dimensions, shifted_indices)
 
-    def _visit_shift(self, node: itir.FunCall) -> IteratorExpr:
+    def _visit_shift(self, node: gtir.FunCall) -> IteratorExpr:
         shift_node = node.fun
-        assert isinstance(shift_node, itir.FunCall)
+        assert isinstance(shift_node, gtir.FunCall)
 
         # here we check the arguments to the `shift` builtin function: the offset provider and the offset value
         head, tail = self._split_shift_args(shift_node.args)
@@ -645,20 +645,20 @@ class LambdaToTasklet(eve.NodeVisitor):
         assert isinstance(it, IteratorExpr)
 
         # first argument of the shift node is the offset provider
-        assert isinstance(head[0], itir.OffsetLiteral)
+        assert isinstance(head[0], gtir.OffsetLiteral)
         offset = head[0].value
         assert isinstance(offset, str)
         offset_provider = self.offset_provider[offset]
         # second argument should be the offset value, which could be a symbolic expression or a dynamic offset
         offset_expr: IteratorIndexExpr
-        if isinstance(head[1], itir.OffsetLiteral):
+        if isinstance(head[1], gtir.OffsetLiteral):
             offset_expr = SymbolExpr(head[1].value, dace.int32)
         else:
             dynamic_offset_expr = self.visit(head[1])
             assert isinstance(dynamic_offset_expr, MemletExpr | ValueExpr)
             offset_expr = dynamic_offset_expr
 
-        if isinstance(offset_provider, Dimension):
+        if isinstance(offset_provider, gtx_common.Dimension):
             return self._make_cartesian_shift(it, offset_provider, offset_expr)
         else:
             # initially, the storage for the connectivty tables is created as transient;
@@ -672,7 +672,7 @@ class LambdaToTasklet(eve.NodeVisitor):
                 it, offset_provider, offset_table_node, offset_expr
             )
 
-    def visit_FunCall(self, node: itir.FunCall) -> IteratorExpr | MemletExpr | ValueExpr:
+    def visit_FunCall(self, node: gtir.FunCall) -> IteratorExpr | MemletExpr | ValueExpr:
         if cpm.is_call_to(node, "deref"):
             return self._visit_deref(node)
 
@@ -686,7 +686,7 @@ class LambdaToTasklet(eve.NodeVisitor):
             return self._visit_shift(node)
 
         else:
-            assert isinstance(node.fun, itir.SymRef)
+            assert isinstance(node.fun, gtir.SymRef)
 
         # create a tasklet node implementing the builtin function
         builtin_name = str(node.fun.id)
@@ -753,7 +753,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         return self._get_tasklet_result(dtype, tasklet_node, "result")
 
     def visit_Lambda(
-        self, node: itir.Lambda, args: list[IteratorExpr | MemletExpr | SymbolExpr]
+        self, node: gtir.Lambda, args: list[IteratorExpr | MemletExpr | SymbolExpr]
     ) -> tuple[list[InputConnection], ValueExpr]:
         for p, arg in zip(node.params, args, strict=True):
             self.symbol_map[str(p.id)] = arg
@@ -779,11 +779,11 @@ class LambdaToTasklet(eve.NodeVisitor):
             )
         return self.input_connections, self._get_tasklet_result(output_dtype, tasklet_node, "__out")
 
-    def visit_Literal(self, node: itir.Literal) -> SymbolExpr:
+    def visit_Literal(self, node: gtir.Literal) -> SymbolExpr:
         dtype = dace_fieldview_util.as_dace_type(node.type)
         return SymbolExpr(node.value, dtype)
 
-    def visit_SymRef(self, node: itir.SymRef) -> IteratorExpr | MemletExpr | SymbolExpr:
+    def visit_SymRef(self, node: gtir.SymRef) -> IteratorExpr | MemletExpr | SymbolExpr:
         param = str(node.id)
         assert param in self.symbol_map
         return self.symbol_map[param]
@@ -799,22 +799,22 @@ class PythonCodegen(codegen.TemplatedGenerator):
     SymRef = as_fmt("{id}")
     Literal = as_fmt("{value}")
 
-    def _visit_deref(self, node: itir.FunCall) -> str:
+    def _visit_deref(self, node: gtir.FunCall) -> str:
         assert len(node.args) == 1
-        if isinstance(node.args[0], itir.SymRef):
+        if isinstance(node.args[0], gtir.SymRef):
             return self.visit(node.args[0])
         raise NotImplementedError(f"Unexpected deref with arg type '{type(node.args[0])}'.")
 
-    def _visit_numeric_builtin(self, node: itir.FunCall) -> str:
-        assert isinstance(node.fun, itir.SymRef)
+    def _visit_numeric_builtin(self, node: gtir.FunCall) -> str:
+        assert isinstance(node.fun, gtir.SymRef)
         fmt = MATH_BUILTINS_MAPPING[str(node.fun.id)]
         args = self.visit(node.args)
         return fmt.format(*args)
 
-    def visit_FunCall(self, node: itir.FunCall) -> str:
+    def visit_FunCall(self, node: gtir.FunCall) -> str:
         if cpm.is_call_to(node, "deref"):
             return self._visit_deref(node)
-        elif isinstance(node.fun, itir.SymRef):
+        elif isinstance(node.fun, gtir.SymRef):
             builtin_name = str(node.fun.id)
             if builtin_name in MATH_BUILTINS_MAPPING:
                 return self._visit_numeric_builtin(node)

@@ -14,14 +14,13 @@
 
 
 import abc
-from dataclasses import dataclass
-from typing import Optional, TypeAlias
+from typing import Final, Optional, Protocol, TypeAlias
 
 import dace
 import dace.subsets as sbs
 
-from gt4py.next.common import Dimension
-from gt4py.next.iterator import ir as itir
+from gt4py.next import common as gtx_common
+from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_to_tasklet,
@@ -32,63 +31,73 @@ from gt4py.next.type_system import type_specifications as ts
 
 
 # Define aliases for return types
-SDFGField: TypeAlias = tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]
+TemporaryData: TypeAlias = tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]
 
-DIMENSION_INDEX_FMT = "i_{dim}"
-ITERATOR_INDEX_DTYPE = dace.int32  # type of iterator indexes
+IteratorIndexFmt: Final[str] = "i_{dim}"
+IteratorIndexDType: TypeAlias = dace.int32  # type of iterator indexes
 
 
-@dataclass(frozen=True)
-class PrimitiveTranslator(abc.ABC):
+class PrimitiveTranslator(Protocol):
     @abc.abstractmethod
     def __call__(
         self,
-        node: itir.Node,
+        node: gtir.Node,
         sdfg: dace.SDFG,
         state: dace.SDFGState,
         sdfg_builder: SDFGBuilder,
         reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
-    ) -> list[SDFGField]:  # keep only call, same interface for all primitives
-        """Creates the dataflow subgraph representing a GTIR builtin function.
+    ) -> list[TemporaryData]:
+        """Creates the dataflow subgraph representing a GTIR primitive function.
 
         This method is used by derived classes to build a specialized subgraph
-        for a specific builtin function.
+        for a specific GTIR primitive function.
 
-        Returns a list of SDFG nodes and the associated GT4Py data type.
+        Arguments:
+            node: The GTIR node describing the primitive to be lowered
+            sdfg: The SDFG where the primitive subgraph should be instantiated
+            state: The SDFG state where the result of the primitive function should be made available
+            sdfg_builder: The object responsible for visiting child nodes of the primitive node.
+            reduce_identity: The value of the reduction identity, in case the primitive node
+                is visited in the context of a reduction expression. This value is used
+                by the `neighbors` primitive to provide the value of skip neighbors.
 
-        The GT4Py data type is useful in the case of fields, because it provides
-        information on the field domain (e.g. order of dimensions, types of dimensions).
+        Returns:
+            A list of data access nodes and the associated GT4Py data type, which provide
+            access to the result of the primitive subgraph. The GT4Py data type is useful
+            in the case the returned data is an array, because the type provdes the domain
+            information (e.g. order of dimensions, dimension types).
         """
 
 
 class AsFieldOp(PrimitiveTranslator):
     """Generates the dataflow subgraph for the `as_field_op` builtin function."""
 
-    callable_args: list[itir.Expr]
+    callable_args: list[gtir.Expr]
 
-    def __init__(self, node_args: list[itir.Expr]):
+    def __init__(self, node_args: list[gtir.Expr]):
         self.callable_args = node_args
 
     def __call__(
         self,
-        node: itir.Node,
+        node: gtir.Node,
         sdfg: dace.SDFG,
         state: dace.SDFGState,
         sdfg_builder: SDFGBuilder,
         reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
-    ) -> list[SDFGField]:
+    ) -> list[TemporaryData]:
         assert cpm.is_call_to(node, "as_fieldop")
         assert len(node.args) == 2
         stencil_expr, domain_expr = node.args
         # expect stencil (represented as a lambda function) as first argument
-        assert isinstance(stencil_expr, itir.Lambda)
+        assert isinstance(stencil_expr, gtir.Lambda)
         # the domain of the field operator is passed as second argument
-        assert isinstance(domain_expr, itir.FunCall)
+        assert isinstance(domain_expr, gtir.FunCall)
 
         # add local storage to compute the field operator over the given domain
         # TODO: use type inference to determine the result type
         node_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
-        field_domain = dace_fieldview_util.get_domain(domain_expr)
+        domain = dace_fieldview_util.get_domain(domain_expr)
+        domain_dims, domain_lbs, domain_ubs = zip(*domain)
 
         if cpm.is_applied_reduce(stencil_expr.expr):
             if reduce_identity:
@@ -98,7 +107,7 @@ class AsFieldOp(PrimitiveTranslator):
         # first visit the list of arguments and build a symbol map
         stencil_args: list[gtir_to_tasklet.IteratorExpr | gtir_to_tasklet.MemletExpr] = []
         for arg in self.callable_args:
-            fields: list[SDFGField] = sdfg_builder.visit(
+            fields: list[TemporaryData] = sdfg_builder.visit(
                 arg, sdfg=sdfg, head_state=state, reduce_identity=reduce_identity
             )
             assert len(fields) == 1
@@ -106,24 +115,24 @@ class AsFieldOp(PrimitiveTranslator):
             # require all argument nodes to be data access nodes (no symbols)
             assert isinstance(data_node, dace.nodes.AccessNode)
 
+            arg_definition: gtir_to_tasklet.IteratorExpr | gtir_to_tasklet.MemletExpr
             if isinstance(arg_type, ts.ScalarType):
-                scalar_arg = gtir_to_tasklet.MemletExpr(data_node, sbs.Indices([0]))
-                stencil_args.append(scalar_arg)
+                arg_definition = gtir_to_tasklet.MemletExpr(data_node, sbs.Indices([0]))
             else:
                 assert isinstance(arg_type, ts.FieldType)
-                indices: dict[Dimension, gtir_to_tasklet.IteratorIndexExpr] = {
+                indices: dict[gtx_common.Dimension, gtir_to_tasklet.IteratorIndexExpr] = {
                     dim: gtir_to_tasklet.SymbolExpr(
-                        dace.symbolic.SymExpr(DIMENSION_INDEX_FMT.format(dim=dim.value)),
-                        ITERATOR_INDEX_DTYPE,
+                        dace.symbolic.SymExpr(IteratorIndexFmt.format(dim=dim.value)),
+                        IteratorIndexDType,
                     )
-                    for dim, _, _ in field_domain
+                    for dim in domain_dims
                 }
-                iterator_arg = gtir_to_tasklet.IteratorExpr(
+                arg_definition = gtir_to_tasklet.IteratorExpr(
                     data_node,
                     arg_type.dims,
                     indices,
                 )
-                stencil_args.append(iterator_arg)
+            stencil_args.append(arg_definition)
 
         # represent the field operator as a mapped tasklet graph, which will range over the field domain
         taskgen = gtir_to_tasklet.LambdaToTasklet(
@@ -144,15 +153,15 @@ class AsFieldOp(PrimitiveTranslator):
             last_node_connector = None
 
         # allocate local temporary storage for the result field
-        field_dims = [dim for dim, _, _ in field_domain]
+        field_dims = list(domain_dims)
         field_shape = [
             # diff between upper and lower bound
             (ub - lb)
-            for _, lb, ub in field_domain
+            for lb, ub in zip(domain_lbs, domain_ubs)
         ]
         field_offset: Optional[list[dace.symbolic.SymbolicType]] = None
-        if any(lb != 0 for _, lb, _ in field_domain):
-            field_offset = [lb for _, lb, _ in field_domain]
+        if any(domain_lbs):
+            field_offset = list(domain_lbs)
         if isinstance(output_desc, dace.data.Array):
             # extend the result arrays with the local dimensions added by the field operator e.g. `neighbors`)
             assert isinstance(output_expr.field_type, ts.FieldType)
@@ -173,7 +182,7 @@ class AsFieldOp(PrimitiveTranslator):
         field_node = state.add_access(temp_name)
 
         # assume tasklet with single output
-        output_subset = [DIMENSION_INDEX_FMT.format(dim=dim.value) for dim, _, _ in field_domain]
+        output_subset = [IteratorIndexFmt.format(dim=dim.value) for dim in domain_dims]
         if isinstance(output_desc, dace.data.Array):
             # additional local dimension for neighbors
             assert set(output_desc.offset) == {0}
@@ -181,7 +190,7 @@ class AsFieldOp(PrimitiveTranslator):
 
         # create map range corresponding to the field operator domain
         map_ranges = {
-            DIMENSION_INDEX_FMT.format(dim=dim.value): f"{lb}:{ub}" for dim, lb, ub in field_domain
+            IteratorIndexFmt.format(dim=dim.value): f"{lb}:{ub}" for dim, lb, ub in domain
         }
         me, mx = state.add_map("field_op", map_ranges)
 
@@ -209,18 +218,18 @@ class AsFieldOp(PrimitiveTranslator):
         return [(field_node, field_type)]
 
 
-class Select(PrimitiveTranslator):
-    """Generates the dataflow subgraph for the `select` builtin function."""
+class Cond(PrimitiveTranslator):
+    """Generates the dataflow subgraph for the `cond` builtin function."""
 
     def __call__(
         self,
-        node: itir.Node,
+        node: gtir.Node,
         sdfg: dace.SDFG,
         state: dace.SDFGState,
         sdfg_builder: SDFGBuilder,
         reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
-    ) -> list[SDFGField]:
-        assert cpm.is_call_to(node, "select")
+    ) -> list[TemporaryData]:
+        assert cpm.is_call_to(node, "cond")
         assert len(node.args) == 3
         cond_expr, true_expr, false_expr = node.args
 
@@ -231,7 +240,7 @@ class Select(PrimitiveTranslator):
         # to connect the true/false branch states as follows:
         #
         #               ------------
-        #           === |  select  | ===
+        #           === |  cond  | ===
         #          ||   ------------   ||
         #          \/                  \/
         #     ------------       -------------
@@ -242,19 +251,17 @@ class Select(PrimitiveTranslator):
         #           ==> |   head   | <==
         #               ------------
         #
-        select_state = sdfg.add_state_before(state, state.label + "_select")
-        sdfg.remove_edge(sdfg.out_edges(select_state)[0])
+        cond_state = sdfg.add_state_before(state, state.label + "_cond")
+        sdfg.remove_edge(sdfg.out_edges(cond_state)[0])
 
         # expect true branch as second argument
         true_state = sdfg.add_state(state.label + "_true_branch")
-        sdfg.add_edge(select_state, true_state, dace.InterstateEdge(condition=f"bool({cond})"))
+        sdfg.add_edge(cond_state, true_state, dace.InterstateEdge(condition=f"bool({cond})"))
         sdfg.add_edge(true_state, state, dace.InterstateEdge())
 
         # and false branch as third argument
         false_state = sdfg.add_state(state.label + "_false_branch")
-        sdfg.add_edge(
-            select_state, false_state, dace.InterstateEdge(condition=(f"not bool({cond})"))
-        )
+        sdfg.add_edge(cond_state, false_state, dace.InterstateEdge(condition=(f"not bool({cond})")))
         sdfg.add_edge(false_state, state, dace.InterstateEdge())
 
         true_br_args = sdfg_builder.visit(
@@ -297,16 +304,16 @@ class SymbolRef(PrimitiveTranslator):
 
     def __call__(
         self,
-        node: itir.Node,
+        node: gtir.Node,
         sdfg: dace.SDFG,
         state: dace.SDFGState,
         sdfg_builder: SDFGBuilder,
         reduce_identity: Optional[gtir_to_tasklet.SymbolExpr] = None,
-    ) -> list[SDFGField]:
-        assert isinstance(node, (itir.Literal, itir.SymRef))
+    ) -> list[TemporaryData]:
+        assert isinstance(node, (gtir.Literal, gtir.SymRef))
 
         data_type: ts.FieldType | ts.ScalarType
-        if isinstance(node, itir.Literal):
+        if isinstance(node, gtir.Literal):
             sym_value = node.value
             data_type = node.type
             tasklet_name = "get_literal"

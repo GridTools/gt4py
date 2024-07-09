@@ -16,14 +16,14 @@ Visitor interface to build an SDFG dataflow.
 
 """
 
-from dataclasses import dataclass
+import dataclasses
 
 from gt4py import eve
-from gt4py.next.common import Connectivity, Dimension
+from gt4py.next import common as gtx_common
 from gt4py.next.type_system import type_specifications as ts
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class SDFGBuilder(eve.NodeVisitor):
-    offset_provider: dict[str, Connectivity | Dimension]
+    offset_provider: dict[str, gtx_common.Connectivity | gtx_common.Dimension]
     symbol_types: dict[str, ts.FieldType | ts.ScalarType]
