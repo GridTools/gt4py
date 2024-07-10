@@ -89,11 +89,6 @@ class PrimitiveTranslator(Protocol):
 class AsFieldOp(PrimitiveTranslator):
     """Generates the dataflow subgraph for the `as_field_op` builtin function."""
 
-    callable_args: list[gtir.Expr]
-
-    def __init__(self, node_args: list[gtir.Expr]):
-        self.callable_args = node_args
-
     def __call__(
         self,
         node: gtir.Node,
@@ -102,9 +97,12 @@ class AsFieldOp(PrimitiveTranslator):
         sdfg_builder: SDFGBuilder,
         reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
     ) -> list[TemporaryData]:
-        assert cpm.is_call_to(node, "as_fieldop")
-        assert len(node.args) == 2
-        stencil_expr, domain_expr = node.args
+        assert isinstance(node, gtir.FunCall)
+        assert cpm.is_call_to(node.fun, "as_fieldop")
+
+        fun_node = node.fun
+        assert len(fun_node.args) == 2
+        stencil_expr, domain_expr = fun_node.args
         # expect stencil (represented as a lambda function) as first argument
         assert isinstance(stencil_expr, gtir.Lambda)
         # the domain of the field operator is passed as second argument
@@ -123,7 +121,7 @@ class AsFieldOp(PrimitiveTranslator):
 
         # first visit the list of arguments and build a symbol map
         stencil_args: list[gtir_to_tasklet.IteratorExpr | gtir_to_tasklet.MemletExpr] = []
-        for arg in self.callable_args:
+        for arg in node.args:
             fields: list[TemporaryData] = sdfg_builder.visit(
                 arg, sdfg=sdfg, head_state=state, reduce_identity=reduce_identity
             )
@@ -246,9 +244,13 @@ class Cond(PrimitiveTranslator):
         sdfg_builder: SDFGBuilder,
         reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
     ) -> list[TemporaryData]:
-        assert cpm.is_call_to(node, "cond")
-        assert len(node.args) == 3
-        cond_expr, true_expr, false_expr = node.args
+        assert isinstance(node, gtir.FunCall)
+        assert cpm.is_call_to(node.fun, "cond")
+        assert len(node.args) == 0
+
+        fun_node = node.fun
+        assert len(fun_node.args) == 3
+        cond_expr, true_expr, false_expr = fun_node.args
 
         # expect condition as first argument
         cond = gtir_python_codegen.get_source(cond_expr)
