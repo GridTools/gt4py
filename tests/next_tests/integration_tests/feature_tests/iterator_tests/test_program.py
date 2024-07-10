@@ -18,7 +18,6 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import as_fieldop, cartesian_domain, deref, named_range
 from gt4py.next.iterator.runtime import fendef, fundef, set_at
-from gt4py.next.program_processors.runners import dace, gtfn
 
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
