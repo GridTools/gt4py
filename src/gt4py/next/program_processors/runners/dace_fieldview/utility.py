@@ -16,10 +16,10 @@ from typing import Any, Mapping, Optional
 
 import dace
 
-from gt4py.next.common import Connectivity, Dimension
-from gt4py.next.iterator import ir as itir
+from gt4py.next import common as gtx_common
+from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
-from gt4py.next.program_processors.runners.dace_fieldview import gtir_to_tasklet
+from gt4py.next.program_processors.runners.dace_fieldview import gtir_python_codegen
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -53,8 +53,8 @@ def connectivity_identifier(name: str) -> str:
     return f"connectivity_{name}"
 
 
-def debuginfo(
-    node: itir.Node, debuginfo: Optional[dace.dtypes.DebugInfo] = None
+def debug_info(
+    node: gtir.Node, *, default: Optional[dace.dtypes.DebugInfo] = None
 ) -> Optional[dace.dtypes.DebugInfo]:
     location = node.location
     if location:
@@ -65,10 +65,10 @@ def debuginfo(
             end_column=location.end_column if location.end_column else 0,
             filename=location.filename,
         )
-    return debuginfo
+    return default
 
 
-def filter_connectivities(offset_provider: Mapping[str, Any]) -> dict[str, Connectivity]:
+def filter_connectivities(offset_provider: Mapping[str, Any]) -> dict[str, gtx_common.Connectivity]:
     """
     Filter offset providers of type `Connectivity`.
 
@@ -78,13 +78,13 @@ def filter_connectivities(offset_provider: Mapping[str, Any]) -> dict[str, Conne
     return {
         offset: table
         for offset, table in offset_provider.items()
-        if isinstance(table, Connectivity)
+        if isinstance(table, gtx_common.Connectivity)
     }
 
 
 def get_domain(
-    node: itir.Expr,
-) -> list[tuple[Dimension, dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]]:
+    node: gtir.Expr,
+) -> list[tuple[gtx_common.Dimension, dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]]:
     """
     Specialized visit method for domain expressions.
 
@@ -97,21 +97,21 @@ def get_domain(
         assert cpm.is_call_to(named_range, "named_range")
         assert len(named_range.args) == 3
         axis = named_range.args[0]
-        assert isinstance(axis, itir.AxisLiteral)
+        assert isinstance(axis, gtir.AxisLiteral)
         bounds = []
         for arg in named_range.args[1:3]:
-            sym_str = get_symbolic_expr(arg)
+            sym_str = gtir_python_codegen.get_source(arg)
             sym_val = dace.symbolic.SymExpr(sym_str)
             bounds.append(sym_val)
-        dim = Dimension(axis.value, axis.kind)
+        dim = gtx_common.Dimension(axis.value, axis.kind)
         domain.append((dim, bounds[0], bounds[1]))
 
     return domain
 
 
 def get_domain_ranges(
-    node: itir.Expr,
-) -> dict[Dimension, tuple[dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]]:
+    node: gtir.Expr,
+) -> dict[gtx_common.Dimension, tuple[dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]]:
     """
     Returns domain represented in dictionary form.
     """
@@ -120,11 +120,9 @@ def get_domain_ranges(
     return {dim: (lb, ub) for dim, lb, ub in domain}
 
 
-def get_symbolic_expr(node: itir.Expr) -> str:
+def get_map_variable(dim: gtx_common.Dimension) -> str:
     """
-    Specialized visit method for symbolic expressions.
-
-    Returns a string containong the corresponding Python code, which as tasklet body
-    or symbolic array shape.
+    Format map variable name based on the naming convention for application-specific SDFG transformations.
     """
-    return gtir_to_tasklet.PythonCodegen().visit(node)
+    suffix = "dim" if dim.kind == gtx_common.DimensionKind.LOCAL else ""
+    return f"i_{dim.value}_gtx_{dim.kind}{suffix}"
