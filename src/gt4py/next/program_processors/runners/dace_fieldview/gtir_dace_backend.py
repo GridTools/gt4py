@@ -14,22 +14,33 @@
 
 import dace
 
-from gt4py.next.common import Connectivity, Dimension
-from gt4py.next.iterator import ir as itir
+from gt4py.next import common as gtx_common
+from gt4py.next.iterator import ir as gtir
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_to_sdfg as gtir_dace_translator,
 )
 
 
 def build_sdfg_from_gtir(
-    program: itir.Program,
-    offset_provider: dict[str, Connectivity | Dimension],
+    program: gtir.Program,
+    offset_provider: dict[str, gtx_common.Connectivity | gtx_common.Dimension],
 ) -> dace.SDFG:
     """
-    TODO: enable type inference
-    program = itir_type_inference.infer(program, offset_provider=offset_provider)
+    Receives a GTIR program and lowers it to a DaCe SDFG.
+
+    The lowering to SDFG requires that the program node is type-annotated, therefore this function
+    runs type ineference as first step.
+    As a final step, it runs the `simplify` pass to ensure that the SDFG is in the DaCe canonical form.
+
+    Arguments:
+        program: The GTIR program node to be lowered to SDFG
+        offset_provider: The definitions of offset providers used by the program node
+
+    Returns:
+        An SDFG in the DaCe canonical form (simplified)
     """
     sdfg_genenerator = gtir_dace_translator.GTIRToSDFG(offset_provider)
+    # TODO: run type inference on the `program` node before passing it to `GTIRToSDFG`
     sdfg = sdfg_genenerator.visit(program)
     assert isinstance(sdfg, dace.SDFG)
 
