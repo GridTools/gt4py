@@ -40,17 +40,9 @@ def copy_program(inp, out, size):
     )
 
 
+@pytest.mark.requires_gtir_program
 def test_prog(program_processor):
     program_processor, validate = program_processor
-
-    if program_processor in [
-        gtfn.run_gtfn.executor,
-        gtfn.run_gtfn_imperative.executor,
-        gtfn.run_gtfn_with_temporaries.executor,
-        dace.run_dace_cpu.executor,
-    ]:
-        # TODO(havogt): Remove, skipped during refactoring to GTIR
-        pytest.skip("Executor requires to start from fencil.")
 
     isize = 10
     inp = gtx.as_field([I], np.arange(0, isize, dtype=np.float64))
