@@ -74,9 +74,6 @@ class IteratorExpr:
     indices: dict[gtx_common.Dimension, IteratorIndexExpr]
 
 
-INDEX_CONNECTOR_FMT = "__index_{dim}"
-
-
 class LambdaToTasklet(eve.NodeVisitor):
     """Translates an `ir.Lambda` expression to a dataflow graph.
 

@@ -114,3 +114,11 @@ def get_domain_ranges(
     domain = get_domain(node)
 
     return {dim: (lb, ub) for dim, lb, ub in domain}
+
+
+def get_map_variable(dim: gtx_common.Dimension) -> str:
+    """
+    Format map variable name based on the naming convention for application-specific SDFG transformations.
+    """
+    suffix = "dim" if dim.kind == gtx_common.DimensionKind.LOCAL else ""
+    return f"i_{dim.value}_gtx_{dim.kind}{suffix}"
