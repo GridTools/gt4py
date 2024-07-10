@@ -14,8 +14,10 @@
 
 """Implements Helper functionaliyies for map fusion"""
 
+import functools
 from typing import Any, Iterable, Optional, Sequence, Union
 
+import dace
 from dace import subsets
 from dace.sdfg import (
     SDFG,
@@ -26,6 +28,8 @@ from dace.sdfg import (
     transformation as dace_transformation,
 )
 from dace.transformation import helpers
+
+from . import util
 
 
 @properties.make_properties
@@ -77,6 +81,54 @@ class MapFusionHelper(dace_transformation.SingleStateTransformation):
     @classmethod
     def expressions(cls) -> bool:
         raise RuntimeError("The `_MapFusionHelper` is not a transformation on its own.")
+
+    def can_be_applied(
+        self,
+        map_entry_1: nodes.MapEntry,
+        map_entry_2: nodes.MapEntry,
+        graph: Union[SDFGState, SDFG],
+        sdfg: dace.SDFG,
+        permissive: bool = False,
+    ) -> bool:
+        """Performs some checks if the maps can be fused.
+
+        This function does not follow the standard interface of DaCe transformations.
+        Instead it checks if the two maps can be fused, by comparing:
+        - The scope of the maps.
+        - The scheduling of the maps.
+        - The map parameters.
+
+        However, for performance reasons, the function does not compute the node
+        partition.
+        """
+
+        if self.only_inner_maps and self.only_toplevel_maps:
+            raise ValueError("You specified both `only_inner_maps` and `only_toplevel_maps`.")
+
+        # ensure that both have the same schedule
+        if map_entry_1.map.schedule != map_entry_2.map.schedule:
+            return False
+
+        # Fusing is only possible if our two entries are in the same scope.
+        scope = graph.scope_dict()
+        if scope[map_entry_1] != scope[map_entry_2]:
+            return False
+        elif self.only_inner_maps:
+            if scope[map_entry_1] is None:
+                return False
+        elif self.only_toplevel_maps:
+            if scope[map_entry_1] is not None:
+                return False
+            elif util.is_nested_sdfg(sdfg):
+                return False
+
+        # We will now check if there exists a remapping that we can use.
+        if not self.map_parameter_compatible(
+            map_1=map_entry_1.map, map_2=map_entry_2.map, state=graph, sdfg=sdfg
+        ):
+            return False
+
+        return True
 
     def relocate_nodes(
         self,
@@ -304,18 +356,19 @@ class MapFusionHelper(dace_transformation.SingleStateTransformation):
             processed_inter_nodes.add(intermediate_node)
 
             # Empty Memlets are currently not supported.
+            #  However, they are much more important in entry nodes.
             if out_edge.data.is_empty():
                 return None
 
             # Now let's look at all nodes that are downstream of the intermediate node.
-            #  This, among other thing will tell us, how we have to handle this node.
+            #  This, among other things, will tell us, how we have to handle this node.
             downstream_nodes = self.all_nodes_between(
                 graph=state,
                 begin=intermediate_node,
                 end=map_entry_2,
             )
 
-            # If `downstream_nodes` is `None` it means that `map_entry_2` was never
+            # If `downstream_nodes` is `None` this means that `map_entry_2` was never
             #  reached, thus `intermediate_node` does not enter the second map and
             #  the node is a pure output node.
             if downstream_nodes is None:
@@ -323,19 +376,20 @@ class MapFusionHelper(dace_transformation.SingleStateTransformation):
                 continue
             #
 
-            # The following tests, before we start handle intermediate nodes, are
-            #  _after_ the pure node test for a reason, because this allows us to
-            #  handle more exotic cases for these nodes.
+            # The following tests are _after_ we have determined if we have a pure
+            #  output node for a reason, as this allows us to handle more exotic
+            #  pure node cases, as handling them is essentially rerouting an edge.
 
             # In case the intermediate has more than one entry, all must come from the
-            #  first map, otherwise we can not fuse them.
+            #  first map, otherwise we can not fuse them. Currently we restrict this
+            #  even further by saying that it has only one incoming Memlet.
             if state.in_degree(intermediate_node) != 1:
-                # TODO(phimuell): In some cases it can be possible to fuse such
-                #  nodes, but we will not handle them for the time being.
+                # TODO(phimuell): handle this case.
                 return None
 
-            # It happens can be that multiple edges at the `IN_` connector of the
-            #  first exit map converges, but there is only one edge leaving the exit.
+            # It can happen that multiple edges converges at the `IN_` connector
+            #  of the first map exit, but there is only one edge leaving the exit.
+            #  It is complicate to handle this, so for now we ignore it.
             # TODO(phimuell): Handle this case properly.
             inner_collector_edges = state.in_edges_by_connector(
                 intermediate_node, "IN_" + out_edge.src_conn[3:]
@@ -344,7 +398,7 @@ class MapFusionHelper(dace_transformation.SingleStateTransformation):
                 return None
 
             # For us an intermediate node must always be an access node, pointing to a
-            #  transient array, since it is the only thing that we know how to handle.
+            #  transient value, since it is the only thing that we know how to handle.
             if not isinstance(intermediate_node, nodes.AccessNode):
                 return None
             intermediate_desc: data.Data = intermediate_node.desc(sdfg)
@@ -353,19 +407,24 @@ class MapFusionHelper(dace_transformation.SingleStateTransformation):
             if isinstance(intermediate_desc, data.View):
                 return None
 
-            # There are two restrictions we have on the intermediate output sets.
-            #  First, we do not allow that they are involved in WCR (as they are
-            #  currently not handled by the implementation) and second, that the
-            #  "producer" generate only one element, this is actual crucial, as we
-            #  assume that we can freely recreate them, a simples example consider
-            #  that a Tasklet outputs "rows" then we can not handle the rest in
-            #  columns. For that reason we check the generating Memlets.
+            # There are some restrictions we have on intermediate nodes. The first one
+            #  is that we do not allow WCR, this is because they need special handling
+            #  which is currently not implement (the DaCe transformation has this
+            #  restriction as well). The second one is that we can reduce the
+            #  intermediate node and only feed a part into the second map, consider
+            #  the case `b = a + 1; return b + 2`, where we have arrays. In this
+            #  example only a single element must be available to the second map.
+            #  However, this is hard to check so we will make a simplification.
+            #  First we will not check it at the producer, but at the consumer point.
+            #  There we assume if the consumer does _not consume the whole_
+            #  intermediate array, then we can decompose the intermediate, by setting
+            #  the map iteration index to zero and recover the shape, see
+            #  implementation in the actual fusion routine.
+            #  This is an assumption that is in most cases correct, but not always.
+            #  However, doing it correctly is extremely complex.
             for _, produce_edge in self.find_upstream_producers(state, out_edge):
                 if produce_edge.data.wcr is not None:
                     return None
-                if produce_edge.data.num_elements() != 1:
-                    return None
-                # TODO(phimuell): Check that the producing is only pointwise.
 
             if len(downstream_nodes) == 0:
                 # There is nothing between intermediate node and the entry of the
@@ -378,53 +437,57 @@ class MapFusionHelper(dace_transformation.SingleStateTransformation):
                 if state.out_degree(intermediate_node) != 1:
                     return None
 
-                # There are certain nodes, for example Tasklets, that needs the whole
-                #  array as input. Thus it can not be removed, because the node might
-                #  need the whole array.
-                # TODO(phimuell): This is true for JaCe but also for GT4Py?
-                for _, feed_edge in self.find_downstream_consumers(
-                    state=state, begin=intermediate_node
-                ):
-                    if feed_edge.data.num_elements() != 1:
+                # Certain nodes need more than one element as input. As explained
+                #  above, in this situation we assume that we can naturally decompose
+                #  them iff the node does not consume that whole intermediate.
+                #  Furthermore, it can not be a dynamic map range.
+                intermediate_size = functools.reduce(lambda a, b: a * b, intermediate_desc.shape)
+                consumers = self.find_downstream_consumers(state=state, begin=intermediate_node)
+                for consumer_node, feed_edge in consumers:
+                    # TODO(phimuell): Improve this approximation.
+                    if feed_edge.data.num_elements() == intermediate_size:
                         return None
-                    # TODO(phimuell): Check that the consuming is only pointwise.
+                    if consumer_node is map_entry_2:  # Dynamic map range.
+                        return None
 
+                # Note that "remove" has a special meaning here, regardless of the
+                #  output of the check function, from within the second map we remove
+                #  the intermediate, it has more the meaning of "do we need to
+                #  reconstruct it after the second map again?".
                 if self.can_transient_be_removed(intermediate_node, sdfg):
-                    # The transient can be removed, thus it is exclusive.
                     exclusive_outputs.add(out_edge)
                 else:
-                    # The transient can not be removed, to it must be shared.
                     shared_outputs.add(out_edge)
                 continue
 
             else:
-                # These is no single connection from the intermediate node to the
-                #  second map, but many. For now we will only handle a very special
-                #  case that makes the node to a shared intermediate node:
-                #  All output connections of the intermediate node either lead:
-                #   - directly to the second map entry node and does not define a
-                #       dynamic map range, and can actually be removed.
-                #   - have no connection to the second map entry at all.
+                # These is not only a single connection from the intermediate node to
+                #  the second map, but the intermediate has more connection, thus
+                #  the node might belong to the shared outputs. Of the many different
+                #  possibilities, we only consider a single case:
+                #  - The intermediate has a single connection to the second map, that
+                #       fulfills the restriction outlined above.
+                #  - All other connections have no connection to the second map.
+                found_second_entry = False
+                intermediate_size = functools.reduce(lambda a, b: a * b, intermediate_desc.shape)
                 for edge in state.out_edges(intermediate_node):
                     if edge.dst is map_entry_2:
-                        # The edge immediately leads to the second map.
-                        for consumer_node, feed_edge in self.find_downstream_consumers(
-                            state=state, begin=edge
-                        ):
-                            # Consumer needs the whole array.
-                            if feed_edge.data.num_elements() != 1:
+                        if found_second_entry:  # The second map was found again.
+                            return None
+                        found_second_entry = True
+                        consumers = self.find_downstream_consumers(state=state, begin=edge)
+                        for consumer_node, feed_edge in consumers:
+                            if feed_edge.data.num_elements() == intermediate_size:
                                 return None
-                            # Defines a dynamic map range
-                            if consumer_node is map_entry_2:
+                            if consumer_node is map_entry_2:  # Dynamic map range
                                 return None
                     else:
                         # Ensure that there is no path that leads to the second map.
-                        if (
-                            self.all_nodes_between(graph=state, begin=edge.dst, end=map_entry_2)
-                            is not None
-                        ):
+                        after_intermdiate_node = self.all_nodes_between(
+                            graph=state, begin=edge.dst, end=map_entry_2
+                        )
+                        if after_intermdiate_node is not None:
                             return None
-
                 # If we are here, then we know that the node is a shared output
                 shared_outputs.add(out_edge)
                 continue
