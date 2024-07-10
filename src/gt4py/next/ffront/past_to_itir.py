@@ -39,6 +39,8 @@ from gt4py.next.type_system import type_info, type_specifications as ts
 
 @dataclasses.dataclass(frozen=True)
 class PastToItir(workflow.ChainableWorkflowMixin):
+    to_gtir: bool = False
+
     def __call__(self, inp: ffront_stages.PastClosure) -> stages.ProgramCall:
         all_closure_vars = transform_utils._get_closure_vars_recursively(inp.closure_vars)
         offsets_and_dimensions = transform_utils._filter_closure_vars_by_type(
@@ -54,7 +56,10 @@ class PastToItir(workflow.ChainableWorkflowMixin):
         lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
 
         itir_program = ProgramLowering.apply(
-            inp.past_node, function_definitions=lowered_funcs, grid_type=grid_type
+            inp.past_node,
+            function_definitions=lowered_funcs,
+            grid_type=grid_type,
+            to_gtir=self.to_gtir,
         )
 
         if config.DEBUG or "debug" in inp.kwargs:

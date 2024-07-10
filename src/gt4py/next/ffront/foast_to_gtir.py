@@ -22,6 +22,7 @@ from gt4py.next.ffront import (
     dialect_ast_enums,
     fbuiltins,
     field_operator_ast as foast,
+    stages as ffront_stages,
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.experimental import EXPERIMENTAL_FUN_BUILTIN_NAMES
@@ -31,8 +32,8 @@ from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
-# def foast_to_itir(inp: ffront_stages.FoastOperatorDefinition) -> itir.Expr:
-#     return FieldOperatorLowering.apply(inp.foast_node)
+def foast_to_gtir(inp: ffront_stages.FoastOperatorDefinition) -> itir.Expr:
+    return FieldOperatorLowering.apply(inp.foast_node)
 
 
 def promote_to_list(node: foast.Symbol | foast.Expr) -> Callable[[itir.Expr], itir.Expr]:
@@ -82,16 +83,16 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             id=node.id, params=params, expr=self.visit_BlockStmt(node.body, inner_expr=None)
         )  # `expr` is a lifted stencil
 
-    # def visit_FieldOperator(
-    #     self, node: foast.FieldOperator, **kwargs: Any
-    # ) -> itir.FunctionDefinition:
-    #     func_definition: itir.FunctionDefinition = self.visit(node.definition, **kwargs)
+    def visit_FieldOperator(
+        self, node: foast.FieldOperator, **kwargs: Any
+    ) -> itir.FunctionDefinition:
+        func_definition: itir.FunctionDefinition = self.visit(node.definition, **kwargs)
 
-    #     new_body = func_definition.expr
+        new_body = func_definition.expr
 
-    #     return itir.FunctionDefinition(
-    #         id=func_definition.id, params=func_definition.params, expr=new_body
-    #     )
+        return itir.FunctionDefinition(
+            id=func_definition.id, params=func_definition.params, expr=new_body
+        )
 
     # def visit_ScanOperator(
     #     self, node: foast.ScanOperator, **kwargs: Any
