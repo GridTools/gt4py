@@ -15,7 +15,8 @@
 """Implements Helper functionaliyies for map fusion"""
 
 import functools
-from typing import Any, Iterable, Optional, Sequence, Union
+import itertools
+from typing import Any, Optional, Sequence, Union
 
 import dace
 from dace import subsets
@@ -42,6 +43,10 @@ class MapFusionHelper(dace_transformation.SingleStateTransformation):
 
     After every transformation that manipulates the state machine, you shouls recreate
     the transformation.
+
+    Args:
+        only_inner_maps: Only match Maps that are internal, i.e. inside another Map.
+        only_toplevel_maps: Only consider Maps that are at the top.
     """
 
     only_toplevel_maps = properties.Property(
@@ -62,7 +67,7 @@ class MapFusionHelper(dace_transformation.SingleStateTransformation):
         default=None,
         allow_none=True,
         desc="Maps SDFGs to the set of array transients that can not be removed. "
-        "The variable acts as a cache, and is managed by 'can_transient_be_removed()'.",
+        "The variable acts as a cache, and is managed by 'is_interstate_transient()'.",
     )
 
     def __init__(
@@ -82,24 +87,24 @@ class MapFusionHelper(dace_transformation.SingleStateTransformation):
     def expressions(cls) -> bool:
         raise RuntimeError("The `_MapFusionHelper` is not a transformation on its own.")
 
-    def can_be_applied(
+    def can_be_fused(
         self,
         map_entry_1: nodes.MapEntry,
         map_entry_2: nodes.MapEntry,
-        graph: Union[SDFGState, SDFG],
+        graph: Union[dace.SDFGState, dace.SDFG],
         sdfg: dace.SDFG,
         permissive: bool = False,
     ) -> bool:
         """Performs some checks if the maps can be fused.
 
-        This function does not follow the standard interface of DaCe transformations.
-        Instead it checks if the two maps can be fused, by comparing:
+        Essentially, this function only checks constrains that does not depend if
+        a serial or a parallel map fusion happens. Thus it tests:
         - The scope of the maps.
         - The scheduling of the maps.
         - The map parameters.
 
-        However, for performance reasons, the function does not compute the node
-        partition.
+        However, for performance reasons, the function does not check if the node
+        decomposition exists.
         """
 
         if self.only_inner_maps and self.only_toplevel_maps:
@@ -249,49 +254,61 @@ class MapFusionHelper(dace_transformation.SingleStateTransformation):
 
         return True
 
-    def can_transient_be_removed(
+    def is_interstate_transient(
         self,
         transient: Union[str, nodes.AccessNode],
-        sdfg: SDFG,
+        sdfg: dace.SDFG,
     ) -> bool:
-        """Can `transient` be removed.
+        """Tests if `transient` is an interstate transient, an can not be removed.
 
-        Essentially the function tests if the transient `transient` is needed to
-        transmit information from one state to the other. The function will first
-        look consult `self.shared_transients`, if the SDFG is not known the function
-        will compute the set of transients that have to be kept alive.
-
-        If `transient` refers to a scalar the function will return `False`, as
-        a scalar can not be removed.
+        Essentially this function checks if a transient is needed in a
+        different state in the SDFG, because it transmit information from
+        one state to the other. However, this function only checks if the
+        transient is needed for transmitting information between states.
+        It does _not_ check if the transient is needed multiple times within
+        the state. This case can be detected by checking the number of outgoing
+        edges.
 
         Args:
             transient: The transient that should be checked.
             sdfg: The SDFG containing the array.
         """
 
-        if sdfg not in self.shared_transients:
-            # SDFG is not known, so we have to compute the set of all transients that
-            #  have to be kept alive. This set is given by all transients that are
-            #  source nodes; We currently ignore scalars.
-            shared_sdfg_transients: set[str] = set()
+        # According to [rule 6](https://hackmd.io/klvzLnzMR6GZBWtRU8HbDg#Requirements-on-SDFG)
+        #  the set of such transients is partially given by all source access nodes.
+        #  Because of rule 3 we also include all scalars in this set, as an over
+        #  approximation. Furthermore, because simplify might violate rule 3,
+        #  we also include the sink nodes.
+
+        # See if we have already computed the set
+        if sdfg in self.shared_transients:
+            shared_sdfg_transients: set[str] = self.shared_transients[sdfg]
+
+        else:
+            # SDFG is not known so we have to compute it.
+            #  If a scalar is not a source node then it is not included in this set.
+            #  Thus we do not have to look for it, instead we will check for them
+            #  explicitly.
+            shared_sdfg_transients = set()
             for state in sdfg.states():
-                for acnode in filter(
-                    lambda node: isinstance(node, nodes.AccessNode), state.sink_nodes()
-                ):
-                    desc = sdfg.arrays[acnode.data]
-                    if desc.transient and isinstance(desc, data.Array):
-                        shared_sdfg_transients.add(acnode.data)
+                shared_sdfg_transients.update(
+                    filter(
+                        lambda node: isinstance(node, nodes.AccessNode)
+                        and sdfg.arrays[node.data].transient,
+                        itertools.chain(state.source_nodes(), state.sink_nodes()),
+                    )
+                )
             self.shared_transients[sdfg] = shared_sdfg_transients
 
         if isinstance(transient, nodes.AccessNode):
             transient = transient.data
+        desc: data.Data = sdfg.arrays[transient]
 
-        desc: data.Data = sdfg.arrays[transient]  # type: ignore[no-redef]
-        if isinstance(desc, data.View):
+        if not desc.transient:
             return False
         if isinstance(desc, data.Scalar):
             return False
-        return transient not in self.shared_transients[sdfg]
+        return transient not in shared_sdfg_transients
 
     def partition_first_outputs(
         self,
@@ -422,7 +439,7 @@ class MapFusionHelper(dace_transformation.SingleStateTransformation):
             #  implementation in the actual fusion routine.
             #  This is an assumption that is in most cases correct, but not always.
             #  However, doing it correctly is extremely complex.
-            for _, produce_edge in self.find_upstream_producers(state, out_edge):
+            for _, produce_edge in util.find_upstream_producers(state, out_edge):
                 if produce_edge.data.wcr is not None:
                     return None
 
@@ -442,7 +459,7 @@ class MapFusionHelper(dace_transformation.SingleStateTransformation):
                 #  them iff the node does not consume that whole intermediate.
                 #  Furthermore, it can not be a dynamic map range.
                 intermediate_size = functools.reduce(lambda a, b: a * b, intermediate_desc.shape)
-                consumers = self.find_downstream_consumers(state=state, begin=intermediate_node)
+                consumers = util.find_downstream_consumers(state=state, begin=intermediate_node)
                 for consumer_node, feed_edge in consumers:
                     # TODO(phimuell): Improve this approximation.
                     if feed_edge.data.num_elements() == intermediate_size:
@@ -454,10 +471,10 @@ class MapFusionHelper(dace_transformation.SingleStateTransformation):
                 #  output of the check function, from within the second map we remove
                 #  the intermediate, it has more the meaning of "do we need to
                 #  reconstruct it after the second map again?".
-                if self.can_transient_be_removed(intermediate_node, sdfg):
-                    exclusive_outputs.add(out_edge)
-                else:
+                if self.is_interstate_transient(intermediate_node, sdfg):
                     shared_outputs.add(out_edge)
+                else:
+                    exclusive_outputs.add(out_edge)
                 continue
 
             else:
@@ -475,7 +492,7 @@ class MapFusionHelper(dace_transformation.SingleStateTransformation):
                         if found_second_entry:  # The second map was found again.
                             return None
                         found_second_entry = True
-                        consumers = self.find_downstream_consumers(state=state, begin=edge)
+                        consumers = util.find_downstream_consumers(state=state, begin=edge)
                         for consumer_node, feed_edge in consumers:
                             if feed_edge.data.num_elements() == intermediate_size:
                                 return None
@@ -494,141 +511,3 @@ class MapFusionHelper(dace_transformation.SingleStateTransformation):
 
         assert exclusive_outputs or shared_outputs or pure_outputs
         return (pure_outputs, exclusive_outputs, shared_outputs)
-
-    def all_nodes_between(
-        self,
-        graph: SDFG | SDFGState,
-        begin: nodes.Node,
-        end: nodes.Node,
-        reverse: bool = False,
-    ) -> set[nodes.Node] | None:
-        """Returns all nodes that are reachable from `begin` but bound by `end`.
-
-        What the function does is, that it starts a DFS starting at `begin`, which is
-        not part of the returned set, every edge that goes to `end` will be considered
-        to not exists.
-        In case `end` is never found the function will return `None`.
-
-        If `reverse` is set to `True` the function will start exploring at `end` and
-        follows the outgoing edges, i.e. the meaning of `end` and `begin` are swapped.
-
-        Args:
-            graph: The graph to operate on.
-            begin: The start of the DFS.
-            end: The terminator node of the DFS.
-            reverse: Perform a backward DFS.
-
-        Notes:
-            - The returned set will never contain the node `begin`.
-            - The returned set will also contain the nodes of path that starts at
-                `begin` and ends at a node that is not `end`.
-        """
-
-        def next_nodes(node: nodes.Node) -> Iterable[nodes.Node]:
-            return (edge.dst for edge in graph.out_edges(node))
-
-        if reverse:
-            begin, end = end, begin
-
-            def next_nodes(node: nodes.Node) -> Iterable[nodes.Node]:
-                return (edge.src for edge in graph.in_edges(node))
-
-        to_visit: list[nodes.Node] = [begin]
-        seen: set[nodes.Node] = set()
-        found_end: bool = False
-
-        while len(to_visit) > 0:
-            n: nodes.Node = to_visit.pop()
-            if n == end:
-                found_end = True
-                continue
-            elif n in seen:
-                continue
-            seen.add(n)
-            to_visit.extend(next_nodes(n))
-
-        if not found_end:
-            return None
-
-        seen.discard(begin)
-        return seen
-
-    def find_downstream_consumers(
-        self,
-        state: SDFGState,
-        begin: nodes.Node | nodes.MultiConnectorEdge,
-        only_tasklets: bool = False,
-        reverse: bool = False,
-    ) -> set[tuple[nodes.Node, nodes.MultiConnectorEdge]]:
-        """Find all downstream connectors of `begin`.
-
-        A consumer, in this sense, is any node that is neither an entry nor an exit
-        node. The function returns a set storing the pairs, the first element is the
-        node that acts as consumer and the second is the edge that leads to it.
-        By setting `only_tasklets` the nodes the function finds are only Tasklets.
-
-        To find this set the function starts a search at `begin`, however, it is also
-        possible to pass an edge as `begin`.
-        If `reverse` is `True` the function essentially finds the producers that are
-        upstream.
-
-        Args:
-            state: The state in which to look for the consumers.
-            begin: The initial node that from which the search starts.
-            only_tasklets: Return only Tasklets.
-            reverse: Follow the reverse direction.
-        """
-        if isinstance(begin, nodes.MultiConnectorEdge):
-            to_visit: list[nodes.MultiConnectorEdge] = [begin]
-        elif reverse:
-            to_visit = list(state.in_edges(begin))
-        else:
-            to_visit = list(state.out_edges(begin))
-        seen: set[nodes.MultiConnectorEdge] = set()
-        found: set[tuple[nodes.Node, nodes.MultiConnectorEdge]] = set()
-
-        while len(to_visit) != 0:
-            curr_edge: nodes.MultiConnectorEdge = to_visit.pop()
-            next_node: nodes.Node = curr_edge.src if reverse else curr_edge.dst
-
-            if curr_edge in seen:
-                continue
-            seen.add(curr_edge)
-
-            if isinstance(next_node, (nodes.MapEntry, nodes.MapExit)):
-                if reverse:
-                    target_conn = curr_edge.src_conn[4:]
-                    new_edges = state.in_edges_by_connector(curr_edge.src, "IN_" + target_conn)
-                else:
-                    # In forward mode a Map entry could also mean the definition of a
-                    #  dynamic map range.
-                    if (not curr_edge.dst_conn.startswith("IN_")) and isinstance(
-                        next_node, nodes.MapEntry
-                    ):
-                        # This edge defines a dynamic map range, which is a consumer
-                        if not only_tasklets:
-                            found.add((next_node, curr_edge))
-                        continue
-                    target_conn = curr_edge.dst_conn[3:]
-                    new_edges = state.out_edges_by_connector(curr_edge.dst, "OUT_" + target_conn)
-                to_visit.extend(new_edges)
-            else:
-                if only_tasklets and (not isinstance(next_node, nodes.Tasklet)):
-                    continue
-                found.add((next_node, curr_edge))
-
-        return found
-
-    def find_upstream_producers(
-        self,
-        state: SDFGState,
-        begin: nodes.Node | nodes.MultiConnectorEdge,
-        only_tasklets: bool = False,
-    ) -> set[tuple[nodes.Node, nodes.MultiConnectorEdge]]:
-        """Same as `find_downstream_consumers()` but with `reverse` set to `True`."""
-        return self.find_downstream_consumers(
-            state=state,
-            begin=begin,
-            only_tasklets=only_tasklets,
-            reverse=True,
-        )
