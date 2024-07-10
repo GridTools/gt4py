@@ -89,6 +89,94 @@ class PrimitiveTranslator(Protocol):
 class AsFieldOp(PrimitiveTranslator):
     """Generates the dataflow subgraph for the `as_field_op` builtin function."""
 
+    @classmethod
+    def _parse_node_args(
+        cls,
+        args: list[gtir.Expr],
+        sdfg: dace.SDFG,
+        state: dace.SDFGState,
+        sdfg_builder: SDFGBuilder,
+        domain: list[
+            tuple[gtx_common.Dimension, dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]
+        ],
+        reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
+    ) -> list[gtir_to_tasklet.IteratorExpr | gtir_to_tasklet.MemletExpr]:
+        stencil_args: list[gtir_to_tasklet.IteratorExpr | gtir_to_tasklet.MemletExpr] = []
+        for arg in args:
+            fields: list[TemporaryData] = sdfg_builder.visit(
+                arg, sdfg=sdfg, head_state=state, reduce_identity=reduce_identity
+            )
+            assert len(fields) == 1
+            data_node, arg_type = fields[0]
+            # require all argument nodes to be data access nodes (no symbols)
+            assert isinstance(data_node, dace.nodes.AccessNode)
+
+            arg_definition: gtir_to_tasklet.IteratorExpr | gtir_to_tasklet.MemletExpr
+            if isinstance(arg_type, ts.ScalarType):
+                arg_definition = gtir_to_tasklet.MemletExpr(data_node, sbs.Indices([0]))
+            else:
+                assert isinstance(arg_type, ts.FieldType)
+                indices: dict[gtx_common.Dimension, gtir_to_tasklet.IteratorIndexExpr] = {
+                    dim: gtir_to_tasklet.SymbolExpr(
+                        dace.symbolic.SymExpr(IteratorIndexFmt.format(dim=dim.value)),
+                        IteratorIndexDType,
+                    )
+                    for dim, _, _ in domain
+                }
+                arg_definition = gtir_to_tasklet.IteratorExpr(
+                    data_node,
+                    arg_type.dims,
+                    indices,
+                )
+            stencil_args.append(arg_definition)
+
+        return stencil_args
+
+    @classmethod
+    def _create_temporary_field(
+        cls,
+        sdfg: dace.SDFG,
+        state: dace.SDFGState,
+        domain: list[
+            tuple[gtx_common.Dimension, dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]
+        ],
+        node_type: ts.ScalarType,
+        output_desc: dace.data.Data,
+        output_field_type: ts.DataType,
+    ) -> tuple[dace.nodes.AccessNode, ts.FieldType]:
+        domain_dims, domain_lbs, domain_ubs = zip(*domain)
+        field_dims = list(domain_dims)
+        field_shape = [
+            # diff between upper and lower bound
+            (ub - lb)
+            for lb, ub in zip(domain_lbs, domain_ubs)
+        ]
+        field_offset: Optional[list[dace.symbolic.SymbolicType]] = None
+        if any(domain_lbs):
+            field_offset = [-lb for lb in domain_lbs]
+
+        if isinstance(output_desc, dace.data.Array):
+            # extend the result arrays with the local dimensions added by the field operator e.g. `neighbors`)
+            assert isinstance(output_field_type, ts.FieldType)
+            # TODO: enable `assert output_field_type.dtype == node_type`, remove variable `dtype`
+            node_type = output_field_type.dtype
+            field_dims.extend(output_field_type.dims)
+            field_shape.extend(output_desc.shape)
+        else:
+            assert isinstance(output_desc, dace.data.Scalar)
+            assert isinstance(output_field_type, ts.ScalarType)
+            # TODO: enable `assert output_field_type == node_type`, remove variable `dtype`
+            node_type = output_field_type
+
+        # allocate local temporary storage for the result field
+        temp_name, _ = sdfg.add_temp_transient(
+            field_shape, dace_fieldview_util.as_dace_type(node_type), offset=field_offset
+        )
+        field_node = state.add_access(temp_name)
+        field_type = ts.FieldType(field_dims, node_type)
+
+        return field_node, field_type
+
     def __call__(
         self,
         node: gtir.Node,
@@ -112,7 +200,6 @@ class AsFieldOp(PrimitiveTranslator):
         # TODO: use type inference to determine the result type
         node_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
         domain = dace_fieldview_util.get_domain(domain_expr)
-        domain_dims, domain_lbs, domain_ubs = zip(*domain)
 
         if cpm.is_applied_reduce(stencil_expr.expr):
             if reduce_identity:
@@ -120,34 +207,9 @@ class AsFieldOp(PrimitiveTranslator):
             _, _, reduce_identity = gtir_to_tasklet.get_reduce_params(stencil_expr.expr)
 
         # first visit the list of arguments and build a symbol map
-        stencil_args: list[gtir_to_tasklet.IteratorExpr | gtir_to_tasklet.MemletExpr] = []
-        for arg in node.args:
-            fields: list[TemporaryData] = sdfg_builder.visit(
-                arg, sdfg=sdfg, head_state=state, reduce_identity=reduce_identity
-            )
-            assert len(fields) == 1
-            data_node, arg_type = fields[0]
-            # require all argument nodes to be data access nodes (no symbols)
-            assert isinstance(data_node, dace.nodes.AccessNode)
-
-            arg_definition: gtir_to_tasklet.IteratorExpr | gtir_to_tasklet.MemletExpr
-            if isinstance(arg_type, ts.ScalarType):
-                arg_definition = gtir_to_tasklet.MemletExpr(data_node, sbs.Indices([0]))
-            else:
-                assert isinstance(arg_type, ts.FieldType)
-                indices: dict[gtx_common.Dimension, gtir_to_tasklet.IteratorIndexExpr] = {
-                    dim: gtir_to_tasklet.SymbolExpr(
-                        dace.symbolic.SymExpr(IteratorIndexFmt.format(dim=dim.value)),
-                        IteratorIndexDType,
-                    )
-                    for dim in domain_dims
-                }
-                arg_definition = gtir_to_tasklet.IteratorExpr(
-                    data_node,
-                    arg_type.dims,
-                    indices,
-                )
-            stencil_args.append(arg_definition)
+        stencil_args = self._parse_node_args(
+            node.args, sdfg, state, sdfg_builder, domain, reduce_identity
+        )
 
         # represent the field operator as a mapped tasklet graph, which will range over the field domain
         taskgen = gtir_to_tasklet.LambdaToTasklet(
@@ -168,36 +230,12 @@ class AsFieldOp(PrimitiveTranslator):
             last_node_connector = None
 
         # allocate local temporary storage for the result field
-        field_dims = list(domain_dims)
-        field_shape = [
-            # diff between upper and lower bound
-            (ub - lb)
-            for lb, ub in zip(domain_lbs, domain_ubs)
-        ]
-        field_offset: Optional[list[dace.symbolic.SymbolicType]] = None
-        if any(domain_lbs):
-            field_offset = [-lb for lb in domain_lbs]
-        if isinstance(output_desc, dace.data.Array):
-            # extend the result arrays with the local dimensions added by the field operator e.g. `neighbors`)
-            assert isinstance(output_expr.field_type, ts.FieldType)
-            # TODO: enable `assert output_expr.field_type.dtype == self.field_dtype`, remove variable `dtype`
-            node_type = output_expr.field_type.dtype
-            field_dims.extend(output_expr.field_type.dims)
-            field_shape.extend(output_desc.shape)
-        else:
-            assert isinstance(output_expr.field_type, ts.ScalarType)
-            # TODO: enable `assert output_expr.field_type == node_type`, remove variable `dtype`
-            node_type = output_expr.field_type
-
-        # TODO: use `field_type` directly, without passing through `dtype`
-        field_type = ts.FieldType(field_dims, node_type)
-        temp_name, _ = sdfg.add_temp_transient(
-            field_shape, dace_fieldview_util.as_dace_type(node_type), offset=field_offset
+        field_node, field_type = self._create_temporary_field(
+            sdfg, state, domain, node_type, output_desc, output_expr.field_type
         )
-        field_node = state.add_access(temp_name)
 
         # assume tasklet with single output
-        output_subset = [IteratorIndexFmt.format(dim=dim.value) for dim in domain_dims]
+        output_subset = [IteratorIndexFmt.format(dim=dim.value) for dim, _, _ in domain]
         if isinstance(output_desc, dace.data.Array):
             # additional local dimension for neighbors
             assert set(output_desc.offset) == {0}
