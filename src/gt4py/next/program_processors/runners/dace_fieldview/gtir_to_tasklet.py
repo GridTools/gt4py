@@ -75,9 +75,6 @@ class IteratorExpr:
     indices: dict[gtx_common.Dimension, IteratorIndexExpr]
 
 
-INDEX_CONNECTOR_FMT = "__index_{dim}"
-
-
 DACE_REDUCTION_MAPPING: dict[str, dace.dtypes.ReductionType] = {
     "minimum": dace.dtypes.ReductionType.Min,
     "maximum": dace.dtypes.ReductionType.Max,
@@ -168,6 +165,9 @@ class LambdaToTasklet(eve.NodeVisitor):
         return ValueExpr(temp_node, data_type)
 
     def _visit_deref(self, node: gtir.FunCall) -> MemletExpr | ValueExpr:
+        # format used for field index tasklet connector
+        IndexConnectorFmt = "__index_{dim}"
+
         assert len(node.args) == 1
         it = self.visit(node.args[0])
 
@@ -191,14 +191,14 @@ class LambdaToTasklet(eve.NodeVisitor):
                 assert all(dim in it.indices for dim in it.dimensions)
                 field_indices = [(dim, it.indices[dim]) for dim in it.dimensions]
                 index_connectors = [
-                    INDEX_CONNECTOR_FMT.format(dim=dim.value)
+                    IndexConnectorFmt.format(dim=dim.value)
                     for dim, index in field_indices
                     if not isinstance(index, SymbolExpr)
                 ]
                 index_internals = ",".join(
                     str(index.value)
                     if isinstance(index, SymbolExpr)
-                    else INDEX_CONNECTOR_FMT.format(dim=dim.value)
+                    else IndexConnectorFmt.format(dim=dim.value)
                     for dim, index in field_indices
                 )
                 deref_node = self.state.add_tasklet(
@@ -216,7 +216,7 @@ class LambdaToTasklet(eve.NodeVisitor):
                 )
 
                 for dim, index_expr in field_indices:
-                    deref_connector = INDEX_CONNECTOR_FMT.format(dim=dim.value)
+                    deref_connector = IndexConnectorFmt.format(dim=dim.value)
                     if isinstance(index_expr, MemletExpr):
                         self._add_entry_memlet_path(
                             index_expr.node,
@@ -437,7 +437,9 @@ class LambdaToTasklet(eve.NodeVisitor):
         index_expr = it.indices[offset_dim]
         if isinstance(index_expr, SymbolExpr) and isinstance(offset_expr, SymbolExpr):
             # purely symbolic expression which can be interpreted at compile time
-            new_index = SymbolExpr(index_expr.value + offset_expr.value, index_expr.dtype)
+            new_index = SymbolExpr(
+                dace.symbolic.SymExpr(index_expr.value) + offset_expr.value, index_expr.dtype
+            )
         else:
             # the offset needs to be calculate by means of a tasklet
             new_index_connector = "shifted_index"

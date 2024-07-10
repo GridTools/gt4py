@@ -14,7 +14,7 @@
 
 
 import abc
-from typing import Any, Final, Optional, Protocol, TypeAlias
+from typing import Any, Optional, Protocol, TypeAlias
 
 import dace
 import dace.subsets as sbs
@@ -31,11 +31,8 @@ from gt4py.next.program_processors.runners.dace_fieldview import (
 from gt4py.next.type_system import type_specifications as ts
 
 
-# Define aliases for return types
-TemporaryData: TypeAlias = tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]
-
-IteratorIndexFmt: Final[str] = "i_{dim}"
 IteratorIndexDType: TypeAlias = dace.int32  # type of iterator indexes
+TemporaryData: TypeAlias = tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]
 
 
 class SDFGBuilder(Protocol):
@@ -106,6 +103,7 @@ class AsFieldOp(PrimitiveTranslator):
             fields: list[TemporaryData] = sdfg_builder.visit(
                 arg, sdfg=sdfg, head_state=state, reduce_identity=reduce_identity
             )
+
             assert len(fields) == 1
             data_node, arg_type = fields[0]
             # require all argument nodes to be data access nodes (no symbols)
@@ -118,7 +116,7 @@ class AsFieldOp(PrimitiveTranslator):
                 assert isinstance(arg_type, ts.FieldType)
                 indices: dict[gtx_common.Dimension, gtir_to_tasklet.IteratorIndexExpr] = {
                     dim: gtir_to_tasklet.SymbolExpr(
-                        dace.symbolic.SymExpr(IteratorIndexFmt.format(dim=dim.value)),
+                        dace_fieldview_util.get_map_variable(dim),
                         IteratorIndexDType,
                     )
                     for dim, _, _ in domain
@@ -235,7 +233,7 @@ class AsFieldOp(PrimitiveTranslator):
         )
 
         # assume tasklet with single output
-        output_subset = [IteratorIndexFmt.format(dim=dim.value) for dim, _, _ in domain]
+        output_subset = [dace_fieldview_util.get_map_variable(dim) for dim, _, _ in domain]
         if isinstance(output_desc, dace.data.Array):
             # additional local dimension for neighbors
             assert set(output_desc.offset) == {0}
@@ -243,7 +241,7 @@ class AsFieldOp(PrimitiveTranslator):
 
         # create map range corresponding to the field operator domain
         map_ranges = {
-            IteratorIndexFmt.format(dim=dim.value): f"{lb}:{ub}" for dim, lb, ub in domain
+            dace_fieldview_util.get_map_variable(dim): f"{lb}:{ub}" for dim, lb, ub in domain
         }
         me, mx = state.add_map("field_op", map_ranges)
 

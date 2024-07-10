@@ -1582,6 +1582,7 @@ def _get_output_type(
     pos_in_domain = next(iter(_domain_iterator(domain)))
     with embedded_context.new_context(closure_column_range=col_range) as ctx:
         single_pos_result = ctx.run(_compute_at_position, fun, args, pos_in_domain, col_dim)
+    assert single_pos_result is not _UNDEFINED, "Stencil contains an Out-Of-Bound access."
     dtype = _elem_dtype(single_pos_result)
     return _structured_dtype_to_typespec(dtype)
 
