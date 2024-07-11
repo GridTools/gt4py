@@ -20,6 +20,8 @@ import dace
 from dace.transformation import dataflow as dace_dataflow
 from dace.transformation.auto import auto_optimize as dace_aoptimize
 
+from .map_seriall_fusion import SerialMapFusion
+
 
 def dace_auto_optimize(
     sdfg: dace.SDFG,
@@ -64,18 +66,25 @@ def gt_auto_optimize(
         device: The device for which we should optimize.
     """
 
-    # Initial cleaning
-    sdfg.simplify()
+    with dace.config.temporary_config():
+        dace.Config.set("optimizer", "match_exception", value=True)
 
-    # Due to the structure of the generated SDFG getting rid of Maps,
-    #  i.e. fusing them, is the best we can currently do.
-    sdfg.apply_transformations_repeated([dace_dataflow.MapFusion])
+        # Initial cleaning
+        sdfg.simplify()
 
-    # These are the part that we copy from DaCe built in auto optimization.
-    dace_aoptimize.set_fast_implementations(sdfg, device)
-    dace_aoptimize.make_transients_persistent(sdfg, device)
-    dace_aoptimize.move_small_arrays_to_stack(sdfg)
+        # Due to the structure of the generated SDFG getting rid of Maps,
+        #  i.e. fusing them, is the best we can currently do.
+        if kwargs.get("use_dace_fusion", False):
+            sdfg.apply_transformations_repeated([dace_dataflow.MapFusion])
+        else:
+            xform = SerialMapFusion()
+            sdfg.apply_transformations_repeated([xform], validate=True, validate_all=True)
 
-    sdfg.simplify()
+        # These are the part that we copy from DaCe built in auto optimization.
+        dace_aoptimize.set_fast_implementations(sdfg, device)
+        dace_aoptimize.make_transients_persistent(sdfg, device)
+        dace_aoptimize.move_small_arrays_to_stack(sdfg)
 
-    return sdfg
+        sdfg.simplify()
+
+        return sdfg
