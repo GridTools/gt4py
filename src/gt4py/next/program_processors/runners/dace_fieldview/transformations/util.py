@@ -17,7 +17,7 @@
 from typing import Iterable
 
 import dace
-from dace.sdfg import nodes
+from dace.sdfg import graph as dace_graph, nodes
 
 
 def is_nested_sdfg(sdfg: dace.SDFG) -> bool:
@@ -93,10 +93,10 @@ def all_nodes_between(
 
 def find_downstream_consumers(
     state: dace.SDFGState,
-    begin: nodes.Node | nodes.MultiConnectorEdge,
+    begin: nodes.Node | dace_graph.MultiConnectorEdge[dace.Memlet],
     only_tasklets: bool = False,
     reverse: bool = False,
-) -> set[tuple[nodes.Node, nodes.MultiConnectorEdge]]:
+) -> set[tuple[nodes.Node, dace_graph.MultiConnectorEdge[dace.Memlet]]]:
     """Find all downstream connectors of `begin`.
 
     A consumer, in this sense, is any node that is neither an entry nor an exit
@@ -115,17 +115,17 @@ def find_downstream_consumers(
         only_tasklets: Return only Tasklets.
         reverse: Follow the reverse direction.
     """
-    if isinstance(begin, nodes.MultiConnectorEdge):
-        to_visit: list[nodes.MultiConnectorEdge] = [begin]
+    if isinstance(begin, dace_graph.MultiConnectorEdge):
+        to_visit: list[dace_graph.MultiConnectorEdge[dace.Memlet]] = [begin]
     elif reverse:
         to_visit = list(state.in_edges(begin))
     else:
         to_visit = list(state.out_edges(begin))
-    seen: set[nodes.MultiConnectorEdge] = set()
-    found: set[tuple[nodes.Node, nodes.MultiConnectorEdge]] = set()
+    seen: set[dace_graph.MultiConnectorEdge[dace.Memlet]] = set()
+    found: set[tuple[nodes.Node, dace_graph.MultiConnectorEdge[dace.Memlet]]] = set()
 
     while len(to_visit) != 0:
-        curr_edge: nodes.MultiConnectorEdge = to_visit.pop()
+        curr_edge: dace_graph.MultiConnectorEdge[dace.Memlet] = to_visit.pop()
         next_node: nodes.Node = curr_edge.src if reverse else curr_edge.dst
 
         if curr_edge in seen:
@@ -159,9 +159,9 @@ def find_downstream_consumers(
 
 def find_upstream_producers(
     state: dace.SDFGState,
-    begin: nodes.Node | nodes.MultiConnectorEdge,
+    begin: nodes.Node | dace_graph.MultiConnectorEdge[dace.Memlet],
     only_tasklets: bool = False,
-) -> set[tuple[nodes.Node, nodes.MultiConnectorEdge]]:
+) -> set[tuple[nodes.Node, dace_graph.MultiConnectorEdge[dace.Memlet]]]:
     """Same as `find_downstream_consumers()` but with `reverse` set to `True`."""
     return find_downstream_consumers(
         state=state,

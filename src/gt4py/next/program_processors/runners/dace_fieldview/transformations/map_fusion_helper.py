@@ -20,7 +20,7 @@ from typing import Any, Optional, Sequence, Union
 
 import dace
 from dace import data, properties, subsets, transformation
-from dace.sdfg import SDFG, SDFGState, nodes
+from dace.sdfg import SDFG, SDFGState, graph as dace_graph, nodes
 from dace.transformation import helpers
 
 from . import util
@@ -128,8 +128,8 @@ class MapFusionHelper(transformation.SingleStateTransformation):
 
         return True
 
+    @staticmethod
     def relocate_nodes(
-        self,
         from_node: Union[nodes.MapExit, nodes.MapEntry],
         to_node: Union[nodes.MapExit, nodes.MapEntry],
         state: SDFGState,
@@ -191,14 +191,13 @@ class MapFusionHelper(transformation.SingleStateTransformation):
 
             # We have a Passthrough connection, i.e. there exists a `OUT_` connector
             #  thus we now have to migrate the two edges.
-
             old_conn = edge_to_move.dst_conn[3:]  # The connection name without prefix
             new_conn = to_node.next_connector(old_conn)
 
             for e in list(state.in_edges_by_connector(from_node, "IN_" + old_conn)):
                 helpers.redirect_edge(state, e, new_dst=to_node, new_dst_conn="IN_" + new_conn)
             for e in list(state.out_edges_by_connector(from_node, "OUT_" + old_conn)):
-                helpers.redirect_edge(state, e, new_dst=to_node, new_dst_conn="OUT_" + new_conn)
+                helpers.redirect_edge(state, e, new_src=to_node, new_src_conn="OUT_" + new_conn)
             from_node.remove_in_connector("IN_" + old_conn)
             from_node.remove_out_connector("OUT_" + old_conn)
 
@@ -207,7 +206,7 @@ class MapFusionHelper(transformation.SingleStateTransformation):
         ), f"After moving source node '{from_node}' still has an input degree of {state.in_degree(from_node)}"
         assert (
             state.out_degree(from_node) == 0
-        ), f"After moving source node '{from_node}' still has an output degree of {state.in_degree(from_node)}"
+        ), f"After moving source node '{from_node}' still has an output degree of {state.out_degree(from_node)}"
 
     def map_parameter_compatible(
         self,
@@ -301,7 +300,7 @@ class MapFusionHelper(transformation.SingleStateTransformation):
             return False
         if isinstance(desc, data.Scalar):
             return False
-        return transient not in shared_sdfg_transients
+        return transient in shared_sdfg_transients
 
     def partition_first_outputs(
         self,
@@ -311,9 +310,9 @@ class MapFusionHelper(transformation.SingleStateTransformation):
         map_entry_2: nodes.MapEntry,
     ) -> Union[
         tuple[
-            set[nodes.MultiConnectorEdge],
-            set[nodes.MultiConnectorEdge],
-            set[nodes.MultiConnectorEdge],
+            set[dace_graph.MultiConnectorEdge[dace.Memlet]],
+            set[dace_graph.MultiConnectorEdge[dace.Memlet]],
+            set[dace_graph.MultiConnectorEdge[dace.Memlet]],
         ],
         None,
     ]:
@@ -348,9 +347,9 @@ class MapFusionHelper(transformation.SingleStateTransformation):
             map_entry_2: The entry node of the second map.
         """
         # The three outputs set.
-        pure_outputs: set[nodes.MultiConnectorEdge] = set()
-        exclusive_outputs: set[nodes.MultiConnectorEdge] = set()
-        shared_outputs: set[nodes.MultiConnectorEdge] = set()
+        pure_outputs: set[dace_graph.MultiConnectorEdge[dace.Memlet]] = set()
+        exclusive_outputs: set[dace_graph.MultiConnectorEdge[dace.Memlet]] = set()
+        shared_outputs: set[dace_graph.MultiConnectorEdge[dace.Memlet]] = set()
 
         # Set of intermediate nodes that we have already processed.
         processed_inter_nodes: set[nodes.Node] = set()
@@ -372,7 +371,7 @@ class MapFusionHelper(transformation.SingleStateTransformation):
 
             # Now let's look at all nodes that are downstream of the intermediate node.
             #  This, among other things, will tell us, how we have to handle this node.
-            downstream_nodes = self.all_nodes_between(
+            downstream_nodes = util.all_nodes_between(
                 graph=state,
                 begin=intermediate_node,
                 end=map_entry_2,
@@ -401,8 +400,8 @@ class MapFusionHelper(transformation.SingleStateTransformation):
             #  of the first map exit, but there is only one edge leaving the exit.
             #  It is complicate to handle this, so for now we ignore it.
             # TODO(phimuell): Handle this case properly.
-            inner_collector_edges = state.in_edges_by_connector(
-                intermediate_node, "IN_" + out_edge.src_conn[3:]
+            inner_collector_edges = list(
+                state.in_edges_by_connector(intermediate_node, "IN_" + out_edge.src_conn[3:])
             )
             if len(inner_collector_edges) > 1:
                 return None
@@ -494,7 +493,7 @@ class MapFusionHelper(transformation.SingleStateTransformation):
                                 return None
                     else:
                         # Ensure that there is no path that leads to the second map.
-                        after_intermdiate_node = self.all_nodes_between(
+                        after_intermdiate_node = util.all_nodes_between(
                             graph=state, begin=edge.dst, end=map_entry_2
                         )
                         if after_intermdiate_node is not None:

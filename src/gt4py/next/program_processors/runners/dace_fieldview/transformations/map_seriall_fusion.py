@@ -19,7 +19,7 @@ from typing import Any, Union
 
 import dace
 from dace import dtypes, properties, subsets, symbolic, transformation
-from dace.sdfg import SDFG, SDFGState, nodes
+from dace.sdfg import SDFG, SDFGState, graph as dace_graph, nodes
 
 from . import map_fusion_helper
 
@@ -54,9 +54,9 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
         This transformation modifies more nodes than it matches!
     """
 
-    map_exit1 = transformation.PatternNode(nodes.MapExit)
-    access_node = transformation.PatternNode(nodes.AccessNode)
-    map_entry2 = transformation.PatternNode(nodes.MapEntry)
+    map_exit1 = transformation.transformation.PatternNode(nodes.MapExit)
+    access_node = transformation.transformation.PatternNode(nodes.AccessNode)
+    map_entry2 = transformation.transformation.PatternNode(nodes.MapEntry)
 
     def __init__(
         self,
@@ -91,6 +91,8 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
         - The decomposition exists and at least one of the intermediate sets
             is not empty.
         """
+        assert isinstance(self.map_exit1, nodes.MapExit)
+        assert isinstance(self.map_entry2, nodes.MapEntry)
         map_entry_1: nodes.MapEntry = graph.entry_node(self.map_exit1)
         map_entry_2: nodes.MapEntry = self.map_entry2
 
@@ -111,7 +113,8 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
             return False
         if not (output_partition[1] or output_partition[2]):
             return False
-
+        assert isinstance(self.map_exit1, nodes.MapExit)
+        assert isinstance(self.map_entry2, nodes.MapEntry)
         return True
 
     def apply(self, graph: Union[dace.SDFGState, dace.SDFG], sdfg: dace.SDFG) -> None:
@@ -124,19 +127,24 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
         By assumption we do not have to rename anything.
         """
         assert isinstance(graph, dace.SDFGState)
+        assert isinstance(self.map_exit1, nodes.MapExit)
+        assert isinstance(self.map_entry2, nodes.MapEntry)
+
+        # From here on forward we can no longer use `self.map_*`!!
+        #  For some reason they are not stable and change.
+        map_exit_1: nodes.MapExit = self.map_exit1
+        map_entry_2: nodes.MapEntry = self.map_entry2
+        map_exit_2: nodes.MapExit = graph.exit_node(self.map_entry2)
+        map_entry_1: nodes.MapEntry = graph.entry_node(self.map_exit1)
 
         output_partition = self.partition_first_outputs(
             state=graph,
             sdfg=sdfg,
-            map_exit_1=self.map_exit1,
-            map_entry_2=self.map_entry2,
+            map_exit_1=map_exit_1,
+            map_entry_2=map_entry_2,
         )
         assert output_partition is not None  # Make MyPy happy.
         pure_outputs, exclusive_outputs, shared_outputs = output_partition
-
-        # Must be here to prevent errors
-        map_exit_2: nodes.MapExit = graph.exit_node(self.map_entry2)
-        map_entry_1: nodes.MapEntry = graph.entry_node(self.map_exit1)
 
         # Handling the outputs
         if len(exclusive_outputs) != 0:
@@ -144,8 +152,9 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
                 intermediate_outputs=exclusive_outputs,
                 state=graph,
                 sdfg=sdfg,
-                map_exit_1=self.map_exit1,
-                map_entry_2=self.map_entry2,
+                map_exit_1=map_exit_1,
+                map_entry_2=map_entry_2,
+                map_exit_2=map_exit_2,
                 is_exclusive_set=True,
             )
         if len(shared_outputs) != 0:
@@ -153,14 +162,15 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
                 intermediate_outputs=shared_outputs,
                 state=graph,
                 sdfg=sdfg,
-                map_exit_1=self.map_exit1,
-                map_entry_2=self.map_entry2,
+                map_exit_1=map_exit_1,
+                map_entry_2=map_entry_2,
+                map_exit_2=map_exit_2,
                 is_exclusive_set=False,
             )
-        assert pure_outputs == set(graph.out_edges(self.map_exit1))
+        assert pure_outputs == set(graph.out_edges(map_exit_1))
         if len(pure_outputs) != 0:
             self.relocate_nodes(
-                from_node=self.map_exit1,
+                from_node=map_exit_1,
                 to_node=map_exit_2,
                 state=graph,
                 sdfg=sdfg,
@@ -170,14 +180,14 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
         #  to the first map, now we must move the output of the first map
         #  to the second one, as this one is used.
         self.relocate_nodes(
-            from_node=self.map_entry2,
+            from_node=map_entry_2,
             to_node=map_entry_1,
             state=graph,
             sdfg=sdfg,
         )
 
-        for node_to_remove in [self.map_exit1, self.map_entry2]:
-            assert graph.degree(node_to_remove)
+        for node_to_remove in [map_exit_1, map_entry_2]:
+            assert graph.degree(node_to_remove) == 0
             graph.remove_node(node_to_remove)
 
         # Now turn the second output node into the output node of the first Map.
@@ -185,11 +195,12 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
 
     def handle_intermediate_set(
         self,
-        intermediate_outputs: set[nodes.MultiConnectorEdge],
+        intermediate_outputs: set[dace_graph.MultiConnectorEdge[dace.Memlet]],
         state: SDFGState,
         sdfg: SDFG,
         map_exit_1: nodes.MapExit,
         map_entry_2: nodes.MapEntry,
+        map_exit_2: nodes.MapExit,
         is_exclusive_set: bool,
     ) -> None:
         """Handle the intermediate output sets.
@@ -220,8 +231,6 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
         #  Note that this is still not enough as the dimensionality might be different.
         memlet_repl: dict[str, int] = {str(param): 0 for param in map_entry_2.map.params}
 
-        map_exit_2: nodes.MapExit = state.exit_node(map_entry_2)
-
         # Now we will iterate over all intermediate edge and process them.
         #  If not stated otherwise the comments assume that we run in exclusive mode.
         for out_edge in intermediate_outputs:
@@ -241,23 +250,18 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
             )
             if len(pre_exit_edges) != 1:
                 raise NotImplementedError()
-            assert pre_exit_edges[0].dst_conn is None
             pre_exit_edge = pre_exit_edges[0]
             new_inter_shape_raw = symbolic.overapproximate(pre_exit_edge.data.subset.size())
 
             # Over approximation will leave us with some unneeded size one dimensions.
             #  That are known to cause some troubles, so we will now remove them.
-            squeezed_dims: list[
-                int
-            ] = []  # Dimensions of the original intermediate we squeezed away.
+            squeezed_dims: list[int] = []
             new_inter_shape: list[int] = []  # This is the final shape of the new intermediate.
             for dim, (proposed_dim_size, full_dim_size) in enumerate(
                 zip(new_inter_shape_raw, inter_shape)
             ):
-                # Order of checks is important.
-                if (
-                    full_dim_size == 1
-                ):  # The original array had dimension size 1, so we have to keep it.
+                # Order of checks is important!
+                if full_dim_size == 1:  # Must be kept!
                     new_inter_shape.append(proposed_dim_size)
                 elif proposed_dim_size == 1:  # This dimension was reduced, so we can remove it.
                     squeezed_dims.append(dim)
@@ -351,11 +355,16 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
             #  in the second map. We do this by finding the input connectors on the
             #  map entry, such that we know where we have to reroute inside the Map.
             # NOTE: Assumes that map (if connected is the direct neighbour).
-            conn_names: list[str] = []
+            conn_names: set[str] = set()
             for inter_node_out_edge in state.out_edges(inter_node):
                 if inter_node_out_edge.dst == map_entry_2:
                     assert inter_node_out_edge.dst_conn.startswith("IN_")
-                    conn_names.append(inter_node_out_edge.dst_conn)
+                    conn_names.add(inter_node_out_edge.dst_conn)
+                else:
+                    # If we found another target than the second map entry from the
+                    #  intermediate node it means that the node _must_ survive,
+                    #  i.e. we are not in exclusive mode.
+                    assert not is_exclusive_set
 
             # Now we will reroute the connections inside the second map, i.e.
             #  instead of consuming the old intermediate node, they will now
@@ -387,7 +396,7 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
                     )
 
                     # Now we do subset modification to ensure that nothing failed.
-                    if isScalar:
+                    if is_scalar:
                         new_inner_memlet.src_subset = "0"
                     else:
                         if new_inner_memlet.src_subset is not None:
@@ -404,13 +413,13 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
                             if consumer_edge.data.subset is not None:
                                 consumer_edge.data.subset.pop(squeezed_dims)
 
-                    # Now remove the inner edge, as it is no longer needed.
-                    state.remove_edge(inner_edge)
-
-                # Now remove the connectors from the map entry. Note that the
-                #  edge ending in `out_conn_name` is still connected to the node.
-                map_entry_2.remove_out_connector(out_conn_name)
+                # The edge that leaves the second map entry was already deleted.
+                #  We will now delete the edges that brought the data.
+                for edge in list(state.in_edges_by_connector(map_entry_2, in_conn_name)):
+                    assert edge.src == inter_node
+                    state.remove_edge(edge)
                 map_entry_2.remove_in_connector(in_conn_name)
+                map_entry_2.remove_out_connector(out_conn_name)
 
             # TODO: Apply this modification to Memlets
             # for neighbor in state.all_edges(local_node):
