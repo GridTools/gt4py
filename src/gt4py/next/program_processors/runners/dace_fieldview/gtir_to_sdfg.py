@@ -276,11 +276,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     ) -> list[gtir_builtin_translators.TemporaryData]:
         # use specialized dataflow builder classes for each builtin function
         if cpm.is_call_to(node.fun, "as_fieldop"):
-            return gtir_builtin_translators.AsFieldOp()(
+            return gtir_builtin_translators.visit_AsFieldOp(
                 node, sdfg, head_state, self, reduce_identity
             )
         elif cpm.is_call_to(node.fun, "cond"):
-            return gtir_builtin_translators.Cond()(node, sdfg, head_state, self, reduce_identity)
+            return gtir_builtin_translators.visit_Cond(
+                node, sdfg, head_state, self, reduce_identity
+            )
         else:
             raise NotImplementedError(f"Unexpected 'FunCall' expression ({node}).")
 
@@ -299,7 +301,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         head_state: dace.SDFGState,
         reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
     ) -> list[gtir_builtin_translators.TemporaryData]:
-        return gtir_builtin_translators.SymbolRef()(node, sdfg, head_state, self, reduce_identity)
+        return gtir_builtin_translators.visit_SymbolRef(
+            node, sdfg, head_state, self, reduce_identity
+        )
 
     def visit_SymRef(
         self,
@@ -308,4 +312,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         head_state: dace.SDFGState,
         reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
     ) -> list[gtir_builtin_translators.TemporaryData]:
-        return gtir_builtin_translators.SymbolRef()(node, sdfg, head_state, self, reduce_identity)
+        return gtir_builtin_translators.visit_SymbolRef(
+            node, sdfg, head_state, self, reduce_identity
+        )
