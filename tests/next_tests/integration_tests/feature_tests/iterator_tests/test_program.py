@@ -39,7 +39,7 @@ def copy_program(inp, out, size):
     )
 
 
-@pytest.mark.requires_gtir_program
+@pytest.mark.starts_from_gtir_program
 def test_prog(program_processor):
     program_processor, validate = program_processor
 
