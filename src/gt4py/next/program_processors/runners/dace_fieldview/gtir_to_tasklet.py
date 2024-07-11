@@ -13,8 +13,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
+from __future__ import annotations
+
+import dataclasses
 import itertools
-from dataclasses import dataclass
 from typing import Optional, TypeAlias
 
 import dace
@@ -31,7 +33,7 @@ from gt4py.next.program_processors.runners.dace_fieldview import (
 from gt4py.next.type_system import type_specifications as ts
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class MemletExpr:
     """Scalar or array data access thorugh a memlet."""
 
@@ -39,7 +41,7 @@ class MemletExpr:
     subset: sbs.Indices | sbs.Range
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class SymbolExpr:
     """Any symbolic expression that is constant in the context of current SDFG."""
 
@@ -47,7 +49,7 @@ class SymbolExpr:
     dtype: dace.typeclass
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class ValueExpr:
     """Result of the computation implemented by a tasklet node."""
 
@@ -66,7 +68,7 @@ InputConnection: TypeAlias = tuple[
 IteratorIndexExpr: TypeAlias = MemletExpr | SymbolExpr | ValueExpr
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class IteratorExpr:
     """Iterator for field access to be consumed by `deref` or `shift` builtin functions."""
 
