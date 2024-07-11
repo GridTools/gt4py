@@ -19,22 +19,15 @@ import itertools
 from typing import Any, Optional, Sequence, Union
 
 import dace
-from dace import subsets
-from dace.sdfg import (
-    SDFG,
-    SDFGState,
-    data,
-    nodes,
-    properties,
-    transformation as dace_transformation,
-)
+from dace import data, properties, subsets, transformation
+from dace.sdfg import SDFG, SDFGState, nodes
 from dace.transformation import helpers
 
 from . import util
 
 
 @properties.make_properties
-class MapFusionHelper(dace_transformation.SingleStateTransformation):
+class MapFusionHelper(transformation.SingleStateTransformation):
     """
     Contains common part of the map fusion for parallel and serial map fusion.
 
@@ -471,6 +464,7 @@ class MapFusionHelper(dace_transformation.SingleStateTransformation):
                 #  output of the check function, from within the second map we remove
                 #  the intermediate, it has more the meaning of "do we need to
                 #  reconstruct it after the second map again?".
+                #  NOTE: The case "used in this state" is handled above!!
                 if self.is_interstate_transient(intermediate_node, sdfg):
                     shared_outputs.add(out_edge)
                 else:
