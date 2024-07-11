@@ -13,13 +13,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
+from __future__ import annotations
+
 import abc
-from typing import Any, Optional, Protocol, TypeAlias
+from typing import TYPE_CHECKING, Optional, Protocol, TypeAlias
 
 import dace
 import dace.subsets as sbs
 
-from gt4py.eve import concepts
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
@@ -31,24 +32,12 @@ from gt4py.next.program_processors.runners.dace_fieldview import (
 from gt4py.next.type_system import type_specifications as ts
 
 
+if TYPE_CHECKING:
+    from gt4py.next.program_processors.runners.dace_fieldview import gtir_to_sdfg
+
+
 IteratorIndexDType: TypeAlias = dace.int32  # type of iterator indexes
 TemporaryData: TypeAlias = tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]
-
-
-class SDFGBuilder(Protocol):
-    """Visitor interface available to GTIR-primitive translators."""
-
-    @abc.abstractmethod
-    def get_offset_provider(self) -> dict[str, gtx_common.Connectivity | gtx_common.Dimension]:
-        pass
-
-    @abc.abstractmethod
-    def get_symbol_types(self) -> dict[str, ts.FieldType | ts.ScalarType]:
-        pass
-
-    @abc.abstractmethod
-    def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
-        pass
 
 
 class PrimitiveTranslator(Protocol):
@@ -58,7 +47,7 @@ class PrimitiveTranslator(Protocol):
         node: gtir.Node,
         sdfg: dace.SDFG,
         state: dace.SDFGState,
-        sdfg_builder: SDFGBuilder,
+        sdfg_builder: gtir_to_sdfg.SDFGBuilder,
         reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
     ) -> list[TemporaryData]:
         """Creates the dataflow subgraph representing a GTIR primitive function.
@@ -92,7 +81,7 @@ class AsFieldOp(PrimitiveTranslator):
         args: list[gtir.Expr],
         sdfg: dace.SDFG,
         state: dace.SDFGState,
-        sdfg_builder: SDFGBuilder,
+        sdfg_builder: gtir_to_sdfg.SDFGBuilder,
         domain: list[
             tuple[gtx_common.Dimension, dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]
         ],
@@ -180,7 +169,7 @@ class AsFieldOp(PrimitiveTranslator):
         node: gtir.Node,
         sdfg: dace.SDFG,
         state: dace.SDFGState,
-        sdfg_builder: SDFGBuilder,
+        sdfg_builder: gtir_to_sdfg.SDFGBuilder,
         reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
     ) -> list[TemporaryData]:
         assert isinstance(node, gtir.FunCall)
@@ -277,7 +266,7 @@ class Cond(PrimitiveTranslator):
         node: gtir.Node,
         sdfg: dace.SDFG,
         state: dace.SDFGState,
-        sdfg_builder: SDFGBuilder,
+        sdfg_builder: gtir_to_sdfg.SDFGBuilder,
         reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
     ) -> list[TemporaryData]:
         assert isinstance(node, gtir.FunCall)
@@ -362,7 +351,7 @@ class SymbolRef(PrimitiveTranslator):
         node: gtir.Node,
         sdfg: dace.SDFG,
         state: dace.SDFGState,
-        sdfg_builder: SDFGBuilder,
+        sdfg_builder: gtir_to_sdfg.SDFGBuilder,
         reduce_identity: Optional[gtir_to_tasklet.SymbolExpr] = None,
     ) -> list[TemporaryData]:
         assert isinstance(node, (gtir.Literal, gtir.SymRef))

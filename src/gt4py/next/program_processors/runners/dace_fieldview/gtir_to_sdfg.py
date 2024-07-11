@@ -17,11 +17,15 @@ Class to lower GTIR to DaCe SDFG.
 Note: this module covers the fieldview flavour of GTIR.
 """
 
-from typing import Any, Optional, Sequence
+from __future__ import annotations
+
+import abc
+from typing import Any, Optional, Protocol, Sequence
 
 import dace
 
 from gt4py import eve
+from gt4py.eve import concepts
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
@@ -33,7 +37,23 @@ from gt4py.next.program_processors.runners.dace_fieldview import (
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
 
 
-class GTIRToSDFG(eve.NodeVisitor, gtir_builtin_translators.SDFGBuilder):
+class SDFGBuilder(Protocol):
+    """Visitor interface available to GTIR-primitive translators."""
+
+    @abc.abstractmethod
+    def get_offset_provider(self) -> dict[str, gtx_common.Connectivity | gtx_common.Dimension]:
+        pass
+
+    @abc.abstractmethod
+    def get_symbol_types(self) -> dict[str, ts.FieldType | ts.ScalarType]:
+        pass
+
+    @abc.abstractmethod
+    def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
+        pass
+
+
+class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     """Provides translation capability from a GTIR program to a DaCe SDFG.
 
     This class is responsible for translation of `ir.Program`, that is the top level representation
