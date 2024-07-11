@@ -194,12 +194,14 @@ class MapFusionHelper(transformation.SingleStateTransformation):
             old_conn = edge_to_move.dst_conn[3:]  # The connection name without prefix
             new_conn = to_node.next_connector(old_conn)
 
+            to_node.add_in_connector("IN_" + new_conn)
+            from_node.remove_in_connector("IN_" + old_conn)
             for e in list(state.in_edges_by_connector(from_node, "IN_" + old_conn)):
                 helpers.redirect_edge(state, e, new_dst=to_node, new_dst_conn="IN_" + new_conn)
+            from_node.remove_out_connector("OUT_" + old_conn)
+            to_node.add_out_connector("OUT_" + new_conn)
             for e in list(state.out_edges_by_connector(from_node, "OUT_" + old_conn)):
                 helpers.redirect_edge(state, e, new_src=to_node, new_src_conn="OUT_" + new_conn)
-            from_node.remove_in_connector("IN_" + old_conn)
-            from_node.remove_out_connector("OUT_" + old_conn)
 
         assert (
             state.in_degree(from_node) == 0
