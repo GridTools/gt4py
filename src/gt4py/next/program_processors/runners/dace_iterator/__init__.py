@@ -319,6 +319,11 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
 
     sdfg_closure_vars: dict[str, Any] = field(default_factory=dict)
 
+    # Defined as class variable, otherwise the same connectivity table -name & data descriptor- across multiple GT4Py Programs
+    # will be considered as a different table (with subsequent name mangling). Therefore, the memory address of the table's data descriptor needs to be the same.
+    # This affects the case where a DaCe.Program calls multiple GT4Py Programs (fused SDFG).
+    connectivity_tables_data_descriptors: dict[str, Any] = {}  # noqa: RUF008
+
     def __sdfg__(self, *args, **kwargs) -> dace.sdfg.sdfg.SDFG:
         params = {str(p.id): p.type for p in self.itir.params}
         fields = {str(p.id): p.type for p in self.itir.params if hasattr(p.type, "dims")}
@@ -335,8 +340,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             column_axis=kwargs.get("column_axis", None),
         )
 
-        sdfg.arg_names.extend(self.__sdfg_signature__()[0])
-        sdfg.arg_names.extend(list(self.__sdfg_closure__().keys()))
+        self.sdfg_closure_vars["sdfg.arrays"] = sdfg.arrays
 
         # TODO(kotsaloscv): Keep halo exchange related metadata here?
         # Could possibly be computed directly from the SDFG.
@@ -389,11 +393,39 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         return sdfg
 
     def __sdfg_closure__(self, reevaluate: Optional[dict[str, str]] = None) -> dict[str, Any]:
-        return {
-            connectivity_identifier(k): v.table
+        """
+        The connectivity tables are defined here symbolically (runtime args and not compile time).
+        They need to be defined in `__sdfg_closure__` due to the fact that they are not part of GT4Py Program's arguments.
+        Actually, they are already defined in the construction of the sdfg, but some symbols are missing because they are not part of GT4Py Program's arguments -parsing issue-.
+        Here, we define them symbolically (along with the correct dtypes), and let DaCe fill the missing symbols.
+        Keep in mind, that __sdfg_closure__ is called after __sdfg__.
+        """
+        symbols = {
+            f"__{connectivity_identifier(k)}_{sym}": dace.symbol(
+                f"__{connectivity_identifier(k)}_{sym}"
+            )
             for k, v in self.sdfg_closure_vars.get("offset_provider", {}).items()
+            for sym in ["size_0", "size_1", "stride_0", "stride_1"]
             if hasattr(v, "table")
+            and connectivity_identifier(k) in self.sdfg_closure_vars.get("sdfg.arrays", {})
         }
+
+        closure_dict = {}
+        for k, v in self.sdfg_closure_vars.get("offset_provider", {}).items():
+            conn_id = connectivity_identifier(k)
+            if hasattr(v, "table") and conn_id in self.sdfg_closure_vars.get("sdfg.arrays", {}):
+                if conn_id not in Program.connectivity_tables_data_descriptors:
+                    Program.connectivity_tables_data_descriptors[conn_id] = dace.data.Array(
+                        dtype=dace.int64 if v.table.dtype == np.int64 else dace.int32,
+                        shape=[symbols[f"__{conn_id}_size_0"], symbols[f"__{conn_id}_size_1"]],
+                        strides=[
+                            symbols[f"__{conn_id}_stride_0"],
+                            symbols[f"__{conn_id}_stride_1"],
+                        ],
+                    )
+                closure_dict[conn_id] = Program.connectivity_tables_data_descriptors[conn_id]
+
+        return closure_dict
 
     def __sdfg_signature__(self) -> tuple[Sequence[str], Sequence[str]]:
         args = []
