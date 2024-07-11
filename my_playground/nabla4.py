@@ -25,6 +25,8 @@ from gt4py.next.ffront.fbuiltins import Field
 from gt4py.next.program_processors.runners import dace_fieldview as dace_backend
 from gt4py.next.type_system import type_specifications as ts
 
+from gt4py.next.program_processors.runners.dace_fieldview import transformations as fw_trans
+
 from simple_icon_mesh import (
     IDim,  # Dimensions
     JDim,
@@ -469,11 +471,23 @@ def verify_nabla4(
 
     SYMBS = make_syms(**call_args)
 
-    sdfg(**call_args, **SYMBS)
-    ref = nabla4_np(**call_args, **offset_provider)
+    org_sdfg = copy.deepcopy(sdfg)
 
-    assert np.allclose(ref, nab4)
-    print(f"Version({version}): Succeeded")
+    for i in range(2):
+        sdfg = copy.deepcopy(org_sdfg)
+        if i != 0:
+            fw_trans.gt_auto_optimize(sdfg)
+
+        sdfg.view()
+
+        sdfg(**call_args, **SYMBS)
+        ref = nabla4_np(**call_args, **offset_provider)
+        assert np.allclose(ref, nab4)
+        nab4[:] = 0
+        if i == 0:
+            print(f"Version({version} | unoptimized): Succeeded")
+        else:
+            print(f"Version({version} | optimized): Succeeded")
 
 
 if "__main__" == __name__:
