@@ -16,7 +16,7 @@ from typing import Any, Mapping, Optional
 
 import dace
 
-from gt4py.next.common import Connectivity, Dimension
+from gt4py.next.common import Connectivity, Dimension, DimensionKind
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.program_processors.runners.dace_fieldview import gtir_to_tasklet
