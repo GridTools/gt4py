@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 """
-Class to lower GTIR to DaCe SDFG.
+Contains visitors to lower GTIR to DaCe SDFG.
 
 Note: this module covers the fieldview flavour of GTIR.
 """

@@ -11,6 +11,11 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+"""
+Contains definitions of the workflow steps for GTIR programs with dace as backend for optimization and code generation.
+
+Note: this module covers the fieldview flavour of GTIR.
+"""
 
 from __future__ import annotations
 
