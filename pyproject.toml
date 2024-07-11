@@ -237,6 +237,7 @@ markers = [
   'requires_atlas: tests that require `atlas4py` bindings package',
   'requires_dace: tests that require `dace` package',
   'requires_gpu: tests that require a NVidia GPU (`cupy` and `cudatoolkit` are required)',
+  'starts_from_gtir_program: tests that require backend to start lowering from GTIR program',
   'uses_applied_shifts: tests that require backend support for applied-shifts',
   'uses_constant_fields: tests that require backend support for constant fields',
   'uses_dynamic_offsets: tests that require backend support for dynamic offsets',
