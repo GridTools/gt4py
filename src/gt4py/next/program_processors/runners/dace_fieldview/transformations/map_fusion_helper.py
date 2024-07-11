@@ -208,8 +208,8 @@ class MapFusionHelper(transformation.SingleStateTransformation):
             state.out_degree(from_node) == 0
         ), f"After moving source node '{from_node}' still has an output degree of {state.out_degree(from_node)}"
 
+    @staticmethod
     def map_parameter_compatible(
-        self,
         map_1: nodes.Map,
         map_2: nodes.Map,
         state: Union[SDFGState, SDFG],

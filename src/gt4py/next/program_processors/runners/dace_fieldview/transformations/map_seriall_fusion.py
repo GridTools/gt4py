@@ -130,8 +130,9 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
         assert isinstance(self.map_exit1, nodes.MapExit)
         assert isinstance(self.map_entry2, nodes.MapEntry)
 
-        # From here on forward we can no longer use `self.map_*`!!
-        #  For some reason they are not stable and change.
+        # NOTE: `self.map_*` actually stores the ID of the node.
+        #  once we start adding and removing nodes it seems that their ID changes.
+        #  Thus we have to save them here.
         map_exit_1: nodes.MapExit = self.map_exit1
         map_entry_2: nodes.MapEntry = self.map_entry2
         map_exit_2: nodes.MapExit = graph.exit_node(self.map_entry2)
@@ -193,8 +194,8 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
         # Now turn the second output node into the output node of the first Map.
         map_exit_2.map = map_entry_1.map
 
+    @staticmethod
     def handle_intermediate_set(
-        self,
         intermediate_outputs: set[dace_graph.MultiConnectorEdge[dace.Memlet]],
         state: SDFGState,
         sdfg: SDFG,
@@ -272,7 +273,7 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
             #  It will only have the shape `new_inter_shape` which is basically its
             #  output within one Map iteration.
             #  NOTE: The insertion process might generate a new name.
-            new_inter_name: str = f"__s{self.state_id}_n{state.node_id(out_edge.src)}{out_edge.src_conn}_n{state.node_id(out_edge.dst)}{out_edge.dst_conn}"
+            new_inter_name: str = f"__s{sdfg.node_id(state)}_n{state.node_id(out_edge.src)}{out_edge.src_conn}_n{state.node_id(out_edge.dst)}{out_edge.dst_conn}"
 
             # Now generate the intermediate data container.
             if len(new_inter_shape) == 0:
