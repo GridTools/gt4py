@@ -433,3 +433,34 @@ def cartesian_domain(ranges: Dict[Union[common.Dimension, str], Tuple[Any, Any]]
             for d, r in ranges.items()
         ]
     )
+
+
+# TODO: merge with cartesian_domain using GridType
+def unstructured_domain(ranges: Dict[Union[common.Dimension, str], Tuple[Any, Any]]) -> itir.FunCall:
+    """
+    >>> str(
+    ...     cartesian_domain(
+    ...         {
+    ...             common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (0, 10),
+    ...             common.Dimension(value="JDim", kind=common.DimensionKind.HORIZONTAL): (0, 20),
+    ...         }
+    ...     )
+    ... )
+    'c⟨ IDimₕ: [0, 10), JDimₕ: [0, 20) ⟩'
+    >>> str(cartesian_domain({"IDim": (0, 10), "JDim": (0, 20)}))
+    'c⟨ IDimₕ: [0, 10), JDimₕ: [0, 20) ⟩'
+
+    """
+
+    return call("unstructured_domain")(
+        *[
+            call("named_range")(
+                itir.AxisLiteral(value=d.value, kind=d.kind)
+                if isinstance(d, common.Dimension)
+                else itir.AxisLiteral(value=d),
+                r[0],
+                r[1],
+            )
+            for d, r in ranges.items()
+        ]
+    )

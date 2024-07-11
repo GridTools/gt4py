@@ -14,10 +14,12 @@
 import dataclasses
 
 from gt4py.eve.extended_typing import Dict, Tuple, Union
+from gt4py.next import common
 from gt4py.next.common import Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.iterator.transforms.global_tmps import SymbolicDomain, SymbolicRange, domain_union
+from gt4py.next.iterator.transforms.global_tmps import SymbolicDomain, SymbolicRange, domain_union, \
+    _max_domain_sizes_by_location_type
 from gt4py.next.iterator.transforms.trace_shifts import TraceShifts
 
 
@@ -57,11 +59,39 @@ class InferDomain:
         new_ranges = {dim: symbolic_domain.ranges[dim] for dim in dims}
         if shift:
             off, val = shift
-            current_dim = offset_provider[off.value]
-            new_ranges[current_dim] = SymbolicRange.translate(
-                symbolic_domain.ranges[current_dim], val.value
-            )
-        return SymbolicDomain("cartesian_domain", new_ranges)
+            nbt_provider = offset_provider[off.value]
+            if isinstance(nbt_provider, common.Dimension):
+                current_dim = nbt_provider
+                # cartesian offset
+                new_ranges[current_dim] = SymbolicRange.translate(
+                    symbolic_domain.ranges[current_dim], val.value
+                )
+            elif isinstance(nbt_provider, common.Connectivity):
+                # unstructured shift
+                # TODO: move to initialization
+                horizontal_sizes = _max_domain_sizes_by_location_type(offset_provider)
+
+                nbt_provider = offset_provider[off.value]
+                old_dim = nbt_provider.origin_axis
+                new_dim = nbt_provider.neighbor_axis
+
+                assert new_dim not in new_ranges or old_dim == new_dim
+
+                # TODO(tehrengruber): symbolic sizes for ICON?
+                new_range = SymbolicRange(
+                    im.literal("0", itir.INTEGER_INDEX_BUILTIN),
+                    im.literal(
+                        str(horizontal_sizes[new_dim.value]), itir.INTEGER_INDEX_BUILTIN
+                    ),
+                )
+                new_ranges = dict(
+                    (dim, range_) if dim != old_dim else (new_dim, new_range)
+                    for dim, range_ in new_ranges.items()
+                )
+            else:
+                raise AssertionError()
+
+        return SymbolicDomain(symbolic_domain.grid_type, new_ranges)
 
     @classmethod
     def infer_as_fieldop(

@@ -12,13 +12,14 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import numpy as np
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms.infer_domain import InferDomain
 from gt4py.next.iterator.transforms.global_tmps import SymbolicDomain, AUTO_DOMAIN
 import pytest
 from gt4py.next.common import Dimension, DimensionKind
-from gt4py.next import common
+from gt4py.next import common, NeighborTableOffsetProvider
 from gt4py.next.type_system import type_specifications as ts
 
 float_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
@@ -30,6 +31,20 @@ def offset_provider():
         "Ioff": Dimension("IDim", DimensionKind.HORIZONTAL),
         "Joff": Dimension("JDim", DimensionKind.HORIZONTAL),
         "Koff": Dimension("KDim", DimensionKind.VERTICAL),
+    }
+
+    return offset_provider
+
+
+@pytest.fixture
+def unstructured_offset_provider():
+    offset_provider = {
+        "E2V": NeighborTableOffsetProvider(
+            np.array([[0, 1]], dtype=np.int32),
+            Dimension("Edge", DimensionKind.HORIZONTAL),
+            Dimension("Vertex", DimensionKind.HORIZONTAL),
+            2
+        )
     }
 
     return offset_provider
@@ -56,6 +71,33 @@ def test_forward_difference_x(offset_provider):
 
     actual_call, actual_domains = InferDomain.infer_as_fieldop(
         testee, SymbolicDomain.from_expr(domain), offset_provider
+    )
+
+    assert actual_call == expected
+    assert actual_domains == expected_domains
+
+
+def test_unstructured_shift(unstructured_offset_provider):
+    stencil = im.lambda_("arg0")(
+        im.deref(im.shift(itir.SymbolRef("E2V"), 1)("arg0"))
+    )
+    testee = im.call(im.call("as_fieldop")(stencil))(im.ref("in_field"))
+
+    domain = im.unstructured_domain(
+        {common.Dimension(value="Edge", kind=common.DimensionKind.HORIZONTAL): (0, 1)}
+    )
+
+    expected = im.call(im.call("as_fieldop")(stencil, domain))(im.ref("in_field"))
+    expected_domains = {
+        "in_field": SymbolicDomain.from_expr(
+            im.unstructured_domain(
+                {common.Dimension(value="Vertex", kind=common.DimensionKind.HORIZONTAL): (0, 2)}
+            )
+        )
+    }
+
+    actual_call, actual_domains = InferDomain.infer_as_fieldop(
+        testee, SymbolicDomain.from_expr(domain), unstructured_offset_provider
     )
 
     assert actual_call == expected
