@@ -91,6 +91,9 @@ def get_domain(
     Specialized visit method for domain expressions.
 
     Returns for each domain dimension the corresponding range.
+
+    TODO: Domain expressions will be recurrent in the GTIR program. An interesting idea
+          would be to cache the results of lowering here (e.g. using `functools.lru_cache`)
     """
     assert cpm.is_call_to(node, ("cartesian_domain", "unstructured_domain"))
 
@@ -100,11 +103,10 @@ def get_domain(
         assert len(named_range.args) == 3
         axis = named_range.args[0]
         assert isinstance(axis, gtir.AxisLiteral)
-        bounds = []
-        for arg in named_range.args[1:3]:
-            sym_str = gtir_python_codegen.get_source(arg)
-            sym_val = dace.symbolic.SymExpr(sym_str)
-            bounds.append(sym_val)
+        bounds = [
+            dace.symbolic.SymExpr(gtir_python_codegen.get_source(arg))
+            for arg in named_range.args[1:3]
+        ]
         dim = gtx_common.Dimension(axis.value, axis.kind)
         domain.append((dim, bounds[0], bounds[1]))
 
