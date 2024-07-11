@@ -72,8 +72,8 @@ class PrimitiveTranslator(Protocol):
         """
 
 
-def _parse_node_args(
-    args: list[gtir.Expr],
+def _parse_arg_expr(
+    node: gtir.Expr,
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
@@ -81,38 +81,32 @@ def _parse_node_args(
         tuple[gtx_common.Dimension, dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]
     ],
     reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
-) -> list[gtir_to_tasklet.IteratorExpr | gtir_to_tasklet.MemletExpr]:
-    stencil_args: list[gtir_to_tasklet.IteratorExpr | gtir_to_tasklet.MemletExpr] = []
-    for arg in args:
-        fields: list[TemporaryData] = sdfg_builder.visit(
-            arg, sdfg=sdfg, head_state=state, reduce_identity=reduce_identity
-        )
+) -> gtir_to_tasklet.IteratorExpr | gtir_to_tasklet.MemletExpr:
+    fields: list[TemporaryData] = sdfg_builder.visit(
+        node, sdfg=sdfg, head_state=state, reduce_identity=reduce_identity
+    )
 
-        assert len(fields) == 1
-        data_node, arg_type = fields[0]
-        # require all argument nodes to be data access nodes (no symbols)
-        assert isinstance(data_node, dace.nodes.AccessNode)
+    assert len(fields) == 1
+    data_node, arg_type = fields[0]
+    # require all argument nodes to be data access nodes (no symbols)
+    assert isinstance(data_node, dace.nodes.AccessNode)
 
-        arg_definition: gtir_to_tasklet.IteratorExpr | gtir_to_tasklet.MemletExpr
-        if isinstance(arg_type, ts.ScalarType):
-            arg_definition = gtir_to_tasklet.MemletExpr(data_node, sbs.Indices([0]))
-        else:
-            assert isinstance(arg_type, ts.FieldType)
-            indices: dict[gtx_common.Dimension, gtir_to_tasklet.IteratorIndexExpr] = {
-                dim: gtir_to_tasklet.SymbolExpr(
-                    dace_fieldview_util.get_map_variable(dim),
-                    IteratorIndexDType,
-                )
-                for dim, _, _ in domain
-            }
-            arg_definition = gtir_to_tasklet.IteratorExpr(
-                data_node,
-                arg_type.dims,
-                indices,
+    if isinstance(arg_type, ts.ScalarType):
+        return gtir_to_tasklet.MemletExpr(data_node, sbs.Indices([0]))
+    else:
+        assert isinstance(arg_type, ts.FieldType)
+        indices: dict[gtx_common.Dimension, gtir_to_tasklet.IteratorIndexExpr] = {
+            dim: gtir_to_tasklet.SymbolExpr(
+                dace_fieldview_util.get_map_variable(dim),
+                IteratorIndexDType,
             )
-        stencil_args.append(arg_definition)
-
-    return stencil_args
+            for dim, _, _ in domain
+        }
+        return gtir_to_tasklet.IteratorExpr(
+            data_node,
+            arg_type.dims,
+            indices,
+        )
 
 
 def _create_temporary_field(
@@ -189,7 +183,10 @@ def visit_AsFieldOp(
         _, _, reduce_identity = gtir_to_tasklet.get_reduce_params(stencil_expr.expr)
 
     # first visit the list of arguments and build a symbol map
-    stencil_args = _parse_node_args(node.args, sdfg, state, sdfg_builder, domain, reduce_identity)
+    stencil_args = [
+        _parse_arg_expr(arg, sdfg, state, sdfg_builder, domain, reduce_identity)
+        for arg in node.args
+    ]
 
     # represent the field operator as a mapped tasklet graph, which will range over the field domain
     taskgen = gtir_to_tasklet.LambdaToTasklet(
