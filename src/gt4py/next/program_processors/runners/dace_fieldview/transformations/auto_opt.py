@@ -20,6 +20,7 @@ import dace
 from dace.transformation import dataflow as dace_dataflow
 from dace.transformation.auto import auto_optimize as dace_aoptimize
 
+from .map_promoter import SerialMapPromoter
 from .map_seriall_fusion import SerialMapFusion
 
 
@@ -101,21 +102,45 @@ def gt_auto_optimize(
         dace.Config.set("optimizer", "match_exception", value=True)
 
         # Initial cleaning
-        sdfg.simplify()
+        gt_simplify(sdfg)
 
-        # Due to the structure of the generated SDFG getting rid of Maps,
-        #  i.e. fusing them, is the best we can currently do.
-        if kwargs.get("use_dace_fusion", False):
-            sdfg.apply_transformations_repeated([dace_dataflow.MapFusion])
+        # Compute the SDFG to see if something has changed.
+        sdfg_hash = sdfg.hash_sdfg()
+
+        for _ in range(100):
+            # Due to the structure of the generated SDFG getting rid of Maps,
+            #  i.e. fusing them, is the best we can currently do.
+            if kwargs.get("use_dace_fusion", False):
+                sdfg.apply_transformations_repeated([dace_dataflow.MapFusion])
+            else:
+                xform = SerialMapFusion()
+                sdfg.apply_transformations_repeated([xform], validate=True, validate_all=True)
+
+            sdfg.apply_transformations_repeated(
+                [SerialMapPromoter(promote_horizontal=False)],
+                validate=True,
+                validate_all=True,
+            )
+
+            # Maybe running the fusion has opened more opportunities.
+            gt_simplify(sdfg)
+
+            # check if something has changed and if so end it here.
+            old_sdfg_hash = sdfg_hash
+            sdfg_hash = sdfg.hash_sdfg()
+
+            if old_sdfg_hash == sdfg_hash:
+                break
+
         else:
-            xform = SerialMapFusion()
-            sdfg.apply_transformations_repeated([xform], validate=True, validate_all=True)
+            raise RuntimeWarning("Optimization of the SDFG did not converged.")
 
         # These are the part that we copy from DaCe built in auto optimization.
         dace_aoptimize.set_fast_implementations(sdfg, device)
         dace_aoptimize.make_transients_persistent(sdfg, device)
         dace_aoptimize.move_small_arrays_to_stack(sdfg)
 
-        sdfg.simplify()
+        # Final simplify
+        gt_simplify(sdfg)
 
         return sdfg
