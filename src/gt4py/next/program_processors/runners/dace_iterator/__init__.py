@@ -349,7 +349,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             str(inpt.id)
             for closure in self.itir.closures
             for inpt in closure.inputs
-            if str(inpt.id) in sdfg.arrays
+            if str(inpt.id) in fields
         ]
         sdfg.gt4py_program_input_fields = {
             inpt: dim
@@ -362,11 +362,11 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         for closure in self.itir.closures:
             output = closure.output
             if isinstance(output, itir.SymRef):
-                if str(output.id) in sdfg.arrays:
+                if str(output.id) in fields:
                     output_fields.append(str(output.id))
             else:
                 for arg in output.args:
-                    if str(arg.id) in sdfg.arrays:  # type: ignore[attr-defined]
+                    if str(arg.id) in fields:  # type: ignore[attr-defined]
                         output_fields.append(str(arg.id))  # type: ignore[attr-defined]
         sdfg.gt4py_program_output_fields = {
             output: dim
