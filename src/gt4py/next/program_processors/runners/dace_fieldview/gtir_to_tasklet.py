@@ -338,9 +338,15 @@ class LambdaToTasklet(eve.NodeVisitor):
         )
         neighbors_node = self.state.add_access(neighbors_temp)
 
+        neighbors_field_type = dace_fieldview_util.get_neighbors_field_type(
+            offset, field_desc.dtype
+        )
+        neighbor_idx = dace_fieldview_util.get_map_variable(neighbors_field_type.dims[0])
         me, mx = self._add_map(
-            "neighbors",
-            dict(__neighbor_idx=f"0:{offset_provider.max_neighbors}"),
+            f"{offset}_neighbors",
+            {
+                neighbor_idx: f"0:{offset_provider.max_neighbors}",
+            },
         )
         index_connector = "__index"
         if offset_provider.has_skip_values:
@@ -367,17 +373,14 @@ class LambdaToTasklet(eve.NodeVisitor):
             me,
             tasklet_node,
             dst_conn=index_connector,
-            memlet=dace.Memlet(data=connectivity_slice_view, subset="__neighbor_idx"),
+            memlet=dace.Memlet(data=connectivity_slice_view, subset=neighbor_idx),
         )
         self.state.add_memlet_path(
             tasklet_node,
             mx,
             neighbors_node,
             src_conn="__val",
-            memlet=dace.Memlet(data=neighbors_temp, subset="__neighbor_idx"),
-        )
-        neighbors_field_type = dace_fieldview_util.get_neighbors_field_type(
-            offset, field_desc.dtype
+            memlet=dace.Memlet(data=neighbors_temp, subset=neighbor_idx),
         )
         return ValueExpr(neighbors_node, neighbors_field_type)
 
