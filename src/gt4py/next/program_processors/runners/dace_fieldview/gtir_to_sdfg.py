@@ -20,12 +20,14 @@ Note: this module covers the fieldview flavour of GTIR.
 from __future__ import annotations
 
 import abc
-from typing import Any, Protocol, Sequence
+import dataclasses
+from typing import Any, Dict, List, Protocol, Sequence, Set, Tuple, Union
 
 import dace
 
 from gt4py import eve
 from gt4py.eve import concepts
+from gt4py.eve.utils import UIDGenerator
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
@@ -36,15 +38,54 @@ from gt4py.next.program_processors.runners.dace_fieldview import (
 from gt4py.next.type_system import type_specifications as ts
 
 
-class SDFGBuilder(Protocol):
-    """Visitor interface available to GTIR-primitive translators."""
+class DataflowBuilder(Protocol):
+    """Visitor interface to build a dataflow subgraph."""
 
     @abc.abstractmethod
-    def get_offset_provider(self) -> dict[str, gtx_common.Connectivity | gtx_common.Dimension]:
+    def get_offset_provider(self, offset: str) -> gtx_common.Connectivity | gtx_common.Dimension:
         pass
 
     @abc.abstractmethod
-    def get_symbol_types(self) -> dict[str, ts.FieldType | ts.ScalarType]:
+    def unique_map_name(self, name: str) -> str:
+        pass
+
+    @abc.abstractmethod
+    def unique_tasklet_name(self, name: str) -> str:
+        pass
+
+    def add_map(
+        self,
+        name: str,
+        state: dace.SDFGState,
+        ndrange: Union[
+            Dict[str, Union[str, dace.subsets.Subset]],
+            List[Tuple[str, Union[str, dace.subsets.Subset]]],
+        ],
+        **kwargs: Any,
+    ) -> Tuple[dace.nodes.MapEntry, dace.nodes.MapExit]:
+        """Wrapper of `dace.SDFGState.add_map` that assigns unique name."""
+        unique_name = self.unique_map_name(name)
+        return state.add_map(unique_name, ndrange, **kwargs)
+
+    def add_tasklet(
+        self,
+        name: str,
+        state: dace.SDFGState,
+        inputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
+        outputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
+        code: str,
+        **kwargs: Any,
+    ) -> dace.nodes.Tasklet:
+        """Wrapper of `dace.SDFGState.add_tasklet` that assigns unique name."""
+        unique_name = self.unique_tasklet_name(name)
+        return state.add_tasklet(unique_name, inputs, outputs, code, **kwargs)
+
+
+class SDFGBuilder(DataflowBuilder, Protocol):
+    """Visitor interface available to GTIR-primitive translators."""
+
+    @abc.abstractmethod
+    def get_symbol_type(self, symbol_name: str) -> ts.FieldType | ts.ScalarType:
         pass
 
     @abc.abstractmethod
@@ -52,6 +93,7 @@ class SDFGBuilder(Protocol):
         pass
 
 
+@dataclasses.dataclass(frozen=True)
 class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     """Provides translation capability from a GTIR program to a DaCe SDFG.
 
@@ -66,20 +108,29 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     """
 
     offset_provider: dict[str, gtx_common.Connectivity | gtx_common.Dimension]
-    symbol_types: dict[str, ts.FieldType | ts.ScalarType]
+    symbol_types: dict[str, ts.FieldType | ts.ScalarType] = dataclasses.field(
+        default_factory=lambda: {}
+    )
+    map_uids: UIDGenerator = dataclasses.field(
+        init=False, repr=False, default_factory=lambda: UIDGenerator(prefix="map")
+    )
+    tesklet_uids: UIDGenerator = dataclasses.field(
+        init=False, repr=False, default_factory=lambda: UIDGenerator(prefix="tlet")
+    )
 
-    def __init__(
-        self,
-        offset_provider: dict[str, gtx_common.Connectivity | gtx_common.Dimension],
-    ):
-        self.offset_provider = offset_provider
-        self.symbol_types = {}
+    def get_offset_provider(self, offset: str) -> gtx_common.Connectivity | gtx_common.Dimension:
+        assert offset in self.offset_provider
+        return self.offset_provider[offset]
 
-    def get_offset_provider(self) -> dict[str, gtx_common.Connectivity | gtx_common.Dimension]:
-        return self.offset_provider
+    def get_symbol_type(self, symbol_name: str) -> ts.FieldType | ts.ScalarType:
+        assert symbol_name in self.symbol_types
+        return self.symbol_types[symbol_name]
 
-    def get_symbol_types(self) -> dict[str, ts.FieldType | ts.ScalarType]:
-        return self.symbol_types
+    def unique_map_name(self, name: str) -> str:
+        return f"{self.map_uids.sequential_id()}_{name}"
+
+    def unique_tasklet_name(self, name: str) -> str:
+        return f"{self.tesklet_uids.sequential_id()}_{name}"
 
     def _make_array_shape_and_strides(
         self, name: str, dims: Sequence[gtx_common.Dimension]
