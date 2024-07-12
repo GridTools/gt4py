@@ -20,7 +20,8 @@ Note: this module covers the fieldview flavour of GTIR.
 from __future__ import annotations
 
 import abc
-from typing import Any, Protocol, Sequence
+import dataclasses
+from typing import Any, Dict, List, Protocol, Sequence, Set, Tuple, Union
 
 import dace
 
@@ -36,15 +37,54 @@ from gt4py.next.program_processors.runners.dace_fieldview import (
 from gt4py.next.type_system import type_specifications as ts
 
 
-class SDFGBuilder(Protocol):
-    """Visitor interface available to GTIR-primitive translators."""
+class DataflowBuilder(Protocol):
+    """Visitor interface to build a dataflow subgraph."""
 
     @abc.abstractmethod
-    def get_offset_provider(self) -> dict[str, gtx_common.Connectivity | gtx_common.Dimension]:
+    def get_offset_provider(self, offset: str) -> gtx_common.Connectivity | gtx_common.Dimension:
         pass
 
     @abc.abstractmethod
-    def get_symbol_types(self) -> dict[str, ts.FieldType | ts.ScalarType]:
+    def unique_map_name(self, name: str) -> str:
+        pass
+
+    @abc.abstractmethod
+    def unique_tasklet_name(self, name: str) -> str:
+        pass
+
+    def add_map(
+        self,
+        name: str,
+        state: dace.SDFGState,
+        ndrange: Union[
+            Dict[str, Union[str, dace.subsets.Subset]],
+            List[Tuple[str, Union[str, dace.subsets.Subset]]],
+        ],
+        **kwargs: Any,
+    ) -> Tuple[dace.nodes.MapEntry, dace.nodes.MapExit]:
+        """Wrapper of `dace.SDFGState.add_map` that assigns unique name."""
+        unique_name = self.unique_map_name(name)
+        return state.add_map(unique_name, ndrange, **kwargs)
+
+    def add_tasklet(
+        self,
+        name: str,
+        state: dace.SDFGState,
+        inputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
+        outputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
+        code: str,
+        **kwargs: Any,
+    ) -> dace.nodes.Tasklet:
+        """Wrapper of `dace.SDFGState.add_tasklet` that assigns unique name."""
+        unique_name = self.unique_tasklet_name(name)
+        return state.add_tasklet(unique_name, inputs, outputs, code, **kwargs)
+
+
+class SDFGBuilder(DataflowBuilder, Protocol):
+    """Visitor interface available to GTIR-primitive translators."""
+
+    @abc.abstractmethod
+    def get_symbol_type(self, symbol_name: str) -> ts.FieldType | ts.ScalarType:
         pass
 
     @abc.abstractmethod
@@ -52,6 +92,7 @@ class SDFGBuilder(Protocol):
         pass
 
 
+@dataclasses.dataclass(frozen=True)
 class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     """Provides translation capability from a GTIR program to a DaCe SDFG.
 
@@ -66,20 +107,29 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     """
 
     offset_provider: dict[str, gtx_common.Connectivity | gtx_common.Dimension]
-    symbol_types: dict[str, ts.FieldType | ts.ScalarType]
+    symbol_types: dict[str, ts.FieldType | ts.ScalarType] = dataclasses.field(
+        default_factory=lambda: {}
+    )
+    map_uids: eve.utils.UIDGenerator = dataclasses.field(
+        init=False, repr=False, default_factory=lambda: eve.utils.UIDGenerator(prefix="map")
+    )
+    tesklet_uids: eve.utils.UIDGenerator = dataclasses.field(
+        init=False, repr=False, default_factory=lambda: eve.utils.UIDGenerator(prefix="tlet")
+    )
 
-    def __init__(
-        self,
-        offset_provider: dict[str, gtx_common.Connectivity | gtx_common.Dimension],
-    ):
-        self.offset_provider = offset_provider
-        self.symbol_types = {}
+    def get_offset_provider(self, offset: str) -> gtx_common.Connectivity | gtx_common.Dimension:
+        assert offset in self.offset_provider
+        return self.offset_provider[offset]
 
-    def get_offset_provider(self) -> dict[str, gtx_common.Connectivity | gtx_common.Dimension]:
-        return self.offset_provider
+    def get_symbol_type(self, symbol_name: str) -> ts.FieldType | ts.ScalarType:
+        assert symbol_name in self.symbol_types
+        return self.symbol_types[symbol_name]
 
-    def get_symbol_types(self) -> dict[str, ts.FieldType | ts.ScalarType]:
-        return self.symbol_types
+    def unique_map_name(self, name: str) -> str:
+        return f"{self.map_uids.sequential_id()}_{name}"
+
+    def unique_tasklet_name(self, name: str) -> str:
+        return f"{self.tesklet_uids.sequential_id()}_{name}"
 
     def _make_array_shape_and_strides(
         self, name: str, dims: Sequence[gtx_common.Dimension]
@@ -255,9 +305,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     ) -> list[gtir_builtin_translators.TemporaryData]:
         # use specialized dataflow builder classes for each builtin function
         if cpm.is_call_to(node.fun, "as_fieldop"):
-            return gtir_builtin_translators.visit_AsFieldOp(node, sdfg, head_state, self)
+            return gtir_builtin_translators.translate_as_field_op(node, sdfg, head_state, self)
         elif cpm.is_call_to(node.fun, "cond"):
-            return gtir_builtin_translators.visit_Cond(node, sdfg, head_state, self)
+            return gtir_builtin_translators.translate_cond(node, sdfg, head_state, self)
         else:
             raise NotImplementedError(f"Unexpected 'FunCall' expression ({node}).")
 
@@ -275,7 +325,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
     ) -> list[gtir_builtin_translators.TemporaryData]:
-        return gtir_builtin_translators.visit_SymbolRef(node, sdfg, head_state, self)
+        return gtir_builtin_translators.translate_symbol_ref(node, sdfg, head_state, self)
 
     def visit_SymRef(
         self,
@@ -283,4 +333,31 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
     ) -> list[gtir_builtin_translators.TemporaryData]:
-        return gtir_builtin_translators.visit_SymbolRef(node, sdfg, head_state, self)
+        return gtir_builtin_translators.translate_symbol_ref(node, sdfg, head_state, self)
+
+
+def build_sdfg_from_gtir(
+    program: gtir.Program,
+    offset_provider: dict[str, gtx_common.Connectivity | gtx_common.Dimension],
+) -> dace.SDFG:
+    """
+    Receives a GTIR program and lowers it to a DaCe SDFG.
+
+    The lowering to SDFG requires that the program node is type-annotated, therefore this function
+    runs type ineference as first step.
+    As a final step, it runs the `simplify` pass to ensure that the SDFG is in the DaCe canonical form.
+
+    Arguments:
+        program: The GTIR program node to be lowered to SDFG
+        offset_provider: The definitions of offset providers used by the program node
+
+    Returns:
+        An SDFG in the DaCe canonical form (simplified)
+    """
+    sdfg_genenerator = GTIRToSDFG(offset_provider)
+    # TODO: run type inference on the `program` node before passing it to `GTIRToSDFG`
+    sdfg = sdfg_genenerator.visit(program)
+    assert isinstance(sdfg, dace.SDFG)
+
+    sdfg.simplify()
+    return sdfg

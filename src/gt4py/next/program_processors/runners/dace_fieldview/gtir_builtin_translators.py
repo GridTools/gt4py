@@ -146,7 +146,7 @@ def _create_temporary_field(
     return field_node, field_type
 
 
-def visit_AsFieldOp(
+def translate_as_field_op(
     node: gtir.Node,
     sdfg: dace.SDFG,
     state: dace.SDFGState,
@@ -173,7 +173,7 @@ def visit_AsFieldOp(
     stencil_args = [_parse_arg_expr(arg, sdfg, state, sdfg_builder, domain) for arg in node.args]
 
     # represent the field operator as a mapped tasklet graph, which will range over the field domain
-    taskgen = gtir_to_tasklet.LambdaToTasklet(sdfg, state, sdfg_builder.get_offset_provider())
+    taskgen = gtir_to_tasklet.LambdaToTasklet(sdfg, state, sdfg_builder)
     input_connections, output_expr = taskgen.visit(stencil_expr, args=stencil_args)
     assert isinstance(output_expr, gtir_to_tasklet.ValueExpr)
     output_desc = output_expr.node.desc(sdfg)
@@ -202,7 +202,7 @@ def visit_AsFieldOp(
 
     # create map range corresponding to the field operator domain
     map_ranges = {dace_fieldview_util.get_map_variable(dim): f"{lb}:{ub}" for dim, lb, ub in domain}
-    me, mx = state.add_map("field_op", map_ranges)
+    me, mx = sdfg_builder.add_map("field_op", state, map_ranges)
 
     if len(input_connections) == 0:
         # dace requires an empty edge from map entry node to tasklet node, in case there no input memlets
@@ -228,7 +228,7 @@ def visit_AsFieldOp(
     return [(field_node, field_type)]
 
 
-def visit_Cond(
+def translate_cond(
     node: gtir.Node,
     sdfg: dace.SDFG,
     state: dace.SDFGState,
@@ -305,7 +305,7 @@ def visit_Cond(
     return output_nodes
 
 
-def visit_SymbolRef(
+def translate_symbol_ref(
     node: gtir.Node,
     sdfg: dace.SDFG,
     state: dace.SDFGState,
@@ -321,8 +321,7 @@ def visit_SymbolRef(
         tasklet_name = "get_literal"
     else:
         sym_value = str(node.id)
-        assert sym_value in sdfg_builder.get_symbol_types()
-        data_type = sdfg_builder.get_symbol_types()[sym_value]
+        data_type = sdfg_builder.get_symbol_type(sym_value)
         tasklet_name = f"get_{sym_value}"
 
     if isinstance(data_type, ts.FieldType):
@@ -332,8 +331,9 @@ def visit_SymbolRef(
     else:
         # scalar symbols are passed to the SDFG as symbols: build tasklet node
         # to write the symbol to a scalar access node
-        tasklet_node = state.add_tasklet(
+        tasklet_node = sdfg_builder.add_tasklet(
             tasklet_name,
+            state,
             {},
             {"__out"},
             f"__out = {sym_value}",
@@ -352,9 +352,9 @@ def visit_SymbolRef(
 
 
 if TYPE_CHECKING:
-    # Use type-checking to assert that all visitor functions implement the `PrimitiveTranslator` protocol
+    # Use type-checking to assert that all translator functions implement the `PrimitiveTranslator` protocol
     __primitive_translators: list[PrimitiveTranslator] = [
-        visit_AsFieldOp,
-        visit_Cond,
-        visit_SymbolRef,
+        translate_as_field_op,
+        translate_cond,
+        translate_symbol_ref,
     ]
