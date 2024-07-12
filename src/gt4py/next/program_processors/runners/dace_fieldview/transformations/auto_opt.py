@@ -14,7 +14,7 @@
 
 """Fast access to the auto optimization on DaCe."""
 
-from typing import Any
+from typing import Any, Optional
 
 import dace
 from dace.transformation import dataflow as dace_dataflow
@@ -52,6 +52,37 @@ def dace_auto_optimize(
     sdfg.simplify()
 
     return sdfg
+
+
+def gt_simplify(
+    sdfg: dace.SDFG,
+    validate: bool = True,
+    validate_all: bool = False,
+    skip: Optional[set[str]] = None,
+) -> Any:
+    """Performs simplifications on the SDFG in place.
+
+    Instead of calling `sdfg.simplify()` directly, you should use this function,
+    as it is specially tuned for GridTool based SDFGs.
+
+    Args:
+        sdfg: The SDFG to optimize.
+        validate: Perform validation after the pass has run.
+        validate_all: Perform extensive validation.
+        skip: List of simplify passes that should not be applied.
+
+    Note:
+        The reason for this function is that we can influence how simplify works.
+        Since some parts in simplify might break things in the SDFG.
+    """
+    from dace.transformation.passes.simplify import SimplifyPass
+
+    return SimplifyPass(
+        validate=validate,
+        validate_all=validate_all,
+        verbose=False,
+        skip=skip,
+    ).apply_pass(sdfg, {})
 
 
 def gt_auto_optimize(
