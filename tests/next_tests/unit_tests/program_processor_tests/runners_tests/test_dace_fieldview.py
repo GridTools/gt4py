@@ -1377,8 +1377,23 @@ def test_gtir_let_lambda():
         declarations=[],
         body=[
             gtir.SetAt(
-                expr=im.let("x2", im.op_as_fieldop("multiplies", domain)(2, "x"))(
-                    im.op_as_fieldop("plus", domain)("x2", "x2")
+                # `x1` is a let-lambda expression representing `x * 3`
+                # `x2` is a let-lambda expression representing `x * 4`
+                #  - note that the let-symbol `x2` is used twice, in a nested let-expression, to test aliasing of the symbol
+                # `x3` is a let-lambda expression simply accessing `x` field symref
+                expr=im.let("x1", im.op_as_fieldop("multiplies", domain)(3, "x"))(
+                    im.let(
+                        "x2",
+                        im.let("x2", im.op_as_fieldop("multiplies", domain)(2, "x"))(
+                            im.op_as_fieldop("plus", domain)("x2", "x2")
+                        ),
+                    )(
+                        im.let("x3", "x")(
+                            im.op_as_fieldop("plus", domain)(
+                                "x1", im.op_as_fieldop("plus", domain)("x2", "x3")
+                            )
+                        )
+                    )
                 ),
                 domain=domain,
                 target=gtir.SymRef(id="y"),
@@ -1392,4 +1407,4 @@ def test_gtir_let_lambda():
     sdfg = dace_backend.build_sdfg_from_gtir(testee, {})
 
     sdfg(x=a, y=b, **FSYMBOLS)
-    assert np.allclose(b, a * 4)
+    assert np.allclose(b, a * 8)
