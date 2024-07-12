@@ -328,12 +328,17 @@ def shifting():
     IOffset = 3
 
     domain = im.call("cartesian_domain")(
-        im.call("named_range")(itir.AxisLiteral(value=IDim.value), 0, "size"),
+        im.call("named_range")(itir.AxisLiteral(value=IDim.value), 0, "red_size"),
         im.call("named_range")(itir.AxisLiteral(value=JDim.value), 0, "size"),
     )
     stencil1 = im.call(
         im.call("as_fieldop")(
-            im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+            im.lambda_("a", "b")(
+                im.plus(
+                    im.deref("a"),
+                    im.deref("b"),
+                ),
+            ),
             domain,
         )
     )(
@@ -354,6 +359,7 @@ def shifting():
             itir.Sym(id="y", type=IJFTYPE),
             itir.Sym(id="z", type=IJFTYPE),
             itir.Sym(id="size", type=SIZE_TYPE),
+            itir.Sym(id="red_size", type=SIZE_TYPE),
         ],
         declarations=[],
         body=[
@@ -385,6 +391,7 @@ def shifting():
         "y": y,
         "z": z,
         "size": N,
+        "red_size": N - IOffset,
     }
     return_names = ["z"]
 
@@ -468,9 +475,9 @@ def non_zero_start():
 
 
 if "__main__" == __name__:
+    shifting()
     exclusive_only()
     exclusive_only_2()
     intermediate_branch()
-    # shifting()
     non_zero_start()
     print("SUCCESS")
