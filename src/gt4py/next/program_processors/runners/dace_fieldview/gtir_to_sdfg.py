@@ -157,7 +157,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         to have the same memory layout as the target array.
         """
         results: list[gtir_builtin_translators.TemporaryData] = self.visit(
-            node, sdfg=sdfg, head_state=head_state, reduce_identity=None
+            node, sdfg=sdfg, head_state=head_state, let_symbols={}, reduce_identity=None
         )
 
         field_nodes = []
@@ -272,37 +272,75 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         node: gtir.FunCall,
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
+        let_symbols: dict[str, gtir_builtin_translators.TemporaryData],
         reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
     ) -> list[gtir_builtin_translators.TemporaryData]:
         # use specialized dataflow builder classes for each builtin function
         if cpm.is_call_to(node.fun, "as_fieldop"):
             return gtir_builtin_translators.visit_AsFieldOp(
-                node, sdfg, head_state, self, reduce_identity
+                node, sdfg, head_state, self, let_symbols, reduce_identity
             )
         elif cpm.is_call_to(node.fun, "cond"):
             return gtir_builtin_translators.visit_Cond(
-                node, sdfg, head_state, self, reduce_identity
+                node, sdfg, head_state, self, let_symbols, reduce_identity
+            )
+        elif isinstance(node.fun, gtir.Lambda):
+            node_let_symbols = []
+            for arg in node.args:
+                arg_fields = self.visit(
+                    arg,
+                    sdfg=sdfg,
+                    head_state=head_state,
+                    let_symbols=let_symbols,
+                    reduce_identity=reduce_identity,
+                )
+                node_let_symbols.extend(arg_fields)
+
+            assert reduce_identity is None
+            return self.visit(
+                node.fun,
+                sdfg=sdfg,
+                head_state=head_state,
+                let_symbols=let_symbols,
+                args=node_let_symbols,
             )
         else:
             raise NotImplementedError(f"Unexpected 'FunCall' expression ({node}).")
 
-    def visit_Lambda(self, node: gtir.Lambda) -> Any:
+    def visit_Lambda(
+        self,
+        node: gtir.Lambda,
+        sdfg: dace.SDFG,
+        head_state: dace.SDFGState,
+        let_symbols: dict[str, gtir_builtin_translators.TemporaryData],
+        args: list[gtir_builtin_translators.TemporaryData],
+    ) -> list[gtir_builtin_translators.TemporaryData]:
         """
-        This visitor class should never encounter `itir.Lambda` expressions
-        because a lambda represents a stencil, which operates from iterator to values.
-        In fieldview, lambdas should only be arguments to field operators (`as_field_op`).
+        All arguments to lambda functions are fields (i.e. `as_fieldop`, field or scalar `gtir.SymRef`, nested let-lambdas thereof)
+        The dictionary called `let_symbols` maps the lambda parameters to symbols, e.g. temporary fields or program arguments.
+        The lambda parameters can override previously defined symbols, that is why the current dictionary is copied.
         """
-        raise RuntimeError("Unexpected 'itir.Lambda' node encountered in GTIR.")
+        lambda_symbols = let_symbols.copy()
+        lambda_symbols.update({str(p.id): arg for p, arg in zip(node.params, args, strict=True)})
+
+        return self.visit(
+            node.expr,
+            sdfg=sdfg,
+            head_state=head_state,
+            let_symbols=lambda_symbols,
+            reduce_identity=None,
+        )
 
     def visit_Literal(
         self,
         node: gtir.Literal,
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
+        let_symbols: dict[str, gtir_builtin_translators.TemporaryData],
         reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
     ) -> list[gtir_builtin_translators.TemporaryData]:
         return gtir_builtin_translators.visit_SymbolRef(
-            node, sdfg, head_state, self, reduce_identity
+            node, sdfg, head_state, self, let_symbols={}
         )
 
     def visit_SymRef(
@@ -310,8 +348,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         node: gtir.SymRef,
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
+        let_symbols: dict[str, gtir_builtin_translators.TemporaryData],
         reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
     ) -> list[gtir_builtin_translators.TemporaryData]:
         return gtir_builtin_translators.visit_SymbolRef(
-            node, sdfg, head_state, self, reduce_identity
+            node, sdfg, head_state, self, let_symbols=let_symbols
         )

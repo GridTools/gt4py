@@ -1360,3 +1360,36 @@ def test_gtir_reduce_with_cond_neighbors():
             __connectivity_V2E_FULL_stride_1=1,
         )
         assert np.allclose(v, v_ref)
+
+
+def test_gtir_let_lambda():
+    domain = im.call("cartesian_domain")(
+        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
+    )
+    testee = gtir.Program(
+        id="let_lambda",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="x", type=IFTYPE),
+            gtir.Sym(id="y", type=IFTYPE),
+            gtir.Sym(id="size", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.let("x2", im.op_as_fieldop("multiplies", domain)(2, "x"))(
+                    im.op_as_fieldop("plus", domain)("x2", "x2")
+                ),
+                domain=domain,
+                target=gtir.SymRef(id="y"),
+            )
+        ],
+    )
+
+    a = np.random.rand(N)
+    b = np.empty_like(a)
+
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, {})
+
+    sdfg(x=a, y=b, **FSYMBOLS)
+    assert np.allclose(b, a * 4)

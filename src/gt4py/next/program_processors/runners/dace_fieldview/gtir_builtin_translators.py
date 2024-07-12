@@ -48,6 +48,7 @@ class PrimitiveTranslator(Protocol):
         sdfg: dace.SDFG,
         state: dace.SDFGState,
         sdfg_builder: gtir_to_sdfg.SDFGBuilder,
+        let_symbols: dict[str, TemporaryData],
         reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
     ) -> list[TemporaryData]:
         """Creates the dataflow subgraph representing a GTIR primitive function.
@@ -60,6 +61,7 @@ class PrimitiveTranslator(Protocol):
             sdfg: The SDFG where the primitive subgraph should be instantiated
             state: The SDFG state where the result of the primitive function should be made available
             sdfg_builder: The object responsible for visiting child nodes of the primitive node.
+            let_symbols: Mapping of symbols (i.e. lambda parameters) to known temporary fields.
             reduce_identity: The value of the reduction identity, in case the primitive node
                 is visited in the context of a reduction expression. This value is used
                 by the `neighbors` primitive to provide the value of skip neighbors.
@@ -80,10 +82,15 @@ def _parse_arg_expr(
     domain: list[
         tuple[gtx_common.Dimension, dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]
     ],
+    let_symbols: dict[str, TemporaryData],
     reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
 ) -> gtir_to_tasklet.IteratorExpr | gtir_to_tasklet.MemletExpr:
     fields: list[TemporaryData] = sdfg_builder.visit(
-        node, sdfg=sdfg, head_state=state, reduce_identity=reduce_identity
+        node,
+        sdfg=sdfg,
+        head_state=state,
+        let_symbols=let_symbols,
+        reduce_identity=reduce_identity,
     )
 
     assert len(fields) == 1
@@ -158,6 +165,7 @@ def visit_AsFieldOp(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
+    let_symbols: dict[str, TemporaryData],
     reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
 ) -> list[TemporaryData]:
     """Generates the dataflow subgraph for the `as_field_op` builtin function."""
@@ -184,7 +192,7 @@ def visit_AsFieldOp(
 
     # first visit the list of arguments and build a symbol map
     stencil_args = [
-        _parse_arg_expr(arg, sdfg, state, sdfg_builder, domain, reduce_identity)
+        _parse_arg_expr(arg, sdfg, state, sdfg_builder, domain, let_symbols, reduce_identity)
         for arg in node.args
     ]
 
@@ -251,6 +259,7 @@ def visit_Cond(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
+    let_symbols: dict[str, TemporaryData],
     reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
 ) -> list[TemporaryData]:
     """Generates the dataflow subgraph for the `cond` builtin function."""
@@ -294,10 +303,18 @@ def visit_Cond(
     sdfg.add_edge(false_state, state, dace.InterstateEdge())
 
     true_br_args = sdfg_builder.visit(
-        true_expr, sdfg=sdfg, head_state=true_state, reduce_identity=reduce_identity
+        true_expr,
+        sdfg=sdfg,
+        head_state=true_state,
+        let_symbols=let_symbols,
+        reduce_identity=reduce_identity,
     )
     false_br_args = sdfg_builder.visit(
-        false_expr, sdfg=sdfg, head_state=false_state, reduce_identity=reduce_identity
+        false_expr,
+        sdfg=sdfg,
+        head_state=false_state,
+        let_symbols=let_symbols,
+        reduce_identity=reduce_identity,
     )
 
     output_nodes = []
@@ -333,6 +350,7 @@ def visit_SymbolRef(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
+    let_symbols: dict[str, TemporaryData],
     reduce_identity: Optional[gtir_to_tasklet.SymbolExpr] = None,
 ) -> list[TemporaryData]:
     """Generates the dataflow subgraph for a `ir.SymRef` node."""
@@ -345,6 +363,8 @@ def visit_SymbolRef(
         tasklet_name = "get_literal"
     else:
         sym_value = str(node.id)
+        if sym_value in let_symbols:
+            return [let_symbols[sym_value]]
         assert sym_value in sdfg_builder.get_symbol_types()
         data_type = sdfg_builder.get_symbol_types()[sym_value]
         tasklet_name = f"get_{sym_value}"
