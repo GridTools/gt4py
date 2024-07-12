@@ -17,7 +17,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import field
 from inspect import currentframe, getframeinfo
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, ClassVar, Optional
 
 import dace
 import numpy as np
@@ -322,7 +322,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
     # Defined as class variable, otherwise the same connectivity table -name & data descriptor- across multiple GT4Py Programs
     # will be considered as a different table (with subsequent name mangling). Therefore, the memory address of the table's data descriptor needs to be the same.
     # This affects the case where a DaCe.Program calls multiple GT4Py Programs (fused SDFG).
-    connectivity_tables_data_descriptors: dict[str, Any] = {}  # noqa: RUF008
+    connectivity_tables_data_descriptors: ClassVar[dict[str, Any]] = {}
 
     def __sdfg__(self, *args, **kwargs) -> dace.sdfg.sdfg.SDFG:
         params = {str(p.id): p.type for p in self.itir.params}
