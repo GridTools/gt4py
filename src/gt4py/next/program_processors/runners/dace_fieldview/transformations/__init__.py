@@ -13,9 +13,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from .auto_opt import dace_auto_optimize, gt_auto_optimize
+from .map_seriall_fusion import SerialMapFusion
 
 
 __all__ = [
     "dace_auto_optimize",
     "gt_auto_optimize",
+    "SerialMapFusion",
 ]
