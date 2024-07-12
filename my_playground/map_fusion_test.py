@@ -323,6 +323,8 @@ def intermediate_branch():
 def shifting():
     """Tests what happens if we have a sift."""
 
+    # Currently the transformer fails to parse the IR.
+
     IOffset = 3
 
     domain = im.call("cartesian_domain")(
@@ -400,10 +402,6 @@ def shifting():
 def non_zero_start():
     """Tests what happens if there are two maps, that does not start at zero."""
 
-    # NOTE:
-    #  Currently the translator has an error, that leads to an invalid SDFG.
-    #  However, I am now, also unsure what the result should be in the first place.
-
     dom_start = 3
     domain = im.call("cartesian_domain")(
         im.call("named_range")(itir.AxisLiteral(value=IDim.value), dom_start, "size")
@@ -473,6 +471,6 @@ if "__main__" == __name__:
     exclusive_only()
     exclusive_only_2()
     intermediate_branch()
-    shifting()
-    # non_zero_start()
+    # shifting()
+    non_zero_start()
     print("SUCCESS")
