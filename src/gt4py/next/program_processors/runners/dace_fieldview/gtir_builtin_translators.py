@@ -197,9 +197,7 @@ def visit_AsFieldOp(
     ]
 
     # represent the field operator as a mapped tasklet graph, which will range over the field domain
-    taskgen = gtir_to_tasklet.LambdaToTasklet(
-        sdfg, state, sdfg_builder.get_offset_provider(), reduce_identity
-    )
+    taskgen = gtir_to_tasklet.LambdaToTasklet(sdfg, state, sdfg_builder, reduce_identity)
     input_connections, output_expr = taskgen.visit(stencil_expr, args=stencil_args)
     assert isinstance(output_expr, gtir_to_tasklet.ValueExpr)
     output_desc = output_expr.node.desc(sdfg)
@@ -228,7 +226,7 @@ def visit_AsFieldOp(
 
     # create map range corresponding to the field operator domain
     map_ranges = {dace_fieldview_util.get_map_variable(dim): f"{lb}:{ub}" for dim, lb, ub in domain}
-    me, mx = state.add_map("field_op", map_ranges)
+    me, mx = sdfg_builder.add_map("field_op", state, map_ranges)
 
     if len(input_connections) == 0:
         # dace requires an empty edge from map entry node to tasklet node, in case there no input memlets
@@ -365,8 +363,7 @@ def visit_SymbolRef(
         sym_value = str(node.id)
         if sym_value in let_symbols:
             return [let_symbols[sym_value]]
-        assert sym_value in sdfg_builder.get_symbol_types()
-        data_type = sdfg_builder.get_symbol_types()[sym_value]
+        data_type = sdfg_builder.get_symbol_type(sym_value)
         tasklet_name = f"get_{sym_value}"
 
     if isinstance(data_type, ts.FieldType):
@@ -376,8 +373,9 @@ def visit_SymbolRef(
     else:
         # scalar symbols are passed to the SDFG as symbols: build tasklet node
         # to write the symbol to a scalar access node
-        tasklet_node = state.add_tasklet(
+        tasklet_node = sdfg_builder.add_tasklet(
             tasklet_name,
+            state,
             {},
             {"__out"},
             f"__out = {sym_value}",

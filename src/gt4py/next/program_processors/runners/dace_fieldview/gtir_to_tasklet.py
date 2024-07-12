@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import dataclasses
 import itertools
-from typing import Optional, TypeAlias
+from typing import Any, Dict, List, Optional, Set, Tuple, TypeAlias, Union
 
 import dace
 import dace.subsets as sbs
@@ -28,6 +28,7 @@ from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_python_codegen,
+    gtir_to_sdfg,
     utility as dace_fieldview_util,
 )
 from gt4py.next.type_system import type_specifications as ts
@@ -119,7 +120,7 @@ class LambdaToTasklet(eve.NodeVisitor):
 
     sdfg: dace.SDFG
     state: dace.SDFGState
-    offset_provider: dict[str, gtx_common.Connectivity | gtx_common.Dimension]
+    subgraph_builder: gtir_to_sdfg.DataflowBuilder
     reduce_identity: Optional[SymbolExpr]
     input_connections: list[InputConnection]
     symbol_map: dict[str, IteratorExpr | MemletExpr | SymbolExpr]
@@ -128,12 +129,12 @@ class LambdaToTasklet(eve.NodeVisitor):
         self,
         sdfg: dace.SDFG,
         state: dace.SDFGState,
-        offset_provider: dict[str, gtx_common.Connectivity | gtx_common.Dimension],
+        subgraph_builder: gtir_to_sdfg.DataflowBuilder,
         reduce_identity: Optional[SymbolExpr],
     ):
         self.sdfg = sdfg
         self.state = state
-        self.offset_provider = offset_provider
+        self.subgraph_builder = subgraph_builder
         self.reduce_identity = reduce_identity
         self.input_connections = []
         self.symbol_map = {}
@@ -146,6 +147,29 @@ class LambdaToTasklet(eve.NodeVisitor):
         dst_conn: Optional[str] = None,
     ) -> None:
         self.input_connections.append((src, src_subset, dst_node, dst_conn))
+
+    def _add_map(
+        self,
+        name: str,
+        ndrange: Union[
+            Dict[str, Union[str, dace.subsets.Subset]],
+            List[Tuple[str, Union[str, dace.subsets.Subset]]],
+        ],
+        **kwargs: Any,
+    ) -> Tuple[dace.nodes.MapEntry, dace.nodes.MapExit]:
+        """Helper method to add a map with unique ame in current state."""
+        return self.subgraph_builder.add_map(name, self.state, ndrange, **kwargs)
+
+    def _add_tasklet(
+        self,
+        name: str,
+        inputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
+        outputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
+        code: str,
+        **kwargs: Any,
+    ) -> dace.nodes.Tasklet:
+        """Helper method to add a tasklet with unique ame in current state."""
+        return self.subgraph_builder.add_tasklet(name, self.state, inputs, outputs, code, **kwargs)
 
     def _get_tasklet_result(
         self,
@@ -203,7 +227,7 @@ class LambdaToTasklet(eve.NodeVisitor):
                     else IndexConnectorFmt.format(dim=dim.value)
                     for dim, index in field_indices
                 )
-                deref_node = self.state.add_tasklet(
+                deref_node = self._add_tasklet(
                     "deref_field_indirection",
                     {"field"} | set(index_connectors),
                     {"val"},
@@ -251,7 +275,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         assert isinstance(node.args[0], gtir.OffsetLiteral)
         offset = node.args[0].value
         assert isinstance(offset, str)
-        offset_provider = self.offset_provider[offset]
+        offset_provider = self.subgraph_builder.get_offset_provider(offset)
         assert isinstance(offset_provider, gtx_common.Connectivity)
 
         it = self.visit(node.args[1])
@@ -314,7 +338,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         )
         neighbors_node = self.state.add_access(neighbors_temp)
 
-        me, mx = self.state.add_map(
+        me, mx = self._add_map(
             "neighbors",
             dict(__neighbor_idx=f"0:{offset_provider.max_neighbors}"),
         )
@@ -325,7 +349,7 @@ class LambdaToTasklet(eve.NodeVisitor):
             skip_value_code = f" if {index_connector} != {gtx_common._DEFAULT_SKIP_VALUE} else {self.reduce_identity.dtype}({self.reduce_identity.value})"
         else:
             skip_value_code = ""
-        tasklet_node = self.state.add_tasklet(
+        tasklet_node = self._add_tasklet(
             "gather_neighbors",
             {"__field", index_connector},
             {"__val"},
@@ -446,21 +470,21 @@ class LambdaToTasklet(eve.NodeVisitor):
             # the offset needs to be calculate by means of a tasklet
             new_index_connector = "shifted_index"
             if isinstance(index_expr, SymbolExpr):
-                dynamic_offset_tasklet = self.state.add_tasklet(
+                dynamic_offset_tasklet = self._add_tasklet(
                     "dynamic_offset",
                     {"offset"},
                     {new_index_connector},
                     f"{new_index_connector} = {index_expr.value} + offset",
                 )
             elif isinstance(offset_expr, SymbolExpr):
-                dynamic_offset_tasklet = self.state.add_tasklet(
+                dynamic_offset_tasklet = self._add_tasklet(
                     "dynamic_offset",
                     {"index"},
                     {new_index_connector},
                     f"{new_index_connector} = index + {offset_expr}",
                 )
             else:
-                dynamic_offset_tasklet = self.state.add_tasklet(
+                dynamic_offset_tasklet = self._add_tasklet(
                     "dynamic_offset",
                     {"index", "offset"},
                     {new_index_connector},
@@ -513,7 +537,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         or computed byanother tasklet (`ValueExpr`).
         """
         new_index_connector = "neighbor_index"
-        tasklet_node = self.state.add_tasklet(
+        tasklet_node = self._add_tasklet(
             "dynamic_neighbor_offset",
             {"table", "offset"},
             {new_index_connector},
@@ -597,7 +621,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         assert isinstance(head[0], gtir.OffsetLiteral)
         offset = head[0].value
         assert isinstance(offset, str)
-        offset_provider = self.offset_provider[offset]
+        offset_provider = self.subgraph_builder.get_offset_provider(offset)
         # second argument should be the offset value, which could be a symbolic expression or a dynamic offset
         offset_expr: IteratorIndexExpr
         if isinstance(head[1], gtir.OffsetLiteral):
@@ -656,9 +680,9 @@ class LambdaToTasklet(eve.NodeVisitor):
         code = gtir_python_codegen.format_builtin(builtin_name, *node_internals)
 
         out_connector = "result"
-        tasklet_node = self.state.add_tasklet(
+        tasklet_node = self._add_tasklet(
             builtin_name,
-            node_connections.keys(),
+            set(node_connections.keys()),
             {out_connector},
             "{} = {}".format(out_connector, code),
         )
@@ -707,7 +731,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         if isinstance(output_expr, MemletExpr):
             # special case where the field operator is simply copying data from source to destination node
             output_dtype = output_expr.node.desc(self.sdfg).dtype
-            tasklet_node = self.state.add_tasklet("copy", {"__inp"}, {"__out"}, "__out = __inp")
+            tasklet_node = self._add_tasklet("copy", {"__inp"}, {"__out"}, "__out = __inp")
             self._add_entry_memlet_path(
                 output_expr.node,
                 output_expr.subset,
@@ -717,9 +741,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         else:
             # even simpler case, where a constant value is written to destination node
             output_dtype = output_expr.dtype
-            tasklet_node = self.state.add_tasklet(
-                "write", {}, {"__out"}, f"__out = {output_expr.value}"
-            )
+            tasklet_node = self._add_tasklet("write", {}, {"__out"}, f"__out = {output_expr.value}")
         return self.input_connections, self._get_tasklet_result(output_dtype, tasklet_node, "__out")
 
     def visit_Literal(self, node: gtir.Literal) -> SymbolExpr:
