@@ -246,3 +246,57 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
                 if curr_range != source_range:
                     return None
         return list(source_params_set - curr_params_set)
+
+
+@properties.make_properties
+class SerialMapPromoter(BaseMapPromoter):
+    """This class promotes serial maps, such that they can be fused."""
+
+    # Pattern Matching
+    exit_first_map = transformation.transformation.PatternNode(nodes.MapExit)
+    access_node = transformation.transformation.PatternNode(nodes.AccessNode)
+    entry_second_map = transformation.transformation.PatternNode(nodes.MapEntry)
+
+    @classmethod
+    def expressions(cls) -> Any:
+        """Get the match expressions.
+
+        The function generates two different match expression. The first match
+        describes the case where the top map must be promoted, while the second
+        case is the second/lower map must be promoted.
+        """
+        return [
+            dace.sdfg.utils.node_path_graph(
+                cls.exit_first_map, cls.access_node, cls.entry_second_map
+            ),
+            dace.sdfg.utils.node_path_graph(
+                cls.exit_first_map, cls.access_node, cls.entry_second_map
+            ),
+        ]
+
+    def map_to_promote(
+        self,
+        state: dace.SDFGState,
+        sdfg: dace.SDFG,
+    ) -> nodes.MapEntry:
+        if self.expr_index == 0:
+            # The first the top map will be promoted.
+            return state.entry_node(self.exit_first_map)
+        assert self.expr_index == 1
+
+        # The second map will be promoted.
+        return self.entry_second_map
+
+    def source_map(
+        self,
+        state: dace.SDFGState,
+        sdfg: dace.SDFG,
+    ) -> nodes.MapEntry:
+        """Returns the map entry that is used as source/template."""
+        if self.expr_index == 0:
+            # The first the top map will be promoted, so the second map is the source.
+            return self.entry_second_map
+        assert self.expr_index == 1
+
+        # The second map will be promoted, so the first is used as source
+        return state.entry_node(self.exit_first_map)
