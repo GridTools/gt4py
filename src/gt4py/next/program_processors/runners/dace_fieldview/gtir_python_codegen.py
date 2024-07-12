@@ -119,10 +119,10 @@ class PythonCodegen(codegen.TemplatedGenerator):
         raise NotImplementedError(f"Unexpected 'FunCall' node ({node}).")
 
 
+get_source = PythonCodegen.apply
 """
 Specialized visit method for symbolic expressions.
 
 Returns:
     A string containing the Python code corresponding to a symbolic expression
 """
-get_source = PythonCodegen.apply
