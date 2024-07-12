@@ -27,7 +27,6 @@ import dace
 
 from gt4py import eve
 from gt4py.eve import concepts
-from gt4py.eve.utils import UIDGenerator
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
@@ -111,11 +110,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     symbol_types: dict[str, ts.FieldType | ts.ScalarType] = dataclasses.field(
         default_factory=lambda: {}
     )
-    map_uids: UIDGenerator = dataclasses.field(
-        init=False, repr=False, default_factory=lambda: UIDGenerator(prefix="map")
+    map_uids: eve.utils.UIDGenerator = dataclasses.field(
+        init=False, repr=False, default_factory=lambda: eve.utils.UIDGenerator(prefix="map")
     )
-    tesklet_uids: UIDGenerator = dataclasses.field(
-        init=False, repr=False, default_factory=lambda: UIDGenerator(prefix="tlet")
+    tesklet_uids: eve.utils.UIDGenerator = dataclasses.field(
+        init=False, repr=False, default_factory=lambda: eve.utils.UIDGenerator(prefix="tlet")
     )
 
     def get_offset_provider(self, offset: str) -> gtx_common.Connectivity | gtx_common.Dimension:
@@ -325,9 +324,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     ) -> list[gtir_builtin_translators.TemporaryData]:
         # use specialized dataflow builder classes for each builtin function
         if cpm.is_call_to(node.fun, "as_fieldop"):
-            return gtir_builtin_translators.visit_AsFieldOp(node, sdfg, head_state, self)
+            return gtir_builtin_translators.translate_as_field_op(node, sdfg, head_state, self)
         elif cpm.is_call_to(node.fun, "cond"):
-            return gtir_builtin_translators.visit_Cond(node, sdfg, head_state, self)
+            return gtir_builtin_translators.translate_cond(node, sdfg, head_state, self)
         else:
             raise NotImplementedError(f"Unexpected 'FunCall' expression ({node}).")
 
@@ -345,7 +344,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
     ) -> list[gtir_builtin_translators.TemporaryData]:
-        return gtir_builtin_translators.visit_SymbolRef(node, sdfg, head_state, self)
+        return gtir_builtin_translators.translate_symbol_ref(node, sdfg, head_state, self)
 
     def visit_SymRef(
         self,
@@ -353,4 +352,31 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
     ) -> list[gtir_builtin_translators.TemporaryData]:
-        return gtir_builtin_translators.visit_SymbolRef(node, sdfg, head_state, self)
+        return gtir_builtin_translators.translate_symbol_ref(node, sdfg, head_state, self)
+
+
+def build_sdfg_from_gtir(
+    program: gtir.Program,
+    offset_provider: dict[str, gtx_common.Connectivity | gtx_common.Dimension],
+) -> dace.SDFG:
+    """
+    Receives a GTIR program and lowers it to a DaCe SDFG.
+
+    The lowering to SDFG requires that the program node is type-annotated, therefore this function
+    runs type ineference as first step.
+    As a final step, it runs the `simplify` pass to ensure that the SDFG is in the DaCe canonical form.
+
+    Arguments:
+        program: The GTIR program node to be lowered to SDFG
+        offset_provider: The definitions of offset providers used by the program node
+
+    Returns:
+        An SDFG in the DaCe canonical form (simplified)
+    """
+    sdfg_genenerator = GTIRToSDFG(offset_provider)
+    # TODO: run type inference on the `program` node before passing it to `GTIRToSDFG`
+    sdfg = sdfg_genenerator.visit(program)
+    assert isinstance(sdfg, dace.SDFG)
+
+    sdfg.simplify()
+    return sdfg
