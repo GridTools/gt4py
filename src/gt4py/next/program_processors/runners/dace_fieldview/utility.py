@@ -51,6 +51,10 @@ def as_scalar_type(typestr: str) -> ts.ScalarType:
     return ts.ScalarType(kind)
 
 
+def connectivity_identifier(name: str) -> str:
+    return f"connectivity_{name}"
+
+
 def debug_info(
     node: gtir.Node, *, default: Optional[dace.dtypes.DebugInfo] = None
 ) -> Optional[dace.dtypes.DebugInfo]:
