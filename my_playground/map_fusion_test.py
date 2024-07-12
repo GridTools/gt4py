@@ -383,8 +383,8 @@ def shifting():
 
     x = np.random.rand(N + 2 * IOffset, N)
     y = np.random.rand(N, N)
-    z = np.empty_like(y)
-    ref = x[IOffset : (IOffset + N), :] + y
+    z = np.zeros((N - IOffset, N))
+    ref = x[IOffset:N, :] + y[: (N - IOffset), :]
 
     args = {
         "x": x,
