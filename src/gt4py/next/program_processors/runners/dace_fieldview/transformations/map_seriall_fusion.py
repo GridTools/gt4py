@@ -51,7 +51,9 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
         only_toplevel_maps: Only consider Maps that are at the top.
 
     Notes:
-        This transformation modifies more nodes than it matches!
+        - This transformation modifies more nodes than it matches!
+        - The consolidate edge transformation (part of simplify) is probably
+            harmful to the applicability of this transformation.
     """
 
     map_exit1 = transformation.transformation.PatternNode(nodes.MapExit)
@@ -96,6 +98,7 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
         map_entry_1: nodes.MapEntry = graph.entry_node(self.map_exit1)
         map_entry_2: nodes.MapEntry = self.map_entry2
 
+        # This essentially test the structural properties of the two Maps.
         if not self.can_be_fused(
             map_entry_1=map_entry_1, map_entry_2=map_entry_2, graph=graph, sdfg=sdfg
         ):
@@ -113,8 +116,6 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
             return False
         if not (output_partition[1] or output_partition[2]):
             return False
-        assert isinstance(self.map_exit1, nodes.MapExit)
-        assert isinstance(self.map_entry2, nodes.MapEntry)
         return True
 
     def apply(self, graph: Union[dace.SDFGState, dace.SDFG], sdfg: dace.SDFG) -> None:
@@ -125,14 +126,17 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
         the two intermediate sets are handled by `handle_intermediate_set()`.
 
         By assumption we do not have to rename anything.
-        """
-        assert isinstance(graph, dace.SDFGState)
-        assert isinstance(self.map_exit1, nodes.MapExit)
-        assert isinstance(self.map_entry2, nodes.MapEntry)
 
+        Args:
+            graph: The SDFG state we are operating on.
+            sdfg: The SDFG we are operating on.
+        """
         # NOTE: `self.map_*` actually stores the ID of the node.
         #  once we start adding and removing nodes it seems that their ID changes.
         #  Thus we have to save them here.
+        assert isinstance(graph, dace.SDFGState)
+        assert isinstance(self.map_exit1, nodes.MapExit)
+        assert isinstance(self.map_entry2, nodes.MapEntry)
         map_exit_1: nodes.MapExit = self.map_exit1
         map_entry_2: nodes.MapEntry = self.map_entry2
         map_exit_2: nodes.MapExit = graph.exit_node(self.map_entry2)
@@ -204,23 +208,33 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
         map_exit_2: nodes.MapExit,
         is_exclusive_set: bool,
     ) -> None:
-        """Handle the intermediate output sets.
+        """This function handles the intermediate sets.
 
         The function is able to handle both the shared and exclusive intermediate
-        output set that was computed by `partition_first_outputs()`. Which one is
-        handled is indicated by `is_exclusive_set`.
-
-        The main difference is that in exclusive mode is that the intermediate node
-        will be fully removed from the SDFG. However, in shared mode, the intermediate
+        output set, see `partition_first_outputs()`. The main difference is that
+        in exclusive mode is that the intermediate node will be fully removed from
+        the SDFG. While in shared mode the intermediate node will be preserved.
+        However, the function just performs some rewiring of the outputs and
+        manipulation of the intermediate node set.
 
         Args:
-            intermediateOutputSet:      The set of edges that are intermediate outputs of the first Map.
-            graph:                      The graph we operate on.
-            sdfg:                       The SDFG we operate on.
-            mapExit1:                   The node that serves as exit node of the first Map.
-            mapEntry2:                  The node that serves as entry node of the second Map.
-            mapExit2:                   The node that serves as exit node of the second Map.
-            isExclusiveSet:             If `True` process the exclusive set.
+            intermediate_outputs: The set of outputs, that should be processed.
+            state: The state in which the map is processed.
+            sdfg: The SDFG that should be optimized.
+            map_exit_1: The exit of the first/top map.
+            map_entry_1: The entry of the second map.
+            map_exit_2: The exit of the second map.
+            is_exclusive_set: If `True` `intermediate_outputs` is the exclusive set.
+
+        Notes:
+            Before the transformation the `state` does not be to be valid and
+            after this function has run the state is invalid.
+            The function is static and the map nodes have to be explicitly passed
+            because the `self.map_*` properties are modified by the modification.
+            This is a known behaviour in DaCe.
+
+        Todo:
+            Rewrite using `MemletTree`.
         """
 
         # Essentially this function removes the AccessNode between the two maps.

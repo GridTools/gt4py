@@ -28,14 +28,14 @@ from . import util
 
 @properties.make_properties
 class MapFusionHelper(transformation.SingleStateTransformation):
-    """
-    Contains common part of the map fusion for parallel and serial map fusion.
+    """Contains common part of the map fusion for parallel and serial map fusion.
 
-    See also [this HackMD document](https://hackmd.io/klvzLnzMR6GZBWtRU8HbDg#Requirements-on-SDFG)
-    about the underlying assumption this transformation makes.
-
-    After every transformation that manipulates the state machine, you shouls recreate
-    the transformation.
+    The transformation assumes that the SDFG obeys the principals outlined in [this
+    HackMD document](https://hackmd.io/klvzLnzMR6GZBWtRU8HbDg#Requirements-on-SDFG).
+    The main advantage of this structure is, that it is rather easy to determine
+    if a transient can be used. This check, performed by `is_interstate_transient()`,
+    is speed up by cashing some computation, thus such an object should not be used
+    after interstate optimizations were applied to the SDFG.
 
     Args:
         only_inner_maps: Only match Maps that are internal, i.e. inside another Map.
@@ -90,8 +90,8 @@ class MapFusionHelper(transformation.SingleStateTransformation):
     ) -> bool:
         """Performs some checks if the maps can be fused.
 
-        Essentially, this function only checks constrains that does not depend if
-        a serial or a parallel map fusion happens. Thus it tests:
+        Essentially, this function only checks constrains that are common between
+        the serial and parallel map fusion process. It tests:
         - The scope of the maps.
         - The scheduling of the maps.
         - The map parameters.
@@ -99,7 +99,6 @@ class MapFusionHelper(transformation.SingleStateTransformation):
         However, for performance reasons, the function does not check if the node
         decomposition exists.
         """
-
         if self.only_inner_maps and self.only_toplevel_maps:
             raise ValueError("You specified both `only_inner_maps` and `only_toplevel_maps`.")
 
@@ -203,12 +202,10 @@ class MapFusionHelper(transformation.SingleStateTransformation):
             for e in list(state.out_edges_by_connector(from_node, "OUT_" + old_conn)):
                 helpers.redirect_edge(state, e, new_src=to_node, new_src_conn="OUT_" + new_conn)
 
-        assert (
-            state.in_degree(from_node) == 0
-        ), f"After moving source node '{from_node}' still has an input degree of {state.in_degree(from_node)}"
-        assert (
-            state.out_degree(from_node) == 0
-        ), f"After moving source node '{from_node}' still has an output degree of {state.out_degree(from_node)}"
+        assert state.in_degree(from_node) == 0
+        assert len(from_node.in_connectors) == 0
+        assert state.out_degree(from_node) == 0
+        assert len(from_node.out_connectors) == 0
 
     @staticmethod
     def map_parameter_compatible(
@@ -252,20 +249,25 @@ class MapFusionHelper(transformation.SingleStateTransformation):
         self,
         transient: Union[str, nodes.AccessNode],
         sdfg: dace.SDFG,
+        state: dace.SDFGState | None = None,
     ) -> bool:
         """Tests if `transient` is an interstate transient, an can not be removed.
 
-        Essentially this function checks if a transient is needed in a
+        Essentially this function checks if a transient might be needed in a
         different state in the SDFG, because it transmit information from
-        one state to the other. However, this function only checks if the
-        transient is needed for transmitting information between states.
-        It does _not_ check if the transient is needed multiple times within
-        the state. This case can be detected by checking the number of outgoing
-        edges.
+        one state to the other. If only the name of the transient is passed,
+        then the function will only check if it is used in another state.
+        If the access node and the state are passed the function will also
+        check if it is used inside the state.
 
         Args:
             transient: The transient that should be checked.
             sdfg: The SDFG containing the array.
+            state: If given the state the node is located in.
+
+        Note:
+            This function build upon the structure of the SDFG that is outlined
+            in the HackMD document.
         """
 
         # According to [rule 6](https://hackmd.io/klvzLnzMR6GZBWtRU8HbDg#Requirements-on-SDFG)
@@ -283,8 +285,12 @@ class MapFusionHelper(transformation.SingleStateTransformation):
             #  If a scalar is not a source node then it is not included in this set.
             #  Thus we do not have to look for it, instead we will check for them
             #  explicitly.
+            def decent(node: nodes.Node, graph: Any) -> bool:
+                return not isinstance(node, nodes.NestedSDFG)
+
             shared_sdfg_transients = set()
-            for state in sdfg.states():
+            # TODO(phimuell): use `sdfg.all_nodes_recursive(decent)` if it is available.
+            for state in sdfg.all_states():
                 shared_sdfg_transients.update(
                     filter(
                         lambda node: isinstance(node, nodes.AccessNode)
@@ -295,13 +301,17 @@ class MapFusionHelper(transformation.SingleStateTransformation):
             self.shared_transients[sdfg] = shared_sdfg_transients
 
         if isinstance(transient, nodes.AccessNode):
+            if state is not None:
+                # Rule 8: Used within the state.
+                if state.out_degree(transient) > 1:
+                    return True
             transient = transient.data
-        desc: data.Data = sdfg.arrays[transient]
 
+        desc: data.Data = sdfg.arrays[transient]
         if not desc.transient:
-            return False
+            return True
         if isinstance(desc, data.Scalar):
-            return False
+            return True
         return transient in shared_sdfg_transients
 
     def partition_first_outputs(
@@ -408,13 +418,13 @@ class MapFusionHelper(transformation.SingleStateTransformation):
             if len(inner_collector_edges) > 1:
                 return None
 
-            # For us an intermediate node must always be an access node, pointing to a
-            #  transient value, since it is the only thing that we know how to handle.
+            # For us an intermediate node must always be an access node, because
+            #  everything else we do not know how to handle. It is important that
+            #  we do not test for non transient data here, because they can be
+            #  handled has shared intermediates.
             if not isinstance(intermediate_node, nodes.AccessNode):
                 return None
             intermediate_desc: data.Data = intermediate_node.desc(sdfg)
-            if not intermediate_desc.transient:
-                return None
             if isinstance(intermediate_desc, data.View):
                 return None
 
@@ -464,9 +474,8 @@ class MapFusionHelper(transformation.SingleStateTransformation):
                 # Note that "remove" has a special meaning here, regardless of the
                 #  output of the check function, from within the second map we remove
                 #  the intermediate, it has more the meaning of "do we need to
-                #  reconstruct it after the second map again?".
-                #  NOTE: The case "used in this state" is handled above!!
-                if self.is_interstate_transient(intermediate_node, sdfg):
+                #  reconstruct it after the second map again?"
+                if self.is_interstate_transient(intermediate_node, sdfg, state):
                     shared_outputs.add(out_edge)
                 else:
                     exclusive_outputs.add(out_edge)
