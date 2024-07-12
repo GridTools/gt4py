@@ -77,8 +77,6 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
         """
         return [dace.sdfg.utils.node_path_graph(cls.map_exit1, cls.access_node, cls.map_entry2)]
 
-    # end def: expressions
-
     def can_be_applied(
         self,
         graph: Union[SDFGState, SDFG],

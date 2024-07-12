@@ -32,15 +32,15 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
     builds upon the structure defined [here](https://hackmd.io/klvzLnzMR6GZBWtRU8HbDg#Requirements-on-SDFG).
     Thus it only checks the name of the parameters.
 
-    Attributes:
-        map_to_promote: This is the map entry that should be promoted, i.e. dimensions
-            will be added such that its parameter matches `source_map`.
-        source_map: The map entry node that describes how `map_to_promote` should
-            look after the promotion.
+    To influence what to promote the user must implement the `map_to_promote()`
+    and `source_map()` must be implemented. They have to return the map entry node.
 
     Args:
         only_inner_maps: Only match Maps that are internal, i.e. inside another Map.
         only_toplevel_maps: Only consider Maps that are at the top.
+        promote_vertical: If `True` promote vertical dimensions; `True` by default.
+        promote_local: If `True` promote local dimensions; `True` by default.
+        promote_horizontal: If `True` promote horizontal dimensions; `False` by default.
 
     Note:
         This ignores tiling.
@@ -59,10 +59,37 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
         allow_none=False,
         desc="Only perform fusing if the Maps are inner Maps, i.e. does not have top level scope.",
     )
+    promote_vertical = properties.Property(
+        dtype=bool,
+        default=True,
+        desc="If `True` promote vertical dimensions.",
+    )
+    promote_local = properties.Property(
+        dtype=bool,
+        default=True,
+        desc="If `True` promote local dimensions.",
+    )
+    promote_horizontal = properties.Property(
+        dtype=bool,
+        default=False,
+        desc="If `True` promote horizontal dimensions.",
+    )
 
-    # Pattern Matching
-    map_to_promote = transformation.transformation.PatternNode(nodes.MapEntry)
-    source_map = transformation.transformation.PatternNode(nodes.MapEntry)
+    def map_to_promote(
+        self,
+        state: dace.SDFGState,
+        sdfg: dace.SDFG,
+    ) -> nodes.MapEntry:
+        """Returns the map entry that should be promoted."""
+        raise NotImplementedError(f"{type(self).__name__} must implement 'map_to_promote'.")
+
+    def source_map(
+        self,
+        state: dace.SDFGState,
+        sdfg: dace.SDFG,
+    ) -> nodes.MapEntry:
+        """Returns the map entry that is used as source/template."""
+        raise NotImplementedError(f"{type(self).__name__} must implement 'source_map'.")
 
     @classmethod
     def expressions(cls) -> Any:
@@ -72,6 +99,9 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
         self,
         only_inner_maps: Optional[bool] = None,
         only_toplevel_maps: Optional[bool] = None,
+        promote_local: Optional[bool] = None,
+        promote_vertical: Optional[bool] = None,
+        promote_horizontal: Optional[bool] = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
@@ -80,6 +110,12 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
             self.only_inner_maps = bool(only_inner_maps)
         if only_toplevel_maps is not None:
             self.only_toplevel_maps = bool(only_toplevel_maps)
+        if promote_local is not None:
+            self.promote_local = bool(promote_local)
+        if promote_vertical is not None:
+            self.promote_vertical = bool(promote_vertical)
+        if promote_horizontal is not None:
+            self.promote_horizontal = bool(promote_horizontal)
         if only_inner_maps and only_toplevel_maps:
             raise ValueError("You specified both `only_inner_maps` and `only_toplevel_maps`.")
 
@@ -98,10 +134,11 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
         - If the map to promote is in the right scope (it is not required that
             the two maps are in the same scope).
         - If the parameter of the second map are compatible with each other.
+        - If a dimension would be promoted that should not.
         """
-        map_to_promote_entry: nodes.MapEntry = self.map_to_promote
+        map_to_promote_entry: nodes.MapEntry = self.map_to_promote(state=graph, sdfg=sdfg)
         map_to_promote: nodes.Map = map_to_promote_entry.map
-        source_map_entry: nodes.MapEntry = self.source_map
+        source_map_entry: nodes.MapEntry = self.source_map(state=graph, sdfg=sdfg)
         source_map: nodes.Map = source_map_entry.map
 
         # Test the scope of the promotee.
@@ -113,10 +150,25 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
                 return False
 
         # Test if the map ranges are compatible with each other.
-        if not self.missing_map_params(
+        params_to_promote: list[str] | None = self.missing_map_params(
             map_to_promote=map_to_promote,
             source_map=source_map,
             be_strict=True,
+        )
+        if not params_to_promote:
+            return False
+
+        # Now we must check if there are dimensions that we do not want to promote.
+        if (not self.promote_local) and any(
+            param.endswith("__gtx_localdim") for param in params_to_promote
+        ):
+            return False
+        if (not self.promote_vertical) and any(
+            param.endswith("__gtx_vertical") for param in params_to_promote
+        ):
+            return False
+        if (not self.promote_horizontal) and any(
+            param.endswith("__gtx_horizontal") for param in params_to_promote
         ):
             return False
 
@@ -130,8 +182,8 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
         from the source map.
         The order of the parameters of these new dimensions is undetermined.
         """
-        map_to_promote: nodes.Map = self.map_to_promote.map
-        source_map: nodes.Map = self.source_map.map
+        map_to_promote: nodes.Map = self.map_to_promote(state=graph, sdfg=sdfg).map
+        source_map: nodes.Map = self.source_map(state=graph, sdfg=sdfg).map
         source_params: Sequence[str] = source_map.params
         source_ranges: subsets.Range = source_map.range
 
@@ -162,7 +214,7 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
         map_to_promote: nodes.Map,
         source_map: nodes.Map,
         be_strict: bool = True,
-    ) -> Sequence[str] | None:
+    ) -> list[str] | None:
         """Returns the parameter that are missing in the map that should be promoted.
 
         The returned sequence is empty if they are already have the same parameters.
@@ -173,12 +225,12 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
             source_map: The map acting as template.
             be_strict: Ensure that the ranges that are already there are correct.
         """
-        source_params: set[str] = set(source_map.params)
-        curr_params: set[str] = set(map_to_promote.params)
+        source_params_set: set[str] = set(source_map.params)
+        curr_params_set: set[str] = set(map_to_promote.params)
 
         # The promotion can only work if the source map's parameters
         #  if a superset of the ones the map that should be promoted is.
-        if not source_params.issuperset(curr_params):
+        if not source_params_set.issuperset(curr_params_set):
             return None
 
         if be_strict:
@@ -188,9 +240,9 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
             curr_ranges: subsets.Range = map_to_promote.range
             curr_param_to_idx: dict[str, int] = {p: i for i, p in enumerate(map_to_promote.params)}
             source_param_to_idx: dict[str, int] = {p: i for i, p in enumerate(source_map.params)}
-            for param_to_check in curr_params:
+            for param_to_check in curr_params_set:
                 curr_range = curr_ranges[curr_param_to_idx[param_to_check]]
                 source_range = source_ranges[source_param_to_idx[param_to_check]]
                 if curr_range != source_range:
                     return None
-        return list(source_params - curr_params)
+        return list(source_params_set - curr_params_set)
