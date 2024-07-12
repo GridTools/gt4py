@@ -447,14 +447,15 @@ def non_zero_start():
     assert _count_nodes(sdfg, node_type=dace_nodes.MapEntry) == 2
 
     x = np.random.rand(N)
-    z = np.empty_like(x)
+    z = np.zeros_like(x)
 
     args = {
         "x": x,
         "z": z,
         "size": N,
     }
-    ref = x[3:N] + 3.0
+    ref = np.zeros_like(x)
+    ref[dom_start:N] = x[dom_start:N] + 3.0
     return_names = ["z"]
 
     opt_sdfg = _perform_test(
