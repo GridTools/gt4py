@@ -320,8 +320,158 @@ def intermediate_branch():
     assert _count_nodes(opt_sdfg, node_type=dace_nodes.MapEntry) == 1
 
 
+def shifting():
+    """Tests what happens if we have a sift."""
+
+    IOffset = 3
+
+    domain = im.call("cartesian_domain")(
+        im.call("named_range")(itir.AxisLiteral(value=IDim.value), 0, "size"),
+        im.call("named_range")(itir.AxisLiteral(value=JDim.value), 0, "size"),
+    )
+    stencil1 = im.call(
+        im.call("as_fieldop")(
+            im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+            domain,
+        )
+    )(
+        "y",
+        im.call(
+            im.call("as_fieldop")(
+                im.lambda_("a")(im.deref(im.shift("IDim", IOffset)("a"))),
+                domain,
+            )
+        )("x"),
+    )
+
+    testee = itir.Program(
+        id=f"shift_test",
+        function_definitions=[],
+        params=[
+            itir.Sym(id="x", type=IJFTYPE),
+            itir.Sym(id="y", type=IJFTYPE),
+            itir.Sym(id="z", type=IJFTYPE),
+            itir.Sym(id="size", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            itir.SetAt(
+                expr=stencil1,
+                domain=domain,
+                target=itir.SymRef(id="z"),
+            )
+        ],
+    )
+
+    offset_provider = {
+        "IDim": IDim,
+        "JDim": JDim,
+    }
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, offset_provider)
+    sdfg.validate()
+
+    assert _count_nodes(sdfg, node_type=dace_nodes.AccessNode) == 4
+    assert _count_nodes(sdfg, node_type=dace_nodes.MapEntry) == 2
+
+    x = np.random.rand(N + 2 * IOffset, N)
+    y = np.random.rand(N, N)
+    z = np.empty_like(y)
+    ref = x[IOffset : (IOffset + N), :] + y
+
+    args = {
+        "x": x,
+        "y": y,
+        "z": z,
+        "size": N,
+    }
+    return_names = ["z"]
+
+    opt_sdfg = _perform_test(
+        sdfg=sdfg,
+        ref=ref,
+        return_names="z",
+        args=args,
+    )
+
+    assert _count_nodes(opt_sdfg, node_type=dace_nodes.AccessNode) == 4
+    assert _count_nodes(opt_sdfg, node_type=dace_nodes.MapEntry) == 1
+
+
+def non_zero_start():
+    """Tests what happens if there are two maps, that does not start at zero."""
+
+    # NOTE:
+    #  Currently the translator has an error, that leads to an invalid SDFG.
+    #  However, I am now, also unsure what the result should be in the first place.
+
+    dom_start = 3
+    domain = im.call("cartesian_domain")(
+        im.call("named_range")(itir.AxisLiteral(value=IDim.value), dom_start, "size")
+    )
+    stencil1 = im.call(
+        im.call("as_fieldop")(
+            im.lambda_("a")(im.plus(im.deref("a"), 1.0)),
+            domain,
+        )
+    )(
+        im.call(
+            im.call("as_fieldop")(
+                im.lambda_("a")(im.plus(im.deref("a"), 2.0)),
+                domain,
+            )
+        )("x"),
+    )
+
+    testee = itir.Program(
+        id=f"non_zero_start_test",
+        function_definitions=[],
+        params=[
+            itir.Sym(id="x", type=IFTYPE),
+            itir.Sym(id="z", type=IFTYPE),
+            itir.Sym(id="size", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            itir.SetAt(
+                expr=stencil1,
+                domain=domain,
+                target=itir.SymRef(id="z"),
+            )
+        ],
+    )
+
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, {})
+    sdfg.validate()
+
+    assert _count_nodes(sdfg, node_type=dace_nodes.AccessNode) == 3
+    assert _count_nodes(sdfg, node_type=dace_nodes.MapEntry) == 2
+
+    x = np.random.rand(N)
+    z = np.empty_like(x)
+
+    args = {
+        "x": x,
+        "z": z,
+        "size": N,
+    }
+    ref = x[3:N] + 3.0
+    return_names = ["z"]
+
+    opt_sdfg = _perform_test(
+        sdfg=sdfg,
+        ref=ref,
+        return_names="z",
+        args=args,
+    )
+
+    assert _count_nodes(opt_sdfg, node_type=dace_nodes.AccessNode) == 3
+    assert _count_nodes(opt_sdfg, node_type=dace_nodes.MapEntry) == 1
+
+
 if "__main__" == __name__:
-    # exclusive_only()
-    # exclusive_only_2()
+    exclusive_only()
+    exclusive_only_2()
     intermediate_branch()
+    shifting()
+    # non_zero_start()
     print("SUCCESS")
