@@ -146,7 +146,7 @@ def _create_temporary_field(
     return field_node, field_type
 
 
-def visit_AsFieldOp(
+def translate_as_field_op(
     node: gtir.Node,
     sdfg: dace.SDFG,
     state: dace.SDFGState,
@@ -228,7 +228,7 @@ def visit_AsFieldOp(
     return [(field_node, field_type)]
 
 
-def visit_Cond(
+def translate_cond(
     node: gtir.Node,
     sdfg: dace.SDFG,
     state: dace.SDFGState,
@@ -305,7 +305,7 @@ def visit_Cond(
     return output_nodes
 
 
-def visit_SymbolRef(
+def translate_symbol_ref(
     node: gtir.Node,
     sdfg: dace.SDFG,
     state: dace.SDFGState,
@@ -352,9 +352,9 @@ def visit_SymbolRef(
 
 
 if TYPE_CHECKING:
-    # Use type-checking to assert that all visitor functions implement the `PrimitiveTranslator` protocol
+    # Use type-checking to assert that all translator functions implement the `PrimitiveTranslator` protocol
     __primitive_translators: list[PrimitiveTranslator] = [
-        visit_AsFieldOp,
-        visit_Cond,
-        visit_SymbolRef,
+        translate_as_field_op,
+        translate_cond,
+        translate_symbol_ref,
     ]

@@ -305,9 +305,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     ) -> list[gtir_builtin_translators.TemporaryData]:
         # use specialized dataflow builder classes for each builtin function
         if cpm.is_call_to(node.fun, "as_fieldop"):
-            return gtir_builtin_translators.visit_AsFieldOp(node, sdfg, head_state, self)
+            return gtir_builtin_translators.translate_as_field_op(node, sdfg, head_state, self)
         elif cpm.is_call_to(node.fun, "cond"):
-            return gtir_builtin_translators.visit_Cond(node, sdfg, head_state, self)
+            return gtir_builtin_translators.translate_cond(node, sdfg, head_state, self)
         else:
             raise NotImplementedError(f"Unexpected 'FunCall' expression ({node}).")
 
@@ -325,7 +325,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
     ) -> list[gtir_builtin_translators.TemporaryData]:
-        return gtir_builtin_translators.visit_SymbolRef(node, sdfg, head_state, self)
+        return gtir_builtin_translators.translate_symbol_ref(node, sdfg, head_state, self)
 
     def visit_SymRef(
         self,
@@ -333,4 +333,31 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
     ) -> list[gtir_builtin_translators.TemporaryData]:
-        return gtir_builtin_translators.visit_SymbolRef(node, sdfg, head_state, self)
+        return gtir_builtin_translators.translate_symbol_ref(node, sdfg, head_state, self)
+
+
+def build_sdfg_from_gtir(
+    program: gtir.Program,
+    offset_provider: dict[str, gtx_common.Connectivity | gtx_common.Dimension],
+) -> dace.SDFG:
+    """
+    Receives a GTIR program and lowers it to a DaCe SDFG.
+
+    The lowering to SDFG requires that the program node is type-annotated, therefore this function
+    runs type ineference as first step.
+    As a final step, it runs the `simplify` pass to ensure that the SDFG is in the DaCe canonical form.
+
+    Arguments:
+        program: The GTIR program node to be lowered to SDFG
+        offset_provider: The definitions of offset providers used by the program node
+
+    Returns:
+        An SDFG in the DaCe canonical form (simplified)
+    """
+    sdfg_genenerator = GTIRToSDFG(offset_provider)
+    # TODO: run type inference on the `program` node before passing it to `GTIRToSDFG`
+    sdfg = sdfg_genenerator.visit(program)
+    assert isinstance(sdfg, dace.SDFG)
+
+    sdfg.simplify()
+    return sdfg
