@@ -386,10 +386,6 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
                     continue
                 sdfg.offset_providers_per_input_field.setdefault(k, []).extend(list(v))
 
-        sdfg.gt4py_program_kwargs = {
-            key: value for key, value in kwargs.items() if key != "offset_provider"
-        }
-
         return sdfg
 
     def __sdfg_closure__(self, reevaluate: Optional[dict[str, str]] = None) -> dict[str, Any]:
