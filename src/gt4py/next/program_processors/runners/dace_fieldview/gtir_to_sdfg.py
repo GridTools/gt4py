@@ -12,27 +12,47 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 """
-Class to lower GTIR to DaCe SDFG.
+Contains visitors to lower GTIR to DaCe SDFG.
 
 Note: this module covers the fieldview flavour of GTIR.
 """
 
-from typing import Any, Sequence
+from __future__ import annotations
+
+import abc
+from typing import Any, Protocol, Sequence
 
 import dace
 
-from gt4py.next.common import Connectivity, Dimension, DimensionKind
-from gt4py.next.iterator import ir as itir
+from gt4py import eve
+from gt4py.eve import concepts
+from gt4py.next import common as gtx_common
+from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_builtin_translators,
     utility as dace_fieldview_util,
 )
-from gt4py.next.program_processors.runners.dace_fieldview.sdfg_builder import SDFGBuilder
-from gt4py.next.type_system import type_specifications as ts, type_translation as tt
+from gt4py.next.type_system import type_specifications as ts
 
 
-class GTIRToSDFG(SDFGBuilder):
+class SDFGBuilder(Protocol):
+    """Visitor interface available to GTIR-primitive translators."""
+
+    @abc.abstractmethod
+    def get_offset_provider(self) -> dict[str, gtx_common.Connectivity | gtx_common.Dimension]:
+        pass
+
+    @abc.abstractmethod
+    def get_symbol_types(self) -> dict[str, ts.FieldType | ts.ScalarType]:
+        pass
+
+    @abc.abstractmethod
+    def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
+        pass
+
+
+class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     """Provides translation capability from a GTIR program to a DaCe SDFG.
 
     This class is responsible for translation of `ir.Program`, that is the top level representation
@@ -45,14 +65,24 @@ class GTIRToSDFG(SDFGBuilder):
     from where to continue building the SDFG.
     """
 
+    offset_provider: dict[str, gtx_common.Connectivity | gtx_common.Dimension]
+    symbol_types: dict[str, ts.FieldType | ts.ScalarType]
+
     def __init__(
         self,
-        offset_provider: dict[str, Connectivity | Dimension],
+        offset_provider: dict[str, gtx_common.Connectivity | gtx_common.Dimension],
     ):
-        super().__init__(offset_provider, symbol_types={})
+        self.offset_provider = offset_provider
+        self.symbol_types = {}
+
+    def get_offset_provider(self) -> dict[str, gtx_common.Connectivity | gtx_common.Dimension]:
+        return self.offset_provider
+
+    def get_symbol_types(self) -> dict[str, ts.FieldType | ts.ScalarType]:
+        return self.symbol_types
 
     def _make_array_shape_and_strides(
-        self, name: str, dims: Sequence[Dimension]
+        self, name: str, dims: Sequence[gtx_common.Dimension]
     ) -> tuple[list[dace.symbol], list[dace.symbol]]:
         """
         Parse field dimensions and allocate symbols for array shape and strides.
@@ -68,7 +98,7 @@ class GTIRToSDFG(SDFGBuilder):
         shape = [
             (
                 neighbor_tables[dim.value].max_neighbors
-                if dim.kind == DimensionKind.LOCAL
+                if dim.kind == gtx_common.DimensionKind.LOCAL
                 # we reuse the same symbol for field size passed as scalar argument to the gt4py program
                 else dace.symbol(f"__{name}_size_{i}", dtype)
             )
@@ -77,9 +107,7 @@ class GTIRToSDFG(SDFGBuilder):
         strides = [dace.symbol(f"__{name}_stride_{i}", dtype) for i in range(len(dims))]
         return shape, strides
 
-    def _add_storage(
-        self, sdfg: dace.SDFG, name: str, symbol_type: ts.DataType, transient: bool = False
-    ) -> None:
+    def _add_storage(self, sdfg: dace.SDFG, name: str, symbol_type: ts.DataType) -> None:
         """
         Add external storage (aka non-transient) for data containers passed as arguments to the SDFG.
 
@@ -90,7 +118,7 @@ class GTIRToSDFG(SDFGBuilder):
             # use symbolic shape, which allows to invoke the program with fields of different size;
             # and symbolic strides, which enables decoupling the memory layout from generated code.
             sym_shape, sym_strides = self._make_array_shape_and_strides(name, symbol_type.dims)
-            sdfg.add_array(name, sym_shape, dtype, strides=sym_strides, transient=transient)
+            sdfg.add_array(name, sym_shape, dtype, strides=sym_strides, transient=False)
         elif isinstance(symbol_type, ts.ScalarType):
             dtype = dace_fieldview_util.as_dace_type(symbol_type)
             # scalar arguments passed to the program are represented as symbols in DaCe SDFG
@@ -102,7 +130,7 @@ class GTIRToSDFG(SDFGBuilder):
         assert isinstance(symbol_type, (ts.FieldType, ts.ScalarType))
         self.symbol_types[name] = symbol_type
 
-    def _add_storage_for_temporary(self, temp_decl: itir.Temporary) -> dict[str, str]:
+    def _add_storage_for_temporary(self, temp_decl: gtir.Temporary) -> dict[str, str]:
         """
         Add temporary storage (aka transient) for data containers used as GTIR temporaries.
 
@@ -111,7 +139,7 @@ class GTIRToSDFG(SDFGBuilder):
         raise NotImplementedError("Temporaries not supported yet by GTIR DaCe backend.")
 
     def _visit_expression(
-        self, node: itir.Expr, sdfg: dace.SDFG, head_state: dace.SDFGState
+        self, node: gtir.Expr, sdfg: dace.SDFG, head_state: dace.SDFGState
     ) -> list[dace.nodes.AccessNode]:
         """
         Specialized visit method for fieldview expressions.
@@ -125,7 +153,7 @@ class GTIRToSDFG(SDFGBuilder):
         in case the transient arrays containing the expression result are not guaranteed
         to have the same memory layout as the target array.
         """
-        results: list[gtir_builtin_translators.SDFGField] = self.visit(
+        results: list[gtir_builtin_translators.TemporaryData] = self.visit(
             node, sdfg=sdfg, head_state=head_state
         )
 
@@ -142,7 +170,7 @@ class GTIRToSDFG(SDFGBuilder):
 
         return field_nodes
 
-    def visit_Program(self, node: itir.Program) -> dace.SDFG:
+    def visit_Program(self, node: gtir.Program) -> dace.SDFG:
         """Translates `ir.Program` to `dace.SDFG`.
 
         First, it will allocate field and scalar storage for global data. The storage
@@ -155,7 +183,7 @@ class GTIRToSDFG(SDFGBuilder):
             raise NotImplementedError("Functions expected to be inlined as lambda calls.")
 
         sdfg = dace.SDFG(node.id)
-        sdfg.debuginfo = dace_fieldview_util.debuginfo(node, sdfg.debuginfo)
+        sdfg.debuginfo = dace_fieldview_util.debug_info(node, default=sdfg.debuginfo)
         entry_state = sdfg.add_state("program_entry", is_start_block=True)
 
         # declarations of temporaries result in transient array definitions in the SDFG
@@ -174,34 +202,17 @@ class GTIRToSDFG(SDFGBuilder):
             assert isinstance(param.type, ts.DataType)
             self._add_storage(sdfg, str(param.id), param.type)
 
-        # add SDFG storage for connectivity tables
-        for offset, offset_provider in dace_fieldview_util.filter_connectivities(
-            self.offset_provider
-        ).items():
-            scalar_kind = tt.get_scalar_kind(offset_provider.index_type)
-            local_dim = Dimension(offset, kind=DimensionKind.LOCAL)
-            type_ = ts.FieldType(
-                [offset_provider.origin_axis, local_dim], ts.ScalarType(scalar_kind)
-            )
-            # We store all connectivity tables as transient arrays here; later, while building
-            # the field operator expressions, we change to non transient the tables
-            # that are actually used. This way, we avoid adding SDFG arguments for
-            # the connectivity tables that are not used.
-            self._add_storage(
-                sdfg, dace_fieldview_util.connectivity_identifier(offset), type_, transient=True
-            )
-
         # visit one statement at a time and expand the SDFG from the current head state
         for i, stmt in enumerate(node.body):
             # include `debuginfo` only for `ir.Program` and `ir.Stmt` nodes: finer granularity would be too messy
             head_state = sdfg.add_state_after(head_state, f"stmt_{i}")
-            head_state._debuginfo = dace_fieldview_util.debuginfo(stmt, sdfg.debuginfo)
+            head_state._debuginfo = dace_fieldview_util.debug_info(stmt, default=sdfg.debuginfo)
             self.visit(stmt, sdfg=sdfg, state=head_state)
 
         sdfg.validate()
         return sdfg
 
-    def visit_SetAt(self, stmt: itir.SetAt, sdfg: dace.SDFG, state: dace.SDFGState) -> None:
+    def visit_SetAt(self, stmt: gtir.SetAt, sdfg: dace.SDFG, state: dace.SDFGState) -> None:
         """Visits a `SetAt` statement expression and writes the local result to some external storage.
 
         Each statement expression results in some sort of dataflow gragh writing to temporary storage.
@@ -237,18 +248,20 @@ class GTIRToSDFG(SDFGBuilder):
             )
 
     def visit_FunCall(
-        self, node: itir.FunCall, sdfg: dace.SDFG, head_state: dace.SDFGState
-    ) -> list[gtir_builtin_translators.SDFGField]:
+        self,
+        node: gtir.FunCall,
+        sdfg: dace.SDFG,
+        head_state: dace.SDFGState,
+    ) -> list[gtir_builtin_translators.TemporaryData]:
         # use specialized dataflow builder classes for each builtin function
         if cpm.is_call_to(node.fun, "as_fieldop"):
-            return gtir_builtin_translators.AsFieldOp(node.args)(node.fun, sdfg, head_state, self)
-        elif cpm.is_call_to(node.fun, "select"):
-            assert len(node.args) == 0
-            return gtir_builtin_translators.Select()(node.fun, sdfg, head_state, self)
+            return gtir_builtin_translators.visit_AsFieldOp(node, sdfg, head_state, self)
+        elif cpm.is_call_to(node.fun, "cond"):
+            return gtir_builtin_translators.visit_Cond(node, sdfg, head_state, self)
         else:
             raise NotImplementedError(f"Unexpected 'FunCall' expression ({node}).")
 
-    def visit_Lambda(self, node: itir.Lambda) -> Any:
+    def visit_Lambda(self, node: gtir.Lambda) -> Any:
         """
         This visitor class should never encounter `itir.Lambda` expressions
         because a lambda represents a stencil, which operates from iterator to values.
@@ -257,11 +270,17 @@ class GTIRToSDFG(SDFGBuilder):
         raise RuntimeError("Unexpected 'itir.Lambda' node encountered in GTIR.")
 
     def visit_Literal(
-        self, node: itir.Literal, sdfg: dace.SDFG, head_state: dace.SDFGState
-    ) -> list[gtir_builtin_translators.SDFGField]:
-        return gtir_builtin_translators.SymbolRef()(node, sdfg, head_state, self)
+        self,
+        node: gtir.Literal,
+        sdfg: dace.SDFG,
+        head_state: dace.SDFGState,
+    ) -> list[gtir_builtin_translators.TemporaryData]:
+        return gtir_builtin_translators.visit_SymbolRef(node, sdfg, head_state, self)
 
     def visit_SymRef(
-        self, node: itir.SymRef, sdfg: dace.SDFG, head_state: dace.SDFGState
-    ) -> list[gtir_builtin_translators.SDFGField]:
-        return gtir_builtin_translators.SymbolRef()(node, sdfg, head_state, self)
+        self,
+        node: gtir.SymRef,
+        sdfg: dace.SDFG,
+        head_state: dace.SDFGState,
+    ) -> list[gtir_builtin_translators.TemporaryData]:
+        return gtir_builtin_translators.visit_SymbolRef(node, sdfg, head_state, self)
