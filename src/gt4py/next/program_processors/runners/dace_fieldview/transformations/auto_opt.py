@@ -20,8 +20,10 @@ import dace
 from dace.transformation import dataflow as dace_dataflow
 from dace.transformation.auto import auto_optimize as dace_aoptimize
 
-from .map_promoter import SerialMapPromoter
-from .map_seriall_fusion import SerialMapFusion
+from gt4py.next import common as gtx_common
+from gt4py.next.program_processors.runners.dace_fieldview import (
+    transformations as gtx_transformations,
+)
 
 
 def dace_auto_optimize(
@@ -89,6 +91,7 @@ def gt_simplify(
 def gt_auto_optimize(
     sdfg: dace.SDFG,
     device: dace.DeviceType = dace.DeviceType.CPU,
+    leading_dim: Optional[gtx_common.Dimension] = None,
     **kwargs: Any,
 ) -> dace.SDFG:
     """Performs GT4Py specific optimizations in place.
@@ -113,11 +116,11 @@ def gt_auto_optimize(
             if kwargs.get("use_dace_fusion", False):
                 sdfg.apply_transformations_repeated([dace_dataflow.MapFusion])
             else:
-                xform = SerialMapFusion()
+                xform = gtx_transformations.SerialMapFusion()
                 sdfg.apply_transformations_repeated([xform], validate=True, validate_all=True)
 
             sdfg.apply_transformations_repeated(
-                [SerialMapPromoter(promote_horizontal=False)],
+                [gtx_transformations.SerialMapPromoter(promote_horizontal=False)],
                 validate=True,
                 validate_all=True,
             )
@@ -134,6 +137,15 @@ def gt_auto_optimize(
 
         else:
             raise RuntimeWarning("Optimization of the SDFG did not converged.")
+
+        # After we have optimized the SDFG as good as we can, we will now do some
+        #  lower level optimization.
+        if leading_dim is not None:
+            sdfg.apply_transformations_once_everywhere(
+                gtx_transformations.MapIterationOrder(
+                    leading_dim=leading_dim,
+                )
+            )
 
         # These are the part that we copy from DaCe built in auto optimization.
         dace_aoptimize.set_fast_implementations(sdfg, device)
