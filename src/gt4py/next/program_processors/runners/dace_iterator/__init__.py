@@ -476,7 +476,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
                             in dace_parsed_arg.shape[i].name.lower()
                         )
                 # for the compile-time constant arrays, we cannot do any further checks
-            elif isinstance(dace_parsed_arg, OrderedDict):  # offset_provider
+            elif isinstance(dace_parsed_arg, (dict, OrderedDict)):  # offset_provider
                 continue
             else:
                 raise ValueError(
