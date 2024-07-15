@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import dataclasses
 import warnings
+from collections import OrderedDict
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import field
 from inspect import currentframe, getframeinfo
@@ -32,7 +33,7 @@ from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.type_system import type_specifications as ts
 
 from .itir_to_sdfg import ItirToSDFG
-from .utility import connectivity_identifier, filter_connectivities, get_sorted_dims
+from .utility import as_dace_type, connectivity_identifier, filter_connectivities, get_sorted_dims
 
 
 try:
@@ -329,6 +330,10 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         fields = {str(p.id): p.type for p in self.itir.params if hasattr(p.type, "dims")}
         arg_types = list(params.values())
 
+        dace_parsed_args = list(args) + list(kwargs.values())
+        gt4py_program_args = list(params.values())
+        Program.crosscheck_dace_parsing(dace_parsed_args, gt4py_program_args)
+
         # Do this because DaCe converts the offset_provider to an OrderedDict with StringLiteral keys
         offset_provider = {str(k): v for k, v in kwargs.get("offset_provider", {}).items()}
         self.sdfg_closure_vars["offset_provider"] = offset_provider
@@ -341,6 +346,15 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         )
 
         self.sdfg_closure_vars["sdfg.arrays"] = sdfg.arrays
+        if "storage" not in Program.connectivity_tables_data_descriptors and offset_provider:
+            for k in offset_provider.keys():
+                if not hasattr(offset_provider[k], "table"):
+                    continue
+                if connectivity_identifier(k) in sdfg.arrays:
+                    Program.connectivity_tables_data_descriptors["storage"] = sdfg.arrays[
+                        connectivity_identifier(k)
+                    ].storage
+                    break
 
         # TODO(kotsaloscv): Keep halo exchange related metadata here?
         # Could possibly be computed directly from the SDFG.
@@ -381,7 +395,9 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         )
         for closure in itir_tmp.closures:  # type: ignore[union-attr]
             shifts = itir_transforms.trace_shifts.TraceShifts.apply(closure)
-            for k, v in shifts.items():
+            for k, v in shifts.items():  # type: ignore[assignment]
+                if not isinstance(k, str):
+                    continue
                 if k not in sdfg.gt4py_program_input_fields:
                     continue
                 sdfg.offset_providers_per_input_field.setdefault(k, []).extend(list(v))
@@ -418,6 +434,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
                             symbols[f"__{conn_id}_stride_0"],
                             symbols[f"__{conn_id}_stride_1"],
                         ],
+                        storage=Program.connectivity_tables_data_descriptors["storage"],
                     )
                 closure_dict[conn_id] = Program.connectivity_tables_data_descriptors[conn_id]
 
@@ -428,3 +445,42 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         for arg in self.past_stage.past_node.params:
             args.append(arg.id)
         return (args, [])
+
+    @classmethod
+    def crosscheck_dace_parsing(
+        cls, dace_parsed_args: list[Any], gt4py_program_args: list[Any]
+    ) -> bool:
+        for dace_parsed_arg, gt4py_program_arg in zip(dace_parsed_args, gt4py_program_args):
+            if isinstance(dace_parsed_arg, dace.data.Scalar):
+                assert dace_parsed_arg.dtype == as_dace_type(gt4py_program_arg)
+            elif isinstance(dace_parsed_arg, (bool, int, float, str)) or isinstance(
+                dace_parsed_arg, (np.bool_, np.integer, np.floating, np.str_)
+            ):  # compile-time constant scalar
+                assert isinstance(gt4py_program_arg, ts.ScalarType)
+                if isinstance(dace_parsed_arg, (bool, np.bool_)):
+                    assert gt4py_program_arg.kind == ts.ScalarKind.BOOL
+                elif isinstance(dace_parsed_arg, (int, np.integer)):
+                    assert gt4py_program_arg.kind in [ts.ScalarKind.INT32, ts.ScalarKind.INT64]
+                elif isinstance(dace_parsed_arg, (float, np.floating)):
+                    assert gt4py_program_arg.kind in [ts.ScalarKind.FLOAT32, ts.ScalarKind.FLOAT64]
+                elif isinstance(dace_parsed_arg, (str, np.str_)):
+                    assert gt4py_program_arg.kind == ts.ScalarKind.STRING
+            elif isinstance(dace_parsed_arg, dace.data.Array):
+                assert isinstance(gt4py_program_arg, ts.FieldType)
+                assert len(dace_parsed_arg.shape) == len(gt4py_program_arg.dims)
+                assert dace_parsed_arg.dtype == as_dace_type(gt4py_program_arg.dtype)
+                for i in range(len(dace_parsed_arg.shape)):
+                    if isinstance(dace_parsed_arg.shape[i], dace.symbol):
+                        assert (
+                            gt4py_program_arg.dims[i].value.lower()
+                            in dace_parsed_arg.shape[i].name.lower()
+                        )
+                # for the compile-time constant arrays, we cannot do any further checks
+            elif isinstance(dace_parsed_arg, OrderedDict):  # offset_provider
+                continue
+            else:
+                raise ValueError(
+                    f"Unresolved case for {dace_parsed_arg} (==, !=) {gt4py_program_arg}"
+                )
+
+        return True
