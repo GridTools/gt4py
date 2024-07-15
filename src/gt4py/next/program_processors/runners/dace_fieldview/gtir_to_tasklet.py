@@ -16,7 +16,6 @@
 from __future__ import annotations
 
 import dataclasses
-import itertools
 from typing import Any, Dict, List, Optional, Set, Tuple, TypeAlias, Union
 
 import dace
@@ -156,9 +155,6 @@ class LambdaToTasklet(eve.NodeVisitor):
         return ValueExpr(temp_node, data_type)
 
     def _visit_deref(self, node: gtir.FunCall) -> MemletExpr | ValueExpr:
-        # format used for field index tasklet connector
-        IndexConnectorFmt = "__index_{dim}"
-
         assert len(node.args) == 1
         it = self.visit(node.args[0])
 
@@ -171,279 +167,15 @@ class LambdaToTasklet(eve.NodeVisitor):
                 return MemletExpr(it.field, field_subset)
 
             else:
-                # we use a tasklet to perform dereferencing of a generic iterator
-                assert all(dim in it.indices for dim in it.dimensions)
-                field_indices = [(dim, it.indices[dim]) for dim in it.dimensions]
-                index_connectors = [
-                    IndexConnectorFmt.format(dim=dim.value)
-                    for dim, index in field_indices
-                    if not isinstance(index, SymbolExpr)
-                ]
-                index_internals = ",".join(
-                    str(index.value)
-                    if isinstance(index, SymbolExpr)
-                    else IndexConnectorFmt.format(dim=dim.value)
-                    for dim, index in field_indices
-                )
-                deref_node = self._add_tasklet(
-                    "deref_field_indirection",
-                    {"field"} | set(index_connectors),
-                    {"val"},
-                    code=f"val = field[{index_internals}]",
-                )
-                # add new termination point for this field parameter
-                self._add_entry_memlet_path(
-                    it.field,
-                    sbs.Range.from_array(field_desc),
-                    deref_node,
-                    "field",
-                )
-
-                for dim, index_expr in field_indices:
-                    deref_connector = IndexConnectorFmt.format(dim=dim.value)
-                    if isinstance(index_expr, MemletExpr):
-                        self._add_entry_memlet_path(
-                            index_expr.node,
-                            index_expr.subset,
-                            deref_node,
-                            deref_connector,
-                        )
-
-                    elif isinstance(index_expr, ValueExpr):
-                        self.state.add_edge(
-                            index_expr.node,
-                            None,
-                            deref_node,
-                            deref_connector,
-                            dace.Memlet(data=index_expr.node.data, subset="0"),
-                        )
-                    else:
-                        assert isinstance(index_expr, SymbolExpr)
-
-                dtype = it.field.desc(self.sdfg).dtype
-                return self._get_tasklet_result(dtype, deref_node, "val")
+                raise NotImplementedError
 
         else:
             assert isinstance(it, MemletExpr)
             return it
 
-    def _split_shift_args(
-        self, args: list[gtir.Expr]
-    ) -> tuple[list[gtir.Expr], Optional[list[gtir.Expr]]]:
-        """
-        Splits the arguments to `shift` builtin function as pairs, each pair containing
-        the offset provider and the offset value in one dimension.
-        """
-        pairs = [args[i : i + 2] for i in range(0, len(args), 2)]
-        assert len(pairs) >= 1
-        assert all(len(pair) == 2 for pair in pairs)
-        return pairs[-1], list(itertools.chain(*pairs[0:-1])) if len(pairs) > 1 else None
-
-    def _make_shift_for_rest(self, rest: list[gtir.Expr], iterator: gtir.Expr) -> gtir.FunCall:
-        """Transforms a multi-dimensional shift into recursive shift calls, each in a single dimension."""
-        return gtir.FunCall(
-            fun=gtir.FunCall(fun=gtir.SymRef(id="shift"), args=rest),
-            args=[iterator],
-        )
-
-    def _make_cartesian_shift(
-        self, it: IteratorExpr, offset_dim: gtx_common.Dimension, offset_expr: IteratorIndexExpr
-    ) -> IteratorExpr:
-        """Implements cartesian shift along one dimension."""
-        assert offset_dim in it.dimensions
-        new_index: SymbolExpr | ValueExpr
-        assert offset_dim in it.indices
-        index_expr = it.indices[offset_dim]
-        if isinstance(index_expr, SymbolExpr) and isinstance(offset_expr, SymbolExpr):
-            # purely symbolic expression which can be interpreted at compile time
-            new_index = SymbolExpr(
-                dace.symbolic.SymExpr(index_expr.value) + offset_expr.value, index_expr.dtype
-            )
-        else:
-            # the offset needs to be calculate by means of a tasklet
-            new_index_connector = "shifted_index"
-            if isinstance(index_expr, SymbolExpr):
-                dynamic_offset_tasklet = self._add_tasklet(
-                    "dynamic_offset",
-                    {"offset"},
-                    {new_index_connector},
-                    f"{new_index_connector} = {index_expr.value} + offset",
-                )
-            elif isinstance(offset_expr, SymbolExpr):
-                dynamic_offset_tasklet = self._add_tasklet(
-                    "dynamic_offset",
-                    {"index"},
-                    {new_index_connector},
-                    f"{new_index_connector} = index + {offset_expr}",
-                )
-            else:
-                dynamic_offset_tasklet = self._add_tasklet(
-                    "dynamic_offset",
-                    {"index", "offset"},
-                    {new_index_connector},
-                    f"{new_index_connector} = index + offset",
-                )
-            for input_expr, input_connector in [(index_expr, "index"), (offset_expr, "offset")]:
-                if isinstance(input_expr, MemletExpr):
-                    if input_connector == "index":
-                        dtype = input_expr.node.desc(self.sdfg).dtype
-                    self._add_entry_memlet_path(
-                        input_expr.node,
-                        input_expr.subset,
-                        dynamic_offset_tasklet,
-                        input_connector,
-                    )
-                elif isinstance(input_expr, ValueExpr):
-                    if input_connector == "index":
-                        dtype = input_expr.node.desc(self.sdfg).dtype
-                    self.state.add_edge(
-                        input_expr.node,
-                        None,
-                        dynamic_offset_tasklet,
-                        input_connector,
-                        dace.Memlet(data=input_expr.node.data, subset="0"),
-                    )
-                else:
-                    assert isinstance(input_expr, SymbolExpr)
-                    if input_connector == "index":
-                        dtype = input_expr.dtype
-
-            new_index = self._get_tasklet_result(dtype, dynamic_offset_tasklet, new_index_connector)
-
-        # a new iterator with a shifted index along one dimension
-        return IteratorExpr(
-            it.field,
-            it.dimensions,
-            {dim: (new_index if dim == offset_dim else index) for dim, index in it.indices.items()},
-        )
-
-    def _make_dynamic_neighbor_offset(
-        self,
-        offset_expr: MemletExpr | ValueExpr,
-        offset_table_node: dace.nodes.AccessNode,
-        origin_index: SymbolExpr,
-    ) -> ValueExpr:
-        """
-        Implements access to neighbor connectivity table by means of a tasklet node.
-
-        It requires a dynamic offset value, either obtained from a field (`MemletExpr`)
-        or computed byanother tasklet (`ValueExpr`).
-        """
-        new_index_connector = "neighbor_index"
-        tasklet_node = self._add_tasklet(
-            "dynamic_neighbor_offset",
-            {"table", "offset"},
-            {new_index_connector},
-            f"{new_index_connector} = table[{origin_index.value}, offset]",
-        )
-        self._add_entry_memlet_path(
-            offset_table_node,
-            sbs.Range.from_array(offset_table_node.desc(self.sdfg)),
-            tasklet_node,
-            "table",
-        )
-        if isinstance(offset_expr, MemletExpr):
-            self._add_entry_memlet_path(
-                offset_expr.node,
-                offset_expr.subset,
-                tasklet_node,
-                "offset",
-            )
-        else:
-            self.state.add_edge(
-                offset_expr.node,
-                None,
-                tasklet_node,
-                "offset",
-                dace.Memlet(data=offset_expr.node.data, subset="0"),
-            )
-
-        dtype = offset_table_node.desc(self.sdfg).dtype
-        return self._get_tasklet_result(dtype, tasklet_node, new_index_connector)
-
-    def _make_unstructured_shift(
-        self,
-        it: IteratorExpr,
-        connectivity: gtx_common.Connectivity,
-        offset_table_node: dace.nodes.AccessNode,
-        offset_expr: IteratorIndexExpr,
-    ) -> IteratorExpr:
-        """Implements shift in unstructured domain by means of a neighbor table."""
-        assert connectivity.neighbor_axis in it.dimensions
-        neighbor_dim = connectivity.neighbor_axis
-        assert neighbor_dim not in it.indices
-
-        origin_dim = connectivity.origin_axis
-        assert origin_dim in it.indices
-        origin_index = it.indices[origin_dim]
-        assert isinstance(origin_index, SymbolExpr)
-
-        if isinstance(offset_expr, SymbolExpr):
-            # use memlet to retrieve the neighbor index
-            shifted_indices = it.indices | {
-                neighbor_dim: MemletExpr(
-                    offset_table_node,
-                    sbs.Indices([origin_index.value, offset_expr.value]),
-                )
-            }
-        else:
-            # dynamic offset: we cannot use a memlet to retrieve the offset value, use a tasklet node
-            dynamic_offset_value = self._make_dynamic_neighbor_offset(
-                offset_expr, offset_table_node, origin_index
-            )
-
-            shifted_indices = it.indices | {neighbor_dim: dynamic_offset_value}
-
-        return IteratorExpr(it.field, it.dimensions, shifted_indices)
-
-    def _visit_shift(self, node: gtir.FunCall) -> IteratorExpr:
-        shift_node = node.fun
-        assert isinstance(shift_node, gtir.FunCall)
-
-        # here we check the arguments to the `shift` builtin function: the offset provider and the offset value
-        head, tail = self._split_shift_args(shift_node.args)
-        if tail:
-            # we visit a multi-dimensional shift as recursive shift function calls, each returning a new iterator
-            it = self.visit(self._make_shift_for_rest(tail, node.args[0]))
-        else:
-            # the iterator to be shifted is the argument to the function node
-            it = self.visit(node.args[0])
-        assert isinstance(it, IteratorExpr)
-
-        # first argument of the shift node is the offset provider
-        assert isinstance(head[0], gtir.OffsetLiteral)
-        offset = head[0].value
-        assert isinstance(offset, str)
-        offset_provider = self.subgraph_builder.get_offset_provider(offset)
-        # second argument should be the offset value, which could be a symbolic expression or a dynamic offset
-        offset_expr: IteratorIndexExpr
-        if isinstance(head[1], gtir.OffsetLiteral):
-            offset_expr = SymbolExpr(head[1].value, dace.int32)
-        else:
-            dynamic_offset_expr = self.visit(head[1])
-            assert isinstance(dynamic_offset_expr, MemletExpr | ValueExpr)
-            offset_expr = dynamic_offset_expr
-
-        if isinstance(offset_provider, gtx_common.Dimension):
-            return self._make_cartesian_shift(it, offset_provider, offset_expr)
-        else:
-            # initially, the storage for the connectivty tables is created as transient;
-            # when the tables are used, the storage is changed to non-transient,
-            # so the corresponding arrays are supposed to be allocated by the SDFG caller
-            offset_table = dace_fieldview_util.connectivity_identifier(offset)
-            self.sdfg.arrays[offset_table].transient = False
-            offset_table_node = self.state.add_access(offset_table)
-
-            return self._make_unstructured_shift(
-                it, offset_provider, offset_table_node, offset_expr
-            )
-
     def visit_FunCall(self, node: gtir.FunCall) -> IteratorExpr | MemletExpr | ValueExpr:
         if cpm.is_call_to(node, "deref"):
             return self._visit_deref(node)
-
-        elif cpm.is_applied_shift(node):
-            return self._visit_shift(node)
 
         else:
             assert isinstance(node.fun, gtir.SymRef)
