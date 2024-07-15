@@ -31,7 +31,7 @@ from gt4py.next.program_processors.processor_interface import (
 )
 
 
-__all__ = ["offset", "fundef", "fendef", "closure"]
+__all__ = ["offset", "fundef", "fendef", "closure", "set_at"]
 
 
 @dataclass(frozen=True)
@@ -206,5 +206,10 @@ def fundef(fun):
 
 
 @builtin_dispatch
-def closure(*args):
+def closure(*args):  # TODO remove
+    return BackendNotSelectedError()
+
+
+@builtin_dispatch
+def set_at(*args):
     return BackendNotSelectedError()
