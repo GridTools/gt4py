@@ -135,6 +135,9 @@ def gt_auto_optimize(
     sdfg: dace.SDFG,
     device: dace.DeviceType = dace.DeviceType.CPU,
     leading_dim: Optional[gtx_common.Dimension] = None,
+    gpu: bool = False,
+    validate: bool = True,
+    validate_all: bool = False,
     **kwargs: Any,
 ) -> dace.SDFG:
     """Performs GT4Py specific optimizations in place.
@@ -142,6 +145,8 @@ def gt_auto_optimize(
     Args:
         sdfg: The SDFG that should ve optimized in place.
         device: The device for which we should optimize.
+        leading_dim: Leading dimension, where the stride is expected to be 1.
+        gpu: Optimize for GPU.
     """
 
     with dace.config.temporary_config():
@@ -153,6 +158,9 @@ def gt_auto_optimize(
         # Compute the SDFG to see if something has changed.
         sdfg_hash = sdfg.hash_sdfg()
 
+        # Have GPU transformations been performed.
+        have_gpu_transformations_been_run = False
+
         for _ in range(100):
             # Due to the structure of the generated SDFG getting rid of Maps,
             #  i.e. fusing them, is the best we can currently do.
@@ -160,12 +168,14 @@ def gt_auto_optimize(
                 sdfg.apply_transformations_repeated([dace_dataflow.MapFusion])
             else:
                 xform = gtx_transformations.SerialMapFusion()
-                sdfg.apply_transformations_repeated([xform], validate=True, validate_all=True)
+                sdfg.apply_transformations_repeated(
+                    [xform], validate=validate, validate_all=validate_all
+                )
 
             sdfg.apply_transformations_repeated(
                 [gtx_transformations.SerialMapPromoter(promote_horizontal=False)],
-                validate=True,
-                validate_all=True,
+                validate=validate,
+                validate_all=validate_all,
             )
 
             # Maybe running the fusion has opened more opportunities.
@@ -176,8 +186,12 @@ def gt_auto_optimize(
             sdfg_hash = sdfg.hash_sdfg()
 
             if old_sdfg_hash == sdfg_hash:
+                if gpu and (not have_gpu_transformations_been_run):
+                    gt_gpu_transformation(sdfg, validate=validate, validate_all=validate_all)
+                    have_gpu_transformations_been_run = True
+                    sdfg_hash = sdfg.hash_sdfg()
+                    continue
                 break
-
         else:
             raise RuntimeWarning("Optimization of the SDFG did not converged.")
 
