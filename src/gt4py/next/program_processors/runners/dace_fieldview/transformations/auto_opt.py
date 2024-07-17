@@ -88,6 +88,49 @@ def gt_simplify(
     ).apply_pass(sdfg, {})
 
 
+def gt_gpu_transformation(
+    sdfg: dace.SDFG,
+    validate: bool = True,
+    validate_all: bool = False,
+) -> dace.SDFG:
+    """Transform an SDFG into an GPU SDFG.
+
+    The transformations are done in place.
+    The function will roughly do the same:
+    - Move all arrays used as input to the GPU.
+    - Apply the standard DaCe GPU transformation.
+    - Run `gt_simplify()` (recommended by the DaCe documentation).
+    - Try to promote trivial maps.
+    """
+
+    # Turn all global arrays (which we identify as input) into GPU memory.
+    #  This way the GPU transformation will not create this copying stuff.
+    for desc in sdfg.arrays.values():
+        if desc.transient:
+            continue
+        if not isinstance(desc, dace.data.Array):
+            continue
+        desc.storage = dace.dtypes.StorageType.GPU_Global
+
+    # Now turn it into a GPU SDFG
+    sdfg.apply_gpu_transformations(
+        validate=validate,
+        validate_all=validate_all,
+        simplify=False,
+    )
+
+    # The documentation recommend to run simplify afterwards
+    gtx_transformations.gt_simplify(sdfg)
+
+    # Start to promote the maps.
+    sdfg.apply_transformations_repeated(
+        [gtx_transformations.SerialMapPromoterGPU()],
+        validate=validate,
+        validate_all=validate_all,
+    )
+    return sdfg
+
+
 def gt_auto_optimize(
     sdfg: dace.SDFG,
     device: dace.DeviceType = dace.DeviceType.CPU,

@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from .auto_opt import dace_auto_optimize, gt_auto_optimize, gt_simplify
+from .auto_opt import dace_auto_optimize, gt_auto_optimize, gt_gpu_transformation, gt_simplify
 from .map_orderer import MapIterationOrder
 from .map_promoter import SerialMapPromoter, SerialMapPromoterGPU
 from .map_seriall_fusion import SerialMapFusion
@@ -22,6 +22,7 @@ __all__ = [
     "dace_auto_optimize",
     "gt_auto_optimize",
     "gt_simplify",
+    "gt_gpu_transformation",
     "SerialMapFusion",
     "SerialMapPromoter",
     "SerialMapPromoterGPU",
