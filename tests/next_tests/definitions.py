@@ -97,6 +97,7 @@ class ProgramFormatterId(_PythonObjectIdMixin, str, enum.Enum):
 
 
 # Test markers
+ALL = "all"
 REQUIRES_ATLAS = "requires_atlas"
 # TODO(havogt): Remove, skipped during refactoring to GTIR
 STARTS_FROM_GTIR_PROGRAM = "starts_from_gtir_program"
@@ -146,6 +147,8 @@ COMMON_SKIP_TEST_LIST = [
     (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),
 ]
 DACE_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
+    # TODO(tehrengruber): disable all DaCe tests until new version of the backend using GTIR lands
+    (ALL, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_INDEX_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_LIFT_EXPRESSIONS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_ORIGIN, XFAIL, UNSUPPORTED_MESSAGE),
