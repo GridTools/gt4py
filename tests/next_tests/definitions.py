@@ -97,7 +97,10 @@ class ProgramFormatterId(_PythonObjectIdMixin, str, enum.Enum):
 
 
 # Test markers
+ALL = "all"
 REQUIRES_ATLAS = "requires_atlas"
+# TODO(havogt): Remove, skipped during refactoring to GTIR
+STARTS_FROM_GTIR_PROGRAM = "starts_from_gtir_program"
 USES_APPLIED_SHIFTS = "uses_applied_shifts"
 USES_CONSTANT_FIELDS = "uses_constant_fields"
 USES_DYNAMIC_OFFSETS = "uses_dynamic_offsets"
@@ -135,6 +138,7 @@ REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE = (
 # Common list of feature markers to skip
 COMMON_SKIP_TEST_LIST = [
     (REQUIRES_ATLAS, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
+    (STARTS_FROM_GTIR_PROGRAM, SKIP, UNSUPPORTED_MESSAGE),
     (USES_APPLIED_SHIFTS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_IF_STMTS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_NEGATIVE_MODULO, XFAIL, UNSUPPORTED_MESSAGE),
@@ -143,6 +147,8 @@ COMMON_SKIP_TEST_LIST = [
     (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),
 ]
 DACE_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
+    # TODO(tehrengruber): disable all DaCe tests until new version of the backend using GTIR lands
+    (ALL, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_INDEX_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_LIFT_EXPRESSIONS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_ORIGIN, XFAIL, UNSUPPORTED_MESSAGE),
