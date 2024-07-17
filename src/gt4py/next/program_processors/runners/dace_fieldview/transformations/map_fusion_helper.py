@@ -466,7 +466,9 @@ class MapFusionHelper(transformation.SingleStateTransformation):
                 consumers = util.find_downstream_consumers(state=state, begin=intermediate_node)
                 for consumer_node, feed_edge in consumers:
                     # TODO(phimuell): Improve this approximation.
-                    if feed_edge.data.num_elements() == intermediate_size:
+                    if (
+                        intermediate_size != 1
+                    ) and feed_edge.data.num_elements() == intermediate_size:
                         return None
                     if consumer_node is map_entry_2:  # Dynamic map range.
                         return None
