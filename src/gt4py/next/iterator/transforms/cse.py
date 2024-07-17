@@ -98,7 +98,7 @@ class CollectSubexpressions(PreserveLocationVisitor, VisitorWithSymbolTableTrait
     class State:
         #: A dictionary mapping a node to a list of node ids with equal hash and some additional
         #: information. See `SubexpressionData` for more information.
-        subexprs: dict[itir.Node, "CollectSubexpressions.SubexpressionData"] = dataclasses.field(
+        subexprs: dict[itir.Node, CollectSubexpressions.SubexpressionData] = dataclasses.field(
             default_factory=dict
         )
         # TODO(tehrengruber): Revisit if this makes sense or if we can just recompute the collected
@@ -126,7 +126,7 @@ class CollectSubexpressions(PreserveLocationVisitor, VisitorWithSymbolTableTrait
         obj.visit(node, state=state, depth=-1)
         # Return subexpression such that the nodes closer to the root come first and skip the root
         # node itself.
-        subexprs_sorted: list[tuple[itir.Node, "CollectSubexpressions.SubexpressionData"]] = sorted(
+        subexprs_sorted: list[tuple[itir.Node, CollectSubexpressions.SubexpressionData]] = sorted(
             state.subexprs.items(), key=lambda el: el[1].max_depth
         )
         return {k: v.subexprs for k, v in subexprs_sorted if k is not node}
