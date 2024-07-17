@@ -14,7 +14,7 @@
 
 from .auto_opt import dace_auto_optimize, gt_auto_optimize, gt_simplify
 from .map_orderer import MapIterationOrder
-from .map_promoter import SerialMapPromoter
+from .map_promoter import SerialMapPromoter, SerialMapPromoterGPU
 from .map_seriall_fusion import SerialMapFusion
 
 
@@ -24,5 +24,6 @@ __all__ = [
     "gt_simplify",
     "SerialMapFusion",
     "SerialMapPromoter",
+    "SerialMapPromoterGPU",
     "MapIterationOrder",
 ]
