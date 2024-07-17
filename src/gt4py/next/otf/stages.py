@@ -42,6 +42,15 @@ class CompileArg:
     def __gt_type__(self) -> ts.TypeSpec:
         return self.gt_type
 
+    @classmethod
+    def from_concrete(cls, value: Any) -> Self | tuple[Self | tuple, ...]:
+        gt_type = type_translation.from_value(value)
+        match gt_type:
+            case ts.TupleType():
+                return tuple(cls.from_concrete(element) for element in value)
+            case _:
+                return cls(gt_type)
+
 
 @dataclasses.dataclass(frozen=True)
 class CompileConnectivity(common.Connectivity):
@@ -74,9 +83,9 @@ def connectivity_or_dimension(
             raise ValueError
 
 
-def iter_size_compile_args(args: Iterable[CompileArg]) -> Iterator[CompileArg]:
+def iter_size_compile_args(args: Iterable[CompileArg | tuple]) -> Iterator[CompileArg | tuple]:
     for arg in args:
-        match argt := arg.__gt_type__():
+        match argt := type_translation.from_value(arg):
             case ts.TupleType():
                 yield from iter_size_compile_args((CompileArg(t) for t in argt))
             case ts.FieldType():
@@ -89,26 +98,45 @@ def iter_size_compile_args(args: Iterable[CompileArg]) -> Iterator[CompileArg]:
 
 @dataclasses.dataclass(frozen=True)
 class CompileArgSpec:
-    args: tuple[CompileArg, ...]
-    kwargs: dict[str, CompileArg]
+    args: tuple[CompileArg | tuple, ...]
+    kwargs: dict[str, CompileArg | tuple]
     offset_provider: dict[str, common.Connectivity | common.Dimension]
     column_axis: Optional[common.Dimension]
 
     @classmethod
-    def from_concrete(cls, *args: Any, **kwargs: Any) -> Self:
-        compile_args = tuple(CompileArg(type_translation.from_value(arg)) for arg in args)
-        size_args = tuple(iter_size_compile_args(compile_args))
+    def from_concrete_no_size(cls, *args: Any, **kwargs: Any) -> Self:
+        compile_args = tuple(CompileArg.from_concrete(arg) for arg in args)
         kwargs_copy = kwargs.copy()
+        offset_provider = kwargs_copy.pop("offset_provider", {})
         return cls(
-            args=(*compile_args, *size_args),
-            offset_provider=kwargs_copy.pop("offset_provider", {}),
+            args=compile_args,
+            offset_provider=offset_provider,  # TODO(ricoh): replace with the line below once the temporaries pass is AOT-ready. If unsure, just try it and run the tests.
+            # offset_provider={k: connectivity_or_dimension(v) for k, v in offset_provider.items()}, # noqa: ERA001 [commented-out-code]
             column_axis=kwargs_copy.pop("column_axis", None),
             kwargs={
-                k: CompileArg(type_translation.from_value(v))
-                for k, v in kwargs_copy.items()
-                if v is not None
+                k: CompileArg.from_concrete(v) for k, v in kwargs_copy.items() if v is not None
             },
         )
+
+    @classmethod
+    def from_concrete(cls, *args: Any, **kwargs: Any) -> Self:
+        no_size = cls.from_concrete_no_size(*args, **kwargs)
+        return cls(
+            args=(*no_size.args, *iter_size_compile_args(no_size.args)),
+            offset_provider=no_size.offset_provider,
+            column_axis=no_size.column_axis,
+            kwargs=no_size.kwargs,
+        )
+
+    @classmethod
+    def empty(cls) -> Self:
+        return cls(tuple(), {}, {}, None)
+
+
+@dataclasses.dataclass(frozen=True)
+class JITArgs:
+    args: tuple[Any, ...]
+    kwargs: dict[str, Any]
 
 
 @dataclasses.dataclass(frozen=True)

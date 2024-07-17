@@ -32,6 +32,7 @@ from gt4py.eve import extended_typing as xtyping
 from gt4py.next import (
     allocators as next_allocators,
     backend as next_backend,
+    backend_exp,
     embedded as next_embedded,
     errors,
 )
@@ -40,7 +41,6 @@ from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
     field_operator_ast as foast,
     past_process_args,
-    past_to_itir,
     stages as ffront_stages,
     transform_utils,
     type_specifications as ts_ffront,
@@ -53,6 +53,7 @@ from gt4py.next.iterator.ir_utils.ir_makers import (
     ref,
     sym,
 )
+from gt4py.next.otf import stages, workflow
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
@@ -101,15 +102,17 @@ class Program:
     @functools.cached_property
     def past_stage(self):
         # backwards compatibility for backends that do not support the full toolchain
+        no_args_def = workflow.DataWithArgs(self.definition_stage, stages.CompileArgSpec.empty())
         if self.backend is not None and self.backend.transforms_prog is not None:
-            return self.backend.transforms_prog.func_to_past(self.definition_stage)
-        return next_backend.DEFAULT_PROG_TRANSFORMS.func_to_past(self.definition_stage)
+            return self.backend.transforms_prog.func_to_past(no_args_def).data
+        return backend_exp.DEFAULT_TRANSFORMS.func_to_past(no_args_def).data
 
     # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self):
+        no_args_past = workflow.DataWithArgs(self.past_stage, stages.CompileArgSpec.empty())
         if self.backend is not None and self.backend.transforms_prog is not None:
-            self.backend.transforms_prog.past_lint(self.past_stage)
-        return next_backend.DEFAULT_PROG_TRANSFORMS.past_lint(self.past_stage)
+            return self.backend.transforms_prog.past_lint(no_args_past).data
+        return backend_exp.DEFAULT_TRANSFORMS.past_lint(no_args_past).data
 
     @property
     def __name__(self) -> str:
@@ -172,18 +175,17 @@ class Program:
 
     @functools.cached_property
     def itir(self) -> itir.FencilDefinition:
-        no_args_past = ffront_stages.PastClosure(
-            definition=ffront_stages.PastProgramDefinition(
+        no_args_past = workflow.DataWithArgs(
+            data=ffront_stages.PastProgramDefinition(
                 past_node=self.past_stage.past_node,
                 closure_vars=self.past_stage.closure_vars,
                 grid_type=self.definition_stage.grid_type,
             ),
-            args=[],
-            kwargs={},
+            args=stages.CompileArgSpec.empty(),
         )
         if self.backend is not None and self.backend.transforms_prog is not None:
             return self.backend.transforms_prog.past_to_itir(no_args_past).program
-        return past_to_itir.JITPastToItirFactory()(no_args_past).program
+        return backend_exp.DEFAULT_TRANSFORMS.past_to_itir(no_args_past).program
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs: Any) -> None:
         if self.backend is None:
@@ -412,8 +414,12 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     @functools.cached_property
     def foast_stage(self) -> ffront_stages.FoastOperatorDefinition:
         if self.backend is not None and self.backend.transforms_fop is not None:
-            return self.backend.transforms_fop.func_to_foast(self.definition_stage)
-        return next_backend.DEFAULT_FIELDOP_TRANSFORMS.func_to_foast(self.definition_stage)
+            return self.backend.transforms_fop.func_to_foast(
+                workflow.DataWithArgs(self.definition_stage, args=None)
+            ).data
+        return next_backend.DEFAULT_FIELDOP_TRANSFORMS.func_to_foast(
+            workflow.DataWithArgs(self.definition_stage, None)
+        ).data
 
     @property
     def __name__(self) -> str:

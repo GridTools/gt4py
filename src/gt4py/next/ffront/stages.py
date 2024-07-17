@@ -65,6 +65,12 @@ class FoastWithTypes(Generic[OperatorNodeT]):
 
 
 @dataclasses.dataclass(frozen=True)
+class FoastWithPastClosureVars(Generic[OperatorNodeT]):
+    foast_op_def: FoastOperatorDefinition[OperatorNodeT]
+    closure_vars: dict[str, Any]
+
+
+@dataclasses.dataclass(frozen=True)
 class FoastClosure(Generic[OperatorNodeT]):
     foast_op_def: FoastOperatorDefinition[OperatorNodeT]
     args: tuple[Any, ...]

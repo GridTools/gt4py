@@ -18,7 +18,7 @@ import pytest
 
 from gt4py import next as gtx
 from gt4py.next.ffront import stages
-from gt4py.next.otf import workflow
+from gt4py.next.otf import workflow, stages as otf_stages
 
 
 @pytest.fixture
@@ -101,67 +101,76 @@ def test_fingerprint_stage_field_op_def(fieldop, samecode_fieldop, different_fie
 
 
 def test_fingerprint_stage_foast_op_def(fieldop, samecode_fieldop, different_fieldop):
-    foast = gtx.backend.DEFAULT_FIELDOP_TRANSFORMS.func_to_foast(fieldop.definition_stage)
-    samecode = gtx.backend.DEFAULT_FIELDOP_TRANSFORMS.func_to_foast(
-        samecode_fieldop.definition_stage
-    )
-    different = gtx.backend.DEFAULT_FIELDOP_TRANSFORMS.func_to_foast(
-        different_fieldop.definition_stage
-    )
+    foast = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_foast(
+        workflow.DataWithArgs(fieldop.definition_stage, None)
+    ).data
+    samecode = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_foast(
+        workflow.DataWithArgs(samecode_fieldop.definition_stage, None)
+    ).data
+    different = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_foast(
+        workflow.DataWithArgs(different_fieldop.definition_stage, None)
+    ).data
 
     assert stages.fingerprint_stage(samecode) != stages.fingerprint_stage(foast)
     assert stages.fingerprint_stage(different) != stages.fingerprint_stage(foast)
 
 
 @dataclasses.dataclass(frozen=True)
-class ToFoastClosure(workflow.NamedStepSequenceWithArgs):
-    func_to_foast: workflow.Workflow = gtx.backend.DEFAULT_FIELDOP_TRANSFORMS.func_to_foast
+class ToFoastClosure(workflow.NamedStepSequence):
+    func_to_foast: workflow.Workflow = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_foast
     foast_to_closure: workflow.Workflow = dataclasses.field(
         default=gtx.backend.DEFAULT_FIELDOP_TRANSFORMS.foast_to_foast_closure,
-        metadata={"takes_args": True},
     )
 
 
 def test_fingerprint_stage_foast_closure(fieldop, samecode_fieldop, different_fieldop, idim, jdim):
     toolchain = ToFoastClosure()
     foast_closure = toolchain(
-        workflow.InputWithArgs(
+        workflow.DataWithArgs(
             data=fieldop.definition_stage,
-            args=(gtx.zeros({idim: 10}, gtx.int32),),
-            kwargs={
-                "out": gtx.zeros({idim: 10}, gtx.int32),
-                "from_fieldop": fieldop,
-            },
+            args=otf_stages.JITArgs(
+                args=(gtx.zeros({idim: 10}, gtx.int32),),
+                kwargs={
+                    "out": gtx.zeros({idim: 10}, gtx.int32),
+                    "from_fieldop": fieldop,
+                },
+            ),
         ),
     )
     samecode = toolchain(
-        workflow.InputWithArgs(
+        workflow.DataWithArgs(
             data=samecode_fieldop.definition_stage,
-            args=(gtx.zeros({idim: 10}, gtx.int32),),
-            kwargs={
-                "out": gtx.zeros({idim: 10}, gtx.int32),
-                "from_fieldop": samecode_fieldop,
-            },
+            args=otf_stages.JITArgs(
+                args=(gtx.zeros({idim: 10}, gtx.int32),),
+                kwargs={
+                    "out": gtx.zeros({idim: 10}, gtx.int32),
+                    "from_fieldop": samecode_fieldop,
+                },
+            ),
         )
     )
     different = toolchain(
-        workflow.InputWithArgs(
+        workflow.DataWithArgs(
             data=different_fieldop.definition_stage,
-            args=(gtx.zeros({jdim: 10}, gtx.int32),),
-            kwargs={
-                "out": gtx.zeros({jdim: 10}, gtx.int32),
-                "from_fieldop": different_fieldop,
-            },
+            args=otf_stages.JITArgs(
+                args=(gtx.zeros({jdim: 10}, gtx.int32),),
+                kwargs={
+                    "out": gtx.zeros({jdim: 10}, gtx.int32),
+                    "from_fieldop": different_fieldop,
+                },
+            ),
         )
     )
     different_args = toolchain(
-        workflow.InputWithArgs(
+        workflow.DataWithArgs(
             data=fieldop.definition_stage,
-            args=(gtx.zeros({idim: 11}, gtx.int32),),
-            kwargs={
-                "out": gtx.zeros({idim: 11}, gtx.int32),
-                "from_fieldop": fieldop,
-            },
+            args=otf_stages.JITArgs(
+                args=(gtx.zeros({idim: 11}, gtx.int32),),
+                kwargs={
+                    "out": gtx.zeros({idim: 11}, gtx.int32),
+                    "from_fieldop": fieldop,
+                },
+            ),
         )
     )
 

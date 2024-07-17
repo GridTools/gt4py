@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import dataclasses
-from typing import Any, Iterator, Optional
+from typing import Any, Iterator
 
 from gt4py.next import common, errors
 from gt4py.next.ffront import (
@@ -74,7 +74,7 @@ def _process_args(
     )
 
     # extract size of all field arguments
-    size_args: list[Optional[int]] = []
+    size_args: list[int | type_translation.SizeArg] = []
     rewritten_args = list(args)
     for param_idx, param in enumerate(past_node.params):
         if implicit_domain and isinstance(param.type, (ts.FieldType, ts.TupleType)):
@@ -87,7 +87,7 @@ def _process_args(
                     "Constituents of composite arguments (e.g. the elements of a"
                     " tuple) need to have the same shape and dimensions."
                 )
-            size_args.extend(shape if shape else [None] * len(dims))
+            size_args.extend(shape if shape else [type_translation.SizeArg()] * len(dims))  # type: ignore[arg-type] ##(ricoh) mypy is unable to correctly defer the type of the ternary expression
     return tuple(rewritten_args), tuple(size_args), kwargs
 
 

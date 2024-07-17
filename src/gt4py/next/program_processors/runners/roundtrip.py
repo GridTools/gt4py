@@ -27,8 +27,15 @@ import factory
 
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
-from gt4py.next import allocators as next_allocators, backend as next_backend, common, config
-from gt4py.next.iterator import embedded, ir as itir, transforms as itir_transforms
+from gt4py.next import (
+    allocators as next_allocators,
+    backend as next_backend,
+    backend_exp,
+    common,
+    config,
+)
+from gt4py.next.ffront import stages as ffront_stages
+from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.iterator.transforms import global_tmps as gtmps_transform
 from gt4py.next.otf import stages, workflow
 from gt4py.next.program_processors import modular_executor, processor_interface as ppi
@@ -112,7 +119,7 @@ def fencil_generator(
     debug: bool,
     lift_mode: itir_transforms.LiftMode,
     use_embedded: bool,
-    offset_provider: dict[str, embedded.NeighborTableOffsetProvider],
+    offset_provider: dict[str, common.Connectivity | common.Dimension],
 ) -> stages.CompiledProgram:
     """
     Generate a directly executable fencil from an ITIR node.
@@ -182,7 +189,7 @@ def fencil_generator(
         source_file.write("\n".join(axis_literals))
         source_file.write("\n")
         source_file.write(program)
-
+        print(program)
     try:
         spec = importlib.util.spec_from_file_location("module.name", source_file_name)
         mod = importlib.util.module_from_spec(spec)  # type: ignore
@@ -209,7 +216,7 @@ def execute_roundtrip(
     ir: itir.Node,
     *args: Any,
     column_axis: Optional[common.Dimension] = None,
-    offset_provider: dict[str, embedded.NeighborTableOffsetProvider],
+    offset_provider: dict[str, common.Connectivity | common.Dimension],
     debug: Optional[bool] = None,
     lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE,
     dispatch_backend: Optional[ppi.ProgramExecutor] = None,
@@ -231,16 +238,16 @@ def execute_roundtrip(
 
 
 @dataclasses.dataclass(frozen=True)
-class Roundtrip(workflow.Workflow[stages.ProgramCall, stages.CompiledProgram]):
+class Roundtrip(workflow.Workflow[stages.AOTProgram, stages.CompiledProgram]):
     debug: Optional[bool] = None
     lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE
     use_embedded: bool = True
 
-    def __call__(self, inp: stages.ProgramCall) -> stages.CompiledProgram:
+    def __call__(self, inp: stages.AOTProgram) -> stages.CompiledProgram:
         debug = config.DEBUG if self.debug is None else self.debug
         return fencil_generator(
             inp.program,
-            offset_provider=inp.kwargs.get("offset_provider", None),
+            offset_provider=inp.argspec.offset_provider,
             debug=debug,
             lift_mode=self.lift_mode,
             use_embedded=self.use_embedded,
@@ -257,10 +264,21 @@ class RoundtripExecutor(modular_executor.ModularExecutor):
     dispatch_backend: Optional[ppi.ProgramExecutor] = None
 
     def __call__(self, program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
-        kwargs["backend"] = self.dispatch_backend
-        self.otf_workflow(stages.ProgramCall(program=program, args=args, kwargs=kwargs))(
-            *args, **kwargs
+        if "out" in kwargs:
+            args = (*args, kwargs.pop("out"))
+        argspec = stages.CompileArgSpec.from_concrete_no_size(
+            *args, **kwargs | {"column_axis": kwargs.get("column_axis", None)}
         )
+        kwargs["backend"] = self.dispatch_backend
+        self.otf_workflow(
+            stages.AOTProgram(
+                program=program,
+                argspec=dataclasses.replace(
+                    argspec,
+                    kwargs=argspec.kwargs,
+                ),
+            )
+        )(*args, **kwargs)
 
 
 class RoundtripExecutorFactory(factory.Factory):
@@ -277,15 +295,32 @@ class RoundtripExecutorFactory(factory.Factory):
     otf_workflow = factory.LazyAttribute(lambda o: o.roundtrip_workflow)
 
 
+class RoundtripBackend(next_backend.Backend):
+    def __call__(
+        self,
+        program: ffront_stages.ProgramDefinition | ffront_stages.FieldOperatorDefinition,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        args, kwargs = backend_exp.convert_to_positional(program, *args, **kwargs)
+        return super().__call__(program, *args, **kwargs)
+
+
 executor = RoundtripExecutorFactory(name="roundtrip")
 executor_with_temporaries = RoundtripExecutorFactory(
     name="roundtrip_with_temporaries",
     roundtrip_workflow=RoundtripFactory(lift_mode=itir_transforms.LiftMode.USE_TEMPORARIES),
 )
 
-default = next_backend.Backend(
-    executor=executor, allocator=next_allocators.StandardCPUFieldBufferAllocator()
+default = RoundtripBackend(
+    executor=executor,
+    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
+    transforms_fop=backend_exp.DEFAULT_TRANSFORMS,
+    transforms_prog=backend_exp.DEFAULT_TRANSFORMS,
 )
-with_temporaries = next_backend.Backend(
-    executor=executor_with_temporaries, allocator=next_allocators.StandardCPUFieldBufferAllocator()
+with_temporaries = RoundtripBackend(
+    executor=executor_with_temporaries,
+    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
+    transforms_fop=backend_exp.DEFAULT_TRANSFORMS,
+    transforms_prog=backend_exp.DEFAULT_TRANSFORMS,
 )
