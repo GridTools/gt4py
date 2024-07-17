@@ -393,16 +393,18 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
         is_local_view=None,
         offset_provider=None,
     ):
-        if isinstance(node, (itir.Program, itir.FencilDefinition)):
+        is_program = isinstance(node, (itir.Program, itir.FencilDefinition))
+        if is_program:
             assert is_local_view is None
             is_local_view = True
         else:
             assert (
                 is_local_view is not None
             ), "The expression's context must be specified using `is_local_view`."
+
         offset_provider = offset_provider or {}
         node = itir_type_inference.infer(
-            node, offset_provider=offset_provider, allow_undeclared_symbols=True
+            node, offset_provider=offset_provider, allow_undeclared_symbols=not is_program
         )
         return cls().visit(node, is_local_view=is_local_view)
 
