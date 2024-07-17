@@ -4,9 +4,11 @@ on:
   push:
     branches:
     - main
+    - gtir
   pull_request:
     branches:
     - main
+    - gtir
 
 jobs:
   code-quality:
