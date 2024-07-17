@@ -97,6 +97,8 @@ class ProgramFormatterId(_PythonObjectIdMixin, str, enum.Enum):
 
 
 # Test markers
+# Special marker that skips all tests. This is not a regular pytest marker, but handled explicitly
+# to avoid needing to mark all tests.
 ALL = "all"
 REQUIRES_ATLAS = "requires_atlas"
 # TODO(havogt): Remove, skipped during refactoring to GTIR
