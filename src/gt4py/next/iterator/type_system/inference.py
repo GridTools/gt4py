@@ -246,7 +246,9 @@ class ObservableTypeSynthesizer(type_synthesizer.TypeSynthesizer):
         return return_type_or_synthesizer
 
 
-def _get_dimensions_from_offset_provider(offset_provider) -> dict[str, common.Dimension]:
+def _get_dimensions_from_offset_provider(
+    offset_provider: common.OffsetProvider,
+) -> dict[str, common.Dimension]:
     dimensions: dict[str, common.Dimension] = {}
     for offset_name, provider in offset_provider.items():
         dimensions[offset_name] = common.Dimension(
