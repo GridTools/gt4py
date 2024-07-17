@@ -149,8 +149,8 @@ def gt_auto_optimize(
 
         # These are the part that we copy from DaCe built in auto optimization.
         dace_aoptimize.set_fast_implementations(sdfg, device)
-        dace_aoptimize.make_transients_persistent(sdfg, device)
         dace_aoptimize.move_small_arrays_to_stack(sdfg)
+        dace_aoptimize.make_transients_persistent(sdfg, device)
 
         # Final simplify
         gt_simplify(sdfg)
