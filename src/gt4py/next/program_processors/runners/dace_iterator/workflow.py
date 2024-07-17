@@ -37,7 +37,7 @@ from . import build_sdfg_from_itir, get_sdfg_args
 @dataclasses.dataclass(frozen=True)
 class DaCeTranslator(
     workflow.ChainableWorkflowMixin[
-        stages.ProgramCall, stages.ProgramSource[languages.SDFG, languages.LanguageSettings]
+        stages.AOTProgram, stages.ProgramSource[languages.SDFG, languages.LanguageSettings]
     ],
     step_types.TranslationStep[languages.SDFG, languages.LanguageSettings],
 ):
@@ -80,22 +80,22 @@ class DaCeTranslator(
         )
 
     def __call__(
-        self, inp: stages.ProgramCall
+        self, inp: stages.AOTProgram
     ) -> stages.ProgramSource[languages.SDFG, LanguageSettings]:
         """Generate DaCe SDFG file from the ITIR definition."""
         program: itir.FencilDefinition = inp.program
-        arg_types = [tt.from_value(arg) for arg in inp.args]
+        arg_types = [tt.from_value(arg) for arg in inp.argspec.args]
 
         sdfg = self.generate_sdfg(
             program,
             arg_types,
-            inp.kwargs["offset_provider"],
-            inp.kwargs.get("column_axis", None),
+            inp.argspec.offset_provider,
+            inp.argspec.column_axis,
         )
 
         param_types = tuple(
             interface.Parameter(param, tt.from_value(arg))
-            for param, arg in zip(sdfg.arg_names, inp.args)
+            for param, arg in zip(sdfg.arg_names, inp.argspec.args)
         )
 
         module: stages.ProgramSource[languages.SDFG, languages.LanguageSettings] = (

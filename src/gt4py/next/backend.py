@@ -146,8 +146,18 @@ DEFAULT_PROG_TRANSFORMS = ProgramTransformWorkflow()
 class Backend(Generic[core_defs.DeviceTypeT]):
     executor: ppi.ProgramExecutor
     allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
-    transforms_fop: FieldopTransformWorkflow = DEFAULT_FIELDOP_TRANSFORMS
-    transforms_prog: ProgramTransformWorkflow = DEFAULT_PROG_TRANSFORMS
+    transforms_fop: workflow.Workflow[
+        workflow.DataWithArgs[
+            ffront_stages.FieldOperatorDefinition, stages.JITArgs | stages.CompileArgSpec
+        ],
+        stages.AOTProgram,
+    ] = DEFAULT_FIELDOP_TRANSFORMS
+    transforms_prog: workflow.Workflow[
+        workflow.DataWithArgs[
+            ffront_stages.ProgramDefinition, stages.JITArgs | stages.CompileArgSpec
+        ],
+        stages.AOTProgram,
+    ] = DEFAULT_PROG_TRANSFORMS
 
     def __call__(
         self,
@@ -158,21 +168,17 @@ class Backend(Generic[core_defs.DeviceTypeT]):
         if isinstance(
             program, (ffront_stages.FieldOperatorDefinition, ffront_stages.FoastOperatorDefinition)
         ):
-            offset_provider = kwargs.pop("offset_provider")
-            from_fieldop = kwargs.pop("from_fieldop")
-            program_call = self.transforms_fop(
-                workflow.DataWithArgs(
-                    program, args=stages.JITArgs(args, kwargs | {"from_fieldop": from_fieldop})
-                )
-            )
-            program_call = dataclasses.replace(
-                program_call, kwargs=program_call.kwargs | {"offset_provider": offset_provider}
+            _ = kwargs.pop("from_fieldop")
+            aot_program = self.transforms_fop(
+                workflow.DataWithArgs(program, args=stages.JITArgs(args, kwargs))
             )
         else:
-            program_call = self.transforms_prog(
+            aot_program = self.transforms_prog(
                 workflow.DataWithArgs(program, stages.JITArgs(args, kwargs))
             )
-        self.executor(program_call.program, *program_call.args, **program_call.kwargs)
+        self.executor(
+            aot_program.program, *args, column_axis=aot_program.argspec.column_axis, **kwargs
+        )
 
     @property
     def __name__(self) -> str:

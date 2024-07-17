@@ -101,24 +101,25 @@ def test_fingerprint_stage_field_op_def(fieldop, samecode_fieldop, different_fie
 
 
 def test_fingerprint_stage_foast_op_def(fieldop, samecode_fieldop, different_fieldop):
-    foast = gtx.backend.DEFAULT_FIELDOP_TRANSFORMS.func_to_foast(fieldop.definition_stage)
-    samecode = gtx.backend.DEFAULT_FIELDOP_TRANSFORMS.func_to_foast(
-        samecode_fieldop.definition_stage
-    )
-    different = gtx.backend.DEFAULT_FIELDOP_TRANSFORMS.func_to_foast(
-        different_fieldop.definition_stage
-    )
+    foast = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_foast(
+        workflow.DataWithArgs(fieldop.definition_stage, None)
+    ).data
+    samecode = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_foast(
+        workflow.DataWithArgs(samecode_fieldop.definition_stage, None)
+    ).data
+    different = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_foast(
+        workflow.DataWithArgs(different_fieldop.definition_stage, None)
+    ).data
 
     assert stages.fingerprint_stage(samecode) != stages.fingerprint_stage(foast)
     assert stages.fingerprint_stage(different) != stages.fingerprint_stage(foast)
 
 
 @dataclasses.dataclass(frozen=True)
-class ToFoastClosure(workflow.NamedStepSequenceWithArgs):
-    func_to_foast: workflow.Workflow = gtx.backend.DEFAULT_FIELDOP_TRANSFORMS.func_to_foast
+class ToFoastClosure(workflow.NamedStepSequence):
+    func_to_foast: workflow.Workflow = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_foast
     foast_to_closure: workflow.Workflow = dataclasses.field(
         default=gtx.backend.DEFAULT_FIELDOP_TRANSFORMS.foast_to_foast_closure,
-        metadata={"takes_args": True},
     )
 
 

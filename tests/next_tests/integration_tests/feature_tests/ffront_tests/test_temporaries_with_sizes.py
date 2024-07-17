@@ -16,7 +16,7 @@ import pytest
 from numpy import int32, int64
 
 from gt4py import next as gtx
-from gt4py.next import backend, common
+from gt4py.next import backend_exp, common
 from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms
 from gt4py.next.program_processors import modular_executor
 from gt4py.next.program_processors.runners.gtfn import run_gtfn_with_temporaries
@@ -38,7 +38,9 @@ from next_tests.toy_connectivity import Cell, Edge
 
 @pytest.fixture
 def run_gtfn_with_temporaries_and_symbolic_sizes():
-    return backend.Backend(
+    return backend_exp.ExpBackend(
+        transforms_fop=backend_exp.DEFAULT_TRANSFORMS,
+        transforms_prog=backend_exp.DEFAULT_TRANSFORMS,
         executor=modular_executor.ModularExecutor(
             name="run_gtfn_with_temporaries_and_sizes",
             otf_workflow=run_gtfn_with_temporaries.executor.otf_workflow.replace(

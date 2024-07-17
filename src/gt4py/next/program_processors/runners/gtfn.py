@@ -22,7 +22,7 @@ import numpy.typing as npt
 import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
 from gt4py.eve.utils import content_hash
-from gt4py.next import backend, common, config
+from gt4py.next import backend_exp, common, config
 from gt4py.next.iterator import transforms
 from gt4py.next.iterator.transforms import global_tmps
 from gt4py.next.otf import recipes, stages, workflow
@@ -162,7 +162,7 @@ class GTFNCompileWorkflowFactory(factory.Factory):
 
 class GTFNBackendFactory(factory.Factory):
     class Meta:
-        model = backend.Backend
+        model = backend_exp.ExpBackend
 
     class Params:
         name_device = "cpu"
@@ -201,6 +201,8 @@ class GTFNBackendFactory(factory.Factory):
         lambda o: modular_executor.ModularExecutor(otf_workflow=o.otf_workflow, name=o.name)
     )
     allocator = next_allocators.StandardCPUFieldBufferAllocator()
+    transforms_fop = backend_exp.DEFAULT_TRANSFORMS
+    transforms_prog = backend_exp.DEFAULT_TRANSFORMS
 
 
 run_gtfn = GTFNBackendFactory()

@@ -30,15 +30,26 @@ from gt4py.next.ffront import (
     func_to_past,
     past_process_args,
     past_to_itir,
+    program_ast as past,
     stages as ffront_stages,
     type_specifications as ffts,
 )
+from gt4py.next.ffront.past_passes import linters as past_linters
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import stages, workflow
-from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
 DataT = typing.TypeVar("DataT")
+
+
+ARGS: typing.TypeAlias = stages.JITArgs
+CARG: typing.TypeAlias = stages.CompileArgSpec
+DSL_FOP: typing.TypeAlias = ffront_stages.FieldOperatorDefinition
+FOP: typing.TypeAlias = ffront_stages.FoastOperatorDefinition
+DSL_PRG: typing.TypeAlias = ffront_stages.ProgramDefinition
+PRG: typing.TypeAlias = ffront_stages.PastProgramDefinition
+IT_PRG: typing.TypeAlias = itir.FencilDefinition
 
 
 @dataclasses.dataclass(frozen=True)
@@ -81,7 +92,9 @@ def make_signature(func: Any) -> inspect.Signature:
     raise NotImplementedError(f"'make_signature' not implemented for {type(func)}.")
 
 
-@make_signature.dispatch(foast.ScanOperator)
+@make_signature.register(foast.ScanOperator)
+@make_signature.register(past.Program)
+@make_signature.register(foast.FieldOperator)
 def signature_from_fieldop(func: foast.FieldOperator) -> inspect.Signature:
     if isinstance(func.type, ts.DeferredType):
         raise NotImplementedError(
@@ -100,8 +113,33 @@ def signature_from_fieldop(func: foast.FieldOperator) -> inspect.Signature:
     )
 
 
+@make_signature.register(ffront_stages.FieldOperatorDefinition)
+def signature_from_fieldop_def(func: ffront_stages.FieldOperatorDefinition) -> inspect.Signature:
+    signature = make_signature(func.definition)
+    if func.node_class == foast.ScanOperator:
+        return inspect.Signature(list(signature.parameters.values())[1:])
+    return signature
+
+
+@make_signature.register(ffront_stages.ProgramDefinition)
+def signature_from_program_def(func: ffront_stages.ProgramDefinition) -> inspect.Signature:
+    return make_signature(func.definition)
+
+
+@make_signature.register(ffront_stages.FoastOperatorDefinition)
+def signature_from_foast_stage(func: ffront_stages.FoastOperatorDefinition) -> inspect.Signature:
+    return make_signature(func.foast_node)
+
+
+@make_signature.register
+def signature_from_past_stage(func: ffront_stages.PastProgramDefinition) -> inspect.Signature:
+    return make_signature(func.past_node)
+
+
 def convert_to_positional(
-    func: Callable | foast.FieldOperator | foast.ScanOperator, *args: Any, **kwargs: Any
+    func: Callable | foast.FieldOperator | foast.ScanOperator | DSL_FOP | FOP | DSL_PRG | PRG,
+    *args: Any,
+    **kwargs: Any,
 ) -> tuple[tuple[Any, ...], dict[str, Any]]:
     """
     Convert arguments given as keyword args to positional ones where possible.
@@ -155,9 +193,11 @@ class FieldviewOpToFieldviewProg:
         fieldview_program = foast_to_past.foast_to_past(
             ffront_stages.FoastWithTypes(
                 foast_op_def=inp.data,
-                arg_types=tuple(arg.gt_type for arg in inp.args.args),
+                arg_types=tuple(type_translation.from_value(arg) for arg in inp.args.args),
                 kwarg_types={
-                    k: v.gt_type for k, v in inp.args.kwargs.items() if k not in ["from_fieldop"]
+                    k: type_translation.from_value(v)
+                    for k, v in inp.args.kwargs.items()
+                    if k not in ["from_fieldop"]
                 },
                 closure_vars={inp.data.foast_node.id: ItirShim(inp.data, self.foast_to_itir)},
             )
@@ -197,15 +237,6 @@ def jit_to_aot_args(inp: stages.JITArgs) -> stages.CompileArgSpec:
     return stages.CompileArgSpec.from_concrete_no_size(*inp.args, **inp.kwargs)
 
 
-ARGS: typing.TypeAlias = stages.JITArgs
-CARG: typing.TypeAlias = stages.CompileArgSpec
-DSL_FOP: typing.TypeAlias = ffront_stages.FieldOperatorDefinition
-FOP: typing.TypeAlias = ffront_stages.FoastOperatorDefinition
-DSL_PRG: typing.TypeAlias = ffront_stages.ProgramDefinition
-PRG: typing.TypeAlias = ffront_stages.PastProgramDefinition
-IT_PRG: typing.TypeAlias = itir.FencilDefinition
-
-
 AOT_FOP: typing.TypeAlias = workflow.DataWithArgs[FOP, CARG]
 AOT_PRG: typing.TypeAlias = workflow.DataWithArgs[PRG, CARG]
 
@@ -221,7 +252,7 @@ class FieldopTransformWorkflow(workflow.MultiWorkflow):
         workflow.DataWithArgs[INPUT_DATA_T, ARGS], workflow.DataWithArgs[INPUT_DATA_T, CARG]
     ] = dataclasses.field(default_factory=lambda: workflow.ArgsOnlyAdapter(jit_to_aot_args))
 
-    func_to_fieldview_op: workflow.Workflow[workflow.DataWithArgs[DSL_FOP | FOP, CARG], AOT_FOP] = (
+    func_to_foast: workflow.Workflow[workflow.DataWithArgs[DSL_FOP | FOP, CARG], AOT_FOP] = (
         dataclasses.field(
             default_factory=lambda: workflow.DataOnlyAdapter(
                 func_to_foast.OptionalFuncToFoastFactory(cached=True)
@@ -229,11 +260,11 @@ class FieldopTransformWorkflow(workflow.MultiWorkflow):
         )
     )
 
-    func_to_fieldview_prog: workflow.Workflow[
-        workflow.DataWithArgs[DSL_PRG | PRG, CARG], AOT_PRG
-    ] = dataclasses.field(
-        default_factory=lambda: workflow.DataOnlyAdapter(
-            func_to_past.OptionalFuncToPastFactory(cached=True)
+    func_to_past: workflow.Workflow[workflow.DataWithArgs[DSL_PRG | PRG, CARG], AOT_PRG] = (
+        dataclasses.field(
+            default_factory=lambda: workflow.DataOnlyAdapter(
+                func_to_past.OptionalFuncToPastFactory(cached=True)
+            )
         )
     )
 
@@ -250,6 +281,10 @@ class FieldopTransformWorkflow(workflow.MultiWorkflow):
 
     field_view_op_to_prog: workflow.Workflow[workflow.DataWithArgs[FOP, CARG], AOT_PRG] = (
         dataclasses.field(default_factory=FieldviewOpToFieldviewProg)
+    )
+
+    past_lint: workflow.Workflow[AOT_PRG, AOT_PRG] = dataclasses.field(
+        default_factory=lambda: workflow.DataOnlyAdapter(past_linters.LinterFactory())
     )
 
     field_view_prog_args_transform: workflow.Workflow[AOT_PRG, AOT_PRG] = dataclasses.field(
@@ -270,23 +305,30 @@ class FieldopTransformWorkflow(workflow.MultiWorkflow):
             case DSL_FOP():
                 steps.extend(
                     [
-                        "func_to_fieldview_op",
+                        "func_to_foast",
                         "field_view_op_to_prog",
+                        "past_lint",
                         "field_view_prog_args_transform",
                     ]
                 )
             case FOP():
-                steps.extend(["field_view_op_to_prog", "field_view_prog_args_transform"])
+                steps.extend(
+                    ["field_view_op_to_prog", "past_lint", "field_view_prog_args_transform"]
+                )
             case DSL_PRG():
-                steps.extend(["func_to_fieldview_prog", "field_view_prog_args_transform"])
+                steps.extend(["func_to_past", "past_lint", "field_view_prog_args_transform"])
             case PRG():
-                steps.append("field_view_prog_args_transform")
+                steps.extend(["past_lint", "field_view_prog_args_transform"])
             case _:
                 pass
         steps.append("past_to_itir")
         return steps
 
 
+DEFAULT_TRANSFORMS: FieldopTransformWorkflow = FieldopTransformWorkflow()
+
+
+@dataclasses.dataclass(frozen=True)
 class ExpBackend(backend.Backend):
     def __call__(
         self,
@@ -294,17 +336,14 @@ class ExpBackend(backend.Backend):
         *args: Any,
         **kwargs: Any,
     ) -> None:
-        if isinstance(
-            program, (ffront_stages.FieldOperatorDefinition, ffront_stages.FoastOperatorDefinition)
-        ):
-            _ = kwargs.pop("from_fieldop")
-            # taking the offset provider out is not needed
-            program_info = self.transforms_fop(
-                workflow.DataWithArgs(
-                    data=program,
-                    args=stages.CompileArgSpec.from_concrete_no_size(*args, **kwargs),
-                )
+        _ = kwargs.pop("from_fieldop", None)
+        # taking the offset provider out is not needed
+        args, kwargs = convert_to_positional(program, *args, **kwargs)
+        program_info = self.transforms_fop(
+            workflow.DataWithArgs(
+                data=program,  # type: ignore[arg-type] # TODO(ricoh): should go away when toolchain unified everywhere
+                args=stages.CompileArgSpec.from_concrete_no_size(*args, **kwargs),
             )
-            self.executor(program_info, *args, **kwargs)
-        else:
-            super().__call__(program, *args, **kwargs)
+        )
+        # TODO(ricoh): get rid of executors altogether
+        self.executor.otf_workflow(program_info)(*args, **kwargs)  # type: ignore[attr-defined]
