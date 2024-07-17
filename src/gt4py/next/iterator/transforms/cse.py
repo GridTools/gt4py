@@ -396,7 +396,7 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
         is_program = isinstance(node, (itir.Program, itir.FencilDefinition))
         if is_program:
             assert is_local_view is None
-            is_local_view = True
+            is_local_view = False
         else:
             assert (
                 is_local_view is not None
