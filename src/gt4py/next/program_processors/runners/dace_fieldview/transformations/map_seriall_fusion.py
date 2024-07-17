@@ -303,7 +303,7 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
                 assert (pre_exit_edge.data.subset.num_elements() > 1) or all(
                     x == 1 for x in new_inter_shape
                 )
-                isScalar: bool = False
+                is_scalar = False
                 new_inter_name, new_inter_desc = sdfg.add_transient(
                     new_inter_name,
                     shape=new_inter_shape,
@@ -420,7 +420,7 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
                         consumer_edge = consumer_tree.edge
                         assert consumer_edge.data.data == inter_name
                         consumer_edge.data.data = new_inter_name
-                        if isScalar:
+                        if is_scalar:
                             consumer_edge.data.src_subset = "0"
                         else:
                             if consumer_edge.data.subset is not None:
