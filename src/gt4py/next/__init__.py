@@ -46,7 +46,7 @@ from .ffront.fbuiltins import FieldOffset
 from .iterator.embedded import (
     NeighborTableOffsetProvider,
     StridedNeighborOffsetProvider,
-    StripedNeighborOffsetProvider,
+    StripedNeighborTableOffsetProvider,
     index_field,
     np_as_located_field,
 )
@@ -81,7 +81,7 @@ __all__ = [
     "as_connectivity",
     # from iterator
     "NeighborTableOffsetProvider",
-    "StripedNeighborOffsetProvider",
+    "StripedNeighborTableOffsetProvider",
     "StridedNeighborOffsetProvider",
     "index_field",
     "np_as_located_field",

@@ -139,7 +139,7 @@ class NeighborTableOffsetProvider:
             return dace.data.create_datadescriptor(self.table)
 
 
-class StripedNeighborOffsetProvider:
+class StripedNeighborTableOffsetProvider:
     def __init__(
         self,
         table: core_defs.NDArrayObject,
