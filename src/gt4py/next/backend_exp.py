@@ -149,11 +149,18 @@ def convert_to_positional(
     thorough check on whether the signature is fulfilled is expected to happen
     later in the toolchain.
 
+    Note that positional-or-keyword arguments with defaults will have their defaults
+    inserted even if not strictly necessary. This is to reduce complexity and should
+    be changed if the current behavior is found harmful in some way.
+
     Examples:
     >>> def example(posonly, /, pos_or_key, pk_with_default=42, *, key_only=43):
     ...     pass
+
     >>> convert_to_positional(example, 1, pos_or_key=2, key_only=3)
-    ((1, 2), {"key_only": 3})
+    ((1, 2, 42), {"key_only": 3})
+    >>> # inserting the default value '42' here could be avoided
+    >>> # but this is not the current behavior.
     """
     signature = make_signature(func)
     new_args = list(args)
