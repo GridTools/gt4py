@@ -158,7 +158,7 @@ def convert_to_positional(
     ...     pass
 
     >>> convert_to_positional(example, 1, pos_or_key=2, key_only=3)
-    ((1, 2, 42), {"key_only": 3})
+    ((1, 2, 42), {'key_only': 3})
     >>> # inserting the default value '42' here could be avoided
     >>> # but this is not the current behavior.
     """
