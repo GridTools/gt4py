@@ -21,9 +21,18 @@ import gt4py.next as gtx
 from gt4py.next import backend as next_backend
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import IDim, Ioff, JDim, Joff, cartesian_case
+from next_tests.integration_tests.cases import cartesian_case, unstructured_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     exec_alloc_descriptor,
+    mesh_descriptor,
+    Vertex,
+    Edge,
+    E2V,
+)
+from next_tests.integration_tests.multi_feature_tests.ffront_tests.test_laplacian import (
+    lap_program,
+    laplap_program,
+    lap_ref,
 )
 
 try:
@@ -36,38 +45,13 @@ except ImportError:
 
 
 @gtx.field_operator
-def lap(in_field: gtx.Field[[IDim, JDim], "float"]) -> gtx.Field[[IDim, JDim], "float"]:
-    return (
-        -4.0 * in_field
-        + in_field(Ioff[1])
-        + in_field(Joff[1])
-        + in_field(Ioff[-1])
-        + in_field(Joff[-1])
-    )
-
-
-@gtx.field_operator
-def laplap(in_field: gtx.Field[[IDim, JDim], "float"]) -> gtx.Field[[IDim, JDim], "float"]:
-    return lap(lap(in_field))
+def _testee(a: gtx.Field[gtx.Dims[Vertex], gtx.float64]):
+    return a(E2V[0])
 
 
 @gtx.program
-def lap_program(
-    in_field: gtx.Field[[IDim, JDim], "float"], out_field: gtx.Field[[IDim, JDim], "float"]
-):
-    lap(in_field, out=out_field[1:-1, 1:-1])
-
-
-@gtx.program
-def laplap_program(
-    in_field: gtx.Field[[IDim, JDim], "float"], out_field: gtx.Field[[IDim, JDim], "float"]
-):
-    laplap(in_field, out=out_field[2:-2, 2:-2])
-
-
-def lap_ref(inp):
-    """Compute the laplacian using numpy"""
-    return -4.0 * inp[1:-1, 1:-1] + inp[:-2, 1:-1] + inp[2:, 1:-1] + inp[1:-1, :-2] + inp[1:-1, 2:]
+def testee(a: gtx.Field[gtx.Dims[Vertex], gtx.float64], b: gtx.Field[gtx.Dims[Edge], gtx.float64]):
+    _testee(a, out=b)
 
 
 def test_sdfgConvertible_laplap(cartesian_case):
@@ -82,16 +66,25 @@ def test_sdfgConvertible_laplap(cartesian_case):
     in_field = cases.allocate(cartesian_case, laplap_program, "in_field")()
     out_field = cases.allocate(cartesian_case, laplap_program, "out_field")()
 
+    connectivities = {}  # Dict of NeighborOffsetProviders, where self.table = None
+    for k, v in cartesian_case.offset_provider.items():
+        if hasattr(v, "table"):
+            connectivities[k] = gtx.StripedNeighborOffsetProvider(
+                v.table, v.origin_axis, v.neighbor_axis, v.max_neighbors, v.has_skip_values
+            )
+        else:
+            connectivities[k] = v
+
     # Test DaCe closure support
     @dace.program
     def sdfg():
         tmp_field = xp.empty_like(out_field)
-        lap_program.with_grid_type(cartesian_case.grid_type).with_backend(cartesian_case.executor)(
-            in_field, tmp_field, offset_provider=cartesian_case.offset_provider
-        )
-        lap_program.with_grid_type(cartesian_case.grid_type).with_backend(cartesian_case.executor)(
-            tmp_field, out_field, offset_provider=cartesian_case.offset_provider
-        )
+        lap_program.with_grid_type(cartesian_case.grid_type).with_backend(
+            cartesian_case.executor
+        ).with_connectivities(connectivities)(in_field, tmp_field)
+        lap_program.with_grid_type(cartesian_case.grid_type).with_backend(
+            cartesian_case.executor
+        ).with_connectivities(connectivities)(tmp_field, out_field)
 
     sdfg()
 
@@ -107,27 +100,104 @@ def test_sdfgConvertible_laplap(cartesian_case):
     def sdfg_with_args(
         in_field,
         out_field,
-        offset_provider: dace.compiletime,
         grid_type: dace.compiletime,
         executor: dace.compiletime,
+        connectivities: dace.compiletime,
     ):
         tmp_field = xp.empty_like(out_field)
-        lap_program.with_grid_type(grid_type).with_backend(executor)(
-            in_field, tmp_field, offset_provider=offset_provider
-        )
-        lap_program.with_grid_type(grid_type).with_backend(executor)(
-            tmp_field, out_field, offset_provider=offset_provider
-        )
+        lap_program.with_grid_type(grid_type).with_backend(executor).with_connectivities(
+            connectivities
+        )(in_field, tmp_field)
+        lap_program.with_grid_type(grid_type).with_backend(executor).with_connectivities(
+            connectivities
+        )(tmp_field, out_field)
 
     sdfg_with_args(
         in_field_new,
         out_field,
-        cartesian_case.offset_provider,
         cartesian_case.grid_type,
         cartesian_case.executor,
+        connectivities,
     )
 
     assert np.allclose(
         gtx.field_utils.asnumpy(out_field)[2:-2, 2:-2],
         lap_ref(lap_ref(in_field_new.array_ns.asarray(in_field.ndarray))),
     )
+
+
+@pytest.mark.uses_unstructured_shift
+def test_sdfgConvertible_connectivities(unstructured_case):
+    if unstructured_case.executor not in [run_dace_cpu, run_dace_gpu]:
+        pytest.skip("DaCe-related test: Test SDFGConvertible interface for GT4Py programs")
+
+    allocator, backend = unstructured_case.allocator, unstructured_case.executor
+
+    rows = dace.symbol("rows")
+    cols = dace.symbol("cols")
+    OffsetProvider_t = dace.data.Structure(
+        dict(E2V=dace.data.Array(dtype=dace.int64, shape=[rows, cols])), name="OffsetProvider"
+    )
+
+    @dace.program
+    def sdfg(
+        a: dace.data.Array(dtype=dace.float64, shape=(rows,)),
+        out: dace.data.Array(dtype=dace.float64, shape=(rows,)),
+        offset_provider: OffsetProvider_t,
+        connectivities: dace.compiletime,
+    ):
+        testee.with_backend(backend).with_connectivities(connectivities)(
+            a, out, offset_provider=offset_provider
+        )
+
+    e2v_array = np.asarray([[0, 1], [1, 2], [2, 0]])
+    e2v = gtx.NeighborTableOffsetProvider(e2v_array, Edge, Vertex, 2, False)
+    connectivities = {}
+    connectivities["E2V"] = gtx.StripedNeighborOffsetProvider(
+        e2v.table, e2v.origin_axis, e2v.neighbor_axis, e2v.max_neighbors, e2v.has_skip_values
+    )
+    offset_provider = OffsetProvider_t.dtype._typeclass.as_ctypes()(E2V=e2v.data_ptr())
+
+    SDFG = sdfg.to_sdfg(
+        connectivities=connectivities
+    )  # connectivities could have been passed like `backend` -from the closure-, but this is an alternative way
+    cSDFG = SDFG.compile()
+
+    a_array = np.asarray([0.0, 1.0, 2.0])
+    a = gtx.as_field([Vertex], a_array, allocator=allocator)
+    out = gtx.zeros({Edge: 3}, allocator=allocator)
+    cSDFG(
+        a,
+        out,
+        offset_provider,
+        rows=3,
+        cols=2,
+        __connectivity_E2V=e2v.table,
+        ____connectivity_E2V_stride_0=get_stride_from_numpy_to_dace(e2v.table, 0),
+        ____connectivity_E2V_stride_1=get_stride_from_numpy_to_dace(e2v.table, 1),
+    )
+
+    assert np.allclose(out.ndarray, a_array[e2v_array[:, 0]])
+
+    e2v_array = np.asarray([[1, 0], [2, 1], [0, 2]])
+    e2v = gtx.NeighborTableOffsetProvider(e2v_array, Edge, Vertex, 2, False)
+    cSDFG(
+        a,
+        out,
+        offset_provider,
+        rows=3,
+        cols=2,
+        __connectivity_E2V=e2v.table,
+        ____connectivity_E2V_stride_0=get_stride_from_numpy_to_dace(e2v.table, 0),
+        ____connectivity_E2V_stride_1=get_stride_from_numpy_to_dace(e2v.table, 1),
+    )
+
+    assert np.allclose(out.ndarray, a_array[e2v_array[:, 0]])
+
+
+def get_stride_from_numpy_to_dace(numpy_array: np.ndarray, axis: int) -> int:
+    """
+    NumPy strides: number of bytes to jump
+    DaCe strides: number of elements to jump
+    """
+    return numpy_array.strides[axis] // numpy_array.itemsize

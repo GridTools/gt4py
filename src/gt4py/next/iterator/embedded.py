@@ -63,6 +63,14 @@ from gt4py.next.iterator import builtins, runtime
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
+try:
+    import dace
+except ImportError:
+    from types import ModuleType
+
+    dace: Optional[ModuleType] = None  # type: ignore[no-redef]
+
+
 EMBEDDED = "embedded"
 
 
@@ -112,6 +120,44 @@ class NeighborTableOffsetProvider:
         res = self.table[(primary, neighbor_idx)]
         assert common.is_int_index(res)
         return res
+
+    if dace:
+        # Extension of NeighborTableOffsetProvider adding SDFGConvertible support in GT4Py Programs
+        def data_ptr(self) -> int:
+            obj = self.table
+            if dace.dtypes.is_array(obj) and (
+                hasattr(obj, "__array_interface__") or hasattr(obj, "__cuda_array_interface__")
+            ):
+                if dace.dtypes.is_gpu_array(obj):
+                    return obj.__cuda_array_interface__["data"][0]  # type: ignore
+                else:
+                    return obj.__array_interface__["data"][0]  # type: ignore
+            else:
+                raise ValueError("Unsupported data container.")
+
+        def __descriptor__(self) -> dace.data.Data:
+            return dace.data.create_datadescriptor(self.table)
+
+
+class StripedNeighborOffsetProvider:
+    def __init__(
+        self,
+        table: core_defs.NDArrayObject,
+        origin_axis: common.Dimension,
+        neighbor_axis: common.Dimension,
+        max_neighbors: int,
+        has_skip_values=True,
+    ) -> None:
+        self.table = None
+        self.origin_axis = origin_axis
+        self.neighbor_axis = neighbor_axis
+        self.max_neighbors = max_neighbors
+        self.has_skip_values = has_skip_values
+        self.index_type = table.dtype
+
+    def mapped_index(
+        self, cur_index: int | np.integer, neigh_index: int | np.integer
+    ) -> Optional[int | np.integer]: ...
 
 
 class StridedNeighborOffsetProvider:

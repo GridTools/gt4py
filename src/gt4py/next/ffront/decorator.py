@@ -35,7 +35,7 @@ from gt4py.next import (
     embedded as next_embedded,
     errors,
 )
-from gt4py.next.common import Dimension, GridType
+from gt4py.next.common import Connectivity, Dimension, GridType
 from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
     field_operator_ast as foast,
@@ -82,6 +82,7 @@ class Program:
 
     definition_stage: ffront_stages.ProgramDefinition
     backend: Optional[next_backend.Backend]
+    connectivities: Optional[dict[Connectivity]]
 
     @classmethod
     def from_function(
@@ -89,9 +90,10 @@ class Program:
         definition: types.FunctionType,
         backend: Optional[next_backend],
         grid_type: Optional[GridType] = None,
+        connectivities: Optional[dict[Connectivity]] = None,
     ) -> Program:
         program_def = ffront_stages.ProgramDefinition(definition=definition, grid_type=grid_type)
-        return cls(definition_stage=program_def, backend=backend)
+        return cls(definition_stage=program_def, backend=backend, connectivities=connectivities)
 
     # needed in testing
     @property
@@ -126,6 +128,9 @@ class Program:
 
     def with_backend(self, backend: ppi.ProgramExecutor) -> Program:
         return dataclasses.replace(self, backend=backend)
+
+    def with_connectivities(self, connectivities: dict[Connectivity]) -> Program:
+        return dataclasses.replace(self, connectivities=connectivities)
 
     def with_grid_type(self, grid_type: GridType) -> Program:
         return dataclasses.replace(

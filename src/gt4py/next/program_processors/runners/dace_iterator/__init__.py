@@ -326,6 +326,9 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
     connectivity_tables_data_descriptors: ClassVar[dict[str, Any]] = {}
 
     def __sdfg__(self, *args, **kwargs) -> dace.sdfg.sdfg.SDFG:
+        if "dace" not in self.backend.executor.name.lower():  # type: ignore[union-attr]
+            raise ValueError("The SDFG can be generated only for the DaCe backend.")
+
         params = {str(p.id): p.type for p in self.itir.params}
         fields = {str(p.id): p.type for p in self.itir.params if hasattr(p.type, "dims")}
         arg_types = list(params.values())
@@ -334,9 +337,11 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         gt4py_program_args = list(params.values())
         Program.crosscheck_dace_parsing(dace_parsed_args, gt4py_program_args)
 
-        # Do this because DaCe converts the offset_provider to an OrderedDict with StringLiteral keys
-        offset_provider = {str(k): v for k, v in kwargs.get("offset_provider", {}).items()}
-        self.sdfg_closure_vars["offset_provider"] = offset_provider
+        if self.connectivities is None:
+            raise ValueError(
+                "[DaCe Orchestration] Connectivities -at compile time- are required to generate the SDFG. Use `with_connectivities` method."
+            )
+        offset_provider = self.connectivities
 
         sdfg = self.backend.executor.otf_workflow.step.translation.generate_sdfg(  # type: ignore[union-attr]
             self.itir,
@@ -395,7 +400,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         )
         for closure in itir_tmp.closures:  # type: ignore[union-attr]
             shifts = itir_transforms.trace_shifts.TraceShifts.apply(closure)
-            for k, v in shifts.items():  # type: ignore[assignment]
+            for k, v in shifts.items():
                 if not isinstance(k, str):
                     continue
                 if k not in sdfg.gt4py_program_input_fields:
@@ -412,23 +417,25 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         Here, we define them symbolically (along with the correct dtypes), and let DaCe fill the missing symbols.
         Keep in mind, that __sdfg_closure__ is called after __sdfg__.
         """
+        offset_provider = self.connectivities
+
         symbols = {
             f"__{connectivity_identifier(k)}_{sym}": dace.symbol(
                 f"__{connectivity_identifier(k)}_{sym}"
             )
-            for k, v in self.sdfg_closure_vars.get("offset_provider", {}).items()
+            for k, v in offset_provider.items()  # type: ignore[union-attr]
             for sym in ["size_0", "size_1", "stride_0", "stride_1"]
             if hasattr(v, "table")
             and connectivity_identifier(k) in self.sdfg_closure_vars.get("sdfg.arrays", {})
         }
 
         closure_dict = {}
-        for k, v in self.sdfg_closure_vars.get("offset_provider", {}).items():
+        for k, v in offset_provider.items():  # type: ignore[union-attr]
             conn_id = connectivity_identifier(k)
             if hasattr(v, "table") and conn_id in self.sdfg_closure_vars.get("sdfg.arrays", {}):
                 if conn_id not in Program.connectivity_tables_data_descriptors:
                     Program.connectivity_tables_data_descriptors[conn_id] = dace.data.Array(
-                        dtype=dace.int64 if v.table.dtype == np.int64 else dace.int32,
+                        dtype=dace.int64 if v.index_type == np.int64 else dace.int32,
                         shape=[symbols[f"__{conn_id}_size_0"], symbols[f"__{conn_id}_size_1"]],
                         strides=[
                             symbols[f"__{conn_id}_stride_0"],
@@ -469,14 +476,9 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
                 assert isinstance(gt4py_program_arg, ts.FieldType)
                 assert len(dace_parsed_arg.shape) == len(gt4py_program_arg.dims)
                 assert dace_parsed_arg.dtype == as_dace_type(gt4py_program_arg.dtype)
-                for i in range(len(dace_parsed_arg.shape)):
-                    if isinstance(dace_parsed_arg.shape[i], dace.symbol):
-                        assert (
-                            gt4py_program_arg.dims[i].value.lower()
-                            in dace_parsed_arg.shape[i].name.lower()
-                        )
-                # for the compile-time constant arrays, we cannot do any further checks
-            elif isinstance(dace_parsed_arg, (dict, OrderedDict)):  # offset_provider
+            elif isinstance(
+                dace_parsed_arg, (dace.data.Structure, dict, OrderedDict)
+            ):  # offset_provider
                 continue
             else:
                 raise ValueError(
