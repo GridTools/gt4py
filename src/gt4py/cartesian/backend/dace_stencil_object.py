@@ -50,7 +50,11 @@ def add_optional_fields(
         if info.access == AccessKind.NONE and name in kwargs and name not in sdfg.arrays:
             outer_array = kwargs[name]
             sdfg.add_array(
-                name, shape=outer_array.shape, dtype=outer_array.dtype, strides=outer_array.strides
+                name,
+                shape=outer_array.shape,
+                dtype=outer_array.dtype,
+                total_size=outer_array.total_size,
+                strides=outer_array.strides,
             )
 
     for name, info in parameter_info.items():
