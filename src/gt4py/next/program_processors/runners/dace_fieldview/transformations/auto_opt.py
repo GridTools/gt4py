@@ -14,7 +14,7 @@
 
 """Fast access to the auto optimization on DaCe."""
 
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 import dace
 from dace.transformation import dataflow as dace_dataflow
@@ -88,54 +88,12 @@ def gt_simplify(
     ).apply_pass(sdfg, {})
 
 
-def gt_gpu_transformation(
-    sdfg: dace.SDFG,
-    validate: bool = True,
-    validate_all: bool = False,
-) -> dace.SDFG:
-    """Transform an SDFG into an GPU SDFG.
-
-    The transformations are done in place.
-    The function will roughly do the same:
-    - Move all arrays used as input to the GPU.
-    - Apply the standard DaCe GPU transformation.
-    - Run `gt_simplify()` (recommended by the DaCe documentation).
-    - Try to promote trivial maps.
-    """
-
-    # Turn all global arrays (which we identify as input) into GPU memory.
-    #  This way the GPU transformation will not create this copying stuff.
-    for desc in sdfg.arrays.values():
-        if desc.transient:
-            continue
-        if not isinstance(desc, dace.data.Array):
-            continue
-        desc.storage = dace.dtypes.StorageType.GPU_Global
-
-    # Now turn it into a GPU SDFG
-    sdfg.apply_gpu_transformations(
-        validate=validate,
-        validate_all=validate_all,
-        simplify=False,
-    )
-
-    # The documentation recommend to run simplify afterwards
-    gtx_transformations.gt_simplify(sdfg)
-
-    # Start to promote the maps.
-    sdfg.apply_transformations_repeated(
-        [gtx_transformations.SerialMapPromoterGPU()],
-        validate=validate,
-        validate_all=validate_all,
-    )
-    return sdfg
-
-
 def gt_auto_optimize(
     sdfg: dace.SDFG,
     device: dace.DeviceType = dace.DeviceType.CPU,
     leading_dim: Optional[gtx_common.Dimension] = None,
     gpu: bool = False,
+    gpu_block_size: Optional[Sequence[int | str] | str] = None,
     validate: bool = True,
     validate_all: bool = False,
     **kwargs: Any,
@@ -147,6 +105,7 @@ def gt_auto_optimize(
         device: The device for which we should optimize.
         leading_dim: Leading dimension, where the stride is expected to be 1.
         gpu: Optimize for GPU.
+        gpu_block_size: The block size that should be used for the GPU.
     """
 
     with dace.config.temporary_config():
@@ -187,7 +146,12 @@ def gt_auto_optimize(
 
             if old_sdfg_hash == sdfg_hash:
                 if gpu and (not have_gpu_transformations_been_run):
-                    gt_gpu_transformation(sdfg, validate=validate, validate_all=validate_all)
+                    gtx_transformations.gt_gpu_transformation(
+                        sdfg,
+                        validate=validate,
+                        validate_all=validate_all,
+                        gpu_block_size=None,  # Explicitly not set here.
+                    )
                     have_gpu_transformations_been_run = True
                     sdfg_hash = sdfg.hash_sdfg()
                     continue
@@ -203,6 +167,10 @@ def gt_auto_optimize(
                     leading_dim=leading_dim,
                 )
             )
+
+        # After everything we set the GPU block size.
+        if gpu_block_size is not None:
+            gtx_transformations.gt_set_gpu_blocksize(sdfg, gpu_block_size)
 
         # These are the part that we copy from DaCe built in auto optimization.
         dace_aoptimize.set_fast_implementations(sdfg, device)

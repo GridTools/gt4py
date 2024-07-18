@@ -12,7 +12,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import copy
 from typing import Any, Mapping, Optional, Sequence, Union
 
 import dace
@@ -22,7 +21,6 @@ from dace.sdfg import SDFG, SDFGState, nodes
 
 __all__ = [
     "SerialMapPromoter",
-    "SerialMapPromoterGPU",
 ]
 
 
@@ -307,80 +305,3 @@ class SerialMapPromoter(BaseMapPromoter):
 
         # The second map will be promoted, so the first is used as source
         return state.entry_node(self.exit_first_map)
-
-
-@properties.make_properties
-class SerialMapPromoterGPU(transformation.SingleStateTransformation):
-    """Serial Map promoter for empty Maps in case of trivial Maps.
-
-    In CPU mode a Tasklet can be outside of a map, however, this is not
-    possible in CPU mode. For this reason DaCe wraps every such Tasklet
-    in a trivial Map.
-    This function will look for such Maps and promote them, such that they
-    can be fused with downstream maps.
-
-    Note:
-        This transformation must be run after the GPU Transformation.
-    """
-
-    # Pattern Matching
-    map_exit1 = transformation.transformation.PatternNode(nodes.MapExit)
-    access_node = transformation.transformation.PatternNode(nodes.AccessNode)
-    map_entry2 = transformation.transformation.PatternNode(nodes.MapEntry)
-
-    @classmethod
-    def expressions(cls) -> Any:
-        return [dace.sdfg.utils.node_path_graph(cls.map_exit1, cls.access_node, cls.map_entry2)]
-
-    def can_be_applied(
-        self,
-        graph: Union[SDFGState, SDFG],
-        expr_index: int,
-        sdfg: dace.SDFG,
-        permissive: bool = False,
-    ) -> bool:
-        """Tests if the promotion is possible.
-
-        The function tests:
-        - If the top map is a trivial map.
-        - If a valid partition exists that can be fused at all.
-        """
-        from .map_seriall_fusion import SerialMapFusion
-
-        map_exit_1: nodes.MapExit = self.map_exit1
-        map_1: nodes.Map = map_exit_1.map
-        map_entry_2: nodes.MapEntry = self.map_entry2
-
-        # Check if the first map is trivial.
-        if len(map_1.params) != 1:
-            return False
-        if map_1.range.num_elements() != 1:
-            return False
-
-        # Check if the partition exists, if not promotion to fusing is pointless.
-        #  TODO(phimuell): Find the proper way of doing it.
-        serial_fuser = SerialMapFusion()
-        output_partition = serial_fuser.partition_first_outputs(
-            state=graph,
-            sdfg=sdfg,
-            map_exit_1=map_exit_1,
-            map_entry_2=map_entry_2,
-        )
-        if output_partition is None:
-            return False
-
-        return True
-
-    def apply(self, graph: Union[SDFGState, SDFG], sdfg: SDFG) -> None:
-        """Performs the Map Promoting.
-
-        The function essentially copies the parameters and the ranges from the
-        bottom map to the top one.
-        """
-        map_1: nodes.Map = self.map_exit1.map
-        map_2: nodes.Map = self.map_entry2.map
-
-        map_1.params = copy.deepcopy(map_2.params)
-        map_1.range = copy.deepcopy(map_2.range)
-
-        return
