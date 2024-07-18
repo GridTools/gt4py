@@ -18,7 +18,6 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import as_fieldop, cartesian_domain, deref, named_range
 from gt4py.next.iterator.runtime import fendef, fundef, set_at
-from gt4py.next.program_processors.runners import dace, gtfn
 
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
@@ -40,17 +39,9 @@ def copy_program(inp, out, size):
     )
 
 
+@pytest.mark.starts_from_gtir_program
 def test_prog(program_processor):
     program_processor, validate = program_processor
-
-    if program_processor in [
-        gtfn.run_gtfn.executor,
-        gtfn.run_gtfn_imperative.executor,
-        gtfn.run_gtfn_with_temporaries.executor,
-        dace.run_dace_cpu.executor,
-    ]:
-        # TODO(havogt): Remove, skipped during refactoring to GTIR
-        pytest.skip("Executor requires to start from fencil.")
 
     isize = 10
     inp = gtx.as_field([I], np.arange(0, isize, dtype=np.float64))
