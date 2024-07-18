@@ -400,7 +400,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         )
         for closure in itir_tmp.closures:  # type: ignore[union-attr]
             shifts = itir_transforms.trace_shifts.TraceShifts.apply(closure)
-            for k, v in shifts.items():
+            for k, v in shifts.items():  # type: ignore[assignment]
                 if not isinstance(k, str):
                     continue
                 if k not in sdfg.gt4py_program_input_fields:
