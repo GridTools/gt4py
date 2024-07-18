@@ -205,8 +205,10 @@ def convert_args(
     on_gpu = True if device == core_defs.DeviceType.CUDA else False
 
     def decorated_program(
-        *args, offset_provider: dict[str, common.Connectivity | common.Dimension]
+        *args, offset_provider: dict[str, common.Connectivity | common.Dimension], out: Any = None
     ):
+        if out is not None:
+            args = (*args, out)
         if sdfg_program._lastargs:
             # The scalar arguments should be replaced with the actual value; for field arguments,
             # the data pointer should remain the same otherwise fast-call cannot be used and
