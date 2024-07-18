@@ -374,7 +374,7 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
         >>> x = itir.SymRef(id="x")
         >>> plus = lambda a, b: itir.FunCall(fun=itir.SymRef(id=("plus")), args=[a, b])
         >>> expr = plus(plus(x, x), plus(x, x))
-        >>> print(CommonSubexpressionElimination().visit(expr))
+        >>> print(CommonSubexpressionElimination.apply(expr, is_local_view=True))
         (λ(_cs_1) → _cs_1 + _cs_1)(x + x)
     """
 
