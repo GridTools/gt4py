@@ -15,6 +15,7 @@ import dataclasses
 import warnings
 from collections import OrderedDict
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import field
 from inspect import currentframe, getframeinfo
 from pathlib import Path
 from typing import Any, ClassVar, Optional
@@ -317,6 +318,8 @@ def build_sdfg_from_itir(
 class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
     """Extension of GT4Py Program implementing the SDFGConvertible interface."""
 
+    sdfg_closure_vars: dict[str, Any] = field(default_factory=dict)
+
     # Defined as class variable, otherwise the same connectivity table -name & data descriptor- across multiple GT4Py Programs
     # will be considered as a different table (with subsequent name mangling). Therefore, the memory address of the table's data descriptor needs to be the same.
     # This affects the case where a DaCe.Program calls multiple GT4Py Programs (fused SDFG).
@@ -347,6 +350,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             column_axis=kwargs.get("column_axis", None),
         )
 
+        self.sdfg_closure_vars["sdfg.arrays"] = sdfg.arrays
         if "storage" not in Program.connectivity_tables_data_descriptors:
             for k in offset_provider.keys():
                 if not hasattr(offset_provider[k], "table"):
@@ -422,12 +426,13 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             for k, v in offset_provider.items()  # type: ignore[union-attr]
             for sym in ["size_0", "size_1", "stride_0", "stride_1"]
             if hasattr(v, "table")
+            and connectivity_identifier(k) in self.sdfg_closure_vars["sdfg.arrays"]
         }
 
         closure_dict = {}
         for k, v in offset_provider.items():  # type: ignore[union-attr]
             conn_id = connectivity_identifier(k)
-            if hasattr(v, "table"):
+            if hasattr(v, "table") and conn_id in self.sdfg_closure_vars["sdfg.arrays"]:
                 if conn_id not in Program.connectivity_tables_data_descriptors:
                     Program.connectivity_tables_data_descriptors[conn_id] = dace.data.Array(
                         dtype=dace.int64 if v.index_type == np.int64 else dace.int32,
