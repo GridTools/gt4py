@@ -21,43 +21,15 @@ from typing import Optional
 
 from gt4py import eve
 from gt4py.eve import utils as eve_utils
-from gt4py.next import type_inference
-from gt4py.next.iterator import ir, type_inference as it_type_inference
+from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils import (
     common_pattern_matcher as cpm,
     ir_makers as im,
     misc as ir_misc,
 )
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas, inline_lambda
-from gt4py.next.type_system import type_info
-
-
-class UnknownLength:
-    pass
-
-
-def _get_tuple_size(elem: ir.Node, use_global_information: bool) -> int | type[UnknownLength]:
-    if use_global_information:
-        type_ = elem.annex.type
-        # global inference should always give a length, fail otherwise
-        assert isinstance(type_, it_type_inference.Val) and isinstance(
-            type_.dtype, it_type_inference.Tuple
-        )
-    else:
-        # use local type inference if no global information is available
-        assert isinstance(elem, ir.Node)
-        type_ = it_type_inference.infer(elem)
-
-        if not (
-            isinstance(type_, it_type_inference.Val)
-            and isinstance(type_.dtype, it_type_inference.Tuple)
-        ):
-            return UnknownLength
-
-    if not type_.dtype.has_known_length:
-        return UnknownLength
-
-    return len(type_.dtype)
+from gt4py.next.iterator.type_system import inference as itir_type_inference
+from gt4py.next.type_system import type_info, type_specifications as ts
 
 
 def _with_altered_arg(node: ir.FunCall, arg_idx: int, new_arg: ir.Expr):
@@ -120,7 +92,6 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
             return functools.reduce(operator.or_, self.__members__.values())
 
     ignore_tuple_size: bool
-    use_global_type_inference: bool
     flags: Flag = Flag.all()  # noqa: RUF009 [function-call-in-dataclass-default-argument]
 
     PRESERVED_ANNEX_ATTRS = ("type",)
@@ -131,18 +102,18 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         init=False, repr=False, default_factory=lambda: eve_utils.UIDGenerator(prefix="_tuple_el")
     )
 
-    _node_types: Optional[dict[int, type_inference.Type]] = None
-
     @classmethod
     def apply(
         cls,
         node: ir.Node,
         *,
         ignore_tuple_size: bool = False,
-        use_global_type_inference: bool = False,
         remove_letified_make_tuple_elements: bool = True,
+        offset_provider=None,
         # manually passing flags is mostly for allowing separate testing of the modes
         flags=None,
+        # allow sym references without a symbol declaration, mostly for testing
+        allow_undeclared_symbols: bool = False,
     ) -> ir.Node:
         """
         Simplifies `make_tuple`, `tuple_get` calls.
@@ -153,18 +124,22 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         Keyword arguments:
             ignore_tuple_size: Apply the transformation even if length of the inner tuple is greater
                 than the length of the outer tuple.
-            use_global_type_inference: Run global type inference to determine tuple sizes.
             remove_letified_make_tuple_elements: Run `InlineLambdas` as a post-processing step
                 to remove left-overs from `LETIFY_MAKE_TUPLE_ELEMENTS` transformation.
                 `(λ(_tuple_el_1, _tuple_el_2) → {_tuple_el_1, _tuple_el_2})(1, 2)` -> {1, 2}`
         """
         flags = flags or cls.flags
-        if use_global_type_inference:
-            it_type_inference.infer_all(node, save_to_annex=True)
+        offset_provider = offset_provider or {}
+
+        if not ignore_tuple_size:
+            node = itir_type_inference.infer(
+                node,
+                offset_provider=offset_provider,
+                allow_undeclared_symbols=allow_undeclared_symbols,
+            )
 
         new_node = cls(
             ignore_tuple_size=ignore_tuple_size,
-            use_global_type_inference=use_global_type_inference,
             flags=flags,
         ).visit(node)
 
@@ -222,9 +197,8 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
                     # tuple argument differs, just continue with the rest of the tree
                     return None
 
-            if self.ignore_tuple_size or _get_tuple_size(
-                first_expr, self.use_global_type_inference
-            ) == len(node.args):
+            assert self.ignore_tuple_size or isinstance(first_expr.type, ts.TupleType)
+            if self.ignore_tuple_size or len(first_expr.type.types) == len(node.args):  # type: ignore[union-attr] # ensured by assert above
                 return first_expr
         return None
 

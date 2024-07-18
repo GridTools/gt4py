@@ -23,7 +23,7 @@ to create a streamlined user experience. `from module import *` can be used but 
 module in question is a submodule, defines `__all__` and exports many public API objects.
 """
 
-from . import common, ffront, iterator, program_processors, type_inference
+from . import common, ffront, iterator, program_processors
 from .common import (
     Dimension,
     DimensionKind,
@@ -62,7 +62,6 @@ __all__ = [
     "ffront",
     "iterator",
     "program_processors",
-    "type_inference",
     # from common
     "Dimension",
     "DimensionKind",
