@@ -30,6 +30,7 @@ from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.compilation import cache
 from gt4py.next.otf.languages import LanguageSettings
+from gt4py.next.program_processors.runners import gtfn
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
 
 from . import build_sdfg_from_itir, get_sdfg_args
@@ -209,6 +210,7 @@ def convert_args(
     ):
         if out is not None:
             args = (*args, out)
+            args = (*args, *gtfn.iter_size_args(args))
         if sdfg_program._lastargs:
             # The scalar arguments should be replaced with the actual value; for field arguments,
             # the data pointer should remain the same otherwise fast-call cannot be used and
