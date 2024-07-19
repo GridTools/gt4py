@@ -159,24 +159,45 @@ class KBlocking(transformation.SingleStateTransformation):
         #  Note that this only handles the map entry.
         for out_edge in list(graph.out_edges(outer_entry)):
             edge_dst: nodes.Node = out_edge.dst
-            edge_conn: str = out_edge.src_conn[4:]
 
             if edge_dst in dependent_nodes:
                 # This is the simple case as we just ave to rewire the edge
                 #  and make a connection between the outer and inner map.
+                assert not out_edge.data.is_empty()
+                edge_conn: str = out_edge.src_conn[4:]
+
+                # Must be before the handling of the modification below
+                #  Note that this will remove the edge from the SDFG.
                 helpers.redirect_edge(
                     state=graph,
                     edge=out_edge,
                     new_src=inner_entry,
                     new_src_conn="OUT_" + edge_conn,
                 )
-                graph.add_edge(
-                    outer_entry,
-                    "OUT_" + edge_conn,
-                    inner_entry,
-                    "IN_" + edge_conn,
-                    copy.deepcopy(out_edge.data),
-                )
+
+                # In a valid SDFG one one edge can go to an input connector of
+                #  a map (this is their definition), thus we have to adhere to
+                #  this definition as well.
+                if "IN_" + edge_conn in inner_entry.in_connectors:
+                    # We have found this edge multiple times already.
+                    #  To ensure that there is no error, we will create a new
+                    #  Memlet that reads the whole array.
+                    piping_edge = next(graph.in_edges_by_connector(inner_entry, "IN_" + edge_conn))
+                    data_name = piping_edge.data.data
+                    piping_edge.data = dace.Memlet.from_array(
+                        data_name, sdfg.arrays[data_name], piping_edge.data.wcr
+                    )
+
+                else:
+                    # This is the first time we found this connection.
+                    #  so we just create the edge.
+                    graph.add_edge(
+                        outer_entry,
+                        "OUT_" + edge_conn,
+                        inner_entry,
+                        "IN_" + edge_conn,
+                        copy.deepcopy(out_edge.data),
+                    )
                 inner_entry.add_in_connector("IN_" + edge_conn)
                 inner_entry.add_out_connector("OUT_" + edge_conn)
                 continue
@@ -203,7 +224,7 @@ class KBlocking(transformation.SingleStateTransformation):
                 assert isinstance(caching_node, nodes.AccessNode)
 
                 for consumer_edge in list(graph.out_edges(caching_node)):
-                    new_map_conn = inner_exit.next_connector()
+                    new_map_conn = inner_entry.next_connector()
                     helpers.redirect_edge(
                         state=graph,
                         edge=consumer_edge,
@@ -310,18 +331,26 @@ class KBlocking(transformation.SingleStateTransformation):
             #  for this we have to look at all the edges that feed information to it.
             edges: list[dace_graph.MultiConnectorEdge[dace.Memlet]] = list(state.in_edges(node))
 
+            # If all edges are empty, i.e. they are only needed to keep the
+            #  node inside the scope, consider it as independent. If they are
+            #  tied to different scopes, refuse to work.
+            if all(edge.data.is_empty() for edge in edges):
+                if not all(edge.src is map_entry for edge in edges):
+                    return None
+                block_independent.add(node)
+                continue
+
+            # Currently we do not allow that a node has a mix of empty and non
+            #  empty Memlets, is all or nothing.
+            if any(edge.data.is_empty() for edge in edges):
+                return None
+
             # If the node gets information from other nodes than the map entry
             #  we classify it as a dependent node, although there can be situations
             #  were it could still be an independent node, but figuring this out
             #  is too complicated.
             if any(edge.src is not map_entry for edge in edges):
                 block_dependent.add(node)
-                continue
-
-            # If all edges are empty, i.e. they are only needed to keep the
-            #  node inside the scope, consider it as independent.
-            if all(edge.data.is_empty() for edge in edges):
-                block_independent.add(node)
                 continue
 
             # Now we have to look at the edges individually.
