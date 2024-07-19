@@ -23,7 +23,6 @@ import numpy as np
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import codegen, trees, utils
-from gt4py.eve.extended_typing import Self
 from gt4py.next import common
 from gt4py.next.common import Connectivity, Dimension
 from gt4py.next.ffront import fbuiltins
@@ -341,65 +340,9 @@ class GTFNTranslationStep(
         )
 
 
-# TODO(ricoh): remove when the whole toolchain is AOT capable
-@dataclasses.dataclass(frozen=True)
-class GTFNJitTranslationStep(
-    workflow.NamedStepSequence[
-        stages.ProgramCall,
-        stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
-    ],
-    step_types.TranslationStep[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
-):
-    inner: GTFNTranslationStep
-
-    def __call__(
-        self, inp: stages.ProgramCall
-    ) -> stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings]:
-        return self.inner(stages.program_call_to_aot_program(inp))
-
-    def replace(self, **kwargs: Any) -> Self:
-        """Pass through to the inner step."""
-        return super().replace(inner=self.inner.replace(**kwargs))
-
-    def __getattr__(self, name: str) -> Any:
-        if name == "inner":
-            return self.inner
-        else:
-            return getattr(self.inner, name)
-
-
 class GTFNTranslationStepFactory(factory.Factory):
     class Meta:
         model = GTFNTranslationStep
-
-
-# TODO(ricoh): remove when the whole toolchain is AOT capable
-class GTFNJitTranslationStepFactory(factory.Factory):
-    class Meta:
-        model = GTFNJitTranslationStep
-
-    class Params:
-        # Note: this duplication is only here to avoid changing calls to the factory
-        #   while the rest of the toolchain becomes AOT capable. Then this level of indirection will
-        #   go away again.
-        language_settings: Optional[languages.LanguageWithHeaderFilesSettings] = None
-        enable_itir_transforms: bool = True
-        use_imperative_backend: bool = False
-        lift_mode: Optional[LiftMode] = None
-        device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
-        symbolic_domain_sizes: Optional[dict[str, str]] = None
-        temporary_extraction_heuristics: Optional[
-            Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
-        ] = None
-
-    inner = factory.SubFactory(
-        GTFNTranslationStepFactory,
-        **{
-            name: factory.SelfAttribute(f"..{name}")
-            for name in dir(Params)
-            if not name.startswith("_")
-        },
-    )
 
 
 translate_program_cpu: Final[step_types.TranslationStep] = GTFNTranslationStepFactory()
