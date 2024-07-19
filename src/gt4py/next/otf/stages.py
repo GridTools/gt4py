@@ -138,6 +138,10 @@ class JITArgs:
     args: tuple[Any, ...]
     kwargs: dict[str, Any]
 
+    @classmethod
+    def from_signature(cls, *args: Any, **kwargs: Any) -> Self:
+        return cls(args=args, kwargs=kwargs)
+
 
 @dataclasses.dataclass(frozen=True)
 class AOTProgram:

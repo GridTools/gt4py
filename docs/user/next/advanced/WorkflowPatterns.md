@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: "1.3"
-      jupytext_version: 1.16.1
+      jupytext_version: 1.16.2
   kernelspec:
     display_name: Python 3 (ipykernel)
     language: python
@@ -98,7 +98,7 @@ add_3(1)
 
 ### Example in the Wild
 
-```python jupyter={"outputs_hidden": true}
+```python
 gtx.ffront.func_to_past.func_to_past.steps.inner[0]??
 ```
 
@@ -134,7 +134,7 @@ add_3_times_2(1)
 
 ### Example in the Wild
 
-```python jupyter={"outputs_hidden": true}
+```python
 gtx.program_processors.runners.roundtrip.Roundtrip??
 ```
 
@@ -180,7 +180,7 @@ cached_calc(1)
 
 ### Example in the Wild
 
-```python jupyter={"outputs_hidden": true}
+```python
 gtx.backend.DEFAULT_PROG_TRANSFORMS.past_lint??
 ```
 
@@ -268,7 +268,7 @@ strint_calc(1) == strint_calc("1")
 
 <!-- #endregion -->
 
-```python jupyter={"outputs_hidden": true} editable=true slideshow={"slide_type": ""}
+```python editable=true slideshow={"slide_type": ""}
 gtx.backend.DEFAULT_PROG_TRANSFORMS.func_to_past??
 ```
 
@@ -485,8 +485,4 @@ gtx.program_processors.runners.gtfn.run_gtfn_gpu.executor.otf_workflow??
 
 ```python
 gtx.program_processors.runners.gtfn.GTFNBackendFactory??
-```
-
-```python
-
 ```

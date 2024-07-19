@@ -189,9 +189,9 @@ def test_fingerprint_stage_program_def(program, samecode_program, different_prog
 
 
 def test_fingerprint_stage_past_def(program, samecode_program, different_program):
-    past = gtx.backend.DEFAULT_PROG_TRANSFORMS.func_to_past(program.definition_stage)
-    samecode = gtx.backend.DEFAULT_PROG_TRANSFORMS.func_to_past(samecode_program.definition_stage)
-    different = gtx.backend.DEFAULT_PROG_TRANSFORMS.func_to_past(different_program.definition_stage)
+    past = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_past(program.definition_stage)
+    samecode = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_past(samecode_program.definition_stage)
+    different = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_past(different_program.definition_stage)
 
     assert stages.fingerprint_stage(samecode) != stages.fingerprint_stage(past)
     assert stages.fingerprint_stage(different) != stages.fingerprint_stage(past)

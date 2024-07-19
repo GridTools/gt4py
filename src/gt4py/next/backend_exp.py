@@ -275,10 +275,7 @@ class FieldopTransformWorkflow(workflow.MultiWorkflow):
         )
     )
 
-    foast_to_itir: workflow.Workflow[
-        workflow.DataWithArgs[FOP, CARG],
-        itir.Expr,
-    ] = dataclasses.field(
+    foast_to_itir: workflow.Workflow[AOT_FOP, itir.Expr] = dataclasses.field(
         default_factory=lambda: workflow.StripArgsAdapter(
             workflow.CachedStep(
                 step=foast_to_itir.foast_to_itir, hash_function=ffront_stages.fingerprint_stage

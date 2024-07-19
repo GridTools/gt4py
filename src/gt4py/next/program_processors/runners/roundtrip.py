@@ -229,16 +229,36 @@ class Roundtrip(workflow.Workflow[stages.AOTProgram, stages.CompiledProgram]):
     debug: Optional[bool] = None
     lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE
     use_embedded: bool = True
+    dispatch_backend: Optional[ppi.ProgramExecutor] = None
 
     def __call__(self, inp: stages.AOTProgram) -> stages.CompiledProgram:
         debug = config.DEBUG if self.debug is None else self.debug
-        return fencil_generator(
+
+        fencil = fencil_generator(
             inp.program,
             offset_provider=inp.argspec.offset_provider,
             debug=debug,
             lift_mode=self.lift_mode,
             use_embedded=self.use_embedded,
         )
+
+        def decorated_fencil(
+            *args: Any,
+            offset_provider: dict[str, common.Connectivity | common.Dimension],
+            out: Any = None,
+            **kwargs: Any,
+        ) -> None:
+            if out is not None:
+                args = (*args, out)
+            fencil(
+                *args,
+                offset_provider=offset_provider,
+                backend=self.dispatch_backend,
+                column_axis=inp.argspec.column_axis,
+                **kwargs,
+            )
+
+        return decorated_fencil
 
 
 class RoundtripFactory(factory.Factory):
@@ -251,12 +271,7 @@ class RoundtripExecutor(modular_executor.ModularExecutor):
     dispatch_backend: Optional[ppi.ProgramExecutor] = None
 
     def __call__(self, program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
-        if "out" in kwargs:
-            args = (*args, kwargs.pop("out"))
-        argspec = stages.CompileArgSpec.from_concrete_no_size(
-            *args, **kwargs | {"column_axis": kwargs.get("column_axis", None)}
-        )
-        kwargs["backend"] = self.dispatch_backend
+        argspec = stages.CompileArgSpec.from_concrete_no_size(*args, **kwargs)
         self.otf_workflow(
             stages.AOTProgram(
                 program=program,
@@ -299,13 +314,13 @@ executor_with_temporaries = RoundtripExecutorFactory(
     roundtrip_workflow=RoundtripFactory(lift_mode=itir_transforms.LiftMode.USE_TEMPORARIES),
 )
 
-default = RoundtripBackend(
+default = backend_exp.ExpBackend(
     executor=executor,
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
     transforms_fop=backend_exp.DEFAULT_TRANSFORMS,
     transforms_prog=backend_exp.DEFAULT_TRANSFORMS,
 )
-with_temporaries = RoundtripBackend(
+with_temporaries = backend_exp.ExpBackend(
     executor=executor_with_temporaries,
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
     transforms_fop=backend_exp.DEFAULT_TRANSFORMS,

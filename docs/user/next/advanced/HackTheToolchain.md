@@ -4,6 +4,7 @@ import typing
 
 from gt4py import next as gtx
 from gt4py.next.otf import workflow
+from gt4py.next.ffront import stages as ff_stages
 from gt4py import eve
 ```
 
@@ -13,7 +14,7 @@ from gt4py import eve
 ## Replace Steps
 
 ```python
-cached_lowering_toolchain = gtx.backend.DEFAULT_PROG_TRANSFORMS.replace(
+cached_lowering_toolchain = gtx.backend_exp.DEFAULT_TRANSFORMS.replace(
     past_to_itir=workflow.CachedStep(
         step=gtx.ffront.past_to_itir.PastToItirFactory(),
         hash_function=eve.utils.content_hash
@@ -24,32 +25,27 @@ cached_lowering_toolchain = gtx.backend.DEFAULT_PROG_TRANSFORMS.replace(
 ## Skip Steps / Change Order
 
 ```python
-gtx.backend.DEFAULT_PROG_TRANSFORMS.step_order
+DUMMY_FOP = workflow.DataWithArgs(data=ff_stages.FieldOperatorDefinition(definition=None), args=None)
 ```
 
-    ['func_to_past',
-     'past_lint',
-     'past_inject_args',
-     'past_transform_args',
-     'past_to_itir']
+```python
+gtx.backend_exp.DEFAULT_TRANSFORMS.step_order(DUMMY_FOP)
+```
 
 ```python
 @dataclasses.dataclass(frozen=True)
-class SkipLinting(gtx.backend.ProgramTransformWorkflow):
-    @property
-    def step_order(self):
-        return [
-            "func_to_past",
-            # not running "past_lint"
-            "past_inject_args",
-            "past_transform_args",
-            "past_to_itir",
-        ]
+class SkipLinting(gtx.backend_exp.FieldopTransformWorkflow):
+    def step_order(self, inp):
+        order = super().step_order(inp)
+        if "past_lint" in order:
+            order.remove("past_lint")  # not running "past_lint"
+        return order
 
-same_steps = dataclasses.asdict(gtx.backend.DEFAULT_PROG_TRANSFORMS)
+same_steps = dataclasses.asdict(gtx.backend_exp.DEFAULT_TRANSFORMS)
 skip_linting_transforms = SkipLinting(
     **same_steps
 )
+skip_linting_transforms.step_order(DUMMY_FOP)
 ```
 
 ## Alternative Factory
@@ -72,12 +68,12 @@ PureCpp2WorkflowFactory(cmake_build_type=gtx.config.CMAKE_BUILD_TYPE.DEBUG)
 
 ## Invent new Workflow Types
 
-````mermaid
+```mermaid
 graph LR
 
 IN_T --> i{{split}} --> A_T --> a{{track_a}} --> B_T --> o{{combine}} --> OUT_T
 i --> X_T --> x{{track_x}} --> Y_T --> o
-
+```
 
 ```python
 IN_T = typing.TypeVar("IN_T")
@@ -126,4 +122,12 @@ class PartiallyModularDiamond(
             b=self.track_a(a),
             y=self.track_x(x)
         )
-````
+```
+
+```python
+
+```
+
+```python
+
+```

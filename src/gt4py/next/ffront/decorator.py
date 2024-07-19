@@ -234,7 +234,7 @@ class ProgramFromPast(Program):
     def __post_init__(self):
         if self.backend is not None and self.backend.transforms_prog is not None:
             self.backend.transforms_prog.past_lint(self.past_stage)
-        return next_backend.DEFAULT_PROG_TRANSFORMS.past_lint(self.past_stage)
+        return backend_exp.DEFAULT_TRANSFORMS.past_lint(self.past_stage)
 
 
 @dataclasses.dataclass(frozen=True)
