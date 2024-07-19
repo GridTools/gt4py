@@ -242,7 +242,7 @@ class SerialMapPromoterGPU(transformation.SingleStateTransformation):
 
         # Check if it is a GPU map
         if map_1.schedule not in [
-            dace.dtypes.ScheduleType.GPU_Global,
+            dace.dtypes.ScheduleType.GPU_Device,
             dace.dtypes.ScheduleType.GPU_Default,
         ]:
             return False
