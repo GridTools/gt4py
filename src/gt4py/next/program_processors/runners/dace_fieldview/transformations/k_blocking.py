@@ -195,7 +195,12 @@ class KBlocking(transformation.SingleStateTransformation):
                 #  data, and is used within the inner loop.
                 #  This prevents the reloading of data.
                 assert graph.out_degree(edge_dst) == 1
-                caching_node: nodes.AccessNode = next(iter(graph.out_edges(edge_dst)))
+                if isinstance(edge_dst, nodes.AccessNode):
+                    caching_node: nodes.AccessNode = edge_dst
+                else:
+                    caching_node = next(iter(graph.out_edges(edge_dst))).dst
+                    assert graph.in_degree(caching_node) == 1
+                assert isinstance(caching_node, nodes.AccessNode)
 
                 for consumer_edge in list(graph.out_edges(caching_node)):
                     new_map_conn = inner_exit.next_connector()
@@ -324,7 +329,7 @@ class KBlocking(transformation.SingleStateTransformation):
             #  clause then we classify the node as independent.
             for edge in edges:
                 memlet: dace.Memlet = edge.data
-                src_subset: subsets.Subset = memlet.src_subset
+                src_subset: subsets.Subset | None = memlet.src_subset
                 dst_subset: subsets.Subset | None = memlet.dst_subset
                 edge_desc: dace.data.Data = sdfg.arrays[memlet.data]
                 edge_desc_size = functools.reduce(lambda a, b: a * b, edge_desc.shape)
@@ -332,14 +337,16 @@ class KBlocking(transformation.SingleStateTransformation):
                 if memlet.is_empty():
                     # Empty Memlets do not impose any restrictions.
                     continue
-                if src_subset.num_elements() == edge_desc_size:
+                if memlet.num_elements() == edge_desc_size:
                     # The whole source array is consumed, which is not a problem.
                     continue
 
                 # Now we have to look at the source and destination set of the Memlet.
-                subsets_to_inspect: list[subsets.Subset] = [src_subset]
+                subsets_to_inspect: list[subsets.Subset] = []
                 if dst_subset is not None:
                     subsets_to_inspect.append(dst_subset)
+                if src_subset is not None:
+                    subsets_to_inspect.append(src_subset)
 
                 # If a subset needs the block variable then the node is not
                 #  independent from the block variable.
@@ -357,11 +364,16 @@ class KBlocking(transformation.SingleStateTransformation):
 
         # We now make a last screening of the independent nodes.
         for independent_node in list(block_independent):
+            if isinstance(independent_node, nodes.AccessNode):
+                if state.in_degree(independent_node) != 1:
+                    block_independent.discard(independent_node)
+                    block_dependent.add(independent_node)
+                continue
             for out_edge in state.out_edges(independent_node):
                 if (
                     (not isinstance(out_edge.dst, nodes.AccessNode))
                     or (state.in_degree(out_edge.dst) != 1)
-                    or (sdfg.desc(out_edge.dst).lifetime != dace.dtypes.AllocationLifetime.Scope)
+                    or (out_edge.dst.desc(sdfg).lifetime != dace.dtypes.AllocationLifetime.Scope)
                 ):
                     block_independent.discard(independent_node)
                     block_dependent.add(independent_node)
