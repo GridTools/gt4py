@@ -19,6 +19,7 @@ from .gpu_utils import (
     gt_gpu_transformation,
     gt_set_gpu_blocksize,
 )
+from .k_blocking import KBlocking
 from .map_orderer import MapIterationOrder
 from .map_promoter import SerialMapPromoter
 from .map_seriall_fusion import SerialMapFusion
@@ -35,4 +36,5 @@ __all__ = [
     "SerialMapPromoterGPU",
     "MapIterationOrder",
     "GPUSetBlockSize",
+    "KBlocking",
 ]
