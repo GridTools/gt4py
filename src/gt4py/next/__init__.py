@@ -44,9 +44,9 @@ from .ffront.decorator import field_operator, program, scan_operator
 from .ffront.fbuiltins import *  # noqa: F403 [undefined-local-with-import-star]  explicitly reexport all from fbuiltins.__all__
 from .ffront.fbuiltins import FieldOffset
 from .iterator.embedded import (
+    NeighborOffsetProvider,
     NeighborTableOffsetProvider,
     StridedNeighborOffsetProvider,
-    StripedNeighborTableOffsetProvider,
     index_field,
     np_as_located_field,
 )
@@ -81,7 +81,7 @@ __all__ = [
     "as_connectivity",
     # from iterator
     "NeighborTableOffsetProvider",
-    "StripedNeighborTableOffsetProvider",
+    "NeighborOffsetProvider",
     "StridedNeighborOffsetProvider",
     "index_field",
     "np_as_located_field",
