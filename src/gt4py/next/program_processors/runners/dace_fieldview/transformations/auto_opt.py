@@ -96,6 +96,8 @@ def gt_auto_optimize(
     gpu_block_size: Optional[Sequence[int | str] | str] = None,
     validate: bool = True,
     validate_all: bool = False,
+    block_dim: Optional[gtx_common.Dimension] = None,
+    blocking_size: int = 10,
     **kwargs: Any,
 ) -> dace.SDFG:
     """Performs GT4Py specific optimizations in place.
@@ -171,6 +173,15 @@ def gt_auto_optimize(
         # After everything we set the GPU block size.
         if gpu_block_size is not None:
             gtx_transformations.gt_set_gpu_blocksize(sdfg, gpu_block_size)
+
+        if gpu and (block_dim is not None):
+            sdfg.apply_transformations_repeated(
+                gtx_transformations.KBlocking(
+                    blocking_size=10,
+                    block_dim=block_dim,
+                ),
+                validate=True,
+            )
 
         # These are the part that we copy from DaCe built in auto optimization.
         dace_aoptimize.set_fast_implementations(sdfg, device)
