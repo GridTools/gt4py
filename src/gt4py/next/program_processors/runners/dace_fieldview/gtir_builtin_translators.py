@@ -62,7 +62,7 @@ class PrimitiveTranslator(Protocol):
             sdfg_builder: The object responsible for visiting child nodes of the primitive node.
             reduce_identity: The value of the reduction identity, in case the primitive node
                 is visited in the context of a reduction expression. This value is used
-                by the `neighbors` primitive to provide the value of skip neighbors.
+                by the `neighbors` primitive to provide the default value of skip neighbors.
 
         Returns:
             A list of data access nodes and the associated GT4Py data type, which provide
