@@ -113,7 +113,9 @@ def _gpu_block_parser(
     elif isinstance(val, str):
         val = tuple(x.replace(" ", "") for x in val.split(","))
     else:
-        raise TypeError(f"Does not know how to transform '{type(val).__name__}' into a proper GPU block size.")
+        raise TypeError(
+            f"Does not know how to transform '{type(val).__name__}' into a proper GPU block size."
+        )
     if len(val) == 1:
         val = (*val, 1, 1)
     elif len(val) == 2:
@@ -144,7 +146,7 @@ class GPUSetBlockSize(transformation.SingleStateTransformation):
     block_size = properties.Property(
         dtype=None,
         allow_none=False,
-        default=(32,1,1),
+        default=(32, 1, 1),
         setter=_gpu_block_parser,
         getter=_gpu_block_getter,
         desc="Size of the block size a GPU Map should have.",
@@ -152,7 +154,7 @@ class GPUSetBlockSize(transformation.SingleStateTransformation):
 
     map_entry = transformation.transformation.PatternNode(nodes.MapEntry)
 
-    def __int__(
+    def __init__(
         self,
         block_size: Sequence[int | str] | str | None = None,
     ) -> None:
