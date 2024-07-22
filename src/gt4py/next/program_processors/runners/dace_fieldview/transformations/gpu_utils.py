@@ -112,6 +112,8 @@ def _gpu_block_parser(
         val = tuple(val)
     elif isinstance(val, str):
         val = tuple(x.replace(" ", "") for x in val.split(","))
+    else:
+        raise TypeError(f"Does not know how to transform '{type(val).__name__}' into a proper GPU block size.")
     if len(val) == 1:
         val = (*val, 1, 1)
     elif len(val) == 2:
@@ -126,9 +128,9 @@ def _gpu_block_getter(
     self: "GPUSetBlockSize",
 ) -> tuple[int, int, int]:
     """Used as getter in the `GPUSetBlockSize.block_size` property."""
-    assert isinstance(self._block_size, tuple) and len(self.block_size) == 3
+    assert isinstance(self._block_size, (tuple, list)) and len(self._block_size) == 3
     assert all(isinstance(x, int) for x in self._block_size)
-    return self._block_size
+    return tuple(self._block_size)
 
 
 @properties.make_properties
@@ -141,7 +143,8 @@ class GPUSetBlockSize(transformation.SingleStateTransformation):
 
     block_size = properties.Property(
         dtype=None,
-        allow_none=True,
+        allow_none=False,
+        default=(32,1,1),
         setter=_gpu_block_parser,
         getter=_gpu_block_getter,
         desc="Size of the block size a GPU Map should have.",
@@ -151,9 +154,11 @@ class GPUSetBlockSize(transformation.SingleStateTransformation):
 
     def __int__(
         self,
-        block_size: Sequence[int | str] | str,
+        block_size: Sequence[int | str] | str | None = None,
     ) -> None:
-        self.block_size = block_size
+        super().__init__()
+        if block_size is not None:
+            self.block_size = block_size
 
     @classmethod
     def expressions(cls) -> Any:
