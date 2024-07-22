@@ -186,12 +186,12 @@ class LambdaToTasklet(eve.NodeVisitor):
                     for dim, index in field_indices
                 )
                 deref_node = self._add_tasklet(
-                    "deref_field_indirection",
+                    "deref",
                     {"field"} | set(index_connectors),
                     {"val"},
                     code=f"val = field[{index_internals}]",
                 )
-                # add new termination point for this field parameter
+                # add new termination point for the field parameter
                 self._add_entry_memlet_path(
                     it.field,
                     sbs.Range.from_array(field_desc),
@@ -200,6 +200,7 @@ class LambdaToTasklet(eve.NodeVisitor):
                 )
 
                 for dim, index_expr in field_indices:
+                    # add termination points for the dynamic iterator indices
                     deref_connector = IndexConnectorFmt.format(dim=dim.value)
                     if isinstance(index_expr, MemletExpr):
                         self._add_entry_memlet_path(
@@ -260,7 +261,7 @@ class LambdaToTasklet(eve.NodeVisitor):
                 dace.symbolic.SymExpr(index_expr.value) + offset_expr.value, index_expr.dtype
             )
         else:
-            # the offset needs to be calculate by means of a tasklet
+            # the offset needs to be calculated by means of a tasklet (i.e. dynamic offset)
             new_index_connector = "shifted_index"
             if isinstance(index_expr, SymbolExpr):
                 dynamic_offset_tasklet = self._add_tasklet(
@@ -326,8 +327,8 @@ class LambdaToTasklet(eve.NodeVisitor):
         """
         Implements access to neighbor connectivity table by means of a tasklet node.
 
-        It requires a dynamic offset value, either obtained from a field (`MemletExpr`)
-        or computed byanother tasklet (`ValueExpr`).
+        It requires a dynamic offset value, either obtained from a field/scalar argument (`MemletExpr`)
+        or computed by another tasklet (`ValueExpr`).
         """
         new_index_connector = "neighbor_index"
         tasklet_node = self._add_tasklet(
