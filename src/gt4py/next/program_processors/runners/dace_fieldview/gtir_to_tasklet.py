@@ -428,7 +428,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         if isinstance(offset_provider, gtx_common.Dimension):
             return self._make_cartesian_shift(it, offset_provider, offset_expr)
         else:
-            # initially, the storage for the connectivty tables is created as transient;
+            # initially, the storage for the connectivity tables is created as transient;
             # when the tables are used, the storage is changed to non-transient,
             # so the corresponding arrays are supposed to be allocated by the SDFG caller
             offset_table = dace_fieldview_util.connectivity_identifier(offset)
