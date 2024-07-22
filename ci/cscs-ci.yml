@@ -53,7 +53,7 @@ stages:
     CUDA_VERSION: 12.4.1
     CUPY_PACKAGE: cupy-cuda12x
   # TODO: re-enable CI job when Todi is back in operational state
-  when: never
+  when: manual
 
 build_py311_baseimage_x86_64:
   extends: .build_baseimage_x86_64
