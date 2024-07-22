@@ -149,7 +149,7 @@ COMMON_SKIP_TEST_LIST = [
     (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),
 ]
 DACE_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
-    # TODO(tehrengruber): disable all DaCe tests until new version of the backend using GTIR lands
+    # FIXME[#1582](tehrengruber): disable all DaCe tests until new version of the backend using GTIR lands
     (ALL, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_INDEX_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_LIFT_EXPRESSIONS, XFAIL, UNSUPPORTED_MESSAGE),
