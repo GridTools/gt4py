@@ -41,6 +41,9 @@ class KBlocking(transformation.SingleStateTransformation):
     Furthermore, the map will inspect the neighbours of the old, or outer map.
     If the node does not depend on the blocked dimension, the node will be put
     between the two maps, thus its content will only be computed once.
+
+    The function will also change the name of the outer map, it will append
+    `_blocked` to it.
     """
 
     blocking_size = properties.Property(
@@ -151,6 +154,7 @@ class KBlocking(transformation.SingleStateTransformation):
         ).ranges[0]
         outer_map.params[block_idx] = coarse_block_var
         outer_map.range[block_idx] = coarse_block_range
+        outer_map.label = f"{outer_map.label}_blocked"
 
         # Contains the independent nodes that are already relocated.
         relocated_nodes: set[nodes.Node] = set()
