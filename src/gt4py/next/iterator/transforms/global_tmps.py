@@ -408,7 +408,7 @@ def _max_domain_sizes_by_location_type(offset_provider: Mapping[str, Any]) -> di
             )
             sizes[provider.neighbor_axis.value] = max(
                 sizes.get(provider.neighbor_axis.value, 0),
-                provider.table.max()+1,  # type: ignore[attr-defined] # TODO(havogt): improve typing for NDArrayObject
+                provider.table.max() + 1,  # type: ignore[attr-defined] # TODO(havogt): improve typing for NDArrayObject
             )
     return sizes
 
@@ -452,20 +452,8 @@ class SymbolicDomain:
         return cls(node.fun.id, ranges)  # type: ignore[attr-defined]  # ensure by assert above
 
     def as_expr(self) -> ir.FunCall:
-        if self.grid_type == "cartesian_domain":
-            converted_ranges = {
-                key: (value.start, value.stop) for key, value in self.ranges.items()
-            }
-            return im.cartesian_domain(converted_ranges)
-        else:
-            return im.call("unstructured_domain")(
-                *[
-                    im.call("named_range")(
-                        ir.AxisLiteral(value=d.value, kind=d.kind), r.start, r.stop
-                    )
-                    for d, r in self.ranges.items()
-                ]
-            )
+        converted_ranges = {key: (value.start, value.stop) for key, value in self.ranges.items()}
+        return im.domain(self.grid_type, converted_ranges)
 
 
 def domain_union(domains: list[SymbolicDomain]) -> SymbolicDomain:
