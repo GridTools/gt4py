@@ -125,15 +125,12 @@ class NeighborTableOffsetProvider:
         # Extension of NeighborTableOffsetProvider adding SDFGConvertible support in GT4Py Programs
         def data_ptr(self) -> int:
             obj = self.table
-            if dace.dtypes.is_array(obj) and (
-                hasattr(obj, "__array_interface__") or hasattr(obj, "__cuda_array_interface__")
-            ):
-                if dace.dtypes.is_gpu_array(obj):
-                    return obj.__cuda_array_interface__["data"][0]  # type: ignore
-                else:
-                    return obj.__array_interface__["data"][0]  # type: ignore
-            else:
-                raise ValueError("Unsupported data container.")
+            if dace.dtypes.is_array(obj):
+                if hasattr(obj, "__array_interface__"):
+                    return obj.__array_interface__["data"][0]
+                if hasattr(obj, "__cuda_array_interface__"):
+                    return obj.__cuda_array_interface__["data"][0]
+            raise ValueError("Unsupported data container.")
 
         def __descriptor__(self) -> dace.data.Data:
             return dace.data.create_datadescriptor(self.table)

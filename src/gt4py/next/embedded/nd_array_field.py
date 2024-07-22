@@ -427,7 +427,13 @@ class NdArrayField(
     if dace:
         # Extension of NdArrayField adding SDFGConvertible support in GT4Py Programs
         def data_ptr(self) -> int:
-            return self.array_ns.byte_bounds(self.ndarray)[0]
+            array_ns = self.array_ns
+            array_byte_bounds = (  # TODO(egparedes): make this part of some Array namespace protocol
+                array_ns.byte_bounds
+                if hasattr(array_ns, "byte_bounds")
+                else array_ns.lib.array_utils.byte_bounds
+            )
+            return array_byte_bounds(self.ndarray)[0]
 
         def __descriptor__(self) -> dace.data.Data:
             return dace.data.create_datadescriptor(self.ndarray)

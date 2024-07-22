@@ -33,7 +33,14 @@ from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.type_system import type_specifications as ts
 
 from .itir_to_sdfg import ItirToSDFG
-from .utility import as_dace_type, connectivity_identifier, filter_connectivities, get_sorted_dims
+from .utility import (
+    as_dace_type,
+    connectivity_identifier,
+    connectivity_table_size_symbol,
+    connectivity_table_stride_symbol,
+    filter_connectivities,
+    get_sorted_dims,
+)
 
 
 try:
@@ -320,10 +327,11 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
 
     sdfg_closure_vars: dict[str, Any] = field(default_factory=dict)
 
-    # Defined as class variable, otherwise the same connectivity table -name & data descriptor- across multiple GT4Py Programs
-    # will be considered as a different table (with subsequent name mangling). Therefore, the memory address of the table's data descriptor needs to be the same.
-    # This affects the case where a DaCe.Program calls multiple GT4Py Programs (fused SDFG).
-    connectivity_tables_data_descriptors: ClassVar[dict[str, Any]] = {}
+    # Being a ClassVar ensures that in an SDFG with multiple nested GT4Py Programs,
+    # there is no name mangling of the connectivity tables used across the nested SDFGs since they share the same memory address.
+    connectivity_tables_data_descriptors: ClassVar[
+        dict[str, dace.data.Array]
+    ] = {}  # symbolically defined
 
     def __sdfg__(self, *args, **kwargs) -> dace.sdfg.sdfg.SDFG:
         if "dace" not in self.backend.executor.name.lower():  # type: ignore[union-attr]
@@ -331,11 +339,11 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
 
         params = {str(p.id): p.type for p in self.itir.params}
         fields = {str(p.id): p.type for p in self.itir.params if hasattr(p.type, "dims")}
-        arg_types = list(params.values())
+        arg_types = [*params.values()]
 
-        dace_parsed_args = list(args) + list(kwargs.values())
-        gt4py_program_args = list(params.values())
-        Program.crosscheck_dace_parsing(dace_parsed_args, gt4py_program_args)
+        dace_parsed_args = [*args, *kwargs.values()]
+        gt4py_program_args = [*params.values()]
+        crosscheck_dace_parsing(dace_parsed_args, gt4py_program_args)
 
         if self.connectivities is None:
             raise ValueError(
@@ -349,31 +357,21 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             offset_provider=offset_provider,
             column_axis=kwargs.get("column_axis", None),
         )
+        self.sdfg_closure_vars["sdfg.arrays"] = sdfg.arrays  # use it in __sdfg_closure__
 
-        self.sdfg_closure_vars["sdfg.arrays"] = sdfg.arrays
-        if "storage" not in Program.connectivity_tables_data_descriptors:
-            for k in offset_provider.keys():
-                if not hasattr(offset_provider[k], "table"):
-                    continue
-                if connectivity_identifier(k) in sdfg.arrays:
-                    Program.connectivity_tables_data_descriptors["storage"] = sdfg.arrays[
-                        connectivity_identifier(k)
-                    ].storage
-                    break
-
-        # TODO(kotsaloscv): Keep halo exchange related metadata here?
-        # Could possibly be computed directly from the SDFG.
+        # Halo exchange related metadata, i.e. gt4py_program_input_fields, gt4py_program_output_fields, offset_providers_per_input_field
+        # Add them as dynamic properties to the SDFG
 
         input_fields = [
-            str(inpt.id)
+            str(in_field.id)
             for closure in self.itir.closures
-            for inpt in closure.inputs
-            if str(inpt.id) in fields
+            for in_field in closure.inputs
+            if str(in_field.id) in fields
         ]
         sdfg.gt4py_program_input_fields = {
-            inpt: dim
-            for inpt in input_fields
-            for dim in fields[inpt].dims  # type: ignore[union-attr]
+            in_field: dim
+            for in_field in input_fields
+            for dim in fields[in_field].dims  # type: ignore[union-attr]
             if dim.kind == common.DimensionKind.HORIZONTAL
         }
 
@@ -400,7 +398,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         )
         for closure in itir_tmp.closures:  # type: ignore[union-attr]
             shifts = itir_transforms.trace_shifts.TraceShifts.apply(closure)
-            for k, v in shifts.items():  # type: ignore[assignment]
+            for k, v in shifts.items():
                 if not isinstance(k, str):
                     continue
                 if k not in sdfg.gt4py_program_input_fields:
@@ -411,24 +409,50 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
 
     def __sdfg_closure__(self, reevaluate: Optional[dict[str, str]] = None) -> dict[str, Any]:
         """
-        The connectivity tables are defined here symbolically (runtime args and not compile time).
-        They need to be defined in `__sdfg_closure__` due to the fact that they are not part of GT4Py Program's arguments.
-        Actually, they are already defined in the construction of the sdfg, but some symbols are missing because they are not part of GT4Py Program's arguments -parsing issue-.
-        Here, we define them symbolically (along with the correct dtypes), and let DaCe fill the missing symbols.
-        Keep in mind, that __sdfg_closure__ is called after __sdfg__.
+        Returns the closure arrays of the SDFG represented by this object
+        as a mapping between array name and the corresponding value.
+
+        The connectivity tables are defined symbolically, i.e. table sizes & strides are DaCe symbols.
+        The need to define the connectivity tables in the `__sdfg_closure__` arises from the fact that the offset providers are not part of GT4Py Program's arguments.
+        Keep in mind, that `__sdfg_closure__` is called after `__sdfg__` method.
         """
         offset_provider = self.connectivities
 
-        symbols = {
-            f"__{connectivity_identifier(k)}_{sym}": dace.symbol(
-                f"__{connectivity_identifier(k)}_{sym}"
+        # Define DaCe symbols
+        connectivity_table_size_symbols = {
+            connectivity_table_size_symbol(connectivity_identifier(k), axis): dace.symbol(
+                connectivity_table_size_symbol(connectivity_identifier(k), axis)
             )
             for k, v in offset_provider.items()  # type: ignore[union-attr]
-            for sym in ["size_0", "size_1", "stride_0", "stride_1"]
+            for axis in [0, 1]
             if hasattr(v, "table")
             and connectivity_identifier(k) in self.sdfg_closure_vars["sdfg.arrays"]
         }
 
+        connectivity_table_stride_symbols = {
+            connectivity_table_stride_symbol(connectivity_identifier(k), axis): dace.symbol(
+                connectivity_table_stride_symbol(connectivity_identifier(k), axis)
+            )
+            for k, v in offset_provider.items()  # type: ignore[union-attr]
+            for axis in [0, 1]
+            if hasattr(v, "table")
+            and connectivity_identifier(k) in self.sdfg_closure_vars["sdfg.arrays"]
+        }
+
+        symbols = {**connectivity_table_size_symbols, **connectivity_table_stride_symbols}
+
+        # Define the storage location (e.g. CPU, GPU) of the connectivity tables
+        if "storage" not in Program.connectivity_tables_data_descriptors:
+            for k, v in offset_provider.items():  # type: ignore[union-attr]
+                if not hasattr(v, "table"):
+                    continue
+                if connectivity_identifier(k) in self.sdfg_closure_vars["sdfg.arrays"]:
+                    Program.connectivity_tables_data_descriptors["storage"] = (
+                        self.sdfg_closure_vars["sdfg.arrays"][connectivity_identifier(k)].storage
+                    )
+                    break
+
+        # Build the closure dictionary
         closure_dict = {}
         for k, v in offset_provider.items():  # type: ignore[union-attr]
             conn_id = connectivity_identifier(k)
@@ -436,10 +460,13 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
                 if conn_id not in Program.connectivity_tables_data_descriptors:
                     Program.connectivity_tables_data_descriptors[conn_id] = dace.data.Array(
                         dtype=dace.int64 if v.index_type == np.int64 else dace.int32,
-                        shape=[symbols[f"__{conn_id}_size_0"], symbols[f"__{conn_id}_size_1"]],
+                        shape=[
+                            symbols[connectivity_table_size_symbol(conn_id, 0)],
+                            symbols[connectivity_table_size_symbol(conn_id, 1)],
+                        ],
                         strides=[
-                            symbols[f"__{conn_id}_stride_0"],
-                            symbols[f"__{conn_id}_stride_1"],
+                            symbols[connectivity_table_stride_symbol(conn_id, 0)],
+                            symbols[connectivity_table_stride_symbol(conn_id, 1)],
                         ],
                         storage=Program.connectivity_tables_data_descriptors["storage"],
                     )
@@ -453,36 +480,32 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             args.append(arg.id)
         return (args, [])
 
-    @classmethod
-    def crosscheck_dace_parsing(
-        cls, dace_parsed_args: list[Any], gt4py_program_args: list[Any]
-    ) -> bool:
-        for dace_parsed_arg, gt4py_program_arg in zip(dace_parsed_args, gt4py_program_args):
-            if isinstance(dace_parsed_arg, dace.data.Scalar):
-                assert dace_parsed_arg.dtype == as_dace_type(gt4py_program_arg)
-            elif isinstance(dace_parsed_arg, (bool, int, float, str)) or isinstance(
-                dace_parsed_arg, (np.bool_, np.integer, np.floating, np.str_)
-            ):  # compile-time constant scalar
-                assert isinstance(gt4py_program_arg, ts.ScalarType)
-                if isinstance(dace_parsed_arg, (bool, np.bool_)):
-                    assert gt4py_program_arg.kind == ts.ScalarKind.BOOL
-                elif isinstance(dace_parsed_arg, (int, np.integer)):
-                    assert gt4py_program_arg.kind in [ts.ScalarKind.INT32, ts.ScalarKind.INT64]
-                elif isinstance(dace_parsed_arg, (float, np.floating)):
-                    assert gt4py_program_arg.kind in [ts.ScalarKind.FLOAT32, ts.ScalarKind.FLOAT64]
-                elif isinstance(dace_parsed_arg, (str, np.str_)):
-                    assert gt4py_program_arg.kind == ts.ScalarKind.STRING
-            elif isinstance(dace_parsed_arg, dace.data.Array):
-                assert isinstance(gt4py_program_arg, ts.FieldType)
-                assert len(dace_parsed_arg.shape) == len(gt4py_program_arg.dims)
-                assert dace_parsed_arg.dtype == as_dace_type(gt4py_program_arg.dtype)
-            elif isinstance(
-                dace_parsed_arg, (dace.data.Structure, dict, OrderedDict)
-            ):  # offset_provider
-                continue
-            else:
-                raise ValueError(
-                    f"Unresolved case for {dace_parsed_arg} (==, !=) {gt4py_program_arg}"
-                )
 
-        return True
+def crosscheck_dace_parsing(dace_parsed_args: list[Any], gt4py_program_args: list[Any]) -> bool:
+    for dace_parsed_arg, gt4py_program_arg in zip(dace_parsed_args, gt4py_program_args):
+        if isinstance(dace_parsed_arg, dace.data.Scalar):
+            assert dace_parsed_arg.dtype == as_dace_type(gt4py_program_arg)
+        elif isinstance(
+            dace_parsed_arg, (bool, int, float, str, np.bool_, np.integer, np.floating, np.str_)
+        ):  # compile-time constant scalar
+            assert isinstance(gt4py_program_arg, ts.ScalarType)
+            if isinstance(dace_parsed_arg, (bool, np.bool_)):
+                assert gt4py_program_arg.kind == ts.ScalarKind.BOOL
+            elif isinstance(dace_parsed_arg, (int, np.integer)):
+                assert gt4py_program_arg.kind in [ts.ScalarKind.INT32, ts.ScalarKind.INT64]
+            elif isinstance(dace_parsed_arg, (float, np.floating)):
+                assert gt4py_program_arg.kind in [ts.ScalarKind.FLOAT32, ts.ScalarKind.FLOAT64]
+            elif isinstance(dace_parsed_arg, (str, np.str_)):
+                assert gt4py_program_arg.kind == ts.ScalarKind.STRING
+        elif isinstance(dace_parsed_arg, dace.data.Array):
+            assert isinstance(gt4py_program_arg, ts.FieldType)
+            assert len(dace_parsed_arg.shape) == len(gt4py_program_arg.dims)
+            assert dace_parsed_arg.dtype == as_dace_type(gt4py_program_arg.dtype)
+        elif isinstance(
+            dace_parsed_arg, (dace.data.Structure, dict, OrderedDict)
+        ):  # offset_provider
+            continue
+        else:
+            raise ValueError(f"Unresolved case for {dace_parsed_arg} (==, !=) {gt4py_program_arg}")
+
+    return True
