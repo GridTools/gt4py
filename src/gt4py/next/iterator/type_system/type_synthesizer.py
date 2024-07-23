@@ -281,6 +281,20 @@ def as_fieldop(
 
 
 @_register_builtin_type_synthesizer
+def cond(
+    pred: ts.ScalarType, true_branch: ts.DataType, false_branch: ts.DataType
+) -> TypeSynthesizer:
+    assert isinstance(pred, ts.ScalarType) and pred.kind == ts.ScalarKind.BOOL
+    assert true_branch == false_branch
+
+    @TypeSynthesizer
+    def apply_cond() -> ts.DataType:
+        return true_branch
+
+    return apply_cond
+
+
+@_register_builtin_type_synthesizer
 def scan(
     scan_pass: TypeSynthesizer, direction: ts.ScalarType, init: ts.ScalarType
 ) -> TypeSynthesizer:

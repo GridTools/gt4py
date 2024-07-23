@@ -92,14 +92,15 @@ DACE_REDUCTION_MAPPING: dict[str, dace.dtypes.ReductionType] = {
 
 
 def get_reduce_params(node: gtir.FunCall) -> tuple[str, SymbolExpr, SymbolExpr]:
-    # TODO: use type inference to determine the result type
-    dtype = dace.float64
+    assert node.type
+    dtype = dace_fieldview_util.as_dace_type(node.type)
 
     assert isinstance(node.fun, gtir.FunCall)
     assert len(node.fun.args) == 2
     assert isinstance(node.fun.args[0], gtir.SymRef)
     op_name = str(node.fun.args[0])
     assert isinstance(node.fun.args[1], gtir.Literal)
+    assert node.fun.args[1].type == node.type
     reduce_init = SymbolExpr(node.fun.args[1].value, dtype)
 
     if op_name not in DACE_REDUCTION_MAPPING:
@@ -407,9 +408,6 @@ class LambdaToTasklet(eve.NodeVisitor):
         else:
             reduce_axes = None
 
-        # TODO: use type ineference
-        res_type = dace_fieldview_util.as_scalar_type(str(dtype.as_numpy_dtype()))
-
         reduce_wcr = "lambda x, y: " + gtir_python_codegen.format_builtin(op_name, "x", "y")
         reduce_node = self.state.add_reduce(reduce_wcr, reduce_axes, reduce_init.value)
 
@@ -435,7 +433,8 @@ class LambdaToTasklet(eve.NodeVisitor):
             temp_node,
             dace.Memlet(data=temp_name, subset="0"),
         )
-        return ValueExpr(temp_node, res_type)
+        assert isinstance(node.type, ts.ScalarType)
+        return ValueExpr(temp_node, node.type)
 
     def _split_shift_args(
         self, args: list[gtir.Expr]
@@ -604,6 +603,7 @@ class LambdaToTasklet(eve.NodeVisitor):
 
             shifted_indices = it.indices | {neighbor_dim: dynamic_offset_value}
 
+        shifted_indices.pop(origin_dim)
         return IteratorExpr(it.field, it.dimensions, shifted_indices)
 
     def _visit_shift(self, node: gtir.FunCall) -> IteratorExpr:
@@ -707,18 +707,8 @@ class LambdaToTasklet(eve.NodeVisitor):
                     connector,
                 )
 
-        # TODO: use type inference to determine the result type
-        if len(node_connections) == 1:
-            dtype = None
-            for conn_name in ["__inp_0", "__inp_1"]:
-                if conn_name in node_connections:
-                    dtype = node_connections[conn_name].node.desc(self.sdfg).dtype
-                    break
-            if dtype is None:
-                raise ValueError("Failed to determine the type")
-        else:
-            node_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
-            dtype = dace_fieldview_util.as_dace_type(node_type)
+        assert node.type
+        dtype = dace_fieldview_util.as_dace_type(node.type)
 
         return self._get_tasklet_result(dtype, tasklet_node, "result")
 
