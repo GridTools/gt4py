@@ -159,7 +159,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         return shape, strides
 
     def _add_storage(
-        self, sdfg: dace.SDFG, name: str, symbol_type: ts.DataType, transient: bool = False
+        self, sdfg: dace.SDFG, name: str, symbol_type: ts.DataType, transient: bool = True
     ) -> None:
         """
         Add external storage (aka non-transient) for data containers passed as arguments to the SDFG.
@@ -253,7 +253,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         # add non-transient arrays and/or SDFG symbols for the program arguments
         for param in node.params:
             assert isinstance(param.type, ts.DataType)
-            self._add_storage(sdfg, str(param.id), param.type)
+            self._add_storage(sdfg, str(param.id), param.type, transient=False)
 
         # add SDFG storage for connectivity tables
         for offset, offset_provider in dace_fieldview_util.filter_connectivities(
@@ -269,9 +269,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             # the tables that are actually used. This way, we avoid adding SDFG arguments for
             # the connectivity tables that are not used. The remaining unused transient arrays
             # are removed by the dace simplify pass.
-            self._add_storage(
-                sdfg, dace_fieldview_util.connectivity_identifier(offset), type_, transient=True
-            )
+            self._add_storage(sdfg, dace_fieldview_util.connectivity_identifier(offset), type_)
 
         # visit one statement at a time and expand the SDFG from the current head state
         for i, stmt in enumerate(node.body):
