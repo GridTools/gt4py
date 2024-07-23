@@ -13,7 +13,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import types
-from collections import namedtuple
 from typing import Any, Protocol, TypeVar
 
 import numpy as np
@@ -24,7 +23,6 @@ from gt4py.next import backend as next_backend, common
 from gt4py.next.ffront import decorator
 from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors import processor_interface as ppi
-from gt4py.next.program_processors.runners import gtfn, roundtrip
 
 
 try:

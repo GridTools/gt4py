@@ -27,14 +27,7 @@ import factory
 
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
-from gt4py.next import (
-    allocators as next_allocators,
-    backend as next_backend,
-    backend_exp,
-    common,
-    config,
-)
-from gt4py.next.ffront import stages as ffront_stages
+from gt4py.next import allocators as next_allocators, backend_exp, common, config
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.iterator.transforms import fencil_to_program
 from gt4py.next.otf import stages, workflow
@@ -198,32 +191,6 @@ def fencil_generator(
     return typing.cast(stages.CompiledProgram, fencil)
 
 
-@ppi.program_executor  # type: ignore[arg-type]
-def execute_roundtrip(
-    ir: itir.Node,
-    *args: Any,
-    column_axis: Optional[common.Dimension] = None,
-    offset_provider: dict[str, common.Connectivity | common.Dimension],
-    debug: Optional[bool] = None,
-    lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE,
-    dispatch_backend: Optional[ppi.ProgramExecutor] = None,
-) -> None:
-    debug = debug if debug is not None else config.DEBUG
-    fencil = fencil_generator(
-        ir,
-        offset_provider=offset_provider,
-        debug=debug,
-        lift_mode=lift_mode,
-        use_embedded=dispatch_backend is None,
-    )
-
-    new_kwargs: dict[str, Any] = {"offset_provider": offset_provider, "column_axis": column_axis}
-    if dispatch_backend:
-        new_kwargs["backend"] = dispatch_backend
-
-    return fencil(*args, **new_kwargs)
-
-
 @dataclasses.dataclass(frozen=True)
 class Roundtrip(workflow.Workflow[stages.AOTProgram, stages.CompiledProgram]):
     debug: Optional[bool] = None
@@ -298,17 +265,6 @@ class RoundtripExecutorFactory(factory.Factory):
 
     dispatch_backend = None
     otf_workflow = factory.LazyAttribute(lambda o: o.roundtrip_workflow)
-
-
-class RoundtripBackend(next_backend.Backend):
-    def __call__(
-        self,
-        program: ffront_stages.ProgramDefinition | ffront_stages.FieldOperatorDefinition,
-        *args: Any,
-        **kwargs: Any,
-    ) -> None:
-        args, kwargs = backend_exp.convert_to_positional(program, *args, **kwargs)
-        return super().__call__(program, *args, **kwargs)
 
 
 executor = RoundtripExecutorFactory(name="roundtrip")
