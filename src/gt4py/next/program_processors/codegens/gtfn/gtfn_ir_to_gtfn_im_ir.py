@@ -265,7 +265,6 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             return gtfn_ir_common.SymRef(id=f"{lam_idx}")
         if isinstance(node.fun, gtfn_ir.Lambda):
             localized_symbols = {**kwargs["localized_symbols"]}  # create a new scope
-            new_kwargs = {**kwargs, "localized_symbols": localized_symbols}
 
             lam_idx = self.uids.sequential_id(prefix="lam")
             params = [self.visit(param, **kwargs) for param in node.fun.params]
@@ -280,6 +279,7 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                         rhs=arg,
                     )
                 )
+            new_kwargs = {**kwargs, "localized_symbols": localized_symbols}
             expr = self.visit(node.fun.expr, **new_kwargs)
             self.imp_list_ir.append(InitStmt(lhs=gtfn_ir_common.Sym(id=f"{lam_idx}"), rhs=expr))
             return gtfn_ir_common.SymRef(id=f"{lam_idx}")

@@ -185,7 +185,7 @@ class GTFNTranslationStep(
         if not self.enable_itir_transforms:
             return fencil_to_program.FencilToProgram().apply(
                 program
-            )  # TODO(tehrengruber): should be removed after refactoring to combined IR
+            )  # FIXME[#1582](tehrengruber): should be removed after refactoring to combined IR
 
         apply_common_transforms = functools.partial(
             pass_manager.apply_common_transforms,

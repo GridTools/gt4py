@@ -184,7 +184,7 @@ def apply_common_transforms(
     assert isinstance(ir, (itir.FencilDefinition, FencilWithTemporaries))
     ir = fencil_to_program.FencilToProgram().apply(
         ir
-    )  # TODO(havogt): should be removed after refactoring to combined IR
+    )  # FIXME[#1582](havogt): should be removed after refactoring to combined IR
 
     if unroll_reduce:
         for _ in range(10):
@@ -203,7 +203,7 @@ def apply_common_transforms(
     ir = ScanEtaReduction().visit(ir)
 
     if common_subexpression_elimination:
-        ir = CommonSubexpressionElimination.apply(ir, offset_provider=offset_provider)  # type: ignore[arg-type]
+        ir = CommonSubexpressionElimination.apply(ir, offset_provider=offset_provider)  # type: ignore[type-var]  # always an itir.Program
         ir = MergeLet().visit(ir)
 
     ir = InlineLambdas.apply(

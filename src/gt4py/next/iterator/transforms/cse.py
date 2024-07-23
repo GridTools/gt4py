@@ -18,7 +18,7 @@ import dataclasses
 import functools
 import math
 import operator
-import typing
+from typing import Callable, Iterable, TypeVar, Union, cast
 
 from gt4py.eve import (
     NodeTranslator,
@@ -28,6 +28,7 @@ from gt4py.eve import (
     VisitorWithSymbolTableTrait,
 )
 from gt4py.eve.utils import UIDGenerator
+from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda
@@ -47,7 +48,7 @@ class _NodeReplacer(PreserveLocationVisitor, NodeTranslator):
         return self.generic_visit(node)
 
     def visit_FunCall(self, node: itir.FunCall) -> itir.Node:
-        node = typing.cast(itir.FunCall, self.visit_Expr(node))
+        node = cast(itir.FunCall, self.visit_Expr(node))
         # If we encounter an expression like:
         #  (λ(_cs_1) → (λ(a) → a+a)(_cs_1))(outer_expr)
         # (non-recursively) inline the lambda to obtain:
@@ -108,7 +109,7 @@ class CollectSubexpressions(PreserveLocationVisitor, VisitorWithSymbolTableTrait
         #: The ids of all nodes declaring a symbol which are referenced (using a `SymRef`)
         used_symbol_ids: set[int] = dataclasses.field(default_factory=set)
 
-        def remove_subexprs(self, nodes: typing.Iterable[itir.Node]) -> None:
+        def remove_subexprs(self, nodes: Iterable[itir.Node]) -> None:
             node_ids_to_remove: set[int] = set()
             for node in nodes:
                 subexpr_data = self.subexprs.pop(node, None)
@@ -217,11 +218,11 @@ class CollectSubexpressions(PreserveLocationVisitor, VisitorWithSymbolTableTrait
 
 def extract_subexpression(
     node: itir.Expr,
-    predicate: typing.Callable[[itir.Expr, int], bool],
+    predicate: Callable[[itir.Expr, int], bool],
     uid_generator: UIDGenerator,
     once_only: bool = False,
     deepest_expr_first: bool = False,
-) -> tuple[itir.Expr, typing.Union[dict[itir.Sym, itir.Expr], None], bool]:
+) -> tuple[itir.Expr, Union[dict[itir.Sym, itir.Expr], None], bool]:
     """
     Given an expression extract all subexprs and return a new expr with the subexprs replaced.
 
@@ -365,6 +366,9 @@ def extract_subexpression(
     return _NodeReplacer(expr_map).visit(node), extracted, ignored_children
 
 
+ProgramOrExpr = TypeVar("ProgramOrExpr", bound=itir.Program | itir.FencilDefinition | itir.Expr)
+
+
 @dataclasses.dataclass(frozen=True)
 class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
     """
@@ -376,6 +380,12 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
         >>> expr = plus(plus(x, x), plus(x, x))
         >>> print(CommonSubexpressionElimination.apply(expr, is_local_view=True))
         (λ(_cs_1) → _cs_1 + _cs_1)(x + x)
+
+    The pass visits the tree top-down starting from the root node, e.g. an itir.Program.
+    For each node we extract (eligible) subexpressions occuring more than once using
+    :ref:`extract_subexpression`. In field-view context we only extract expression when they are
+    fields (or composites thereof), in local view everything is eligible. Since the visit is
+    top-down, extracted expressions always land up in the outermost scope they can appear in.
     """
 
     # we use one UID generator per instance such that the generated ids are
@@ -389,10 +399,10 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
     @classmethod
     def apply(
         cls,
-        node: itir.Program | itir.FencilDefinition | itir.Expr,
-        is_local_view=None,
-        offset_provider=None,
-    ):
+        node: ProgramOrExpr,
+        is_local_view: bool | None = None,
+        offset_provider: common.OffsetProvider | None = None,
+    ) -> ProgramOrExpr:
         is_program = isinstance(node, (itir.Program, itir.FencilDefinition))
         if is_program:
             assert is_local_view is None
@@ -409,7 +419,8 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
         return cls().visit(node, is_local_view=is_local_view)
 
     def generic_visit(self, node, **kwargs):
-        assert not (cpm.is_call_to("as_fieldop", node) and kwargs.get("is_local_view"))
+        if cpm.is_call_to("as_fieldop", node):
+            assert not kwargs.get("is_local_view")
         is_local_view = cpm.is_call_to("as_fieldop", node) or kwargs.get("is_local_view")
 
         return super().generic_visit(node, **(kwargs | {"is_local_view": is_local_view}))
@@ -422,20 +433,21 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
 
         def predicate(subexpr: itir.Expr, num_occurences: int):
             # note: be careful here with the syntatic context: the expression might be in local
-            #  view, even though the syntactic context of the root node is in field view.
+            #  view, even though the syntactic context `node` is in field view.
+            # note: what is extracted is sketched in the docstring above. keep it updated.
             if num_occurences > 1:
                 if is_local_view:
                     return True
-
-                # only extract fields outside of `as_fieldop`
-                # `as_fieldop(...)(field_expr, field_expr)`
-                # -> `(λ(_cs_1) → as_fieldop(...)(_cs_1, _cs_1))(field_expr)`
-                assert isinstance(subexpr.type, ts.TypeSpec)
-                if not is_local_view and all(
-                    isinstance(stype, ts.FieldType)
-                    for stype in type_info.primitive_constituents(subexpr.type)
-                ):
-                    return True
+                else:
+                    # only extract fields outside of `as_fieldop`
+                    # `as_fieldop(...)(field_expr, field_expr)`
+                    # -> `(λ(_cs_1) → as_fieldop(...)(_cs_1, _cs_1))(field_expr)`
+                    assert isinstance(subexpr.type, ts.TypeSpec)
+                    if all(
+                        isinstance(stype, ts.FieldType)
+                        for stype in type_info.primitive_constituents(subexpr.type)
+                    ):
+                        return True
             return False
 
         new_expr, extracted, ignored_children = extract_subexpression(node, predicate, self.uids)
