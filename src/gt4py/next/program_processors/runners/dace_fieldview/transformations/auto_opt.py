@@ -186,7 +186,7 @@ def gt_auto_optimize(
         if gpu and (block_dim is not None):
             sdfg.apply_transformations_repeated(
                 gtx_transformations.KBlocking(
-                    blocking_size=10,
+                    blocking_size=blocking_size,
                     block_dim=block_dim,
                 ),
                 validate=True,
