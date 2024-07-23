@@ -30,7 +30,10 @@ from gt4py.eve import concepts
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
-from gt4py.next.iterator.type_system import inference as gtir_type_inference
+from gt4py.next.iterator.type_system import (
+    inference as gtir_type_inference,
+    type_specifications as gtir_ts,
+)
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_builtin_translators,
     gtir_to_tasklet,
@@ -168,10 +171,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         For fields, it allocates dace arrays, while scalars are stored as SDFG symbols.
         """
         if isinstance(symbol_type, ts.FieldType):
+            if isinstance(symbol_type.dtype, gtir_ts.ListType):
+                dims = [*symbol_type.dims, gtx_common.Dimension("")]
+            else:
+                dims = symbol_type.dims
             dtype = dace_fieldview_util.as_dace_type(symbol_type.dtype)
             # use symbolic shape, which allows to invoke the program with fields of different size;
             # and symbolic strides, which enables decoupling the memory layout from generated code.
-            sym_shape, sym_strides = self._make_array_shape_and_strides(name, symbol_type.dims)
+            sym_shape, sym_strides = self._make_array_shape_and_strides(name, dims)
             sdfg.add_array(name, sym_shape, dtype, strides=sym_strides, transient=transient)
         elif isinstance(symbol_type, ts.ScalarType):
             dtype = dace_fieldview_util.as_dace_type(symbol_type)
@@ -308,6 +315,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 subset = ",".join(
                     f"{domain[dim][0]}:{domain[dim][1]}" for dim in target_symbol_type.dims
                 )
+                if isinstance(target_symbol_type.dtype, gtir_ts.ListType):
+                    desc = expr_node.desc(sdfg)
+                    subset += f",0:{desc.shape[-1]}"
             else:
                 assert len(domain) == 0
                 subset = "0"

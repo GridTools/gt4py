@@ -26,6 +26,7 @@ from gt4py import eve
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.iterator.type_system import type_specifications as gtir_ts
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_python_codegen,
     gtir_to_sdfg,
@@ -55,7 +56,7 @@ class ValueExpr:
     """Result of the computation implemented by a tasklet node."""
 
     node: dace.nodes.AccessNode
-    field_type: ts.FieldType | ts.ScalarType
+    dtype: gtir_ts.ListType | ts.ScalarType
 
 
 # Define alias for the elements needed to setup input connections to a map scope
@@ -339,10 +340,8 @@ class LambdaToTasklet(eve.NodeVisitor):
         )
         neighbors_node = self.state.add_access(neighbors_temp)
 
-        neighbors_field_type = dace_fieldview_util.get_neighbors_field_type(
-            offset, field_desc.dtype
-        )
-        neighbor_idx = dace_fieldview_util.get_map_variable(neighbors_field_type.dims[0])
+        offset_dim = gtx_common.Dimension(offset)
+        neighbor_idx = dace_fieldview_util.get_map_variable(offset_dim)
         me, mx = self._add_map(
             f"{offset}_neighbors",
             {
@@ -383,7 +382,9 @@ class LambdaToTasklet(eve.NodeVisitor):
             src_conn="__val",
             memlet=dace.Memlet(data=neighbors_temp, subset=neighbor_idx),
         )
-        return ValueExpr(neighbors_node, neighbors_field_type)
+
+        assert isinstance(node.type, gtir_ts.ListType)
+        return ValueExpr(neighbors_node, node.type)
 
     def _visit_reduce(self, node: gtir.FunCall) -> ValueExpr:
         op_name, reduce_init, reduce_identity = get_reduce_params(node)

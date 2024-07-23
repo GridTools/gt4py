@@ -21,6 +21,7 @@ import copy
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.type_system import type_specifications as gtir_ts
 from gt4py.next.program_processors.runners import dace_fieldview as dace_backend
 from gt4py.next.type_system import type_specifications as ts
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
@@ -45,7 +46,7 @@ IFTYPE = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT6
 CFTYPE = ts.FieldType(dims=[Cell], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
 EFTYPE = ts.FieldType(dims=[Edge], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
 VFTYPE = ts.FieldType(dims=[Vertex], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
-V2E_FTYPE = ts.FieldType(dims=[Vertex, V2EDim], dtype=EFTYPE.dtype)
+V2E_FTYPE = ts.FieldType(dims=[Vertex], dtype=gtir_ts.ListType(EFTYPE.dtype))
 CARTESIAN_OFFSETS = {
     "IDim": IDim,
 }
@@ -985,17 +986,8 @@ def test_gtir_connectivity_shift_chain():
 
 
 def test_gtir_neighbors():
-    pytest.xfail("Requires return type for field of lists")
     vertex_domain = im.call("unstructured_domain")(
         im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
-    )
-    v2e_domain = im.call("unstructured_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
-        im.call("named_range")(
-            gtir.AxisLiteral(value=V2EDim.value, kind=V2EDim.kind),
-            0,
-            SIMPLE_MESH_OFFSET_PROVIDER["V2E"].max_neighbors,
-        ),
     )
     testee = gtir.Program(
         id=f"neighbors",
@@ -1014,7 +1006,7 @@ def test_gtir_neighbors():
                         vertex_domain,
                     )
                 )("edges"),
-                domain=v2e_domain,
+                domain=vertex_domain,
                 target=gtir.SymRef(id="v2e_field"),
             )
         ],
@@ -1193,18 +1185,9 @@ def test_gtir_reduce_with_skip_values():
 
 
 def test_gtir_reduce_dot_product():
-    pytest.xfail("Requires return type for field of lists")
     init_value = np.random.rand()
     vertex_domain = im.call("unstructured_domain")(
         im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
-    )
-    v2e_domain = im.call("unstructured_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
-        im.call("named_range")(
-            gtir.AxisLiteral(value=V2EDim.value, kind=V2EDim.kind),
-            0,
-            SIMPLE_MESH_OFFSET_PROVIDER["V2E"].max_neighbors,
-        ),
     )
 
     testee = gtir.Program(
@@ -1213,7 +1196,6 @@ def test_gtir_reduce_dot_product():
         params=[
             gtir.Sym(id="edges", type=EFTYPE),
             gtir.Sym(id="vertices", type=VFTYPE),
-            gtir.Sym(id="nedges", type=SIZE_TYPE),
             gtir.Sym(id="nvertices", type=SIZE_TYPE),
         ],
         declarations=[],
@@ -1232,7 +1214,7 @@ def test_gtir_reduce_dot_product():
                     im.call(
                         im.call("as_fieldop")(
                             im.lambda_("a", "b")(im.multiplies_(im.deref("a"), im.deref("b"))),
-                            v2e_domain,
+                            vertex_domain,
                         )
                     )(
                         im.call(
@@ -1243,17 +1225,10 @@ def test_gtir_reduce_dot_product():
                         )("edges"),
                         im.call(
                             im.call("as_fieldop")(
-                                im.lambda_("it")(im.plus(im.deref("it"), 1.0)),
-                                v2e_domain,
+                                im.lambda_("it")(im.neighbors("V2E", "it")),
+                                vertex_domain,
                             )
-                        )(
-                            im.call(
-                                im.call("as_fieldop")(
-                                    im.lambda_("it")(im.neighbors("V2E", "it")),
-                                    vertex_domain,
-                                )
-                            )("edges")
-                        ),
+                        )("edges"),
                     ),
                 ),
                 domain=vertex_domain,
@@ -1270,7 +1245,7 @@ def test_gtir_reduce_dot_product():
     e = np.random.rand(SIMPLE_MESH.num_edges)
     v = np.empty(SIMPLE_MESH.num_vertices, dtype=e.dtype)
     v_ref = [
-        reduce(lambda x, y: x + y, e[v2e_neighbors] * (e[v2e_neighbors] + 1), init_value)
+        reduce(lambda x, y: x + y, e[v2e_neighbors] * e[v2e_neighbors], init_value)
         for v2e_neighbors in connectivity_V2E.table
     ]
 

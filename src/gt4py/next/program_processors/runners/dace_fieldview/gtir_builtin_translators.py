@@ -24,7 +24,7 @@ import dace.subsets as sbs
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
-from gt4py.next.iterator.type_system import type_specifications as itir_ts
+from gt4py.next.iterator.type_system import type_specifications as gtir_ts
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_python_codegen,
     gtir_to_tasklet,
@@ -125,10 +125,8 @@ def _create_temporary_field(
     ],
     node_type: ts.FieldType,
     output_desc: dace.data.Data,
-    output_field_type: ts.DataType,
 ) -> tuple[dace.nodes.AccessNode, ts.FieldType]:
     domain_dims, domain_lbs, domain_ubs = zip(*domain)
-    field_dims = list(domain_dims)
     field_shape = [
         # diff between upper and lower bound
         (ub - lb)
@@ -138,29 +136,26 @@ def _create_temporary_field(
     if any(domain_lbs):
         field_offset = [-lb for lb in domain_lbs]
 
-    if isinstance(output_desc, dace.data.Array):
+    if isinstance(node_type.dtype, gtir_ts.ListType):
+        field_dtype = node_type.dtype.element_type
+        field_dims = [*domain_dims, gtx_common.Dimension("")]
         # extend the result arrays with the local dimensions added by the field operator e.g. `neighbors`)
-        assert isinstance(output_field_type, ts.FieldType)
-        if isinstance(node_type.dtype, itir_ts.ListType):
-            assert isinstance(node_type.dtype.element_type, ts.ScalarType)
-            field_dtype = node_type.dtype.element_type
-        else:
-            field_dtype = node_type.dtype
-        assert output_field_type.dtype == field_dtype
-        field_dims.extend(output_field_type.dims)
-        field_shape.extend(output_desc.shape)
+        if isinstance(output_desc, dace.data.Array):
+            field_shape.extend(output_desc.shape)
     else:
         assert isinstance(output_desc, dace.data.Scalar)
-        assert isinstance(output_field_type, ts.ScalarType)
+
         field_dtype = node_type.dtype
-        assert output_field_type == field_dtype
+        field_dims = list(domain_dims)
+
+    assert isinstance(field_dtype, ts.ScalarType)
 
     # allocate local temporary storage for the result field
     temp_name, _ = sdfg.add_temp_transient(
         field_shape, dace_fieldview_util.as_dace_type(field_dtype), offset=field_offset
     )
     field_node = state.add_access(temp_name)
-    field_type = ts.FieldType(field_dims, field_dtype)
+    field_type = ts.FieldType(field_dims, node_type.dtype)
 
     return field_node, field_type
 
@@ -176,6 +171,7 @@ def translate_as_field_op(
     """Generates the dataflow subgraph for the `as_field_op` builtin function."""
     assert isinstance(node, gtir.FunCall)
     assert cpm.is_call_to(node.fun, "as_fieldop")
+    assert isinstance(node.type, ts.FieldType)
 
     fun_node = node.fun
     assert len(fun_node.args) == 2
@@ -204,6 +200,7 @@ def translate_as_field_op(
     taskgen = gtir_to_tasklet.LambdaToTasklet(sdfg, state, sdfg_builder, reduce_identity)
     input_connections, output_expr = taskgen.visit(stencil_expr, args=stencil_args)
     assert isinstance(output_expr, gtir_to_tasklet.ValueExpr)
+    #assert output_expr.dtype == node.type.dtype
     output_desc = output_expr.node.desc(sdfg)
 
     # retrieve the tasklet node which writes the result
@@ -217,9 +214,7 @@ def translate_as_field_op(
         last_node_connector = None
 
     # allocate local temporary storage for the result field
-    field_node, field_type = _create_temporary_field(
-        sdfg, state, domain, node.type, output_desc, output_expr.field_type
-    )
+    field_node, field_type = _create_temporary_field(sdfg, state, domain, node.type, output_desc)
 
     # assume tasklet with single output
     output_subset = [dace_fieldview_util.get_map_variable(dim) for dim, _, _ in domain]
