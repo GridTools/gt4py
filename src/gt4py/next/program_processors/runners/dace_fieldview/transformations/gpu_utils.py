@@ -18,7 +18,6 @@ import copy
 from typing import Any, Optional, Sequence, Union
 
 import dace
-import numpy as np
 from dace import properties, transformation
 from dace.sdfg import SDFG, SDFGState, nodes
 
@@ -39,6 +38,8 @@ def gt_gpu_transformation(
     sdfg: dace.SDFG,
     promote_serial_maps: bool = True,
     gpu_block_size: Optional[Sequence[int | str] | str] = None,
+    gpu_launch_bounds: Optional[int | str] = None,
+    gpu_launch_factor: Optional[int] = None,
     validate: bool = True,
     validate_all: bool = False,
 ) -> dace.SDFG:
@@ -82,7 +83,12 @@ def gt_gpu_transformation(
 
     # Set the GPU block size if it is known.
     if gpu_block_size is not None:
-        gt_set_gpu_blocksize(sdfg, gpu_block_size)
+        gt_set_gpu_blocksize(
+            sdfg=sdfg,
+            gpu_block_size=gpu_block_size,
+            gpu_launch_bounds=gpu_launch_bounds,
+            gpu_launch_factor=gpu_launch_factor,
+        )
 
     return sdfg
 
@@ -90,14 +96,23 @@ def gt_gpu_transformation(
 def gt_set_gpu_blocksize(
     sdfg: dace.SDFG,
     gpu_block_size: Optional[Sequence[int | str] | str],
+    gpu_launch_bounds: Optional[int | str] = None,
+    gpu_launch_factor: Optional[int] = None,
 ) -> Any:
     """Set the block sizes of GPU Maps.
 
     Args:
         sdfg: The SDFG to process.
         gpu_block_size: The block size to use.
+        gpu_launch_bounds: The launch bounds to use.
+        gpu_launch_factor: The launch factor to use.
     """
-    return sdfg.apply_transformations_once_everywhere([GPUSetBlockSize(block_size=gpu_block_size)])
+    xform = GPUSetBlockSize(
+        block_size=gpu_block_size,
+        launch_bounds=gpu_launch_bounds,
+        launch_factor=gpu_launch_factor,
+    )
+    return sdfg.apply_transformations_once_everywhere([xform])
 
 
 def _gpu_block_parser(
@@ -122,8 +137,13 @@ def _gpu_block_parser(
         val = (*val, 1)
     elif len(val) != 3:
         raise ValueError(f"Can not parse block size '{org_val}': wrong length")
-    assert all(isinstance(x, (str, int, np.integer)) for x in val)
-    self._block_size = [int(x) for x in val]
+    try:
+        val = [int(x) for x in val]
+    except ValueError:
+        raise TypeError(
+            f"Currently only block sizes convertible to int are supported, you passed '{val}'."
+        ) from None
+    self._block_size = val
 
 
 def _gpu_block_getter(
@@ -139,6 +159,12 @@ def _gpu_block_getter(
 class GPUSetBlockSize(transformation.SingleStateTransformation):
     """Sets the GPU block size on GPU Maps.
 
+    Args:
+        block_size: The block size that should be used.
+        launch_bounds: The value for the launch bound that should be used.
+        launch_factor: If no `launch_bounds` was given use the number of threads
+            in a block multiplied by this number.
+
     Todo:
         Depending on the number of dimensions of a map, there should be different sources.
     """
@@ -152,15 +178,38 @@ class GPUSetBlockSize(transformation.SingleStateTransformation):
         desc="Size of the block size a GPU Map should have.",
     )
 
+    launch_bounds = properties.Property(
+        dtype=str,
+        allow_none=True,
+        default=None,
+        desc="Set the launch bound property of the map.",
+    )
+
     map_entry = transformation.transformation.PatternNode(nodes.MapEntry)
 
     def __init__(
         self,
         block_size: Sequence[int | str] | str | None = None,
+        launch_bounds: int | str | None = None,
+        launch_factor: int | None = None,
     ) -> None:
         super().__init__()
         if block_size is not None:
             self.block_size = block_size
+
+        if launch_factor is not None:
+            assert launch_bounds is None
+            self.launch_bounds = str(
+                int(launch_factor) * self.block_size[0] * self.block_size[1] * self.block_size[2]
+            )
+        elif launch_bounds is None:
+            self.launch_bounds = None
+        elif isinstance(launch_bounds, (str, int)):
+            self.launch_bounds = str(launch_bounds)
+        else:
+            raise TypeError(
+                f"Does not know how to parse '{launch_bounds}' as 'launch_bounds' argument."
+            )
 
     @classmethod
     def expressions(cls) -> Any:
@@ -195,8 +244,10 @@ class GPUSetBlockSize(transformation.SingleStateTransformation):
         graph: Union[SDFGState, SDFG],
         sdfg: SDFG,
     ) -> None:
-        """Sets the block size."""
+        """Modify the map as requested."""
         self.map_entry.map.gpu_block_size = self.block_size
+        if self.launch_bounds is not None:  # Note empty string has a meaning in DaCe
+            self.map_entry.map.gpu_launch_bounds = self.launch_bounds
 
 
 @properties.make_properties

@@ -94,6 +94,8 @@ def gt_auto_optimize(
     leading_dim: Optional[gtx_common.Dimension] = None,
     gpu: bool = False,
     gpu_block_size: Optional[Sequence[int | str] | str] = None,
+    gpu_launch_bounds: Optional[int | str] = None,
+    gpu_launch_factor: Optional[int] = None,
     validate: bool = True,
     validate_all: bool = False,
     block_dim: Optional[gtx_common.Dimension] = None,
@@ -108,6 +110,8 @@ def gt_auto_optimize(
         leading_dim: Leading dimension, where the stride is expected to be 1.
         gpu: Optimize for GPU.
         gpu_block_size: The block size that should be used for the GPU.
+        gpu_launch_bounds: The launch bounds to use.
+        gpu_launch_factor: The launch factor to use.
     """
 
     with dace.config.temporary_config():
@@ -172,7 +176,12 @@ def gt_auto_optimize(
 
         # After everything we set the GPU block size.
         if gpu_block_size is not None:
-            gtx_transformations.gt_set_gpu_blocksize(sdfg, gpu_block_size)
+            gtx_transformations.gt_set_gpu_blocksize(
+                sdfg=sdfg,
+                gpu_block_size=gpu_block_size,
+                gpu_launch_bounds=gpu_launch_bounds,
+                gpu_launch_factor=gpu_launch_factor,
+            )
 
         if gpu and (block_dim is not None):
             sdfg.apply_transformations_repeated(
