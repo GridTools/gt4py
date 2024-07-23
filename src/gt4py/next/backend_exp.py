@@ -15,24 +15,19 @@
 from __future__ import annotations
 
 import dataclasses
-import functools
-import inspect
-import types
 import typing
-from typing import Any, Callable, Generic, Optional
+from typing import Any, Optional
 
 from gt4py.next import backend
 from gt4py.next.ffront import (
-    field_operator_ast as foast,
     foast_to_itir,
     foast_to_past,
     func_to_foast,
     func_to_past,
     past_process_args,
     past_to_itir,
-    program_ast as past,
+    signature,
     stages as ffront_stages,
-    type_specifications as ffts,
 )
 from gt4py.next.ffront.past_passes import linters as past_linters
 from gt4py.next.iterator import ir as itir
@@ -53,17 +48,6 @@ IT_PRG: typing.TypeAlias = itir.FencilDefinition
 
 
 @dataclasses.dataclass(frozen=True)
-class IteratorProgramMetadata:
-    fieldview_program_type: ffts.ProgramType
-
-
-@dataclasses.dataclass(frozen=True)
-class DataWithIteratorProgramMetadata(Generic[DataT]):
-    data: DataT
-    metadata: IteratorProgramMetadata
-
-
-@dataclasses.dataclass(frozen=True)
 class ItirShim:
     definition: ffront_stages.FoastOperatorDefinition
     foast_to_itir: workflow.Workflow[ffront_stages.FoastOperatorDefinition, itir.Expr]
@@ -76,111 +60,6 @@ class ItirShim:
 
     def __gt_itir__(self) -> itir.Expr:
         return self.foast_to_itir(self.definition)
-
-
-def should_be_positional(param: inspect.Parameter) -> bool:
-    return (param.kind is inspect.Parameter.POSITIONAL_ONLY) or (
-        param.kind is inspect.Parameter.POSITIONAL_OR_KEYWORD
-    )
-
-
-@functools.singledispatch
-def make_signature(func: Any) -> inspect.Signature:
-    """Make a signature for a Python or DSL callable, which suffices for use in 'convert_to_positional'."""
-    if isinstance(func, types.FunctionType):
-        return inspect.signature(func)
-    raise NotImplementedError(f"'make_signature' not implemented for {type(func)}.")
-
-
-@make_signature.register(foast.ScanOperator)
-@make_signature.register(past.Program)
-@make_signature.register(foast.FieldOperator)
-def signature_from_fieldop(func: foast.FieldOperator) -> inspect.Signature:
-    if isinstance(func.type, ts.DeferredType):
-        raise NotImplementedError(
-            f"'make_signature' not implemented for pre type deduction {type(func)}."
-        )
-    fieldview_signature = func.type.definition
-    return inspect.Signature(
-        parameters=[
-            inspect.Parameter(name=str(i), kind=inspect.Parameter.POSITIONAL_ONLY)
-            for i, param in enumerate(fieldview_signature.pos_only_args)
-        ]
-        + [
-            inspect.Parameter(name=k, kind=inspect.Parameter.POSITIONAL_OR_KEYWORD)
-            for k in fieldview_signature.pos_or_kw_args
-        ],
-    )
-
-
-@make_signature.register(ffront_stages.FieldOperatorDefinition)
-def signature_from_fieldop_def(func: ffront_stages.FieldOperatorDefinition) -> inspect.Signature:
-    signature = make_signature(func.definition)
-    if func.node_class == foast.ScanOperator:
-        return inspect.Signature(list(signature.parameters.values())[1:])
-    return signature
-
-
-@make_signature.register(ffront_stages.ProgramDefinition)
-def signature_from_program_def(func: ffront_stages.ProgramDefinition) -> inspect.Signature:
-    return make_signature(func.definition)
-
-
-@make_signature.register(ffront_stages.FoastOperatorDefinition)
-def signature_from_foast_stage(func: ffront_stages.FoastOperatorDefinition) -> inspect.Signature:
-    return make_signature(func.foast_node)
-
-
-@make_signature.register
-def signature_from_past_stage(func: ffront_stages.PastProgramDefinition) -> inspect.Signature:
-    return make_signature(func.past_node)
-
-
-def convert_to_positional(
-    func: Callable | foast.FieldOperator | foast.ScanOperator | DSL_FOP | FOP | DSL_PRG | PRG,
-    *args: Any,
-    **kwargs: Any,
-) -> tuple[tuple[Any, ...], dict[str, Any]]:
-    """
-    Convert arguments given as keyword args to positional ones where possible.
-
-    Raises en error if and only if there are clearly missing positional arguments,
-    Without awareness of the peculiarities of DSL function signatures. A more
-    thorough check on whether the signature is fulfilled is expected to happen
-    later in the toolchain.
-
-    Note that positional-or-keyword arguments with defaults will have their defaults
-    inserted even if not strictly necessary. This is to reduce complexity and should
-    be changed if the current behavior is found harmful in some way.
-
-    Examples:
-    >>> def example(posonly, /, pos_or_key, pk_with_default=42, *, key_only=43):
-    ...     pass
-
-    >>> convert_to_positional(example, 1, pos_or_key=2, key_only=3)
-    ((1, 2, 42), {'key_only': 3})
-    >>> # inserting the default value '42' here could be avoided
-    >>> # but this is not the current behavior.
-    """
-    signature = make_signature(func)
-    new_args = list(args)
-    modified_kwargs = kwargs.copy()
-    missing = []
-    interesting_params = [p for p in signature.parameters.values() if should_be_positional(p)]
-
-    for param in interesting_params[len(args) :]:
-        if param.kind is inspect.Parameter.POSITIONAL_OR_KEYWORD and param.name in modified_kwargs:
-            # if keyword allowed, check if was given as kwarg
-            new_args.append(modified_kwargs.pop(param.name))
-        else:
-            # add default and report as missing if no default
-            # note: this treats POSITIONAL_ONLY params correctly, as they can not have a default.
-            new_args.append(param.default)
-            if param.default is inspect._empty:
-                missing.append(param.name)
-    if missing:
-        raise TypeError(f"Missing positional argument(s): {', '.join(missing)}.")
-    return tuple(new_args), modified_kwargs
 
 
 @dataclasses.dataclass(frozen=True)
@@ -342,7 +221,7 @@ class ExpBackend(backend.Backend):
     ) -> None:
         _ = kwargs.pop("from_fieldop", None)
         # taking the offset provider out is not needed
-        args, kwargs = convert_to_positional(program, *args, **kwargs)
+        args, kwargs = signature.convert_to_positional(program, *args, **kwargs)
         program_info = self.transforms_fop(
             workflow.DataWithArgs(
                 data=program,  # type: ignore[arg-type] # TODO(ricoh): should go away when toolchain unified everywhere
