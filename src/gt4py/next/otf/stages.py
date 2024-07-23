@@ -111,7 +111,7 @@ class CompileArgSpec:
         return cls(
             args=compile_args,
             offset_provider=offset_provider,  # TODO(ricoh): replace with the line below once the temporaries pass is AOT-ready. If unsure, just try it and run the tests.
-            # offset_provider={k: connectivity_or_dimension(v) for k, v in offset_provider.items()}, # noqa: ERA001 [commented-out-code]
+            # offset_provider={k: connectivity_or_dimension(v) for k, v in offset_provider.items()},  # noqa: ERA001 [commented-out-code]
             column_axis=kwargs_copy.pop("column_axis", None),
             kwargs={
                 k: CompileArg.from_concrete(v) for k, v in kwargs_copy.items() if v is not None

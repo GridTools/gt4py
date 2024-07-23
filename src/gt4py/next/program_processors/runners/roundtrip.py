@@ -246,10 +246,13 @@ class Roundtrip(workflow.Workflow[stages.AOTProgram, stages.CompiledProgram]):
             *args: Any,
             offset_provider: dict[str, common.Connectivity | common.Dimension],
             out: Any = None,
+            column_axis: Optional[common.Dimension] = None,
             **kwargs: Any,
         ) -> None:
             if out is not None:
                 args = (*args, out)
+            if not column_axis:
+                column_axis = inp.argspec.column_axis
             fencil(
                 *args,
                 offset_provider=offset_provider,

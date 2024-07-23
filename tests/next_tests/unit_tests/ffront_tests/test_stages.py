@@ -102,13 +102,13 @@ def test_fingerprint_stage_field_op_def(fieldop, samecode_fieldop, different_fie
 
 def test_fingerprint_stage_foast_op_def(fieldop, samecode_fieldop, different_fieldop):
     foast = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_foast(
-        workflow.DataWithArgs(fieldop.definition_stage, None)
+        workflow.DataWithArgs(fieldop.definition_stage, otf_stages.CompileArgSpec.empty())
     ).data
     samecode = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_foast(
-        workflow.DataWithArgs(samecode_fieldop.definition_stage, None)
+        workflow.DataWithArgs(samecode_fieldop.definition_stage, otf_stages.CompileArgSpec.empty())
     ).data
     different = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_foast(
-        workflow.DataWithArgs(different_fieldop.definition_stage, None)
+        workflow.DataWithArgs(different_fieldop.definition_stage, otf_stages.CompileArgSpec.empty())
     ).data
 
     assert stages.fingerprint_stage(samecode) != stages.fingerprint_stage(foast)
@@ -189,9 +189,15 @@ def test_fingerprint_stage_program_def(program, samecode_program, different_prog
 
 
 def test_fingerprint_stage_past_def(program, samecode_program, different_program):
-    past = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_past(program.definition_stage)
-    samecode = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_past(samecode_program.definition_stage)
-    different = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_past(different_program.definition_stage)
+    past = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_past(
+        workflow.DataWithArgs(program.definition_stage, otf_stages.CompileArgSpec.empty())
+    )
+    samecode = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_past(
+        workflow.DataWithArgs(samecode_program.definition_stage, otf_stages.CompileArgSpec.empty())
+    )
+    different = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_past(
+        workflow.DataWithArgs(different_program.definition_stage, otf_stages.CompileArgSpec.empty())
+    )
 
     assert stages.fingerprint_stage(samecode) != stages.fingerprint_stage(past)
     assert stages.fingerprint_stage(different) != stages.fingerprint_stage(past)
