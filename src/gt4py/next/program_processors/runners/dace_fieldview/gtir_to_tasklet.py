@@ -395,6 +395,7 @@ class LambdaToTasklet(eve.NodeVisitor):
 
             shifted_indices = it.indices | {neighbor_dim: dynamic_offset_value}
 
+        shifted_indices.pop(origin_dim)
         return IteratorExpr(it.field, it.dimensions, shifted_indices)
 
     def _visit_shift(self, node: gtir.FunCall) -> IteratorExpr:
@@ -492,18 +493,8 @@ class LambdaToTasklet(eve.NodeVisitor):
                     connector,
                 )
 
-        # TODO: use type inference to determine the result type
-        if len(node_connections) == 1:
-            dtype = None
-            for conn_name in ["__inp_0", "__inp_1"]:
-                if conn_name in node_connections:
-                    dtype = node_connections[conn_name].node.desc(self.sdfg).dtype
-                    break
-            if dtype is None:
-                raise ValueError("Failed to determine the type")
-        else:
-            node_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
-            dtype = dace_fieldview_util.as_dace_type(node_type)
+        assert node.type
+        dtype = dace_fieldview_util.as_dace_type(node.type)
 
         return self._get_tasklet_result(dtype, tasklet_node, "result")
 
