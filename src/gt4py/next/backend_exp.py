@@ -31,15 +31,15 @@ from gt4py.next.ffront import (
 )
 from gt4py.next.ffront.past_passes import linters as past_linters
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import stages, workflow
+from gt4py.next.otf import arguments, stages, workflow
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
 DataT = typing.TypeVar("DataT")
 
 
-ARGS: typing.TypeAlias = stages.JITArgs
-CARG: typing.TypeAlias = stages.CompileArgSpec
+ARGS: typing.TypeAlias = arguments.JITArgs
+CARG: typing.TypeAlias = arguments.CompileArgSpec
 DSL_FOP: typing.TypeAlias = ffront_stages.FieldOperatorDefinition
 FOP: typing.TypeAlias = ffront_stages.FoastOperatorDefinition
 DSL_PRG: typing.TypeAlias = ffront_stages.ProgramDefinition
@@ -74,8 +74,8 @@ class FieldviewOpToFieldviewProg:
 
     def __call__(
         self,
-        inp: workflow.DataWithArgs[ffront_stages.FoastOperatorDefinition, stages.CompileArgSpec],
-    ) -> workflow.DataWithArgs[ffront_stages.PastProgramDefinition, stages.CompileArgSpec]:
+        inp: workflow.DataWithArgs[ffront_stages.FoastOperatorDefinition, arguments.CompileArgSpec],
+    ) -> workflow.DataWithArgs[ffront_stages.PastProgramDefinition, arguments.CompileArgSpec]:
         fieldview_program = foast_to_past.foast_to_past(
             ffront_stages.FoastWithTypes(
                 foast_op_def=inp.data,
@@ -95,8 +95,8 @@ class FieldviewOpToFieldviewProg:
 
 
 def transform_prog_args(
-    inp: workflow.DataWithArgs[ffront_stages.PastProgramDefinition, stages.CompileArgSpec],
-) -> workflow.DataWithArgs[ffront_stages.PastProgramDefinition, stages.CompileArgSpec]:
+    inp: workflow.DataWithArgs[ffront_stages.PastProgramDefinition, arguments.CompileArgSpec],
+) -> workflow.DataWithArgs[ffront_stages.PastProgramDefinition, arguments.CompileArgSpec]:
     transformed = past_process_args.PastProcessArgs(aot_off=True)(
         ffront_stages.PastClosure(definition=inp.data, args=inp.args.args, kwargs=inp.args.kwargs)
     )
@@ -113,14 +113,17 @@ class PastToItirAdapter:
     )
 
     def __call__(
-        self, inp: workflow.DataWithArgs[ffront_stages.PastProgramDefinition, stages.CompileArgSpec]
+        self,
+        inp: workflow.DataWithArgs[ffront_stages.PastProgramDefinition, arguments.CompileArgSpec],
     ) -> stages.AOTProgram:
         aot_fvprog = ffront_stages.AOTFieldviewProgramAst(definition=inp.data, argspec=inp.args)
         return self.step(aot_fvprog)
 
 
-def jit_to_aot_args(inp: stages.JITArgs) -> stages.CompileArgSpec:
-    return stages.CompileArgSpec.from_concrete_no_size(*inp.args, **inp.kwargs)
+def jit_to_aot_args(
+    inp: arguments.JITArgs,
+) -> arguments.CompileArgSpec:
+    return arguments.CompileArgSpec.from_concrete_no_size(*inp.args, **inp.kwargs)
 
 
 AOT_FOP: typing.TypeAlias = workflow.DataWithArgs[FOP, CARG]
@@ -225,7 +228,7 @@ class ExpBackend(backend.Backend):
         program_info = self.transforms_fop(
             workflow.DataWithArgs(
                 data=program,  # type: ignore[arg-type] # TODO(ricoh): should go away when toolchain unified everywhere
-                args=stages.CompileArgSpec.from_concrete_no_size(*args, **kwargs),
+                args=arguments.CompileArgSpec.from_concrete_no_size(*args, **kwargs),
             )
         )
         # TODO(ricoh): get rid of executors altogether

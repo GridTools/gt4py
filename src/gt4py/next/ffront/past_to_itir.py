@@ -33,7 +33,7 @@ from gt4py.next.ffront import (
 )
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.otf import stages, workflow
+from gt4py.next.otf import arguments, stages, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
@@ -83,7 +83,7 @@ class JITPastToItir(workflow.ChainableWorkflowMixin):
         aot_program = self.inner(
             ffront_stages.AOTFieldviewProgramAst(
                 definition=inp.definition,
-                argspec=stages.CompileArgSpec.from_concrete(*inp.args, **inp.kwargs),
+                argspec=arguments.CompileArgSpec.from_concrete(*inp.args, **inp.kwargs),
             )
         )
         return stages.ProgramCall(

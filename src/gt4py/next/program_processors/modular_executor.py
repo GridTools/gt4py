@@ -19,7 +19,7 @@ from typing import Any, Optional
 
 import gt4py.next.program_processors.processor_interface as ppi
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import stages, workflow
+from gt4py.next.otf import arguments, stages, workflow
 
 
 @dataclasses.dataclass(frozen=True)
@@ -31,7 +31,7 @@ class ModularExecutor(ppi.ProgramExecutor):
         self.otf_workflow(
             stages.AOTProgram(
                 program=program,
-                argspec=stages.CompileArgSpec.from_concrete(*args, **kwargs),
+                argspec=arguments.CompileArgSpec.from_concrete(*args, **kwargs),
             )
         )(*args, offset_provider=kwargs["offset_provider"])
 

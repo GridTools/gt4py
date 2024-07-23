@@ -30,7 +30,7 @@ from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from gt4py.next import allocators as next_allocators, backend_exp, common, config
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.iterator.transforms import fencil_to_program
-from gt4py.next.otf import stages, workflow
+from gt4py.next.otf import arguments, stages, workflow
 from gt4py.next.program_processors import modular_executor, processor_interface as ppi
 from gt4py.next.type_system import type_specifications as ts
 
@@ -241,7 +241,7 @@ class RoundtripExecutor(modular_executor.ModularExecutor):
     dispatch_backend: Optional[ppi.ProgramExecutor] = None
 
     def __call__(self, program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
-        argspec = stages.CompileArgSpec.from_concrete_no_size(*args, **kwargs)
+        argspec = arguments.CompileArgSpec.from_concrete_no_size(*args, **kwargs)
         self.otf_workflow(
             stages.AOTProgram(
                 program=program,

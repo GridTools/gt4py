@@ -27,7 +27,7 @@ import xxhash
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
 from gt4py.next.ffront import field_operator_ast as foast, program_ast as past, source_utils
-from gt4py.next.otf import stages as otf_stages
+from gt4py.next.otf import arguments
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -97,7 +97,7 @@ class PastClosure:
 @dataclasses.dataclass(frozen=True)
 class AOTFieldviewProgramAst:
     definition: PastProgramDefinition
-    argspec: otf_stages.CompileArgSpec
+    argspec: arguments.CompileArgSpec
 
 
 def fingerprint_stage(obj: Any, algorithm: Optional[str | xtyping.HashlibAlgorithm] = None) -> str:

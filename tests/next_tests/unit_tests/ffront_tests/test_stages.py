@@ -18,7 +18,7 @@ import pytest
 
 from gt4py import next as gtx
 from gt4py.next.ffront import stages
-from gt4py.next.otf import workflow, stages as otf_stages
+from gt4py.next.otf import arguments, workflow
 
 
 @pytest.fixture
@@ -102,13 +102,13 @@ def test_fingerprint_stage_field_op_def(fieldop, samecode_fieldop, different_fie
 
 def test_fingerprint_stage_foast_op_def(fieldop, samecode_fieldop, different_fieldop):
     foast = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_foast(
-        workflow.DataWithArgs(fieldop.definition_stage, otf_stages.CompileArgSpec.empty())
+        workflow.DataWithArgs(fieldop.definition_stage, arguments.CompileArgSpec.empty())
     ).data
     samecode = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_foast(
-        workflow.DataWithArgs(samecode_fieldop.definition_stage, otf_stages.CompileArgSpec.empty())
+        workflow.DataWithArgs(samecode_fieldop.definition_stage, arguments.CompileArgSpec.empty())
     ).data
     different = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_foast(
-        workflow.DataWithArgs(different_fieldop.definition_stage, otf_stages.CompileArgSpec.empty())
+        workflow.DataWithArgs(different_fieldop.definition_stage, arguments.CompileArgSpec.empty())
     ).data
 
     assert stages.fingerprint_stage(samecode) != stages.fingerprint_stage(foast)
@@ -128,7 +128,7 @@ def test_fingerprint_stage_foast_closure(fieldop, samecode_fieldop, different_fi
     foast_closure = toolchain(
         workflow.DataWithArgs(
             data=fieldop.definition_stage,
-            args=otf_stages.JITArgs(
+            args=arguments.JITArgs(
                 args=(gtx.zeros({idim: 10}, gtx.int32),),
                 kwargs={
                     "out": gtx.zeros({idim: 10}, gtx.int32),
@@ -140,7 +140,7 @@ def test_fingerprint_stage_foast_closure(fieldop, samecode_fieldop, different_fi
     samecode = toolchain(
         workflow.DataWithArgs(
             data=samecode_fieldop.definition_stage,
-            args=otf_stages.JITArgs(
+            args=arguments.JITArgs(
                 args=(gtx.zeros({idim: 10}, gtx.int32),),
                 kwargs={
                     "out": gtx.zeros({idim: 10}, gtx.int32),
@@ -152,7 +152,7 @@ def test_fingerprint_stage_foast_closure(fieldop, samecode_fieldop, different_fi
     different = toolchain(
         workflow.DataWithArgs(
             data=different_fieldop.definition_stage,
-            args=otf_stages.JITArgs(
+            args=arguments.JITArgs(
                 args=(gtx.zeros({jdim: 10}, gtx.int32),),
                 kwargs={
                     "out": gtx.zeros({jdim: 10}, gtx.int32),
@@ -164,7 +164,7 @@ def test_fingerprint_stage_foast_closure(fieldop, samecode_fieldop, different_fi
     different_args = toolchain(
         workflow.DataWithArgs(
             data=fieldop.definition_stage,
-            args=otf_stages.JITArgs(
+            args=arguments.JITArgs(
                 args=(gtx.zeros({idim: 11}, gtx.int32),),
                 kwargs={
                     "out": gtx.zeros({idim: 11}, gtx.int32),
@@ -190,13 +190,13 @@ def test_fingerprint_stage_program_def(program, samecode_program, different_prog
 
 def test_fingerprint_stage_past_def(program, samecode_program, different_program):
     past = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_past(
-        workflow.DataWithArgs(program.definition_stage, otf_stages.CompileArgSpec.empty())
+        workflow.DataWithArgs(program.definition_stage, arguments.CompileArgSpec.empty())
     )
     samecode = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_past(
-        workflow.DataWithArgs(samecode_program.definition_stage, otf_stages.CompileArgSpec.empty())
+        workflow.DataWithArgs(samecode_program.definition_stage, arguments.CompileArgSpec.empty())
     )
     different = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_past(
-        workflow.DataWithArgs(different_program.definition_stage, otf_stages.CompileArgSpec.empty())
+        workflow.DataWithArgs(different_program.definition_stage, arguments.CompileArgSpec.empty())
     )
 
     assert stages.fingerprint_stage(samecode) != stages.fingerprint_stage(past)

@@ -3,8 +3,8 @@ import dataclasses
 import inspect
 import pprint
 
-import gt4py.next as gtx
-from gt4py.next import backend_exp as backend
+import gtx as gtx
+from gtx import backend_exp as backend
 
 import devtools
 ```
@@ -71,8 +71,9 @@ linkStyle 0 stroke:red,stroke-width:4px,color:pink
 ```
 
 ```python
+
 foast = backend.DEFAULT_TRANSFORMS.func_to_foast(
-    gtx.otf.workflow.DataWithArgs(start, gtx.otf.stages.CompileArgSpec.empty())
+    gtx.otf.workflow.DataWithArgs(start, gtx.otf.arguments.CompileArgSpec.empty())
 )
 ```
 
@@ -133,13 +134,13 @@ linkStyle 2 stroke:red,stroke-width:4px,color:pink
 So far we have gotten away with empty compile time arguments, now we need to supply actual types. The easiest way to do that is from concrete arguments.
 
 ```python
-jit_args = gtx.otf.stages.JITArgs.from_signature(
+jit_args = gtx.otf.arguments.JITArgs.from_signature(
     gtx.ones(domain={I: 10}, dtype=gtx.float64),
     out=gtx.zeros(domain={I: 10}, dtype=gtx.float64),
     offset_provider=OFFSET_PROVIDER
 )
 
-aot_args = gtx.otf.stages.CompileArgSpec.from_concrete_no_size(
+aot_args = gtx.otf.arguments.CompileArgSpec.from_concrete_no_size(
     *jit_args.args, **jit_args.kwargs
 )
 ```
@@ -358,7 +359,8 @@ linkStyle 6 stroke:red,stroke-width:4px,color:pink
 ```
 
 ```python
-p_past = backend.DEFAULT_TRANSFORMS.func_to_past(gtx.otf.workflow.DataWithArgs(data=p_start, args=gtx.otf.stages.CompileArgSpec.empty()))
+p_past = backend.DEFAULT_TRANSFORMS.func_to_past(
+    gtx.otf.workflow.DataWithArgs(data=p_start, args=gtx.otf.arguments.CompileArgSpec.empty()))
 ```
 
 ## Full Program Toolchain
