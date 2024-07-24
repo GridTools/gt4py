@@ -108,12 +108,7 @@ def test_gtir_copy():
         declarations=[],
         body=[
             gtir.SetAt(
-                expr=im.call(
-                    im.call("as_fieldop")(
-                        im.lambda_("a")(im.deref("a")),
-                        domain,
-                    )
-                )("x"),
+                expr=im.as_fieldop(im.lambda_("a")(im.deref("a")), domain)("x"),
                 domain=domain,
                 target=gtir.SymRef(id="y"),
             )
@@ -133,17 +128,13 @@ def test_gtir_update():
     domain = im.call("cartesian_domain")(
         im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
     )
-    stencil1 = im.call(
-        im.call("as_fieldop")(
-            im.lambda_("a")(im.plus(im.deref("a"), 1.0)),
-            domain,
-        )
+    stencil1 = im.as_fieldop(
+        im.lambda_("a")(im.plus(im.deref("a"), 1.0)),
+        domain,
     )("x")
-    stencil2 = im.call(
-        im.call("as_fieldop")(
-            im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-            domain,
-        )
+    stencil2 = im.as_fieldop(
+        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+        domain,
     )("x", 1.0)
 
     for i, stencil in enumerate([stencil1, stencil2]):
@@ -188,11 +179,9 @@ def test_gtir_sum2():
         declarations=[],
         body=[
             gtir.SetAt(
-                expr=im.call(
-                    im.call("as_fieldop")(
-                        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-                        domain,
-                    )
+                expr=im.as_fieldop(
+                    im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+                    domain,
                 )("x", "y"),
                 domain=domain,
                 target=gtir.SymRef(id="z"),
@@ -225,11 +214,9 @@ def test_gtir_sum2_sym():
         declarations=[],
         body=[
             gtir.SetAt(
-                expr=im.call(
-                    im.call("as_fieldop")(
-                        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-                        domain,
-                    )
+                expr=im.as_fieldop(
+                    im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+                    domain,
                 )("x", "x"),
                 domain=domain,
                 target=gtir.SymRef(id="z"),
@@ -250,27 +237,19 @@ def test_gtir_sum3():
     domain = im.call("cartesian_domain")(
         im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
     )
-    stencil1 = im.call(
-        im.call("as_fieldop")(
-            im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-            domain,
-        )
+    stencil1 = im.as_fieldop(
+        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+        domain,
     )(
         "x",
-        im.call(
-            im.call("as_fieldop")(
-                im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-                domain,
-            )
+        im.as_fieldop(
+            im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+            domain,
         )("y", "w"),
     )
-    stencil2 = im.call(
-        im.call("as_fieldop")(
-            im.lambda_("a", "b", "c")(
-                im.plus(im.deref("a"), im.plus(im.deref("b"), im.deref("c")))
-            ),
-            domain,
-        )
+    stencil2 = im.as_fieldop(
+        im.lambda_("a", "b", "c")(im.plus(im.deref("a"), im.plus(im.deref("b"), im.deref("c")))),
+        domain,
     )("x", "y", "w")
 
     a = np.random.rand(N)
@@ -325,27 +304,21 @@ def test_gtir_cond():
         declarations=[],
         body=[
             gtir.SetAt(
-                expr=im.call(
-                    im.call("as_fieldop")(
-                        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-                        domain,
-                    )
+                expr=im.as_fieldop(
+                    im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+                    domain,
                 )(
                     "x",
                     im.call(
                         im.call("cond")(
                             gtir.SymRef(id="pred"),
-                            im.call(
-                                im.call("as_fieldop")(
-                                    im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-                                    domain,
-                                )
+                            im.as_fieldop(
+                                im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+                                domain,
                             )("y", "scalar"),
-                            im.call(
-                                im.call("as_fieldop")(
-                                    im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-                                    domain,
-                                )
+                            im.as_fieldop(
+                                im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+                                domain,
                             )("w", "scalar"),
                         )
                     )(),
@@ -388,26 +361,20 @@ def test_gtir_cond_nested():
                 expr=im.call(
                     im.call("cond")(
                         gtir.SymRef(id="pred_1"),
-                        im.call(
-                            im.call("as_fieldop")(
-                                im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-                                domain,
-                            )
+                        im.as_fieldop(
+                            im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+                            domain,
                         )("x", 1.0),
                         im.call(
                             im.call("cond")(
                                 gtir.SymRef(id="pred_2"),
-                                im.call(
-                                    im.call("as_fieldop")(
-                                        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-                                        domain,
-                                    )
+                                im.as_fieldop(
+                                    im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+                                    domain,
                                 )("x", 2.0),
-                                im.call(
-                                    im.call("as_fieldop")(
-                                        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-                                        domain,
-                                    )
+                                im.as_fieldop(
+                                    im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+                                    domain,
                                 )("x", 3.0),
                             )
                         )(),
@@ -442,99 +409,65 @@ def test_gtir_cartesian_shift_left():
     )
 
     # cartesian shift with literal integer offset
-    stencil1_inlined = im.call(
-        im.call("as_fieldop")(
-            im.lambda_("a")(im.plus(im.deref(im.shift("IDim", OFFSET)("a")), DELTA)),
-            domain,
-        )
+    stencil1_inlined = im.as_fieldop(
+        im.lambda_("a")(im.plus(im.deref(im.shift("IDim", OFFSET)("a")), DELTA)),
+        domain,
     )("x")
     # fieldview flavor of same stencil, in which a temporary field is initialized with the `DELTA` constant value
-    stencil1_fieldview = im.call(
-        im.call("as_fieldop")(
-            im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-            domain,
-        )
+    stencil1_fieldview = im.as_fieldop(
+        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+        domain,
     )(
-        im.call(
-            im.call("as_fieldop")(
-                im.lambda_("a")(im.deref(im.shift("IDim", OFFSET)("a"))),
-                domain,
-            )
+        im.as_fieldop(
+            im.lambda_("a")(im.deref(im.shift("IDim", OFFSET)("a"))),
+            domain,
         )("x"),
-        im.call(
-            im.call("as_fieldop")(
-                im.lambda_()(DELTA),
-                domain,
-            )
+        im.as_fieldop(
+            im.lambda_()(DELTA),
+            domain,
         )(),
     )
 
     # use dynamic offset retrieved from field
-    stencil2_inlined = im.call(
-        im.call("as_fieldop")(
-            im.lambda_("a", "off")(
-                im.plus(im.deref(im.shift("IDim", im.deref("off"))("a")), DELTA)
-            ),
-            domain,
-        )
+    stencil2_inlined = im.as_fieldop(
+        im.lambda_("a", "off")(im.plus(im.deref(im.shift("IDim", im.deref("off"))("a")), DELTA)),
+        domain,
     )("x", "x_offset")
     # fieldview flavor of same stencil
-    stencil2_fieldview = im.call(
-        im.call("as_fieldop")(
-            im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-            domain,
-        )
+    stencil2_fieldview = im.as_fieldop(
+        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+        domain,
     )(
-        im.call(
-            im.call("as_fieldop")(
-                im.lambda_("a", "off")(im.deref(im.shift("IDim", im.deref("off"))("a"))),
-                domain,
-            )
+        im.as_fieldop(
+            im.lambda_("a", "off")(im.deref(im.shift("IDim", im.deref("off"))("a"))),
+            domain,
         )("x", "x_offset"),
-        im.call(
-            im.call("as_fieldop")(
-                im.lambda_()(DELTA),
-                domain,
-            )
-        )(),
+        im.as_fieldop(im.lambda_()(DELTA), domain)(),
     )
 
     # use the result of an arithmetic field operation as dynamic offset
-    stencil3_inlined = im.call(
-        im.call("as_fieldop")(
-            im.lambda_("a", "off")(
-                im.plus(im.deref(im.shift("IDim", im.plus(im.deref("off"), 0))("a")), DELTA)
-            ),
-            domain,
-        )
+    stencil3_inlined = im.as_fieldop(
+        im.lambda_("a", "off")(
+            im.plus(im.deref(im.shift("IDim", im.plus(im.deref("off"), 0))("a")), DELTA)
+        ),
+        domain,
     )("x", "x_offset")
     # fieldview flavor of same stencil
-    stencil3_fieldview = im.call(
-        im.call("as_fieldop")(
-            im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-            domain,
-        )
+    stencil3_fieldview = im.as_fieldop(
+        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+        domain,
     )(
-        im.call(
-            im.call("as_fieldop")(
-                im.lambda_("a", "off")(im.deref(im.shift("IDim", im.deref("off"))("a"))),
-                domain,
-            )
+        im.as_fieldop(
+            im.lambda_("a", "off")(im.deref(im.shift("IDim", im.deref("off"))("a"))),
+            domain,
         )(
             "x",
-            im.call(
-                im.call("as_fieldop")(
-                    im.lambda_("it")(im.plus(im.deref("it"), 0)),
-                    domain,
-                )
+            im.as_fieldop(
+                im.lambda_("it")(im.plus(im.deref("it"), 0)),
+                domain,
             )("x_offset"),
         ),
-        im.call(
-            im.call("as_fieldop")(
-                im.lambda_()(DELTA),
-                domain,
-            )
-        )(),
+        im.as_fieldop(im.lambda_()(DELTA), domain)(),
     )
 
     a = np.random.rand(N)
@@ -588,99 +521,62 @@ def test_gtir_cartesian_shift_right():
     )
 
     # cartesian shift with literal integer offset
-    stencil1_inlined = im.call(
-        im.call("as_fieldop")(
-            im.lambda_("a")(im.plus(im.deref(im.shift("IDim", -OFFSET)("a")), DELTA)),
-            domain,
-        )
+    stencil1_inlined = im.as_fieldop(
+        im.lambda_("a")(im.plus(im.deref(im.shift("IDim", -OFFSET)("a")), DELTA)),
+        domain,
     )("x")
     # fieldview flavor of same stencil, in which a temporary field is initialized with the `DELTA` constant value
-    stencil1_fieldview = im.call(
-        im.call("as_fieldop")(
-            im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-            domain,
-        )
+    stencil1_fieldview = im.as_fieldop(
+        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+        domain,
     )(
-        im.call(
-            im.call("as_fieldop")(
-                im.lambda_("a")(im.deref(im.shift("IDim", -OFFSET)("a"))),
-                domain,
-            )
+        im.as_fieldop(
+            im.lambda_("a")(im.deref(im.shift("IDim", -OFFSET)("a"))),
+            domain,
         )("x"),
-        im.call(
-            im.call("as_fieldop")(
-                im.lambda_()(DELTA),
-                domain,
-            )
-        )(),
+        im.as_fieldop(im.lambda_()(DELTA), domain)(),
     )
 
     # use dynamic offset retrieved from field
-    stencil2_inlined = im.call(
-        im.call("as_fieldop")(
-            im.lambda_("a", "off")(
-                im.plus(im.deref(im.shift("IDim", im.deref("off"))("a")), DELTA)
-            ),
-            domain,
-        )
+    stencil2_inlined = im.as_fieldop(
+        im.lambda_("a", "off")(im.plus(im.deref(im.shift("IDim", im.deref("off"))("a")), DELTA)),
+        domain,
     )("x", "x_offset")
     # fieldview flavor of same stencil
-    stencil2_fieldview = im.call(
-        im.call("as_fieldop")(
-            im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-            domain,
-        )
+    stencil2_fieldview = im.as_fieldop(
+        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+        domain,
     )(
-        im.call(
-            im.call("as_fieldop")(
-                im.lambda_("a", "off")(im.deref(im.shift("IDim", im.deref("off"))("a"))),
-                domain,
-            )
+        im.as_fieldop(
+            im.lambda_("a", "off")(im.deref(im.shift("IDim", im.deref("off"))("a"))),
+            domain,
         )("x", "x_offset"),
-        im.call(
-            im.call("as_fieldop")(
-                im.lambda_()(DELTA),
-                domain,
-            )
-        )(),
+        im.as_fieldop(im.lambda_()(DELTA), domain)(),
     )
 
     # use the result of an arithmetic field operation as dynamic offset
-    stencil3_inlined = im.call(
-        im.call("as_fieldop")(
-            im.lambda_("a", "off")(
-                im.plus(im.deref(im.shift("IDim", im.plus(im.deref("off"), 0))("a")), DELTA)
-            ),
-            domain,
-        )
+    stencil3_inlined = im.as_fieldop(
+        im.lambda_("a", "off")(
+            im.plus(im.deref(im.shift("IDim", im.plus(im.deref("off"), 0))("a")), DELTA)
+        ),
+        domain,
     )("x", "x_offset")
     # fieldview flavor of same stencil
-    stencil3_fieldview = im.call(
-        im.call("as_fieldop")(
-            im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-            domain,
-        )
+    stencil3_fieldview = im.as_fieldop(
+        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+        domain,
     )(
-        im.call(
-            im.call("as_fieldop")(
-                im.lambda_("a", "off")(im.deref(im.shift("IDim", im.deref("off"))("a"))),
-                domain,
-            )
+        im.as_fieldop(
+            im.lambda_("a", "off")(im.deref(im.shift("IDim", im.deref("off"))("a"))),
+            domain,
         )(
             "x",
-            im.call(
-                im.call("as_fieldop")(
-                    im.lambda_("it")(im.plus(im.deref("it"), 0)),
-                    domain,
-                )
+            im.as_fieldop(
+                im.lambda_("it")(im.plus(im.deref("it"), 0)),
+                domain,
             )("x_offset"),
         ),
-        im.call(
-            im.call("as_fieldop")(
-                im.lambda_()(DELTA),
-                domain,
-            )
-        )(),
+        im.as_fieldop(im.lambda_()(DELTA), domain)(),
     )
 
     a = np.random.rand(N)
@@ -739,95 +635,81 @@ def test_gtir_connectivity_shift():
     )
 
     # apply shift 2 times along different dimensions
-    stencil1_inlined = im.call(
-        im.call("as_fieldop")(
-            im.lambda_("it")(
-                im.deref(im.shift("C2E", C2E_neighbor_idx)(im.shift("E2V", E2V_neighbor_idx)("it")))
-            ),
-            ce_domain,
-        )
+    stencil1_inlined = im.as_fieldop(
+        im.lambda_("it")(
+            im.deref(im.shift("C2E", C2E_neighbor_idx)(im.shift("E2V", E2V_neighbor_idx)("it")))
+        ),
+        ce_domain,
     )("ev_field")
 
     # fieldview flavor of the same stncil: create an intermediate temporary field
-    stencil1_fieldview = im.call(
-        im.call("as_fieldop")(
-            im.lambda_("it")(im.deref(im.shift("E2V", E2V_neighbor_idx)("it"))),
-            ce_domain,
-        )
+    stencil1_fieldview = im.as_fieldop(
+        im.lambda_("it")(im.deref(im.shift("E2V", E2V_neighbor_idx)("it"))),
+        ce_domain,
     )(
-        im.call(
-            im.call("as_fieldop")(
-                im.lambda_("it")(im.deref(im.shift("C2E", C2E_neighbor_idx)("it"))),
-                cv_domain,
-            )
+        im.as_fieldop(
+            im.lambda_("it")(im.deref(im.shift("C2E", C2E_neighbor_idx)("it"))),
+            cv_domain,
         )("ev_field")
     )
 
     # multi-dimensional shift in one function call
-    stencil2 = im.call(
-        im.call("as_fieldop")(
-            im.lambda_("it")(
-                im.deref(
-                    im.call(
-                        im.call("shift")(
-                            im.ensure_offset("E2V"),
-                            im.ensure_offset(E2V_neighbor_idx),
-                            im.ensure_offset("C2E"),
-                            im.ensure_offset(C2E_neighbor_idx),
-                        )
-                    )("it")
-                )
-            ),
-            ce_domain,
-        )
+    stencil2 = im.as_fieldop(
+        im.lambda_("it")(
+            im.deref(
+                im.call(
+                    im.call("shift")(
+                        im.ensure_offset("E2V"),
+                        im.ensure_offset(E2V_neighbor_idx),
+                        im.ensure_offset("C2E"),
+                        im.ensure_offset(C2E_neighbor_idx),
+                    )
+                )("it")
+            )
+        ),
+        ce_domain,
     )("ev_field")
 
     # again multi-dimensional shift in one function call, but this time with dynamic offset values
-    stencil3_inlined = im.call(
-        im.call("as_fieldop")(
-            im.lambda_("it", "c2e_off", "e2v_off")(
-                im.deref(
-                    im.call(
-                        im.call("shift")(
-                            im.ensure_offset("E2V"),
-                            im.plus(im.deref("e2v_off"), 0),
-                            im.ensure_offset("C2E"),
-                            im.deref("c2e_off"),
-                        )
-                    )("it")
-                )
-            ),
-            ce_domain,
-        )
+    stencil3_inlined = im.as_fieldop(
+        im.lambda_("it", "c2e_off", "e2v_off")(
+            im.deref(
+                im.call(
+                    im.call("shift")(
+                        im.ensure_offset("E2V"),
+                        im.plus(im.deref("e2v_off"), 0),
+                        im.ensure_offset("C2E"),
+                        im.deref("c2e_off"),
+                    )
+                )("it")
+            )
+        ),
+        ce_domain,
     )("ev_field", "c2e_offset", "e2v_offset")
 
     # fieldview flavor of same stencil with dynamic offset
-    stencil3_fieldview = im.call(
-        im.call("as_fieldop")(
-            im.lambda_("it", "c2e_off", "e2v_off")(
-                im.deref(
-                    im.call(
-                        im.call("shift")(
-                            im.ensure_offset("E2V"),
-                            im.deref("e2v_off"),
-                            im.ensure_offset("C2E"),
-                            im.deref("c2e_off"),
-                        )
-                    )("it")
-                )
-            ),
-            ce_domain,
-        )
+    stencil3_fieldview = im.as_fieldop(
+        im.lambda_("it", "c2e_off", "e2v_off")(
+            im.deref(
+                im.call(
+                    im.call("shift")(
+                        im.ensure_offset("E2V"),
+                        im.deref("e2v_off"),
+                        im.ensure_offset("C2E"),
+                        im.deref("c2e_off"),
+                    )
+                )("it")
+            )
+        ),
+        ce_domain,
     )(
         "ev_field",
         "c2e_offset",
-        im.call(
-            im.call("as_fieldop")(
-                im.lambda_("it")(im.plus(im.deref("it"), 0)),
-                im.call("unstructured_domain")(
-                    im.call("named_range")(gtir.AxisLiteral(value=Edge.value), 0, "nedges"),
-                ),
-            )
+        im.as_fieldop(
+            im.lambda_("it")(im.plus(im.deref("it"), 0)),
+            im.call("unstructured_domain")(
+                im.call("named_range")(gtir.AxisLiteral(value=Edge.value), 0, "nedges"),
+            ),
         )("e2v_offset"),
     )
 
@@ -919,17 +801,13 @@ def test_gtir_connectivity_shift_chain():
         declarations=[],
         body=[
             gtir.SetAt(
-                expr=im.call(
-                    im.call("as_fieldop")(
-                        im.lambda_("it")(im.deref(im.shift("E2V", E2V_neighbor_idx)("it"))),
-                        edge_domain,
-                    )
+                expr=im.as_fieldop(
+                    im.lambda_("it")(im.deref(im.shift("E2V", E2V_neighbor_idx)("it"))),
+                    edge_domain,
                 )(
-                    im.call(
-                        im.call("as_fieldop")(
-                            im.lambda_("it")(im.deref(im.shift("V2E", V2E_neighbor_idx)("it"))),
-                            vertex_domain,
-                        )
+                    im.as_fieldop(
+                        im.lambda_("it")(im.deref(im.shift("V2E", V2E_neighbor_idx)("it"))),
+                        vertex_domain,
                     )("edges")
                 ),
                 domain=edge_domain,
