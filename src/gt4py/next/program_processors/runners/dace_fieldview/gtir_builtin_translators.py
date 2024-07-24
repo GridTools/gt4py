@@ -321,11 +321,11 @@ def translate_symbol_ref(
     if isinstance(node, gtir.Literal):
         sym_value = node.value
         data_type = node.type
-        tasklet_name = "get_literal"
+        temp_name = "literal"
     else:
         sym_value = str(node.id)
         data_type = sdfg_builder.get_symbol_type(sym_value)
-        tasklet_name = f"get_{sym_value}"
+        temp_name = sym_value
 
     if isinstance(data_type, ts.FieldType):
         # add access node to current state
@@ -335,13 +335,18 @@ def translate_symbol_ref(
         # scalar symbols are passed to the SDFG as symbols: build tasklet node
         # to write the symbol to a scalar access node
         tasklet_node = sdfg_builder.add_tasklet(
-            tasklet_name,
+            f"get_{temp_name}",
             state,
             {},
             {"__out"},
             f"__out = {sym_value}",
         )
-        temp_name, _ = sdfg.add_temp_transient((1,), dace_fieldview_util.as_dace_type(data_type))
+        temp_name, _ = sdfg.add_scalar(
+            f"__{temp_name}",
+            dace_fieldview_util.as_dace_type(data_type),
+            find_new_name=True,
+            transient=True,
+        )
         sym_node = state.add_access(temp_name)
         state.add_edge(
             tasklet_node,
