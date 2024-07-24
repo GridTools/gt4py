@@ -402,23 +402,19 @@ class LambdaToTasklet(eve.NodeVisitor):
         origin_index = it.indices[origin_dim]
         assert isinstance(origin_index, SymbolExpr)
 
+        shifted_indices = {dim: idx for dim, idx in it.indices.items() if dim != origin_dim}
         if isinstance(offset_expr, SymbolExpr):
             # use memlet to retrieve the neighbor index
-            shifted_indices = it.indices | {
-                neighbor_dim: MemletExpr(
-                    offset_table_node,
-                    sbs.Indices([origin_index.value, offset_expr.value]),
-                )
-            }
+            shifted_indices[neighbor_dim] = MemletExpr(
+                offset_table_node,
+                sbs.Indices([origin_index.value, offset_expr.value]),
+            )
         else:
             # dynamic offset: we cannot use a memlet to retrieve the offset value, use a tasklet node
-            dynamic_offset_value = self._make_dynamic_neighbor_offset(
+            shifted_indices[neighbor_dim] = self._make_dynamic_neighbor_offset(
                 offset_expr, offset_table_node, origin_index
             )
 
-            shifted_indices = it.indices | {neighbor_dim: dynamic_offset_value}
-
-        shifted_indices.pop(origin_dim)
         return IteratorExpr(it.field, it.dimensions, shifted_indices)
 
     def _visit_shift(self, node: gtir.FunCall) -> IteratorExpr:
