@@ -3,8 +3,8 @@ import dataclasses
 import inspect
 import pprint
 
-import gtx as gtx
-from gtx import backend_exp as backend
+import gt4py.next as gtx
+from gt4py.next import backend_exp as backend
 
 import devtools
 ```
