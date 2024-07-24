@@ -21,26 +21,26 @@ from gt4py.next.iterator.transforms.global_tmps import (
     SymbolicDomain,
     SymbolicRange,
     _max_domain_sizes_by_location_type,
-    domain_union,
+    domain_union, AUTO_DOMAIN,
 )
 from gt4py.next.iterator.transforms.trace_shifts import TraceShifts
-
+from gt4py.eve import utils as eve_utils
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 
 def _merge_domains(
-    original_domains: Dict[str, SymbolicDomain], new_domains: Dict[str, SymbolicDomain]
+    original_domains: Dict[str, SymbolicDomain], additional_domains: Dict[str, SymbolicDomain]
 ) -> Dict[str, SymbolicDomain]:
-    for key, value in new_domains.items():
+    new_domains = {**original_domains}
+    for key, value in additional_domains.items():
         if key in original_domains:
-            original_domains[key] = domain_union([original_domains[key], value])
+            new_domains[key] = domain_union([original_domains[key], value])
         else:
-            original_domains[key] = value
+            new_domains[key] = value
 
-    return {
-        key: domain_union(value) if isinstance(value, list) else value
-        for key, value in original_domains.items()
-    }
+    return new_domains
 
 
+# TODO: move to SymbolicDomain.translate?
 def _translate_domain(
     symbolic_domain: SymbolicDomain,
     shift: Tuple[itir.OffsetLiteral, itir.OffsetLiteral],
@@ -83,11 +83,11 @@ def _translate_domain(
 
 
 # TODO: until TraceShifts directly supporty stencils we just wrap our expression into a dummy closure in this helper function.
-def trace_shifts(stencil: itir.Expr, inputs: list[itir.Expr], domain: itir.Expr, out_field_name):
+def trace_shifts(stencil: itir.Expr, input_ids: list[str], domain: itir.Expr):
     node = itir.StencilClosure(
         stencil=stencil,
-        inputs=inputs,
-        output=im.ref(out_field_name),
+        inputs=[im.ref(id_) for id_ in input_ids],
+        output=im.ref("__dummy"),
         domain=domain,
     )
     return TraceShifts.apply(node)
@@ -98,40 +98,35 @@ def infer_as_fieldop(
     input_domain: SymbolicDomain | itir.FunCall,
     offset_provider: Dict[str, Dimension],
 ) -> Tuple[itir.FunCall, Dict[str, SymbolicDomain]]:  # todo: test scan operator
-    assert isinstance(applied_fieldop, itir.FunCall) and isinstance(
-        applied_fieldop.fun, itir.FunCall
-    )
-    assert applied_fieldop.fun.fun == im.ref("as_fieldop")
+    assert isinstance(applied_fieldop, itir.FunCall)
+    assert cpm.is_call_to(applied_fieldop.fun, "as_fieldop")
 
     stencil, inputs = applied_fieldop.fun.args[0], applied_fieldop.args
 
-    inputs_node = []
+    input_ids: list[str] = []
     accessed_domains: Dict[str, SymbolicDomain] = {}
 
-    # Set inputs for StencilClosure node by replacing FunCalls with temporary SymRefs
-    tmp_counter = 0
+    # Assign ids for all inputs to `as_fieldop`. `SymRef`s stay as is, nested `as_fieldop` get a
+    # temporary id.
+    tmp_uid_gen = eve_utils.UIDGenerator(prefix="__dom_inf")
     for in_field in inputs:
         if isinstance(in_field, itir.FunCall):
-            in_field.id = im.ref(f"__dom_inf_{tmp_counter}")
-            inputs_node.append(im.ref(in_field.id))
-            accessed_domains[str(in_field.id)] = []
-            tmp_counter += 1
+            id_ = tmp_uid_gen.sequential_id()
         else:
-            inputs_node.append(in_field)
-            accessed_domains[str(in_field.id)] = []
-
-    out_field_name = "tmp"  # todo: can this be derived from somewhere?
+            assert isinstance(in_field, itir.SymRef)
+            id_ = in_field.id
+        input_ids.append(id_)
+        accessed_domains[id_] = []
 
     if isinstance(input_domain, itir.FunCall):
         input_domain = SymbolicDomain.from_expr(input_domain)
 
     # Extract the shifts and translate the domains accordingly
     shifts_results = trace_shifts(
-        stencil, inputs_node, SymbolicDomain.as_expr(input_domain), out_field_name
+        stencil, input_ids, SymbolicDomain.as_expr(input_domain)
     )
 
-    for in_field in inputs:
-        in_field_id = str(in_field.id)
+    for in_field_id in input_ids:
         shifts_list = shifts_results[in_field_id]
 
         new_domains = [
@@ -140,26 +135,25 @@ def infer_as_fieldop(
 
         accessed_domains[in_field_id] = domain_union(new_domains)
 
-    inputs_new = []
-    for in_field in inputs:
-        # Recursively traverse inputs
+    # Recursively infer domain of inputs and update domain arg of nested `as_fieldops`
+    transformed_inputs = []
+    for in_field_id, in_field in zip(input_ids, inputs):
         if isinstance(in_field, itir.FunCall):
-            transformed_calls_tmp, accessed_domains_tmp = infer_as_fieldop(
-                in_field, accessed_domains[str(in_field.id)], offset_provider
+            transformed_input, accessed_domains_tmp = infer_as_fieldop(
+                in_field, accessed_domains[in_field_id], offset_provider
             )
-            inputs_new.append(transformed_calls_tmp)
+            transformed_inputs.append(transformed_input)
 
             # Merge accessed_domains and accessed_domains_tmp
             accessed_domains = _merge_domains(accessed_domains, accessed_domains_tmp)
         else:
-            inputs_new.append(in_field)
+            assert isinstance(in_field, itir.SymRef)
+            transformed_inputs.append(in_field)
 
-    transformed_call = im.call(
-        im.call("as_fieldop")(stencil, SymbolicDomain.as_expr(input_domain))
-    )(*inputs_new)
+    transformed_call = im.as_fieldop(stencil, SymbolicDomain.as_expr(input_domain))(*transformed_inputs)
 
     accessed_domains_without_tmp = {
-        k: v for k, v in accessed_domains.items() if not k.startswith("__dom_inf_")
+        k: v for k, v in accessed_domains.items() if not k.startswith(tmp_uid_gen.prefix)
     }
 
     return transformed_call, accessed_domains_without_tmp
@@ -186,60 +180,65 @@ def infer_let( # Todo generaize for nested lets
 
 
 def _validate_temporary_usage(body: list[itir.SetAt], temporaries: list[str]):
-    for i in range(len(body)):
-        for j in range(i + 1, len(body)):
-            if (
-                str(body[i].target.id) == str(body[j].target.id)
-                and str(body[i].target.id) in temporaries
-            ):
-                raise ValueError("Temporaries can only be used once within a program.")
+    # TODO: stmt.target can be an expr, e.g. make_tuple
+    tmp_assignments = [stmt.target.id for stmt in body if stmt.target.id in temporaries]
+    if len(tmp_assignments) != len(set(tmp_assignments)):
+        raise ValueError("Temporaries can only be used once within a program.")
 
 
 def infer_program(
     program: itir.Program,
     offset_provider: Dict[str, Dimension],
 ) -> itir.Program:
-    fields_dict = {}
-    new_set_at_list = []
+    accessed_domains: dict[str, SymbolicDomain] = {}
+    transformed_set_ats: list[itir.SetAt] = []
 
-    temporaries = [str(tmp.id) for tmp in program.declarations]
+    temporaries: list[str] = [tmp.id for tmp in program.declarations]
 
     _validate_temporary_usage(program.body, temporaries)
 
     for set_at in reversed(program.body):
         assert isinstance(set_at, itir.SetAt)
         assert isinstance(set_at.expr, itir.FunCall)
-        assert isinstance(set_at.expr.fun, itir.FunCall)
-        assert set_at.expr.fun.fun == im.ref("as_fieldop")
+        assert cpm.is_call_to(set_at.expr.fun, "as_fieldop")
 
-        if str(set_at.target.id) not in temporaries:
-            fields_dict[set_at.target] = SymbolicDomain.from_expr(set_at.domain)
+        if set_at.target.id in temporaries:
+            # ignore temporaries as their domain is the `AUTO_DOMAIN` placeholder
+            assert set_at.domain == AUTO_DOMAIN
+        else:
+            accessed_domains[set_at.target.id] = SymbolicDomain.from_expr(set_at.domain)
 
-        actual_call, actual_domains = infer_as_fieldop(
-            set_at.expr, fields_dict[set_at.target], offset_provider
+        actual_call, current_accessed_domains = infer_as_fieldop(
+            set_at.expr, accessed_domains[set_at.target.id], offset_provider
         )
-        new_set_at_list.insert(
+        transformed_set_ats.insert(
             0,
             itir.SetAt(expr=actual_call, domain=actual_call.fun.args[1], target=set_at.target),
         )
 
-        for domain in actual_domains:
-            domain_ref = itir.SymRef(id=domain)
-            if domain_ref in fields_dict:
-                fields_dict[domain_ref] = domain_union(
-                    [fields_dict[domain_ref], actual_domains[domain]]
-                )
+        for field in current_accessed_domains:
+            if field in accessed_domains:
+                # multiple accesses to the same field -> compute union of accessed domains
+                if field in temporaries:
+                    accessed_domains[field] = domain_union(
+                        [accessed_domains[field], current_accessed_domains[field]]
+                    )
+                else:
+                    # TODO(tehrengruber): if domain_ref is an external field the domain must
+                    #  already be larger. This should be checked, but would require additions
+                    #  to the IR.
+                    pass
             else:
-                fields_dict[domain_ref] = actual_domains[domain]
+                accessed_domains[field] = current_accessed_domains[field]
 
     new_declarations = program.declarations
     for temporary in new_declarations:
-        temporary.domain = SymbolicDomain.as_expr(fields_dict[itir.SymRef(id=temporary.id)])
+        temporary.domain = SymbolicDomain.as_expr(accessed_domains[temporary.id])
 
     return itir.Program(
         id=program.id,
         function_definitions=program.function_definitions,
         params=program.params,
         declarations=new_declarations,
-        body=new_set_at_list,
+        body=transformed_set_ats,
     )
