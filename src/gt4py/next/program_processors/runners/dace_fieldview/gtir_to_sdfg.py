@@ -326,10 +326,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         head_state: dace.SDFGState,
     ) -> list[gtir_builtin_translators.TemporaryData]:
         # use specialized dataflow builder classes for each builtin function
-        if cpm.is_call_to(node.fun, "as_fieldop"):
-            return gtir_builtin_translators.translate_as_field_op(node, sdfg, head_state, self)
-        elif cpm.is_call_to(node.fun, "cond"):
+        if cpm.is_call_to(node, "cond"):
             return gtir_builtin_translators.translate_cond(node, sdfg, head_state, self)
+        elif cpm.is_call_to(node.fun, "as_fieldop"):
+            return gtir_builtin_translators.translate_as_field_op(node, sdfg, head_state, self)
         else:
             raise NotImplementedError(f"Unexpected 'FunCall' expression ({node}).")
 

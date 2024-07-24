@@ -309,19 +309,17 @@ def test_gtir_cond():
                     domain,
                 )(
                     "x",
-                    im.call(
-                        im.call("cond")(
-                            gtir.SymRef(id="pred"),
-                            im.as_fieldop(
-                                im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-                                domain,
-                            )("y", "scalar"),
-                            im.as_fieldop(
-                                im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-                                domain,
-                            )("w", "scalar"),
-                        )
-                    )(),
+                    im.call("cond")(
+                        gtir.SymRef(id="pred"),
+                        im.as_fieldop(
+                            im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+                            domain,
+                        )("y", "scalar"),
+                        im.as_fieldop(
+                            im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+                            domain,
+                        )("w", "scalar"),
+                    ),
                 ),
                 domain=domain,
                 target=gtir.SymRef(id="z"),
@@ -358,28 +356,24 @@ def test_gtir_cond_nested():
         declarations=[],
         body=[
             gtir.SetAt(
-                expr=im.call(
+                expr=im.call("cond")(
+                    gtir.SymRef(id="pred_1"),
+                    im.as_fieldop(
+                        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+                        domain,
+                    )("x", 1.0),
                     im.call("cond")(
-                        gtir.SymRef(id="pred_1"),
+                        gtir.SymRef(id="pred_2"),
                         im.as_fieldop(
                             im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
                             domain,
-                        )("x", 1.0),
-                        im.call(
-                            im.call("cond")(
-                                gtir.SymRef(id="pred_2"),
-                                im.as_fieldop(
-                                    im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-                                    domain,
-                                )("x", 2.0),
-                                im.as_fieldop(
-                                    im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-                                    domain,
-                                )("x", 3.0),
-                            )
-                        )(),
-                    )
-                )(),
+                        )("x", 2.0),
+                        im.as_fieldop(
+                            im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+                            domain,
+                        )("x", 3.0),
+                    ),
+                ),
                 domain=domain,
                 target=gtir.SymRef(id="z"),
             )

@@ -178,27 +178,25 @@ def expression_test_cases():
         ),
         # cond
         (
-            im.call(
-                im.call("cond")(
-                    False,
-                    im.call(
-                        im.call("as_fieldop")(
-                            im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-                            im.call("cartesian_domain")(
-                                im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
-                            ),
-                        )
-                    )(im.ref("inp", float_i_field), 1.0),
-                    im.call(
-                        im.call("as_fieldop")(
-                            "deref",
-                            im.call("cartesian_domain")(
-                                im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
-                            ),
-                        )
-                    )(im.ref("inp", float_i_field)),
-                )
-            )(),
+            im.call("cond")(
+                False,
+                im.call(
+                    im.call("as_fieldop")(
+                        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+                        im.call("cartesian_domain")(
+                            im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
+                        ),
+                    )
+                )(im.ref("inp", float_i_field), 1.0),
+                im.call(
+                    im.call("as_fieldop")(
+                        "deref",
+                        im.call("cartesian_domain")(
+                            im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
+                        ),
+                    )
+                )(im.ref("inp", float_i_field)),
+            ),
             float_i_field,
         ),
     )

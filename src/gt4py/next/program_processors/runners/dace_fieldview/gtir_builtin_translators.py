@@ -238,13 +238,9 @@ def translate_cond(
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
 ) -> list[TemporaryData]:
     """Generates the dataflow subgraph for the `cond` builtin function."""
-    assert isinstance(node, gtir.FunCall)
-    assert cpm.is_call_to(node.fun, "cond")
-    assert len(node.args) == 0
-
-    fun_node = node.fun
-    assert len(fun_node.args) == 3
-    cond_expr, true_expr, false_expr = fun_node.args
+    assert cpm.is_call_to(node, "cond")
+    assert len(node.args) == 3
+    cond_expr, true_expr, false_expr = node.args
 
     # expect condition as first argument
     cond = gtir_python_codegen.get_source(cond_expr)
