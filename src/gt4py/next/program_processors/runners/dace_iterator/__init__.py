@@ -87,18 +87,12 @@ def preprocess_program(
 
     node = itir_type_inference.infer(node, offset_provider=offset_provider)
 
-    if isinstance(node, itir_transforms.global_tmps.FencilWithTemporaries):
-        fencil_definition = node.fencil
-        tmps = node.tmps
-
-    elif isinstance(node, itir.FencilDefinition):
+    if isinstance(node, itir.Program):
         fencil_definition = node
-        tmps = []
-
+        tmps = node.declarations
+        assert all(isinstance(tmp, itir.Temporary) for tmp in tmps)
     else:
-        raise TypeError(
-            f"Expected 'FencilDefinition' or 'FencilWithTemporaries', got '{type(program).__name__}'."
-        )
+        raise TypeError(f"Expected 'Program', got '{type(node).__name__}'.")
 
     return fencil_definition, tmps
 
