@@ -202,8 +202,8 @@ class Roundtrip(workflow.Workflow[stages.AOTProgram, stages.CompiledProgram]):
         debug = config.DEBUG if self.debug is None else self.debug
 
         fencil = fencil_generator(
-            inp.program,
-            offset_provider=inp.argspec.offset_provider,
+            inp.data,
+            offset_provider=inp.args.offset_provider,
             debug=debug,
             lift_mode=self.lift_mode,
             use_embedded=self.use_embedded,
@@ -219,12 +219,12 @@ class Roundtrip(workflow.Workflow[stages.AOTProgram, stages.CompiledProgram]):
             if out is not None:
                 args = (*args, out)
             if not column_axis:
-                column_axis = inp.argspec.column_axis
+                column_axis = inp.args.column_axis
             fencil(
                 *args,
                 offset_provider=offset_provider,
                 backend=self.dispatch_backend,
-                column_axis=inp.argspec.column_axis,
+                column_axis=inp.args.column_axis,
                 **kwargs,
             )
 
@@ -244,8 +244,8 @@ class RoundtripExecutor(modular_executor.ModularExecutor):
         argspec = arguments.CompileArgSpec.from_concrete_no_size(*args, **kwargs)
         self.otf_workflow(
             stages.AOTProgram(
-                program=program,
-                argspec=dataclasses.replace(
+                data=program,
+                args=dataclasses.replace(
                     argspec,
                     kwargs=argspec.kwargs,
                 ),

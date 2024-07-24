@@ -19,7 +19,6 @@ import dataclasses
 import functools
 import hashlib
 import types
-import typing
 from typing import Any, Generic, Optional, TypeVar
 
 import xxhash
@@ -29,10 +28,6 @@ from gt4py.next import common
 from gt4py.next.ffront import field_operator_ast as foast, program_ast as past, source_utils
 from gt4py.next.otf import arguments
 from gt4py.next.type_system import type_specifications as ts
-
-
-if typing.TYPE_CHECKING:
-    pass
 
 
 OperatorNodeT = TypeVar("OperatorNodeT", bound=foast.LocatedNode)

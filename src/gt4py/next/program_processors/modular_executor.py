@@ -30,8 +30,8 @@ class ModularExecutor(ppi.ProgramExecutor):
     def __call__(self, program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
         self.otf_workflow(
             stages.AOTProgram(
-                program=program,
-                argspec=arguments.CompileArgSpec.from_concrete(*args, **kwargs),
+                data=program,
+                args=arguments.CompileArgSpec.from_concrete(*args, **kwargs),
             )
         )(*args, offset_provider=kwargs["offset_provider"])
 

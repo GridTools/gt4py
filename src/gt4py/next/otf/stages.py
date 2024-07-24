@@ -15,10 +15,10 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Generic, Optional, Protocol, TypeVar
+from typing import Any, Generic, Optional, Protocol, TypeAlias, TypeVar
 
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import arguments, languages
+from gt4py.next.otf import arguments, languages, workflow
 from gt4py.next.otf.binding import interface
 
 
@@ -30,10 +30,7 @@ TgtL_co = TypeVar("TgtL_co", bound=languages.LanguageTag, covariant=True)
 SettingT_co = TypeVar("SettingT_co", bound=languages.LanguageSettings, covariant=True)
 
 
-@dataclasses.dataclass(frozen=True)
-class AOTProgram:
-    program: itir.FencilDefinition
-    argspec: arguments.CompileArgSpec
+AOTProgram: TypeAlias = workflow.DataArgsPair[itir.FencilDefinition, arguments.CompileArgSpec]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -47,8 +44,8 @@ class ProgramCall:
 
 def program_call_to_aot_program(program_call: ProgramCall) -> AOTProgram:
     return AOTProgram(
-        program=program_call.program,
-        argspec=arguments.CompileArgSpec.from_concrete(*program_call.args, **program_call.kwargs),
+        data=program_call.program,
+        args=arguments.CompileArgSpec.from_concrete(*program_call.args, **program_call.kwargs),
     )
 
 

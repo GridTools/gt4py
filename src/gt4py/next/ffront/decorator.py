@@ -102,14 +102,14 @@ class Program:
     @functools.cached_property
     def past_stage(self):
         # backwards compatibility for backends that do not support the full toolchain
-        no_args_def = workflow.DataWithArgs(self.definition_stage, arguments.CompileArgSpec.empty())
+        no_args_def = workflow.DataArgsPair(self.definition_stage, arguments.CompileArgSpec.empty())
         if self.backend is not None and self.backend.transforms_prog is not None:
             return self.backend.transforms_prog.func_to_past(no_args_def).data
         return backend_exp.DEFAULT_TRANSFORMS.func_to_past(no_args_def).data
 
     # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self):
-        no_args_past = workflow.DataWithArgs(self.past_stage, arguments.CompileArgSpec.empty())
+        no_args_past = workflow.DataArgsPair(self.past_stage, arguments.CompileArgSpec.empty())
         if self.backend is not None and self.backend.transforms_prog is not None:
             return self.backend.transforms_prog.past_lint(no_args_past).data
         return backend_exp.DEFAULT_TRANSFORMS.past_lint(no_args_past).data
@@ -175,7 +175,7 @@ class Program:
 
     @functools.cached_property
     def itir(self) -> itir.FencilDefinition:
-        no_args_past = workflow.DataWithArgs(
+        no_args_past = workflow.DataArgsPair(
             data=ffront_stages.PastProgramDefinition(
                 past_node=self.past_stage.past_node,
                 closure_vars=self.past_stage.closure_vars,
@@ -184,8 +184,8 @@ class Program:
             args=arguments.CompileArgSpec.empty(),
         )
         if self.backend is not None and self.backend.transforms_prog is not None:
-            return self.backend.transforms_prog.past_to_itir(no_args_past).program
-        return backend_exp.DEFAULT_TRANSFORMS.past_to_itir(no_args_past).program
+            return self.backend.transforms_prog.past_to_itir(no_args_past).data
+        return backend_exp.DEFAULT_TRANSFORMS.past_to_itir(no_args_past).data
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs: Any) -> None:
         if self.backend is None:
@@ -415,10 +415,10 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     def foast_stage(self) -> ffront_stages.FoastOperatorDefinition:
         if self.backend is not None and self.backend.transforms_fop is not None:
             return self.backend.transforms_fop.func_to_foast(
-                workflow.DataWithArgs(self.definition_stage, args=None)
+                workflow.DataArgsPair(self.definition_stage, args=None)
             ).data
         return next_backend.DEFAULT_FIELDOP_TRANSFORMS.func_to_foast(
-            workflow.DataWithArgs(self.definition_stage, None)
+            workflow.DataArgsPair(self.definition_stage, None)
         ).data
 
     @property

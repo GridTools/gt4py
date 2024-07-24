@@ -74,8 +74,8 @@ class FieldviewOpToFieldviewProg:
 
     def __call__(
         self,
-        inp: workflow.DataWithArgs[ffront_stages.FoastOperatorDefinition, arguments.CompileArgSpec],
-    ) -> workflow.DataWithArgs[ffront_stages.PastProgramDefinition, arguments.CompileArgSpec]:
+        inp: workflow.DataArgsPair[ffront_stages.FoastOperatorDefinition, arguments.CompileArgSpec],
+    ) -> workflow.DataArgsPair[ffront_stages.PastProgramDefinition, arguments.CompileArgSpec]:
         fieldview_program = foast_to_past.foast_to_past(
             ffront_stages.FoastWithTypes(
                 foast_op_def=inp.data,
@@ -88,19 +88,19 @@ class FieldviewOpToFieldviewProg:
                 closure_vars={inp.data.foast_node.id: ItirShim(inp.data, self.foast_to_itir)},
             )
         )
-        return workflow.DataWithArgs(
+        return workflow.DataArgsPair(
             data=fieldview_program,
             args=inp.args,
         )
 
 
 def transform_prog_args(
-    inp: workflow.DataWithArgs[ffront_stages.PastProgramDefinition, arguments.CompileArgSpec],
-) -> workflow.DataWithArgs[ffront_stages.PastProgramDefinition, arguments.CompileArgSpec]:
+    inp: workflow.DataArgsPair[ffront_stages.PastProgramDefinition, arguments.CompileArgSpec],
+) -> workflow.DataArgsPair[ffront_stages.PastProgramDefinition, arguments.CompileArgSpec]:
     transformed = past_process_args.PastProcessArgs(aot_off=True)(
         ffront_stages.PastClosure(definition=inp.data, args=inp.args.args, kwargs=inp.args.kwargs)
     )
-    return workflow.DataWithArgs(
+    return workflow.DataArgsPair(
         data=transformed.definition,
         args=dataclasses.replace(inp.args, args=transformed.args, kwargs=transformed.kwargs),
     )
@@ -114,7 +114,7 @@ class PastToItirAdapter:
 
     def __call__(
         self,
-        inp: workflow.DataWithArgs[ffront_stages.PastProgramDefinition, arguments.CompileArgSpec],
+        inp: workflow.DataArgsPair[ffront_stages.PastProgramDefinition, arguments.CompileArgSpec],
     ) -> stages.AOTProgram:
         aot_fvprog = ffront_stages.AOTFieldviewProgramAst(definition=inp.data, argspec=inp.args)
         return self.step(aot_fvprog)
@@ -126,8 +126,8 @@ def jit_to_aot_args(
     return arguments.CompileArgSpec.from_concrete_no_size(*inp.args, **inp.kwargs)
 
 
-AOT_FOP: typing.TypeAlias = workflow.DataWithArgs[FOP, CARG]
-AOT_PRG: typing.TypeAlias = workflow.DataWithArgs[PRG, CARG]
+AOT_FOP: typing.TypeAlias = workflow.DataArgsPair[FOP, CARG]
+AOT_PRG: typing.TypeAlias = workflow.DataArgsPair[PRG, CARG]
 
 
 INPUT_DATA_T: typing.TypeAlias = DSL_FOP | FOP | DSL_PRG | PRG | IT_PRG
@@ -138,10 +138,10 @@ class FieldopTransformWorkflow(workflow.MultiWorkflow):
     """Modular workflow for transformations with access to intermediates."""
 
     aotify_args: workflow.Workflow[
-        workflow.DataWithArgs[INPUT_DATA_T, ARGS], workflow.DataWithArgs[INPUT_DATA_T, CARG]
+        workflow.DataArgsPair[INPUT_DATA_T, ARGS], workflow.DataArgsPair[INPUT_DATA_T, CARG]
     ] = dataclasses.field(default_factory=lambda: workflow.ArgsOnlyAdapter(jit_to_aot_args))
 
-    func_to_foast: workflow.Workflow[workflow.DataWithArgs[DSL_FOP | FOP, CARG], AOT_FOP] = (
+    func_to_foast: workflow.Workflow[workflow.DataArgsPair[DSL_FOP | FOP, CARG], AOT_FOP] = (
         dataclasses.field(
             default_factory=lambda: workflow.DataOnlyAdapter(
                 func_to_foast.OptionalFuncToFoastFactory(cached=True)
@@ -149,7 +149,7 @@ class FieldopTransformWorkflow(workflow.MultiWorkflow):
         )
     )
 
-    func_to_past: workflow.Workflow[workflow.DataWithArgs[DSL_PRG | PRG, CARG], AOT_PRG] = (
+    func_to_past: workflow.Workflow[workflow.DataArgsPair[DSL_PRG | PRG, CARG], AOT_PRG] = (
         dataclasses.field(
             default_factory=lambda: workflow.DataOnlyAdapter(
                 func_to_past.OptionalFuncToPastFactory(cached=True)
@@ -165,7 +165,7 @@ class FieldopTransformWorkflow(workflow.MultiWorkflow):
         )
     )
 
-    field_view_op_to_prog: workflow.Workflow[workflow.DataWithArgs[FOP, CARG], AOT_PRG] = (
+    field_view_op_to_prog: workflow.Workflow[workflow.DataArgsPair[FOP, CARG], AOT_PRG] = (
         dataclasses.field(default_factory=FieldviewOpToFieldviewProg)
     )
 
@@ -182,7 +182,7 @@ class FieldopTransformWorkflow(workflow.MultiWorkflow):
     )
 
     def step_order(
-        self, inp: workflow.DataWithArgs[DSL_FOP | FOP | DSL_PRG | PRG | IT_PRG, ARGS | CARG]
+        self, inp: workflow.DataArgsPair[DSL_FOP | FOP | DSL_PRG | PRG | IT_PRG, ARGS | CARG]
     ) -> list[str]:
         steps: list[str] = []
         if isinstance(inp.args, ARGS):
@@ -226,7 +226,7 @@ class ExpBackend(backend.Backend):
         # taking the offset provider out is not needed
         args, kwargs = signature.convert_to_positional(program, *args, **kwargs)
         program_info = self.transforms_fop(
-            workflow.DataWithArgs(
+            workflow.DataArgsPair(
                 data=program,  # type: ignore[arg-type] # TODO(ricoh): should go away when toolchain unified everywhere
                 args=arguments.CompileArgSpec.from_concrete_no_size(*args, **kwargs),
             )

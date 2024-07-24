@@ -65,8 +65,8 @@ class PastToItir(workflow.ChainableWorkflowMixin):
             devtools.debug(itir_program)
 
         return stages.AOTProgram(
-            program=itir_program,
-            argspec=dataclasses.replace(inp.argspec, column_axis=_column_axis(all_closure_vars)),
+            data=itir_program,
+            args=dataclasses.replace(inp.argspec, column_axis=_column_axis(all_closure_vars)),
         )
 
 
@@ -87,9 +87,9 @@ class JITPastToItir(workflow.ChainableWorkflowMixin):
             )
         )
         return stages.ProgramCall(
-            program=aot_program.program,
+            program=aot_program.data,
             args=inp.args,
-            kwargs=inp.kwargs | {"column_axis": aot_program.argspec.column_axis},
+            kwargs=inp.kwargs | {"column_axis": aot_program.args.column_axis},
         )
 
 

@@ -237,18 +237,18 @@ class GTFNTranslationStep(
         self, inp: stages.AOTProgram
     ) -> stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings]:
         """Generate GTFN C++ code from the ITIR definition."""
-        program: itir.FencilDefinition = inp.program
+        program: itir.FencilDefinition = inp.data
 
         # handle regular parameters and arguments of the program (i.e. what the user defined in
         #  the program)
         regular_parameters, regular_args_expr = self._process_regular_arguments(
-            program, inp.argspec.args, inp.argspec.offset_provider
+            program, inp.args.args, inp.args.offset_provider
         )
 
         # handle connectivity parameters and arguments (i.e. what the user provided in the offset
         #  provider)
         connectivity_parameters, connectivity_args_expr = self._process_connectivity_args(
-            inp.argspec.offset_provider
+            inp.args.offset_provider
         )
 
         # combine into a format that is aligned with what the backend expects
@@ -264,8 +264,8 @@ class GTFNTranslationStep(
         decl_src = cpp_interface.render_function_declaration(function, body=decl_body)
         stencil_src = self.generate_stencil_source(
             program,
-            inp.argspec.offset_provider,
-            inp.argspec.column_axis,
+            inp.args.offset_provider,
+            inp.args.column_axis,
         )
         source_code = interface.format_source(
             self._language_settings(),
@@ -286,7 +286,7 @@ class GTFNTranslationStep(
             source_code=source_code,
             language=self._language(),
             language_settings=self._language_settings(),
-            implicit_domain=inp.program.implicit_domain,
+            implicit_domain=inp.data.implicit_domain,
         )
         return module
 

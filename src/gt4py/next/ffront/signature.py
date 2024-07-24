@@ -19,7 +19,6 @@ import inspect
 import types
 from typing import Any, Callable
 
-from gt4py.next.backend_exp import DSL_FOP, DSL_PRG, FOP, PRG
 from gt4py.next.ffront import (
     field_operator_ast as foast,
     program_ast as past,
@@ -87,7 +86,13 @@ def signature_from_past_stage(func: ffront_stages.PastProgramDefinition) -> insp
 
 
 def convert_to_positional(
-    func: Callable | foast.FieldOperator | foast.ScanOperator | DSL_FOP | FOP | DSL_PRG | PRG,
+    func: Callable
+    | foast.FieldOperator
+    | foast.ScanOperator
+    | ffront_stages.FieldOperatorDefinition
+    | ffront_stages.FoastOperatorDefinition
+    | ffront_stages.ProgramDefinition
+    | ffront_stages.PastProgramDefinition,
     *args: Any,
     **kwargs: Any,
 ) -> tuple[tuple[Any, ...], dict[str, Any]]:

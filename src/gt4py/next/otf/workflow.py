@@ -286,7 +286,7 @@ class SkippableStep(
 
 
 @dataclasses.dataclass(frozen=True)
-class DataWithArgs(Generic[DataT, ArgT]):
+class DataArgsPair(Generic[DataT, ArgT]):
     data: DataT
     args: ArgT
 
@@ -295,51 +295,51 @@ class DataWithArgs(Generic[DataT, ArgT]):
 class DataOnlyAdapter(
     ChainableWorkflowMixin,
     ReplaceEnabledWorkflowMixin,
-    Workflow[DataWithArgs[StartT, ArgT], DataWithArgs[EndT, ArgT]],
+    Workflow[DataArgsPair[StartT, ArgT], DataArgsPair[EndT, ArgT]],
     Generic[ArgT, StartT, EndT],
 ):
     step: Workflow[StartT, EndT]
 
-    def __call__(self, inp: DataWithArgs[StartT, ArgT]) -> DataWithArgs[EndT, ArgT]:
-        return DataWithArgs(data=self.step(inp.data), args=inp.args)
-
-
-@dataclasses.dataclass(frozen=True)
-class StripArgsAdapter(
-    ChainableWorkflowMixin,
-    ReplaceEnabledWorkflowMixin,
-    Workflow[DataWithArgs[StartT, ArgT], EndT],
-    Generic[ArgT, StartT, EndT],
-):
-    step: Workflow[StartT, EndT]
-
-    def __call__(self, inp: DataWithArgs[StartT, ArgT]) -> EndT:
-        return self.step(inp.data)
+    def __call__(self, inp: DataArgsPair[StartT, ArgT]) -> DataArgsPair[EndT, ArgT]:
+        return DataArgsPair(data=self.step(inp.data), args=inp.args)
 
 
 @dataclasses.dataclass(frozen=True)
 class ArgsOnlyAdapter(
     ChainableWorkflowMixin,
     ReplaceEnabledWorkflowMixin,
-    Workflow[DataWithArgs[DataT, StartT], DataWithArgs[DataT, EndT]],
+    Workflow[DataArgsPair[DataT, StartT], DataArgsPair[DataT, EndT]],
     Generic[DataT, StartT, EndT],
 ):
     step: Workflow[StartT, EndT]
 
-    def __call__(self, inp: DataWithArgs[DataT, StartT]) -> DataWithArgs[DataT, EndT]:
-        return DataWithArgs(data=inp.data, args=self.step(inp.args))
+    def __call__(self, inp: DataArgsPair[DataT, StartT]) -> DataArgsPair[DataT, EndT]:
+        return DataArgsPair(data=inp.data, args=self.step(inp.args))
 
 
 @dataclasses.dataclass(frozen=True)
-class NamedStepSequenceWithArgs(NamedStepSequence[DataWithArgs[StartT, ArgT], EndT]):
-    def __call__(self, inp: DataWithArgs[StartT, ArgT]) -> EndT:
+class StripArgsAdapter(
+    ChainableWorkflowMixin,
+    ReplaceEnabledWorkflowMixin,
+    Workflow[DataArgsPair[StartT, ArgT], EndT],
+    Generic[ArgT, StartT, EndT],
+):
+    step: Workflow[StartT, EndT]
+
+    def __call__(self, inp: DataArgsPair[StartT, ArgT]) -> EndT:
+        return self.step(inp.data)
+
+
+@dataclasses.dataclass(frozen=True)
+class NamedStepSequenceWithArgs(NamedStepSequence[DataArgsPair[StartT, ArgT], EndT]):
+    def __call__(self, inp: DataArgsPair[StartT, ArgT]) -> EndT:
         args = inp.args
         step_result: Any = inp.data
         fields = {f.name: f for f in dataclasses.fields(self)}
         for step_name in self.step_order:
             step = getattr(self, step_name)
             if fields[step_name].metadata.get("takes_args", False):
-                step_result = step(DataWithArgs(step_result, args))
+                step_result = step(DataArgsPair(step_result, args))
             else:
                 step_result = step(step_result)
         return step_result

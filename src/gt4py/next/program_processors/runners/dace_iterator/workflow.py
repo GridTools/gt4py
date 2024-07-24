@@ -85,19 +85,19 @@ class DaCeTranslator(
         self, inp: stages.AOTProgram
     ) -> stages.ProgramSource[languages.SDFG, LanguageSettings]:
         """Generate DaCe SDFG file from the ITIR definition."""
-        program: itir.FencilDefinition = inp.program
-        arg_types = [tt.from_value(arg) for arg in inp.argspec.args]
+        program: itir.FencilDefinition = inp.data
+        arg_types = [tt.from_value(arg) for arg in inp.args.args]
 
         sdfg = self.generate_sdfg(
             program,
             arg_types,
-            inp.argspec.offset_provider,
-            inp.argspec.column_axis,
+            inp.args.offset_provider,
+            inp.args.column_axis,
         )
 
         param_types = tuple(
             interface.Parameter(param, tt.from_value(arg))
-            for param, arg in zip(sdfg.arg_names, inp.argspec.args)
+            for param, arg in zip(sdfg.arg_names, inp.args.args)
         )
 
         module: stages.ProgramSource[languages.SDFG, languages.LanguageSettings] = (
@@ -107,7 +107,7 @@ class DaCeTranslator(
                 library_deps=tuple(),
                 language=languages.SDFG,
                 language_settings=self._language_settings(),
-                implicit_domain=inp.program.implicit_domain,
+                implicit_domain=inp.data.implicit_domain,
             )
         )
         return module

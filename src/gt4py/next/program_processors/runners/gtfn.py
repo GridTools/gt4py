@@ -117,15 +117,15 @@ def extract_connectivity_args(
 
 def compilation_hash(otf_closure: stages.AOTProgram) -> int:
     """Given closure compute a hash uniquely determining if we need to recompile."""
-    offset_provider = otf_closure.argspec.offset_provider
+    offset_provider = otf_closure.args.offset_provider
     return hash(
         (
-            otf_closure.program,
+            otf_closure.data,
             # As the frontend types contain lists they are not hashable. As a workaround we just
             # use content_hash here.
-            content_hash(tuple(from_value(arg) for arg in otf_closure.argspec.args)),
+            content_hash(tuple(from_value(arg) for arg in otf_closure.args.args)),
             id(offset_provider) if offset_provider else None,
-            otf_closure.argspec.column_axis,
+            otf_closure.args.column_axis,
         )
     )
 

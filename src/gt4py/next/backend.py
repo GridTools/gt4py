@@ -36,7 +36,7 @@ from gt4py.next.program_processors import processor_interface as ppi
 
 @workflow.make_step
 def foast_to_foast_closure(
-    inp: workflow.DataWithArgs[ffront_stages.FoastOperatorDefinition, arguments.JITArgs],
+    inp: workflow.DataArgsPair[ffront_stages.FoastOperatorDefinition, arguments.JITArgs],
 ) -> ffront_stages.FoastClosure:
     from_fieldop = inp.args.kwargs.pop("from_fieldop")
     debug = inp.args.kwargs.pop("debug", inp.data.debug)
@@ -53,18 +53,18 @@ class FieldopTransformWorkflow(workflow.NamedStepSequence):
     """Modular workflow for transformations with access to intermediates."""
 
     func_to_foast: workflow.Workflow[
-        workflow.DataWithArgs[
+        workflow.DataArgsPair[
             ffront_stages.FieldOperatorDefinition | ffront_stages.FoastOperatorDefinition,
             arguments.JITArgs,
         ],
-        workflow.DataWithArgs[ffront_stages.FoastOperatorDefinition, arguments.JITArgs],
+        workflow.DataArgsPair[ffront_stages.FoastOperatorDefinition, arguments.JITArgs],
     ] = dataclasses.field(
         default_factory=lambda: workflow.DataOnlyAdapter(
             func_to_foast.OptionalFuncToFoastFactory(cached=True)
         )
     )
     foast_to_foast_closure: workflow.Workflow[
-        workflow.DataWithArgs[ffront_stages.FoastOperatorDefinition, arguments.JITArgs],
+        workflow.DataArgsPair[ffront_stages.FoastOperatorDefinition, arguments.JITArgs],
         ffront_stages.FoastClosure,
     ] = dataclasses.field(default=foast_to_foast_closure, metadata={"takes_args": True})
     foast_to_past_closure: workflow.Workflow[
@@ -119,7 +119,7 @@ class ProgramTransformWorkflow(workflow.NamedStepSequenceWithArgs):
         ffront_stages.PastProgramDefinition, ffront_stages.PastProgramDefinition
     ] = dataclasses.field(default_factory=past_linters.LinterFactory)
     past_to_past_closure: workflow.Workflow[
-        workflow.DataWithArgs[ffront_stages.PastProgramDefinition, arguments.JITArgs],
+        workflow.DataArgsPair[ffront_stages.PastProgramDefinition, arguments.JITArgs],
         ffront_stages.PastClosure,
     ] = dataclasses.field(
         default=lambda inp: ffront_stages.PastClosure(
@@ -147,14 +147,14 @@ class Backend(Generic[core_defs.DeviceTypeT]):
     executor: ppi.ProgramExecutor
     allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
     transforms_fop: workflow.Workflow[
-        workflow.DataWithArgs[
+        workflow.DataArgsPair[
             ffront_stages.FieldOperatorDefinition,
             arguments.JITArgs | arguments.CompileArgSpec,
         ],
         stages.AOTProgram,
     ] = DEFAULT_FIELDOP_TRANSFORMS
     transforms_prog: workflow.Workflow[
-        workflow.DataWithArgs[
+        workflow.DataArgsPair[
             ffront_stages.ProgramDefinition,
             arguments.JITArgs | arguments.CompileArgSpec,
         ],
@@ -172,15 +172,13 @@ class Backend(Generic[core_defs.DeviceTypeT]):
         ):
             _ = kwargs.pop("from_fieldop")
             aot_program = self.transforms_fop(
-                workflow.DataWithArgs(program, args=arguments.JITArgs(args, kwargs))
+                workflow.DataArgsPair(program, args=arguments.JITArgs(args, kwargs))
             )
         else:
             aot_program = self.transforms_prog(
-                workflow.DataWithArgs(program, arguments.JITArgs(args, kwargs))
+                workflow.DataArgsPair(program, arguments.JITArgs(args, kwargs))
             )
-        self.executor(
-            aot_program.program, *args, column_axis=aot_program.argspec.column_axis, **kwargs
-        )
+        self.executor(aot_program.data, *args, column_axis=aot_program.args.column_axis, **kwargs)
 
     @property
     def __name__(self) -> str:
