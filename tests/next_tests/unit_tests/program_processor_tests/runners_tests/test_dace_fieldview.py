@@ -291,13 +291,11 @@ def test_gtir_cond():
             gtir.SetAt(
                 expr=im.op_as_fieldop("plus", domain)(
                     "x",
-                    im.call(
-                        im.call("cond")(
-                            gtir.SymRef(id="pred"),
-                            im.op_as_fieldop("plus", domain)("y", "scalar"),
-                            im.op_as_fieldop("plus", domain)("w", "scalar"),
-                        )
-                    )(),
+                    im.call("cond")(
+                        gtir.SymRef(id="pred"),
+                        im.op_as_fieldop("plus", domain)("y", "scalar"),
+                        im.op_as_fieldop("plus", domain)("w", "scalar"),
+                    ),
                 ),
                 domain=domain,
                 target=gtir.SymRef(id="z"),
@@ -334,19 +332,15 @@ def test_gtir_cond_nested():
         declarations=[],
         body=[
             gtir.SetAt(
-                expr=im.call(
+                expr=im.call("cond")(
+                    gtir.SymRef(id="pred_1"),
+                    im.op_as_fieldop("plus", domain)("x", 1.0),
                     im.call("cond")(
-                        gtir.SymRef(id="pred_1"),
-                        im.op_as_fieldop("plus", domain)("x", 1.0),
-                        im.call(
-                            im.call("cond")(
-                                gtir.SymRef(id="pred_2"),
-                                im.op_as_fieldop("plus", domain)("x", 2.0),
-                                im.op_as_fieldop("plus", domain)("x", 3.0),
-                            )
-                        )(),
-                    )
-                )(),
+                        gtir.SymRef(id="pred_2"),
+                        im.op_as_fieldop("plus", domain)("x", 2.0),
+                        im.op_as_fieldop("plus", domain)("x", 3.0),
+                    ),
+                ),
                 domain=domain,
                 target=gtir.SymRef(id="z"),
             )

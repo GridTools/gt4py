@@ -250,13 +250,9 @@ def translate_cond(
     let_symbols: dict[str, TemporaryData],
 ) -> list[TemporaryData]:
     """Generates the dataflow subgraph for the `cond` builtin function."""
-    assert isinstance(node, gtir.FunCall)
-    assert cpm.is_call_to(node.fun, "cond")
-    assert len(node.args) == 0
-
-    fun_node = node.fun
-    assert len(fun_node.args) == 3
-    cond_expr, true_expr, false_expr = fun_node.args
+    assert cpm.is_call_to(node, "cond")
+    assert len(node.args) == 3
+    cond_expr, true_expr, false_expr = node.args
 
     # expect condition as first argument
     cond = gtir_python_codegen.get_source(cond_expr)
@@ -344,13 +340,13 @@ def translate_symbol_ref(
     if isinstance(node, gtir.Literal):
         sym_value = node.value
         data_type = node.type
-        tasklet_name = "get_literal"
+        temp_name = "literal"
     else:
         sym_value = str(node.id)
         if sym_value in let_symbols:
             return [let_symbols[sym_value]]
         data_type = sdfg_builder.get_symbol_type(sym_value)
-        tasklet_name = f"get_{sym_value}"
+        temp_name = sym_value
 
     if isinstance(data_type, ts.FieldType):
         # add access node to current state
@@ -360,13 +356,18 @@ def translate_symbol_ref(
         # scalar symbols are passed to the SDFG as symbols: build tasklet node
         # to write the symbol to a scalar access node
         tasklet_node = sdfg_builder.add_tasklet(
-            tasklet_name,
+            f"get_{temp_name}",
             state,
             {},
             {"__out"},
             f"__out = {sym_value}",
         )
-        temp_name, _ = sdfg.add_temp_transient((1,), dace_fieldview_util.as_dace_type(data_type))
+        temp_name, _ = sdfg.add_scalar(
+            f"__{temp_name}",
+            dace_fieldview_util.as_dace_type(data_type),
+            find_new_name=True,
+            transient=True,
+        )
         sym_node = state.add_access(temp_name)
         state.add_edge(
             tasklet_node,

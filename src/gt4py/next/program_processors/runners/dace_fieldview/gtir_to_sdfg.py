@@ -327,31 +327,31 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         let_symbols: dict[str, gtir_builtin_translators.TemporaryData],
     ) -> list[gtir_builtin_translators.TemporaryData]:
         # use specialized dataflow builder classes for each builtin function
-        if cpm.is_call_to(node.fun, "as_fieldop"):
-            return gtir_builtin_translators.translate_as_field_op(
-                node, sdfg, head_state, self, let_symbols
-            )
-        elif cpm.is_call_to(node.fun, "cond"):
+        if cpm.is_call_to(node, "cond"):
             return gtir_builtin_translators.translate_cond(
                 node, sdfg, head_state, self, let_symbols
             )
+        elif cpm.is_call_to(node.fun, "as_fieldop"):
+            return gtir_builtin_translators.translate_as_field_op(
+                node, sdfg, head_state, self, let_symbols
+            )
         elif isinstance(node.fun, gtir.Lambda):
-            node_let_symbols = []
+            node_args = []
             for arg in node.args:
-                arg_fields = self.visit(
-                    arg,
-                    sdfg=sdfg,
-                    head_state=head_state,
-                    let_symbols=let_symbols,
+                node_args.extend(
+                    self.visit(
+                        arg,
+                        sdfg=sdfg,
+                        head_state=head_state,
+                        let_symbols=let_symbols,
+                    )
                 )
-                node_let_symbols.extend(arg_fields)
-
             return self.visit(
                 node.fun,
                 sdfg=sdfg,
                 head_state=head_state,
                 let_symbols=let_symbols,
-                args=node_let_symbols,
+                args=node_args,
             )
         else:
             raise NotImplementedError(f"Unexpected 'FunCall' expression ({node}).")
