@@ -21,7 +21,18 @@ import numpy as np
 from typing_extensions import Self
 
 from gt4py.next import common
+from gt4py.next.otf import workflow
 from gt4py.next.type_system import type_specifications as ts, type_translation
+
+
+@dataclasses.dataclass(frozen=True)
+class JITArgs:
+    args: tuple[Any, ...]
+    kwargs: dict[str, Any]
+
+    @classmethod
+    def from_signature(cls, *args: Any, **kwargs: Any) -> Self:
+        return cls(args=args, kwargs=kwargs)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -97,14 +108,19 @@ class CompileArgSpec:
         return cls(tuple(), {}, {}, None)
 
 
-@dataclasses.dataclass(frozen=True)
-class JITArgs:
-    args: tuple[Any, ...]
-    kwargs: dict[str, Any]
+def jit_to_aot_args(
+    inp: JITArgs,
+) -> CompileArgSpec:
+    return CompileArgSpec.from_concrete_no_size(*inp.args, **inp.kwargs)
 
-    @classmethod
-    def from_signature(cls, *args: Any, **kwargs: Any) -> Self:
-        return cls(args=args, kwargs=kwargs)
+
+def jit_to_aot_args_factory(
+    adapter: bool = True,
+) -> workflow.Workflow[JITArgs, CompileArgSpec]:
+    wf = jit_to_aot_args
+    if adapter:
+        wf = workflow.ArgsOnlyAdapter(wf)
+    return wf
 
 
 def connectivity_or_dimension(

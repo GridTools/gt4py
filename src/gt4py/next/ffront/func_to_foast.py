@@ -16,11 +16,8 @@ from __future__ import annotations
 
 import ast
 import builtins
-import dataclasses
 import typing
 from typing import Any, Callable, Iterable, Mapping, Type
-
-import factory
 
 import gt4py.eve as eve
 from gt4py.next import errors
@@ -78,40 +75,17 @@ def func_to_foast(
     )
 
 
-@dataclasses.dataclass(frozen=True)
-class OptionalFuncToFoast(workflow.SkippableStep):
-    step: workflow.Workflow[
-        ffront_stages.FieldOperatorDefinition, ffront_stages.FoastOperatorDefinition
-    ] = func_to_foast
-
-    def skip_condition(
-        self, inp: ffront_stages.FieldOperatorDefinition | ffront_stages.FoastOperatorDefinition
-    ) -> bool:
-        match inp:
-            case ffront_stages.FieldOperatorDefinition():
-                return False
-            case ffront_stages.FoastOperatorDefinition():
-                return True
-
-
-@dataclasses.dataclass(frozen=True)
-class OptionalFuncToFoastFactory(factory.Factory):
-    class Meta:
-        model = OptionalFuncToFoast
-
-    class Params:
-        workflow: workflow.Workflow[
-            ffront_stages.FieldOperatorDefinition, ffront_stages.FoastOperatorDefinition
-        ] = func_to_foast
-        cached = factory.Trait(
-            step=factory.LazyAttribute(
-                lambda o: workflow.CachedStep(
-                    step=o.workflow, hash_function=ffront_stages.fingerprint_stage
-                )
-            )
-        )
-
-    step = factory.LazyAttribute(lambda o: o.workflow)
+def func_to_foast_factory(
+    cached: bool = True, data_adapter: bool = True
+) -> workflow.Workflow[
+    ffront_stages.FieldOperatorDefinition, ffront_stages.FoastOperatorDefinition
+]:
+    wf = func_to_foast
+    if cached:
+        wf = workflow.CachedStep(step=wf, hash_function=ffront_stages.fingerprint_stage)
+    if data_adapter:
+        wf = workflow.DataOnlyAdapter(wf)
+    return wf
 
 
 class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):

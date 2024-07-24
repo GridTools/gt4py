@@ -12,8 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import dataclasses
-from typing import Any, Iterator
+from typing import Any, Iterator, TypeAlias
 
 from gt4py.next import common, errors
 from gt4py.next.ffront import (
@@ -21,25 +20,35 @@ from gt4py.next.ffront import (
     stages as ffront_stages,
     type_specifications as ts_ffront,
 )
+from gt4py.next.otf import arguments, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
-@dataclasses.dataclass(frozen=True)
-class PastProcessArgs:
-    aot_off: bool = False
+AOT_PRG: TypeAlias = workflow.DataArgsPair[
+    ffront_stages.PastProgramDefinition, arguments.CompileArgSpec
+]
 
-    def __call__(self, inp: ffront_stages.PastClosure) -> ffront_stages.PastClosure:
-        extra_kwarg_names = ["offset_provider", "column_axis"]
-        extra_kwargs = {k: v for k, v in inp.kwargs.items() if k in extra_kwarg_names}
-        kwargs = {k: v for k, v in inp.kwargs.items() if k not in extra_kwarg_names}
-        rewritten_args, size_args, kwargs = _process_args(
-            past_node=inp.definition.past_node, args=list(inp.args), kwargs=kwargs
-        )
-        return ffront_stages.PastClosure(
-            definition=inp.definition,
-            args=(*rewritten_args, *(size_args if self.aot_off else tuple())),
-            kwargs=kwargs | extra_kwargs,
-        )
+
+def transform_program_args(inp: AOT_PRG) -> AOT_PRG:
+    rewritten_args, size_args, kwargs = _process_args(
+        past_node=inp.data.past_node, args=list(inp.args.args), kwargs=inp.args.kwargs
+    )
+    return workflow.DataArgsPair(
+        data=inp.data,
+        args=arguments.CompileArgSpec(
+            args=tuple((*rewritten_args, *(size_args))),
+            kwargs=kwargs,
+            offset_provider=inp.args.offset_provider,
+            column_axis=inp.args.column_axis,
+        ),
+    )
+
+
+def transform_program_args_factory(cached: bool = True) -> workflow.Workflow[AOT_PRG, AOT_PRG]:
+    wf = transform_program_args
+    if cached:
+        wf = workflow.CachedStep(wf, hash_function=ffront_stages.fingerprint_stage)
+    return wf
 
 
 def _validate_args(past_node: past.Program, args: list, kwargs: dict[str, Any]) -> None:

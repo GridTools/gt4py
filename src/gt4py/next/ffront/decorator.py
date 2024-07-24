@@ -417,7 +417,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             return self.backend.transforms_fop.func_to_foast(
                 workflow.DataArgsPair(self.definition_stage, args=None)
             ).data
-        return next_backend.DEFAULT_FIELDOP_TRANSFORMS.func_to_foast(
+        return backend_exp.DEFAULT_TRANSFORMS.func_to_foast(
             workflow.DataArgsPair(self.definition_stage, None)
         ).data
 
@@ -444,39 +444,32 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
     def __gt_itir__(self) -> itir.FunctionDefinition:
         if self.backend is not None and self.backend.transforms_fop is not None:
-            return self.backend.transforms_fop.foast_to_itir(self.foast_stage)
-        return next_backend.DEFAULT_FIELDOP_TRANSFORMS.foast_to_itir(self.foast_stage)
+            return self.backend.transforms_fop.foast_to_itir(
+                workflow.DataArgsPair(self.foast_stage, arguments.CompileArgSpec.empty())
+            )
+        return backend_exp.DEFAULT_TRANSFORMS.foast_to_itir(
+            workflow.DataArgsPair(self.foast_stage, arguments.CompileArgSpec.empty())
+        )
 
     def __gt_closure_vars__(self) -> dict[str, Any]:
         return self.foast_stage.closure_vars
 
-    def as_program(
-        self, arg_types: list[ts.TypeSpec], kwarg_types: dict[str, ts.TypeSpec]
-    ) -> Program:
+    def as_program(self, compiletime_args: arguments.CompileArgSpec) -> Program:
         foast_with_types = (
-            ffront_stages.FoastWithTypes(
-                foast_op_def=self.foast_stage,
-                arg_types=tuple(arg_types),
-                kwarg_types=kwarg_types,
-                closure_vars={self.foast_stage.foast_node.id: self},
+            workflow.DataArgsPair(
+                data=self.foast_stage,
+                args=compiletime_args,
             ),
         )
         past_stage = None
         if self.backend is not None and self.backend.transforms_fop is not None:
-            past_stage = self.backend.transforms_fop.foast_to_past_closure.foast_to_past(
+            past_stage = self.backend.transforms_fop.field_view_op_to_prog.foast_to_past(
                 foast_with_types
-            )
+            ).data
         else:
-            past_stage = (
-                next_backend.DEFAULT_FIELDOP_TRANSFORMS.foast_to_past_closure.foast_to_past(
-                    ffront_stages.FoastWithTypes(
-                        foast_op_def=self.foast_stage,
-                        arg_types=tuple(arg_types),
-                        kwarg_types=kwarg_types,
-                        closure_vars={self.foast_stage.foast_node.id: self},
-                    ),
-                )
-            )
+            past_stage = backend_exp.DEFAULT_TRANSFORMS.foast_to_past_closure.foast_to_past(
+                foast_with_types
+            ).data
         return ProgramFromPast(definition_stage=None, past_stage=past_stage, backend=self.backend)
 
     def __call__(self, *args, **kwargs) -> None:
@@ -675,4 +668,6 @@ def add_program_to_fingerprint(obj: Program, hasher: xtyping.HashlibAlgorithm) -
 @ffront_stages.add_content_to_fingerprint.register
 def add_past_program_to_fingerprint(obj: ProgramFromPast, hasher: xtyping.HashlibAlgorithm) -> None:
     ffront_stages.add_content_to_fingerprint(obj.past_stage, hasher)
+    ffront_stages.add_content_to_fingerprint(obj.backend, hasher)
+    ffront_stages.add_content_to_fingerprint(obj.backend, hasher)
     ffront_stages.add_content_to_fingerprint(obj.backend, hasher)

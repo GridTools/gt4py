@@ -19,8 +19,6 @@ import dataclasses
 import typing
 from typing import Any, cast
 
-import factory
-
 from gt4py.next import errors
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -49,37 +47,15 @@ def func_to_past(inp: ffront_stages.ProgramDefinition) -> ffront_stages.PastProg
     )
 
 
-@dataclasses.dataclass(frozen=True)
-class OptionalFuncToPast(workflow.SkippableStep):
-    step: workflow.Workflow[
-        ffront_stages.ProgramDefinition, ffront_stages.PastProgramDefinition
-    ] = func_to_past
-
-    def skip_condition(
-        self, inp: ffront_stages.PastProgramDefinition | ffront_stages.ProgramDefinition
-    ) -> bool:
-        match inp:
-            case ffront_stages.ProgramDefinition():
-                return False
-            case ffront_stages.PastProgramDefinition():
-                return True
-
-
-class OptionalFuncToPastFactory(factory.Factory):
-    class Meta:
-        model = OptionalFuncToPast
-
-    class Params:
-        workflow = func_to_past
-        cached = factory.Trait(
-            step=factory.LazyAttribute(
-                lambda o: workflow.CachedStep(
-                    step=o.workflow, hash_function=ffront_stages.fingerprint_stage
-                )
-            )
-        )
-
-        step = factory.LazyAttribute(lambda o: o.workflow)
+def func_to_past_factory(
+    cached: bool = True, adapter: bool = True
+) -> workflow.Workflow[ffront_stages.ProgramDefinition, ffront_stages.PastProgramDefinition]:
+    wf = func_to_past
+    if cached:
+        wf = workflow.CachedStep(step=wf, hash_function=ffront_stages.fingerprint_stage)
+    if adapter:
+        wf = workflow.DataOnlyAdapter(wf)
+    return wf
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)

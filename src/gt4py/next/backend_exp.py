@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import dataclasses
 import typing
-from typing import Any, Optional
+from typing import Any
 
 from gt4py.next import backend
 from gt4py.next.ffront import (
@@ -32,7 +32,6 @@ from gt4py.next.ffront import (
 from gt4py.next.ffront.past_passes import linters as past_linters
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import arguments, stages, workflow
-from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
 DataT = typing.TypeVar("DataT")
@@ -45,65 +44,6 @@ FOP: typing.TypeAlias = ffront_stages.FoastOperatorDefinition
 DSL_PRG: typing.TypeAlias = ffront_stages.ProgramDefinition
 PRG: typing.TypeAlias = ffront_stages.PastProgramDefinition
 IT_PRG: typing.TypeAlias = itir.FencilDefinition
-
-
-@dataclasses.dataclass(frozen=True)
-class ItirShim:
-    definition: ffront_stages.FoastOperatorDefinition
-    foast_to_itir: workflow.Workflow[ffront_stages.FoastOperatorDefinition, itir.Expr]
-
-    def __gt_closure_vars__(self) -> Optional[dict[str, Any]]:
-        return self.definition.closure_vars
-
-    def __gt_type__(self) -> ts.CallableType:
-        return self.definition.foast_node.type
-
-    def __gt_itir__(self) -> itir.Expr:
-        return self.foast_to_itir(self.definition)
-
-
-@dataclasses.dataclass(frozen=True)
-class FieldviewOpToFieldviewProg:
-    foast_to_itir: workflow.Workflow[ffront_stages.FoastOperatorDefinition, itir.Expr] = (
-        dataclasses.field(
-            default_factory=lambda: workflow.CachedStep(
-                step=foast_to_itir.foast_to_itir, hash_function=ffront_stages.fingerprint_stage
-            )
-        )
-    )
-
-    def __call__(
-        self,
-        inp: workflow.DataArgsPair[ffront_stages.FoastOperatorDefinition, arguments.CompileArgSpec],
-    ) -> workflow.DataArgsPair[ffront_stages.PastProgramDefinition, arguments.CompileArgSpec]:
-        fieldview_program = foast_to_past.foast_to_past(
-            ffront_stages.FoastWithTypes(
-                foast_op_def=inp.data,
-                arg_types=tuple(type_translation.from_value(arg) for arg in inp.args.args),
-                kwarg_types={
-                    k: type_translation.from_value(v)
-                    for k, v in inp.args.kwargs.items()
-                    if k not in ["from_fieldop"]
-                },
-                closure_vars={inp.data.foast_node.id: ItirShim(inp.data, self.foast_to_itir)},
-            )
-        )
-        return workflow.DataArgsPair(
-            data=fieldview_program,
-            args=inp.args,
-        )
-
-
-def transform_prog_args(
-    inp: workflow.DataArgsPair[ffront_stages.PastProgramDefinition, arguments.CompileArgSpec],
-) -> workflow.DataArgsPair[ffront_stages.PastProgramDefinition, arguments.CompileArgSpec]:
-    transformed = past_process_args.PastProcessArgs(aot_off=True)(
-        ffront_stages.PastClosure(definition=inp.data, args=inp.args.args, kwargs=inp.args.kwargs)
-    )
-    return workflow.DataArgsPair(
-        data=transformed.definition,
-        args=dataclasses.replace(inp.args, args=transformed.args, kwargs=transformed.kwargs),
-    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -120,70 +60,53 @@ class PastToItirAdapter:
         return self.step(aot_fvprog)
 
 
-def jit_to_aot_args(
-    inp: arguments.JITArgs,
-) -> arguments.CompileArgSpec:
-    return arguments.CompileArgSpec.from_concrete_no_size(*inp.args, **inp.kwargs)
-
-
+AOT_DSL_FOP: typing.Alias = workflow.DataArgsPair[DSL_FOP, CARG]
+AOT_DSL_PRG: typing.Alias = workflow.DataArgsPair[DSL_FOP, CARG]
 AOT_FOP: typing.TypeAlias = workflow.DataArgsPair[FOP, CARG]
 AOT_PRG: typing.TypeAlias = workflow.DataArgsPair[PRG, CARG]
 
 
 INPUT_DATA_T: typing.TypeAlias = DSL_FOP | FOP | DSL_PRG | PRG | IT_PRG
+INPUT_PAIR_T: typing.TypeAlias = workflow.DataArgsPair[INPUT_DATA_T, ARGS | CARG]
 
 
 @dataclasses.dataclass(frozen=True)
-class FieldopTransformWorkflow(workflow.MultiWorkflow):
+class FieldopTransformWorkflow(workflow.MultiWorkflow[INPUT_PAIR_T, stages.AOTProgram]):
     """Modular workflow for transformations with access to intermediates."""
 
     aotify_args: workflow.Workflow[
         workflow.DataArgsPair[INPUT_DATA_T, ARGS], workflow.DataArgsPair[INPUT_DATA_T, CARG]
-    ] = dataclasses.field(default_factory=lambda: workflow.ArgsOnlyAdapter(jit_to_aot_args))
+    ] = dataclasses.field(default_factory=arguments.jit_to_aot_args_factory)
 
-    func_to_foast: workflow.Workflow[workflow.DataArgsPair[DSL_FOP | FOP, CARG], AOT_FOP] = (
-        dataclasses.field(
-            default_factory=lambda: workflow.DataOnlyAdapter(
-                func_to_foast.OptionalFuncToFoastFactory(cached=True)
-            )
-        )
+    func_to_foast: workflow.Workflow[AOT_DSL_FOP, AOT_FOP] = dataclasses.field(
+        default_factory=func_to_foast.func_to_foast_factory
     )
 
-    func_to_past: workflow.Workflow[workflow.DataArgsPair[DSL_PRG | PRG, CARG], AOT_PRG] = (
-        dataclasses.field(
-            default_factory=lambda: workflow.DataOnlyAdapter(
-                func_to_past.OptionalFuncToPastFactory(cached=True)
-            )
-        )
+    func_to_past: workflow.Workflow[AOT_DSL_PRG, AOT_PRG] = dataclasses.field(
+        default_factory=func_to_past.func_to_past_factory
     )
 
     foast_to_itir: workflow.Workflow[AOT_FOP, itir.Expr] = dataclasses.field(
-        default_factory=lambda: workflow.StripArgsAdapter(
-            workflow.CachedStep(
-                step=foast_to_itir.foast_to_itir, hash_function=ffront_stages.fingerprint_stage
-            )
-        )
+        default_factory=foast_to_itir.foast_to_itir_factory
     )
 
-    field_view_op_to_prog: workflow.Workflow[workflow.DataArgsPair[FOP, CARG], AOT_PRG] = (
-        dataclasses.field(default_factory=FieldviewOpToFieldviewProg)
+    field_view_op_to_prog: workflow.Workflow[AOT_FOP, AOT_PRG] = dataclasses.field(
+        default_factory=foast_to_past.operator_to_program_factory
     )
 
     past_lint: workflow.Workflow[AOT_PRG, AOT_PRG] = dataclasses.field(
-        default_factory=lambda: workflow.DataOnlyAdapter(past_linters.LinterFactory())
+        default_factory=past_linters.linter_factory
     )
 
     field_view_prog_args_transform: workflow.Workflow[AOT_PRG, AOT_PRG] = dataclasses.field(
-        default=transform_prog_args
+        default_factory=past_process_args.transform_program_args_factory
     )
 
     past_to_itir: workflow.Workflow[AOT_PRG, stages.AOTProgram] = dataclasses.field(
         default_factory=PastToItirAdapter
     )
 
-    def step_order(
-        self, inp: workflow.DataArgsPair[DSL_FOP | FOP | DSL_PRG | PRG | IT_PRG, ARGS | CARG]
-    ) -> list[str]:
+    def step_order(self, inp: workflow.DataArgsPair[INPUT_DATA_T, ARGS | CARG]) -> list[str]:
         steps: list[str] = []
         if isinstance(inp.args, ARGS):
             steps.append("aotify_args")

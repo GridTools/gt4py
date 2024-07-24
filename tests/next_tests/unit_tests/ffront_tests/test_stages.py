@@ -119,7 +119,7 @@ def test_fingerprint_stage_foast_op_def(fieldop, samecode_fieldop, different_fie
 class ToFoastClosure(workflow.NamedStepSequence):
     func_to_foast: workflow.Workflow = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_foast
     foast_to_closure: workflow.Workflow = dataclasses.field(
-        default=gtx.backend.DEFAULT_FIELDOP_TRANSFORMS.foast_to_foast_closure,
+        default=gtx.backend_exp.DEFAULT_TRANSFORMS.field_view_op_to_prog,
     )
 
 
