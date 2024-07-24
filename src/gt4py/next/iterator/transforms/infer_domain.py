@@ -62,7 +62,6 @@ def _translate_domain(
             # TODO: move to initialization
             horizontal_sizes = _max_domain_sizes_by_location_type(offset_provider)
 
-            nbt_provider = offset_provider[off.value]
             old_dim = nbt_provider.origin_axis
             new_dim = nbt_provider.neighbor_axis
 
@@ -84,8 +83,6 @@ def _translate_domain(
 
 
 # TODO: until TraceShifts directly supporty stencils we just wrap our expression into a dummy closure in this helper function.
-
-
 def trace_shifts(stencil: itir.Expr, inputs: list[itir.Expr], domain: itir.Expr, out_field_name):
     node = itir.StencilClosure(
         stencil=stencil,
@@ -166,6 +163,26 @@ def infer_as_fieldop(
     }
 
     return transformed_call, accessed_domains_without_tmp
+
+def infer_let( # Todo generaize for nested lets
+    applied_let: itir.FunCall,
+    input_domain: SymbolicDomain | itir.FunCall,
+    offset_provider: Dict[str, Dimension],
+) -> Tuple[itir.FunCall, Dict[str, SymbolicDomain]]:
+    assert isinstance(applied_let, itir.FunCall) and isinstance(
+        applied_let.fun, itir.Lambda
+    )
+    if applied_let.fun.expr.fun.fun == im.ref("as_fieldop"):
+        transformed_calls_expr, accessed_domains_expr = infer_as_fieldop(
+            applied_let.fun.expr, input_domain, offset_provider
+        )
+    if applied_let.args[0].fun.fun == im.ref("as_fieldop"):
+        transformed_calls_args, accessed_domains_args= infer_as_fieldop(
+            applied_let.args[0], accessed_domains_expr[applied_let.fun.params[0].id], offset_provider # Todo generaize for more inputs
+        )
+    accessed_domains = accessed_domains_args
+    transformed_call = im.let(applied_let.fun.params[0].id,transformed_calls_args)(transformed_calls_expr)
+    return transformed_call, accessed_domains
 
 
 def _validate_temporary_usage(body: list[itir.SetAt], temporaries: list[str]):
