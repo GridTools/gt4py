@@ -132,10 +132,7 @@ def test_gtir_update():
         im.lambda_("a")(im.plus(im.deref("a"), 1.0)),
         domain,
     )("x")
-    stencil2 = im.as_fieldop(
-        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-        domain,
-    )("x", 1.0)
+    stencil2 = im.op_as_fieldop("plus", domain)("x", 1.0)
 
     for i, stencil in enumerate([stencil1, stencil2]):
         testee = gtir.Program(
@@ -179,10 +176,7 @@ def test_gtir_sum2():
         declarations=[],
         body=[
             gtir.SetAt(
-                expr=im.as_fieldop(
-                    im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-                    domain,
-                )("x", "y"),
+                expr=im.op_as_fieldop("plus", domain)("x", "y"),
                 domain=domain,
                 target=gtir.SymRef(id="z"),
             )
@@ -214,10 +208,7 @@ def test_gtir_sum2_sym():
         declarations=[],
         body=[
             gtir.SetAt(
-                expr=im.as_fieldop(
-                    im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-                    domain,
-                )("x", "x"),
+                expr=im.op_as_fieldop("plus", domain)("x", "x"),
                 domain=domain,
                 target=gtir.SymRef(id="z"),
             )
@@ -237,15 +228,9 @@ def test_gtir_sum3():
     domain = im.call("cartesian_domain")(
         im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
     )
-    stencil1 = im.as_fieldop(
-        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-        domain,
-    )(
+    stencil1 = im.op_as_fieldop("plus", domain)(
         "x",
-        im.as_fieldop(
-            im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-            domain,
-        )("y", "w"),
+        im.op_as_fieldop("plus", domain)("y", "w"),
     )
     stencil2 = im.as_fieldop(
         im.lambda_("a", "b", "c")(im.plus(im.deref("a"), im.plus(im.deref("b"), im.deref("c")))),
@@ -304,22 +289,13 @@ def test_gtir_cond():
         declarations=[],
         body=[
             gtir.SetAt(
-                expr=im.as_fieldop(
-                    im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-                    domain,
-                )(
+                expr=im.op_as_fieldop("plus", domain)(
                     "x",
                     im.call(
                         im.call("cond")(
                             gtir.SymRef(id="pred"),
-                            im.as_fieldop(
-                                im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-                                domain,
-                            )("y", "scalar"),
-                            im.as_fieldop(
-                                im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-                                domain,
-                            )("w", "scalar"),
+                            im.op_as_fieldop("plus", domain)("y", "scalar"),
+                            im.op_as_fieldop("plus", domain)("w", "scalar"),
                         )
                     )(),
                 ),
@@ -361,21 +337,12 @@ def test_gtir_cond_nested():
                 expr=im.call(
                     im.call("cond")(
                         gtir.SymRef(id="pred_1"),
-                        im.as_fieldop(
-                            im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-                            domain,
-                        )("x", 1.0),
+                        im.op_as_fieldop("plus", domain)("x", 1.0),
                         im.call(
                             im.call("cond")(
                                 gtir.SymRef(id="pred_2"),
-                                im.as_fieldop(
-                                    im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-                                    domain,
-                                )("x", 2.0),
-                                im.as_fieldop(
-                                    im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-                                    domain,
-                                )("x", 3.0),
+                                im.op_as_fieldop("plus", domain)("x", 2.0),
+                                im.op_as_fieldop("plus", domain)("x", 3.0),
                             )
                         )(),
                     )
@@ -414,18 +381,12 @@ def test_gtir_cartesian_shift_left():
         domain,
     )("x")
     # fieldview flavor of same stencil, in which a temporary field is initialized with the `DELTA` constant value
-    stencil1_fieldview = im.as_fieldop(
-        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-        domain,
-    )(
+    stencil1_fieldview = im.op_as_fieldop("plus", domain)(
         im.as_fieldop(
             im.lambda_("a")(im.deref(im.shift("IDim", OFFSET)("a"))),
             domain,
         )("x"),
-        im.as_fieldop(
-            im.lambda_()(DELTA),
-            domain,
-        )(),
+        im.as_fieldop(im.lambda_()(DELTA), domain)(),
     )
 
     # use dynamic offset retrieved from field
@@ -434,10 +395,7 @@ def test_gtir_cartesian_shift_left():
         domain,
     )("x", "x_offset")
     # fieldview flavor of same stencil
-    stencil2_fieldview = im.as_fieldop(
-        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-        domain,
-    )(
+    stencil2_fieldview = im.op_as_fieldop("plus", domain)(
         im.as_fieldop(
             im.lambda_("a", "off")(im.deref(im.shift("IDim", im.deref("off"))("a"))),
             domain,
@@ -453,19 +411,13 @@ def test_gtir_cartesian_shift_left():
         domain,
     )("x", "x_offset")
     # fieldview flavor of same stencil
-    stencil3_fieldview = im.as_fieldop(
-        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-        domain,
-    )(
+    stencil3_fieldview = im.op_as_fieldop("plus", domain)(
         im.as_fieldop(
             im.lambda_("a", "off")(im.deref(im.shift("IDim", im.deref("off"))("a"))),
             domain,
         )(
             "x",
-            im.as_fieldop(
-                im.lambda_("it")(im.plus(im.deref("it"), 0)),
-                domain,
-            )("x_offset"),
+            im.op_as_fieldop("plus", domain)("x_offset", 0),
         ),
         im.as_fieldop(im.lambda_()(DELTA), domain)(),
     )
@@ -526,10 +478,7 @@ def test_gtir_cartesian_shift_right():
         domain,
     )("x")
     # fieldview flavor of same stencil, in which a temporary field is initialized with the `DELTA` constant value
-    stencil1_fieldview = im.as_fieldop(
-        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-        domain,
-    )(
+    stencil1_fieldview = im.op_as_fieldop("plus", domain)(
         im.as_fieldop(
             im.lambda_("a")(im.deref(im.shift("IDim", -OFFSET)("a"))),
             domain,
@@ -543,10 +492,7 @@ def test_gtir_cartesian_shift_right():
         domain,
     )("x", "x_offset")
     # fieldview flavor of same stencil
-    stencil2_fieldview = im.as_fieldop(
-        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-        domain,
-    )(
+    stencil2_fieldview = im.op_as_fieldop("plus", domain)(
         im.as_fieldop(
             im.lambda_("a", "off")(im.deref(im.shift("IDim", im.deref("off"))("a"))),
             domain,
@@ -562,19 +508,13 @@ def test_gtir_cartesian_shift_right():
         domain,
     )("x", "x_offset")
     # fieldview flavor of same stencil
-    stencil3_fieldview = im.as_fieldop(
-        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-        domain,
-    )(
+    stencil3_fieldview = im.op_as_fieldop("plus", domain)(
         im.as_fieldop(
             im.lambda_("a", "off")(im.deref(im.shift("IDim", im.deref("off"))("a"))),
             domain,
         )(
             "x",
-            im.as_fieldop(
-                im.lambda_("it")(im.plus(im.deref("it"), 0)),
-                domain,
-            )("x_offset"),
+            im.op_as_fieldop("plus", domain)("x_offset", 0),
         ),
         im.as_fieldop(im.lambda_()(DELTA), domain)(),
     )
@@ -705,12 +645,12 @@ def test_gtir_connectivity_shift():
     )(
         "ev_field",
         "c2e_offset",
-        im.as_fieldop(
-            im.lambda_("it")(im.plus(im.deref("it"), 0)),
+        im.op_as_fieldop(
+            "plus",
             im.call("unstructured_domain")(
                 im.call("named_range")(gtir.AxisLiteral(value=Edge.value), 0, "nedges"),
             ),
-        )("e2v_offset"),
+        )("e2v_offset", 0),
     )
 
     CE_FTYPE = ts.FieldType(dims=[Cell, Edge], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
