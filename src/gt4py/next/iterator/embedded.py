@@ -121,9 +121,15 @@ class NeighborTableOffsetProvider:
         assert common.is_int_index(res)
         return res
 
+    def data_ptr(self) -> int:
+        return self.__dace_data_ptr()
+
+    def __descriptor__(self) -> Any:
+        return self.__dace__descriptor__()
+
     if dace:
         # Extension of NeighborTableOffsetProvider adding SDFGConvertible support in GT4Py Programs
-        def data_ptr(self) -> int:
+        def __dace_data_ptr(self) -> int:
             obj = self.table
             if dace.dtypes.is_array(obj):
                 if hasattr(obj, "__array_interface__"):
@@ -132,29 +138,46 @@ class NeighborTableOffsetProvider:
                     return obj.__cuda_array_interface__["data"][0]
             raise ValueError("Unsupported data container.")
 
-        def __descriptor__(self) -> dace.data.Data:
+        def __dace__descriptor__(self) -> dace.data.Data:
             return dace.data.create_datadescriptor(self.table)
+    else:
+
+        def __dace_data_ptr(self) -> NoReturn:  # type: ignore[misc]
+            raise NotImplementedError(
+                "data_ptr is only supported when the 'dace' module is available."
+            )
+
+        def __dace__descriptor__(self) -> NoReturn:  # type: ignore[misc]
+            raise NotImplementedError(
+                "__descriptor__ is only supported when the 'dace' module is available."
+            )
 
 
-class NeighborOffsetProvider:
-    def __init__(
-        self,
-        table: core_defs.NDArrayObject,
-        origin_axis: common.Dimension,
-        neighbor_axis: common.Dimension,
-        max_neighbors: int,
-        has_skip_values=True,
-    ) -> None:
-        self.table = None
-        self.origin_axis = origin_axis
-        self.neighbor_axis = neighbor_axis
-        self.max_neighbors = max_neighbors
-        self.has_skip_values = has_skip_values
-        self.index_type = table.dtype
+@dataclasses.dataclass(frozen=True)
+class CompileTimeConnectivity:
+    max_neighbors: int
+    has_skip_values: bool
+    origin_axis: common.Dimension
+    neighbor_axis: common.Dimension
+    index_type: type[int] | type[np.int32] | type[np.int64]
 
     def mapped_index(
         self, cur_index: int | np.integer, neigh_index: int | np.integer
     ) -> Optional[int | np.integer]: ...
+
+    @classmethod
+    def from_connectivity(cls, connectivity: common.Connectivity) -> Self:
+        return cls(
+            max_neighbors=connectivity.max_neighbors,
+            has_skip_values=connectivity.has_skip_values,
+            origin_axis=connectivity.origin_axis,
+            neighbor_axis=connectivity.neighbor_axis,
+            index_type=connectivity.index_type,
+        )
+
+    @property
+    def table(self):
+        return None
 
 
 class StridedNeighborOffsetProvider:

@@ -69,8 +69,8 @@ def test_sdfgConvertible_laplap(cartesian_case):
     connectivities = {}  # Dict of NeighborOffsetProviders, where self.table = None
     for k, v in cartesian_case.offset_provider.items():
         if hasattr(v, "table"):
-            connectivities[k] = gtx.NeighborOffsetProvider(
-                v.table, v.origin_axis, v.neighbor_axis, v.max_neighbors, v.has_skip_values
+            connectivities[k] = gtx.CompileTimeConnectivity(
+                v.max_neighbors, v.has_skip_values, v.origin_axis, v.neighbor_axis, v.table.dtype
             )
         else:
             connectivities[k] = v
@@ -153,8 +153,8 @@ def test_sdfgConvertible_connectivities(unstructured_case):
     e2v_array = np.asarray([[0, 1], [1, 2], [2, 0]])
     e2v = gtx.NeighborTableOffsetProvider(e2v_array, Edge, Vertex, 2, False)
     connectivities = {}
-    connectivities["E2V"] = gtx.NeighborOffsetProvider(
-        e2v.table, e2v.origin_axis, e2v.neighbor_axis, e2v.max_neighbors, e2v.has_skip_values
+    connectivities["E2V"] = gtx.CompileTimeConnectivity(
+        e2v.max_neighbors, e2v.has_skip_values, e2v.origin_axis, e2v.neighbor_axis, e2v.table.dtype
     )
     offset_provider = OffsetProvider_t.dtype._typeclass.as_ctypes()(E2V=e2v.data_ptr())
 

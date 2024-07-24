@@ -19,6 +19,7 @@ import dataclasses
 import functools
 from collections.abc import Callable, Sequence
 from types import ModuleType
+from typing import Any
 
 import numpy as np
 from numpy import typing as npt
@@ -424,9 +425,15 @@ class NdArrayField(
         assert common.is_relative_index_sequence(slice_)
         return new_domain, slice_
 
+    def data_ptr(self) -> int:
+        return self.__dace_data_ptr()
+
+    def __descriptor__(self) -> Any:
+        return self.__dace__descriptor__()
+
     if dace:
         # Extension of NdArrayField adding SDFGConvertible support in GT4Py Programs
-        def data_ptr(self) -> int:
+        def __dace_data_ptr(self) -> int:
             array_ns = self.array_ns
             array_byte_bounds = (  # TODO(egparedes): make this part of some Array namespace protocol
                 array_ns.byte_bounds
@@ -435,8 +442,19 @@ class NdArrayField(
             )
             return array_byte_bounds(self.ndarray)[0]
 
-        def __descriptor__(self) -> dace.data.Data:
+        def __dace__descriptor__(self) -> dace.data.Data:
             return dace.data.create_datadescriptor(self.ndarray)
+    else:
+
+        def __dace_data_ptr(self) -> int:
+            raise NotImplementedError(
+                "data_ptr is only supported when the 'dace' module is available."
+            )
+
+        def __dace__descriptor__(self) -> Any:
+            raise NotImplementedError(
+                "__descriptor__ is only supported when the 'dace' module is available."
+            )
 
 
 @dataclasses.dataclass(frozen=True)
