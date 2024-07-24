@@ -16,7 +16,7 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Dict, List, Optional, Set, Tuple, TypeAlias, Union
+from typing import Any, Dict, Final, List, Optional, Set, Tuple, TypeAlias, Union
 
 import dace
 import dace.subsets as sbs
@@ -156,18 +156,21 @@ class LambdaToTasklet(eve.NodeVisitor):
 
     def _visit_deref(self, node: gtir.FunCall) -> MemletExpr | ValueExpr:
         """
-        Visit a `deref` node, which rerpesents dereferencing of an iterator.
+        Visit a `deref` node, which represents dereferencing of an iterator.
         The iterator is the argument of this node.
 
-        The iterator contains the information for accessing a field, that is the sorted list of dimensions
-        in the field domain and the index values for each dimension. The index values can be either symbol values,
-        that is literal values or scalar arguments which are constant in the SDFG scope;
-        or they can be the result of some expression, that computes a dynamic index offset or gets an neighbor index
-        from a connectivity table. In case all indexes are symbol values, the `deref` node is lowered to a memlet;
-        otherwise dereferencing is a runtime operation and it is represented in the SDFG as a tasklet node.
+        The iterator contains the information for accessing a field, that is the
+        sorted list of dimensions in the field domain and the index values for
+        each dimension. The index values can be either symbol values, that is
+        literal values or scalar arguments which are constant in the SDFG scope;
+        or they can be the result of some expression, that computes a dynamic
+        index offset or gets an neighbor index from a connectivity table.
+        In case all indexes are symbol values, the `deref` node is lowered to a
+        memlet; otherwise dereferencing is a runtime operation represented in
+        the SDFG as a tasklet node.
         """
         # format used for field index tasklet connector
-        IndexConnectorFmt = "__index_{dim}"
+        IndexConnectorFmt: Final = "__index_{dim}"
 
         assert len(node.args) == 1
         it = self.visit(node.args[0])
@@ -190,8 +193,9 @@ class LambdaToTasklet(eve.NodeVisitor):
                     for dim, index in field_indices
                     if not isinstance(index, SymbolExpr)
                 ]
-                # here `internals` refer to the names used as index in the tasklet code string: an index can be either
-                # a connector name (for dynamic/indirect indices) or a symbol value (for literal values and scalar arguments).
+                # here `internals` refer to the names used as index in the tasklet code string:
+                # an index can be either a connector name (for dynamic/indirect indices)
+                # or a symbol value (for literal values and scalar arguments).
                 index_internals = ",".join(
                     str(index.value)
                     if isinstance(index, SymbolExpr)
@@ -243,21 +247,31 @@ class LambdaToTasklet(eve.NodeVisitor):
 
     def _split_shift_args(
         self, args: list[gtir.Expr]
-    ) -> tuple[list[gtir.Expr], Optional[list[gtir.Expr]]]:
+    ) -> tuple[tuple[gtir.Expr, gtir.Expr], Optional[list[gtir.Expr]]]:
         """
         Splits the arguments to `shift` builtin function as pairs, each pair containing
-        the offset provider and the offset value in one dimension.
+        the offset provider and the offset expression in one dimension.
         """
         nargs = len(args)
         assert nargs >= 2 and nargs % 2 == 0
-        return args[nargs - 2 :], args[: nargs - 2] if nargs > 2 else None
+        return (args[-2], args[-1]), args[: nargs - 2] if nargs > 2 else None
 
-    def _make_shift_for_rest(self, rest: list[gtir.Expr], iterator: gtir.Expr) -> gtir.FunCall:
+    def _visit_shift_multidim(
+        self, iterator: gtir.Expr, shift_args: list[gtir.Expr]
+    ) -> tuple[gtir.Expr, gtir.Expr, IteratorExpr]:
         """Transforms a multi-dimensional shift into recursive shift calls, each in a single dimension."""
-        return gtir.FunCall(
-            fun=gtir.FunCall(fun=gtir.SymRef(id="shift"), args=rest),
-            args=[iterator],
-        )
+        (offset_provider_arg, offset_value_arg), tail = self._split_shift_args(shift_args)
+        if tail:
+            node = gtir.FunCall(
+                fun=gtir.FunCall(fun=gtir.SymRef(id="shift"), args=tail),
+                args=[iterator],
+            )
+            it = self.visit(node)
+        else:
+            it = self.visit(iterator)
+
+        assert isinstance(it, IteratorExpr)
+        return offset_provider_arg, offset_value_arg, it
 
     def _make_cartesian_shift(
         self, it: IteratorExpr, offset_dim: gtx_common.Dimension, offset_expr: IteratorIndexExpr
@@ -408,32 +422,30 @@ class LambdaToTasklet(eve.NodeVisitor):
         return IteratorExpr(it.field, it.dimensions, shifted_indices)
 
     def _visit_shift(self, node: gtir.FunCall) -> IteratorExpr:
-        shift_node = node.fun
-        assert isinstance(shift_node, gtir.FunCall)
+        # convert builtin-index type to dace type
+        IndexDType: Final = dace_fieldview_util.as_dace_type(
+            ts.ScalarType(kind=getattr(ts.ScalarKind, gtir.INTEGER_INDEX_BUILTIN.upper()))
+        )
 
-        # here we check the arguments to the `shift` builtin function: the offset provider and the offset value
-        head, tail = self._split_shift_args(shift_node.args)
-        if tail:
-            # we visit a multi-dimensional shift as recursive shift function calls, each returning a new iterator
-            it = self.visit(self._make_shift_for_rest(tail, node.args[0]))
-        else:
-            # the iterator to be shifted is the argument to the function node
-            it = self.visit(node.args[0])
-        assert isinstance(it, IteratorExpr)
+        assert isinstance(node.fun, gtir.FunCall)
+        # the iterator to be shifted is the node argument, while the shift arguments
+        # are provided by the nested function call; the shift arguments consist of
+        # the offset provider and the offset value in each dimension to be shifted
+        offset_provider_arg, offset_value_arg, it = self._visit_shift_multidim(
+            node.args[0], node.fun.args
+        )
 
         # first argument of the shift node is the offset provider
-        assert isinstance(head[0], gtir.OffsetLiteral)
-        offset = head[0].value
+        assert isinstance(offset_provider_arg, gtir.OffsetLiteral)
+        offset = offset_provider_arg.value
         assert isinstance(offset, str)
         offset_provider = self.subgraph_builder.get_offset_provider(offset)
         # second argument should be the offset value, which could be a symbolic expression or a dynamic offset
-        offset_expr: IteratorIndexExpr
-        if isinstance(head[1], gtir.OffsetLiteral):
-            offset_expr = SymbolExpr(head[1].value, dace.int32)
-        else:
-            dynamic_offset_expr = self.visit(head[1])
-            assert isinstance(dynamic_offset_expr, MemletExpr | ValueExpr)
-            offset_expr = dynamic_offset_expr
+        offset_expr = (
+            SymbolExpr(offset_value_arg.value, IndexDType)
+            if isinstance(offset_value_arg, gtir.OffsetLiteral)
+            else self.visit(offset_value_arg)
+        )
 
         if isinstance(offset_provider, gtx_common.Dimension):
             return self._make_cartesian_shift(it, offset_provider, offset_expr)

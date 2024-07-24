@@ -162,9 +162,12 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         self, sdfg: dace.SDFG, name: str, symbol_type: ts.DataType, transient: bool = True
     ) -> None:
         """
-        Add external storage (aka non-transient) for data containers passed as arguments to the SDFG.
+        Add storage for data containers used in the SDFG. For fields, it allocates dace arrays,
+        while scalars are stored as SDFG symbols.
 
-        For fields, it allocates dace arrays, while scalars are stored as SDFG symbols.
+        The fields used as temporary arrays, when `transient = True`, are allocated internally
+        in the SDFG scope; when `transient = False`, the fields are allocated by the SDFG caller.
+        The latter case (external arrays) is for fields passed as program arguments.
         """
         if isinstance(symbol_type, ts.FieldType):
             dtype = dace_fieldview_util.as_dace_type(symbol_type.dtype)
