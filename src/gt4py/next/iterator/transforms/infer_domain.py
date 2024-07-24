@@ -12,20 +12,21 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Dict, Tuple
 from gt4py.next import common
 from gt4py.next.common import Dimension
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms.global_tmps import (
+    AUTO_DOMAIN,
     SymbolicDomain,
     SymbolicRange,
     _max_domain_sizes_by_location_type,
-    domain_union, AUTO_DOMAIN,
+    domain_union,
 )
 from gt4py.next.iterator.transforms.trace_shifts import TraceShifts
-from gt4py.eve import utils as eve_utils
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+
 
 def _merge_domains(
     original_domains: Dict[str, SymbolicDomain], additional_domains: Dict[str, SymbolicDomain]
@@ -122,9 +123,7 @@ def infer_as_fieldop(
         input_domain = SymbolicDomain.from_expr(input_domain)
 
     # Extract the shifts and translate the domains accordingly
-    shifts_results = trace_shifts(
-        stencil, input_ids, SymbolicDomain.as_expr(input_domain)
-    )
+    shifts_results = trace_shifts(stencil, input_ids, SymbolicDomain.as_expr(input_domain))
 
     for in_field_id in input_ids:
         shifts_list = shifts_results[in_field_id]
@@ -150,7 +149,9 @@ def infer_as_fieldop(
             assert isinstance(in_field, itir.SymRef)
             transformed_inputs.append(in_field)
 
-    transformed_call = im.as_fieldop(stencil, SymbolicDomain.as_expr(input_domain))(*transformed_inputs)
+    transformed_call = im.as_fieldop(stencil, SymbolicDomain.as_expr(input_domain))(
+        *transformed_inputs
+    )
 
     accessed_domains_without_tmp = {
         k: v for k, v in accessed_domains.items() if not k.startswith(tmp_uid_gen.prefix)
@@ -158,24 +159,27 @@ def infer_as_fieldop(
 
     return transformed_call, accessed_domains_without_tmp
 
-def infer_let( # Todo generaize for nested lets
+
+def infer_let(  # Todo generaize for nested lets
     applied_let: itir.FunCall,
     input_domain: SymbolicDomain | itir.FunCall,
     offset_provider: Dict[str, Dimension],
 ) -> Tuple[itir.FunCall, Dict[str, SymbolicDomain]]:
-    assert isinstance(applied_let, itir.FunCall) and isinstance(
-        applied_let.fun, itir.Lambda
-    )
+    assert isinstance(applied_let, itir.FunCall) and isinstance(applied_let.fun, itir.Lambda)
     if applied_let.fun.expr.fun.fun == im.ref("as_fieldop"):
         transformed_calls_expr, accessed_domains_expr = infer_as_fieldop(
             applied_let.fun.expr, input_domain, offset_provider
         )
     if applied_let.args[0].fun.fun == im.ref("as_fieldop"):
-        transformed_calls_args, accessed_domains_args= infer_as_fieldop(
-            applied_let.args[0], accessed_domains_expr[applied_let.fun.params[0].id], offset_provider # Todo generaize for more inputs
+        transformed_calls_args, accessed_domains_args = infer_as_fieldop(
+            applied_let.args[0],
+            accessed_domains_expr[applied_let.fun.params[0].id],
+            offset_provider,  # Todo generaize for more inputs
         )
     accessed_domains = accessed_domains_args
-    transformed_call = im.let(applied_let.fun.params[0].id,transformed_calls_args)(transformed_calls_expr)
+    transformed_call = im.let(applied_let.fun.params[0].id, transformed_calls_args)(
+        transformed_calls_expr
+    )
     return transformed_call, accessed_domains
 
 

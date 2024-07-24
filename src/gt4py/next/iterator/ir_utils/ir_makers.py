@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import typing
-from typing import Callable, Iterable, Union, Optional
+from typing import Callable, Iterable, Optional, Union
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve.extended_typing import Any, Dict, Tuple
@@ -439,6 +439,7 @@ def domain(
             for d, r in ranges.items()
         ]
     )
+
 
 def as_fieldop(expr: itir.Expr, domain: Optional[itir.FunCall] = None) -> call:
     """

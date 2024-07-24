@@ -519,6 +519,7 @@ def test_program_tree_tmps_two_inputs(offset_provider):
         im.minus(im.deref(im.shift(itir.SymbolRef("Ioff"), -1)("arg0")), im.deref("arg1"))
     )
 
+    # TODO: use im.as_fieldop everywhere
     as_fieldop_tmp1 = im.call(im.call("as_fieldop")(stencil))(
         im.ref("in_field1"), im.ref("in_field2")
     )
@@ -695,21 +696,44 @@ def test_program_tree_tmps_two_inputs(offset_provider):
 #
 #     assert actual_program == expected
 
+
 def test_let(offset_provider):
     stencil = im.lambda_("arg0")(
         im.minus(im.deref(im.shift(itir.SymbolRef("Ioff"), 1)("arg0")), im.deref("arg0"))
     )
-    testee = im.let("inner",
-           im.call(im.call("as_fieldop")(im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it")))))("squared_shift"))(im.call(
-        im.call("as_fieldop")(im.lambda_("it")(
-            im.multiplies_(im.deref(im.shift("Ioff", -1)("it")), im.deref(im.shift("Ioff", -1)("it"))))))("inner"))
+    testee = im.let(
+        "inner",
+        im.call(im.call("as_fieldop")(im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it")))))(
+            "squared_shift"
+        ),
+    )(
+        im.call(
+            im.call("as_fieldop")(
+                im.lambda_("it")(
+                    im.multiplies_(
+                        im.deref(im.shift("Ioff", -1)("it")), im.deref(im.shift("Ioff", -1)("it"))
+                    )
+                )
+            )
+        )("inner")
+    )
     # testee = im.let("inner", # TODO remove comment
     #                 im.call(im.call("as_fieldop")(im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it")))))("outer"))(
     #     im.call(im.call("as_fieldop")(im.lambda_("it")(
     #         im.deref(im.shift("Ioff", 2)("it")))))("inner"))
-    testee2= im.call(im.call("as_fieldop")(
-        im.lambda_("it")(im.multiplies_(im.deref(im.shift("Ioff", -1)("it")), im.deref(im.shift("Ioff", -1)("it"))))))(
-        im.call(im.call("as_fieldop")(im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it")))))("squared_shift"))
+    testee2 = im.call(
+        im.call("as_fieldop")(
+            im.lambda_("it")(
+                im.multiplies_(
+                    im.deref(im.shift("Ioff", -1)("it")), im.deref(im.shift("Ioff", -1)("it"))
+                )
+            )
+        )
+    )(
+        im.call(im.call("as_fieldop")(im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it")))))(
+            "squared_shift"
+        )
+    )
 
     domain = im.domain(
         common.GridType.CARTESIAN,
@@ -721,14 +745,42 @@ def test_let(offset_provider):
         {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (-1, 10)},
     )
 
-    expected = im.let("inner",
-           im.call(im.call("as_fieldop")(im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))), domain_squared))("squared_shift"))(im.call(
-        im.call("as_fieldop")(im.lambda_("it")(
-            im.multiplies_(im.deref(im.shift("Ioff", -1)("it")), im.deref(im.shift("Ioff", -1)("it")))), domain))("inner"))
+    expected = im.let(
+        "inner",
+        im.call(
+            im.call("as_fieldop")(
+                im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))), domain_squared
+            )
+        )("squared_shift"),
+    )(
+        im.call(
+            im.call("as_fieldop")(
+                im.lambda_("it")(
+                    im.multiplies_(
+                        im.deref(im.shift("Ioff", -1)("it")), im.deref(im.shift("Ioff", -1)("it"))
+                    )
+                ),
+                domain,
+            )
+        )("inner")
+    )
 
-    expected2 = im.call(im.call("as_fieldop")(
-        im.lambda_("it")(im.multiplies_(im.deref(im.shift("Ioff", -1)("it")), im.deref(im.shift("Ioff", -1)("it")))), domain))(
-        im.call(im.call("as_fieldop")(im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))), domain_squared))("squared_shift"))
+    expected2 = im.call(
+        im.call("as_fieldop")(
+            im.lambda_("it")(
+                im.multiplies_(
+                    im.deref(im.shift("Ioff", -1)("it")), im.deref(im.shift("Ioff", -1)("it"))
+                )
+            ),
+            domain,
+        )
+    )(
+        im.call(
+            im.call("as_fieldop")(
+                im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))), domain_squared
+            )
+        )("squared_shift")
+    )
 
     expected_domains = {
         # "inner": SymbolicDomain.from_expr( # TODO remove comment
@@ -748,7 +800,6 @@ def test_let(offset_provider):
     actual_call, actual_domains = infer_let(
         testee, SymbolicDomain.from_expr(domain), offset_provider
     )
-
 
     assert actual_call == expected
     assert actual_domains == expected_domains
