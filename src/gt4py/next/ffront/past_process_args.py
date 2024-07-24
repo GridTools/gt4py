@@ -78,7 +78,10 @@ def _process_args(
     for param_idx, param in enumerate(past_node.params):
         if implicit_domain and isinstance(param.type, (ts.FieldType, ts.TupleType)):
             shapes_and_dims = [*_field_constituents_shape_and_dims(args[param_idx], param.type)]
-            if shapes_and_dims:  # scalar or zero-dim field otherwise
+            # check that all non-scalar like constituents have the same shape and dimension, e.g.
+            # for `(scalar, (field1, field2))` the two fields need to have the same shape and
+            # dimension
+            if shapes_and_dims:
                 shape, dims = shapes_and_dims[0]
                 if not all(
                     el_shape == shape and el_dims == dims for (el_shape, el_dims) in shapes_and_dims
@@ -101,11 +104,11 @@ def _field_constituents_shape_and_dims(
                 yield from _field_constituents_shape_and_dims(el, el_type)
         case ts.FieldType():
             dims = type_info.extract_dims(arg_type)
-            if hasattr(arg, "shape"):
-                assert len(arg.shape) == len(dims)
+            if dims:
+                assert hasattr(arg, "shape") and len(arg.shape) == len(dims)
                 yield (arg.shape, dims)
             else:
-                yield (tuple(), dims)
+                pass
         case ts.ScalarType():
             pass
         case _:

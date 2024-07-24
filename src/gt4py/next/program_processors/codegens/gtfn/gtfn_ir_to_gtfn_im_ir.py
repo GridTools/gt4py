@@ -337,6 +337,7 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             or isinstance(node, gtfn_ir.FunctionDefinition),
         }
 
+        # only transform things inside of function definitions and leave the rest as is
         if kwargs["inside_fun"]:
             return super().visit(node, **kwargs)
         else:

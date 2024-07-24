@@ -35,6 +35,7 @@ from gt4py.next import (
 from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.program_processors.runners import gtfn
 from gt4py.next.type_system import type_specifications as ts
+from gt4py.next import utils as gt_utils
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
@@ -221,6 +222,23 @@ def test_scalar_tuple_arg(unstructured_case):
             [unstructured_case.default_sizes[Vertex]], a[0] + 2 * a[1][0] + 3 * a[1][1], dtype=int32
         ),
     )
+
+
+@pytest.mark.uses_tuple_args
+def test_zero_dim_tuple_arg(unstructured_case):
+    @gtx.field_operator
+    def testee(
+        a: tuple[gtx.Field[[], int32], tuple[gtx.Field[[], int32], gtx.Field[[], int32]]],
+    ) -> cases.VField:
+        return broadcast(a[0] + 2 * a[1][0] + 3 * a[1][1], (Vertex,))
+
+    def ref(a):
+        a = gt_utils.tree_map(lambda x: x.ndarray)(a)  # unwrap 0d field
+        return np.full(
+            [unstructured_case.default_sizes[Vertex]], a[0] + 2 * a[1][0] + 3 * a[1][1], dtype=int32
+        )
+
+    cases.verify_with_default_data(unstructured_case, testee, ref=ref)
 
 
 @pytest.mark.uses_tuple_args

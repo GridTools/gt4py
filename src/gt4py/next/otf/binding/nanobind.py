@@ -48,10 +48,6 @@ class Tuple(Expr):
     elems: list[Union[Expr, str]]
 
 
-class CompositeSID(Expr):
-    elems: Sequence[Union[BufferSID, CompositeSID]]
-
-
 class FunctionCall(Expr):
     target: interface.Function
     args: Sequence[Any]
@@ -162,16 +158,6 @@ class BindingCodeGenerator(TemplatedGenerator):
         renamed = f"gridtools::sid::rename_numbered_dimensions<{', '.join(dims)}>({shifted})"
         return renamed
 
-    def visit_CompositeSID(self, node: CompositeSID, **kwargs: Any) -> str:
-        kwargs["composite_ids"] = (
-            f"gridtools::integral_constant<int,{i}>" for i in range(len(node.elems))
-        )
-        return self.generic_visit(node, **kwargs)
-
-    CompositeSID = as_jinja(
-        "gridtools::sid::composite::keys<{{','.join(composite_ids)}}>::make_values({{','.join(elems)}})"
-    )
-
     Tuple = as_jinja("""gridtools::tuple({{','.join(elems)}})""")
 
     DimensionType = as_jinja("""generated::{{name}}_t""")
@@ -181,7 +167,7 @@ def _tuple_get(index: int, var: str) -> str:
     return f"gridtools::tuple_util::get<{index}>({var})"
 
 
-def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | CompositeSID | Tuple:
+def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | Tuple:
     if isinstance(type_, ts.FieldType):
         return BufferSID(
             source_buffer=name,
