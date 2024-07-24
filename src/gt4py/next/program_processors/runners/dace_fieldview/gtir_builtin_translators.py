@@ -24,6 +24,7 @@ import dace.subsets as sbs
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.iterator.type_system import type_specifications as itir_ts
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_python_codegen,
     gtir_to_tasklet,
@@ -49,7 +50,6 @@ class PrimitiveTranslator(Protocol):
         state: dace.SDFGState,
         sdfg_builder: gtir_to_sdfg.SDFGBuilder,
         let_symbols: dict[str, TemporaryData],
-        reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
     ) -> list[TemporaryData]:
         """Creates the dataflow subgraph representing a GTIR primitive function.
 
@@ -62,9 +62,6 @@ class PrimitiveTranslator(Protocol):
             state: The SDFG state where the result of the primitive function should be made available
             sdfg_builder: The object responsible for visiting child nodes of the primitive node.
             let_symbols: Mapping of symbols (i.e. lambda parameters) to known temporary fields.
-            reduce_identity: The value of the reduction identity, in case the primitive node
-                is visited in the context of a reduction expression. This value is used
-                by the `neighbors` primitive to provide the value of skip neighbors.
 
         Returns:
             A list of data access nodes and the associated GT4Py data type, which provide
@@ -83,14 +80,12 @@ def _parse_arg_expr(
         tuple[gtx_common.Dimension, dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]
     ],
     let_symbols: dict[str, TemporaryData],
-    reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
 ) -> gtir_to_tasklet.IteratorExpr | gtir_to_tasklet.MemletExpr:
     fields: list[TemporaryData] = sdfg_builder.visit(
         node,
         sdfg=sdfg,
         head_state=state,
         let_symbols=let_symbols,
-        reduce_identity=reduce_identity,
     )
 
     assert len(fields) == 1
@@ -122,7 +117,7 @@ def _create_temporary_field(
     domain: list[
         tuple[gtx_common.Dimension, dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]
     ],
-    node_type: ts.ScalarType,
+    node_type: ts.FieldType,
     output_desc: dace.data.Data,
     output_field_type: ts.DataType,
 ) -> tuple[dace.nodes.AccessNode, ts.FieldType]:
@@ -140,22 +135,25 @@ def _create_temporary_field(
     if isinstance(output_desc, dace.data.Array):
         # extend the result arrays with the local dimensions added by the field operator e.g. `neighbors`)
         assert isinstance(output_field_type, ts.FieldType)
-        # TODO: enable `assert output_field_type.dtype == node_type`, remove variable `dtype`
-        node_type = output_field_type.dtype
+        if isinstance(node_type.dtype, itir_ts.ListType):
+            raise NotImplementedError
+        else:
+            field_dtype = node_type.dtype
+        assert output_field_type.dtype == field_dtype
         field_dims.extend(output_field_type.dims)
         field_shape.extend(output_desc.shape)
     else:
         assert isinstance(output_desc, dace.data.Scalar)
         assert isinstance(output_field_type, ts.ScalarType)
-        # TODO: enable `assert output_field_type == node_type`, remove variable `dtype`
-        node_type = output_field_type
+        field_dtype = node_type.dtype
+        assert output_field_type == field_dtype
 
     # allocate local temporary storage for the result field
     temp_name, _ = sdfg.add_temp_transient(
-        field_shape, dace_fieldview_util.as_dace_type(node_type), offset=field_offset
+        field_shape, dace_fieldview_util.as_dace_type(field_dtype), offset=field_offset
     )
     field_node = state.add_access(temp_name)
-    field_type = ts.FieldType(field_dims, node_type)
+    field_type = ts.FieldType(field_dims, field_dtype)
 
     return field_node, field_type
 
@@ -166,7 +164,6 @@ def translate_as_field_op(
     state: dace.SDFGState,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
     let_symbols: dict[str, TemporaryData],
-    reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
 ) -> list[TemporaryData]:
     """Generates the dataflow subgraph for the `as_field_op` builtin function."""
     assert isinstance(node, gtir.FunCall)
@@ -181,23 +178,16 @@ def translate_as_field_op(
     assert isinstance(domain_expr, gtir.FunCall)
 
     # add local storage to compute the field operator over the given domain
-    # TODO: use type inference to determine the result type
-    node_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     domain = dace_fieldview_util.get_domain(domain_expr)
-
-    if cpm.is_applied_reduce(stencil_expr.expr):
-        if reduce_identity:
-            raise NotImplementedError("nested reductions not supported.")
-        _, _, reduce_identity = gtir_to_tasklet.get_reduce_params(stencil_expr.expr)
+    assert isinstance(node.type, ts.FieldType)
 
     # first visit the list of arguments and build a symbol map
     stencil_args = [
-        _parse_arg_expr(arg, sdfg, state, sdfg_builder, domain, let_symbols, reduce_identity)
-        for arg in node.args
+        _parse_arg_expr(arg, sdfg, state, sdfg_builder, domain, let_symbols) for arg in node.args
     ]
 
     # represent the field operator as a mapped tasklet graph, which will range over the field domain
-    taskgen = gtir_to_tasklet.LambdaToTasklet(sdfg, state, sdfg_builder, reduce_identity)
+    taskgen = gtir_to_tasklet.LambdaToTasklet(sdfg, state, sdfg_builder)
     input_connections, output_expr = taskgen.visit(stencil_expr, args=stencil_args)
     assert isinstance(output_expr, gtir_to_tasklet.ValueExpr)
     output_desc = output_expr.node.desc(sdfg)
@@ -214,7 +204,7 @@ def translate_as_field_op(
 
     # allocate local temporary storage for the result field
     field_node, field_type = _create_temporary_field(
-        sdfg, state, domain, node_type, output_desc, output_expr.field_type
+        sdfg, state, domain, node.type, output_desc, output_expr.field_type
     )
 
     # assume tasklet with single output
@@ -258,7 +248,6 @@ def translate_cond(
     state: dace.SDFGState,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
     let_symbols: dict[str, TemporaryData],
-    reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
 ) -> list[TemporaryData]:
     """Generates the dataflow subgraph for the `cond` builtin function."""
     assert isinstance(node, gtir.FunCall)
@@ -305,14 +294,12 @@ def translate_cond(
         sdfg=sdfg,
         head_state=true_state,
         let_symbols=let_symbols,
-        reduce_identity=reduce_identity,
     )
     false_br_args = sdfg_builder.visit(
         false_expr,
         sdfg=sdfg,
         head_state=false_state,
         let_symbols=let_symbols,
-        reduce_identity=reduce_identity,
     )
 
     output_nodes = []
@@ -349,7 +336,6 @@ def translate_symbol_ref(
     state: dace.SDFGState,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
     let_symbols: dict[str, TemporaryData],
-    reduce_identity: Optional[gtir_to_tasklet.SymbolExpr] = None,
 ) -> list[TemporaryData]:
     """Generates the dataflow subgraph for a `ir.SymRef` node."""
     assert isinstance(node, (gtir.Literal, gtir.SymRef))

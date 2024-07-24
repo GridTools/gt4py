@@ -18,7 +18,6 @@ from typing import TypeGuard
 from gt4py.eve import NodeTranslator, traits
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next.iterator import ir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.iterator.transforms import inline_lambdas
 
 
@@ -27,6 +26,14 @@ def _is_map(node: ir.Node) -> TypeGuard[ir.FunCall]:
         isinstance(node, ir.FunCall)
         and isinstance(node.fun, ir.FunCall)
         and node.fun.fun == ir.SymRef(id="map_")
+    )
+
+
+def _is_reduce(node: ir.Node) -> TypeGuard[ir.FunCall]:
+    return (
+        isinstance(node, ir.FunCall)
+        and isinstance(node.fun, ir.FunCall)
+        and node.fun.fun == ir.SymRef(id="reduce")
     )
 
 
@@ -64,7 +71,7 @@ class FuseMaps(traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrai
 
     def visit_FunCall(self, node: ir.FunCall, **kwargs):
         node = self.generic_visit(node)
-        if _is_map(node) or cpm.is_applied_reduce(node):
+        if _is_map(node) or _is_reduce(node):
             if any(_is_map(arg) for arg in node.args):
                 first_param = (
                     0 if _is_map(node) else 1
@@ -76,7 +83,7 @@ class FuseMaps(traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrai
                 inlined_args = []
                 new_params = []
                 new_args = []
-                if cpm.is_applied_reduce(node):
+                if _is_reduce(node):
                     # param corresponding to reduce acc
                     inlined_args.append(ir.SymRef(id=outer_op.params[0].id))
                     new_params.append(outer_op.params[0])
@@ -112,7 +119,7 @@ class FuseMaps(traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrai
                     return ir.FunCall(
                         fun=ir.FunCall(fun=ir.SymRef(id="map_"), args=[new_op]), args=new_args
                     )
-                else:  # is_applied_reduce
+                else:  # _is_reduce(node)
                     return ir.FunCall(
                         fun=ir.FunCall(fun=ir.SymRef(id="reduce"), args=[new_op, node.fun.args[1]]),
                         args=new_args,

@@ -25,8 +25,9 @@ from gt4py.next.program_processors.runners.dace_fieldview import gtir_python_cod
 from gt4py.next.type_system import type_specifications as ts
 
 
-def as_dace_type(type_: ts.ScalarType) -> dace.typeclass:
+def as_dace_type(type_: ts.TypeSpec) -> dace.typeclass:
     """Converts GT4Py scalar type to corresponding DaCe type."""
+    assert isinstance(type_, ts.ScalarType)
     match type_.kind:
         case ts.ScalarKind.BOOL:
             return dace.bool_
@@ -130,12 +131,3 @@ def get_map_variable(dim: gtx_common.Dimension) -> str:
     """
     suffix = "dim" if dim.kind == gtx_common.DimensionKind.LOCAL else ""
     return f"i_{dim.value}_gtx_{dim.kind}{suffix}"
-
-
-def get_neighbors_field_type(offset: str, dtype: dace.typeclass) -> ts.FieldType:
-    """Utility function to obtain the descriptor for a local field of neighbors."""
-    scalar_type = as_scalar_type(str(dtype.as_numpy_dtype()))
-    return ts.FieldType(
-        [gtx_common.Dimension(offset, gtx_common.DimensionKind.LOCAL)],
-        scalar_type,
-    )

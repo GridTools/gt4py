@@ -254,14 +254,6 @@ def lift(expr):
     return call(call("lift")(expr))
 
 
-def as_fieldop(stencil, domain=None):
-    """Creates a field_operator from a stencil."""
-    args = [stencil]
-    if domain is not None:
-        args.append(domain)
-    return call(call("as_fieldop")(*args))
-
-
 class let:
     """
     Create a lambda expression that works as a let.
@@ -406,6 +398,33 @@ def promote_to_lifted_stencil(op: str | itir.SymRef | Callable) -> Callable[...,
     return _impl
 
 
+def map_(op):
+    """Create a `map_` call."""
+    return call(call("map_")(op))
+
+
+def as_fieldop(expr: itir.Expr, domain: Optional[itir.FunCall] = None) -> call:
+    """
+    Create an `as_fieldop` call.
+    Examples
+    --------
+    >>> str(as_fieldop(lambda_("it1", "it2")(plus(deref("it1"), deref("it2"))))("field1", "field2"))
+    '(⇑(λ(it1, it2) → ·it1 + ·it2))(field1, field2)'
+    """
+    return call(
+        call("as_fieldop")(
+            *(
+                (
+                    expr,
+                    domain,
+                )
+                if domain
+                else (expr,)
+            )
+        )
+    )
+
+
 def op_as_fieldop(
     op: str | itir.SymRef | Callable, domain: Optional[itir.FunCall] = None
 ) -> Callable[..., itir.FunCall]:
@@ -429,8 +448,3 @@ def op_as_fieldop(
         return as_fieldop(lambda_(*args)(op(*[deref(arg) for arg in args])), domain)(*its)
 
     return _impl
-
-
-def map_(op):
-    """Create a `map_` call."""
-    return call(call("map_")(op))
