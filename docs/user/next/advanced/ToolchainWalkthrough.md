@@ -73,7 +73,7 @@ linkStyle 0 stroke:red,stroke-width:4px,color:pink
 ```python
 
 foast = backend.DEFAULT_TRANSFORMS.func_to_foast(
-    gtx.otf.workflow.DataArgsPair(start, gtx.otf.arguments.CompileArgSpec.empty())
+    gtx.otf.workflow.DataArgsPair(start, gtx.otf.arguments.CompileTimeArgs.empty())
 )
 ```
 
@@ -140,7 +140,7 @@ jit_args = gtx.otf.arguments.JITArgs.from_signature(
     offset_provider=OFFSET_PROVIDER
 )
 
-aot_args = gtx.otf.arguments.CompileArgSpec.from_concrete_no_size(
+aot_args = gtx.otf.arguments.CompileTimeArgs.from_concrete_no_size(
     *jit_args.args, **jit_args.kwargs
 )
 ```
@@ -360,7 +360,7 @@ linkStyle 6 stroke:red,stroke-width:4px,color:pink
 
 ```python
 p_past = backend.DEFAULT_TRANSFORMS.func_to_past(
-    gtx.otf.workflow.DataArgsPair(data=p_start, args=gtx.otf.arguments.CompileArgSpec.empty()))
+    gtx.otf.workflow.DataArgsPair(data=p_start, args=gtx.otf.arguments.CompileTimeArgs.empty()))
 ```
 
 ## Full Program Toolchain

@@ -30,7 +30,7 @@ TgtL_co = TypeVar("TgtL_co", bound=languages.LanguageTag, covariant=True)
 SettingT_co = TypeVar("SettingT_co", bound=languages.LanguageSettings, covariant=True)
 
 
-AOTProgram: TypeAlias = workflow.DataArgsPair[itir.FencilDefinition, arguments.CompileArgSpec]
+AOTProgram: TypeAlias = workflow.DataArgsPair[itir.FencilDefinition, arguments.CompileTimeArgs]
 
 
 @dataclasses.dataclass(frozen=True)

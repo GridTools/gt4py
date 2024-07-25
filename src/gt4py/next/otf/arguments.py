@@ -40,7 +40,7 @@ class JITArgs:
 
 
 @dataclasses.dataclass(frozen=True)
-class CompileArg:
+class CompileTimeArg:
     gt_type: ts.TypeSpec
 
     def __gt_type__(self) -> ts.TypeSpec:
@@ -57,7 +57,7 @@ class CompileArg:
 
 
 @dataclasses.dataclass(frozen=True)
-class CompileConnectivity(common.Connectivity):
+class CompileTimeConnectivity(common.Connectivity):
     max_neighbors: int
     has_skip_values: bool
     origin_axis: common.Dimension
@@ -76,15 +76,15 @@ class CompileConnectivity(common.Connectivity):
 
 
 @dataclasses.dataclass(frozen=True)
-class CompileArgSpec:
-    args: tuple[CompileArg | tuple, ...]
-    kwargs: dict[str, CompileArg | tuple]
+class CompileTimeArgs:
+    args: tuple[CompileTimeArg | tuple, ...]
+    kwargs: dict[str, CompileTimeArg | tuple]
     offset_provider: dict[str, common.Connectivity | common.Dimension]
     column_axis: Optional[common.Dimension]
 
     @classmethod
     def from_concrete_no_size(cls, *args: Any, **kwargs: Any) -> Self:
-        compile_args = tuple(CompileArg.from_concrete(arg) for arg in args)
+        compile_args = tuple(CompileTimeArg.from_concrete(arg) for arg in args)
         kwargs_copy = kwargs.copy()
         offset_provider = kwargs_copy.pop("offset_provider", {})
         return cls(
@@ -93,7 +93,7 @@ class CompileArgSpec:
             # offset_provider={k: connectivity_or_dimension(v) for k, v in offset_provider.items()},  # noqa: ERA001 [commented-out-code]
             column_axis=kwargs_copy.pop("column_axis", None),
             kwargs={
-                k: CompileArg.from_concrete(v) for k, v in kwargs_copy.items() if v is not None
+                k: CompileTimeArg.from_concrete(v) for k, v in kwargs_copy.items() if v is not None
             },
         )
 
@@ -114,13 +114,13 @@ class CompileArgSpec:
 
 def jit_to_aot_args(
     inp: JITArgs,
-) -> CompileArgSpec:
-    return CompileArgSpec.from_concrete_no_size(*inp.args, **inp.kwargs)
+) -> CompileTimeArgs:
+    return CompileTimeArgs.from_concrete_no_size(*inp.args, **inp.kwargs)
 
 
 def adapted_jit_to_aot_args_factory() -> (
     workflow.Workflow[
-        workflow.DataArgsPair[DATA_T, JITArgs], workflow.DataArgsPair[DATA_T, CompileArgSpec]
+        workflow.DataArgsPair[DATA_T, JITArgs], workflow.DataArgsPair[DATA_T, CompileTimeArgs]
     ]
 ):
     return workflow.ArgsOnlyAdapter(jit_to_aot_args)
@@ -128,24 +128,26 @@ def adapted_jit_to_aot_args_factory() -> (
 
 def connectivity_or_dimension(
     some_offset_provider: common.Connectivity | common.Dimension,
-) -> CompileConnectivity | common.Dimension:
+) -> CompileTimeConnectivity | common.Dimension:
     match some_offset_provider:
         case common.Dimension():
             return some_offset_provider
         case common.Connectivity():
-            return CompileConnectivity.from_connectivity(some_offset_provider)
+            return CompileTimeConnectivity.from_connectivity(some_offset_provider)
         case _:
             raise ValueError
 
 
-def iter_size_compile_args(args: Iterable[CompileArg | tuple]) -> Iterator[CompileArg | tuple]:
+def iter_size_compile_args(
+    args: Iterable[CompileTimeArg | tuple],
+) -> Iterator[CompileTimeArg | tuple]:
     for arg in args:
         match argt := type_translation.from_value(arg):
             case ts.TupleType():
-                yield from iter_size_compile_args((CompileArg(t) for t in argt))
+                yield from iter_size_compile_args((CompileTimeArg(t) for t in argt))
             case ts.FieldType():
                 yield from [
-                    CompileArg(ts.ScalarType(kind=ts.ScalarKind.INT32)) for dim in argt.dims
+                    CompileTimeArg(ts.ScalarType(kind=ts.ScalarKind.INT32)) for dim in argt.dims
                 ]
             case _:
                 pass

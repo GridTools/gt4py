@@ -102,14 +102,16 @@ class Program:
     @functools.cached_property
     def past_stage(self):
         # backwards compatibility for backends that do not support the full toolchain
-        no_args_def = workflow.DataArgsPair(self.definition_stage, arguments.CompileArgSpec.empty())
+        no_args_def = workflow.DataArgsPair(
+            self.definition_stage, arguments.CompileTimeArgs.empty()
+        )
         if self.backend is not None and self.backend.transforms_prog is not None:
             return self.backend.transforms_prog.func_to_past(no_args_def).data
         return backend_exp.DEFAULT_TRANSFORMS.func_to_past(no_args_def).data
 
     # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self):
-        no_args_past = workflow.DataArgsPair(self.past_stage, arguments.CompileArgSpec.empty())
+        no_args_past = workflow.DataArgsPair(self.past_stage, arguments.CompileTimeArgs.empty())
         if self.backend is not None and self.backend.transforms_prog is not None:
             return self.backend.transforms_prog.past_lint(no_args_past).data
         return backend_exp.DEFAULT_TRANSFORMS.past_lint(no_args_past).data
@@ -181,7 +183,7 @@ class Program:
                 closure_vars=self.past_stage.closure_vars,
                 grid_type=self.definition_stage.grid_type,
             ),
-            args=arguments.CompileArgSpec.empty(),
+            args=arguments.CompileTimeArgs.empty(),
         )
         if self.backend is not None and self.backend.transforms_prog is not None:
             return self.backend.transforms_prog.past_to_itir(no_args_past).data
@@ -445,16 +447,16 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     def __gt_itir__(self) -> itir.FunctionDefinition:
         if self.backend is not None and self.backend.transforms_fop is not None:
             return self.backend.transforms_fop.foast_to_itir(
-                workflow.DataArgsPair(self.foast_stage, arguments.CompileArgSpec.empty())
+                workflow.DataArgsPair(self.foast_stage, arguments.CompileTimeArgs.empty())
             )
         return backend_exp.DEFAULT_TRANSFORMS.foast_to_itir(
-            workflow.DataArgsPair(self.foast_stage, arguments.CompileArgSpec.empty())
+            workflow.DataArgsPair(self.foast_stage, arguments.CompileTimeArgs.empty())
         )
 
     def __gt_closure_vars__(self) -> dict[str, Any]:
         return self.foast_stage.closure_vars
 
-    def as_program(self, compiletime_args: arguments.CompileArgSpec) -> Program:
+    def as_program(self, compiletime_args: arguments.CompileTimeArgs) -> Program:
         foast_with_types = (
             workflow.DataArgsPair(
                 data=self.foast_stage,

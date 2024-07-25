@@ -241,7 +241,7 @@ class RoundtripExecutor(modular_executor.ModularExecutor):
     dispatch_backend: Optional[ppi.ProgramExecutor] = None
 
     def __call__(self, program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
-        argspec = arguments.CompileArgSpec.from_concrete_no_size(*args, **kwargs)
+        argspec = arguments.CompileTimeArgs.from_concrete_no_size(*args, **kwargs)
         self.otf_workflow(
             stages.AOTProgram(
                 data=program,

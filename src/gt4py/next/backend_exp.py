@@ -129,7 +129,7 @@ class ExpBackend(backend.Backend):
         program_info = self.transforms_fop(
             workflow.DataArgsPair(
                 data=program,
-                args=arguments.CompileArgSpec.from_concrete_no_size(*args, **kwargs),
+                args=arguments.CompileTimeArgs.from_concrete_no_size(*args, **kwargs),
             )
         )
         # TODO(ricoh): get rid of executors altogether

@@ -69,7 +69,7 @@ def test_codegen(fencil_example):
     module = gtfn_module.translate_program_cpu(
         stages.AOTProgram(
             data=fencil,
-            args=arguments.CompileArgSpec.from_concrete(*parameters, **{"offset_provider": {}}),
+            args=arguments.CompileTimeArgs.from_concrete(*parameters, **{"offset_provider": {}}),
         )
     )
     assert module.entry_point.name == fencil.id

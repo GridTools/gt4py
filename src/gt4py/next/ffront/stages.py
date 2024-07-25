@@ -43,7 +43,7 @@ class FieldOperatorDefinition(Generic[OperatorNodeT]):
 
 
 DSL_FOP: typing.TypeAlias = FieldOperatorDefinition
-AOT_DSL_FOP: typing.TypeAlias = workflow.DataArgsPair[DSL_FOP, arguments.CompileArgSpec]
+AOT_DSL_FOP: typing.TypeAlias = workflow.DataArgsPair[DSL_FOP, arguments.CompileTimeArgs]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -56,7 +56,7 @@ class FoastOperatorDefinition(Generic[OperatorNodeT]):
 
 
 FOP: typing.TypeAlias = FoastOperatorDefinition
-AOT_FOP: typing.TypeAlias = workflow.DataArgsPair[FOP, arguments.CompileArgSpec]
+AOT_FOP: typing.TypeAlias = workflow.DataArgsPair[FOP, arguments.CompileTimeArgs]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -67,7 +67,7 @@ class ProgramDefinition:
 
 
 DSL_PRG: typing.TypeAlias = ProgramDefinition
-AOT_DSL_PRG: typing.TypeAlias = workflow.DataArgsPair[DSL_PRG, arguments.CompileArgSpec]
+AOT_DSL_PRG: typing.TypeAlias = workflow.DataArgsPair[DSL_PRG, arguments.CompileTimeArgs]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -79,7 +79,7 @@ class PastProgramDefinition:
 
 
 PRG: typing.TypeAlias = PastProgramDefinition
-AOT_PRG: typing.TypeAlias = workflow.DataArgsPair[PRG, arguments.CompileArgSpec]
+AOT_PRG: typing.TypeAlias = workflow.DataArgsPair[PRG, arguments.CompileTimeArgs]
 
 
 def fingerprint_stage(obj: Any, algorithm: Optional[str | xtyping.HashlibAlgorithm] = None) -> str:
@@ -116,7 +116,7 @@ for t in (str, int):
 @add_content_to_fingerprint.register(FoastOperatorDefinition)
 @add_content_to_fingerprint.register(PastProgramDefinition)
 @add_content_to_fingerprint.register(workflow.DataArgsPair)
-@add_content_to_fingerprint.register(arguments.CompileArgSpec)
+@add_content_to_fingerprint.register(arguments.CompileTimeArgs)
 def add_stage_to_fingerprint(obj: Any, hasher: xtyping.HashlibAlgorithm) -> None:
     add_content_to_fingerprint(obj.__class__, hasher)
     for field in dataclasses.fields(obj):
@@ -162,4 +162,5 @@ def add_foast_located_node_to_fingerprint(
     obj: foast.LocatedNode, hasher: xtyping.HashlibAlgorithm
 ) -> None:
     add_content_to_fingerprint(obj.location, hasher)
+    add_content_to_fingerprint(str(obj), hasher)
     add_content_to_fingerprint(str(obj), hasher)

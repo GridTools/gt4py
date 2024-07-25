@@ -102,13 +102,13 @@ def test_fingerprint_stage_field_op_def(fieldop, samecode_fieldop, different_fie
 
 def test_fingerprint_stage_foast_op_def(fieldop, samecode_fieldop, different_fieldop):
     foast = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_foast(
-        workflow.DataArgsPair(fieldop.definition_stage, arguments.CompileArgSpec.empty())
+        workflow.DataArgsPair(fieldop.definition_stage, arguments.CompileTimeArgs.empty())
     ).data
     samecode = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_foast(
-        workflow.DataArgsPair(samecode_fieldop.definition_stage, arguments.CompileArgSpec.empty())
+        workflow.DataArgsPair(samecode_fieldop.definition_stage, arguments.CompileTimeArgs.empty())
     ).data
     different = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_foast(
-        workflow.DataArgsPair(different_fieldop.definition_stage, arguments.CompileArgSpec.empty())
+        workflow.DataArgsPair(different_fieldop.definition_stage, arguments.CompileTimeArgs.empty())
     ).data
 
     assert stages.fingerprint_stage(samecode) != stages.fingerprint_stage(foast)
@@ -190,13 +190,13 @@ def test_fingerprint_stage_program_def(program, samecode_program, different_prog
 
 def test_fingerprint_stage_past_def(program, samecode_program, different_program):
     past = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_past(
-        workflow.DataArgsPair(program.definition_stage, arguments.CompileArgSpec.empty())
+        workflow.DataArgsPair(program.definition_stage, arguments.CompileTimeArgs.empty())
     )
     samecode = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_past(
-        workflow.DataArgsPair(samecode_program.definition_stage, arguments.CompileArgSpec.empty())
+        workflow.DataArgsPair(samecode_program.definition_stage, arguments.CompileTimeArgs.empty())
     )
     different = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_past(
-        workflow.DataArgsPair(different_program.definition_stage, arguments.CompileArgSpec.empty())
+        workflow.DataArgsPair(different_program.definition_stage, arguments.CompileTimeArgs.empty())
     )
 
     assert stages.fingerprint_stage(samecode) != stages.fingerprint_stage(past)

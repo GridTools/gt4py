@@ -31,7 +31,7 @@ class ModularExecutor(ppi.ProgramExecutor):
         self.otf_workflow(
             stages.AOTProgram(
                 data=program,
-                args=arguments.CompileArgSpec.from_concrete(*args, **kwargs),
+                args=arguments.CompileTimeArgs.from_concrete(*args, **kwargs),
             )
         )(*args, offset_provider=kwargs["offset_provider"])
 

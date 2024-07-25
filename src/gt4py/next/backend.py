@@ -28,7 +28,7 @@ from gt4py.next.program_processors import processor_interface as ppi
 
 
 ARGS: typing.TypeAlias = arguments.JITArgs
-CARG: typing.TypeAlias = arguments.CompileArgSpec
+CARG: typing.TypeAlias = arguments.CompileTimeArgs
 IT_PRG: typing.TypeAlias = itir.FencilDefinition
 
 

@@ -25,7 +25,7 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 
 
 AOT_PRG: TypeAlias = workflow.DataArgsPair[
-    ffront_stages.PastProgramDefinition, arguments.CompileArgSpec
+    ffront_stages.PastProgramDefinition, arguments.CompileTimeArgs
 ]
 
 
@@ -35,7 +35,7 @@ def transform_program_args(inp: AOT_PRG) -> AOT_PRG:
     )
     return workflow.DataArgsPair(
         data=inp.data,
-        args=arguments.CompileArgSpec(
+        args=arguments.CompileTimeArgs(
             args=tuple((*rewritten_args, *(size_args))),
             kwargs=kwargs,
             offset_provider=inp.args.offset_provider,
