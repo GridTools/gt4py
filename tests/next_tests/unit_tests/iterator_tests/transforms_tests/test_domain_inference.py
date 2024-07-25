@@ -511,7 +511,6 @@ def test_program_tree_tmps_two_inputs(offset_provider):
         im.minus(im.deref(im.shift(itir.SymbolRef("Ioff"), -1)("arg0")), im.deref("arg1"))
     )
 
-    # TODO: use im.as_fieldop everywhere
     as_fieldop_tmp1 = im.as_fieldop(stencil)(im.ref("in_field1"), im.ref("in_field2"))
     as_fieldop_tmp2 = im.as_fieldop(stencil_tmp)(im.ref("tmp1"))
     as_fieldop_out1 = im.as_fieldop(stencil_tmp)(im.ref("tmp2"))

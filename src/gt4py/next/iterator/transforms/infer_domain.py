@@ -14,17 +14,10 @@
 
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Dict, Tuple
-from gt4py.next import common
 from gt4py.next.common import Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
-from gt4py.next.iterator.transforms.global_tmps import (
-    AUTO_DOMAIN,
-    SymbolicDomain,
-    SymbolicRange,
-    _max_domain_sizes_by_location_type,
-    domain_union,
-)
+from gt4py.next.iterator.transforms.global_tmps import AUTO_DOMAIN, SymbolicDomain, domain_union
 from gt4py.next.iterator.transforms.trace_shifts import TraceShifts
 
 
@@ -39,48 +32,6 @@ def _merge_domains(
             new_domains[key] = value
 
     return new_domains
-
-
-# TODO: move to SymbolicDomain.translate?
-def _translate_domain(
-    symbolic_domain: SymbolicDomain,
-    shift: Tuple[itir.OffsetLiteral, itir.OffsetLiteral],
-    offset_provider: Dict[str, Dimension],
-) -> SymbolicDomain:
-    dims = list(symbolic_domain.ranges.keys())
-    new_ranges = {dim: symbolic_domain.ranges[dim] for dim in dims}
-    if shift:
-        off, val = shift
-        nbt_provider = offset_provider[off.value]
-        if isinstance(nbt_provider, common.Dimension):
-            current_dim = nbt_provider
-            # cartesian offset
-            new_ranges[current_dim] = SymbolicRange.translate(
-                symbolic_domain.ranges[current_dim], val.value
-            )
-        elif isinstance(nbt_provider, common.Connectivity):
-            # unstructured shift
-            # TODO: move to initialization
-            horizontal_sizes = _max_domain_sizes_by_location_type(offset_provider)
-
-            old_dim = nbt_provider.origin_axis
-            new_dim = nbt_provider.neighbor_axis
-
-            assert new_dim not in new_ranges or old_dim == new_dim
-
-            # TODO(tehrengruber): symbolic sizes for ICON?
-            new_range = SymbolicRange(
-                im.literal("0", itir.INTEGER_INDEX_BUILTIN),
-                im.literal(str(horizontal_sizes[new_dim.value]), itir.INTEGER_INDEX_BUILTIN),
-            )
-            new_ranges = dict(
-                (dim, range_) if dim != old_dim else (new_dim, new_range)
-                for dim, range_ in new_ranges.items()
-            )
-        else:
-            raise AssertionError()
-
-    return SymbolicDomain(symbolic_domain.grid_type, new_ranges)
 
 
 # TODO: until TraceShifts directly supporty stencils we just wrap our expression into a dummy closure in this helper function.
@@ -129,7 +80,7 @@ def infer_as_fieldop(
         shifts_list = shifts_results[in_field_id]
 
         new_domains = [
-            _translate_domain(input_domain, shift, offset_provider) for shift in shifts_list
+            SymbolicDomain.translate(input_domain, shift, offset_provider) for shift in shifts_list
         ]
 
         accessed_domains[in_field_id] = domain_union(new_domains)
