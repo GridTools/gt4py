@@ -29,25 +29,26 @@ from gt4py.next.ffront import (
 from gt4py.next.ffront.experimental import EXPERIMENTAL_FUN_BUILTIN_NAMES
 from gt4py.next.ffront.fbuiltins import FUN_BUILTIN_NAMES, MATH_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
 from gt4py.next.ffront.foast_introspection import StmtReturnKind, deduce_stmt_return_kind
+from gt4py.next.ffront.stages import AOT_FOP, FOP
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.otf import workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
-def foast_to_itir(inp: ffront_stages.FoastOperatorDefinition) -> itir.Expr:
+def foast_to_itir(inp: FOP) -> itir.Expr:
     return FieldOperatorLowering.apply(inp.foast_node)
 
 
-def foast_to_itir_factory(
-    cached: bool = True, adapter: bool = True
-) -> workflow.Workflow[ffront_stages.FoastOperatorDefinition, itir.Expr]:
+def foast_to_itir_factory(cached: bool = True) -> workflow.Workflow[FOP, itir.Expr]:
     wf = foast_to_itir
     if cached:
         wf = workflow.CachedStep(step=wf, hash_function=ffront_stages.fingerprint_stage)
-    if adapter:
-        wf = workflow.StripArgsAdapter(wf)
     return wf
+
+
+def adapted_foast_to_itir_factory(**kwargs: Any) -> workflow.Workflow[AOT_FOP, itir.Expr]:
+    return workflow.StripArgsAdapter(foast_to_itir_factory(**kwargs))
 
 
 def promote_to_list(node: foast.Symbol | foast.Expr) -> Callable[[itir.Expr], itir.Expr]:

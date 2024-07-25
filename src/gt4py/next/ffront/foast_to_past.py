@@ -24,13 +24,10 @@ from gt4py.next.ffront import (
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.past_passes import closure_var_type_deduction, type_deduction
+from gt4py.next.ffront.stages import AOT_FOP, AOT_PRG
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import arguments, workflow
+from gt4py.next.otf import workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
-
-
-AOT_FOP = workflow.DataArgsPair[ffront_stages.FoastOperatorDefinition, arguments.CompileArgSpec]
-AOT_PRG = workflow.DataArgsPair[ffront_stages.PastProgramDefinition, arguments.CompileArgSpec]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -49,7 +46,7 @@ class ItirShim:
 
 
 @dataclasses.dataclass(frozen=True)
-class OperatorToProgram(workflow.Workflow):
+class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
     foast_to_itir: workflow.Workflow[AOT_FOP, itir.Expr]
 
     def __call__(self, inp: AOT_FOP) -> AOT_PRG:
@@ -132,7 +129,9 @@ def operator_to_program_factory(
     foast_to_itir_step: Optional[workflow.Workflow[AOT_FOP, itir.Expr]] = None,
     cached: bool = True,
 ) -> workflow.Workflow[AOT_FOP, AOT_PRG]:
-    wf = OperatorToProgram(foast_to_itir_step or foast_to_itir.foast_to_itir_factory())
+    wf: workflow.Workflow[AOT_FOP, AOT_PRG] = OperatorToProgram(
+        foast_to_itir_step or foast_to_itir.adapted_foast_to_itir_factory()
+    )
     if cached:
         wf = workflow.CachedStep(wf, hash_function=ffront_stages.fingerprint_stage)
     return wf

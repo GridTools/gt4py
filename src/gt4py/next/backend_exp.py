@@ -19,6 +19,7 @@ import typing
 from typing import Any
 
 from gt4py.next import backend
+from gt4py.next.backend import ARGS, CARG, INPUT_DATA_T, INPUT_PAIR_T
 from gt4py.next.ffront import (
     foast_to_itir,
     foast_to_past,
@@ -30,20 +31,21 @@ from gt4py.next.ffront import (
     stages as ffront_stages,
 )
 from gt4py.next.ffront.past_passes import linters as past_linters
+from gt4py.next.ffront.stages import (
+    AOT_DSL_FOP,
+    AOT_DSL_PRG,
+    AOT_FOP,
+    AOT_PRG,
+    DSL_FOP,
+    DSL_PRG,
+    FOP,
+    PRG,
+)
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import arguments, stages, workflow
 
 
 DataT = typing.TypeVar("DataT")
-
-
-ARGS: typing.TypeAlias = arguments.JITArgs
-CARG: typing.TypeAlias = arguments.CompileArgSpec
-DSL_FOP: typing.TypeAlias = ffront_stages.FieldOperatorDefinition
-FOP: typing.TypeAlias = ffront_stages.FoastOperatorDefinition
-DSL_PRG: typing.TypeAlias = ffront_stages.ProgramDefinition
-PRG: typing.TypeAlias = ffront_stages.PastProgramDefinition
-IT_PRG: typing.TypeAlias = itir.FencilDefinition
 
 
 @dataclasses.dataclass(frozen=True)
@@ -60,34 +62,24 @@ class PastToItirAdapter:
         return self.step(aot_fvprog)
 
 
-AOT_DSL_FOP: typing.Alias = workflow.DataArgsPair[DSL_FOP, CARG]
-AOT_DSL_PRG: typing.Alias = workflow.DataArgsPair[DSL_FOP, CARG]
-AOT_FOP: typing.TypeAlias = workflow.DataArgsPair[FOP, CARG]
-AOT_PRG: typing.TypeAlias = workflow.DataArgsPair[PRG, CARG]
-
-
-INPUT_DATA_T: typing.TypeAlias = DSL_FOP | FOP | DSL_PRG | PRG | IT_PRG
-INPUT_PAIR_T: typing.TypeAlias = workflow.DataArgsPair[INPUT_DATA_T, ARGS | CARG]
-
-
 @dataclasses.dataclass(frozen=True)
 class FieldopTransformWorkflow(workflow.MultiWorkflow[INPUT_PAIR_T, stages.AOTProgram]):
     """Modular workflow for transformations with access to intermediates."""
 
     aotify_args: workflow.Workflow[
         workflow.DataArgsPair[INPUT_DATA_T, ARGS], workflow.DataArgsPair[INPUT_DATA_T, CARG]
-    ] = dataclasses.field(default_factory=arguments.jit_to_aot_args_factory)
+    ] = dataclasses.field(default_factory=arguments.adapted_jit_to_aot_args_factory)
 
     func_to_foast: workflow.Workflow[AOT_DSL_FOP, AOT_FOP] = dataclasses.field(
-        default_factory=func_to_foast.func_to_foast_factory
+        default_factory=func_to_foast.adapted_func_to_foast_factory
     )
 
     func_to_past: workflow.Workflow[AOT_DSL_PRG, AOT_PRG] = dataclasses.field(
-        default_factory=func_to_past.func_to_past_factory
+        default_factory=func_to_past.adapted_func_to_past_factory
     )
 
     foast_to_itir: workflow.Workflow[AOT_FOP, itir.Expr] = dataclasses.field(
-        default_factory=foast_to_itir.foast_to_itir_factory
+        default_factory=foast_to_itir.adapted_foast_to_itir_factory
     )
 
     field_view_op_to_prog: workflow.Workflow[AOT_FOP, AOT_PRG] = dataclasses.field(
@@ -95,7 +87,7 @@ class FieldopTransformWorkflow(workflow.MultiWorkflow[INPUT_PAIR_T, stages.AOTPr
     )
 
     past_lint: workflow.Workflow[AOT_PRG, AOT_PRG] = dataclasses.field(
-        default_factory=past_linters.linter_factory
+        default_factory=past_linters.adapted_linter_factory
     )
 
     field_view_prog_args_transform: workflow.Workflow[AOT_PRG, AOT_PRG] = dataclasses.field(
@@ -150,7 +142,7 @@ class ExpBackend(backend.Backend):
         args, kwargs = signature.convert_to_positional(program, *args, **kwargs)
         program_info = self.transforms_fop(
             workflow.DataArgsPair(
-                data=program,  # type: ignore[arg-type] # TODO(ricoh): should go away when toolchain unified everywhere
+                data=program,
                 args=arguments.CompileArgSpec.from_concrete_no_size(*args, **kwargs),
             )
         )

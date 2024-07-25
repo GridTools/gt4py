@@ -30,12 +30,13 @@ from gt4py.next.ffront import (
 from gt4py.next.ffront.dialect_parser import DialectParser
 from gt4py.next.ffront.past_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeDeduction
+from gt4py.next.ffront.stages import AOT_DSL_PRG, AOT_PRG, DSL_PRG, PRG
 from gt4py.next.otf import workflow
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
 @workflow.make_step
-def func_to_past(inp: ffront_stages.ProgramDefinition) -> ffront_stages.PastProgramDefinition:
+def func_to_past(inp: DSL_PRG) -> PRG:
     source_def = source_utils.SourceDefinition.from_function(inp.definition)
     closure_vars = source_utils.get_closure_vars_from_function(inp.definition)
     annotations = typing.get_type_hints(inp.definition)
@@ -47,15 +48,22 @@ def func_to_past(inp: ffront_stages.ProgramDefinition) -> ffront_stages.PastProg
     )
 
 
-def func_to_past_factory(
-    cached: bool = True, adapter: bool = True
-) -> workflow.Workflow[ffront_stages.ProgramDefinition, ffront_stages.PastProgramDefinition]:
-    wf = func_to_past
-    if cached:
-        wf = workflow.CachedStep(step=wf, hash_function=ffront_stages.fingerprint_stage)
-    if adapter:
-        wf = workflow.DataOnlyAdapter(wf)
-    return wf
+# TODO(ricoh): turn this docstring from a note to self into something more useful
+def adapted_func_to_past_factory() -> workflow.Workflow[AOT_DSL_PRG, AOT_PRG]:
+    """
+    Do not allow caching.
+
+    Caching this step leads to problems when programmatically generating programs and fieldops.
+    Consider a function, which defines a fieldop "test_op" and a program "test_prog" and only the "test_op"
+    depends on the function's arguments (as it occurs in some tests). If this step is cached,
+    the second time the function is called, the "test_prog" has not changed in any way that can
+    be detected while hashing, yet it's closure var "test_op" refers to a different field operator.
+    This different field operator is only different in the value of a closure variable itself.
+
+    This will lead to subsequent executions of our hypothetical function effectively ignoring
+    all arguments that change "test_op".
+    """
+    return workflow.DataOnlyAdapter(func_to_past)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)

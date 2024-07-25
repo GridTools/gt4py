@@ -19,6 +19,7 @@ import dataclasses
 import functools
 import hashlib
 import types
+import typing
 from typing import Any, Generic, Optional, TypeVar
 
 import xxhash
@@ -26,7 +27,7 @@ import xxhash
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
 from gt4py.next.ffront import field_operator_ast as foast, program_ast as past, source_utils
-from gt4py.next.otf import arguments
+from gt4py.next.otf import arguments, workflow
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -42,6 +43,10 @@ class FieldOperatorDefinition(Generic[OperatorNodeT]):
     debug: bool = False
 
 
+DSL_FOP: typing.TypeAlias = FieldOperatorDefinition
+AOT_DSL_FOP: typing.TypeAlias = workflow.DataArgsPair[DSL_FOP, arguments.CompileArgSpec]
+
+
 @dataclasses.dataclass(frozen=True)
 class FoastOperatorDefinition(Generic[OperatorNodeT]):
     foast_node: OperatorNodeT
@@ -49,6 +54,10 @@ class FoastOperatorDefinition(Generic[OperatorNodeT]):
     grid_type: Optional[common.GridType] = None
     attributes: dict[str, Any] = dataclasses.field(default_factory=dict)
     debug: bool = False
+
+
+FOP: typing.TypeAlias = FoastOperatorDefinition
+AOT_FOP: typing.TypeAlias = workflow.DataArgsPair[FOP, arguments.CompileArgSpec]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -74,12 +83,20 @@ class ProgramDefinition:
     debug: bool = False
 
 
+DSL_PRG: typing.TypeAlias = ProgramDefinition
+AOT_DSL_PRG: typing.TypeAlias = workflow.DataArgsPair[DSL_PRG, arguments.CompileArgSpec]
+
+
 @dataclasses.dataclass(frozen=True)
 class PastProgramDefinition:
     past_node: past.Program
     closure_vars: dict[str, Any]
     grid_type: Optional[common.GridType] = None
     debug: bool = False
+
+
+PRG: typing.TypeAlias = PastProgramDefinition
+AOT_PRG: typing.TypeAlias = workflow.DataArgsPair[PRG, arguments.CompileArgSpec]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -105,6 +122,14 @@ def fingerprint_stage(obj: Any, algorithm: Optional[str | xtyping.HashlibAlgorit
         hasher = algorithm
 
     add_content_to_fingerprint(obj, hasher)
+    import devtools
+
+    if hasattr(obj, "definition"):
+        print(obj.definition.id if hasattr(obj.definition, "id") else obj.definition.__name__)
+    print(id(obj))
+    print(type(obj))
+    print(id(obj))
+    devtools.debug(hasher.hexdigest())
     return hasher.hexdigest()
 
 
@@ -121,13 +146,20 @@ for t in (str, int):
 @add_content_to_fingerprint.register(FoastOperatorDefinition)
 @add_content_to_fingerprint.register(FoastWithTypes)
 @add_content_to_fingerprint.register(FoastClosure)
-@add_content_to_fingerprint.register(ProgramDefinition)
 @add_content_to_fingerprint.register(PastProgramDefinition)
 @add_content_to_fingerprint.register(PastClosure)
-def add_content_to_fingerprint_stages(obj: Any, hasher: xtyping.HashlibAlgorithm) -> None:
+@add_content_to_fingerprint.register(workflow.DataArgsPair)
+@add_content_to_fingerprint.register(arguments.CompileArgSpec)
+def add_stage_to_fingerprint(obj: Any, hasher: xtyping.HashlibAlgorithm) -> None:
     add_content_to_fingerprint(obj.__class__, hasher)
     for field in dataclasses.fields(obj):
         add_content_to_fingerprint(getattr(obj, field.name), hasher)
+
+
+def add_jit_args_id_to_fingerprint(
+    obj: arguments.JITArgs, hasher: xtyping.HashlibAlgorithm
+) -> None:
+    add_content_to_fingerprint(str(id(obj)), hasher)
 
 
 @add_content_to_fingerprint.register
@@ -140,6 +172,7 @@ def add_func_to_fingerprint(obj: types.FunctionType, hasher: xtyping.HashlibAlgo
 @add_content_to_fingerprint.register
 def add_dict_to_fingerprint(obj: dict, hasher: xtyping.HashlibAlgorithm) -> None:
     for key, value in obj.items():
+        print(f"{key}: {value} added to fingerprint")
         add_content_to_fingerprint(key, hasher)
         add_content_to_fingerprint(value, hasher)
 

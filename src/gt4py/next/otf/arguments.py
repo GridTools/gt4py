@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import dataclasses
+import typing
 from typing import Any, Iterable, Iterator, Optional
 
 import numpy as np
@@ -23,6 +24,9 @@ from typing_extensions import Self
 from gt4py.next import common
 from gt4py.next.otf import workflow
 from gt4py.next.type_system import type_specifications as ts, type_translation
+
+
+DATA_T = typing.TypeVar("DATA_T")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -114,13 +118,12 @@ def jit_to_aot_args(
     return CompileArgSpec.from_concrete_no_size(*inp.args, **inp.kwargs)
 
 
-def jit_to_aot_args_factory(
-    adapter: bool = True,
-) -> workflow.Workflow[JITArgs, CompileArgSpec]:
-    wf = jit_to_aot_args
-    if adapter:
-        wf = workflow.ArgsOnlyAdapter(wf)
-    return wf
+def adapted_jit_to_aot_args_factory() -> (
+    workflow.Workflow[
+        workflow.DataArgsPair[DATA_T, JITArgs], workflow.DataArgsPair[DATA_T, CompileArgSpec]
+    ]
+):
+    return workflow.ArgsOnlyAdapter(jit_to_aot_args)
 
 
 def connectivity_or_dimension(

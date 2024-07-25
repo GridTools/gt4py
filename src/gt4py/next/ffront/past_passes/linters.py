@@ -12,7 +12,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from typing import Any
+
 from gt4py.next.ffront import gtcallable, stages as ffront_stages, transform_utils
+from gt4py.next.ffront.stages import AOT_PRG, PRG
 from gt4py.next.otf import workflow
 
 
@@ -49,12 +52,12 @@ def lint_undefined_symbols(
     return inp
 
 
-def linter_factory(
-    cached: bool = True, adapter: bool = True
-) -> workflow.Workflow[ffront_stages.PastProgramDefinition, ffront_stages.PastProgramDefinition]:
+def linter_factory(cached: bool = True, adapter: bool = True) -> workflow.Workflow[PRG, PRG]:
     wf = lint_misnamed_functions.chain(lint_undefined_symbols)
     if cached:
         wf = workflow.CachedStep(step=wf, hash_function=ffront_stages.fingerprint_stage)
-    if adapter:
-        wf = workflow.DataOnlyAdapter(wf)
     return wf
+
+
+def adapted_linter_factory(**kwargs: Any) -> workflow.Workflow[AOT_PRG, AOT_PRG]:
+    return workflow.DataOnlyAdapter(linter_factory(**kwargs))

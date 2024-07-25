@@ -42,19 +42,21 @@ from gt4py.next.ffront.foast_passes.dead_closure_var_elimination import DeadClos
 from gt4py.next.ffront.foast_passes.iterable_unpack import UnpackedAssignPass
 from gt4py.next.ffront.foast_passes.type_alias_replacement import TypeAliasReplacement
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
+from gt4py.next.ffront.stages import AOT_DSL_FOP, AOT_FOP, DSL_FOP, FOP
 from gt4py.next.otf import workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
 @workflow.make_step
-def func_to_foast(
-    inp: ffront_stages.FieldOperatorDefinition[ffront_stages.OperatorNodeT],
-) -> ffront_stages.FoastOperatorDefinition[ffront_stages.OperatorNodeT]:
+def func_to_foast(inp: DSL_FOP) -> FOP:
     source_def = source_utils.SourceDefinition.from_function(inp.definition)
     closure_vars = source_utils.get_closure_vars_from_function(inp.definition)
     annotations = typing.get_type_hints(inp.definition)
     foast_definition_node = FieldOperatorParser.apply(source_def, closure_vars, annotations)
     loc = foast_definition_node.location
+    import devtools
+
+    devtools.debug(inp.attributes)
     operator_attribute_nodes = {
         key: foast.Constant(value=value, type=type_translation.from_value(value), location=loc)
         for key, value in inp.attributes.items()
@@ -75,17 +77,15 @@ def func_to_foast(
     )
 
 
-def func_to_foast_factory(
-    cached: bool = True, data_adapter: bool = True
-) -> workflow.Workflow[
-    ffront_stages.FieldOperatorDefinition, ffront_stages.FoastOperatorDefinition
-]:
-    wf = func_to_foast
+def func_to_foast_factory(cached: bool = True) -> workflow.Workflow[DSL_FOP, FOP]:
+    wf: workflow.Workflow[DSL_FOP, FOP] = func_to_foast
     if cached:
         wf = workflow.CachedStep(step=wf, hash_function=ffront_stages.fingerprint_stage)
-    if data_adapter:
-        wf = workflow.DataOnlyAdapter(wf)
     return wf
+
+
+def adapted_func_to_foast_factory(**kwargs: Any) -> workflow.Workflow[AOT_DSL_FOP, AOT_FOP]:
+    return workflow.DataOnlyAdapter(func_to_foast_factory(**kwargs))
 
 
 class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):

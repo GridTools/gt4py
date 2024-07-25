@@ -210,6 +210,7 @@ def convert_args(
     ):
         if out is not None:
             args = (*args, out)
+        if len(sdfg.arg_names) > len(args):
             args = (*args, *gtfn.iter_size_args(args))
         if sdfg_program._lastargs:
             # The scalar arguments should be replaced with the actual value; for field arguments,

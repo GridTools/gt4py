@@ -474,6 +474,13 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
     def __call__(self, *args, **kwargs) -> None:
         if not next_embedded.context.within_valid_context() and self.backend is not None:
+            import devtools
+
+            devtools.debug(
+                self.definition_stage.attributes
+                if self.definition_stage
+                else self.foast_stage.attributes
+            )
             # non embedded execution
             if "offset_provider" not in kwargs:
                 raise errors.MissingArgumentError(None, "offset_provider", True)
@@ -668,6 +675,4 @@ def add_program_to_fingerprint(obj: Program, hasher: xtyping.HashlibAlgorithm) -
 @ffront_stages.add_content_to_fingerprint.register
 def add_past_program_to_fingerprint(obj: ProgramFromPast, hasher: xtyping.HashlibAlgorithm) -> None:
     ffront_stages.add_content_to_fingerprint(obj.past_stage, hasher)
-    ffront_stages.add_content_to_fingerprint(obj.backend, hasher)
-    ffront_stages.add_content_to_fingerprint(obj.backend, hasher)
     ffront_stages.add_content_to_fingerprint(obj.backend, hasher)
