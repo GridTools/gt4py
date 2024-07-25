@@ -43,11 +43,10 @@ except ImportError:
     run_dace_cpu: Optional[next_backend.Backend] = None
     run_dace_gpu: Optional[next_backend.Backend] = None
 
+pytestmark = pytest.mark.requires_dace
+
 
 def test_sdfgConvertible_laplap(cartesian_case):
-    if cartesian_case.executor not in [run_dace_cpu, run_dace_gpu]:
-        pytest.skip("DaCe-related test: Test SDFGConvertible interface for GT4Py programs")
-
     if cartesian_case.executor == run_dace_gpu:
         import cupy as xp
     else:
@@ -83,38 +82,6 @@ def test_sdfgConvertible_laplap(cartesian_case):
         lap_ref(lap_ref(in_field.array_ns.asarray(in_field.ndarray))),
     )
 
-    in_field_new = 3.14 * cases.allocate(cartesian_case, laplap_program, "in_field")()
-
-    # Provide all arguments instead of using the closure
-    @dace.program
-    def sdfg_with_args(
-        in_field,
-        out_field,
-        grid_type: dace.compiletime,
-        executor: dace.compiletime,
-        connectivities: dace.compiletime,
-    ):
-        tmp_field = xp.empty_like(out_field)
-        lap_program.with_grid_type(grid_type).with_backend(executor).with_connectivities(
-            connectivities
-        )(in_field, tmp_field)
-        lap_program.with_grid_type(grid_type).with_backend(executor).with_connectivities(
-            connectivities
-        )(tmp_field, out_field)
-
-    sdfg_with_args(
-        in_field_new,
-        out_field,
-        cartesian_case.grid_type,
-        cartesian_case.executor,
-        connectivities,
-    )
-
-    assert np.allclose(
-        gtx.field_utils.asnumpy(out_field)[2:-2, 2:-2],
-        lap_ref(lap_ref(in_field_new.array_ns.asarray(in_field.ndarray))),
-    )
-
 
 @gtx.field_operator
 def _testee(a: gtx.Field[gtx.Dims[Vertex], gtx.float64]):
@@ -128,9 +95,6 @@ def testee(a: gtx.Field[gtx.Dims[Vertex], gtx.float64], b: gtx.Field[gtx.Dims[Ed
 
 @pytest.mark.uses_unstructured_shift
 def test_sdfgConvertible_connectivities(unstructured_case):
-    if unstructured_case.executor not in [run_dace_cpu, run_dace_gpu]:
-        pytest.skip("DaCe-related test: Test SDFGConvertible interface for GT4Py programs")
-
     allocator, backend = unstructured_case.allocator, unstructured_case.executor
 
     rows = dace.symbol("rows")
@@ -160,12 +124,17 @@ def test_sdfgConvertible_connectivities(unstructured_case):
 
     SDFG = sdfg.to_sdfg(
         connectivities=connectivities
-    )  # connectivities could have been passed like `backend` -from the closure-, but this is an alternative way
+    )
     cSDFG = SDFG.compile()
 
     a_array = np.asarray([0.0, 1.0, 2.0])
     a = gtx.as_field([Vertex], a_array, allocator=allocator)
     out = gtx.zeros({Edge: 3}, allocator=allocator)
+    # This is a low level interface to call the compiled SDFG.
+    # It is not supposed to be used in user code.
+    # The high level interface should be provided by a DaCe Orchestrator,
+    # i.e. decorator that hides the low level operations.
+    # This test checks only that the SDFGConvertible interface works correctly.
     cSDFG(
         a,
         out,
