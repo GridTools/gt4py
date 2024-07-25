@@ -14,6 +14,7 @@
 
 import copy
 import numpy as np
+from typing import List
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms.infer_domain import infer_as_fieldop, infer_program
@@ -51,6 +52,46 @@ def unstructured_offset_provider():
     }
 
     return offset_provider
+
+
+def run_test_as_fieldop(
+    stencil,
+    domain,
+    expected_domain_dict,
+    offset_provider,
+    *refs,
+    domain_type=common.GridType.CARTESIAN,
+):
+    testee = im.as_fieldop(stencil)(*refs)
+    expected = im.as_fieldop(stencil, domain)(*refs)
+
+    actual_call, actual_domains = infer_as_fieldop(
+        testee, SymbolicDomain.from_expr(domain), offset_provider
+    )
+
+    folded_domains = domains_dict_constant_folding(actual_domains)
+    expected_domains = {
+        ref: SymbolicDomain.from_expr(im.domain(domain_type, d))
+        for ref, d in expected_domain_dict.items()
+    }
+
+    assert actual_call == expected
+    assert folded_domains == expected_domains
+
+
+def run_test_program(testee, expected, offset_provider):
+    actual_program = infer_program(testee, offset_provider)
+
+    folded_program = program_constant_folding(actual_program)
+    assert folded_program == expected
+
+
+def create_params(names: List[str]) -> List[im.sym]:
+    params = [im.sym(name) for name in names]
+    for param in params[:2]:
+        param.dtype = ("float64", False)
+        param.kind = "Iterator"
+    return params
 
 
 def domains_dict_constant_folding(domains: Dict[str, SymbolicDomain]) -> Dict[str, SymbolicDomain]:
@@ -102,64 +143,35 @@ def program_constant_folding(program_call: itir.Program) -> itir.Program:
     return new_call
 
 
-def test_forward_difference_x(
-    offset_provider,
-):
+def test_forward_difference_x(offset_provider):
     stencil = im.lambda_("arg0")(
         im.minus(im.deref(im.shift(itir.SymbolRef("Ioff"), 1)("arg0")), im.deref("arg0"))
     )
-    testee = im.as_fieldop(stencil)(im.ref("in_field"))
-
-    domain = im.domain(
-        common.GridType.CARTESIAN,
-        {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (0, 11)},
-    )
-
-    expected = im.as_fieldop(stencil, domain)(im.ref("in_field"))
-    expected_domains = {
-        "in_field": SymbolicDomain.from_expr(
-            im.domain(
-                common.GridType.CARTESIAN,
-                {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (0, 12)},
-            )
-        )
+    domain = im.domain(common.GridType.CARTESIAN, {"IDim": (0, 11)})
+    expected_domains_dict = {
+        "in_field": {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (0, 12)}
     }
-
-    actual_call, actual_domains = infer_as_fieldop(
-        testee, SymbolicDomain.from_expr(domain), offset_provider
-    )
-
-    folded_domains = domains_dict_constant_folding(actual_domains)
-    assert actual_call == expected
-    assert folded_domains == expected_domains
+    run_test_as_fieldop(stencil, domain, expected_domains_dict, offset_provider, im.ref("in_field"))
 
 
 def test_unstructured_shift(unstructured_offset_provider):
     stencil = im.lambda_("arg0")(im.deref(im.shift(itir.SymbolRef("E2V"), 1)("arg0")))
-    testee = im.as_fieldop(stencil)(im.ref("in_field"))
-
     domain = im.domain(
         common.GridType.UNSTRUCTURED,
         {common.Dimension(value="Edge", kind=common.DimensionKind.HORIZONTAL): (0, 1)},
     )
-
-    expected = im.as_fieldop(stencil, domain)(im.ref("in_field"))
-    expected_domains = {
-        "in_field": SymbolicDomain.from_expr(
-            im.domain(
-                common.GridType.UNSTRUCTURED,
-                {common.Dimension(value="Vertex", kind=common.DimensionKind.HORIZONTAL): (0, 2)},
-            )
-        )
+    expected_domains_dict = {
+        "in_field": {common.Dimension(value="Vertex", kind=common.DimensionKind.HORIZONTAL): (0, 2)}
     }
 
-    actual_call, actual_domains = infer_as_fieldop(
-        testee, SymbolicDomain.from_expr(domain), unstructured_offset_provider
+    run_test_as_fieldop(
+        stencil,
+        domain,
+        expected_domains_dict,
+        unstructured_offset_provider,
+        im.ref("in_field"),
+        domain_type=common.GridType.UNSTRUCTURED,
     )
-
-    folded_domains = domains_dict_constant_folding(actual_domains)
-    assert actual_call == expected
-    assert folded_domains == expected_domains
 
 
 def test_laplace(offset_provider):
@@ -178,25 +190,10 @@ def test_laplace(offset_provider):
             im.deref(im.shift(itir.SymbolRef("Joff"), -1)("arg0")),
         )
     )
-
-    testee = im.as_fieldop(stencil)(im.ref("in_field"))
-
     domain = im.domain(common.GridType.CARTESIAN, {"IDim": (0, 11), "JDim": (0, 7)})
+    expected_domains_dict = {"in_field": {"IDim": (-1, 12), "JDim": (-1, 8)}}
 
-    expected = im.as_fieldop(stencil, domain)(im.ref("in_field"))
-    expected_domains = {
-        "in_field": SymbolicDomain.from_expr(
-            im.domain(common.GridType.CARTESIAN, {"IDim": (-1, 12), "JDim": (-1, 8)})
-        )
-    }
-
-    actual_call, actual_domains = infer_as_fieldop(
-        testee, SymbolicDomain.from_expr(domain), offset_provider
-    )
-
-    folded_domains = domains_dict_constant_folding(actual_domains)
-    assert actual_call == expected
-    assert folded_domains == expected_domains
+    run_test_as_fieldop(stencil, domain, expected_domains_dict, offset_provider, im.ref("in_field"))
 
 
 def test_shift_x_y_two_inputs(offset_provider):
@@ -206,27 +203,19 @@ def test_shift_x_y_two_inputs(offset_provider):
             im.deref(im.shift(itir.SymbolRef("Joff"), 1)("arg1")),
         )
     )
-    testee = im.as_fieldop(stencil)(im.ref("in_field1"), im.ref("in_field2"))
-
     domain = im.domain(common.GridType.CARTESIAN, {"IDim": (0, 11), "JDim": (0, 7)})
-
-    expected = im.as_fieldop(stencil, domain)(im.ref("in_field1"), im.ref("in_field2"))
-    expected_domains = {
-        "in_field1": SymbolicDomain.from_expr(
-            im.domain(common.GridType.CARTESIAN, {"IDim": (-1, 10), "JDim": (0, 7)})
-        ),
-        "in_field2": SymbolicDomain.from_expr(
-            im.domain(common.GridType.CARTESIAN, {"IDim": (0, 11), "JDim": (1, 8)})
-        ),
+    expected_domains_dict = {
+        "in_field1": {"IDim": (-1, 10), "JDim": (0, 7)},
+        "in_field2": {"IDim": (0, 11), "JDim": (1, 8)},
     }
-
-    actual_call, actual_domains = infer_as_fieldop(
-        testee, SymbolicDomain.from_expr(domain), offset_provider
+    run_test_as_fieldop(
+        stencil,
+        domain,
+        expected_domains_dict,
+        offset_provider,
+        im.ref("in_field1"),
+        im.ref("in_field2"),
     )
-
-    folded_domains = domains_dict_constant_folding(actual_domains)
-    assert actual_call == expected
-    assert folded_domains == expected_domains
 
 
 def test_shift_x_y_z_three_inputs(offset_provider):
@@ -239,60 +228,37 @@ def test_shift_x_y_z_three_inputs(offset_provider):
             im.deref(im.shift(itir.SymbolRef("Koff"), -1)("arg2")),
         )
     )
-    testee = im.as_fieldop(stencil)(im.ref("in_field1"), im.ref("in_field2"), im.ref("in_field3"))
-
-    domain = im.domain(
-        common.GridType.CARTESIAN,
-        {
-            "IDim": (0, 11),
+    domain_dict = {
+        "IDim": (0, 11),
+        "JDim": (0, 7),
+        common.Dimension(value="KDim", kind=common.DimensionKind.VERTICAL): (0, 3),
+    }
+    expected_domain_dict = {
+        "in_field1": {
+            "IDim": (1, 12),
             "JDim": (0, 7),
             common.Dimension(value="KDim", kind=common.DimensionKind.VERTICAL): (0, 3),
         },
-    )
-
-    expected = im.as_fieldop(stencil, domain)(
-        im.ref("in_field1"), im.ref("in_field2"), im.ref("in_field3")
-    )
-    expected_domains = {
-        "in_field1": SymbolicDomain.from_expr(
-            im.domain(
-                common.GridType.CARTESIAN,
-                {
-                    "IDim": (1, 12),
-                    "JDim": (0, 7),
-                    common.Dimension(value="KDim", kind=common.DimensionKind.VERTICAL): (0, 3),
-                },
-            )
-        ),
-        "in_field2": SymbolicDomain.from_expr(
-            im.domain(
-                common.GridType.CARTESIAN,
-                {
-                    "IDim": (0, 11),
-                    "JDim": (1, 8),
-                    common.Dimension(value="KDim", kind=common.DimensionKind.VERTICAL): (0, 3),
-                },
-            )
-        ),
-        "in_field3": SymbolicDomain.from_expr(
-            im.domain(
-                common.GridType.CARTESIAN,
-                {
-                    "IDim": (0, 11),
-                    "JDim": (0, 7),
-                    common.Dimension(value="KDim", kind=common.DimensionKind.VERTICAL): (-1, 2),
-                },
-            )
-        ),
+        "in_field2": {
+            "IDim": (0, 11),
+            "JDim": (1, 8),
+            common.Dimension(value="KDim", kind=common.DimensionKind.VERTICAL): (0, 3),
+        },
+        "in_field3": {
+            "IDim": (0, 11),
+            "JDim": (0, 7),
+            common.Dimension(value="KDim", kind=common.DimensionKind.VERTICAL): (-1, 2),
+        },
     }
-
-    actual_call, actual_domains = infer_as_fieldop(
-        testee, SymbolicDomain.from_expr(domain), offset_provider
+    run_test_as_fieldop(
+        stencil,
+        im.domain(common.GridType.CARTESIAN, domain_dict),
+        expected_domain_dict,
+        offset_provider,
+        im.ref("in_field1"),
+        im.ref("in_field2"),
+        im.ref("in_field3"),
     )
-
-    folded_domains = domains_dict_constant_folding(actual_domains)
-    assert actual_call == expected
-    assert folded_domains == expected_domains
 
 
 def test_nested_stencils(offset_provider):
@@ -308,18 +274,17 @@ def test_nested_stencils(offset_provider):
             im.deref(im.shift(itir.SymbolRef("Joff"), -1)("arg1")),
         )
     )
-
     tmp = im.as_fieldop(inner_stencil)(im.ref("in_field1"), im.ref("in_field2"))
-
     testee = im.as_fieldop(stencil)(im.ref("in_field1"), tmp)
 
     domain_inner = im.domain(common.GridType.CARTESIAN, {"IDim": (0, 11), "JDim": (-1, 6)})
     domain = im.domain(common.GridType.CARTESIAN, {"IDim": (0, 11), "JDim": (0, 7)})
 
-    expected = im.as_fieldop(stencil, domain)(
-        im.ref("in_field1"),
-        im.as_fieldop(inner_stencil, domain_inner)(im.ref("in_field1"), im.ref("in_field2")),
+    expected_inner = im.as_fieldop(inner_stencil, domain_inner)(
+        im.ref("in_field1"), im.ref("in_field2")
     )
+    expected = im.as_fieldop(stencil, domain)(im.ref("in_field1"), expected_inner)
+
     expected_domains = {
         "in_field1": SymbolicDomain.from_expr(
             im.domain(common.GridType.CARTESIAN, {"IDim": (1, 12), "JDim": (-1, 7)})
@@ -328,11 +293,9 @@ def test_nested_stencils(offset_provider):
             im.domain(common.GridType.CARTESIAN, {"IDim": (0, 11), "JDim": (-2, 5)})
         ),
     }
-
     actual_call, actual_domains = infer_as_fieldop(
         testee, SymbolicDomain.from_expr(domain), offset_provider
     )
-
     folded_domains = domains_dict_constant_folding(actual_domains)
     folded_call = as_fieldop_domains_constant_folding(actual_call)
     assert folded_call == expected
@@ -410,10 +373,7 @@ def test_program(offset_provider):
         {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (0, 11)},
     )
 
-    params = [im.sym(name) for name in ["in_field", "out_field", "_gtmp_auto_domain"]]
-    for param in params[:2]:
-        param.dtype = ("float64", False)
-        param.kind = "Iterator"
+    params = create_params(["in_field", "out_field", "_gtmp_auto_domain"])
 
     testee = itir.Program(
         id="forward_diff_with_tmp",
@@ -440,10 +400,7 @@ def test_program(offset_provider):
         ],
     )
 
-    actual_program = infer_program(testee, offset_provider)
-
-    folded_program = program_constant_folding(actual_program)
-    assert folded_program == expected
+    run_test_program(testee, expected, offset_provider)
 
 
 def test_program_two_tmps(offset_provider):
@@ -468,10 +425,7 @@ def test_program_two_tmps(offset_provider):
         {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (0, 12)},
     )
 
-    params = [im.sym(name) for name in ["in_field", "out_field", "_gtmp_auto_domain"]]
-    for param in params[:2]:
-        param.dtype = ("float64", False)
-        param.kind = "Iterator"
+    params = create_params(["in_field", "out_field", "_gtmp_auto_domain"])
 
     testee = itir.Program(
         id="forward_diff_with_two_tmps",
@@ -507,10 +461,7 @@ def test_program_two_tmps(offset_provider):
         ],
     )
 
-    actual_program = infer_program(testee, offset_provider)
-
-    folded_program = program_constant_folding(actual_program)
-    assert folded_program == expected
+    run_test_program(testee, expected, offset_provider)
 
 
 @pytest.mark.xfail(raises=ValueError)
@@ -528,10 +479,7 @@ def test_program_ValueError(offset_provider):
             {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (0, 11)},
         )
 
-        params = [im.sym(name) for name in ["in_field", "out_field", "_gtmp_auto_domain"]]
-        for param in params[:2]:
-            param.dtype = ("float64", False)
-            param.kind = "Iterator"
+        params = create_params(["in_field", "out_field", "_gtmp_auto_domain"])
 
         testee = infer_program(
             itir.Program(
@@ -582,13 +530,9 @@ def test_program_tree_tmps_two_inputs(offset_provider):
         common.GridType.CARTESIAN,
         {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (-1, 13)},
     )
-    params = [
-        im.sym(name)
-        for name in ["in_field1", "in_field2", "out_field1", "out_field2", "_gtmp_auto_domain"]
-    ]
-    for param in params[:3]:
-        param.dtype = ("float64", False)
-        param.kind = "Iterator"
+    params = create_params(
+        ["in_field1", "in_field2", "out_field1", "out_field2", "_gtmp_auto_domain"]
+    )
 
     testee = itir.Program(
         id="differences_three_tmps_two_inputs",
@@ -642,7 +586,4 @@ def test_program_tree_tmps_two_inputs(offset_provider):
         ],
     )
 
-    actual_program = infer_program(testee, offset_provider)
-
-    folded_program = program_constant_folding(actual_program)
-    assert folded_program == expected
+    run_test_program(testee, expected, offset_provider)
