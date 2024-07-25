@@ -18,7 +18,6 @@ import dataclasses
 from typing import Any, Optional, cast
 
 import devtools
-import factory
 
 from gt4py.eve import NodeTranslator, concepts, traits
 from gt4py.next import common, config
@@ -31,71 +30,47 @@ from gt4py.next.ffront import (
     transform_utils,
     type_specifications as ts_ffront,
 )
+from gt4py.next.ffront.stages import AOT_PRG
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.otf import arguments, stages, workflow
+from gt4py.next.otf import stages, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
-@dataclasses.dataclass(frozen=True)
-class PastToItir(workflow.ChainableWorkflowMixin):
-    def __call__(self, inp: ffront_stages.AOTFieldviewProgramAst) -> stages.AOTProgram:
-        all_closure_vars = transform_utils._get_closure_vars_recursively(
-            inp.definition.closure_vars
-        )
-        offsets_and_dimensions = transform_utils._filter_closure_vars_by_type(
-            all_closure_vars, fbuiltins.FieldOffset, common.Dimension
-        )
-        grid_type = transform_utils._deduce_grid_type(
-            inp.definition.grid_type, offsets_and_dimensions.values()
-        )
+def past_to_itir(inp: AOT_PRG) -> stages.AOTProgram:
+    all_closure_vars = transform_utils._get_closure_vars_recursively(inp.data.closure_vars)
+    offsets_and_dimensions = transform_utils._filter_closure_vars_by_type(
+        all_closure_vars, fbuiltins.FieldOffset, common.Dimension
+    )
+    grid_type = transform_utils._deduce_grid_type(
+        inp.data.grid_type, offsets_and_dimensions.values()
+    )
 
-        gt_callables = transform_utils._filter_closure_vars_by_type(
-            all_closure_vars, gtcallable.GTCallable
-        ).values()
-        lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
+    gt_callables = transform_utils._filter_closure_vars_by_type(
+        all_closure_vars, gtcallable.GTCallable
+    ).values()
+    lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
 
-        itir_program = ProgramLowering.apply(
-            inp.definition.past_node,
-            function_definitions=lowered_funcs,
-            grid_type=grid_type,
-        )
+    itir_program = ProgramLowering.apply(
+        inp.data.past_node,
+        function_definitions=lowered_funcs,
+        grid_type=grid_type,
+    )
 
-        if config.DEBUG or inp.definition.debug:
-            devtools.debug(itir_program)
+    if config.DEBUG or inp.data.debug:
+        devtools.debug(itir_program)
 
-        return stages.AOTProgram(
-            data=itir_program,
-            args=dataclasses.replace(inp.argspec, column_axis=_column_axis(all_closure_vars)),
-        )
+    return stages.AOTProgram(
+        data=itir_program,
+        args=dataclasses.replace(inp.args, column_axis=_column_axis(all_closure_vars)),
+    )
 
 
-class PastToItirFactory(factory.Factory):
-    class Meta:
-        model = PastToItir
-
-
-@dataclasses.dataclass(frozen=True)
-class JITPastToItir(workflow.ChainableWorkflowMixin):
-    inner: PastToItir = dataclasses.field(default_factory=PastToItir)
-
-    def __call__(self, inp: ffront_stages.PastClosure) -> stages.ProgramCall:
-        aot_program = self.inner(
-            ffront_stages.AOTFieldviewProgramAst(
-                definition=inp.definition,
-                argspec=arguments.CompileArgSpec.from_concrete(*inp.args, **inp.kwargs),
-            )
-        )
-        return stages.ProgramCall(
-            program=aot_program.data,
-            args=inp.args,
-            kwargs=inp.kwargs | {"column_axis": aot_program.args.column_axis},
-        )
-
-
-class JITPastToItirFactory(factory.Factory):
-    class Meta:
-        model = JITPastToItir
+def past_to_itir_factory(cached: bool = True) -> workflow.Workflow[AOT_PRG, stages.AOTProgram]:
+    wf = past_to_itir
+    if cached:
+        wf = workflow.CachedStep(wf, hash_function=ffront_stages.fingerprint_stage)
+    return wf
 
 
 def _column_axis(all_closure_vars: dict[str, Any]) -> Optional[common.Dimension]:

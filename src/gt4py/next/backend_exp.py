@@ -19,7 +19,7 @@ import typing
 from typing import Any
 
 from gt4py.next import backend
-from gt4py.next.backend import ARGS, CARG, INPUT_DATA_T, INPUT_PAIR_T
+from gt4py.next.backend import ARGS, CARG, INPUT_DATA, INPUT_PAIR
 from gt4py.next.ffront import (
     foast_to_itir,
     foast_to_past,
@@ -49,25 +49,11 @@ DataT = typing.TypeVar("DataT")
 
 
 @dataclasses.dataclass(frozen=True)
-class PastToItirAdapter:
-    step: workflow.Workflow[ffront_stages.AOTFieldviewProgramAst, stages.AOTProgram] = (
-        dataclasses.field(default_factory=past_to_itir.PastToItir)
-    )
-
-    def __call__(
-        self,
-        inp: workflow.DataArgsPair[ffront_stages.PastProgramDefinition, arguments.CompileArgSpec],
-    ) -> stages.AOTProgram:
-        aot_fvprog = ffront_stages.AOTFieldviewProgramAst(definition=inp.data, argspec=inp.args)
-        return self.step(aot_fvprog)
-
-
-@dataclasses.dataclass(frozen=True)
-class FieldopTransformWorkflow(workflow.MultiWorkflow[INPUT_PAIR_T, stages.AOTProgram]):
+class FieldopTransformWorkflow(workflow.MultiWorkflow[INPUT_PAIR, stages.AOTProgram]):
     """Modular workflow for transformations with access to intermediates."""
 
     aotify_args: workflow.Workflow[
-        workflow.DataArgsPair[INPUT_DATA_T, ARGS], workflow.DataArgsPair[INPUT_DATA_T, CARG]
+        workflow.DataArgsPair[INPUT_DATA, ARGS], workflow.DataArgsPair[INPUT_DATA, CARG]
     ] = dataclasses.field(default_factory=arguments.adapted_jit_to_aot_args_factory)
 
     func_to_foast: workflow.Workflow[AOT_DSL_FOP, AOT_FOP] = dataclasses.field(
@@ -95,10 +81,10 @@ class FieldopTransformWorkflow(workflow.MultiWorkflow[INPUT_PAIR_T, stages.AOTPr
     )
 
     past_to_itir: workflow.Workflow[AOT_PRG, stages.AOTProgram] = dataclasses.field(
-        default_factory=PastToItirAdapter
+        default_factory=past_to_itir.past_to_itir_factory
     )
 
-    def step_order(self, inp: workflow.DataArgsPair[INPUT_DATA_T, ARGS | CARG]) -> list[str]:
+    def step_order(self, inp: INPUT_PAIR) -> list[str]:
         steps: list[str] = []
         if isinstance(inp.args, ARGS):
             steps.append("aotify_args")

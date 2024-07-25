@@ -32,8 +32,8 @@ CARG: typing.TypeAlias = arguments.CompileArgSpec
 IT_PRG: typing.TypeAlias = itir.FencilDefinition
 
 
-INPUT_DATA_T: typing.TypeAlias = DSL_FOP | FOP | DSL_PRG | PRG | IT_PRG
-INPUT_PAIR_T: typing.TypeAlias = workflow.DataArgsPair[INPUT_DATA_T, ARGS | CARG]
+INPUT_DATA: typing.TypeAlias = DSL_FOP | FOP | DSL_PRG | PRG | IT_PRG
+INPUT_PAIR: typing.TypeAlias = workflow.DataArgsPair[INPUT_DATA, ARGS | CARG]
 
 
 @workflow.make_step
@@ -54,8 +54,8 @@ def foast_to_foast_closure(
 class Backend(Generic[core_defs.DeviceTypeT]):
     executor: ppi.ProgramExecutor
     allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
-    transforms_fop: workflow.Workflow[INPUT_PAIR_T, stages.AOTProgram]
-    transforms_prog: workflow.Workflow[INPUT_PAIR_T, stages.AOTProgram]
+    transforms_fop: workflow.Workflow[INPUT_PAIR, stages.AOTProgram]
+    transforms_prog: workflow.Workflow[INPUT_PAIR, stages.AOTProgram]
 
     def __call__(
         self,
