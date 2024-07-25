@@ -29,7 +29,6 @@ from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.pretty_printer import PrettyPrinter
 from gt4py.next.iterator.transforms import trace_shifts
-from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 from gt4py.next.iterator.transforms.cse import extract_subexpression
 from gt4py.next.iterator.transforms.eta_reduction import EtaReduction
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
@@ -511,9 +510,8 @@ def domain_union(domains: list[SymbolicDomain]) -> SymbolicDomain:
             lambda current_expr, el_expr: im.call("maximum")(current_expr, el_expr),
             [domain.ranges[dim].stop for domain in domains],
         )
-        new_domain_ranges[dim] = SymbolicRange(
-            ConstantFolding.apply(start), ConstantFolding.apply(stop)
-        )
+        new_domain_ranges[dim] = SymbolicRange(start, stop)
+
     return SymbolicDomain(domains[0].grid_type, new_domain_ranges)
 
 

@@ -12,12 +12,14 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import copy
 import numpy as np
-from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms.infer_domain import infer_as_fieldop, infer_program
 from gt4py.next.iterator.transforms.global_tmps import SymbolicDomain, AUTO_DOMAIN
 import pytest
+from gt4py.eve.extended_typing import Dict
 from gt4py.next.common import Dimension, DimensionKind
 from gt4py.next import common, NeighborTableOffsetProvider
 from gt4py.next.type_system import type_specifications as ts
@@ -51,9 +53,58 @@ def unstructured_offset_provider():
     return offset_provider
 
 
+def domains_dict_constant_folding(domains: Dict[str, SymbolicDomain]) -> Dict[str, SymbolicDomain]:
+    return {k: domain_constant_folding(v) for k, v in domains.items()}
+
+
+def domain_constant_folding(domain: SymbolicDomain | itir.FunCall) -> SymbolicDomain | itir.FunCall:
+    new_domain = (
+        SymbolicDomain.from_expr(copy.deepcopy(domain))
+        if isinstance(domain, itir.FunCall)
+        else copy.deepcopy(domain)
+    )
+    for dim in new_domain.ranges:
+        range_dim = new_domain.ranges[dim]
+        range_dim.start, range_dim.stop = (
+            ConstantFolding.apply(range_dim.start),
+            ConstantFolding.apply(range_dim.stop),
+        )
+    return SymbolicDomain.as_expr(new_domain) if isinstance(domain, itir.FunCall) else new_domain
+
+
+def as_fieldop_domains_constant_folding(as_fieldop_call: itir.FunCall) -> itir.FunCall:
+    def fold_fun_args(fun):
+        if isinstance(fun, itir.FunCall) and cpm.is_call_to(fun, "cartesian_domain"):
+            fun.args = [
+                ConstantFolding.apply(dim) if isinstance(dim, itir.FunCall) else dim
+                for dim in fun.args
+            ]
+
+    new_call = copy.deepcopy(as_fieldop_call)
+    for fun in new_call.fun.args:
+        fold_fun_args(fun)
+
+    new_call.args = [
+        as_fieldop_domains_constant_folding(arg) if isinstance(arg, itir.FunCall) else arg
+        for arg in new_call.args
+    ]
+
+    return new_call
+
+
+def program_constant_folding(program_call: itir.Program) -> itir.Program:
+    new_call = copy.deepcopy(program_call)
+    for j, tmp in enumerate(new_call.declarations):
+        tmp.domain = domain_constant_folding(tmp.domain)
+    for j, set_at in enumerate(new_call.body):
+        set_at.expr = as_fieldop_domains_constant_folding(set_at.expr)
+        set_at.domain = domain_constant_folding(set_at.domain)
+    return new_call
+
+
 def test_forward_difference_x(
     offset_provider,
-):  # Todo: apply ConstantFolding here instead of in domain_union
+):
     stencil = im.lambda_("arg0")(
         im.minus(im.deref(im.shift(itir.SymbolRef("Ioff"), 1)("arg0")), im.deref("arg0"))
     )
@@ -77,22 +128,10 @@ def test_forward_difference_x(
     actual_call, actual_domains = infer_as_fieldop(
         testee, SymbolicDomain.from_expr(domain), offset_provider
     )
-    actual_domains["in_field"].ranges[
-        common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)
-    ].start = ConstantFolding.apply(
-        actual_domains["in_field"]
-        .ranges[common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)]
-        .start
-    )
-    actual_domains["in_field"].ranges[
-        common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)
-    ].stop = ConstantFolding.apply(
-        actual_domains["in_field"]
-        .ranges[common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)]
-        .stop
-    )
+
+    folded_domains = domains_dict_constant_folding(actual_domains)
     assert actual_call == expected
-    assert actual_domains == expected_domains
+    assert folded_domains == expected_domains
 
 
 def test_unstructured_shift(unstructured_offset_provider):
@@ -118,8 +157,9 @@ def test_unstructured_shift(unstructured_offset_provider):
         testee, SymbolicDomain.from_expr(domain), unstructured_offset_provider
     )
 
+    folded_domains = domains_dict_constant_folding(actual_domains)
     assert actual_call == expected
-    assert actual_domains == expected_domains
+    assert folded_domains == expected_domains
 
 
 def test_laplace(offset_provider):
@@ -154,8 +194,9 @@ def test_laplace(offset_provider):
         testee, SymbolicDomain.from_expr(domain), offset_provider
     )
 
+    folded_domains = domains_dict_constant_folding(actual_domains)
     assert actual_call == expected
-    assert actual_domains == expected_domains
+    assert folded_domains == expected_domains
 
 
 def test_shift_x_y_two_inputs(offset_provider):
@@ -183,8 +224,9 @@ def test_shift_x_y_two_inputs(offset_provider):
         testee, SymbolicDomain.from_expr(domain), offset_provider
     )
 
+    folded_domains = domains_dict_constant_folding(actual_domains)
     assert actual_call == expected
-    assert actual_domains == expected_domains
+    assert folded_domains == expected_domains
 
 
 def test_shift_x_y_z_three_inputs(offset_provider):
@@ -248,8 +290,9 @@ def test_shift_x_y_z_three_inputs(offset_provider):
         testee, SymbolicDomain.from_expr(domain), offset_provider
     )
 
+    folded_domains = domains_dict_constant_folding(actual_domains)
     assert actual_call == expected
-    assert actual_domains == expected_domains
+    assert folded_domains == expected_domains
 
 
 def test_nested_stencils(offset_provider):
@@ -290,8 +333,10 @@ def test_nested_stencils(offset_provider):
         testee, SymbolicDomain.from_expr(domain), offset_provider
     )
 
-    assert actual_call == expected
-    assert actual_domains == expected_domains
+    folded_domains = domains_dict_constant_folding(actual_domains)
+    folded_call = as_fieldop_domains_constant_folding(actual_call)
+    assert folded_call == expected
+    assert folded_domains == expected_domains
 
 
 @pytest.mark.parametrize("iterations", [3, 5])
@@ -342,8 +387,10 @@ def test_nested_stencils_n_times(offset_provider, iterations):
         testee, SymbolicDomain.from_expr(current_domain), offset_provider
     )
 
-    assert actual_call == current_expected
-    assert actual_domains == expected_domains
+    folded_domains = domains_dict_constant_folding(actual_domains)
+    folded_call = as_fieldop_domains_constant_folding(actual_call)
+    assert folded_call == current_expected
+    assert folded_domains == expected_domains
 
 
 def test_program(offset_provider):
@@ -395,7 +442,8 @@ def test_program(offset_provider):
 
     actual_program = infer_program(testee, offset_provider)
 
-    assert actual_program == expected
+    folded_program = program_constant_folding(actual_program)
+    assert folded_program == expected
 
 
 def test_program_two_tmps(offset_provider):
@@ -461,7 +509,8 @@ def test_program_two_tmps(offset_provider):
 
     actual_program = infer_program(testee, offset_provider)
 
-    assert actual_program == expected
+    folded_program = program_constant_folding(actual_program)
+    assert folded_program == expected
 
 
 @pytest.mark.xfail(raises=ValueError)
@@ -595,4 +644,5 @@ def test_program_tree_tmps_two_inputs(offset_provider):
 
     actual_program = infer_program(testee, offset_provider)
 
-    assert actual_program == expected
+    folded_program = program_constant_folding(actual_program)
+    assert folded_program == expected
