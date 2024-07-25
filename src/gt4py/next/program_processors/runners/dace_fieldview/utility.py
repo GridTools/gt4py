@@ -25,8 +25,9 @@ from gt4py.next.program_processors.runners.dace_fieldview import gtir_python_cod
 from gt4py.next.type_system import type_specifications as ts
 
 
-def as_dace_type(type_: ts.ScalarType) -> dace.typeclass:
+def as_dace_type(type_: ts.TypeSpec) -> dace.typeclass:
     """Converts GT4Py scalar type to corresponding DaCe type."""
+    assert isinstance(type_, ts.ScalarType)
     match type_.kind:
         case ts.ScalarKind.BOOL:
             return dace.bool_
@@ -49,6 +50,10 @@ def as_scalar_type(typestr: str) -> ts.ScalarType:
     except AttributeError as ex:
         raise ValueError(f"Data type {typestr} not supported.") from ex
     return ts.ScalarType(kind)
+
+
+def connectivity_identifier(name: str) -> str:
+    return f"connectivity_{name}"
 
 
 def debug_info(
