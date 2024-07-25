@@ -121,15 +121,9 @@ class NeighborTableOffsetProvider:
         assert common.is_int_index(res)
         return res
 
-    def data_ptr(self) -> int:
-        return self.__dace_data_ptr()
-
-    def __descriptor__(self) -> Any:
-        return self.__dace__descriptor__()
-
     if dace:
         # Extension of NeighborTableOffsetProvider adding SDFGConvertible support in GT4Py Programs
-        def __dace_data_ptr(self) -> int:
+        def _dace_data_ptr(self) -> int:
             obj = self.table
             if dace.dtypes.is_array(obj):
                 if hasattr(obj, "__array_interface__"):
@@ -138,19 +132,22 @@ class NeighborTableOffsetProvider:
                     return obj.__cuda_array_interface__["data"][0]
             raise ValueError("Unsupported data container.")
 
-        def __dace__descriptor__(self) -> dace.data.Data:
+        def _dace_descriptor(self) -> dace.data.Data:
             return dace.data.create_datadescriptor(self.table)
     else:
 
-        def __dace_data_ptr(self) -> NoReturn:  # type: ignore[misc]
+        def _dace_data_ptr(self) -> NoReturn:  # type: ignore[misc]
             raise NotImplementedError(
                 "data_ptr is only supported when the 'dace' module is available."
             )
 
-        def __dace__descriptor__(self) -> NoReturn:  # type: ignore[misc]
+        def _dace_descriptor(self) -> NoReturn:  # type: ignore[misc]
             raise NotImplementedError(
                 "__descriptor__ is only supported when the 'dace' module is available."
             )
+
+    data_ptr = _dace_data_ptr
+    __descriptor__ = _dace_descriptor
 
 
 @dataclasses.dataclass(frozen=True)
@@ -163,7 +160,10 @@ class CompileTimeConnectivity:
 
     def mapped_index(
         self, cur_index: int | np.integer, neigh_index: int | np.integer
-    ) -> Optional[int | np.integer]: ...
+    ) -> Optional[int | np.integer]:
+        raise NotImplementedError(
+            "A CompileTimeConnectivity instance should not call `mapped_index`."
+        )
 
     @classmethod
     def from_connectivity(cls, connectivity: common.Connectivity) -> Self:

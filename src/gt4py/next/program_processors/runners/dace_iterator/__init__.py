@@ -328,7 +328,8 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
     sdfg_closure_vars: dict[str, Any] = field(default_factory=dict)
 
     # Being a ClassVar ensures that in an SDFG with multiple nested GT4Py Programs,
-    # there is no name mangling of the connectivity tables used across the nested SDFGs since they share the same memory address.
+    # there is no name mangling of the connectivity tables used across the nested SDFGs
+    # since they share the same memory address.
     connectivity_tables_data_descriptors: ClassVar[
         dict[str, dace.data.Array]
     ] = {}  # symbolically defined
@@ -343,7 +344,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
 
         dace_parsed_args = [*args, *kwargs.values()]
         gt4py_program_args = [*params.values()]
-        crosscheck_dace_parsing(dace_parsed_args, gt4py_program_args)
+        _crosscheck_dace_parsing(dace_parsed_args, gt4py_program_args)
 
         if self.connectivities is None:
             raise ValueError(
@@ -413,7 +414,8 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         as a mapping between array name and the corresponding value.
 
         The connectivity tables are defined symbolically, i.e. table sizes & strides are DaCe symbols.
-        The need to define the connectivity tables in the `__sdfg_closure__` arises from the fact that the offset providers are not part of GT4Py Program's arguments.
+        The need to define the connectivity tables in the `__sdfg_closure__` arises from the fact that
+        the offset providers are not part of GT4Py Program's arguments.
         Keep in mind, that `__sdfg_closure__` is called after `__sdfg__` method.
         """
         offset_provider = self.connectivities
@@ -481,7 +483,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         return (args, [])
 
 
-def crosscheck_dace_parsing(dace_parsed_args: list[Any], gt4py_program_args: list[Any]) -> bool:
+def _crosscheck_dace_parsing(dace_parsed_args: list[Any], gt4py_program_args: list[Any]) -> bool:
     for dace_parsed_arg, gt4py_program_arg in zip(dace_parsed_args, gt4py_program_args):
         if isinstance(dace_parsed_arg, dace.data.Scalar):
             assert dace_parsed_arg.dtype == as_dace_type(gt4py_program_arg)

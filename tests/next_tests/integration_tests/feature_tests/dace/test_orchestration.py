@@ -44,16 +44,6 @@ except ImportError:
     run_dace_gpu: Optional[next_backend.Backend] = None
 
 
-@gtx.field_operator
-def _testee(a: gtx.Field[gtx.Dims[Vertex], gtx.float64]):
-    return a(E2V[0])
-
-
-@gtx.program
-def testee(a: gtx.Field[gtx.Dims[Vertex], gtx.float64], b: gtx.Field[gtx.Dims[Edge], gtx.float64]):
-    _testee(a, out=b)
-
-
 def test_sdfgConvertible_laplap(cartesian_case):
     if cartesian_case.executor not in [run_dace_cpu, run_dace_gpu]:
         pytest.skip("DaCe-related test: Test SDFGConvertible interface for GT4Py programs")
@@ -124,6 +114,16 @@ def test_sdfgConvertible_laplap(cartesian_case):
         gtx.field_utils.asnumpy(out_field)[2:-2, 2:-2],
         lap_ref(lap_ref(in_field_new.array_ns.asarray(in_field.ndarray))),
     )
+
+
+@gtx.field_operator
+def _testee(a: gtx.Field[gtx.Dims[Vertex], gtx.float64]):
+    return a(E2V[0])
+
+
+@gtx.program
+def testee(a: gtx.Field[gtx.Dims[Vertex], gtx.float64], b: gtx.Field[gtx.Dims[Edge], gtx.float64]):
+    _testee(a, out=b)
 
 
 @pytest.mark.uses_unstructured_shift

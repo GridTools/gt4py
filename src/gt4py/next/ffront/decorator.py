@@ -78,9 +78,9 @@ class Program:
         definition: The Python function object corresponding to the PAST node.
         grid_type: The grid type (cartesian or unstructured) to be used. If not explicitly given
             it will be deduced from actually occurring dimensions.
-        connectivities: A dictionary holding static information about the offset providers. It is used
-            for ahead of time compilation in DaCe orchestrated programs, i.e. DaCe programs that call
-            GT4Py Programs -SDFGConvertible interface-.
+        connectivities: A dictionary holding static/compile-time information about the offset providers.
+            For now, it is used for ahead of time compilation in DaCe orchestrated programs,
+            i.e. DaCe programs that call GT4Py Programs -SDFGConvertible interface-.
     """
 
     definition_stage: ffront_stages.ProgramDefinition
