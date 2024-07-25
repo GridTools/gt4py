@@ -150,7 +150,7 @@ We recommended you to use `tox` for most development-related tasks, like running
 tox list
 
 # Run a specific task environment
-tox run -e cartesian-py38-internal-cpu
+tox run -e cartesian-py38-cpu
 ```
 
 Check `tox` documentation (`tox --help`) for the complete reference.
