@@ -112,6 +112,17 @@ class LambdaToTasklet(eve.NodeVisitor):
     ) -> None:
         self.input_connections.append((src, src_subset, dst_node, dst_conn))
 
+    def _add_edge(
+        self,
+        src_node: dace.Node,
+        src_node_connector: Optional[str],
+        dst_node: dace.Node,
+        dst_node_connector: Optional[str],
+        memlet: dace.Memlet,
+    ) -> None:
+        """Helper method to add an edge in current state."""
+        self.state.add_edge(src_node, src_node_connector, dst_node, dst_node_connector, memlet)
+
     def _add_map(
         self,
         name: str,
@@ -121,7 +132,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         ],
         **kwargs: Any,
     ) -> Tuple[dace.nodes.MapEntry, dace.nodes.MapExit]:
-        """Helper method to add a map with unique ame in current state."""
+        """Helper method to add a map with unique name in current state."""
         return self.subgraph_builder.add_map(name, self.state, ndrange, **kwargs)
 
     def _add_tasklet(
@@ -132,7 +143,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         code: str,
         **kwargs: Any,
     ) -> dace.nodes.Tasklet:
-        """Helper method to add a tasklet with unique ame in current state."""
+        """Helper method to add a tasklet with unique name in current state."""
         return self.subgraph_builder.add_tasklet(name, self.state, inputs, outputs, code, **kwargs)
 
     def _get_tasklet_result(
@@ -145,7 +156,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         self.sdfg.add_scalar(temp_name, dtype, transient=True)
         data_type = dace_fieldview_util.as_scalar_type(str(dtype.as_numpy_dtype()))
         temp_node = self.state.add_access(temp_name)
-        self.state.add_edge(
+        self._add_edge(
             src_node,
             src_connector,
             temp_node,
@@ -228,7 +239,7 @@ class LambdaToTasklet(eve.NodeVisitor):
                         )
 
                     elif isinstance(index_expr, ValueExpr):
-                        self.state.add_edge(
+                        self._add_edge(
                             index_expr.node,
                             None,
                             deref_node,
@@ -319,7 +330,7 @@ class LambdaToTasklet(eve.NodeVisitor):
                         input_connector,
                     )
                 elif isinstance(input_expr, ValueExpr):
-                    self.state.add_edge(
+                    self._add_edge(
                         input_expr.node,
                         None,
                         dynamic_offset_tasklet,
@@ -374,7 +385,7 @@ class LambdaToTasklet(eve.NodeVisitor):
                 "offset",
             )
         else:
-            self.state.add_edge(
+            self._add_edge(
                 offset_expr.node,
                 None,
                 tasklet_node,
@@ -495,7 +506,7 @@ class LambdaToTasklet(eve.NodeVisitor):
 
         for connector, arg_expr in node_connections.items():
             if isinstance(arg_expr, ValueExpr):
-                self.state.add_edge(
+                self._add_edge(
                     arg_expr.node,
                     None,
                     tasklet_node,
