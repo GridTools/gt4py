@@ -28,7 +28,6 @@ from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
 from gt4py.next.ffront import field_operator_ast as foast, program_ast as past, source_utils
 from gt4py.next.otf import arguments, workflow
-from gt4py.next.type_system import type_specifications as ts
 
 
 OperatorNodeT = TypeVar("OperatorNodeT", bound=foast.LocatedNode)
@@ -61,22 +60,6 @@ AOT_FOP: typing.TypeAlias = workflow.DataArgsPair[FOP, arguments.CompileArgSpec]
 
 
 @dataclasses.dataclass(frozen=True)
-class FoastWithTypes(Generic[OperatorNodeT]):
-    foast_op_def: FoastOperatorDefinition[OperatorNodeT]
-    arg_types: tuple[ts.TypeSpec, ...]
-    kwarg_types: dict[str, ts.TypeSpec]
-    closure_vars: dict[str, Any]
-
-
-@dataclasses.dataclass(frozen=True)
-class FoastClosure(Generic[OperatorNodeT]):
-    foast_op_def: FoastOperatorDefinition[OperatorNodeT]
-    args: tuple[Any, ...]
-    kwargs: dict[str, Any]
-    closure_vars: dict[str, Any]
-
-
-@dataclasses.dataclass(frozen=True)
 class ProgramDefinition:
     definition: types.FunctionType
     grid_type: Optional[common.GridType] = None
@@ -97,19 +80,6 @@ class PastProgramDefinition:
 
 PRG: typing.TypeAlias = PastProgramDefinition
 AOT_PRG: typing.TypeAlias = workflow.DataArgsPair[PRG, arguments.CompileArgSpec]
-
-
-@dataclasses.dataclass(frozen=True)
-class PastClosure:
-    definition: PastProgramDefinition
-    args: tuple[Any, ...]
-    kwargs: dict[str, Any]
-
-
-@dataclasses.dataclass(frozen=True)
-class AOTFieldviewProgramAst:
-    definition: PastProgramDefinition
-    argspec: arguments.CompileArgSpec
 
 
 def fingerprint_stage(obj: Any, algorithm: Optional[str | xtyping.HashlibAlgorithm] = None) -> str:
@@ -144,10 +114,7 @@ for t in (str, int):
 
 @add_content_to_fingerprint.register(FieldOperatorDefinition)
 @add_content_to_fingerprint.register(FoastOperatorDefinition)
-@add_content_to_fingerprint.register(FoastWithTypes)
-@add_content_to_fingerprint.register(FoastClosure)
 @add_content_to_fingerprint.register(PastProgramDefinition)
-@add_content_to_fingerprint.register(PastClosure)
 @add_content_to_fingerprint.register(workflow.DataArgsPair)
 @add_content_to_fingerprint.register(arguments.CompileArgSpec)
 def add_stage_to_fingerprint(obj: Any, hasher: xtyping.HashlibAlgorithm) -> None:

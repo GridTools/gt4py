@@ -36,20 +36,6 @@ INPUT_DATA: typing.TypeAlias = DSL_FOP | FOP | DSL_PRG | PRG | IT_PRG
 INPUT_PAIR: typing.TypeAlias = workflow.DataArgsPair[INPUT_DATA, ARGS | CARG]
 
 
-@workflow.make_step
-def foast_to_foast_closure(
-    inp: workflow.DataArgsPair[ffront_stages.FoastOperatorDefinition, arguments.JITArgs],
-) -> ffront_stages.FoastClosure:
-    from_fieldop = inp.args.kwargs.pop("from_fieldop")
-    debug = inp.args.kwargs.pop("debug", inp.data.debug)
-    return ffront_stages.FoastClosure(
-        foast_op_def=dataclasses.replace(inp.data, debug=debug),
-        args=inp.args.args,
-        kwargs=inp.args.kwargs,
-        closure_vars={inp.data.foast_node.id: from_fieldop},
-    )
-
-
 @dataclasses.dataclass(frozen=True)
 class Backend(Generic[core_defs.DeviceTypeT]):
     executor: ppi.ProgramExecutor

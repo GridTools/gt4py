@@ -34,22 +34,6 @@ AOTProgram: TypeAlias = workflow.DataArgsPair[itir.FencilDefinition, arguments.C
 
 
 @dataclasses.dataclass(frozen=True)
-class ProgramCall:
-    """Iterator IR representaion of a program together with arguments to be passed to it."""
-
-    program: itir.FencilDefinition
-    args: tuple[Any, ...]
-    kwargs: dict[str, Any]
-
-
-def program_call_to_aot_program(program_call: ProgramCall) -> AOTProgram:
-    return AOTProgram(
-        data=program_call.program,
-        args=arguments.CompileArgSpec.from_concrete(*program_call.args, **program_call.kwargs),
-    )
-
-
-@dataclasses.dataclass(frozen=True)
 class ProgramSource(Generic[SrcL, SettingT]):
     """
     Standalone source code translated from an IR along with information relevant for OTF compilation.
