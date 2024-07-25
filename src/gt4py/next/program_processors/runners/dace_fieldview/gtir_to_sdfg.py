@@ -163,12 +163,15 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         return shape, strides
 
     def _add_storage(
-        self, sdfg: dace.SDFG, name: str, symbol_type: ts.DataType, transient: bool = False
+        self, sdfg: dace.SDFG, name: str, symbol_type: ts.DataType, transient: bool = True
     ) -> None:
         """
-        Add external storage (aka non-transient) for data containers passed as arguments to the SDFG.
+        Add storage for data containers used in the SDFG. For fields, it allocates dace arrays,
+        while scalars are stored as SDFG symbols.
 
-        For fields, it allocates dace arrays, while scalars are stored as SDFG symbols.
+        The fields used as temporary arrays, when `transient = True`, are allocated and exist
+        only within the SDFG; when `transient = False`, the fields have to be allocated outside
+        and have to be passed as array arguments to the SDFG.
         """
         if isinstance(symbol_type, ts.FieldType):
             if isinstance(symbol_type.dtype, gtir_ts.ListType):
@@ -261,7 +264,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         # add non-transient arrays and/or SDFG symbols for the program arguments
         for param in node.params:
             assert isinstance(param.type, ts.DataType)
-            self._add_storage(sdfg, str(param.id), param.type)
+            self._add_storage(sdfg, str(param.id), param.type, transient=False)
 
         # add SDFG storage for connectivity tables
         for offset, offset_provider in dace_fieldview_util.filter_connectivities(
@@ -273,12 +276,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 [offset_provider.origin_axis, local_dim], ts.ScalarType(scalar_kind)
             )
             # We store all connectivity tables as transient arrays here; later, while building
-            # the field operator expressions, we change to non transient the tables
-            # that are actually used. This way, we avoid adding SDFG arguments for
-            # the connectivity tables that are not used.
-            self._add_storage(
-                sdfg, dace_fieldview_util.connectivity_identifier(offset), type_, transient=True
-            )
+            # the field operator expressions, we change to non-transient (i.e. allocated extrenally)
+            # the tables that are actually used. This way, we avoid adding SDFG arguments for
+            # the connectivity tables that are not used. The remaining unused transient arrays
+            # are removed by the dace simplify pass.
+            self._add_storage(sdfg, dace_fieldview_util.connectivity_identifier(offset), type_)
 
         # visit one statement at a time and expand the SDFG from the current head state
         for i, stmt in enumerate(node.body):
@@ -337,33 +339,45 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
     ) -> list[gtir_builtin_translators.TemporaryData]:
         # use specialized dataflow builder classes for each builtin function
-        if cpm.is_call_to(node.fun, "as_fieldop"):
-            return gtir_builtin_translators.translate_as_field_op(
-                node, sdfg, head_state, self, let_symbols, reduce_identity
-            )
-        elif cpm.is_call_to(node.fun, "cond"):
+        if cpm.is_call_to(node, "cond"):
             return gtir_builtin_translators.translate_cond(
                 node, sdfg, head_state, self, let_symbols, reduce_identity
             )
+        elif cpm.is_call_to(node.fun, "as_fieldop"):
+            return gtir_builtin_translators.translate_as_field_op(
+                node, sdfg, head_state, self, let_symbols, reduce_identity
+            )
         elif isinstance(node.fun, gtir.Lambda):
-            node_let_symbols = []
-            for arg in node.args:
-                arg_fields = self.visit(
-                    arg,
-                    sdfg=sdfg,
-                    head_state=head_state,
-                    let_symbols=let_symbols,
-                    reduce_identity=reduce_identity,
-                )
-                node_let_symbols.extend(arg_fields)
+            # We use a separate state to ensure that the lambda arguments are evaluated
+            # before the computation starts. This is required in case the let-symbols
+            # are used in conditional branch execution, which happens in different states.
+            lambda_state = sdfg.add_state_before(head_state, f"{head_state.label}_symbols")
 
-            assert reduce_identity is None
+            node_args = []
+            for arg in node.args:
+                node_args.extend(
+                    self.visit(
+                        arg,
+                        sdfg=sdfg,
+                        head_state=lambda_state,
+                        let_symbols=let_symbols,
+                    )
+                )
+
+            # some cleanup: remove isolated nodes for program arguments in lambda state
+            isolated_node_args = [node for node, _ in node_args if lambda_state.degree(node) == 0]
+            assert all(
+                isinstance(node, dace.nodes.AccessNode) and node.data in self.symbol_types
+                for node in isolated_node_args
+            )
+            lambda_state.remove_nodes_from(isolated_node_args)
+
             return self.visit(
                 node.fun,
                 sdfg=sdfg,
                 head_state=head_state,
                 let_symbols=let_symbols,
-                args=node_let_symbols,
+                args=node_args,
             )
         else:
             raise NotImplementedError(f"Unexpected 'FunCall' expression ({node}).")
@@ -377,12 +391,17 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         args: list[gtir_builtin_translators.TemporaryData],
     ) -> list[gtir_builtin_translators.TemporaryData]:
         """
-        All arguments to lambda functions are fields (i.e. `as_fieldop`, field or scalar `gtir.SymRef`, nested let-lambdas thereof)
-        The dictionary called `let_symbols` maps the lambda parameters to symbols, e.g. temporary fields or program arguments.
-        The lambda parameters can override previously defined symbols, that is why the current dictionary is copied.
+        Translates a `Lambda` node to a tasklet subgraph in the current SDFG state.
+
+        All arguments to lambda functions are fields (i.e. `as_fieldop`, field or scalar `gtir.SymRef`,
+        nested let-lambdas thereof). The dictionary called `let_symbols` maps the lambda parameters
+        to symbols, e.g. temporary fields or program arguments. If the lambda has a parameter whose name
+        is already present in `let_symbols`, i.e. a paramater with the same name as a previously defined
+        symbol, the parameter will shadow the previous symbol during traversal of the lambda expression.
         """
-        lambda_symbols = let_symbols.copy()
-        lambda_symbols.update({str(p.id): arg for p, arg in zip(node.params, args, strict=True)})
+        lambda_symbols = let_symbols | {
+            str(p.id): arg for p, arg in zip(node.params, args, strict=True)
+        }
 
         return self.visit(
             node.expr,
@@ -413,7 +432,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
     ) -> list[gtir_builtin_translators.TemporaryData]:
         return gtir_builtin_translators.translate_symbol_ref(
-            node, sdfg, head_state, self, let_symbols=let_symbols
+            node, sdfg, head_state, self, let_symbols
         )
 
 
