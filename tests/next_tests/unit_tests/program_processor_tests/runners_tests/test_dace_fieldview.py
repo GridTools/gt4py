@@ -34,7 +34,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 import numpy as np
 import pytest
 
-dace = pytest.importorskip("dace")
+pytestmark = pytest.mark.requires_dace
 
 
 N = 10
