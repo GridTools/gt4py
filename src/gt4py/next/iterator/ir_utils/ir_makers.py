@@ -430,13 +430,17 @@ def op_as_fieldop(
 ) -> Callable[..., itir.FunCall]:
     """
     Promotes a function `op` to a field_operator.
-    `op` is a function from values to value.
+
+    Args:
+        op: a function from values to value.
+        domain: the domain of the returned field.
+
     Returns:
         A function from Fields to Field.
-    Examples
-    --------
-    >>> str(op_as_fieldop("op")("a", "b"))
-    '(⇑(λ(__arg0, __arg1) → op(·__arg0, ·__arg1)))(a, b)'
+
+    Examples:
+        >>> str(op_as_fieldop("op")("a", "b"))
+        '(⇑(λ(__arg0, __arg1) → op(·__arg0, ·__arg1)))(a, b)'
     """
     if isinstance(op, (str, itir.SymRef, itir.Lambda)):
         op = call(op)

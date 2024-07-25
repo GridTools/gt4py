@@ -365,13 +365,16 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         args: list[gtir_builtin_translators.TemporaryData],
     ) -> list[gtir_builtin_translators.TemporaryData]:
         """
+        Translates a `Lambda` node to a tasklet subgraph in the current SDFG state.
+
         All arguments to lambda functions are fields (i.e. `as_fieldop`, field or scalar `gtir.SymRef`,
         nested let-lambdas thereof). The dictionary called `let_symbols` maps the lambda parameters
         to symbols, e.g. temporary fields or program arguments. The lambda parameters can override
         previously defined symbols, that is why the current dictionary is copied.
         """
-        lambda_symbols = let_symbols.copy()
-        lambda_symbols.update({str(p.id): arg for p, arg in zip(node.params, args, strict=True)})
+        lambda_symbols = let_symbols | {
+            str(p.id): arg for p, arg in zip(node.params, args, strict=True)
+        }
 
         return self.visit(
             node.expr,
