@@ -53,8 +53,8 @@ class ConstantFolding(PreserveLocationVisitor, NodeTranslator):
                 if new_node.fun.id in ir.ARITHMETIC_BUILTINS:
                     fun = getattr(embedded, str(new_node.fun.id))
                     arg_values = [
-                        getattr(embedded, str(arg.type))(arg.value)
-                        for arg in new_node.args  # type: ignore[attr-defined] # arg type already established in if condition
+                        getattr(embedded, str(arg.type))(arg.value)  # type: ignore[attr-defined] # arg type already established in if condition
+                        for arg in new_node.args
                     ]
                     new_node = im.literal_from_value(fun(*arg_values))
             except ValueError:
