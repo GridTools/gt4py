@@ -23,14 +23,6 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
 
 
-def _is_shifted(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
-    return (
-        isinstance(arg, itir.FunCall)
-        and isinstance(arg.fun, itir.FunCall)
-        and arg.fun.fun == itir.SymRef(id="shift")
-    )
-
-
 def _is_neighbors(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
     return isinstance(arg, itir.FunCall) and arg.fun == itir.SymRef(id="neighbors")
 
