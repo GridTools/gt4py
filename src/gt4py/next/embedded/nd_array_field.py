@@ -19,6 +19,7 @@ import dataclasses
 import functools
 from collections.abc import Callable, Sequence
 from types import ModuleType
+from typing import Any
 
 import numpy as np
 from numpy import typing as npt
@@ -47,12 +48,17 @@ from gt4py.next.iterator import embedded as itir_embedded
 try:
     import cupy as cp
 except ImportError:
-    cp: Optional[ModuleType] = None  # type:ignore[no-redef]
+    cp: Optional[ModuleType] = None  # type: ignore[no-redef]
 
 try:
     from jax import numpy as jnp
 except ImportError:
-    jnp: Optional[ModuleType] = None  # type:ignore[no-redef]
+    jnp: Optional[ModuleType] = None  # type: ignore[no-redef]
+
+try:
+    import dace
+except ImportError:
+    dace: Optional[ModuleType] = None  # type: ignore[no-redef]
 
 
 def _get_nd_array_class(*fields: common.Field | core_defs.Scalar) -> type[NdArrayField]:
@@ -418,6 +424,34 @@ class NdArrayField(
         )
         assert common.is_relative_index_sequence(slice_)
         return new_domain, slice_
+
+    if dace:
+        # Extension of NdArrayField adding SDFGConvertible support in GT4Py Programs
+        def _dace_data_ptr(self) -> int:
+            array_ns = self.array_ns
+            array_byte_bounds = (  # TODO(egparedes): make this part of some Array namespace protocol
+                array_ns.byte_bounds
+                if hasattr(array_ns, "byte_bounds")
+                else array_ns.lib.array_utils.byte_bounds
+            )
+            return array_byte_bounds(self.ndarray)[0]
+
+        def _dace_descriptor(self) -> dace.data.Data:
+            return dace.data.create_datadescriptor(self.ndarray)
+    else:
+
+        def _dace_data_ptr(self) -> int:
+            raise NotImplementedError(
+                "data_ptr is only supported when the 'dace' module is available."
+            )
+
+        def _dace_descriptor(self) -> Any:
+            raise NotImplementedError(
+                "__descriptor__ is only supported when the 'dace' module is available."
+            )
+
+    data_ptr = _dace_data_ptr
+    __descriptor__ = _dace_descriptor
 
 
 @dataclasses.dataclass(frozen=True)
