@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import abc
 import dataclasses
-from typing import Any, Dict, List, Optional, Protocol, Sequence, Set, Tuple, Union
+from typing import Any, Dict, List, Protocol, Sequence, Set, Tuple, Union
 
 import dace
 
@@ -30,13 +30,9 @@ from gt4py.eve import concepts
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
-from gt4py.next.iterator.type_system import (
-    inference as gtir_type_inference,
-    type_specifications as gtir_ts,
-)
+from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_builtin_translators,
-    gtir_to_tasklet,
     utility as dace_fieldview_util,
 )
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
@@ -174,14 +170,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         and have to be passed as array arguments to the SDFG.
         """
         if isinstance(symbol_type, ts.FieldType):
-            if isinstance(symbol_type.dtype, gtir_ts.ListType):
-                dims = [*symbol_type.dims, gtx_common.Dimension("")]
-            else:
-                dims = symbol_type.dims
             dtype = dace_fieldview_util.as_dace_type(symbol_type.dtype)
             # use symbolic shape, which allows to invoke the program with fields of different size;
             # and symbolic strides, which enables decoupling the memory layout from generated code.
-            sym_shape, sym_strides = self._make_array_shape_and_strides(name, dims)
+            sym_shape, sym_strides = self._make_array_shape_and_strides(name, symbol_type.dims)
             sdfg.add_array(name, sym_shape, dtype, strides=sym_strides, transient=transient)
         elif isinstance(symbol_type, ts.ScalarType):
             dtype = dace_fieldview_util.as_dace_type(symbol_type)
@@ -218,7 +210,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         to have the same memory layout as the target array.
         """
         results: list[gtir_builtin_translators.TemporaryData] = self.visit(
-            node, sdfg=sdfg, head_state=head_state, let_symbols={}, reduce_identity=None
+            node, sdfg=sdfg, head_state=head_state, let_symbols={}
         )
 
         field_nodes = []
@@ -317,9 +309,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 subset = ",".join(
                     f"{domain[dim][0]}:{domain[dim][1]}" for dim in target_symbol_type.dims
                 )
-                if isinstance(target_symbol_type.dtype, gtir_ts.ListType):
-                    desc = expr_node.desc(sdfg)
-                    subset += f",0:{desc.shape[-1]}"
             else:
                 assert len(domain) == 0
                 subset = "0"
@@ -336,16 +325,15 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
         let_symbols: dict[str, gtir_builtin_translators.TemporaryData],
-        reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
     ) -> list[gtir_builtin_translators.TemporaryData]:
         # use specialized dataflow builder classes for each builtin function
         if cpm.is_call_to(node, "cond"):
             return gtir_builtin_translators.translate_cond(
-                node, sdfg, head_state, self, let_symbols, reduce_identity
+                node, sdfg, head_state, self, let_symbols
             )
         elif cpm.is_call_to(node.fun, "as_fieldop"):
             return gtir_builtin_translators.translate_as_field_op(
-                node, sdfg, head_state, self, let_symbols, reduce_identity
+                node, sdfg, head_state, self, let_symbols
             )
         elif isinstance(node.fun, gtir.Lambda):
             # We use a separate state to ensure that the lambda arguments are evaluated
@@ -408,7 +396,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             sdfg=sdfg,
             head_state=head_state,
             let_symbols=lambda_symbols,
-            reduce_identity=None,
         )
 
     def visit_Literal(
@@ -417,7 +404,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
         let_symbols: dict[str, gtir_builtin_translators.TemporaryData],
-        reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
     ) -> list[gtir_builtin_translators.TemporaryData]:
         return gtir_builtin_translators.translate_symbol_ref(
             node, sdfg, head_state, self, let_symbols={}
@@ -429,7 +415,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
         let_symbols: dict[str, gtir_builtin_translators.TemporaryData],
-        reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
     ) -> list[gtir_builtin_translators.TemporaryData]:
         return gtir_builtin_translators.translate_symbol_ref(
             node, sdfg, head_state, self, let_symbols
