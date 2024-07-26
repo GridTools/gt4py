@@ -29,32 +29,24 @@ from gt4py.next.program_processors.runners.dace_fieldview import (
 def dace_auto_optimize(
     sdfg: dace.SDFG,
     device: dace.DeviceType = dace.DeviceType.CPU,
+    use_gpu_storage: bool = True,
     **kwargs: Any,
 ) -> dace.SDFG:
     """This is a convenient wrapper arround DaCe's `auto_optimize` function.
 
-    By default it uses the `CPU` device type. Furthermore, it will first run the
-    `{In, Out}LocalStorage` transformations of the SDFG. The reason for this is that
-    empirical observations have shown, that the current auto optimizer has problems
-    in certain cases and this should prevent some of them.
-
     Args:
         sdfg: The SDFG that should be optimized in place.
         device: the device for which optimizations should be done, defaults to CPU.
+        use_gpu_storage: Assumes that the SDFG input is already on the GPU.
+            This parameter is `False` in DaCe but here is changed to `True`.
         kwargs: Are forwarded to the underlying auto optimized exposed by DaCe.
     """
-
-    # Now put output storages everywhere to make auto optimizer less likely to fail.
-    # sdfg.apply_transformations_repeated([InLocalStorage, OutLocalStorage])  # noqa: ERA001 [commented-out-code]
-
-    # Now the optimization.
-    sdfg = dace_aoptimize(sdfg, device=device, **kwargs)
-
-    # Now the simplification step.
-    #  This should get rid of some of teh additional transients we have added.
-    sdfg.simplify()
-
-    return sdfg
+    return dace_aoptimize.auto_optimize(
+        sdfg,
+        device=device,
+        use_gpu_storage=use_gpu_storage,
+        **kwargs,
+    )
 
 
 def gt_simplify(
@@ -77,6 +69,8 @@ def gt_simplify(
     Note:
         The reason for this function is that we can influence how simplify works.
         Since some parts in simplify might break things in the SDFG.
+        However, currently nothing is customized yet, and the function just calls
+        the simplification pass directly.
     """
     from dace.transformation.passes.simplify import SimplifyPass
 
@@ -90,83 +84,170 @@ def gt_simplify(
 
 def gt_auto_optimize(
     sdfg: dace.SDFG,
-    device: dace.DeviceType = dace.DeviceType.CPU,
+    gpu: bool,
     leading_dim: Optional[gtx_common.Dimension] = None,
-    gpu: bool = False,
+    aggressive_fusion: bool = True,
+    make_persistent: bool = True,
     gpu_block_size: Optional[Sequence[int | str] | str] = None,
-    gpu_launch_bounds: Optional[int | str] = None,
-    gpu_launch_factor: Optional[int] = None,
-    validate: bool = True,
-    validate_all: bool = False,
     block_dim: Optional[gtx_common.Dimension] = None,
     blocking_size: int = 10,
+    validate: bool = True,
+    validate_all: bool = False,
     **kwargs: Any,
 ) -> dace.SDFG:
-    """Performs GT4Py specific optimizations in place.
+    """Performs GT4Py specific optimizations on the SDFG in place.
+
+    The auto optimization works in different phases, that focuses each on
+    different aspects of the SDFG. The initial SDFG is assumed to have a
+    very large number of rather simple Maps.
+
+    1. Some general simplification transformations, beyond classical simplify,
+        are applied to the SDFG.
+    2. In this phase the function tries to reduce the number of maps. This
+        process mostly relies on the map fusion transformation. If
+        `aggressive_fusion` is set the function will also promote certain Maps, to
+        make them fusable. For this it will add dummy dimensions. However, currently
+        the function will only add horizonal dimensions.
+        In this phase some optimizations inside the bigger kernels themselves might
+        be applied as well.
+    3. After the function created big kernels it will apply some optimization,
+        inside the kernels itself. For example fuse maps inside them.
+    4. Afterwards it will process the map ranges and iteration order. For this
+        the function assumes that the dimension indicated by `leading_dim` is the
+        once with stride one.
+    5. If requested the function will now apply blocking, on the dimension indicated
+        by `leading_dim`. (The reason that it is not done in the kernel optimization
+        phase is a restriction dictated by the implementation.)
+    6. If requested the SDFG will be transformed to GPU. For this the
+        `gt_gpu_transformation()` function is used, that might apply several other
+        optimizations.
+    7. Afterwards some general transformations to the SDFG are applied.
+        This includes:
+        - Use fast implementation for library nodes.
+        - Move small transients to stack.
+        - Make transients persistent (if requested).
+        - Reuse transients.
 
     Args:
         sdfg: The SDFG that should ve optimized in place.
-        device: The device for which we should optimize.
-        leading_dim: Leading dimension, where the stride is expected to be 1.
-        gpu: Optimize for GPU.
-        gpu_block_size: The block size that should be used for the GPU.
-        gpu_launch_bounds: The launch bounds to use.
-        gpu_launch_factor: The launch factor to use.
+        gpu: Optimize for GPU or CPU.
+        leading_dim: Leading dimension, indicates where the stride is 1.
+        aggressive_fusion: Be more aggressive in fusion, will lead to the promotion
+            of certain maps.
+        make_persistent: Turn all transients to persistent lifetime, thus they are
+            allocated over the whole lifetime of the program, even if the kernel exits.
+            Thus the SDFG can not be called by different threads.
+        gpu_block_size: The thread block size for maps in GPU mode, currently only
+            one for all.
+        block_dim: On which dimension blocking should be applied.
+        blocking_size: How many elements each block should process.
+        validate: Perform validation during the steps.
+        validate_all: Perform extensive validation.
+
+    Todo:
+        - Make sure that `SDFG.simplify()` is not called indirectly, by temporary
+            overwriting it with `gt_simplify()`.
+        - Specify arguments to set the size of GPU thread blocks depending on the
+            dimensions. I.e. be able to use a different size for 1D than 2D Maps.
+        - Add a parallel version of Map fusion.
+        - Implements some model to further guide to determine what we want to fuse.
+            Something along the line "Fuse if operational intensity goes up, but
+            not if we have too much internal space (register pressure).
+        - Create a custom array elimination pass that honor rule 1.
     """
 
     with dace.config.temporary_config():
         dace.Config.set("optimizer", "match_exception", value=True)
+        dace.Config.set("store_history", value=False)
 
-        # Initial cleaning
+        # TODO(phimuell): Should there be a zeroth phase, in which we generate
+        #       a chanonical form of the SDFG, for example move all local maps
+        #       to internal serial maps, such that they not block fusion?
+        #       in the JaCe prototype we did that.
+
+        # Phase 1: Initial Cleanup
         gt_simplify(sdfg)
+        sdfg.apply_transformations_once_everywhere(
+            [
+                dace_dataflow.TrivialMapElimination,
+                dace_dataflow.MapReduceFusion,
+                dace_dataflow.MapWCRFusion,
+            ],
+            validate=validate,
+            validate_all=validate_all,
+        )
 
         # Compute the SDFG to see if something has changed.
         sdfg_hash = sdfg.hash_sdfg()
 
-        # Have GPU transformations been performed.
-        have_gpu_transformations_been_run = False
-
+        # Phase 2: Kernel Creation
+        #   We will now try to reduce the number of kernels and create big one.
+        #   For this we essentially use map fusion. We do this is a loop because
+        #   after a graph modification followed by simplify new fusing opportunities
+        #   might arise. We use the hash of the SDFG to detect if we have reached a
+        #   fix point.
         for _ in range(100):
-            # Due to the structure of the generated SDFG getting rid of Maps,
-            #  i.e. fusing them, is the best we can currently do.
-            if kwargs.get("use_dace_fusion", False):
-                sdfg.apply_transformations_repeated([dace_dataflow.MapFusion])
-            else:
-                xform = gtx_transformations.SerialMapFusion()
-                sdfg.apply_transformations_repeated(
-                    [xform], validate=validate, validate_all=validate_all
-                )
-
+            # Use map fusion to reduce their number and to create big kernels
+            # TODO(phimuell): Use a cost measurement to decide if fusion should be done.
+            # TODO(phimuell): Add parallel fusion transformation. Should it run after
+            #                   or with the serial one?
             sdfg.apply_transformations_repeated(
-                [gtx_transformations.SerialMapPromoter(promote_horizontal=False)],
+                gtx_transformations.SerialMapFusion(
+                    only_toplevel_maps=True,
+                ),
                 validate=validate,
                 validate_all=validate_all,
             )
 
-            # Maybe running the fusion has opened more opportunities.
-            gt_simplify(sdfg)
+            # Now do some cleanup task, that may enable further fusion opportunities.
+            #  Note for performance reasons simplify is deferred.
+            phase2_cleanup = []
+            phase2_cleanup.append(dace_dataflow.TrivialTaskletElimination())
 
-            # check if something has changed and if so end it here.
+            # TODO(phimuell): Should we do this all the time or only once? (probably the later)
+            # TODO(phimuell): More control what we promote.
+            phase2_cleanup.append(
+                gtx_transformations.SerialMapPromoter(
+                    promote_horizontal=False,
+                )
+            )
+
+            sdfg.apply_transformations_once_everywhere(
+                phase2_cleanup,
+                validate=validate,
+                validate_all=validate_all,
+            )
+
+            # Use the hash to determine if the transformations did modify the SDFG.
+            #  If not we have optimized the SDFG as much as we could, in this phase.
             old_sdfg_hash = sdfg_hash
             sdfg_hash = sdfg.hash_sdfg()
-
             if old_sdfg_hash == sdfg_hash:
-                if gpu and (not have_gpu_transformations_been_run):
-                    gtx_transformations.gt_gpu_transformation(
-                        sdfg,
-                        validate=validate,
-                        validate_all=validate_all,
-                        gpu_block_size=None,  # Explicitly not set here.
-                    )
-                    have_gpu_transformations_been_run = True
-                    sdfg_hash = sdfg.hash_sdfg()
-                    continue
                 break
+
+            # The SDFG was modified by the transformations above. But no
+            #  transformation could be applied, so we will now call simplify
+            #  and start over.
+            gt_simplify(sdfg)
+
         else:
             raise RuntimeWarning("Optimization of the SDFG did not converged.")
 
-        # After we have optimized the SDFG as good as we can, we will now do some
-        #  lower level optimization.
+        # Phase 3: Optimizing the kernels themselves.
+        #   Currently this is only applies fusion inside them.
+        # TODO(phimuell): Improve.
+        sdfg.apply_transformations_repeated(
+            gtx_transformations.SerialMapFusion(
+                only_inner_maps=True,
+            ),
+            validate=validate,
+            validate_all=validate_all,
+        )
+        gt_simplify(sdfg)
+
+        # Phase 4: Iteration Space
+        #   This essentially ensures that the stride 1 dimensions are handled
+        #   by the inner most loop nest (CPU) or x-block (GPU)
         if leading_dim is not None:
             sdfg.apply_transformations_once_everywhere(
                 gtx_transformations.MapIterationOrder(
@@ -174,30 +255,43 @@ def gt_auto_optimize(
                 )
             )
 
-        # After everything we set the GPU block size.
-        if gpu_block_size is not None:
-            gtx_transformations.gt_set_gpu_blocksize(
-                sdfg=sdfg,
-                gpu_block_size=gpu_block_size,
-                gpu_launch_bounds=gpu_launch_bounds,
-                gpu_launch_factor=gpu_launch_factor,
-            )
-
-        if gpu and (block_dim is not None):
-            sdfg.apply_transformations_repeated(
+        # Phase 5: Apply blocking
+        if block_dim is not None:
+            sdfg.apply_transformations_once_everywhere(
                 gtx_transformations.KBlocking(
                     blocking_size=blocking_size,
                     block_dim=block_dim,
                 ),
-                validate=True,
+                validate=validate,
+                validate_all=validate_all,
             )
 
-        # These are the part that we copy from DaCe built in auto optimization.
-        dace_aoptimize.set_fast_implementations(sdfg, device)
-        dace_aoptimize.move_small_arrays_to_stack(sdfg)
-        dace_aoptimize.make_transients_persistent(sdfg, device)
+        # Phase 6: Going to GPU
+        if gpu:
+            gpu_launch_factor: Optional[int] = kwargs.get("gpu_launch_factor", None)
+            gpu_launch_bounds: Optional[int] = kwargs.get("gpu_launch_bounds", None)
+            gtx_transformations.gt_gpu_transformation(
+                sdfg,
+                gpu_block_size=gpu_block_size,
+                gpu_launch_bounds=gpu_launch_bounds,
+                gpu_launch_factor=gpu_launch_factor,
+                validate=validate,
+                validate_all=validate_all,
+            )
 
-        # Final simplify
-        gt_simplify(sdfg)
+        # Phase 7: General Optimizations
+        #   The following operations apply regardless if we have a GPU or CPU.
+        #   The DaCe auto optimizer also uses them. Note that the reuse transient
+        #   is not done by DaCe.
+        device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
+        transient_reuse = dace.transformation.passes.TransientReuse()
+
+        transient_reuse.apply_pass(sdfg, {})
+        dace_aoptimize.set_fast_implementations(sdfg, device)
+        # TODO(phimuell): Fix the bug, it is used the tile value and not the stack array value.
+        dace_aoptimize.move_small_arrays_to_stack(sdfg)
+        if make_persistent:
+            # TODO(phimuell): Allow to also make them `SDFG`.
+            dace_aoptimize.make_transients_persistent(sdfg, device)
 
         return sdfg
