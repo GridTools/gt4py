@@ -276,12 +276,10 @@ executor_with_temporaries = RoundtripExecutorFactory(
 default = next_backend.Backend(
     executor=executor,
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
-    transforms_fop=next_backend.DEFAULT_TRANSFORMS,
-    transforms_prog=next_backend.DEFAULT_TRANSFORMS,
+    transforms=next_backend.DEFAULT_TRANSFORMS,
 )
 with_temporaries = next_backend.Backend(
     executor=executor_with_temporaries,
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
-    transforms_fop=next_backend.DEFAULT_TRANSFORMS,
-    transforms_prog=next_backend.DEFAULT_TRANSFORMS,
+    transforms=next_backend.DEFAULT_TRANSFORMS,
 )

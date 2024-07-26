@@ -104,15 +104,15 @@ class Program:
         no_args_def = workflow.DataArgsPair(
             self.definition_stage, arguments.CompileTimeArgs.empty()
         )
-        if self.backend is not None and self.backend.transforms_prog is not None:
-            return self.backend.transforms_prog.func_to_past(no_args_def).data
+        if self.backend is not None and self.backend.transforms is not None:
+            return self.backend.transforms.func_to_past(no_args_def).data
         return next_backend.DEFAULT_TRANSFORMS.func_to_past(no_args_def).data
 
     # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self):
         no_args_past = workflow.DataArgsPair(self.past_stage, arguments.CompileTimeArgs.empty())
-        if self.backend is not None and self.backend.transforms_prog is not None:
-            return self.backend.transforms_prog.past_lint(no_args_past).data
+        if self.backend is not None and self.backend.transforms is not None:
+            return self.backend.transforms.past_lint(no_args_past).data
         return next_backend.DEFAULT_TRANSFORMS.past_lint(no_args_past).data
 
     @property
@@ -184,8 +184,8 @@ class Program:
             ),
             args=arguments.CompileTimeArgs.empty(),
         )
-        if self.backend is not None and self.backend.transforms_prog is not None:
-            return self.backend.transforms_prog.past_to_itir(no_args_past).data
+        if self.backend is not None and self.backend.transforms is not None:
+            return self.backend.transforms.past_to_itir(no_args_past).data
         return next_backend.DEFAULT_TRANSFORMS.past_to_itir(no_args_past).data
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs: Any) -> None:
@@ -233,8 +233,8 @@ class ProgramFromPast(Program):
 
     # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self):
-        if self.backend is not None and self.backend.transforms_prog is not None:
-            self.backend.transforms_prog.past_lint(self.past_stage)
+        if self.backend is not None and self.backend.transforms is not None:
+            self.backend.transforms.past_lint(self.past_stage)
         return next_backend.DEFAULT_TRANSFORMS.past_lint(self.past_stage)
 
 
@@ -414,8 +414,8 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
     @functools.cached_property
     def foast_stage(self) -> ffront_stages.FoastOperatorDefinition:
-        if self.backend is not None and self.backend.transforms_fop is not None:
-            return self.backend.transforms_fop.func_to_foast(
+        if self.backend is not None and self.backend.transforms is not None:
+            return self.backend.transforms.func_to_foast(
                 workflow.DataArgsPair(self.definition_stage, args=None)
             ).data
         return next_backend.DEFAULT_TRANSFORMS.func_to_foast(
@@ -444,8 +444,8 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         )
 
     def __gt_itir__(self) -> itir.FunctionDefinition:
-        if self.backend is not None and self.backend.transforms_fop is not None:
-            return self.backend.transforms_fop.foast_to_itir(
+        if self.backend is not None and self.backend.transforms is not None:
+            return self.backend.transforms.foast_to_itir(
                 workflow.DataArgsPair(self.foast_stage, arguments.CompileTimeArgs.empty())
             )
         return next_backend.DEFAULT_TRANSFORMS.foast_to_itir(
@@ -463,8 +463,8 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             ),
         )
         past_stage = None
-        if self.backend is not None and self.backend.transforms_fop is not None:
-            past_stage = self.backend.transforms_fop.field_view_op_to_prog.foast_to_past(
+        if self.backend is not None and self.backend.transforms is not None:
+            past_stage = self.backend.transforms.field_view_op_to_prog.foast_to_past(
                 foast_with_types
             ).data
         else:
@@ -475,13 +475,6 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
     def __call__(self, *args, **kwargs) -> None:
         if not next_embedded.context.within_valid_context() and self.backend is not None:
-            import devtools
-
-            devtools.debug(
-                self.definition_stage.attributes
-                if self.definition_stage
-                else self.foast_stage.attributes
-            )
             # non embedded execution
             if "offset_provider" not in kwargs:
                 raise errors.MissingArgumentError(None, "offset_provider", True)

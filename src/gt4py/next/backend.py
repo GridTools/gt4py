@@ -126,8 +126,7 @@ DEFAULT_TRANSFORMS: FieldopTransformWorkflow = FieldopTransformWorkflow()
 class Backend(Generic[core_defs.DeviceTypeT]):
     executor: ppi.ProgramExecutor
     allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
-    transforms_fop: workflow.Workflow[INPUT_PAIR, stages.AOTProgram]
-    transforms_prog: workflow.Workflow[INPUT_PAIR, stages.AOTProgram]
+    transforms: workflow.Workflow[INPUT_PAIR, stages.AOTProgram]
 
     def __call__(
         self,
@@ -138,7 +137,7 @@ class Backend(Generic[core_defs.DeviceTypeT]):
         _ = kwargs.pop("from_fieldop", None)
         # taking the offset provider out is not needed
         args, kwargs = signature.convert_to_positional(program, *args, **kwargs)
-        program_info = self.transforms_fop(
+        program_info = self.transforms(
             workflow.DataArgsPair(
                 data=program,
                 args=arguments.CompileTimeArgs.from_concrete_no_size(*args, **kwargs),

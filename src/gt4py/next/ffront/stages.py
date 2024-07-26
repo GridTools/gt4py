@@ -92,14 +92,6 @@ def fingerprint_stage(obj: Any, algorithm: Optional[str | xtyping.HashlibAlgorit
         hasher = algorithm
 
     add_content_to_fingerprint(obj, hasher)
-    import devtools
-
-    if hasattr(obj, "definition"):
-        print(obj.definition.id if hasattr(obj.definition, "id") else obj.definition.__name__)
-    print(id(obj))
-    print(type(obj))
-    print(id(obj))
-    devtools.debug(hasher.hexdigest())
     return hasher.hexdigest()
 
 

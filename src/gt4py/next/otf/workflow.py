@@ -265,10 +265,8 @@ class CachedStep(
         hash_ = self.hash_function(inp)
         try:
             result = self._cache[hash_]
-            print("cache hit!\n")
         except KeyError:
             result = self._cache[hash_] = self.step(inp)
-            print("cache miss!\n")
         return result
 
 

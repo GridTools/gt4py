@@ -81,8 +81,7 @@ class DaCeBackendFactory(GTFNBackendFactory):
         )
         use_field_canonical_representation: bool = False
 
-    transforms_fop = backend.DEFAULT_TRANSFORMS
-    transforms_prog = backend.DEFAULT_TRANSFORMS
+    transforms = backend.DEFAULT_TRANSFORMS
 
 
 run_dace_cpu = DaCeBackendFactory(cached=True, auto_optimize=True)

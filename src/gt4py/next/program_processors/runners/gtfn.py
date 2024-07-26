@@ -201,8 +201,7 @@ class GTFNBackendFactory(factory.Factory):
         lambda o: modular_executor.ModularExecutor(otf_workflow=o.otf_workflow, name=o.name)
     )
     allocator = next_allocators.StandardCPUFieldBufferAllocator()
-    transforms_fop = backend.DEFAULT_TRANSFORMS
-    transforms_prog = backend.DEFAULT_TRANSFORMS
+    transforms = backend.DEFAULT_TRANSFORMS
 
 
 run_gtfn = GTFNBackendFactory()

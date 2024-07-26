@@ -54,9 +54,6 @@ def func_to_foast(inp: DSL_FOP) -> FOP:
     annotations = typing.get_type_hints(inp.definition)
     foast_definition_node = FieldOperatorParser.apply(source_def, closure_vars, annotations)
     loc = foast_definition_node.location
-    import devtools
-
-    devtools.debug(inp.attributes)
     operator_attribute_nodes = {
         key: foast.Constant(value=value, type=type_translation.from_value(value), location=loc)
         for key, value in inp.attributes.items()
