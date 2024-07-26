@@ -56,7 +56,7 @@ INPUT_PAIR: typing.TypeAlias = workflow.DataArgsPair[INPUT_DATA, ARGS | CARG]
 
 
 @dataclasses.dataclass(frozen=True)
-class FieldopTransformWorkflow(workflow.MultiWorkflow[INPUT_PAIR, stages.AOTProgram]):
+class Transforms(workflow.MultiWorkflow[INPUT_PAIR, stages.AOTProgram]):
     """Modular workflow for transformations with access to intermediates."""
 
     aotify_args: workflow.Workflow[
@@ -119,7 +119,7 @@ class FieldopTransformWorkflow(workflow.MultiWorkflow[INPUT_PAIR, stages.AOTProg
         return steps
 
 
-DEFAULT_TRANSFORMS: FieldopTransformWorkflow = FieldopTransformWorkflow()
+DEFAULT_TRANSFORMS: Transforms = Transforms()
 
 
 @dataclasses.dataclass(frozen=True)
