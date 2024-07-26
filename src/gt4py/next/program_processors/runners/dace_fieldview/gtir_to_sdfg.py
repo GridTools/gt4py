@@ -369,8 +369,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         All arguments to lambda functions are fields (i.e. `as_fieldop`, field or scalar `gtir.SymRef`,
         nested let-lambdas thereof). The dictionary called `let_symbols` maps the lambda parameters
-        to symbols, e.g. temporary fields or program arguments. The lambda parameters can override
-        previously defined symbols, that is why the current dictionary is copied.
+        to symbols, e.g. temporary fields or program arguments. If the lambda has a parameter whose name
+        is already present in `let_symbols`, i.e. a paramater with the same name as a previously defined
+        symbol, the parameter will shadow the previous symbol during traversal of the lambda expression.
         """
         lambda_symbols = let_symbols | {
             str(p.id): arg for p, arg in zip(node.params, args, strict=True)

@@ -822,3 +822,43 @@ def test_gtir_let_lambda():
 
     sdfg(x=a, y=b, **FSYMBOLS)
     assert np.allclose(b, a * 8)
+
+
+def test_gtir_let_lambda_with_cond():
+    domain = im.call("cartesian_domain")(
+        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
+    )
+    testee = gtir.Program(
+        id="let_lambda_with_cond",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="x", type=IFTYPE),
+            gtir.Sym(id="y", type=IFTYPE),
+            gtir.Sym(id="pred", type=ts.ScalarType(ts.ScalarKind.BOOL)),
+            gtir.Sym(id="size", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.let("x1", "x")(
+                    im.let("x2", im.op_as_fieldop("multiplies", domain)(2.0, "x"))(
+                        im.call("cond")(
+                            gtir.SymRef(id="pred"),
+                            im.as_fieldop(im.lambda_("a")(im.deref("a")), domain)("x1"),
+                            im.as_fieldop(im.lambda_("a")(im.deref("a")), domain)("x2"),
+                        )
+                    )
+                ),
+                domain=domain,
+                target=gtir.SymRef(id="y"),
+            )
+        ],
+    )
+
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, {})
+
+    a = np.random.rand(N)
+    for s in [False, True]:
+        b = np.empty_like(a)
+        sdfg(pred=np.bool_(s), x=a, y=b, **FSYMBOLS)
+        assert np.allclose(b, a if s else a * 2)

@@ -165,7 +165,7 @@ def translate_as_field_op(
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
     let_symbols: dict[str, TemporaryData],
 ) -> list[TemporaryData]:
-    """Generates the dataflow subgraph for the `as_field_op` builtin function."""
+    """Generates the dataflow subgraph for the `as_fieldop` builtin function."""
     assert isinstance(node, gtir.FunCall)
     assert cpm.is_call_to(node.fun, "as_fieldop")
 
