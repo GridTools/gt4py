@@ -153,13 +153,16 @@ def test_sdfgConvertible_connectivities(unstructured_case):
         rows=3,
         cols=2,
         __connectivity_E2V=e2v.table,
-        ____connectivity_E2V_stride_0=get_stride_from_numpy_to_dace(xp.asnumpy(e2v.table), 0),
-        ____connectivity_E2V_stride_1=get_stride_from_numpy_to_dace(xp.asnumpy(e2v.table), 1),
+        ____connectivity_E2V_stride_0=get_stride_from_numpy_to_dace(
+            xp.asnumpy(e2v.table) if backend == run_dace_gpu else e2v.table, 0
+        ),
+        ____connectivity_E2V_stride_1=get_stride_from_numpy_to_dace(
+            xp.asnumpy(e2v.table) if backend == run_dace_gpu else e2v.table, 1
+        ),
     )
 
-    assert np.allclose(
-        gtx.field_utils.asnumpy(out), gtx.field_utils.asnumpy(a)[xp.asnumpy(e2v_array)[:, 0]]
-    )
+    e2v_xp = xp.asnumpy(e2v_array) if backend == run_dace_gpu else e2v_array
+    assert np.allclose(gtx.field_utils.asnumpy(out), gtx.field_utils.asnumpy(a)[e2v_xp[:, 0]])
 
     e2v_array = xp.asarray([[1, 0], [2, 1], [0, 2]])
     e2v = gtx.NeighborTableOffsetProvider(e2v_array, Edge, Vertex, 2, False)
@@ -174,9 +177,8 @@ def test_sdfgConvertible_connectivities(unstructured_case):
         ____connectivity_E2V_stride_1=get_stride_from_numpy_to_dace(e2v.table, 1),
     )
 
-    assert np.allclose(
-        gtx.field_utils.asnumpy(out), gtx.field_utils.asnumpy(a)[xp.asnumpy(e2v_array)[:, 0]]
-    )
+    e2v_xp = xp.asnumpy(e2v_array) if backend == run_dace_gpu else e2v_array
+    assert np.allclose(gtx.field_utils.asnumpy(out), gtx.field_utils.asnumpy(a)[e2v_xp[:, 0]])
 
 
 def get_stride_from_numpy_to_dace(numpy_array: np.ndarray, axis: int) -> int:
