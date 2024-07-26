@@ -107,19 +107,24 @@ def test_sdfgConvertible_connectivities(unstructured_case):
 
     if backend == run_dace_gpu:
         import cupy as xp
+
+        dace_storage_type = dace.StorageType.GPU_Global
     else:
         import numpy as xp
+
+        dace_storage_type = dace.StorageType.Default
 
     rows = dace.symbol("rows")
     cols = dace.symbol("cols")
     OffsetProvider_t = dace.data.Structure(
-        dict(E2V=dace.data.Array(dtype=dace.int64, shape=[rows, cols])), name="OffsetProvider"
+        dict(E2V=dace.data.Array(dtype=dace.int64, shape=[rows, cols], storage=dace_storage_type)),
+        name="OffsetProvider",
     )
 
     @dace.program
     def sdfg(
-        a: dace.data.Array(dtype=dace.float64, shape=(rows,)),
-        out: dace.data.Array(dtype=dace.float64, shape=(rows,)),
+        a: dace.data.Array(dtype=dace.float64, shape=(rows,), storage=dace_storage_type),
+        out: dace.data.Array(dtype=dace.float64, shape=(rows,), storage=dace_storage_type),
         offset_provider: OffsetProvider_t,
         connectivities: dace.compiletime,
     ):
