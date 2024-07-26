@@ -43,7 +43,7 @@ from gt4py.next.ffront.stages import (
 )
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import arguments, stages, workflow
-from gt4py.next.program_processors import processor_interface as ppi
+from gt4py.next.program_processors import modular_executor
 
 
 ARGS: typing.TypeAlias = arguments.JITArgs
@@ -124,7 +124,7 @@ DEFAULT_TRANSFORMS: Transforms = Transforms()
 
 @dataclasses.dataclass(frozen=True)
 class Backend(Generic[core_defs.DeviceTypeT]):
-    executor: ppi.ProgramExecutor
+    executor: modular_executor.ModularExecutor
     allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
     transforms: workflow.Workflow[INPUT_PAIR, stages.AOTProgram]
 
@@ -135,7 +135,6 @@ class Backend(Generic[core_defs.DeviceTypeT]):
         **kwargs: Any,
     ) -> None:
         _ = kwargs.pop("from_fieldop", None)
-        # taking the offset provider out is not needed
         args, kwargs = signature.convert_to_positional(program, *args, **kwargs)
         program_info = self.transforms(
             workflow.DataArgsPair(
@@ -144,7 +143,7 @@ class Backend(Generic[core_defs.DeviceTypeT]):
             )
         )
         # TODO(ricoh): get rid of executors altogether
-        self.executor.otf_workflow(program_info)(*args, **kwargs)  # type: ignore[attr-defined]
+        self.executor.otf_workflow(program_info)(*args, **kwargs)
 
     @property
     def __name__(self) -> str:
