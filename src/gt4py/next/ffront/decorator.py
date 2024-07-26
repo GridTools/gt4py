@@ -32,7 +32,6 @@ from gt4py.eve import extended_typing as xtyping
 from gt4py.next import (
     allocators as next_allocators,
     backend as next_backend,
-    backend_exp,
     embedded as next_embedded,
     errors,
 )
@@ -107,14 +106,14 @@ class Program:
         )
         if self.backend is not None and self.backend.transforms_prog is not None:
             return self.backend.transforms_prog.func_to_past(no_args_def).data
-        return backend_exp.DEFAULT_TRANSFORMS.func_to_past(no_args_def).data
+        return next_backend.DEFAULT_TRANSFORMS.func_to_past(no_args_def).data
 
     # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self):
         no_args_past = workflow.DataArgsPair(self.past_stage, arguments.CompileTimeArgs.empty())
         if self.backend is not None and self.backend.transforms_prog is not None:
             return self.backend.transforms_prog.past_lint(no_args_past).data
-        return backend_exp.DEFAULT_TRANSFORMS.past_lint(no_args_past).data
+        return next_backend.DEFAULT_TRANSFORMS.past_lint(no_args_past).data
 
     @property
     def __name__(self) -> str:
@@ -187,7 +186,7 @@ class Program:
         )
         if self.backend is not None and self.backend.transforms_prog is not None:
             return self.backend.transforms_prog.past_to_itir(no_args_past).data
-        return backend_exp.DEFAULT_TRANSFORMS.past_to_itir(no_args_past).data
+        return next_backend.DEFAULT_TRANSFORMS.past_to_itir(no_args_past).data
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs: Any) -> None:
         if self.backend is None:
@@ -236,7 +235,7 @@ class ProgramFromPast(Program):
     def __post_init__(self):
         if self.backend is not None and self.backend.transforms_prog is not None:
             self.backend.transforms_prog.past_lint(self.past_stage)
-        return backend_exp.DEFAULT_TRANSFORMS.past_lint(self.past_stage)
+        return next_backend.DEFAULT_TRANSFORMS.past_lint(self.past_stage)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -419,7 +418,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             return self.backend.transforms_fop.func_to_foast(
                 workflow.DataArgsPair(self.definition_stage, args=None)
             ).data
-        return backend_exp.DEFAULT_TRANSFORMS.func_to_foast(
+        return next_backend.DEFAULT_TRANSFORMS.func_to_foast(
             workflow.DataArgsPair(self.definition_stage, None)
         ).data
 
@@ -449,7 +448,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             return self.backend.transforms_fop.foast_to_itir(
                 workflow.DataArgsPair(self.foast_stage, arguments.CompileTimeArgs.empty())
             )
-        return backend_exp.DEFAULT_TRANSFORMS.foast_to_itir(
+        return next_backend.DEFAULT_TRANSFORMS.foast_to_itir(
             workflow.DataArgsPair(self.foast_stage, arguments.CompileTimeArgs.empty())
         )
 
@@ -469,7 +468,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 foast_with_types
             ).data
         else:
-            past_stage = backend_exp.DEFAULT_TRANSFORMS.foast_to_past_closure.foast_to_past(
+            past_stage = next_backend.DEFAULT_TRANSFORMS.foast_to_past_closure.foast_to_past(
                 foast_with_types
             ).data
         return ProgramFromPast(definition_stage=None, past_stage=past_stage, backend=self.backend)

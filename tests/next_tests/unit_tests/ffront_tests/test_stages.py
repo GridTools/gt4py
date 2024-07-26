@@ -101,13 +101,13 @@ def test_fingerprint_stage_field_op_def(fieldop, samecode_fieldop, different_fie
 
 
 def test_fingerprint_stage_foast_op_def(fieldop, samecode_fieldop, different_fieldop):
-    foast = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_foast(
+    foast = gtx.backend.DEFAULT_TRANSFORMS.func_to_foast(
         workflow.DataArgsPair(fieldop.definition_stage, arguments.CompileTimeArgs.empty())
     ).data
-    samecode = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_foast(
+    samecode = gtx.backend.DEFAULT_TRANSFORMS.func_to_foast(
         workflow.DataArgsPair(samecode_fieldop.definition_stage, arguments.CompileTimeArgs.empty())
     ).data
-    different = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_foast(
+    different = gtx.backend.DEFAULT_TRANSFORMS.func_to_foast(
         workflow.DataArgsPair(different_fieldop.definition_stage, arguments.CompileTimeArgs.empty())
     ).data
 
@@ -117,9 +117,9 @@ def test_fingerprint_stage_foast_op_def(fieldop, samecode_fieldop, different_fie
 
 @dataclasses.dataclass(frozen=True)
 class ToFoastClosure(workflow.NamedStepSequence):
-    func_to_foast: workflow.Workflow = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_foast
+    func_to_foast: workflow.Workflow = gtx.backend.DEFAULT_TRANSFORMS.func_to_foast
     foast_to_closure: workflow.Workflow = dataclasses.field(
-        default=gtx.backend_exp.DEFAULT_TRANSFORMS.field_view_op_to_prog,
+        default=gtx.backend.DEFAULT_TRANSFORMS.field_view_op_to_prog,
     )
 
 
@@ -189,13 +189,13 @@ def test_fingerprint_stage_program_def(program, samecode_program, different_prog
 
 
 def test_fingerprint_stage_past_def(program, samecode_program, different_program):
-    past = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_past(
+    past = gtx.backend.DEFAULT_TRANSFORMS.func_to_past(
         workflow.DataArgsPair(program.definition_stage, arguments.CompileTimeArgs.empty())
     )
-    samecode = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_past(
+    samecode = gtx.backend.DEFAULT_TRANSFORMS.func_to_past(
         workflow.DataArgsPair(samecode_program.definition_stage, arguments.CompileTimeArgs.empty())
     )
-    different = gtx.backend_exp.DEFAULT_TRANSFORMS.func_to_past(
+    different = gtx.backend.DEFAULT_TRANSFORMS.func_to_past(
         workflow.DataArgsPair(different_program.definition_stage, arguments.CompileTimeArgs.empty())
     )
 

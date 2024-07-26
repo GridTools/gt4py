@@ -14,11 +14,8 @@ from gt4py import eve
 ## Replace Steps
 
 ```python
-cached_lowering_toolchain = gtx.backend_exp.DEFAULT_TRANSFORMS.replace(
-    past_to_itir=workflow.CachedStep(
-        step=gtx.ffront.past_to_itir.PastToItirFactory(),
-        hash_function=eve.utils.content_hash
-    )
+cached_lowering_toolchain = gtx.backend.DEFAULT_TRANSFORMS.replace(
+    past_to_itir=tx.ffront.past_to_itir.past_to_itir_factory(cached=False)
 )
 ```
 
@@ -29,7 +26,7 @@ DUMMY_FOP = workflow.DataArgsPair(data=ff_stages.FieldOperatorDefinition(definit
 ```
 
 ```python
-gtx.backend_exp.DEFAULT_TRANSFORMS.step_order(DUMMY_FOP)
+gtx.backend.DEFAULT_TRANSFORMS.step_order(DUMMY_FOP)
 ```
 
 ```python
@@ -41,7 +38,7 @@ class SkipLinting(gtx.backend_exp.FieldopTransformWorkflow):
             order.remove("past_lint")  # not running "past_lint"
         return order
 
-same_steps = dataclasses.asdict(gtx.backend_exp.DEFAULT_TRANSFORMS)
+same_steps = dataclasses.asdict(gtx.backend.DEFAULT_TRANSFORMS)
 skip_linting_transforms = SkipLinting(
     **same_steps
 )

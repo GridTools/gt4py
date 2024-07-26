@@ -4,7 +4,7 @@ import inspect
 import pprint
 
 import gt4py.next as gtx
-from gt4py.next import backend_exp as backend
+from gt4py.next import backend
 
 import devtools
 ```
