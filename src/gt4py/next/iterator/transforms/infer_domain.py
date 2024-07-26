@@ -46,6 +46,24 @@ def trace_shifts(stencil: itir.Expr, input_ids: list[str], domain: itir.Expr):
     return TraceShifts.apply(node)
 
 
+def extract_shifts_and_translate_domains(
+    stencil: itir.Expr,
+    input_ids: list[str],
+    input_domain: SymbolicDomain,
+    offset_provider: Dict[str, Dimension],
+    accessed_domains: Dict[str, SymbolicDomain],
+):
+    shifts_results = trace_shifts(stencil, input_ids, SymbolicDomain.as_expr(input_domain))
+
+    for in_field_id in input_ids:
+        shifts_list = shifts_results[in_field_id]
+
+        new_domains = [
+            SymbolicDomain.translate(input_domain, shift, offset_provider) for shift in shifts_list
+        ]
+        accessed_domains[in_field_id] = domain_union(new_domains)
+
+
 def infer_as_fieldop(
     applied_fieldop: itir.FunCall,
     input_domain: SymbolicDomain | itir.FunCall,
@@ -73,19 +91,9 @@ def infer_as_fieldop(
     if isinstance(input_domain, itir.FunCall):
         input_domain = SymbolicDomain.from_expr(input_domain)
 
-    # Extract the shifts and translate the domains accordingly
-    shifts_results = trace_shifts(
-        stencil, input_ids, SymbolicDomain.as_expr(input_domain)
-    )  #TODO: 76-86 -> move to function
-
-    for in_field_id in input_ids:
-        shifts_list = shifts_results[in_field_id]
-
-        new_domains = [
-            SymbolicDomain.translate(input_domain, shift, offset_provider) for shift in shifts_list
-        ]
-
-        accessed_domains[in_field_id] = domain_union(new_domains)
+    extract_shifts_and_translate_domains(
+        stencil, input_ids, input_domain, offset_provider, accessed_domains
+    )
 
     # Recursively infer domain of inputs and update domain arg of nested `as_fieldops`
     transformed_inputs: list[itir.Expr] = []

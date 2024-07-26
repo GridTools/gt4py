@@ -57,12 +57,12 @@ def unstructured_offset_provider():
 
 
 def run_test_as_fieldop(
-    stencil,
-    domain,
-    expected_domain_dict,
-    offset_provider,
-    *refs,
-    domain_type=common.GridType.CARTESIAN,
+    stencil: itir.Lambda,
+    domain: itir.FunCall,
+    expected_domain_dict: Dict[str, Dict[str | Dimension, tuple[itir.Expr, itir.Expr]]],
+    offset_provider: Dict[str, Dimension],
+    *refs: im.ref,
+    domain_type: str = common.GridType.CARTESIAN,
 ):
     testee = im.as_fieldop(stencil)(*refs)
     expected = im.as_fieldop(stencil, domain)(*refs)
@@ -81,7 +81,9 @@ def run_test_as_fieldop(
     assert folded_domains == expected_domains
 
 
-def run_test_program(testee, expected, offset_provider):
+def run_test_program(
+    testee: itir.Program, expected: itir.Program, offset_provider: dict[str, Dimension]
+):
     actual_program = infer_program(testee, offset_provider)
 
     folded_program = program_constant_folding(actual_program)
@@ -388,8 +390,8 @@ def test_program(offset_provider):
         ],
     )
 
-    expected_as_fieldop_tmp = im.as_fieldop(stencil, domain_tmp)(im.ref("in_field"))
-    expected_as_fieldop = im.as_fieldop(stencil, domain)(im.ref("tmp"))
+    expected_expr_tmp = im.as_fieldop(stencil, domain_tmp)(im.ref("in_field"))
+    expected_epxr = im.as_fieldop(stencil, domain)(im.ref("tmp"))
 
     expected = itir.Program(
         id="forward_diff_with_tmp",
@@ -397,8 +399,8 @@ def test_program(offset_provider):
         params=params,
         declarations=[itir.Temporary(id="tmp", domain=domain_tmp, dtype=float_type)],
         body=[
-            itir.SetAt(expr=expected_as_fieldop_tmp, domain=domain_tmp, target=im.ref("tmp")),
-            itir.SetAt(expr=expected_as_fieldop, domain=domain, target=im.ref("out_field")),
+            itir.SetAt(expr=expected_expr_tmp, domain=domain_tmp, target=im.ref("tmp")),
+            itir.SetAt(expr=expected_epxr, domain=domain, target=im.ref("out_field")),
         ],
     )
 
@@ -444,9 +446,9 @@ def test_program_two_tmps(offset_provider):
         ],
     )
 
-    expected_as_fieldop_tmp1 = im.as_fieldop(stencil, domain_tmp1)(im.ref("in_field"))
-    expected_as_fieldop_tmp2 = im.as_fieldop(stencil, domain_tmp2)(im.ref("tmp1"))
-    expected_as_fieldop = im.as_fieldop(stencil, domain)(im.ref("tmp2"))
+    expected_expr_tmp1 = im.as_fieldop(stencil, domain_tmp1)(im.ref("in_field"))
+    expected_expr_tmp2 = im.as_fieldop(stencil, domain_tmp2)(im.ref("tmp1"))
+    expected_expr = im.as_fieldop(stencil, domain)(im.ref("tmp2"))
 
     expected = itir.Program(
         id="forward_diff_with_two_tmps",
@@ -457,9 +459,9 @@ def test_program_two_tmps(offset_provider):
             itir.Temporary(id="tmp2", domain=domain_tmp2, dtype=float_type),
         ],
         body=[
-            itir.SetAt(expr=expected_as_fieldop_tmp1, domain=domain_tmp1, target=im.ref("tmp1")),
-            itir.SetAt(expr=expected_as_fieldop_tmp2, domain=domain_tmp2, target=im.ref("tmp2")),
-            itir.SetAt(expr=expected_as_fieldop, domain=domain, target=im.ref("out_field")),
+            itir.SetAt(expr=expected_expr_tmp1, domain=domain_tmp1, target=im.ref("tmp1")),
+            itir.SetAt(expr=expected_expr_tmp2, domain=domain_tmp2, target=im.ref("tmp2")),
+            itir.SetAt(expr=expected_expr, domain=domain, target=im.ref("out_field")),
         ],
     )
 
@@ -554,15 +556,13 @@ def test_program_tree_tmps_two_inputs(offset_provider):
         ],
     )
 
-    expected_as_fieldop_tmp1 = im.as_fieldop(stencil, domain_tmp1)(
+    expected_expr_tmp1 = im.as_fieldop(stencil, domain_tmp1)(
         im.ref("in_field1"), im.ref("in_field2")
     )
-    expected_as_fieldop_tmp2 = im.as_fieldop(stencil_tmp, domain_tmp2)(im.ref("tmp1"))
-    expected_as_fieldop_out1 = im.as_fieldop(stencil_tmp, domain_out)(im.ref("tmp2"))
-    expected_as_fieldop_tmp3 = im.as_fieldop(stencil, domain_tmp3)(
-        im.ref("tmp1"), im.ref("in_field2")
-    )
-    expected_as_fieldop_out2 = im.as_fieldop(stencil_tmp_minus, domain_out)(
+    expected_expr_tmp2 = im.as_fieldop(stencil_tmp, domain_tmp2)(im.ref("tmp1"))
+    expected_expr_out1 = im.as_fieldop(stencil_tmp, domain_out)(im.ref("tmp2"))
+    expected_expr_tmp3 = im.as_fieldop(stencil, domain_tmp3)(im.ref("tmp1"), im.ref("in_field2"))
+    expected_expr_out2 = im.as_fieldop(stencil_tmp_minus, domain_out)(
         im.ref("tmp2"), im.ref("tmp3")
     )
 
@@ -576,18 +576,12 @@ def test_program_tree_tmps_two_inputs(offset_provider):
             itir.Temporary(id="tmp3", domain=domain_tmp3, dtype=float_type),
         ],
         body=[
-            itir.SetAt(expr=expected_as_fieldop_tmp1, domain=domain_tmp1, target=im.ref("tmp1")),
-            itir.SetAt(expr=expected_as_fieldop_tmp2, domain=domain_tmp2, target=im.ref("tmp2")),
-            itir.SetAt(
-                expr=expected_as_fieldop_out1, domain=domain_out, target=im.ref("out_field1")
-            ),
-            itir.SetAt(expr=expected_as_fieldop_tmp3, domain=domain_tmp3, target=im.ref("tmp3")),
-            itir.SetAt(
-                expr=expected_as_fieldop_out2, domain=domain_out, target=im.ref("out_field2")
-            ),
+            itir.SetAt(expr=expected_expr_tmp1, domain=domain_tmp1, target=im.ref("tmp1")),
+            itir.SetAt(expr=expected_expr_tmp2, domain=domain_tmp2, target=im.ref("tmp2")),
+            itir.SetAt(expr=expected_expr_out1, domain=domain_out, target=im.ref("out_field1")),
+            itir.SetAt(expr=expected_expr_tmp3, domain=domain_tmp3, target=im.ref("tmp3")),
+            itir.SetAt(expr=expected_expr_out2, domain=domain_out, target=im.ref("out_field2")),
         ],
     )
 
     run_test_program(testee, expected, offset_provider)
-
-#TODO: expected_expr
