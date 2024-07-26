@@ -31,7 +31,7 @@ gtx.backend.DEFAULT_TRANSFORMS.step_order(DUMMY_FOP)
 
 ```python
 @dataclasses.dataclass(frozen=True)
-class SkipLinting(gtx.backend_exp.FieldopTransformWorkflow):
+class SkipLinting(gtx.backend.FieldopTransformWorkflow):
     def step_order(self, inp):
         order = super().step_order(inp)
         if "past_lint" in order:

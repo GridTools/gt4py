@@ -27,13 +27,7 @@ import factory
 
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
-from gt4py.next import (
-    allocators as next_allocators,
-    backend as next_backend,
-    backend_exp,
-    common,
-    config,
-)
+from gt4py.next import allocators as next_allocators, backend as next_backend, common, config
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.iterator.transforms import fencil_to_program
 from gt4py.next.otf import arguments, stages, workflow
@@ -279,13 +273,13 @@ executor_with_temporaries = RoundtripExecutorFactory(
     roundtrip_workflow=RoundtripFactory(lift_mode=itir_transforms.LiftMode.USE_TEMPORARIES),
 )
 
-default = backend_exp.ExpBackend(
+default = next_backend.Backend(
     executor=executor,
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
     transforms_fop=next_backend.DEFAULT_TRANSFORMS,
     transforms_prog=next_backend.DEFAULT_TRANSFORMS,
 )
-with_temporaries = backend_exp.ExpBackend(
+with_temporaries = next_backend.Backend(
     executor=executor_with_temporaries,
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
     transforms_fop=next_backend.DEFAULT_TRANSFORMS,

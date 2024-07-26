@@ -27,6 +27,7 @@ from gt4py.next.ffront import (
     func_to_past,
     past_process_args,
     past_to_itir,
+    signature,
     stages as ffront_stages,
 )
 from gt4py.next.ffront.past_passes import linters as past_linters
@@ -134,18 +135,17 @@ class Backend(Generic[core_defs.DeviceTypeT]):
         *args: Any,
         **kwargs: Any,
     ) -> None:
-        if isinstance(
-            program, (ffront_stages.FieldOperatorDefinition, ffront_stages.FoastOperatorDefinition)
-        ):
-            _ = kwargs.pop("from_fieldop")
-            aot_program = self.transforms_fop(
-                workflow.DataArgsPair(program, args=arguments.JITArgs(args, kwargs))
+        _ = kwargs.pop("from_fieldop", None)
+        # taking the offset provider out is not needed
+        args, kwargs = signature.convert_to_positional(program, *args, **kwargs)
+        program_info = self.transforms_fop(
+            workflow.DataArgsPair(
+                data=program,
+                args=arguments.CompileTimeArgs.from_concrete_no_size(*args, **kwargs),
             )
-        else:
-            aot_program = self.transforms_prog(
-                workflow.DataArgsPair(program, arguments.JITArgs(args, kwargs))
-            )
-        self.executor(aot_program.data, *args, column_axis=aot_program.args.column_axis, **kwargs)
+        )
+        # TODO(ricoh): get rid of executors altogether
+        self.executor.otf_workflow(program_info)(*args, **kwargs)  # type: ignore[attr-defined]
 
     @property
     def __name__(self) -> str:

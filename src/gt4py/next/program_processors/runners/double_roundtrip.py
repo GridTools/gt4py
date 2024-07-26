@@ -14,11 +14,11 @@
 
 from __future__ import annotations
 
-from gt4py.next import backend as next_backend, backend_exp
+from gt4py.next import backend as next_backend
 from gt4py.next.program_processors.runners import roundtrip
 
 
-backend = backend_exp.ExpBackend(
+backend = next_backend.Backend(
     transforms_fop=next_backend.DEFAULT_TRANSFORMS,
     transforms_prog=next_backend.DEFAULT_TRANSFORMS,
     executor=roundtrip.RoundtripExecutorFactory(dispatch_backend=roundtrip.default.executor),
