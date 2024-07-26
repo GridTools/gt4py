@@ -165,6 +165,8 @@ class NamedStepSequence(
 class MultiWorkflow(
     ChainableWorkflowMixin[StartT, EndT], ReplaceEnabledWorkflowMixin[StartT, EndT]
 ):
+    """A flexible workflow, where the sequence of steps depends on the input type."""
+
     def __call__(self, inp: StartT) -> EndT:
         step_result: Any = inp
         for step_name in self.step_order(inp):

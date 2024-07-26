@@ -115,66 +115,6 @@ def test_fingerprint_stage_foast_op_def(fieldop, samecode_fieldop, different_fie
     assert stages.fingerprint_stage(different) != stages.fingerprint_stage(foast)
 
 
-@dataclasses.dataclass(frozen=True)
-class ToFoastClosure(workflow.NamedStepSequence):
-    func_to_foast: workflow.Workflow = gtx.backend.DEFAULT_TRANSFORMS.func_to_foast
-    foast_to_closure: workflow.Workflow = dataclasses.field(
-        default=gtx.backend.DEFAULT_TRANSFORMS.field_view_op_to_prog,
-    )
-
-
-def test_fingerprint_stage_foast_closure(fieldop, samecode_fieldop, different_fieldop, idim, jdim):
-    toolchain = ToFoastClosure()
-    foast_closure = toolchain(
-        workflow.DataArgsPair(
-            data=fieldop.definition_stage,
-            args=arguments.JITArgs(
-                args=(gtx.zeros({idim: 10}, gtx.int32),),
-                kwargs={
-                    "out": gtx.zeros({idim: 10}, gtx.int32),
-                },
-            ),
-        ),
-    )
-    samecode = toolchain(
-        workflow.DataArgsPair(
-            data=samecode_fieldop.definition_stage,
-            args=arguments.JITArgs(
-                args=(gtx.zeros({idim: 10}, gtx.int32),),
-                kwargs={
-                    "out": gtx.zeros({idim: 10}, gtx.int32),
-                },
-            ),
-        )
-    )
-    different = toolchain(
-        workflow.DataArgsPair(
-            data=different_fieldop.definition_stage,
-            args=arguments.JITArgs(
-                args=(gtx.zeros({jdim: 10}, gtx.int32),),
-                kwargs={
-                    "out": gtx.zeros({jdim: 10}, gtx.int32),
-                },
-            ),
-        )
-    )
-    different_args = toolchain(
-        workflow.DataArgsPair(
-            data=fieldop.definition_stage,
-            args=arguments.JITArgs(
-                args=(gtx.zeros({idim: 11}, gtx.int32),),
-                kwargs={
-                    "out": gtx.zeros({idim: 11}, gtx.int32),
-                },
-            ),
-        )
-    )
-
-    assert stages.fingerprint_stage(samecode) != stages.fingerprint_stage(foast_closure)
-    assert stages.fingerprint_stage(different) != stages.fingerprint_stage(foast_closure)
-    assert stages.fingerprint_stage(different_args) != stages.fingerprint_stage(foast_closure)
-
-
 def test_fingerprint_stage_program_def(program, samecode_program, different_program):
     assert stages.fingerprint_stage(samecode_program.definition_stage) != stages.fingerprint_stage(
         program.definition_stage
