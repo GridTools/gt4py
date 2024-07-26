@@ -36,32 +36,50 @@ __all__ = [
 
 def gt_gpu_transformation(
     sdfg: dace.SDFG,
-    promote_serial_maps: bool = True,
+    try_removing_trivial_maps: bool = True,
+    use_gpu_storage: bool = True,
     gpu_block_size: Optional[Sequence[int | str] | str] = None,
-    gpu_launch_bounds: Optional[int | str] = None,
-    gpu_launch_factor: Optional[int] = None,
     validate: bool = True,
     validate_all: bool = False,
+    **kwargs: Any,
 ) -> dace.SDFG:
     """Transform an SDFG into an GPU SDFG.
 
-    The transformations are done in place.
-    The function will roughly do the same:
-    - Move all arrays used as input to the GPU.
-    - Apply the standard DaCe GPU transformation.
-    - Run `gt_simplify()` (recommended by the DaCe documentation).
-    - Try to promote trivial maps.
-    - If given set the GPU block size.
+    The transformation expects a rather optimized SDFG and turn it into an SDFG
+    capable of running on the GPU.
+    The function performs the following steps:
+    - If requested, modify the storage location of the non transient arrays to
+        life on GPU.
+    - Call the normal GPU transform function followed by simplify.
+    - If requested try to remove trivial kernels.
+    - If given set the `gpu_block_size` parameters of the Maps to the given value.
+
+    Args:
+        sdfg: The SDFG that should be processed.
+        try_removing_trivial_maps: Try to get rid of trivial maps by incorporating them.
+        use_gpu_storage: Assume that the non global memory is already on the GPU.
+        gpu_block_size: Set the GPU block size of all maps that does not have
+            one to this value.
+
+    Notes:
+        The function might modify the order of the iteration variables of some
+        maps and fuse other Maps.
+
+    Todo:
+        - Solve the fusing problem.
+        - Currently only one block size for all maps is given, add more options.
     """
+
+    # You need guru level or above to use these arguments.
+    gpu_launch_factor: Optional[int] = kwargs.get("gpu_launch_factor", None)
+    gpu_launch_bounds: Optional[int] = kwargs.get("gpu_launch_bounds", None)
 
     # Turn all global arrays (which we identify as input) into GPU memory.
     #  This way the GPU transformation will not create this copying stuff.
-    for desc in sdfg.arrays.values():
-        if desc.transient:
-            continue
-        if not isinstance(desc, dace.data.Array):
-            continue
-        desc.storage = dace.dtypes.StorageType.GPU_Global
+    if use_gpu_storage:
+        for desc in sdfg.arrays.values():
+            if not (desc.transient or not isinstance(desc, dace.data.Array)):
+                desc.storage = dace.dtypes.StorageType.GPU_Global
 
     # Now turn it into a GPU SDFG
     sdfg.apply_gpu_transformations(
@@ -69,14 +87,29 @@ def gt_gpu_transformation(
         validate_all=validate_all,
         simplify=False,
     )
-
-    # The documentation recommend to run simplify afterwards
+    # The documentation recommends to run simplify afterwards
     gtx_transformations.gt_simplify(sdfg)
 
-    # Start to promote the maps.
-    if promote_serial_maps:
+    if try_removing_trivial_maps:
+        # For reasons a Tasklet can not exist outside a Map in a GPU SDFG. The GPU
+        #  transformation will thus adds trivial maps around them, which translate to
+        #  a kernel launch. Our current solution is to promote them and then fuse it.
+        # NOTE: The current implementation has a flaw, because promotion and fusion
+        #   are two different steps, this is is inefficient. There are some problems
+        #   because the mapped Tasklet might not be fusable at all. However, the real
+        #   problem is, that Map fusion does not guarantee a certain order of Map
+        #   variables. Currently this is not a problem because of the way it is
+        #   implemented.
+        # TODO(phimuell): Fix the issue described above.
+        sdfg.apply_transformations_once_everywhere(
+            gtx_transformations.SerialMapPromoterGPU(),
+            validate=False,
+            validate_all=False,
+        )
         sdfg.apply_transformations_repeated(
-            [gtx_transformations.SerialMapPromoterGPU()],
+            gtx_transformations.SerialMapFusion(
+                only_toplevel_maps=True,
+            ),
             validate=validate,
             validate_all=validate_all,
         )
@@ -159,6 +192,8 @@ def _gpu_block_getter(
 class GPUSetBlockSize(transformation.SingleStateTransformation):
     """Sets the GPU block size on GPU Maps.
 
+    It is also possible to set the launch bound.
+
     Args:
         block_size: The block size that should be used.
         launch_bounds: The value for the launch bound that should be used.
@@ -166,7 +201,7 @@ class GPUSetBlockSize(transformation.SingleStateTransformation):
             in a block multiplied by this number.
 
     Todo:
-        Depending on the number of dimensions of a map, there should be different sources.
+        Add the possibility to specify other bounds for 1, 2, or 3 dimensional maps.
     """
 
     block_size = properties.Property(
@@ -255,13 +290,18 @@ class SerialMapPromoterGPU(transformation.SingleStateTransformation):
     """Serial Map promoter for empty Maps in case of trivial Maps.
 
     In CPU mode a Tasklet can be outside of a map, however, this is not
-    possible in CPU mode. For this reason DaCe wraps every such Tasklet
-    in a trivial Map.
-    This function will look for such Maps and promote them, such that they
-    can be fused with downstream maps.
+    possible in GPU mode. For this reason DaCe wraps such Tasklets in a
+    trivial Map.
+    This transformation will look for such Maps and promote them, such
+    that they can be fused with downstream maps.
 
     Note:
         This transformation must be run after the GPU Transformation.
+
+    Todo:
+        - The transformation assumes that the upper Map is a trivial Tasklet.
+            Which should be the majority of all cases.
+        - Combine this transformation such that it can do serial fusion on its own.
     """
 
     # Pattern Matching
@@ -330,5 +370,3 @@ class SerialMapPromoterGPU(transformation.SingleStateTransformation):
 
         map_1.params = copy.deepcopy(map_2.params)
         map_1.range = copy.deepcopy(map_2.range)
-
-        return

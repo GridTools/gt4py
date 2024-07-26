@@ -12,6 +12,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+"""Transformation and optimization pipeline for the DaCe backend in GT4Py.
+
+Please also see [this HackMD document](https://hackmd.io/@gridtools/rklwk4OIR#Requirements-on-SDFG)
+that explains the general structure and requirements on the SDFG.
+"""
+
 from .auto_opt import dace_auto_optimize, gt_auto_optimize, gt_simplify
 from .gpu_utils import (
     GPUSetBlockSize,

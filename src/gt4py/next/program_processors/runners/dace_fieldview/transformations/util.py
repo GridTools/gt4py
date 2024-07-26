@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Common functionality for the transformations."""
+"""Common functionality for the transformations/optimization pipeline."""
 
 from typing import Iterable
 
@@ -40,11 +40,12 @@ def all_nodes_between(
     end: nodes.Node,
     reverse: bool = False,
 ) -> set[nodes.Node] | None:
-    """Returns all nodes that are reachable from `begin` but bound by `end`.
+    """Find all nodes that are reachable from `begin` but bound by `end`.
 
-    What the function does is, that it starts a DFS starting at `begin`, which is
-    not part of the returned set, every edge that goes to `end` will be considered
-    to not exists.
+    Essentially the function starts a DFS at `begin`, which is never part of the
+    returned set, if at a node an edge is found that lead to `end`, the function
+    will ignore this edge. However, it will find every node that is reachable
+    from `begin` that is reachable by a path that does not visit `end`.
     In case `end` is never found the function will return `None`.
 
     If `reverse` is set to `True` the function will start exploring at `end` and
@@ -99,8 +100,8 @@ def find_downstream_consumers(
 ) -> set[tuple[nodes.Node, dace_graph.MultiConnectorEdge[dace.Memlet]]]:
     """Find all downstream connectors of `begin`.
 
-    A consumer, in this sense, is any node that is neither an entry nor an exit
-    node. The function returns a set storing the pairs, the first element is the
+    A consumer, in for this function, is any node that is neither an entry nor
+    an exit node. The function returns a set of pairs, the first element is the
     node that acts as consumer and the second is the edge that leads to it.
     By setting `only_tasklets` the nodes the function finds are only Tasklets.
 
@@ -149,6 +150,7 @@ def find_downstream_consumers(
                 target_conn = curr_edge.dst_conn[3:]
                 new_edges = state.out_edges_by_connector(curr_edge.dst, "OUT_" + target_conn)
             to_visit.extend(new_edges)
+            del new_edges
         else:
             if only_tasklets and (not isinstance(next_node, nodes.Tasklet)):
                 continue

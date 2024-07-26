@@ -26,21 +26,21 @@ from gt4py.next.program_processors.runners.dace_fieldview import utility as dace
 class MapIterationOrder(transformation.SingleStateTransformation):
     """Modify the order of the iteration variables.
 
-    The transformation modifies the order in which the map variables are processed.
-    This transformation is restricted in the sense, that it is only possible
-    to set the "first map" variable, i.e. the one that is associated with the
-    `x` dimension in a thread block and where the input memory should have stride 1.
+    The iteration order, while irrelevant from an SDFG point of view, is highly
+    relevant in code, and the fastest varying index ("inner most loop" in CPU or
+    "x block dimension" in GPU) should be associated with the stride 1 dimension
+    of the array.
+    This transformation will reorder the map indexes such that this is the case.
 
-    If the transformation modifies then the map variable corresponding to
-    `self.leading_dim` will be at the correct place, the order of all other
-    map variable is unspecific. Otherwise the map is unmodified.
+    While the place of the leading dimension is clearly defined, the order of the
+    other loop indexes, after this transformation is unspecified.
 
     Args:
         leading_dim: A GT4Py dimension object that identifies the dimension that
-            should be used.
+            is supposed to have stride 1.
 
     Note:
-        This transformation does follow the rules outlines [here](https://hackmd.io/klvzLnzMR6GZBWtRU8HbDg#Requirements-on-SDFG)
+        The transformation does follow the rules outlines [here](https://hackmd.io/klvzLnzMR6GZBWtRU8HbDg#Requirements-on-SDFG)
 
     Todo:
         - Extend that different dimensions can be specified to be leading
@@ -85,24 +85,26 @@ class MapIterationOrder(transformation.SingleStateTransformation):
 
         if self.leading_dim is None:
             return False
-
         map_entry: nodes.MapEntry = self.map_entry
         map_params: Sequence[str] = map_entry.map.params
         map_var: str = dace_fieldview_util.get_map_variable(self.leading_dim)
 
         if map_var not in map_params:
             return False
-        if map_params[-1] == map_var:  # Already at the end; `-1` is correct!
+        if map_params[-1] == map_var:  # Already at the correct location
             return False
         return True
 
-    def apply(self, graph: Union[SDFGState, SDFG], sdfg: SDFG) -> None:
+    def apply(
+        self,
+        graph: Union[SDFGState, SDFG],
+        sdfg: SDFG,
+    ) -> None:
         """Performs the actual parameter reordering.
 
-        The function will move the map variable, that corresponds to
-        `self.leading_dim` at the end. It will not put it at the front, because
-        DaCe.codegen processes the variables in revers order and smashes all
-        the excess parameter into the last CUDA dimension.
+        The function will make the map variable, that corresponds to
+        `self.leading_dim` the last map variable (this is given by the structure of
+        DaCe's code generator).
         """
         map_entry: nodes.MapEntry = self.map_entry
         map_params: list[str] = map_entry.map.params

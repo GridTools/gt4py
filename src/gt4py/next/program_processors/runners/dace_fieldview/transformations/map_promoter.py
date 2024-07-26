@@ -28,17 +28,23 @@ __all__ = [
 class BaseMapPromoter(transformation.SingleStateTransformation):
     """Base transformation to add certain missing dimension to a map.
 
-    By adding certain dimension to a map it will became possible to fuse them.
-    This class acts as a base and the actual matching and checking must be
-    implemented by a concrete implementation.
+    By adding certain dimension to a Map, it might became possible to use the Map
+    in more transformations. This class acts as a base and the actual matching and
+    checking must be implemented by a concrete implementation.
+    But it provides some basic check functionality and the actual promotion logic.
 
-    In order to properly work, the parameters of `source_map` must be a strict
-    superset of the ones of `map_to_promote`. Furthermore, this transformation
+    The transformation operates on two Maps, first the "source map". This map
+    describes the Map that should be used as template. The second one is "map to
+    promote". After the transformation the "map to promote" will have the same
+    map parameter than the "source map" has.
+
+    In order to properly work, the parameters of "source map" must be a strict
+    superset of the ones of "map to promote". Furthermore, this transformation
     builds upon the structure defined [here](https://hackmd.io/klvzLnzMR6GZBWtRU8HbDg#Requirements-on-SDFG).
     Thus it only checks the name of the parameters.
 
     To influence what to promote the user must implement the `map_to_promote()`
-    and `source_map()` must be implemented. They have to return the map entry node.
+    and `source_map()` function. They have to return the map entry node.
 
     Args:
         only_inner_maps: Only match Maps that are internal, i.e. inside another Map.
@@ -49,7 +55,6 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
 
     Note:
         This ignores tiling.
-        This only works with constant sized maps.
     """
 
     only_toplevel_maps = properties.Property(
@@ -123,6 +128,10 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
             self.promote_horizontal = bool(promote_horizontal)
         if only_inner_maps and only_toplevel_maps:
             raise ValueError("You specified both `only_inner_maps` and `only_toplevel_maps`.")
+        if not (self.promote_local or self.promote_vertical or self.promote_horizontal):
+            raise ValueError(
+                "You must select at least one class of dimension that should be promoted."
+            )
 
     def can_be_applied(
         self,
@@ -136,8 +145,7 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
         A subclass should call this function before checking anything else. If a
         subclass has not called this function, the behaviour will be undefined.
         The function checks:
-        - If the map to promote is in the right scope (it is not required that
-            the two maps are in the same scope).
+        - If the map to promote is in the right scope.
         - If the parameter of the second map are compatible with each other.
         - If a dimension would be promoted that should not.
         """
@@ -147,6 +155,10 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
         source_map: nodes.Map = source_map_entry.map
 
         # Test the scope of the promotee.
+        #  Because of the nature of the transformation, it is not needed that the
+        #  two maps are in the same scope. However, they should be in the same state
+        #  to ensure that the symbols are the same and all. But this is guaranteed by
+        #  the nature of this transformation (single state).
         if self.only_inner_maps or self.only_toplevel_maps:
             scopeDict: Mapping[nodes.Node, Union[nodes.Node, None]] = graph.scope_dict()
             if self.only_inner_maps and (scopeDict[map_to_promote_entry] is None):
@@ -155,37 +167,41 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
                 return False
 
         # Test if the map ranges are compatible with each other.
-        params_to_promote: list[str] | None = self.missing_map_params(
+        missing_map_parameters: list[str] | None = self.missing_map_params(
             map_to_promote=map_to_promote,
             source_map=source_map,
             be_strict=True,
         )
-        if not params_to_promote:
+        if not missing_map_parameters:
             return False
 
-        # Now we must check if there are dimensions that we do not want to promote.
-        if (not self.promote_local) and any(
-            param.endswith("__gtx_localdim") for param in params_to_promote
-        ):
+        # We now know which dimensions we have to add to the promotee map.
+        #  Now we must test if we are also allowed to make that promotion in the first place.
+        dimension_identifier: list[str] = []
+        if self.promote_local:
+            dimension_identifier.append("__gtx_localdim")
+        if self.promote_vertical:
+            dimension_identifier.append("__gtx_vertical")
+        if self.promote_horizontal:
+            dimension_identifier.append("__gtx_horizontal")
+        if not dimension_identifier:
             return False
-        if (not self.promote_vertical) and any(
-            param.endswith("__gtx_vertical") for param in params_to_promote
-        ):
-            return False
-        if (not self.promote_horizontal) and any(
-            param.endswith("__gtx_horizontal") for param in params_to_promote
-        ):
-            return False
+        for missing_map_param in missing_map_parameters:
+            if not any(
+                missing_map_param.endswith(dim_identifier)
+                for dim_identifier in dimension_identifier
+            ):
+                return False
 
         return True
 
     def apply(self, graph: Union[SDFGState, SDFG], sdfg: SDFG) -> None:
-        """Performs the Map Promoting.
+        """Performs the actual Map promoting.
 
         Add all parameters that `self.source_map` has but `self.map_to_promote`
         lacks to `self.map_to_promote` the range of these new dimensions is taken
         from the source map.
-        The order of the parameters of these new dimensions is undetermined.
+        The order of the parameters the Map has after the promotion is unspecific.
         """
         map_to_promote: nodes.Map = self.map_to_promote(state=graph, sdfg=sdfg).map
         source_map: nodes.Map = self.source_map(state=graph, sdfg=sdfg).map
@@ -255,7 +271,19 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
 
 @properties.make_properties
 class SerialMapPromoter(BaseMapPromoter):
-    """This class promotes serial maps, such that they can be fused."""
+    """Promote a map such that it can be fused serially.
+
+    A condition for fusing serial Maps is that they cover the same range. This
+    transformation is able to promote a Map, i.e. adding the missing dimensions,
+    such that the maps can be fused.
+    For more information see the `BaseMapPromoter` class.
+
+    Notes:
+        The transformation does not perform the fusing on its one.
+
+    Todo:
+        The map should do the fusing on its own directly.
+    """
 
     # Pattern Matching
     exit_first_map = transformation.transformation.PatternNode(nodes.MapExit)
@@ -278,6 +306,33 @@ class SerialMapPromoter(BaseMapPromoter):
                 cls.exit_first_map, cls.access_node, cls.entry_second_map
             ),
         ]
+
+    def can_be_applied(
+        self,
+        graph: Union[SDFGState, SDFG],
+        expr_index: int,
+        sdfg: dace.SDFG,
+        permissive: bool = False,
+    ) -> bool:
+        """Tests if the Maps really can be fused."""
+        from .map_seriall_fusion import SerialMapFusion
+
+        if not super().can_be_applied(graph, expr_index, sdfg, permissive):
+            return False
+
+        # Check if the partition exists, if not promotion to fusing is pointless.
+        #  TODO(phimuell): Find the proper way of doing it.
+        serial_fuser = SerialMapFusion(only_toplevel_maps=True)
+        output_partition = serial_fuser.partition_first_outputs(
+            state=graph,
+            sdfg=sdfg,
+            map_exit_1=self.exit_first_map,
+            map_entry_2=self.entry_second_map,
+        )
+        if output_partition is None:
+            return False
+
+        return True
 
     def map_to_promote(
         self,

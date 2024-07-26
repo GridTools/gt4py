@@ -27,20 +27,22 @@ from gt4py.next.program_processors.runners.dace_fieldview import utility as dace
 
 @properties.make_properties
 class KBlocking(transformation.SingleStateTransformation):
-    """Performs K blocking.
+    """Applies k-Blocking with separation on a Map.
 
-    This transformation takes a multidimensional map and performs k blocking on
-    one particular dimension, which is identified by `block_dim`, which we also
-    call `k`.
-    All dimensions except `k` are unaffected and the transformation replaces it
-    with `kk` and the range `0:N:B`, where `N` is the original end of the
-    transformation and `B` is the block size, passed as `blocking_size`.
-    The transformation will then add an inner sequential map with one
-    dimension `k = kk:(kk+B)`.
+    This transformation takes a multidimensional Map and performs blocking on a
+    dimension, that is commonly called "k", but identified with `block_dim`.
 
-    Furthermore, the map will inspect the neighbours of the old, or outer map.
-    If the node does not depend on the blocked dimension, the node will be put
-    between the two maps, thus its content will only be computed once.
+    All dimensions except `k` are unaffected by this transformation. In the outer
+    Map the will replace the `k` range, currently `k = 0:N`, with
+    `__coarse_k = 0:N:B`, where `N` is the original size of the range and `B`
+    is the block size, passed as `blocking_size`. The transformation also handles the
+    case if `N % B != 0`.
+    The transformation will then create an inner sequential map with
+    `k = __coarse_k:(__coarse_k + B)`.
+
+    However, before the split the transformation examines all adjacent nodes of
+    the original Map. If a node does not depend on `k`, then the  node will be
+    put between the two maps, thus its content will only be computed once.
 
     The function will also change the name of the outer map, it will append
     `_blocked` to it.
@@ -54,7 +56,7 @@ class KBlocking(transformation.SingleStateTransformation):
     block_dim = properties.Property(
         dtype=str,
         allow_none=True,
-        desc="Which dimension should be blocked.",
+        desc="Which dimension should be blocked (must be an exact match).",
     )
 
     map_entry = transformation.transformation.PatternNode(nodes.MapEntry)
@@ -85,9 +87,12 @@ class KBlocking(transformation.SingleStateTransformation):
     ) -> bool:
         """Test if the map can be blocked.
 
-        For this the map:
-        - Must contain the block dimension.
-        - Must not be serial.
+        The test involves:
+        - Toplevel map.
+        - The map shall not be serial.
+        - The block dimension must be present (exact match).
+        - The map range must have stride one.
+        - The partition must exists (see `partition_map_output()`).
         """
         map_entry: nodes.MapEntry = self.map_entry
         map_params: list[str] = map_entry.map.params
@@ -101,9 +106,9 @@ class KBlocking(transformation.SingleStateTransformation):
             return False
         if map_entry.map.schedule == dace.dtypes.ScheduleType.Sequential:
             return False
-        if self.partition_map_output(map_entry, block_var, graph, sdfg) is None:
-            return False
         if map_range[map_params.index(block_var)][2] != 1:
+            return False
+        if self.partition_map_output(map_entry, block_var, graph, sdfg) is None:
             return False
 
         return True
@@ -113,7 +118,10 @@ class KBlocking(transformation.SingleStateTransformation):
         graph: Union[SDFGState, SDFG],
         sdfg: SDFG,
     ) -> None:
-        """Performs the blocking transformation."""
+        """Creates a blocking map.
+
+        Performs the operation described in the doc string.
+        """
         outer_entry: nodes.MapEntry = self.map_entry
         outer_exit: nodes.MapExit = graph.exit_node(outer_entry)
         outer_map: nodes.Map = outer_entry.map
@@ -133,7 +141,7 @@ class KBlocking(transformation.SingleStateTransformation):
             outer_entry, block_var, graph, sdfg
         )
 
-        # Now generate the sequential inner map
+        # Generate the sequential inner map
         rng_start = map_range[block_idx][0]
         rng_stop = map_range[block_idx][1]
         inner_label = f"inner_{outer_map.label}"
@@ -148,6 +156,8 @@ class KBlocking(transformation.SingleStateTransformation):
             schedule=dace.dtypes.ScheduleType.Sequential,
         )
 
+        # TODO(phimuell): Investigate if we want to prevent unrolling here
+
         # Now we modify the properties of the outer map.
         coarse_block_range = subsets.Range.from_string(
             f"0:int_ceil(({rng_stop} + 1) - {rng_start}, {self.blocking_size})"
@@ -160,18 +170,18 @@ class KBlocking(transformation.SingleStateTransformation):
         relocated_nodes: set[nodes.Node] = set()
 
         # Now we iterate over all the output edges of the outer map and rewire them.
-        #  Note that this only handles the map entry.
+        #  Note that this only handles the entry of the Map.
         for out_edge in list(graph.out_edges(outer_entry)):
             edge_dst: nodes.Node = out_edge.dst
 
             if edge_dst in dependent_nodes:
-                # This is the simple case as we just ave to rewire the edge
+                # This is the simple case as we just have to rewire the edge
                 #  and make a connection between the outer and inner map.
                 assert not out_edge.data.is_empty()
                 edge_conn: str = out_edge.src_conn[4:]
 
                 # Must be before the handling of the modification below
-                #  Note that this will remove the edge from the SDFG.
+                #  Note that this will remove the original edge from the SDFG.
                 helpers.redirect_edge(
                     state=graph,
                     edge=out_edge,
@@ -179,9 +189,7 @@ class KBlocking(transformation.SingleStateTransformation):
                     new_src_conn="OUT_" + edge_conn,
                 )
 
-                # In a valid SDFG one one edge can go to an input connector of
-                #  a map (this is their definition), thus we have to adhere to
-                #  this definition as well.
+                # In a valid SDFG only one edge can go into an input connector of a Map.
                 if "IN_" + edge_conn in inner_entry.in_connectors:
                     # We have found this edge multiple times already.
                     #  To ensure that there is no error, we will create a new
@@ -202,31 +210,36 @@ class KBlocking(transformation.SingleStateTransformation):
                         "IN_" + edge_conn,
                         copy.deepcopy(out_edge.data),
                     )
-                inner_entry.add_in_connector("IN_" + edge_conn)
-                inner_entry.add_out_connector("OUT_" + edge_conn)
+                    inner_entry.add_in_connector("IN_" + edge_conn)
+                    inner_entry.add_out_connector("OUT_" + edge_conn)
                 continue
 
             elif edge_dst in relocated_nodes:
-                # See `else` case
+                # The node was already fully handled in the `else` clause.
                 continue
 
             else:
                 # Relocate the node and make the reconnection.
-                #  Different from the dependent case we will handle the node fully,
-                #  i.e. all of its edges will be processed in one go.
+                #  Different from the dependent case we will handle all the edges
+                #  of the node in one go.
                 relocated_nodes.add(edge_dst)
 
-                # This is the node serving as the storage to store the independent
-                #  data, and is used within the inner loop.
-                #  This prevents the reloading of data.
-                assert graph.out_degree(edge_dst) == 1
+                # In order to be useful we have to temporary store the data the
+                #  independent node generates
+                assert graph.out_degree(edge_dst) == 1  # TODO(phimuell): Lift
                 if isinstance(edge_dst, nodes.AccessNode):
+                    # The independent node is an access node, so we can use it directly.
                     caching_node: nodes.AccessNode = edge_dst
                 else:
+                    # The dependent node is not an access node. For now we will
+                    #  just use the next node, with some restriction.
+                    # TODO(phimuell): create an access node in this case instead.
                     caching_node = next(iter(graph.out_edges(edge_dst))).dst
                     assert graph.in_degree(caching_node) == 1
-                assert isinstance(caching_node, nodes.AccessNode)
+                    assert isinstance(caching_node, nodes.AccessNode)
 
+                # Now rewire the Memlets that leave the caching node to go through
+                #  new inner Map.
                 for consumer_edge in list(graph.out_edges(caching_node)):
                     new_map_conn = inner_entry.next_connector()
                     helpers.redirect_edge(
@@ -246,8 +259,9 @@ class KBlocking(transformation.SingleStateTransformation):
                     inner_entry.add_out_connector("OUT_" + new_map_conn)
                 continue
 
-        # Now we have to handle the output of the map.
-        #  There is not many to do just reconnect some edges.
+        # Handle the Map exits
+        #  This is simple reconnecting, there would be possibilities for improvements
+        #  but we do not use them for now.
         for out_edge in list(graph.in_edges(outer_exit)):
             edge_conn = out_edge.dst_conn[3:]
             helpers.redirect_edge(
@@ -276,18 +290,17 @@ class KBlocking(transformation.SingleStateTransformation):
         state: SDFGState,
         sdfg: SDFG,
     ) -> tuple[set[nodes.Node], set[nodes.Node]] | None:
-        """Partition the outputs
+        """Partition the outputs of the Map.
 
-        This function computes the partition of the intermediate outputs of the map.
-        It will compute two set:
+        The partition will only look at the direct intermediate outputs of the
+        Map. The outputs will be two sets, defined as:
         - The independent outputs `\mathcal{I}`:
             These are output nodes, whose output does not depend on the blocked
-            dimension. These nodes will be relocated between the outer and
-            inner map.
+            dimension. These nodes can be relocated between the outer and inner map.
         - The dependent output `\mathcal{D}`:
             These are the output nodes, whose output depend on the blocked dimension.
-            Thus they will not be relocated between the two maps, but remain in the
-            inner most scope.
+            Thus they can not be relocated between the two maps, but will remain
+            inside the inner scope.
 
         In case the function fails to compute the partition `None` is returned.
 
@@ -308,9 +321,9 @@ class KBlocking(transformation.SingleStateTransformation):
         # Find all nodes that are adjacent to the map entry.
         nodes_to_partition: set[nodes.Node] = {edge.dst for edge in state.out_edges(map_entry)}
 
-        # Now we examine every node and assign them to a set.
+        # Now we examine every node and assign them to one of the sets.
         #  Note that this is only tentative and we will later inspect the
-        #  outputs of the independent node and reevaluate the classification.
+        #  outputs of the independent node and reevaluate their classification.
         for node in nodes_to_partition:
             # Filter out all nodes that we can not (yet) handle.
             if not isinstance(node, (nodes.Tasklet, nodes.AccessNode)):
@@ -324,20 +337,19 @@ class KBlocking(transformation.SingleStateTransformation):
                     block_dependent.add(node)
                     continue
 
-            # Only one output is allowed
-            #  Might be less important for Tasklets but for AccessNodes.
+            # An independent node can (for now) only have one output.
             # TODO(phimuell): Lift this restriction.
             if state.out_degree(node) != 1:
                 block_dependent.add(node)
                 continue
 
-            # Now we have to understand how the node generates its information.
-            #  for this we have to look at all the edges that feed information to it.
+            # Now we have to understand how the node generates its data.
+            #  For this we have to look at all the edges that feed information to it.
             edges: list[dace_graph.MultiConnectorEdge[dace.Memlet]] = list(state.in_edges(node))
 
             # If all edges are empty, i.e. they are only needed to keep the
-            #  node inside the scope, consider it as independent. If they are
-            #  tied to different scopes, refuse to work.
+            #  node inside the scope, consider it as independent. However, they have
+            #  to be associated to the outer map.
             if all(edge.data.is_empty() for edge in edges):
                 if not all(edge.src is map_entry for edge in edges):
                     return None
@@ -345,14 +357,15 @@ class KBlocking(transformation.SingleStateTransformation):
                 continue
 
             # Currently we do not allow that a node has a mix of empty and non
-            #  empty Memlets, is all or nothing.
+            #  empty Memlets, it is all or nothing.
             if any(edge.data.is_empty() for edge in edges):
                 return None
 
             # If the node gets information from other nodes than the map entry
-            #  we classify it as a dependent node, although there can be situations
-            #  were it could still be an independent node, but figuring this out
-            #  is too complicated.
+            #  we classify it as a dependent node. But there can be situations where
+            #  the node could still be independent, for example if it is connected
+            #  to a independent node, then it could be independent itself.
+            # TODO(phimuell): Consider independent node as "equal" to the map.
             if any(edge.src is not map_entry for edge in edges):
                 block_dependent.add(node)
                 continue
@@ -387,7 +400,7 @@ class KBlocking(transformation.SingleStateTransformation):
                     break
             else:
                 # The loop ended normally, thus we did not found anything that made us
-                #  believe that the node is _not_ an independent node. We will later
+                #  _think_ that the node is _not_ an independent node. We will later
                 #  also inspect the output, which might reclassify the node
                 block_independent.add(node)
 
@@ -396,6 +409,7 @@ class KBlocking(transformation.SingleStateTransformation):
                 block_dependent.add(node)
 
         # We now make a last screening of the independent nodes.
+        # TODO(phimuell): Make an iterative process to find the maximal set.
         for independent_node in list(block_independent):
             if isinstance(independent_node, nodes.AccessNode):
                 if state.in_degree(independent_node) != 1:

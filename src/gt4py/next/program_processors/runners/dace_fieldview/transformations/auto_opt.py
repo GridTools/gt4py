@@ -208,7 +208,10 @@ def gt_auto_optimize(
             # TODO(phimuell): More control what we promote.
             phase2_cleanup.append(
                 gtx_transformations.SerialMapPromoter(
+                    only_toplevel_maps=True,
+                    promote_vertical=True,
                     promote_horizontal=False,
+                    promote_local=False,
                 )
             )
 
@@ -268,6 +271,10 @@ def gt_auto_optimize(
 
         # Phase 6: Going to GPU
         if gpu:
+            # TODO(phimuell): The GPU function might modify the map iteration order.
+            #                   This is because how it is implemented (promotion and
+            #                   fusion). However, because of its current state, this
+            #                   should not happen, but we have to look into it.
             gpu_launch_factor: Optional[int] = kwargs.get("gpu_launch_factor", None)
             gpu_launch_bounds: Optional[int] = kwargs.get("gpu_launch_bounds", None)
             gtx_transformations.gt_gpu_transformation(
@@ -277,6 +284,7 @@ def gt_auto_optimize(
                 gpu_launch_factor=gpu_launch_factor,
                 validate=validate,
                 validate_all=validate_all,
+                try_removing_trivial_maps=True,
             )
 
         # Phase 7: General Optimizations
