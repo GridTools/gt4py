@@ -452,28 +452,31 @@ class SymbolicDomain:
         return cls(node.fun.id, ranges)  # type: ignore[attr-defined]  # ensure by assert above
 
     def as_expr(self) -> ir.FunCall:
-        converted_ranges = {key: (value.start, value.stop) for key, value in self.ranges.items()}
+        converted_ranges: dict[common.Dimension | str, tuple[ir.Expr, ir.Expr]] = {
+            key: (value.start, value.stop) for key, value in self.ranges.items()
+        }
         return im.domain(self.grid_type, converted_ranges)
 
     def translate(
-        symbolic_domain: SymbolicDomain,
+        self: SymbolicDomain,
         shift: Tuple[ir.OffsetLiteral, ir.OffsetLiteral],
         offset_provider: Dict[str, common.Dimension],
     ) -> SymbolicDomain:
-        dims = list(symbolic_domain.ranges.keys())
-        new_ranges = {dim: symbolic_domain.ranges[dim] for dim in dims}
+        dims = list(self.ranges.keys())
+        new_ranges = {dim: self.ranges[dim] for dim in dims}
         if shift:
             off, val = shift
+            assert isinstance(off.value, str) and isinstance(val.value, int)
             nbt_provider = offset_provider[off.value]
             if isinstance(nbt_provider, common.Dimension):
                 current_dim = nbt_provider
                 # cartesian offset
                 new_ranges[current_dim] = SymbolicRange.translate(
-                    symbolic_domain.ranges[current_dim], val.value
+                    self.ranges[current_dim], val.value
                 )
             elif isinstance(nbt_provider, common.Connectivity):
                 # unstructured shift
-                # TODO: move to initialization
+                # note: ugly but cheap re-computation, but should disappear
                 horizontal_sizes = _max_domain_sizes_by_location_type(offset_provider)
 
                 old_dim = nbt_provider.origin_axis
@@ -481,7 +484,7 @@ class SymbolicDomain:
 
                 assert new_dim not in new_ranges or old_dim == new_dim
 
-                # TODO(tehrengruber): symbolic sizes for ICON?
+                # TODO(tehrengruber): Do we need symbolic sizes, e.g., for ICON?
                 new_range = SymbolicRange(
                     im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                     im.literal(str(horizontal_sizes[new_dim.value]), ir.INTEGER_INDEX_BUILTIN),
@@ -493,7 +496,7 @@ class SymbolicDomain:
             else:
                 raise AssertionError()
 
-        return SymbolicDomain(symbolic_domain.grid_type, new_ranges)
+        return SymbolicDomain(self.grid_type, new_ranges)
 
 
 def domain_union(domains: list[SymbolicDomain]) -> SymbolicDomain:

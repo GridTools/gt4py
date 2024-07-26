@@ -16,7 +16,7 @@ import typing
 from typing import Callable, Iterable, Optional, Union
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve.extended_typing import Any, Dict, Tuple
+from gt4py.eve.extended_typing import Dict, Tuple
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.type_system import type_specifications as ts, type_translation
@@ -407,7 +407,7 @@ def map_(op):
 
 def domain(
     grid_type: Union[common.GridType, str],
-    ranges: Dict[Union[common.Dimension, str], Tuple[Any, Any]],
+    ranges: Dict[Union[common.Dimension, str], Tuple[itir.Expr, itir.Expr]],
 ) -> itir.FunCall:
     """
     >>> str(
