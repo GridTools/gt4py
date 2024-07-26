@@ -167,6 +167,7 @@ def test_sdfgConvertible_connectivities(unstructured_case):
     e2v = gtx.NeighborTableOffsetProvider(
         xp.asarray([[1, 0], [2, 1], [0, 2]]), Edge, Vertex, 2, False
     )
+    offset_provider = OffsetProvider_t.dtype._typeclass.as_ctypes()(E2V=e2v.data_ptr())
     cSDFG(
         a,
         out,
