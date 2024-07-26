@@ -336,16 +336,30 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 node, sdfg, head_state, self, let_symbols
             )
         elif isinstance(node.fun, gtir.Lambda):
+            # We use a separate state to ensure that the lambda arguments are evaluated
+            # before the computation starts. This is required in case the let-symbols
+            # are used in conditional branch execution, which happens in different states.
+            lambda_state = sdfg.add_state_before(head_state, f"{head_state.label}_symbols")
+
             node_args = []
             for arg in node.args:
                 node_args.extend(
                     self.visit(
                         arg,
                         sdfg=sdfg,
-                        head_state=head_state,
+                        head_state=lambda_state,
                         let_symbols=let_symbols,
                     )
                 )
+
+            # some cleanup: remove isolated nodes for program arguments in lambda state
+            isolated_node_args = [node for node, _ in node_args if lambda_state.degree(node) == 0]
+            assert all(
+                isinstance(node, dace.nodes.AccessNode) and node.data in self.symbol_types
+                for node in isolated_node_args
+            )
+            lambda_state.remove_nodes_from(isolated_node_args)
+
             return self.visit(
                 node.fun,
                 sdfg=sdfg,

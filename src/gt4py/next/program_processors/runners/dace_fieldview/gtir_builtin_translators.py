@@ -344,8 +344,10 @@ def translate_symbol_ref(
     else:
         sym_value = str(node.id)
         if sym_value in let_symbols:
-            return [let_symbols[sym_value]]
-        data_type = sdfg_builder.get_symbol_type(sym_value)
+            sym_node, data_type = let_symbols[sym_value]
+            sym_value = sym_node.data
+        else:
+            data_type = sdfg_builder.get_symbol_type(sym_value)
         temp_name = sym_value
 
     if isinstance(data_type, ts.FieldType):
