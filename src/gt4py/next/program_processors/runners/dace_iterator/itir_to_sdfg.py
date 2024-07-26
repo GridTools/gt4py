@@ -38,9 +38,9 @@ from .utility import (
     add_mapped_nested_sdfg,
     as_dace_type,
     connectivity_identifier,
-    connectivity_table_size_symbol,
-    connectivity_table_stride_symbol,
     dace_debuginfo,
+    field_size_symbol_name,
+    field_stride_symbol_name,
     filter_connectivities,
     flatten_list,
     get_sorted_dims,
@@ -121,13 +121,11 @@ def _make_array_shape_and_strides(
             neighbor_tables[dim.value].max_neighbors
             if dim.kind == DimensionKind.LOCAL
             # we reuse the same gt4py symbol for field size passed as scalar argument which is used in closure domain
-            else dace.symbol(connectivity_table_size_symbol(name, i), dtype)
+            else dace.symbol(field_size_symbol_name(name, i), dtype)
         )
         for i, dim in sorted_dims
     ]
-    strides = [
-        dace.symbol(connectivity_table_stride_symbol(name, i), dtype) for i, _ in sorted_dims
-    ]
+    strides = [dace.symbol(field_stride_symbol_name(name, i), dtype) for i, _ in sorted_dims]
     return shape, strides
 
 

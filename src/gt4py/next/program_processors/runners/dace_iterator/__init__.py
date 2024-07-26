@@ -36,8 +36,8 @@ from .itir_to_sdfg import ItirToSDFG
 from .utility import (
     as_dace_type,
     connectivity_identifier,
-    connectivity_table_size_symbol,
-    connectivity_table_stride_symbol,
+    field_size_symbol_name,
+    field_stride_symbol_name,
     filter_connectivities,
     get_sorted_dims,
 )
@@ -422,8 +422,8 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
 
         # Define DaCe symbols
         connectivity_table_size_symbols = {
-            connectivity_table_size_symbol(connectivity_identifier(k), axis): dace.symbol(
-                connectivity_table_size_symbol(connectivity_identifier(k), axis)
+            field_size_symbol_name(connectivity_identifier(k), axis): dace.symbol(
+                field_size_symbol_name(connectivity_identifier(k), axis)
             )
             for k, v in offset_provider.items()  # type: ignore[union-attr]
             for axis in [0, 1]
@@ -432,8 +432,8 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         }
 
         connectivity_table_stride_symbols = {
-            connectivity_table_stride_symbol(connectivity_identifier(k), axis): dace.symbol(
-                connectivity_table_stride_symbol(connectivity_identifier(k), axis)
+            field_stride_symbol_name(connectivity_identifier(k), axis): dace.symbol(
+                field_stride_symbol_name(connectivity_identifier(k), axis)
             )
             for k, v in offset_provider.items()  # type: ignore[union-attr]
             for axis in [0, 1]
@@ -463,12 +463,12 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
                     Program.connectivity_tables_data_descriptors[conn_id] = dace.data.Array(
                         dtype=dace.int64 if v.index_type == np.int64 else dace.int32,
                         shape=[
-                            symbols[connectivity_table_size_symbol(conn_id, 0)],
-                            symbols[connectivity_table_size_symbol(conn_id, 1)],
+                            symbols[field_size_symbol_name(conn_id, 0)],
+                            symbols[field_size_symbol_name(conn_id, 1)],
                         ],
                         strides=[
-                            symbols[connectivity_table_stride_symbol(conn_id, 0)],
-                            symbols[connectivity_table_stride_symbol(conn_id, 1)],
+                            symbols[field_stride_symbol_name(conn_id, 0)],
+                            symbols[field_stride_symbol_name(conn_id, 1)],
                         ],
                         storage=Program.connectivity_tables_data_descriptors["storage"],
                     )

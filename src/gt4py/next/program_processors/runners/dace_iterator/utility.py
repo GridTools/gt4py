@@ -72,12 +72,12 @@ def connectivity_identifier(name: str) -> str:
     return f"__connectivity_{name}"
 
 
-def connectivity_table_size_symbol(connectivity_identifier: str, axis: int) -> str:
-    return f"__{connectivity_identifier}_size_{axis}"
+def field_size_symbol_name(field_name: str, axis: int) -> str:
+    return f"__{field_name}_size_{axis}"
 
 
-def connectivity_table_stride_symbol(connectivity_identifier: str, axis: int) -> str:
-    return f"__{connectivity_identifier}_stride_{axis}"
+def field_stride_symbol_name(field_name: str, axis: int) -> str:
+    return f"__{field_name}_stride_{axis}"
 
 
 def get_sorted_dims(dims: Sequence[Dimension]) -> Sequence[tuple[int, Dimension]]:
