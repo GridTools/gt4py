@@ -491,7 +491,6 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 *args,
                 out=out,
                 offset_provider=offset_provider,
-                from_fieldop=self,
                 **kwargs,
             )
         else:
@@ -530,7 +529,7 @@ class FieldOperatorFromFoast(FieldOperator):
     foast_stage: ffront_stages.FoastOperatorDefinition
 
     def __call__(self, *args, **kwargs) -> None:
-        return self.backend(self.foast_stage, *args, from_fieldop=self, **kwargs)
+        return self.backend(self.foast_stage, *args, **kwargs)
 
 
 @typing.overload

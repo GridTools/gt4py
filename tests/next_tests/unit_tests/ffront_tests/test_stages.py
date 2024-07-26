@@ -132,7 +132,6 @@ def test_fingerprint_stage_foast_closure(fieldop, samecode_fieldop, different_fi
                 args=(gtx.zeros({idim: 10}, gtx.int32),),
                 kwargs={
                     "out": gtx.zeros({idim: 10}, gtx.int32),
-                    "from_fieldop": fieldop,
                 },
             ),
         ),
@@ -144,7 +143,6 @@ def test_fingerprint_stage_foast_closure(fieldop, samecode_fieldop, different_fi
                 args=(gtx.zeros({idim: 10}, gtx.int32),),
                 kwargs={
                     "out": gtx.zeros({idim: 10}, gtx.int32),
-                    "from_fieldop": samecode_fieldop,
                 },
             ),
         )
@@ -156,7 +154,6 @@ def test_fingerprint_stage_foast_closure(fieldop, samecode_fieldop, different_fi
                 args=(gtx.zeros({jdim: 10}, gtx.int32),),
                 kwargs={
                     "out": gtx.zeros({jdim: 10}, gtx.int32),
-                    "from_fieldop": different_fieldop,
                 },
             ),
         )
@@ -168,7 +165,6 @@ def test_fingerprint_stage_foast_closure(fieldop, samecode_fieldop, different_fi
                 args=(gtx.zeros({idim: 11}, gtx.int32),),
                 kwargs={
                     "out": gtx.zeros({idim: 11}, gtx.int32),
-                    "from_fieldop": fieldop,
                 },
             ),
         )
