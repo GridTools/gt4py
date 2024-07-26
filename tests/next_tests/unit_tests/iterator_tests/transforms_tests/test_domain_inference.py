@@ -12,6 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+# TODO(SF-N): test scan operator
+
 import copy
 import numpy as np
 from typing import List
@@ -587,3 +589,5 @@ def test_program_tree_tmps_two_inputs(offset_provider):
     )
 
     run_test_program(testee, expected, offset_provider)
+
+#TODO: expected_expr
