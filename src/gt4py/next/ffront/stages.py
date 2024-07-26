@@ -131,7 +131,6 @@ def add_func_to_fingerprint(obj: types.FunctionType, hasher: xtyping.HashlibAlgo
 @add_content_to_fingerprint.register
 def add_dict_to_fingerprint(obj: dict, hasher: xtyping.HashlibAlgorithm) -> None:
     for key, value in obj.items():
-        print(f"{key}: {value} added to fingerprint")
         add_content_to_fingerprint(key, hasher)
         add_content_to_fingerprint(value, hasher)
 
