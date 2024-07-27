@@ -93,7 +93,7 @@ def _type_string(type_: ts.TypeSpec) -> str:
     elif isinstance(type_, ts.FieldType):
         ndims = len(type_.dims)
         dtype = cpp_interface.render_scalar_type(type_.dtype)
-        shape = f"nanobind::shape<{', '.join(['nanobind::any'] * ndims)}>"
+        shape = f"nanobind::shape<{', '.join(['gridtools::nanobind::dynamic_size'] * ndims)}>"
         buffer_t = f"nanobind::ndarray<{dtype}, {shape}>"
         origin_t = f"std::tuple<{', '.join(['ptrdiff_t'] * ndims)}>"
         return f"std::pair<{buffer_t}, {origin_t}>"
@@ -247,7 +247,7 @@ def create_bindings(
         program_source.language_settings, BindingCodeGenerator.apply(file_binding)
     )
 
-    return stages.BindingSource(src, (interface.LibraryDependency("nanobind", "1.4.0"),))
+    return stages.BindingSource(src, (interface.LibraryDependency("nanobind", "2.0.0"),))
 
 
 @workflow.make_step

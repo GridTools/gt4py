@@ -192,6 +192,6 @@ def new_array_symbols(name: str, ndim: int) -> tuple[list[dace.symbol], list[dac
 def flatten_list(node_list: list[Any]) -> list[Any]:
     return list(
         itertools.chain.from_iterable(
-            [flatten_list(e) if e.__class__ == list else [e] for e in node_list]
+            [flatten_list(e) if isinstance(e, list) else [e] for e in node_list]
         )
     )

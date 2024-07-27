@@ -106,6 +106,9 @@ class TupleType(DataType):
     def __iter__(self) -> Iterator[DataType]:
         yield from self.types
 
+    def __len__(self) -> int:
+        return len(self.types)
+
 
 @dataclass(frozen=True)
 class FieldType(DataType, CallableType):

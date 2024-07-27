@@ -159,7 +159,7 @@ class GTFNTranslationStep(
         self,
         program: itir.FencilDefinition,
         offset_provider: dict[str, Connectivity | Dimension],
-    ) -> itir.FencilDefinition | global_tmps.FencilWithTemporaries:
+    ) -> itir.FencilDefinition | global_tmps.FencilWithTemporaries | itir.Program:
         if not self.enable_itir_transforms:
             return program
 
