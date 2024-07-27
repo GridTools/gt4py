@@ -11,6 +11,12 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+# TODO: test failure when something is not typed after inference is run
+# TODO: test lift with no args
+# TODO: lambda function that is not called
+# TODO: partially applied function in a let
+# TODO: function calling itself should fail
+# TODO: lambda function called with different argument types
 
 import pytest
 
@@ -109,10 +115,8 @@ def expression_test_cases():
         ),
         # cast
         (im.call("cast_")(1, "int32"), int_type),
-        # lift
-        #  ...
-        # scan
-        #  ...
+        # TODO: lift
+        # TODO: scan
         # map
         (
             im.map_(im.ref("plus"))(im.ref("a", int_list_type), im.ref("b", int_list_type)),
@@ -194,18 +198,6 @@ def test_adhoc_polymorphism():
     result = itir_type_inference.infer(testee, offset_provider={}, allow_undeclared_symbols=True)
 
     assert result.type == ts.TupleType(types=[bool_type, int_type])
-
-
-# TODO: test failure when something is not typed
-# TODO: test lift with no args
-# TODO: lambda function that is not called
-# TODO: partially applied function in a let
-# TODO: function calling itself
-# TODO: lambda function called with different argument types
-
-# reduce(λ(_fuse_maps_1, _fuse_maps_3, _fuse_maps_4) → _fuse_maps_1 + (_fuse_maps_3 + _fuse_maps_4), 0)(
-#   neighbors(V2Eₒ, in_edges), neighbors(V2Eₒ, in_edges)
-# )
 
 
 def test_aliased_function():

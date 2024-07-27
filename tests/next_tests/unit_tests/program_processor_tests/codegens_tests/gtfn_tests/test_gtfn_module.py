@@ -49,7 +49,7 @@ def fencil_example():
             itir.FunctionDefinition(
                 id="stencil",
                 params=[itir.Sym(id="buf"), itir.Sym(id="sc")],
-                expr=im.literal("1", "float64"),
+                expr=im.literal("1", "float32"),
             )
         ],
         closures=[

@@ -11,11 +11,13 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+
+from __future__ import annotations
+
 import collections.abc
 import copy
 import dataclasses
 import functools
-import inspect
 
 from gt4py import eve
 from gt4py.eve import concepts
@@ -24,7 +26,7 @@ from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_call_to
 from gt4py.next.iterator.transforms import global_tmps
-from gt4py.next.iterator.type_system import rules, type_specifications as it_ts
+from gt4py.next.iterator.type_system import type_specifications as it_ts, type_synthesizer
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.type_system.type_info import primitive_constituents
 
@@ -94,30 +96,13 @@ def _is_compatible_type(type_a: ts.TypeSpec, type_b: ts.TypeSpec):
     return is_compatible
 
 
-# TODO(tehrengruber): remove after documentation is written
-# Problems:
-#  - what happens when we get a lambda function whose params are already typed
-#  - write back params type in lambda
-#  - documentation
-#    describe why lambda can only have one type. Describe idea to solve e.g.
-#     `let("f", lambda x: x)(f(1)+f(1.))
-#     -> let("f_int", lambda x: x, "f_float", lambda x: x)(f_int(1)+f_float(1.))`
-#    describe where this is needed, e.g.:
-#      `if_(cond, fun_tail(it_on_vertex), fun_tail(it_on_vertex_k))`
-#  - document how scans are handled (also mention to Hannes)
-#  - types are stored in the node, but will be incomplete after some passes
-# Design decisions
-#  Only the parameters of fencils need to be typed.
-#  Lambda functions are not polymorphic.
 def _set_node_type(node: itir.Node, type_: ts.TypeSpec) -> None:
     if node.type:
         assert _is_compatible_type(node.type, type_), "Node already has a type which differs."
     node.type = type_
 
 
-def on_inferred(
-    callback: Callable, *args: Union[ts.TypeSpec, "ObservableTypeInferenceRule"]
-) -> None:
+def on_inferred(callback: Callable, *args: Union[ts.TypeSpec, ObservableTypeSynthesizer]) -> None:
     """
     Execute `callback` as soon as all `args` have a type.
     """
@@ -131,7 +116,7 @@ def on_inferred(
             callback(*inferred_args)
 
     for i, arg in enumerate(args):
-        if isinstance(arg, ObservableTypeInferenceRule):
+        if isinstance(arg, ObservableTypeSynthesizer):
             arg.on_type_ready(functools.partial(mark_ready, i))
         else:
             assert isinstance(arg, ts.TypeSpec)
@@ -139,17 +124,17 @@ def on_inferred(
 
 
 @dataclasses.dataclass
-class ObservableTypeInferenceRule:
+class ObservableTypeSynthesizer(type_synthesizer.TypeSynthesizer):
     """
-    This class wraps a raw type inference rule to handle typing of nodes representing functions.
+    This class wraps a type synthesizer to handle typing of nodes representing functions.
 
-    The type inference algorithm represents functions as type inference rules, i.e. regular
+    The type inference algorithm represents functions as type synthesizer, i.e. regular
     callables that given a set of arguments compute / deduce the return type. The return type of
     functions, let it be a builtin like ``itir.plus`` or a user defined lambda function, is only
     defined when all its arguments are typed.
 
-    Let's start with a small example to examplify this. The power function has a rather simple
-    type inference rule, where the output type is simply the type of the base.
+    Let's start with a small example to exemplify this. The power function has a rather simple
+    type synthesizer, where the output type is simply the type of the base.
 
     >>> def power(base: ts.ScalarType, exponent: ts.ScalarType) -> ts.ScalarType:
     ...     return base
@@ -158,29 +143,30 @@ class ObservableTypeInferenceRule:
     >>> power(float_type, int_type)
     ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None)
 
-    Now, consider a simple lambda function that, using the power builtin squares its argument. A
-    type inference rule for this function is simple to formulate, but merely gives us the return
+    Now, consider a simple lambda function that squares its argument using the power builtin. A
+    type synthesizer for this function is simple to formulate, but merely gives us the return
     type of the function.
 
     >>> from gt4py.next.iterator.ir_utils import ir_makers as im
     >>> square_func = im.lambda_("base")(im.call("power")("base", 2))
-    >>> square_func_type_rule = lambda base: power(base, int_type)
-    >>> square_func_type_rule(float_type)
+    >>> square_func_type_synthesizer = type_synthesizer.TypeSynthesizer(
+    ...     type_synthesizer=lambda base: power(base, int_type)
+    ... )
+    >>> square_func_type_synthesizer(float_type, offset_provider={})
     ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None)
 
     Note that without a corresponding call the function itself can not be fully typed and as such
     the type inference algorithm has to defer typing until then. This task is handled transparently
-    (in the sense that an ``ObservableTypeInferenceRule`` is a type inference rule again) by this
-    class. Given a type inference rule and a node we obtain a new type inference rule that when
+    (in the sense that an ``ObservableTypeSynthesizer`` is a type synthesizer again) by this
+    class. Given a type synthesizer and a node we obtain a new type synthesizer that when
     evaluated stores the type of the function in the node.
 
-    >>> o_type_rule = ObservableTypeInferenceRule(
-    ...     type_rule=square_func_type_rule,
-    ...     offset_provider={},
+    >>> o_type_synthesizer = ObservableTypeSynthesizer(
+    ...     type_synthesizer=square_func_type_synthesizer,
     ...     node=square_func,
     ...     store_inferred_type_in_node=True,
     ... )
-    >>> o_type_rule(float_type)
+    >>> o_type_synthesizer(float_type, offset_provider={})
     ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None)
     >>> square_func.type == ts.FunctionType(
     ...     pos_only_args=[float_type], pos_or_kw_args={}, kw_only_args={}, returns=float_type
@@ -194,10 +180,6 @@ class ObservableTypeInferenceRule:
     ready.
     """
 
-    #: type rule that given a set of types or type rules returns the return type or a type rule
-    type_rule: rules.TypeInferenceRule
-    #: offset provider used by some type rules
-    offset_provider: common.OffsetProvider
     #: node that has this type
     node: Optional[itir.Node] = None
     #: list of references to this function
@@ -219,7 +201,7 @@ class ObservableTypeInferenceRule:
     def _infer_type_listener(self, return_type: ts.TypeSpec, *args: ts.TypeSpec) -> None:
         self.inferred_type = self.infer_type(return_type, *args)  # type: ignore[arg-type]  # ensured by assert above
 
-        # if the type has been fully inferred, notify all `ObservableTypeInferenceRule`s that depend on it.
+        # if the type has been fully inferred, notify all `ObservableTypeSynthesizer`s that depend on it.
         for cb in self.callbacks:
             cb(self.inferred_type)
 
@@ -238,26 +220,30 @@ class ObservableTypeInferenceRule:
             self.callbacks.append(cb)
 
     def __call__(
-        self, *args: Union[ts.TypeSpec, "ObservableTypeInferenceRule"]
-    ) -> Union[ts.TypeSpec, "ObservableTypeInferenceRule"]:
-        if "offset_provider" in inspect.signature(self.type_rule).parameters:
-            return_type = self.type_rule(*args, offset_provider=self.offset_provider)
-        else:
-            return_type = self.type_rule(*args)
+        self,
+        *args: type_synthesizer.TypeOrTypeSynthesizer,
+        offset_provider: common.OffsetProvider,
+    ) -> Union[ts.TypeSpec, ObservableTypeSynthesizer]:
+        assert all(
+            isinstance(arg, (ts.TypeSpec, ObservableTypeSynthesizer)) for arg in args
+        ), "ObservableTypeSynthesizer can only be used with arguments that are TypeSpec or ObservableTypeSynthesizer"
+
+        return_type_or_synthesizer = self.type_synthesizer(*args, offset_provider=offset_provider)
 
         # return type is a typing rule by itself
-        if callable(return_type):
-            return_type = ObservableTypeInferenceRule(
+        if isinstance(return_type_or_synthesizer, type_synthesizer.TypeSynthesizer):
+            return_type_or_synthesizer = ObservableTypeSynthesizer(
                 node=None,  # node will be set by caller
-                type_rule=return_type,
-                offset_provider=self.offset_provider,
+                type_synthesizer=return_type_or_synthesizer,
                 store_inferred_type_in_node=True,
             )
 
-        # delay storing the type until the return type and all arguments are inferred
-        on_inferred(self._infer_type_listener, return_type, *args)
+        assert isinstance(return_type_or_synthesizer, (ts.TypeSpec, ObservableTypeSynthesizer))
 
-        return return_type
+        # delay storing the type until the return type and all arguments are inferred
+        on_inferred(self._infer_type_listener, return_type_or_synthesizer, *args)  # type: ignore[arg-type] # ensured by assert above
+
+        return return_type_or_synthesizer
 
 
 def _get_dimensions_from_offset_provider(offset_provider) -> dict[str, common.Dimension]:
@@ -291,12 +277,12 @@ def _get_dimensions_from_types(types) -> dict[str, common.Dimension]:
     return {dim.value: dim for dim in _get_dimensions(types)}
 
 
-def _type_inference_rule_from_function_type(fun_type: ts.FunctionType):
-    def type_rule(*args, **kwargs):
+def _type_synthesizer_from_function_type(fun_type: ts.FunctionType):
+    def type_synthesizer(*args, **kwargs):
         assert type_info.accepts_args(fun_type, with_args=list(args), with_kwargs=kwargs)
         return fun_type.returns
 
-    return type_rule
+    return type_synthesizer
 
 
 class RemoveTypes(eve.NodeTranslator):
@@ -315,7 +301,7 @@ class ITIRTypeInference(eve.NodeTranslator):
     """
     ITIR type inference algorithm.
 
-    See :py:method:ITIRTypeInference.apply for more details.
+    See :method:ITIRTypeInference.apply for more details.
     """
 
     offset_provider: common.OffsetProvider
@@ -337,14 +323,58 @@ class ITIRTypeInference(eve.NodeTranslator):
         Infer the type of ``node`` and its sub-nodes.
 
         Arguments:
-            node: The :py:class:`itir.Node` to infer the types of.
+            node: The :class:`itir.Node` to infer the types of.
 
         Keyword Arguments:
             offset_provider: Offset provider dictionary.
             inplace: Write types directly to the given ``node`` instead of returning a copy.
             allow_undeclared_symbols: Allow references to symbols that don't have a corresponding
               declaration. This is useful for testing or inference on partially inferred sub-nodes.
+
+        Design decisions:
+        - Lamba functions are monomorphic
+        Builtin functions like ``plus`` are by design polymorphic and only their argument and return
+        types are of importance in transformations. Lambda functions on the contrary also have a
+        body on which we would like to run transformations. By choosing them to be monomorphic all
+        types in the body can be inferred to a concrete type, making reasoning about them in
+        transformations simple. Consequently, the following is invalid as `f` is called with
+        arguments of different type
+        ```
+        let f = λ(a) → a+a
+            in f(1)+f(1.)
+        ```
+        In case we want polymorphic lambda functions, i.e. generic functions in the frontend
+        could be implemented that way, current consensus is to instead implement a transformation
+        that duplicates the lambda function for each of the types it is called with
+        ```
+        let f_int = λ(a) → a+a, f_float = λ(a) → a+a
+            in f_int(1)+f_float(1.)
+        ```
+        Note that this is not the only possible choice. Polymorphic lambda functions and a type
+        inference algorithm that only infers the most generic type would allow us to run
+        transformations without this duplication and reduce code size early. However, this would
+        require careful planning and documentation on what information a transformation needs.
+
+        Limitations:
+
+        - The current position of (iterator) arguments to a lifted stencil is unknown
+        Consider the following trivial stencil: ``λ(it) → deref(it)``. A priori we don't know
+        what the current position of ``it`` is (inside the body of the lambda function), but only
+        when we call the stencil with an actual iterator the position becomes known. Consequently,
+        when we lift the stencil, the position of its iterator arguments is only known as soon as
+        the iterator as returned by the applied lift is dereferenced. Deferring the inference
+        of the current position for lifts has been decided to be too complicated as we don't need
+        the information right now and is hence not implemented.
+
+        - Iterators only ever reference values, not columns.
+        The initial version of the ITIR used iterators of columns and vectorized operations between
+        columns in order to express scans. This differentiation is not needed in our transformations
+        and as such was not implemented here.
         """
+        # TODO(tehrengruber): some of the transformations reuse nodes with type information that
+        #  becomes invalid (e.g. the shift part of ``shift(...)(it)`` has a different type when used
+        #  on a different iterator). For now we just delete all types in case we are working an
+        #   parts of a program.
         if not allow_undeclared_symbols:
             node = RemoveTypes().visit(node)
 
@@ -367,13 +397,12 @@ class ITIRTypeInference(eve.NodeTranslator):
         instance.visit(
             node,
             ctx={
-                name: ObservableTypeInferenceRule(
-                    type_rule=rules.type_inference_rules[name],
+                name: ObservableTypeSynthesizer(
+                    type_synthesizer=type_synthesizer.builtin_type_synthesizers[name],
                     # builtin functions are polymorphic
                     store_inferred_type_in_node=False,
-                    offset_provider=offset_provider,
                 )
-                for name in rules.type_inference_rules.keys()
+                for name in type_synthesizer.builtin_type_synthesizers.keys()
             },
         )
         return node
@@ -385,19 +414,20 @@ class ITIRTypeInference(eve.NodeTranslator):
                 if node.type:
                     assert _is_compatible_type(node.type, result)
                 node.type = result
-            elif isinstance(result, ObservableTypeInferenceRule) or result is None:
+            elif isinstance(result, ObservableTypeSynthesizer) or result is None:
                 pass
-            elif callable(result):
-                return ObservableTypeInferenceRule(
+            elif isinstance(result, type_synthesizer.TypeSynthesizer):
+                # this case occurs either when a Lambda node is visited or TypeSynthesizer returns
+                # another type synthesizer.
+                return ObservableTypeSynthesizer(
                     node=node,
-                    type_rule=result,
+                    type_synthesizer=result,
                     store_inferred_type_in_node=True,
-                    offset_provider=self.offset_provider,
                 )
             else:
                 raise AssertionError(
-                    f"Expected a 'TypeSpec', `callable` or 'ObservableTypeInferenceRule', but got "
-                    f"`{type(result).__name__}`"
+                    f"Expected a 'TypeSpec', `TypeSynthesizer` or 'ObservableTypeSynthesizer', "
+                    f"`but got {type(result).__name__}`"
                 )
         return result
 
@@ -408,7 +438,7 @@ class ITIRTypeInference(eve.NodeTranslator):
             assert isinstance(param.type, ts.DataType)
             params[param.id] = param.type
 
-        function_definitions: dict[str, rules.TypeInferenceRule] = {}
+        function_definitions: dict[str, type_synthesizer.TypeSynthesizer] = {}
         for fun_def in node.function_definitions:
             function_definitions[fun_def.id] = self.visit(fun_def, ctx=ctx | function_definitions)
 
@@ -420,7 +450,7 @@ class ITIRTypeInference(eve.NodeTranslator):
         self, node: global_tmps.FencilWithTemporaries, *, ctx
     ) -> it_ts.FencilType:
         # TODO(tehrengruber): This implementation is not very appealing. Since we are about to
-        #  refactor the PR anyway this is fine for now.
+        #  refactor the IR anyway this is fine for now.
         params: dict[str, ts.DataType] = {}
         for param in node.params:
             assert isinstance(param.type, ts.DataType)
@@ -437,7 +467,7 @@ class ITIRTypeInference(eve.NodeTranslator):
         assert isinstance(node.fencil.type, it_ts.FencilType)
         return node.fencil.type
 
-    def visit_Program(self, node: itir.Program, *, ctx):
+    def visit_Program(self, node: itir.Program, *, ctx) -> it_ts.ProgramType:
         params: dict[str, ts.DataType] = {}
         for param in node.params:
             assert isinstance(param.type, ts.DataType)
@@ -493,11 +523,14 @@ class ITIRTypeInference(eve.NodeTranslator):
         for output_el in type_info.primitive_constituents(output):
             assert isinstance(output_el, ts.FieldType)
 
-        stencil_type_rule = self.visit(node.stencil, ctx=ctx)
+        stencil_type_synthesizer = self.visit(node.stencil, ctx=ctx)
         stencil_args = [
-            rules._convert_as_fieldop_input_to_iterator(domain, input_) for input_ in inputs
+            type_synthesizer._convert_as_fieldop_input_to_iterator(domain, input_)
+            for input_ in inputs
         ]
-        stencil_returns = stencil_type_rule(*stencil_args)
+        stencil_returns = stencil_type_synthesizer(
+            *stencil_args, offset_provider=self.offset_provider
+        )
 
         return it_ts.StencilClosureType(
             domain=domain,
@@ -534,41 +567,37 @@ class ITIRTypeInference(eve.NodeTranslator):
 
     def visit_SymRef(
         self, node: itir.SymRef, *, ctx: dict[str, ts.TypeSpec]
-    ) -> ts.TypeSpec | rules.TypeInferenceRule:
+    ) -> ts.TypeSpec | type_synthesizer.TypeSynthesizer:
         # for testing, it is useful to be able to use types without a declaration
         if self.allow_undeclared_symbols and node.id not in ctx:
             # type has been stored in the node itself
             if node.type:
                 if isinstance(node.type, ts.FunctionType):
-                    return _type_inference_rule_from_function_type(node.type)
+                    return _type_synthesizer_from_function_type(node.type)
                 return node.type
             return ts.DeferredType(constraint=None)
         assert node.id in ctx
         result = ctx[node.id]
-        if isinstance(result, ObservableTypeInferenceRule):
+        if isinstance(result, ObservableTypeSynthesizer):
             result.aliases.append(node)
         return result
 
     def visit_Lambda(
         self, node: itir.Lambda | itir.FunctionDefinition, *, ctx: dict[str, ts.TypeSpec]
-    ) -> ObservableTypeInferenceRule:
+    ) -> type_synthesizer.TypeSynthesizer:
+        @type_synthesizer.TypeSynthesizer
         def fun(*args):
             return self.visit(
                 node.expr, ctx=ctx | {p.id: a for p, a in zip(node.params, args, strict=True)}
             )
 
-        return ObservableTypeInferenceRule(
-            node=node,
-            type_rule=fun,
-            store_inferred_type_in_node=True,
-            offset_provider=self.offset_provider,
-        )
+        return fun
 
     visit_FunctionDefinition = visit_Lambda
 
     def visit_FunCall(
         self, node: itir.FunCall, *, ctx: dict[str, ts.TypeSpec]
-    ) -> ts.TypeSpec | rules.TypeInferenceRule:
+    ) -> ts.TypeSpec | type_synthesizer.TypeSynthesizer:
         # grammar builtins
         if is_call_to(node, "cast_"):
             value, type_constructor = node.args
@@ -589,18 +618,16 @@ class ITIRTypeInference(eve.NodeTranslator):
         fun = self.visit(node.fun, ctx=ctx)
         args = self.visit(node.args, ctx=ctx)
 
-        result = fun(*args)
+        result = fun(*args, offset_provider=self.offset_provider)
 
-        if isinstance(result, ObservableTypeInferenceRule):
+        if isinstance(result, ObservableTypeSynthesizer):
             assert not result.node
             result.node = node
 
         return result
 
     def visit_Node(self, node: itir.Node, **kwargs):
-        raise NotImplementedError(
-            f"No type deduction rule for nodes of type " f"'{type(node).__name__}'."
-        )
+        raise NotImplementedError(f"No type rule for nodes of type " f"'{type(node).__name__}'.")
 
 
 infer = ITIRTypeInference.apply

@@ -14,9 +14,8 @@
 
 import functools
 import types
-import typing
 from collections.abc import Callable, Iterator
-from typing import Any, Generic, Protocol, Type, TypeGuard, TypeVar, cast
+from typing import Any, Generic, Literal, Protocol, Type, TypeGuard, TypeVar, cast, overload
 
 import numpy as np
 
@@ -88,23 +87,20 @@ def type_class(symbol_type: ts.TypeSpec) -> Type[ts.TypeSpec]:
     )
 
 
-@typing.overload
+@overload
 def primitive_constituents(
-    symbol_type: ts.TypeSpec,
-    with_path_arg: typing.Literal[False] = False,
+    symbol_type: ts.TypeSpec, with_path_arg: Literal[False] = False
 ) -> XIterable[ts.TypeSpec]: ...
 
 
-@typing.overload
+@overload
 def primitive_constituents(
-    symbol_type: ts.TypeSpec,
-    with_path_arg: typing.Literal[True],
+    symbol_type: ts.TypeSpec, with_path_arg: Literal[True]
 ) -> XIterable[tuple[ts.TypeSpec, tuple[int, ...]]]: ...
 
 
 def primitive_constituents(
-    symbol_type: ts.TypeSpec,
-    with_path_arg: bool = False,
+    symbol_type: ts.TypeSpec, with_path_arg: bool = False
 ) -> XIterable[ts.TypeSpec] | XIterable[tuple[ts.TypeSpec, tuple[int, ...]]]:
     """
     Return the primitive types contained in a composite type.

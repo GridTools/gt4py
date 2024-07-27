@@ -503,7 +503,7 @@ def _named_range(axis: str, range_: Iterable[int]) -> Iterable[CompleteOffset]:
     return ((axis, i) for i in range_)
 
 
-def _domain_iterator(domain: dict[Tag, range]) -> Iterable[Position]:
+def _domain_iterator(domain: dict[Tag, range]) -> Iterable[ConcretePosition]:
     return (
         dict(elem)
         for elem in itertools.product(*(_named_range(axis, rang) for axis, rang in domain.items()))
@@ -1111,7 +1111,7 @@ class IndexField(common.Field):
         assert self._cur_index is not None
         return self._cur_index
 
-    def remap(self, index_field: common.ConnectivityField | fbuiltins.FieldOffset) -> common.Field:
+    def premap(self, index_field: common.ConnectivityField | fbuiltins.FieldOffset) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
@@ -1125,7 +1125,7 @@ class IndexField(common.Field):
         # TODO set a domain...
         raise NotImplementedError()
 
-    __call__ = remap
+    __call__ = premap
     __getitem__ = restrict
 
     def __abs__(self) -> common.Field:
@@ -1231,7 +1231,7 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
     def asnumpy(self) -> np.ndarray:
         raise NotImplementedError()
 
-    def remap(self, index_field: common.ConnectivityField | fbuiltins.FieldOffset) -> common.Field:
+    def premap(self, index_field: common.ConnectivityField | fbuiltins.FieldOffset) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
@@ -1243,7 +1243,7 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
         assert self.domain.ndim == 0
         return self._value
 
-    __call__ = remap
+    __call__ = premap
     __getitem__ = restrict
 
     def __abs__(self) -> common.Field:

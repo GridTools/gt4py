@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import dataclasses
-import typing
+from typing import Literal
 
 from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts
@@ -41,7 +41,7 @@ class ListType(ts.DataType):
 
 @dataclasses.dataclass(frozen=True)
 class IteratorType(ts.DataType, ts.CallableType):
-    position_dims: list[common.Dimension] | typing.Literal["unknown"]
+    position_dims: list[common.Dimension] | Literal["unknown"]
     defined_dims: list[common.Dimension]
     element_type: ts.DataType
 
@@ -57,8 +57,10 @@ class StencilClosureType(ts.TypeSpec):
         # local import to avoid importing type_info from a type_specification module
         from gt4py.next.type_system import type_info
 
-        for el_type in type_info.primitive_constituents(self.output):
-            assert isinstance(el_type, ts.FieldType), "All constituent types must be field types."
+        for i, el_type in enumerate(type_info.primitive_constituents(self.output)):
+            assert isinstance(
+                el_type, ts.FieldType
+            ), f"All constituent types must be field types, but the {i}-th element is of type '{el_type}'."
 
 
 # TODO(tehrengruber): Remove after new ITIR format with apply_stencil is used everywhere
