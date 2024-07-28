@@ -13,7 +13,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import types
-from collections import namedtuple
 from typing import Any, Protocol, TypeVar
 
 import numpy as np
@@ -24,16 +23,6 @@ from gt4py.next import backend as next_backend, common
 from gt4py.next.ffront import decorator
 from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors import processor_interface as ppi
-from gt4py.next.program_processors.runners import gtfn, roundtrip
-
-
-try:
-    from gt4py.next.program_processors.runners import dace_iterator
-except ModuleNotFoundError as e:
-    if "dace" in str(e):
-        dace_iterator = None
-    else:
-        raise e
 
 import next_tests
 
@@ -52,19 +41,6 @@ class NoBackend(next_backend.Backend):
 no_backend = NoBackend(executor=no_exec, transforms_prog=None, allocator=None)
 
 
-OPTIONAL_PROCESSORS = []
-if dace_iterator:
-    OPTIONAL_PROCESSORS.append(next_tests.definitions.OptionalProgramBackendId.DACE_CPU)
-    (
-        OPTIONAL_PROCESSORS.append(
-            pytest.param(
-                next_tests.definitions.OptionalProgramBackendId.DACE_GPU,
-                marks=pytest.mark.requires_gpu,
-            )
-        ),
-    )
-
-
 @pytest.fixture(
     params=[
         next_tests.definitions.ProgramBackendId.ROUNDTRIP,
@@ -79,8 +55,15 @@ if dace_iterator:
         pytest.param(
             next_tests.definitions.EmbeddedIds.CUPY_EXECUTION, marks=pytest.mark.requires_gpu
         ),
-    ]
-    + OPTIONAL_PROCESSORS,
+        pytest.param(
+            next_tests.definitions.OptionalProgramBackendId.DACE_CPU,
+            marks=pytest.mark.requires_dace,
+        ),
+        pytest.param(
+            next_tests.definitions.OptionalProgramBackendId.DACE_GPU,
+            marks=(pytest.mark.requires_dace, pytest.mark.requires_gpu),
+        ),
+    ],
     ids=lambda p: p.short_id(),
 )
 def exec_alloc_descriptor(request):
