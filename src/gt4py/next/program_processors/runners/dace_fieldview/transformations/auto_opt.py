@@ -91,6 +91,7 @@ def gt_auto_optimize(
     gpu_block_size: Optional[Sequence[int | str] | str] = None,
     block_dim: Optional[gtx_common.Dimension] = None,
     blocking_size: int = 10,
+    reuse_transients: bool = False,
     validate: bool = True,
     validate_all: bool = False,
     **kwargs: Any,
@@ -126,7 +127,7 @@ def gt_auto_optimize(
         - Use fast implementation for library nodes.
         - Move small transients to stack.
         - Make transients persistent (if requested).
-        - Reuse transients.
+        - If requested reuse transients.
 
     Args:
         sdfg: The SDFG that should ve optimized in place.
@@ -141,6 +142,7 @@ def gt_auto_optimize(
             one for all.
         block_dim: On which dimension blocking should be applied.
         blocking_size: How many elements each block should process.
+        reuse_transients: Run the `TransientReuse` transformation, might reduce memory footprint.
         validate: Perform validation during the steps.
         validate_all: Perform extensive validation.
 
@@ -155,6 +157,7 @@ def gt_auto_optimize(
             not if we have too much internal space (register pressure).
         - Create a custom array elimination pass that honor rule 1.
     """
+    device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
 
     with dace.config.temporary_config():
         dace.Config.set("optimizer", "match_exception", value=True)
@@ -291,10 +294,13 @@ def gt_auto_optimize(
         #   The following operations apply regardless if we have a GPU or CPU.
         #   The DaCe auto optimizer also uses them. Note that the reuse transient
         #   is not done by DaCe.
-        device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
-        transient_reuse = dace.transformation.passes.TransientReuse()
+        if reuse_transients:
+            # TODO(phimuell): Investigate if we should enable it, it makes stuff
+            #                   harder for the compiler. Maybe write our own that
+            #                   only consider big transients and not small ones (~60B)
+            transient_reuse = dace.transformation.passes.TransientReuse()
+            transient_reuse.apply_pass(sdfg, {})
 
-        transient_reuse.apply_pass(sdfg, {})
         dace_aoptimize.set_fast_implementations(sdfg, device)
         # TODO(phimuell): Fix the bug, it is used the tile value and not the stack array value.
         dace_aoptimize.move_small_arrays_to_stack(sdfg)
