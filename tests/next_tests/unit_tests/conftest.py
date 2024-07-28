@@ -19,31 +19,11 @@ import dataclasses
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next.iterator import runtime, transforms
+from gt4py.next.iterator import runtime
 from gt4py.next.program_processors import processor_interface as ppi
 
 
-try:
-    from gt4py.next.program_processors.runners import dace_iterator
-except ModuleNotFoundError as e:
-    if "dace" in str(e):
-        dace_iterator = None
-    else:
-        raise e
-
-
 import next_tests
-
-
-OPTIONAL_PROCESSORS = []
-if dace_iterator:
-    OPTIONAL_PROCESSORS.append((next_tests.definitions.OptionalProgramBackendId.DACE_CPU, True))
-    # TODO(havogt): update tests to use proper allocation
-    # OPTIONAL_PROCESSORS.append(
-    #     pytest.param(
-    #         (definitions.OptionalProgramBackendId.DACE_GPU, True), marks=pytest.mark.requires_gpu
-    #     )
-    # ),
 
 
 @pytest.fixture(
@@ -59,8 +39,16 @@ if dace_iterator:
         (next_tests.definitions.ProgramFormatterId.LISP_FORMATTER, False),
         (next_tests.definitions.ProgramFormatterId.ITIR_PRETTY_PRINTER, False),
         (next_tests.definitions.ProgramFormatterId.GTFN_CPP_FORMATTER, False),
-    ]
-    + OPTIONAL_PROCESSORS,
+        pytest.param(
+            (next_tests.definitions.OptionalProgramBackendId.DACE_CPU, True),
+            marks=pytest.mark.requires_dace,
+        ),
+        # TODO(havogt): update tests to use proper allocation
+        # pytest.param(
+        #     (next_tests.definitions.OptionalProgramBackendId.DACE_GPU, True),
+        #     marks=(pytest.mark.requires_dace, pytest.mark.requires_gpu),
+        # ),
+    ],
     ids=lambda p: p[0].short_id() if p[0] is not None else "None",
 )
 def program_processor(request) -> tuple[ppi.ProgramProcessor, bool]:
