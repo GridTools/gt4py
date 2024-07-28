@@ -327,17 +327,6 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
 
         return fun
 
-    # FIXME[#1582](tehrengruber): remove after refactoring to GTIR
-    def visit_StencilClosure(self, node: ir.StencilClosure):
-        tracers = []
-        for inp in node.inputs:
-            self.shift_recorder.register_node(inp)
-            tracers.append(ArgTracer(arg=inp, shift_recorder=self.shift_recorder))
-
-        result = self.visit(node.stencil, ctx=_START_CTX)(*tracers)
-        assert all(el is Sentinel.VALUE for el in _primitive_constituents(result))
-        return node
-
     def initialize_context(self, inputs: Iterable[ir.Sym | ir.SymRef]) -> dict[str, Any]:
         ctx: dict[str, Any] = {**_START_CTX}
         for inp in inputs:
