@@ -23,25 +23,6 @@ def test_trivial_stencil():
     assert actual == expected
 
 
-def test_trivial_program():
-    set_at = ir.SetAt(
-        expr=im.as_fieldop("deref")("inp"),
-        domain=im.call("cartesian_domain")(),
-        target=im.ref("out"),
-    )
-    testee = ir.Program(
-        id="testee",
-        function_definitions=[],
-        params=[im.sym("inp"), im.sym("out")],
-        declarations=[],
-        body=[set_at],
-    )
-    expected = {"inp": {()}, "out": set()}
-
-    actual = TraceShifts.trace_program(testee)
-    assert actual == expected
-
-
 def test_shift():
     testee = im.lambda_("inp")(im.deref(im.shift("I", 1)("inp")))
     expected = [{(ir.OffsetLiteral(value="I"), ir.OffsetLiteral(value=1))}]

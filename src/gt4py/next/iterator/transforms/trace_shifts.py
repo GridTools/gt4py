@@ -338,9 +338,6 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
         assert all(el is Sentinel.VALUE for el in _primitive_constituents(result))
         return node
 
-    def visit_SetAt(self, node: ir.SetAt, *, ctx: dict[str, Any]) -> None:
-        self.visit(node.expr, ctx=ctx)
-
     def initialize_context(self, inputs: Iterable[ir.Sym | ir.SymRef]) -> dict[str, Any]:
         ctx: dict[str, Any] = {**_START_CTX}
         for inp in inputs:
@@ -361,9 +358,14 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
 
         args = [im.ref(f"__arg{i}") for i in range(num_args)]
 
+        old_recursionlimit = sys.getrecursionlimit()
+        sys.setrecursionlimit(100000000)
+
         instance = cls()
         ctx = instance.initialize_context(args)
         instance.visit(im.call(stencil)(*args), ctx=ctx)
+
+        sys.setrecursionlimit(old_recursionlimit)
 
         recorded_shifts = instance.shift_recorder.recorded_shifts
 
@@ -376,33 +378,6 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
 
         return param_shifts
 
-    @classmethod
-    def trace_program(cls, program: ir.Program, save_to_annex=False):
-        old_recursionlimit = sys.getrecursionlimit()
-        sys.setrecursionlimit(100000000)
-
-        instance = cls()
-        ctx = instance.initialize_context(program.params)
-
-        for stmt in program.body:
-            assert isinstance(stmt, ir.SetAt)
-            instance.visit(stmt, ctx=ctx)
-
-        sys.setrecursionlimit(old_recursionlimit)
-
-        recorded_shifts = instance.shift_recorder.recorded_shifts
-
-        if save_to_annex:
-            _save_to_annex(program, recorded_shifts)
-
-        param_shifts: dict[str, set[tuple[ir.OffsetLiteral, ...]]] = {}
-        for param in program.params:
-            param_shifts[str(param.id)] = recorded_shifts[id(param)]
-
-        return param_shifts
-
-
-trace_program = TraceShifts.trace_program
 
 trace_stencil = TraceShifts.trace_stencil
 
