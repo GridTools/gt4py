@@ -233,6 +233,7 @@ def test_aliased_function():
     assert result.type == int_type
 
 
+
 def test_late_offset_axis():
     mesh = simple_mesh()
 
