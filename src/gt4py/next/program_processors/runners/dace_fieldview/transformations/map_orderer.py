@@ -49,7 +49,7 @@ class MapIterationOrder(transformation.SingleStateTransformation):
     """
 
     leading_dim = properties.Property(
-        dtype=gtx_common.Dimension,
+        dtype=str,
         allow_none=True,
         desc="Dimension that should become the leading dimension.",
     )
@@ -58,12 +58,14 @@ class MapIterationOrder(transformation.SingleStateTransformation):
 
     def __init__(
         self,
-        leading_dim: Optional[gtx_common.Dimension] = None,
+        leading_dim: Optional[Union[gtx_common.Dimension, str]] = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
-        if leading_dim is not None:
+        if isinstance(leading_dim, gtx_common.Dimension):
+            self.leading_dim = dace_fieldview_util.get_map_variable(leading_dim)
+        elif leading_dim is not None:
             self.leading_dim = leading_dim
 
     @classmethod
@@ -87,7 +89,7 @@ class MapIterationOrder(transformation.SingleStateTransformation):
             return False
         map_entry: nodes.MapEntry = self.map_entry
         map_params: Sequence[str] = map_entry.map.params
-        map_var: str = dace_fieldview_util.get_map_variable(self.leading_dim)
+        map_var: str = self.leading_dim
 
         if map_var not in map_params:
             return False
@@ -108,7 +110,7 @@ class MapIterationOrder(transformation.SingleStateTransformation):
         """
         map_entry: nodes.MapEntry = self.map_entry
         map_params: list[str] = map_entry.map.params
-        map_var: str = dace_fieldview_util.get_map_variable(self.leading_dim)
+        map_var: str = self.leading_dim
 
         # This implementation will just swap the variable that is currently the last
         #  with the one that should be the last.

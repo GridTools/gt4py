@@ -14,7 +14,7 @@
 
 import copy
 import functools
-from typing import Any, Union
+from typing import Any, Optional, Union
 
 import dace
 from dace import properties, subsets, transformation
@@ -63,16 +63,18 @@ class KBlocking(transformation.SingleStateTransformation):
 
     def __init__(
         self,
-        blocking_size: int,
-        block_dim: Union[gtx_common.Dimension, str],
+        blocking_size: Optional[int] = None,
+        block_dim: Optional[Union[gtx_common.Dimension, str]] = None,
     ) -> None:
         super().__init__()
-        self.blocking_size = blocking_size
         if isinstance(block_dim, str):
             pass
         elif isinstance(block_dim, gtx_common.Dimension):
             block_dim = dace_fieldview_util.get_map_variable(block_dim)
-        self.block_dim = block_dim
+        if block_dim is not None:
+            self.block_dim = block_dim
+        if blocking_size is not None:
+            self.blocking_size = blocking_size
 
     @classmethod
     def expressions(cls) -> Any:
@@ -94,6 +96,11 @@ class KBlocking(transformation.SingleStateTransformation):
         - The map range must have stride one.
         - The partition must exists (see `partition_map_output()`).
         """
+        if self.block_dim is None:
+            raise ValueError("The blocking dimension was not specified.")
+        elif self.blocking_size is None:
+            raise ValueError("The blocking size was not specified.")
+
         map_entry: nodes.MapEntry = self.map_entry
         map_params: list[str] = map_entry.map.params
         map_range: subsets.Range = map_entry.map.range

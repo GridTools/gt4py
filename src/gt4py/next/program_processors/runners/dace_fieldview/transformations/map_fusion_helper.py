@@ -28,7 +28,7 @@ from gt4py.next.program_processors.runners.dace_fieldview.transformations import
 
 @properties.make_properties
 class MapFusionHelper(transformation.SingleStateTransformation):
-    """Contains common part of the map fusion for parallel and serial map fusion.
+    """Contains common part of the fusion for parallel and serial Map fusion.
 
     The transformation assumes that the SDFG obeys the principals outlined [here](https://hackmd.io/klvzLnzMR6GZBWtRU8HbDg#Requirements-on-SDFG).
     The main advantage of this structure is, that it is rather easy to determine
@@ -46,7 +46,7 @@ class MapFusionHelper(transformation.SingleStateTransformation):
         dtype=bool,
         default=False,
         allow_none=False,
-        desc="Only perform fusing if the Maps are on the top level.",
+        desc="Only perform fusing if the Maps are in the top level.",
     )
     only_inner_maps = properties.Property(
         dtype=bool,
@@ -91,7 +91,7 @@ class MapFusionHelper(transformation.SingleStateTransformation):
         """Performs basic checks if the maps can be fused.
 
         This function only checks constrains that are common between serial and
-        parallel map fusion process. It tests:
+        parallel map fusion process, which includes:
         - The scope of the maps.
         - The scheduling of the maps.
         - The map parameters.
@@ -123,6 +123,7 @@ class MapFusionHelper(transformation.SingleStateTransformation):
         elif self.only_toplevel_maps:
             if scope[map_entry_1] is not None:
                 return False
+            # TODO(phimuell): Figuring out why this is here.
             elif util.is_nested_sdfg(sdfg):
                 return False
 
@@ -145,7 +146,7 @@ class MapFusionHelper(transformation.SingleStateTransformation):
 
         This function will only rewire the edges, it does not remove the nodes
         themselves. Furthermore, this function should be called twice per Map,
-        once for the entries and then for the exits.
+        once for the entry and then for the exit.
 
         Args:
             from_node: Node from which the edges should be removed.
@@ -168,9 +169,8 @@ class MapFusionHelper(transformation.SingleStateTransformation):
                 state.remove_edge(empty_edge)
             empty_targets.add(empty_edge.dst)
 
-        # We now determine if which connections we have to migrate. We only consider
-        #  the in edges, for Map exits it does not matter, but for Map entries,
-        #  we need it for the dynamic map range feature.
+        # We now determine which edges we have to migrate, for this we are looking at
+        #  the incoming edges, because this allows us also to detect dynamic map ranges.
         for edge_to_move in list(state.in_edges(from_node)):
             assert isinstance(edge_to_move.dst_conn, str)
 
@@ -197,19 +197,18 @@ class MapFusionHelper(transformation.SingleStateTransformation):
                 # There is no other edge that we have to consider, so we just end here
                 continue
 
-            # We have a Passthrough connection, i.e. there exists a matching `OUT_`
-            #  connector thus we now have to migrate the two edges.
+            # We have a Passthrough connection, i.e. there exists a matching `OUT_`.
             old_conn = edge_to_move.dst_conn[3:]  # The connection name without prefix
             new_conn = to_node.next_connector(old_conn)
 
             to_node.add_in_connector("IN_" + new_conn)
-            from_node.remove_in_connector("IN_" + old_conn)
             for e in list(state.in_edges_by_connector(from_node, "IN_" + old_conn)):
                 helpers.redirect_edge(state, e, new_dst=to_node, new_dst_conn="IN_" + new_conn)
-            from_node.remove_out_connector("OUT_" + old_conn)
             to_node.add_out_connector("OUT_" + new_conn)
             for e in list(state.out_edges_by_connector(from_node, "OUT_" + old_conn)):
                 helpers.redirect_edge(state, e, new_src=to_node, new_src_conn="OUT_" + new_conn)
+            from_node.remove_in_connector("IN_" + old_conn)
+            from_node.remove_out_connector("OUT_" + old_conn)
 
         assert state.in_degree(from_node) == 0
         assert len(from_node.in_connectors) == 0
@@ -223,7 +222,7 @@ class MapFusionHelper(transformation.SingleStateTransformation):
         state: Union[SDFGState, SDFG],
         sdfg: SDFG,
     ) -> bool:
-        """Checks if the parameters of `map_1` are compatible with `map_1`.
+        """Checks if the parameters of `map_1` are compatible with `map_2`.
 
         The check follows the following rules:
         - The names of the map variables must be the same, i.e. no renaming
@@ -236,7 +235,8 @@ class MapFusionHelper(transformation.SingleStateTransformation):
         params_2: Sequence[str] = map_2.params
 
         # The maps are only fuseable if we have an exact match in the parameter names
-        #  this is because we do not do any renaming.
+        #  this is because we do not do any renaming. This is in accordance with the
+        #  rules.
         if set(params_1) != set(params_2):
             return False
 
@@ -265,11 +265,11 @@ class MapFusionHelper(transformation.SingleStateTransformation):
         Essentially this function checks if a transient might be needed in a
         different state in the SDFG, because it transmit information from
         one state to the other.
+        If only the name of the data container is passed the function will
+        first look for an corresponding access node.
 
-        If only the name of the transient is passed,
-        then the function will only check if it is used in another state.
-        If the access node and the state are passed the function will also
-        check if it is used inside the state.
+        The set of these "interstate transients" is computed once per SDFG.
+        The result is then cached internally for later reuse.
 
         Args:
             transient: The transient that should be checked.
@@ -292,16 +292,10 @@ class MapFusionHelper(transformation.SingleStateTransformation):
             shared_sdfg_transients: set[str] = self.shared_transients[sdfg]
 
         else:
-            # SDFG is not known so we have to compute it.
-            #  If a scalar is not a source node then it is not included in this set.
-            #  Thus we do not have to look for it, instead we will check for them
-            #  explicitly.
-            def go_deeper(node: nodes.Node, graph: Any) -> bool:
-                return not isinstance(node, nodes.NestedSDFG)
-
+            # SDFG is not known so we have to compute the set.
             shared_sdfg_transients = set()
-            # TODO(phimuell): use `sdfg.all_nodes_recursive(go_deeper)` if it is available.
             for state in sdfg.all_states():
+                # TODO(phimuell): Use `all_nodes_recursive()` once it is available.
                 shared_sdfg_transients.update(
                     filter(
                         lambda node: isinstance(node, nodes.AccessNode)
@@ -371,7 +365,7 @@ class MapFusionHelper(transformation.SingleStateTransformation):
             If such a decomposition exists the function will return the three sets
             mentioned above in the same order.
             In case the decomposition does not exist, i.e. the maps can not be fused
-            serially, the function returns `None`.
+            the function returns `None`.
 
         Args:
             state: The in which the two maps are located.
@@ -397,11 +391,6 @@ class MapFusionHelper(transformation.SingleStateTransformation):
                 return None
             processed_inter_nodes.add(intermediate_node)
 
-            # Empty Memlets are currently not supported.
-            #  However, they are much more important in entry nodes.
-            if out_edge.data.is_empty():
-                return None
-
             # Now let's look at all nodes that are downstream of the intermediate node.
             #  This, among other things, will tell us, how we have to handle this node.
             downstream_nodes = util.all_nodes_between(
@@ -416,17 +405,22 @@ class MapFusionHelper(transformation.SingleStateTransformation):
             if downstream_nodes is None:
                 pure_outputs.add(out_edge)
                 continue
-            #
 
             # The following tests are _after_ we have determined if we have a pure
             #  output node, because this allows us to handle more exotic pure node
-            #  cases, as handling them is essentially rerouting an edge.
+            #  cases, as handling them is essentially rerouting an edge, whereas
+            #  handling intermediate nodes is much more complicated.
+
+            # Empty Memlets are only allowed if they are in `\mathbb{P}`, which
+            #  is also the only place they really make sense (for a map exit).
+            #  Thus if we now found an empty Memlet we reject it.
+            if out_edge.data.is_empty():
+                return None
 
             # In case the intermediate has more than one entry, all must come from the
             #  first map, otherwise we can not fuse them. Currently we restrict this
             #  even further by saying that it has only one incoming Memlet.
             if state.in_degree(intermediate_node) != 1:
-                # TODO(phimuell): handle this case.
                 return None
 
             # It can happen that multiple edges converges at the `IN_` connector

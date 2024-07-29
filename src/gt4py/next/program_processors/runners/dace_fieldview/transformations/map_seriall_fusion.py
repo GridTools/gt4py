@@ -52,8 +52,6 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
 
     Notes:
         - This transformation modifies more nodes than it matches!
-        - The consolidate edge transformation (part of simplify) is probably
-            harmful to the applicability of this transformation.
     """
 
     map_exit1 = transformation.transformation.PatternNode(nodes.MapExit)
@@ -73,7 +71,8 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
         The transformation matches the exit node of the top Map that is connected to
         an access node that again is connected to the entry node of the second Map.
         An important note is, that the transformation operates not just on these nodes,
-        but more or less anything that has an outgoing connection of the first Map.
+        but more or less anything that has an outgoing connection of the first Map,
+        and is connected to the second map.
         """
         return [dace.sdfg.utils.node_path_graph(cls.map_exit1, cls.access_node, cls.map_entry2)]
 
@@ -131,7 +130,7 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
         """
         # NOTE: `self.map_*` actually stores the ID of the node.
         #  once we start adding and removing nodes it seems that their ID changes.
-        #  Thus we have to save them here.
+        #  Thus we have to save them here, this is a known behaviour in DaCe.
         assert isinstance(graph, dace.SDFGState)
         assert isinstance(self.map_exit1, nodes.MapExit)
         assert isinstance(self.map_entry2, nodes.MapEntry)
@@ -149,7 +148,6 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
         assert output_partition is not None  # Make MyPy happy.
         pure_outputs, exclusive_outputs, shared_outputs = output_partition
 
-        # Handling the outputs
         if len(exclusive_outputs) != 0:
             self.handle_intermediate_set(
                 intermediate_outputs=exclusive_outputs,
@@ -210,10 +208,8 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
 
         The function is able to handle both the shared and exclusive intermediate
         output set, see `partition_first_outputs()`. The main difference is that
-        in exclusive mode is that the intermediate node will be fully removed from
+        in exclusive mode the intermediate nodes will be fully removed from
         the SDFG. While in shared mode the intermediate node will be preserved.
-        However, the function just performs some rewiring of the outputs and
-        manipulation of the intermediate node set.
 
         Args:
             intermediate_outputs: The set of outputs, that should be processed.
@@ -226,10 +222,7 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
 
         Notes:
             Before the transformation the `state` does not be to be valid and
-            after this function has run the state is invalid.
-            The function is static and the map nodes have to be explicitly passed
-            because the `self.map_*` properties are modified by the modification.
-            This is a known behaviour in DaCe.
+            after this function has run the state is (most likely) invalid.
 
         Todo:
             Rewrite using `MemletTree`.
@@ -244,20 +237,18 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
         #  Note that this is still not enough as the dimensionality might be different.
         memlet_repl: dict[str, int] = {str(param): 0 for param in map_entry_2.map.params}
 
-        # Now we will iterate over all intermediate edge and process them.
+        # Now we will iterate over all intermediate edges and process them.
         #  If not stated otherwise the comments assume that we run in exclusive mode.
         for out_edge in intermediate_outputs:
-            # This is the intermediate node that, depending on the mode, we want
-            #  to get rid off, in shared mode it materialize, but now at the
-            #  exit of the second Map, in exclusive mode it will be removed.
+            # This is the intermediate node that, that we want to get rid of.
+            #  In shared mode we want to recreate it after the second map.
             inter_node: nodes.AccessNode = out_edge.dst
             inter_name = inter_node.data
             inter_desc = inter_node.desc(sdfg)
             inter_shape = inter_desc.shape
 
-            # Now we will determine the shape of the new intermediate, which has some
-            #  issue. The size of this temporary is given by the Memlet that
-            #  goes into the first map exit.
+            # Now we will determine the shape of the new intermediate. This size of
+            #  this temporary is given by the Memlet that goes into the first map exit.
             pre_exit_edges = list(
                 state.in_edges_by_connector(map_exit_1, "IN_" + out_edge.src_conn[4:])
             )
@@ -268,7 +259,7 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
 
             # Over approximation will leave us with some unneeded size one dimensions.
             #  That are known to cause some troubles, so we will now remove them.
-            squeezed_dims: list[int] = []
+            squeezed_dims: list[int] = []  # These are the dimensions we removed.
             new_inter_shape: list[int] = []  # This is the final shape of the new intermediate.
             for dim, (proposed_dim_size, full_dim_size) in enumerate(
                 zip(new_inter_shape_raw, inter_shape)
@@ -434,14 +425,6 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
                 map_entry_2.remove_in_connector(in_conn_name)
                 map_entry_2.remove_out_connector(out_conn_name)
 
-            # TODO: Apply this modification to Memlets
-            # for neighbor in state.all_edges(local_node):
-            #    for e in state.memlet_tree(neighbor):
-            #        if e.data.data == local_name:
-            #            continue  # noqa: ERA001
-            #        e.data.data = local_name  # noqa: ERA001
-            #        e.data.subset.offset(old_edge.data.subset, negative=True)  # noqa: ERA001
-
             if is_exclusive_set:
                 # In exclusive mode the old intermediate node is no longer needed.
                 assert state.degree(inter_node) == 1
@@ -459,10 +442,10 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
                 state.remove_edge(pre_exit_edge)
                 map_exit_1.remove_in_connector(pre_exit_edge.dst_conn)
 
-                # This is the Memlet that goes from the map internal intermediate temporary node to the Map output.
-                #  This will essentially restore or preserve the output for the intermediate node.
-                #  It is important that we use the data that `preExitEdge` was used.
-                #   On CPU it works but for some reasons not on GPU.
+                # This is the Memlet that goes from the map internal intermediate
+                #  temporary node to the Map output. This will essentially restore
+                #  or preserve the output for the intermediate node. It is important
+                #  that we use the data that `preExitEdge` was used.
                 new_exit_memlet = copy.deepcopy(pre_exit_edge.data)
                 assert new_exit_memlet.data == inter_name
                 new_exit_memlet.subset = pre_exit_edge.data.dst_subset
