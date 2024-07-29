@@ -25,48 +25,7 @@ from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace_fieldview import (
     transformations as gtx_transformations,
 )
-
-
-@overload
-def _count_nodes(
-    graph: Union[dace.SDFG, dace.SDFGState],
-    node_type: tuple[type, ...] | type,
-    return_nodes: Literal[False],
-) -> int: ...
-
-
-@overload
-def _count_nodes(
-    graph: Union[dace.SDFG, dace.SDFGState],
-    node_type: tuple[type, ...] | type,
-    return_nodes: Literal[True],
-) -> list[dace_nodes.Node]: ...
-
-
-def _count_nodes(
-    graph: Union[dace.SDFG, dace.SDFGState],
-    node_type: tuple[type, ...] | type,
-    return_nodes: bool = False,
-) -> Union[int, list[dace_nodes.Node]]:
-    """Counts the number of nodes in of a particular type in `graph`.
-
-    If `graph` is an SDFGState then only count the nodes inside this state,
-    but if `graph` is an SDFG count in all states.
-
-    Args:
-        graph: The graph to scan.
-        node_type: The type or sequence of types of nodes to look for.
-    """
-
-    states = graph.states() if isinstance(graph, dace.SDFG) else [graph]
-    found_nodes: list[dace_nodes.Node] = []
-    for state_nodes in states:
-        for node in state_nodes.nodes():
-            if isinstance(node, node_type):
-                found_nodes.append(node)
-    if return_nodes:
-        return found_nodes
-    return len(found_nodes)
+from . import util
 
 
 def _make_serial_sdfg_1(
@@ -197,19 +156,19 @@ def test_exclusive_itermediate():
     sdfg = _make_serial_sdfg_1(N)
 
     # Now apply the optimizations.
-    assert _count_nodes(sdfg, dace_nodes.MapEntry) == 2
+    assert util._count_nodes(sdfg, dace_nodes.MapEntry) == 2
     sdfg.apply_transformations(
         gtx_transformations.SerialMapFusion(),
         validate=True,
         validate_all=True,
     )
-    assert _count_nodes(sdfg, dace_nodes.MapEntry) == 1
+    assert util._count_nodes(sdfg, dace_nodes.MapEntry) == 1
     assert "tmp" not in sdfg.arrays
 
     # Test if the intermediate is a scalar
     intermediate_nodes: list[dace_nodes.Node] = [
         node
-        for node in _count_nodes(sdfg, dace_nodes.AccessNode, True)
+        for node in util._count_nodes(sdfg, dace_nodes.AccessNode, True)
         if node.data not in ["a", "b"]
     ]
     assert len(intermediate_nodes) == 1
@@ -234,19 +193,19 @@ def test_shared_itermediate():
     sdfg.arrays["tmp"].transient = False
 
     # Now apply the optimizations.
-    assert _count_nodes(sdfg, dace_nodes.MapEntry) == 2
+    assert util._count_nodes(sdfg, dace_nodes.MapEntry) == 2
     sdfg.apply_transformations(
         gtx_transformations.SerialMapFusion(),
         validate=True,
         validate_all=True,
     )
-    assert _count_nodes(sdfg, dace_nodes.MapEntry) == 1
+    assert util._count_nodes(sdfg, dace_nodes.MapEntry) == 1
     assert "tmp" in sdfg.arrays
 
     # Test if the intermediate is a scalar
     intermediate_nodes: list[dace_nodes.Node] = [
         node
-        for node in _count_nodes(sdfg, dace_nodes.AccessNode, True)
+        for node in util._count_nodes(sdfg, dace_nodes.AccessNode, True)
         if node.data not in ["a", "b", "tmp"]
     ]
     assert len(intermediate_nodes) == 1
@@ -268,7 +227,7 @@ def test_pure_output_node():
     """Tests the path of a pure intermediate."""
     N = 10
     sdfg = _make_serial_sdfg_2(N)
-    assert _count_nodes(sdfg, dace_nodes.MapEntry) == 3
+    assert util._count_nodes(sdfg, dace_nodes.MapEntry) == 3
 
     # The first fusion will only bring it down to two maps.
     sdfg.apply_transformations(
@@ -276,13 +235,13 @@ def test_pure_output_node():
         validate=True,
         validate_all=True,
     )
-    assert _count_nodes(sdfg, dace_nodes.MapEntry) == 2
+    assert util._count_nodes(sdfg, dace_nodes.MapEntry) == 2
     sdfg.apply_transformations(
         gtx_transformations.SerialMapFusion(),
         validate=True,
         validate_all=True,
     )
-    assert _count_nodes(sdfg, dace_nodes.MapEntry) == 1
+    assert util._count_nodes(sdfg, dace_nodes.MapEntry) == 1
 
     a = np.random.rand(N, N)
     b = np.empty_like(a)
@@ -304,9 +263,9 @@ def test_array_intermediate():
     """
     N = 10
     sdfg = _make_serial_sdfg_1(N)
-    assert _count_nodes(sdfg, dace_nodes.MapEntry) == 2
+    assert util._count_nodes(sdfg, dace_nodes.MapEntry) == 2
     sdfg.apply_transformations_repeated([dace_dataflow.MapExpansion])
-    assert _count_nodes(sdfg, dace_nodes.MapEntry) == 4
+    assert util._count_nodes(sdfg, dace_nodes.MapEntry) == 4
 
     # Now perform the fusion
     sdfg.apply_transformations(
@@ -314,7 +273,7 @@ def test_array_intermediate():
         validate=True,
         validate_all=True,
     )
-    map_entries = _count_nodes(sdfg, dace_nodes.MapEntry, return_nodes=True)
+    map_entries = util._count_nodes(sdfg, dace_nodes.MapEntry, return_nodes=True)
 
     scope = next(iter(sdfg.states())).scope_dict()
     assert len(map_entries) == 3
@@ -325,7 +284,9 @@ def test_array_intermediate():
 
     # Find the access node that is the new intermediate node.
     inner_access_nodes: list[dace_nodes.AccessNode] = [
-        node for node in _count_nodes(sdfg, dace_nodes.AccessNode, True) if scope[node] is not None
+        node
+        for node in util._count_nodes(sdfg, dace_nodes.AccessNode, True)
+        if scope[node] is not None
     ]
     assert len(inner_access_nodes) == 1
     inner_access_node = inner_access_nodes[0]
@@ -349,7 +310,7 @@ def test_interstate_transient():
     """
     N = 10
     sdfg = _make_serial_sdfg_2(N)
-    assert _count_nodes(sdfg, dace_nodes.MapEntry) == 3
+    assert util._count_nodes(sdfg, dace_nodes.MapEntry) == 3
     assert sdfg.number_of_nodes() == 1
 
     # Now add the new state and the new output.
@@ -375,8 +336,8 @@ def test_interstate_transient():
     assert "tmp_1" in sdfg.arrays
     assert "tmp_2" not in sdfg.arrays
     assert sdfg.number_of_nodes() == 2
-    assert _count_nodes(head_state, dace_nodes.MapEntry) == 1
-    assert _count_nodes(new_state, dace_nodes.MapEntry) == 1
+    assert util._count_nodes(head_state, dace_nodes.MapEntry) == 1
+    assert util._count_nodes(new_state, dace_nodes.MapEntry) == 1
 
     a = np.random.rand(N, N)
     b = np.empty_like(a)
