@@ -175,7 +175,10 @@ def _collect_offset_definitions(
             connectivity: common.Connectivity = dim_or_connectivity
             for dim in [connectivity.origin_axis, connectivity.neighbor_axis]:
                 if dim.kind != common.DimensionKind.HORIZONTAL:
-                    raise NotImplementedError()
+                    offset_definitions[dim.value] = TagDefinition(
+                        name=Sym(id=dim.value), alias=_vertical_dimension
+                    )
+                    # raise NotImplementedError()
                 offset_definitions[dim.value] = TagDefinition(
                     name=Sym(id=dim.value), alias=_horizontal_dimension
                 )
