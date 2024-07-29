@@ -122,7 +122,7 @@ class LambdaToTasklet(eve.NodeVisitor):
     sdfg: dace.SDFG
     state: dace.SDFGState
     subgraph_builder: gtir_to_sdfg.DataflowBuilder
-    reduce_identity: Optional[ValueExpr | SymbolExpr]
+    reduce_identity: Optional[SymbolExpr]
     input_connections: list[InputConnection]
     symbol_map: dict[str, IteratorExpr | MemletExpr | SymbolExpr]
 
@@ -131,16 +131,12 @@ class LambdaToTasklet(eve.NodeVisitor):
         sdfg: dace.SDFG,
         state: dace.SDFGState,
         subgraph_builder: gtir_to_sdfg.DataflowBuilder,
-        reduce_identity_node: Optional[dace.nodes.AccessNode],
+        reduce_identity: Optional[SymbolExpr],
     ):
         self.sdfg = sdfg
         self.state = state
         self.subgraph_builder = subgraph_builder
-        self.reduce_identity = (
-            ValueExpr(reduce_identity_node, reduce_identity_node.desc(sdfg).dtype)
-            if reduce_identity_node
-            else None
-        )
+        self.reduce_identity = reduce_identity
         self.input_connections = []
         self.symbol_map = {}
 
@@ -382,40 +378,13 @@ class LambdaToTasklet(eve.NodeVisitor):
         index_connector = "__index"
         if offset_provider.has_skip_values:
             assert self.reduce_identity is not None
-
-            if isinstance(self.reduce_identity, SymbolExpr):
-                tasklet_node = self._add_tasklet(
-                    "gather_neighbors",
-                    {"__field", index_connector},
-                    {"__val"},
-                    f"__val = __field[{index_connector}] if {index_connector} != {gtx_common._DEFAULT_SKIP_VALUE} else {self.reduce_identity.dtype}({self.reduce_identity.value})",
-                )
-            else:
-                tasklet_node = self._add_tasklet(
-                    "gather_neighbors_with_skip_values",
-                    {"__field", "__identity", index_connector},
-                    {"__val"},
-                    f"__val = __field[{index_connector}] if {index_connector} != {gtx_common._DEFAULT_SKIP_VALUE} else __identity",
-                )
-                identity_view, _ = self.sdfg.add_view(
-                    "identity_view",
-                    (1,),
-                    self.reduce_identity.dtype,
-                    find_new_name=True,
-                )
-                identity_node = self.state.add_access(identity_view)
-                self._add_entry_memlet_path(
-                    self.reduce_identity.node,
-                    sbs.Range.from_string("0"),
-                    identity_node,
-                )
-                self.state.add_memlet_path(
-                    identity_node,
-                    me,
-                    tasklet_node,
-                    dst_conn="__identity",
-                    memlet=dace.Memlet(data=identity_view, subset="0"),
-                )
+            assert self.reduce_identity.dtype == field_desc.dtype
+            tasklet_node = self._add_tasklet(
+                "gather_neighbors_with_skip_values",
+                {"__field", index_connector},
+                {"__val"},
+                f"__val = __field[{index_connector}] if {index_connector} != {gtx_common._DEFAULT_SKIP_VALUE} else {self.reduce_identity.dtype}({self.reduce_identity.value})",
+            )
 
         else:
             tasklet_node = self._add_tasklet(

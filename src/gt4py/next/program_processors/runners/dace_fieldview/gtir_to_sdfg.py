@@ -386,7 +386,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         symbol, the parameter will shadow the previous symbol during traversal of the lambda expression.
         """
         lambda_symbols = let_symbols | {
-            str(p.id): (temp_node.data, type_)
+            str(p.id): (gtir.SymRef(id=temp_node.data), type_)
             for p, (temp_node, type_) in zip(node.params, args, strict=True)
         }
 

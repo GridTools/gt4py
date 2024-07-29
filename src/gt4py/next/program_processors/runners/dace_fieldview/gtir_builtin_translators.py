@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 
 
 IteratorIndexDType: TypeAlias = dace.int32  # type of iterator indexes
-LetSymbol: TypeAlias = tuple[str, ts.FieldType | ts.ScalarType]
+LetSymbol: TypeAlias = tuple[gtir.Literal | gtir.SymRef, ts.FieldType | ts.ScalarType]
 TemporaryData: TypeAlias = tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]
 
 
@@ -176,26 +176,27 @@ def translate_as_field_op(
     domain = dace_fieldview_util.get_domain(domain_expr)
     assert isinstance(node.type, ts.FieldType)
 
-    reduce_identity_node: Optional[dace.node.AccessNode] = None
+    reduce_identity: Optional[gtir_to_tasklet.SymbolExpr] = None
     if cpm.is_applied_reduce(stencil_expr.expr):
         if "reduce" in let_symbols:
             raise NotImplementedError("nested reductions not supported.")
 
         _, _, reduce_identity = gtir_to_tasklet.get_reduce_params(stencil_expr.expr)
 
-        reduce_symbol_state = sdfg.add_state_before(state, f"{state.label}_symbols")
-        reduce_identity_node, type_ = sdfg_builder.visit(
-            gtir.Literal(value=str(reduce_identity.value), type=stencil_expr.expr.type),
-            sdfg=sdfg,
-            head_state=reduce_symbol_state,
-            let_symbols={},
-        )[0]
-        reduce_identity_node = state.add_access(reduce_identity_node.data)
-        let_symbols = let_symbols | {"reduce": (reduce_identity_node, type_)}
+        let_symbols = let_symbols | {
+            "reduce": (
+                gtir.Literal(value=str(reduce_identity.value), type=stencil_expr.expr.type),
+                reduce_identity.dtype,
+            )
+        }
+
     elif "reduce" in let_symbols:
-        reduce_identity_node, _ = let_symbols["reduce"]
-    else:
-        reduce_identity_node = None
+        reduce_symbol, _ = let_symbols["reduce"]
+        assert isinstance(reduce_symbol, gtir.Literal)
+        assert reduce_symbol.type == stencil_expr.expr.type
+        reduce_identity = gtir_to_tasklet.SymbolExpr(
+            reduce_symbol.value, dace_fieldview_util.as_dace_type(reduce_symbol.type)
+        )
 
     # first visit the list of arguments and build a symbol map
     stencil_args = [
@@ -203,7 +204,7 @@ def translate_as_field_op(
     ]
 
     # represent the field operator as a mapped tasklet graph, which will range over the field domain
-    taskgen = gtir_to_tasklet.LambdaToTasklet(sdfg, state, sdfg_builder, reduce_identity_node)
+    taskgen = gtir_to_tasklet.LambdaToTasklet(sdfg, state, sdfg_builder, reduce_identity)
     input_connections, output_expr = taskgen.visit(stencil_expr, args=stencil_args)
     assert isinstance(output_expr, gtir_to_tasklet.ValueExpr)
     output_desc = output_expr.node.desc(sdfg)
@@ -254,10 +255,6 @@ def translate_as_field_op(
         src_conn=last_node_connector,
         memlet=dace.Memlet(data=field_node.data, subset=",".join(output_subset)),
     )
-
-    # cleanup: remove unused access node
-    if cpm.is_applied_reduce(stencil_expr.expr) and state.degree(reduce_identity_node) == 0:
-        state.remove_node(reduce_identity_node)
 
     return [(field_node, field_type)]
 
@@ -370,7 +367,11 @@ def translate_symbol_ref(
             # everytime they are accessed. It is therefore possible that multiple access
             # nodes are created in one state for the same data container. We rely
             # on the simplify to remove duplicated access nodes.
-            sym_value, data_type = let_symbols[sym_value]
+            let_node, data_type = let_symbols[sym_value]
+            if isinstance(let_node, gtir.Literal):
+                return sdfg_builder.visit(let_node)
+            else:
+                sym_value = str(let_node.id)
         else:
             data_type = sdfg_builder.get_symbol_type(sym_value)
         temp_name = sym_value
