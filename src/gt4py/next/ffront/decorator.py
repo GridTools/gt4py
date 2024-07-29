@@ -205,7 +205,6 @@ class Program:
                 stacklevel=2,
             )
             with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
-                # TODO(ricoh): check if rewriting still needed
                 rewritten_args, size_args, kwargs = past_process_args._process_args(
                     self.past_stage.past_node, args, kwargs
                 )
