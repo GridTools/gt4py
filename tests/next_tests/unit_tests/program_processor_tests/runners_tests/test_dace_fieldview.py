@@ -954,7 +954,9 @@ def test_gtir_reduce_with_skip_values():
 
     e = np.random.rand(SKIP_VALUE_MESH.num_edges)
     v_ref = [
-        itertools.reduce(lambda x, y: x + y, [e[i] if i != -1 else 0.0 for i in v2e_neighbors], init_value)
+        itertools.reduce(
+            lambda x, y: x + y, [e[i] if i != -1 else 0.0 for i in v2e_neighbors], init_value
+        )
         for v2e_neighbors in connectivity_V2E.table
     ]
 
