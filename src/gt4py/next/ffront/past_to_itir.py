@@ -38,6 +38,39 @@ from gt4py.next.type_system import type_info, type_specifications as ts
 
 
 def past_to_itir(inp: AOT_PRG) -> stages.AOTProgram:
+    """
+    Lower a PAST program definition to Iterator IR.
+
+    Example:
+        >>> from gt4py import next as gtx
+        >>> from gt4py.next.otf import arguments
+        >>> from gt4py.next.otf import arguments
+        >>> IDim = gtx.Dimension("I")
+
+        >>> @gtx.field_operator
+        ... def copy(a: gtx.Field[[IDim], gtx.float32]) -> gtx.Field[[IDim], gtx.float32]:
+        ...     return a
+
+        >>> @gtx.program
+        ... def copy_program(a: gtx.Field[[IDim], gtx.float32], out: gtx.Field[[IDim], gtx.float32]):
+        ...     copy(a, out=out)
+
+        >>> compile_time_args = arguments.CompileTimeArgs.from_concrete(
+        ...     *(
+        ...         arguments.CompileTimeArg(param.type)
+        ...         for param in copy_program.past_stage.past_node.params
+        ...     ),
+        ...     offset_provider={"I", IDim},
+        ... )  # this will include field dim size arguments automatically.
+
+        >>> itir_copy = past_to_itir(workflow.DataArgsPair(copy_program.past_stage, compile_time_args))
+
+        >>> print(itir_copy.data.id)
+        copy_program
+
+        >>> print(type(itir_copy.data))
+        <class 'gt4py.next.iterator.ir.FencilDefinition'>
+    """
     all_closure_vars = transform_utils._get_closure_vars_recursively(inp.data.closure_vars)
     offsets_and_dimensions = transform_utils._filter_closure_vars_by_type(
         all_closure_vars, fbuiltins.FieldOffset, common.Dimension
@@ -67,7 +100,7 @@ def past_to_itir(inp: AOT_PRG) -> stages.AOTProgram:
 
 
 def past_to_itir_factory(cached: bool = True) -> workflow.Workflow[AOT_PRG, stages.AOTProgram]:
-    wf = past_to_itir
+    wf = workflow.make_step(past_to_itir)
     if cached:
         wf = workflow.CachedStep(wf, hash_function=ffront_stages.fingerprint_stage)
     return wf

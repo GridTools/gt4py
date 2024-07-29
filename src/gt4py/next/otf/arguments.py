@@ -31,6 +31,8 @@ DATA_T = typing.TypeVar("DATA_T")
 
 @dataclasses.dataclass(frozen=True)
 class JITArgs:
+    """Concrete (runtime) arguments to a GTX program in a format that can be passed into the toolchain."""
+
     args: tuple[Any, ...]
     kwargs: dict[str, Any]
 
@@ -41,6 +43,8 @@ class JITArgs:
 
 @dataclasses.dataclass(frozen=True)
 class CompileTimeArg:
+    """Standin (at compile-time) for a GTX program argument, retaining only the type information."""
+
     gt_type: ts.TypeSpec
 
     def __gt_type__(self) -> ts.TypeSpec:
@@ -58,6 +62,8 @@ class CompileTimeArg:
 
 @dataclasses.dataclass(frozen=True)
 class CompileTimeConnectivity(common.Connectivity):
+    """Compile-time standin for a GTX connectivity, retaining everything except the connectivity tables."""
+
     max_neighbors: int
     has_skip_values: bool
     origin_axis: common.Dimension
@@ -77,6 +83,8 @@ class CompileTimeConnectivity(common.Connectivity):
 
 @dataclasses.dataclass(frozen=True)
 class CompileTimeArgs:
+    """Compile-time standins for arguments to a GTX program to be used in ahead-of-time compilation."""
+
     args: tuple[CompileTimeArg | tuple, ...]
     kwargs: dict[str, CompileTimeArg | tuple]
     offset_provider: dict[str, common.Connectivity | common.Dimension]
@@ -84,6 +92,7 @@ class CompileTimeArgs:
 
     @classmethod
     def from_concrete_no_size(cls, *args: Any, **kwargs: Any) -> Self:
+        """Convert concrete GTX program arguments into their compile-time counterparts."""
         compile_args = tuple(CompileTimeArg.from_concrete(arg) for arg in args)
         kwargs_copy = kwargs.copy()
         offset_provider = kwargs_copy.pop("offset_provider", {})
@@ -99,6 +108,7 @@ class CompileTimeArgs:
 
     @classmethod
     def from_concrete(cls, *args: Any, **kwargs: Any) -> Self:
+        """Convert concrete GTX program arguments to compile-time, adding (compile-time) dimension size arguments."""
         no_size = cls.from_concrete_no_size(*args, **kwargs)
         return cls(
             args=(*no_size.args, *iter_size_compile_args(no_size.args)),
@@ -123,6 +133,7 @@ def adapted_jit_to_aot_args_factory() -> (
         workflow.DataArgsPair[DATA_T, JITArgs], workflow.DataArgsPair[DATA_T, CompileTimeArgs]
     ]
 ):
+    """Wrap `jit_to_aot` into a workflow adapter to fit into backend transform workflows."""
     return workflow.ArgsOnlyAdapter(jit_to_aot_args)
 
 

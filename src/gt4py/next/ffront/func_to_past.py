@@ -35,20 +35,29 @@ from gt4py.next.otf import workflow
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
-@workflow.make_step
 def func_to_past(inp: DSL_PRG) -> PRG:
     """
     Turn a DSL program definition into a PAST Program definition, adding metadata.
 
     Examples:
-    >>> from gt4py import next as gtx
-    >>> IDim = gtx.Dimension("I")
-    >>> def dsl_program(a: gtx.Field[[IDim], gtx.float32]):
-    ...     return a
-    >>> dsl_definition = gtx.ffront.stages.ProgramDefinition(definition=dsl_program)
-    >>> past_definition = func_to_past(dsl_definition)
-    >>> print(past_definition.past_node.id)
-    dsl_program
+
+        >>> from gt4py import next as gtx
+        >>> IDim = gtx.Dimension("I")
+
+        >>> @gtx.field_operator
+        ... def copy(a: gtx.Field[[IDim], gtx.float32]) -> gtx.Field[[IDim], gtx.float32]:
+        ...     return a
+
+        >>> def dsl_program(a: gtx.Field[[IDim], gtx.float32], out: gtx.Field[[IDim], gtx.float32]):
+        ...     copy(a, out=out)
+
+        >>> dsl_definition = gtx.ffront.stages.ProgramDefinition(definition=dsl_program)
+        >>> past_definition = func_to_past(dsl_definition)
+
+        >>> print(past_definition.past_node.id)
+        dsl_program
+
+        >>> assert "copy" in past_definition.closure_vars
     """
     source_def = source_utils.SourceDefinition.from_function(inp.definition)
     closure_vars = source_utils.get_closure_vars_from_function(inp.definition)
@@ -61,19 +70,25 @@ def func_to_past(inp: DSL_PRG) -> PRG:
     )
 
 
-# TODO(ricoh): turn this docstring from a note to self into something more useful
-def adapted_func_to_past_factory(cached: bool = False) -> workflow.Workflow[AOT_DSL_PRG, AOT_PRG]:
+def func_to_past_factory(cached: bool = False) -> workflow.Workflow[DSL_PRG, PRG]:
     """
-    Wrap an adapter around the DSL definition -> PAST definition step to fit into transform toolchains.
+    Wrap `func_to_past` in a chainable and optionally cached workflow step.
 
     Caching is switched off by default, because whether recompiling is necessary can only be known after
     the closure variables have been collected (which is done in this step). In special cases where it can
     be guaranteed that the closure variables do not change, switching caching on should be safe.
     """
-    wf = func_to_past
+    wf = workflow.make_step(func_to_past)
     if cached:
         wf = workflow.CachedStep(wf, hash_function=ffront_stages.fingerprint_stage)
-    return workflow.DataOnlyAdapter(wf)
+    return wf
+
+
+def adapted_func_to_past_factory(**kwargs: Any) -> workflow.Workflow[AOT_DSL_PRG, AOT_PRG]:
+    """
+    Wrap an adapter around the DSL definition -> PAST definition step to fit into transform toolchains.
+    """
+    return workflow.DataOnlyAdapter(func_to_past_factory(**kwargs))
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)

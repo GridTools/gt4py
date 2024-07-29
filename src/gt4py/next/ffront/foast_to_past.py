@@ -32,6 +32,13 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 
 @dataclasses.dataclass(frozen=True)
 class ItirShim:
+    """
+    A wrapper for a FOAST operator definition with `__gt_*__` special methods.
+
+    Can be placed in a PAST program definition's closure variables so the program
+    lowering has access to the relevant information.
+    """
+
     definition: AOT_FOP
     foast_to_itir: workflow.Workflow[AOT_FOP, itir.Expr]
 
@@ -47,6 +54,39 @@ class ItirShim:
 
 @dataclasses.dataclass(frozen=True)
 class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
+    """
+    Generate a PAST program definition from a FOAST operator definition.
+
+    This workflow step must must be given a FOAST -> ITIR lowering step so that it can place
+    valid `ItirShim` instances into the closure variables of the generated program.
+
+    Example:
+        >>> from gt4py import next as gtx
+        >>> from gt4py.next.otf import arguments
+        >>> IDim = gtx.Dimension("I")
+
+        >>> @gtx.field_operator
+        ... def copy(a: gtx.Field[[IDim], gtx.float32]) -> gtx.Field[[IDim], gtx.float32]:
+        ...     return a
+
+        >>> op_to_prog = OperatorToProgram(foast_to_itir.adapted_foast_to_itir_factory())
+
+        >>> compile_time_args = arguments.CompileTimeArgs.from_concrete_no_size(
+        ...     *(
+        ...         arguments.CompileTimeArg(param.type)
+        ...         for param in copy.foast_stage.foast_node.definition.params
+        ...     ),
+        ...     offset_provider={"I", IDim},
+        ... )
+
+        >>> copy_program = op_to_prog(workflow.DataArgsPair(copy.foast_stage, compile_time_args))
+
+        >>> print(copy_program.data.past_node.id)
+        __field_operator_copy
+
+        >>> assert copy_program.data.closure_vars["copy"].definition.data is copy.foast_stage
+    """
+
     foast_to_itir: workflow.Workflow[AOT_FOP, itir.Expr]
 
     def __call__(self, inp: AOT_FOP) -> AOT_PRG:
@@ -129,6 +169,7 @@ def operator_to_program_factory(
     foast_to_itir_step: Optional[workflow.Workflow[AOT_FOP, itir.Expr]] = None,
     cached: bool = True,
 ) -> workflow.Workflow[AOT_FOP, AOT_PRG]:
+    """Optionally wrap `OperatorToProgram` in a `CachedStep`."""
     wf: workflow.Workflow[AOT_FOP, AOT_PRG] = OperatorToProgram(
         foast_to_itir_step or foast_to_itir.adapted_foast_to_itir_factory()
     )

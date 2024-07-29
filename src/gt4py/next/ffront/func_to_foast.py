@@ -47,8 +47,28 @@ from gt4py.next.otf import workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
-@workflow.make_step
 def func_to_foast(inp: DSL_FOP) -> FOP:
+    """
+    Turn a DSL field operator definition into a FOAST operator definition, adding metadata.
+
+    Examples:
+
+        >>> from gt4py import next as gtx
+        >>> IDim = gtx.Dimension("I")
+
+        >>> const = gtx.float32(2.0)
+        >>> def dsl_operator(a: gtx.Field[[IDim], gtx.float32]) -> gtx.Field[[IDim], gtx.float32]:
+        ...     return a * const
+
+        >>> dsl_operator_def = gtx.ffront.stages.FieldOperatorDefinition(definition=dsl_operator)
+        >>> foast_definition = func_to_foast(dsl_operator_def)
+
+        >>> print(foast_definition.foast_node.id)
+        dsl_operator
+
+        >>> print(foast_definition.closure_vars)
+        {'const': 2.0}
+    """
     source_def = source_utils.SourceDefinition.from_function(inp.definition)
     closure_vars = source_utils.get_closure_vars_from_function(inp.definition)
     annotations = typing.get_type_hints(inp.definition)
@@ -75,13 +95,15 @@ def func_to_foast(inp: DSL_FOP) -> FOP:
 
 
 def func_to_foast_factory(cached: bool = True) -> workflow.Workflow[DSL_FOP, FOP]:
-    wf: workflow.Workflow[DSL_FOP, FOP] = func_to_foast
+    """Wrap `func_to_foast` in a chainable and optionally cached workflow step."""
+    wf = workflow.make_step(func_to_foast)
     if cached:
         wf = workflow.CachedStep(step=wf, hash_function=ffront_stages.fingerprint_stage)
     return wf
 
 
 def adapted_func_to_foast_factory(**kwargs: Any) -> workflow.Workflow[AOT_DSL_FOP, AOT_FOP]:
+    """Wrap the `func_to_foast step in an adapter to fit into transform toolchains.`"""
     return workflow.DataOnlyAdapter(func_to_foast_factory(**kwargs))
 
 

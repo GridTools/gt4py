@@ -56,7 +56,19 @@ INPUT_PAIR: typing.TypeAlias = workflow.DataArgsPair[INPUT_DATA, ARGS | CARG]
 
 @dataclasses.dataclass(frozen=True)
 class Transforms(workflow.MultiWorkflow[INPUT_PAIR, stages.AOTProgram]):
-    """Modular workflow for transformations with access to intermediates."""
+    """
+    Modular workflow for transformations with access to intermediates.
+
+    The set and order of transformation steps depends on the input type.
+    Thus this workflow can be applied to DSL field operator and program definitions,
+    as well as their AST representations. Even to Iterator IR programs, although in that
+    case it will be a no-op.
+
+    The input to the workflow as well as each step must be a `DataArgsPair`. The arguments
+    inside the `DataArgsPair` passed to the whole workflow may be concrete (`JITArgs`)
+    or compile-time (`CompileTimeArgs`). The individual steps (apart from `.aotify_args`)
+    require compile-time arguments. Some of the steps can work with an empty `CompileTimeArgs` instance.
+    """
 
     aotify_args: workflow.Workflow[
         workflow.DataArgsPair[INPUT_DATA, ARGS], workflow.DataArgsPair[INPUT_DATA, CARG]

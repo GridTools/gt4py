@@ -37,10 +37,16 @@ from gt4py.next.type_system import type_info, type_specifications as ts
 
 
 def foast_to_itir(inp: FOP) -> itir.Expr:
+    """
+    Lower a FOAST field operator node to Iterator IR.
+
+    See the docstring of `FieldOperatorLowering` for details.
+    """
     return FieldOperatorLowering.apply(inp.foast_node)
 
 
 def foast_to_itir_factory(cached: bool = True) -> workflow.Workflow[FOP, itir.Expr]:
+    """Wrap `foast_to_itir` into a chainable and, optionally, cached workflow step."""
     wf = foast_to_itir
     if cached:
         wf = workflow.CachedStep(step=wf, hash_function=ffront_stages.fingerprint_stage)
@@ -48,6 +54,7 @@ def foast_to_itir_factory(cached: bool = True) -> workflow.Workflow[FOP, itir.Ex
 
 
 def adapted_foast_to_itir_factory(**kwargs: Any) -> workflow.Workflow[AOT_FOP, itir.Expr]:
+    """Wrap the `foast_to_itir` workflow step into an adapter to fit into backend transform workflows."""
     return workflow.StripArgsAdapter(foast_to_itir_factory(**kwargs))
 
 
