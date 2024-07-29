@@ -115,7 +115,7 @@ def gt_auto_optimize(
         inside the kernels itself. For example fuse maps inside them.
     4. Afterwards it will process the map ranges and iteration order. For this
         the function assumes that the dimension indicated by `leading_dim` is the
-        once with stride one.
+        one with stride one.
     5. If requested the function will now apply blocking, on the dimension indicated
         by `leading_dim`. (The reason that it is not done in the kernel optimization
         phase is a restriction dictated by the implementation.)
@@ -127,10 +127,10 @@ def gt_auto_optimize(
         - Use fast implementation for library nodes.
         - Move small transients to stack.
         - Make transients persistent (if requested).
-        - If requested reuse transients.
+        - Apply DaCe's `TransientReuse` transformation (if requested).
 
     Args:
-        sdfg: The SDFG that should ve optimized in place.
+        sdfg: The SDFG that should be optimized in place.
         gpu: Optimize for GPU or CPU.
         leading_dim: Leading dimension, indicates where the stride is 1.
         aggressive_fusion: Be more aggressive in fusion, will lead to the promotion
@@ -147,15 +147,15 @@ def gt_auto_optimize(
         validate_all: Perform extensive validation.
 
     Todo:
-        - Make sure that `SDFG.simplify()` is not called indirectly, by temporary
+        - Make sure that `SDFG.simplify()` is not called indirectly, by temporarily
             overwriting it with `gt_simplify()`.
         - Specify arguments to set the size of GPU thread blocks depending on the
             dimensions. I.e. be able to use a different size for 1D than 2D Maps.
         - Add a parallel version of Map fusion.
-        - Implements some model to further guide to determine what we want to fuse.
+        - Implement some model to further guide to determine what we want to fuse.
             Something along the line "Fuse if operational intensity goes up, but
             not if we have too much internal space (register pressure).
-        - Create a custom array elimination pass that honor rule 1.
+        - Create a custom array elimination pass that honors rule 1.
     """
     device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
 
@@ -165,8 +165,7 @@ def gt_auto_optimize(
 
         # TODO(phimuell): Should there be a zeroth phase, in which we generate
         #       a chanonical form of the SDFG, for example move all local maps
-        #       to internal serial maps, such that they not block fusion?
-        #       in the JaCe prototype we did that.
+        #       to internal serial maps, such that they do not block fusion?
 
         # Phase 1: Initial Cleanup
         gt_simplify(sdfg)
@@ -180,15 +179,16 @@ def gt_auto_optimize(
             validate_all=validate_all,
         )
 
-        # Compute the SDFG to see if something has changed.
+        # Compute the SDFG hash to see if something has changed.
         sdfg_hash = sdfg.hash_sdfg()
 
         # Phase 2: Kernel Creation
-        #   We will now try to reduce the number of kernels and create big one.
-        #   For this we essentially use map fusion. We do this is a loop because
+        #   We will now try to reduce the number of kernels and create large Maps/kernels.
+        #   For this we essentially use Map fusion. We do this is a loop because
         #   after a graph modification followed by simplify new fusing opportunities
         #   might arise. We use the hash of the SDFG to detect if we have reached a
         #   fix point.
+        # TODO(phimuell): Find a better upper bound for the starvation protection.
         for _ in range(100):
             # Use map fusion to reduce their number and to create big kernels
             # TODO(phimuell): Use a cost measurement to decide if fusion should be done.
@@ -208,7 +208,7 @@ def gt_auto_optimize(
             phase2_cleanup.append(dace_dataflow.TrivialTaskletElimination())
 
             # TODO(phimuell): Should we do this all the time or only once? (probably the later)
-            # TODO(phimuell): More control what we promote.
+            # TODO(phimuell): Add a criteria to decide if we should promote or not.
             phase2_cleanup.append(
                 gtx_transformations.SerialMapPromoter(
                     only_toplevel_maps=True,
@@ -231,17 +231,15 @@ def gt_auto_optimize(
             if old_sdfg_hash == sdfg_hash:
                 break
 
-            # The SDFG was modified by the transformations above. But no
-            #  transformation could be applied, so we will now call simplify
-            #  and start over.
+            # The SDFG was modified by the transformations above. The SDFG was
+            #  modified. Call Simplify and try again to further optimize.
             gt_simplify(sdfg)
 
         else:
-            raise RuntimeWarning("Optimization of the SDFG did not converged.")
+            raise RuntimeWarning("Optimization of the SDFG did not converge.")
 
         # Phase 3: Optimizing the kernels themselves.
-        #   Currently this is only applies fusion inside them.
-        # TODO(phimuell): Improve.
+        #   Currently this only applies fusion inside Maps.
         sdfg.apply_transformations_repeated(
             gtx_transformations.SerialMapFusion(
                 only_inner_maps=True,
@@ -295,17 +293,18 @@ def gt_auto_optimize(
         #   The DaCe auto optimizer also uses them. Note that the reuse transient
         #   is not done by DaCe.
         if reuse_transients:
-            # TODO(phimuell): Investigate if we should enable it, it makes stuff
-            #                   harder for the compiler. Maybe write our own that
+            # TODO(phimuell): Investigate if we should enable it, it may make things
+            #                   harder for the compiler. Maybe write our own to
             #                   only consider big transients and not small ones (~60B)
             transient_reuse = dace.transformation.passes.TransientReuse()
             transient_reuse.apply_pass(sdfg, {})
 
+        # Set the implementation of the library nodes.
         dace_aoptimize.set_fast_implementations(sdfg, device)
-        # TODO(phimuell): Fix the bug, it is used the tile value and not the stack array value.
+        # TODO(phimuell): Fix the bug, it uses the tile value and not the stack array value.
         dace_aoptimize.move_small_arrays_to_stack(sdfg)
         if make_persistent:
-            # TODO(phimuell): Allow to also make them `SDFG`.
+            # TODO(phimuell): Allow to also to set the lifetime to `SDFG`.
             dace_aoptimize.make_transients_persistent(sdfg, device)
 
         return sdfg

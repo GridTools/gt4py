@@ -101,6 +101,7 @@ def gt_gpu_transformation(
         #   variables. Currently this is not a problem because of the way it is
         #   implemented.
         # TODO(phimuell): Fix the issue described above.
+        # TODO(phimuell): Maybe we should fuse trivial GPU maps before we do anything.
         sdfg.apply_transformations_once_everywhere(
             gtx_transformations.SerialMapPromoterGPU(),
             validate=False,
@@ -326,7 +327,7 @@ class SerialMapPromoterGPU(transformation.SingleStateTransformation):
         - If the top map is a trivial map.
         - If a valid partition exists that can be fused at all.
         """
-        from .map_seriall_fusion import SerialMapFusion
+        from .map_serial_fusion import SerialMapFusion
 
         map_exit_1: nodes.MapExit = self.map_exit1
         map_1: nodes.Map = map_exit_1.map

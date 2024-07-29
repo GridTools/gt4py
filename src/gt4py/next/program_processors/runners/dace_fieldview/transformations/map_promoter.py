@@ -315,7 +315,7 @@ class SerialMapPromoter(BaseMapPromoter):
         permissive: bool = False,
     ) -> bool:
         """Tests if the Maps really can be fused."""
-        from .map_seriall_fusion import SerialMapFusion
+        from .map_serial_fusion import SerialMapFusion
 
         if not super().can_be_applied(graph, expr_index, sdfg, permissive):
             return False
