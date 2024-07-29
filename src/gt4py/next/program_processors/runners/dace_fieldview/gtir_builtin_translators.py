@@ -38,6 +38,7 @@ if TYPE_CHECKING:
 
 
 IteratorIndexDType: TypeAlias = dace.int32  # type of iterator indexes
+LetSymbol: TypeAlias = tuple[str, ts.FieldType | ts.ScalarType]
 TemporaryData: TypeAlias = tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]
 
 
@@ -49,7 +50,7 @@ class PrimitiveTranslator(Protocol):
         sdfg: dace.SDFG,
         state: dace.SDFGState,
         sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-        let_symbols: dict[str, TemporaryData],
+        let_symbols: dict[str, LetSymbol],
     ) -> list[TemporaryData]:
         """Creates the dataflow subgraph representing a GTIR primitive function.
 
@@ -79,7 +80,7 @@ def _parse_arg_expr(
     domain: list[
         tuple[gtx_common.Dimension, dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]
     ],
-    let_symbols: dict[str, TemporaryData],
+    let_symbols: dict[str, LetSymbol],
 ) -> gtir_to_tasklet.IteratorExpr | gtir_to_tasklet.MemletExpr:
     fields: list[TemporaryData] = sdfg_builder.visit(
         node,
@@ -163,7 +164,7 @@ def translate_as_field_op(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    let_symbols: dict[str, TemporaryData],
+    let_symbols: dict[str, LetSymbol],
 ) -> list[TemporaryData]:
     """Generates the dataflow subgraph for the `as_fieldop` builtin function."""
     assert isinstance(node, gtir.FunCall)
@@ -247,7 +248,7 @@ def translate_cond(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    let_symbols: dict[str, TemporaryData],
+    let_symbols: dict[str, LetSymbol],
 ) -> list[TemporaryData]:
     """Generates the dataflow subgraph for the `cond` builtin function."""
     assert cpm.is_call_to(node, "cond")
@@ -331,7 +332,7 @@ def translate_symbol_ref(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    let_symbols: dict[str, TemporaryData],
+    let_symbols: dict[str, LetSymbol],
 ) -> list[TemporaryData]:
     """Generates the dataflow subgraph for a `ir.SymRef` node."""
     assert isinstance(node, (gtir.Literal, gtir.SymRef))
@@ -344,8 +345,7 @@ def translate_symbol_ref(
     else:
         sym_value = str(node.id)
         if sym_value in let_symbols:
-            sym_node, data_type = let_symbols[sym_value]
-            sym_value = sym_node.data
+            sym_value, data_type = let_symbols[sym_value]
         else:
             data_type = sdfg_builder.get_symbol_type(sym_value)
         temp_name = sym_value
