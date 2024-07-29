@@ -84,6 +84,11 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
         default=False,
         desc="If `True` promote horizontal dimensions.",
     )
+    promote_all = properties.Property(
+        dtype=bool,
+        default=False,
+        desc="If `True` perform any promotion. Takes precedence over all other selectors.",
+    )
 
     def map_to_promote(
         self,
@@ -112,6 +117,7 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
         promote_local: Optional[bool] = None,
         promote_vertical: Optional[bool] = None,
         promote_horizontal: Optional[bool] = None,
+        promote_all: Optional[bool] = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
@@ -126,9 +132,19 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
             self.promote_vertical = bool(promote_vertical)
         if promote_horizontal is not None:
             self.promote_horizontal = bool(promote_horizontal)
+        if promote_all is not None:
+            self.promote_all = bool(promote_all)
+            self.promote_horizontal = False
+            self.promote_vertical = False
+            self.promote_local = False
         if only_inner_maps and only_toplevel_maps:
             raise ValueError("You specified both `only_inner_maps` and `only_toplevel_maps`.")
-        if not (self.promote_local or self.promote_vertical or self.promote_horizontal):
+        if not (
+            self.promote_local
+            or self.promote_vertical
+            or self.promote_horizontal
+            or self.promote_all
+        ):
             raise ValueError(
                 "You must select at least one class of dimension that should be promoted."
             )
@@ -177,21 +193,22 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
 
         # We now know which dimensions we have to add to the promotee map.
         #  Now we must test if we are also allowed to make that promotion in the first place.
-        dimension_identifier: list[str] = []
-        if self.promote_local:
-            dimension_identifier.append("__gtx_localdim")
-        if self.promote_vertical:
-            dimension_identifier.append("__gtx_vertical")
-        if self.promote_horizontal:
-            dimension_identifier.append("__gtx_horizontal")
-        if not dimension_identifier:
-            return False
-        for missing_map_param in missing_map_parameters:
-            if not any(
-                missing_map_param.endswith(dim_identifier)
-                for dim_identifier in dimension_identifier
-            ):
+        if not self.promote_all:
+            dimension_identifier: list[str] = []
+            if self.promote_local:
+                dimension_identifier.append("__gtx_localdim")
+            if self.promote_vertical:
+                dimension_identifier.append("__gtx_vertical")
+            if self.promote_horizontal:
+                dimension_identifier.append("__gtx_horizontal")
+            if not dimension_identifier:
                 return False
+            for missing_map_param in missing_map_parameters:
+                if not any(
+                    missing_map_param.endswith(dim_identifier)
+                    for dim_identifier in dimension_identifier
+                ):
+                    return False
 
         return True
 
