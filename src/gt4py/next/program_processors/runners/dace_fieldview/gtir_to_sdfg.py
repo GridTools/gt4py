@@ -119,11 +119,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     )
 
     def get_offset_provider(self, offset: str) -> gtx_common.Connectivity | gtx_common.Dimension:
-        assert offset in self.offset_provider
         return self.offset_provider[offset]
 
     def get_symbol_type(self, symbol_name: str) -> ts.FieldType | ts.ScalarType:
-        assert symbol_name in self.global_symbols
         return self.global_symbols[symbol_name]
 
     def unique_map_name(self, name: str) -> str:
