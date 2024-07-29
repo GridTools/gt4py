@@ -38,6 +38,7 @@ if TYPE_CHECKING:
 
 
 IteratorIndexDType: TypeAlias = dace.int32  # type of iterator indexes
+LetSymbol: TypeAlias = tuple[str, ts.FieldType | ts.ScalarType]
 TemporaryData: TypeAlias = tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]
 
 
@@ -49,6 +50,7 @@ class PrimitiveTranslator(Protocol):
         sdfg: dace.SDFG,
         state: dace.SDFGState,
         sdfg_builder: gtir_to_sdfg.SDFGBuilder,
+        let_symbols: dict[str, LetSymbol],
     ) -> list[TemporaryData]:
         """Creates the dataflow subgraph representing a GTIR primitive function.
 
@@ -60,6 +62,7 @@ class PrimitiveTranslator(Protocol):
             sdfg: The SDFG where the primitive subgraph should be instantiated
             state: The SDFG state where the result of the primitive function should be made available
             sdfg_builder: The object responsible for visiting child nodes of the primitive node.
+            let_symbols: Mapping of symbols (i.e. lambda parameters) to known temporary fields.
 
         Returns:
             A list of data access nodes and the associated GT4Py data type, which provide
@@ -77,8 +80,14 @@ def _parse_arg_expr(
     domain: list[
         tuple[gtx_common.Dimension, dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]
     ],
+    let_symbols: dict[str, LetSymbol],
 ) -> gtir_to_tasklet.IteratorExpr | gtir_to_tasklet.MemletExpr:
-    fields: list[TemporaryData] = sdfg_builder.visit(node, sdfg=sdfg, head_state=state)
+    fields: list[TemporaryData] = sdfg_builder.visit(
+        node,
+        sdfg=sdfg,
+        head_state=state,
+        let_symbols=let_symbols,
+    )
 
     assert len(fields) == 1
     data_node, arg_type = fields[0]
@@ -155,8 +164,9 @@ def translate_as_field_op(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
+    let_symbols: dict[str, LetSymbol],
 ) -> list[TemporaryData]:
-    """Generates the dataflow subgraph for the `as_field_op` builtin function."""
+    """Generates the dataflow subgraph for the `as_fieldop` builtin function."""
     assert isinstance(node, gtir.FunCall)
     assert cpm.is_call_to(node.fun, "as_fieldop")
 
@@ -173,7 +183,9 @@ def translate_as_field_op(
     assert isinstance(node.type, ts.FieldType)
 
     # first visit the list of arguments and build a symbol map
-    stencil_args = [_parse_arg_expr(arg, sdfg, state, sdfg_builder, domain) for arg in node.args]
+    stencil_args = [
+        _parse_arg_expr(arg, sdfg, state, sdfg_builder, domain, let_symbols) for arg in node.args
+    ]
 
     # represent the field operator as a mapped tasklet graph, which will range over the field domain
     taskgen = gtir_to_tasklet.LambdaToTasklet(sdfg, state, sdfg_builder)
@@ -236,6 +248,7 @@ def translate_cond(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
+    let_symbols: dict[str, LetSymbol],
 ) -> list[TemporaryData]:
     """Generates the dataflow subgraph for the `cond` builtin function."""
     assert cpm.is_call_to(node, "cond")
@@ -273,8 +286,18 @@ def translate_cond(
     sdfg.add_edge(cond_state, false_state, dace.InterstateEdge(condition=(f"not bool({cond})")))
     sdfg.add_edge(false_state, state, dace.InterstateEdge())
 
-    true_br_args = sdfg_builder.visit(true_expr, sdfg=sdfg, head_state=true_state)
-    false_br_args = sdfg_builder.visit(false_expr, sdfg=sdfg, head_state=false_state)
+    true_br_args = sdfg_builder.visit(
+        true_expr,
+        sdfg=sdfg,
+        head_state=true_state,
+        let_symbols=let_symbols,
+    )
+    false_br_args = sdfg_builder.visit(
+        false_expr,
+        sdfg=sdfg,
+        head_state=false_state,
+        let_symbols=let_symbols,
+    )
 
     output_nodes = []
     for true_br, false_br in zip(true_br_args, false_br_args, strict=True):
@@ -309,6 +332,7 @@ def translate_symbol_ref(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
+    let_symbols: dict[str, LetSymbol],
 ) -> list[TemporaryData]:
     """Generates the dataflow subgraph for a `ir.SymRef` node."""
     assert isinstance(node, (gtir.Literal, gtir.SymRef))
@@ -320,7 +344,16 @@ def translate_symbol_ref(
         temp_name = "literal"
     else:
         sym_value = str(node.id)
-        data_type = sdfg_builder.get_symbol_type(sym_value)
+        if sym_value in let_symbols:
+            # The `let_symbols` dictionary maps a `gtir.SymRef` string to a temporary
+            # data container. These symbols are visited and initialized in a state
+            # that preceeds the current state, therefore a new access node is created
+            # everytime they are accessed. It is therefore possible that multiple access
+            # nodes are created in one state for the same data container. We rely
+            # on the simplify to remove duplicated access nodes.
+            sym_value, data_type = let_symbols[sym_value]
+        else:
+            data_type = sdfg_builder.get_symbol_type(sym_value)
         temp_name = sym_value
 
     if isinstance(data_type, ts.FieldType):
