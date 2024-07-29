@@ -345,6 +345,12 @@ def translate_symbol_ref(
     else:
         sym_value = str(node.id)
         if sym_value in let_symbols:
+            # The `let_symbols` dictionary maps a `gtir.SymRef` string to a temporary
+            # data container. These symbols are visited and initialized in a state
+            # that preceeds the current state, therefore a new access node is created
+            # everytime they are accessed. It is therefore possible that multiple access
+            # nodes are created in one state for the same data container. We rely
+            # on the simplify to remove duplicated access nodes.
             sym_value, data_type = let_symbols[sym_value]
         else:
             data_type = sdfg_builder.get_symbol_type(sym_value)
