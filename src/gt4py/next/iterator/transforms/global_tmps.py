@@ -407,7 +407,7 @@ def _max_domain_sizes_by_location_type(offset_provider: Mapping[str, Any]) -> di
             )
             sizes[provider.neighbor_axis.value] = max(
                 sizes.get(provider.neighbor_axis.value, 0),
-                provider.table.max(),  # type: ignore[attr-defined] # TODO(havogt): improve typing for NDArrayObject
+                provider.table.max() + 1,  # type: ignore[attr-defined] # TODO(havogt): improve typing for NDArrayObject
             )
     return sizes
 

@@ -30,6 +30,7 @@ from gt4py.eve import concepts
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_builtin_translators,
     utility as dace_fieldview_util,
@@ -158,12 +159,15 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         return shape, strides
 
     def _add_storage(
-        self, sdfg: dace.SDFG, name: str, symbol_type: ts.DataType, transient: bool = False
+        self, sdfg: dace.SDFG, name: str, symbol_type: ts.DataType, transient: bool = True
     ) -> None:
         """
-        Add external storage (aka non-transient) for data containers passed as arguments to the SDFG.
+        Add storage for data containers used in the SDFG. For fields, it allocates dace arrays,
+        while scalars are stored as SDFG symbols.
 
-        For fields, it allocates dace arrays, while scalars are stored as SDFG symbols.
+        The fields used as temporary arrays, when `transient = True`, are allocated and exist
+        only within the SDFG; when `transient = False`, the fields have to be allocated outside
+        and have to be passed as array arguments to the SDFG.
         """
         if isinstance(symbol_type, ts.FieldType):
             dtype = dace_fieldview_util.as_dace_type(symbol_type.dtype)
@@ -252,7 +256,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         # add non-transient arrays and/or SDFG symbols for the program arguments
         for param in node.params:
             assert isinstance(param.type, ts.DataType)
-            self._add_storage(sdfg, str(param.id), param.type)
+            self._add_storage(sdfg, str(param.id), param.type, transient=False)
 
         # add SDFG storage for connectivity tables
         for offset, offset_provider in dace_fieldview_util.filter_connectivities(
@@ -264,12 +268,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 [offset_provider.origin_axis, local_dim], ts.ScalarType(scalar_kind)
             )
             # We store all connectivity tables as transient arrays here; later, while building
-            # the field operator expressions, we change to non transient the tables
-            # that are actually used. This way, we avoid adding SDFG arguments for
-            # the connectivity tables that are not used.
-            self._add_storage(
-                sdfg, dace_fieldview_util.connectivity_identifier(offset), type_, transient=True
-            )
+            # the field operator expressions, we change to non-transient (i.e. allocated extrenally)
+            # the tables that are actually used. This way, we avoid adding SDFG arguments for
+            # the connectivity tables that are not used. The remaining unused transient arrays
+            # are removed by the dace simplify pass.
+            self._add_storage(sdfg, dace_fieldview_util.connectivity_identifier(offset), type_)
 
         # visit one statement at a time and expand the SDFG from the current head state
         for i, stmt in enumerate(node.body):
@@ -323,10 +326,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         head_state: dace.SDFGState,
     ) -> list[gtir_builtin_translators.TemporaryData]:
         # use specialized dataflow builder classes for each builtin function
-        if cpm.is_call_to(node.fun, "as_fieldop"):
-            return gtir_builtin_translators.translate_as_field_op(node, sdfg, head_state, self)
-        elif cpm.is_call_to(node.fun, "cond"):
+        if cpm.is_call_to(node, "cond"):
             return gtir_builtin_translators.translate_cond(node, sdfg, head_state, self)
+        elif cpm.is_call_to(node.fun, "as_fieldop"):
+            return gtir_builtin_translators.translate_as_field_op(node, sdfg, head_state, self)
         else:
             raise NotImplementedError(f"Unexpected 'FunCall' expression ({node}).")
 
@@ -373,8 +376,8 @@ def build_sdfg_from_gtir(
     Returns:
         An SDFG in the DaCe canonical form (simplified)
     """
+    program = gtir_type_inference.infer(program, offset_provider=offset_provider)
     sdfg_genenerator = GTIRToSDFG(offset_provider)
-    # TODO: run type inference on the `program` node before passing it to `GTIRToSDFG`
     sdfg = sdfg_genenerator.visit(program)
     assert isinstance(sdfg, dace.SDFG)
 

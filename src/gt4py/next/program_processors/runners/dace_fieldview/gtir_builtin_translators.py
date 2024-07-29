@@ -24,6 +24,7 @@ import dace.subsets as sbs
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.iterator.type_system import type_specifications as itir_ts
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_python_codegen,
     gtir_to_tasklet,
@@ -108,7 +109,7 @@ def _create_temporary_field(
     domain: list[
         tuple[gtx_common.Dimension, dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]
     ],
-    node_type: ts.ScalarType,
+    node_type: ts.FieldType,
     output_desc: dace.data.Data,
     output_field_type: ts.DataType,
 ) -> tuple[dace.nodes.AccessNode, ts.FieldType]:
@@ -126,22 +127,25 @@ def _create_temporary_field(
     if isinstance(output_desc, dace.data.Array):
         # extend the result arrays with the local dimensions added by the field operator e.g. `neighbors`)
         assert isinstance(output_field_type, ts.FieldType)
-        # TODO: enable `assert output_field_type.dtype == node_type`, remove variable `dtype`
-        node_type = output_field_type.dtype
+        if isinstance(node_type.dtype, itir_ts.ListType):
+            raise NotImplementedError
+        else:
+            field_dtype = node_type.dtype
+        assert output_field_type.dtype == field_dtype
         field_dims.extend(output_field_type.dims)
         field_shape.extend(output_desc.shape)
     else:
         assert isinstance(output_desc, dace.data.Scalar)
         assert isinstance(output_field_type, ts.ScalarType)
-        # TODO: enable `assert output_field_type == node_type`, remove variable `dtype`
-        node_type = output_field_type
+        field_dtype = node_type.dtype
+        assert output_field_type == field_dtype
 
     # allocate local temporary storage for the result field
     temp_name, _ = sdfg.add_temp_transient(
-        field_shape, dace_fieldview_util.as_dace_type(node_type), offset=field_offset
+        field_shape, dace_fieldview_util.as_dace_type(field_dtype), offset=field_offset
     )
     field_node = state.add_access(temp_name)
-    field_type = ts.FieldType(field_dims, node_type)
+    field_type = ts.FieldType(field_dims, field_dtype)
 
     return field_node, field_type
 
@@ -165,9 +169,8 @@ def translate_as_field_op(
     assert isinstance(domain_expr, gtir.FunCall)
 
     # add local storage to compute the field operator over the given domain
-    # TODO: use type inference to determine the result type
-    node_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     domain = dace_fieldview_util.get_domain(domain_expr)
+    assert isinstance(node.type, ts.FieldType)
 
     # first visit the list of arguments and build a symbol map
     stencil_args = [_parse_arg_expr(arg, sdfg, state, sdfg_builder, domain) for arg in node.args]
@@ -190,7 +193,7 @@ def translate_as_field_op(
 
     # allocate local temporary storage for the result field
     field_node, field_type = _create_temporary_field(
-        sdfg, state, domain, node_type, output_desc, output_expr.field_type
+        sdfg, state, domain, node.type, output_desc, output_expr.field_type
     )
 
     # assume tasklet with single output
@@ -235,13 +238,9 @@ def translate_cond(
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
 ) -> list[TemporaryData]:
     """Generates the dataflow subgraph for the `cond` builtin function."""
-    assert isinstance(node, gtir.FunCall)
-    assert cpm.is_call_to(node.fun, "cond")
-    assert len(node.args) == 0
-
-    fun_node = node.fun
-    assert len(fun_node.args) == 3
-    cond_expr, true_expr, false_expr = fun_node.args
+    assert cpm.is_call_to(node, "cond")
+    assert len(node.args) == 3
+    cond_expr, true_expr, false_expr = node.args
 
     # expect condition as first argument
     cond = gtir_python_codegen.get_source(cond_expr)
@@ -318,11 +317,11 @@ def translate_symbol_ref(
     if isinstance(node, gtir.Literal):
         sym_value = node.value
         data_type = node.type
-        tasklet_name = "get_literal"
+        temp_name = "literal"
     else:
         sym_value = str(node.id)
         data_type = sdfg_builder.get_symbol_type(sym_value)
-        tasklet_name = f"get_{sym_value}"
+        temp_name = sym_value
 
     if isinstance(data_type, ts.FieldType):
         # add access node to current state
@@ -332,13 +331,18 @@ def translate_symbol_ref(
         # scalar symbols are passed to the SDFG as symbols: build tasklet node
         # to write the symbol to a scalar access node
         tasklet_node = sdfg_builder.add_tasklet(
-            tasklet_name,
+            f"get_{temp_name}",
             state,
             {},
             {"__out"},
             f"__out = {sym_value}",
         )
-        temp_name, _ = sdfg.add_temp_transient((1,), dace_fieldview_util.as_dace_type(data_type))
+        temp_name, _ = sdfg.add_scalar(
+            f"__{temp_name}",
+            dace_fieldview_util.as_dace_type(data_type),
+            find_new_name=True,
+            transient=True,
+        )
         sym_node = state.add_access(temp_name)
         state.add_edge(
             tasklet_node,
