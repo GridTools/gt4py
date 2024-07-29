@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Optional, Sequence, Union, overload, Literal, Generator
+from typing import Any, Optional, Sequence, Union, Literal, overload
 
 import pytest
 import dace
@@ -25,14 +25,6 @@ from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace_fieldview import (
     transformations as gtx_transformations,
 )
-
-
-@pytest.fixture(autouse=True)
-def _set_dace_settings() -> Generator[None, None, None]:
-    """Enables the correct settings in DaCe."""
-    with dace.config.temporary_config():
-        dace.Config.set("optimizer", "match_exception", value=True)
-        yield
 
 
 @overload
