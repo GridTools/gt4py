@@ -43,23 +43,23 @@ def gt_gpu_transformation(
     validate_all: bool = False,
     **kwargs: Any,
 ) -> dace.SDFG:
-    """Transform an SDFG into an GPU SDFG.
+    """Transform an SDFG into a GPU SDFG.
 
     The transformation expects a rather optimized SDFG and turn it into an SDFG
     capable of running on the GPU.
     The function performs the following steps:
-    - If requested, modify the storage location of the non transient arrays to
-        life on GPU.
+    - If requested, modify the storage location of the non transient arrays such
+        that they reside in GPU memory.
     - Call the normal GPU transform function followed by simplify.
     - If requested try to remove trivial kernels.
-    - If given set the `gpu_block_size` parameters of the Maps to the given value.
+    - If specified, set the `gpu_block_size` parameters of the Maps to the given value.
 
     Args:
         sdfg: The SDFG that should be processed.
         try_removing_trivial_maps: Try to get rid of trivial maps by incorporating them.
         use_gpu_storage: Assume that the non global memory is already on the GPU.
-        gpu_block_size: Set the GPU block size of all maps that does not have
-            one to this value.
+        gpu_block_size: Set to true when the SDFG array arguments are already allocated
+            on GPU global memory. This will avoid the data copy from host to GPU memory.
 
     Notes:
         The function might modify the order of the iteration variables of some
@@ -78,7 +78,7 @@ def gt_gpu_transformation(
     #  This way the GPU transformation will not create this copying stuff.
     if use_gpu_storage:
         for desc in sdfg.arrays.values():
-            if not (desc.transient or not isinstance(desc, dace.data.Array)):
+            if isinstance(desc, dace.data.Array) and not desc.transient:
                 desc.storage = dace.dtypes.StorageType.GPU_Global
 
     # Now turn it into a GPU SDFG
@@ -91,9 +91,10 @@ def gt_gpu_transformation(
     gtx_transformations.gt_simplify(sdfg)
 
     if try_removing_trivial_maps:
-        # For reasons a Tasklet can not exist outside a Map in a GPU SDFG. The GPU
-        #  transformation will thus adds trivial maps around them, which translate to
-        #  a kernel launch. Our current solution is to promote them and then fuse it.
+        # Because of DaCe's design a Tasklet can not exist outside a Map in a GPU SDFG.
+        #  The GPU transformation will thus add trivial maps around them, which
+        #  translate to a kernel launch. Our current solution is to promote them and
+        #  then fuse it.
         # NOTE: The current implementation has a flaw, because promotion and fusion
         #   are two different steps, this is is inefficient. There are some problems
         #   because the mapped Tasklet might not be fusable at all. However, the real
