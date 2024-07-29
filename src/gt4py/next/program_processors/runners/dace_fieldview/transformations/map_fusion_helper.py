@@ -290,18 +290,19 @@ class MapFusionHelper(transformation.SingleStateTransformation):
         # See if we have already computed the set
         if sdfg in self.shared_transients:
             shared_sdfg_transients: set[str] = self.shared_transients[sdfg]
-
         else:
             # SDFG is not known so we have to compute the set.
             shared_sdfg_transients = set()
-            for state in sdfg.all_states():
+            for state_to_scan in sdfg.all_states():
                 # TODO(phimuell): Use `all_nodes_recursive()` once it is available.
                 shared_sdfg_transients.update(
-                    filter(
-                        lambda node: isinstance(node, nodes.AccessNode)
-                        and sdfg.arrays[node.data].transient,
-                        itertools.chain(state.source_nodes(), state.sink_nodes()),
-                    )
+                    [
+                        node.data
+                        for node in itertools.chain(
+                            state_to_scan.source_nodes(), state_to_scan.sink_nodes()
+                        )
+                        if isinstance(node, nodes.AccessNode) and sdfg.arrays[node.data].transient
+                    ]
                 )
             self.shared_transients[sdfg] = shared_sdfg_transients
 
@@ -311,7 +312,6 @@ class MapFusionHelper(transformation.SingleStateTransformation):
             # Rule 8: There is only one access node per state for data.
             assert len(matching_access_nodes) == 1
             transient = matching_access_nodes[0]
-
         else:
             assert isinstance(transient, nodes.AccessNode)
             name = transient.data
@@ -327,7 +327,7 @@ class MapFusionHelper(transformation.SingleStateTransformation):
             return True
 
         # Now we check if it is used in a different state.
-        return transient in shared_sdfg_transients
+        return name in shared_sdfg_transients
 
     def partition_first_outputs(
         self,
