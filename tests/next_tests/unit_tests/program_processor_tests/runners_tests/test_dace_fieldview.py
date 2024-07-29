@@ -18,7 +18,7 @@ Note: this test module covers the fieldview flavour of ITIR.
 """
 
 import copy
-import itertools
+import functools
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import ir_makers as im
@@ -30,8 +30,10 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     Edge,
     IDim,
     MeshDescriptor,
+    V2EDim,
     Vertex,
     simple_mesh,
+    skip_value_mesh,
 )
 import numpy as np
 import pytest
@@ -879,7 +881,7 @@ def test_gtir_reduce():
 
     e = np.random.rand(SIMPLE_MESH.num_edges)
     v_ref = [
-        itertools.reduce(lambda x, y: x + y, e[v2e_neighbors], init_value)
+        functools.reduce(lambda x, y: x + y, e[v2e_neighbors], init_value)
         for v2e_neighbors in connectivity_V2E.table
     ]
 
@@ -954,7 +956,7 @@ def test_gtir_reduce_with_skip_values():
 
     e = np.random.rand(SKIP_VALUE_MESH.num_edges)
     v_ref = [
-        itertools.reduce(
+        functools.reduce(
             lambda x, y: x + y, [e[i] if i != -1 else 0.0 for i in v2e_neighbors], init_value
         )
         for v2e_neighbors in connectivity_V2E.table
@@ -1139,7 +1141,7 @@ def test_gtir_reduce_with_cond_neighbors():
 
         v = np.empty(SIMPLE_MESH.num_vertices, dtype=e.dtype)
         v_ref = [
-            itertools.reduce(
+            functools.reduce(
                 lambda x, y: x + y, [e[i] if i != -1 else 0.0 for i in v2e_neighbors], init_value
             )
             for v2e_neighbors in (

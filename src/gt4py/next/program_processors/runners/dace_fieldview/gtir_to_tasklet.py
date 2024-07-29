@@ -717,6 +717,12 @@ class LambdaToTasklet(eve.NodeVisitor):
         if cpm.is_call_to(node, "deref"):
             return self._visit_deref(node)
 
+        elif cpm.is_call_to(node, "neighbors"):
+            return self._visit_neighbors(node)
+
+        elif cpm.is_applied_reduce(node):
+            return self._visit_reduce(node)
+
         elif cpm.is_applied_shift(node):
             return self._visit_shift(node)
 
