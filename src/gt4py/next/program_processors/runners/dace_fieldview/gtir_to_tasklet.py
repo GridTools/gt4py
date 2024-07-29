@@ -114,7 +114,7 @@ def get_reduce_params(node: gtir.FunCall) -> tuple[str, SymbolExpr, SymbolExpr]:
 class LambdaToTasklet(eve.NodeVisitor):
     """Translates an `ir.Lambda` expression to a dataflow graph.
 
-    Lambda functions should only be encountered as argument to the `as_field_op`
+    Lambda functions should only be encountered as argument to the `as_fieldop`
     builtin function, therefore the dataflow graph generated here typically
     represents the stencil function of a field operator.
     """
@@ -190,8 +190,8 @@ class LambdaToTasklet(eve.NodeVisitor):
     def _get_tasklet_result(
         self,
         dtype: dace.typeclass,
-        src_node: dace.nodes.Node,
-        src_connector: Optional[str] = None,
+        src_node: dace.nodes.Tasklet,
+        src_connector: str,
     ) -> ValueExpr:
         temp_name = self.sdfg.temp_data_name()
         self.sdfg.add_scalar(temp_name, dtype, transient=True)
@@ -716,12 +716,6 @@ class LambdaToTasklet(eve.NodeVisitor):
     def visit_FunCall(self, node: gtir.FunCall) -> IteratorExpr | MemletExpr | ValueExpr:
         if cpm.is_call_to(node, "deref"):
             return self._visit_deref(node)
-
-        elif cpm.is_call_to(node, "neighbors"):
-            return self._visit_neighbors(node)
-
-        elif cpm.is_applied_reduce(node):
-            return self._visit_reduce(node)
 
         elif cpm.is_applied_shift(node):
             return self._visit_shift(node)

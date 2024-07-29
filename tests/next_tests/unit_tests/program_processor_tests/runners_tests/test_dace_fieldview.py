@@ -18,6 +18,7 @@ Note: this test module covers the fieldview flavour of ITIR.
 """
 
 import copy
+import itertools
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import ir_makers as im
@@ -29,12 +30,9 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     Edge,
     IDim,
     MeshDescriptor,
-    V2EDim,
     Vertex,
     simple_mesh,
-    skip_value_mesh,
 )
-from functools import reduce
 import numpy as np
 import pytest
 
@@ -73,18 +71,6 @@ FSYMBOLS = dict(
 
 
 def make_mesh_symbols(mesh: MeshDescriptor):
-    C2E_size_0, C2E_size_1 = mesh.offset_provider["C2E"].table.shape
-    C2E_stride_0, C2E_stride_1 = C2E_size_1, 1  # mesh.offset_provider["C2E"].table.strides
-
-    C2V_size_0, C2V_size_1 = mesh.offset_provider["C2V"].table.shape
-    C2V_stride_0, C2V_stride_1 = C2V_size_1, 1  # mesh.offset_provider["C2V"].table.strides
-
-    E2V_size_0, E2V_size_1 = mesh.offset_provider["E2V"].table.shape
-    E2V_stride_0, E2V_stride_1 = E2V_size_1, 1  # mesh.offset_provider["E2V"].table.strides
-
-    V2E_size_0, V2E_size_1 = mesh.offset_provider["V2E"].table.shape
-    V2E_stride_0, V2E_stride_1 = V2E_size_1, 1  # mesh.offset_provider["V2E"].table.strides
-
     return dict(
         ncells=mesh.num_cells,
         nedges=mesh.num_edges,
@@ -95,22 +81,22 @@ def make_mesh_symbols(mesh: MeshDescriptor):
         __edges_stride_0=1,
         __vertices_size_0=mesh.num_vertices,
         __vertices_stride_0=1,
-        __connectivity_C2E_size_0=C2E_size_0,
-        __connectivity_C2E_size_1=C2E_size_1,
-        __connectivity_C2E_stride_0=C2E_stride_0,
-        __connectivity_C2E_stride_1=C2E_stride_1,
-        __connectivity_C2V_size_0=C2V_size_0,
-        __connectivity_C2V_size_1=C2V_size_1,
-        __connectivity_C2V_stride_0=C2V_stride_0,
-        __connectivity_C2V_stride_1=C2V_stride_1,
-        __connectivity_E2V_size_0=E2V_size_0,
-        __connectivity_E2V_size_1=E2V_size_1,
-        __connectivity_E2V_stride_0=E2V_stride_0,
-        __connectivity_E2V_stride_1=E2V_stride_1,
-        __connectivity_V2E_size_0=V2E_size_0,
-        __connectivity_V2E_size_1=V2E_size_1,
-        __connectivity_V2E_stride_0=V2E_stride_0,
-        __connectivity_V2E_stride_1=V2E_stride_1,
+        __connectivity_C2E_size_0=mesh.num_cells,
+        __connectivity_C2E_size_1=mesh.offset_provider["C2E"].max_neighbors,
+        __connectivity_C2E_stride_0=mesh.offset_provider["C2E"].max_neighbors,
+        __connectivity_C2E_stride_1=1,
+        __connectivity_C2V_size_0=mesh.num_cells,
+        __connectivity_C2V_size_1=mesh.offset_provider["C2V"].max_neighbors,
+        __connectivity_C2V_stride_0=mesh.offset_provider["C2V"].max_neighbors,
+        __connectivity_C2V_stride_1=1,
+        __connectivity_E2V_size_0=mesh.num_edges,
+        __connectivity_E2V_size_1=mesh.offset_provider["E2V"].max_neighbors,
+        __connectivity_E2V_stride_0=mesh.offset_provider["E2V"].max_neighbors,
+        __connectivity_E2V_stride_1=1,
+        __connectivity_V2E_size_0=mesh.num_vertices,
+        __connectivity_V2E_size_1=mesh.offset_provider["V2E"].max_neighbors,
+        __connectivity_V2E_stride_0=mesh.offset_provider["V2E"].max_neighbors,
+        __connectivity_V2E_stride_1=1,
     )
 
 
@@ -893,7 +879,7 @@ def test_gtir_reduce():
 
     e = np.random.rand(SIMPLE_MESH.num_edges)
     v_ref = [
-        reduce(lambda x, y: x + y, e[v2e_neighbors], init_value)
+        itertools.reduce(lambda x, y: x + y, e[v2e_neighbors], init_value)
         for v2e_neighbors in connectivity_V2E.table
     ]
 
@@ -968,7 +954,7 @@ def test_gtir_reduce_with_skip_values():
 
     e = np.random.rand(SKIP_VALUE_MESH.num_edges)
     v_ref = [
-        reduce(lambda x, y: x + y, [e[i] if i != -1 else 0.0 for i in v2e_neighbors], init_value)
+        itertools.reduce(lambda x, y: x + y, [e[i] if i != -1 else 0.0 for i in v2e_neighbors], init_value)
         for v2e_neighbors in connectivity_V2E.table
     ]
 
@@ -1151,7 +1137,7 @@ def test_gtir_reduce_with_cond_neighbors():
 
         v = np.empty(SIMPLE_MESH.num_vertices, dtype=e.dtype)
         v_ref = [
-            reduce(
+            itertools.reduce(
                 lambda x, y: x + y, [e[i] if i != -1 else 0.0 for i in v2e_neighbors], init_value
             )
             for v2e_neighbors in (

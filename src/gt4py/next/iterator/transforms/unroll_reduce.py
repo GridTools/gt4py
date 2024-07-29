@@ -20,7 +20,6 @@ from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
 
 
@@ -61,12 +60,16 @@ def _get_partial_offset_tags(reduce_args: Iterable[itir.Expr]) -> Iterable[str]:
     return [_get_partial_offset_tag(arg) for arg in _get_neighbors_args(reduce_args)]
 
 
+def _is_reduce(node: itir.FunCall) -> TypeGuard[itir.FunCall]:
+    return isinstance(node.fun, itir.FunCall) and node.fun.fun == itir.SymRef(id="reduce")
+
+
 def _get_connectivity(
     applied_reduce_node: itir.FunCall,
     offset_provider: dict[str, common.Dimension | common.Connectivity],
 ) -> common.Connectivity:
     """Return single connectivity that is compatible with the arguments of the reduce."""
-    if not cpm.is_applied_reduce(applied_reduce_node):
+    if not _is_reduce(applied_reduce_node):
         raise ValueError("Expected a call to a 'reduce' object, i.e. 'reduce(...)(...)'.")
 
     connectivities: list[common.Connectivity] = []
@@ -155,6 +158,6 @@ class UnrollReduce(PreserveLocationVisitor, NodeTranslator):
 
     def visit_FunCall(self, node: itir.FunCall, **kwargs) -> itir.Expr:
         node = self.generic_visit(node, **kwargs)
-        if cpm.is_applied_reduce(node):
+        if _is_reduce(node):
             return self._visit_reduce(node, **kwargs)
         return node
