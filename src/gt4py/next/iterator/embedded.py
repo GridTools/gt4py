@@ -150,36 +150,6 @@ class NeighborTableOffsetProvider:
     __descriptor__ = _dace_descriptor
 
 
-@dataclasses.dataclass(frozen=True)
-class CompileTimeConnectivity:
-    max_neighbors: int
-    has_skip_values: bool
-    origin_axis: common.Dimension
-    neighbor_axis: common.Dimension
-    index_type: type[int] | type[np.int32] | type[np.int64]
-
-    def mapped_index(
-        self, cur_index: int | np.integer, neigh_index: int | np.integer
-    ) -> Optional[int | np.integer]:
-        raise NotImplementedError(
-            "A CompileTimeConnectivity instance should not call `mapped_index`."
-        )
-
-    @classmethod
-    def from_connectivity(cls, connectivity: common.Connectivity) -> Self:
-        return cls(
-            max_neighbors=connectivity.max_neighbors,
-            has_skip_values=connectivity.has_skip_values,
-            origin_axis=connectivity.origin_axis,
-            neighbor_axis=connectivity.neighbor_axis,
-            index_type=connectivity.index_type,
-        )
-
-    @property
-    def table(self):
-        return None
-
-
 class StridedNeighborOffsetProvider:
     def __init__(
         self,

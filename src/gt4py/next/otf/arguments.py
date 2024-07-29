@@ -70,6 +70,13 @@ class CompileTimeConnectivity(common.Connectivity):
     neighbor_axis: common.Dimension
     index_type: type[int] | type[np.int32] | type[np.int64]
 
+    def mapped_index(
+        self, cur_index: int | np.integer, neigh_index: int | np.integer
+    ) -> Optional[int | np.integer]:
+        raise NotImplementedError(
+            "A CompileTimeConnectivity instance should not call `mapped_index`."
+        )
+
     @classmethod
     def from_connectivity(cls, connectivity: common.Connectivity) -> Self:
         return cls(
@@ -79,6 +86,10 @@ class CompileTimeConnectivity(common.Connectivity):
             neighbor_axis=connectivity.neighbor_axis,
             index_type=connectivity.index_type,
         )
+
+    @property
+    def table(self) -> None:
+        return None
 
 
 @dataclasses.dataclass(frozen=True)
