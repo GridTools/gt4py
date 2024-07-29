@@ -178,9 +178,10 @@ def _collect_offset_definitions(
                     offset_definitions[dim.value] = TagDefinition(
                         name=Sym(id=dim.value), alias=_vertical_dimension
                     )
-                offset_definitions[dim.value] = TagDefinition(
-                    name=Sym(id=dim.value), alias=_horizontal_dimension
-                )
+                else:
+                    offset_definitions[dim.value] = TagDefinition(
+                        name=Sym(id=dim.value), alias=_horizontal_dimension
+                    )
         else:
             raise AssertionError(
                 "Elements of offset provider need to be either 'Dimension' or 'Connectivity'."
