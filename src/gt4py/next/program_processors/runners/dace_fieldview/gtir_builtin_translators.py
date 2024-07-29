@@ -62,8 +62,8 @@ class PrimitiveTranslator(Protocol):
             sdfg: The SDFG where the primitive subgraph should be instantiated
             state: The SDFG state where the result of the primitive function should be made available
             sdfg_builder: The object responsible for visiting child nodes of the primitive node.
-            let_symbols: Mapping of symbols (i.e. lambda parameters and/or reduce identity)
-                         to known temporary fields.
+            let_symbols: Mapping of symbols (i.e. lambda parameters and/or local constants
+                         like the reduce identity value) to temporary fields or symbolic expressions.
 
         Returns:
             A list of data access nodes and the associated GT4Py data type, which provide
@@ -107,6 +107,8 @@ def _parse_arg_expr(
             for dim, _, _ in domain
         }
         dims = arg_type.dims + (
+            # we add an extra anonymous dimension in the iterator definition to enable
+            # dereferencing elements in `ListType`
             [gtx_common.Dimension("")] if isinstance(arg_type.dtype, gtir_ts.ListType) else []
         )
         return gtir_to_tasklet.IteratorExpr(data_node, dims, indices)
@@ -181,8 +183,10 @@ def translate_as_field_op(
         if "reduce" in let_symbols:
             raise NotImplementedError("nested reductions not supported.")
 
+        # the reduce identity value is used to fill the skip values in neighbors list
         _, _, reduce_identity = gtir_to_tasklet.get_reduce_params(stencil_expr.expr)
 
+        # we store the reduce identity value as a constant let-symbol
         let_symbols = let_symbols | {
             "reduce": (
                 gtir.Literal(value=str(reduce_identity.value), type=stencil_expr.expr.type),
@@ -191,6 +195,7 @@ def translate_as_field_op(
         }
 
     elif "reduce" in let_symbols:
+        # a parent node is a reduction node, so we are visiting the current node in the context of a reduction
         reduce_symbol, _ = let_symbols["reduce"]
         assert isinstance(reduce_symbol, gtir.Literal)
         reduce_identity = gtir_to_tasklet.SymbolExpr(
@@ -360,17 +365,16 @@ def translate_symbol_ref(
     else:
         sym_value = str(node.id)
         if sym_value in let_symbols:
+            let_node, data_type = let_symbols[sym_value]
+            if isinstance(let_node, gtir.Literal):
+                return sdfg_builder.visit(let_node)
             # The `let_symbols` dictionary maps a `gtir.SymRef` string to a temporary
             # data container. These symbols are visited and initialized in a state
             # that preceeds the current state, therefore a new access node is created
             # everytime they are accessed. It is therefore possible that multiple access
             # nodes are created in one state for the same data container. We rely
             # on the dace simplify pass to remove duplicated access nodes.
-            let_node, data_type = let_symbols[sym_value]
-            if isinstance(let_node, gtir.Literal):
-                return sdfg_builder.visit(let_node)
-            else:
-                sym_value = str(let_node.id)
+            sym_value = str(let_node.id)
         else:
             data_type = sdfg_builder.get_symbol_type(sym_value)
         temp_name = sym_value
