@@ -108,7 +108,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     """
 
     offset_provider: dict[str, gtx_common.Connectivity | gtx_common.Dimension]
-    symbol_types: dict[str, ts.FieldType | ts.ScalarType] = dataclasses.field(
+    global_symbols: dict[str, ts.FieldType | ts.ScalarType] = dataclasses.field(
         default_factory=lambda: {}
     )
     map_uids: eve.utils.UIDGenerator = dataclasses.field(
@@ -123,8 +123,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         return self.offset_provider[offset]
 
     def get_symbol_type(self, symbol_name: str) -> ts.FieldType | ts.ScalarType:
-        assert symbol_name in self.symbol_types
-        return self.symbol_types[symbol_name]
+        assert symbol_name in self.global_symbols
+        return self.global_symbols[symbol_name]
 
     def unique_map_name(self, name: str) -> str:
         return f"{self.map_uids.sequential_id()}_{name}"
@@ -184,7 +184,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         # TODO: unclear why mypy complains about incompatible types
         assert isinstance(symbol_type, (ts.FieldType, ts.ScalarType))
-        self.symbol_types[name] = symbol_type
+        self.global_symbols[name] = symbol_type
 
     def _add_storage_for_temporary(self, temp_decl: gtir.Temporary) -> dict[str, str]:
         """
@@ -303,7 +303,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         for expr_node, target_node in zip(expr_nodes, target_nodes, strict=True):
             target_array = sdfg.arrays[target_node.data]
             assert not target_array.transient
-            target_symbol_type = self.symbol_types[target_node.data]
+            target_symbol_type = self.global_symbols[target_node.data]
 
             if isinstance(target_symbol_type, ts.FieldType):
                 subset = ",".join(
@@ -324,7 +324,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         node: gtir.FunCall,
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
-        let_symbols: dict[str, gtir_builtin_translators.TemporaryData],
+        let_symbols: dict[str, gtir_builtin_translators.LetSymbol],
     ) -> list[gtir_builtin_translators.TemporaryData]:
         # use specialized dataflow builder classes for each builtin function
         if cpm.is_call_to(node, "cond"):
@@ -355,7 +355,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             # some cleanup: remove isolated nodes for program arguments in lambda state
             isolated_node_args = [node for node, _ in node_args if lambda_state.degree(node) == 0]
             assert all(
-                isinstance(node, dace.nodes.AccessNode) and node.data in self.symbol_types
+                isinstance(node, dace.nodes.AccessNode) and node.data in self.global_symbols
                 for node in isolated_node_args
             )
             lambda_state.remove_nodes_from(isolated_node_args)
@@ -375,7 +375,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         node: gtir.Lambda,
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
-        let_symbols: dict[str, gtir_builtin_translators.TemporaryData],
+        let_symbols: dict[str, gtir_builtin_translators.LetSymbol],
         args: list[gtir_builtin_translators.TemporaryData],
     ) -> list[gtir_builtin_translators.TemporaryData]:
         """
@@ -388,7 +388,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         symbol, the parameter will shadow the previous symbol during traversal of the lambda expression.
         """
         lambda_symbols = let_symbols | {
-            str(p.id): arg for p, arg in zip(node.params, args, strict=True)
+            str(p.id): (temp_node.data, type_)
+            for p, (temp_node, type_) in zip(node.params, args, strict=True)
         }
 
         return self.visit(
@@ -403,7 +404,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         node: gtir.Literal,
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
-        let_symbols: dict[str, gtir_builtin_translators.TemporaryData],
+        let_symbols: dict[str, gtir_builtin_translators.LetSymbol],
     ) -> list[gtir_builtin_translators.TemporaryData]:
         return gtir_builtin_translators.translate_symbol_ref(
             node, sdfg, head_state, self, let_symbols={}
@@ -414,7 +415,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         node: gtir.SymRef,
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
-        let_symbols: dict[str, gtir_builtin_translators.TemporaryData],
+        let_symbols: dict[str, gtir_builtin_translators.LetSymbol],
     ) -> list[gtir_builtin_translators.TemporaryData]:
         return gtir_builtin_translators.translate_symbol_ref(
             node, sdfg, head_state, self, let_symbols
