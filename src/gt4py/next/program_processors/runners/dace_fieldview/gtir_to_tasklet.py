@@ -80,7 +80,7 @@ class IteratorExpr:
 class LambdaToTasklet(eve.NodeVisitor):
     """Translates an `ir.Lambda` expression to a dataflow graph.
 
-    Lambda functions should only be encountered as argument to the `as_field_op`
+    Lambda functions should only be encountered as argument to the `as_fieldop`
     builtin function, therefore the dataflow graph generated here typically
     represents the stencil function of a field operator.
     """
