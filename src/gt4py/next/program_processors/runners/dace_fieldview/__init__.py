@@ -13,9 +13,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
+from gt4py.next.program_processors.runners.dace_fieldview.gtir_dace_backend import get_sdfg_args
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_to_sdfg import build_sdfg_from_gtir
 
 
 __all__ = [
     "build_sdfg_from_gtir",
+    "get_sdfg_args",
 ]

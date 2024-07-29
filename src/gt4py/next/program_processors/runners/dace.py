@@ -19,7 +19,7 @@ import factory
 import gt4py._core.definitions as core_defs
 from gt4py.next import config
 from gt4py.next.otf import recipes, stages
-from gt4py.next.program_processors.runners.dace_iterator.workflow import (
+from gt4py.next.program_processors.runners.dace_fieldview.workflow import (
     DaCeCompilationStepFactory,
     DaCeTranslationStepFactory,
     convert_args,
