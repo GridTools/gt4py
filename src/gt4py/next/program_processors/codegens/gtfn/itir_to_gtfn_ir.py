@@ -178,7 +178,6 @@ def _collect_offset_definitions(
                     offset_definitions[dim.value] = TagDefinition(
                         name=Sym(id=dim.value), alias=_vertical_dimension
                     )
-                    # raise NotImplementedError()
                 offset_definitions[dim.value] = TagDefinition(
                     name=Sym(id=dim.value), alias=_horizontal_dimension
                 )
