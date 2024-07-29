@@ -193,7 +193,6 @@ def translate_as_field_op(
     elif "reduce" in let_symbols:
         reduce_symbol, _ = let_symbols["reduce"]
         assert isinstance(reduce_symbol, gtir.Literal)
-        assert reduce_symbol.type == stencil_expr.expr.type
         reduce_identity = gtir_to_tasklet.SymbolExpr(
             reduce_symbol.value, dace_fieldview_util.as_dace_type(reduce_symbol.type)
         )
@@ -366,7 +365,7 @@ def translate_symbol_ref(
             # that preceeds the current state, therefore a new access node is created
             # everytime they are accessed. It is therefore possible that multiple access
             # nodes are created in one state for the same data container. We rely
-            # on the simplify to remove duplicated access nodes.
+            # on the dace simplify pass to remove duplicated access nodes.
             let_node, data_type = let_symbols[sym_value]
             if isinstance(let_node, gtir.Literal):
                 return sdfg_builder.visit(let_node)
