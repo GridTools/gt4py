@@ -785,8 +785,69 @@ def test_gtir_connectivity_shift_chain():
     assert np.allclose(e_out, ref)
 
 
-def test_gtir_neighbors():
-    pytest.skip("Field of lists not fully supported as a type in GTIR yet")
+def test_gtir_neighbors_as_input():
+    # FIXME[#1582](edopao): Enable testcase when type inference is working
+    pytest.skip("Field of lists not fully supported by GTIR type inference")
+    init_value = np.random.rand()
+    vertex_domain = im.call("unstructured_domain")(
+        im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
+    )
+    testee = gtir.Program(
+        id=f"neighbors_as_input",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="v2e_field", type=V2E_FTYPE),
+            gtir.Sym(id="vertex", type=EFTYPE),
+            gtir.Sym(id="nvertices", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.call(
+                    im.call("as_fieldop")(
+                        im.lambda_("it")(
+                            im.call(im.call("reduce")("plus", im.literal_from_value(init_value)))(
+                                "it"
+                            )
+                        ),
+                        vertex_domain,
+                    )
+                )("v2e_field"),
+                domain=vertex_domain,
+                target=gtir.SymRef(id="vertex"),
+            )
+        ],
+    )
+
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, SIMPLE_MESH_OFFSET_PROVIDER)
+
+    connectivity_V2E = SIMPLE_MESH_OFFSET_PROVIDER["V2E"]
+    assert isinstance(connectivity_V2E, gtx_common.NeighborTable)
+
+    v2e_field = np.random.rand(SIMPLE_MESH.num_vertices, connectivity_V2E.max_neighbors)
+    v = np.empty(SIMPLE_MESH.num_vertices, dtype=v2e_field.dtype)
+
+    v_ref = [
+        functools.reduce(lambda x, y: x + y, v2e_neighbors, init_value)
+        for v2e_neighbors in v2e_field
+    ]
+
+    sdfg(
+        v2e_field=v2e_field,
+        vertex=v,
+        **FSYMBOLS,
+        **make_mesh_symbols(SIMPLE_MESH),
+        __v2e_field_size_0=SIMPLE_MESH.num_vertices,
+        __v2e_field_size_1=connectivity_V2E.max_neighbors,
+        __v2e_field_stride_0=connectivity_V2E.max_neighbors,
+        __v2e_field_stride_1=1,
+    )
+    assert np.allclose(v, v_ref)
+
+
+def test_gtir_neighbors_as_output():
+    # FIXME[#1582](edopao): Enable testcase when type inference is working
+    pytest.skip("Field of lists not fully supported by GTIR type inference")
     vertex_domain = im.call("unstructured_domain")(
         im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
     )
@@ -799,7 +860,7 @@ def test_gtir_neighbors():
         ),
     )
     testee = gtir.Program(
-        id=f"neighbors",
+        id=f"neighbors_as_output",
         function_definitions=[],
         params=[
             gtir.Sym(id="edges", type=EFTYPE),
@@ -996,6 +1057,7 @@ def test_gtir_reduce_with_skip_values():
 
 
 def test_gtir_reduce_dot_product():
+    # FIXME[#1582](edopao): Enable testcase when type inference is working
     pytest.skip("Field of lists not fully supported as a type in GTIR yet")
     init_value = np.random.rand()
     vertex_domain = im.call("unstructured_domain")(
