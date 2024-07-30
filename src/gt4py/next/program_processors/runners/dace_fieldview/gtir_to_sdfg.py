@@ -404,7 +404,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         head_state: dace.SDFGState,
         let_symbols: dict[str, gtir_builtin_translators.LetSymbol],
     ) -> list[gtir_builtin_translators.TemporaryData]:
-        return gtir_builtin_translators.translate_symbol_ref(
+        return gtir_builtin_translators.translate_literal(
             node, sdfg, head_state, self, let_symbols={}
         )
 
