@@ -150,6 +150,73 @@ def _make_serial_sdfg_2(
     return sdfg
 
 
+def _make_serial_sdfg_3(
+    N_input: str | int,
+    N_output: str | int,
+) -> dace.SDFG:
+    """Creates a serial SDFG that has an indirect access Tasklet in the second map.
+
+    The SDFG has three inputs `a`, `b` and `idx`. The first two are 1 dimensional
+    arrays, and the second is am array containing integers.
+    The top map computes `a + b` and stores that in `tmp`.
+    The second map then uses the elements of `idx` to make indirect accesses into
+    `tmp`, which are stored inside `c`.
+
+    Args:
+        N_input: The length of `a` and `b`.
+        N_output: The length of `c` and `idx`.
+    """
+    input_shape = (N_input,)
+    output_shape = (N_output,)
+
+    sdfg = dace.SDFG("serial_3_sdfg")
+    state = sdfg.add_state(is_start_block=True)
+
+    for name, shape in [
+        ("a", input_shape),
+        ("b", input_shape),
+        ("c", output_shape),
+        ("idx", output_shape),
+        ("tmp", input_shape),
+    ]:
+        sdfg.add_array(
+            name=name,
+            shape=shape,
+            dtype=dace.int32 if name == "idx" else dace.float64,
+            transient=False,
+        )
+    sdfg.arrays["tmp"].transient = True
+    tmp = state.add_access("tmp")
+
+    state.add_mapped_tasklet(
+        name="first_computation",
+        map_ranges=[("__i0", f"0:{N_input}")],
+        inputs={
+            "__in0": dace.Memlet("a[__i0]"),
+            "__in1": dace.Memlet("b[__i0]"),
+        },
+        code="__out = __in0 + __in1",
+        outputs={"__out": dace.Memlet("tmp[__i0]")},
+        output_nodes={"tmp": tmp},
+        external_edges=True,
+    )
+
+    state.add_mapped_tasklet(
+        name="indirect_access",
+        map_ranges=[("__i0", f"0:{N_output}")],
+        input_nodes={"tmp": tmp},
+        inputs={
+            "__index": dace.Memlet("idx[__i0]"),
+            "__array": dace.Memlet.simple("tmp", subset_str=f"0:{N_input}", num_accesses=1),
+        },
+        code="__out = __array[__index]",
+        outputs={"__out": dace.Memlet("c[__i0]")},
+        external_edges=True,
+    )
+
+    return sdfg
+
+
 def test_exclusive_itermediate():
     """Tests if the exclusive intermediate branch works."""
     N = 10
@@ -351,3 +418,40 @@ def test_interstate_transient():
     assert np.allclose(ref_b, b)
     assert np.allclose(ref_c, c)
     assert np.allclose(ref_d, d)
+
+
+def test_indirect_access():
+    """Tests if indirect accesses are handled.
+
+    Indirect accesses, a Tasklet dereferences the array, can not be fused, because
+    the array is accessed by the Tasklet.
+    """
+    N_input = 100
+    N_output = 1000
+    a = np.random.rand(N_input)
+    b = np.random.rand(N_input)
+    c = np.empty(N_output)
+    idx = np.random.randint(low=0, high=N_input, size=N_output, dtype=np.int32)
+    sdfg = _make_serial_sdfg_3(N_input=N_input, N_output=N_output)
+    assert util._count_nodes(sdfg, dace_nodes.MapEntry) == 2
+
+    def _ref(a, b, idx):
+        tmp = a + b
+        return tmp[idx]
+
+    ref = _ref(a, b, idx)
+
+    sdfg(a=a, b=b, idx=idx, c=c)
+    assert np.allclose(ref, c)
+
+    # Now "apply" the transformation
+    sdfg.apply_transformations_repeated(
+        gtx_transformations.SerialMapFusion(),
+        validate=True,
+        validate_all=True,
+    )
+    assert util._count_nodes(sdfg, dace_nodes.MapEntry) == 2
+
+    c[:] = -1.0
+    sdfg(a=a, b=b, idx=idx, c=c)
+    assert np.allclose(ref, c)
