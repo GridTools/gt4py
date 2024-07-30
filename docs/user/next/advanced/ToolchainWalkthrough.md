@@ -27,7 +27,7 @@ fdef("DataArgsPair[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("Dat
 foast -->|foast_to_itir| itir_expr(itir.Expr)
 foast -->|field_view_op_to_prog| past("DataArgsPair[PastProgramDefinition, AOT]")
 past -->|past_lint| past
-past -->|field_view_prog_args_transform| tapast
+past -->|field_view_prog_args_transform| tapast("DataArgsPair[PastProgramDefinition, AOT]")
 tapast -->|past_to_itir| pcall(AOTProgram)
 
 pdef("DataArgsPair[ProgramDefinition, AOT]") -->|func_to_past| past("DataArgsPair[PastProgramDefinition, AOT]")
@@ -60,7 +60,7 @@ fdef("DataArgsPair[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("Dat
 foast -->|foast_to_itir| itir_expr(itir.Expr)
 foast -->|field_view_op_to_prog| past("DataArgsPair[PastProgramDefinition, AOT]")
 past -->|past_lint| past
-past -->|field_view_prog_args_transform| tapast
+past -->|field_view_prog_args_transform| tapast("DataArgsPair[PastProgramDefinition, AOT]")
 tapast -->|past_to_itir| pcall(AOTProgram)
 
 pdef("DataArgsPair[ProgramDefinition, AOT]") -->|func_to_past| past("DataArgsPair[PastProgramDefinition, AOT]")
@@ -92,7 +92,7 @@ fdef("DataArgsPair[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("Dat
 foast -->|foast_to_itir| itir_expr(itir.Expr)
 foast -->|field_view_op_to_prog| past("DataArgsPair[PastProgramDefinition, AOT]")
 past -->|past_lint| past
-past -->|field_view_prog_args_transform| tapast
+past -->|field_view_prog_args_transform| tapast("DataArgsPair[PastProgramDefinition, AOT]")
 tapast -->|past_to_itir| pcall(AOTProgram)
 
 pdef("DataArgsPair[ProgramDefinition, AOT]") -->|func_to_past| past("DataArgsPair[PastProgramDefinition, AOT]")
@@ -121,7 +121,7 @@ fdef("DataArgsPair[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("Dat
 foast -->|foast_to_itir| itir_expr(itir.Expr)
 foast -->|field_view_op_to_prog| past("DataArgsPair[PastProgramDefinition, AOT]")
 past -->|past_lint| past
-past -->|field_view_prog_args_transform| tapast
+past -->|field_view_prog_args_transform| tapast("DataArgsPair[PastProgramDefinition, AOT]")
 tapast -->|past_to_itir| pcall(AOTProgram)
 
 pdef("DataArgsPair[ProgramDefinition, AOT]") -->|func_to_past| past("DataArgsPair[PastProgramDefinition, AOT]")
@@ -164,7 +164,7 @@ fdef("DataArgsPair[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("Dat
 foast -->|foast_to_itir| itir_expr(itir.Expr)
 foast -->|field_view_op_to_prog| past("DataArgsPair[PastProgramDefinition, AOT]")
 past -->|past_lint| past
-past -->|field_view_prog_args_transform| tapast
+past -->|field_view_prog_args_transform| tapast("DataArgsPair[PastProgramDefinition, AOT]")
 tapast -->|past_to_itir| pcall(AOTProgram)
 
 pdef("DataArgsPair[ProgramDefinition, AOT]") -->|func_to_past| past("DataArgsPair[PastProgramDefinition, AOT]")
@@ -189,7 +189,7 @@ fdef("DataArgsPair[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("Dat
 foast -->|foast_to_itir| itir_expr(itir.Expr)
 foast -->|field_view_op_to_prog| past("DataArgsPair[PastProgramDefinition, AOT]")
 past -->|past_lint| past
-past -->|field_view_prog_args_transform| tapast
+past -->|field_view_prog_args_transform| tapast("DataArgsPair[PastProgramDefinition, AOT]")
 tapast -->|past_to_itir| pcall(AOTProgram)
 
 pdef("DataArgsPair[ProgramDefinition, AOT]") -->|func_to_past| past("DataArgsPair[PastProgramDefinition, AOT]")
@@ -222,7 +222,7 @@ fdef("DataArgsPair[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("Dat
 foast -->|foast_to_itir| itir_expr(itir.Expr)
 foast -->|field_view_op_to_prog| past("DataArgsPair[PastProgramDefinition, AOT]")
 past -->|past_lint| past
-past -->|field_view_prog_args_transform| tapast
+past -->|field_view_prog_args_transform| tapast("DataArgsPair[PastProgramDefinition, AOT]")
 tapast -->|past_to_itir| pcall(AOTProgram)
 
 pdef("DataArgsPair[ProgramDefinition, AOT]") -->|func_to_past| past("DataArgsPair[PastProgramDefinition, AOT]")
@@ -265,7 +265,7 @@ fdef("DataArgsPair[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("Dat
 foast -->|foast_to_itir| itir_expr(itir.Expr)
 foast -->|field_view_op_to_prog| past("DataArgsPair[PastProgramDefinition, AOT]")
 past -->|past_lint| past
-past -->|field_view_prog_args_transform| tapast
+past -->|field_view_prog_args_transform| tapast("DataArgsPair[PastProgramDefinition, AOT]")
 tapast -->|past_to_itir| pcall(AOTProgram)
 
 pdef("DataArgsPair[ProgramDefinition, AOT]") -->|func_to_past| past("DataArgsPair[PastProgramDefinition, AOT]")
@@ -348,7 +348,7 @@ fdef("DataArgsPair[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("Dat
 foast -->|foast_to_itir| itir_expr(itir.Expr)
 foast -->|field_view_op_to_prog| past("DataArgsPair[PastProgramDefinition, AOT]")
 past -->|past_lint| past
-past -->|field_view_prog_args_transform| tapast
+past -->|field_view_prog_args_transform| tapast("DataArgsPair[PastProgramDefinition, AOT]")
 tapast -->|past_to_itir| pcall(AOTProgram)
 
 pdef("DataArgsPair[ProgramDefinition, AOT]") -->|func_to_past| past("DataArgsPair[PastProgramDefinition, AOT]")
@@ -372,7 +372,7 @@ fdef("DataArgsPair[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("Dat
 foast -->|foast_to_itir| itir_expr(itir.Expr)
 foast -->|field_view_op_to_prog| past("DataArgsPair[PastProgramDefinition, AOT]")
 past -->|past_lint| past
-past -->|field_view_prog_args_transform| tapast
+past -->|field_view_prog_args_transform| tapast("DataArgsPair[PastProgramDefinition, AOT]")
 tapast -->|past_to_itir| pcall(AOTProgram)
 
 pdef("DataArgsPair[ProgramDefinition, AOT]") -->|func_to_past| past("DataArgsPair[PastProgramDefinition, AOT]")
