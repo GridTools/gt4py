@@ -386,7 +386,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         symbol, the parameter will shadow the previous symbol during traversal of the lambda expression.
         """
         lambda_symbols = let_symbols | {
-            str(p.id): (temp_node.data, type_)
+            str(p.id): (gtir.SymRef(id=temp_node.data), type_)
             for p, (temp_node, type_) in zip(node.params, args, strict=True)
         }
 
@@ -404,7 +404,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         head_state: dace.SDFGState,
         let_symbols: dict[str, gtir_builtin_translators.LetSymbol],
     ) -> list[gtir_builtin_translators.TemporaryData]:
-        return gtir_builtin_translators.translate_symbol_ref(
+        return gtir_builtin_translators.translate_literal(
             node, sdfg, head_state, self, let_symbols={}
         )
 
