@@ -154,14 +154,14 @@ def _gpu_block_parser(
     self: "GPUSetBlockSize",
     val: Any,
 ) -> None:
-    """Used by the setter ob `GPUSetBlockSize.block_size`."""
+    """Used by the setter of `GPUSetBlockSize.block_size`."""
     org_val = val
     if isinstance(val, tuple):
         pass
     elif isinstance(val, list):
         val = tuple(val)
     elif isinstance(val, str):
-        val = tuple(x.replace(" ", "") for x in val.split(","))
+        val = tuple(x.strip() for x in val.split(","))
     else:
         raise TypeError(
             f"Does not know how to transform '{type(val).__name__}' into a proper GPU block size."
