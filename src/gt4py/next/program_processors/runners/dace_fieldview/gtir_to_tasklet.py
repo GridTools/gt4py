@@ -71,7 +71,18 @@ IteratorIndexExpr: TypeAlias = MemletExpr | SymbolExpr | ValueExpr
 
 @dataclasses.dataclass(frozen=True)
 class IteratorExpr:
-    """Iterator for field access to be consumed by `deref` or `shift` builtin functions."""
+    """
+    Iterator for field access to be consumed by `deref` or `shift` builtin functions.
+
+    Args:
+        field: The field this iterator operates on.
+        dimensions: Field domain represented as a sorted list of dimensions.
+                    In order to dereference an element in the field, we need index values
+                    for all the dimensions in the right order.
+        indices: Maps each dimension to an index value, which could be either a symbolic value
+                 or the result of a tasklet computation like neighbors connectivity or dynamic offset.
+
+    """
 
     field: dace.nodes.AccessNode
     dimensions: list[gtx_common.Dimension]
@@ -322,12 +333,18 @@ class LambdaToTasklet(eve.NodeVisitor):
         connectivity = dace_fieldview_util.connectivity_identifier(offset)
         # initially, the storage for the connectivty tables is created as transient;
         # when the tables are used, the storage is changed to non-transient,
-        # so the corresponding arrays are supposed to be allocated by the SDFG caller
+        # as the corresponding arrays are supposed to be allocated by the SDFG caller
         connectivity_desc = self.sdfg.arrays[connectivity]
         connectivity_desc.transient = False
 
-        # in order to incorporate a nested map we need some views to propagate the input connections
-        # the simplify pass should take care of removing redundant access nodes
+        # The visitor is constructing a list of input connections that will be handled
+        # by `translate_as_fieldop` (the primitive translator), that is responsible
+        # of creating the map for the field domain. For each input connection, it will
+        # create a memlet that will write to a node specified by the third attribute
+        # in the `InputConnection` tuple (either a tasklet, or a view node, or a library
+        # node). For the specific case of `neighbors` we need to nest the neighbors map
+        # inside the field map and the memlets will traverse the external map and write
+        # to the view nodes. The simplify pass will remove the redundant access nodes.
         field_slice_view, field_slice_desc = self.sdfg.add_view(
             f"{offset_provider.neighbor_axis.value}_view",
             (field_desc.shape[neighbor_dim_index],),
@@ -379,6 +396,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         if offset_provider.has_skip_values:
             assert self.reduce_identity is not None
             assert self.reduce_identity.dtype == field_desc.dtype
+            # TODO: Investigate if a NestedSDFG brings benefits
             tasklet_node = self._add_tasklet(
                 "gather_neighbors_with_skip_values",
                 {"__field", index_connector},
@@ -423,20 +441,27 @@ class LambdaToTasklet(eve.NodeVisitor):
         op_name, reduce_init, reduce_identity = get_reduce_params(node)
         dtype = reduce_identity.dtype
 
-        # we store the value of reduce identity in the visitor context while visiting the input to reduction
-        # this value will be returned by the neighbors builtin function for skip values
+        # We store the value of reduce identity in the visitor context while visiting
+        # the input to reduction; this value will be use by the `neighbors` visitor
+        # to fill the skip values in the neighbors list.
         prev_reduce_identity = self.reduce_identity
         self.reduce_identity = reduce_identity
-        assert len(node.args) == 1
-        input_expr = self.visit(node.args[0])
+
+        try:
+            input_expr = self.visit(node.args[0])
+        finally:
+            # ensure that we leave the visitor in the same state as we entered
+            self.reduce_identity = prev_reduce_identity
+
         assert isinstance(input_expr, MemletExpr | ValueExpr)
-        self.reduce_identity = prev_reduce_identity
         input_desc = input_expr.node.desc(self.sdfg)
         assert isinstance(input_desc, dace.data.Array)
 
         if len(input_desc.shape) > 1:
             assert isinstance(input_expr, MemletExpr)
             ndims = len(input_desc.shape) - 1
+            # the axis to be reduced is always the last one, because `reduce` is supposed
+            # to operate on `ListType`
             assert set(input_expr.subset.size()[0:ndims]) == {1}
             reduce_axes = [ndims]
         else:

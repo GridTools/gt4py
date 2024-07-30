@@ -63,7 +63,8 @@ class PrimitiveTranslator(Protocol):
             state: The SDFG state where the result of the primitive function should be made available
             sdfg_builder: The object responsible for visiting child nodes of the primitive node.
             let_symbols: Mapping of symbols (i.e. lambda parameters and/or local constants
-                         like the reduce identity value) to temporary fields or symbolic expressions.
+                         like the identity value in a reduction context) to temporary fields
+                         or symbolic expressions.
 
         Returns:
             A list of data access nodes and the associated GT4Py data type, which provide
@@ -138,7 +139,7 @@ def _create_temporary_field(
     if isinstance(output_desc, dace.data.Array):
         assert isinstance(node_type.dtype, gtir_ts.ListType)
         field_dtype = node_type.dtype.element_type
-        # extend the result arrays with the local dimensions added by the field operator e.g. `neighbors`)
+        # extend the result arrays with the local dimensions added by the field operator (e.g. `neighbors`)
         field_shape.extend(output_desc.shape)
     else:
         assert isinstance(output_desc, dace.data.Scalar)
@@ -180,6 +181,9 @@ def translate_as_field_op(
 
     reduce_identity: Optional[gtir_to_tasklet.SymbolExpr] = None
     if cpm.is_applied_reduce(stencil_expr.expr):
+        # 'reduce' is a reserved keyword of the DSL and we will never find a user-defined symbol
+        # with this name. Since 'reduce' will never collide with a user-defined symbol, it is safe
+        # to use it internally to store the reduce identity value as a let-symbol.
         if "reduce" in let_symbols:
             raise NotImplementedError("nested reductions not supported.")
 
