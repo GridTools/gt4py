@@ -455,3 +455,8 @@ def test_indirect_access():
     c[:] = -1.0
     sdfg(a=a, b=b, idx=idx, c=c)
     assert np.allclose(ref, c)
+
+
+def test_indirect_access_2():
+    # TODO(phimuell): Index should be computed and that map should be fusable.
+    pass
