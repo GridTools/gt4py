@@ -169,9 +169,10 @@ def gt_auto_optimize(
 
         # Phase 1: Initial Cleanup
         gt_simplify(sdfg)
-        sdfg.apply_transformations_once_everywhere(
+        sdfg.apply_transformations_repeated(
             [
                 dace_dataflow.TrivialMapElimination,
+                # TODO(phimuell): Investigate if these two are appropriate.
                 dace_dataflow.MapReduceFusion,
                 dace_dataflow.MapWCRFusion,
             ],
