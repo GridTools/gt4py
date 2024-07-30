@@ -29,7 +29,8 @@ from gt4py.next.program_processors.runners.dace_fieldview import (
 
 @pytest.fixture(autouse=True)
 def _set_dace_settings() -> Generator[None, None, None]:
-    """Enables the correct settings in DaCe."""
+    """Customizes DaCe settings during the tests."""
     with dace.config.temporary_config():
         dace.Config.set("optimizer", "match_exception", value=True)
+        dace.Config.set("compiler", "allow_view_arguments", value=True)
         yield
