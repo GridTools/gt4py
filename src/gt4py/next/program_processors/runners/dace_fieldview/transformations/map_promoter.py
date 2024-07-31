@@ -36,7 +36,7 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
     The transformation operates on two Maps, first the "source map". This map
     describes the Map that should be used as template. The second one is "map to
     promote". After the transformation the "map to promote" will have the same
-    map parameter than the "source map" has.
+    map parameter as the "source map" has.
 
     In order to properly work, the parameters of "source map" must be a strict
     superset of the ones of "map to promote". Furthermore, this transformation
@@ -52,6 +52,8 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
         promote_vertical: If `True` promote vertical dimensions; `True` by default.
         promote_local: If `True` promote local dimensions; `True` by default.
         promote_horizontal: If `True` promote horizontal dimensions; `False` by default.
+        promote_all: Do not impose any restriction on what to promote. The only
+            reasonable value is `True` or `None`.
 
     Note:
         This ignores tiling.
@@ -311,9 +313,9 @@ class SerialMapPromoter(BaseMapPromoter):
     def expressions(cls) -> Any:
         """Get the match expressions.
 
-        The function generates two different match expression. The first match
-        describes the case where the top map must be promoted, while the second
-        case is the second/lower map must be promoted.
+        The function generates two match expressions. The first match describes
+        the case where the top map must be promoted, while the second case is
+        the second/lower map must be promoted.
         """
         return [
             dace.sdfg.utils.node_path_graph(

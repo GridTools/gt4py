@@ -190,6 +190,7 @@ def gt_auto_optimize(
             Something along the line "Fuse if operational intensity goes up, but
             not if we have too much internal space (register pressure).
         - Create a custom array elimination pass that honors rule 1.
+        - Check if a pipeline could be used to speed up some computations.
     """
     device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
 

@@ -35,12 +35,12 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
 
     Things that are improved, compared to the native DaCe implementation:
     - Nested Maps.
-    - Temporary arrays and the correct propagation of their Memelts.
+    - Temporary arrays and the correct propagation of their Memlets.
     - Top Maps that have multiple outputs.
 
     Conceptually this transformation removes the exit of the first or upper map
-    and the entry of the lower or second map and then rewriting the connections
-    appropriate.
+    and the entry of the lower or second map and then rewrites the connections
+    appropriately.
 
     This transformation assumes that an SDFG obeys the structure that is outlined
     [here](https://hackmd.io/klvzLnzMR6GZBWtRU8HbDg#Requirements-on-SDFG). For that
@@ -70,9 +70,9 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
 
         The transformation matches the exit node of the top Map that is connected to
         an access node that again is connected to the entry node of the second Map.
-        An important note is, that the transformation operates not just on these nodes,
-        but more or less anything that has an outgoing connection of the first Map,
-        and is connected to the second map.
+        An important note is, that the transformation operates not just on the
+        matched nodes, but more or less on anything that has an incoming connection
+        from the first Map or an outgoing connection to the second Map entry.
         """
         return [dace.sdfg.utils.node_path_graph(cls.map_exit1, cls.access_node, cls.map_entry2)]
 
@@ -86,7 +86,7 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
         """Tests if the matched Maps can be merged.
 
         The two Maps are mergeable iff:
-        - The `can_be_fused()` of the base succeed, which checks some basic constrains.
+        - The `can_be_fused()` of the base succeed, which checks some basic constraints.
         - The decomposition exists and at least one of the intermediate sets
             is not empty.
         """
@@ -102,7 +102,8 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
             return False
 
         # Two maps can be serially fused if the node decomposition exists and
-        #  there at least one of the intermediate output sets is not empty.
+        #  at least one of the intermediate output sets is not empty. The state
+        #  of the pure outputs is irrelevant for serial map fusion.
         output_partition = self.partition_first_outputs(
             state=graph,
             sdfg=sdfg,
@@ -111,7 +112,8 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
         )
         if output_partition is None:
             return False
-        if not (output_partition[1] or output_partition[2]):
+        _, exclusive_outputs, shared_outputs = output_partition
+        if not (exclusive_outputs or shared_outputs):
             return False
         return True
 
@@ -216,12 +218,12 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
             state: The state in which the map is processed.
             sdfg: The SDFG that should be optimized.
             map_exit_1: The exit of the first/top map.
-            map_entry_1: The entry of the second map.
+            map_entry_2: The entry of the second map.
             map_exit_2: The exit of the second map.
             is_exclusive_set: If `True` `intermediate_outputs` is the exclusive set.
 
         Notes:
-            Before the transformation the `state` does not be to be valid and
+            Before the transformation the `state` does not have to be valid and
             after this function has run the state is (most likely) invalid.
 
         Todo:
@@ -303,7 +305,7 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
                 )
             new_inter_node: nodes.AccessNode = state.add_access(new_inter_name)
 
-            # New we will reroute the output Memlet, thus it will no longer going
+            # New we will reroute the output Memlet, thus it will no longer pass
             #  through the Map exit but through the newly created intermediate.
             #  we will delete the previous edge later.
             pre_exit_memlet: dace.Memlet = pre_exit_edge.data
@@ -314,11 +316,11 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
             assert pre_exit_memlet.data == inter_name
             new_pre_exit_memlet.data = new_inter_name
 
-            # Now we have to fix the subset of the Memlet.
-            #  Before the subset of the Memlet dependent on the Map variables,
+            # Now we have to modify the subset of the Memlet.
+            #  Before the subset of the Memlet was dependent on the Map variables,
             #  however, this is no longer the case, as we removed them. This change
             #  has to be reflected in the Memlet.
-            #  NOTE: Assert above ensures that the bellow is correct.
+            #  NOTE: Assert above ensures that the below is correct.
             new_pre_exit_memlet.replace(memlet_repl)
             if is_scalar:
                 new_pre_exit_memlet.subset = "0"
@@ -350,14 +352,14 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
                 producer_edge.data.replace(memlet_repl)
                 if is_scalar:
                     producer_edge.data.dst_subset = "0"
-                else:
-                    if producer_edge.data.dst_subset is not None:
-                        producer_edge.data.dst_subset.pop(squeezed_dims)
+                elif producer_edge.data.dst_subset is not None:
+                    producer_edge.data.dst_subset.pop(squeezed_dims)
 
             # Now after we have handled the input of the new intermediate node,
-            #  we must handle its output. For this we have to "inject" the temporary
-            #  in the second map. We do this by finding the input connectors on the
-            #  map entry, such that we know where we have to reroute inside the Map.
+            #  we must handle its output. For this we have to "inject" the newly
+            #  created intermediate into the second map. We do this by finding
+            #  the input connectors on the map entry, such that we know where we
+            #  have to reroute inside the Map.
             # NOTE: Assumes that map (if connected is the direct neighbour).
             conn_names: set[str] = set()
             for inter_node_out_edge in state.out_edges(inter_node):
@@ -386,7 +388,7 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
                     #       Memlet and the correctness of the code below.
                     new_inner_memlet = copy.deepcopy(inner_edge.data)
                     new_inner_memlet.replace(memlet_repl)
-                    new_inner_memlet.data = new_inter_name  # Because of the assert above, this will not chenge the direction.
+                    new_inner_memlet.data = new_inter_name  # Because of the assert above, this will not change the direction.
 
                     # Now remove the old edge, that started the second map entry.
                     #  Also add the new edge that started at the new intermediate.
@@ -402,9 +404,8 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
                     # Now we do subset modification to ensure that nothing failed.
                     if is_scalar:
                         new_inner_memlet.src_subset = "0"
-                    else:
-                        if new_inner_memlet.src_subset is not None:
-                            new_inner_memlet.src_subset.pop(squeezed_dims)
+                    elif new_inner_memlet.src_subset is not None:
+                        new_inner_memlet.src_subset.pop(squeezed_dims)
 
                     # Now clean the Memlets of that tree to use the new intermediate node.
                     for consumer_tree in state.memlet_tree(new_inner_edge).traverse_children():
@@ -413,9 +414,8 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
                         consumer_edge.data.data = new_inter_name
                         if is_scalar:
                             consumer_edge.data.src_subset = "0"
-                        else:
-                            if consumer_edge.data.subset is not None:
-                                consumer_edge.data.subset.pop(squeezed_dims)
+                        elif consumer_edge.data.subset is not None:
+                            consumer_edge.data.subset.pop(squeezed_dims)
 
                 # The edge that leaves the second map entry was already deleted.
                 #  We will now delete the edges that brought the data.

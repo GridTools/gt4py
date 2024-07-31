@@ -33,7 +33,7 @@ class KBlocking(transformation.SingleStateTransformation):
     dimension, that is commonly called "k", but identified with `block_dim`.
 
     All dimensions except `k` are unaffected by this transformation. In the outer
-    Map the will replace the `k` range, currently `k = 0:N`, with
+    Map will be replace the `k` range, currently `k = 0:N`, with
     `__coarse_k = 0:N:B`, where `N` is the original size of the range and `B`
     is the block size, passed as `blocking_size`. The transformation also handles the
     case if `N % B != 0`.
@@ -231,7 +231,7 @@ class KBlocking(transformation.SingleStateTransformation):
                 #  of the node in one go.
                 relocated_nodes.add(edge_dst)
 
-                # In order to be useful we have to temporary store the data the
+                # In order to be useful we have to temporarily store the data the
                 #  independent node generates
                 assert graph.out_degree(edge_dst) == 1  # TODO(phimuell): Lift
                 if isinstance(edge_dst, nodes.AccessNode):
