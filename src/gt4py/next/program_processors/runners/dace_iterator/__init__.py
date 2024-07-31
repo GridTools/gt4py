@@ -113,7 +113,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         if not isinstance(itir_tmp, itir.FencilDefinition):
             # FIXME[#1582](kotsaloscv): Update dace orchestration to work with GTIR program
             raise NotImplementedError
-        for closure in itir_tmp.closures:  # type: ignore[union-attr]
+        for closure in itir_tmp.closures:
             params_shifts = itir_transforms.trace_shifts.trace_stencil(
                 closure.stencil, num_args=len(closure.inputs)
             )
