@@ -63,7 +63,9 @@ def gt_gpu_transformation(
 
     Notes:
         The function might modify the order of the iteration variables of some
-        maps and fuse other Maps.
+        maps.
+        In addition it might fuse Maps together that should not be fused. To prevent
+        that you should set `try_removing_trivial_maps` to `False`.
 
     Todo:
         - Solve the fusing problem.
@@ -71,8 +73,11 @@ def gt_gpu_transformation(
     """
 
     # You need guru level or above to use these arguments.
-    gpu_launch_factor: Optional[int] = kwargs.get("gpu_launch_factor", None)
-    gpu_launch_bounds: Optional[int] = kwargs.get("gpu_launch_bounds", None)
+    gpu_launch_factor: Optional[int] = kwargs.pop("gpu_launch_factor", None)
+    gpu_launch_bounds: Optional[int] = kwargs.pop("gpu_launch_bounds", None)
+    assert (
+        len(kwargs) == 0
+    ), f"gt_gpu_transformation(): found unknown arguments: {', '.join(arg for arg in kwargs.keys())}"
 
     # Turn all global arrays (which we identify as input) into GPU memory.
     #  This way the GPU transformation will not create this copying stuff.
@@ -91,18 +96,15 @@ def gt_gpu_transformation(
     gtx_transformations.gt_simplify(sdfg)
 
     if try_removing_trivial_maps:
-        # Because of DaCe's design a Tasklet can not exist outside a Map in a GPU SDFG.
-        #  The GPU transformation will thus add trivial maps around them, which
-        #  translate to a kernel launch. Our current solution is to promote them and
-        #  then fuse it.
-        # NOTE: The current implementation has a flaw, because promotion and fusion
-        #   are two different steps, this is is inefficient. There are some problems
-        #   because the mapped Tasklet might not be fusable at all. However, the real
-        #   problem is, that Map fusion does not guarantee a certain order of Map
-        #   variables. Currently this is not a problem because of the way it is
-        #   implemented.
+        # A Tasklet, outside of a Map, that writes into an array on GPU can not work
+        #  `sdfg.appyl_gpu_transformations()` puts Map around it (if said Tasklet
+        #  would write into a Scalar that then goes into a GPU Map, nothing would
+        #  happen. So we might end up with lot of these trivial Maps, that results
+        #  in a single kernel launch. To prevent this we will try to fuse them.
+        # NOTE: The current implementation has a bug, because promotion and fusion
+        #   are two different steps. Because of this the function will implicitly
+        #   fuse everything together it can find.
         # TODO(phimuell): Fix the issue described above.
-        # TODO(phimuell): Maybe we should fuse trivial GPU maps before we do anything.
         sdfg.apply_transformations_once_everywhere(
             gtx_transformations.SerialMapPromoterGPU(),
             validate=False,
