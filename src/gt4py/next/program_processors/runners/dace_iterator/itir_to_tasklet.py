@@ -299,7 +299,13 @@ def _visit_lift_in_neighbors_reduction(
 
     if offset_provider.has_skip_values:
         # check neighbor validity on if/else inter-state edge
-        start_state = lift_context.body.add_state("start", is_start_block=True)
+        # use true branch for connectivity case
+        start_state = lift_context.body.add_state_before(
+            lift_context.body.start_state,
+            "start",
+            condition=f"{lifted_index_connectors[0]} != {neighbor_skip_value}",
+        )
+        # use false branch for skip value case
         skip_neighbor_state = lift_context.body.add_state("skip_neighbor")
         skip_neighbor_state.add_edge(
             skip_neighbor_state.add_tasklet(
@@ -314,11 +320,6 @@ def _visit_lift_in_neighbors_reduction(
             start_state,
             skip_neighbor_state,
             dace.InterstateEdge(condition=f"{lifted_index_connectors[0]} == {neighbor_skip_value}"),
-        )
-        lift_context.body.add_edge(
-            start_state,
-            lift_context.state,
-            dace.InterstateEdge(condition=f"{lifted_index_connectors[0]} != {neighbor_skip_value}"),
         )
 
     return [ValueExpr(neighbor_value_node, inner_outputs[0].dtype)]
