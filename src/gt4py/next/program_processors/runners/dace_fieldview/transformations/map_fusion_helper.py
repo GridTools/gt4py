@@ -477,7 +477,7 @@ class MapFusionHelper(transformation.SingleStateTransformation):
                 # Certain nodes need more than one element as input. As explained
                 #  above, in this situation we assume that we can naturally decompose
                 #  them iff the node does not consume that whole intermediate.
-                #  Furthermore, it can not be a dynamic map range.
+                #  Furthermore, it can not be a dynamic map range or a library node.
                 intermediate_size = functools.reduce(lambda a, b: a * b, intermediate_desc.shape)
                 consumers = util.find_downstream_consumers(state=state, begin=intermediate_node)
                 for consumer_node, feed_edge in consumers:
@@ -487,6 +487,9 @@ class MapFusionHelper(transformation.SingleStateTransformation):
                     ) and feed_edge.data.num_elements() == intermediate_size:
                         return None
                     if consumer_node is map_entry_2:  # Dynamic map range.
+                        return None
+                    if isinstance(consumer_node, nodes.LibraryNode):
+                        # TODO(phimuell): Allow some library nodes.
                         return None
 
                 # Note that "remove" has a special meaning here, regardless of the
@@ -519,6 +522,9 @@ class MapFusionHelper(transformation.SingleStateTransformation):
                             if feed_edge.data.num_elements() == intermediate_size:
                                 return None
                             if consumer_node is map_entry_2:  # Dynamic map range
+                                return None
+                            if isinstance(consumer_node, nodes.LibraryNode):
+                                # TODO(phimuell): Allow some library nodes.
                                 return None
                     else:
                         # Ensure that there is no path that leads to the second map.
