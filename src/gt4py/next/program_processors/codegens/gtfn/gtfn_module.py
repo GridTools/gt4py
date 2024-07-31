@@ -246,7 +246,6 @@ class GTFNTranslationStep(
             self._language_settings(),
             f"""
                     #include <{self._backend_header()}>
-                    #include <gridtools/stencil/global_parameter.hpp>
                     #include <gridtools/sid/dimension_to_tuple_like.hpp>
                     {stencil_src}
                     {decl_src}
