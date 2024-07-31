@@ -24,6 +24,8 @@ import dace
 import numpy as np
 from dace.sdfg import utils as sdutils
 from dace.transformation.auto import auto_optimize as autoopt
+from dace.transformation.pass_pipeline import Pipeline
+from dace.transformation.passes import DeadStateElimination
 
 import gt4py.next.iterator.ir as itir
 from gt4py.next import common
@@ -297,6 +299,14 @@ def build_sdfg_from_itir(
 
     # TODO(edopao): remove `inline_loop_blocks` when DaCe transformations support LoopRegion construct
     sdutils.inline_loop_blocks(sdfg)
+
+    # TODO(kotsaloscv): remove the DeadStateElimination transformation once this issue is fixed: https://github.com/spcl/dace/issues/1625
+    # From DaCe v0.16 to v0.16.1, there were changes in the CFG analysis that appear to be incompatible
+    # with SDFGs that have structurally inaccessible states. The workaround involves calling DeadStateElimination first
+    # to remove those states so that they don't cause issues in subsequent passes.
+    dace_pipeline = Pipeline([DeadStateElimination()])
+    for sd in sdfg.all_sdfgs_recursive():
+        dace_pipeline.apply_pass(sd, {})
 
     # run DaCe transformations to simplify the SDFG
     sdfg.simplify()
