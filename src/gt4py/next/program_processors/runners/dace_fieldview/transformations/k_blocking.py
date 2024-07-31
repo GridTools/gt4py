@@ -93,7 +93,7 @@ class KBlocking(transformation.SingleStateTransformation):
         - Toplevel map.
         - The map shall not be serial.
         - The block dimension must be present (exact match).
-        - The map range must have stride one.
+        - The map range must have step size of 1.
         - The partition must exists (see `partition_map_output()`).
         """
         if self.block_dim is None:
