@@ -148,12 +148,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             (
                 neighbor_tables[dim.value].max_neighbors
                 if dim.kind == gtx_common.DimensionKind.LOCAL
-                # we reuse the same symbol for field size passed as scalar argument to the gt4py program
-                else dace.symbol(f"__{name}_size_{i}", dtype)
+                else dace.symbol(dace_fieldview_util.field_size_symbol_name(name, i), dtype)
             )
             for i, dim in enumerate(dims)
         ]
-        strides = [dace.symbol(f"__{name}_stride_{i}", dtype) for i in range(len(dims))]
+        strides = [
+            dace.symbol(dace_fieldview_util.field_stride_symbol_name(name, i), dtype)
+            for i in range(len(dims))
+        ]
         return shape, strides
 
     def _add_storage(

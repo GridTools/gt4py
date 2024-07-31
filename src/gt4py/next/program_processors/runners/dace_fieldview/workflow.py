@@ -32,7 +32,7 @@ from gt4py.next.otf.compilation import cache
 from gt4py.next.otf.languages import LanguageSettings
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
 
-from . import build_sdfg_from_itir, get_sdfg_args
+from . import get_sdfg_args
 
 
 @dataclasses.dataclass(frozen=True)
@@ -63,22 +63,8 @@ class DaCeTranslator(
         offset_provider: dict[str, common.Dimension | common.Connectivity],
         column_axis: Optional[common.Dimension],
     ) -> dace.SDFG:
-        on_gpu = True if self.device_type == core_defs.DeviceType.CUDA else False
-
-        return build_sdfg_from_itir(
-            program,
-            arg_types,
-            offset_provider=offset_provider,
-            auto_optimize=self.auto_optimize,
-            on_gpu=on_gpu,
-            column_axis=column_axis,
-            lift_mode=self.lift_mode,
-            symbolic_domain_sizes=self.symbolic_domain_sizes,
-            temporary_extraction_heuristics=self.temporary_extraction_heuristics,
-            load_sdfg_from_file=False,
-            save_sdfg=False,
-            use_field_canonical_representation=self.use_field_canonical_representation,
-        )
+        # FIXME[#1582](edopao): Generate SDFG and run SDFG transformation for program optimization
+        raise NotImplementedError
 
     def __call__(
         self, inp: stages.ProgramCall
@@ -121,7 +107,7 @@ class CompiledDaceProgram(stages.CompiledProgram):
     # Map SDFG argument to its position in program ABI; scalar arguments that are not used in the SDFG will not be present.
     sdfg_arg_position: list[Optional[int]]
 
-    def __init__(self, program):
+    def __init__(self, program: dace.CompiledSDFG):
         # extract position of arguments in program ABI
         sdfg_arglist = program.sdfg.signature_arglist(with_types=False)
         sdfg_arg_pos_mapping = {param: pos for pos, param in enumerate(sdfg_arglist)}
@@ -135,7 +121,7 @@ class CompiledDaceProgram(stages.CompiledProgram):
             for param in program.sdfg.arg_names
         ]
 
-    def __call__(self, *args, **kwargs) -> None:
+    def __call__(self, *args: Any, **kwargs: Any) -> None:
         self.sdfg_program(*args, **kwargs)
 
 
@@ -187,7 +173,7 @@ class DaCeCompilationStepFactory(factory.Factory):
         model = DaCeCompiler
 
 
-def _get_ctype_value(arg: Any, dtype: dace.dtypes.dataclass):
+def _get_ctype_value(arg: Any, dtype: dace.dtypes.dataclass) -> Any:
     if not isinstance(arg, (ctypes._SimpleCData, ctypes._Pointer)):
         actype = dtype.as_ctypes()
         return actype(arg)
@@ -204,8 +190,8 @@ def convert_args(
     on_gpu = True if device == core_defs.DeviceType.CUDA else False
 
     def decorated_program(
-        *args, offset_provider: dict[str, common.Connectivity | common.Dimension]
-    ):
+        *args: Any, offset_provider: dict[str, common.Connectivity | common.Dimension]
+    ) -> Any:
         if sdfg_program._lastargs:
             # The scalar arguments should be replaced with the actual value; for field arguments,
             # the data pointer should remain the same otherwise fast-call cannot be used and
