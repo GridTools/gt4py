@@ -52,8 +52,6 @@ stages:
   variables:
     CUDA_VERSION: 12.4.1
     CUPY_PACKAGE: cupy-cuda12x
-  # TODO: re-enable CI job when Todi is back in operational state
-  when: manual
 
 build_py311_baseimage_x86_64:
   extends: .build_baseimage_x86_64
@@ -176,9 +174,6 @@ build_py38_image_x86_64:
     - SUBPACKAGE: next
       VARIANT: [-nomesh, -atlas]
       SUBVARIANT: [-cuda12x, -cpu]
-  before_script:
-  # TODO: remove start of CUDA MPS daemon once CI-CD can handle CRAY_CUDA_MPS
-  - CUDA_MPS_PIPE_DIRECTORY="/tmp/nvidia-mps" nvidia-cuda-mps-control -d
   variables:
     # Grace-Hopper gpu architecture is not enabled by default in CUDA build
     CUDAARCHS: "90"
