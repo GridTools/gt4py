@@ -26,6 +26,14 @@ from gt4py.next.program_processors.runners.dace_fieldview import (
 )
 
 
+__all__ = [
+    "dace_auto_optimize",
+    "gt_simplify",
+    "gt_set_iteration_order",
+    "gt_auto_optimize",
+]
+
+
 def dace_auto_optimize(
     sdfg: dace.SDFG,
     device: dace.DeviceType = dace.DeviceType.CPU,
@@ -80,6 +88,32 @@ def gt_simplify(
         verbose=False,
         skip=skip,
     ).apply_pass(sdfg, {})
+
+
+def gt_set_iteration_order(
+    sdfg: dace.SDFG,
+    leading_dim: gtx_common.Dimension,
+    validate: bool = True,
+    validate_all: bool = False,
+) -> Any:
+    """Set the iteration order of the Maps correctly.
+
+    Modifies the order of the Map parameters such that `leading_dim`
+    is the fastest varying one, the order of the other dimensions in
+    a Map is unspecific. `leading_dim` should be the dimensions were
+    the stride is one.
+
+    Args:
+        sdfg: The SDFG to process.
+        leading_dim: The leading dimensions.
+        validate: Perform validation during the steps.
+        validate_all: Perform extensive validation.
+    """
+    return sdfg.apply_transformations_once_everywhere(
+        gtx_transformations.MapIterationOrder(
+            leading_dim=leading_dim,
+        )
+    )
 
 
 def gt_auto_optimize(
@@ -254,10 +288,11 @@ def gt_auto_optimize(
         #   This essentially ensures that the stride 1 dimensions are handled
         #   by the inner most loop nest (CPU) or x-block (GPU)
         if leading_dim is not None:
-            sdfg.apply_transformations_once_everywhere(
-                gtx_transformations.MapIterationOrder(
-                    leading_dim=leading_dim,
-                )
+            gt_set_iteration_order(
+                sdfg=sdfg,
+                leading_dim=leading_dim,
+                validate=validate,
+                validate_all=validate_all,
             )
 
         # Phase 5: Apply blocking

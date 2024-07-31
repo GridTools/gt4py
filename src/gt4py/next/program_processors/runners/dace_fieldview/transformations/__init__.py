@@ -18,7 +18,7 @@ Please also see [this HackMD document](https://hackmd.io/@gridtools/rklwk4OIR#Re
 that explains the general structure and requirements on the SDFG.
 """
 
-from .auto_opt import dace_auto_optimize, gt_auto_optimize, gt_simplify
+from .auto_opt import dace_auto_optimize, gt_auto_optimize, gt_set_iteration_order, gt_simplify
 from .gpu_utils import (
     GPUSetBlockSize,
     SerialMapPromoterGPU,
@@ -32,15 +32,16 @@ from .map_serial_fusion import SerialMapFusion
 
 
 __all__ = [
-    "dace_auto_optimize",
-    "gt_auto_optimize",
-    "gt_simplify",
-    "gt_gpu_transformation",
-    "gt_set_gpu_blocksize",
+    "GPUSetBlockSize",
+    "KBlocking",
+    "MapIterationOrder",
     "SerialMapFusion",
     "SerialMapPromoter",
     "SerialMapPromoterGPU",
-    "MapIterationOrder",
-    "GPUSetBlockSize",
-    "KBlocking",
+    "dace_auto_optimize",
+    "gt_auto_optimize",
+    "gt_gpu_transformation",
+    "gt_set_iteration_order",
+    "gt_set_gpu_blocksize",
+    "gt_simplify",
 ]
