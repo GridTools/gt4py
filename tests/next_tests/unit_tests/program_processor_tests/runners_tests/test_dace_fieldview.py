@@ -18,9 +18,11 @@ Note: this test module covers the fieldview flavour of ITIR.
 """
 
 import copy
+import functools
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.type_system import type_specifications as gtir_ts
 from gt4py.next.program_processors.runners import dace_fieldview as dace_backend
 from gt4py.next.type_system import type_specifications as ts
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
@@ -28,8 +30,10 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     Edge,
     IDim,
     MeshDescriptor,
+    V2EDim,
     Vertex,
     simple_mesh,
+    skip_value_mesh,
 )
 import numpy as np
 import pytest
@@ -42,12 +46,17 @@ IFTYPE = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT6
 CFTYPE = ts.FieldType(dims=[Cell], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
 EFTYPE = ts.FieldType(dims=[Edge], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
 VFTYPE = ts.FieldType(dims=[Vertex], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+V2E_FTYPE = ts.FieldType(dims=[Vertex, V2EDim], dtype=EFTYPE.dtype)
 CARTESIAN_OFFSETS = {
     "IDim": IDim,
 }
 SIMPLE_MESH: MeshDescriptor = simple_mesh()
 SIMPLE_MESH_OFFSET_PROVIDER: dict[str, gtx_common.Connectivity | gtx_common.Dimension] = (
     SIMPLE_MESH.offset_provider | CARTESIAN_OFFSETS
+)
+SKIP_VALUE_MESH: MeshDescriptor = skip_value_mesh()
+SKIP_VALUE_MESH_OFFSET_PROVIDER: dict[str, gtx_common.Connectivity | gtx_common.Dimension] = (
+    SKIP_VALUE_MESH.offset_provider | CARTESIAN_OFFSETS
 )
 SIZE_TYPE = ts.ScalarType(ts.ScalarKind.INT32)
 FSYMBOLS = dict(
@@ -774,6 +783,447 @@ def test_gtir_connectivity_shift_chain():
         __edges_out_stride_0=1,
     )
     assert np.allclose(e_out, ref)
+
+
+def test_gtir_neighbors_as_input():
+    # FIXME[#1582](edopao): Enable testcase when type inference is working
+    pytest.skip("Field of lists not fully supported by GTIR type inference")
+    init_value = np.random.rand()
+    vertex_domain = im.call("unstructured_domain")(
+        im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
+    )
+    testee = gtir.Program(
+        id=f"neighbors_as_input",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="v2e_field", type=V2E_FTYPE),
+            gtir.Sym(id="vertex", type=EFTYPE),
+            gtir.Sym(id="nvertices", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.call(
+                    im.call("as_fieldop")(
+                        im.lambda_("it")(
+                            im.call(im.call("reduce")("plus", im.literal_from_value(init_value)))(
+                                "it"
+                            )
+                        ),
+                        vertex_domain,
+                    )
+                )("v2e_field"),
+                domain=vertex_domain,
+                target=gtir.SymRef(id="vertex"),
+            )
+        ],
+    )
+
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, SIMPLE_MESH_OFFSET_PROVIDER)
+
+    connectivity_V2E = SIMPLE_MESH_OFFSET_PROVIDER["V2E"]
+    assert isinstance(connectivity_V2E, gtx_common.NeighborTable)
+
+    v2e_field = np.random.rand(SIMPLE_MESH.num_vertices, connectivity_V2E.max_neighbors)
+    v = np.empty(SIMPLE_MESH.num_vertices, dtype=v2e_field.dtype)
+
+    v_ref = [
+        functools.reduce(lambda x, y: x + y, v2e_neighbors, init_value)
+        for v2e_neighbors in v2e_field
+    ]
+
+    sdfg(
+        v2e_field=v2e_field,
+        vertex=v,
+        **FSYMBOLS,
+        **make_mesh_symbols(SIMPLE_MESH),
+        __v2e_field_size_0=SIMPLE_MESH.num_vertices,
+        __v2e_field_size_1=connectivity_V2E.max_neighbors,
+        __v2e_field_stride_0=connectivity_V2E.max_neighbors,
+        __v2e_field_stride_1=1,
+    )
+    assert np.allclose(v, v_ref)
+
+
+def test_gtir_neighbors_as_output():
+    # FIXME[#1582](edopao): Enable testcase when type inference is working
+    pytest.skip("Field of lists not fully supported by GTIR type inference")
+    vertex_domain = im.call("unstructured_domain")(
+        im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
+    )
+    v2e_domain = im.call("unstructured_domain")(
+        im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
+        im.call("named_range")(
+            gtir.AxisLiteral(value=V2EDim.value),
+            0,
+            SIMPLE_MESH_OFFSET_PROVIDER["V2E"].max_neighbors,
+        ),
+    )
+    testee = gtir.Program(
+        id=f"neighbors_as_output",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="edges", type=EFTYPE),
+            gtir.Sym(id="v2e_field", type=V2E_FTYPE),
+            gtir.Sym(id="nvertices", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.call(
+                    im.call("as_fieldop")(
+                        im.lambda_("it")(im.neighbors("V2E", "it")),
+                        vertex_domain,
+                    )
+                )("edges"),
+                domain=v2e_domain,
+                target=gtir.SymRef(id="v2e_field"),
+            )
+        ],
+    )
+
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, SIMPLE_MESH_OFFSET_PROVIDER)
+
+    connectivity_V2E = SIMPLE_MESH_OFFSET_PROVIDER["V2E"]
+    assert isinstance(connectivity_V2E, gtx_common.NeighborTable)
+
+    e = np.random.rand(SIMPLE_MESH.num_edges)
+    v2e_field = np.empty([SIMPLE_MESH.num_vertices, connectivity_V2E.max_neighbors], dtype=e.dtype)
+
+    sdfg(
+        edges=e,
+        v2e_field=v2e_field,
+        connectivity_V2E=connectivity_V2E.table,
+        **FSYMBOLS,
+        **make_mesh_symbols(SIMPLE_MESH),
+        __v2e_field_size_0=SIMPLE_MESH.num_vertices,
+        __v2e_field_size_1=connectivity_V2E.max_neighbors,
+        __v2e_field_stride_0=connectivity_V2E.max_neighbors,
+        __v2e_field_stride_1=1,
+    )
+    assert np.allclose(v2e_field, e[connectivity_V2E.table])
+
+
+def test_gtir_reduce():
+    init_value = np.random.rand()
+    vertex_domain = im.call("unstructured_domain")(
+        im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
+    )
+    stencil_inlined = im.call(
+        im.call("as_fieldop")(
+            im.lambda_("it")(
+                im.call(im.call("reduce")("plus", im.literal_from_value(init_value)))(
+                    im.neighbors("V2E", "it")
+                )
+            ),
+            vertex_domain,
+        )
+    )("edges")
+    stencil_fieldview = im.call(
+        im.call("as_fieldop")(
+            im.lambda_("it")(
+                im.call(im.call("reduce")("plus", im.literal_from_value(init_value)))(
+                    im.deref("it")
+                )
+            ),
+            vertex_domain,
+        )
+    )(
+        im.call(
+            im.call("as_fieldop")(
+                im.lambda_("it")(im.neighbors("V2E", "it")),
+                vertex_domain,
+            )
+        )("edges")
+    )
+
+    connectivity_V2E = SIMPLE_MESH_OFFSET_PROVIDER["V2E"]
+    assert isinstance(connectivity_V2E, gtx_common.NeighborTable)
+
+    e = np.random.rand(SIMPLE_MESH.num_edges)
+    v_ref = [
+        functools.reduce(lambda x, y: x + y, e[v2e_neighbors], init_value)
+        for v2e_neighbors in connectivity_V2E.table
+    ]
+
+    for i, stencil in enumerate([stencil_inlined, stencil_fieldview]):
+        testee = gtir.Program(
+            id=f"reduce_{i}",
+            function_definitions=[],
+            params=[
+                gtir.Sym(id="edges", type=EFTYPE),
+                gtir.Sym(id="vertices", type=VFTYPE),
+                gtir.Sym(id="nvertices", type=SIZE_TYPE),
+            ],
+            declarations=[],
+            body=[
+                gtir.SetAt(
+                    expr=stencil,
+                    domain=vertex_domain,
+                    target=gtir.SymRef(id="vertices"),
+                )
+            ],
+        )
+        sdfg = dace_backend.build_sdfg_from_gtir(testee, SIMPLE_MESH_OFFSET_PROVIDER)
+
+        # new empty output field
+        v = np.empty(SIMPLE_MESH.num_vertices, dtype=e.dtype)
+
+        sdfg(
+            edges=e,
+            vertices=v,
+            connectivity_V2E=connectivity_V2E.table,
+            **FSYMBOLS,
+            **make_mesh_symbols(SIMPLE_MESH),
+        )
+        assert np.allclose(v, v_ref)
+
+
+def test_gtir_reduce_with_skip_values():
+    init_value = np.random.rand()
+    vertex_domain = im.call("unstructured_domain")(
+        im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
+    )
+    stencil_inlined = im.call(
+        im.call("as_fieldop")(
+            im.lambda_("it")(
+                im.call(im.call("reduce")("plus", im.literal_from_value(init_value)))(
+                    im.neighbors("V2E", "it")
+                )
+            ),
+            vertex_domain,
+        )
+    )("edges")
+    stencil_fieldview = im.call(
+        im.call("as_fieldop")(
+            im.lambda_("it")(
+                im.call(im.call("reduce")("plus", im.literal_from_value(init_value)))(
+                    im.deref("it")
+                )
+            ),
+            vertex_domain,
+        )
+    )(
+        im.call(
+            im.call("as_fieldop")(
+                im.lambda_("it")(im.neighbors("V2E", "it")),
+                vertex_domain,
+            )
+        )("edges")
+    )
+
+    connectivity_V2E = SKIP_VALUE_MESH_OFFSET_PROVIDER["V2E"]
+    assert isinstance(connectivity_V2E, gtx_common.NeighborTable)
+
+    e = np.random.rand(SKIP_VALUE_MESH.num_edges)
+    v_ref = [
+        functools.reduce(
+            lambda x, y: x + y, [e[i] if i != -1 else 0.0 for i in v2e_neighbors], init_value
+        )
+        for v2e_neighbors in connectivity_V2E.table
+    ]
+
+    for i, stencil in enumerate([stencil_inlined, stencil_fieldview]):
+        testee = gtir.Program(
+            id=f"reduce_with_skip_values_{i}",
+            function_definitions=[],
+            params=[
+                gtir.Sym(id="edges", type=EFTYPE),
+                gtir.Sym(id="vertices", type=VFTYPE),
+                gtir.Sym(id="nvertices", type=SIZE_TYPE),
+            ],
+            declarations=[],
+            body=[
+                gtir.SetAt(
+                    expr=stencil,
+                    domain=vertex_domain,
+                    target=gtir.SymRef(id="vertices"),
+                )
+            ],
+        )
+        sdfg = dace_backend.build_sdfg_from_gtir(testee, SKIP_VALUE_MESH_OFFSET_PROVIDER)
+
+        # new empty output field
+        v = np.empty(SKIP_VALUE_MESH.num_vertices, dtype=e.dtype)
+
+        sdfg(
+            edges=e,
+            vertices=v,
+            connectivity_V2E=connectivity_V2E.table,
+            **FSYMBOLS,
+            **make_mesh_symbols(SKIP_VALUE_MESH),
+        )
+        assert np.allclose(v, v_ref)
+
+
+def test_gtir_reduce_dot_product():
+    # FIXME[#1582](edopao): Enable testcase when type inference is working
+    pytest.skip("Field of lists not fully supported as a type in GTIR yet")
+    init_value = np.random.rand()
+    vertex_domain = im.call("unstructured_domain")(
+        im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
+    )
+    v2e_domain = im.call("unstructured_domain")(
+        im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
+        im.call("named_range")(
+            gtir.AxisLiteral(value=V2EDim.value),
+            0,
+            SIMPLE_MESH_OFFSET_PROVIDER["V2E"].max_neighbors,
+        ),
+    )
+
+    testee = gtir.Program(
+        id=f"reduce_dot_product",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="edges", type=EFTYPE),
+            gtir.Sym(id="vertices", type=VFTYPE),
+            gtir.Sym(id="nvertices", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.call(
+                    im.call("as_fieldop")(
+                        im.lambda_("it")(
+                            im.call(im.call("reduce")("plus", im.literal_from_value(init_value)))(
+                                im.deref("it")
+                            )
+                        ),
+                        vertex_domain,
+                    )
+                )(
+                    im.op_as_fieldop("multiplies", vertex_domain)(
+                        im.call(
+                            im.call("as_fieldop")(
+                                im.lambda_("it")(im.neighbors("V2E", "it")),
+                                vertex_domain,
+                            )
+                        )("edges"),
+                        im.call(
+                            im.call("as_fieldop")(
+                                im.lambda_("it")(im.neighbors("V2E", "it")),
+                                vertex_domain,
+                            )
+                        )("edges"),
+                    ),
+                ),
+                domain=vertex_domain,
+                target=gtir.SymRef(id="vertices"),
+            )
+        ],
+    )
+
+    connectivity_V2E = SIMPLE_MESH_OFFSET_PROVIDER["V2E"]
+    assert isinstance(connectivity_V2E, gtx_common.NeighborTable)
+
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, SIMPLE_MESH_OFFSET_PROVIDER)
+
+    e = np.random.rand(SIMPLE_MESH.num_edges)
+    v = np.empty(SIMPLE_MESH.num_vertices, dtype=e.dtype)
+    v_ref = [
+        reduce(lambda x, y: x + y, e[v2e_neighbors] * e[v2e_neighbors], init_value)
+        for v2e_neighbors in connectivity_V2E.table
+    ]
+
+    sdfg(
+        edges=e,
+        vertices=v,
+        connectivity_V2E=connectivity_V2E.table,
+        **FSYMBOLS,
+        **make_mesh_symbols(SIMPLE_MESH),
+    )
+    assert np.allclose(v, v_ref)
+
+
+def test_gtir_reduce_with_cond_neighbors():
+    init_value = np.random.rand()
+    vertex_domain = im.call("unstructured_domain")(
+        im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
+    )
+    testee = gtir.Program(
+        id=f"reduce_with_cond_neighbors",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="pred", type=ts.ScalarType(ts.ScalarKind.BOOL)),
+            gtir.Sym(id="edges", type=EFTYPE),
+            gtir.Sym(id="vertices", type=VFTYPE),
+            gtir.Sym(id="nvertices", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.as_fieldop(
+                    im.lambda_("it")(
+                        im.call(im.call("reduce")("plus", im.literal_from_value(init_value)))(
+                            im.deref("it")
+                        )
+                    ),
+                    vertex_domain,
+                )(
+                    im.call("cond")(
+                        gtir.SymRef(id="pred"),
+                        im.as_fieldop(
+                            im.lambda_("it")(im.neighbors("V2E_FULL", "it")),
+                            vertex_domain,
+                        )("edges"),
+                        im.as_fieldop(
+                            im.lambda_("it")(im.neighbors("V2E", "it")),
+                            vertex_domain,
+                        )("edges"),
+                    )
+                ),
+                domain=vertex_domain,
+                target=gtir.SymRef(id="vertices"),
+            )
+        ],
+    )
+
+    connectivity_V2E_simple = SIMPLE_MESH_OFFSET_PROVIDER["V2E"]
+    assert isinstance(connectivity_V2E_simple, gtx_common.NeighborTable)
+    connectivity_V2E_skip_values = copy.deepcopy(SKIP_VALUE_MESH_OFFSET_PROVIDER["V2E"])
+    assert isinstance(connectivity_V2E_skip_values, gtx_common.NeighborTable)
+    assert SKIP_VALUE_MESH.num_vertices <= SIMPLE_MESH.num_vertices
+    connectivity_V2E_skip_values.table = np.concatenate(
+        (
+            connectivity_V2E_skip_values.table[:, 0 : connectivity_V2E_simple.max_neighbors],
+            connectivity_V2E_simple.table[SKIP_VALUE_MESH.num_vertices :, :],
+        ),
+        axis=0,
+    )
+    connectivity_V2E_skip_values.max_neighbors = connectivity_V2E_simple.max_neighbors
+
+    e = np.random.rand(SIMPLE_MESH.num_edges)
+
+    for use_full in [False, True]:
+        sdfg = dace_backend.build_sdfg_from_gtir(
+            testee,
+            SIMPLE_MESH_OFFSET_PROVIDER | {"V2E_FULL": connectivity_V2E_skip_values},
+        )
+
+        v = np.empty(SIMPLE_MESH.num_vertices, dtype=e.dtype)
+        v_ref = [
+            functools.reduce(
+                lambda x, y: x + y, [e[i] if i != -1 else 0.0 for i in v2e_neighbors], init_value
+            )
+            for v2e_neighbors in (
+                connectivity_V2E_simple.table if use_full else connectivity_V2E_skip_values.table
+            )
+        ]
+        sdfg(
+            pred=np.bool_(use_full),
+            edges=e,
+            vertices=v,
+            connectivity_V2E=connectivity_V2E_skip_values.table,
+            connectivity_V2E_FULL=connectivity_V2E_simple.table,
+            **FSYMBOLS,
+            **make_mesh_symbols(SIMPLE_MESH),
+            __connectivity_V2E_FULL_size_0=SIMPLE_MESH.num_edges,
+            __connectivity_V2E_FULL_size_1=connectivity_V2E_skip_values.max_neighbors,
+            __connectivity_V2E_FULL_stride_0=connectivity_V2E_skip_values.max_neighbors,
+            __connectivity_V2E_FULL_stride_1=1,
+        )
+        assert np.allclose(v, v_ref)
 
 
 def test_gtir_let_lambda():
