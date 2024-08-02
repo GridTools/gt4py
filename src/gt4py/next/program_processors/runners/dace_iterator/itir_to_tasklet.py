@@ -299,13 +299,13 @@ def _visit_lift_in_neighbors_reduction(
 
     if offset_provider.has_skip_values:
         # check neighbor validity on if/else inter-state edge
-        # use true branch for connectivity case
+        # use one branch for connectivity case
         start_state = lift_context.body.add_state_before(
             lift_context.body.start_state,
             "start",
             condition=f"{lifted_index_connectors[0]} != {neighbor_skip_value}",
         )
-        # use false branch for skip value case
+        # use the other branch for skip value case
         skip_neighbor_state = lift_context.body.add_state("skip_neighbor")
         skip_neighbor_state.add_edge(
             skip_neighbor_state.add_tasklet(
