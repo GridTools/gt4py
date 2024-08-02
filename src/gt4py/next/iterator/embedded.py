@@ -63,6 +63,14 @@ from gt4py.next.iterator import builtins, runtime
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
+try:
+    import dace
+except ImportError:
+    from types import ModuleType
+
+    dace: Optional[ModuleType] = None  # type: ignore[no-redef]
+
+
 EMBEDDED = "embedded"
 
 
@@ -112,6 +120,64 @@ class NeighborTableOffsetProvider:
         res = self.table[(primary, neighbor_idx)]
         assert common.is_int_index(res)
         return res
+
+    if dace:
+        # Extension of NeighborTableOffsetProvider adding SDFGConvertible support in GT4Py Programs
+        def _dace_data_ptr(self) -> int:
+            obj = self.table
+            if dace.dtypes.is_array(obj):
+                if hasattr(obj, "__array_interface__"):
+                    return obj.__array_interface__["data"][0]
+                if hasattr(obj, "__cuda_array_interface__"):
+                    return obj.__cuda_array_interface__["data"][0]
+            raise ValueError("Unsupported data container.")
+
+        def _dace_descriptor(self) -> dace.data.Data:
+            return dace.data.create_datadescriptor(self.table)
+    else:
+
+        def _dace_data_ptr(self) -> NoReturn:  # type: ignore[misc]
+            raise NotImplementedError(
+                "data_ptr is only supported when the 'dace' module is available."
+            )
+
+        def _dace_descriptor(self) -> NoReturn:  # type: ignore[misc]
+            raise NotImplementedError(
+                "__descriptor__ is only supported when the 'dace' module is available."
+            )
+
+    data_ptr = _dace_data_ptr
+    __descriptor__ = _dace_descriptor
+
+
+@dataclasses.dataclass(frozen=True)
+class CompileTimeConnectivity:
+    max_neighbors: int
+    has_skip_values: bool
+    origin_axis: common.Dimension
+    neighbor_axis: common.Dimension
+    index_type: type[int] | type[np.int32] | type[np.int64]
+
+    def mapped_index(
+        self, cur_index: int | np.integer, neigh_index: int | np.integer
+    ) -> Optional[int | np.integer]:
+        raise NotImplementedError(
+            "A CompileTimeConnectivity instance should not call `mapped_index`."
+        )
+
+    @classmethod
+    def from_connectivity(cls, connectivity: common.Connectivity) -> Self:
+        return cls(
+            max_neighbors=connectivity.max_neighbors,
+            has_skip_values=connectivity.has_skip_values,
+            origin_axis=connectivity.origin_axis,
+            neighbor_axis=connectivity.neighbor_axis,
+            index_type=connectivity.index_type,
+        )
+
+    @property
+    def table(self):
+        return None
 
 
 class StridedNeighborOffsetProvider:

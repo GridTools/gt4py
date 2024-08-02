@@ -451,3 +451,54 @@ def op_as_fieldop(
 def map_(op):
     """Create a `map_` call."""
     return call(call("map_")(op))
+
+
+def as_fieldop(expr: itir.Expr, domain: Optional[itir.FunCall] = None) -> call:
+    """
+    Create an `as_fieldop` call.
+    Examples
+    --------
+    >>> str(as_fieldop(lambda_("it1", "it2")(plus(deref("it1"), deref("it2"))))("field1", "field2"))
+    '(⇑(λ(it1, it2) → ·it1 + ·it2))(field1, field2)'
+    """
+    return call(
+        call("as_fieldop")(
+            *(
+                (
+                    expr,
+                    domain,
+                )
+                if domain
+                else (expr,)
+            )
+        )
+    )
+
+
+def op_as_fieldop(
+    op: str | itir.SymRef | Callable, domain: Optional[itir.FunCall] = None
+) -> Callable[..., itir.FunCall]:
+    """
+    Promotes a function `op` to a field_operator.
+
+    Args:
+        op: a function from values to value.
+        domain: the domain of the returned field.
+
+    Returns:
+        A function from Fields to Field.
+
+    Examples:
+        >>> str(op_as_fieldop("op")("a", "b"))
+        '(⇑(λ(__arg0, __arg1) → op(·__arg0, ·__arg1)))(a, b)'
+    """
+    if isinstance(op, (str, itir.SymRef, itir.Lambda)):
+        op = call(op)
+
+    def _impl(*its: itir.Expr) -> itir.FunCall:
+        args = [
+            f"__arg{i}" for i in range(len(its))
+        ]  # TODO: `op` must not contain `SymRef(id="__argX")`
+        return as_fieldop(lambda_(*args)(op(*[deref(arg) for arg in args])), domain)(*its)
+
+    return _impl
