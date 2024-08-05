@@ -160,9 +160,30 @@ def connectivity_or_dimension(
             raise ValueError
 
 
+def iter_size_args(args: tuple[Any, ...]) -> Iterator[int]:
+    """
+    Yield the size of each field argument in each dimension.
+
+    This can be used to generate domain size arguments for FieldView Programs that use an implicit domain.
+    """
+    for arg in args:
+        match arg:
+            case tuple():
+                yield from iter_size_args((arg[0],))
+            case common.Field():
+                yield from arg.ndarray.shape
+            case _:
+                pass
+
+
 def iter_size_compile_args(
     args: Iterable[CompileTimeArg | tuple],
 ) -> Iterator[CompileTimeArg | tuple]:
+    """
+    Yield a compile-time size argument for every compile-time field argument in each dimension.
+
+    This can be used inside transformation workflows to generate compile-time domain size arguments for FieldView Programs that use an implicit domain.
+    """
     for arg in args:
         match argt := type_translation.from_value(arg):
             case ts.TupleType():

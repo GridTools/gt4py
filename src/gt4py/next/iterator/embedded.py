@@ -60,6 +60,7 @@ from gt4py.next.embedded import (
 )
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import builtins, runtime
+from gt4py.next.otf import arguments
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
@@ -1695,9 +1696,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
     import inspect
 
     if len(args) < len(inspect.getfullargspec(fun).args):
-        from gt4py.next.program_processors.runners import gtfn
-
-        args = (*args, *gtfn.iter_size_args(args))
+        args = (*args, *arguments.iter_size_args(args))
 
     with embedded_context.new_context(**context_vars) as ctx:
         ctx.run(fun, *args)

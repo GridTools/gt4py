@@ -14,7 +14,7 @@
 
 import functools
 import warnings
-from typing import Any, Iterator
+from typing import Any
 
 import factory
 import numpy.typing as npt
@@ -25,7 +25,7 @@ from gt4py.eve.utils import content_hash
 from gt4py.next import backend, common, config
 from gt4py.next.iterator import transforms
 from gt4py.next.iterator.transforms import global_tmps
-from gt4py.next.otf import recipes, stages, workflow
+from gt4py.next.otf import arguments, recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
@@ -46,17 +46,6 @@ def convert_arg(arg: Any) -> Any:
         return arg
 
 
-def iter_size_args(args: tuple[Any, ...]) -> Iterator[int]:
-    for arg in args:
-        match arg:
-            case tuple():
-                yield from iter_size_args((arg[0],))
-            case common.Field():
-                yield from arg.ndarray.shape
-            case _:
-                pass
-
-
 def convert_args(
     inp: stages.ExtendedCompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
 ) -> stages.CompiledProgram:
@@ -69,8 +58,11 @@ def convert_args(
             args = (*args, out)
         converted_args = [convert_arg(arg) for arg in args]
         conn_args = extract_connectivity_args(offset_provider, device)
+        # generate implicit domain size arguments only if necessary, using `iter_size_args()`
         return inp(
-            *converted_args, *(iter_size_args(args) if inp.implicit_domain else ()), *conn_args
+            *converted_args,
+            *(arguments.iter_size_args(args) if inp.implicit_domain else ()),
+            *conn_args,
         )
 
     return decorated_program
