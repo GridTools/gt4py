@@ -38,7 +38,6 @@ if TYPE_CHECKING:
 
 
 IteratorIndexDType: TypeAlias = dace.int32  # type of iterator indexes
-LetSymbol: TypeAlias = tuple[gtir.Literal | gtir.SymRef, ts.FieldType | ts.ScalarType]
 TemporaryData: TypeAlias = tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]
 
 
@@ -179,9 +178,6 @@ def translate_as_field_op(
     assert isinstance(node.type, ts.FieldType)
 
     if cpm.is_applied_reduce(stencil_expr.expr):
-        # 'reduce' is a reserved keyword of the DSL and we will never find a user-defined symbol
-        # with this name. Since 'reduce' will never collide with a user-defined symbol, it is safe
-        # to use it internally to store the reduce identity value as a let-symbol.
         if reduce_identity is not None:
             raise NotImplementedError("nested reductions not supported.")
 

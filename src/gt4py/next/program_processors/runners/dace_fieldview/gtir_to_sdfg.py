@@ -226,6 +226,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         return field_nodes
 
     def _add_sdfg_params(self, sdfg: dace.SDFG, node_params: Sequence[gtir.Sym]) -> None:
+        """Helper function to add storage for node parameters and connectivity tables."""
+
         # add non-transient arrays and/or SDFG symbols for the program arguments
         for param in node_params:
             assert isinstance(param.type, ts.DataType)
@@ -368,18 +370,20 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         args: list[gtir_builtin_translators.TemporaryData],
     ) -> list[gtir_builtin_translators.TemporaryData]:
         """
-        Translates a `Lambda` node to a tasklet subgraph in the current SDFG state.
+        Translates a `Lambda` node to a nested SDFG in the current state.
 
         All arguments to lambda functions are fields (i.e. `as_fieldop`, field or scalar `gtir.SymRef`,
-        nested let-lambdas thereof). The dictionary called `let_symbols` maps the lambda parameters
-        to symbols, e.g. temporary fields or program arguments. If the lambda has a parameter whose name
-        is already present in `let_symbols`, i.e. a paramater with the same name as a previously defined
-        symbol, the parameter will shadow the previous symbol during traversal of the lambda expression.
+        nested let-lambdas thereof). The reason for creating a nested SDFG is to define local symbols
+        (the lambda paremeters) that map to parent fields, either program arguments or temporary fields.
+
+        If the lambda has a parameter whose name is already present in `GTIRToSDFG.global_symbols`,
+        i.e. a lambda parameter with the same name as a symbol in scope, the parameter will shadow
+        the previous symbol during traversal of the lambda expression.
         """
 
         lambda_args_mapping = {str(p.id): arg for p, arg in zip(node.params, args, strict=True)}
 
-        # inherit parent scope symbols but eventually override with local symbols
+        # inherit symbols from parent scope but eventually override with local symbols
         lambda_symbols = self.global_symbols | {
             pname: type_ for pname, (_, type_) in lambda_args_mapping.items()
         }
@@ -392,9 +396,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             [gtir.Sym(id=p_name, type=p_type) for p_name, p_type in lambda_symbols.items()],
         )
 
-        lambda_sdfg_builder = GTIRToSDFG(self.offset_provider, lambda_symbols.copy())
-
-        lambda_nodes = lambda_sdfg_builder.visit(
+        lambda_nodes = GTIRToSDFG(self.offset_provider, lambda_symbols.copy()).visit(
             node.expr,
             sdfg=nsdfg,
             head_state=nstate,
@@ -406,14 +408,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         input_memlets = {}
         for name, type_ in lambda_symbols.items():
             datadesc: Optional[dace.dtypes.Array] = None
-            if isinstance(type_, ts.FieldType):
-                if name in lambda_args_mapping:
-                    src_node, _ = lambda_args_mapping[name]
-                    dataname = src_node.data
-                    datadesc = src_node.desc(sdfg)
-                else:
-                    dataname = name
-                    datadesc = sdfg.arrays[name]
+            if name in lambda_args_mapping:
+                src_node, _ = lambda_args_mapping[name]
+                dataname = src_node.data
+                datadesc = src_node.desc(sdfg)
 
                 nsdfg_symbols_mapping |= {
                     str(nested_symbol): parent_symbol
@@ -424,15 +422,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     )
                     if isinstance(nested_symbol, dace.symbol)
                 }
-            else:
-                assert isinstance(type_, ts.ScalarType)
-                if name in lambda_args_mapping:
-                    src_node, _ = lambda_args_mapping[name]
-                    dataname = src_node.data
-                    datadesc = src_node.desc(sdfg)
-                else:
-                    # global scalar arguments are represented as dace symbols
-                    nsdfg_symbols_mapping[name] = name
+            elif isinstance(type_, ts.FieldType):
+                dataname = name
+                datadesc = sdfg.arrays[name]
 
             if datadesc:
                 input_memlets[name] = dace.Memlet.from_array(dataname, datadesc)
@@ -446,8 +438,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         )
 
         for connector, memlet in input_memlets.items():
-            if memlet.data in lambda_args_mapping:
-                src_node, _ = lambda_args_mapping[memlet.data]
+            if connector in lambda_args_mapping:
+                src_node, _ = lambda_args_mapping[connector]
             else:
                 src_node = head_state.add_access(memlet.data)
 
@@ -459,6 +451,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             desc = lambda_node.desc(nsdfg)
             # make lambda result non-transient and map it to external temporary
             desc.transient = False
+            # isolated access node will make validation fail
+            if nstate.degree(lambda_node) == 0:
+                nstate.remove_node(lambda_node)
             temp, _ = sdfg.add_temp_transient_like(desc)
             dst_node = head_state.add_access(temp)
             head_state.add_edge(
