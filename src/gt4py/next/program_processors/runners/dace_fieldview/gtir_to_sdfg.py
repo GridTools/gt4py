@@ -181,10 +181,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         else:
             raise RuntimeError(f"Data type '{type(symbol_type)}' not supported.")
 
-        # TODO: unclear why mypy complains about incompatible types
-        assert isinstance(symbol_type, (ts.FieldType, ts.ScalarType))
-        self.global_symbols[name] = symbol_type
-
     def _add_storage_for_temporary(self, temp_decl: gtir.Temporary) -> dict[str, str]:
         """
         Add temporary storage (aka transient) for data containers used as GTIR temporaries.
@@ -230,8 +226,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         # add non-transient arrays and/or SDFG symbols for the program arguments
         for param in node_params:
-            assert isinstance(param.type, ts.DataType)
-            self._add_storage(sdfg, str(param.id), param.type, transient=False)
+            pname = str(param.id)
+            assert isinstance(param.type, (ts.FieldType, ts.ScalarType))
+            self._add_storage(sdfg, pname, param.type, transient=False)
+            self.global_symbols[pname] = param.type
 
         # add SDFG storage for connectivity tables
         for offset, offset_provider in dace_fieldview_util.filter_connectivities(
@@ -403,31 +401,40 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             reduce_identity=reduce_identity,
         )
 
+        connectivity_arrays = {
+            dace_fieldview_util.connectivity_identifier(offset)
+            for offset in dace_fieldview_util.filter_connectivities(self.offset_provider)
+        }
         nsdfg_symbols_mapping: dict[str, dace.symbolic.SymExpr] = {}
 
         input_memlets = {}
-        for name, type_ in lambda_symbols.items():
+        for nsdfg_dataname, nsdfg_datadesc in nsdfg.arrays.items():
+            if nsdfg_datadesc.transient:
+                continue
             datadesc: Optional[dace.dtypes.Array] = None
-            if name in lambda_args_mapping:
-                src_node, _ = lambda_args_mapping[name]
+            if nsdfg_dataname in lambda_args_mapping:
+                src_node, _ = lambda_args_mapping[nsdfg_dataname]
                 dataname = src_node.data
                 datadesc = src_node.desc(sdfg)
 
                 nsdfg_symbols_mapping |= {
                     str(nested_symbol): parent_symbol
                     for nested_symbol, parent_symbol in zip(
-                        [*nsdfg.arrays[name].shape, *nsdfg.arrays[name].strides],
+                        [*nsdfg_datadesc.shape, *nsdfg_datadesc.strides],
                         [*datadesc.shape, *datadesc.strides],
                         strict=True,
                     )
                     if isinstance(nested_symbol, dace.symbol)
                 }
-            elif isinstance(type_, ts.FieldType):
-                dataname = name
-                datadesc = sdfg.arrays[name]
+            else:
+                dataname = nsdfg_dataname
+                datadesc = sdfg.arrays[nsdfg_dataname]
+                # ensure that connectivity tables are non-transient arrays in parent SDFG
+                if dataname in connectivity_arrays:
+                    datadesc.transient = False
 
             if datadesc:
-                input_memlets[name] = dace.Memlet.from_array(dataname, datadesc)
+                input_memlets[nsdfg_dataname] = dace.Memlet.from_array(dataname, datadesc)
 
         nsdfg_node = head_state.add_nested_sdfg(
             nsdfg,

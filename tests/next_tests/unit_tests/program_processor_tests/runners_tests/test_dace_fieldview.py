@@ -1274,6 +1274,73 @@ def test_gtir_let_lambda():
     assert np.allclose(b, a * 8)
 
 
+def test_gtir_let_lambda_with_connectivity():
+    C2E_neighbor_idx = 1
+    C2V_neighbor_idx = 2
+    cell_domain = im.call("unstructured_domain")(
+        im.call("named_range")(gtir.AxisLiteral(value=Cell.value), 0, "ncells"),
+    )
+
+    connectivity_C2E = SIMPLE_MESH_OFFSET_PROVIDER["C2E"]
+    assert isinstance(connectivity_C2E, gtx_common.NeighborTable)
+    connectivity_C2V = SIMPLE_MESH_OFFSET_PROVIDER["C2V"]
+    assert isinstance(connectivity_C2V, gtx_common.NeighborTable)
+
+    testee = gtir.Program(
+        id="let_lambda_with_connectivity",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="cells", type=CFTYPE),
+            gtir.Sym(id="edges", type=EFTYPE),
+            gtir.Sym(id="vertices", type=VFTYPE),
+            gtir.Sym(id="ncells", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.let(
+                    "x1",
+                    im.as_fieldop(
+                        im.lambda_("it")(im.deref(im.shift("C2E", C2E_neighbor_idx)("it"))),
+                        cell_domain,
+                    )("edges"),
+                )(
+                    im.let(
+                        "x2",
+                        im.as_fieldop(
+                            im.lambda_("it")(im.deref(im.shift("C2V", C2V_neighbor_idx)("it"))),
+                            cell_domain,
+                        )("vertices"),
+                    )(im.op_as_fieldop("plus", cell_domain)("x1", "x2"))
+                ),
+                domain=cell_domain,
+                target=gtir.SymRef(id="cells"),
+            )
+        ],
+    )
+
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, SIMPLE_MESH_OFFSET_PROVIDER)
+
+    e = np.random.rand(SIMPLE_MESH.num_edges)
+    v = np.random.rand(SIMPLE_MESH.num_vertices)
+    c = np.empty(SIMPLE_MESH.num_cells)
+    ref = (
+        e[connectivity_C2E.table[:, C2E_neighbor_idx]]
+        + v[connectivity_C2V.table[:, C2V_neighbor_idx]]
+    )
+
+    sdfg(
+        cells=c,
+        edges=e,
+        vertices=v,
+        connectivity_C2E=connectivity_C2E.table,
+        connectivity_C2V=connectivity_C2V.table,
+        **FSYMBOLS,
+        **make_mesh_symbols(SIMPLE_MESH),
+    )
+    assert np.allclose(c, ref)
+
+
 def test_gtir_let_lambda_with_cond():
     domain = im.call("cartesian_domain")(
         im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
