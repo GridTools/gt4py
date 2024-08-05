@@ -24,7 +24,7 @@ from types import SimpleNamespace
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import float32, float64, int32, int64, neighbor_sum
+from gt4py.next import float32, float64, int32, int64, neighbor_sum, broadcast, max_over, min_over
 from gt4py.next.ffront import type_specifications as ts_ffront
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.foast_to_gtir import FieldOperatorLowering
@@ -32,7 +32,8 @@ from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.type_system import type_specifications as it_ts
-from gt4py.next.type_system import type_specifications as ts, type_translation
+from gt4py.next.type_system import type_specifications as ts, type_translation, type_info
+import numpy as np
 
 
 IDim = gtx.Dimension("IDim")
@@ -42,6 +43,7 @@ Cell = gtx.Dimension("Cell")
 V2EDim = gtx.Dimension("V2E", gtx.DimensionKind.LOCAL)
 V2E = gtx.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
 TDim = gtx.Dimension("TDim")  # Meaningless dimension, used for tests.
+UDim = gtx.Dimension("UDim")  # Meaningless dimension, used for tests.
 
 
 def test_return():
@@ -53,6 +55,17 @@ def test_return():
 
     assert lowered.id == "foo"
     assert lowered.expr == im.ref("inp")
+
+
+def test_return_literal_tuple():
+    def foo():
+        return (1.0, True)
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    assert lowered.id == "foo"
+    assert lowered.expr == im.make_tuple(im.literal_from_value(1.0), im.literal_from_value(True))
 
 
 def test_scalar_arg():
@@ -447,7 +460,7 @@ def test_premap_to_local_field():
     assert lowered.expr == reference
 
 
-def test_reduction_lowering_simple():
+def test_reduction_lowering_neighbor_sum():
     def foo(edge_f: gtx.Field[[Edge], float64]):
         return neighbor_sum(edge_f(V2E), axis=V2EDim)
 
@@ -459,6 +472,44 @@ def test_reduction_lowering_simple():
             im.call("reduce")(
                 "plus",
                 im.literal(value="0", typename="float64"),
+            )
+        )
+    )(im.as_fieldop_neighbors("V2E", "edge_f"))
+
+    assert lowered.expr == reference
+
+
+def test_reduction_lowering_max_over():
+    def foo(edge_f: gtx.Field[[Edge], float64]):
+        return max_over(edge_f(V2E), axis=V2EDim)
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.op_as_fieldop(
+        im.call(
+            im.call("reduce")(
+                "maximum",
+                im.literal(value=str(np.finfo(np.float64).min), typename="float64"),
+            )
+        )
+    )(im.as_fieldop_neighbors("V2E", "edge_f"))
+
+    assert lowered.expr == reference
+
+
+def test_reduction_lowering_min_over():
+    def foo(edge_f: gtx.Field[[Edge], float64]):
+        return min_over(edge_f(V2E), axis=V2EDim)
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.op_as_fieldop(
+        im.call(
+            im.call("reduce")(
+                "minimum",
+                im.literal(value=str(np.finfo(np.float64).max), typename="float64"),
             )
         )
     )(im.as_fieldop_neighbors("V2E", "edge_f"))
@@ -561,3 +612,14 @@ def test_builtin_bool_constructors():
     )
 
     assert lowered.expr == reference
+
+
+def test_broadcast():
+    def foo(inp: gtx.Field[[TDim], float64]):
+        return broadcast(inp, (UDim, TDim))
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    assert lowered.id == "foo"
+    assert lowered.expr == im.ref("inp")

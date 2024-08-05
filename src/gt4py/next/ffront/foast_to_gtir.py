@@ -362,8 +362,8 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
 
     # _visit_concat_where = _visit_where
 
-    # def _visit_broadcast(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
-    #     return self.visit(node.args[0], **kwargs)
+    def _visit_broadcast(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
+        return self.visit(node.args[0], **kwargs)
 
     # def _visit_math_built_in(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
     #     return self._map(self.visit(node.func, **kwargs), *node.args)
@@ -381,17 +381,17 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         dtype = type_info.extract_dtype(node.type)
         return self._make_reduction_expr(node, "plus", self._make_literal("0", dtype), **kwargs)
 
-    # def _visit_max_over(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
-    #     dtype = type_info.extract_dtype(node.type)
-    #     min_value, _ = type_info.arithmetic_bounds(dtype)
-    #     init_expr = self._make_literal(str(min_value), dtype)
-    #     return self._make_reduction_expr(node, "maximum", init_expr, **kwargs)
+    def _visit_max_over(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
+        dtype = type_info.extract_dtype(node.type)
+        min_value, _ = type_info.arithmetic_bounds(dtype)
+        init_expr = self._make_literal(str(min_value), dtype)
+        return self._make_reduction_expr(node, "maximum", init_expr, **kwargs)
 
-    # def _visit_min_over(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
-    #     dtype = type_info.extract_dtype(node.type)
-    #     _, max_value = type_info.arithmetic_bounds(dtype)
-    #     init_expr = self._make_literal(str(max_value), dtype)
-    #     return self._make_reduction_expr(node, "minimum", init_expr, **kwargs)
+    def _visit_min_over(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
+        dtype = type_info.extract_dtype(node.type)
+        _, max_value = type_info.arithmetic_bounds(dtype)
+        init_expr = self._make_literal(str(max_value), dtype)
+        return self._make_reduction_expr(node, "minimum", init_expr, **kwargs)
 
     def _visit_type_constr(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         if isinstance(node.args[0], foast.Constant):
@@ -406,14 +406,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         )
 
     def _make_literal(self, val: Any, type_: ts.TypeSpec) -> itir.Expr:
-        # TODO(havogt): lifted nullary lambdas are not supported in iterator.embedded due to an implementation detail;
-        # the following constructs work if they are removed by inlining.
-        if isinstance(type_, ts.TupleType):
-            raise NotImplementedError("TODO")
-            return im.make_tuple(
-                *(self._make_literal(val, type_) for val, type_ in zip(val, type_.types))
-            )
-        elif isinstance(type_, ts.ScalarType):
+        if isinstance(type_, ts.ScalarType):
             typename = type_.kind.name.lower()
             return im.literal(str(val), typename)
         raise ValueError(f"Unsupported literal type '{type_}'.")
