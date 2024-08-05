@@ -232,6 +232,8 @@ def test_aliased_function():
     )
     assert result.type == int_type
 
+    assert result.type == ts.TupleType(types=[bool_type, int_type])
+
 
 def test_late_offset_axis():
     mesh = simple_mesh()
