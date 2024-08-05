@@ -26,7 +26,7 @@ from gt4py.next.ffront import (
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.experimental import EXPERIMENTAL_FUN_BUILTIN_NAMES
-from gt4py.next.ffront.fbuiltins import FUN_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
+from gt4py.next.ffront.fbuiltins import FUN_BUILTIN_NAMES, MATH_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_info, type_specifications as ts
@@ -301,8 +301,8 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
     def visit_Call(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         if type_info.type_class(node.func.type) is ts.FieldType:
             return self._visit_shift(node, **kwargs)
-        #     elif isinstance(node.func, foast.Name) and node.func.id in MATH_BUILTIN_NAMES:
-        #         return self._visit_math_built_in(node, **kwargs)
+        elif isinstance(node.func, foast.Name) and node.func.id in MATH_BUILTIN_NAMES:
+            return self._visit_math_built_in(node, **kwargs)
         elif isinstance(node.func, foast.Name) and node.func.id in (
             FUN_BUILTIN_NAMES + EXPERIMENTAL_FUN_BUILTIN_NAMES
         ):
@@ -365,8 +365,8 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
     def _visit_broadcast(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         return self.visit(node.args[0], **kwargs)
 
-    # def _visit_math_built_in(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
-    #     return self._map(self.visit(node.func, **kwargs), *node.args)
+    def _visit_math_built_in(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
+        return self._map(self.visit(node.func, **kwargs), *node.args)
 
     def _make_reduction_expr(
         self, node: foast.Call, op: str | itir.SymRef, init_expr: itir.Expr, **kwargs: Any

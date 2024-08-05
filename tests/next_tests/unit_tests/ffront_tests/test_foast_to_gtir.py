@@ -21,19 +21,20 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import float32, float64, int32, int64, neighbor_sum, broadcast, max_over, min_over
+from gt4py.next import broadcast, float32, float64, int32, int64, max_over, min_over, neighbor_sum
 from gt4py.next.ffront import type_specifications as ts_ffront
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
+from gt4py.next.ffront.fbuiltins import exp, minimum
 from gt4py.next.ffront.foast_to_gtir import FieldOperatorLowering
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.type_system import type_specifications as it_ts
-from gt4py.next.type_system import type_specifications as ts, type_translation, type_info
-import numpy as np
+from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
 IDim = gtx.Dimension("IDim")
@@ -444,6 +445,30 @@ def test_compare_chain():
         im.op_as_fieldop("greater")("a", "b"),
         im.op_as_fieldop("greater")("b", "c"),
     )
+
+    assert lowered.expr == reference
+
+
+def test_unary_math_builtin():
+    def foo(a: gtx.Field[[TDim], float64]):
+        return exp(a)
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.op_as_fieldop("exp")("a")
+
+    assert lowered.expr == reference
+
+
+def test_binary_math_builtin():
+    def foo(a: gtx.Field[[TDim], float64], b: gtx.Field[[TDim], float64]):
+        return minimum(a, b)
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.op_as_fieldop("minimum")("a", "b")
 
     assert lowered.expr == reference
 
