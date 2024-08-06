@@ -25,7 +25,17 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import broadcast, float32, float64, int32, int64, max_over, min_over, neighbor_sum
+from gt4py.next import (
+    broadcast,
+    float32,
+    float64,
+    int32,
+    int64,
+    max_over,
+    min_over,
+    neighbor_sum,
+    where,
+)
 from gt4py.next.ffront import type_specifications as ts_ffront
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.fbuiltins import exp, minimum
@@ -33,6 +43,7 @@ from gt4py.next.ffront.foast_to_gtir import FieldOperatorLowering
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.transforms import inline_lambdas
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
@@ -131,6 +142,43 @@ def test_temp_assignment():
     )
 
     assert lowered.expr == reference
+
+
+def test_where():
+    def foo(
+        a: gtx.Field[[TDim], bool], b: gtx.Field[[TDim], float64], c: gtx.Field[[TDim], float64]
+    ):
+        return where(a, b, c)
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.op_as_fieldop("if_")("a", "b", "c")
+
+    assert lowered.expr == reference
+
+
+def test_where_tuple():
+    def foo(
+        a: gtx.Field[[TDim], bool],
+        b: tuple[gtx.Field[[TDim], float64], gtx.Field[[TDim], float64]],
+        c: tuple[gtx.Field[[TDim], float64], gtx.Field[[TDim], float64]],
+    ):
+        return where(a, b, c)
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    lowered_inlined = inline_lambdas.InlineLambdas.apply(
+        lowered
+    )  # we generate a let for the condition which is removed by inlining for easier testing
+
+    reference = im.make_tuple(
+        im.op_as_fieldop("if_")("a", im.tuple_get(0, "b"), im.tuple_get(0, "c")),
+        im.op_as_fieldop("if_")("a", im.tuple_get(1, "b"), im.tuple_get(1, "c")),
+    )
+
+    assert lowered_inlined.expr == reference
 
 
 # TODO (introduce neg/pos)

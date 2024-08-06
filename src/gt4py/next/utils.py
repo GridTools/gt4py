@@ -15,6 +15,8 @@
 import functools
 from typing import Any, Callable, ClassVar, Optional, ParamSpec, TypeGuard, TypeVar, cast, overload
 
+from gt4py.eve.utils import toolz
+
 
 class RecursionGuard:
     """
@@ -62,7 +64,11 @@ def is_tuple_of(v: Any, t: type[_T]) -> TypeGuard[tuple[_T, ...]]:
 
 
 # TODO(havogt): remove flatten duplications in the whole codebase
-def flatten_nested_tuple(value: tuple[_T | tuple, ...]) -> tuple[_T, ...]:
+def flatten_nested_tuple(
+    value: tuple[
+        _T | tuple, ...
+    ],  # `_T` omitted on purpose as type of `value`, to properly deduce `_T` on the user-side
+) -> tuple[_T, ...]:
     if isinstance(value, tuple):
         return sum((flatten_nested_tuple(v) for v in value), start=())  # type: ignore[arg-type] # cannot properly express nesting
     else:
@@ -75,14 +81,18 @@ def tree_map(fun: Callable[_P, _R], /) -> Callable[..., _R | tuple[_R | tuple, .
 
 @overload
 def tree_map(
-    *, collection_type: type | tuple[type, ...], result_collection_type: Optional[type] = None
+    *,
+    collection_type: type | tuple[type, ...] = tuple,
+    result_collection_type: Optional[type | Callable] = None,
 ) -> Callable[[Callable[_P, _R]], Callable[..., _R | tuple[_R | tuple, ...]]]: ...
 
 
 def tree_map(
     *args: Callable[_P, _R],
     collection_type: type | tuple[type, ...] = tuple,
-    result_collection_type: Optional[type] = None,
+    result_collection_type: Optional[
+        type | Callable
+    ] = None,  # TODO consider renaming to `result_collection_constructor`
 ) -> (
     Callable[..., _R | tuple[_R | tuple, ...]]
     | Callable[[Callable[_P, _R]], Callable[..., _R | tuple[_R | tuple, ...]]]
@@ -112,7 +122,7 @@ def tree_map(
     if result_collection_type is None:
         if isinstance(collection_type, tuple):
             raise TypeError(
-                "tree_map() requires `result_collection_type` when `collection_type` is a tuple."
+                "tree_map() requires `result_collection_type` when `collection_type` is a tuple of types."
             )
         result_collection_type = collection_type
 
@@ -142,3 +152,53 @@ def tree_map(
     raise TypeError(
         "tree_map() can be used as decorator with optional kwarg `collection_type` and `result_collection_type`."
     )
+
+
+_Type = TypeVar("_Type", bound=type)
+_RType = TypeVar("_RType", bound=type)
+
+
+@overload
+def tree_enumerate(
+    collection: _Type | _T,
+    collection_type: _Type | tuple[_Type, ...],
+    result_collection_type: _RType,
+) -> _RType: ...
+
+
+@overload
+def tree_enumerate(
+    collection: _Type | _T,
+    collection_type: _Type | tuple[_Type, ...],
+    result_collection_type: Callable[[_Type | _T], _R] = toolz.identity,
+) -> _R: ...
+
+
+def tree_enumerate(
+    collection: _Type | _T,
+    collection_type: _Type | tuple[_Type, ...] = tuple,
+    result_collection_type: _RType | Callable[[_Type | _T], _R] = toolz.identity,
+) -> _R | _RType:
+    """
+    Recursively `enumerate`s elements in a nested collection.
+
+    Examples:
+        >>> tree_enumerate("a")
+        'a'
+
+        >>> for elem in tree_enumerate(("a",)):
+        ...     elem
+        (0, 'a')
+
+        >>> for elem in tree_enumerate(("a", "b")):
+        ...     elem
+        (0, 'a')
+        (1, 'b')
+
+        >>> tree_enumerate(("a", ("b", "c")), result_collection_type=list)
+        [(0, 'a'), (1, [(0, 'b'), (1, 'c')])]
+    """
+    return tree_map(
+        collection_type=collection_type,
+        result_collection_type=toolz.compose(result_collection_type, enumerate),
+    )(toolz.identity)(collection)

@@ -14,6 +14,7 @@
 from typing import Any, Callable, TypeVar
 
 from gt4py.eve import utils as eve_utils
+from gt4py.next import utils as next_utils
 from gt4py.next.ffront import type_info as ti_ffront
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
@@ -153,3 +154,33 @@ def _process_elements_impl(
         result = process_func(*_current_el_exprs)
 
     return result
+
+
+def expand_tuple_expr(tup: itir.Expr, tup_type: ts.TypeSpec) -> tuple[itir.Expr | tuple, ...]:
+    """
+    Create a tuple of `tuple_get` calls on `tup` by using the structure provided by `tup_type`.
+
+    Examples:
+        >>> expand_tuple_expr(
+        ...     itir.SymRef(id="tup"),
+        ...     ts.TupleType(
+        ...         types=[
+        ...             ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+        ...             ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+        ...         ]
+        ...     ),
+        ... )
+        (FunCall(fun=SymRef(id=SymbolRef('tuple_get')), args=[Literal(value='0', type=ScalarType(kind=<ScalarKind.INT32: 32>, shape=None)), SymRef(id=SymbolRef('tup'))]), FunCall(fun=SymRef(id=SymbolRef('tuple_get')), args=[Literal(value='1', type=ScalarType(kind=<ScalarKind.INT32: 32>, shape=None)), SymRef(id=SymbolRef('tup'))]))
+    """
+
+    def _tup_get(index_and_type: tuple[int, ts.TypeSpec]) -> itir.Expr:
+        i, _ = index_and_type
+        return im.tuple_get(i, tup)
+
+    res = next_utils.tree_map(collection_type=list, result_collection_type=tuple)(_tup_get)(
+        next_utils.tree_enumerate(
+            tup_type, collection_type=ts.TupleType, result_collection_type=list
+        )
+    )
+    assert isinstance(res, tuple)  # for mypy
+    return res
