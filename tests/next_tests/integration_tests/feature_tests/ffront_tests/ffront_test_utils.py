@@ -92,6 +92,7 @@ def exec_alloc_descriptor(request) -> Generator[ppi.ProgramProcessor, None, None
     gpu_env: Optional[str] = None
     if xdist and request.node.get_closest_marker(pytest.mark.requires_gpu.name):
         import cupy
+
         num_gpu_devices = cupy.cuda.runtime.getDeviceCount()
         if num_gpu_devices > 1 and xdist.is_xdist_worker(request):
             wid = xdist.get_xdist_worker_id(request)
