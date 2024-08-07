@@ -22,6 +22,7 @@ from gt4py.next.ffront import (
     dialect_ast_enums,
     fbuiltins,
     field_operator_ast as foast,
+    foast_introspection,
     lowering_utils,
     stages as ffront_stages,
     type_specifications as ts_ffront,
@@ -168,63 +169,61 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         assert inner_expr
         return inner_expr
 
-    # def visit_IfStmt(
-    #     self, node: foast.IfStmt, *, inner_expr: Optional[itir.Expr], **kwargs: Any
-    # ) -> itir.Expr:
-    #     # the lowered if call doesn't need to be lifted as the condition can only originate
-    #     # from a scalar value (and not a field)
-    #     assert (
-    #         isinstance(node.condition.type, ts.ScalarType)
-    #         and node.condition.type.kind == ts.ScalarKind.BOOL
-    #     )
+    def visit_IfStmt(
+        self, node: foast.IfStmt, *, inner_expr: Optional[itir.Expr], **kwargs: Any
+    ) -> itir.Expr:
+        assert (
+            isinstance(node.condition.type, ts.ScalarType)
+            and node.condition.type.kind == ts.ScalarKind.BOOL
+        )
 
-    #     cond = self.visit(node.condition, **kwargs)
+        cond = self.visit(node.condition, **kwargs)
 
-    #     return_kind: StmtReturnKind = deduce_stmt_return_kind(node)
+        return_kind = foast_introspection.deduce_stmt_return_kind(node)
 
-    #     common_symbols: dict[str, foast.Symbol] = node.annex.propagated_symbols
+        common_symbols: dict[str, foast.Symbol] = node.annex.propagated_symbols
 
-    #     if return_kind is StmtReturnKind.NO_RETURN:
-    #         # pack the common symbols into a tuple
-    #         common_symrefs = im.make_tuple(*(im.ref(sym) for sym in common_symbols.keys()))
+        if return_kind is foast_introspection.StmtReturnKind.NO_RETURN:
+            # TODO document why this case should be handled in this way, not by the more general CONDITIONAL_RETURN
 
-    #         # apply both branches and extract the common symbols through the prepared tuple
-    #         true_branch = self.visit(node.true_branch, inner_expr=common_symrefs, **kwargs)
-    #         false_branch = self.visit(node.false_branch, inner_expr=common_symrefs, **kwargs)
+            # pack the common symbols into a tuple
+            common_symrefs = im.make_tuple(*(im.ref(sym) for sym in common_symbols.keys()))
 
-    #         # unpack the common symbols' tuple for `inner_expr`
-    #         for i, sym in enumerate(common_symbols.keys()):
-    #             inner_expr = im.let(sym, im.tuple_get(i, im.ref("__if_stmt_result")))(inner_expr)
+            # apply both branches and extract the common symbols through the prepared tuple
+            true_branch = self.visit(node.true_branch, inner_expr=common_symrefs, **kwargs)
+            false_branch = self.visit(node.false_branch, inner_expr=common_symrefs, **kwargs)
 
-    #         # here we assume neither branch returns
-    #         return im.let("__if_stmt_result", im.if_(im.deref(cond), true_branch, false_branch))(
-    #             inner_expr
-    #         )
-    #     elif return_kind is StmtReturnKind.CONDITIONAL_RETURN:
-    #         common_syms = tuple(im.sym(sym) for sym in common_symbols.keys())
-    #         common_symrefs = tuple(im.ref(sym) for sym in common_symbols.keys())
+            # unpack the common symbols' tuple for `inner_expr`
+            for i, sym in enumerate(common_symbols.keys()):
+                inner_expr = im.let(sym, im.tuple_get(i, im.ref("__if_stmt_result")))(inner_expr)
 
-    #         # wrap the inner expression in a lambda function. note that this increases the
-    #         # operation count if both branches are evaluated.
-    #         inner_expr_name = self.uid_generator.sequential_id(prefix="__inner_expr")
-    #         inner_expr_evaluator = im.lambda_(*common_syms)(inner_expr)
-    #         inner_expr = im.call(inner_expr_name)(*common_symrefs)
+            # here we assume neither branch returns
+            return im.let("__if_stmt_result", im.cond(cond, true_branch, false_branch))(inner_expr)
+        elif return_kind is foast_introspection.StmtReturnKind.CONDITIONAL_RETURN:
+            common_syms = tuple(im.sym(sym) for sym in common_symbols.keys())
+            common_symrefs = tuple(im.ref(sym) for sym in common_symbols.keys())
 
-    #         true_branch = self.visit(node.true_branch, inner_expr=inner_expr, **kwargs)
-    #         false_branch = self.visit(node.false_branch, inner_expr=inner_expr, **kwargs)
+            # wrap the inner expression in a lambda function. note that this increases the
+            # operation count if both branches are evaluated.
+            inner_expr_name = self.uid_generator.sequential_id(prefix="__inner_expr")
+            inner_expr_evaluator = im.lambda_(*common_syms)(inner_expr)
+            inner_expr = im.call(inner_expr_name)(*common_symrefs)
 
-    #         return im.let(inner_expr_name, inner_expr_evaluator)(
-    #             im.if_(im.deref(cond), true_branch, false_branch)
-    #         )
+            true_branch = self.visit(node.true_branch, inner_expr=inner_expr, **kwargs)
+            false_branch = self.visit(node.false_branch, inner_expr=inner_expr, **kwargs)
 
-    #     assert return_kind is StmtReturnKind.UNCONDITIONAL_RETURN
+            return im.let(inner_expr_name, inner_expr_evaluator)(
+                im.cond(cond, true_branch, false_branch)
+            )
 
-    #     # note that we do not duplicate `inner_expr` here since if both branches
-    #     #  return, `inner_expr` is ignored.
-    #     true_branch = self.visit(node.true_branch, inner_expr=inner_expr, **kwargs)
-    #     false_branch = self.visit(node.false_branch, inner_expr=inner_expr, **kwargs)
+        assert return_kind is foast_introspection.StmtReturnKind.UNCONDITIONAL_RETURN
 
-    #     return im.if_(im.deref(cond), true_branch, false_branch)
+        # note that we do not duplicate `inner_expr` here since if both branches
+        #  return, `inner_expr` is ignored.
+        true_branch = self.visit(node.true_branch, inner_expr=inner_expr, **kwargs)
+        false_branch = self.visit(node.false_branch, inner_expr=inner_expr, **kwargs)
+
+        return im.cond(cond, true_branch, false_branch)
 
     def visit_Assign(
         self, node: foast.Assign, *, inner_expr: Optional[itir.Expr], **kwargs: Any
@@ -264,20 +263,14 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
     def visit_BinOp(self, node: foast.BinOp, **kwargs: Any) -> itir.FunCall:
         return self._map(node.op.value, node.left, node.right)
 
-    # def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs: Any) -> itir.FunCall:
-    #     op = "if_"
-    #     args = (node.condition, node.true_expr, node.false_expr)
-    #     lowered_args: list[itir.Expr] = [
-    #         lowering_utils.to_iterator_of_tuples(self.visit(arg, **kwargs), arg.type)
-    #         for arg in args
-    #     ]
-    #     if any(type_info.contains_local_field(arg.type) for arg in args):
-    #         lowered_args = [promote_to_list(arg)(larg) for arg, larg in zip(args, lowered_args)]
-    #         op = im.call("map_")(op)
-
-    #     return lowering_utils.to_tuples_of_iterator(
-    #         im.promote_to_lifted_stencil(im.call(op))(*lowered_args), node.type
-    #     )
+    def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs: Any) -> itir.FunCall:
+        assert (
+            isinstance(node.condition.type, ts.ScalarType)
+            and node.condition.type.kind == ts.ScalarKind.BOOL
+        )
+        return im.cond(
+            self.visit(node.condition), self.visit(node.true_expr), self.visit(node.false_expr)
+        )
 
     def visit_Compare(self, node: foast.Compare, **kwargs: Any) -> itir.FunCall:
         return self._map(node.op.value, node.left, node.right)

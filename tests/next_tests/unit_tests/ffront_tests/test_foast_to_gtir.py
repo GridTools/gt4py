@@ -43,7 +43,7 @@ from gt4py.next.ffront.foast_to_gtir import FieldOperatorLowering
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.iterator.transforms import inline_lambdas
+from gt4py.next.iterator.transforms import collapse_tuple, inline_lambdas
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
@@ -177,6 +177,72 @@ def test_where_tuple():
         im.op_as_fieldop("if_")("a", im.tuple_get(0, "b"), im.tuple_get(0, "c")),
         im.op_as_fieldop("if_")("a", im.tuple_get(1, "b"), im.tuple_get(1, "c")),
     )
+
+    assert lowered_inlined.expr == reference
+
+
+def test_ternary():
+    def foo(a: bool, b: gtx.Field[[TDim], float64], c: gtx.Field[[TDim], float64]):
+        return b if a else c
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.cond("a", "b", "c")
+
+    assert lowered.expr == reference
+
+
+def test_if_unconditional_return():
+    def foo(a: bool, b: gtx.Field[[TDim], float64], c: gtx.Field[[TDim], float64]):
+        if a:
+            return b
+        else:
+            return c
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.cond("a", "b", "c")
+
+    assert lowered.expr == reference
+
+
+def test_if_no_return():
+    def foo(a: bool, b: gtx.Field[[TDim], float64], c: gtx.Field[[TDim], float64]):
+        if a:
+            res = b
+        else:
+            res = c
+        return res
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+    lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
+    lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered_inlined)
+    print(lowered_inlined)
+
+    reference = im.tuple_get(0, im.cond("a", im.make_tuple("b"), im.make_tuple("c")))
+
+    assert lowered_inlined.expr == reference
+
+
+def test_if_conditional_return():
+    def foo(a: bool, b: gtx.Field[[TDim], float64], c: gtx.Field[[TDim], float64]):
+        if a:
+            res = b
+        else:
+            if a:
+                return c
+            res = b
+        return res
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+    lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
+    lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered_inlined)
+
+    reference = im.cond("a", "b", im.cond("a", "c", "b"))
 
     assert lowered_inlined.expr == reference
 
