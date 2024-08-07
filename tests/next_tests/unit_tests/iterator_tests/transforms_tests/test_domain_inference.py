@@ -90,6 +90,27 @@ def run_test_program(
     assert folded_program == expected
 
 
+def run_test_let(
+    testee: itir.FunCall,
+    expected: itir.FunCall,
+    domain: itir.FunCall,
+    expected_domains: Dict[str, SymbolicDomain],
+    offset_provider: dict[str, Dimension],
+):
+    actual_program, actual_domains = infer_let(
+        testee, SymbolicDomain.from_expr(domain), offset_provider
+    )
+
+    actual_call, actual_domains = infer_let(
+        testee, SymbolicDomain.from_expr(domain), offset_provider
+    )
+    folded_call = let_constant_folding(actual_call)
+    folded_domains = domains_dict_constant_folding(actual_domains)
+
+    assert folded_call == expected
+    assert folded_domains == expected_domains
+
+
 def create_params(names: List[str]) -> List[im.sym]:
     params = [im.sym(name) for name in names]
     for param in params[:2]:
@@ -145,17 +166,21 @@ def let_constant_folding(let_call: itir.FunCall) -> itir.FunCall:
                 for dim in fun.expr
             ]
         elif isinstance(fun, itir.FunCall) and cpm.is_call_to(fun.fun, "as_fieldop"):
-            return  as_fieldop_domains_constant_folding(fun)
+            return as_fieldop_domains_constant_folding(fun)
         elif isinstance(fun, itir.FunCall) and isinstance(fun.fun, itir.Lambda):
             return let_constant_folding(fun)
-
 
     new_call = copy.deepcopy(let_call)
     new_call.fun.expr = fold_fun_args(let_call.fun.expr)
 
     new_call.args = [
-        as_fieldop_domains_constant_folding(arg) if (isinstance(arg, itir.FunCall) and cpm.is_call_to(arg.fun, "as_fieldop") )
-    else (let_constant_folding(arg) if (isinstance(arg, itir.FunCall) and isinstance(arg.fun, itir.Lambda) ) else arg )
+        as_fieldop_domains_constant_folding(arg)
+        if (isinstance(arg, itir.FunCall) and cpm.is_call_to(arg.fun, "as_fieldop"))
+        else (
+            let_constant_folding(arg)
+            if (isinstance(arg, itir.FunCall) and isinstance(arg.fun, itir.Lambda))
+            else arg
+        )
         for arg in new_call.args
     ]
 
@@ -167,7 +192,12 @@ def program_constant_folding(program_call: itir.Program) -> itir.Program:
     for j, tmp in enumerate(new_call.declarations):
         tmp.domain = domain_constant_folding(tmp.domain)
     for j, set_at in enumerate(new_call.body):
-        set_at.expr = as_fieldop_domains_constant_folding(set_at.expr)
+        if isinstance(set_at.expr.fun, itir.FunCall) and cpm.is_call_to(
+            set_at.expr.fun, "as_fieldop"
+        ):
+            set_at.expr = as_fieldop_domains_constant_folding(set_at.expr)
+        elif isinstance(set_at.expr.fun, itir.Lambda):
+            set_at.expr = let_constant_folding(set_at.expr)
         set_at.domain = domain_constant_folding(set_at.domain)
     return new_call
 
@@ -612,88 +642,6 @@ def test_program_tree_tmps_two_inputs(offset_provider):
     run_test_program(testee, expected, offset_provider)
 
 
-# def test_program_let(offset_provider):
-#     stencil = im.lambda_("arg0")(
-#         im.minus(im.deref(im.shift(itir.SymbolRef("Ioff"), 1)("arg0")), im.deref("arg0"))
-#     )
-#     stencil_plus = im.lambda_("arg0","arg1","arg2")(
-#         im.plus( im.plus(im.deref("arg0"), im.deref("arg1")), im.deref("arg2"))
-#     )
-#     stencil_squared_shift = im.lambda_("arg0")(
-#         im.multiplies_(im.deref(im.shift(itir.SymbolRef("Ioff"), 1)("arg0")), im.deref(im.shift(itir.SymbolRef("Ioff"), 1)("arg0")))
-#     )
-#
-#     let_tmp = im.let("in_field_squared_shift", im.multiplies_(im.ref("in_field"), im.ref("in_field")))(im.minus(im.deref(im.shift(itir.SymbolRef("Ioff"), 1)("in_field_squared_shift")), im.deref("in_field_squared_shift")))
-#     as_fieldop = im.as_fieldop(stencil_tmp)(im.ref("tmp"))
-#
-#     domain_tmp = im.domain(common.GridType.CARTESIAN,
-#         {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (0, 12)}
-#     )
-#     domain = im.domain(common.GridType.CARTESIAN,
-#         {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (0, 11)}
-#     )
-#
-#     params = [im.sym(name) for name in ["in_field", "out_field", "new_field","in_field_squared_shift","_gtmp_auto_domain"]]
-#     for param in params[:2]:
-#         param.dtype = ("float64", False)
-#         param.kind = "Iterator"
-#
-#     testee = itir.Program(
-#         id="forward_diff_with_tmp",
-#         function_definitions=[],
-#         params=params,
-#         declarations=[itir.Temporary(id="tmp", domain=AUTO_DOMAIN, dtype=float_type)],
-#         body=[
-#             itir.SetAt(expr=let_tmp, domain=AUTO_DOMAIN, target=im.ref("tmp")),
-#             itir.SetAt(expr=as_fieldop, domain=domain, target=im.ref("out_field")),
-#         ],
-#     )
-#
-#     expected_as_fieldop_plus = iim.as_fieldop(stencil_plus, domain)(im.ref("tmp"), im.ref("tmp2"),
-#                                                                                     im.ref("tmp3"))
-#     expected_as_squared_fieldop = im.as_fieldop(stencil_squared_shift, domain)(im.ref("in_field"))
-#     expected_let_tmp_shift = im.let("in_field_squared_shift",
-#                                     im.multiplies_(im.deref(im.shift(itir.SymbolRef("Ioff"), 1)(im.ref("in_field"))),
-#                                                    im.deref(im.shift(itir.SymbolRef("Ioff"), 1)(im.ref("in_field")))))(
-#         im.minus(im.deref(im.shift(itir.SymbolRef("Ioff"), 1)("in_field_squared_shift")),
-#                  im.deref("in_field_squared_shift")))
-#
-#     expected_let_as_fieldop_tmp2 = im.let("in_field_squared_shift", expected_as_squared_fieldop)(
-#         im.minus(im.deref(im.shift(itir.SymbolRef("Ioff"), 1)("in_field_squared_shift")),
-#                  im.deref("in_field_squared_shift")))
-#     expected_let_as_fieldop_tmp3 = im.let("in_field_squared_shift", im.multiplies_(im.deref(im.shift(itir.SymbolRef("Ioff"), 1)(im.ref("in_field"))),
-#                                                    im.deref(im.shift(itir.SymbolRef("Ioff"), 1)(im.ref("in_field")))))(
-#         im.let("in_field_pow4_shift", im.multiplies_(im.deref(im.shift(itir.SymbolRef("Ioff"), 1)(im.ref("in_field_squared_shift"))),
-#                                                    im.deref(im.shift(itir.SymbolRef("Ioff"), 1)(im.ref("in_field_squared_shift")))))(
-#             im.minus(im.deref(im.shift(itir.SymbolRef("Ioff"), 1)("in_field_pow4_shift")), im.deref("in_field_pow4_shift"))))
-#
-#
-#     expected = itir.Program(
-#         id="forward_diff_with_tmp",
-#         function_definitions=[],
-#         params=params,
-#         declarations=[itir.Temporary(id="tmp", domain=domain, dtype=float_type),itir.Temporary(id="tmp2", domain=domain, dtype=float_type),itir.Temporary(id="tmp3", domain=domain, dtype=float_type)],
-#         body=[
-#             itir.SetAt(expr=expected_let_tmp_shift, domain=domain, target=im.ref("tmp")),
-#             itir.SetAt(expr=expected_let_as_fieldop_tmp2, domain=domain, target=im.ref("tmp2")),
-#             itir.SetAt(expr=expected_let_as_fieldop_tmp3, domain=domain, target=im.ref("tmp3")),
-#             itir.SetAt(expr=expected_as_fieldop_plus, domain=domain, target=im.ref("out_field")),
-#         ],
-#     )
-#
-#     testee = im.let("inner", as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))))("outer"))(
-#         as_fieldop(im.lambda_("it")(
-#             im.deref(im.shift("Ioff", 2)("it"))))("inner"))
-#
-#     expected = im.let("inner", as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))), domain)("outer"))(
-#         as_fieldop(im.lambda_("it")(
-#             im.deref(im.shift("Ioff", 2)("it"))), domain)("inner"))
-#
-#     actual_program = infer_program(testee, offset_provider)
-#
-#     assert actual_program == expected
-
-
 def test_let(offset_provider):
     stencil = im.lambda_("arg0")(
         im.minus(im.deref(im.shift(itir.SymbolRef("Ioff"), 1)("arg0")), im.deref("arg0"))
@@ -760,13 +708,7 @@ def test_let(offset_provider):
             )
         )
     }
-    actual_call, actual_domains = infer_let(
-        testee, SymbolicDomain.from_expr(domain), offset_provider
-    )
-    folded_domains = domains_dict_constant_folding(actual_domains)
-    folded_call = let_constant_folding(actual_call)
-    assert folded_call == expected
-    assert folded_domains == expected_domains
+    run_test_let(testee, expected, domain, expected_domains, offset_provider)
 
     actual_call2, actual_domains2 = infer_as_fieldop(
         testee2, SymbolicDomain.from_expr(domain), offset_provider
@@ -774,7 +716,7 @@ def test_let(offset_provider):
     folded_domains2 = domains_dict_constant_folding(actual_domains2)
     folded_call2 = as_fieldop_domains_constant_folding(actual_call2)
     assert folded_call2 == expected2
-    assert folded_domains == folded_domains2
+    assert expected_domains == folded_domains2
 
 
 def test_let_two_inputs(offset_provider):
@@ -838,13 +780,7 @@ def test_let_two_inputs(offset_provider):
             )
         ),
     }
-    actual_call, actual_domains = infer_let(
-        testee, SymbolicDomain.from_expr(domain), offset_provider
-    )
-    folded_domains = domains_dict_constant_folding(actual_domains)
-    folded_call = let_constant_folding(actual_call)
-    assert folded_call == expected
-    assert folded_domains == expected_domains
+    run_test_let(testee, expected, domain, expected_domains, offset_provider)
 
 
 def test_nested_let_fun_expr(offset_provider):
@@ -852,34 +788,52 @@ def test_nested_let_fun_expr(offset_provider):
         im.minus(im.deref(im.shift(itir.SymbolRef("Ioff"), 1)("arg0")), im.deref("arg0"))
     )
 
-    testee = im.let("pow1_p1", im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))))(
-            "outer"
-        ))(
-        im.let("pow2_m1", im.as_fieldop(im.lambda_("it")(im.multiplies_(
-                        im.deref(im.shift("Ioff", -1)("it")), im.deref(im.shift("Ioff", -1)("it")))))("pow1_p1"))(
-        im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 2)("it"))))("pow2_m1")
-        )
+    testee = im.let(
+        "pow1_p1", im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))))("outer")
+    )(
+        im.let(
+            "pow2_m1",
+            im.as_fieldop(
+                im.lambda_("it")(
+                    im.multiplies_(
+                        im.deref(im.shift("Ioff", -1)("it")), im.deref(im.shift("Ioff", -1)("it"))
+                    )
+                )
+            )("pow1_p1"),
+        )(im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 2)("it"))))("pow2_m1"))
     )
 
-    domain = im.domain(
+    domain_011 = im.domain(
         common.GridType.CARTESIAN,
         {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (0, 11)},
     )
-    domain_squared = im.domain(
-        common.GridType.CARTESIAN,
-        {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (2, 13)},
-    )
-    domain_double = im.domain(
+    domain_112 = im.domain(
         common.GridType.CARTESIAN,
         {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (1, 12)},
     )
+    domain_213 = im.domain(
+        common.GridType.CARTESIAN,
+        {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (2, 13)},
+    )
 
-    expected = im.let("pow1_p1", im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))),domain_double)(
-        "outer"
-    ))(
-        im.let("pow2_m1", im.as_fieldop(im.lambda_("it")(im.multiplies_(
-            im.deref(im.shift("Ioff", -1)("it")), im.deref(im.shift("Ioff", -1)("it")))), domain_squared)("pow1_p1"))(
-            im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 2)("it"))), domain)("pow2_m1")
+    expected = im.let(
+        "pow1_p1",
+        im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))), domain_112)("outer"),
+    )(
+        im.let(
+            "pow2_m1",
+            im.as_fieldop(
+                im.lambda_("it")(
+                    im.multiplies_(
+                        im.deref(im.shift("Ioff", -1)("it")), im.deref(im.shift("Ioff", -1)("it"))
+                    )
+                ),
+                domain_213,
+            )("pow1_p1"),
+        )(
+            im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 2)("it"))), domain_011)(
+                "pow2_m1"
+            )
         )
     )
     expected_domains = {
@@ -890,14 +844,64 @@ def test_nested_let_fun_expr(offset_provider):
             )
         )
     }
-    actual_call, actual_domains = infer_let(
-        testee, SymbolicDomain.from_expr(domain), offset_provider
-    )
-    folded_call = let_constant_folding(actual_call)
-    assert folded_call == expected
+    run_test_let(testee, expected, domain_011, expected_domains, offset_provider)
 
-    folded_domains = domains_dict_constant_folding(actual_domains)
-    assert folded_domains == expected_domains
+
+def test_nested_let_fun_expr_shaddowing(offset_provider):
+    stencil = im.lambda_("arg0")(
+        im.minus(im.deref(im.shift(itir.SymbolRef("Ioff"), 1)("arg0")), im.deref("arg0"))
+    )
+
+    testee = im.let("a", im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))))("a"))(
+        im.let(
+            "a",
+            im.as_fieldop(
+                im.lambda_("it")(
+                    im.multiplies_(
+                        im.deref(im.shift("Ioff", -1)("it")), im.deref(im.shift("Ioff", -1)("it"))
+                    )
+                )
+            )("a"),
+        )(im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 2)("it"))))("a"))
+    )
+
+    domain_011 = im.domain(
+        common.GridType.CARTESIAN,
+        {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (0, 11)},
+    )
+    domain_112 = im.domain(
+        common.GridType.CARTESIAN,
+        {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (1, 12)},
+    )
+    domain_213 = im.domain(
+        common.GridType.CARTESIAN,
+        {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (2, 13)},
+    )
+
+    expected = im.let(
+        "a", im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))), domain_112)("a")
+    )(
+        im.let(
+            "a",
+            im.as_fieldop(
+                im.lambda_("it")(
+                    im.multiplies_(
+                        im.deref(im.shift("Ioff", -1)("it")), im.deref(im.shift("Ioff", -1)("it"))
+                    )
+                ),
+                domain_213,
+            )("a"),
+        )(im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 2)("it"))), domain_011)("a"))
+    )
+    expected_domains = {
+        "a": SymbolicDomain.from_expr(
+            im.domain(
+                common.GridType.CARTESIAN,
+                {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (2, 13)},
+            )
+        )
+    }
+    run_test_let(testee, expected, domain_011, expected_domains, offset_provider)
 
 
 def test_double_nested_let_fun_expr(offset_provider):
@@ -905,22 +909,35 @@ def test_double_nested_let_fun_expr(offset_provider):
         im.minus(im.deref(im.shift(itir.SymbolRef("Ioff"), 1)("arg0")), im.deref("arg0"))
     )
 
-    testee = im.let("pow1_p1", im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))))(
-            "outer"
-        ))(
-        im.let("pow2_m1", im.as_fieldop(im.lambda_("it")(im.multiplies_(
-                        im.deref(im.shift("Ioff", -1)("it")), im.deref(im.shift("Ioff", -1)("it")))))("pow1_p1"))(
-            im.let("pow4_m1", im.as_fieldop(im.lambda_("it")(im.multiplies_(
-                im.deref(im.shift("Ioff", -1)("it")), im.deref(im.shift("Ioff", -1)("it")))))("pow2_m1"))(
-                im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 2)("it"))))("pow4_m1")
-            )
+    testee = im.let(
+        "pow1_p1", im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))))("outer")
+    )(
+        im.let(
+            "pow2_m1",
+            im.as_fieldop(
+                im.lambda_("it")(
+                    im.multiplies_(
+                        im.deref(im.shift("Ioff", -1)("it")), im.deref(im.shift("Ioff", -1)("it"))
+                    )
+                )
+            )("pow1_p1"),
+        )(
+            im.let(
+                "pow4_m1",
+                im.as_fieldop(
+                    im.lambda_("it")(
+                        im.multiplies_(
+                            im.deref(im.shift("Ioff", -1)("it")),
+                            im.deref(im.shift("Ioff", -1)("it")),
+                        )
+                    )
+                )("pow2_m1"),
+            )(im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 2)("it"))))("pow4_m1"))
         )
     )
     im.let("power_1", im.plus("x", 1))(
         im.let("power_2", im.multiplies_("power_1", "power_1"))(
-            im.let("power_4", im.multiplies_("power_2", "power_2"))(
-                im.plus("power_4", "power_1")
-            )
+            im.let("power_4", im.multiplies_("power_2", "power_2"))(im.plus("power_4", "power_1"))
         )
     )
     domain_011 = im.domain(
@@ -931,19 +948,41 @@ def test_double_nested_let_fun_expr(offset_provider):
         common.GridType.CARTESIAN,
         {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (1, 12)},
     )
-
-    domain_213 = im.domain( common.GridType.CARTESIAN,
+    domain_213 = im.domain(
+        common.GridType.CARTESIAN,
         {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (2, 13)},
     )
 
-    expected=im.let("pow1_p1", im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))), domain_011)(
-            "outer"
-        ))(
-        im.let("pow2_m1", im.as_fieldop(im.lambda_("it")(im.multiplies_(
-                        im.deref(im.shift("Ioff", -1)("it")), im.deref(im.shift("Ioff", -1)("it")))), domain_112)("pow1_p1"))(
-            im.let("pow4_m1", im.as_fieldop(im.lambda_("it")(im.multiplies_(
-                im.deref(im.shift("Ioff", -1)("it")), im.deref(im.shift("Ioff", -1)("it")))), domain_213)("pow2_m1"))(
-                im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 2)("it"))), domain_011)("pow4_m1")
+    expected = im.let(
+        "pow1_p1",
+        im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))), domain_011)("outer"),
+    )(
+        im.let(
+            "pow2_m1",
+            im.as_fieldop(
+                im.lambda_("it")(
+                    im.multiplies_(
+                        im.deref(im.shift("Ioff", -1)("it")), im.deref(im.shift("Ioff", -1)("it"))
+                    )
+                ),
+                domain_112,
+            )("pow1_p1"),
+        )(
+            im.let(
+                "pow4_m1",
+                im.as_fieldop(
+                    im.lambda_("it")(
+                        im.multiplies_(
+                            im.deref(im.shift("Ioff", -1)("it")),
+                            im.deref(im.shift("Ioff", -1)("it")),
+                        )
+                    ),
+                    domain_213,
+                )("pow2_m1"),
+            )(
+                im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 2)("it"))), domain_011)(
+                    "pow4_m1"
+                )
             )
         )
     )
@@ -956,14 +995,9 @@ def test_double_nested_let_fun_expr(offset_provider):
             )
         )
     }
-    actual_call, actual_domains = infer_let(
-        testee, SymbolicDomain.from_expr(domain_011), offset_provider
-    )
-    folded_call = let_constant_folding(actual_call)
-    assert folded_call == expected
 
-    folded_domains = domains_dict_constant_folding(actual_domains)
-    assert folded_domains == expected_domains
+    run_test_let(testee, expected, domain_011, expected_domains, offset_provider)
+
 
 def test_nested_let_args(offset_provider):
     stencil = im.lambda_("arg0")(
@@ -982,7 +1016,7 @@ def test_nested_let_args(offset_provider):
                     )
                 )
             )("inner_arg")
-        )
+        ),
     )(
         im.as_fieldop(
             im.lambda_("it")(
@@ -993,31 +1027,35 @@ def test_nested_let_args(offset_provider):
         )("inner")
     )
 
-    domain = im.domain(
+    domain_011 = im.domain(
         common.GridType.CARTESIAN,
         {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (0, 11)},
     )
-    domain_m1 = im.domain(
+    domain_m110 = im.domain(
         common.GridType.CARTESIAN,
         {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (-1, 10)},
     )
-    domain_squared = im.domain(
+    domain_m29 = im.domain(
         common.GridType.CARTESIAN,
         {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (-2, 9)},
     )
     expected = im.let(
-        "inner",im.let(
+        "inner",
+        im.let(
             "inner_arg",
-            im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))), domain_squared)("squared_shift"),
+            im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))), domain_m29)(
+                "squared_shift"
+            ),
         )(
             im.as_fieldop(
                 im.lambda_("it")(
                     im.multiplies_(
                         im.deref(im.shift("Ioff", -1)("it")), im.deref(im.shift("Ioff", -1)("it"))
                     )
-                ), domain_m1
+                ),
+                domain_m110,
             )("inner_arg")
-        )
+        ),
     )(
         im.as_fieldop(
             im.lambda_("it")(
@@ -1025,7 +1063,7 @@ def test_nested_let_args(offset_provider):
                     im.deref(im.shift("Ioff", -1)("it")), im.deref(im.shift("Ioff", -1)("it"))
                 )
             ),
-            domain,
+            domain_011,
         )("inner")
     )
 
@@ -1037,10 +1075,88 @@ def test_nested_let_args(offset_provider):
             )
         )
     }
-    actual_call, actual_domains = infer_let(
-        testee, SymbolicDomain.from_expr(domain), offset_provider
+    run_test_let(testee, expected, domain_011, expected_domains, offset_provider)
+
+
+def test_program_let(offset_provider):
+    stencil_tmp = im.lambda_("arg0")(
+        im.minus(im.deref(im.shift(itir.SymbolRef("Ioff"), -1)("arg0")), im.deref("arg0"))
     )
-    folded_domains = domains_dict_constant_folding(actual_domains)
-    folded_call = let_constant_folding(actual_call)
-    assert folded_call == expected
-    assert folded_domains == expected_domains
+
+    let_tmp = im.let(
+        "inner",
+        im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", -1)("it"))))("squared_shift"),
+    )(
+        im.as_fieldop(
+            im.lambda_("it")(
+                im.multiplies_(
+                    im.deref(im.shift("Ioff", -1)("it")), im.deref(im.shift("Ioff", -1)("it"))
+                )
+            )
+        )("inner")
+    )
+
+    as_fieldop = im.as_fieldop(stencil_tmp)(im.ref("tmp"))
+
+    domain_m210 = im.domain(
+        common.GridType.CARTESIAN,
+        {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (-2, 10)},
+    )
+    domain_011 = im.domain(
+        common.GridType.CARTESIAN,
+        {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (0, 11)},
+    )
+    domain_m111 = im.domain(
+        common.GridType.CARTESIAN,
+        {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (-1, 11)},
+    )
+
+    params = [
+        im.sym(name)
+        for name in ["in_field", "out_field", "new_field", "squared_shift", "_gtmp_auto_domain"]
+    ]
+    for param in params[:2]:
+        param.dtype = ("float64", False)
+        param.kind = "Iterator"
+
+    testee = itir.Program(
+        id="forward_diff_with_tmp",
+        function_definitions=[],
+        params=params,
+        declarations=[itir.Temporary(id="tmp", domain=AUTO_DOMAIN, dtype=float_type)],
+        body=[
+            itir.SetAt(expr=let_tmp, domain=AUTO_DOMAIN, target=im.ref("tmp")),
+            itir.SetAt(expr=as_fieldop, domain=domain_011, target=im.ref("out_field")),
+        ],
+    )
+
+    expected_let = im.let(
+        "inner",
+        im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", -1)("it"))), domain_m210)(
+            "squared_shift"
+        ),
+    )(
+        im.as_fieldop(
+            im.lambda_("it")(
+                im.multiplies_(
+                    im.deref(im.shift("Ioff", -1)("it")), im.deref(im.shift("Ioff", -1)("it"))
+                )
+            ),
+            domain_m111,
+        )("inner")
+    )
+
+    expected_as_fieldop = im.as_fieldop(stencil_tmp, domain_011)(im.ref("tmp"))
+
+    expected = itir.Program(
+        id="forward_diff_with_tmp",
+        function_definitions=[],
+        params=params,
+        declarations=[itir.Temporary(id="tmp", domain=domain_m111, dtype=float_type)],
+        body=[
+            itir.SetAt(expr=expected_let, domain=domain_m111, target=im.ref("tmp")),
+            itir.SetAt(expr=expected_as_fieldop, domain=domain_011, target=im.ref("out_field")),
+        ],
+    )
+
+    run_test_program(testee, expected, offset_provider)

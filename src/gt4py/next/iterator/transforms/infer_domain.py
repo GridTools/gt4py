@@ -12,6 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import copy
+
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Dict, Tuple
 from gt4py.next.common import Dimension
@@ -123,42 +125,44 @@ def infer_as_fieldop(
     return transformed_call, accessed_domains_without_tmp
 
 
-def infer_let(  # Todo merge with infer_as_fieldop
+def infer_let(
     applied_let: itir.FunCall,
     input_domain: SymbolicDomain | itir.FunCall,
     offset_provider: Dict[str, Dimension],
 ) -> Tuple[itir.FunCall, Dict[str, SymbolicDomain]]:
     assert isinstance(applied_let, itir.FunCall) and isinstance(applied_let.fun, itir.Lambda)
+    assert isinstance(applied_let.fun.expr, itir.FunCall)
+
     accessed_domains: Dict[str, SymbolicDomain] = {}
 
-    # Recursively infer domain of inputs and update domain arg of nested `let`s
-    transformed_calls_expr = []
-    if isinstance(applied_let.fun.expr.fun, itir.Lambda):
-        actual_call, accessed_domains_expr = infer_let(applied_let.fun.expr, input_domain, offset_provider)
-        transformed_calls_expr=actual_call
-    else:
-        actual_domain = input_domain
-        if cpm.is_call_to(applied_let.fun.expr.fun, "as_fieldop"):
-            transformed_calls_expr, accessed_domains_expr = infer_as_fieldop(
-                applied_let.fun.expr, actual_domain, offset_provider
-            )
-    transformed_calls_args: list(itir.FunCall) = []
-    for arg in applied_let.args:
-        if cpm.is_call_to(arg.fun, "as_fieldop"):
-            transformed_calls_arg, accessed_domains_arg = infer_as_fieldop(
-                arg, accessed_domains_expr[applied_let.fun.params[0].id], offset_provider
-            )
+    def process_expr(
+        expr: itir.FunCall, domain: SymbolicDomain | itir.FunCall
+    ) -> Tuple[itir.FunCall, Dict[str, SymbolicDomain]]:
+        if isinstance(expr.fun, itir.Lambda):
+            return infer_let(expr, domain, offset_provider)
+        elif cpm.is_call_to(expr.fun, "as_fieldop"):
+            return infer_as_fieldop(expr, domain, offset_provider)
+        else:
+            raise ValueError(f"Unsupported function call: {expr.fun}")
 
-        elif isinstance(arg.fun, itir.Lambda):
-            transformed_calls_arg, accessed_domains_arg = infer_let(arg, accessed_domains_expr[applied_let.fun.params[0].id], offset_provider)
+    transformed_calls_expr, accessed_domains_expr = process_expr(applied_let.fun.expr, input_domain)
+
+    transformed_calls_args: list[itir.FunCall] = []
+    for arg in applied_let.args:
+        assert isinstance(arg, itir.FunCall)
+        param_id = applied_let.fun.params[0].id
+        transformed_calls_arg, accessed_domains_arg = process_expr(
+            arg, accessed_domains_expr[param_id]
+        )
         transformed_calls_args.append(transformed_calls_arg)
         accessed_domains = _merge_domains(accessed_domains, accessed_domains_arg)
+
     transformed_call = im.let(
-            *Tuple(
-                (str(param.id), call)
-                for param, call in zip(applied_let.fun.params, transformed_calls_args)
-            )
-        )(transformed_calls_expr)
+        *(
+            (str(param.id), call)
+            for param, call in zip(applied_let.fun.params, transformed_calls_args)
+        )
+    )(transformed_calls_expr)
 
     return transformed_call, accessed_domains
 
@@ -190,7 +194,6 @@ def infer_program(
     for set_at in reversed(program.body):
         assert isinstance(set_at, itir.SetAt)
         assert isinstance(set_at.expr, itir.FunCall)
-        assert cpm.is_call_to(set_at.expr.fun, "as_fieldop")
         assert isinstance(
             set_at.target, itir.SymRef
         )  # TODO: stmt.target can be an expr, e.g. make_tuple
@@ -199,14 +202,18 @@ def infer_program(
             assert set_at.domain == AUTO_DOMAIN
         else:
             accessed_domains[set_at.target.id] = SymbolicDomain.from_expr(set_at.domain)
-
-        transformed_as_fieldop, current_accessed_domains = infer_as_fieldop(
-            set_at.expr, accessed_domains[set_at.target.id], offset_provider
-        )
+        if cpm.is_call_to(set_at.expr.fun, "as_fieldop"):
+            transformed_call, current_accessed_domains = infer_as_fieldop(
+                set_at.expr, accessed_domains[set_at.target.id], offset_provider
+            )
+        elif isinstance(set_at.expr.fun, itir.Lambda):
+            transformed_call, current_accessed_domains = infer_let(
+                set_at.expr, accessed_domains[set_at.target.id], offset_provider
+            )
         transformed_set_ats.insert(
             0,
             itir.SetAt(
-                expr=transformed_as_fieldop,
+                expr=transformed_call,
                 domain=SymbolicDomain.as_expr(accessed_domains[set_at.target.id]),
                 target=set_at.target,
             ),
@@ -227,7 +234,7 @@ def infer_program(
             else:
                 accessed_domains[field] = current_accessed_domains[field]
 
-    new_declarations = program.declarations
+    new_declarations = copy.deepcopy(program.declarations)
     for temporary in new_declarations:
         temporary.domain = SymbolicDomain.as_expr(accessed_domains[temporary.id])
 
