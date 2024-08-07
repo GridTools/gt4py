@@ -70,7 +70,7 @@ def program_processor(
     """
     processor_id, is_backend = request.param
     if processor_id is None:
-        return None, is_backend
+        yield None, is_backend
 
     gpu_env: Optional[str] = None
     processor = processor_id.load()
