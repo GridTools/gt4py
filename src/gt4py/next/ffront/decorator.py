@@ -40,6 +40,7 @@ from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
     field_operator_ast as foast,
     past_process_args,
+    signature,
     stages as ffront_stages,
     transform_utils,
     type_specifications as ts_ffront,
@@ -52,7 +53,7 @@ from gt4py.next.iterator.ir_utils.ir_makers import (
     ref,
     sym,
 )
-from gt4py.next.otf import arguments, workflow
+from gt4py.next.otf import arguments, stages, workflow
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
@@ -96,7 +97,11 @@ class Program:
         connectivities: Optional[dict[str, Connectivity]] = None,
     ) -> Program:
         program_def = ffront_stages.ProgramDefinition(definition=definition, grid_type=grid_type)
-        return cls(definition_stage=program_def, backend=backend, connectivities=connectivities)
+        return cls(
+            definition_stage=program_def,
+            backend=backend,
+            connectivities=connectivities,
+        )
 
     # needed in testing
     @property
@@ -196,7 +201,9 @@ class Program:
             return self.backend.transforms.past_to_itir(no_args_past).data
         return next_backend.DEFAULT_TRANSFORMS.past_to_itir(no_args_past).data
 
-    def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs: Any) -> None:
+    def __call__(
+        self, *args: Any, offset_provider: dict[str, Dimension | Connectivity], **kwargs: Any
+    ) -> None:
         if self.backend is None:
             warnings.warn(
                 UserWarning(
@@ -212,10 +219,64 @@ class Program:
             return
 
         ppi.ensure_processor_kind(self.backend.executor, ppi.ProgramExecutor)
-
         self.backend(
             self.definition_stage, *args, **(kwargs | {"offset_provider": offset_provider})
         )
+
+    def freeze(self) -> FrozenProgram:
+        if self.backend is None:
+            raise ValueError("Can not freeze a program without backend (embedded execution).")
+        return FrozenProgram(
+            self.definition_stage if self.definition_stage else self.past_stage,
+            backend=self.backend,
+        )
+
+
+@dataclasses.dataclass(frozen=True)
+class FrozenProgram:
+    """
+    Simplified program instance, which skips the whole toolchain after the first execution.
+
+    Does not work in embedded execution.
+    """
+
+    program: ffront_stages.DSL_PRG | ffront_stages.PRG
+    backend: next_backend.Backend
+    _compiled_program: Optional[stages.CompiledProgram] = dataclasses.field(
+        init=False, default=None
+    )
+
+    @property
+    def definition(self) -> str:
+        return self.program.definition
+
+    def with_backend(self, backend: ppi.ProgramExecutor) -> FrozenProgram:
+        return self.__class__(program=self.program, backend=backend)
+
+    def with_grid_type(self, grid_type: GridType) -> FrozenProgram:
+        return self.__class__(
+            program=dataclasses.replace(self.program, grid_type=grid_type), backend=self.backend
+        )
+
+    def jit(
+        self, *args: Any, offset_provider: dict[str, Dimension | Connectivity], **kwargs: Any
+    ) -> stages.CompiledProgram:
+        if self.backend is not None:
+            return self.backend.jit(self.program, *args, offset_provider=offset_provider, **kwargs)
+        raise ValueError("Can not JIT-compile programs without backend (embedded execution).")
+
+    def __call__(
+        self, *args: Any, offset_provider: dict[str, Dimension | Connectivity], **kwargs: Any
+    ) -> None:
+        ppi.ensure_processor_kind(self.backend.executor, ppi.ProgramExecutor)
+
+        args, kwargs = signature.convert_to_positional(self.program, *args, **kwargs)
+
+        if not self._compiled_program:
+            super().__setattr__(
+                "_compiled_program", self.jit(*args, offset_provider=offset_provider, **kwargs)
+            )
+        self._compiled_program(*args, offset_provider=offset_provider, **kwargs)
 
 
 try:
@@ -235,14 +296,16 @@ class ProgramFromPast(Program):
 
     past_stage: ffront_stages.PastProgramDefinition
 
-    def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs):
+    def __call__(self, *args: Any, offset_provider: dict[str, Dimension], **kwargs: Any) -> None:
         if self.backend is None:
             raise NotImplementedError(
                 "Programs created from a PAST node (without a function definition) can not be executed in embedded mode"
             )
 
         ppi.ensure_processor_kind(self.backend.executor, ppi.ProgramExecutor)
-        self.backend(self.past_stage, *args, **(kwargs | {"offset_provider": offset_provider}))
+        self.backend(
+            self.definition_stage, *args, **(kwargs | {"offset_provider": offset_provider})
+        )
 
     # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self):
@@ -337,12 +400,13 @@ def program(
 
 
 def program(
-    definition=None,
+    definition: Optional[types.FunctionType] = None,
     *,
     # `NOTHING` -> default backend, `None` -> no backend (embedded execution)
-    backend=eve.NOTHING,
-    grid_type=None,
-) -> Program | Callable[[types.FunctionType], Program]:
+    backend: next_backend.Backend | eve.NOTHING = eve.NOTHING,
+    grid_type: Optional[GridType] = None,
+    frozen: bool = False,
+) -> Program | FrozenProgram | Callable[[types.FunctionType], Program | FrozenProgram]:
     """
     Generate an implementation of a program from a Python function object.
 
@@ -362,9 +426,14 @@ def program(
     """
 
     def program_inner(definition: types.FunctionType) -> Program:
-        return Program.from_function(
-            definition, DEFAULT_BACKEND if backend is eve.NOTHING else backend, grid_type
+        program = Program.from_function(
+            definition,
+            DEFAULT_BACKEND if backend is eve.NOTHING else backend,
+            grid_type,
         )
+        if frozen:
+            return program.freeze()
+        return program
 
     return program_inner if definition is None else program_inner(definition)
 
