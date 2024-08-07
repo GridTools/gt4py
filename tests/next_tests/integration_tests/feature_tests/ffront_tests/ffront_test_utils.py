@@ -13,8 +13,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import types
-from typing import Any, Protocol, TypeVar
-
+from typing import Any, Protocol, TypeVar, Generator, Optional
+import os
 import numpy as np
 import pytest
 
@@ -25,6 +25,11 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors import processor_interface as ppi
 
 import next_tests
+
+try:
+    import xdist.testrun_uid
+except ImportError:
+    testrun_uid = None
 
 
 @ppi.program_executor
@@ -66,7 +71,7 @@ no_backend = NoBackend(executor=no_exec, transforms_prog=None, allocator=None)
     ],
     ids=lambda p: p.short_id(),
 )
-def exec_alloc_descriptor(request):
+def exec_alloc_descriptor(request, testrun_uid) -> Generator[ppi.ProgramProcessor, None, None]:
     """
     Fixture creating field-view operator backend on-demand for tests.
 
@@ -76,16 +81,29 @@ def exec_alloc_descriptor(request):
     backend_id = request.param
     backend = backend_id.load()
 
+    gpu_env: Optional[str] = None
     for marker, skip_mark, msg in next_tests.definitions.BACKEND_SKIP_TEST_MATRIX.get(
         backend_id, []
     ):
         if request.node.get_closest_marker(marker):
             skip_mark(msg.format(marker=marker, backend=backend_id))
 
+        if testrun_uid and marker == "requires_gpu":
+            import cupy
+
+            # override environment variable to make a single device visible to cupy
+            gpu_env = os.getenv("CUDA_VISIBLE_DEVICES")
+            num_gpu_devices = cupy.cuda.runtime.getDeviceCount()
+            os.environ["CUDA_VISIBLE_DEVICES"] = testrun_uid % num_gpu_devices
+
     backup_backend = decorator.DEFAULT_BACKEND
     decorator.DEFAULT_BACKEND = no_backend
     yield backend
     decorator.DEFAULT_BACKEND = backup_backend
+
+    if gpu_env:
+        # restore environment variable
+        os.environment["CUDA_VISIBLE_DEVICES"] = gpu_env
 
 
 def debug_itir(tree):

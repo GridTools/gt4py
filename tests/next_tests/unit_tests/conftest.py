@@ -15,6 +15,8 @@
 from __future__ import annotations
 
 import dataclasses
+import os
+from typing import Generator, Optional
 
 import pytest
 
@@ -24,6 +26,11 @@ from gt4py.next.program_processors import processor_interface as ppi
 
 
 import next_tests
+
+try:
+    import xdist.testrun_uid
+except ImportError:
+    testrun_uid = None
 
 
 @pytest.fixture(
@@ -51,7 +58,9 @@ import next_tests
     ],
     ids=lambda p: p[0].short_id() if p[0] is not None else "None",
 )
-def program_processor(request) -> tuple[ppi.ProgramProcessor, bool]:
+def program_processor(
+    request, testrun_uid
+) -> Generator[tuple[ppi.ProgramProcessor, bool], None, None]:
     """
     Fixture creating program processors on-demand for tests.
 
@@ -62,6 +71,7 @@ def program_processor(request) -> tuple[ppi.ProgramProcessor, bool]:
     if processor_id is None:
         return None, is_backend
 
+    gpu_env: Optional[str] = None
     processor = processor_id.load()
     assert is_backend == ppi.is_program_backend(processor)
     if is_backend:
@@ -73,7 +83,19 @@ def program_processor(request) -> tuple[ppi.ProgramProcessor, bool]:
         if request.node.get_closest_marker(marker):
             skip_mark(msg.format(marker=marker, backend=processor_id))
 
-    return processor, is_backend
+        if testrun_uid and marker == "requires_gpu":
+            import cupy
+
+            # override environment variable to make a single device visible to cupy
+            gpu_env = os.getenv("CUDA_VISIBLE_DEVICES")
+            num_gpu_devices = cupy.cuda.runtime.getDeviceCount()
+            os.environ["CUDA_VISIBLE_DEVICES"] = testrun_uid % num_gpu_devices
+
+    yield processor, is_backend
+
+    if gpu_env:
+        # restore environment variable
+        os.environment["CUDA_VISIBLE_DEVICES"] = gpu_env
 
 
 def run_processor(
