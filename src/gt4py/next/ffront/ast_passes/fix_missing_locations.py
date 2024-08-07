@@ -42,15 +42,15 @@ class FixMissingLocations(ast.NodeTransformer):
             node = copy.copy(node)
             parent_node = self._parent_nodes[-1]
 
-            node.lineno = parent_node.lineno
-            node.col_offset = parent_node.col_offset
+            node.lineno = parent_node.lineno  # type: ignore[attr-defined] # this is monkey patching as not all `ast.AST` have `lineno` etc
+            node.col_offset = parent_node.col_offset  # type: ignore[attr-defined] # this is monkey patching as not all `ast.AST` have `lineno` etc
 
             # the end positions are optional according to
             #  https://docs.python.org/3/library/ast.html#ast.AST.end_col_offset
             if hasattr(parent_node, "end_lineno"):
-                node.end_lineno = parent_node.end_lineno
+                node.end_lineno = parent_node.end_lineno  # type: ignore[attr-defined] # this is monkey patching as not all `ast.AST` have `lineno` etc
             if hasattr(parent_node, "end_col_offset"):
-                node.end_col_offset = parent_node.end_col_offset
+                node.end_col_offset = parent_node.end_col_offset  # type: ignore[attr-defined] # this is monkey patching as not all `ast.AST` have `lineno` etc
 
         self._parent_nodes.append(node)
         result = super().generic_visit(node)
