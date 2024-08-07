@@ -28,9 +28,9 @@ from gt4py.next.program_processors import processor_interface as ppi
 import next_tests
 
 try:
-    import xdist.testrun_uid
+    import xdist
 except ImportError:
-    testrun_uid = None
+    xdist = None
 
 
 @pytest.fixture(
@@ -83,13 +83,19 @@ def program_processor(
         if request.node.get_closest_marker(marker):
             skip_mark(msg.format(marker=marker, backend=processor_id))
 
-        if testrun_uid and marker == "requires_gpu":
-            import cupy
+    gpu_env: Optional[str] = None
+    if xdist and request.node.get_closest_marker(pytest.mark.requires_gpu.name):
+        import cupy
+
+        if xdist.is_xdist_worker(request):
+            wid = xdist.get_xdist_worker_id(request)
+            wid_stripped = re.search('.*(\d+)', wid).group(1)
 
             # override environment variable to make a single device visible to cupy
             gpu_env = os.getenv("CUDA_VISIBLE_DEVICES")
             num_gpu_devices = cupy.cuda.runtime.getDeviceCount()
-            os.environ["CUDA_VISIBLE_DEVICES"] = testrun_uid % num_gpu_devices
+            os.environ["CUDA_VISIBLE_DEVICES"] = str(int(wid_stripped) % num_gpu_devices)
+            print(f"gpu_env={gpu_env} num_gpu_devices={num_gpu_devices} device_id={os.getenv('CUDA_VISIBLE_DEVICES')}")
 
     yield processor, is_backend
 
