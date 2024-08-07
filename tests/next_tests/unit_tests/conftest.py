@@ -71,37 +71,36 @@ def program_processor(
     processor_id, is_backend = request.param
     if processor_id is None:
         yield None, is_backend
+    else:
+        processor = processor_id.load()
+        assert is_backend == ppi.is_program_backend(processor)
+        if is_backend:
+            processor = processor.executor
 
-    gpu_env: Optional[str] = None
-    processor = processor_id.load()
-    assert is_backend == ppi.is_program_backend(processor)
-    if is_backend:
-        processor = processor.executor
+        for marker, skip_mark, msg in next_tests.definitions.BACKEND_SKIP_TEST_MATRIX.get(
+            processor_id, []
+        ):
+            if request.node.get_closest_marker(marker):
+                skip_mark(msg.format(marker=marker, backend=processor_id))
 
-    for marker, skip_mark, msg in next_tests.definitions.BACKEND_SKIP_TEST_MATRIX.get(
-        processor_id, []
-    ):
-        if request.node.get_closest_marker(marker):
-            skip_mark(msg.format(marker=marker, backend=processor_id))
+        gpu_env: Optional[str] = None
+        if xdist and request.node.get_closest_marker(pytest.mark.requires_gpu.name):
+            import cupy
 
-    gpu_env: Optional[str] = None
-    if xdist and request.node.get_closest_marker(pytest.mark.requires_gpu.name):
-        import cupy
+            num_gpu_devices = cupy.cuda.runtime.getDeviceCount()
+            if num_gpu_devices > 1 and xdist.is_xdist_worker(request):
+                wid = xdist.get_xdist_worker_id(request)
+                wid_stripped = re.search(r".*(\d+)", wid).group(1)
 
-        num_gpu_devices = cupy.cuda.runtime.getDeviceCount()
-        if num_gpu_devices > 1 and xdist.is_xdist_worker(request):
-            wid = xdist.get_xdist_worker_id(request)
-            wid_stripped = re.search(r".*(\d+)", wid).group(1)
+                # override environment variable to make a single device visible to cupy
+                gpu_env = os.getenv("CUDA_VISIBLE_DEVICES")
+                os.environ["CUDA_VISIBLE_DEVICES"] = str(int(wid_stripped) % num_gpu_devices)
 
-            # override environment variable to make a single device visible to cupy
-            gpu_env = os.getenv("CUDA_VISIBLE_DEVICES")
-            os.environ["CUDA_VISIBLE_DEVICES"] = str(int(wid_stripped) % num_gpu_devices)
+        yield processor, is_backend
 
-    yield processor, is_backend
-
-    if gpu_env:
-        # restore environment variable
-        os.environ["CUDA_VISIBLE_DEVICES"] = gpu_env
+        if gpu_env:
+            # restore environment variable
+            os.environ["CUDA_VISIBLE_DEVICES"] = gpu_env
 
 
 def run_processor(
