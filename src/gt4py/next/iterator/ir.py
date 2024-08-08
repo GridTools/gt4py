@@ -203,6 +203,7 @@ class FencilDefinition(Node, ValidatedSymbolTableTrait):
     function_definitions: List[FunctionDefinition]
     params: List[Sym]
     closures: List[StencilClosure]
+    implicit_domain: bool = False
 
     _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in BUILTINS]
 
@@ -228,6 +229,7 @@ class Program(Node, ValidatedSymbolTableTrait):
     params: List[Sym]
     declarations: List[Temporary]
     body: List[Stmt]
+    implicit_domain: bool = False
 
     _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in GTIR_BUILTINS]
 

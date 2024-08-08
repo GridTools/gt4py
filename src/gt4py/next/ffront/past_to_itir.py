@@ -18,7 +18,6 @@ import dataclasses
 from typing import Any, Optional, cast
 
 import devtools
-import factory
 
 from gt4py.eve import NodeTranslator, concepts, traits
 from gt4py.next import common, config
@@ -31,43 +30,80 @@ from gt4py.next.ffront import (
     transform_utils,
     type_specifications as ts_ffront,
 )
+from gt4py.next.ffront.stages import AOT_PRG
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.otf import stages, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
-@dataclasses.dataclass(frozen=True)
-class PastToItir(workflow.ChainableWorkflowMixin):
-    def __call__(self, inp: ffront_stages.PastClosure) -> stages.ProgramCall:
-        all_closure_vars = transform_utils._get_closure_vars_recursively(inp.closure_vars)
-        offsets_and_dimensions = transform_utils._filter_closure_vars_by_type(
-            all_closure_vars, fbuiltins.FieldOffset, common.Dimension
-        )
-        grid_type = transform_utils._deduce_grid_type(
-            inp.grid_type, offsets_and_dimensions.values()
-        )
+def past_to_itir(inp: AOT_PRG) -> stages.AOTProgram:
+    """
+    Lower a PAST program definition to Iterator IR.
 
-        gt_callables = transform_utils._filter_closure_vars_by_type(
-            all_closure_vars, gtcallable.GTCallable
-        ).values()
-        lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
+    Example:
+        >>> from gt4py import next as gtx
+        >>> from gt4py.next.otf import arguments
+        >>> from gt4py.next.otf import arguments
+        >>> IDim = gtx.Dimension("I")
 
-        itir_program = ProgramLowering.apply(
-            inp.past_node, function_definitions=lowered_funcs, grid_type=grid_type
-        )
+        >>> @gtx.field_operator
+        ... def copy(a: gtx.Field[[IDim], gtx.float32]) -> gtx.Field[[IDim], gtx.float32]:
+        ...     return a
 
-        if config.DEBUG or "debug" in inp.kwargs:
-            devtools.debug(itir_program)
+        >>> @gtx.program
+        ... def copy_program(a: gtx.Field[[IDim], gtx.float32], out: gtx.Field[[IDim], gtx.float32]):
+        ...     copy(a, out=out)
 
-        return stages.ProgramCall(
-            itir_program, inp.args, inp.kwargs | {"column_axis": _column_axis(all_closure_vars)}
-        )
+        >>> compile_time_args = arguments.CompileTimeArgs.from_concrete(
+        ...     *(
+        ...         arguments.CompileTimeArg(param.type)
+        ...         for param in copy_program.past_stage.past_node.params
+        ...     ),
+        ...     offset_provider={"I", IDim},
+        ... )  # this will include field dim size arguments automatically.
+
+        >>> itir_copy = past_to_itir(workflow.DataArgsPair(copy_program.past_stage, compile_time_args))
+
+        >>> print(itir_copy.data.id)
+        copy_program
+
+        >>> print(type(itir_copy.data))
+        <class 'gt4py.next.iterator.ir.FencilDefinition'>
+    """
+    all_closure_vars = transform_utils._get_closure_vars_recursively(inp.data.closure_vars)
+    offsets_and_dimensions = transform_utils._filter_closure_vars_by_type(
+        all_closure_vars, fbuiltins.FieldOffset, common.Dimension
+    )
+    grid_type = transform_utils._deduce_grid_type(
+        inp.data.grid_type, offsets_and_dimensions.values()
+    )
+
+    gt_callables = transform_utils._filter_closure_vars_by_type(
+        all_closure_vars, gtcallable.GTCallable
+    ).values()
+    lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
+
+    itir_program = ProgramLowering.apply(
+        inp.data.past_node,
+        function_definitions=lowered_funcs,
+        grid_type=grid_type,
+    )
+
+    if config.DEBUG or inp.data.debug:
+        devtools.debug(itir_program)
+
+    return stages.AOTProgram(
+        data=itir_program,
+        args=dataclasses.replace(inp.args, column_axis=_column_axis(all_closure_vars)),
+    )
 
 
-class PastToItirFactory(factory.Factory):
-    class Meta:
-        model = PastToItir
+def past_to_itir_factory(cached: bool = True) -> workflow.Workflow[AOT_PRG, stages.AOTProgram]:
+    wf = workflow.make_step(past_to_itir)
+    if cached:
+        wf = workflow.CachedStep(wf, hash_function=ffront_stages.fingerprint_stage)
+    return wf
 
 
 def _column_axis(all_closure_vars: dict[str, Any]) -> Optional[common.Dimension]:
@@ -200,15 +236,21 @@ class ProgramLowering(
 
         params = self.visit(node.params)
 
+        implicit_domain = False
         if any("domain" not in body_entry.kwargs for body_entry in node.body):
             params = params + self._gen_size_params_from_program(node)
+            implicit_domain = True
 
         closures: list[itir.StencilClosure] = []
         for stmt in node.body:
             closures.append(self._visit_stencil_call(stmt, **kwargs))
 
         return itir.FencilDefinition(
-            id=node.id, function_definitions=function_definitions, params=params, closures=closures
+            id=node.id,
+            function_definitions=function_definitions,
+            params=params,
+            closures=closures,
+            implicit_domain=implicit_domain,
         )
 
     def _visit_stencil_call(self, node: past.Call, **kwargs: Any) -> itir.StencilClosure:

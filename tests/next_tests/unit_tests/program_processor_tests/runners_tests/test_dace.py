@@ -17,7 +17,7 @@ import ctypes
 from typing import Any
 import numpy as np
 import pytest
-import unittest
+import unittest.mock
 
 import gt4py.next as gtx
 from gt4py.next import int32

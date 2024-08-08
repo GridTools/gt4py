@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import abc
 import dataclasses
 import functools
 import typing
@@ -29,6 +30,8 @@ EndT_co = TypeVar("EndT_co", covariant=True)
 NewEndT = TypeVar("NewEndT")
 IntermediateT = TypeVar("IntermediateT")
 HashT = TypeVar("HashT")
+DataT = TypeVar("DataT")
+ArgT = TypeVar("ArgT")
 
 
 def make_step(function: Workflow[StartT, EndT]) -> ChainableWorkflowMixin[StartT, EndT]:
@@ -159,6 +162,23 @@ class NamedStepSequence(
 
 
 @dataclasses.dataclass(frozen=True)
+class MultiWorkflow(
+    ChainableWorkflowMixin[StartT, EndT], ReplaceEnabledWorkflowMixin[StartT, EndT]
+):
+    """A flexible workflow, where the sequence of steps depends on the input type."""
+
+    def __call__(self, inp: StartT) -> EndT:
+        step_result: Any = inp
+        for step_name in self.step_order(inp):
+            step_result = getattr(self, step_name)(step_result)
+        return step_result
+
+    @abc.abstractmethod
+    def step_order(self, inp: StartT) -> list[str]:
+        pass
+
+
+@dataclasses.dataclass(frozen=True)
 class StepSequence(ChainableWorkflowMixin[StartT, EndT]):
     """
     Composable workflow of single input callables.
@@ -267,24 +287,61 @@ class SkippableStep(
         raise NotImplementedError()
 
 
-@dataclasses.dataclass
-class InputWithArgs(Generic[StartT]):
-    data: StartT
-    args: tuple[Any]
-    kwargs: dict[str, Any]
+@dataclasses.dataclass(frozen=True)
+class DataArgsPair(Generic[DataT, ArgT]):
+    data: DataT
+    args: ArgT
 
 
 @dataclasses.dataclass(frozen=True)
-class NamedStepSequenceWithArgs(NamedStepSequence[InputWithArgs[StartT], EndT]):
-    def __call__(self, inp: InputWithArgs[StartT]) -> EndT:
+class DataOnlyAdapter(
+    ChainableWorkflowMixin,
+    ReplaceEnabledWorkflowMixin,
+    Workflow[DataArgsPair[StartT, ArgT], DataArgsPair[EndT, ArgT]],
+    Generic[ArgT, StartT, EndT],
+):
+    step: Workflow[StartT, EndT]
+
+    def __call__(self, inp: DataArgsPair[StartT, ArgT]) -> DataArgsPair[EndT, ArgT]:
+        return DataArgsPair(data=self.step(inp.data), args=inp.args)
+
+
+@dataclasses.dataclass(frozen=True)
+class ArgsOnlyAdapter(
+    ChainableWorkflowMixin,
+    ReplaceEnabledWorkflowMixin,
+    Workflow[DataArgsPair[DataT, StartT], DataArgsPair[DataT, EndT]],
+    Generic[DataT, StartT, EndT],
+):
+    step: Workflow[StartT, EndT]
+
+    def __call__(self, inp: DataArgsPair[DataT, StartT]) -> DataArgsPair[DataT, EndT]:
+        return DataArgsPair(data=inp.data, args=self.step(inp.args))
+
+
+@dataclasses.dataclass(frozen=True)
+class StripArgsAdapter(
+    ChainableWorkflowMixin,
+    ReplaceEnabledWorkflowMixin,
+    Workflow[DataArgsPair[StartT, ArgT], EndT],
+    Generic[ArgT, StartT, EndT],
+):
+    step: Workflow[StartT, EndT]
+
+    def __call__(self, inp: DataArgsPair[StartT, ArgT]) -> EndT:
+        return self.step(inp.data)
+
+
+@dataclasses.dataclass(frozen=True)
+class NamedStepSequenceWithArgs(NamedStepSequence[DataArgsPair[StartT, ArgT], EndT]):
+    def __call__(self, inp: DataArgsPair[StartT, ArgT]) -> EndT:
         args = inp.args
-        kwargs = inp.kwargs
         step_result: Any = inp.data
         fields = {f.name: f for f in dataclasses.fields(self)}
         for step_name in self.step_order:
             step = getattr(self, step_name)
             if fields[step_name].metadata.get("takes_args", False):
-                step_result = step(InputWithArgs(step_result, args, kwargs))
+                step_result = step(DataArgsPair(step_result, args))
             else:
                 step_result = step(step_result)
         return step_result

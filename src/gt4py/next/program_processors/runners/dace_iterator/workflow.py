@@ -26,7 +26,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common, config
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import LiftMode
-from gt4py.next.otf import languages, stages, step_types, workflow
+from gt4py.next.otf import arguments, languages, stages, step_types, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.compilation import cache
 from gt4py.next.otf.languages import LanguageSettings
@@ -38,7 +38,7 @@ from . import build_sdfg_from_itir, get_sdfg_args
 @dataclasses.dataclass(frozen=True)
 class DaCeTranslator(
     workflow.ChainableWorkflowMixin[
-        stages.ProgramCall, stages.ProgramSource[languages.SDFG, languages.LanguageSettings]
+        stages.AOTProgram, stages.ProgramSource[languages.SDFG, languages.LanguageSettings]
     ],
     step_types.TranslationStep[languages.SDFG, languages.LanguageSettings],
 ):
@@ -81,22 +81,22 @@ class DaCeTranslator(
         )
 
     def __call__(
-        self, inp: stages.ProgramCall
+        self, inp: stages.AOTProgram
     ) -> stages.ProgramSource[languages.SDFG, LanguageSettings]:
         """Generate DaCe SDFG file from the ITIR definition."""
-        program: itir.FencilDefinition = inp.program
-        arg_types = [tt.from_value(arg) for arg in inp.args]
+        program: itir.FencilDefinition = inp.data
+        arg_types = [tt.from_value(arg) for arg in inp.args.args]
 
         sdfg = self.generate_sdfg(
             program,
             arg_types,
-            inp.kwargs["offset_provider"],
-            inp.kwargs.get("column_axis", None),
+            inp.args.offset_provider,
+            inp.args.column_axis,
         )
 
         param_types = tuple(
             interface.Parameter(param, tt.from_value(arg))
-            for param, arg in zip(sdfg.arg_names, inp.args)
+            for param, arg in zip(sdfg.arg_names, inp.args.args)
         )
 
         module: stages.ProgramSource[languages.SDFG, languages.LanguageSettings] = (
@@ -106,6 +106,7 @@ class DaCeTranslator(
                 library_deps=tuple(),
                 language=languages.SDFG,
                 language_settings=self._language_settings(),
+                implicit_domain=inp.data.implicit_domain,
             )
         )
         return module
@@ -204,8 +205,12 @@ def convert_args(
     on_gpu = True if device == core_defs.DeviceType.CUDA else False
 
     def decorated_program(
-        *args, offset_provider: dict[str, common.Connectivity | common.Dimension]
+        *args, offset_provider: dict[str, common.Connectivity | common.Dimension], out: Any = None
     ):
+        if out is not None:
+            args = (*args, out)
+        if len(sdfg.arg_names) > len(args):
+            args = (*args, *arguments.iter_size_args(args))
         if sdfg_program._lastargs:
             # The scalar arguments should be replaced with the actual value; for field arguments,
             # the data pointer should remain the same otherwise fast-call cannot be used and

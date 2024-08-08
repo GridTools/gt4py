@@ -17,7 +17,7 @@ import functools
 import factory
 
 import gt4py._core.definitions as core_defs
-from gt4py.next import config
+from gt4py.next import backend, config
 from gt4py.next.otf import recipes, stages
 from gt4py.next.program_processors.runners.dace_iterator.workflow import (
     DaCeCompilationStepFactory,
@@ -80,6 +80,8 @@ class DaCeBackendFactory(GTFNBackendFactory):
             otf_workflow__translation__auto_optimize=True, name_temps="_opt"
         )
         use_field_canonical_representation: bool = False
+
+    transforms = backend.DEFAULT_TRANSFORMS
 
 
 run_dace_cpu = DaCeBackendFactory(cached=True, auto_optimize=True)
