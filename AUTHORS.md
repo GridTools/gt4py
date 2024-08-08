@@ -18,6 +18,7 @@
 - Häuselmann, Rico. ETH Zurich - CSCS
 - Kardos, Péter. ETH Zurich - EXCLAIM
 - Kellerhals, Samuel. ETH Zurich - EXCLAIM
+- Kotsalos, Christos. ETH Zurich - CSCS
 - Luz, Magdalena. ETH Zurich - EXCLAIM
 - Madonna, Alberto. ETH Zurich - CSCS
 - Mariotti, Kean. ETH Zurich - CSCS
