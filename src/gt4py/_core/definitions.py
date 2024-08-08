@@ -167,11 +167,9 @@ class DTypeKind(eve.StrEnum):
 
 
 @overload
-def dtype_kind(sc_type: Type[BoolT]) -> Literal[DTypeKind.BOOL]: ...
-
-
-@overload
-def dtype_kind(sc_type: Type[IntT]) -> Literal[DTypeKind.INT]: ...
+def dtype_kind(
+    sc_type: Type[IntT] | Type[BoolT],  # mypy doesn't distinguish IntT and BoolT
+) -> Literal[DTypeKind.INT, DTypeKind.BOOL]: ...
 
 
 @overload
