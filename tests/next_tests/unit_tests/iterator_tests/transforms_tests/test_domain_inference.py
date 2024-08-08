@@ -142,6 +142,8 @@ def program_constant_folding(program_call: itir.Program) -> itir.Program:
     for j, tmp in enumerate(new_call.declarations):
         tmp.domain = domain_constant_folding(tmp.domain)
     for j, set_at in enumerate(new_call.body):
+        if isinstance(set_at.expr, itir.SymRef):
+            continue
         set_at.expr = as_fieldop_domains_constant_folding(set_at.expr)
         set_at.domain = domain_constant_folding(set_at.domain)
     return new_call
@@ -219,6 +221,27 @@ def test_shift_x_y_two_inputs(offset_provider):
         offset_provider,
         im.ref("in_field1"),
         im.ref("in_field2"),
+    )
+
+
+def test_shift_x_y_two_inputs_literal(offset_provider):
+    stencil = im.lambda_("arg0", "arg1")(
+        im.plus(
+            im.deref(im.shift(itir.SymbolRef("Ioff"), -1)("arg0")),
+            im.deref(im.shift(itir.SymbolRef("Joff"), 1)("arg1")),
+        )
+    )
+    domain = im.domain(common.GridType.CARTESIAN, {"IDim": (0, 11), "JDim": (0, 7)})
+    expected_domains_dict = {
+        "in_field1": {"IDim": (-1, 10), "JDim": (0, 7)},
+    }
+    run_test_as_fieldop(
+        stencil,
+        domain,
+        expected_domains_dict,
+        offset_provider,
+        im.ref("in_field1"),
+        2,
     )
 
 
