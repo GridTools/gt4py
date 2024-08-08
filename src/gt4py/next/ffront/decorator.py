@@ -60,6 +60,37 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 DEFAULT_BACKEND: Callable = None
 
 
+# copied from the standard library, but updating with `object.__setattr__` for frozen dataclasses
+def _frozen_update_wrapper(
+    wrapper, wrapped, assigned=functools.WRAPPER_ASSIGNMENTS, updated=functools.WRAPPER_UPDATES
+):
+    """Update a wrapper function to look like the wrapped function
+
+    wrapper is the function to be updated
+    wrapped is the original function
+    assigned is a tuple naming the attributes assigned directly
+    from the wrapped function to the wrapper function (defaults to
+    functools.WRAPPER_ASSIGNMENTS)
+    updated is a tuple naming the attributes of the wrapper that
+    are updated with the corresponding attribute from the wrapped
+    function (defaults to functools.WRAPPER_UPDATES)
+    """
+    for attr in assigned:
+        try:
+            value = getattr(wrapped, attr)
+        except AttributeError:
+            pass
+        else:
+            object.__setattr__(wrapper, attr, value)
+    for attr in updated:
+        getattr(wrapper, attr).update(getattr(wrapped, attr, {}))
+    # Issue #17482: set __wrapped__ last so we don't inadvertently copy it
+    # from the wrapped function when updating __dict__
+    object.__setattr__(wrapper, "__wrapped__", wrapped)
+    # Return the wrapper so this can be used as a decorator via partial()
+    return wrapper
+
+
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
 #  result Program could become a GTCallable.
 @dataclasses.dataclass(frozen=True)
@@ -114,11 +145,8 @@ class Program:
     def __post_init__(self):
         if self.backend is not None and self.backend.transforms_prog is not None:
             self.backend.transforms_prog.past_lint(self.past_stage)
+        _frozen_update_wrapper(self, self.definition)
         return next_backend.DEFAULT_PROG_TRANSFORMS.past_lint(self.past_stage)
-
-    @property
-    def __name__(self) -> str:
-        return self.definition_stage.definition.__name__
 
     @functools.cached_property
     def __gt_allocator__(
@@ -420,16 +448,13 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     def __post_init__(self):
         """This ensures that DSL linting occurs at decoration time."""
         _ = self.foast_stage
+        _frozen_update_wrapper(self, self.definition)
 
     @functools.cached_property
     def foast_stage(self) -> ffront_stages.FoastOperatorDefinition:
         if self.backend is not None and self.backend.transforms_fop is not None:
             return self.backend.transforms_fop.func_to_foast(self.definition_stage)
         return next_backend.DEFAULT_FIELDOP_TRANSFORMS.func_to_foast(self.definition_stage)
-
-    @property
-    def __name__(self) -> str:
-        return self.definition_stage.definition.__name__
 
     @property
     def definition(self) -> str:
