@@ -104,6 +104,8 @@ DType = TypeVar("DType")
 IDim = gtx.Dimension("IDim")
 JDim = gtx.Dimension("JDim")
 KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+KHalf2KDim = gtx.Dimension("KHalf2KDim", kind=gtx.DimensionKind.LOCAL)
+KHalfDim = gtx.Dimension("KHalf", kind=gtx.DimensionKind.VERTICAL)
 Ioff = gtx.FieldOffset("Ioff", source=IDim, target=(IDim,))
 Joff = gtx.FieldOffset("Joff", source=JDim, target=(JDim,))
 Koff = gtx.FieldOffset("Koff", source=KDim, target=(KDim,))
@@ -121,6 +123,7 @@ V2E = gtx.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
 E2V = gtx.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
 C2E = gtx.FieldOffset("C2E", source=Edge, target=(Cell, C2EDim))
 C2V = gtx.FieldOffset("C2V", source=Vertex, target=(Cell, C2VDim))
+KHalf2K = gtx.FieldOffset("KHalf2K", source=KDim, target=(KHalfDim, KHalf2KDim))
 
 size = 10
 
@@ -201,6 +204,15 @@ def simple_mesh() -> MeshDescriptor:
     assert all(len(row) == 2 for row in e2v_arr)
     e2v_arr = np.asarray(e2v_arr, dtype=gtx.IndexType)
 
+    # khalf2k connectivity
+    k_lev_ls = [0, 1]
+    nlev = size
+    for k in range(nlev * 2):
+        k_lev_ls.append(k_lev_ls[k] + 1)
+    khalf2k_arr = np.asarray(
+        k_lev_ls,
+    ).reshape(nlev + 1, 2)
+
     return types.SimpleNamespace(
         name="simple_mesh",
         num_vertices=num_vertices,
@@ -218,6 +230,9 @@ def simple_mesh() -> MeshDescriptor:
             ),
             C2E.value: gtx.NeighborTableOffsetProvider(
                 c2e_arr, Cell, Edge, 4, has_skip_values=False
+            ),
+            KHalf2K.value: gtx.NeighborTableOffsetProvider(
+                khalf2k_arr, KHalfDim, KDim, 1, has_skip_values=False
             ),
         },
     )
@@ -308,6 +323,7 @@ __all__ = [
     "IDim",
     "JDim",
     "KDim",
+    "KHalfDim",
     "Ioff",
     "Joff",
     "Koff",

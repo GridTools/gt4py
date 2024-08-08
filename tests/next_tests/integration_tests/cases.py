@@ -54,6 +54,8 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     JDim,
     Joff,
     KDim,
+    KHalfDim,
+    KHalf2K,
     Koff,
     V2EDim,
     Vertex,

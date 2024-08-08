@@ -47,9 +47,11 @@ from next_tests.integration_tests.cases import (
     JDim,
     KDim,
     Koff,
+    KHalf2K,
     V2EDim,
     Vertex,
     Edge,
+    KHalfDim,
     cartesian_case,
     unstructured_case,
 )
@@ -89,6 +91,18 @@ def test_cartesian_shift(cartesian_case):
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
     cases.verify(cartesian_case, testee, a, out=out, ref=a[1:])
+
+
+@pytest.mark.uses_cartesian_shift
+def test_copy_khalf(cartesian_case):
+    @gtx.field_operator
+    def testee(a: gtx.Field[[KDim], np.int32]) -> gtx.Field[[KHalfDim], np.int32]:
+        return a(KHalf2K[1])
+
+    a = cases.allocate(cartesian_case, testee, "a").extend({KDim: (0, 1)})()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+
+    cases.verify(cartesian_case, testee, a, out=out, ref=a)
 
 
 @pytest.mark.uses_unstructured_shift
