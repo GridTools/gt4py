@@ -433,12 +433,14 @@ def content_hash(*args: Any, hash_algorithm: str | xtyping.HashlibAlgorithm | No
 
     """
     if hash_algorithm is None:
-        hash_algorithm = xxhash.xxh64()
+        hasher = xxhash.xxh64()
     elif isinstance(hash_algorithm, str):
-        hash_algorithm = hashlib.new(hash_algorithm)
+        hasher = hashlib.new(hash_algorithm)
+    else:
+        hasher = hash_algorithm
 
-    hash_algorithm.update(pickle.dumps(args))
-    result = hash_algorithm.hexdigest()
+    hasher.update(pickle.dumps(args))
+    result = hasher.hexdigest()
     assert isinstance(result, str)
 
     return result

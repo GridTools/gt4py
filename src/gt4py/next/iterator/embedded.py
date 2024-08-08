@@ -271,7 +271,7 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
 
     def __init__(self, kstart: int, data: np.ndarray | Scalar) -> None:
         self.kstart = kstart
-        assert isinstance(data, (np.ndarray, Scalar))  # type: ignore # mypy bug #11673
+        assert isinstance(data, (np.ndarray, Scalar))
         column_range: common.NamedRange = embedded_context.closure_column_range.get()
         self.data = (
             data if isinstance(data, np.ndarray) else np.full(len(column_range.unit_range), data)
@@ -560,7 +560,7 @@ def promote_scalars(val: CompositeOfScalarOrField):
     elif isinstance(val, common.Field):
         return val
     val_type = infer_dtype_like_type(val)
-    if isinstance(val, Scalar):  # type: ignore # mypy bug
+    if isinstance(val, Scalar):
         return constant_field(val)
     else:
         raise ValueError(
