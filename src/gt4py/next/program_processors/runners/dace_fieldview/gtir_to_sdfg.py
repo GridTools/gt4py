@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import abc
 import dataclasses
+import warnings
 from typing import Any, Dict, List, Protocol, Sequence, Set, Tuple, Union
 
 import dace
@@ -148,12 +149,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             (
                 neighbor_tables[dim.value].max_neighbors
                 if dim.kind == gtx_common.DimensionKind.LOCAL
-                # we reuse the same symbol for field size passed as scalar argument to the gt4py program
-                else dace.symbol(f"__{name}_size_{i}", dtype)
+                else dace.symbol(dace_fieldview_util.field_size_symbol_name(name, i), dtype)
             )
             for i, dim in enumerate(dims)
         ]
-        strides = [dace.symbol(f"__{name}_stride_{i}", dtype) for i in range(len(dims))]
+        strides = [
+            dace.symbol(dace_fieldview_util.field_stride_symbol_name(name, i), dtype)
+            for i in range(len(dims))
+        ]
         return shape, strides
 
     def _add_storage(
@@ -175,8 +178,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             sdfg.add_array(name, sym_shape, dtype, strides=sym_strides, transient=transient)
         elif isinstance(symbol_type, ts.ScalarType):
             dtype = dace_fieldview_util.as_dace_type(symbol_type)
-            # scalar arguments passed to the program are represented as symbols in DaCe SDFG
-            sdfg.add_symbol(name, dtype)
+            # Scalar arguments passed to the program are represented as symbols in DaCe SDFG.
+            # The field size is sometimes passed as scalar argument to the program, so we have to
+            # check if the shape symbol was already allocated by `_make_array_shape_and_strides`.
+            # We assume that the scalar argument for field size always follows the field argument.
+            if name in sdfg.symbols:
+                assert sdfg.symbols[name].dtype == dtype
+            else:
+                sdfg.add_symbol(name, dtype)
         else:
             raise RuntimeError(f"Data type '{type(symbol_type)}' not supported.")
 
@@ -279,6 +288,12 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             head_state._debuginfo = dace_fieldview_util.debug_info(stmt, default=sdfg.debuginfo)
             self.visit(stmt, sdfg=sdfg, state=head_state)
 
+        # Create the call signature for the SDFG.
+        #  Only the arguments required by the GT4Py program, i.e. `node.params`, are added
+        #  as positional arguments. The implicit arguments, such as the offset providers or
+        #  the arguments created by the translation process, must be passed as keywords arguments.
+        sdfg.arg_names = [str(a) for a in node.params]
+
         sdfg.validate()
         return sdfg
 
@@ -303,19 +318,24 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             assert not target_array.transient
             target_symbol_type = self.global_symbols[target_node.data]
 
-            if isinstance(target_symbol_type, ts.FieldType):
-                subset = ",".join(
-                    f"{domain[dim][0]}:{domain[dim][1]}" for dim in target_symbol_type.dims
-                )
+            if expr_node.data == target_node.data:
+                # handle extreme case encountered in test_execution.py::test_single_value_field
+                # for program IR like 'a @ c⟨ IDimₕ: [1, 2), KDimᵥ: [3, 4) ⟩ ← a'
+                warnings.warn("Inout argument is trying to copy to itself", stacklevel=2)
+                state.remove_nodes_from([expr_node, target_node])
             else:
-                assert len(domain) == 0
-                subset = "0"
+                if isinstance(target_symbol_type, ts.FieldType):
+                    subset = ",".join(
+                        f"{domain[dim][0]}:{domain[dim][1]}" for dim in target_symbol_type.dims
+                    )
+                else:
+                    subset = "0"
 
-            state.add_nedge(
-                expr_node,
-                target_node,
-                dace.Memlet(data=target_node.data, subset=subset),
-            )
+                state.add_nedge(
+                    expr_node,
+                    target_node,
+                    dace.Memlet(data=target_node.data, subset=subset),
+                )
 
     def visit_FunCall(
         self,

@@ -79,6 +79,14 @@ def debug_info(
     return default
 
 
+def field_size_symbol_name(field_name: str, axis: int) -> str:
+    return f"__{field_name}_size_{axis}"
+
+
+def field_stride_symbol_name(field_name: str, axis: int) -> str:
+    return f"__{field_name}_stride_{axis}"
+
+
 def filter_connectivities(offset_provider: Mapping[str, Any]) -> dict[str, gtx_common.Connectivity]:
     """
     Filter offset providers of type `Connectivity`.
