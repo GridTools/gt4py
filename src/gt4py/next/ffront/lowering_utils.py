@@ -154,6 +154,10 @@ def process_elements(
         zipper = lambda x: x
     else:
         zipper = lambda *x: x
+
+    if not isinstance(current_el_type, ts.TupleType):
+        return process_func(*objs)
+
     expanded = [expand_tuple_expr(arg, current_el_type) for arg in objs]
     tree_zip = next_utils.tree_map(result_collection_type=list)(zipper)(*expanded)
     result = next_utils.tree_map(
