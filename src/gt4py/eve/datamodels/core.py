@@ -261,7 +261,7 @@ def datamodel(
     cls: Literal[None] = None,
     /,
     *,
-    repr: bool = _REPR_DEFAULT,  # noqa: A002 [builtin-argument-shadowing]
+    repr: bool = _REPR_DEFAULT,
     eq: bool = _EQ_DEFAULT,
     order: bool = _ORDER_DEFAULT,
     unsafe_hash: bool = _UNSAFE_HASH_DEFAULT,
@@ -280,7 +280,7 @@ def datamodel(  # redefinion of unused symbol
     cls: Type[_T],
     /,
     *,
-    repr: bool = _REPR_DEFAULT,  # noqa: A002 [builtin-argument-shadowing]
+    repr: bool = _REPR_DEFAULT,
     eq: bool = _EQ_DEFAULT,
     order: bool = _ORDER_DEFAULT,
     unsafe_hash: bool = _UNSAFE_HASH_DEFAULT,
@@ -373,7 +373,7 @@ def datamodel(  # redefinion of unused symbol
     }
 
     if cls is None:  # called as: @datamodel()
-        return functools.partial(_make_datamodel, **datamodel_options)
+        return functools.partial(_make_datamodel, **datamodel_options)  # type: ignore[arg-type, return-value]
     else:  # called as: @datamodel
         return _make_datamodel(
             cls,

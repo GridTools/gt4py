@@ -44,7 +44,7 @@ class ScanOperator(EmbeddedOperator[core_defs.ScalarT | tuple[core_defs.ScalarT 
     def __call__(  # type: ignore[override]
         self,
         *args: common.Field | core_defs.Scalar,
-        **kwargs: common.Field | core_defs.Scalar,  # type: ignore[override]
+        **kwargs: common.Field | core_defs.Scalar,
     ) -> (
         common.Field[Any, core_defs.ScalarT]
         | tuple[common.Field[Any, core_defs.ScalarT] | tuple, ...]

@@ -106,5 +106,5 @@ class DefaultPipeline(OirPipeline):
             if isinstance(step, type) and issubclass(step, NodeVisitor):
                 oir = step().visit(oir)
             else:
-                oir = step(oir)
+                oir = step(oir)  # type: ignore[call-arg, assignment]
         return oir
