@@ -802,5 +802,8 @@ class LambdaToTasklet(eve.NodeVisitor):
 
     def visit_SymRef(self, node: gtir.SymRef) -> IteratorExpr | MemletExpr | SymbolExpr:
         param = str(node.id)
-        assert param in self.symbol_map
-        return self.symbol_map[param]
+        if param in self.symbol_map:
+            return self.symbol_map[param]
+        # if not in the lambda symbol map, this must be a symref to a builtin function
+        assert param in gtir_python_codegen.MATH_BUILTINS_MAPPING
+        return SymbolExpr(param, dace.string)
