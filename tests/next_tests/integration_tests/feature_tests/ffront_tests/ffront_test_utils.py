@@ -44,6 +44,7 @@ no_backend = NoBackend(executor=no_exec, transforms_prog=None, allocator=None)
 @pytest.fixture(
     params=[
         next_tests.definitions.ProgramBackendId.ROUNDTRIP,
+        next_tests.definitions.ProgramBackendId.GTIR_EMBEDDED,
         next_tests.definitions.ProgramBackendId.GTFN_CPU,
         next_tests.definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE,
         next_tests.definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES,

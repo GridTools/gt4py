@@ -11,9 +11,11 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+from collections.abc import Iterable
 from typing import Any, Callable, TypeVar
 
 from gt4py.eve import utils as eve_utils
+from gt4py.next import utils as next_utils
 from gt4py.next.ffront import type_info as ti_ffront
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
@@ -101,15 +103,45 @@ def to_iterator_of_tuples(expr: itir.Expr | str, arg_type: ts.TypeSpec) -> itir.
     return im.let(param, expr)(im.lift(im.lambda_(*lift_params)(stencil_expr))(*lift_args))
 
 
-# TODO(tehrengruber): The code quality of this function is poor. We should rewrite it.
+T = TypeVar("T", bound=itir.Expr, covariant=True)
+
+
+def expand_tuple_expr(tup: itir.Expr, tup_type: ts.TypeSpec) -> tuple[itir.Expr | tuple, ...]:
+    """
+    Create a tuple of `tuple_get` calls on `tup` by using the structure provided by `tup_type`.
+
+    Examples:
+        >>> expand_tuple_expr(
+        ...     itir.SymRef(id="tup"),
+        ...     ts.TupleType(
+        ...         types=[
+        ...             ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+        ...             ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+        ...         ]
+        ...     ),
+        ... )
+        (FunCall(fun=SymRef(id=SymbolRef('tuple_get')), args=[Literal(value='0', type=ScalarType(kind=<ScalarKind.INT32: 32>, shape=None)), SymRef(id=SymbolRef('tup'))]), FunCall(fun=SymRef(id=SymbolRef('tuple_get')), args=[Literal(value='1', type=ScalarType(kind=<ScalarKind.INT32: 32>, shape=None)), SymRef(id=SymbolRef('tup'))]))
+    """
+
+    def _tup_get(index_and_type: tuple[int, ts.TypeSpec]) -> itir.Expr:
+        i, _ = index_and_type
+        return im.tuple_get(i, tup)
+
+    res = next_utils.tree_map(collection_type=list, result_collection_type=tuple)(_tup_get)(
+        next_utils.tree_enumerate(
+            tup_type, collection_type=ts.TupleType, result_collection_type=list
+        )
+    )
+    assert isinstance(res, tuple)  # for mypy
+    return res
+
+
 def process_elements(
     process_func: Callable[..., itir.Expr],
-    objs: itir.Expr | list[itir.Expr],
+    objs: itir.Expr | Iterable[itir.Expr],
     current_el_type: ts.TypeSpec,
 ) -> itir.FunCall:
     """
-    Recursively applies a processing function to all primitive constituents of a tuple.
-
     Arguments:
         process_func: A callable that takes an itir.Expr representing a leaf-element of `objs`.
             If multiple `objs` are given the callable takes equally many arguments.
@@ -118,38 +150,17 @@ def process_elements(
             are not used and thus not relevant.
     """
     if isinstance(objs, itir.Expr):
-        objs = [objs]
-
-    _current_el_exprs = [
-        im.ref(f"__val_{eve_utils.content_hash(obj)}") for i, obj in enumerate(objs)
-    ]
-    body = _process_elements_impl(process_func, _current_el_exprs, current_el_type)
-
-    return im.let(*((f"__val_{eve_utils.content_hash(obj)}", obj) for i, obj in enumerate(objs)))(  # type: ignore[arg-type]  # mypy not smart enough
-        body
-    )
-
-
-T = TypeVar("T", bound=itir.Expr, covariant=True)
-
-
-def _process_elements_impl(
-    process_func: Callable[..., itir.Expr], _current_el_exprs: list[T], current_el_type: ts.TypeSpec
-) -> itir.Expr:
-    if isinstance(current_el_type, ts.TupleType):
-        result = im.make_tuple(
-            *[
-                _process_elements_impl(
-                    process_func,
-                    [im.tuple_get(i, current_el_expr) for current_el_expr in _current_el_exprs],
-                    current_el_type.types[i],
-                )
-                for i in range(len(current_el_type.types))
-            ]
-        )
-    elif type_info.contains_local_field(current_el_type):
-        raise NotImplementedError("Processing fields with local dimension is not implemented.")
+        objs = (objs,)
+        zipper = lambda x: x
     else:
-        result = process_func(*_current_el_exprs)
+        zipper = lambda *x: x
 
+    if not isinstance(current_el_type, ts.TupleType):
+        return process_func(*objs)
+
+    expanded = [expand_tuple_expr(arg, current_el_type) for arg in objs]
+    tree_zip = next_utils.tree_map(result_collection_type=list)(zipper)(*expanded)
+    result = next_utils.tree_map(
+        collection_type=list, result_collection_type=lambda x: im.make_tuple(*x)
+    )(process_func)(tree_zip)
     return result
