@@ -11,6 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+from collections.abc import Iterable
 from typing import Any, Callable, TypeVar
 
 from gt4py.eve import utils as eve_utils
@@ -102,58 +103,7 @@ def to_iterator_of_tuples(expr: itir.Expr | str, arg_type: ts.TypeSpec) -> itir.
     return im.let(param, expr)(im.lift(im.lambda_(*lift_params)(stencil_expr))(*lift_args))
 
 
-# TODO(tehrengruber): The code quality of this function is poor. We should rewrite it.
-def process_elements(
-    process_func: Callable[..., itir.Expr],
-    objs: itir.Expr | list[itir.Expr],
-    current_el_type: ts.TypeSpec,
-) -> itir.FunCall:
-    """
-    Recursively applies a processing function to all primitive constituents of a tuple.
-
-    Arguments:
-        process_func: A callable that takes an itir.Expr representing a leaf-element of `objs`.
-            If multiple `objs` are given the callable takes equally many arguments.
-        objs: The object whose elements are to be transformed.
-        current_el_type: A type with the same structure as the elements of `objs`. The leaf-types
-            are not used and thus not relevant.
-    """
-    if isinstance(objs, itir.Expr):
-        objs = [objs]
-
-    _current_el_exprs = [
-        im.ref(f"__val_{eve_utils.content_hash(obj)}") for i, obj in enumerate(objs)
-    ]
-    body = _process_elements_impl(process_func, _current_el_exprs, current_el_type)
-
-    return im.let(*((f"__val_{eve_utils.content_hash(obj)}", obj) for i, obj in enumerate(objs)))(  # type: ignore[arg-type]  # mypy not smart enough
-        body
-    )
-
-
 T = TypeVar("T", bound=itir.Expr, covariant=True)
-
-
-def _process_elements_impl(
-    process_func: Callable[..., itir.Expr], _current_el_exprs: list[T], current_el_type: ts.TypeSpec
-) -> itir.Expr:
-    if isinstance(current_el_type, ts.TupleType):
-        result = im.make_tuple(
-            *[
-                _process_elements_impl(
-                    process_func,
-                    [im.tuple_get(i, current_el_expr) for current_el_expr in _current_el_exprs],
-                    current_el_type.types[i],
-                )
-                for i in range(len(current_el_type.types))
-            ]
-        )
-    elif type_info.contains_local_field(current_el_type):
-        raise NotImplementedError("Processing fields with local dimension is not implemented.")
-    else:
-        result = process_func(*_current_el_exprs)
-
-    return result
 
 
 def expand_tuple_expr(tup: itir.Expr, tup_type: ts.TypeSpec) -> tuple[itir.Expr | tuple, ...]:
@@ -184,3 +134,29 @@ def expand_tuple_expr(tup: itir.Expr, tup_type: ts.TypeSpec) -> tuple[itir.Expr 
     )
     assert isinstance(res, tuple)  # for mypy
     return res
+
+
+def process_elements(
+    process_func: Callable[..., itir.Expr],
+    objs: itir.Expr | Iterable[itir.Expr],
+    current_el_type: ts.TypeSpec,
+) -> itir.FunCall:
+    """
+    Arguments:
+        process_func: A callable that takes an itir.Expr representing a leaf-element of `objs`.
+            If multiple `objs` are given the callable takes equally many arguments.
+        objs: The object whose elements are to be transformed.
+        current_el_type: A type with the same structure as the elements of `objs`. The leaf-types
+            are not used and thus not relevant.
+    """
+    if isinstance(objs, itir.Expr):
+        objs = (objs,)
+        zipper = lambda x: x
+    else:
+        zipper = lambda *x: x
+    expanded = [expand_tuple_expr(arg, current_el_type) for arg in objs]
+    tree_zip = next_utils.tree_map(result_collection_type=list)(zipper)(*expanded)
+    result = next_utils.tree_map(
+        collection_type=list, result_collection_type=lambda x: im.make_tuple(*x)
+    )(process_func)(tree_zip)
+    return result

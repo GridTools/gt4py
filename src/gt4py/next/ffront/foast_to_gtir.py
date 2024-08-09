@@ -17,7 +17,6 @@ from typing import Any, Callable, Optional
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor, utils as eve_utils
 from gt4py.eve.extended_typing import Never
-from gt4py.next import utils as next_utils
 from gt4py.next.ffront import (
     dialect_ast_enums,
     fbuiltins,
@@ -335,16 +334,19 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             f"Call to object of type '{type(node.func.type).__name__}' not understood."
         )
 
-    # def _visit_astype(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
-    #     assert len(node.args) == 2 and isinstance(node.args[1], foast.Name)
-    #     obj, new_type = node.args[0], node.args[1].id
-    #     return lowering_utils.process_elements(
-    #         lambda x: im.promote_to_lifted_stencil(
-    #             im.lambda_("it")(im.call("cast_")("it", str(new_type)))
-    #         )(x),
-    #         self.visit(obj, **kwargs),
-    #         obj.type,
-    #     )
+    def _visit_astype(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
+        assert len(node.args) == 2 and isinstance(node.args[1], foast.Name)
+        obj, new_type = self.visit(node.args[0], **kwargs), node.args[1].id
+
+        def create_cast(expr: itir.Expr) -> itir.FunCall:
+            return im.as_fieldop(
+                im.lambda_("__val")(im.call("cast_")(im.deref("__val"), str(new_type)))
+            )(expr)
+
+        if not isinstance(node.type, ts.TupleType):
+            return create_cast(obj)
+
+        return lowering_utils.process_elements(create_cast, obj, node.type)
 
     def _visit_where(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         if not isinstance(node.type, ts.TupleType):
@@ -353,20 +355,18 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         cond_ = self.visit(node.args[0])
         cond_symref_name = f"__cond_{eve_utils.content_hash(cond_)}"
 
-        true_structure = lowering_utils.expand_tuple_expr(self.visit(node.args[1]), node.type)
-        false_structure = lowering_utils.expand_tuple_expr(self.visit(node.args[2]), node.type)
+        def create_if(cond: itir.Expr):
+            def create_if_impl(true_false_: tuple[itir.Expr, itir.Expr]) -> itir.FunCall:
+                true_, false_ = true_false_
+                return im.op_as_fieldop("if_")(cond, true_, false_)
 
-        tree_zip = next_utils.tree_map(result_collection_type=list)(lambda x, y: (x, y))(
-            true_structure, false_structure
+            return create_if_impl
+
+        result = lowering_utils.process_elements(
+            create_if(im.ref(cond_symref_name)),
+            (self.visit(node.args[1]), self.visit(node.args[2])),
+            node.type,
         )
-
-        def create_if(true_false_: tuple[itir.Expr, itir.Expr]) -> itir.FunCall:
-            true_, false_ = true_false_
-            return im.op_as_fieldop("if_")(im.ref(cond_symref_name), true_, false_)
-
-        result = next_utils.tree_map(
-            collection_type=list, result_collection_type=lambda x: im.make_tuple(*x)
-        )(create_if)(tree_zip)
 
         return im.let(cond_symref_name, cond_)(result)
 

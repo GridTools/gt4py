@@ -26,6 +26,7 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.next import (
+    astype,
     broadcast,
     float32,
     float64,
@@ -245,6 +246,39 @@ def test_if_conditional_return():
     reference = im.cond("a", "b", im.cond("a", "c", "b"))
 
     assert lowered_inlined.expr == reference
+
+
+def test_astype():
+    def foo(a: gtx.Field[[TDim], float64]):
+        return astype(a, int32)
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.as_fieldop(im.lambda_("__val")(im.call("cast_")(im.deref("__val"), "int32")))(
+        "a"
+    )
+
+    assert lowered.expr == reference
+
+
+def test_astype_tuple():
+    def foo(a: tuple[gtx.Field[[TDim], float64], gtx.Field[[TDim], float64]]):
+        return astype(a, int32)
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.make_tuple(
+        im.as_fieldop(im.lambda_("__val")(im.call("cast_")(im.deref("__val"), "int32")))(
+            im.tuple_get(0, "a")
+        ),
+        im.as_fieldop(im.lambda_("__val")(im.call("cast_")(im.deref("__val"), "int32")))(
+            im.tuple_get(1, "a")
+        ),
+    )
+
+    assert lowered.expr == reference
 
 
 # TODO (introduce neg/pos)
