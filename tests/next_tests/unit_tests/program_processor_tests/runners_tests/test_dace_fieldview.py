@@ -1312,3 +1312,38 @@ def test_gtir_let_lambda_with_cond():
         b = np.empty_like(a)
         sdfg(pred=np.bool_(s), x=a, y=b, **FSYMBOLS)
         assert np.allclose(b, a if s else a * 2)
+
+
+def test_gtir_if_values():
+    domain = im.call("cartesian_domain")(
+        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
+    )
+    testee = gtir.Program(
+        id="if_values",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="x", type=IFTYPE),
+            gtir.Sym(id="y", type=IFTYPE),
+            gtir.Sym(id="z", type=IFTYPE),
+            gtir.Sym(id="size", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.op_as_fieldop("if_", domain)(
+                    im.op_as_fieldop("less", domain)("x", "y"), "x", "y"
+                ),
+                domain=domain,
+                target=gtir.SymRef(id="z"),
+            )
+        ],
+    )
+
+    a = np.random.rand(N)
+    b = np.random.rand(N)
+    c = np.empty_like(a)
+
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
+
+    sdfg(x=a, y=b, z=c, **FSYMBOLS)
+    assert np.allclose(c, np.where(a < b, a, b))
