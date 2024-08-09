@@ -21,7 +21,8 @@ from __future__ import annotations
 
 import abc
 import dataclasses
-from typing import Any, Dict, List, Protocol, Sequence, Set, Tuple, Union
+import itertools
+from typing import Any, Dict, List, Optional, Protocol, Sequence, Set, Tuple, Union
 
 import dace
 
@@ -277,16 +278,21 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             # include `debuginfo` only for `ir.Program` and `ir.Stmt` nodes: finer granularity would be too messy
             head_state = sdfg.add_state_after(head_state, f"stmt_{i}")
             head_state._debuginfo = dace_fieldview_util.debug_info(stmt, default=sdfg.debuginfo)
-            self.visit(stmt, sdfg=sdfg, state=head_state)
+            head_state = self.visit(stmt, sdfg=sdfg, state=head_state)
 
         sdfg.validate()
         return sdfg
 
-    def visit_SetAt(self, stmt: gtir.SetAt, sdfg: dace.SDFG, state: dace.SDFGState) -> None:
+    def visit_SetAt(
+        self, stmt: gtir.SetAt, sdfg: dace.SDFG, state: dace.SDFGState
+    ) -> dace.SDFGState:
         """Visits a `SetAt` statement expression and writes the local result to some external storage.
 
         Each statement expression results in some sort of dataflow gragh writing to temporary storage.
         The translation of `SetAt` ensures that the result is written back to the target external storage.
+
+        Return:
+          The SDFG head state, eventually updated if the target write requires a new state.
         """
 
         expr_nodes = self._visit_expression(stmt.expr, sdfg, state)
@@ -298,6 +304,12 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         # convert domain expression to dictionary to ease access to dimension boundaries
         domain = dace_fieldview_util.get_domain_ranges(stmt.domain)
 
+        expr_input_args = set(
+            str(sym.id)
+            for sym in eve.walk_values(stmt.expr).if_isinstance(gtir.SymRef)
+            if str(sym.id) in sdfg.arrays
+        )
+        target_state: Optional[dace.SDFGState] = None
         for expr_node, target_node in zip(expr_nodes, target_nodes, strict=True):
             target_array = sdfg.arrays[target_node.data]
             assert not target_array.transient
@@ -311,11 +323,28 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 assert len(domain) == 0
                 subset = "0"
 
-            state.add_nedge(
-                expr_node,
-                target_node,
-                dace.Memlet(data=target_node.data, subset=subset),
-            )
+            if target_node.data in expr_input_args:
+                # if inout argument, write the result in separate next state
+                # this is needed to avoid undefined behavior for expressions like: X, Y = X + 1, X
+                if not target_state:
+                    target_state = sdfg.add_state_after(state, f"post_{state.label}")
+                # create new access nodes in the target state
+                target_state.add_nedge(
+                    target_state.add_access(expr_node.data),
+                    target_state.add_access(target_node.data),
+                    dace.Memlet(data=target_node.data, subset=subset),
+                )
+                # remove target access node to in current state
+                assert state.in_degree(target_node) == 0
+                state.remove_node(target_node)
+            else:
+                state.add_nedge(
+                    expr_node,
+                    target_node,
+                    dace.Memlet(data=target_node.data, subset=subset),
+                )
+
+        return target_state or state
 
     def visit_FunCall(
         self,
@@ -329,6 +358,18 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             return gtir_builtin_translators.translate_cond(
                 node, sdfg, head_state, self, let_symbols
             )
+        elif cpm.is_call_to(node, "make_tuple"):
+            tuple_args = [
+                self.visit(
+                    arg,
+                    sdfg=sdfg,
+                    head_state=head_state,
+                    let_symbols=let_symbols,
+                )
+                for arg in node.args
+            ]
+            assert all(len(arg) == 1 for arg in tuple_args)
+            return list(itertools.chain(*tuple_args))
         elif cpm.is_call_to(node.fun, "as_fieldop"):
             return gtir_builtin_translators.translate_as_field_op(
                 node, sdfg, head_state, self, let_symbols
