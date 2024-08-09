@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 
@@ -79,12 +79,25 @@ MATH_BUILTINS_MAPPING = {
 }
 
 
-def format_builtin(bultin: str, *args: Any) -> str:
-    if bultin in MATH_BUILTINS_MAPPING:
-        fmt = MATH_BUILTINS_MAPPING[bultin]
+def builtin_cast(*args: Any) -> str:
+    val, target_type = args
+    return MATH_BUILTINS_MAPPING[target_type].format(val)
+
+
+GENERAL_BUILTIN_MAPPING: dict[str, Callable[[Any], str]] = {
+    "cast_": builtin_cast,
+}
+
+
+def format_builtin(builtin: str, *args: Any) -> str:
+    if builtin in MATH_BUILTINS_MAPPING:
+        fmt = MATH_BUILTINS_MAPPING[builtin]
+        return fmt.format(*args)
+    elif builtin in GENERAL_BUILTIN_MAPPING:
+        expr_func = GENERAL_BUILTIN_MAPPING[builtin]
+        return expr_func(*args)
     else:
-        raise NotImplementedError(f"'{bultin}' not implemented.")
-    return fmt.format(*args)
+        raise NotImplementedError(f"'{builtin}' not implemented.")
 
 
 class PythonCodegen(codegen.TemplatedGenerator):

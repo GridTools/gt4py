@@ -102,35 +102,38 @@ def make_mesh_symbols(mesh: MeshDescriptor):
     )
 
 
-def test_gtir_copy():
+def test_gtir_cast():
     domain = im.call("cartesian_domain")(
         im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
     )
+    IFTYPE_INT64 = ts.FieldType(IFTYPE.dims, dtype=ts.ScalarType(kind=ts.ScalarKind.INT64))
     testee = gtir.Program(
-        id="gtir_copy",
+        id="test_gtir_cast",
         function_definitions=[],
         params=[
-            gtir.Sym(id="x", type=IFTYPE),
+            gtir.Sym(id="x", type=IFTYPE_INT64),
             gtir.Sym(id="y", type=IFTYPE),
             gtir.Sym(id="size", type=SIZE_TYPE),
         ],
         declarations=[],
         body=[
             gtir.SetAt(
-                expr=im.as_fieldop(im.lambda_("a")(im.deref("a")), domain)("x"),
+                expr=im.as_fieldop(
+                    im.lambda_("a")(im.call("cast_")(im.deref("a"), "float64")), domain
+                )("x"),
                 domain=domain,
                 target=gtir.SymRef(id="y"),
             )
         ],
     )
 
-    a = np.random.rand(N)
-    b = np.empty_like(a)
+    a = np.random.randint(-1000, +1000, N)
+    b = np.empty_like(a, dtype=np.float64)
 
     sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
 
     sdfg(x=a, y=b, **FSYMBOLS)
-    assert np.allclose(a, b)
+    assert np.allclose(a.astype(np.float64), b)
 
 
 def test_gtir_update():
