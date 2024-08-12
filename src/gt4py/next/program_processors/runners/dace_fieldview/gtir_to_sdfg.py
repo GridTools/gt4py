@@ -323,7 +323,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 assert len(domain) == 0
                 subset = "0"
 
-            if target_node.data in expr_input_args:
+            # TODO(edopao): check if `target_node.data != expr_node.data` is till needed to avoid isolated access nodes
+            if target_node.data in expr_input_args and target_node.data != expr_node.data:
                 # if inout argument, write the result in separate next state
                 # this is needed to avoid undefined behavior for expressions like: X, Y = X + 1, X
                 if not target_state:
@@ -332,7 +333,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 target_state.add_nedge(
                     target_state.add_access(expr_node.data),
                     target_state.add_access(target_node.data),
-                    dace.Memlet(data=target_node.data, subset=subset),
+                    dace.Memlet(data=target_node.data, subset=subset, other_subset=subset),
                 )
                 # remove target access node to in current state
                 assert state.in_degree(target_node) == 0
@@ -341,7 +342,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 state.add_nedge(
                     expr_node,
                     target_node,
-                    dace.Memlet(data=target_node.data, subset=subset),
+                    dace.Memlet(data=target_node.data, subset=subset, other_subset=subset),
                 )
 
         return target_state or state
