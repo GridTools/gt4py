@@ -17,8 +17,8 @@ __all__ = ["__author__", "__copyright__", "__license__", "__version__", "__versi
 
 
 __author__: Final = "ETH Zurich and individual contributors"
-__copyright__: Final = "Copyright (c) 2014-2022 ETH Zurich"
-__license__: Final = "GPL-3.0-or-later"
+__copyright__: Final = "Copyright (c) 2014-2024 ETH Zurich"
+__license__: Final = "BSD-3-Clause"
 
 
 __version__: Final = "1.0.3"
