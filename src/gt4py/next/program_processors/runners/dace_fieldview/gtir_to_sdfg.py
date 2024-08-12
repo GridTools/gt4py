@@ -323,19 +323,20 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 # for program IR like 'a @ c⟨ IDimₕ: [1, 2), KDimᵥ: [3, 4) ⟩ ← a'
                 warnings.warn("Inout argument is trying to copy to itself", stacklevel=2)
                 state.remove_nodes_from([expr_node, target_node])
-            else:
-                if isinstance(target_symbol_type, ts.FieldType):
-                    subset = ",".join(
-                        f"{domain[dim][0]}:{domain[dim][1]}" for dim in target_symbol_type.dims
-                    )
-                else:
-                    subset = "0"
+                continue
 
-                state.add_nedge(
-                    expr_node,
-                    target_node,
-                    dace.Memlet(data=target_node.data, subset=subset),
+            if isinstance(target_symbol_type, ts.FieldType):
+                subset = ",".join(
+                    f"{domain[dim][0]}:{domain[dim][1]}" for dim in target_symbol_type.dims
                 )
+            else:
+                subset = "0"
+
+            state.add_nedge(
+                expr_node,
+                target_node,
+                dace.Memlet(data=target_node.data, subset=subset, other_subset=subset),
+            )
 
     def visit_FunCall(
         self,
