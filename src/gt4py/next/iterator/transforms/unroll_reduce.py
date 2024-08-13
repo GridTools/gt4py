@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
 from collections.abc import Iterable, Iterator
@@ -20,15 +14,8 @@ from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
-
-
-def _is_shifted(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
-    return (
-        isinstance(arg, itir.FunCall)
-        and isinstance(arg.fun, itir.FunCall)
-        and arg.fun.fun == itir.SymRef(id="shift")
-    )
 
 
 def _is_neighbors(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
@@ -68,16 +55,12 @@ def _get_partial_offset_tags(reduce_args: Iterable[itir.Expr]) -> Iterable[str]:
     return [_get_partial_offset_tag(arg) for arg in _get_neighbors_args(reduce_args)]
 
 
-def _is_reduce(node: itir.FunCall) -> TypeGuard[itir.FunCall]:
-    return isinstance(node.fun, itir.FunCall) and node.fun.fun == itir.SymRef(id="reduce")
-
-
 def _get_connectivity(
     applied_reduce_node: itir.FunCall,
     offset_provider: dict[str, common.Dimension | common.Connectivity],
 ) -> common.Connectivity:
     """Return single connectivity that is compatible with the arguments of the reduce."""
-    if not _is_reduce(applied_reduce_node):
+    if not cpm.is_applied_reduce(applied_reduce_node):
         raise ValueError("Expected a call to a 'reduce' object, i.e. 'reduce(...)(...)'.")
 
     connectivities: list[common.Connectivity] = []
@@ -166,6 +149,6 @@ class UnrollReduce(PreserveLocationVisitor, NodeTranslator):
 
     def visit_FunCall(self, node: itir.FunCall, **kwargs) -> itir.Expr:
         node = self.generic_visit(node, **kwargs)
-        if _is_reduce(node):
+        if cpm.is_applied_reduce(node):
             return self._visit_reduce(node, **kwargs)
         return node

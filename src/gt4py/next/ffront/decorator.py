@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 # TODO(tehrengruber): This file contains to many different components. Split
 #  into components for each dialect.
@@ -35,7 +29,7 @@ from gt4py.next import (
     embedded as next_embedded,
     errors,
 )
-from gt4py.next.common import Dimension, GridType
+from gt4py.next.common import Connectivity, Dimension, GridType
 from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
     field_operator_ast as foast,
@@ -78,10 +72,14 @@ class Program:
         definition: The Python function object corresponding to the PAST node.
         grid_type: The grid type (cartesian or unstructured) to be used. If not explicitly given
             it will be deduced from actually occurring dimensions.
+        connectivities: A dictionary holding static/compile-time information about the offset providers.
+            For now, it is used for ahead of time compilation in DaCe orchestrated programs,
+            i.e. DaCe programs that call GT4Py Programs -SDFGConvertible interface-.
     """
 
     definition_stage: ffront_stages.ProgramDefinition
     backend: Optional[next_backend.Backend]
+    connectivities: Optional[dict[str, Connectivity]]
 
     @classmethod
     def from_function(
@@ -89,9 +87,10 @@ class Program:
         definition: types.FunctionType,
         backend: Optional[next_backend],
         grid_type: Optional[GridType] = None,
+        connectivities: Optional[dict[str, Connectivity]] = None,
     ) -> Program:
         program_def = ffront_stages.ProgramDefinition(definition=definition, grid_type=grid_type)
-        return cls(definition_stage=program_def, backend=backend)
+        return cls(definition_stage=program_def, backend=backend, connectivities=connectivities)
 
     # needed in testing
     @property
@@ -126,6 +125,9 @@ class Program:
 
     def with_backend(self, backend: ppi.ProgramExecutor) -> Program:
         return dataclasses.replace(self, backend=backend)
+
+    def with_connectivities(self, connectivities: dict[str, Connectivity]) -> Program:
+        return dataclasses.replace(self, connectivities=connectivities)
 
     def with_grid_type(self, grid_type: GridType) -> Program:
         return dataclasses.replace(
@@ -204,6 +206,12 @@ class Program:
         self.backend(
             self.definition_stage, *args, **(kwargs | {"offset_provider": offset_provider})
         )
+
+
+try:
+    from gt4py.next.program_processors.runners.dace_iterator import Program
+except ImportError:
+    pass
 
 
 @dataclasses.dataclass(frozen=True)

@@ -1,6 +1,6 @@
 # Contributing
 
-Contributions to GT4Py are welcome and greatly appreciated. Proper credit will be given to contributors by adding their names to the [AUTHORS.md](AUTHORS.md) file. Note that [ETH Zurich](https://ethz.ch/en.html) is the owner of the GridTools project and the GT4Py library, therefore external contributors must sign a contributor assignment agreement.
+Contributions to GT4Py are welcome and greatly appreciated. Proper credit will be given to contributors by adding their names to the [AUTHORS.md](AUTHORS.md) file.
 
 ## Types of Contributions
 
@@ -167,7 +167,7 @@ Before submitting a pull request, check that it meets the following criteria:
 2. If the pull request adds functionality, it should be documented both in the code docstrings and in the official documentation.
 3. If the pull request contains important design changes, it should contain a new ADR documenting the rationale behind the final decision.
 4. The pull request should have a proper description of its intent and the main changes in the code. In general this description should be used as commit message if the pull request is approved (check point **6.** below).
-5. If the pull request contains code authored by first-time contributors, check they are covered by a contributor agreement and they have been added to [AUTHORS.md](AUTHORS.md) file.
+5. If the pull request contains code authored by first-time contributors, check they have been added to [AUTHORS.md](AUTHORS.md) file.
 6. Pick one reviewer and try to contact them directly to let them know about the pull request. If there is no feedback in 24h/48h try to contact them again or pick another reviewer.
 7. Once the pull request has been approved, it should be squash-merged as soon as possible with a meaningful description of the changes. Although it is optional, we encourage the use of the [Conventional Commits][conventional-commits] specification for writing informative and automation-friendly commit messages (_commit types: `build`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `feature`, `style`, `test`_).
 

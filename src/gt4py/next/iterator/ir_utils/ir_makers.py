@@ -1,19 +1,13 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import typing
-from typing import Callable, Iterable, Union
+from typing import Callable, Iterable, Optional, Union
 
 from gt4py._core import definitions as core_defs
 from gt4py.next.iterator import ir as itir
@@ -401,3 +395,54 @@ def promote_to_lifted_stencil(op: str | itir.SymRef | Callable) -> Callable[...,
 def map_(op):
     """Create a `map_` call."""
     return call(call("map_")(op))
+
+
+def as_fieldop(expr: itir.Expr, domain: Optional[itir.FunCall] = None) -> call:
+    """
+    Create an `as_fieldop` call.
+    Examples
+    --------
+    >>> str(as_fieldop(lambda_("it1", "it2")(plus(deref("it1"), deref("it2"))))("field1", "field2"))
+    '(⇑(λ(it1, it2) → ·it1 + ·it2))(field1, field2)'
+    """
+    return call(
+        call("as_fieldop")(
+            *(
+                (
+                    expr,
+                    domain,
+                )
+                if domain
+                else (expr,)
+            )
+        )
+    )
+
+
+def op_as_fieldop(
+    op: str | itir.SymRef | Callable, domain: Optional[itir.FunCall] = None
+) -> Callable[..., itir.FunCall]:
+    """
+    Promotes a function `op` to a field_operator.
+
+    Args:
+        op: a function from values to value.
+        domain: the domain of the returned field.
+
+    Returns:
+        A function from Fields to Field.
+
+    Examples:
+        >>> str(op_as_fieldop("op")("a", "b"))
+        '(⇑(λ(__arg0, __arg1) → op(·__arg0, ·__arg1)))(a, b)'
+    """
+    if isinstance(op, (str, itir.SymRef, itir.Lambda)):
+        op = call(op)
+
+    def _impl(*its: itir.Expr) -> itir.FunCall:
+        args = [
+            f"__arg{i}" for i in range(len(its))
+        ]  # TODO: `op` must not contain `SymRef(id="__argX")`
+        return as_fieldop(lambda_(*args)(op(*[deref(arg) for arg in args])), domain)(*its)
+
+    return _impl

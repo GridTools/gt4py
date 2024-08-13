@@ -1,16 +1,13 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+from __future__ import annotations
+
 import copy
 import dataclasses
 import functools
@@ -176,8 +173,10 @@ class SimpleTemporaryExtractionHeuristics:
     closure: ir.StencilClosure
 
     @functools.cached_property
-    def closure_shifts(self):
-        return trace_shifts.TraceShifts.apply(self.closure, inputs_only=False)
+    def closure_shifts(
+        self,
+    ) -> dict[int, set[tuple[ir.OffsetLiteral, ...]]]:
+        return trace_shifts.TraceShifts.apply(self.closure, inputs_only=False)  # type: ignore[return-value] # TODO fix weird `apply` overloads
 
     def __call__(self, expr: ir.Expr) -> bool:
         shifts = self.closure_shifts[id(expr)]
@@ -186,7 +185,7 @@ class SimpleTemporaryExtractionHeuristics:
         return False
 
 
-def _closure_parameter_argument_mapping(closure: ir.StencilClosure):
+def _closure_parameter_argument_mapping(closure: ir.StencilClosure) -> dict[str, ir.Expr]:
     """
     Create a mapping from the closures parameters to the closure arguments.
 
@@ -215,7 +214,7 @@ def _ensure_expr_does_not_capture(expr: ir.Expr, whitelist: list[ir.Sym]) -> Non
 
 def split_closures(
     node: ir.FencilDefinition,
-    offset_provider,
+    offset_provider: common.OffsetProvider,
     *,
     extraction_heuristics: Optional[
         Callable[[ir.StencilClosure], Callable[[ir.Expr], bool]]
@@ -234,7 +233,7 @@ def split_closures(
     """
     if not extraction_heuristics:
         # extract all (eligible) lifts
-        def always_extract_heuristics(_):
+        def always_extract_heuristics(_: ir.StencilClosure) -> Callable[[ir.Expr], bool]:
             return lambda _: True
 
         extraction_heuristics = always_extract_heuristics
@@ -403,7 +402,7 @@ def _max_domain_sizes_by_location_type(offset_provider: Mapping[str, Any]) -> di
             )
             sizes[provider.neighbor_axis.value] = max(
                 sizes.get(provider.neighbor_axis.value, 0),
-                provider.table.max(),  # type: ignore[attr-defined] # TODO(havogt): improve typing for NDArrayObject
+                provider.table.max() + 1,  # type: ignore[attr-defined] # TODO(havogt): improve typing for NDArrayObject
             )
     return sizes
 
@@ -420,16 +419,18 @@ class SymbolicRange:
 @dataclasses.dataclass
 class SymbolicDomain:
     grid_type: Literal["unstructured_domain", "cartesian_domain"]
-    ranges: dict[str, SymbolicRange]
+    ranges: dict[
+        common.Dimension, SymbolicRange
+    ]  # TODO(havogt): remove `AxisLiteral` by `Dimension` everywhere
 
     @classmethod
-    def from_expr(cls, node: ir.Node):
+    def from_expr(cls, node: ir.Node) -> SymbolicDomain:
         assert isinstance(node, ir.FunCall) and node.fun in [
             im.ref("unstructured_domain"),
             im.ref("cartesian_domain"),
         ]
 
-        ranges: dict[str, SymbolicRange] = {}
+        ranges: dict[common.Dimension, SymbolicRange] = {}
         for named_range in node.args:
             assert (
                 isinstance(named_range, ir.FunCall)
@@ -439,13 +440,15 @@ class SymbolicDomain:
             axis_literal, lower_bound, upper_bound = named_range.args
             assert isinstance(axis_literal, ir.AxisLiteral)
 
-            ranges[axis_literal.value] = SymbolicRange(lower_bound, upper_bound)
+            ranges[common.Dimension(value=axis_literal.value, kind=axis_literal.kind)] = (
+                SymbolicRange(lower_bound, upper_bound)
+            )
         return cls(node.fun.id, ranges)  # type: ignore[attr-defined]  # ensure by assert above
 
-    def as_expr(self):
+    def as_expr(self) -> ir.FunCall:
         return im.call(self.grid_type)(
             *[
-                im.call("named_range")(ir.AxisLiteral(value=d), r.start, r.stop)
+                im.call("named_range")(ir.AxisLiteral(value=d.value, kind=d.kind), r.start, r.stop)
                 for d, r in self.ranges.items()
             ]
         )
@@ -489,7 +492,7 @@ def update_domains(
     node: FencilWithTemporaries,
     offset_provider: Mapping[str, Any],
     symbolic_sizes: Optional[dict[str, str]],
-):
+) -> FencilWithTemporaries:
     horizontal_sizes = _max_domain_sizes_by_location_type(offset_provider)
     closures: list[ir.StencilClosure] = []
     domains = dict[str, ir.FunCall]()
@@ -526,13 +529,14 @@ def update_domains(
                 for offset_name, offset in _group_offsets(shift_chain):
                     if isinstance(offset_provider[offset_name], gtx.Dimension):
                         # cartesian shift
-                        dim = offset_provider[offset_name].value
+                        dim = offset_provider[offset_name]
+                        assert offset is not trace_shifts.Sentinel.ALL_NEIGHBORS
                         consumed_domain.ranges[dim] = consumed_domain.ranges[dim].translate(offset)
                     elif isinstance(offset_provider[offset_name], common.Connectivity):
                         # unstructured shift
                         nbt_provider = offset_provider[offset_name]
-                        old_axis = nbt_provider.origin_axis.value
-                        new_axis = nbt_provider.neighbor_axis.value
+                        old_axis = nbt_provider.origin_axis
+                        new_axis = nbt_provider.neighbor_axis
 
                         assert new_axis not in consumed_domain.ranges or old_axis == new_axis
 
@@ -540,13 +544,13 @@ def update_domains(
                             new_range = SymbolicRange(
                                 im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                                 im.literal(
-                                    str(horizontal_sizes[new_axis]), ir.INTEGER_INDEX_BUILTIN
+                                    str(horizontal_sizes[new_axis.value]), ir.INTEGER_INDEX_BUILTIN
                                 ),
                             )
                         else:
                             new_range = SymbolicRange(
                                 im.literal("0", ir.INTEGER_INDEX_BUILTIN),
-                                im.ref(symbolic_sizes[new_axis]),
+                                im.ref(symbolic_sizes[new_axis.value]),
                             )
                         consumed_domain.ranges = dict(
                             (axis, range_) if axis != old_axis else (new_axis, new_range)
@@ -590,7 +594,9 @@ def _tuple_constituents(node: ir.Expr) -> Iterable[ir.Expr]:
         yield node
 
 
-def collect_tmps_info(node: FencilWithTemporaries, *, offset_provider) -> FencilWithTemporaries:
+def collect_tmps_info(
+    node: FencilWithTemporaries, *, offset_provider: common.OffsetProvider
+) -> FencilWithTemporaries:
     """Perform type inference for finding the types of temporaries and sets the temporary size."""
     tmps = {tmp.id for tmp in node.tmps}
     domains: dict[str, ir.Expr] = {}
@@ -616,7 +622,7 @@ def collect_tmps_info(node: FencilWithTemporaries, *, offset_provider) -> Fencil
     return itir_type_inference.infer(new_node, offset_provider=offset_provider)
 
 
-def validate_no_dynamic_offsets(node: ir.Node):
+def validate_no_dynamic_offsets(node: ir.Node) -> None:
     """Vaidate we have no dynamic offsets, e.g. `shift(Ioff, deref(...))(...)`"""
     for call_node in node.walk_values().if_isinstance(ir.FunCall):
         assert isinstance(call_node, ir.FunCall)

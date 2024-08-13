@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -19,31 +13,11 @@ import dataclasses
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next.iterator import runtime, transforms
+from gt4py.next.iterator import runtime
 from gt4py.next.program_processors import processor_interface as ppi
 
 
-try:
-    from gt4py.next.program_processors.runners import dace_iterator
-except ModuleNotFoundError as e:
-    if "dace" in str(e):
-        dace_iterator = None
-    else:
-        raise e
-
-
 import next_tests
-
-
-OPTIONAL_PROCESSORS = []
-if dace_iterator:
-    OPTIONAL_PROCESSORS.append((next_tests.definitions.OptionalProgramBackendId.DACE_CPU, True))
-    # TODO(havogt): update tests to use proper allocation
-    # OPTIONAL_PROCESSORS.append(
-    #     pytest.param(
-    #         (definitions.OptionalProgramBackendId.DACE_GPU, True), marks=pytest.mark.requires_gpu
-    #     )
-    # ),
 
 
 @pytest.fixture(
@@ -59,8 +33,16 @@ if dace_iterator:
         (next_tests.definitions.ProgramFormatterId.LISP_FORMATTER, False),
         (next_tests.definitions.ProgramFormatterId.ITIR_PRETTY_PRINTER, False),
         (next_tests.definitions.ProgramFormatterId.GTFN_CPP_FORMATTER, False),
-    ]
-    + OPTIONAL_PROCESSORS,
+        pytest.param(
+            (next_tests.definitions.OptionalProgramBackendId.DACE_CPU, True),
+            marks=pytest.mark.requires_dace,
+        ),
+        # TODO(havogt): update tests to use proper allocation
+        # pytest.param(
+        #     (next_tests.definitions.OptionalProgramBackendId.DACE_GPU, True),
+        #     marks=(pytest.mark.requires_dace, pytest.mark.requires_gpu),
+        # ),
+    ],
     ids=lambda p: p[0].short_id() if p[0] is not None else "None",
 )
 def program_processor(request) -> tuple[ppi.ProgramProcessor, bool]:

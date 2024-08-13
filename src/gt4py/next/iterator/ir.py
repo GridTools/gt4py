@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from typing import ClassVar, List, Optional, Union
 
@@ -19,8 +13,11 @@ from gt4py.eve import Coerced, SymbolName, SymbolRef, datamodels
 from gt4py.eve.concepts import SourceLocation
 from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from gt4py.eve.utils import noninstantiable
+from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts
 
+
+DimensionKind = common.DimensionKind
 
 # TODO(havogt):
 # After completion of refactoring to GTIR, FencilDefinition and StencilClosure should be removed everywhere.
@@ -70,7 +67,10 @@ class OffsetLiteral(Expr):
 
 
 class AxisLiteral(Expr):
+    # TODO(havogt): Refactor to use declare Axis/Dimension at the Program level.
+    # Now every use of the literal has to provide the kind, where usually we only care of the name.
     value: str
+    kind: common.DimensionKind = common.DimensionKind.HORIZONTAL
 
 
 class SymRef(Expr):
@@ -187,7 +187,8 @@ BUILTINS = {
 # TODO(havogt): restructure after refactoring to GTIR
 GTIR_BUILTINS = {
     *BUILTINS,
-    "as_fieldop",  # `as_fieldop(stencil)` creates field_operator from stencil
+    "as_fieldop",  # `as_fieldop(stencil, domain)` creates field_operator from stencil (domain is optional, but for now required for embedded execution)
+    "cond",  # `cond(expr, field_a, field_b)` creates the field on one branch or the other
 }
 
 
@@ -238,3 +239,5 @@ FunCall.__hash__ = Node.__hash__  # type: ignore[method-assign]
 FunctionDefinition.__hash__ = Node.__hash__  # type: ignore[method-assign]
 StencilClosure.__hash__ = Node.__hash__  # type: ignore[method-assign]
 FencilDefinition.__hash__ = Node.__hash__  # type: ignore[method-assign]
+Program.__hash__ = Node.__hash__  # type: ignore[method-assign]
+SetAt.__hash__ = Node.__hash__  # type: ignore[method-assign]

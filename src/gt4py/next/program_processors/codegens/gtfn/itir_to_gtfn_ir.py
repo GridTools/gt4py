@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
 from typing import Any, ClassVar, Iterable, Optional, Type, TypeGuard, Union
@@ -209,6 +203,32 @@ def _is_applied_as_fieldop(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
     )
 
 
+class _CannonicalizeUnstructuredDomain(eve.NodeTranslator):
+    def visit_FunCall(self, node: itir.FunCall) -> itir.FunCall:
+        if node.fun == itir.SymRef(id="unstructured_domain"):
+            # for no good reason, the domain arguments for unstructured need to be in order (horizontal, vertical)
+            assert isinstance(node.args[0], itir.FunCall)
+            first_axis_literal = node.args[0].args[0]
+            assert isinstance(first_axis_literal, itir.AxisLiteral)
+            if first_axis_literal.kind == itir.DimensionKind.VERTICAL:
+                assert len(node.args) == 2
+                assert isinstance(node.args[1], itir.FunCall)
+                assert isinstance(node.args[1].args[0], itir.AxisLiteral)
+                assert node.args[1].args[0].kind == itir.DimensionKind.HORIZONTAL
+                return itir.FunCall(fun=node.fun, args=[node.args[1], node.args[0]])
+        return node
+
+    @classmethod
+    def apply(
+        cls,
+        node: itir.Program,
+    ) -> itir.Program:
+        if not isinstance(node, itir.Program):
+            raise TypeError(f"Expected a 'Program', got '{type(node).__name__}'.")
+
+        return cls().visit(node)
+
+
 @dataclasses.dataclass(frozen=True)
 class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     _binary_op_map: ClassVar[dict[str, str]] = {
@@ -252,6 +272,8 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
         node = itir_type_inference.infer(node, offset_provider=offset_provider)
         grid_type = _get_gridtype(node.body)
+        if grid_type == common.GridType.UNSTRUCTURED:
+            node = _CannonicalizeUnstructuredDomain.apply(node)
         return cls(
             offset_provider=offset_provider, column_axis=column_axis, grid_type=grid_type
         ).visit(node)

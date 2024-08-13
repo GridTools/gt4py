@@ -1,16 +1,11 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 import itertools
 from typing import Any, Mapping, Optional, Sequence
 
@@ -70,6 +65,14 @@ def get_used_connectivities(
 
 def connectivity_identifier(name: str) -> str:
     return f"__connectivity_{name}"
+
+
+def field_size_symbol_name(field_name: str, axis: int) -> str:
+    return f"__{field_name}_size_{axis}"
+
+
+def field_stride_symbol_name(field_name: str, axis: int) -> str:
+    return f"__{field_name}_stride_{axis}"
 
 
 def get_sorted_dims(dims: Sequence[Dimension]) -> Sequence[tuple[int, Dimension]]:
@@ -192,6 +195,6 @@ def new_array_symbols(name: str, ndim: int) -> tuple[list[dace.symbol], list[dac
 def flatten_list(node_list: list[Any]) -> list[Any]:
     return list(
         itertools.chain.from_iterable(
-            [flatten_list(e) if e.__class__ == list else [e] for e in node_list]
+            [flatten_list(e) if isinstance(e, list) else [e] for e in node_list]
         )
     )

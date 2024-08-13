@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from typing import Union
 
@@ -38,7 +32,7 @@ GRAMMAR = """
     OFFSET_LITERAL: ( INT_LITERAL | CNAME ) "ₒ"
     _literal: INT_LITERAL | FLOAT_LITERAL | OFFSET_LITERAL
     ID_NAME: CNAME
-    AXIS_NAME: CNAME
+    AXIS_NAME: CNAME ("ᵥ" | "ₕ")
 
     ?prec0: prec1
         | "λ(" ( SYM "," )* SYM? ")" "→" prec0 -> lam
@@ -130,7 +124,9 @@ class ToIrTransformer(lark_visitors.Transformer):
         return value.value
 
     def AXIS_NAME(self, value: lark_lexer.Token) -> ir.AxisLiteral:
-        return ir.AxisLiteral(value=value.value)
+        name = value.value[:-1]
+        kind = ir.DimensionKind.HORIZONTAL if value.value[-1] == "ₕ" else ir.DimensionKind.VERTICAL
+        return ir.AxisLiteral(value=name, kind=kind)
 
     def lam(self, *args: ir.Node) -> ir.Lambda:
         *params, expr = args

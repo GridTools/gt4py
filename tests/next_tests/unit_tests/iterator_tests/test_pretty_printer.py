@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.pretty_printer import PrettyPrinter, pformat
@@ -220,12 +214,26 @@ def test_make_tuple():
     assert actual == expected
 
 
-def test_named_range():
+def test_axis_literal_horizontal():
+    testee = ir.AxisLiteral(value="I", kind=ir.DimensionKind.HORIZONTAL)
+    expected = "Iₕ"
+    actual = pformat(testee)
+    assert actual == expected
+
+
+def test_axis_literal_vertical():
+    testee = ir.AxisLiteral(value="I", kind=ir.DimensionKind.VERTICAL)
+    expected = "Iᵥ"
+    actual = pformat(testee)
+    assert actual == expected
+
+
+def test_named_range_horizontal():
     testee = ir.FunCall(
         fun=ir.SymRef(id="named_range"),
         args=[ir.AxisLiteral(value="IDim"), ir.SymRef(id="x"), ir.SymRef(id="y")],
     )
-    expected = "IDim: [x, y)"
+    expected = "IDimₕ: [x, y)"
     actual = pformat(testee)
     assert actual == expected
 
