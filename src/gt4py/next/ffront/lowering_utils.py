@@ -1,16 +1,11 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 from typing import Any, Callable, TypeVar
 
 from gt4py.eve import utils as eve_utils
@@ -47,7 +42,7 @@ def to_tuples_of_iterator(expr: itir.Expr | str, arg_type: ts.TypeSpec) -> itir.
 
     return im.let(param, expr)(
         type_info.apply_to_primitive_constituents(
-            arg_type, fun, with_path_arg=True, tuple_constructor=im.make_tuple
+            fun, arg_type, with_path_arg=True, tuple_constructor=im.make_tuple
         )
     )
 
@@ -96,7 +91,7 @@ def to_iterator_of_tuples(expr: itir.Expr | str, arg_type: ts.TypeSpec) -> itir.
         lift_args.append(arg_expr)
 
     stencil_expr = type_info.apply_to_primitive_constituents(
-        arg_type, fun, with_path_arg=True, tuple_constructor=im.make_tuple
+        fun, arg_type, with_path_arg=True, tuple_constructor=im.make_tuple
     )
     return im.let(param, expr)(im.lift(im.lambda_(*lift_params)(stencil_expr))(*lift_args))
 

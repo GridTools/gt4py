@@ -72,7 +72,7 @@ flake8-pyproject==1.2.2
 flake8-rst-docstrings==0.0.14
 flake8==5.0.4
 frozendict==2.3
-gridtools-cpp==2.3.2
+gridtools-cpp==2.3.4
 hypothesis==6.0.0
 importlib-resources==5.0; python_version < "3.9"
 isort==5.10
@@ -106,7 +106,7 @@ sphinx_rtd_theme==1.0
 tabulate==0.8.10
 tomli==2.0.1; python_version < "3.11"
 tox==3.2.0
-types-all==1.0.0
+types-tabulate==0.8.10
 typing-extensions==4.10.0
 xxhash==1.4.4
 ##[[[end]]]
