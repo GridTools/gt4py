@@ -113,22 +113,25 @@ def test_gtir_cast():
         declarations=[],
         body=[
             gtir.SetAt(
-                expr=im.as_fieldop(
-                    im.lambda_("a")(im.call("cast_")(im.deref("a"), "float64")), domain
-                )("x"),
+                expr=im.op_as_fieldop("divides", domain)(
+                    im.as_fieldop(
+                        im.lambda_("a")(im.call("cast_")(im.deref("a"), "float64")), domain
+                    )("x"),
+                    2.0,
+                ),
                 domain=domain,
                 target=gtir.SymRef(id="y"),
             )
         ],
     )
 
-    a = np.random.randint(-1000, +1000, N)
+    a = np.ones(N, dtype=np.int64)
     b = np.empty_like(a, dtype=np.float64)
 
     sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
 
     sdfg(x=a, y=b, **FSYMBOLS)
-    assert np.allclose(a.astype(np.float64), b)
+    assert np.allclose(b, 0.5)
 
 
 def test_gtir_update():
