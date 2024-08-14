@@ -19,7 +19,12 @@ import numpy as np
 from typing import List
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.transforms.infer_domain import infer_as_fieldop, infer_program, infer_let
+from gt4py.next.iterator.transforms.infer_domain import (
+    infer_as_fieldop,
+    infer_program,
+    infer_cond,
+    infer_let,
+)
 from gt4py.next.iterator.transforms.global_tmps import SymbolicDomain, AUTO_DOMAIN
 import pytest
 from gt4py.eve.extended_typing import Dict
@@ -183,6 +188,17 @@ def let_constant_folding(let_call: itir.FunCall) -> itir.FunCall:
         )
         for arg in new_call.args
     ]
+
+    return new_call
+
+
+def cond_constant_folding(cond_call: itir.FunCall) -> itir.FunCall:
+    assert isinstance(cond_call, itir.FunCall)
+    assert cpm.is_call_to(cond_call, "cond")
+
+    new_call = copy.deepcopy(cond_call)
+    new_call.args[1] = as_fieldop_domains_constant_folding(cond_call.args[1])
+    new_call.args[2] = as_fieldop_domains_constant_folding(cond_call.args[2])
 
     return new_call
 
@@ -640,6 +656,62 @@ def test_program_tree_tmps_two_inputs(offset_provider):
     )
 
     run_test_program(testee, expected, offset_provider)
+
+
+def test_cond(offset_provider):
+    stencil1 = im.lambda_("arg0")(
+        im.minus(im.deref(im.shift(itir.SymbolRef("Ioff"), 1)("arg0")), im.deref("arg0"))
+    )
+    field_1 = im.as_fieldop(stencil1)(im.ref("in_field1"))
+    inner_stencil2 = im.lambda_("arg0_tmp", "arg1_tmp")(
+        im.plus(
+            im.deref(im.shift(itir.SymbolRef("Ioff"), 1)("arg0_tmp")),
+            im.deref(im.shift(itir.SymbolRef("Ioff"), -1)("arg1_tmp")),
+        )
+    )
+    stencil2 = im.lambda_("arg0", "arg1")(
+        im.plus(
+            im.deref(im.shift(itir.SymbolRef("Ioff"), 1)("arg0")),
+            im.deref(im.shift(itir.SymbolRef("Ioff"), -1)("arg1")),
+        )
+    )
+    tmp2 = im.as_fieldop(inner_stencil2)(im.ref("in_field1"), im.ref("in_field2"))
+    field_2 = im.as_fieldop(stencil2)(im.ref("in_field2"), tmp2)
+
+    cond = im.deref("cond_")
+
+    testee = im.cond(cond, field_1, field_2)
+
+    domain = im.domain(common.GridType.CARTESIAN, {"IDim": (0, 11)})
+    domain_tmp = im.domain(common.GridType.CARTESIAN, {"IDim": (-1, 10)})
+    expected_domains_dict = {
+        "in_field1": {
+            common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (0, 12)
+        },
+        "in_field2": {
+            common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (-2, 12)
+        },
+    }
+    expected_tmp2 = im.as_fieldop(inner_stencil2, domain_tmp)(
+        im.ref("in_field1"), im.ref("in_field2")
+    )
+    expected_field_1 = im.as_fieldop(stencil1, domain)(im.ref("in_field1"))
+    expected_field_2 = im.as_fieldop(stencil2, domain)(im.ref("in_field2"), expected_tmp2)
+
+    expected = im.cond(cond, expected_field_1, expected_field_2)
+
+    actual_call, actual_domains = infer_cond(
+        testee, SymbolicDomain.from_expr(domain), offset_provider
+    )
+
+    folded_domains = domains_dict_constant_folding(actual_domains)
+    expected_domains = {
+        ref: SymbolicDomain.from_expr(im.domain(common.GridType.CARTESIAN, d))
+        for ref, d in expected_domains_dict.items()
+    }
+    folded_call = cond_constant_folding(actual_call)
+    assert folded_call == expected
+    assert folded_domains == expected_domains
 
 
 def test_let(offset_provider):

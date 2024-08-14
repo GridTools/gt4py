@@ -167,6 +167,24 @@ def infer_let(
     return transformed_call, accessed_domains
 
 
+def infer_cond(
+    applied_cond: itir.FunCall,
+    target_domain: SymbolicDomain | itir.FunCall,
+    offset_provider: Dict[str, Dimension],
+) -> Tuple[itir.FunCall, Dict[str, SymbolicDomain]]:
+    assert isinstance(applied_cond, itir.FunCall) and cpm.is_call_to(applied_cond, "cond")
+    assert isinstance(applied_cond.args[1], itir.FunCall) and isinstance(
+        applied_cond.args[2], itir.FunCall
+    )
+    call_true, domains_true = infer_as_fieldop(applied_cond.args[1], target_domain, offset_provider)
+    call_false, domains_false = infer_as_fieldop(
+        applied_cond.args[2], target_domain, offset_provider
+    )
+    return im.cond(applied_cond.args[0], call_true, call_false), _merge_domains(
+        domains_true, domains_false
+    )
+
+
 def _validate_temporary_usage(body: list[itir.Stmt], temporaries: list[str]):
     assigned_targets = set()
     for stmt in body:
