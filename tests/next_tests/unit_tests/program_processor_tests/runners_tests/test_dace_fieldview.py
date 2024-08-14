@@ -101,37 +101,40 @@ def test_gtir_cast():
     domain = im.call("cartesian_domain")(
         im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
     )
-    IFTYPE_INT64 = ts.FieldType(IFTYPE.dims, dtype=ts.ScalarType(kind=ts.ScalarKind.INT64))
+    IFTYPE_FLOAT32 = ts.FieldType(IFTYPE.dims, dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
+    IFTYPE_BOOL = ts.FieldType(IFTYPE.dims, dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL))
     testee = gtir.Program(
         id="test_gtir_cast",
         function_definitions=[],
         params=[
-            gtir.Sym(id="x", type=IFTYPE_INT64),
-            gtir.Sym(id="y", type=IFTYPE),
+            gtir.Sym(id="x", type=IFTYPE),
+            gtir.Sym(id="y", type=IFTYPE_FLOAT32),
+            gtir.Sym(id="z", type=IFTYPE_BOOL),
             gtir.Sym(id="size", type=SIZE_TYPE),
         ],
         declarations=[],
         body=[
             gtir.SetAt(
-                expr=im.op_as_fieldop("divides", domain)(
+                expr=im.op_as_fieldop("eq", domain)(
                     im.as_fieldop(
-                        im.lambda_("a")(im.call("cast_")(im.deref("a"), "float64")), domain
+                        im.lambda_("a")(im.call("cast_")(im.deref("a"), "float32")), domain
                     )("x"),
-                    2.0,
+                    "y",
                 ),
                 domain=domain,
-                target=gtir.SymRef(id="y"),
+                target=gtir.SymRef(id="z"),
             )
         ],
     )
 
-    a = np.ones(N, dtype=np.int64)
-    b = np.empty_like(a, dtype=np.float64)
+    a = np.ones(N, dtype=np.float64) * np.sqrt(2.0)
+    b = a.astype(np.float32)
+    c = np.empty_like(a, dtype=np.bool_)
 
     sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
 
-    sdfg(x=a, y=b, **FSYMBOLS)
-    assert np.allclose(b, 0.5)
+    sdfg(x=a, y=b, z=c, **FSYMBOLS)
+    np.testing.assert_array_equal(c, True)
 
 
 def test_gtir_update():
