@@ -79,6 +79,7 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
             PRIVATE
                 {{"\\n".join(source_names)}}
         )
+        target_compile_options({{project_name}} PRIVATE -ftemplate-depth=1000)
 
         # Link dependencies
         {{"\\n".join(link_deps)}}
