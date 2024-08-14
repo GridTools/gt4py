@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from collections.abc import Iterable
 from typing import Any, Callable, TypeVar
 
 from gt4py.eve import utils as eve_utils
@@ -134,7 +135,7 @@ def process_elements(
     process_func: Callable[..., itir.Expr],
     objs: itir.Expr | Iterable[itir.Expr],
     current_el_type: ts.TypeSpec,
-) -> itir.FunCall:
+) -> itir.Expr:
     """
     Arguments:
         process_func: A callable that takes an itir.Expr representing a leaf-element of `objs`.
@@ -143,11 +144,9 @@ def process_elements(
         current_el_type: A type with the same structure as the elements of `objs`. The leaf-types
             are not used and thus not relevant.
     """
+    zipper = (lambda x: x) if isinstance(objs, itir.Expr) else (lambda *x: x)
     if isinstance(objs, itir.Expr):
         objs = (objs,)
-        zipper = lambda x: x
-    else:
-        zipper = lambda *x: x
 
     if not isinstance(current_el_type, ts.TupleType):
         return process_func(*objs)

@@ -332,7 +332,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             f"Call to object of type '{type(node.func.type).__name__}' not understood."
         )
 
-    def _visit_astype(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
+    def _visit_astype(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         assert len(node.args) == 2 and isinstance(node.args[1], foast.Name)
         obj, new_type = node.args[0], node.args[1].id
         return lowering_utils.process_elements(
@@ -343,7 +343,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             obj.type,
         )
 
-    def _visit_where(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
+    def _visit_where(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         condition, true_value, false_value = node.args
 
         lowered_condition = self.visit(condition, **kwargs)

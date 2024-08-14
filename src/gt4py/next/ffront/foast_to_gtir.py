@@ -1,16 +1,11 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 
 import dataclasses
 from typing import Any, Callable, Optional
@@ -97,60 +92,10 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             id=func_definition.id, params=func_definition.params, expr=new_body
         )
 
-    # def visit_ScanOperator(
-    #     self, node: foast.ScanOperator, **kwargs: Any
-    # ) -> itir.FunctionDefinition:
-    #     # note: we don't need the axis here as this is handled by the program
-    #     #  decorator
-    #     assert isinstance(node.type, ts_ffront.ScanOperatorType)
-
-    #     # We are lowering node.forward and node.init to iterators, but here we expect values -> `deref`.
-    #     # In iterator IR we didn't properly specify if this is legal,
-    #     # however after lift-inlining the expressions are transformed back to literals.
-    #     forward = im.deref(self.visit(node.forward, **kwargs))
-    #     init = lowering_utils.process_elements(
-    #         im.deref, self.visit(node.init, **kwargs), node.init.type
-    #     )
-
-    #     # lower definition function
-    #     func_definition: itir.FunctionDefinition = self.visit(node.definition, **kwargs)
-    #     new_body = im.let(
-    #         func_definition.params[0].id,
-    #         # promote carry to iterator of tuples
-    #         # (this is the only place in the lowering were a variable is captured in a lifted lambda)
-    #         lowering_utils.to_tuples_of_iterator(
-    #             im.promote_to_const_iterator(func_definition.params[0].id),
-    #             [*node.type.definition.pos_or_kw_args.values()][0],  # [unnecessary-iterable-allocation-for-first-element]
-    #         ),
-    #     )(
-    #         # the function itself returns a tuple of iterators, deref element-wise
-    #         lowering_utils.process_elements(
-    #             im.deref, func_definition.expr, node.type.definition.returns
-    #         )
-    #     )
-
-    #     stencil_args: list[itir.Expr] = []
-    #     assert not node.type.definition.pos_only_args and not node.type.definition.kw_only_args
-    #     for param, arg_type in zip(
-    #         func_definition.params[1:],
-    #         [*node.type.definition.pos_or_kw_args.values()][1:],
-    #         strict=True,
-    #     ):
-    #         if isinstance(arg_type, ts.TupleType):
-    #             # convert into iterator of tuples
-    #             stencil_args.append(lowering_utils.to_iterator_of_tuples(param.id, arg_type))
-
-    #             new_body = im.let(
-    #                 param.id, lowering_utils.to_tuples_of_iterator(param.id, arg_type)
-    #             )(new_body)
-    #         else:
-    #             stencil_args.append(im.ref(param.id))
-
-    #     definition = itir.Lambda(params=func_definition.params, expr=new_body)
-
-    #     body = im.lift(im.call("scan")(definition, forward, init))(*stencil_args)
-
-    #     return itir.FunctionDefinition(id=node.id, params=definition.params[1:], expr=body)
+    def visit_ScanOperator(
+        self, node: foast.ScanOperator, **kwargs: Any
+    ) -> itir.FunctionDefinition:
+        raise NotImplementedError("TODO")
 
     def visit_Stmt(self, node: foast.Stmt, **kwargs: Any) -> Never:
         raise AssertionError("Statements must always be visited in the context of a function.")
@@ -251,13 +196,11 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
                 raise NotImplementedError(f"'{node.op}' is only supported on 'bool' arguments.")
             return self._map("not_", node.operand)
 
-        raise NotImplementedError("TODO neg/pos")
-
-    #     return self._map(
-    #         node.op.value,
-    #         foast.Constant(value="0", type=dtype, location=node.location),
-    #         node.operand,
-    #     )
+        return self._map(
+            node.op.value,
+            foast.Constant(value="0", type=dtype, location=node.location),
+            node.operand,
+        )
 
     def visit_BinOp(self, node: foast.BinOp, **kwargs: Any) -> itir.FunCall:
         return self._map(node.op.value, node.left, node.right)
@@ -334,7 +277,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             f"Call to object of type '{type(node.func.type).__name__}' not understood."
         )
 
-    def _visit_astype(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
+    def _visit_astype(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         assert len(node.args) == 2 and isinstance(node.args[1], foast.Name)
         obj, new_type = self.visit(node.args[0], **kwargs), node.args[1].id
 
@@ -355,7 +298,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         cond_ = self.visit(node.args[0])
         cond_symref_name = f"__cond_{eve_utils.content_hash(cond_)}"
 
-        def create_if(cond: itir.Expr):
+        def create_if(cond: itir.Expr) -> Callable[[tuple[itir.Expr, itir.Expr]], itir.FunCall]:
             def create_if_impl(true_false_: tuple[itir.Expr, itir.Expr]) -> itir.FunCall:
                 true_, false_ = true_false_
                 return im.op_as_fieldop("if_")(cond, true_, false_)

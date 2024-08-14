@@ -1,5 +1,13 @@
 # GT4Py - GridTools Framework
 #
+# Copyright (c) 2014-2024, ETH Zurich
+# All rights reserved.
+#
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+# GT4Py - GridTools Framework
+#
 # Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
@@ -294,30 +302,28 @@ def test_astype_tuple():
 
 
 # TODO (introduce neg/pos)
-# def test_unary_ops():
-#     def unary(inp: gtx.Field[[TDim], float64]):
-#         tmp = +inp
-#         tmp = -tmp
-#         return tmp
+def test_unary_minus():
+    def foo(inp: gtx.Field[[TDim], float64]):
+        return -inp
 
-#     parsed = FieldOperatorParser.apply_to_function(unary)
-#     lowered = FieldOperatorLowering.apply(parsed)
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
 
-#     reference = im.let(
-#         ssa.unique_name("tmp", 0),
-#         im.promote_to_lifted_stencil("plus")(
-#             im.promote_to_const_iterator(im.literal("0", "float64")), "inp"
-#         ),
-#     )(
-#         im.let(
-#             ssa.unique_name("tmp", 1),
-#             im.promote_to_lifted_stencil("minus")(
-#                 im.promote_to_const_iterator(im.literal("0", "float64")), ssa.unique_name("tmp", 0)
-#             ),
-#         )(ssa.unique_name("tmp", 1))
-#     )
+    reference = im.op_as_fieldop("minus")(im.literal("0", "float64"), "inp")
 
-#     assert lowered.expr == reference
+    assert lowered.expr == reference
+
+
+def test_unary_plus():
+    def foo(inp: gtx.Field[[TDim], float64]):
+        return +inp
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.op_as_fieldop("plus")(im.literal("0", "float64"), "inp")
+
+    assert lowered.expr == reference
 
 
 def test_unpacking():

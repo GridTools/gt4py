@@ -78,7 +78,9 @@ def tree_map(
     *,
     collection_type: type | tuple[type, ...] = tuple,
     result_collection_type: Optional[type | Callable] = None,
-) -> Callable[[Callable[_P, _R]], Callable[..., _R | tuple[_R | tuple, ...]]]: ...
+) -> Callable[
+    [Callable[_P, _R]], Callable[..., Any]
+]: ...  # TODO(havogt): if result_collection_type is Callable, improve typing
 
 
 def tree_map(
@@ -87,10 +89,7 @@ def tree_map(
     result_collection_type: Optional[
         type | Callable
     ] = None,  # TODO consider renaming to `result_collection_constructor`
-) -> (
-    Callable[..., _R | tuple[_R | tuple, ...]]
-    | Callable[[Callable[_P, _R]], Callable[..., _R | tuple[_R | tuple, ...]]]
-):
+) -> Callable[..., _R | tuple[_R | tuple, ...]] | Callable[[Callable[_P, _R]], Callable[..., Any]]:
     """
     Apply `fun` to each entry of (possibly nested) collections (by default `tuple`s).
 
@@ -170,7 +169,7 @@ def tree_enumerate(
 
 def tree_enumerate(
     collection: _Type | _T,
-    collection_type: _Type | tuple[_Type, ...] = tuple,
+    collection_type: _Type | tuple[_Type, ...] = tuple,  # type: ignore[assignment] # don't understand why mypy complains
     result_collection_type: _RType | Callable[[_Type | _T], _R] = toolz.identity,
 ) -> _R | _RType:
     """
