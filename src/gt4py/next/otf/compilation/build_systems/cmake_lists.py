@@ -19,6 +19,13 @@ from gt4py.eve.codegen import JinjaTemplate as as_jinja
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.compilation import common
 
+def get_cuda_compute_architecture():
+    try:
+        import cupy as cp
+        device = cp.cuda.Device()
+        return device.compute_capability
+    except Exception:
+        return None
 
 class FindDependency(eve.Node):
     name: str
@@ -44,6 +51,9 @@ class CMakeListsFile(eve.Node):
 
 
 class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
+    def visit_CMakeListsFile(self, node: CMakeListsFile):
+        return self.generic_visit(node, cuda_compute_arch=get_cuda_compute_architecture())
+
     CMakeListsFile = as_jinja(
         """
         cmake_minimum_required(VERSION 3.20.0)
@@ -51,9 +61,11 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
         project({{project_name}})
 
         # Languages
+        {% if cuda_compute_arch %}
         if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-            set(CMAKE_CUDA_ARCHITECTURES 89)
+            set(CMAKE_CUDA_ARCHITECTURES {{ cuda_compute_arch() }})
         endif()
+        {% endif %}
         {{"\\n".join(languages)}}
 
         # Paths
@@ -86,7 +98,7 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
         """
     )
 
-    def visit_FindDependency(self, dep: FindDependency) -> str:
+    def visit_FindDependency(self, dep: FindDependency, **kwargs) -> str:
         # TODO(ricoh): do not add more libraries here
         #   and do not use this design in a new build system.
         #   Instead, design this to be extensible (refer to ADR-0016).
@@ -104,7 +116,7 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
             case _:
                 raise ValueError(f"Library '{dep.name}' is not supported")
 
-    def visit_LinkDependency(self, dep: LinkDependency) -> str:
+    def visit_LinkDependency(self, dep: LinkDependency, **kwargs) -> str:
         # TODO(ricoh): do not add more libraries here
         #   and do not use this design in a new build system.
         #   Instead, design this to be extensible (refer to ADR-0016).
