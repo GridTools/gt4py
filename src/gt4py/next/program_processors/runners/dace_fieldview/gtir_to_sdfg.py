@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import abc
 import dataclasses
-import warnings
 from typing import Any, Dict, List, Protocol, Sequence, Set, Tuple, Union
 
 import dace
@@ -286,7 +285,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         # Create the call signature for the SDFG.
         #  Only the arguments required by the GT4Py program, i.e. `node.params`, are added
         #  as positional arguments. The implicit arguments, such as the offset providers or
-        #  the arguments created by the translation process, must be passed as keywords arguments.
+        #  the arguments created by the translation process, must be passed as keyword arguments.
         sdfg.arg_names = [str(a) for a in node.params]
 
         sdfg.validate()
@@ -312,13 +311,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             target_array = sdfg.arrays[target_node.data]
             assert not target_array.transient
             target_symbol_type = self.global_symbols[target_node.data]
-
-            if expr_node.data == target_node.data:
-                # handle extreme case encountered in test_execution.py::test_single_value_field
-                # for program IR like 'a @ c⟨ IDimₕ: [1, 2), KDimᵥ: [3, 4) ⟩ ← a'
-                warnings.warn("Inout argument is trying to copy to itself", stacklevel=2)
-                state.remove_nodes_from([expr_node, target_node])
-                continue
 
             if isinstance(target_symbol_type, ts.FieldType):
                 subset = ",".join(

@@ -1370,5 +1370,5 @@ def test_gtir_if_values():
 
     sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
 
-    sdfg(x=a, y=b, z=c, **FSYMBOLS)
+    sdfg(a, b, c, **FSYMBOLS)
     assert np.allclose(c, np.where(a < b, a, b))
