@@ -43,24 +43,24 @@ def trace_shifts(stencil: itir.Expr, input_ids: list[str], domain: itir.Expr):
 def extract_shifts_and_translate_domains(
     stencil: itir.Expr,
     input_ids: list[str],
-    input_domain: SymbolicDomain,
+    target_domain: SymbolicDomain,
     offset_provider: Dict[str, Dimension],
     accessed_domains: Dict[str, SymbolicDomain],
 ):
-    shifts_results = trace_shifts(stencil, input_ids, SymbolicDomain.as_expr(input_domain))
+    shifts_results = trace_shifts(stencil, input_ids, SymbolicDomain.as_expr(target_domain))
 
     for in_field_id in input_ids:
         shifts_list = shifts_results[in_field_id]
 
         new_domains = [
-            SymbolicDomain.translate(input_domain, shift, offset_provider) for shift in shifts_list
+            SymbolicDomain.translate(target_domain, shift, offset_provider) for shift in shifts_list
         ]
         accessed_domains[in_field_id] = domain_union(new_domains)
 
 
 def infer_as_fieldop(
     applied_fieldop: itir.FunCall,
-    input_domain: SymbolicDomain | itir.FunCall,
+    target_domain: SymbolicDomain | itir.FunCall,
     offset_provider: Dict[str, Dimension],
 ) -> Tuple[itir.FunCall, Dict[str, SymbolicDomain]]:
     assert isinstance(applied_fieldop, itir.FunCall)
@@ -83,11 +83,11 @@ def infer_as_fieldop(
             raise ValueError(f"Unsupported type {type(in_field)}")
         input_ids.append(id_)
 
-    if isinstance(input_domain, itir.FunCall):
-        input_domain = SymbolicDomain.from_expr(input_domain)
+    if isinstance(target_domain, itir.FunCall):
+        target_domain = SymbolicDomain.from_expr(target_domain)
 
     extract_shifts_and_translate_domains(
-        stencil, input_ids, input_domain, offset_provider, accessed_domains
+        stencil, input_ids, target_domain, offset_provider, accessed_domains
     )
 
     # Recursively infer domain of inputs and update domain arg of nested `as_fieldops`
@@ -106,7 +106,7 @@ def infer_as_fieldop(
         else:
             raise ValueError(f"Unsupported type {type(in_field)}")
 
-    transformed_call = im.as_fieldop(stencil, SymbolicDomain.as_expr(input_domain))(
+    transformed_call = im.as_fieldop(stencil, SymbolicDomain.as_expr(target_domain))(
         *transformed_inputs
     )
 
@@ -117,26 +117,6 @@ def infer_as_fieldop(
     }
 
     return transformed_call, accessed_domains_without_tmp
-
-
-def infer_cond(
-    applied_cond: itir.FunCall,
-    input_domain: SymbolicDomain | itir.FunCall,
-    offset_provider: Dict[str, Dimension],
-) -> Tuple[itir.FunCall, Dict[str, SymbolicDomain]]:
-    assert isinstance(applied_cond, itir.FunCall) and cpm.is_call_to(applied_cond, "cond")
-    assert (
-        isinstance(applied_cond.args[0], bool)
-        and isinstance(applied_cond.args[1], itir.FunCall)
-        and isinstance(applied_cond.args[2], itir.FunCall)
-    )
-    call_true, domains_true = infer_as_fieldop(applied_cond.args[1], input_domain, offset_provider)
-    call_false, domains_false = infer_as_fieldop(
-        applied_cond.args[2], input_domain, offset_provider
-    )
-    return im.cond(applied_cond.args[0], call_true, call_false), _merge_domains(
-        domains_true, domains_false
-    )
 
 
 def _validate_temporary_usage(body: list[itir.Stmt], temporaries: list[str]):

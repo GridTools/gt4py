@@ -11,7 +11,7 @@ from typing import Callable, Iterable, Optional, Union
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve.extended_typing import Dict, Tuple
-from gt4py.next import Field, common
+from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
@@ -456,11 +456,6 @@ def as_fieldop(expr: itir.Expr, domain: Optional[itir.FunCall] = None) -> call:
             )
         )
     )
-
-
-def cond(cond: bool, ture_field: Field, false_field: Field) -> call:
-    """Create a FunCall, shorthand for ``call("cond")(cond, true_fiel, false_field)``."""
-    return call("cond")(cond, ture_field, false_field)
 
 
 def op_as_fieldop(
