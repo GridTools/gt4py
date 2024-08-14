@@ -221,20 +221,22 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         match node.args[0]:
             case foast.Subscript(value=foast.Name(id=offset_name), index=int(offset_index)):
                 shift_offset = im.shift(offset_name, offset_index)
+                return im.as_fieldop(im.lambda_("__it")(im.deref(shift_offset("__it"))))(
+                    self.visit(node.func, **kwargs)
+                )
             case foast.Name(id=offset_name):
                 return im.as_fieldop_neighbors(str(offset_name), self.visit(node.func, **kwargs))
-            # case foast.Call(func=foast.Name(id="as_offset")):
-            #     func_args = node.args[0]
-            #     offset_dim = func_args.args[0]
-            #     assert isinstance(offset_dim, foast.Name)
-            #     shift_offset = im.shift(
-            #         offset_dim.id, im.deref(self.visit(func_args.args[1], **kwargs))
-            #     )
+            case foast.Call(func=foast.Name(id="as_offset")):
+                # TODO(havogt): discuss this representation
+                func_args = node.args[0]
+                offset_dim = func_args.args[0]
+                assert isinstance(offset_dim, foast.Name)
+                shift_offset = im.shift(offset_dim.id, im.deref("__offset"))
+                return im.as_fieldop(
+                    im.lambda_("__it", "__offset")(im.deref(shift_offset("__it")))
+                )(self.visit(node.func, **kwargs), self.visit(func_args.args[1], **kwargs))
             case _:
                 raise FieldOperatorLoweringError("Unexpected shift arguments!")
-        return im.as_fieldop(im.lambda_("it")(im.deref(shift_offset("it"))))(
-            self.visit(node.func, **kwargs)
-        )
 
     def visit_Call(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         if type_info.type_class(node.func.type) is ts.FieldType:
@@ -267,9 +269,6 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             # scan operators return an iterator of tuples, transform into tuples of iterator again
             if isinstance(node.func.type, ts_ffront.ScanOperatorType):
                 raise NotImplementedError("TODO")
-            #             result = lowering_utils.to_tuples_of_iterator(
-            #                 result, node.func.type.definition.returns
-            #             )
 
             return result
 
@@ -313,7 +312,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
 
         return im.let(cond_symref_name, cond_)(result)
 
-    # _visit_concat_where = _visit_where
+    _visit_concat_where = _visit_where  # TODO(havogt): upgrade concat_where
 
     def _visit_broadcast(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         return self.visit(node.args[0], **kwargs)

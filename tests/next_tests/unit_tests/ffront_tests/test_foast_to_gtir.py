@@ -47,6 +47,7 @@ from gt4py.next import (
 )
 from gt4py.next.ffront import type_specifications as ts_ffront
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
+from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.fbuiltins import exp, minimum
 from gt4py.next.ffront.foast_to_gtir import FieldOperatorLowering
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
@@ -64,6 +65,7 @@ Cell = gtx.Dimension("Cell")
 V2EDim = gtx.Dimension("V2E", gtx.DimensionKind.LOCAL)
 V2E = gtx.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
 TDim = gtx.Dimension("TDim")  # Meaningless dimension, used for tests.
+TOff = gtx.FieldOffset("TDim", source=TDim, target=(TDim,))
 UDim = gtx.Dimension("UDim")  # Meaningless dimension, used for tests.
 
 
@@ -135,7 +137,21 @@ def test_premap():
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))))("inp")
+    reference = im.as_fieldop(im.lambda_("__it")(im.deref(im.shift("Ioff", 1)("__it"))))("inp")
+
+    assert lowered.expr == reference
+
+
+def test_as_offset():
+    def foo(inp: gtx.Field[[TDim], float64], offset: gtx.Field[[TDim], int]):
+        return inp(as_offset(TOff, offset))
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.as_fieldop(
+        im.lambda_("__it", "__offset")(im.deref(im.shift("TOff", im.deref("__offset"))("__it")))
+    )("inp", "offset")
 
     assert lowered.expr == reference
 
