@@ -137,6 +137,39 @@ def test_gtir_cast():
     np.testing.assert_array_equal(c, True)
 
 
+def test_gtir_swap():
+    domain = im.call("cartesian_domain")(
+        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
+    )
+    testee = gtir.Program(
+        id="gtir_swap",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="x", type=IFTYPE),
+            gtir.Sym(id="y", type=IFTYPE),
+            gtir.Sym(id="size", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.make_tuple("y", "x"),
+                domain=domain,
+                target=im.make_tuple("x", "y"),
+            )
+        ],
+    )
+
+    a = np.random.rand(N)
+    b = np.random.rand(N)
+    ref = (a.copy(), b.copy())
+
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
+
+    sdfg(x=a, y=b, **FSYMBOLS)
+    assert np.allclose(a, ref[1])
+    assert np.allclose(b, ref[0])
+
+
 def test_gtir_tuple_return():
     domain = im.call("cartesian_domain")(
         im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")

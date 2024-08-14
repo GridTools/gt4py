@@ -189,7 +189,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         raise NotImplementedError("Temporaries not supported yet by GTIR DaCe backend.")
 
     def _visit_expression(
-        self, node: gtir.Expr, sdfg: dace.SDFG, head_state: dace.SDFGState
+        self, node: gtir.Expr, sdfg: dace.SDFG, head_state: dace.SDFGState, use_temp: bool = True
     ) -> list[dace.nodes.AccessNode]:
         """
         Specialized visit method for fieldview expressions.
@@ -210,7 +210,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         field_nodes = []
         for node, _ in results:
             assert isinstance(node, dace.nodes.AccessNode)
-            field_nodes.append(node)
+            desc = sdfg.arrays[node.data]
+            if desc.transient or not use_temp:
+                field_nodes.append(node)
+            else:
+                temp, _ = sdfg.add_temp_transient_like(desc)
+                temp_node = head_state.add_access(temp)
+                head_state.add_nedge(node, temp_node, dace.Memlet.from_array(node.data, desc))
+                field_nodes.append(temp_node)
 
         # sanity check: each statement should preserve the property of single exit state (aka head state),
         # i.e. eventually only introduce internal branches, and keep the same head state
@@ -294,7 +301,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         # the target expression could be a `SymRef` to an output node or a `make_tuple` expression
         # in case the statement returns more than one field
-        target_nodes = self._visit_expression(stmt.target, sdfg, state)
+        target_nodes = self._visit_expression(stmt.target, sdfg, state, use_temp=False)
 
         # convert domain expression to dictionary to ease access to dimension boundaries
         domain = dace_fieldview_util.get_domain_ranges(stmt.domain)
@@ -318,7 +325,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 assert len(domain) == 0
                 subset = "0"
 
-            if target_node.data in expr_input_args and target_node.data != expr_node.data:
+            if target_node.data in expr_input_args:
                 # if inout argument, write the result in separate next state
                 # this is needed to avoid undefined behavior for expressions like: X, Y = X + 1, X
                 if not target_state:
@@ -329,16 +336,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     target_state.add_access(target_node.data),
                     dace.Memlet(data=target_node.data, subset=subset, other_subset=subset),
                 )
+                # remove isolated access node
+                state.remove_node(target_node)
             else:
                 state.add_nedge(
                     expr_node,
                     target_node,
                     dace.Memlet(data=target_node.data, subset=subset, other_subset=subset),
                 )
-
-        # remove isolated access nodes
-        isolated_nodes = [node for node in state.data_nodes() if state.degree(node) == 0]
-        state.remove_nodes_from(isolated_nodes)
 
         return target_state or state
 
@@ -390,6 +395,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     let_symbols=let_symbols,
                 )
                 elem = tuple_args[index]
+                # remove isolated access nodes
+                isolated_nodes = [
+                    node
+                    for i, (node, _) in enumerate(tuple_args)
+                    if i != index and head_state.degree(node) == 0
+                ]
+                head_state.remove_nodes_from(isolated_nodes)
             return elem if isinstance(elem, list) else [elem]
         elif cpm.is_call_to(node.fun, "as_fieldop"):
             return gtir_builtin_translators.translate_as_field_op(
