@@ -317,6 +317,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     f"{domain[dim][0]}:{domain[dim][1]}" for dim in target_symbol_type.dims
                 )
             else:
+                assert len(domain) == 0
                 subset = "0"
 
             state.add_nedge(
