@@ -81,7 +81,7 @@ def test_return_literal_tuple():
     assert lowered.expr == im.make_tuple(im.literal_from_value(1.0), im.literal_from_value(True))
 
 
-def test_scalar_arg():
+def test_field_and_scalar_arg():
     def foo(bar: gtx.Field[[IDim], int64], alpha: int64) -> gtx.Field[[IDim], int64]:
         return alpha * bar
 
@@ -90,6 +90,18 @@ def test_scalar_arg():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.op_as_fieldop("multiplies")("alpha", "bar")  # no difference to non-scalar arg
+
+    assert lowered.expr == reference
+
+
+def test_scalar_arg_only():
+    def foo(bar: int64, alpha: int64) -> int64:
+        return alpha * bar
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.call("multiplies")("alpha", "bar")
 
     assert lowered.expr == reference
 
@@ -448,7 +460,7 @@ def test_add_scalar_literals():
 
     reference = im.let(
         ssa.unique_name("tmp", 0),
-        im.op_as_fieldop("plus")(
+        im.call("plus")(
             im.literal("1", "int32"),
             im.literal("1", "int32"),
         ),
@@ -536,7 +548,7 @@ def test_compare_scalars():
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.op_as_fieldop("greater")(
+    reference = im.call("greater")(
         im.literal("3", "int32"),
         im.literal("4", "int32"),
     )

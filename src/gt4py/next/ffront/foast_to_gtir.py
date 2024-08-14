@@ -426,6 +426,12 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
 
     def _map(self, op: itir.Expr | str, *args: Any, **kwargs: Any) -> itir.FunCall:
         lowered_args = [self.visit(arg, **kwargs) for arg in args]
+        if all(
+            isinstance(t, ts.ScalarType)
+            for arg in args
+            for t in type_info.primitive_constituents(arg.type)
+        ):
+            return im.call(op)(*lowered_args)  # scalar operation
         if any(type_info.contains_local_field(arg.type) for arg in args):
             lowered_args = [promote_to_list(arg)(larg) for arg, larg in zip(args, lowered_args)]
             op = im.call("map_")(op)
