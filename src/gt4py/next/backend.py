@@ -67,7 +67,7 @@ class FieldopTransformWorkflow(workflow.NamedStepSequenceWithArgs):
         dataclasses.field(default=past_process_args.past_process_args)
     )
     past_to_itir: workflow.Workflow[ffront_stages.PastClosure, stages.ProgramCall] = (
-        dataclasses.field(default_factory=past_to_itir.PastToItirFactory)
+        dataclasses.field(default_factory=lambda: past_to_itir.PastToItirFactory(cached=True))
     )
 
     foast_to_itir: workflow.Workflow[ffront_stages.FoastOperatorDefinition, itir.Expr] = (
@@ -123,7 +123,7 @@ class ProgramTransformWorkflow(workflow.NamedStepSequenceWithArgs):
         )
     )
     past_to_itir: workflow.Workflow[ffront_stages.PastClosure, stages.ProgramCall] = (
-        dataclasses.field(default_factory=past_to_itir.PastToItirFactory)
+        dataclasses.field(default_factory=lambda: past_to_itir.PastToItirFactory(cached=True))
     )
 
 
@@ -166,4 +166,5 @@ class Backend(Generic[core_defs.DeviceTypeT]):
     def __gt_allocator__(
         self,
     ) -> next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]:
+        return self.allocator
         return self.allocator
