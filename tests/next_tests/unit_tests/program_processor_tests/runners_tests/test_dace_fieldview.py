@@ -325,7 +325,8 @@ def test_gtir_cond():
             gtir.Sym(id="y", type=IFTYPE),
             gtir.Sym(id="w", type=IFTYPE),
             gtir.Sym(id="z", type=IFTYPE),
-            gtir.Sym(id="pred", type=ts.ScalarType(ts.ScalarKind.BOOL)),
+            gtir.Sym(id="s1", type=ts.ScalarType(ts.ScalarKind.INT32)),
+            gtir.Sym(id="s2", type=ts.ScalarType(ts.ScalarKind.INT32)),
             gtir.Sym(id="scalar", type=ts.ScalarType(ts.ScalarKind.FLOAT64)),
             gtir.Sym(id="size", type=SIZE_TYPE),
         ],
@@ -335,7 +336,7 @@ def test_gtir_cond():
                 expr=im.op_as_fieldop("plus", domain)(
                     "x",
                     im.call("cond")(
-                        gtir.SymRef(id="pred"),
+                        im.greater(gtir.SymRef(id="s1"), gtir.SymRef(id="s2")),
                         im.op_as_fieldop("plus", domain)("y", "scalar"),
                         im.op_as_fieldop("plus", domain)("w", "scalar"),
                     ),
@@ -352,10 +353,10 @@ def test_gtir_cond():
 
     sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
 
-    for s in [False, True]:
+    for s1, s2 in [(1, 2), (2, 1)]:
         d = np.empty_like(a)
-        sdfg(a, b, c, d, pred=np.bool_(s), scalar=1.0, **FSYMBOLS)
-        assert np.allclose(d, (a + b + 1) if s else (a + c + 1))
+        sdfg(a, b, c, d, s1, s2, scalar=1.0, **FSYMBOLS)
+        assert np.allclose(d, (a + b + 1) if s1 > s2 else (a + c + 1))
 
 
 def test_gtir_cond_nested():
