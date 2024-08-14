@@ -40,15 +40,14 @@ from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
-IDim = gtx.Dimension("IDim")
 Edge = gtx.Dimension("Edge")
 Vertex = gtx.Dimension("Vertex")
-Cell = gtx.Dimension("Cell")
 V2EDim = gtx.Dimension("V2E", gtx.DimensionKind.LOCAL)
 V2E = gtx.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
-TDim = gtx.Dimension("TDim")  # Meaningless dimension, used for tests.
+
+TDim = gtx.Dimension("TDim")
 TOff = gtx.FieldOffset("TDim", source=TDim, target=(TDim,))
-UDim = gtx.Dimension("UDim")  # Meaningless dimension, used for tests.
+UDim = gtx.Dimension("UDim")
 
 
 def test_return():
@@ -74,7 +73,7 @@ def test_return_literal_tuple():
 
 
 def test_field_and_scalar_arg():
-    def foo(bar: gtx.Field[[IDim], int64], alpha: int64) -> gtx.Field[[IDim], int64]:
+    def foo(bar: gtx.Field[[TDim], int64], alpha: int64) -> gtx.Field[[TDim], int64]:
         return alpha * bar
 
     # TODO document that scalar arguments of `as_fieldop(stencil)` are promoted to 0-d fields
@@ -99,7 +98,7 @@ def test_scalar_arg_only():
 
 
 def test_multicopy():
-    def foo(inp1: gtx.Field[[IDim], float64], inp2: gtx.Field[[IDim], float64]):
+    def foo(inp1: gtx.Field[[TDim], float64], inp2: gtx.Field[[TDim], float64]):
         return inp1, inp2
 
     parsed = FieldOperatorParser.apply_to_function(foo)
@@ -111,15 +110,13 @@ def test_multicopy():
 
 
 def test_premap():
-    Ioff = gtx.FieldOffset("Ioff", source=IDim, target=(IDim,))
-
-    def foo(inp: gtx.Field[[IDim], float64]):
-        return inp(Ioff[1])
+    def foo(inp: gtx.Field[[TDim], float64]):
+        return inp(TOff[1])
 
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.as_fieldop(im.lambda_("__it")(im.deref(im.shift("Ioff", 1)("__it"))))("inp")
+    reference = im.as_fieldop(im.lambda_("__it")(im.deref(im.shift("TOff", 1)("__it"))))("inp")
 
     assert lowered.expr == reference
 
@@ -443,7 +440,7 @@ def test_binary_plus():
 
 
 def test_add_scalar_literal_to_field():
-    def foo(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
+    def foo(a: gtx.Field[[TDim], float64]) -> gtx.Field[[TDim], float64]:
         return 2.0 + a
 
     parsed = FieldOperatorParser.apply_to_function(foo)
@@ -455,7 +452,7 @@ def test_add_scalar_literal_to_field():
 
 
 def test_add_scalar_literals():
-    def foo(a: gtx.Field[[IDim], "int32"]) -> gtx.Field[[IDim], "int32"]:
+    def foo(a: gtx.Field[[TDim], "int32"]) -> gtx.Field[[TDim], "int32"]:
         tmp = int32(1) + int32("1")
         return a + tmp
 
@@ -522,7 +519,7 @@ def test_binary_and():
 
 
 def test_scalar_and():
-    def foo(a: gtx.Field[[IDim], "bool"]) -> gtx.Field[[IDim], "bool"]:
+    def foo(a: gtx.Field[[TDim], "bool"]) -> gtx.Field[[TDim], "bool"]:
         return a & False
 
     parsed = FieldOperatorParser.apply_to_function(foo)
@@ -598,8 +595,8 @@ def test_compare_eq():
 
 def test_compare_chain():
     def foo(
-        a: gtx.Field[[IDim], float64], b: gtx.Field[[IDim], float64], c: gtx.Field[[IDim], float64]
-    ) -> gtx.Field[[IDim], bool]:
+        a: gtx.Field[[TDim], float64], b: gtx.Field[[TDim], float64], c: gtx.Field[[TDim], float64]
+    ) -> gtx.Field[[TDim], bool]:
         return a > b > c
 
     parsed = FieldOperatorParser.apply_to_function(foo)
