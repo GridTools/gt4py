@@ -318,7 +318,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 assert len(domain) == 0
                 subset = "0"
 
-            # TODO(edopao): check if `target_node.data != expr_node.data` is till needed to avoid isolated access nodes
             if target_node.data in expr_input_args and target_node.data != expr_node.data:
                 # if inout argument, write the result in separate next state
                 # this is needed to avoid undefined behavior for expressions like: X, Y = X + 1, X
@@ -330,15 +329,16 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     target_state.add_access(target_node.data),
                     dace.Memlet(data=target_node.data, subset=subset, other_subset=subset),
                 )
-                # remove target access node to in current state
-                assert state.in_degree(target_node) == 0
-                state.remove_node(target_node)
             else:
                 state.add_nedge(
                     expr_node,
                     target_node,
                     dace.Memlet(data=target_node.data, subset=subset, other_subset=subset),
                 )
+
+        # remove isolated access nodes
+        isolated_nodes = [node for node in state.data_nodes() if state.degree(node) == 0]
+        state.remove_nodes_from(isolated_nodes)
 
         return target_state or state
 
@@ -366,6 +366,31 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             ]
             assert all(len(arg) == 1 for arg in tuple_args)
             return list(itertools.chain(*tuple_args))
+        elif cpm.is_call_to(node, "tuple_get"):
+            assert len(node.args) == 2
+            if not isinstance(node.args[0], gtir.Literal):
+                raise ValueError("Tuple can only be subscripted with compile-time constants.")
+            assert node.args[0].type == dace_fieldview_util.as_scalar_type(
+                gtir.INTEGER_INDEX_BUILTIN
+            )
+            index = int(node.args[0].value)
+            if cpm.is_call_to(node.args[1], "make_tuple"):
+                # trivial case: visit only the tuple element to be returned
+                elem = self.visit(
+                    node.args[1].args[index],
+                    sdfg=sdfg,
+                    head_state=head_state,
+                    let_symbols=let_symbols,
+                )
+            else:
+                tuple_args = self.visit(
+                    node.args[1],
+                    sdfg=sdfg,
+                    head_state=head_state,
+                    let_symbols=let_symbols,
+                )
+                elem = tuple_args[index]
+            return elem if isinstance(elem, list) else [elem]
         elif cpm.is_call_to(node.fun, "as_fieldop"):
             return gtir_builtin_translators.translate_as_field_op(
                 node, sdfg, head_state, self, let_symbols
