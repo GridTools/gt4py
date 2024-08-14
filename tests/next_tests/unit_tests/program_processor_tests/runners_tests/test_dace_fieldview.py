@@ -1,16 +1,11 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 """
 Test that ITIR can be lowered to SDFG.
 
@@ -102,35 +97,44 @@ def make_mesh_symbols(mesh: MeshDescriptor):
     )
 
 
-def test_gtir_copy():
+def test_gtir_cast():
     domain = im.call("cartesian_domain")(
         im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
     )
+    IFTYPE_FLOAT32 = ts.FieldType(IFTYPE.dims, dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
+    IFTYPE_BOOL = ts.FieldType(IFTYPE.dims, dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL))
     testee = gtir.Program(
-        id="gtir_copy",
+        id="test_gtir_cast",
         function_definitions=[],
         params=[
             gtir.Sym(id="x", type=IFTYPE),
-            gtir.Sym(id="y", type=IFTYPE),
+            gtir.Sym(id="y", type=IFTYPE_FLOAT32),
+            gtir.Sym(id="z", type=IFTYPE_BOOL),
             gtir.Sym(id="size", type=SIZE_TYPE),
         ],
         declarations=[],
         body=[
             gtir.SetAt(
-                expr=im.as_fieldop(im.lambda_("a")(im.deref("a")), domain)("x"),
+                expr=im.op_as_fieldop("eq", domain)(
+                    im.as_fieldop(
+                        im.lambda_("a")(im.call("cast_")(im.deref("a"), "float32")), domain
+                    )("x"),
+                    "y",
+                ),
                 domain=domain,
-                target=gtir.SymRef(id="y"),
+                target=gtir.SymRef(id="z"),
             )
         ],
     )
 
-    a = np.random.rand(N)
-    b = np.empty_like(a)
+    a = np.ones(N, dtype=np.float64) * np.sqrt(2.0)
+    b = a.astype(np.float32)
+    c = np.empty_like(a, dtype=np.bool_)
 
     sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
 
-    sdfg(x=a, y=b, **FSYMBOLS)
-    assert np.allclose(a, b)
+    sdfg(x=a, y=b, z=c, **FSYMBOLS)
+    np.testing.assert_array_equal(c, True)
 
 
 def test_gtir_tuple_return():
@@ -1345,3 +1349,38 @@ def test_gtir_let_lambda_with_cond():
         b = np.empty_like(a)
         sdfg(pred=np.bool_(s), x=a, y=b, **FSYMBOLS)
         assert np.allclose(b, a if s else a * 2)
+
+
+def test_gtir_if_values():
+    domain = im.call("cartesian_domain")(
+        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
+    )
+    testee = gtir.Program(
+        id="if_values",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="x", type=IFTYPE),
+            gtir.Sym(id="y", type=IFTYPE),
+            gtir.Sym(id="z", type=IFTYPE),
+            gtir.Sym(id="size", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.op_as_fieldop("if_", domain)(
+                    im.op_as_fieldop("less", domain)("x", "y"), "x", "y"
+                ),
+                domain=domain,
+                target=gtir.SymRef(id="z"),
+            )
+        ],
+    )
+
+    a = np.random.rand(N)
+    b = np.random.rand(N)
+    c = np.empty_like(a)
+
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
+
+    sdfg(x=a, y=b, z=c, **FSYMBOLS)
+    assert np.allclose(c, np.where(a < b, a, b))
