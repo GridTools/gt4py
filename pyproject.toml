@@ -11,7 +11,7 @@ classifiers = [
   'Environment :: Console',
   'Environment :: GPU :: NVIDIA CUDA',
   'Intended Audience :: Science/Research',
-  'License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)',
+  'License :: OSI Approved :: BSD License',
   'Operating System :: POSIX',
   'Programming Language :: Python',
   'Programming Language :: Python :: 3.8',
@@ -62,7 +62,7 @@ keywords = [
   'portable',
   'hpc'
 ]
-license = {text = 'GPL-3.0-or-later'}
+license = {file = 'LICENSE'}
 name = 'gt4py'
 readme = 'README.md'
 requires-python = '>=3.8'
