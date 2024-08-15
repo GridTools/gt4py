@@ -209,7 +209,7 @@ def from_value(value: Any) -> ts.TypeSpec:
         allowed_types = (common.Dimension, common.Field)  # TODO: extend this list if needed
         unpacked_mod = {
             name: from_value(getattr(value, name))
-            for idx, name in enumerate(mod_names)
+            for name in mod_names
             if isinstance(getattr(value, name), allowed_types)
         }
         return ts.ModuleType(types=unpacked_mod)

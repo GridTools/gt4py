@@ -364,7 +364,6 @@ class ProgramLowering(
     ) -> list[itir.FunCall]:
         assert len(node_domain.values_[dim_i].elts) == 2
         keys_dims_types = cast(ts.DimensionType, node_domain.keys_[dim_i].type).dim
-
         if keys_dims_types != dim:
             raise ValueError(
                 "common.Dimensions in out field and field domain are not equivalent:"
