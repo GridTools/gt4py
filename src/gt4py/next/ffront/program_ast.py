@@ -83,7 +83,7 @@ class Constant(Expr):
 
 
 class Dict(Expr):
-    keys_: list[Any]
+    keys_: list[Union[Name, AttributeExpr]]
     values_: list[TupleExpr]
 
 
