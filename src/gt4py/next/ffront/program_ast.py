@@ -75,6 +75,7 @@ class TupleExpr(Expr):
 class AttributeExpr(Expr):
     attr: str
     value: Any
+    type: Optional[ts.TypeSpec] = None  # A003
 
 
 class Constant(Expr):

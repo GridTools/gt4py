@@ -163,8 +163,16 @@ class ProgramParser(DialectParser[past.Program]):
         return past.Name(id=node.id, location=self.get_location(node))
 
     def visit_Attribute(self, node: ast.Attribute) -> past.AttributeExpr:
+        attr_type = (
+            type_translation.from_value(self.closure_vars[node.attr])
+            if node.attr in self.closure_vars
+            else None
+        )
         return past.AttributeExpr(
-            attr=node.attr, value=self.visit(node.value), location=self.get_location(node)
+            attr=node.attr,
+            value=self.visit(node.value),
+            type=attr_type,
+            location=self.get_location(node),
         )
 
     def visit_Dict(self, node: ast.Dict) -> past.Dict:

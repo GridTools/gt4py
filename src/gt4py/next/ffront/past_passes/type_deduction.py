@@ -65,9 +65,7 @@ def _validate_operator_call(new_func: past.Name, new_kwargs: dict) -> None:
             raise ValueError("Empty domain not allowed.")
 
         for dim in domain_kwarg.keys_:
-            if not isinstance(dim.type, ts.DimensionType) and not isinstance(
-                dim, past.AttributeExpr
-            ):
+            if not isinstance(dim.type, ts.DimensionType):
                 raise ValueError(
                     f"Only 'Dimension' allowed in domain dictionary keys, got '{dim}' which is of type '{dim.type}'."
                 )
