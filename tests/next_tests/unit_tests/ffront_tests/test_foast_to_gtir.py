@@ -236,7 +236,6 @@ def test_if_no_return():
     lowered = FieldOperatorLowering.apply(parsed)
     lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
     lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered_inlined)
-    print(lowered_inlined)
 
     reference = im.tuple_get(0, im.cond("a", im.make_tuple("b"), im.make_tuple("c")))
 
@@ -283,6 +282,7 @@ def test_astype_tuple():
 
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
 
     reference = im.make_tuple(
         im.as_fieldop(im.lambda_("__val")(im.call("cast_")(im.deref("__val"), "int32")))(
@@ -293,7 +293,37 @@ def test_astype_tuple():
         ),
     )
 
-    assert lowered.expr == reference
+    assert lowered_inlined.expr == reference
+
+
+def test_astype_nested_tuple():
+    def foo(
+        a: tuple[
+            tuple[gtx.Field[[TDim], float64], gtx.Field[[TDim], float64]],
+            gtx.Field[[TDim], float64],
+        ],
+    ):
+        return astype(a, int32)
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+    lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
+
+    reference = im.make_tuple(
+        im.make_tuple(
+            im.as_fieldop(im.lambda_("__val")(im.call("cast_")(im.deref("__val"), "int32")))(
+                im.tuple_get(0, im.tuple_get(0, "a"))
+            ),
+            im.as_fieldop(im.lambda_("__val")(im.call("cast_")(im.deref("__val"), "int32")))(
+                im.tuple_get(1, im.tuple_get(0, "a"))
+            ),
+        ),
+        im.as_fieldop(im.lambda_("__val")(im.call("cast_")(im.deref("__val"), "int32")))(
+            im.tuple_get(1, "a")
+        ),
+    )
+
+    assert lowered_inlined.expr == reference
 
 
 # TODO (introduce neg/pos)

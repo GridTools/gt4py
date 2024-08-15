@@ -40,7 +40,7 @@ class PropagateDeref(PreserveLocationVisitor, NodeTranslator):
         if cpm.is_call_to(node, "deref") and cpm.is_let(node.args[0]):
             fun: ir.Lambda = node.args[0].fun  # type: ignore[assignment]  # ensured by is_let
             args: list[ir.Expr] = node.args[0].args
-            node = im.let(*zip(fun.params, args))(im.deref(fun.expr))  # type: ignore[arg-type] # mypy not smart enough
+            node = im.let(*zip(fun.params, args))(im.deref(fun.expr))
         elif cpm.is_call_to(node, "deref") and cpm.is_call_to(node.args[0], "if_"):
             cond, true_branch, false_branch = node.args[0].args
             return im.if_(cond, im.deref(true_branch), im.deref(false_branch))

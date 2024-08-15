@@ -297,9 +297,8 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         cond_ = self.visit(node.args[0])
         cond_symref_name = f"__cond_{eve_utils.content_hash(cond_)}"
 
-        def create_if(cond: itir.Expr) -> Callable[[tuple[itir.Expr, itir.Expr]], itir.FunCall]:
-            def create_if_impl(true_false_: tuple[itir.Expr, itir.Expr]) -> itir.FunCall:
-                true_, false_ = true_false_
+        def create_if(cond: itir.Expr) -> Callable[[itir.Expr, itir.Expr], itir.FunCall]:
+            def create_if_impl(true_: itir.Expr, false_: itir.Expr) -> itir.FunCall:
                 return im.op_as_fieldop("if_")(cond, true_, false_)
 
             return create_if_impl

@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import typing
-from typing import Callable, Iterable, Optional, Union
+from typing import Callable, Optional, Union
 
 from gt4py._core import definitions as core_defs
 from gt4py.next.iterator import ir as itir
@@ -293,7 +293,7 @@ class let:
     def __init__(self, var: str | itir.Sym, init_form: itir.Expr | str): ...
 
     @typing.overload
-    def __init__(self, *args: Iterable[tuple[str | itir.Sym, itir.Expr | str]]): ...
+    def __init__(self, *args: tuple[str | itir.Sym, itir.Expr | str]): ...
 
     def __init__(self, *args):
         if all(isinstance(arg, tuple) and len(arg) == 2 for arg in args):
