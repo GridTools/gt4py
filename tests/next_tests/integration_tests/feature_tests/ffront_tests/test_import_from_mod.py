@@ -24,3 +24,4 @@ def test_import_dims_module():
     f = gtx.as_field([IDim, KDim], np.ones([10, 10]))
     out = gtx.as_field([IDim, KDim], np.zeros([10, 10]))
     mod_prog(f, out, offset_provider={})
+    assert np.allclose(out.asnumpy()[0:8, 0:3], f.asnumpy()[0:8, 0:3])
