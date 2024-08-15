@@ -63,7 +63,7 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
         # Languages
         {% if cuda_compute_arch %}
         if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-            set(CMAKE_CUDA_ARCHITECTURES {{ cuda_compute_arch() }})
+            set(CMAKE_CUDA_ARCHITECTURES {{ cuda_compute_arch }})
         endif()
         {% endif %}
         {{"\\n".join(languages)}}
