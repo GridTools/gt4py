@@ -65,7 +65,7 @@ def _validate_operator_call(new_func: past.Name, new_kwargs: dict) -> None:
             raise ValueError("Empty domain not allowed.")
 
         for dim in domain_kwarg.keys_:
-            if not isinstance(dim.type, ts.DimensionType):
+            if not isinstance(dim.type, ts.DimensionType) and (type(dim) is not past.AttributeExpr):
                 raise ValueError(
                     f"Only 'Dimension' allowed in domain dictionary keys, got '{dim}' which is of type '{dim.type}'."
                 )
@@ -226,5 +226,4 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         symtable = kwargs["symtable"]
         if node.id not in symtable or symtable[node.id].type is None:
             raise errors.DSLError(node.location, f"Undeclared or untyped symbol '{node.id}'.")
-
         return past.Name(id=node.id, type=symtable[node.id].type, location=node.location)

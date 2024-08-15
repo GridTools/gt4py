@@ -106,6 +106,11 @@ class TupleType(DataType):
 
 
 @dataclass(frozen=True)
+class ModuleType(TypeSpec):
+    types: dict[str, TypeSpec]
+
+
+@dataclass(frozen=True)
 class FieldType(DataType, CallableType):
     dims: list[func_common.Dimension]
     dtype: ScalarType

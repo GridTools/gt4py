@@ -204,6 +204,16 @@ def from_value(value: Any) -> ts.TypeSpec:
         elems = [from_value(el) for el in value]
         assert all(isinstance(elem, ts.DataType) for elem in elems)
         return ts.TupleType(types=elems)  # type: ignore[arg-type] # checked in assert
+    elif isinstance(value, typing.types.ModuleType):  # type: ignore[attr-defined] # correct import
+        mod_names = dir(value)
+        allowed_types = (common.Dimension, common.Field)  # TODO: extend this list if needed
+        unpacked_mod = {
+            name: from_value(getattr(value, name))
+            for idx, name in enumerate(mod_names)
+            if isinstance(getattr(value, name), allowed_types)
+        }
+        return ts.ModuleType(types=unpacked_mod)
+
     else:
         type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
         symbol_type = from_type_hint(type_)

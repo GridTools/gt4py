@@ -363,7 +363,12 @@ class ProgramLowering(
         self, dim_i: int, dim: common.Dimension, node_domain: past.Dict
     ) -> list[itir.FunCall]:
         assert len(node_domain.values_[dim_i].elts) == 2
-        keys_dims_types = cast(ts.DimensionType, node_domain.keys_[dim_i].type).dim
+        current_dim = node_domain.keys_[dim_i]
+        if isinstance(current_dim, past.AttributeExpr):
+            keys_dims_types = current_dim.value.type.types[current_dim.attr].dim
+        else:
+            keys_dims_types = cast(ts.DimensionType, node_domain.keys_[dim_i].type).dim
+
         if keys_dims_types != dim:
             raise ValueError(
                 "common.Dimensions in out field and field domain are not equivalent:"
