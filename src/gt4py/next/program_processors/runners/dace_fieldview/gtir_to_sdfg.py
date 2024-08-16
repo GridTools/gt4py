@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import abc
 import dataclasses
-import itertools
 from typing import Any, Dict, List, Optional, Protocol, Sequence, Set, Tuple, Union
 
 import dace
@@ -360,49 +359,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 node, sdfg, head_state, self, let_symbols
             )
         elif cpm.is_call_to(node, "make_tuple"):
-            tuple_args = [
-                self.visit(
-                    arg,
-                    sdfg=sdfg,
-                    head_state=head_state,
-                    let_symbols=let_symbols,
-                )
-                for arg in node.args
-            ]
-            assert all(len(arg) == 1 for arg in tuple_args)
-            return list(itertools.chain(*tuple_args))
-        elif cpm.is_call_to(node, "tuple_get"):
-            assert len(node.args) == 2
-            if not isinstance(node.args[0], gtir.Literal):
-                raise ValueError("Tuple can only be subscripted with compile-time constants.")
-            assert node.args[0].type == dace_fieldview_util.as_scalar_type(
-                gtir.INTEGER_INDEX_BUILTIN
+            return gtir_builtin_translators.translate_make_tuple(
+                node, sdfg, head_state, self, let_symbols
             )
-            index = int(node.args[0].value)
-            if cpm.is_call_to(node.args[1], "make_tuple"):
-                # trivial case: visit only the tuple element to be returned
-                elem = self.visit(
-                    node.args[1].args[index],
-                    sdfg=sdfg,
-                    head_state=head_state,
-                    let_symbols=let_symbols,
-                )
-            else:
-                tuple_args = self.visit(
-                    node.args[1],
-                    sdfg=sdfg,
-                    head_state=head_state,
-                    let_symbols=let_symbols,
-                )
-                elem = tuple_args[index]
-                # remove isolated access nodes
-                isolated_nodes = [
-                    node
-                    for i, (node, _) in enumerate(tuple_args)
-                    if i != index and head_state.degree(node) == 0
-                ]
-                head_state.remove_nodes_from(isolated_nodes)
-            return elem if isinstance(elem, list) else [elem]
+        elif cpm.is_call_to(node, "tuple_get"):
+            return gtir_builtin_translators.translate_tuple_get(
+                node, sdfg, head_state, self, let_symbols
+            )
         elif cpm.is_call_to(node.fun, "as_fieldop"):
             return gtir_builtin_translators.translate_as_field_op(
                 node, sdfg, head_state, self, let_symbols

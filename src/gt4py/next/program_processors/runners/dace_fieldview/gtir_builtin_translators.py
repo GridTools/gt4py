@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import abc
+import itertools
 from typing import TYPE_CHECKING, Optional, Protocol, TypeAlias
 
 import dace
@@ -390,6 +391,67 @@ def translate_literal(
     data_node = _get_symbolic_value(sdfg, state, sdfg_builder, node.value, data_type)
 
     return [(data_node, data_type)]
+
+
+def translate_make_tuple(
+    node: gtir.Node,
+    sdfg: dace.SDFG,
+    state: dace.SDFGState,
+    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
+    let_symbols: dict[str, LetSymbol],
+) -> list[TemporaryData]:
+    assert cpm.is_call_to(node, "make_tuple")
+    tuple_args = [
+        sdfg_builder.visit(
+            arg,
+            sdfg=sdfg,
+            head_state=state,
+            let_symbols=let_symbols,
+        )
+        for arg in node.args
+    ]
+    assert all(len(arg) == 1 for arg in tuple_args)
+    return list(itertools.chain(*tuple_args))
+
+
+def translate_tuple_get(
+    node: gtir.Node,
+    sdfg: dace.SDFG,
+    state: dace.SDFGState,
+    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
+    let_symbols: dict[str, LetSymbol],
+) -> list[TemporaryData]:
+    assert cpm.is_call_to(node, "tuple_get")
+    assert len(node.args) == 2
+
+    if not isinstance(node.args[0], gtir.Literal):
+        raise ValueError("Tuple can only be subscripted with compile-time constants.")
+    assert node.args[0].type == dace_fieldview_util.as_scalar_type(gtir.INTEGER_INDEX_BUILTIN)
+    index = int(node.args[0].value)
+    
+    if cpm.is_call_to(node.args[1], "make_tuple"):
+        # trivial case: visit only the tuple element to be returned
+        elem = sdfg_builder.visit(
+            node.args[1].args[index],
+            sdfg=sdfg,
+            head_state=state,
+            let_symbols=let_symbols,
+        )
+    else:
+        tuple_args = sdfg_builder.visit(
+            node.args[1],
+            sdfg=sdfg,
+            head_state=state,
+            let_symbols=let_symbols,
+        )
+        elem = tuple_args[index]
+        # remove isolated access nodes
+        isolated_nodes = [
+            node for i, (node, _) in enumerate(tuple_args) if i != index and state.degree(node) == 0
+        ]
+        state.remove_nodes_from(isolated_nodes)
+    
+    return elem if isinstance(elem, list) else [elem]
 
 
 def translate_symbol_ref(
