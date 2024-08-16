@@ -393,6 +393,43 @@ def translate_literal(
     return [(data_node, data_type)]
 
 
+def translate_symbol_ref(
+    node: gtir.Node,
+    sdfg: dace.SDFG,
+    state: dace.SDFGState,
+    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
+    let_symbols: dict[str, LetSymbol],
+) -> list[TemporaryData]:
+    """Generates the dataflow subgraph for a `ir.SymRef` node."""
+    assert isinstance(node, gtir.SymRef)
+
+    sym_value = str(node.id)
+    if sym_value in let_symbols:
+        let_node, sym_type = let_symbols[sym_value]
+        if isinstance(let_node, gtir.Literal):
+            # this branch handles the case a let-symbol is mapped to some constant value
+            return sdfg_builder.visit(let_node)
+        # The `let_symbols` dictionary maps a `gtir.SymRef` string to a temporary
+        # data container. These symbols are visited and initialized in a state
+        # that preceeds the current state, therefore a new access node needs to
+        # be created in the state where they are accessed.
+        sym_value = str(let_node.id)
+    else:
+        sym_type = sdfg_builder.get_symbol_type(sym_value)
+
+    # Create new access node in current state. It is possible that multiple
+    # access nodes are created in one state for the same data container.
+    # We rely on the dace simplify pass to remove duplicated access nodes.
+    if isinstance(sym_type, ts.FieldType):
+        sym_node = state.add_access(sym_value)
+    else:
+        sym_node = _get_symbolic_value(
+            sdfg, state, sdfg_builder, sym_value, sym_type, temp_name=sym_value
+        )
+
+    return [(sym_node, sym_type)]
+
+
 def translate_make_tuple(
     node: gtir.Node,
     sdfg: dace.SDFG,
@@ -454,47 +491,13 @@ def translate_tuple_get(
     return elem if isinstance(elem, list) else [elem]
 
 
-def translate_symbol_ref(
-    node: gtir.Node,
-    sdfg: dace.SDFG,
-    state: dace.SDFGState,
-    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    let_symbols: dict[str, LetSymbol],
-) -> list[TemporaryData]:
-    """Generates the dataflow subgraph for a `ir.SymRef` node."""
-    assert isinstance(node, gtir.SymRef)
-
-    sym_value = str(node.id)
-    if sym_value in let_symbols:
-        let_node, sym_type = let_symbols[sym_value]
-        if isinstance(let_node, gtir.Literal):
-            # this branch handles the case a let-symbol is mapped to some constant value
-            return sdfg_builder.visit(let_node)
-        # The `let_symbols` dictionary maps a `gtir.SymRef` string to a temporary
-        # data container. These symbols are visited and initialized in a state
-        # that preceeds the current state, therefore a new access node needs to
-        # be created in the state where they are accessed.
-        sym_value = str(let_node.id)
-    else:
-        sym_type = sdfg_builder.get_symbol_type(sym_value)
-
-    # Create new access node in current state. It is possible that multiple
-    # access nodes are created in one state for the same data container.
-    # We rely on the dace simplify pass to remove duplicated access nodes.
-    if isinstance(sym_type, ts.FieldType):
-        sym_node = state.add_access(sym_value)
-    else:
-        sym_node = _get_symbolic_value(
-            sdfg, state, sdfg_builder, sym_value, sym_type, temp_name=sym_value
-        )
-
-    return [(sym_node, sym_type)]
-
-
 if TYPE_CHECKING:
     # Use type-checking to assert that all translator functions implement the `PrimitiveTranslator` protocol
     __primitive_translators: list[PrimitiveTranslator] = [
         translate_as_field_op,
         translate_cond,
+        translate_literal,
         translate_symbol_ref,
+        translate_make_tuple,
+        translate_tuple_get,
     ]
