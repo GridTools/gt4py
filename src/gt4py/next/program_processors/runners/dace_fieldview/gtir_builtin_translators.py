@@ -428,7 +428,7 @@ def translate_tuple_get(
         raise ValueError("Tuple can only be subscripted with compile-time constants.")
     assert node.args[0].type == dace_fieldview_util.as_scalar_type(gtir.INTEGER_INDEX_BUILTIN)
     index = int(node.args[0].value)
-    
+
     if cpm.is_call_to(node.args[1], "make_tuple"):
         # trivial case: visit only the tuple element to be returned
         elem = sdfg_builder.visit(
@@ -450,7 +450,7 @@ def translate_tuple_get(
             node for i, (node, _) in enumerate(tuple_args) if i != index and state.degree(node) == 0
         ]
         state.remove_nodes_from(isolated_nodes)
-    
+
     return elem if isinstance(elem, list) else [elem]
 
 

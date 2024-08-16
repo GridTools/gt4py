@@ -310,6 +310,12 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             for sym in eve.walk_values(stmt.expr).if_isinstance(gtir.SymRef)
             if str(sym.id) in sdfg.arrays
         )
+        state_input_data = [
+            node.data
+            for node in state.data_nodes()
+            if node.data in expr_input_args and state.degree(node) != 0
+        ]
+
         target_state: Optional[dace.SDFGState] = None
         for expr_node, target_node in zip(expr_nodes, target_nodes, strict=True):
             target_array = sdfg.arrays[target_node.data]
@@ -324,7 +330,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 assert len(domain) == 0
                 subset = "0"
 
-            if target_node.data in expr_input_args:
+            if target_node.data in state_input_data:
                 # if inout argument, write the result in separate next state
                 # this is needed to avoid undefined behavior for expressions like: X, Y = X + 1, X
                 if not target_state:
