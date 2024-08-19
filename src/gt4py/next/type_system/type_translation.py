@@ -204,7 +204,7 @@ def from_value(value: Any) -> ts.TypeSpec:
         elems = [from_value(el) for el in value]
         assert all(isinstance(elem, ts.DataType) for elem in elems)
         return ts.TupleType(types=elems)  # type: ignore[arg-type] # checked in assert
-    elif isinstance(value, typing.types.ModuleType):  # type: ignore[attr-defined] # correct import
+    elif isinstance(value, types.ModuleType):
         mod_names = dir(value)
         allowed_types = (common.Dimension, common.Field)  # TODO: extend this list if needed
         unpacked_mod = {
