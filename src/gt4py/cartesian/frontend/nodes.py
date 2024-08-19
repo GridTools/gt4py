@@ -411,6 +411,8 @@ class NativeFunction(enum.Enum):
     CEIL = enum.auto()
     TRUNC = enum.auto()
 
+    INT = enum.auto()
+
     @property
     def arity(self):
         return type(self).IR_OP_TO_NUM_ARGS[self]
@@ -445,6 +447,7 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
     NativeFunction.FLOOR: 1,
     NativeFunction.CEIL: 1,
     NativeFunction.TRUNC: 1,
+    NativeFunction.INT: 1,
 }
 
 

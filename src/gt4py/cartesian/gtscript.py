@@ -59,6 +59,7 @@ MATH_BUILTINS = {
     "floor",
     "ceil",
     "trunc",
+    "int",
 }
 
 builtins = {

@@ -167,6 +167,7 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
                 common.NativeFunction.FLOOR: "dace.math.ifloor",
                 common.NativeFunction.CEIL: "ceil",
                 common.NativeFunction.TRUNC: "trunc",
+                common.NativeFunction.INT: "int",
             }[func]
         except KeyError as error:
             raise NotImplementedError("Not implemented NativeFunction encountered.") from error
