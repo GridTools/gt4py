@@ -13,6 +13,7 @@ import gt4py.eve as eve
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.concepts import SymbolName
 from gt4py.next import common
+from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import (
@@ -229,6 +230,67 @@ class _CannonicalizeUnstructuredDomain(eve.NodeTranslator):
         return cls().visit(node)
 
 
+@dataclasses.dataclass
+class ResolveRelocation(eve.NodeTranslator):
+    offset_remapping: dict[str, common.Dimension]
+    dims_remapping: dict[common.Dimension, common.Dimension]
+
+    @classmethod
+    def apply(
+        cls,
+        node: itir.Program,
+        *,
+        offset_provider: dict,
+    ) -> Program:
+        offset_remapping = {}
+        dims_remapping = {}
+        offset_provider = offset_provider.copy()
+        for v in [*offset_provider.values()]:
+            if isinstance(v, fbuiltins.FieldOffset):
+                assert len(v.target) == 1
+                if v.target[0] in dims_remapping.values():
+                    assert v.source in dims_remapping
+                else:
+                    dims_remapping[v.source] = v.target[0]
+                    offset_remapping[v.value] = dims_remapping.get(v.target[0], v.target[0])
+                    offset_provider[v.source.value] = common.Dimension(
+                        v.target[0].value
+                    )  # super ugly hack: this introduces in gtfn an alias from the original dimension to the mapped one
+                offset_provider[v.value] = v.target[0]
+        return cls(offset_remapping=offset_remapping, dims_remapping=dims_remapping).visit(
+            node
+        ), offset_provider
+
+    def visit_OffsetLiteral(self, node: itir.OffsetLiteral) -> itir.OffsetLiteral:
+        # if isinstance(node.value, str):
+        #     return itir.OffsetLiteral(value=self.offset_remapping.get(node.value, node).value)
+        return node
+
+    def visit_FunCall(self, node: itir.FunCall) -> itir.FunCall:
+        if node.fun == itir.SymRef(id="named_range"):
+            return itir.FunCall(
+                fun=node.fun,
+                args=[
+                    self.dims_remapping.get(a, a) if isinstance(a, common.Dimension) else a
+                    for a in node.args
+                ],
+            )
+        return self.generic_visit(node)
+
+    def visit_Node(self, node: itir.Node) -> itir.Node:
+        if node.type is not None:
+            if isinstance(node.type, ts.FieldType) and any(
+                d in self.dims_remapping for d in type_info.extract_dims(node.type)
+            ):
+                node.type = ts.FieldType(
+                    dims=[self.dims_remapping.get(d, d) for d in node.type.dims],
+                    dtype=node.type.dtype,
+                )
+                print(node.type)
+                return node
+        return self.generic_visit(node)
+
+
 @dataclasses.dataclass(frozen=True)
 class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     _binary_op_map: ClassVar[dict[str, str]] = {
@@ -270,6 +332,8 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         if not isinstance(node, itir.Program):
             raise TypeError(f"Expected a 'Program', got '{type(node).__name__}'.")
 
+        node, offset_provider = ResolveRelocation.apply(node, offset_provider=offset_provider)
+        print(node)
         node = itir_type_inference.infer(node, offset_provider=offset_provider)
         grid_type = _get_gridtype(node.body)
         if grid_type == common.GridType.UNSTRUCTURED:

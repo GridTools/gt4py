@@ -629,6 +629,14 @@ def execute_shift(
         else:
             raise AssertionError()
         return new_pos
+    elif isinstance(offset_implementation, fbuiltins.FieldOffset):
+        new_pos = copy.copy(pos)
+        new_pos.pop(offset_implementation.target[0].value)
+        if common.is_int_index(value := pos[offset_implementation.target[0].value]):
+            new_pos[offset_implementation.source.value] = value + index
+        else:
+            raise AssertionError()
+        return new_pos
     else:
         assert isinstance(offset_implementation, common.Connectivity)
         assert offset_implementation.origin_axis.value in pos

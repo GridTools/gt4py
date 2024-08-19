@@ -13,6 +13,7 @@ import inspect
 
 from gt4py.eve.extended_typing import Callable, Iterable, Optional, Union
 from gt4py.next import common
+from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_info, type_specifications as ts
@@ -112,6 +113,7 @@ def _(lhs: ts.ScalarType, rhs: ts.ScalarType) -> ts.ScalarType | ts.TupleType:
 @_register_builtin_type_synthesizer
 def deref(it: it_ts.IteratorType) -> ts.DataType:
     assert isinstance(it, it_ts.IteratorType)
+    print(it)
     assert _is_derefable_iterator_type(it)
     return it.element_type
 
@@ -339,8 +341,16 @@ def shift(*offset_literals, offset_provider) -> TypeSynthesizer:
             assert isinstance(offset_axis, it_ts.OffsetLiteralType) and isinstance(
                 offset_axis.value, common.Dimension
             )
+            print(offset_provider)
             provider = offset_provider[offset_axis.value.value]  # TODO: naming
             if isinstance(provider, common.Dimension):
+                # found = False
+                # for i, dim in enumerate(new_position_dims):
+                #     if dim.value == offset_axis.value.value:
+                #         assert not found
+                #         new_position_dims[i] = provider
+                #         found = True
+                # assert found
                 pass
             elif isinstance(provider, common.Connectivity):
                 found = False
@@ -348,6 +358,14 @@ def shift(*offset_literals, offset_provider) -> TypeSynthesizer:
                     if dim.value == provider.origin_axis.value:
                         assert not found
                         new_position_dims[i] = provider.neighbor_axis
+                        found = True
+                assert found
+            elif isinstance(provider, fbuiltins.FieldOffset):
+                found = False
+                for i, dim in enumerate(new_position_dims):
+                    if dim.value == provider.target[0].value:
+                        assert not found
+                        new_position_dims[i] = provider.source
                         found = True
                 assert found
             else:

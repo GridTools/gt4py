@@ -161,7 +161,7 @@ class GTFNTranslationStep(
                 arg_exprs.append(
                     f"gridtools::hymap::keys<generated::{name}_t>::make_values({nbtbl})"
                 )
-            elif isinstance(connectivity, Dimension):
+            elif isinstance(connectivity, (fbuiltins.FieldOffset, Dimension)):
                 pass
             else:
                 raise AssertionError(

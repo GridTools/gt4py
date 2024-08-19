@@ -344,9 +344,11 @@ def allocate(
             Useful for shifted fields, which must start off bigger
             than the output field in the shifted dimension.
     """
+    print(sizes)
     sizes = extend_sizes(
         case.default_sizes | (sizes or {}), extend
     )  # TODO: this should take into account the Domain of the allocated field
+    print(sizes)
     arg_type = get_param_types(fieldview_prog)[name]
     if strategy is None:
         if name in ["out", RETURN]:

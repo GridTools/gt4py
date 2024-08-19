@@ -17,6 +17,7 @@ import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
 from gt4py.eve.utils import content_hash
 from gt4py.next import backend, common, config
+from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import transforms
 from gt4py.next.iterator.transforms import global_tmps
 from gt4py.next.otf import recipes, stages, workflow
@@ -82,7 +83,7 @@ def extract_connectivity_args(
             # copying to device here is a fallback for easy testing and might be removed later
             conn_arg = _ensure_is_on_device(conn.table, device)
             args.append((conn_arg, tuple([0] * 2)))
-        elif isinstance(conn, common.Dimension):
+        elif isinstance(conn, (common.Dimension, fbuiltins.FieldOffset)):
             pass
         else:
             raise AssertionError(
