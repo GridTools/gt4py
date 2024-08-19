@@ -26,7 +26,7 @@ def test_import_dims_module(cartesian_case):
 
     @gtx.program
     def mod_prog(f: cases.IKField, out: cases.IKField):
-        mod_op(f, out=out, domain={dims.IDim: (0, 8), dims.KDim: (0, 3)})
+        mod_op(f, out=out, domain={cases.IDim: (0, 8), cases.KDim: (0, 3)})
 
     f = cases.allocate(cartesian_case, mod_prog, "f")()
     out = cases.allocate(cartesian_case, mod_prog, "out")()
