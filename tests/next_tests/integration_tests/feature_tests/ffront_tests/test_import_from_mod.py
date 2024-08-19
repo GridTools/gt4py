@@ -10,10 +10,10 @@ from tests.next_tests.integration_tests.feature_tests.ffront_tests import dimens
 from tests.next_tests.integration_tests.cases import IDim, KDim
 import gt4py.next as gtx
 import numpy as np
-from tests.next_tests.integration_tests import cases
-from tests.next_tests.integration_tests.cases import cartesian_case
+from next_tests.integration_tests import cases
+from next_tests.integration_tests.cases import cartesian_case
 
-from tests.next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     exec_alloc_descriptor,
     mesh_descriptor,
 )
