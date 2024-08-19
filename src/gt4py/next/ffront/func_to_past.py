@@ -163,10 +163,13 @@ class ProgramParser(DialectParser[past.Program]):
         return past.Name(id=node.id, location=self.get_location(node))
 
     def visit_Attribute(self, node: ast.Attribute) -> past.AttributeExpr:
-        attr_type = (
-            type_translation.from_value(self.closure_vars[node.attr])
-            if node.attr in self.closure_vars
-            else None
+        if not isinstance(node.ctx, ast.Load):
+            raise errors.DSLError(
+                self.get_location(node), "`node.ctx` can only be of type ast.Load"
+            )
+        assert isinstance(node.value, ast.Name)
+        attr_type = type_translation.from_value(
+            getattr(self.closure_vars[node.value.id], node.attr)
         )
         return past.AttributeExpr(
             attr=node.attr,

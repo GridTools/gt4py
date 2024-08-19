@@ -6,8 +6,6 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from tests.next_tests.integration_tests.feature_tests.ffront_tests import dimensions_mod as dims
-from tests.next_tests.integration_tests.cases import IDim, KDim
 import gt4py.next as gtx
 import numpy as np
 from next_tests.integration_tests import cases
