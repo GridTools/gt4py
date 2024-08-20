@@ -254,7 +254,8 @@ class DomainInterval(eve.Node):
         second_end = second.end if second.end is not None else first_end.end
 
         if (first_start <= second_end and first_end >= second_start) or (
-            second_start <= first_end and second_end >= first_start) :
+            second_start <= first_end and second_end >= first_start
+        ):
             warnings.warn(f"extension is NOT monotonically increasing!")
 
         start = max(first_start, second_start)
