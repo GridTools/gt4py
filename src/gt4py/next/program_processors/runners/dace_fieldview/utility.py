@@ -58,6 +58,14 @@ def connectivity_identifier(name: str) -> str:
     return f"connectivity_{name}"
 
 
+def field_size_symbol_name(field_name: str, axis: int) -> str:
+    return f"__{field_name}_size_{axis}"
+
+
+def field_stride_symbol_name(field_name: str, axis: int) -> str:
+    return f"__{field_name}_stride_{axis}"
+
+
 def debug_info(
     node: gtir.Node, *, default: Optional[dace.dtypes.DebugInfo] = None
 ) -> Optional[dace.dtypes.DebugInfo]:
@@ -71,14 +79,6 @@ def debug_info(
             filename=location.filename,
         )
     return default
-
-
-def field_size_symbol_name(field_name: str, axis: int) -> str:
-    return f"__{field_name}_size_{axis}"
-
-
-def field_stride_symbol_name(field_name: str, axis: int) -> str:
-    return f"__{field_name}_stride_{axis}"
 
 
 def filter_connectivities(offset_provider: Mapping[str, Any]) -> dict[str, gtx_common.Connectivity]:
