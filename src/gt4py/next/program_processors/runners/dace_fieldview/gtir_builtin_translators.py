@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
 
 IteratorIndexDType: TypeAlias = dace.int32  # type of iterator indexes
-LetSymbol: TypeAlias = tuple[gtir.Literal | gtir.SymRef, ts.FieldType | ts.ScalarType]
+LetSymbol: TypeAlias = tuple[gtir.Literal | gtir.SymRef, ts.DataType]
 TemporaryData: TypeAlias = tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]
 
 
@@ -92,8 +92,7 @@ def _parse_arg_expr(
 
     if isinstance(arg_type, ts.ScalarType):
         return gtir_to_tasklet.MemletExpr(data_node, sbs.Indices([0]))
-    else:
-        assert isinstance(arg_type, ts.FieldType)
+    elif isinstance(arg_type, ts.FieldType):
         indices: dict[gtx_common.Dimension, gtir_to_tasklet.IteratorIndexExpr] = {
             dim: gtir_to_tasklet.SymbolExpr(
                 dace_fieldview_util.get_map_variable(dim),
@@ -107,6 +106,8 @@ def _parse_arg_expr(
             [gtx_common.Dimension("")] if isinstance(arg_type.dtype, gtir_ts.ListType) else []
         )
         return gtir_to_tasklet.IteratorExpr(data_node, dims, indices)
+    else:
+        raise NotImplementedError(f"Node type {type(arg_type)} not supported.")
 
 
 def _create_temporary_field(
@@ -345,6 +346,35 @@ def translate_cond(
     return output_nodes
 
 
+def _get_data_nodes(
+    sdfg: dace.SDFG,
+    state: dace.SDFGState,
+    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
+    sym_name: str,
+    sym_type: ts.DataType,
+) -> list[TemporaryData]:
+    data_nodes: list[TemporaryData]
+    if isinstance(sym_type, ts.FieldType):
+        sym_node = state.add_access(sym_name)
+        data_nodes = [(sym_node, sym_type)]
+    elif isinstance(sym_type, ts.ScalarType):
+        sym_node = _get_symbolic_value(
+            sdfg, state, sdfg_builder, sym_name, sym_type, temp_name=sym_name
+        )
+        data_nodes = [(sym_node, sym_type)]
+    elif isinstance(sym_type, ts.TupleType):
+        tuple_fields = dace_fieldview_util.get_tuple_fields(sym_name, sym_type)
+        data_nodes = [
+            data_node
+            for field_name, field_type in tuple_fields
+            for data_node in _get_data_nodes(sdfg, state, sdfg_builder, field_name, field_type)
+        ]
+    else:
+        raise NotImplementedError(f"Symbol type {type(sym_type)} not supported.")
+
+    return data_nodes
+
+
 def _get_symbolic_value(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
@@ -420,14 +450,13 @@ def translate_symbol_ref(
     # Create new access node in current state. It is possible that multiple
     # access nodes are created in one state for the same data container.
     # We rely on the dace simplify pass to remove duplicated access nodes.
-    if isinstance(sym_type, ts.FieldType):
-        sym_node = state.add_access(sym_value)
+    if isinstance(sym_type, (ts.FieldType, ts.ScalarType)):
+        data_nodes = _get_data_nodes(sdfg, state, sdfg_builder, sym_value, sym_type)
+        assert len(data_nodes) == 1
     else:
-        sym_node = _get_symbolic_value(
-            sdfg, state, sdfg_builder, sym_value, sym_type, temp_name=sym_value
-        )
+        raise NotImplementedError(f"Symbol type {type(sym_type)} not supported.")
 
-    return [(sym_node, sym_type)]
+    return data_nodes
 
 
 def translate_make_tuple(
@@ -468,12 +497,20 @@ def translate_tuple_get(
 
     if cpm.is_call_to(node.args[1], "make_tuple"):
         # trivial case: visit only the tuple element to be returned
-        elem = sdfg_builder.visit(
+        data_nodes = sdfg_builder.visit(
             node.args[1].args[index],
             sdfg=sdfg,
             head_state=state,
             let_symbols=let_symbols,
         )
+    elif isinstance(node.args[1], gtir.SymRef):
+        # call to `tuple_get` can appear on the argument itself, in case of tuple arguments
+        sym_name = str(node.args[1].id)
+        sym_type = sdfg_builder.get_symbol_type(sym_name)
+        assert isinstance(sym_type, ts.TupleType)
+        tuple_args = dace_fieldview_util.get_tuple_fields(sym_name, sym_type)
+        field_name, field_type = tuple_args[index]
+        data_nodes = _get_data_nodes(sdfg, state, sdfg_builder, field_name, field_type)
     else:
         tuple_args = sdfg_builder.visit(
             node.args[1],
@@ -481,14 +518,14 @@ def translate_tuple_get(
             head_state=state,
             let_symbols=let_symbols,
         )
-        elem = tuple_args[index]
+        data_nodes = tuple_args[index : index + 1]
         # remove isolated access nodes
         isolated_nodes = [
             node for i, (node, _) in enumerate(tuple_args) if i != index and state.degree(node) == 0
         ]
         state.remove_nodes_from(isolated_nodes)
 
-    return elem if isinstance(elem, list) else [elem]
+    return data_nodes
 
 
 if TYPE_CHECKING:

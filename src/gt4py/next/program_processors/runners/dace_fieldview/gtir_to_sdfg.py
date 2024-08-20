@@ -80,7 +80,7 @@ class SDFGBuilder(DataflowBuilder, Protocol):
     """Visitor interface available to GTIR-primitive translators."""
 
     @abc.abstractmethod
-    def get_symbol_type(self, symbol_name: str) -> ts.FieldType | ts.ScalarType:
+    def get_symbol_type(self, symbol_name: str) -> ts.DataType:
         pass
 
     @abc.abstractmethod
@@ -103,9 +103,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     """
 
     offset_provider: dict[str, gtx_common.Connectivity | gtx_common.Dimension]
-    global_symbols: dict[str, ts.FieldType | ts.ScalarType] = dataclasses.field(
-        default_factory=lambda: {}
-    )
+    global_symbols: dict[str, ts.DataType] = dataclasses.field(default_factory=lambda: {})
     map_uids: eve.utils.UIDGenerator = dataclasses.field(
         init=False, repr=False, default_factory=lambda: eve.utils.UIDGenerator(prefix="map")
     )
@@ -116,7 +114,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     def get_offset_provider(self, offset: str) -> gtx_common.Connectivity | gtx_common.Dimension:
         return self.offset_provider[offset]
 
-    def get_symbol_type(self, symbol_name: str) -> ts.FieldType | ts.ScalarType:
+    def get_symbol_type(self, symbol_name: str) -> ts.DataType:
         return self.global_symbols[symbol_name]
 
     def unique_map_name(self, name: str) -> str:
@@ -155,7 +153,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
     def _add_storage(
         self, sdfg: dace.SDFG, name: str, symbol_type: ts.DataType, transient: bool = True
-    ) -> None:
+    ) -> list[str]:
         """
         Add storage for data containers used in the SDFG. For fields, it allocates dace arrays,
         while scalars are stored as SDFG symbols.
@@ -163,8 +161,19 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         The fields used as temporary arrays, when `transient = True`, are allocated and exist
         only within the SDFG; when `transient = False`, the fields have to be allocated outside
         and have to be passed as array arguments to the SDFG.
+
+        Returns:
+            List of names for the data containers or symbols allocated as storage. This is a list
+            because in case of tuples we flat the tuple fields and allocate storage for each field.
         """
-        if isinstance(symbol_type, ts.FieldType):
+        tuple_fields = []
+        if isinstance(symbol_type, ts.TupleType):
+            for tname, tsymbol_type in dace_fieldview_util.get_tuple_fields(
+                name, symbol_type, flatten=True
+            ):
+                self._add_storage(sdfg, tname, tsymbol_type, transient)
+                tuple_fields.append(tname)
+        elif isinstance(symbol_type, ts.FieldType):
             dtype = dace_fieldview_util.as_dace_type(symbol_type.dtype)
             # use symbolic shape, which allows to invoke the program with fields of different size;
             # and symbolic strides, which enables decoupling the memory layout from generated code.
@@ -183,9 +192,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         else:
             raise RuntimeError(f"Data type '{type(symbol_type)}' not supported.")
 
-        # TODO: unclear why mypy complains about incompatible types
-        assert isinstance(symbol_type, (ts.FieldType, ts.ScalarType))
         self.global_symbols[name] = symbol_type
+
+        return tuple_fields or [name]
 
     def _add_storage_for_temporary(self, temp_decl: gtir.Temporary) -> dict[str, str]:
         """
@@ -204,7 +213,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         This method represents the entry point to visit `ir.Stmt` expressions.
         As such, it must preserve the property of single exit state in the SDFG.
 
-        Returns a list of array nodes containing the result fields.
+        Returns:
+            A list of array nodes containing the result fields.
 
         TODO: Do we need to return the GT4Py `FieldType`/`ScalarType`? It is needed
         in case the transient arrays containing the expression result are not guaranteed
@@ -261,10 +271,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         else:
             head_state = entry_state
 
-        # add non-transient arrays and/or SDFG symbols for the program arguments
+        sdfg_arg_names = []
         for param in node.params:
-            assert isinstance(param.type, ts.DataType)
-            self._add_storage(sdfg, str(param.id), param.type, transient=False)
+            pname = str(param.id)
+            assert isinstance(param.type, (ts.DataType))
+            sdfg_arg_names += self._add_storage(sdfg, pname, param.type, transient=False)
 
         # add SDFG storage for connectivity tables
         for offset, offset_provider in dace_fieldview_util.filter_connectivities(
@@ -293,7 +304,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         #  Only the arguments required by the GT4Py program, i.e. `node.params`, are added
         #  as positional arguments. The implicit arguments, such as the offset providers or
         #  the arguments created by the translation process, must be passed as keyword arguments.
-        sdfg.arg_names = [str(a) for a in node.params]
+        sdfg.arg_names = sdfg_arg_names
 
         sdfg.validate()
         return sdfg
@@ -306,7 +317,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         Each statement expression results in some sort of dataflow gragh writing to temporary storage.
         The translation of `SetAt` ensures that the result is written back to the target external storage.
 
-        Return:
+        Returns:
           The SDFG head state, eventually updated if the target write requires a new state.
         """
 

@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import itertools
 from typing import Any, Mapping, Optional
 
 import dace
@@ -141,3 +142,19 @@ def get_map_variable(dim: gtx_common.Dimension) -> str:
     """
     suffix = "dim" if dim.kind == gtx_common.DimensionKind.LOCAL else ""
     return f"i_{dim.value}_gtx_{dim.kind}{suffix}"
+
+
+def get_tuple_fields(
+    tuple_name: str, tuple_type: ts.TupleType, flatten: bool = False
+) -> list[tuple[str, ts.DataType]]:
+    fields = [(f"{tuple_name}_{i}", field_type) for i, field_type in enumerate(tuple_type.types)]
+    if flatten:
+        expanded_fields = [
+            get_tuple_fields(field_name, field_type)
+            if isinstance(field_type, ts.TupleType)
+            else [(field_name, field_type)]
+            for field_name, field_type in fields
+        ]
+        return list(itertools.chain(*expanded_fields))
+    else:
+        return fields
