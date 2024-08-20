@@ -154,6 +154,23 @@ def program_constant_folding(program_call: itir.Program) -> itir.Program:
     return new_call
 
 
+def test_unused_input(offset_provider):
+    stencil = im.lambda_("arg0", "arg1")(im.deref("arg0"))
+
+    domain = im.domain(common.GridType.CARTESIAN, {"IDim": (0, 11), "JDim": (0, 7)})
+    expected_domains_dict = {
+        "in_field1": {"IDim": (0, 11), "JDim": (0, 7)},
+    }
+    run_test_as_fieldop(
+        stencil,
+        domain,
+        expected_domains_dict,
+        offset_provider,
+        im.ref("in_field1"),
+        im.ref("in_field2"),
+    )
+
+
 def test_forward_difference_x(offset_provider):
     stencil = im.lambda_("arg0")(
         im.minus(im.deref(im.shift(itir.SymbolRef("Ioff"), 1)("arg0")), im.deref("arg0"))

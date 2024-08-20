@@ -55,7 +55,8 @@ def extract_shifts_and_translate_domains(
         new_domains = [
             SymbolicDomain.translate(target_domain, shift, offset_provider) for shift in shifts_list
         ]
-        accessed_domains[in_field_id] = domain_union(new_domains)
+        if new_domains:
+            accessed_domains[in_field_id] = domain_union(new_domains)
 
 
 def infer_as_fieldop(
