@@ -151,7 +151,7 @@ def infer_let(
     transformed_calls_expr, accessed_domains_expr = process_expr(applied_let.fun.expr, input_domain)
 
     transformed_calls_args: list[itir.FunCall] = []
-    for param, arg in zip (applied_let.fun.params, applied_let.args):
+    for param, arg in zip(applied_let.fun.params, applied_let.args):
         param_id = param.id
         if isinstance(arg, itir.SymRef) or isinstance(arg, itir.Literal):
             transformed_calls_arg = arg
@@ -163,7 +163,6 @@ def infer_let(
             )
             accessed_domains = _merge_domains(accessed_domains, accessed_domains_arg)
         transformed_calls_args.append(transformed_calls_arg)
-
 
     transformed_call = im.let(
         *(
