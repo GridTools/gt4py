@@ -26,6 +26,7 @@ from gt4py.eve import extended_typing as xtyping
 from gt4py.next import (
     allocators as next_allocators,
     backend as next_backend,
+    common,
     embedded as next_embedded,
     errors,
 )
@@ -52,6 +53,15 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 
 
 DEFAULT_BACKEND: Callable = None
+
+
+def check_nan(*args, **kwargs):
+    for i, arg in enumerate(args):
+        if isinstance(arg, common.Field):
+            assert arg.array_ns.isfinite(arg.ndarray).any(), i
+    for arg in enumerate(kwargs):
+        if isinstance(arg, common.Field):
+            assert kwargs[arg].array_ns.isfinite(kwargs[arg].ndarray).any(), arg
 
 
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
@@ -186,6 +196,7 @@ class Program:
         return past_to_itir.PastToItirFactory()(no_args_past).program
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs: Any) -> None:
+        check_nan(*args, **kwargs)
         if self.backend is None:
             warnings.warn(
                 UserWarning(
@@ -206,6 +217,7 @@ class Program:
         self.backend(
             self.definition_stage, *args, **(kwargs | {"offset_provider": offset_provider})
         )
+        check_nan(*args, **kwargs)
 
 
 try:
