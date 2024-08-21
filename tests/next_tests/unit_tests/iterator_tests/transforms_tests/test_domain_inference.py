@@ -613,19 +613,19 @@ def test_program_tree_tmps_two_inputs(offset_provider):
 
 def test_cond(offset_provider):
     stencil1 = im.lambda_("arg0")(
-        im.minus(im.deref(im.shift(itir.SymbolRef("Ioff"), 1)("arg0")), im.deref("arg0"))
+        im.minus(im.deref(im.shift("Ioff", 1)("arg0")), im.deref("arg0"))
     )
     field_1 = im.as_fieldop(stencil1)(im.ref("in_field1"))
     inner_stencil2 = im.lambda_("arg0_tmp", "arg1_tmp")(
         im.plus(
-            im.deref(im.shift(itir.SymbolRef("Ioff"), 1)("arg0_tmp")),
-            im.deref(im.shift(itir.SymbolRef("Ioff"), -1)("arg1_tmp")),
+            im.deref(im.shift("Ioff", 1)("arg0_tmp")),
+            im.deref(im.shift("Ioff", -1)("arg1_tmp")),
         )
     )
     stencil2 = im.lambda_("arg0", "arg1")(
         im.plus(
-            im.deref(im.shift(itir.SymbolRef("Ioff"), 1)("arg0")),
-            im.deref(im.shift(itir.SymbolRef("Ioff"), -1)("arg1")),
+            im.deref(im.shift("Ioff", 1)("arg0")),
+            im.deref(im.shift("Ioff", -1)("arg1")),
         )
     )
     tmp2 = im.as_fieldop(inner_stencil2)(im.ref("in_field1"), im.ref("in_field2"))
@@ -689,7 +689,7 @@ def test_simple_let(offset_provider):
 
 def test_let(offset_provider):
     stencil = im.lambda_("arg0")(
-        im.minus(im.deref(im.shift(itir.SymbolRef("Ioff"), 1)("arg0")), im.deref("arg0"))
+        im.minus(im.deref(im.shift("Ioff", 1)("arg0")), im.deref("arg0"))
     )
     testee = im.let(
         "inner",
@@ -766,7 +766,7 @@ def test_let(offset_provider):
 
 def test_let_two_inputs(offset_provider):
     stencil = im.lambda_("arg0")(
-        im.minus(im.deref(im.shift(itir.SymbolRef("Ioff"), 1)("arg0")), im.deref("arg0"))
+        im.minus(im.deref(im.shift("Ioff", 1)("arg0")), im.deref("arg0"))
     )
     testee = im.let(
         ("inner1", im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))))("shift1")),
@@ -834,7 +834,7 @@ def test_let_two_inputs(offset_provider):
 
 def test_nested_let_fun_expr(offset_provider):
     stencil = im.lambda_("arg0")(
-        im.minus(im.deref(im.shift(itir.SymbolRef("Ioff"), 1)("arg0")), im.deref("arg0"))
+        im.minus(im.deref(im.shift("Ioff", 1)("arg0")), im.deref("arg0"))
     )
 
     testee = im.let(
@@ -898,7 +898,7 @@ def test_nested_let_fun_expr(offset_provider):
 
 def test_nested_let_fun_expr_shaddowing(offset_provider):
     stencil = im.lambda_("arg0")(
-        im.minus(im.deref(im.shift(itir.SymbolRef("Ioff"), 1)("arg0")), im.deref("arg0"))
+        im.minus(im.deref(im.shift("Ioff", 1)("arg0")), im.deref("arg0"))
     )
 
     testee = im.let("a", im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))))("outer"))(
@@ -959,7 +959,7 @@ def test_nested_let_fun_expr_shaddowing(offset_provider):
 
 def test_double_nested_let_fun_expr(offset_provider):
     stencil = im.lambda_("arg0")(
-        im.minus(im.deref(im.shift(itir.SymbolRef("Ioff"), 1)("arg0")), im.deref("arg0"))
+        im.minus(im.deref(im.shift("Ioff", 1)("arg0")), im.deref("arg0"))
     )
 
     testee = im.let(
@@ -1054,7 +1054,7 @@ def test_double_nested_let_fun_expr(offset_provider):
 
 def test_nested_let_args(offset_provider):
     stencil = im.lambda_("arg0")(
-        im.minus(im.deref(im.shift(itir.SymbolRef("Ioff"), 1)("arg0")), im.deref("arg0"))
+        im.minus(im.deref(im.shift("Ioff", 1)("arg0")), im.deref("arg0"))
     )
     testee = im.let(
         "inner",
@@ -1133,7 +1133,7 @@ def test_nested_let_args(offset_provider):
 
 def test_program_let(offset_provider):
     stencil_tmp = im.lambda_("arg0")(
-        im.minus(im.deref(im.shift(itir.SymbolRef("Ioff"), -1)("arg0")), im.deref("arg0"))
+        im.minus(im.deref(im.shift("Ioff", -1)("arg0")), im.deref("arg0"))
     )
 
     let_tmp = im.let(
