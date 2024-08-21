@@ -286,9 +286,13 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             case foast.Call(func=foast.Name(id="as_offset")):
                 func_args = node.args[0]
                 offset_dim = func_args.args[0]
-                assert isinstance(offset_dim, foast.Name)
+                assert isinstance(offset_dim, (foast.Name, foast.Attribute))
+                if isinstance(offset_dim, foast.Name):
+                    offset_dim_id = offset_dim.id
+                else:
+                    offset_dim_id = offset_dim.attr  # type: ignore[assignment]
                 shift_offset = im.shift(
-                    offset_dim.id, im.deref(self.visit(func_args.args[1], **kwargs))
+                    offset_dim_id, im.deref(self.visit(func_args.args[1], **kwargs))
                 )
             case foast.Attribute(attr=offset_name):
                 if isinstance(node.func, foast.Name):

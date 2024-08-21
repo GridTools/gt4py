@@ -646,8 +646,10 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
     def visit_Attribute(self, node: foast.Attribute, **kwargs: Any) -> foast.Attribute | foast.Name:
         if isinstance(node.type, ts.FunctionType):
-            kwargs["symtable"] = kwargs["symtable"].new_child(node.attr)
-            return foast.Name(id=node.attr, type=node.type, location=node.location)
+            return foast.Name(
+                id=node.attr, type=self.visit(node.type, **kwargs), location=node.location
+            )
+
         return foast.Attribute(
             value=self.visit(node.value, **kwargs),
             attr=node.attr,

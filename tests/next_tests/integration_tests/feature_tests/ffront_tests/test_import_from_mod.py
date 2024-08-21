@@ -42,7 +42,7 @@ def test_import_dims_module(cartesian_case):
 def test_import_as_offset_module(cartesian_case):
     @gtx.field_operator
     def mod_builtin(f: cases.IKField, offset_field: cases.IKField) -> cases.IKField:
-        field_offset = f(exp.as_offset(Ioff, offset_field))
+        field_offset = f(exp.as_offset(cases.Ioff, offset_field))
         return field_offset
 
     @gtx.program
