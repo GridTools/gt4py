@@ -139,6 +139,7 @@ def infer_let(
     def process_expr(
         expr: itir.FunCall, domain: SymbolicDomain | itir.FunCall
     ) -> Tuple[itir.FunCall, Dict[str, SymbolicDomain]]:
+        # TODO: add support for literal
         if isinstance(expr, itir.SymRef):
             return expr, {str(expr.id): domain}
         elif isinstance(expr.fun, itir.Lambda):
@@ -152,16 +153,12 @@ def infer_let(
 
     transformed_calls_args: list[itir.FunCall] = []
     for param, arg in zip(applied_let.fun.params, applied_let.args):
-        param_id = param.id
-        if isinstance(arg, itir.SymRef) or isinstance(arg, itir.Literal):
-            transformed_calls_arg = arg
-            accessed_domains = _merge_domains(accessed_domains, accessed_domains_expr)
-        else:
-            assert isinstance(arg, itir.FunCall)
-            transformed_calls_arg, accessed_domains_arg = process_expr(
-                arg, accessed_domains_expr[param_id]
-            )
-            accessed_domains = _merge_domains(accessed_domains, accessed_domains_arg)
+        if param.id not in accessed_domains_expr:
+            raise ValueError(f"Let param `{param.id}` is never accessed. Can not infer its domain.")
+        transformed_calls_arg, accessed_domains_arg = process_expr(
+            arg, accessed_domains_expr[param.id]
+        )
+        accessed_domains = _merge_domains(accessed_domains, accessed_domains_arg)
         transformed_calls_args.append(transformed_calls_arg)
 
     transformed_call = im.let(
