@@ -10,6 +10,7 @@ import copy
 
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Dict, Tuple
+from gt4py.next import common
 from gt4py.next.common import Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
@@ -47,7 +48,7 @@ def extract_shifts_and_translate_domains(
     stencil: itir.Expr,
     input_ids: list[str],
     target_domain: SymbolicDomain,
-    offset_provider: Dict[str, Dimension],
+    offset_provider: common.OffsetProvider,
     accessed_domains: Dict[str, SymbolicDomain],
 ):
     shifts_results = trace_shifts(stencil, input_ids, SymbolicDomain.as_expr(target_domain))
@@ -65,7 +66,7 @@ def extract_shifts_and_translate_domains(
 def infer_as_fieldop(
     applied_fieldop: itir.FunCall,
     target_domain: SymbolicDomain | itir.FunCall,
-    offset_provider: Dict[str, Dimension],
+    offset_provider: common.OffsetProvider,
 ) -> Tuple[itir.FunCall, Dict[str, SymbolicDomain]]:
     assert isinstance(applied_fieldop, itir.FunCall)
     assert cpm.is_call_to(applied_fieldop.fun, "as_fieldop")
@@ -88,7 +89,7 @@ def infer_as_fieldop(
         elif isinstance(in_field, itir.SymRef):
             id_ = in_field.id
         else:
-            raise ValueError(f"Unsupported type {type(in_field)}")
+            raise ValueError(f"Unsupported expression of type '{type(in_field)}'.")
         input_ids.append(id_)
 
     if isinstance(target_domain, itir.FunCall):
@@ -101,18 +102,15 @@ def infer_as_fieldop(
     # Recursively infer domain of inputs and update domain arg of nested `as_fieldops`
     transformed_inputs: list[itir.Expr] = []
     for in_field_id, in_field in zip(input_ids, inputs):
-        if isinstance(in_field, itir.FunCall):
-            transformed_input, accessed_domains_tmp = infer_as_fieldop(
-                in_field, accessed_domains[in_field_id], offset_provider
-            )
-            transformed_inputs.append(transformed_input)
+        if in_field_id not in accessed_domains:
+            raise ValueError(f"Let param `{in_field_id}` is never accessed. Can not infer its domain.")
+        transformed_input, accessed_domains_tmp = infer_expr(
+            in_field, accessed_domains[in_field_id], offset_provider
+        )
+        transformed_inputs.append(transformed_input)
 
-            # Merge accessed_domains and accessed_domains_tmp
-            accessed_domains = _merge_domains(accessed_domains, accessed_domains_tmp)
-        elif isinstance(in_field, itir.SymRef) or isinstance(in_field, itir.Literal):
-            transformed_inputs.append(in_field)
-        else:
-            raise ValueError(f"Unsupported type {type(in_field)}")
+        # Merge accessed_domains and accessed_domains_tmp
+        accessed_domains = _merge_domains(accessed_domains, accessed_domains_tmp)
 
     transformed_call = im.as_fieldop(stencil, SymbolicDomain.as_expr(target_domain))(
         *transformed_inputs
@@ -126,37 +124,26 @@ def infer_as_fieldop(
 
     return transformed_call, accessed_domains_without_tmp
 
-
 def infer_let(
-    applied_let: itir.FunCall,
+    let_expr: itir.FunCall,
     input_domain: SymbolicDomain | itir.FunCall,
-    offset_provider: Dict[str, Dimension],
+    offset_provider: common.OffsetProvider,
 ) -> Tuple[itir.FunCall, Dict[str, SymbolicDomain]]:
-    assert isinstance(applied_let, itir.FunCall) and isinstance(applied_let.fun, itir.Lambda)
+    assert cpm.is_let(let_expr)
 
-    accessed_domains: Dict[str, SymbolicDomain] = {}
+    transformed_calls_expr, accessed_domains = infer_expr(let_expr.fun.expr, input_domain, offset_provider)
 
-    def process_expr(
-        expr: itir.FunCall, domain: SymbolicDomain | itir.FunCall
-    ) -> Tuple[itir.FunCall, Dict[str, SymbolicDomain]]:
-        # TODO: add support for literal
-        if isinstance(expr, itir.SymRef):
-            return expr, {str(expr.id): domain}
-        elif isinstance(expr.fun, itir.Lambda):
-            return infer_let(expr, domain, offset_provider)
-        elif cpm.is_call_to(expr.fun, "as_fieldop"):
-            return infer_as_fieldop(expr, domain, offset_provider)
-        else:
-            raise ValueError(f"Unsupported function call: {expr.fun}")
-
-    transformed_calls_expr, accessed_domains_expr = process_expr(applied_let.fun.expr, input_domain)
+    # TODO(tehrengruber): describe and tidy up
+    let_params = {param_sym.id for param_sym in let_expr.fun.params}
+    accessed_domains_let_params = {k: v for k, v in accessed_domains.items() if k in let_params}
+    accessed_domains = {k: v for k, v in accessed_domains.items() if k not in let_params}
 
     transformed_calls_args: list[itir.FunCall] = []
-    for param, arg in zip(applied_let.fun.params, applied_let.args):
-        if param.id not in accessed_domains_expr:
+    for param, arg in zip(let_expr.fun.params, let_expr.args):
+        if param.id not in accessed_domains_let_params:
             raise ValueError(f"Let param `{param.id}` is never accessed. Can not infer its domain.")
-        transformed_calls_arg, accessed_domains_arg = process_expr(
-            arg, accessed_domains_expr[param.id]
+        transformed_calls_arg, accessed_domains_arg = infer_expr(
+            arg, accessed_domains_let_params[param.id], offset_provider
         )
         accessed_domains = _merge_domains(accessed_domains, accessed_domains_arg)
         transformed_calls_args.append(transformed_calls_arg)
@@ -164,7 +151,7 @@ def infer_let(
     transformed_call = im.let(
         *(
             (str(param.id), call)
-            for param, call in zip(applied_let.fun.params, transformed_calls_args)
+            for param, call in zip(let_expr.fun.params, transformed_calls_args)
         )
     )(transformed_calls_expr)
 
@@ -174,20 +161,39 @@ def infer_let(
 def infer_cond(
     applied_cond: itir.FunCall,
     target_domain: SymbolicDomain | itir.FunCall,
-    offset_provider: Dict[str, Dimension],
+    offset_provider: common.OffsetProvider,
 ) -> Tuple[itir.FunCall, Dict[str, SymbolicDomain]]:
     assert isinstance(applied_cond, itir.FunCall) and cpm.is_call_to(applied_cond, "cond")
     assert isinstance(applied_cond.args[1], itir.FunCall) and isinstance(
         applied_cond.args[2], itir.FunCall
     )
-    call_true, domains_true = infer_as_fieldop(applied_cond.args[1], target_domain, offset_provider)
-    call_false, domains_false = infer_as_fieldop(
+    call_true, domains_true = infer_expr(applied_cond.args[1], target_domain, offset_provider)
+    call_false, domains_false = infer_expr(
         applied_cond.args[2], target_domain, offset_provider
     )
     return im.cond(applied_cond.args[0], call_true, call_false), _merge_domains(
         domains_true, domains_false
     )
 
+
+def infer_expr(
+    expr: itir.FunCall,
+    domain: SymbolicDomain | itir.FunCall,
+    offset_provider: common.OffsetProvider,
+) -> Tuple[itir.FunCall, Dict[str, SymbolicDomain]]: # TODO: fix typing, describe what None for domain result means
+    if isinstance(expr, itir.SymRef):
+        return expr, {str(expr.id): domain}
+    elif isinstance(expr, itir.Literal):
+        return expr, {}
+    elif cpm.is_applied_as_fieldop(expr):
+        return infer_as_fieldop(expr, domain, offset_provider)
+    elif cpm.is_let(expr):
+        return infer_let(expr, domain, offset_provider)
+    elif cpm.is_call_to(expr, itir.BUILTINS):
+        # TODO(tehrengruber): double check
+        return im.call(expr.fun)(*(infer_expr(arg, domain, offset_provider)[0] for arg in expr.args)), None
+    else:
+        raise ValueError(f"Unsupported function call: {expr.fun}")
 
 def _validate_temporary_usage(body: list[itir.Stmt], temporaries: list[str]):
     assigned_targets = set()
@@ -231,10 +237,13 @@ def infer_program(
             transformed_call, current_accessed_domains = infer_as_fieldop(
                 set_at.expr, accessed_domains[set_at.target.id], offset_provider
             )
-        elif isinstance(set_at.expr.fun, itir.Lambda):
+        elif cpm.is_let(set_at.expr):
             transformed_call, current_accessed_domains = infer_let(
                 set_at.expr, accessed_domains[set_at.target.id], offset_provider
             )
+        else:
+            raise AssertionError("Unexpected format in SetAt expression. Expected an applied "
+                                 "`as_fieldop` or let expression.")
         transformed_set_ats.insert(
             0,
             itir.SetAt(

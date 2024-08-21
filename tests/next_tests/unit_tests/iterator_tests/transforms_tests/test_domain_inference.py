@@ -20,7 +20,7 @@ from gt4py.next.iterator.transforms.infer_domain import (
     infer_as_fieldop,
     infer_program,
     infer_cond,
-    infer_let,
+    infer_let, infer_expr,
 )
 from gt4py.next.iterator.transforms.global_tmps import SymbolicDomain, AUTO_DOMAIN
 import pytest
@@ -105,11 +105,12 @@ def run_test_let(
     expected_domains: Dict[str, SymbolicDomain],
     offset_provider: dict[str, Dimension],
 ):
-    actual_call, actual_domains = infer_let(
+    # TODO: fuse with run_test_*
+    actual_call, actual_domains = infer_expr(
         testee, SymbolicDomain.from_expr(domain), offset_provider
     )
     folded_call = constant_fold_domain_exprs(actual_call)
-    folded_domains = constant_fold_accessed_domains(actual_domains)
+    folded_domains = constant_fold_accessed_domains(actual_domains) if actual_domains else None
 
     assert folded_call == expected
     assert folded_domains == expected_domains
@@ -172,6 +173,7 @@ def test_unused_input(offset_provider):
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     expected_accessed_domains = {
         "in_field1": {IDim: (0, 11)},
+        "in_field2": None
     }
     run_test_as_fieldop(
         stencil,
@@ -741,52 +743,77 @@ def test_nested_let_in_body(offset_provider):
     run_test_let(testee, expected, domain, expected_domains, offset_provider)
 
 
-def test_nested_let_fun_expr_shadowing(offset_provider):
-    stencil = im.lambda_("arg0")(im.minus(im.deref(im.shift("Ioff", 1)("arg0")), im.deref("arg0")))
-
-    testee = im.let(
-        "a", im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))))("outer")
-    )(
-        im.let(
-            "a",
-            im.as_fieldop(
-                im.lambda_("it")(
-                    im.multiplies_(
-                        im.deref(im.shift("Ioff", -1)("it")), im.deref(im.shift("Ioff", -1)("it"))
-                    )
-                )
-            )("a"),
-        )(im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 2)("it"))))("a"))
+def test_nested_let_arg_shadowed(offset_provider):
+    testee = im.let("a", shift_fieldop_factory("Ioff", 3)("in_field"))(
+        im.let("a",shift_fieldop_factory("Ioff", 2)("a"))(shift_fieldop_factory("Ioff", 1)("a"))
     )
 
     # (λ(a) → (λ(a) → as_fieldop(λ(it) → ·⟪Ioffₒ, 2 ₒ⟫(it), c⟨ IDimₕ: [0, 11) ⟩)(a))(
     #     as_fieldop(λ(it, it2) → ·⟪Ioffₒ, -1ₒ⟫(it) × ·⟪Ioffₒ, -1 ₒ⟫(it2), c⟨ IDimₕ: [2, 13) ⟩)(a, outer)
     # ))(as_fieldop(λ(it) → ·⟪Ioffₒ, 1ₒ⟫(it), c⟨ IDimₕ: [1, 12) ⟩)(outer))
 
-    domain_011 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
-    domain_112 = im.domain(common.GridType.CARTESIAN, {IDim: (1, 12)})
-    domain_213 = im.domain(common.GridType.CARTESIAN, {IDim: (2, 13)})
+    domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
+    domain_p1 = im.domain(common.GridType.CARTESIAN, {IDim: (1, 12)})
+    domain_p3 = im.domain(common.GridType.CARTESIAN, {IDim: (3, 14)})
+    domain_p6 = im.domain(common.GridType.CARTESIAN, {IDim: (6, 17)})
 
     expected = im.let(
-        "a",
-        im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))), domain_112)("outer"),
+        "a", shift_fieldop_factory("Ioff", 3, domain_p3)("in_field"),
     )(
-        im.let(
-            "a",
-            im.as_fieldop(
-                im.lambda_("it")(
-                    im.multiplies_(
-                        im.deref(im.shift("Ioff", -1)("it")), im.deref(im.shift("Ioff", -1)("it"))
-                    )
-                ),
-                domain_213,
-            )("a"),
-        )(im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 2)("it"))), domain_011)("a"))
+        im.let("a", shift_fieldop_factory("Ioff", 2, domain_p1)("a"))(
+            shift_fieldop_factory("Ioff", 1, domain)("a"))
     )
     expected_domains = {
-        "outer": SymbolicDomain.from_expr(im.domain(common.GridType.CARTESIAN, {IDim: (2, 13)}))
+        "in_field": SymbolicDomain.from_expr(domain_p6)
     }
-    run_test_let(testee, expected, domain_011, expected_domains, offset_provider)
+    run_test_let(testee, expected, domain, expected_domains, offset_provider)
+
+
+def test_nested_let_arg(offset_provider):
+    testee = im.let("a", "in_field")(
+        im.as_fieldop(
+            im.lambda_("it1", "it2")(im.multiplies_(im.deref("it1"), im.deref(im.shift("Ioff", 1)("it2"))))
+        )("a", "in_field")
+    )
+
+    domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
+    domain_rp2 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 12)})
+
+    expected = im.let("a", "in_field")(
+        im.as_fieldop(
+            im.lambda_("it1", "it2")(im.multiplies_(im.deref("it1"), im.deref(im.shift("Ioff", 1)("it2")))),
+            domain
+        )("a", "in_field")
+    )
+    expected_domains = {
+        "in_field": SymbolicDomain.from_expr(domain_rp2)
+    }
+    run_test_let(testee, expected, domain, expected_domains, offset_provider)
+
+def test_nested_let_arg_shadowed3(offset_provider):
+    # test that if we shadow `in_field1` its accessed domain is not affected by the accesses
+    # on the shadowed field
+    testee = im.as_fieldop(
+        im.lambda_("it1", "it2")(im.multiplies_(im.deref("it1"), im.deref("it2")))
+    )(
+        shift_fieldop_factory("Ioff", 1)("in_field1"),  # only here we access `in_field1`
+        im.let("in_field1", "in_field2")("in_field1") # here we actually access `in_field2`
+    )
+
+    domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
+    domain_p1 = im.domain(common.GridType.CARTESIAN, {IDim: (1, 12)})
+
+    expected = im.as_fieldop(
+        im.lambda_("it1", "it2")(im.multiplies_(im.deref("it1"), im.deref("it2"))), domain
+    )(
+        shift_fieldop_factory("Ioff", 1, domain)("in_field1"),
+        im.let("in_field1", "in_field2")("in_field1")
+    )
+    expected_domains = {
+        "in_field1": SymbolicDomain.from_expr(domain_p1),
+        "in_field2": SymbolicDomain.from_expr(domain)
+    }
+    run_test_let(testee, expected, domain, expected_domains, offset_provider)
 
 
 def test_double_nested_let_fun_expr(offset_provider):
