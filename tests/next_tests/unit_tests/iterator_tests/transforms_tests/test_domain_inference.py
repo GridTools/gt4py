@@ -8,7 +8,6 @@
 
 # TODO(SF-N): test scan operator
 
-import copy
 import numpy as np
 from typing import Iterable
 
