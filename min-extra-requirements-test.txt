@@ -113,7 +113,7 @@ sympy==1.9
 tabulate==0.8.10
 tomli==2.0.1; python_version < "3.11"
 tox==3.2.0
-types-all==1.0.0
+types-tabulate==0.8.10
 typing-extensions==4.10.0
 xxhash==1.4.4
 ##[[[end]]]

@@ -1,16 +1,11 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 from __future__ import annotations
 
 import copy
@@ -459,12 +454,14 @@ class SymbolicDomain:
 
     def translate(
         self: SymbolicDomain,
-        shift: Tuple[ir.OffsetLiteral, ir.OffsetLiteral],
+        shift: Tuple[ir.OffsetLiteral, ...],
         offset_provider: Dict[str, common.Dimension],
     ) -> SymbolicDomain:
         dims = list(self.ranges.keys())
         new_ranges = {dim: self.ranges[dim] for dim in dims}
-        if shift:
+        if len(shift) == 0:
+            return self
+        if len(shift) == 2:
             off, val = shift
             assert isinstance(off.value, str) and isinstance(val.value, int)
             nbt_provider = offset_provider[off.value]
@@ -495,8 +492,11 @@ class SymbolicDomain:
                 )
             else:
                 raise AssertionError()
-
-        return SymbolicDomain(self.grid_type, new_ranges)
+            return SymbolicDomain(self.grid_type, new_ranges)
+        elif len(shift) > 2:
+            return self.translate(shift[0:2], offset_provider).translate(shift[2:], offset_provider)
+        else:
+            raise AssertionError("Number of shifts must be a multiple of 2.")
 
 
 def domain_union(domains: list[SymbolicDomain]) -> SymbolicDomain:

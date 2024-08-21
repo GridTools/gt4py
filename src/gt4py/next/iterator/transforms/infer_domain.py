@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import copy
 
@@ -36,45 +30,51 @@ def _merge_domains(
     return new_domains
 
 
-# TODO: Revisit. Until TraceShifts directly supports stencils we just wrap our expression into a dummy closure in this
-#  helper function.
-def trace_shifts(stencil: itir.Expr, input_ids: list[str], domain: itir.Expr):
+# FIXME[#1582](tehrengruber): Use new TraceShift API when #1592 is merged.
+def trace_shifts(
+    stencil: itir.Expr, input_ids: list[str], domain: itir.Expr
+) -> dict[str, set[tuple[itir.OffsetLiteral, ...]]]:
     node = itir.StencilClosure(
         stencil=stencil,
         inputs=[im.ref(id_) for id_ in input_ids],
         output=im.ref("__dummy"),
         domain=domain,
     )
-    return TraceShifts.apply(node)
+    return TraceShifts.apply(node, inputs_only=True)  # type: ignore[return-value]  # ensured by inputs_only=True
 
 
 def extract_shifts_and_translate_domains(
     stencil: itir.Expr,
     input_ids: list[str],
-    input_domain: SymbolicDomain,
+    target_domain: SymbolicDomain,
     offset_provider: Dict[str, Dimension],
     accessed_domains: Dict[str, SymbolicDomain],
 ):
-    shifts_results = trace_shifts(stencil, input_ids, SymbolicDomain.as_expr(input_domain))
+    shifts_results = trace_shifts(stencil, input_ids, SymbolicDomain.as_expr(target_domain))
 
     for in_field_id in input_ids:
         shifts_list = shifts_results[in_field_id]
 
         new_domains = [
-            SymbolicDomain.translate(input_domain, shift, offset_provider) for shift in shifts_list
+            SymbolicDomain.translate(target_domain, shift, offset_provider) for shift in shifts_list
         ]
-        accessed_domains[in_field_id] = domain_union(new_domains)
+        if new_domains:
+            accessed_domains[in_field_id] = domain_union(new_domains)
 
 
 def infer_as_fieldop(
     applied_fieldop: itir.FunCall,
-    input_domain: SymbolicDomain | itir.FunCall,
+    target_domain: SymbolicDomain | itir.FunCall,
     offset_provider: Dict[str, Dimension],
 ) -> Tuple[itir.FunCall, Dict[str, SymbolicDomain]]:
     assert isinstance(applied_fieldop, itir.FunCall)
     assert cpm.is_call_to(applied_fieldop.fun, "as_fieldop")
 
+    # `as_fieldop(stencil)(inputs...)`
     stencil, inputs = applied_fieldop.fun.args[0], applied_fieldop.args
+
+    # ensure stencil has as many params as arguments
+    assert not isinstance(stencil, itir.Lambda) or len(stencil.params) == len(applied_fieldop.args)
 
     input_ids: list[str] = []
     accessed_domains: Dict[str, SymbolicDomain] = {}
@@ -83,18 +83,19 @@ def infer_as_fieldop(
     # temporary id.
     tmp_uid_gen = eve_utils.UIDGenerator(prefix="__dom_inf")
     for in_field in inputs:
-        if isinstance(in_field, itir.FunCall):
+        if isinstance(in_field, itir.FunCall) or isinstance(in_field, itir.Literal):
             id_ = tmp_uid_gen.sequential_id()
-        else:
-            assert isinstance(in_field, itir.SymRef)
+        elif isinstance(in_field, itir.SymRef):
             id_ = in_field.id
+        else:
+            raise ValueError(f"Unsupported type {type(in_field)}")
         input_ids.append(id_)
 
-    if isinstance(input_domain, itir.FunCall):
-        input_domain = SymbolicDomain.from_expr(input_domain)
+    if isinstance(target_domain, itir.FunCall):
+        target_domain = SymbolicDomain.from_expr(target_domain)
 
     extract_shifts_and_translate_domains(
-        stencil, input_ids, input_domain, offset_provider, accessed_domains
+        stencil, input_ids, target_domain, offset_provider, accessed_domains
     )
 
     # Recursively infer domain of inputs and update domain arg of nested `as_fieldops`
@@ -108,11 +109,12 @@ def infer_as_fieldop(
 
             # Merge accessed_domains and accessed_domains_tmp
             accessed_domains = _merge_domains(accessed_domains, accessed_domains_tmp)
-        else:
-            assert isinstance(in_field, itir.SymRef)
+        elif isinstance(in_field, itir.SymRef) or isinstance(in_field, itir.Literal):
             transformed_inputs.append(in_field)
+        else:
+            raise ValueError(f"Unsupported type {type(in_field)}")
 
-    transformed_call = im.as_fieldop(stencil, SymbolicDomain.as_expr(input_domain))(
+    transformed_call = im.as_fieldop(stencil, SymbolicDomain.as_expr(target_domain))(
         *transformed_inputs
     )
 
@@ -217,6 +219,9 @@ def infer_program(
 
     for set_at in reversed(program.body):
         assert isinstance(set_at, itir.SetAt)
+        if isinstance(set_at.expr, itir.SymRef):
+            transformed_set_ats.insert(0, set_at)
+            continue
         assert isinstance(set_at.expr, itir.FunCall)
         assert isinstance(
             set_at.target, itir.SymRef

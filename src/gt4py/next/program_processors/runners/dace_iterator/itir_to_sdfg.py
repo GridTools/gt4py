@@ -1,16 +1,11 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 import warnings
 from typing import Any, Mapping, Optional, Sequence, cast
 
@@ -39,6 +34,8 @@ from .utility import (
     as_dace_type,
     connectivity_identifier,
     dace_debuginfo,
+    field_size_symbol_name,
+    field_stride_symbol_name,
     filter_connectivities,
     flatten_list,
     get_sorted_dims,
@@ -119,11 +116,11 @@ def _make_array_shape_and_strides(
             neighbor_tables[dim.value].max_neighbors
             if dim.kind == DimensionKind.LOCAL
             # we reuse the same gt4py symbol for field size passed as scalar argument which is used in closure domain
-            else dace.symbol(f"__{name}_size_{i}", dtype)
+            else dace.symbol(field_size_symbol_name(name, i), dtype)
         )
         for i, dim in sorted_dims
     ]
-    strides = [dace.symbol(f"__{name}_stride_{i}", dtype) for i, _ in sorted_dims]
+    strides = [dace.symbol(field_stride_symbol_name(name, i), dtype) for i, _ in sorted_dims]
     return shape, strides
 
 
