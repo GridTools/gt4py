@@ -37,7 +37,7 @@ def test_import_dims_module(cartesian_case):
 
     cases.verify(cartesian_case, mod_prog, f, out=out, ref=expected)
 
-
+@pytest.mark.uses_dynamic_offsets
 def test_import_as_offset_module(cartesian_case):
     @gtx.field_operator
     def mod_builtin(f: cases.IKField, offset_field: cases.IKField) -> cases.IKField:
