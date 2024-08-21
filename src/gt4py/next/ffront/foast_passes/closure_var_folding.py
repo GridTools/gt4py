@@ -13,6 +13,7 @@ import gt4py.next.ffront.field_operator_ast as foast
 from gt4py.eve import NodeTranslator, traits
 from gt4py.eve.utils import FrozenNamespace
 from gt4py.next import errors
+from gt4py.next.ffront import type_translation
 
 
 @dataclass
@@ -48,13 +49,19 @@ class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                     return foast.Constant(value=value, location=node.location)
         return node
 
-    def visit_Attribute(self, node: foast.Attribute, **kwargs: Any) -> foast.Constant:
+    def visit_Attribute(
+        self, node: foast.Attribute, **kwargs: Any
+    ) -> foast.Attribute | foast.Constant:
         value = self.visit(node.value, **kwargs)
         if isinstance(value, foast.Constant):
             if hasattr(value.value, node.attr):
                 return foast.Constant(value=getattr(value.value, node.attr), location=node.location)
             raise errors.MissingAttributeError(node.location, node.attr)
-        raise errors.DSLError(node.location, "Attribute access only applicable to constants.")
+        assert isinstance(node.value, foast.Name)
+        attr_type = type_translation.from_value(
+            getattr(self.closure_vars[node.value.id], node.attr)
+        )
+        return foast.Attribute(attr=node.attr, value=value, type=attr_type, location=node.location)
 
     def visit_FunctionDefinition(
         self, node: foast.FunctionDefinition, **kwargs: Any
