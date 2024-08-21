@@ -28,16 +28,17 @@ def _merge_domains(
     return new_domains
 
 
-# TODO: Revisit. Until TraceShifts directly supports stencils we just wrap our expression into a dummy closure in this
-#  helper function.
-def trace_shifts(stencil: itir.Expr, input_ids: list[str], domain: itir.Expr):
+# FIXME[#1582](tehrengruber): Use new TraceShift API when #1592 is merged.
+def trace_shifts(
+    stencil: itir.Expr, input_ids: list[str], domain: itir.Expr
+) -> dict[str, set[tuple[itir.OffsetLiteral, ...]]]:
     node = itir.StencilClosure(
         stencil=stencil,
         inputs=[im.ref(id_) for id_ in input_ids],
         output=im.ref("__dummy"),
         domain=domain,
     )
-    return TraceShifts.apply(node)
+    return TraceShifts.apply(node, inputs_only=True)  # type: ignore[return-value]  # ensured by inputs_only=True
 
 
 def extract_shifts_and_translate_domains(
@@ -67,7 +68,11 @@ def infer_as_fieldop(
     assert isinstance(applied_fieldop, itir.FunCall)
     assert cpm.is_call_to(applied_fieldop.fun, "as_fieldop")
 
+    # `as_fieldop(stencil)(inputs...)`
     stencil, inputs = applied_fieldop.fun.args[0], applied_fieldop.args
+
+    # ensure stencil has as many params as arguments
+    assert not isinstance(stencil, itir.Lambda) or len(stencil.params) == len(applied_fieldop.args)
 
     input_ids: list[str] = []
     accessed_domains: Dict[str, SymbolicDomain] = {}

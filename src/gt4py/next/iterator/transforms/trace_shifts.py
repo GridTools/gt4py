@@ -137,6 +137,8 @@ def _can_deref(x):
 
 
 def _shift(*offsets):
+    assert all(isinstance(offset, ir.OffsetLiteral) for offset in offsets)
+
     def apply(arg):
         assert isinstance(arg, IteratorTracer)
         return arg.shift(offsets)
