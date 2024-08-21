@@ -10,7 +10,7 @@
 
 import copy
 import numpy as np
-from typing import List, Iterable
+from typing import Iterable
 
 from gt4py import eve
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
@@ -88,9 +88,6 @@ def run_test_program(
 
     folded_program = constant_fold_domain_exprs(actual_program)
     assert folded_program == expected
-
-
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 
 
 class _ConstantFoldDomainsExprs(eve.NodeTranslator):
