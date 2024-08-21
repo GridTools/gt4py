@@ -795,13 +795,13 @@ def test_let_two_inputs(offset_provider):
     expected = im.let(
         (
             "inner1",
-            im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))), domain_m110)(
+            im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))), domain)(
                 "shift1"
             ),
         ),
         (
             "inner2",
-            im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", -1)("it"))), domain_112)(
+            im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", -1)("it"))), domain)(
                 "shift2"
             ),
         ),
@@ -819,13 +819,13 @@ def test_let_two_inputs(offset_provider):
         "shift1": SymbolicDomain.from_expr(
             im.domain(
                 common.GridType.CARTESIAN,
-                {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (0, 11)},
+                {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (1, 12)},
             )
         ),
         "shift2": SymbolicDomain.from_expr(
             im.domain(
                 common.GridType.CARTESIAN,
-                {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (0, 11)},
+                {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (-1, 10)},
             )
         ),
     }
@@ -947,7 +947,7 @@ def test_nested_let_fun_expr_shaddowing(offset_provider):
         )(im.as_fieldop(im.lambda_("it")(im.deref(im.shift("Ioff", 2)("it"))), domain_011)("a"))
     )
     expected_domains = {
-        "a": SymbolicDomain.from_expr(
+        "outer": SymbolicDomain.from_expr(
             im.domain(
                 common.GridType.CARTESIAN,
                 {common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (2, 13)},

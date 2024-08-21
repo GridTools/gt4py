@@ -159,7 +159,7 @@ def infer_let(
         else:
             assert isinstance(arg, itir.FunCall)
             transformed_calls_arg, accessed_domains_arg = process_expr(
-                arg, accessed_domains_expr[param_id] # Todo: Key error in Hannes testcase
+                arg, accessed_domains_expr[param_id]
             )
             accessed_domains = _merge_domains(accessed_domains, accessed_domains_arg)
         transformed_calls_args.append(transformed_calls_arg)
