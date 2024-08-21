@@ -105,7 +105,7 @@ def test_cartesian_shift_staggering(cartesian_case):
         a,
         out=out,
         ref=a,
-        offset_provider={"IPlusHalf": IPlusHalf},
+        offset_provider={"IPlusHalf": (IDim, IHalfDim)},  # source to target
     )
 
 

@@ -161,8 +161,10 @@ class GTFNTranslationStep(
                 arg_exprs.append(
                     f"gridtools::hymap::keys<generated::{name}_t>::make_values({nbtbl})"
                 )
-            elif isinstance(connectivity, (fbuiltins.FieldOffset, Dimension)):
+            elif isinstance(connectivity, Dimension):
                 pass
+            elif isinstance(connectivity, tuple):
+                assert all(isinstance(dim, Dimension) for dim in connectivity)
             else:
                 raise AssertionError(
                     f"Expected offset provider '{name}' to be a 'Connectivity' or 'Dimension', "

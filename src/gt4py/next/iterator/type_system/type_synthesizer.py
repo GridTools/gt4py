@@ -13,7 +13,6 @@ import inspect
 
 from gt4py.eve.extended_typing import Callable, Iterable, Optional, Union
 from gt4py.next import common
-from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_info, type_specifications as ts
@@ -344,13 +343,6 @@ def shift(*offset_literals, offset_provider) -> TypeSynthesizer:
             print(offset_provider)
             provider = offset_provider[offset_axis.value.value]  # TODO: naming
             if isinstance(provider, common.Dimension):
-                # found = False
-                # for i, dim in enumerate(new_position_dims):
-                #     if dim.value == offset_axis.value.value:
-                #         assert not found
-                #         new_position_dims[i] = provider
-                #         found = True
-                # assert found
                 pass
             elif isinstance(provider, common.Connectivity):
                 found = False
@@ -360,12 +352,13 @@ def shift(*offset_literals, offset_provider) -> TypeSynthesizer:
                         new_position_dims[i] = provider.neighbor_axis
                         found = True
                 assert found
-            elif isinstance(provider, fbuiltins.FieldOffset):
+            elif isinstance(provider, tuple):
+                source, target = provider
                 found = False
                 for i, dim in enumerate(new_position_dims):
-                    if dim.value == provider.target[0].value:
+                    if dim.value == target.value:
                         assert not found
-                        new_position_dims[i] = provider.source
+                        new_position_dims[i] = source
                         found = True
                 assert found
             else:

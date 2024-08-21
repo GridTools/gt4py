@@ -629,11 +629,12 @@ def execute_shift(
         else:
             raise AssertionError()
         return new_pos
-    elif isinstance(offset_implementation, fbuiltins.FieldOffset):
+    elif isinstance(offset_implementation, tuple):
+        source, target = offset_implementation
         new_pos = copy.copy(pos)
-        new_pos.pop(offset_implementation.target[0].value)
-        if common.is_int_index(value := pos[offset_implementation.target[0].value]):
-            new_pos[offset_implementation.source.value] = value + index
+        new_pos.pop(target.value)
+        if common.is_int_index(value := pos[target.value]):
+            new_pos[source.value] = value + index
         else:
             raise AssertionError()
         return new_pos

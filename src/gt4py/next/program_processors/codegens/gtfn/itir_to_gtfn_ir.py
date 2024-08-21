@@ -145,24 +145,37 @@ def _collect_offset_definitions(
     offset_definitions = {}
 
     for offset_name, dim_or_connectivity in offset_provider.items():
-        if isinstance(dim_or_connectivity, common.Dimension):
-            dim: common.Dimension = dim_or_connectivity
-            if grid_type == common.GridType.CARTESIAN:
-                # create alias from offset to dimension
-                offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
-                offset_definitions[offset_name] = TagDefinition(
-                    name=Sym(id=offset_name), alias=SymRef(id=dim.value)
-                )
-            else:
-                assert grid_type == common.GridType.UNSTRUCTURED
-                if not dim.kind == common.DimensionKind.VERTICAL:
-                    raise ValueError(
-                        "Mapping an offset to a horizontal dimension in unstructured is not allowed."
-                    )
-                # create alias from vertical offset to vertical dimension
-                offset_definitions[offset_name] = TagDefinition(
-                    name=Sym(id=offset_name), alias=SymRef(id=dim.value)
-                )
+        if isinstance(dim_or_connectivity, (common.Dimension, tuple)):
+            if isinstance(dim_or_connectivity, common.Dimension):
+                dim_or_connectivity = (dim_or_connectivity,)
+            for dim in dim_or_connectivity:
+                assert isinstance(dim, common.Dimension)
+                if grid_type == common.GridType.CARTESIAN:
+                    # create alias from offset to dimension
+                    if offset_name in offset_definitions:
+                        offset_definitions[dim.value] = TagDefinition(
+                            name=Sym(id=dim.value), alias=SymRef(id=offset_name)
+                        )
+                    else:
+                        offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
+                        offset_definitions[offset_name] = TagDefinition(
+                            name=Sym(id=offset_name), alias=SymRef(id=dim.value)
+                        )
+                else:
+                    assert grid_type == common.GridType.UNSTRUCTURED
+                    if not dim.kind == common.DimensionKind.VERTICAL:
+                        raise ValueError(
+                            "Mapping an offset to a horizontal dimension in unstructured is not allowed."
+                        )
+                    if offset_name in offset_definitions:
+                        offset_definitions[dim.value] = TagDefinition(
+                            name=Sym(id=dim.value), alias=SymRef(id=offset_name)
+                        )
+                    else:
+                        # create alias from vertical offset to vertical dimension
+                        offset_definitions[offset_name] = TagDefinition(
+                            name=Sym(id=offset_name), alias=SymRef(id=dim.value)
+                        )
         elif isinstance(dim_or_connectivity, common.Connectivity):
             assert grid_type == common.GridType.UNSTRUCTURED
             offset_definitions[offset_name] = TagDefinition(name=Sym(id=offset_name))
@@ -623,10 +636,10 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         executions = self.visit(node.body, extracted_functions=extracted_functions)
         executions = self._merge_scans(executions)
         function_definitions = self.visit(node.function_definitions) + extracted_functions
-        offset_definitions = {
-            **_collect_dimensions_from_domain(node.body),
-            **_collect_offset_definitions(node, self.grid_type, self.offset_provider),
-        }
+        offset_definitions = _collect_offset_definitions(node, self.grid_type, self.offset_provider)
+        for k, v in _collect_dimensions_from_domain(node.body).items():
+            if k not in offset_definitions:
+                offset_definitions[k] = v
         return Program(
             id=SymbolName(node.id),
             params=self.visit(node.params),
