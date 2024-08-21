@@ -131,14 +131,15 @@ def infer_let(
     offset_provider: Dict[str, Dimension],
 ) -> Tuple[itir.FunCall, Dict[str, SymbolicDomain]]:
     assert isinstance(applied_let, itir.FunCall) and isinstance(applied_let.fun, itir.Lambda)
-    assert isinstance(applied_let.fun.expr, itir.FunCall)
 
     accessed_domains: Dict[str, SymbolicDomain] = {}
 
     def process_expr(
         expr: itir.FunCall, domain: SymbolicDomain | itir.FunCall
     ) -> Tuple[itir.FunCall, Dict[str, SymbolicDomain]]:
-        if isinstance(expr.fun, itir.Lambda):
+        if isinstance(expr, itir.SymRef):
+            return expr, {str(expr.id): domain}
+        elif isinstance(expr.fun, itir.Lambda):
             return infer_let(expr, domain, offset_provider)
         elif cpm.is_call_to(expr.fun, "as_fieldop"):
             return infer_as_fieldop(expr, domain, offset_provider)
@@ -148,14 +149,19 @@ def infer_let(
     transformed_calls_expr, accessed_domains_expr = process_expr(applied_let.fun.expr, input_domain)
 
     transformed_calls_args: list[itir.FunCall] = []
-    for arg in applied_let.args:
-        assert isinstance(arg, itir.FunCall)
-        param_id = applied_let.fun.params[0].id
-        transformed_calls_arg, accessed_domains_arg = process_expr(
-            arg, accessed_domains_expr[param_id]
-        )
+    for param, arg in zip (applied_let.fun.params, applied_let.args):
+        param_id = param.id
+        if isinstance(arg, itir.SymRef) or isinstance(arg, itir.Literal):
+            transformed_calls_arg = arg
+            accessed_domains = _merge_domains(accessed_domains, accessed_domains_expr)
+        else:
+            assert isinstance(arg, itir.FunCall)
+            transformed_calls_arg, accessed_domains_arg = process_expr(
+                arg, accessed_domains_expr[param_id] # Todo: Key error in Hannes testcase
+            )
+            accessed_domains = _merge_domains(accessed_domains, accessed_domains_arg)
         transformed_calls_args.append(transformed_calls_arg)
-        accessed_domains = _merge_domains(accessed_domains, accessed_domains_arg)
+
 
     transformed_call = im.let(
         *(
