@@ -30,6 +30,7 @@ KDim = common.Dimension(value="KDim", kind=common.DimensionKind.VERTICAL)
 Vertex = common.Dimension(value="Vertex", kind=common.DimensionKind.HORIZONTAL)
 Edge = common.Dimension(value="Edge", kind=common.DimensionKind.HORIZONTAL)
 
+
 @pytest.fixture
 def offset_provider():
     return {
@@ -149,15 +150,8 @@ def test_unused_input(offset_provider):
 
 def test_unstructured_shift(unstructured_offset_provider):
     stencil = im.lambda_("arg0")(im.deref(im.shift("E2V", 1)("arg0")))
-    domain = im.domain(
-        common.GridType.UNSTRUCTURED,
-        {Edge: (0, 1)},
-    )
-    expected_accessed_domains = {
-        "in_field1": {
-            Vertex: (0, 2)
-        }
-    }
+    domain = im.domain(common.GridType.UNSTRUCTURED, {Edge: (0, 1)})
+    expected_accessed_domains = {"in_field1": {Vertex: (0, 2)}}
 
     run_test_as_fieldop(
         stencil,
