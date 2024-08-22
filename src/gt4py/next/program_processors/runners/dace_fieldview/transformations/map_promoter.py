@@ -9,8 +9,12 @@
 from typing import Any, Mapping, Optional, Sequence, Union
 
 import dace
-from dace import properties, subsets, transformation
-from dace.sdfg import SDFG, SDFGState, nodes
+from dace import (
+    properties as dace_properties,
+    subsets as dace_subsets,
+    transformation as dace_transformation,
+)
+from dace.sdfg import SDFG, SDFGState, nodes as dace_nodes
 
 
 __all__ = [
@@ -18,8 +22,8 @@ __all__ = [
 ]
 
 
-@properties.make_properties
-class BaseMapPromoter(transformation.SingleStateTransformation):
+@dace_properties.make_properties
+class BaseMapPromoter(dace_transformation.SingleStateTransformation):
     """Base transformation to add certain missing dimension to a map.
 
     By adding certain dimension to a Map, it might became possible to use the Map
@@ -53,34 +57,34 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
         This ignores tiling.
     """
 
-    only_toplevel_maps = properties.Property(
+    only_toplevel_maps = dace_properties.Property(
         dtype=bool,
         default=False,
         allow_none=False,
         desc="Only perform fusing if the Maps are on the top level.",
     )
-    only_inner_maps = properties.Property(
+    only_inner_maps = dace_properties.Property(
         dtype=bool,
         default=False,
         allow_none=False,
         desc="Only perform fusing if the Maps are inner Maps, i.e. does not have top level scope.",
     )
-    promote_vertical = properties.Property(
+    promote_vertical = dace_properties.Property(
         dtype=bool,
         default=True,
         desc="If `True` promote vertical dimensions.",
     )
-    promote_local = properties.Property(
+    promote_local = dace_properties.Property(
         dtype=bool,
         default=True,
         desc="If `True` promote local dimensions.",
     )
-    promote_horizontal = properties.Property(
+    promote_horizontal = dace_properties.Property(
         dtype=bool,
         default=False,
         desc="If `True` promote horizontal dimensions.",
     )
-    promote_all = properties.Property(
+    promote_all = dace_properties.Property(
         dtype=bool,
         default=False,
         desc="If `True` perform any promotion. Takes precedence over all other selectors.",
@@ -90,7 +94,7 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
         self,
         state: dace.SDFGState,
         sdfg: dace.SDFG,
-    ) -> nodes.MapEntry:
+    ) -> dace_nodes.MapEntry:
         """Returns the map entry that should be promoted."""
         raise NotImplementedError(f"{type(self).__name__} must implement 'map_to_promote'.")
 
@@ -98,7 +102,7 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
         self,
         state: dace.SDFGState,
         sdfg: dace.SDFG,
-    ) -> nodes.MapEntry:
+    ) -> dace_nodes.MapEntry:
         """Returns the map entry that is used as source/template."""
         raise NotImplementedError(f"{type(self).__name__} must implement 'source_map'.")
 
@@ -161,10 +165,10 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
         - If the parameter of the second map are compatible with each other.
         - If a dimension would be promoted that should not.
         """
-        map_to_promote_entry: nodes.MapEntry = self.map_to_promote(state=graph, sdfg=sdfg)
-        map_to_promote: nodes.Map = map_to_promote_entry.map
-        source_map_entry: nodes.MapEntry = self.source_map(state=graph, sdfg=sdfg)
-        source_map: nodes.Map = source_map_entry.map
+        map_to_promote_entry: dace_nodes.MapEntry = self.map_to_promote(state=graph, sdfg=sdfg)
+        map_to_promote: dace_nodes.Map = map_to_promote_entry.map
+        source_map_entry: dace_nodes.MapEntry = self.source_map(state=graph, sdfg=sdfg)
+        source_map: dace_nodes.Map = source_map_entry.map
 
         # Test the scope of the promotee.
         #  Because of the nature of the transformation, it is not needed that the
@@ -172,7 +176,7 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
         #  to ensure that the symbols are the same and all. But this is guaranteed by
         #  the nature of this transformation (single state).
         if self.only_inner_maps or self.only_toplevel_maps:
-            scopeDict: Mapping[nodes.Node, Union[nodes.Node, None]] = graph.scope_dict()
+            scopeDict: Mapping[dace_nodes.Node, Union[dace_nodes.Node, None]] = graph.scope_dict()
             if self.only_inner_maps and (scopeDict[map_to_promote_entry] is None):
                 return False
             if self.only_toplevel_maps and (scopeDict[map_to_promote_entry] is not None):
@@ -216,10 +220,10 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
         from the source map.
         The order of the parameters the Map has after the promotion is unspecific.
         """
-        map_to_promote: nodes.Map = self.map_to_promote(state=graph, sdfg=sdfg).map
-        source_map: nodes.Map = self.source_map(state=graph, sdfg=sdfg).map
+        map_to_promote: dace_nodes.Map = self.map_to_promote(state=graph, sdfg=sdfg).map
+        source_map: dace_nodes.Map = self.source_map(state=graph, sdfg=sdfg).map
         source_params: Sequence[str] = source_map.params
-        source_ranges: subsets.Range = source_map.range
+        source_ranges: dace_subsets.Range = source_map.range
 
         missing_params: Sequence[str] = self.missing_map_params(  # type: ignore[assignment]  # Will never be `None`
             map_to_promote=map_to_promote,
@@ -240,13 +244,13 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
 
         # Now update the map properties
         #  This action will also remove the tiles
-        map_to_promote.range = subsets.Range(promoted_ranges)
+        map_to_promote.range = dace_subsets.Range(promoted_ranges)
         map_to_promote.params = promoted_params
 
     def missing_map_params(
         self,
-        map_to_promote: nodes.Map,
-        source_map: nodes.Map,
+        map_to_promote: dace_nodes.Map,
+        source_map: dace_nodes.Map,
         be_strict: bool = True,
     ) -> list[str] | None:
         """Returns the parameter that are missing in the map that should be promoted.
@@ -270,8 +274,8 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
         if be_strict:
             # Check if the parameters that are already in the map to promote have
             #  the same range as in the source map.
-            source_ranges: subsets.Range = source_map.range
-            curr_ranges: subsets.Range = map_to_promote.range
+            source_ranges: dace_subsets.Range = source_map.range
+            curr_ranges: dace_subsets.Range = map_to_promote.range
             curr_param_to_idx: dict[str, int] = {p: i for i, p in enumerate(map_to_promote.params)}
             source_param_to_idx: dict[str, int] = {p: i for i, p in enumerate(source_map.params)}
             for param_to_check in curr_params_set:
@@ -282,7 +286,7 @@ class BaseMapPromoter(transformation.SingleStateTransformation):
         return list(source_params_set - curr_params_set)
 
 
-@properties.make_properties
+@dace_properties.make_properties
 class SerialMapPromoter(BaseMapPromoter):
     """Promote a map such that it can be fused serially.
 
@@ -299,9 +303,9 @@ class SerialMapPromoter(BaseMapPromoter):
     """
 
     # Pattern Matching
-    exit_first_map = transformation.transformation.PatternNode(nodes.MapExit)
-    access_node = transformation.transformation.PatternNode(nodes.AccessNode)
-    entry_second_map = transformation.transformation.PatternNode(nodes.MapEntry)
+    exit_first_map = dace_transformation.transformation.PatternNode(dace_nodes.MapExit)
+    access_node = dace_transformation.transformation.PatternNode(dace_nodes.AccessNode)
+    entry_second_map = dace_transformation.transformation.PatternNode(dace_nodes.MapEntry)
 
     @classmethod
     def expressions(cls) -> Any:
@@ -351,7 +355,7 @@ class SerialMapPromoter(BaseMapPromoter):
         self,
         state: dace.SDFGState,
         sdfg: dace.SDFG,
-    ) -> nodes.MapEntry:
+    ) -> dace_nodes.MapEntry:
         if self.expr_index == 0:
             # The first the top map will be promoted.
             return state.entry_node(self.exit_first_map)
@@ -364,7 +368,7 @@ class SerialMapPromoter(BaseMapPromoter):
         self,
         state: dace.SDFGState,
         sdfg: dace.SDFG,
-    ) -> nodes.MapEntry:
+    ) -> dace_nodes.MapEntry:
         """Returns the map entry that is used as source/template."""
         if self.expr_index == 0:
             # The first the top map will be promoted, so the second map is the source.
