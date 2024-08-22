@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-import warnings
 from typing import Any, Dict, Generator, List, Optional, Sequence, Set, Tuple, Union
 
 import dace
@@ -246,11 +245,6 @@ class DomainInterval(eve.Node):
         first_end = first.end if first.end is not None else second.end
         second_start = second.start if second.start is not None else first.start
         second_end = second.end if second.end is not None else first_end.end
-
-        if (first_start <= second_end and first_end >= second_start) or (
-            second_start <= first_end and second_end >= first_start
-        ):
-            warnings.warn("extension is NOT monotonically increasing!")
 
         start = max(first_start, second_start)
         start = AxisBound(axis=axis, level=start.level, offset=start.offset)
