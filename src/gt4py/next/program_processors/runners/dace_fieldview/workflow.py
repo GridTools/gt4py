@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ctypes
 import dataclasses
+import functools
 from typing import Any, Callable, Optional
 
 import dace
@@ -19,8 +20,14 @@ from dace.codegen.compiled_sdfg import _array_interface_ptr as get_array_interfa
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, config
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.transforms import LiftMode
-from gt4py.next.otf import languages, stages, step_types, workflow
+from gt4py.next.iterator.transforms import (
+    LiftMode,
+    collapse_tuple,
+    infer_domain,
+    inline_fundefs,
+    inline_lambdas,
+)
+from gt4py.next.otf import languages, recipes, stages, step_types, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.compilation import cache
 from gt4py.next.otf.languages import LanguageSettings
@@ -57,8 +64,6 @@ class DaCeTranslator(
         offset_provider: dict[str, common.Dimension | common.Connectivity],
         column_axis: Optional[common.Dimension],
     ) -> dace.SDFG:
-        from gt4py.next.iterator.transforms import collapse_tuple, inline_fundefs, inline_lambdas
-
         program = inline_fundefs.InlineFundefs().visit(program)
         program = inline_fundefs.PruneUnreferencedFundefs().visit(program)
         program = inline_lambdas.InlineLambdas.apply(program)
@@ -68,9 +73,12 @@ class DaCeTranslator(
             )  # uses type inference and therefore should only run after domain propagation, but makes some simple cases work for now
             assert isinstance(node, itir.Program)
             program = node
-        except:
+        except Exception:
             ...
-        # TODO(edopao): run domain inference
+        cartesian_offset_provider = {
+            k: v for k, v in offset_provider.items() if isinstance(v, common.Dimension)
+        }
+        program = infer_domain.infer_program(program, offset_provider=cartesian_offset_provider)
         sdfg = gtir_to_sdfg.build_sdfg_from_gtir(program=program, offset_provider=offset_provider)
         return sdfg
 
@@ -239,3 +247,35 @@ def convert_args(
             return inp(**sdfg_args)
 
     return decorated_program
+
+
+class DaCeWorkflowFactory(factory.Factory):
+    class Meta:
+        model = recipes.OTFCompileWorkflow
+
+    class Params:
+        device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
+        cmake_build_type: config.CMakeBuildType = factory.LazyFunction(
+            lambda: config.CMAKE_BUILD_TYPE
+        )
+        use_field_canonical_representation: bool = False
+
+    translation = factory.SubFactory(
+        DaCeTranslationStepFactory,
+        device_type=factory.SelfAttribute("..device_type"),
+        use_field_canonical_representation=factory.SelfAttribute(
+            "..use_field_canonical_representation"
+        ),
+    )
+    compilation = factory.SubFactory(
+        DaCeCompilationStepFactory,
+        cache_lifetime=factory.LazyFunction(lambda: config.BUILD_CACHE_LIFETIME),
+        cmake_build_type=factory.SelfAttribute("..cmake_build_type"),
+    )
+    decoration = factory.LazyAttribute(
+        lambda o: functools.partial(
+            convert_args,
+            device=o.device_type,
+            use_field_canonical_representation=o.use_field_canonical_representation,
+        )
+    )

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ctypes
 import dataclasses
+import functools
 from typing import Any, Callable, Optional
 
 import dace
@@ -20,7 +21,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common, config
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import LiftMode
-from gt4py.next.otf import languages, stages, step_types, workflow
+from gt4py.next.otf import languages, recipes, stages, step_types, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.compilation import cache
 from gt4py.next.otf.languages import LanguageSettings
@@ -240,3 +241,40 @@ def convert_args(
             return inp(**sdfg_args)
 
     return decorated_program
+
+
+def _no_bindings(inp: stages.ProgramSource) -> stages.CompilableSource:
+    return stages.CompilableSource(program_source=inp, binding_source=None)
+
+
+class DaCeWorkflowFactory(factory.Factory):
+    class Meta:
+        model = recipes.OTFCompileWorkflow
+
+    class Params:
+        device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
+        cmake_build_type: config.CMakeBuildType = factory.LazyFunction(
+            lambda: config.CMAKE_BUILD_TYPE
+        )
+        use_field_canonical_representation: bool = False
+
+    translation = factory.SubFactory(
+        DaCeTranslationStepFactory,
+        device_type=factory.SelfAttribute("..device_type"),
+        use_field_canonical_representation=factory.SelfAttribute(
+            "..use_field_canonical_representation"
+        ),
+    )
+    bindings = _no_bindings
+    compilation = factory.SubFactory(
+        DaCeCompilationStepFactory,
+        cache_lifetime=factory.LazyFunction(lambda: config.BUILD_CACHE_LIFETIME),
+        cmake_build_type=factory.SelfAttribute("..cmake_build_type"),
+    )
+    decoration = factory.LazyAttribute(
+        lambda o: functools.partial(
+            convert_args,
+            device=o.device_type,
+            use_field_canonical_representation=o.use_field_canonical_representation,
+        )
+    )
