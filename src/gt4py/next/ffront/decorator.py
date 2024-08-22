@@ -54,14 +54,21 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 
 DEFAULT_BACKEND: Callable = None
 
+import numpy as np
 
-def check_nan(*args, **kwargs):
+def check_nan(*args, id: str, **kwargs):
     for i, arg in enumerate(args):
         if isinstance(arg, common.Field):
-            assert arg.array_ns.isfinite(arg.ndarray).any(), i
-    for arg in enumerate(kwargs):
+            np_arg = arg.asnumpy()
+            is_finite, arg = np.isfinite(np_arg).any(), i
+            if not is_finite:
+                raise Exception(f"{id} contains NaN values, in field {i} with values {np_arg}.")
+    for arg_name, arg in kwargs.items():
         if isinstance(arg, common.Field):
-            assert kwargs[arg].array_ns.isfinite(kwargs[arg].ndarray).any(), arg
+            np_arg = arg.asnumpy()
+            is_finite, arg = np.isfinite(np_arg).any(), arg
+            if not is_finite:
+                raise Exception(f"{id} contains NaN values, in field {arg_name} with values {np_arg}")
 
 
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
@@ -196,7 +203,7 @@ class Program:
         return past_to_itir.PastToItirFactory()(no_args_past).program
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs: Any) -> None:
-        check_nan(*args, **kwargs)
+        check_nan(*args, **kwargs, id=self.itir.id)
         if self.backend is None:
             warnings.warn(
                 UserWarning(
@@ -217,7 +224,7 @@ class Program:
         self.backend(
             self.definition_stage, *args, **(kwargs | {"offset_provider": offset_provider})
         )
-        check_nan(*args, **kwargs)
+        check_nan(*args, **kwargs, id=self.itir.id)
 
 
 try:
