@@ -71,7 +71,6 @@ def test_serial_map_promotion():
     assert len(map_entry_1d.map.params) == 1
     assert len(map_entry_2d.map.params) == 2
 
-    sdfg.view()
     # Now apply the promotion
     sdfg.apply_transformations(
         gtx_transformations.SerialMapPromoter(
@@ -80,8 +79,6 @@ def test_serial_map_promotion():
         validate=True,
         validate_all=True,
     )
-
-    sdfg.view()
 
     assert util._count_nodes(sdfg, dace_nodes.MapEntry) == 2
     assert len(map_entry_1d.map.params) == 2
