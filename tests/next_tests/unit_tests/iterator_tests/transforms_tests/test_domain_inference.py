@@ -168,6 +168,7 @@ def test_multi_length_shift(offset_provider):
 
 
 def test_unused_input(offset_provider):
+    # TODO: this still fails, decide ẃhat to do when we have tried the GTIR lowering
     stencil = im.lambda_("arg0", "arg1")(im.deref("arg0"))
 
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
@@ -743,32 +744,6 @@ def test_nested_let_in_body(offset_provider):
     run_test_let(testee, expected, domain, expected_domains, offset_provider)
 
 
-def test_nested_let_arg_shadowed(offset_provider):
-    testee = im.let("a", shift_fieldop_factory("Ioff", 3)("in_field"))(
-        im.let("a",shift_fieldop_factory("Ioff", 2)("a"))(shift_fieldop_factory("Ioff", 1)("a"))
-    )
-
-    # (λ(a) → (λ(a) → as_fieldop(λ(it) → ·⟪Ioffₒ, 2 ₒ⟫(it), c⟨ IDimₕ: [0, 11) ⟩)(a))(
-    #     as_fieldop(λ(it, it2) → ·⟪Ioffₒ, -1ₒ⟫(it) × ·⟪Ioffₒ, -1 ₒ⟫(it2), c⟨ IDimₕ: [2, 13) ⟩)(a, outer)
-    # ))(as_fieldop(λ(it) → ·⟪Ioffₒ, 1ₒ⟫(it), c⟨ IDimₕ: [1, 12) ⟩)(outer))
-
-    domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
-    domain_p1 = im.domain(common.GridType.CARTESIAN, {IDim: (1, 12)})
-    domain_p3 = im.domain(common.GridType.CARTESIAN, {IDim: (3, 14)})
-    domain_p6 = im.domain(common.GridType.CARTESIAN, {IDim: (6, 17)})
-
-    expected = im.let(
-        "a", shift_fieldop_factory("Ioff", 3, domain_p3)("in_field"),
-    )(
-        im.let("a", shift_fieldop_factory("Ioff", 2, domain_p1)("a"))(
-            shift_fieldop_factory("Ioff", 1, domain)("a"))
-    )
-    expected_domains = {
-        "in_field": SymbolicDomain.from_expr(domain_p6)
-    }
-    run_test_let(testee, expected, domain, expected_domains, offset_provider)
-
-
 def test_nested_let_arg(offset_provider):
     testee = im.let("a", "in_field")(
         im.as_fieldop(
@@ -790,6 +765,29 @@ def test_nested_let_arg(offset_provider):
     }
     run_test_let(testee, expected, domain, expected_domains, offset_provider)
 
+
+def test_nested_let_arg_shadowed(offset_provider):
+    testee = im.let("a", shift_fieldop_factory("Ioff", 3)("in_field"))(
+        im.let("a",shift_fieldop_factory("Ioff", 2)("a"))(shift_fieldop_factory("Ioff", 1)("a"))
+    )
+
+    domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
+    domain_p1 = im.domain(common.GridType.CARTESIAN, {IDim: (1, 12)})
+    domain_p3 = im.domain(common.GridType.CARTESIAN, {IDim: (3, 14)})
+    domain_p6 = im.domain(common.GridType.CARTESIAN, {IDim: (6, 17)})
+
+    expected = im.let(
+        "a", shift_fieldop_factory("Ioff", 3, domain_p3)("in_field"),
+    )(
+        im.let("a", shift_fieldop_factory("Ioff", 2, domain_p1)("a"))(
+            shift_fieldop_factory("Ioff", 1, domain)("a"))
+    )
+    expected_domains = {
+        "in_field": SymbolicDomain.from_expr(domain_p6)
+    }
+    run_test_let(testee, expected, domain, expected_domains, offset_provider)
+
+
 def test_nested_let_arg_shadowed3(offset_provider):
     # test that if we shadow `in_field1` its accessed domain is not affected by the accesses
     # on the shadowed field
@@ -797,7 +795,7 @@ def test_nested_let_arg_shadowed3(offset_provider):
         im.lambda_("it1", "it2")(im.multiplies_(im.deref("it1"), im.deref("it2")))
     )(
         shift_fieldop_factory("Ioff", 1)("in_field1"),  # only here we access `in_field1`
-        im.let("in_field1", "in_field2")("in_field1") # here we actually access `in_field2`
+        im.let("in_field1", "in_field2")("in_field1")  # here we actually access `in_field2`
     )
 
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})

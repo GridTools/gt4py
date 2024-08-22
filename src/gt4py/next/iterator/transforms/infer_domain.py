@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import copy
+from typing import Callable
 
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Dict, Tuple
@@ -16,6 +17,20 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms.global_tmps import AUTO_DOMAIN, SymbolicDomain, domain_union
 from gt4py.next.iterator.transforms.trace_shifts import TraceShifts
+
+
+def split_dict_by_key(pred: Callable, d: dict):
+    """
+    Split dictionary into two based on predicate.
+
+    >>> d = {1: "a", 2: "b", 3: "c", 4: "d"}
+    >>> split_dict_by_key(lambda k: k%2 == 0, d)
+    ({2: 'b', 4: 'd'}, {1: 'a', 3: 'c'})
+    """
+    a, b = {}, {}
+    for k, v in d.items():
+        (a if pred(k) else b)[k] = v
+    return a, b
 
 
 def _merge_domains(
@@ -135,17 +150,16 @@ def infer_let(
 
     # TODO(tehrengruber): describe and tidy up
     let_params = {param_sym.id for param_sym in let_expr.fun.params}
-    accessed_domains_let_params = {k: v for k, v in accessed_domains.items() if k in let_params}
-    accessed_domains = {k: v for k, v in accessed_domains.items() if k not in let_params}
+    accessed_domains_let_args, accessed_domains_outer = split_dict_by_key(lambda k: k in let_params, accessed_domains)
 
     transformed_calls_args: list[itir.FunCall] = []
     for param, arg in zip(let_expr.fun.params, let_expr.args):
-        if param.id not in accessed_domains_let_params:
+        if param.id not in accessed_domains_let_args:
             raise ValueError(f"Let param `{param.id}` is never accessed. Can not infer its domain.")
         transformed_calls_arg, accessed_domains_arg = infer_expr(
-            arg, accessed_domains_let_params[param.id], offset_provider
+            arg, accessed_domains_let_args[param.id], offset_provider
         )
-        accessed_domains = _merge_domains(accessed_domains, accessed_domains_arg)
+        accessed_domains_outer = _merge_domains(accessed_domains_outer, accessed_domains_arg)
         transformed_calls_args.append(transformed_calls_arg)
 
     transformed_call = im.let(
@@ -155,7 +169,7 @@ def infer_let(
         )
     )(transformed_calls_expr)
 
-    return transformed_call, accessed_domains
+    return transformed_call, accessed_domains_outer
 
 
 def infer_cond(
