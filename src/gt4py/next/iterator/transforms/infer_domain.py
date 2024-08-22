@@ -10,7 +10,7 @@ import copy
 from typing import Callable
 
 from gt4py.eve import utils as eve_utils
-from gt4py.eve.extended_typing import Dict, Tuple
+from gt4py.eve.extended_typing import Dict
 from gt4py.next import common
 from gt4py.next.common import Dimension
 from gt4py.next.iterator import ir as itir
@@ -82,7 +82,7 @@ def infer_as_fieldop(
     applied_fieldop: itir.FunCall,
     target_domain: SymbolicDomain | itir.FunCall,
     offset_provider: common.OffsetProvider,
-) -> Tuple[itir.FunCall, Dict[str, SymbolicDomain]]:
+) -> tuple[itir.FunCall, Dict[str, SymbolicDomain]]:
     assert isinstance(applied_fieldop, itir.FunCall)
     assert cpm.is_call_to(applied_fieldop.fun, "as_fieldop")
 
@@ -143,7 +143,7 @@ def infer_let(
     let_expr: itir.FunCall,
     input_domain: SymbolicDomain | itir.FunCall,
     offset_provider: common.OffsetProvider,
-) -> Tuple[itir.FunCall, Dict[str, SymbolicDomain]]:
+) -> tuple[itir.FunCall, Dict[str, SymbolicDomain]]:
     assert cpm.is_let(let_expr)
 
     transformed_calls_expr, accessed_domains = infer_expr(let_expr.fun.expr, input_domain, offset_provider)
@@ -176,7 +176,7 @@ def infer_expr(
     expr: itir.Expr,
     domain: SymbolicDomain | itir.FunCall,
     offset_provider: common.OffsetProvider,
-) -> Tuple[itir.Expr, Dict[str, SymbolicDomain]]:
+) -> tuple[itir.Expr, Dict[str, SymbolicDomain]]:
     if isinstance(expr, itir.SymRef):
         return expr, {str(expr.id): domain}
     elif isinstance(expr, itir.Literal):
