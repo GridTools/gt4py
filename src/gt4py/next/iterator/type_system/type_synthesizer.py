@@ -112,6 +112,7 @@ def _(lhs: ts.ScalarType, rhs: ts.ScalarType) -> ts.ScalarType | ts.TupleType:
 @_register_builtin_type_synthesizer
 def deref(it: it_ts.IteratorType) -> ts.DataType:
     assert isinstance(it, it_ts.IteratorType)
+    print(it)
     assert _is_derefable_iterator_type(it)
     return it.element_type
 
@@ -339,6 +340,7 @@ def shift(*offset_literals, offset_provider) -> TypeSynthesizer:
             assert isinstance(offset_axis, it_ts.OffsetLiteralType) and isinstance(
                 offset_axis.value, common.Dimension
             )
+            print(offset_provider)
             provider = offset_provider[offset_axis.value.value]  # TODO: naming
             if isinstance(provider, common.Dimension):
                 pass
@@ -348,6 +350,15 @@ def shift(*offset_literals, offset_provider) -> TypeSynthesizer:
                     if dim.value == provider.origin_axis.value:
                         assert not found
                         new_position_dims[i] = provider.neighbor_axis
+                        found = True
+                assert found
+            elif isinstance(provider, tuple):
+                source, target = provider
+                found = False
+                for i, dim in enumerate(new_position_dims):
+                    if dim.value == target.value:
+                        assert not found
+                        new_position_dims[i] = source
                         found = True
                 assert found
             else:

@@ -163,6 +163,8 @@ class GTFNTranslationStep(
                 )
             elif isinstance(connectivity, Dimension):
                 pass
+            elif isinstance(connectivity, tuple):
+                assert all(isinstance(dim, Dimension) for dim in connectivity)
             else:
                 raise AssertionError(
                     f"Expected offset provider '{name}' to be a 'Connectivity' or 'Dimension', "

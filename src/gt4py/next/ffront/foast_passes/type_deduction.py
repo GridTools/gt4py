@@ -484,12 +484,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 # for cartesian axes (e.g. I, J) the index of the subscript only
                 #  signifies the displacement in the respective dimension,
                 #  but does not change the target type.
-                if source != target:
-                    raise errors.DSLError(
-                        new_value.location,
-                        "Source and target must be equal for offsets with a single target.",
-                    )
-                new_type = new_value.type
+                # if source != target:
+                #     raise errors.DSLError(
+                #         new_value.location,
+                #         "Source and target must be equal for offsets with a single target.",
+                #     )
+                new_type = ts.OffsetType(source=source, target=(target,))
             case _:
                 raise errors.DSLError(
                     new_value.location, "Could not deduce type of subscript expression."

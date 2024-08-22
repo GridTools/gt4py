@@ -13,6 +13,7 @@ import gt4py.eve as eve
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.concepts import SymbolName
 from gt4py.next import common
+from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import (
@@ -144,24 +145,37 @@ def _collect_offset_definitions(
     offset_definitions = {}
 
     for offset_name, dim_or_connectivity in offset_provider.items():
-        if isinstance(dim_or_connectivity, common.Dimension):
-            dim: common.Dimension = dim_or_connectivity
-            if grid_type == common.GridType.CARTESIAN:
-                # create alias from offset to dimension
-                offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
-                offset_definitions[offset_name] = TagDefinition(
-                    name=Sym(id=offset_name), alias=SymRef(id=dim.value)
-                )
-            else:
-                assert grid_type == common.GridType.UNSTRUCTURED
-                if not dim.kind == common.DimensionKind.VERTICAL:
-                    raise ValueError(
-                        "Mapping an offset to a horizontal dimension in unstructured is not allowed."
-                    )
-                # create alias from vertical offset to vertical dimension
-                offset_definitions[offset_name] = TagDefinition(
-                    name=Sym(id=offset_name), alias=SymRef(id=dim.value)
-                )
+        if isinstance(dim_or_connectivity, (common.Dimension, tuple)):
+            if isinstance(dim_or_connectivity, common.Dimension):
+                dim_or_connectivity = (dim_or_connectivity,)
+            for dim in dim_or_connectivity:
+                assert isinstance(dim, common.Dimension)
+                if grid_type == common.GridType.CARTESIAN:
+                    # create alias from offset to dimension
+                    if offset_name in offset_definitions:
+                        offset_definitions[dim.value] = TagDefinition(
+                            name=Sym(id=dim.value), alias=SymRef(id=offset_name)
+                        )
+                    else:
+                        offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
+                        offset_definitions[offset_name] = TagDefinition(
+                            name=Sym(id=offset_name), alias=SymRef(id=dim.value)
+                        )
+                else:
+                    assert grid_type == common.GridType.UNSTRUCTURED
+                    if not dim.kind == common.DimensionKind.VERTICAL:
+                        raise ValueError(
+                            "Mapping an offset to a horizontal dimension in unstructured is not allowed."
+                        )
+                    if offset_name in offset_definitions:
+                        offset_definitions[dim.value] = TagDefinition(
+                            name=Sym(id=dim.value), alias=SymRef(id=offset_name)
+                        )
+                    else:
+                        # create alias from vertical offset to vertical dimension
+                        offset_definitions[offset_name] = TagDefinition(
+                            name=Sym(id=offset_name), alias=SymRef(id=dim.value)
+                        )
         elif isinstance(dim_or_connectivity, common.Connectivity):
             assert grid_type == common.GridType.UNSTRUCTURED
             offset_definitions[offset_name] = TagDefinition(name=Sym(id=offset_name))
@@ -229,6 +243,67 @@ class _CannonicalizeUnstructuredDomain(eve.NodeTranslator):
         return cls().visit(node)
 
 
+@dataclasses.dataclass
+class ResolveRelocation(eve.NodeTranslator):
+    offset_remapping: dict[str, common.Dimension]
+    dims_remapping: dict[common.Dimension, common.Dimension]
+
+    @classmethod
+    def apply(
+        cls,
+        node: itir.Program,
+        *,
+        offset_provider: dict,
+    ) -> Program:
+        offset_remapping = {}
+        dims_remapping = {}
+        offset_provider = offset_provider.copy()
+        for v in [*offset_provider.values()]:
+            if isinstance(v, fbuiltins.FieldOffset):
+                assert len(v.target) == 1
+                if v.target[0] in dims_remapping.values():
+                    assert v.source in dims_remapping
+                else:
+                    dims_remapping[v.source] = v.target[0]
+                    offset_remapping[v.value] = dims_remapping.get(v.target[0], v.target[0])
+                    offset_provider[v.source.value] = common.Dimension(
+                        v.target[0].value
+                    )  # super ugly hack: this introduces in gtfn an alias from the original dimension to the mapped one
+                offset_provider[v.value] = v.target[0]
+        return cls(offset_remapping=offset_remapping, dims_remapping=dims_remapping).visit(
+            node
+        ), offset_provider
+
+    def visit_OffsetLiteral(self, node: itir.OffsetLiteral) -> itir.OffsetLiteral:
+        # if isinstance(node.value, str):
+        #     return itir.OffsetLiteral(value=self.offset_remapping.get(node.value, node).value)
+        return node
+
+    def visit_FunCall(self, node: itir.FunCall) -> itir.FunCall:
+        if node.fun == itir.SymRef(id="named_range"):
+            return itir.FunCall(
+                fun=node.fun,
+                args=[
+                    self.dims_remapping.get(a, a) if isinstance(a, common.Dimension) else a
+                    for a in node.args
+                ],
+            )
+        return self.generic_visit(node)
+
+    def visit_Node(self, node: itir.Node) -> itir.Node:
+        if node.type is not None:
+            if isinstance(node.type, ts.FieldType) and any(
+                d in self.dims_remapping for d in type_info.extract_dims(node.type)
+            ):
+                node.type = ts.FieldType(
+                    dims=[self.dims_remapping.get(d, d) for d in node.type.dims],
+                    dtype=node.type.dtype,
+                )
+                print(node.type)
+                return node
+        return self.generic_visit(node)
+
+
 @dataclasses.dataclass(frozen=True)
 class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     _binary_op_map: ClassVar[dict[str, str]] = {
@@ -270,6 +345,8 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         if not isinstance(node, itir.Program):
             raise TypeError(f"Expected a 'Program', got '{type(node).__name__}'.")
 
+        node, offset_provider = ResolveRelocation.apply(node, offset_provider=offset_provider)
+        print(node)
         node = itir_type_inference.infer(node, offset_provider=offset_provider)
         grid_type = _get_gridtype(node.body)
         if grid_type == common.GridType.UNSTRUCTURED:
@@ -559,10 +636,10 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         executions = self.visit(node.body, extracted_functions=extracted_functions)
         executions = self._merge_scans(executions)
         function_definitions = self.visit(node.function_definitions) + extracted_functions
-        offset_definitions = {
-            **_collect_dimensions_from_domain(node.body),
-            **_collect_offset_definitions(node, self.grid_type, self.offset_provider),
-        }
+        offset_definitions = _collect_offset_definitions(node, self.grid_type, self.offset_provider)
+        for k, v in _collect_dimensions_from_domain(node.body).items():
+            if k not in offset_definitions:
+                offset_definitions[k] = v
         return Program(
             id=SymbolName(node.id),
             params=self.visit(node.params),

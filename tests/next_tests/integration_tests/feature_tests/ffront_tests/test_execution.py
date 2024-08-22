@@ -36,6 +36,7 @@ from next_tests.integration_tests.cases import (
     E2V,
     V2E,
     E2VDim,
+    Edge,
     IDim,
     Ioff,
     JDim,
@@ -43,7 +44,6 @@ from next_tests.integration_tests.cases import (
     Koff,
     V2EDim,
     Vertex,
-    Edge,
     cartesian_case,
     unstructured_case,
 )
@@ -83,6 +83,30 @@ def test_cartesian_shift(cartesian_case):
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
     cases.verify(cartesian_case, testee, a, out=out, ref=a[1:])
+
+
+@pytest.mark.uses_cartesian_shift
+def test_cartesian_shift_staggering(cartesian_case):
+    IHalfDim = gtx.Dimension("IHalfDim")
+    IPlusHalf = gtx.FieldOffset("IPlusHalf", source=IDim, target=(IHalfDim,))
+
+    @gtx.field_operator
+    def testee(a: cases.IJKField) -> gtx.Field[[IHalfDim, JDim, KDim], np.int32]:
+        return a(IPlusHalf[0])
+
+    a = cases.allocate(cartesian_case, testee, "a")()
+    out = cases.allocate(
+        cartesian_case, testee, cases.RETURN, sizes={IHalfDim: cartesian_case.default_sizes[IDim]}
+    )()
+
+    cases.verify(
+        cartesian_case,
+        testee,
+        a,
+        out=out,
+        ref=a,
+        offset_provider={"IPlusHalf": (IDim, IHalfDim)},  # source to target
+    )
 
 
 @pytest.mark.uses_unstructured_shift

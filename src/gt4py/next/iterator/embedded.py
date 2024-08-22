@@ -629,6 +629,15 @@ def execute_shift(
         else:
             raise AssertionError()
         return new_pos
+    elif isinstance(offset_implementation, tuple):
+        source, target = offset_implementation
+        new_pos = copy.copy(pos)
+        new_pos.pop(target.value)
+        if common.is_int_index(value := pos[target.value]):
+            new_pos[source.value] = value + index
+        else:
+            raise AssertionError()
+        return new_pos
     else:
         assert isinstance(offset_implementation, common.Connectivity)
         assert offset_implementation.origin_axis.value in pos
