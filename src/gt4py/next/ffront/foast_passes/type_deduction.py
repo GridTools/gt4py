@@ -653,19 +653,6 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             op=node.op, operand=new_operand, location=node.location, type=new_operand.type
         )
 
-    def visit_Attribute(self, node: foast.Attribute, **kwargs: Any) -> foast.Attribute | foast.Name:
-        if isinstance(node.type, ts.FunctionType):
-            return foast.Name(
-                id=node.attr, type=self.visit(node.type, **kwargs), location=node.location
-            )
-
-        return foast.Attribute(
-            value=self.visit(node.value, **kwargs),
-            attr=node.attr,
-            type=self.visit(node.type, **kwargs),
-            location=node.location,
-        )
-
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs: Any) -> foast.TupleExpr:
         new_elts = self.visit(node.elts, **kwargs)
         new_type = ts.TupleType(types=[element.type for element in new_elts])

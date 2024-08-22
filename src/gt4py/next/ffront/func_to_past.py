@@ -162,7 +162,7 @@ class ProgramParser(DialectParser[past.Program]):
     def visit_Name(self, node: ast.Name) -> past.Name:
         return past.Name(id=node.id, location=self.get_location(node))
 
-    def visit_Attribute(self, node: ast.Attribute) -> past.AttributeExpr:
+    def visit_Attribute(self, node: ast.Attribute) -> past.Attribute:
         if not isinstance(node.ctx, ast.Load):
             raise errors.DSLError(
                 self.get_location(node), "`node.ctx` can only be of type ast.Load"
@@ -171,7 +171,7 @@ class ProgramParser(DialectParser[past.Program]):
         attr_type = type_translation.from_value(
             getattr(self.closure_vars[node.value.id], node.attr)
         )
-        return past.AttributeExpr(
+        return past.Attribute(
             attr=node.attr,
             value=self.visit(node.value),
             type=attr_type,
@@ -198,13 +198,6 @@ class ProgramParser(DialectParser[past.Program]):
             args=[self.visit(arg) for arg in node.args],
             kwargs={arg.arg: self.visit(arg.value) for arg in node.keywords},
             location=loc,
-        )
-
-    def visit_Attribute(self, node: ast.Attribute) -> past.Attribute:
-        return past.Attribute(
-            value=self.visit(node.value),
-            attr=node.attr,
-            location=self.get_location(node),
         )
 
     def visit_Subscript(self, node: ast.Subscript) -> past.Subscript:
