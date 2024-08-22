@@ -11,7 +11,7 @@ classifiers = [
   'Environment :: Console',
   'Environment :: GPU :: NVIDIA CUDA',
   'Intended Audience :: Science/Research',
-  'License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)',
+  'License :: OSI Approved :: BSD License',
   'Operating System :: POSIX',
   'Programming Language :: Python',
   'Programming Language :: Python :: 3.8',
@@ -62,7 +62,7 @@ keywords = [
   'portable',
   'hpc'
 ]
-license = {text = 'GPL-3.0-or-later'}
+license = {file = 'LICENSE'}
 name = 'gt4py'
 readme = 'README.md'
 requires-python = '>=3.8'
@@ -75,7 +75,7 @@ all-cuda12 = ['gt4py[cuda12,dace,formatting,jax-cuda12,performance,testing]']
 # Other extras
 cuda11 = ['cupy-cuda11x>=12.0']
 cuda12 = ['cupy-cuda12x>=12.0']
-dace = ['dace>=0.16.1', 'sympy>=1.9']
+dace = ['dace>=0.16.1', 'sympy>=1.9,<1.13']  # see https://github.com/spcl/dace/pull/1620
 formatting = ['clang-format>=9.0']
 gpu = ['cupy>=12.0']
 jax-cpu = ['jax[cpu]>=0.4.18; python_version>="3.10"']
