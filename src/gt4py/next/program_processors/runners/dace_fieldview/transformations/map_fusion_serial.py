@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Implements the seriall map fusing transformation."""
+"""Implements the serial map fusing transformation."""
 
 import copy
 from typing import Any, Union
@@ -21,7 +21,7 @@ import dace
 from dace import dtypes, properties, subsets, symbolic, transformation
 from dace.sdfg import SDFG, SDFGState, graph as dace_graph, nodes
 
-from . import map_fusion_helper
+from gt4py.next.program_processors.runners.dace_fieldview.transformations import map_fusion_helper
 
 
 @properties.make_properties
@@ -136,6 +136,8 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
         assert isinstance(graph, dace.SDFGState)
         assert isinstance(self.map_exit1, nodes.MapExit)
         assert isinstance(self.map_entry2, nodes.MapEntry)
+        assert self.map_parameter_compatible(self.map_exit1.map, self.map_entry2.map, graph, sdfg)
+
         map_exit_1: nodes.MapExit = self.map_exit1
         map_entry_2: nodes.MapEntry = self.map_entry2
         map_exit_2: nodes.MapExit = graph.exit_node(self.map_entry2)

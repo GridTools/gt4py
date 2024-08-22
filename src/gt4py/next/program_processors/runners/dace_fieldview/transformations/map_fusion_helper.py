@@ -20,7 +20,7 @@ from typing import Any, Optional, Sequence, Union
 
 import dace
 from dace import data, properties, subsets, transformation
-from dace.sdfg import SDFG, SDFGState, graph as dace_graph, nodes
+from dace.sdfg import SDFG, SDFGState, graph as dace_graph, nodes, validation as sdfg_validation
 from dace.transformation import helpers
 
 from gt4py.next.program_processors.runners.dace_fieldview.transformations import util
@@ -147,6 +147,8 @@ class MapFusionHelper(transformation.SingleStateTransformation):
         This function will only rewire the edges, it does not remove the nodes
         themselves. Furthermore, this function should be called twice per Map,
         once for the entry and then for the exit.
+        While it does not remove the node themselves if guarantees that the
+        `from_node` has degree zero.
 
         Args:
             from_node: Node from which the edges should be removed.
@@ -210,9 +212,20 @@ class MapFusionHelper(transformation.SingleStateTransformation):
             from_node.remove_in_connector("IN_" + old_conn)
             from_node.remove_out_connector("OUT_" + old_conn)
 
-        assert state.in_degree(from_node) == 0
+        # Check if we succeeded.
+        if state.out_degree(from_node) != 0:
+            raise sdfg_validation.InvalidSDFGError(
+                f"Failed to relocate the outgoing edges from `{from_node}`, there are still `{state.out_edges(from_node)}`",
+                sdfg,
+                sdfg.node_id(state),
+            )
+        if state.in_degree(from_node) != 0:
+            raise sdfg_validation.InvalidSDFGError(
+                f"Failed to relocate the incoming edges from `{from_node}`, there are still `{state.in_edges(from_node)}`",
+                sdfg,
+                sdfg.node_id(state),
+            )
         assert len(from_node.in_connectors) == 0
-        assert state.out_degree(from_node) == 0
         assert len(from_node.out_connectors) == 0
 
     @staticmethod

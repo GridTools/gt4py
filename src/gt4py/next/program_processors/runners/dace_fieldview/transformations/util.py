@@ -45,7 +45,7 @@ def all_nodes_between(
     """Find all nodes that are reachable from `begin` but bound by `end`.
 
     Essentially the function starts a DFS at `begin`. If an edge is found that lead
-    to `end`, this edge is ignored. It will thus found any node that is reachable
+    to `end`, this edge is ignored. It will thus visit any node that is reachable
     from `begin` by a path that does not involve `end`. The returned set will
     never contain `end` nor `begin`. In case `end` is never found the function
     will return `None`.
@@ -91,6 +91,31 @@ def all_nodes_between(
 
     seen.discard(begin)
     return seen
+
+
+def is_parallel(
+    graph: dace.SDFG | dace.SDFGState,
+    node1: dace_nodes.Node,
+    node2: dace_nodes.Node,
+) -> bool:
+    """Tests if `node1` and `node2` are parallel.
+
+    The nodes are parallel if `node2` can not be reached from `node1` and vice versa.
+
+    Args:
+        graph:      The graph to traverse.
+        node1:      The first node to check.
+        node2:      The second node to check.
+    """
+
+    # The `all_nodes_between()` function traverse the graph and returns `None` if
+    #  `end` was not found. We have to call it twice, because we do not know
+    #  which node is upstream if they are not parallel.
+    if all_nodes_between(graph=graph, begin=node1, end=node2) is not None:
+        return False
+    elif all_nodes_between(graph=graph, begin=node2, end=node1) is not None:
+        return False
+    return True
 
 
 def find_downstream_consumers(
