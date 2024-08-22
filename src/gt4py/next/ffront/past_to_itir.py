@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -175,7 +169,14 @@ class ProgramLowering(
                 )
                 assert all(field_dims == fields_dims[0] for field_dims in fields_dims)
                 for dim_idx in range(len(fields_dims[0])):
-                    size_params.append(itir.Sym(id=_size_arg_from_field(param.id, dim_idx)))
+                    size_params.append(
+                        itir.Sym(
+                            id=_size_arg_from_field(param.id, dim_idx),
+                            type=ts.ScalarType(
+                                kind=getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())
+                            ),
+                        )
+                    )
 
         return size_params
 
@@ -340,7 +341,7 @@ class ProgramLowering(
             domain_args.append(
                 itir.FunCall(
                     fun=itir.SymRef(id="named_range"),
-                    args=[itir.AxisLiteral(value=dim.value), lower, upper],
+                    args=[itir.AxisLiteral(value=dim.value, kind=dim.kind), lower, upper],
                 )
             )
             domain_args_kind.append(dim.kind)
@@ -349,11 +350,6 @@ class ProgramLowering(
             domain_builtin = "cartesian_domain"
         elif self.grid_type == common.GridType.UNSTRUCTURED:
             domain_builtin = "unstructured_domain"
-            # for no good reason, the domain arguments for unstructured need to be in order (horizontal, vertical)
-            if domain_args_kind[0] == common.DimensionKind.VERTICAL:
-                assert len(domain_args) == 2
-                assert domain_args_kind[1] == common.DimensionKind.HORIZONTAL
-                domain_args[0], domain_args[1] = domain_args[1], domain_args[0]
         else:
             raise AssertionError()
 
@@ -390,11 +386,11 @@ class ProgramLowering(
             raise AssertionError(
                 "Unexpected 'out' argument, must be tuple of slices or slice expression."
             )
-        node_dims_ls = cast(ts.FieldType, node.type).dims
-        assert isinstance(node_dims_ls, list)
-        if isinstance(node.type, ts.FieldType) and len(out_field_slice_) != len(node_dims_ls):
+        node_dims = cast(ts.FieldType, node.type).dims
+        assert isinstance(node_dims, list)
+        if isinstance(node.type, ts.FieldType) and len(out_field_slice_) != len(node_dims):
             raise ValueError(
-                f"Too many indices for field '{out_field_name}': field is {len(node_dims_ls)}"
+                f"Too many indices for field '{out_field_name}': field is {len(node_dims)}"
                 f"-dimensional, but {len(out_field_slice_)} were indexed."
             )
         return out_field_slice_
@@ -466,13 +462,7 @@ class ProgramLowering(
         return itir.SymRef(id=node.id)
 
     def visit_Symbol(self, node: past.Symbol, **kwargs: Any) -> itir.Sym:
-        # TODO(tehrengruber): extend to more types
-        if isinstance(node.type, ts.FieldType):
-            kind = "Iterator"
-            dtype = node.type.dtype.kind.name.lower()
-            is_list = type_info.is_local_field(node.type)
-            return itir.Sym(id=node.id, kind=kind, dtype=(dtype, is_list))
-        return itir.Sym(id=node.id)
+        return itir.Sym(id=node.id, type=node.type)
 
     def visit_BinOp(self, node: past.BinOp, **kwargs: Any) -> itir.FunCall:
         return itir.FunCall(

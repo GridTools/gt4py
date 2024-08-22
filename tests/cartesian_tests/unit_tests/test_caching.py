@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import pytest
 
@@ -160,3 +154,60 @@ def test_nocaching_generate(builder, tmp_path):
     builder_g.backend.generate()
 
     assert_nocaching_gtcpp_source_file_tree_conforms_to_expectations(tmp_path / "foo_g", "foo")
+
+
+def test_compiler_optimizations(builder):
+    builder_1 = builder(simple_stencil, backend_name="gt:cpu_kfirst")
+    builder_2 = builder(simple_stencil, backend_name="gt:cpu_kfirst").with_changed_options(
+        backend_opts={
+            "opt_level": gt4pyc.config.GT4PY_COMPILE_OPT_LEVEL,
+            "extra_opt_flags": gt4pyc.config.GT4PY_EXTRA_COMPILE_OPT_FLAGS,
+        }
+    )
+
+    builder_1.backend.generate()
+    builder_2.backend.generate()
+
+    assert not stencil_fingerprints_are_equal(builder_1, builder_2)
+
+
+def test_different_opt_levels(builder):
+    builder_1 = builder(simple_stencil, backend_name="gt:cpu_kfirst").with_changed_options(
+        backend_opts={"opt_level": "0"}
+    )
+    builder_2 = builder(simple_stencil, backend_name="gt:cpu_kfirst").with_changed_options(
+        backend_opts={"opt_level": "1"}
+    )
+
+    builder_1.backend.generate()
+    builder_2.backend.generate()
+
+    assert not stencil_fingerprints_are_equal(builder_1, builder_2)
+
+
+def test_different_extra_opt_flags(builder):
+    builder_1 = builder(simple_stencil, backend_name="gt:cpu_kfirst").with_changed_options(
+        backend_opts={"opt_level": "0"}
+    )
+    builder_2 = builder(simple_stencil, backend_name="gt:cpu_kfirst").with_changed_options(
+        backend_opts={"opt_level": "0", "extra_opt_flags": "-ftree-vectorize"}
+    )
+
+    builder_1.backend.generate()
+    builder_2.backend.generate()
+
+    assert not stencil_fingerprints_are_equal(builder_1, builder_2)
+
+
+def test_debug_mode(builder):
+    builder_1 = builder(simple_stencil, backend_name="gt:cpu_kfirst").with_changed_options(
+        backend_opts={"debug_mode": True, "opt_level": "0"}
+    )
+    builder_2 = builder(simple_stencil, backend_name="gt:cpu_kfirst").with_changed_options(
+        backend_opts={"debug_mode": False, "opt_level": "0"}
+    )
+
+    builder_1.backend.generate()
+    builder_2.backend.generate()
+
+    assert not stencil_fingerprints_are_equal(builder_1, builder_2)
