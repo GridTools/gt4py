@@ -26,6 +26,7 @@ from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
+from gt4py.next.program_processors.runners.dace_common import utility as dace_common_util
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_builtin_translators,
     utility as dace_fieldview_util,
@@ -138,17 +139,17 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             Two lists of symbols, one for the shape and the other for the strides of the array.
         """
         dtype = dace.int32
-        neighbor_tables = dace_fieldview_util.filter_connectivities(self.offset_provider)
+        neighbor_tables = dace_common_util.filter_connectivities(self.offset_provider)
         shape = [
             (
                 neighbor_tables[dim.value].max_neighbors
                 if dim.kind == gtx_common.DimensionKind.LOCAL
-                else dace.symbol(dace_fieldview_util.field_size_symbol_name(name, i), dtype)
+                else dace.symbol(dace_common_util.field_size_symbol_name(name, i), dtype)
             )
             for i, dim in enumerate(dims)
         ]
         strides = [
-            dace.symbol(dace_fieldview_util.field_stride_symbol_name(name, i), dtype)
+            dace.symbol(dace_common_util.field_stride_symbol_name(name, i), dtype)
             for i in range(len(dims))
         ]
         return shape, strides
@@ -240,7 +241,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             raise NotImplementedError("Functions expected to be inlined as lambda calls.")
 
         sdfg = dace.SDFG(node.id)
-        sdfg.debuginfo = dace_fieldview_util.debug_info(node, default=sdfg.debuginfo)
+        sdfg.debuginfo = dace_common_util.debug_info(node, default=sdfg.debuginfo)
         entry_state = sdfg.add_state("program_entry", is_start_block=True)
 
         # declarations of temporaries result in transient array definitions in the SDFG
@@ -260,7 +261,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             self._add_storage(sdfg, str(param.id), param.type, transient=False)
 
         # add SDFG storage for connectivity tables
-        for offset, offset_provider in dace_fieldview_util.filter_connectivities(
+        for offset, offset_provider in dace_common_util.filter_connectivities(
             self.offset_provider
         ).items():
             scalar_kind = tt.get_scalar_kind(offset_provider.index_type)
@@ -273,13 +274,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             # the tables that are actually used. This way, we avoid adding SDFG arguments for
             # the connectivity tables that are not used. The remaining unused transient arrays
             # are removed by the dace simplify pass.
-            self._add_storage(sdfg, dace_fieldview_util.connectivity_identifier(offset), type_)
+            self._add_storage(sdfg, dace_common_util.connectivity_identifier(offset), type_)
 
         # visit one statement at a time and expand the SDFG from the current head state
         for i, stmt in enumerate(node.body):
             # include `debuginfo` only for `ir.Program` and `ir.Stmt` nodes: finer granularity would be too messy
             head_state = sdfg.add_state_after(head_state, f"stmt_{i}")
-            head_state._debuginfo = dace_fieldview_util.debug_info(stmt, default=sdfg.debuginfo)
+            head_state._debuginfo = dace_common_util.debug_info(stmt, default=sdfg.debuginfo)
             self.visit(stmt, sdfg=sdfg, state=head_state)
 
         # Create the call signature for the SDFG.

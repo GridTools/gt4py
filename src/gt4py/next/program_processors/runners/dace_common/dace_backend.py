@@ -13,7 +13,8 @@ import dace
 import numpy as np
 
 from gt4py.next import common as gtx_common
-from gt4py.next.program_processors.runners.dace_fieldview import utility as dace_fieldview_util
+
+from . import utility as dace_util
 
 
 try:
@@ -22,7 +23,7 @@ except ImportError:
     cp = None
 
 
-def convert_arg(arg: Any, sdfg_param: str) -> Any:
+def convert_arg(arg: Any, sdfg_param: str, use_field_canonical_representation: bool) -> Any:
     if not isinstance(arg, gtx_common.Field):
         return arg
     # field domain offsets are not supported
@@ -36,12 +37,27 @@ def convert_arg(arg: Any, sdfg_param: str) -> Any:
         raise RuntimeError(
             f"Field '{sdfg_param}' passed as array slice with offset {dim_range.start} on dimension {dim.value}."
         )
-    return arg.ndarray
+    if not use_field_canonical_representation:
+        return arg.ndarray
+    # the canonical representation requires alphabetical ordering of the dimensions in field domain definition
+    sorted_dims = dace_util.get_sorted_dims(arg.domain.dims)
+    ndim = len(sorted_dims)
+    dim_indices = [dim_index for dim_index, _ in sorted_dims]
+    if isinstance(arg.ndarray, np.ndarray):
+        return np.moveaxis(arg.ndarray, range(ndim), dim_indices)
+    else:
+        assert cp is not None and isinstance(arg.ndarray, cp.ndarray)
+        return cp.moveaxis(arg.ndarray, range(ndim), dim_indices)
 
 
-def get_args(sdfg: dace.SDFG, args: Sequence[Any]) -> dict[str, Any]:
+def get_args(
+    sdfg: dace.SDFG, args: Sequence[Any], use_field_canonical_representation: bool
+) -> dict[str, Any]:
     sdfg_params: Sequence[str] = sdfg.arg_names
-    return {sdfg_param: convert_arg(arg, sdfg_param) for sdfg_param, arg in zip(sdfg_params, args)}
+    return {
+        sdfg_param: convert_arg(arg, sdfg_param, use_field_canonical_representation)
+        for sdfg_param, arg in zip(sdfg_params, args)
+    }
 
 
 def _ensure_is_on_device(
@@ -61,7 +77,7 @@ def get_connectivity_args(
     neighbor_tables: Mapping[str, gtx_common.NeighborTable], device: dace.dtypes.DeviceType
 ) -> dict[str, Any]:
     return {
-        dace_fieldview_util.connectivity_identifier(offset): _ensure_is_on_device(
+        dace_util.connectivity_identifier(offset): _ensure_is_on_device(
             offset_provider.table, device
         )
         for offset, offset_provider in neighbor_tables.items()
@@ -110,6 +126,7 @@ def get_sdfg_args(
     *args: Any,
     check_args: bool = False,
     on_gpu: bool = False,
+    use_field_canonical_representation: bool = True,
     **kwargs: Any,
 ) -> dict[str, Any]:
     """Extracts the arguments needed to call the SDFG.
@@ -122,12 +139,12 @@ def get_sdfg_args(
     offset_provider = kwargs["offset_provider"]
 
     neighbor_tables: dict[str, gtx_common.NeighborTable] = {}
-    for offset, connectivity in dace_fieldview_util.filter_connectivities(offset_provider).items():
+    for offset, connectivity in dace_util.filter_connectivities(offset_provider).items():
         assert isinstance(connectivity, gtx_common.NeighborTable)
         neighbor_tables[offset] = connectivity
     device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
 
-    dace_args = get_args(sdfg, args)
+    dace_args = get_args(sdfg, args, use_field_canonical_representation)
     dace_field_args = {n: v for n, v in dace_args.items() if not np.isscalar(v)}
     dace_conn_args = get_connectivity_args(neighbor_tables, device)
     # keep only connectivity tables that are used in the sdfg
