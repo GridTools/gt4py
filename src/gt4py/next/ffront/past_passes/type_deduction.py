@@ -114,6 +114,15 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             location=node.location,
         )
 
+    def visit_Attribute(self, node: past.Attribute, **kwargs: Any) -> past.Attribute:
+        new_value = self.visit(node.value, **kwargs)
+        return past.Attribute(
+            value=new_value,
+            attr=node.attr,
+            location=node.location,
+            type=getattr(new_value.type, node.attr),
+        )
+
     def visit_TupleExpr(self, node: past.TupleExpr, **kwargs: Any) -> past.TupleExpr:
         elts = self.visit(node.elts, **kwargs)
         return past.TupleExpr(

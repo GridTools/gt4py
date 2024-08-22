@@ -84,7 +84,7 @@ class BuiltInFunction(Generic[_R, _P]):
     function: Callable[_P, _R]
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "name", f"{self.function.__module__}.{self.function.__name__}")
+        object.__setattr__(self, "name", self.function.__name__)  # TODO not sure if save
         object.__setattr__(self, "__doc__", self.function.__doc__)
 
     def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _R:
@@ -107,7 +107,8 @@ class BuiltInFunction(Generic[_R, _P]):
         signature = inspect.signature(self.function)
         params = signature.parameters
 
-        return ts.FunctionType(
+        return ts.BuiltinFunctionType(
+            id=self.name,
             pos_only_args=[
                 _type_conversion(param.annotation)
                 for param in params.values()

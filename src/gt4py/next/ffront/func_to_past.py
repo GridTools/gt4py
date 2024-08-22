@@ -200,6 +200,13 @@ class ProgramParser(DialectParser[past.Program]):
             location=loc,
         )
 
+    def visit_Attribute(self, node: ast.Attribute) -> past.Attribute:
+        return past.Attribute(
+            value=self.visit(node.value),
+            attr=node.attr,
+            location=self.get_location(node),
+        )
+
     def visit_Subscript(self, node: ast.Subscript) -> past.Subscript:
         return past.Subscript(
             value=self.visit(node.value),

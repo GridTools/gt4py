@@ -132,3 +132,11 @@ class FunctionType(TypeSpec, CallableType):
         kwarg_strs = [f"{key}: {value}" for key, value in self.pos_or_kw_args.items()]
         args_str = ", ".join((*arg_strs, *kwarg_strs))
         return f"({args_str}) -> {self.returns}"
+
+
+@dataclass(frozen=True)
+class BuiltinFunctionType(FunctionType):
+    id: str
+
+    def __str__(self) -> str:
+        return self.id + super().__str__()

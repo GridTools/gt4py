@@ -72,9 +72,9 @@ class TupleExpr(Expr):
     elts: list[Expr]
 
 
-class AttributeExpr(Expr):
+class Attribute(Expr):
     attr: str
-    value: Any
+    value: Expr
 
 
 class Constant(Expr):
@@ -82,7 +82,7 @@ class Constant(Expr):
 
 
 class Dict(Expr):
-    keys_: list[Union[Name, AttributeExpr]]
+    keys_: list[Union[Name | Attribute]]
     values_: list[TupleExpr]
 
 

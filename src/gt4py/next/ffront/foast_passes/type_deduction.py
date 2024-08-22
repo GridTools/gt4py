@@ -468,6 +468,15 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             return new_node
         return node
 
+    def visit_Attribute(self, node: foast.Attribute, **kwargs: Any) -> foast.Attribute:
+        new_value = self.visit(node.value, **kwargs)
+        return foast.Attribute(
+            value=new_value,
+            attr=node.attr,
+            location=node.location,
+            type=getattr(new_value.type, node.attr),
+        )
+
     def visit_Subscript(self, node: foast.Subscript, **kwargs: Any) -> foast.Subscript:
         new_value = self.visit(node.value, **kwargs)
         new_type: Optional[ts.TypeSpec] = None
@@ -679,7 +688,13 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             # have the proper format here.
             if not isinstance(
                 new_func,
-                (foast.FunctionDefinition, foast.FieldOperator, foast.ScanOperator, foast.Name),
+                (
+                    foast.FunctionDefinition,
+                    foast.FieldOperator,
+                    foast.ScanOperator,
+                    foast.Name,
+                    foast.Attribute,
+                ),
             ):
                 raise errors.DSLError(node.location, "Functions can only be called directly.")
         elif isinstance(new_func.type, ts.FieldType):
@@ -702,6 +717,13 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         return_type = type_info.return_type(func_type, with_args=arg_types, with_kwargs=kwarg_types)
 
+        if isinstance(
+            new_func.type, ts.BuiltinFunctionType
+        ):  # TODO this attribute collapsing should probably be done after type deduction
+            new_func = foast.Name(
+                id=new_func.type.id, location=new_func.location, type=new_func.type
+            )
+
         new_node = foast.Call(
             func=new_func,
             args=new_args,
@@ -710,26 +732,19 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             type=return_type,
         )
 
-        if (
-            isinstance(new_func.type, ts.FunctionType)
-            and isinstance(new_func, foast.Name)
-            and new_func.id in fbuiltins.MATH_BUILTIN_NAMES
-        ):
-            return self._visit_math_built_in(new_node, **kwargs)
-        elif (
-            isinstance(new_func.type, ts.FunctionType)
-            and not type_info.is_concrete(return_type)
-            and isinstance(new_func, foast.Name)
-            and new_func.id
-            in (fbuiltins.FUN_BUILTIN_NAMES + experimental.EXPERIMENTAL_FUN_BUILTIN_NAMES)
-        ):
-            visitor = getattr(self, f"_visit_{new_func.id}")
-            return visitor(new_node, **kwargs)
+        if isinstance(new_func.type, ts.BuiltinFunctionType):
+            if new_func.type.id in fbuiltins.MATH_BUILTIN_NAMES:
+                return self._visit_math_built_in(new_node, **kwargs)
+            elif not type_info.is_concrete(return_type) and new_func.type.id in (
+                fbuiltins.FUN_BUILTIN_NAMES + experimental.EXPERIMENTAL_FUN_BUILTIN_NAMES
+            ):
+                visitor = getattr(self, f"_visit_{new_func.type.id}")
+                return visitor(new_node, **kwargs)
 
         return new_node
 
     def _visit_math_built_in(self, node: foast.Call, **kwargs: Any) -> foast.Call:
-        func_name = cast(foast.Name, node.func).id
+        func_name = cast(ts.BuiltinFunctionType, cast(foast.Name, node.func).type).id
 
         # validate arguments
         error_msg_preamble = f"Incompatible argument in call to '{func_name}'."
