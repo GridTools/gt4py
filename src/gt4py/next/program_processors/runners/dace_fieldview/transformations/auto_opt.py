@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """Fast access to the auto optimization on DaCe."""
 
@@ -231,9 +225,14 @@ def gt_auto_optimize(
             # TODO(phimuell): Add parallel fusion transformation. Should it run after
             #                   or with the serial one?
             sdfg.apply_transformations_repeated(
-                gtx_transformations.SerialMapFusion(
-                    only_toplevel_maps=True,
-                ),
+                [
+                    gtx_transformations.SerialMapFusion(
+                        only_toplevel_maps=True,
+                    ),
+                    gtx_transformations.ParallelMapFusion(
+                        only_toplevel_maps=True,
+                    ),
+                ],
                 validate=validate,
                 validate_all=validate_all,
             )
@@ -277,9 +276,17 @@ def gt_auto_optimize(
         # Phase 3: Optimizing the kernels themselves.
         #   Currently this only applies fusion inside Maps.
         sdfg.apply_transformations_repeated(
-            gtx_transformations.SerialMapFusion(
-                only_inner_maps=True,
-            ),
+            [
+                gtx_transformations.SerialMapFusion(
+                    only_inner_maps=True,
+                ),
+                # TODO(phimuell): This might be a bit to aggressive, there should be
+                #   more control about what to fuse; Serial fusing here should be good
+                #   most of the times.
+                gtx_transformations.ParallelMapFusion(
+                    only_inner_maps=True,
+                ),
+            ],
             validate=validate,
             validate_all=validate_all,
         )
