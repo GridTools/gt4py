@@ -39,7 +39,7 @@ def all_nodes_between(
     """Find all nodes that are reachable from `begin` but bound by `end`.
 
     Essentially the function starts a DFS at `begin`. If an edge is found that lead
-    to `end`, this edge is ignored. It will thus visit any node that is reachable
+    to `end`, this edge is ignored. It will thus found any node that is reachable
     from `begin` by a path that does not involve `end`. The returned set will
     never contain `end` nor `begin`. In case `end` is never found the function
     will return `None`.

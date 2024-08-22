@@ -12,8 +12,8 @@ import copy
 from typing import Any, Optional, Sequence, Union
 
 import dace
-from dace import properties, transformation
-from dace.sdfg import SDFG, SDFGState, nodes
+from dace import properties as dace_properties, transformation as dace_transformation
+from dace.sdfg import SDFG, SDFGState, nodes as dace_nodes
 
 from gt4py.next.program_processors.runners.dace_fieldview import (
     transformations as gtx_transformations,
@@ -186,8 +186,8 @@ def _gpu_block_getter(
     return tuple(self._block_size)
 
 
-@properties.make_properties
-class GPUSetBlockSize(transformation.SingleStateTransformation):
+@dace_properties.make_properties
+class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
     """Sets the GPU block size on GPU Maps.
 
     It is also possible to set the launch bound.
@@ -202,7 +202,7 @@ class GPUSetBlockSize(transformation.SingleStateTransformation):
         Add the possibility to specify other bounds for 1, 2, or 3 dimensional maps.
     """
 
-    block_size = properties.Property(
+    block_size = dace_properties.Property(
         dtype=None,
         allow_none=False,
         default=(32, 1, 1),
@@ -211,14 +211,14 @@ class GPUSetBlockSize(transformation.SingleStateTransformation):
         desc="Size of the block size a GPU Map should have.",
     )
 
-    launch_bounds = properties.Property(
+    launch_bounds = dace_properties.Property(
         dtype=str,
         allow_none=True,
         default=None,
         desc="Set the launch bound property of the map.",
     )
 
-    map_entry = transformation.transformation.PatternNode(nodes.MapEntry)
+    map_entry = dace_transformation.transformation.PatternNode(dace_nodes.MapEntry)
 
     def __init__(
         self,
@@ -283,8 +283,8 @@ class GPUSetBlockSize(transformation.SingleStateTransformation):
             self.map_entry.map.gpu_launch_bounds = self.launch_bounds
 
 
-@properties.make_properties
-class SerialMapPromoterGPU(transformation.SingleStateTransformation):
+@dace_properties.make_properties
+class SerialMapPromoterGPU(dace_transformation.SingleStateTransformation):
     """Serial Map promoter for empty Maps in case of trivial Maps.
 
     In CPU mode a Tasklet can be outside of a map, however, this is not
@@ -303,9 +303,9 @@ class SerialMapPromoterGPU(transformation.SingleStateTransformation):
     """
 
     # Pattern Matching
-    map_exit1 = transformation.transformation.PatternNode(nodes.MapExit)
-    access_node = transformation.transformation.PatternNode(nodes.AccessNode)
-    map_entry2 = transformation.transformation.PatternNode(nodes.MapEntry)
+    map_exit1 = dace_transformation.transformation.PatternNode(dace_nodes.MapExit)
+    access_node = dace_transformation.transformation.PatternNode(dace_nodes.AccessNode)
+    map_entry2 = dace_transformation.transformation.PatternNode(dace_nodes.MapEntry)
 
     @classmethod
     def expressions(cls) -> Any:
@@ -326,9 +326,9 @@ class SerialMapPromoterGPU(transformation.SingleStateTransformation):
         """
         from .map_fusion_serial import SerialMapFusion
 
-        map_exit_1: nodes.MapExit = self.map_exit1
-        map_1: nodes.Map = map_exit_1.map
-        map_entry_2: nodes.MapEntry = self.map_entry2
+        map_exit_1: dace_nodes.MapExit = self.map_exit1
+        map_1: dace_nodes.Map = map_exit_1.map
+        map_entry_2: dace_nodes.MapEntry = self.map_entry2
 
         # Check if the first map is trivial.
         if len(map_1.params) != 1:
@@ -363,8 +363,8 @@ class SerialMapPromoterGPU(transformation.SingleStateTransformation):
         The function essentially copies the parameters and the ranges from the
         bottom map to the top one.
         """
-        map_1: nodes.Map = self.map_exit1.map
-        map_2: nodes.Map = self.map_entry2.map
+        map_1: dace_nodes.Map = self.map_exit1.map
+        map_2: dace_nodes.Map = self.map_entry2.map
 
         map_1.params = copy.deepcopy(map_2.params)
         map_1.range = copy.deepcopy(map_2.range)

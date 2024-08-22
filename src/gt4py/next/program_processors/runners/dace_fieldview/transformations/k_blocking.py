@@ -11,16 +11,20 @@ import functools
 from typing import Any, Optional, Union
 
 import dace
-from dace import properties, subsets, transformation
-from dace.sdfg import SDFG, SDFGState, graph as dace_graph, nodes
-from dace.transformation import helpers
+from dace import (
+    properties as dace_properties,
+    subsets as dace_subsets,
+    transformation as dace_transformation,
+)
+from dace.sdfg import SDFG, SDFGState, graph as dace_graph, nodes as dace_nodes
+from dace.transformation import helpers as dace_helpers
 
 from gt4py.next import common as gtx_common
-from gt4py.next.program_processors.runners.dace_fieldview import utility as dace_fieldview_util
+from gt4py.next.program_processors.runners.dace_fieldview import utility as gtx_dace_fieldview_util
 
 
-@properties.make_properties
-class KBlocking(transformation.SingleStateTransformation):
+@dace_properties.make_properties
+class KBlocking(dace_transformation.SingleStateTransformation):
     """Applies k-Blocking with separation on a Map.
 
     This transformation takes a multidimensional Map and performs blocking on a
@@ -42,18 +46,18 @@ class KBlocking(transformation.SingleStateTransformation):
     `_blocked` to it.
     """
 
-    blocking_size = properties.Property(
+    blocking_size = dace_properties.Property(
         dtype=int,
         allow_none=True,
         desc="Size of the inner k Block.",
     )
-    block_dim = properties.Property(
+    block_dim = dace_properties.Property(
         dtype=str,
         allow_none=True,
         desc="Which dimension should be blocked (must be an exact match).",
     )
 
-    map_entry = transformation.transformation.PatternNode(nodes.MapEntry)
+    map_entry = dace_transformation.transformation.PatternNode(dace_nodes.MapEntry)
 
     def __init__(
         self,
@@ -64,7 +68,7 @@ class KBlocking(transformation.SingleStateTransformation):
         if isinstance(block_dim, str):
             pass
         elif isinstance(block_dim, gtx_common.Dimension):
-            block_dim = dace_fieldview_util.get_map_variable(block_dim)
+            block_dim = gtx_dace_fieldview_util.get_map_variable(block_dim)
         if block_dim is not None:
             self.block_dim = block_dim
         if blocking_size is not None:
@@ -95,9 +99,9 @@ class KBlocking(transformation.SingleStateTransformation):
         elif self.blocking_size is None:
             raise ValueError("The blocking size was not specified.")
 
-        map_entry: nodes.MapEntry = self.map_entry
+        map_entry: dace_nodes.MapEntry = self.map_entry
         map_params: list[str] = map_entry.map.params
-        map_range: subsets.Range = map_entry.map.range
+        map_range: dace_subsets.Range = map_entry.map.range
         block_var: str = self.block_dim
 
         scope = graph.scope_dict()
@@ -123,10 +127,10 @@ class KBlocking(transformation.SingleStateTransformation):
 
         Performs the operation described in the doc string.
         """
-        outer_entry: nodes.MapEntry = self.map_entry
-        outer_exit: nodes.MapExit = graph.exit_node(outer_entry)
-        outer_map: nodes.Map = outer_entry.map
-        map_range: subsets.Range = outer_entry.map.range
+        outer_entry: dace_nodes.MapEntry = self.map_entry
+        outer_exit: dace_nodes.MapExit = graph.exit_node(outer_entry)
+        outer_map: dace_nodes.Map = outer_entry.map
+        map_range: dace_subsets.Range = outer_entry.map.range
         map_params: list[str] = outer_entry.map.params
 
         # This is the name of the iterator we coarsen
@@ -147,7 +151,7 @@ class KBlocking(transformation.SingleStateTransformation):
         rng_stop = map_range[block_idx][1]
         inner_label = f"inner_{outer_map.label}"
         inner_range = {
-            block_var: subsets.Range.from_string(
+            block_var: dace_subsets.Range.from_string(
                 f"({coarse_block_var} * {self.blocking_size} + {rng_start}):min(({rng_start} + {coarse_block_var} + 1) * {self.blocking_size}, {rng_stop} + 1)"
             )
         }
@@ -160,7 +164,7 @@ class KBlocking(transformation.SingleStateTransformation):
         # TODO(phimuell): Investigate if we want to prevent unrolling here
 
         # Now we modify the properties of the outer map.
-        coarse_block_range = subsets.Range.from_string(
+        coarse_block_range = dace_subsets.Range.from_string(
             f"0:int_ceil(({rng_stop} + 1) - {rng_start}, {self.blocking_size})"
         ).ranges[0]
         outer_map.params[block_idx] = coarse_block_var
@@ -168,12 +172,12 @@ class KBlocking(transformation.SingleStateTransformation):
         outer_map.label = f"{outer_map.label}_blocked"
 
         # Contains the independent nodes that are already relocated.
-        relocated_nodes: set[nodes.Node] = set()
+        relocated_nodes: set[dace_nodes.Node] = set()
 
         # Now we iterate over all the output edges of the outer map and rewire them.
         #  Note that this only handles the entry of the Map.
         for out_edge in list(graph.out_edges(outer_entry)):
-            edge_dst: nodes.Node = out_edge.dst
+            edge_dst: dace_nodes.Node = out_edge.dst
 
             if edge_dst in dependent_nodes:
                 # This is the simple case as we just have to rewire the edge
@@ -183,7 +187,7 @@ class KBlocking(transformation.SingleStateTransformation):
 
                 # Must be before the handling of the modification below
                 #  Note that this will remove the original edge from the SDFG.
-                helpers.redirect_edge(
+                dace_helpers.redirect_edge(
                     state=graph,
                     edge=out_edge,
                     new_src=inner_entry,
@@ -228,22 +232,22 @@ class KBlocking(transformation.SingleStateTransformation):
                 # In order to be useful we have to temporarily store the data the
                 #  independent node generates
                 assert graph.out_degree(edge_dst) == 1  # TODO(phimuell): Lift
-                if isinstance(edge_dst, nodes.AccessNode):
+                if isinstance(edge_dst, dace_nodes.AccessNode):
                     # The independent node is an access node, so we can use it directly.
-                    caching_node: nodes.AccessNode = edge_dst
+                    caching_node: dace_nodes.AccessNode = edge_dst
                 else:
                     # The dependent node is not an access node. For now we will
                     #  just use the next node, with some restriction.
                     # TODO(phimuell): create an access node in this case instead.
                     caching_node = next(iter(graph.out_edges(edge_dst))).dst
                     assert graph.in_degree(caching_node) == 1
-                    assert isinstance(caching_node, nodes.AccessNode)
+                    assert isinstance(caching_node, dace_nodes.AccessNode)
 
                 # Now rewire the Memlets that leave the caching node to go through
                 #  new inner Map.
                 for consumer_edge in list(graph.out_edges(caching_node)):
                     new_map_conn = inner_entry.next_connector()
-                    helpers.redirect_edge(
+                    dace_helpers.redirect_edge(
                         state=graph,
                         edge=consumer_edge,
                         new_dst=inner_entry,
@@ -265,7 +269,7 @@ class KBlocking(transformation.SingleStateTransformation):
         #  but we do not use them for now.
         for out_edge in list(graph.in_edges(outer_exit)):
             edge_conn = out_edge.dst_conn[3:]
-            helpers.redirect_edge(
+            dace_helpers.redirect_edge(
                 state=graph,
                 edge=out_edge,
                 new_dst=inner_exit,
@@ -286,11 +290,11 @@ class KBlocking(transformation.SingleStateTransformation):
 
     def partition_map_output(
         self,
-        map_entry: nodes.MapEntry,
+        map_entry: dace_nodes.MapEntry,
         block_param: str,
         state: SDFGState,
         sdfg: SDFG,
-    ) -> tuple[set[nodes.Node], set[nodes.Node]] | None:
+    ) -> tuple[set[dace_nodes.Node], set[dace_nodes.Node]] | None:
         """Partition the outputs of the Map.
 
         The partition will only look at the direct intermediate outputs of the
@@ -316,22 +320,22 @@ class KBlocking(transformation.SingleStateTransformation):
                 `used_symbol` properties of a Tasklet.
             - Furthermore only the first level is inspected.
         """
-        block_independent: set[nodes.Node] = set()  # `\mathcal{I}`
-        block_dependent: set[nodes.Node] = set()  # `\mathcal{D}`
+        block_independent: set[dace_nodes.Node] = set()  # `\mathcal{I}`
+        block_dependent: set[dace_nodes.Node] = set()  # `\mathcal{D}`
 
         # Find all nodes that are adjacent to the map entry.
-        nodes_to_partition: set[nodes.Node] = {edge.dst for edge in state.out_edges(map_entry)}
+        nodes_to_partition: set[dace_nodes.Node] = {edge.dst for edge in state.out_edges(map_entry)}
 
         # Now we examine every node and assign them to one of the sets.
         #  Note that this is only tentative and we will later inspect the
         #  outputs of the independent node and reevaluate their classification.
         for node in nodes_to_partition:
             # Filter out all nodes that we can not (yet) handle.
-            if not isinstance(node, (nodes.Tasklet, nodes.AccessNode)):
+            if not isinstance(node, (dace_nodes.Tasklet, dace_nodes.AccessNode)):
                 return None
 
             # Check if we have a strange Tasklet or if it uses the symbol inside it.
-            if isinstance(node, nodes.Tasklet):
+            if isinstance(node, dace_nodes.Tasklet):
                 if node.side_effects:
                     return None
                 if block_param in node.free_symbols:
@@ -376,8 +380,8 @@ class KBlocking(transformation.SingleStateTransformation):
             #  clause then we classify the node as independent.
             for edge in edges:
                 memlet: dace.Memlet = edge.data
-                src_subset: subsets.Subset | None = memlet.src_subset
-                dst_subset: subsets.Subset | None = memlet.dst_subset
+                src_subset: dace_subsets.Subset | None = memlet.src_subset
+                dst_subset: dace_subsets.Subset | None = memlet.dst_subset
                 edge_desc: dace.data.Data = sdfg.arrays[memlet.data]
                 edge_desc_size = functools.reduce(lambda a, b: a * b, edge_desc.shape)
 
@@ -389,7 +393,7 @@ class KBlocking(transformation.SingleStateTransformation):
                     continue
 
                 # Now we have to look at the source and destination set of the Memlet.
-                subsets_to_inspect: list[subsets.Subset] = []
+                subsets_to_inspect: list[dace_subsets.Subset] = []
                 if dst_subset is not None:
                     subsets_to_inspect.append(dst_subset)
                 if src_subset is not None:
@@ -412,14 +416,14 @@ class KBlocking(transformation.SingleStateTransformation):
         # We now make a last screening of the independent nodes.
         # TODO(phimuell): Make an iterative process to find the maximal set.
         for independent_node in list(block_independent):
-            if isinstance(independent_node, nodes.AccessNode):
+            if isinstance(independent_node, dace_nodes.AccessNode):
                 if state.in_degree(independent_node) != 1:
                     block_independent.discard(independent_node)
                     block_dependent.add(independent_node)
                 continue
             for out_edge in state.out_edges(independent_node):
                 if (
-                    (not isinstance(out_edge.dst, nodes.AccessNode))
+                    (not isinstance(out_edge.dst, dace_nodes.AccessNode))
                     or (state.in_degree(out_edge.dst) != 1)
                     or (out_edge.dst.desc(sdfg).lifetime != dace.dtypes.AllocationLifetime.Scope)
                 ):

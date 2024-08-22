@@ -9,15 +9,15 @@
 from typing import Any, Optional, Sequence, Union
 
 import dace
-from dace import properties, transformation
-from dace.sdfg import SDFG, SDFGState, nodes
+from dace import properties as dace_properties, transformation as dace_transformation
+from dace.sdfg import SDFG, SDFGState, nodes as dace_nodes
 
 from gt4py.next import common as gtx_common
-from gt4py.next.program_processors.runners.dace_fieldview import utility as dace_fieldview_util
+from gt4py.next.program_processors.runners.dace_fieldview import utility as gtx_dace_fieldview_util
 
 
-@properties.make_properties
-class MapIterationOrder(transformation.SingleStateTransformation):
+@dace_properties.make_properties
+class MapIterationOrder(dace_transformation.SingleStateTransformation):
     """Modify the order of the iteration variables.
 
     The iteration order, while irrelevant from an SDFG point of view, is highly
@@ -42,13 +42,13 @@ class MapIterationOrder(transformation.SingleStateTransformation):
         - Maybe also process the parameters to bring them in a canonical order.
     """
 
-    leading_dim = properties.Property(
+    leading_dim = dace_properties.Property(
         dtype=str,
         allow_none=True,
         desc="Dimension that should become the leading dimension.",
     )
 
-    map_entry = transformation.transformation.PatternNode(nodes.MapEntry)
+    map_entry = dace_transformation.transformation.PatternNode(dace_nodes.MapEntry)
 
     def __init__(
         self,
@@ -58,7 +58,7 @@ class MapIterationOrder(transformation.SingleStateTransformation):
     ) -> None:
         super().__init__(*args, **kwargs)
         if isinstance(leading_dim, gtx_common.Dimension):
-            self.leading_dim = dace_fieldview_util.get_map_variable(leading_dim)
+            self.leading_dim = gtx_dace_fieldview_util.get_map_variable(leading_dim)
         elif leading_dim is not None:
             self.leading_dim = leading_dim
 
@@ -81,7 +81,7 @@ class MapIterationOrder(transformation.SingleStateTransformation):
 
         if self.leading_dim is None:
             return False
-        map_entry: nodes.MapEntry = self.map_entry
+        map_entry: dace_nodes.MapEntry = self.map_entry
         map_params: Sequence[str] = map_entry.map.params
         map_var: str = self.leading_dim
 
@@ -102,7 +102,7 @@ class MapIterationOrder(transformation.SingleStateTransformation):
         `self.leading_dim` the last map variable (this is given by the structure of
         DaCe's code generator).
         """
-        map_entry: nodes.MapEntry = self.map_entry
+        map_entry: dace_nodes.MapEntry = self.map_entry
         map_params: list[str] = map_entry.map.params
         map_var: str = self.leading_dim
 
