@@ -11,7 +11,7 @@ from __future__ import annotations
 import ctypes
 import dataclasses
 import functools
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
 import dace
 import factory
@@ -21,7 +21,6 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common, config
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import (
-    LiftMode,
     collapse_tuple,
     infer_domain,
     inline_fundefs,
@@ -44,14 +43,7 @@ class DaCeTranslator(
     ],
     step_types.TranslationStep[languages.SDFG, languages.LanguageSettings],
 ):
-    auto_optimize: bool = False
-    lift_mode: LiftMode = LiftMode.FORCE_INLINE
     device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
-    symbolic_domain_sizes: Optional[dict[str, str]] = None
-    temporary_extraction_heuristics: Optional[
-        Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
-    ] = None
-    use_field_canonical_representation: bool = False
 
     def _language_settings(self) -> languages.LanguageSettings:
         return languages.LanguageSettings(
@@ -198,7 +190,6 @@ def _get_ctype_value(arg: Any, dtype: dace.dtypes.dataclass) -> Any:
 def convert_args(
     inp: CompiledDaceProgram,
     device: core_defs.DeviceType = core_defs.DeviceType.CPU,
-    use_field_canonical_representation: bool = False,
 ) -> stages.CompiledProgram:
     sdfg_program = inp.sdfg_program
     sdfg = sdfg_program.sdfg
@@ -239,7 +230,6 @@ def convert_args(
             check_args=False,
             offset_provider=offset_provider,
             on_gpu=on_gpu,
-            use_field_canonical_representation=use_field_canonical_representation,
         )
 
         with dace.config.temporary_config():
@@ -258,14 +248,10 @@ class DaCeWorkflowFactory(factory.Factory):
         cmake_build_type: config.CMakeBuildType = factory.LazyFunction(
             lambda: config.CMAKE_BUILD_TYPE
         )
-        use_field_canonical_representation: bool = False
 
     translation = factory.SubFactory(
         DaCeTranslationStepFactory,
         device_type=factory.SelfAttribute("..device_type"),
-        use_field_canonical_representation=factory.SelfAttribute(
-            "..use_field_canonical_representation"
-        ),
     )
     compilation = factory.SubFactory(
         DaCeCompilationStepFactory,
@@ -276,6 +262,5 @@ class DaCeWorkflowFactory(factory.Factory):
         lambda o: functools.partial(
             convert_args,
             device=o.device_type,
-            use_field_canonical_representation=o.use_field_canonical_representation,
         )
     )
