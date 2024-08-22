@@ -1029,3 +1029,29 @@ def test_program_let(offset_provider):
     )
 
     run_test_program(testee, expected, offset_provider)
+
+def test_make_tuple_in_set_at_expr(offset_provider):
+    testee = im.make_tuple(
+        im.as_fieldop("deref")("in_field1"),
+        im.as_fieldop("deref")("in_field2")
+    )
+    domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
+    expected = im.make_tuple(
+        im.as_fieldop("deref", domain)("in_field1"),
+        im.as_fieldop("deref", domain)("in_field2")
+    )
+    expected_domains = {
+        "in_field1": {IDim: (0, 11)},
+        "in_field2": {IDim: (0, 11)}
+    }
+    expected_domains = {  # TODO: conversion is ugly
+        ref: SymbolicDomain.from_expr(im.domain(common.GridType.CARTESIAN, d))
+        for ref, d in expected_domains.items()
+    }
+
+    actual, actual_domains = infer_expr(
+        testee, SymbolicDomain.from_expr(domain), offset_provider
+    )
+
+    assert expected == actual
+    assert expected_domains == constant_fold_accessed_domains(actual_domains)

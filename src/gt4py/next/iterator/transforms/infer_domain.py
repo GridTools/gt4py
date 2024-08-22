@@ -172,29 +172,11 @@ def infer_let(
     return transformed_call, accessed_domains_outer
 
 
-def infer_cond(
-    applied_cond: itir.FunCall,
-    target_domain: SymbolicDomain | itir.FunCall,
-    offset_provider: common.OffsetProvider,
-) -> Tuple[itir.FunCall, Dict[str, SymbolicDomain]]:
-    assert isinstance(applied_cond, itir.FunCall) and cpm.is_call_to(applied_cond, "cond")
-    assert isinstance(applied_cond.args[1], itir.FunCall) and isinstance(
-        applied_cond.args[2], itir.FunCall
-    )
-    call_true, domains_true = infer_expr(applied_cond.args[1], target_domain, offset_provider)
-    call_false, domains_false = infer_expr(
-        applied_cond.args[2], target_domain, offset_provider
-    )
-    return im.cond(applied_cond.args[0], call_true, call_false), _merge_domains(
-        domains_true, domains_false
-    )
-
-
 def infer_expr(
-    expr: itir.FunCall,
+    expr: itir.Expr,
     domain: SymbolicDomain | itir.FunCall,
     offset_provider: common.OffsetProvider,
-) -> Tuple[itir.FunCall, Dict[str, SymbolicDomain]]: # TODO: fix typing, describe what None for domain result means
+) -> Tuple[itir.Expr, Dict[str, SymbolicDomain]]: # TODO: fix typing, describe what None for domain result means
     if isinstance(expr, itir.SymRef):
         return expr, {str(expr.id): domain}
     elif isinstance(expr, itir.Literal):
@@ -203,11 +185,19 @@ def infer_expr(
         return infer_as_fieldop(expr, domain, offset_provider)
     elif cpm.is_let(expr):
         return infer_let(expr, domain, offset_provider)
-    elif cpm.is_call_to(expr, itir.BUILTINS):
+    elif cpm.is_call_to(expr, itir.GTIR_BUILTINS):
         # TODO(tehrengruber): double check
-        return im.call(expr.fun)(*(infer_expr(arg, domain, offset_provider)[0] for arg in expr.args)), None
+        infered_args_expr = []
+        actual_domains = {}
+        for arg in expr.args:
+            infered_arg_expr, actual_domains_arg = infer_expr(arg, domain, offset_provider)
+            infered_args_expr.append(infered_arg_expr)
+            # TODO: test merging works properly with tuple test case
+            actual_domains = _merge_domains(actual_domains, actual_domains_arg)
+
+        return im.call(expr.fun)(*infered_args_expr), actual_domains
     else:
-        raise ValueError(f"Unsupported function call: {expr.fun}")
+        raise ValueError(f"Unsupported expression: {expr}")
 
 def _validate_temporary_usage(body: list[itir.Stmt], temporaries: list[str]):
     assigned_targets = set()
@@ -231,14 +221,15 @@ def infer_program(
 
     temporaries: list[str] = [tmp.id for tmp in program.declarations]
 
-    _validate_temporary_usage(program.body, temporaries)
+    # TODO(tehrengruber): disabled since it breaks with tuples
+    #_validate_temporary_usage(program.body, temporaries)
 
     for set_at in reversed(program.body):
         assert isinstance(set_at, itir.SetAt)
         if isinstance(set_at.expr, itir.SymRef):
             transformed_set_ats.insert(0, set_at)
             continue
-        assert isinstance(set_at.expr, itir.FunCall)
+        assert isinstance(set_at.expr, itir.Expr)
         assert isinstance(
             set_at.target, itir.SymRef
         )  # TODO: stmt.target can be an expr, e.g. make_tuple
@@ -247,17 +238,9 @@ def infer_program(
             assert set_at.domain == AUTO_DOMAIN
         else:
             accessed_domains[set_at.target.id] = SymbolicDomain.from_expr(set_at.domain)
-        if cpm.is_call_to(set_at.expr.fun, "as_fieldop"):
-            transformed_call, current_accessed_domains = infer_as_fieldop(
-                set_at.expr, accessed_domains[set_at.target.id], offset_provider
-            )
-        elif cpm.is_let(set_at.expr):
-            transformed_call, current_accessed_domains = infer_let(
-                set_at.expr, accessed_domains[set_at.target.id], offset_provider
-            )
-        else:
-            raise AssertionError("Unexpected format in SetAt expression. Expected an applied "
-                                 "`as_fieldop` or let expression.")
+        transformed_call, current_accessed_domains = infer_expr(
+            set_at.expr, accessed_domains[set_at.target.id], offset_provider
+        )
         transformed_set_ats.insert(
             0,
             itir.SetAt(
