@@ -176,7 +176,7 @@ def infer_expr(
     expr: itir.Expr,
     domain: SymbolicDomain | itir.FunCall,
     offset_provider: common.OffsetProvider,
-) -> Tuple[itir.Expr, Dict[str, SymbolicDomain]]: # TODO: fix typing, describe what None for domain result means
+) -> Tuple[itir.Expr, Dict[str, SymbolicDomain]]:
     if isinstance(expr, itir.SymRef):
         return expr, {str(expr.id): domain}
     elif isinstance(expr, itir.Literal):
