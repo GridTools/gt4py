@@ -14,11 +14,11 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import Any, Dict, Generator, List, Optional, Sequence, Set, Tuple, Union
 
 import dace
 import sympy
-import warnings
 
 import gt4py.cartesian.gtc.definitions
 from gt4py import eve
@@ -256,7 +256,7 @@ class DomainInterval(eve.Node):
         if (first_start <= second_end and first_end >= second_start) or (
             second_start <= first_end and second_end >= first_start
         ):
-            warnings.warn(f"extension is NOT monotonically increasing!")
+            warnings.warn("extension is NOT monotonically increasing!")
 
         start = max(first_start, second_start)
         start = AxisBound(axis=axis, level=start.level, offset=start.offset)
