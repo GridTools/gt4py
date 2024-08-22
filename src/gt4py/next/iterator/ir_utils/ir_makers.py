@@ -10,6 +10,8 @@ import typing
 from typing import Callable, Iterable, Optional, Union
 
 from gt4py._core import definitions as core_defs
+from gt4py.eve.extended_typing import Dict, Tuple
+from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
@@ -397,9 +399,46 @@ def map_(op):
     return call(call("map_")(op))
 
 
+def domain(
+    grid_type: Union[common.GridType, str],
+    ranges: Dict[Union[common.Dimension, str], Tuple[itir.Expr, itir.Expr]],
+) -> itir.FunCall:
+    """
+    >>> str(
+    ...     domain(
+    ...         common.GridType.CARTESIAN,
+    ...         {
+    ...             common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (0, 10),
+    ...             common.Dimension(value="JDim", kind=common.DimensionKind.HORIZONTAL): (0, 20),
+    ...         },
+    ...     )
+    ... )
+    'c⟨ IDimₕ: [0, 10), JDimₕ: [0, 20) ⟩'
+    >>> str(domain(common.GridType.CARTESIAN, {"IDim": (0, 10), "JDim": (0, 20)}))
+    'c⟨ IDimₕ: [0, 10), JDimₕ: [0, 20) ⟩'
+    >>> str(domain(common.GridType.UNSTRUCTURED, {"IDim": (0, 10), "JDim": (0, 20)}))
+    'u⟨ IDimₕ: [0, 10), JDimₕ: [0, 20) ⟩'
+    """
+    if isinstance(grid_type, common.GridType):
+        grid_type = f"{grid_type!s}_domain"
+    return call(grid_type)(
+        *[
+            call("named_range")(
+                itir.AxisLiteral(value=d.value, kind=d.kind)
+                if isinstance(d, common.Dimension)
+                else itir.AxisLiteral(value=d),
+                r[0],
+                r[1],
+            )
+            for d, r in ranges.items()
+        ]
+    )
+
+
 def as_fieldop(expr: itir.Expr, domain: Optional[itir.FunCall] = None) -> call:
     """
     Create an `as_fieldop` call.
+
     Examples
     --------
     >>> str(as_fieldop(lambda_("it1", "it2")(plus(deref("it1"), deref("it2"))))("field1", "field2"))
