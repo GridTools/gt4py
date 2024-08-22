@@ -33,6 +33,10 @@ class ParallelMapFusion(map_fusion_helper.MapFusionHelper):
             node as direct ancestor. This will increase the locality of the merge.
         only_inner_maps: Only match Maps that are internal, i.e. inside another Map.
         only_toplevel_maps: Only consider Maps that are at the top.
+
+    Note:
+        This transformation only matches the entry nodes of the Map, but will also
+        modify the exit nodes of the Map.
     """
 
     map_entry1 = transformation.transformation.PatternNode(nodes.MapEntry)
