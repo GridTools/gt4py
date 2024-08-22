@@ -193,7 +193,8 @@ def infer_expr(
             infered_arg_expr, actual_domains_arg = infer_expr(arg, domain, offset_provider)
             infered_args_expr.append(infered_arg_expr)
             # TODO: test merging works properly with tuple test case
-            actual_domains = _merge_domains(actual_domains, actual_domains_arg)
+            if isinstance(arg, itir.FunCall) and isinstance(arg.fun, itir.FunCall):
+                actual_domains = _merge_domains(actual_domains, actual_domains_arg)
 
         return im.call(expr.fun)(*infered_args_expr), actual_domains
     else:
