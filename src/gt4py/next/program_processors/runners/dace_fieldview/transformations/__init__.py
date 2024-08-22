@@ -26,9 +26,9 @@ from .gpu_utils import (
     gt_set_gpu_blocksize,
 )
 from .k_blocking import KBlocking
+from .map_fusion_serial import SerialMapFusion
 from .map_orderer import MapIterationOrder
 from .map_promoter import SerialMapPromoter
-from .map_serial_fusion import SerialMapFusion
 
 
 __all__ = [

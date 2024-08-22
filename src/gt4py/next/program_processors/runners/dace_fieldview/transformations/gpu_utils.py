@@ -330,7 +330,7 @@ class SerialMapPromoterGPU(transformation.SingleStateTransformation):
         - If the top map is a trivial map.
         - If a valid partition exists that can be fused at all.
         """
-        from .map_serial_fusion import SerialMapFusion
+        from .map_fusion_serial import SerialMapFusion
 
         map_exit_1: nodes.MapExit = self.map_exit1
         map_1: nodes.Map = map_exit_1.map
