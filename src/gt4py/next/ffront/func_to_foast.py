@@ -369,9 +369,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
     def visit_Attribute(self, node: ast.Attribute) -> Any:
         return foast.Attribute(
-            value=self.visit(node.value),
-            attr=node.attr,
-            location=self.get_location(node),
+            value=self.visit(node.value), attr=node.attr, location=self.get_location(node)
         )
 
     def visit_Tuple(self, node: ast.Tuple, **kwargs: Any) -> foast.TupleExpr:
