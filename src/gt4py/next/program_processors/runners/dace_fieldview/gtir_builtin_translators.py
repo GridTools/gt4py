@@ -453,6 +453,12 @@ def translate_symbol_ref(
     if isinstance(sym_type, (ts.FieldType, ts.ScalarType)):
         data_nodes = _get_data_nodes(sdfg, state, sdfg_builder, sym_value, sym_type)
         assert len(data_nodes) == 1
+    elif isinstance(sym_type, (ts.TupleType)):
+        data_nodes = []
+        for field_name, field_type in dace_fieldview_util.get_tuple_fields(
+            sym_value, sym_type, flatten=True
+        ):
+            data_nodes += _get_data_nodes(sdfg, state, sdfg_builder, field_name, field_type)
     else:
         raise NotImplementedError(f"Symbol type {type(sym_type)} not supported.")
 
@@ -476,7 +482,6 @@ def translate_make_tuple(
         )
         for arg in node.args
     ]
-    assert all(len(arg) == 1 for arg in tuple_args)
     return list(itertools.chain(*tuple_args))
 
 
