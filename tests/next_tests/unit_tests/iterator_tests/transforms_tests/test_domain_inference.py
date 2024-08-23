@@ -621,7 +621,7 @@ def test_program_tree_tmps_two_inputs(offset_provider):
 def test_cond(offset_provider):
     stencil1 = im.lambda_("arg0")(im.minus(im.deref(im.shift("Ioff", 1)("arg0")), im.deref("arg0")))
     field_1 = im.as_fieldop(stencil1)(im.ref("in_field1"))
-    inner_stencil2 = im.lambda_("arg0_tmp", "arg1_tmp")(
+    tmp_stencil2 = im.lambda_("arg0_tmp", "arg1_tmp")(
         im.plus(
             im.deref(im.shift("Ioff", 1)("arg0_tmp")),
             im.deref(im.shift("Ioff", -1)("arg1_tmp")),
@@ -633,7 +633,7 @@ def test_cond(offset_provider):
             im.deref(im.shift("Ioff", -1)("arg1")),
         )
     )
-    tmp2 = im.as_fieldop(inner_stencil2)(im.ref("in_field1"), im.ref("in_field2"))
+    tmp2 = im.as_fieldop(tmp_stencil2)(im.ref("in_field1"), im.ref("in_field2"))
     field_2 = im.as_fieldop(stencil2)(im.ref("in_field2"), tmp2)
 
     cond = im.deref("cond_")
@@ -643,7 +643,7 @@ def test_cond(offset_provider):
     domain = im.domain(common.GridType.CARTESIAN, {"IDim": (0, 11)})
     domain_tmp = translate_domain(domain, {"Ioff": -1}, offset_provider)
     expected_domains_dict = {"in_field1": {IDim: (0, 12)}, "in_field2": {IDim: (-2, 12)}}
-    expected_tmp2 = im.as_fieldop(inner_stencil2, domain_tmp)(
+    expected_tmp2 = im.as_fieldop(tmp_stencil2, domain_tmp)(
         im.ref("in_field1"), im.ref("in_field2")
     )
     expected_field_1 = im.as_fieldop(stencil1, domain)(im.ref("in_field1"))
