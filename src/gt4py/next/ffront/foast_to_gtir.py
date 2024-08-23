@@ -10,10 +10,12 @@
 import dataclasses
 from typing import Any, Callable, Optional
 
-from gt4py.eve import NodeTranslator, PreserveLocationVisitor, utils as eve_utils
+from gt4py import eve
+from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Never
 from gt4py.next.ffront import (
     dialect_ast_enums,
+    experimental as experimental_builtins,
     fbuiltins,
     field_operator_ast as foast,
     foast_introspection,
@@ -21,8 +23,6 @@ from gt4py.next.ffront import (
     stages as ffront_stages,
     type_specifications as ts_ffront,
 )
-from gt4py.next.ffront.experimental import EXPERIMENTAL_FUN_BUILTIN_NAMES
-from gt4py.next.ffront.fbuiltins import FUN_BUILTIN_NAMES, MATH_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_info, type_specifications as ts
@@ -39,7 +39,7 @@ def promote_to_list(node: foast.Symbol | foast.Expr) -> Callable[[itir.Expr], it
 
 
 @dataclasses.dataclass
-class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
+class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     """
     Lower FieldOperator AST (FOAST) to Iterator IR (ITIR).
 
@@ -239,14 +239,14 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
     def visit_Call(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         if type_info.type_class(node.func.type) is ts.FieldType:
             return self._visit_shift(node, **kwargs)
-        elif isinstance(node.func, foast.Name) and node.func.id in MATH_BUILTIN_NAMES:
+        elif isinstance(node.func, foast.Name) and node.func.id in fbuiltins.MATH_BUILTIN_NAMES:
             return self._visit_math_built_in(node, **kwargs)
         elif isinstance(node.func, foast.Name) and node.func.id in (
-            FUN_BUILTIN_NAMES + EXPERIMENTAL_FUN_BUILTIN_NAMES
+            fbuiltins.FUN_BUILTIN_NAMES + experimental_builtins.EXPERIMENTAL_FUN_BUILTIN_NAMES
         ):
             visitor = getattr(self, f"_visit_{node.func.id}")
             return visitor(node, **kwargs)
-        elif isinstance(node.func, foast.Name) and node.func.id in TYPE_BUILTIN_NAMES:
+        elif isinstance(node.func, foast.Name) and node.func.id in fbuiltins.TYPE_BUILTIN_NAMES:
             return self._visit_type_constr(node, **kwargs)
         elif isinstance(
             node.func.type,
