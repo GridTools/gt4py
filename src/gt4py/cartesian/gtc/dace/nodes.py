@@ -215,10 +215,8 @@ class StencilComputation(library.LibraryNode):
     def tile_strides(self):
         if self.tile_sizes_interpretation == "strides":
             return self.tile_sizes
-        else:
-            overall_extent: Extent = next(iter(self.extents.values()))
-            for extent in self.extents.values():
-                overall_extent |= extent
-            return {
-                key: value + overall_extent[key.to_idx()] for key, value in self.tile_sizes.items()
-            }
+
+        overall_extent: Extent = next(iter(self.extents.values()))
+        for extent in self.extents.values():
+            overall_extent |= extent
+        return {key: value + overall_extent[key.to_idx()] for key, value in self.tile_sizes.items()}
