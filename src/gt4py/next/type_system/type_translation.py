@@ -128,7 +128,7 @@ def from_type_hint(
 
             try:
                 dtype = recursive_make_symbol(dtype_arg)
-            except ValueError as error:
+            except (ValueError, exceptions.TypeError_) as error:
                 raise ValueError(
                     f"Field dtype argument must be a scalar type (got '{dtype_arg}')."
                 ) from error
