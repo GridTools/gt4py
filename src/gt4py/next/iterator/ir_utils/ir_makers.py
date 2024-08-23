@@ -363,7 +363,9 @@ def lifted_neighbors(offset, it) -> itir.Expr:
     return lift(lambda_("it")(neighbors(offset, "it")))(it)
 
 
-def as_fieldop_neighbors(offset, it) -> itir.Expr:
+def as_fieldop_neighbors(
+    offset: str | itir.OffsetLiteral, it: str | itir.Expr, domain: Optional[itir.FunCall] = None
+) -> itir.Expr:
     """
     Create a fieldop for neighbors call.
 
@@ -372,7 +374,7 @@ def as_fieldop_neighbors(offset, it) -> itir.Expr:
     >>> str(as_fieldop_neighbors("off", "a"))
     '(⇑(λ(it) → neighbors(offₒ, it)))(a)'
     """
-    return as_fieldop(lambda_("it")(neighbors(offset, "it")))(it)
+    return as_fieldop(lambda_("it")(neighbors(offset, "it")), domain)(it)
 
 
 def promote_to_const_iterator(expr: str | itir.Expr) -> itir.Expr:
