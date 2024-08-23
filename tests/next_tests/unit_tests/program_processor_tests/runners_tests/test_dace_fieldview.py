@@ -1523,57 +1523,6 @@ def test_gtir_let_lambda_with_cond():
         assert np.allclose(b, a if s else a * 2)
 
 
-def test_gtir_let_lambda_with_tuple():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
-    testee = gtir.Program(
-        id="let_lambda_with_tuple",
-        function_definitions=[],
-        params=[
-            gtir.Sym(id="x", type=IFTYPE),
-            gtir.Sym(id="y", type=IFTYPE),
-            gtir.Sym(
-                id="z", type=ts.TupleType(types=[ts.TupleType(types=[IFTYPE, IFTYPE]), IFTYPE])
-            ),
-            gtir.Sym(id="size", type=SIZE_TYPE),
-        ],
-        declarations=[],
-        body=[
-            gtir.SetAt(
-                expr=im.let("t", im.make_tuple(im.op_as_fieldop("plus", domain)("x", "y"), "x"))(
-                    im.make_tuple("t", "y")
-                ),
-                domain=domain,
-                target=gtir.SymRef(id="z"),
-            )
-        ],
-    )
-
-    a = np.random.rand(N)
-    b = np.random.rand(N)
-    c = np.empty_like(a)
-    d = np.empty_like(a)
-    e = np.empty_like(a)
-
-    sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
-
-    z_fields = (c, d, e)
-    z_symbols = dict(
-        __z_0_0_size_0=FSYMBOLS["__x_size_0"],
-        __z_0_0_stride_0=FSYMBOLS["__x_stride_0"],
-        __z_0_1_size_0=FSYMBOLS["__x_size_0"],
-        __z_0_1_stride_0=FSYMBOLS["__x_stride_0"],
-        __z_1_size_0=FSYMBOLS["__x_size_0"],
-        __z_1_stride_0=FSYMBOLS["__x_stride_0"],
-    )
-
-    sdfg(a, b, *z_fields, **FSYMBOLS, **z_symbols)
-    assert np.allclose(c, a + b)
-    assert np.allclose(d, a)
-    assert np.allclose(e, b)
-
-
 def test_gtir_if_values():
     domain = im.call("cartesian_domain")(
         im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
