@@ -275,28 +275,17 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
 
     def _visit_shift(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         match node.args[0]:
-            case foast.Subscript(index=int(offset_index)):
-                node_val = node.args[0].value
-                if isinstance(node_val, foast.Attribute):
-                    shift_offset = im.shift(node_val.attr, offset_index)
-                elif isinstance(node_val, foast.Name):
-                    shift_offset = im.shift(node_val.id, offset_index)
+            case foast.Subscript(value=foast.Name(id=offset_name), index=int(offset_index)):
+                shift_offset = im.shift(offset_name, offset_index)
             case foast.Name(id=offset_name):
                 return im.lifted_neighbors(str(offset_name), self.visit(node.func, **kwargs))
             case foast.Call(func=foast.Name(id="as_offset")):
                 func_args = node.args[0]
                 offset_dim = func_args.args[0]
-                assert isinstance(offset_dim, (foast.Name, foast.Attribute))
-                if isinstance(offset_dim, foast.Name):
-                    offset_dim_id = offset_dim.id
-                else:
-                    offset_dim_id = offset_dim.attr  # type: ignore[assignment]
+                assert isinstance(offset_dim, foast.Name)
                 shift_offset = im.shift(
-                    offset_dim_id, im.deref(self.visit(func_args.args[1], **kwargs))
+                    offset_dim.id, im.deref(self.visit(func_args.args[1], **kwargs))
                 )
-            case foast.Attribute(attr=offset_name):
-                if isinstance(node.func, foast.Name):
-                    return im.lifted_neighbors(str(offset_name), self.visit(node.func, **kwargs))
             case _:
                 raise FieldOperatorLoweringError("Unexpected shift arguments!")
         return im.lift(im.lambda_("it")(im.deref(shift_offset("it"))))(
