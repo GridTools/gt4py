@@ -855,7 +855,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
 
         read_fields = set(memlet.field for memlet in read_memlets)
         write_fields = set(memlet.field for memlet in write_memlets)
-        res = dcir.NestedSDFG(
+        return dcir.NestedSDFG(
             label=global_ctx.library_node.label,
             states=self.to_state(computations, grid_subset=iteration_ctx.grid_subset),
             field_decls=field_decls,
@@ -863,5 +863,3 @@ class DaCeIRBuilder(eve.NodeTranslator):
             write_memlets=[memlet for memlet in field_memlets if memlet.field in write_fields],
             symbol_decls=list(symbol_collector.symbol_decls.values()),
         )
-
-        return res
