@@ -41,10 +41,13 @@ def promote_to_list(node: foast.Symbol | foast.Expr) -> Callable[[itir.Expr], it
 @dataclasses.dataclass
 class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     """
-    Lower FieldOperator AST (FOAST) to Iterator IR (ITIR).
+    Lower FieldOperator AST (FOAST) to GTIR.
 
-    The strategy is to lower every expression to lifted stencils,
-    i.e. taking iterators and returning iterator.
+    Most expressions are lowered to `as_fieldop`ed stencils.
+    Pure scalar expressions are kept as scalar operations as they might appear outside of the stencil context,
+    e.g. in `cond`.
+    In arithemtic operations that involve a field and a scalar, the scalar is implicitly broadcasted to a field
+    in the `as_fieldop` call.
 
     Examples
     --------

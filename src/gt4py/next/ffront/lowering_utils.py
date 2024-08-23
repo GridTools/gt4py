@@ -121,7 +121,7 @@ def process_elements(
         process_func, tuple(im.ref(let_id) for let_id in let_ids), current_el_type
     )
 
-    return im.let(*(zip(let_ids, objs)))(body)
+    return im.let(*(zip(let_ids, objs, strict=True)))(body)
 
 
 T = TypeVar("T", bound=itir.Expr, covariant=True)
@@ -134,7 +134,7 @@ def _process_elements_impl(
 ) -> itir.Expr:
     if isinstance(current_el_type, ts.TupleType):
         result = im.make_tuple(
-            *[
+            *(
                 _process_elements_impl(
                     process_func,
                     tuple(
@@ -143,7 +143,7 @@ def _process_elements_impl(
                     current_el_type.types[i],
                 )
                 for i in range(len(current_el_type.types))
-            ]
+            )
         )
     elif type_info.contains_local_field(current_el_type):
         raise NotImplementedError("Processing fields with local dimension is not implemented.")

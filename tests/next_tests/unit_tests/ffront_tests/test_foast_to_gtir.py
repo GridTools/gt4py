@@ -33,11 +33,9 @@ from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.fbuiltins import exp, minimum
 from gt4py.next.ffront.foast_to_gtir import FieldOperatorLowering
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
-from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.iterator.transforms import collapse_tuple, inline_lambdas
-from gt4py.next.iterator.type_system import type_specifications as it_ts
-from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
+from gt4py.next.iterator.transforms import inline_lambdas
+from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
 Edge = gtx.Dimension("Edge")
@@ -76,7 +74,6 @@ def test_field_and_scalar_arg():
     def foo(bar: gtx.Field[[TDim], int64], alpha: int64) -> gtx.Field[[TDim], int64]:
         return alpha * bar
 
-    # TODO document that scalar arguments of `as_fieldop(stencil)` are promoted to 0-d fields
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
 
