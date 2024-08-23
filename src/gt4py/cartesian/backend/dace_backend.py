@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type
 import dace
 import dace.data
 from dace.sdfg.utils import inline_sdfgs
-from dace.serialize import dumps
 
 from gt4py import storage as gt_storage
 from gt4py.cartesian import config as gt_config
@@ -54,10 +53,6 @@ from gt4py.eve.codegen import MakoTemplate as as_mako
 if TYPE_CHECKING:
     from gt4py.cartesian.stencil_builder import StencilBuilder
     from gt4py.cartesian.stencil_object import StencilObject
-
-
-def _serialize_sdfg(sdfg: dace.SDFG):
-    return dumps(sdfg)
 
 
 def _specialize_transient_strides(sdfg: dace.SDFG, layout_map):
