@@ -1114,12 +1114,7 @@ def test_gtir_neighbors_as_output():
         declarations=[],
         body=[
             gtir.SetAt(
-                expr=im.call(
-                    im.call("as_fieldop")(
-                        im.lambda_("it")(im.neighbors("V2E", "it")),
-                        vertex_domain,
-                    )
-                )("edges"),
+                expr=im.as_fieldop_neighbors("V2E", "edges", vertex_domain),
                 domain=v2e_domain,
                 target=gtir.SymRef(id="v2e_field"),
             )
@@ -1172,14 +1167,7 @@ def test_gtir_reduce():
             ),
             vertex_domain,
         )
-    )(
-        im.call(
-            im.call("as_fieldop")(
-                im.lambda_("it")(im.neighbors("V2E", "it")),
-                vertex_domain,
-            )
-        )("edges")
-    )
+    )(im.as_fieldop_neighbors("V2E", "edges", vertex_domain))
 
     connectivity_V2E = SIMPLE_MESH_OFFSET_PROVIDER["V2E"]
     assert isinstance(connectivity_V2E, gtx_common.NeighborTable)
@@ -1247,14 +1235,7 @@ def test_gtir_reduce_with_skip_values():
             ),
             vertex_domain,
         )
-    )(
-        im.call(
-            im.call("as_fieldop")(
-                im.lambda_("it")(im.neighbors("V2E", "it")),
-                vertex_domain,
-            )
-        )("edges")
-    )
+    )(im.as_fieldop_neighbors("V2E", "edges", vertex_domain))
 
     connectivity_V2E = SKIP_VALUE_MESH_OFFSET_PROVIDER["V2E"]
     assert isinstance(connectivity_V2E, gtx_common.NeighborTable)
@@ -1338,18 +1319,8 @@ def test_gtir_reduce_dot_product():
                     )
                 )(
                     im.op_as_fieldop("multiplies", vertex_domain)(
-                        im.call(
-                            im.call("as_fieldop")(
-                                im.lambda_("it")(im.neighbors("V2E", "it")),
-                                vertex_domain,
-                            )
-                        )("edges"),
-                        im.call(
-                            im.call("as_fieldop")(
-                                im.lambda_("it")(im.neighbors("V2E", "it")),
-                                vertex_domain,
-                            )
-                        )("edges"),
+                        im.as_fieldop_neighbors("V2E", "edges", vertex_domain),
+                        im.as_fieldop_neighbors("V2E", "edges", vertex_domain),
                     ),
                 ),
                 domain=vertex_domain,
@@ -1407,14 +1378,8 @@ def test_gtir_reduce_with_cond_neighbors():
                 )(
                     im.call("cond")(
                         gtir.SymRef(id="pred"),
-                        im.as_fieldop(
-                            im.lambda_("it")(im.neighbors("V2E_FULL", "it")),
-                            vertex_domain,
-                        )("edges"),
-                        im.as_fieldop(
-                            im.lambda_("it")(im.neighbors("V2E", "it")),
-                            vertex_domain,
-                        )("edges"),
+                        im.as_fieldop_neighbors("V2E_FULL", "edges", vertex_domain),
+                        im.as_fieldop_neighbors("V2E", "edges", vertex_domain),
                     )
                 ),
                 domain=vertex_domain,
