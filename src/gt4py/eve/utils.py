@@ -1651,5 +1651,3 @@ class XIterable(Iterable[T]):
 
 
 xiter = XIterable
-
-__all__ = ["toolz"]
