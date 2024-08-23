@@ -26,7 +26,7 @@ At the time of creation of this document, at least one additional toolchain is a
 
 - Some ways of configuring toolchains involve configuring multiple components in synch
 - Some ways of configuring toolchains involve switching out or nesting toolchain steps
-- What configuration options are avaiable will depend on what toolchain will be used and how that is configured.
+- What configuration options are available will depend on what toolchain will be used and how that is configured.
 - Hierarchical configuration defaults and overrides can be confusing from a user perspective.
 - Leaving the configuration interface completely up to toolchain developers could lead to a confusing ad fragmented user experience.
 
