@@ -86,10 +86,8 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
     ) -> itir.FunctionDefinition:
         func_definition: itir.FunctionDefinition = self.visit(node.definition, **kwargs)
 
-        new_body = func_definition.expr
-
         return itir.FunctionDefinition(
-            id=func_definition.id, params=func_definition.params, expr=new_body
+            id=func_definition.id, params=func_definition.params, expr=func_definition.expr
         )
 
     def visit_ScanOperator(

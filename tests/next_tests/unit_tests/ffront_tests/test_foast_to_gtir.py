@@ -97,7 +97,7 @@ def test_scalar_arg_only():
     assert lowered.expr == reference
 
 
-def test_multicopy():
+def test_multivalue_identity():
     def foo(inp1: gtx.Field[[TDim], float64], inp2: gtx.Field[[TDim], float64]):
         return inp1, inp2
 
@@ -326,7 +326,6 @@ def test_astype_nested_tuple():
     assert lowered_inlined.expr == reference
 
 
-# TODO (introduce neg/pos)
 def test_unary_minus():
     def foo(inp: gtx.Field[[TDim], float64]):
         return -inp
@@ -600,10 +599,10 @@ def test_compare_gt():
 
 
 def test_compare_lt():
-    def comp_lt(a: gtx.Field[[TDim], float64], b: gtx.Field[[TDim], float64]):
+    def foo(a: gtx.Field[[TDim], float64], b: gtx.Field[[TDim], float64]):
         return a < b
 
-    parsed = FieldOperatorParser.apply_to_function(comp_lt)
+    parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.op_as_fieldop("less")("a", "b")

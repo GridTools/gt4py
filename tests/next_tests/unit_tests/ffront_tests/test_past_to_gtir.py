@@ -125,7 +125,7 @@ def test_copy_restrict_lowering(copy_restrict_program_def, gtir_identity_fundef)
             ],
         ),
     )
-    fencil_pattern = P(
+    program_pattern = P(
         itir.Program,
         id=eve.SymbolName("copy_restrict_program"),
         params=[
@@ -137,7 +137,7 @@ def test_copy_restrict_lowering(copy_restrict_program_def, gtir_identity_fundef)
         body=[set_at_pattern],
     )
 
-    fencil_pattern.match(itir_node, raise_exception=True)
+    program_pattern.match(itir_node, raise_exception=True)
 
 
 def test_tuple_constructed_in_out_with_slicing(make_tuple_op):
