@@ -368,14 +368,9 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         )
 
     def visit_Attribute(self, node: ast.Attribute) -> Any:
-        assert isinstance(node.value, ast.Name)
-        attr_type = type_translation.from_value(
-            getattr(self.closure_vars[node.value.id], node.attr)
-        )
         return foast.Attribute(
             value=self.visit(node.value),
             attr=node.attr,
-            type=attr_type,
             location=self.get_location(node),
         )
 

@@ -675,12 +675,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             # have the proper format here.
             if not isinstance(
                 new_func,
-                (
-                    foast.FunctionDefinition,
-                    foast.FieldOperator,
-                    foast.ScanOperator,
-                    foast.Name,
-                ),
+                (foast.FunctionDefinition, foast.FieldOperator, foast.ScanOperator, foast.Name),
             ):
                 raise errors.DSLError(node.location, "Functions can only be called directly.")
         elif isinstance(new_func.type, ts.FieldType):
