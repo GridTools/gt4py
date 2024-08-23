@@ -23,11 +23,7 @@ MISSING_FILENAME = "<string>"
 
 def get_closure_vars_from_function(function: Callable) -> dict[str, Any]:
     (nonlocals, globals, builtins, unbound) = inspect.getclosurevars(function)  # noqa: A001 [builtin-variable-shadowing]
-    d = {**builtins, **globals, **nonlocals}
-    if len(unbound) > 0:
-        dc = dict(zip(unbound, unbound))
-        d.update(dc)
-    return d  # nonlocals override globals
+    return {**builtins, **globals, **nonlocals}  # nonlocals override globals
 
 
 def make_source_definition_from_function(func: Callable) -> SourceDefinition:

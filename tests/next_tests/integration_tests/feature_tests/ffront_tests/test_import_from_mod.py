@@ -8,7 +8,6 @@
 
 import gt4py.next as gtx
 import numpy as np
-from next_tests import integration_tests
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import cartesian_case
 
@@ -16,12 +15,13 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     exec_alloc_descriptor,
     mesh_descriptor,
 )
+from next_tests.integration_tests.feature_tests import ffront_tests
 
 
 def test_import_dims_module(cartesian_case):
     @gtx.field_operator
     def mod_op(f: cases.IKField) -> cases.IKField:
-        return f(cases.Ioff[1])
+        return f
 
     @gtx.program
     def mod_prog(f: cases.IKField, out: cases.IKField):
@@ -29,7 +29,7 @@ def test_import_dims_module(cartesian_case):
             f,
             out=out,
             domain={
-                integration_tests.feature_tests.ffront_tests.ffront_test_utils.IDim: (0, 8),
+                ffront_tests.ffront_test_utils.IDim: (0, 8),
                 cases.KDim: (0, 3),
             },
         )
@@ -37,6 +37,6 @@ def test_import_dims_module(cartesian_case):
     f = cases.allocate(cartesian_case, mod_prog, "f")()
     out = cases.allocate(cartesian_case, mod_prog, "out")()
     expected = np.zeros_like(f.asnumpy())
-    expected[0:8, 0:3] = f.asnumpy()[1:9, 0:3]
+    expected[0:8, 0:3] = f.asnumpy()[0:8, 0:3]
 
-    cases.cases.verify(cartesian_case, mod_prog, f, out=out, ref=expected)
+    cases.verify(cartesian_case, mod_prog, f, out=out, ref=expected)

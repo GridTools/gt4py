@@ -5,7 +5,6 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-
 from typing import Any, Optional, cast
 
 from gt4py.eve import NodeTranslator, traits
@@ -65,7 +64,7 @@ def _validate_operator_call(new_func: past.Name, new_kwargs: dict) -> None:
             raise ValueError("Empty domain not allowed.")
 
         for dim in domain_kwarg.keys_:
-            if not isinstance(dim.type, ts.DimensionType):
+            if not isinstance(dim.type, (ts.DimensionType, ts.ModuleType)):
                 raise ValueError(
                     f"Only 'Dimension' allowed in domain dictionary keys, got '{dim}' which is of type '{dim.type}'."
                 )
