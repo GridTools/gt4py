@@ -129,7 +129,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         common_symbols: dict[str, foast.Symbol] = node.annex.propagated_symbols
 
         if return_kind is foast_introspection.StmtReturnKind.NO_RETURN:
-            # TODO document why this case should be handled in this way, not by the more general CONDITIONAL_RETURN
+            # FIXME[#1582](havogt): document why this case should be handled in this way, not by the more general CONDITIONAL_RETURN
 
             # pack the common symbols into a tuple
             common_symrefs = im.make_tuple(*(im.ref(sym) for sym in common_symbols.keys()))
