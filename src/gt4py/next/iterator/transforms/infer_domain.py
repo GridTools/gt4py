@@ -24,10 +24,11 @@ def split_dict_by_key(pred: Callable, d: dict):
     Split dictionary into two based on predicate.
 
     >>> d = {1: "a", 2: "b", 3: "c", 4: "d"}
-    >>> split_dict_by_key(lambda k: k%2 == 0, d)
+    >>> split_dict_by_key(lambda k: k % 2 == 0, d)
     ({2: 'b', 4: 'd'}, {1: 'a', 3: 'c'})
     """
-    a, b = {}, {}
+    a: dict = {}
+    b: dict = {}
     for k, v in d.items():
         (a if pred(k) else b)[k] = v
     return a, b
@@ -118,7 +119,9 @@ def infer_as_fieldop(
     transformed_inputs: list[itir.Expr] = []
     for in_field_id, in_field in zip(input_ids, inputs):
         if in_field_id not in accessed_domains:
-            raise ValueError(f"Let param `{in_field_id}` is never accessed. Can not infer its domain.")
+            raise ValueError(
+                f"Let param `{in_field_id}` is never accessed. Can not infer its domain."
+            )
         transformed_input, accessed_domains_tmp = infer_expr(
             in_field, accessed_domains[in_field_id], offset_provider
         )
@@ -139,20 +142,25 @@ def infer_as_fieldop(
 
     return transformed_call, accessed_domains_without_tmp
 
+
 def infer_let(
     let_expr: itir.FunCall,
-    input_domain: SymbolicDomain | itir.FunCall,
+    input_domain: SymbolicDomain,
     offset_provider: common.OffsetProvider,
 ) -> tuple[itir.FunCall, Dict[str, SymbolicDomain]]:
     assert cpm.is_let(let_expr)
-
-    transformed_calls_expr, accessed_domains = infer_expr(let_expr.fun.expr, input_domain, offset_provider)
+    assert isinstance(let_expr.fun, itir.Lambda)
+    transformed_calls_expr, accessed_domains = infer_expr(
+        let_expr.fun.expr, input_domain, offset_provider
+    )
 
     # TODO(tehrengruber): describe and tidy up
     let_params = {param_sym.id for param_sym in let_expr.fun.params}
-    accessed_domains_let_args, accessed_domains_outer = split_dict_by_key(lambda k: k in let_params, accessed_domains)
+    accessed_domains_let_args, accessed_domains_outer = split_dict_by_key(
+        lambda k: k in let_params, accessed_domains
+    )
 
-    transformed_calls_args: list[itir.FunCall] = []
+    transformed_calls_args: list[itir.Expr] = []
     for param, arg in zip(let_expr.fun.params, let_expr.args):
         if param.id not in accessed_domains_let_args:
             raise ValueError(f"Let param `{param.id}` is never accessed. Can not infer its domain.")
@@ -163,18 +171,17 @@ def infer_let(
         transformed_calls_args.append(transformed_calls_arg)
 
     transformed_call = im.let(
-        *(
-            (str(param.id), call)
-            for param, call in zip(let_expr.fun.params, transformed_calls_args)
-        )
+        *((str(param.id), call) for param, call in zip(let_expr.fun.params, transformed_calls_args))
     )(transformed_calls_expr)
+    # TODO: mypy error "let" has incompatible type "*Generator[tuple[str, Expr], None, None]";
+    #  expected "Iterable[tuple[str | Sym, Expr | str]]"
 
     return transformed_call, accessed_domains_outer
 
 
 def infer_expr(
     expr: itir.Expr,
-    domain: SymbolicDomain | itir.FunCall,
+    domain: SymbolicDomain,
     offset_provider: common.OffsetProvider,
 ) -> tuple[itir.Expr, Dict[str, SymbolicDomain]]:
     if isinstance(expr, itir.SymRef):
@@ -188,7 +195,7 @@ def infer_expr(
     elif cpm.is_call_to(expr, itir.GTIR_BUILTINS):
         # TODO(tehrengruber): double check
         infered_args_expr = []
-        actual_domains = {}
+        actual_domains: Dict[str, SymbolicDomain] = {}
         for arg in expr.args:
             infered_arg_expr, actual_domains_arg = infer_expr(arg, domain, offset_provider)
             infered_args_expr.append(infered_arg_expr)
@@ -199,6 +206,7 @@ def infer_expr(
         return im.call(expr.fun)(*infered_args_expr), actual_domains
     else:
         raise ValueError(f"Unsupported expression: {expr}")
+
 
 def _validate_temporary_usage(body: list[itir.Stmt], temporaries: list[str]):
     assigned_targets = set()
@@ -223,7 +231,7 @@ def infer_program(
     temporaries: list[str] = [tmp.id for tmp in program.declarations]
 
     # TODO(tehrengruber): disabled since it breaks with tuples
-    #_validate_temporary_usage(program.body, temporaries)
+    # _validate_temporary_usage(program.body, temporaries)
 
     for set_at in reversed(program.body):
         assert isinstance(set_at, itir.SetAt)

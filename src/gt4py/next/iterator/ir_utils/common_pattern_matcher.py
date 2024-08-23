@@ -41,12 +41,10 @@ def is_applied_shift(arg: itir.Node) -> TypeGuard[itir.FunCall]:
         and arg.fun.fun.id == "shift"
     )
 
+
 def is_applied_as_fieldop(arg: itir.Node) -> TypeGuard[itir.FunCall]:
     """Match expressions of the form `as_fieldop(stencil)(*args)`."""
-    return (
-        isinstance(arg, itir.FunCall) and
-        is_call_to(arg.fun, "as_fieldop")
-    )
+    return isinstance(arg, itir.FunCall) and is_call_to(arg.fun, "as_fieldop")
 
 
 def is_let(node: itir.Node) -> TypeGuard[itir.FunCall]:

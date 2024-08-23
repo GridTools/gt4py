@@ -16,7 +16,7 @@ from typing import Any, Callable, Final, Iterable, Literal, Optional, Sequence
 
 import gt4py.next as gtx
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
-from gt4py.eve.extended_typing import Dict, Tuple
+from gt4py.eve.extended_typing import Tuple
 from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next import common
@@ -455,7 +455,7 @@ class SymbolicDomain:
     def translate(
         self: SymbolicDomain,
         shift: Tuple[ir.OffsetLiteral, ...],
-        offset_provider: Dict[str, common.Dimension],
+        offset_provider: common.OffsetProvider,
     ) -> SymbolicDomain:
         dims = list(self.ranges.keys())
         new_ranges = {dim: self.ranges[dim] for dim in dims}
