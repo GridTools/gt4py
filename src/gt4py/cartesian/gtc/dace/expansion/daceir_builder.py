@@ -196,12 +196,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
     @dataclass
     class IterationContext:
         grid_subset: dcir.GridSubset
-        parent: Optional[DaCeIRBuilder.IterationContext]
-
-        @classmethod
-        def init(cls, *args, **kwargs):
-            res = cls(*args, parent=None, **kwargs)
-            return res
+        parent: Optional[DaCeIRBuilder.IterationContext] = None
 
         def push_axes_extents(self, axes_extents) -> DaCeIRBuilder.IterationContext:
             res = self.grid_subset
@@ -803,7 +798,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
         for he in node.walk_values().if_isinstance(oir.HorizontalExecution):
             overall_extent = overall_extent.union(global_ctx.library_node.get_extents(he))
 
-        iteration_ctx = DaCeIRBuilder.IterationContext.init(
+        iteration_ctx = DaCeIRBuilder.IterationContext(
             grid_subset=dcir.GridSubset.from_gt4py_extent(overall_extent).set_interval(
                 axis=dcir.Axis.K, interval=overall_interval
             )
