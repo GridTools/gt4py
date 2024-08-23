@@ -788,19 +788,13 @@ class DaCeIRBuilder(eve.NodeTranslator):
     def visit_VerticalLoop(
         self, node: oir.VerticalLoop, *, global_ctx: DaCeIRBuilder.GlobalContext, **kwargs
     ):
-        start, end = (node.sections[0].interval.start, node.sections[0].interval.end)
-
-        overall_interval = dcir.DomainInterval(
-            start=dcir.AxisBound(axis=dcir.Axis.K, level=start.level, offset=start.offset),
-            end=dcir.AxisBound(axis=dcir.Axis.K, level=end.level, offset=end.offset),
-        )
         overall_extent = Extent.zeros(2)
         for he in node.walk_values().if_isinstance(oir.HorizontalExecution):
             overall_extent = overall_extent.union(global_ctx.library_node.get_extents(he))
 
         iteration_ctx = DaCeIRBuilder.IterationContext(
             grid_subset=dcir.GridSubset.from_gt4py_extent(overall_extent).set_interval(
-                axis=dcir.Axis.K, interval=overall_interval
+                axis=dcir.Axis.K, interval=node.sections[0].interval
             )
         )
 
