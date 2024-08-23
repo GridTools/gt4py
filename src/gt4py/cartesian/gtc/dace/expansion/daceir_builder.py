@@ -68,7 +68,13 @@ def _access_iter(node: oir.HorizontalExecution, get_outputs: bool):
     ).unique(key=lambda x: x[2])
 
 
-def _get_tasklet_inout_memlets(node: oir.HorizontalExecution, *, get_outputs, global_ctx, **kwargs):
+def _get_tasklet_inout_memlets(
+    node: oir.HorizontalExecution,
+    *,
+    get_outputs: bool,
+    global_ctx: DaCeIRBuilder.GlobalContext,
+    **kwargs,
+):
     access_infos = compute_dcir_access_infos(
         node,
         block_extents=global_ctx.library_node.get_extents,
@@ -611,7 +617,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
         scope_nodes,
         item: Map,
         *,
-        global_ctx,
+        global_ctx: DaCeIRBuilder.GlobalContext,
         iteration_ctx: DaCeIRBuilder.IterationContext,
         symbol_collector: DaCeIRBuilder.SymbolCollector,
         **kwargs,
