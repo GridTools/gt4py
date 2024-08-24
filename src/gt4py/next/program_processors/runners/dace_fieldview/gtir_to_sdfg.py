@@ -19,6 +19,7 @@ import dataclasses
 from typing import Any, Dict, List, Optional, Protocol, Sequence, Set, Tuple, Union
 
 import dace
+import dace.transformation.dataflow as dace_dataflow
 
 from gt4py import eve
 from gt4py.eve import concepts
@@ -524,6 +525,10 @@ def build_sdfg_from_gtir(
     sdfg_genenerator = GTIRToSDFG(offset_provider)
     sdfg = sdfg_genenerator.visit(program)
     assert isinstance(sdfg, dace.SDFG)
+
+    # nested-SDFGs for let-lambda may contain unused symbols, in which case
+    # we can remove unnecesssary data connectors (not done by dace simplify pass)
+    sdfg.apply_transformations_repeated(dace_dataflow.PruneConnectors)
 
     sdfg.simplify()
     return sdfg
