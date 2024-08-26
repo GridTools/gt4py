@@ -15,6 +15,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
+from gt4py.eve import utils as eve_utils
 from gt4py.next import (
     astype,
     broadcast,
@@ -492,6 +493,23 @@ def test_add_scalar_literals():
             im.literal("1", "int32"),
         ),
     )(im.op_as_fieldop("plus")("a", ssa.unique_name("tmp", 0)))
+
+    assert lowered.expr == reference
+
+
+def test_literal_tuple():
+    tup = eve_utils.FrozenNamespace(a=(4, 2))
+
+    def foo():
+        return tup.a
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.make_tuple(
+        im.literal("4", "int32"),
+        im.literal("2", "int32"),
+    )
 
     assert lowered.expr == reference
 

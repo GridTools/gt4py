@@ -355,6 +355,10 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         )
 
     def _make_literal(self, val: Any, type_: ts.TypeSpec) -> itir.Expr:
+        if isinstance(type_, ts.TupleType):
+            return im.make_tuple(
+                *(self._make_literal(val, type_) for val, type_ in zip(val, type_.types))
+            )
         if isinstance(type_, ts.ScalarType):
             typename = type_.kind.name.lower()
             return im.literal(str(val), typename)
