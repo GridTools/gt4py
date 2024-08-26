@@ -13,19 +13,11 @@ from typing import Any, Optional, Sequence, Union
 
 import dace
 from dace import properties as dace_properties, transformation as dace_transformation
-from dace.sdfg import SDFG, SDFGState, nodes as dace_nodes
+from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next.program_processors.runners.dace_fieldview import (
     transformations as gtx_transformations,
 )
-
-
-__all__ = [
-    "SerialMapPromoterGPU",
-    "GPUSetBlockSize",
-    "gt_gpu_transformation",
-    "gt_set_gpu_blocksize",
-]
 
 
 def gt_gpu_transformation(
@@ -33,6 +25,8 @@ def gt_gpu_transformation(
     try_removing_trivial_maps: bool = True,
     use_gpu_storage: bool = True,
     gpu_block_size: Optional[Sequence[int | str] | str] = None,
+    gpu_launch_bounds: Optional[int | str] = None,
+    gpu_launch_factor: Optional[int] = None,
     validate: bool = True,
     validate_all: bool = False,
     **kwargs: Any,
@@ -51,9 +45,13 @@ def gt_gpu_transformation(
     Args:
         sdfg: The SDFG that should be processed.
         try_removing_trivial_maps: Try to get rid of trivial maps by incorporating them.
-        use_gpu_storage: Assume that the non global memory is already on the GPU.
-        gpu_block_size: Set to true when the SDFG array arguments are already allocated
-            on GPU global memory. This will avoid the data copy from host to GPU memory.
+        use_gpu_storage: Assume that the non global memory is already on the GPU. This
+            will avoid the data copy from host to GPU memory.
+        gpu_block_size: The size of a thread block on the GPU.
+        gpu_launch_bounds: Use this value as `__launch_bounds__` for _all_ GPU Maps.
+        gpu_launch_factor: Use the number of threads times this value as `__launch_bounds__`
+        validate: Perform validation during the steps.
+        validate_all: Perform extensive validation.
 
     Notes:
         The function might modify the order of the iteration variables of some
@@ -65,10 +63,6 @@ def gt_gpu_transformation(
         - Solve the fusing problem.
         - Currently only one block size for all maps is given, add more options.
     """
-
-    # You need guru level or above to use these arguments.
-    gpu_launch_factor: Optional[int] = kwargs.pop("gpu_launch_factor", None)
-    gpu_launch_bounds: Optional[int] = kwargs.pop("gpu_launch_bounds", None)
     assert (
         len(kwargs) == 0
     ), f"gt_gpu_transformation(): found unknown arguments: {', '.join(arg for arg in kwargs.keys())}"
@@ -130,13 +124,16 @@ def gt_set_gpu_blocksize(
     gpu_launch_bounds: Optional[int | str] = None,
     gpu_launch_factor: Optional[int] = None,
 ) -> Any:
-    """Set the block sizes of GPU Maps.
+    """Set the block size related properties of _all_ Maps.
+
+    See `GPUSetBlockSize` for more information.
 
     Args:
         sdfg: The SDFG to process.
-        gpu_block_size: The block size to use.
-        gpu_launch_bounds: The launch bounds to use.
-        gpu_launch_factor: The launch factor to use.
+        gpu_block_size: The size of a thread block on the GPU.
+        launch_bounds: The value for the launch bound that should be used.
+        launch_factor: If no `launch_bounds` was given use the number of threads
+            in a block multiplied by this number.
     """
     xform = GPUSetBlockSize(
         block_size=gpu_block_size,
@@ -152,21 +149,19 @@ def _gpu_block_parser(
 ) -> None:
     """Used by the setter of `GPUSetBlockSize.block_size`."""
     org_val = val
-    if isinstance(val, tuple):
+    if isinstance(val, (tuple | list)):
         pass
-    elif isinstance(val, list):
-        val = tuple(val)
     elif isinstance(val, str):
         val = tuple(x.strip() for x in val.split(","))
+    elif isinstance(val, int):
+        val = (val,)
     else:
         raise TypeError(
-            f"Does not know how to transform '{type(val).__name__}' into a proper GPU block size."
+            f"Does not know how to transform '{type(org_val).__name__}' into a proper GPU block size."
         )
-    if len(val) == 1:
-        val = (*val, 1, 1)
-    elif len(val) == 2:
-        val = (*val, 1)
-    elif len(val) != 3:
+    if 0 < len(val) <= 3:
+        val = [*val, *([1] * (3 - len(val)))]
+    else:
         raise ValueError(f"Can not parse block size '{org_val}': wrong length")
     try:
         val = [int(x) for x in val]
@@ -190,10 +185,17 @@ def _gpu_block_getter(
 class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
     """Sets the GPU block size on GPU Maps.
 
-    It is also possible to set the launch bound.
+    The transformation will apply to all Maps that have a GPU schedule, regardless
+    of their dimensionality.
+
+    The `gpu_block_size` is either a sequence, of up to three integers or a string
+    of up to three numbers, separated by comma (`,`).
+    The first number is the size of the block in `x` direction, the second for the
+    `y` direction and the third for the `z` direction. Missing values will be filled
+    with `1`.
 
     Args:
-        block_size: The block size that should be used.
+        block_size: The size of a thread block on the GPU.
         launch_bounds: The value for the launch bound that should be used.
         launch_factor: If no `launch_bounds` was given use the number of threads
             in a block multiplied by this number.
@@ -250,7 +252,7 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
 
     def can_be_applied(
         self,
-        graph: Union[SDFGState, SDFG],
+        graph: Union[dace.SDFGState, dace.SDFG],
         expr_index: int,
         sdfg: dace.SDFG,
         permissive: bool = False,
@@ -274,8 +276,8 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
 
     def apply(
         self,
-        graph: Union[SDFGState, SDFG],
-        sdfg: SDFG,
+        graph: Union[dace.SDFGState, dace.SDFG],
+        sdfg: dace.SDFG,
     ) -> None:
         """Modify the map as requested."""
         self.map_entry.map.gpu_block_size = self.block_size
@@ -313,7 +315,7 @@ class SerialMapPromoterGPU(dace_transformation.SingleStateTransformation):
 
     def can_be_applied(
         self,
-        graph: Union[SDFGState, SDFG],
+        graph: Union[dace.SDFGState, dace.SDFG],
         expr_index: int,
         sdfg: dace.SDFG,
         permissive: bool = False,
@@ -324,8 +326,6 @@ class SerialMapPromoterGPU(dace_transformation.SingleStateTransformation):
         - If the top map is a trivial map.
         - If a valid partition exists that can be fused at all.
         """
-        from .map_serial_fusion import SerialMapFusion
-
         map_exit_1: dace_nodes.MapExit = self.map_exit1
         map_1: dace_nodes.Map = map_exit_1.map
         map_entry_2: dace_nodes.MapEntry = self.map_entry2
@@ -345,7 +345,7 @@ class SerialMapPromoterGPU(dace_transformation.SingleStateTransformation):
 
         # Check if the partition exists, if not promotion to fusing is pointless.
         #  TODO(phimuell): Find the proper way of doing it.
-        serial_fuser = SerialMapFusion(only_toplevel_maps=True)
+        serial_fuser = gtx_transformations.SerialMapFusion(only_toplevel_maps=True)
         output_partition = serial_fuser.partition_first_outputs(
             state=graph,
             sdfg=sdfg,
@@ -357,7 +357,7 @@ class SerialMapPromoterGPU(dace_transformation.SingleStateTransformation):
 
         return True
 
-    def apply(self, graph: Union[SDFGState, SDFG], sdfg: SDFG) -> None:
+    def apply(self, graph: Union[dace.SDFGState, dace.SDFG], sdfg: dace.SDFG) -> None:
         """Performs the Map Promoting.
 
         The function essentially copies the parameters and the ranges from the

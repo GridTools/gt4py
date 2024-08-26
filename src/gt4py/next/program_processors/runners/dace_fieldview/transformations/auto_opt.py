@@ -13,42 +13,12 @@ from typing import Any, Optional, Sequence
 import dace
 from dace.transformation import dataflow as dace_dataflow
 from dace.transformation.auto import auto_optimize as dace_aoptimize
+from dace.transformation.passes import simplify as dace_passes_simplify
 
 from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace_fieldview import (
     transformations as gtx_transformations,
 )
-
-
-__all__ = [
-    "dace_auto_optimize",
-    "gt_simplify",
-    "gt_set_iteration_order",
-    "gt_auto_optimize",
-]
-
-
-def dace_auto_optimize(
-    sdfg: dace.SDFG,
-    device: dace.DeviceType = dace.DeviceType.CPU,
-    use_gpu_storage: bool = True,
-    **kwargs: Any,
-) -> dace.SDFG:
-    """This is a convenient wrapper arround DaCe's `auto_optimize` function.
-
-    Args:
-        sdfg: The SDFG that should be optimized in place.
-        device: the device for which optimizations should be done, defaults to CPU.
-        use_gpu_storage: Assumes that the SDFG input is already on the GPU.
-            This parameter is `False` in DaCe but here is changed to `True`.
-        kwargs: Are forwarded to the underlying auto optimized exposed by DaCe.
-    """
-    return dace_aoptimize.auto_optimize(
-        sdfg,
-        device=device,
-        use_gpu_storage=use_gpu_storage,
-        **kwargs,
-    )
 
 
 def gt_simplify(
@@ -74,9 +44,8 @@ def gt_simplify(
         However, currently nothing is customized yet, and the function just calls
         the simplification pass directly.
     """
-    from dace.transformation.passes.simplify import SimplifyPass
 
-    return SimplifyPass(
+    return dace_passes_simplify.SimplifyPass(
         validate=validate,
         validate_all=validate_all,
         verbose=False,
@@ -106,7 +75,9 @@ def gt_set_iteration_order(
     return sdfg.apply_transformations_once_everywhere(
         gtx_transformations.MapIterationOrder(
             leading_dim=leading_dim,
-        )
+        ),
+        validate=validate,
+        validate_all=validate_all,
     )
 
 
@@ -115,11 +86,14 @@ def gt_auto_optimize(
     gpu: bool,
     leading_dim: Optional[gtx_common.Dimension] = None,
     aggressive_fusion: bool = True,
+    max_optimization_rounds_p2: int = 100,
     make_persistent: bool = True,
     gpu_block_size: Optional[Sequence[int | str] | str] = None,
     block_dim: Optional[gtx_common.Dimension] = None,
     blocking_size: int = 10,
     reuse_transients: bool = False,
+    gpu_launch_bounds: Optional[int | str] = None,
+    gpu_launch_factor: Optional[int] = None,
     validate: bool = True,
     validate_all: bool = False,
     **kwargs: Any,
@@ -139,7 +113,7 @@ def gt_auto_optimize(
         the function will only add horizonal dimensions.
         In this phase some optimizations inside the bigger kernels themselves might
         be applied as well.
-    3. After the function created big kernels it will apply some optimization,
+    3. After the function created big kernels/maps it will apply some optimization,
         inside the kernels itself. For example fuse maps inside them.
     4. Afterwards it will process the map ranges and iteration order. For this
         the function assumes that the dimension indicated by `leading_dim` is the
@@ -163,6 +137,7 @@ def gt_auto_optimize(
         leading_dim: Leading dimension, indicates where the stride is 1.
         aggressive_fusion: Be more aggressive in fusion, will lead to the promotion
             of certain maps.
+        max_optimization_rounds_p2: Maximum number of optimization rounds in phase 2.
         make_persistent: Turn all transients to persistent lifetime, thus they are
             allocated over the whole lifetime of the program, even if the kernel exits.
             Thus the SDFG can not be called by different threads.
@@ -171,6 +146,9 @@ def gt_auto_optimize(
         block_dim: On which dimension blocking should be applied.
         blocking_size: How many elements each block should process.
         reuse_transients: Run the `TransientReuse` transformation, might reduce memory footprint.
+        gpu_launch_bounds: Use this value as `__launch_bounds__` for _all_ GPU Maps.
+        gpu_launch_factor: Use the number of threads times this value as `__launch_bounds__`
+            for _all_ GPU Maps.
         validate: Perform validation during the steps.
         validate_all: Perform extensive validation.
 
@@ -197,7 +175,11 @@ def gt_auto_optimize(
         #       to internal serial maps, such that they do not block fusion?
 
         # Phase 1: Initial Cleanup
-        gt_simplify(sdfg)
+        gt_simplify(
+            sdfg=sdfg,
+            validate=validate,
+            validate_all=validate_all,
+        )
         sdfg.apply_transformations_repeated(
             [
                 dace_dataflow.TrivialMapElimination,
@@ -209,66 +191,17 @@ def gt_auto_optimize(
             validate_all=validate_all,
         )
 
-        # Compute the SDFG hash to see if something has changed.
-        sdfg_hash = sdfg.hash_sdfg()
-
         # Phase 2: Kernel Creation
-        #   We will now try to reduce the number of kernels and create large Maps/kernels.
-        #   For this we essentially use Map fusion. We do this is a loop because
-        #   after a graph modification followed by simplify new fusing opportunities
-        #   might arise. We use the hash of the SDFG to detect if we have reached a
-        #   fix point.
-        # TODO(phimuell): Find a better upper bound for the starvation protection.
-        for _ in range(100):
-            # Use map fusion to reduce their number and to create big kernels
-            # TODO(phimuell): Use a cost measurement to decide if fusion should be done.
-            # TODO(phimuell): Add parallel fusion transformation. Should it run after
-            #                   or with the serial one?
-            sdfg.apply_transformations_repeated(
-                gtx_transformations.SerialMapFusion(
-                    only_toplevel_maps=True,
-                ),
-                validate=validate,
-                validate_all=validate_all,
-            )
+        #   Try to create kernels as large as possible.
+        sdfg = _gt_auto_optimize_phase_2(
+            sdfg=sdfg,
+            aggressive_fusion=aggressive_fusion,
+            max_optimization_rounds=max_optimization_rounds_p2,
+            validate=validate,
+            validate_all=validate_all,
+        )
 
-            # Now do some cleanup task, that may enable further fusion opportunities.
-            #  Note for performance reasons simplify is deferred.
-            phase2_cleanup = []
-            phase2_cleanup.append(dace_dataflow.TrivialTaskletElimination())
-
-            # TODO(phimuell): Should we do this all the time or only once? (probably the later)
-            # TODO(phimuell): Add a criteria to decide if we should promote or not.
-            phase2_cleanup.append(
-                gtx_transformations.SerialMapPromoter(
-                    only_toplevel_maps=True,
-                    promote_vertical=True,
-                    promote_horizontal=False,
-                    promote_local=False,
-                )
-            )
-
-            sdfg.apply_transformations_once_everywhere(
-                phase2_cleanup,
-                validate=validate,
-                validate_all=validate_all,
-            )
-
-            # Use the hash to determine if the transformations did modify the SDFG.
-            #  If not we have optimized the SDFG as much as we could, in this phase.
-            old_sdfg_hash = sdfg_hash
-            sdfg_hash = sdfg.hash_sdfg()
-            if old_sdfg_hash == sdfg_hash:
-                break
-
-            # The SDFG was modified by the transformations above. The SDFG was
-            #  modified. Call Simplify and try again to further optimize.
-            gt_simplify(sdfg)
-
-        else:
-            raise RuntimeWarning("Optimization of the SDFG did not converge.")
-
-        # Phase 3: Optimizing the kernels themselves.
+        # Phase 3: Optimizing the kernels, i.e. the larger maps, themselves.
         #   Currently this only applies fusion inside Maps.
         sdfg.apply_transformations_repeated(
             gtx_transformations.SerialMapFusion(
@@ -307,8 +240,6 @@ def gt_auto_optimize(
             #                   This is because how it is implemented (promotion and
             #                   fusion). However, because of its current state, this
             #                   should not happen, but we have to look into it.
-            gpu_launch_factor: Optional[int] = kwargs.get("gpu_launch_factor", None)
-            gpu_launch_bounds: Optional[int] = kwargs.get("gpu_launch_bounds", None)
             gtx_transformations.gt_gpu_transformation(
                 sdfg,
                 gpu_block_size=gpu_block_size,
@@ -339,3 +270,95 @@ def gt_auto_optimize(
             dace_aoptimize.make_transients_persistent(sdfg, device)
 
         return sdfg
+
+
+def _gt_auto_optimize_phase_2(
+    sdfg: dace.SDFG,
+    aggressive_fusion: bool = True,
+    max_optimization_rounds: int = 100,
+    validate: bool = True,
+    validate_all: bool = False,
+) -> dace.SDFG:
+    """Performs the second phase of the auto optimization process.
+
+    As noted in the doc of `gt_auto_optimize()` the function tries to reduce the
+    number of kernels/maps by fusing maps. This process essentially builds on
+    the map fusion transformations and some clean up transformations.
+
+    It is important to note that the fusion will only affect top level maps, i.e.
+    nested maps are ignored. Furthermore, the function will iteratively perform
+    optimizations until a fix point is reached. If this does not happen within
+    `max_optimization_rounds` iterations an error is generated.
+
+    Return:
+        The function optimizes the SDFG in place and returns it.
+
+    Args:
+        sdfg: The SDFG to optimize.
+        aggressive_fusion: allow more aggressive fusion by promoting maps (over
+            computing).
+        max_optimization_rounds: Maximal number of optimization rounds should be
+            performed.
+        validate: Perform validation during the steps.
+        validate_all: Perform extensive validation.
+    """
+    # Compute the SDFG hash to see if something has changed.
+    sdfg_hash = sdfg.hash_sdfg()
+
+    # We use a loop to optimize because we are using multiple transformations
+    #  after the other, thus new opportunities might arise in the next round.
+    #  We use the hash of the SDFG to detect if we have reached a fix point.
+    for _ in range(max_optimization_rounds):
+        # Use map fusion to reduce their number and to create big kernels
+        # TODO(phimuell): Use a cost measurement to decide if fusion should be done.
+        # TODO(phimuell): Add parallel fusion transformation. Should it run after
+        #                   or with the serial one?
+        sdfg.apply_transformations_repeated(
+            gtx_transformations.SerialMapFusion(
+                only_toplevel_maps=True,
+            ),
+            validate=validate,
+            validate_all=validate_all,
+        )
+
+        # Now do some cleanup task, that may enable further fusion opportunities.
+        #  Note for performance reasons simplify is deferred.
+        phase2_cleanup = []
+        phase2_cleanup.append(dace_dataflow.TrivialTaskletElimination())
+
+        # If requested perform map promotion, this will lead to more fusion.
+        if aggressive_fusion:
+            # TODO(phimuell): Should we do this all the time or only once?
+            # TODO(phimuell): Add a criteria to decide if we should promote or not.
+            # TODO(phimuell): Add parallel map promotion?
+            phase2_cleanup.append(
+                gtx_transformations.SerialMapPromoter(
+                    only_toplevel_maps=True,
+                    promote_vertical=True,
+                    promote_horizontal=False,
+                    promote_local=False,
+                )
+            )
+
+        # Perform the phase 2 cleanup.
+        sdfg.apply_transformations_once_everywhere(
+            phase2_cleanup,
+            validate=validate,
+            validate_all=validate_all,
+        )
+
+        # Use the hash to determine if the transformations did modify the SDFG.
+        #  If not we have optimized the SDFG as much as we could, in this phase.
+        old_sdfg_hash = sdfg_hash
+        sdfg_hash = sdfg.hash_sdfg()
+        if old_sdfg_hash == sdfg_hash:
+            break
+
+        # The SDFG was modified by the transformations above. The SDFG was
+        #  modified. Call Simplify and try again to further optimize.
+        gt_simplify(sdfg, validate=validate, validate_all=validate_all)
+
+    else:
+        raise RuntimeWarning("Optimization of the SDFG did not converge.")
+
+    return sdfg

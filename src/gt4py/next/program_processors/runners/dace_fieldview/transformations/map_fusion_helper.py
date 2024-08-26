@@ -19,13 +19,7 @@ from dace import (
     subsets as dace_subsets,
     transformation as dace_transformation,
 )
-from dace.sdfg import (
-    SDFG,
-    SDFGState,
-    graph as dace_graph,
-    nodes as dace_nodes,
-    validation as dace_validation,
-)
+from dace.sdfg import graph as dace_graph, nodes as dace_nodes, validation as dace_validation
 from dace.transformation import helpers as dace_helpers
 
 from gt4py.next.program_processors.runners.dace_fieldview.transformations import util
@@ -60,7 +54,7 @@ class MapFusionHelper(dace_transformation.SingleStateTransformation):
         desc="Only perform fusing if the Maps are inner Maps, i.e. does not have top level scope.",
     )
     shared_transients = dace_properties.DictProperty(
-        key_type=SDFG,
+        key_type=dace.SDFG,
         value_type=set[str],
         default=None,
         allow_none=True,
@@ -144,8 +138,8 @@ class MapFusionHelper(dace_transformation.SingleStateTransformation):
     def relocate_nodes(
         from_node: Union[dace_nodes.MapExit, dace_nodes.MapEntry],
         to_node: Union[dace_nodes.MapExit, dace_nodes.MapEntry],
-        state: SDFGState,
-        sdfg: SDFG,
+        state: dace.SDFGState,
+        sdfg: dace.SDFG,
     ) -> None:
         """Move the connectors and edges from `from_node` to `to_nodes` node.
 
@@ -163,22 +157,22 @@ class MapFusionHelper(dace_transformation.SingleStateTransformation):
         """
 
         # Now we relocate empty Memlets, from the `from_node` to the `to_node`
-        for empty_edge in list(filter(lambda e: e.data.is_empty(), state.out_edges(from_node))):
+        for empty_edge in filter(lambda e: e.data.is_empty(), state.out_edges(from_node)):
             dace_helpers.redirect_edge(state, empty_edge, new_src=to_node)
-        for empty_edge in list(filter(lambda e: e.data.is_empty(), state.in_edges(from_node))):
+        for empty_edge in filter(lambda e: e.data.is_empty(), state.in_edges(from_node)):
             dace_helpers.redirect_edge(state, empty_edge, new_dst=to_node)
 
         # We now ensure that there is only one empty Memlet from the `to_node` to any other node.
         #  Although it is allowed, we try to prevent it.
         empty_targets: set[dace_nodes.Node] = set()
-        for empty_edge in list(filter(lambda e: e.data.is_empty(), state.all_edges(to_node))):
+        for empty_edge in filter(lambda e: e.data.is_empty(), state.all_edges(to_node)):
             if empty_edge.dst in empty_targets:
                 state.remove_edge(empty_edge)
             empty_targets.add(empty_edge.dst)
 
         # We now determine which edges we have to migrate, for this we are looking at
         #  the incoming edges, because this allows us also to detect dynamic map ranges.
-        for edge_to_move in list(state.in_edges(from_node)):
+        for edge_to_move in state.in_edges(from_node):
             assert isinstance(edge_to_move.dst_conn, str)
 
             if not edge_to_move.dst_conn.startswith("IN_"):
@@ -209,10 +203,10 @@ class MapFusionHelper(dace_transformation.SingleStateTransformation):
             new_conn = to_node.next_connector(old_conn)
 
             to_node.add_in_connector("IN_" + new_conn)
-            for e in list(state.in_edges_by_connector(from_node, "IN_" + old_conn)):
+            for e in state.in_edges_by_connector(from_node, "IN_" + old_conn):
                 dace_helpers.redirect_edge(state, e, new_dst=to_node, new_dst_conn="IN_" + new_conn)
             to_node.add_out_connector("OUT_" + new_conn)
-            for e in list(state.out_edges_by_connector(from_node, "OUT_" + old_conn)):
+            for e in state.out_edges_by_connector(from_node, "OUT_" + old_conn):
                 dace_helpers.redirect_edge(
                     state, e, new_src=to_node, new_src_conn="OUT_" + new_conn
                 )
@@ -239,8 +233,8 @@ class MapFusionHelper(dace_transformation.SingleStateTransformation):
     def map_parameter_compatible(
         map_1: dace_nodes.Map,
         map_2: dace_nodes.Map,
-        state: Union[SDFGState, SDFG],
-        sdfg: SDFG,
+        state: Union[dace.SDFGState, dace.SDFG],
+        sdfg: dace.SDFG,
     ) -> bool:
         """Checks if the parameters of `map_1` are compatible with `map_2`.
 
@@ -352,8 +346,8 @@ class MapFusionHelper(dace_transformation.SingleStateTransformation):
 
     def partition_first_outputs(
         self,
-        state: SDFGState,
-        sdfg: SDFG,
+        state: dace.SDFGState,
+        sdfg: dace.SDFG,
         map_exit_1: dace_nodes.MapExit,
         map_entry_2: dace_nodes.MapEntry,
     ) -> Union[
@@ -448,8 +442,8 @@ class MapFusionHelper(dace_transformation.SingleStateTransformation):
             #  of the first map exit, but there is only one edge leaving the exit.
             #  It is complicate to handle this, so for now we ignore it.
             # TODO(phimuell): Handle this case properly.
-            inner_collector_edges = list(
-                state.in_edges_by_connector(intermediate_node, "IN_" + out_edge.src_conn[3:])
+            inner_collector_edges = state.in_edges_by_connector(
+                intermediate_node, "IN_" + out_edge.src_conn[3:]
             )
             if len(inner_collector_edges) > 1:
                 return None

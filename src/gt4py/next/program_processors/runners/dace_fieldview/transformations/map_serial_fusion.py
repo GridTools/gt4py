@@ -19,7 +19,7 @@ from dace import (
     symbolic as dace_symbolic,
     transformation as dace_transformation,
 )
-from dace.sdfg import SDFG, SDFGState, graph as dace_graph, nodes as dace_nodes
+from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 
 from gt4py.next.program_processors.runners.dace_fieldview.transformations import map_fusion_helper
 
@@ -78,7 +78,7 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
 
     def can_be_applied(
         self,
-        graph: Union[SDFGState, SDFG],
+        graph: Union[dace.SDFGState, dace.SDFG],
         expr_index: int,
         sdfg: dace.SDFG,
         permissive: bool = False,
@@ -201,8 +201,8 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
     @staticmethod
     def handle_intermediate_set(
         intermediate_outputs: set[dace_graph.MultiConnectorEdge[dace.Memlet]],
-        state: SDFGState,
-        sdfg: SDFG,
+        state: dace.SDFGState,
+        sdfg: dace.SDFG,
         map_exit_1: dace_nodes.MapExit,
         map_entry_2: dace_nodes.MapEntry,
         map_exit_2: dace_nodes.MapExit,
@@ -253,9 +253,7 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
 
             # Now we will determine the shape of the new intermediate. This size of
             #  this temporary is given by the Memlet that goes into the first map exit.
-            pre_exit_edges = list(
-                state.in_edges_by_connector(map_exit_1, "IN_" + out_edge.src_conn[4:])
-            )
+            pre_exit_edges = state.in_edges_by_connector(map_exit_1, "IN_" + out_edge.src_conn[4:])
             if len(pre_exit_edges) != 1:
                 raise NotImplementedError()
             pre_exit_edge = pre_exit_edges[0]
@@ -422,7 +420,7 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
 
                 # The edge that leaves the second map entry was already deleted.
                 #  We will now delete the edges that brought the data.
-                for edge in list(state.in_edges_by_connector(map_entry_2, in_conn_name)):
+                for edge in state.in_edges_by_connector(map_entry_2, in_conn_name):
                     assert edge.src == inter_node
                     state.remove_edge(edge)
                 map_entry_2.remove_in_connector(in_conn_name)

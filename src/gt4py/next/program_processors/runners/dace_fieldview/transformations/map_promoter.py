@@ -14,12 +14,7 @@ from dace import (
     subsets as dace_subsets,
     transformation as dace_transformation,
 )
-from dace.sdfg import SDFG, SDFGState, nodes as dace_nodes
-
-
-__all__ = [
-    "SerialMapPromoter",
-]
+from dace.sdfg import nodes as dace_nodes
 
 
 @dace_properties.make_properties
@@ -151,7 +146,7 @@ class BaseMapPromoter(dace_transformation.SingleStateTransformation):
 
     def can_be_applied(
         self,
-        graph: Union[SDFGState, SDFG],
+        graph: Union[dace.SDFGState, dace.SDFG],
         expr_index: int,
         sdfg: dace.SDFG,
         permissive: bool = False,
@@ -212,7 +207,7 @@ class BaseMapPromoter(dace_transformation.SingleStateTransformation):
 
         return True
 
-    def apply(self, graph: Union[SDFGState, SDFG], sdfg: SDFG) -> None:
+    def apply(self, graph: Union[dace.SDFGState, dace.SDFG], sdfg: dace.SDFG) -> None:
         """Performs the actual Map promoting.
 
         Add all parameters that `self.source_map` has but `self.map_to_promote`
@@ -326,7 +321,7 @@ class SerialMapPromoter(BaseMapPromoter):
 
     def can_be_applied(
         self,
-        graph: Union[SDFGState, SDFG],
+        graph: Union[dace.SDFGState, dace.SDFG],
         expr_index: int,
         sdfg: dace.SDFG,
         permissive: bool = False,

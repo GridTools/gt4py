@@ -23,11 +23,8 @@ def is_nested_sdfg(
     if isinstance(sdfg, dace_nodes.NestedSDFG):
         return True
     elif isinstance(sdfg, dace.SDFG):
-        if sdfg.parent_nsdfg_node is not None:
-            return True
-        return False
-    else:
-        raise TypeError(f"Does not know how to handle '{type(sdfg).__name__}'.")
+        return sdfg.parent_nsdfg_node is not None
+    raise TypeError(f"Does not know how to handle '{type(sdfg).__name__}'.")
 
 
 def all_nodes_between(
@@ -68,23 +65,19 @@ def all_nodes_between(
 
     to_visit: list[dace_nodes.Node] = [begin]
     seen: set[dace_nodes.Node] = set()
-    found_end: bool = False
 
     while len(to_visit) > 0:
-        n: dace_nodes.Node = to_visit.pop()
-        if n == end:
-            found_end = True
-            continue
-        elif n in seen:
-            continue
-        seen.add(n)
-        to_visit.extend(next_nodes(n))
+        node: dace_nodes.Node = to_visit.pop()
+        if node != end and node not in seen:
+            to_visit.extend(next_nodes(node))
+        seen.add(node)
 
-    if not found_end:
+    # If `end` was not found we have to return `None`  to indicate this.
+    if end not in seen:
         return None
 
-    seen.discard(begin)
-    return seen
+    # `begin` and `end` are not included in the output set.
+    return seen - {begin, end}
 
 
 def find_downstream_consumers(
@@ -113,14 +106,13 @@ def find_downstream_consumers(
     """
     if isinstance(begin, dace_graph.MultiConnectorEdge):
         to_visit: list[dace_graph.MultiConnectorEdge[dace.Memlet]] = [begin]
-    elif reverse:
-        to_visit = list(state.in_edges(begin))
     else:
-        to_visit = list(state.out_edges(begin))
+        to_visit = state.in_edges(begin) if reverse else state.out_edges(begin)
+
     seen: set[dace_graph.MultiConnectorEdge[dace.Memlet]] = set()
     found: set[tuple[dace_nodes.Node, dace_graph.MultiConnectorEdge[dace.Memlet]]] = set()
 
-    while len(to_visit) != 0:
+    while len(to_visit) > 0:
         curr_edge: dace_graph.MultiConnectorEdge[dace.Memlet] = to_visit.pop()
         next_node: dace_nodes.Node = curr_edge.src if reverse else curr_edge.dst
 
@@ -129,26 +121,28 @@ def find_downstream_consumers(
         seen.add(curr_edge)
 
         if isinstance(next_node, (dace_nodes.MapEntry, dace_nodes.MapExit)):
-            if reverse:
-                target_conn = curr_edge.src_conn[4:]
-                new_edges = state.in_edges_by_connector(curr_edge.src, "IN_" + target_conn)
-            else:
+            if not reverse:
                 # In forward mode a Map entry could also mean the definition of a
                 #  dynamic map range.
-                if (not curr_edge.dst_conn.startswith("IN_")) and isinstance(
-                    next_node, dace_nodes.MapEntry
+                if isinstance(next_node, dace_nodes.MapEntry) and (
+                    not curr_edge.dst_conn.startswith("IN_")
                 ):
-                    # This edge defines a dynamic map range, which is a consumer
                     if not only_tasklets:
                         found.add((next_node, curr_edge))
                     continue
                 target_conn = curr_edge.dst_conn[3:]
                 new_edges = state.out_edges_by_connector(curr_edge.dst, "OUT_" + target_conn)
+            else:
+                target_conn = curr_edge.src_conn[4:]
+                new_edges = state.in_edges_by_connector(curr_edge.src, "IN_" + target_conn)
             to_visit.extend(new_edges)
-            del new_edges
+
+        elif only_tasklets and (not isinstance(next_node, dace_nodes.Tasklet)):
+            # We are only interested in Tasklets but have not found one. Thus we
+            #  ignore the node.
+            pass
+
         else:
-            if only_tasklets and (not isinstance(next_node, dace_nodes.Tasklet)):
-                continue
             found.add((next_node, curr_edge))
 
     return found

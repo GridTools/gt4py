@@ -10,7 +10,7 @@ from typing import Any, Optional, Sequence, Union
 
 import dace
 from dace import properties as dace_properties, transformation as dace_transformation
-from dace.sdfg import SDFG, SDFGState, nodes as dace_nodes
+from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace_fieldview import utility as gtx_dace_fieldview_util
@@ -68,7 +68,7 @@ class MapIterationOrder(dace_transformation.SingleStateTransformation):
 
     def can_be_applied(
         self,
-        graph: Union[SDFGState, SDFG],
+        graph: Union[dace.SDFGState, dace.SDFG],
         expr_index: int,
         sdfg: dace.SDFG,
         permissive: bool = False,
@@ -93,8 +93,8 @@ class MapIterationOrder(dace_transformation.SingleStateTransformation):
 
     def apply(
         self,
-        graph: Union[SDFGState, SDFG],
-        sdfg: SDFG,
+        graph: Union[dace.SDFGState, dace.SDFG],
+        sdfg: dace.SDFG,
     ) -> None:
         """Performs the actual parameter reordering.
 

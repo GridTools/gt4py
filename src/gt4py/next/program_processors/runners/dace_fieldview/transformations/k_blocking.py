@@ -16,7 +16,7 @@ from dace import (
     subsets as dace_subsets,
     transformation as dace_transformation,
 )
-from dace.sdfg import SDFG, SDFGState, graph as dace_graph, nodes as dace_nodes
+from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 from dace.transformation import helpers as dace_helpers
 
 from gt4py.next import common as gtx_common
@@ -65,9 +65,7 @@ class KBlocking(dace_transformation.SingleStateTransformation):
         block_dim: Optional[Union[gtx_common.Dimension, str]] = None,
     ) -> None:
         super().__init__()
-        if isinstance(block_dim, str):
-            pass
-        elif isinstance(block_dim, gtx_common.Dimension):
+        if isinstance(block_dim, gtx_common.Dimension):
             block_dim = gtx_dace_fieldview_util.get_map_variable(block_dim)
         if block_dim is not None:
             self.block_dim = block_dim
@@ -80,7 +78,7 @@ class KBlocking(dace_transformation.SingleStateTransformation):
 
     def can_be_applied(
         self,
-        graph: Union[SDFGState, SDFG],
+        graph: Union[dace.SDFGState, dace.SDFG],
         expr_index: int,
         sdfg: dace.SDFG,
         permissive: bool = False,
@@ -120,8 +118,8 @@ class KBlocking(dace_transformation.SingleStateTransformation):
 
     def apply(
         self,
-        graph: Union[SDFGState, SDFG],
-        sdfg: SDFG,
+        graph: Union[dace.SDFGState, dace.SDFG],
+        sdfg: dace.SDFG,
     ) -> None:
         """Creates a blocking map.
 
@@ -176,7 +174,7 @@ class KBlocking(dace_transformation.SingleStateTransformation):
 
         # Now we iterate over all the output edges of the outer map and rewire them.
         #  Note that this only handles the entry of the Map.
-        for out_edge in list(graph.out_edges(outer_entry)):
+        for out_edge in graph.out_edges(outer_entry):
             edge_dst: dace_nodes.Node = out_edge.dst
 
             if edge_dst in dependent_nodes:
@@ -245,7 +243,7 @@ class KBlocking(dace_transformation.SingleStateTransformation):
 
                 # Now rewire the Memlets that leave the caching node to go through
                 #  new inner Map.
-                for consumer_edge in list(graph.out_edges(caching_node)):
+                for consumer_edge in graph.out_edges(caching_node):
                     new_map_conn = inner_entry.next_connector()
                     dace_helpers.redirect_edge(
                         state=graph,
@@ -267,7 +265,7 @@ class KBlocking(dace_transformation.SingleStateTransformation):
         # Handle the Map exits
         #  This is simple reconnecting, there would be possibilities for improvements
         #  but we do not use them for now.
-        for out_edge in list(graph.in_edges(outer_exit)):
+        for out_edge in graph.in_edges(outer_exit):
             edge_conn = out_edge.dst_conn[3:]
             dace_helpers.redirect_edge(
                 state=graph,
@@ -292,8 +290,8 @@ class KBlocking(dace_transformation.SingleStateTransformation):
         self,
         map_entry: dace_nodes.MapEntry,
         block_param: str,
-        state: SDFGState,
-        sdfg: SDFG,
+        state: dace.SDFGState,
+        sdfg: dace.SDFG,
     ) -> tuple[set[dace_nodes.Node], set[dace_nodes.Node]] | None:
         """Partition the outputs of the Map.
 
@@ -415,7 +413,7 @@ class KBlocking(dace_transformation.SingleStateTransformation):
 
         # We now make a last screening of the independent nodes.
         # TODO(phimuell): Make an iterative process to find the maximal set.
-        for independent_node in list(block_independent):
+        for independent_node in block_independent:
             if isinstance(independent_node, dace_nodes.AccessNode):
                 if state.in_degree(independent_node) != 1:
                     block_independent.discard(independent_node)

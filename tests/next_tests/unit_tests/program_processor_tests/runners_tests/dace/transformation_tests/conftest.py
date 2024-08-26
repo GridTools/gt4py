@@ -22,8 +22,15 @@ from gt4py.next.program_processors.runners.dace_fieldview import (
 
 
 @pytest.fixture(autouse=True)
-def _set_dace_settings() -> Generator[None, None, None]:
-    """Customizes DaCe settings during the tests."""
+def set_dace_settings() -> Generator[None, None, None]:
+    """Sets the common DaCe settings for the tests.
+
+    The function will modify the following settings:
+    - `optimizer.match_exception` exceptions during the pattern matching stage,
+        especially inside `can_be_applied()` are not ignored.
+    - `compiler.allow_view_arguments` allow that NumPy views can be passed to
+        `CompiledSDFG` objects as arguments.
+    """
     with dace.config.temporary_config():
         dace.Config.set("optimizer", "match_exception", value=True)
         dace.Config.set("compiler", "allow_view_arguments", value=True)
