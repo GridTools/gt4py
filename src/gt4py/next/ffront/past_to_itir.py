@@ -248,6 +248,7 @@ class ProgramLowering(
             target=output,
         )
 
+    # FIXME[#1582](havogt): remove after refactoring to GTIR
     def _visit_stencil_call_as_closure(self, node: past.Call, **kwargs: Any) -> itir.StencilClosure:
         assert isinstance(node.kwargs["out"].type, ts.TypeSpec)
         assert type_info.is_type_or_tuple_of_type(node.kwargs["out"].type, ts.FieldType)

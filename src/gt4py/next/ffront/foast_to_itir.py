@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+# FIXME[#1582](havogt): remove after refactoring to GTIR
+
 import dataclasses
 from typing import Any, Callable, Optional
 

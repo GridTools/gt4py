@@ -286,26 +286,23 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 im.lambda_("__val")(im.call("cast_")(im.deref("__val"), str(new_type)))
             )(expr)
 
-        if not isinstance(node.type, ts.TupleType):
+        if not isinstance(node.type, ts.TupleType):  # to keep the IR simpler
             return create_cast(obj)
 
         return lowering_utils.process_elements(create_cast, obj, node.type)
 
     def _visit_where(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
-        if not isinstance(node.type, ts.TupleType):
+        if not isinstance(node.type, ts.TupleType):  # to keep the IR simpler
             return im.op_as_fieldop("if_")(*self.visit(node.args))
 
         cond_ = self.visit(node.args[0])
         cond_symref_name = f"__cond_{eve_utils.content_hash(cond_)}"
 
-        def create_if(cond: itir.Expr) -> Callable[[itir.Expr, itir.Expr], itir.FunCall]:
-            def create_if_impl(true_: itir.Expr, false_: itir.Expr) -> itir.FunCall:
-                return im.op_as_fieldop("if_")(cond, true_, false_)
-
-            return create_if_impl
+        def create_if(true_: itir.Expr, false_: itir.Expr) -> itir.FunCall:
+            return im.op_as_fieldop("if_")(im.ref(cond_symref_name), true_, false_)
 
         result = lowering_utils.process_elements(
-            create_if(im.ref(cond_symref_name)),
+            create_if,
             (self.visit(node.args[1]), self.visit(node.args[2])),
             node.type,
         )
