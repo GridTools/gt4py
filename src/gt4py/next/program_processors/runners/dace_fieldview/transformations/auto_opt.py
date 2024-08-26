@@ -331,6 +331,7 @@ def _gt_auto_optimize_phase_2(
             # TODO(phimuell): Should we do this all the time or only once?
             # TODO(phimuell): Add a criteria to decide if we should promote or not.
             # TODO(phimuell): Add parallel map promotion?
+            print(">>>>>>>>>>>>>>>>>>>>>>>> AGGRESSIVE FUSION")
             phase2_cleanup.append(
                 gtx_transformations.SerialMapPromoter(
                     only_toplevel_maps=True,
@@ -339,6 +340,8 @@ def _gt_auto_optimize_phase_2(
                     promote_local=False,
                 )
             )
+        else:
+            print("<<<<<<<<<<<<<<<<<<<<<<<<<<<< NO AGGRESSIVE FUSION")
 
         # Perform the phase 2 cleanup.
         sdfg.apply_transformations_once_everywhere(

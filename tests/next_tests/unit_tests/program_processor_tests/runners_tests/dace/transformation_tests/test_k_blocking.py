@@ -11,7 +11,7 @@ import dace
 import copy
 import numpy as np
 
-from dace.sdfg import nodes as dace_nodes
+from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation
 
 from gt4py.next.program_processors.runners.dace_fieldview import (
     transformations as gtx_transformations,
@@ -41,6 +41,93 @@ def _get_simple_sdfg() -> tuple[dace.SDFG, Callable[[np.ndarray, np.ndarray], np
         external_edges=True,
     )
     return sdfg, lambda a, b: a + b.reshape((-1, 1))
+
+
+def _get_chained_sdfg() -> tuple[dace.SDFG, Callable[[np.ndarray, np.ndarray], np.ndarray]]:
+    """Generates an SDFG that has chained Tasklets that are independent.
+
+    The bottom Tasklet is the only dependent Tasklet.
+    """
+    sdfg = dace.SDFG("only_dependent")
+    state = sdfg.add_state("state", is_start_block=True)
+    sdfg.add_symbol("N", dace.int32)
+    sdfg.add_symbol("M", dace.int32)
+    sdfg.add_array("a", ("N", "M"), dace.float64, transient=False)
+    sdfg.add_array("b", ("N",), dace.float64, transient=False)
+    sdfg.add_array("c", ("N", "M"), dace.float64, transient=False)
+    sdfg.add_scalar("tmp1", dtype=dace.float64, transient=True)
+    sdfg.add_scalar("tmp2", dtype=dace.float64, transient=True)
+    a, b, c, tmp1, tmp2 = (state.add_access(name) for name in ["a", "b", "c", "tmp1", "tmp2"])
+
+    # First independent Tasklet.
+    task1 = state.add_tasklet(
+        "task1_indepenent",
+        inputs={
+            "__in0",  # <- `b[i]`
+        },
+        outputs={
+            "__out0",  # <- `tmp1`
+        },
+        code="__out0 = __in0 + 3.0",
+    )
+
+    # This is the second independent Tasklet.
+    task2 = state.add_tasklet(
+        "task2_indepenent",
+        inputs={
+            "__in0",  # <- `tmp1`
+            "__in1",  # <- `b[i]`
+        },
+        outputs={
+            "__out0",  # <- `tmp2`
+        },
+        code="__out0 = __in0 + __in1",
+    )
+
+    # This is the third Tasklet, which is dependent.
+    task3 = state.add_tasklet(
+        "task3_dependent",
+        inputs={
+            "__in0",  # <- `tmp2`
+            "__in1",  # <- `a[i, j]`
+        },
+        outputs={
+            "__out0",  # <- `c[i, j]`.
+        },
+        code="__out0 = __in0 + __in1",
+    )
+
+    # Now create the map
+    mentry, mexit = state.add_map(
+        "map",
+        ndrange={"i": "0:N", "j": "0:M"},
+    )
+
+    # Now assemble everything.
+    state.add_edge(mentry, "OUT_b", task1, "__in0", dace.Memlet("b[i]"))
+    state.add_edge(task1, "__out0", tmp1, None, dace.Memlet("tmp1[0]"))
+
+    state.add_edge(tmp1, None, task2, "__in0", dace.Memlet("tmp1[0]"))
+    state.add_edge(mentry, "OUT_b", task2, "__in1", dace.Memlet("b[i]"))
+    state.add_edge(task2, "__out0", tmp2, None, dace.Memlet("tmp2[0]"))
+
+    state.add_edge(tmp2, None, task3, "__in0", dace.Memlet("tmp2[0]"))
+    state.add_edge(mentry, "OUT_a", task3, "__in1", dace.Memlet("a[i, j]"))
+    state.add_edge(task3, "__out0", mexit, "IN_c", dace.Memlet("c[i, j]"))
+
+    state.add_edge(a, None, mentry, "IN_a", sdfg.make_array_memlet("a"))
+    state.add_edge(b, None, mentry, "IN_b", sdfg.make_array_memlet("b"))
+    state.add_edge(mexit, "OUT_c", c, None, sdfg.make_array_memlet("c"))
+    for name in ["a", "b"]:
+        mentry.add_in_connector("IN_" + name)
+        mentry.add_out_connector("OUT_" + name)
+    mexit.add_in_connector("IN_c")
+    mexit.add_out_connector("OUT_c")
+
+    dace_propagation.propagate_states(sdfg)
+    sdfg.validate()
+
+    return sdfg, lambda a, b: (a + (2 * b.reshape((-1, 1)) + 3))
 
 
 def test_only_dependent():
@@ -142,3 +229,73 @@ def test_intermediate_access_node():
     c[:] = 0
     sdfg(a=a, b=b, c=c, N=N, M=M)
     assert np.allclose(ref, c)
+
+
+def test_chained_access() -> None:
+    """Test if chained access works."""
+    sdfg, reff = _get_chained_sdfg()
+    state: dace.SDFGState = next(iter(sdfg.states()))
+
+    N, M = 100, 10
+    a = np.random.rand(N, M)
+    b = np.random.rand(N)
+    c = np.zeros_like(a)
+    ref = reff(a, b)
+
+    # Before the optimization
+    sdfg(a=a, b=b, c=c, M=M, N=N)
+    assert np.allclose(c, ref)
+    c[:] = 0
+
+    # Apply the transformation.
+    ret = sdfg.apply_transformations_repeated(
+        gtx_transformations.KBlocking(blocking_size=10, block_dim="j"),
+        validate=True,
+        validate_all=True,
+    )
+    assert ret == 1, f"Expected that the transformation was applied 1 time, but it was {ret}."
+
+    # Now run the SDFG to see if it is still the same
+    sdfg(a=a, b=b, c=c, M=M, N=N)
+    assert np.allclose(c, ref)
+
+    # Now look for the outer map.
+    outer_map = None
+    for node in state.nodes():
+        if not isinstance(node, dace_nodes.MapEntry):
+            continue
+        if state.scope_dict()[node] is None:
+            assert (
+                outer_map is None
+            ), f"Found multiple outer maps, first '{outer_map}', second '{node}'."
+            outer_map = node
+    assert outer_map is not None, "Could not found the outer map."
+    assert len(outer_map.map.params) == 2
+
+    # Now inspect the SDFG if the transformation was applied correctly.
+    first_level_tasklets: list[dace_nodes.Tasklet] = []
+    inner_map: list[dace_nodes.MapEntry] = []
+
+    for edge in state.out_edges(outer_map):
+        node: dace_nodes.Node = edge.dst
+        if isinstance(node, dace_nodes.Tasklet):
+            first_level_tasklets.append(node)
+        elif isinstance(node, dace_nodes.MapEntry):
+            inner_map.append(node)
+        else:
+            assert False, f"Found unexpected node '{type(node).__name__}'."
+
+    # Test what we found
+    assert len(first_level_tasklets) == 2
+    assert len(set(first_level_tasklets)) == 2
+    assert len(inner_map) == 1
+    assert state.scope_dict()[inner_map[0]] is outer_map
+
+    # Now we look inside the inner map
+    #  There we expect to find one Tasklet.
+    inner_scope = state.scope_subgraph(next(iter(inner_map)), False, False)
+    assert inner_scope.number_of_nodes() == 1
+    inner_tasklet = next(iter(inner_scope.nodes()))
+
+    assert isinstance(inner_tasklet, dace_nodes.Tasklet)
+    assert inner_tasklet not in first_level_tasklets
