@@ -136,7 +136,6 @@ class TupleConstructorType(Protocol, Generic[_R]):
     def __call__(self, *args: Any) -> _R: ...
 
 
-# TODO(havogt): the complicated typing is a hint that this function needs refactoring
 def apply_to_primitive_constituents(
     fun: Callable[..., _T],
     *symbol_types: ts.TypeSpec,
