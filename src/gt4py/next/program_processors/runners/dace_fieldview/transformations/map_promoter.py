@@ -160,6 +160,7 @@ class BaseMapPromoter(dace_transformation.SingleStateTransformation):
         - If the parameter of the second map are compatible with each other.
         - If a dimension would be promoted that should not.
         """
+        assert self.expr_index == expr_index
         map_to_promote_entry: dace_nodes.MapEntry = self.map_to_promote(state=graph, sdfg=sdfg)
         map_to_promote: dace_nodes.Map = map_to_promote_entry.map
         source_map_entry: dace_nodes.MapEntry = self.source_map(state=graph, sdfg=sdfg)
@@ -191,11 +192,11 @@ class BaseMapPromoter(dace_transformation.SingleStateTransformation):
         if not self.promote_all:
             dimension_identifier: list[str] = []
             if self.promote_local:
-                dimension_identifier.append("__gtx_localdim")
+                dimension_identifier.append("_gtx_localdim")
             if self.promote_vertical:
-                dimension_identifier.append("__gtx_vertical")
+                dimension_identifier.append("_gtx_vertical")
             if self.promote_horizontal:
-                dimension_identifier.append("__gtx_horizontal")
+                dimension_identifier.append("_gtx_horizontal")
             if not dimension_identifier:
                 return False
             for missing_map_param in missing_map_parameters:
@@ -276,6 +277,7 @@ class BaseMapPromoter(dace_transformation.SingleStateTransformation):
             for param_to_check in curr_params_set:
                 curr_range = curr_ranges[curr_param_to_idx[param_to_check]]
                 source_range = source_ranges[source_param_to_idx[param_to_check]]
+                # TODO(phimuell): Use simplify
                 if curr_range != source_range:
                     return None
         return list(source_params_set - curr_params_set)
