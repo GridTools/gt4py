@@ -442,8 +442,8 @@ class MapFusionHelper(dace_transformation.SingleStateTransformation):
             #  of the first map exit, but there is only one edge leaving the exit.
             #  It is complicate to handle this, so for now we ignore it.
             # TODO(phimuell): Handle this case properly.
-            inner_collector_edges = state.in_edges_by_connector(
-                intermediate_node, "IN_" + out_edge.src_conn[3:]
+            inner_collector_edges = list(
+                state.in_edges_by_connector(intermediate_node, "IN_" + out_edge.src_conn[3:])
             )
             if len(inner_collector_edges) > 1:
                 return None

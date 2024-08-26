@@ -253,7 +253,9 @@ class SerialMapFusion(map_fusion_helper.MapFusionHelper):
 
             # Now we will determine the shape of the new intermediate. This size of
             #  this temporary is given by the Memlet that goes into the first map exit.
-            pre_exit_edges = state.in_edges_by_connector(map_exit_1, "IN_" + out_edge.src_conn[4:])
+            pre_exit_edges = list(
+                state.in_edges_by_connector(map_exit_1, "IN_" + out_edge.src_conn[4:])
+            )
             if len(pre_exit_edges) != 1:
                 raise NotImplementedError()
             pre_exit_edge = pre_exit_edges[0]
