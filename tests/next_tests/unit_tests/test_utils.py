@@ -39,7 +39,7 @@ def test_tree_map_custom_input_type():
 
 
 def test_tree_map_custom_output_type():
-    @utils.tree_map(result_collection_type=list)
+    @utils.tree_map(result_collection_constructor=list)
     def testee(x):
         return x + 1
 
@@ -47,7 +47,7 @@ def test_tree_map_custom_output_type():
 
 
 def test_tree_map_multiple_input_types():
-    @utils.tree_map(collection_type=(list, tuple), result_collection_type=tuple)
+    @utils.tree_map(collection_type=(list, tuple), result_collection_constructor=tuple)
     def testee(x):
         return x + 1
 
