@@ -8,6 +8,7 @@
 
 import gt4py.next as gtx
 import numpy as np
+from next_tests import integration_tests
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import cartesian_case
 
