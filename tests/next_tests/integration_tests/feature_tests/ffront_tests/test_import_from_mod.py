@@ -6,8 +6,12 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import gt4py.next as gtx
+import pytest
 import numpy as np
+
+import gt4py.next as gtx
+from gt4py.next import broadcast
+
 from next_tests import integration_tests
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import cartesian_case
@@ -16,8 +20,8 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     exec_alloc_descriptor,
     mesh_descriptor,
 )
-from next_tests.integration_tests.feature_tests import ffront_tests
-from gt4py.next import broadcast
+
+from tests.next_tests.unit_tests.type_system_tests.dummy_package import dummy_module
 
 
 def test_import_dims_module(cartesian_case):
@@ -32,7 +36,10 @@ def test_import_dims_module(cartesian_case):
             f,
             out=out,
             domain={
-                integration_tests.cases.IDim: (0, 8),
+                integration_tests.cases.IDim: (
+                    0,
+                    8,
+                ),  # Nested import done on purpose, do not change
                 cases.KDim: (0, 3),
             },
         )
@@ -45,3 +52,40 @@ def test_import_dims_module(cartesian_case):
     ]
 
     cases.verify(cartesian_case, mod_prog, f, out=out, ref=expected)
+
+
+def test_import_module_errors(cartesian_case):
+    with pytest.raises(gtx.errors.DSLError):
+
+        @gtx.field_operator
+        def field_op(f: cases.IField):
+            f_i_k = gtx.broadcast(f, (cases.IDim, cases.KDim))
+            return f_i_k
+
+    with pytest.raises(ValueError):
+
+        @gtx.field_operator
+        def field_op(f: cases.IField):
+            type_ = gtx.int32
+            return f
+
+    with pytest.raises(gtx.errors.DSLError):
+
+        @gtx.field_operator
+        def field_op(f: cases.IField):
+            f_new = dummy_module.field_op_sample(f)
+            return f_new
+
+    with pytest.raises(TypeError):
+
+        @gtx.field_operator
+        def field_op(f: cases.IField):
+            f_new = dummy_module.dummy_field
+            return f_new
+
+    with pytest.raises(TypeError):
+
+        @gtx.field_operator
+        def field_op(f: cases.IField):
+            val_new = dummy_module.dummy_int
+            return f

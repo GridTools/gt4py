@@ -22,7 +22,6 @@ import numpy.typing as npt
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
-from gt4py.next.errors import exceptions
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
@@ -223,11 +222,7 @@ def from_value(value: Any) -> ts.TypeSpec:
         return UnknownPythonObject(_object=value)
     else:
         type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
-        try:
-            symbol_type = from_type_hint(type_)
-        except exceptions.TypeError_:
-            # valid unknown objects could be ModuleType, classes etc that are used to extract typeable objects
-            symbol_type = UnknownPythonObject(_object=value)
+        symbol_type = from_type_hint(type_)
 
     if isinstance(symbol_type, (ts.DataType, ts.OffsetType, ts.DimensionType)) or (
         isinstance(symbol_type, ts.CallableType) and isinstance(symbol_type, ts.TypeSpec)
