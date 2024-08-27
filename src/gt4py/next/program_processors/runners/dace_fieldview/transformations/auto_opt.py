@@ -89,7 +89,7 @@ def gt_auto_optimize(
     max_optimization_rounds_p2: int = 100,
     make_persistent: bool = True,
     gpu_block_size: Optional[Sequence[int | str] | str] = None,
-    block_dim: Optional[gtx_common.Dimension] = None,
+    blocking_dim: Optional[gtx_common.Dimension] = None,
     blocking_size: int = 10,
     reuse_transients: bool = False,
     gpu_launch_bounds: Optional[int | str] = None,
@@ -143,7 +143,7 @@ def gt_auto_optimize(
             Thus the SDFG can not be called by different threads.
         gpu_block_size: The thread block size for maps in GPU mode, currently only
             one for all.
-        block_dim: On which dimension blocking should be applied.
+        blocking_dim: On which dimension blocking should be applied.
         blocking_size: How many elements each block should process.
         reuse_transients: Run the `TransientReuse` transformation, might reduce memory footprint.
         gpu_launch_bounds: Use this value as `__launch_bounds__` for _all_ GPU Maps.
@@ -224,11 +224,11 @@ def gt_auto_optimize(
             )
 
         # Phase 5: Apply blocking
-        if block_dim is not None:
+        if blocking_dim is not None:
             sdfg.apply_transformations_once_everywhere(
                 gtx_transformations.KBlocking(
                     blocking_size=blocking_size,
-                    block_dim=block_dim,
+                    blocking_parameter=blocking_dim,
                 ),
                 validate=validate,
                 validate_all=validate_all,
@@ -331,7 +331,6 @@ def _gt_auto_optimize_phase_2(
             # TODO(phimuell): Should we do this all the time or only once?
             # TODO(phimuell): Add a criteria to decide if we should promote or not.
             # TODO(phimuell): Add parallel map promotion?
-            print(">>>>>>>>>>>>>>>>>>>>>>>> AGGRESSIVE FUSION")
             phase2_cleanup.append(
                 gtx_transformations.SerialMapPromoter(
                     only_toplevel_maps=True,
@@ -340,8 +339,6 @@ def _gt_auto_optimize_phase_2(
                     promote_local=False,
                 )
             )
-        else:
-            print("<<<<<<<<<<<<<<<<<<<<<<<<<<<< NO AGGRESSIVE FUSION")
 
         # Perform the phase 2 cleanup.
         sdfg.apply_transformations_once_everywhere(

@@ -147,7 +147,7 @@ def test_only_dependent():
 
     # Apply the transformation
     sdfg.apply_transformations_repeated(
-        gtx_transformations.KBlocking(blocking_size=10, block_dim="j"),
+        gtx_transformations.KBlocking(blocking_size=10, blocking_parameter="j"),
         validate=True,
         validate_all=True,
     )
@@ -211,7 +211,7 @@ def test_intermediate_access_node():
 
     # Apply the transformation.
     sdfg.apply_transformations_repeated(
-        gtx_transformations.KBlocking(blocking_size=10, block_dim="j"),
+        gtx_transformations.KBlocking(blocking_size=10, blocking_parameter="j"),
         validate=True,
         validate_all=True,
     )
@@ -249,7 +249,7 @@ def test_chained_access() -> None:
 
     # Apply the transformation.
     ret = sdfg.apply_transformations_repeated(
-        gtx_transformations.KBlocking(blocking_size=10, block_dim="j"),
+        gtx_transformations.KBlocking(blocking_size=10, blocking_parameter="j"),
         validate=True,
         validate_all=True,
     )
