@@ -6,7 +6,12 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Implements Helper functionaliyies for map fusion"""
+"""Implements helper functions for the map fusion transformations.
+
+Note:
+    After DaCe [PR#1629](https://github.com/spcl/dace/pull/1629), that implements
+    a better map fusion transformation is merged, this file will be deleted.
+"""
 
 import functools
 import itertools
