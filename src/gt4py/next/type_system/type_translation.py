@@ -128,7 +128,7 @@ def from_type_hint(
 
             try:
                 dtype = recursive_make_symbol(dtype_arg)
-            except (ValueError, exceptions.TypeError_) as error:
+            except ValueError as error:
                 raise ValueError(
                     f"Field dtype argument must be a scalar type (got '{dtype_arg}')."
                 ) from error
@@ -166,8 +166,7 @@ def from_type_hint(
                 kw_only_args={},  # TODO
                 returns=returns,
             )
-
-    raise exceptions.TypeError_(location=None, message=f"'{type_hint}' type is not supported.")
+    raise ValueError(f"'{type_hint}' type is not supported.")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -220,6 +219,8 @@ def from_value(value: Any) -> ts.TypeSpec:
         elems = [from_value(el) for el in value]
         assert all(isinstance(elem, ts.DataType) for elem in elems)
         return ts.TupleType(types=elems)  # type: ignore[arg-type] # checked in assert
+    elif isinstance(value, types.ModuleType):
+        return UnknownPythonObject(_object=value)
     else:
         type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
         try:
@@ -228,9 +229,9 @@ def from_value(value: Any) -> ts.TypeSpec:
             # valid unknown objects could be ModuleType, classes etc that are used to extract typeable objects
             symbol_type = UnknownPythonObject(_object=value)
 
-    if isinstance(
-        symbol_type, (ts.DataType, ts.OffsetType, ts.DimensionType, UnknownPythonObject)
-    ) or (isinstance(symbol_type, ts.CallableType) and isinstance(symbol_type, ts.TypeSpec)):
+    if isinstance(symbol_type, (ts.DataType, ts.OffsetType, ts.DimensionType)) or (
+        isinstance(symbol_type, ts.CallableType) and isinstance(symbol_type, ts.TypeSpec)
+    ):
         return symbol_type
     else:
         raise ValueError(f"Impossible to map '{value}' value to a 'Symbol'.")
