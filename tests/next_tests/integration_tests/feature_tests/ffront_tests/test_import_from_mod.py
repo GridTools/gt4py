@@ -31,7 +31,7 @@ def test_import_dims_module(cartesian_case):
             f,
             out=out,
             domain={
-                ffront_tests.ffront_test_utils.IDim: (0, 8),
+                integration_tests.cases.IDim: (0, 8),
                 cases.KDim: (0, 3),
             },
         )
