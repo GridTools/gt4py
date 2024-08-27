@@ -33,8 +33,9 @@ class BaseMapPromoter(dace_transformation.SingleStateTransformation):
 
     In order to properly work, the parameters of "source map" must be a strict
     superset of the ones of "map to promote". Furthermore, this transformation
-    builds upon the structure defined [here](https://hackmd.io/klvzLnzMR6GZBWtRU8HbDg#Requirements-on-SDFG).
-    Thus it only checks the name of the parameters.
+    builds upon the structure defined [ADR0018](https://github.com/GridTools/gt4py/tree/main/docs/development/ADRs/0018-Canonical_SDFG_in_GT4Py_Transformations.md)
+    especially rule 11, regarding the names. Thus it only checks the name of
+    the parameters to determine if it should perform the promotion or not.
 
     To influence what to promote the user must implement the `map_to_promote()`
     and `source_map()` function. They have to return the map entry node.

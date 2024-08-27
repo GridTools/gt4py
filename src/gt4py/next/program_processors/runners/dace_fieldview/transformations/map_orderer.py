@@ -34,7 +34,9 @@ class MapIterationOrder(dace_transformation.SingleStateTransformation):
             is supposed to have stride 1.
 
     Note:
-        The transformation does follow the rules outlines [here](https://hackmd.io/klvzLnzMR6GZBWtRU8HbDg#Requirements-on-SDFG)
+        The transformation does follow the rules outlines in
+        [ADR0018](https://github.com/GridTools/gt4py/tree/main/docs/development/ADRs/0018-Canonical_SDFG_in_GT4Py_Transformations.md)
+        especially rule 11, regarding the names.
 
     Todo:
         - Extend that different dimensions can be specified to be leading

@@ -34,7 +34,8 @@ from gt4py.next.program_processors.runners.dace_fieldview.transformations import
 class MapFusionHelper(dace_transformation.SingleStateTransformation):
     """Contains common part of the fusion for parallel and serial Map fusion.
 
-    The transformation assumes that the SDFG obeys the principals outlined [here](https://hackmd.io/klvzLnzMR6GZBWtRU8HbDg#Requirements-on-SDFG).
+    The transformation assumes that the SDFG obeys the principals outlined in
+    [ADR0018](https://github.com/GridTools/gt4py/tree/main/docs/development/ADRs/0018-Canonical_SDFG_in_GT4Py_Transformations.md).
     The main advantage of this structure is, that it is rather easy to determine
     if a transient is used anywhere else. This check, performed by
     `is_interstate_transient()`. It is further speeded up by cashing some computation,
@@ -294,12 +295,11 @@ class MapFusionHelper(dace_transformation.SingleStateTransformation):
             transient: The transient that should be checked.
             sdfg: The SDFG containing the array.
             state: If given the state the node is located in.
-
-        Note:
-            This function build upon the structure of the SDFG that is outlined
-            in the HackMD document.
         """
 
+        # The following builds upon the HACK MD document and not on ADR0018.
+        #   Therefore the numbers are slightly different, but both documents
+        #   essentially describes the same SDFG.
         # According to [rule 6](https://hackmd.io/klvzLnzMR6GZBWtRU8HbDg#Requirements-on-SDFG)
         #  the set of such transients is partially given by all source access dace_nodes.
         #  Because of rule 3 we also include all scalars in this set, as an over

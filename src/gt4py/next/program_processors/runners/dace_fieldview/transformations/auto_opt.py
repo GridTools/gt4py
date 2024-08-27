@@ -100,6 +100,11 @@ def gt_auto_optimize(
 ) -> dace.SDFG:
     """Performs GT4Py specific optimizations on the SDFG in place.
 
+    This function expects that the input SDFG follows the principles that are
+    outlined in [ADR0018](https://github.com/GridTools/gt4py/tree/main/docs/development/ADRs/0018-Canonical_SDFG_in_GT4Py_Transformations.md).
+    It is important to notice, that if `reuse_transients` is active then the
+    optimized SDFG no longer conforms to these rules.
+
     The auto optimization works in different phases, that focuses each on
     different aspects of the SDFG. The initial SDFG is assumed to have a
     very large number of rather simple Maps.
