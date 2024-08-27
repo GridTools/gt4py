@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import copy
 from typing import Any, Mapping, Optional, Sequence, Union
 
 import dace
@@ -15,6 +16,10 @@ from dace import (
     transformation as dace_transformation,
 )
 from dace.sdfg import nodes as dace_nodes
+
+from gt4py.next.program_processors.runners.dace_fieldview import (
+    transformations as gtx_transformations,
+)
 
 
 @dace_properties.make_properties
@@ -34,8 +39,10 @@ class BaseMapPromoter(dace_transformation.SingleStateTransformation):
     In order to properly work, the parameters of "source map" must be a strict
     superset of the ones of "map to promote". Furthermore, this transformation
     builds upon the structure defined [ADR0018](https://github.com/GridTools/gt4py/tree/main/docs/development/ADRs/0018-Canonical_SDFG_in_GT4Py_Transformations.md)
-    especially rule 11, regarding the names. Thus it only checks the name of
-    the parameters to determine if it should perform the promotion or not.
+    especially rule 11, regarding the names. Thus the function uses the names
+    of the map parameters to determine what a local, horizontal, vertical or
+    unknown dimension is. It also uses rule 12, therefore it will not perform
+    a renaming and iteration variables must be a match.
 
     To influence what to promote the user must implement the `map_to_promote()`
     and `source_map()` function. They have to return the map entry node.
@@ -43,9 +50,12 @@ class BaseMapPromoter(dace_transformation.SingleStateTransformation):
     Args:
         only_inner_maps: Only match Maps that are internal, i.e. inside another Map.
         only_toplevel_maps: Only consider Maps that are at the top.
-        promote_vertical: If `True` promote vertical dimensions; `True` by default.
-        promote_local: If `True` promote local dimensions; `True` by default.
-        promote_horizontal: If `True` promote horizontal dimensions; `False` by default.
+        promote_vertical: If `True` promote vertical dimensions, i.e. add them
+            to the map to promote; `True` by default.
+        promote_local: If `True` promote local dimensions, i.e. add them to the
+            map to promote; `True` by default.
+        promote_horizontal: If `True` promote horizontal dimensions, i.e. add
+            them to the map to promote; `False` by default.
         promote_all: Do not impose any restriction on what to promote. The only
             reasonable value is `True` or `None`.
 
@@ -173,13 +183,13 @@ class BaseMapPromoter(dace_transformation.SingleStateTransformation):
         #  to ensure that the symbols are the same and all. But this is guaranteed by
         #  the nature of this transformation (single state).
         if self.only_inner_maps or self.only_toplevel_maps:
-            scopeDict: Mapping[dace_nodes.Node, Union[dace_nodes.Node, None]] = graph.scope_dict()
-            if self.only_inner_maps and (scopeDict[map_to_promote_entry] is None):
+            scope_dict: Mapping[dace_nodes.Node, Union[dace_nodes.Node, None]] = graph.scope_dict()
+            if self.only_inner_maps and (scope_dict[map_to_promote_entry] is None):
                 return False
-            if self.only_toplevel_maps and (scopeDict[map_to_promote_entry] is not None):
+            if self.only_toplevel_maps and (scope_dict[map_to_promote_entry] is not None):
                 return False
 
-        # Test if the map ranges are compatible with each other.
+        # Test if the map ranges and parameter are compatible with each other
         missing_map_parameters: list[str] | None = self.missing_map_params(
             map_to_promote=map_to_promote,
             source_map=source_map,
@@ -201,6 +211,9 @@ class BaseMapPromoter(dace_transformation.SingleStateTransformation):
             if not dimension_identifier:
                 return False
             for missing_map_param in missing_map_parameters:
+                # Check if all missing parameter match a specified pattern. Note
+                #  unknown iteration parameter, such as `__hansi_meier` will be
+                #  rejected and can not be promoted.
                 if not any(
                     missing_map_param.endswith(dim_identifier)
                     for dim_identifier in dimension_identifier
@@ -254,6 +267,7 @@ class BaseMapPromoter(dace_transformation.SingleStateTransformation):
 
         The returned sequence is empty if they are already have the same parameters.
         The function will return `None` is promoting is not possible.
+        By setting `be_strict` to `False` the function will only check the names.
 
         Args:
             map_to_promote: The map that should be promoted.
@@ -330,22 +344,74 @@ class SerialMapPromoter(BaseMapPromoter):
         permissive: bool = False,
     ) -> bool:
         """Tests if the Maps really can be fused."""
-        from .map_serial_fusion import SerialMapFusion
 
+        # Test if the promotion could be done.
         if not super().can_be_applied(graph, expr_index, sdfg, permissive):
             return False
 
-        # Check if the partition exists, if not promotion to fusing is pointless.
-        #  TODO(phimuell): Find the proper way of doing it.
-        serial_fuser = SerialMapFusion(only_toplevel_maps=True)
-        output_partition = serial_fuser.partition_first_outputs(
-            state=graph,
-            sdfg=sdfg,
-            map_exit_1=self.exit_first_map,
-            map_entry_2=self.entry_second_map,
-        )
-        if output_partition is None:
+        # Test if after the promotion the maps could be fused.
+        if not self._test_if_promoted_maps_can_be_fused(graph, sdfg):
             return False
+
+        return True
+
+    def _test_if_promoted_maps_can_be_fused(
+        self,
+        state: dace.SDFGState,
+        sdfg: dace.SDFG,
+    ) -> bool:
+        """This function checks if the promoted maps can be fused by map fusion.
+
+        This function assumes that `self.can_be_applied()` returned `True`.
+
+        Args:
+            state: The state in which we operate.
+            sdfg: The SDFG we process.
+
+        Note:
+            The current implementation uses a very hacky way to test this.
+
+        Todo:
+            Find a better way of doing it.
+        """
+        first_map_exit: dace_nodes.MapExit = self.exit_first_map
+        access_node: dace_nodes.AccessNode = self.access_node
+        second_map_entry: dace_nodes.MapEntry = self.entry_second_map
+
+        map_to_promote: dace_nodes.MapEntry = self.map_to_promote(state=state, sdfg=sdfg).map
+
+        # Since we force a promotion of the map we have to store the old parameters
+        #  of the map such that we can later restore them.
+        org_map_to_promote_params = copy.deepcopy(map_to_promote.params)
+        org_map_to_promote_ranges = copy.deepcopy(map_to_promote.range)
+
+        try:
+            # This will lead to a promotion of the map, this is needed that
+            #  Map fusion can actually inspect them.
+            self.apply(graph=state, sdfg=sdfg)
+
+            # Now create the map fusion object that we can then use to check if
+            #  the fusion is possible or not.
+            serial_fuser = gtx_transformations.SerialMapFusion(
+                only_inner_maps=self.only_inner_maps,
+                only_toplevel_maps=self.only_toplevel_maps,
+            )
+            candidate = {
+                type(serial_fuser).map_exit1: first_map_exit,
+                type(serial_fuser).access_node: access_node,
+                type(serial_fuser).map_entry2: second_map_entry,
+            }
+            state_id = sdfg.node_id(state)
+            serial_fuser.setup_match(sdfg, sdfg.cfg_id, state_id, candidate, 0, override=True)
+
+            # Now use the serial fuser to see if fusion would succeed
+            if not serial_fuser.can_be_applied(state, 0, sdfg):
+                return False
+
+        finally:
+            # Restore the parameters of the map that we promoted before.
+            map_to_promote.params = org_map_to_promote_params
+            map_to_promote.range = org_map_to_promote_ranges
 
         return True
 

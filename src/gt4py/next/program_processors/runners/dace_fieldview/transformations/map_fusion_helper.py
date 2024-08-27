@@ -133,6 +133,8 @@ class MapFusionHelper(dace_transformation.SingleStateTransformation):
                 return False
 
         # We will now check if there exists a "remapping" that we can use.
+        #  NOTE: The serial map promoter depends on the fact that this is the
+        #           last check.
         if not self.map_parameter_compatible(
             map_1=map_entry_1.map, map_2=map_entry_2.map, state=graph, sdfg=sdfg
         ):
