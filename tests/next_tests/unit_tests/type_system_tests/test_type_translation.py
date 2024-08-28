@@ -18,7 +18,7 @@ from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
-from . import dummy_package
+from ... import dummy_package
 
 
 class CustomInt32DType:

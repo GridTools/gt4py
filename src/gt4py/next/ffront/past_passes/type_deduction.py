@@ -115,11 +115,15 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
     def visit_Attribute(self, node: past.Attribute, **kwargs: Any) -> past.Attribute:
         new_value = self.visit(node.value, **kwargs)
+        new_type = getattr(new_value.type, node.attr)
+        if isinstance(new_type, ts.FieldType):
+            raise errors.DSLError(node.location, "Module imports of Fields not accepted.")
+
         return past.Attribute(
             value=new_value,
             attr=node.attr,
             location=node.location,
-            type=getattr(new_value.type, node.attr),
+            type=new_type,
         )
 
     def visit_TupleExpr(self, node: past.TupleExpr, **kwargs: Any) -> past.TupleExpr:

@@ -21,7 +21,9 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     mesh_descriptor,
 )
 
-from tests.next_tests.unit_tests.type_system_tests.dummy_package import dummy_module
+from next_tests.dummy_package import dummy_module
+
+from next_tests.dummy_package.dummy_module import field_op_sample
 
 
 def test_import_dims_module(cartesian_case):
@@ -54,7 +56,8 @@ def test_import_dims_module(cartesian_case):
     cases.verify(cartesian_case, mod_prog, f, out=out, ref=expected)
 
 
-def test_import_module_errors(cartesian_case):
+# TODO: these set of features should be allowed as module imports in a later PR
+def test_import_module_errors_future_allowed(cartesian_case):
     with pytest.raises(gtx.errors.DSLError):
 
         @gtx.field_operator
@@ -76,7 +79,21 @@ def test_import_module_errors(cartesian_case):
             f_new = dummy_module.field_op_sample(f)
             return f_new
 
-    with pytest.raises(TypeError):
+    with pytest.raises(gtx.errors.DSLError):
+
+        @gtx.field_operator
+        def field_op(f: cases.IField):
+            f_new = field_op_sample(f)
+            return f_new
+
+        @gtx.program
+        def field_op(f: cases.IField):
+            dummy_module.field_op_sample(f, out=f, offset_provider={})
+
+
+@pytest.mark.checks_specific_error
+def test_import_module_errors(cartesian_case):
+    with pytest.raises(gtx.errors.DSLError):
         new_field = gtx.as_field([cases.IDim], np.ones((10,), dtype=gtx.int32))
 
         @gtx.field_operator(backend=cartesian_case.executor)
@@ -85,3 +102,16 @@ def test_import_module_errors(cartesian_case):
             return f_new
 
         field_op(out=new_field, offset_provider={})
+
+    with pytest.raises(gtx.errors.DSLError):
+        new_field = gtx.as_field([cases.IDim], np.ones((10,), dtype=gtx.int32))
+
+        @gtx.field_operator(backend=cartesian_case.executor)
+        def field_op(f: cases.IField):
+            return f
+
+        @gtx.program(backend=cartesian_case.executor)
+        def program_op(f: cases.IField, out: cases.IField):
+            field_op(dummy_module.dummy_field, out=out)
+
+        program_op(dummy_module.dummy_field, new_field, offset_provider={})
