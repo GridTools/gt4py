@@ -253,7 +253,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
                     new_args.append(arg)
 
             if bound_vars:
-                return self.fp_transform(im.let(*bound_vars.items())(im.call(node.fun)(*new_args)))  # type: ignore[arg-type]  # mypy not smart enough
+                return self.fp_transform(im.let(*bound_vars.items())(im.call(node.fun)(*new_args)))
         return None
 
     def transform_inline_trivial_make_tuple(self, node: ir.FunCall) -> Optional[ir.Node]:
@@ -298,7 +298,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
                     inner_vars[arg_sym] = arg
             if outer_vars:
                 return self.fp_transform(
-                    im.let(*outer_vars.items())(  # type: ignore[arg-type]  # mypy not smart enough
+                    im.let(*outer_vars.items())(
                         self.fp_transform(im.let(*inner_vars.items())(original_inner_expr))
                     )
                 )

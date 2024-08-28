@@ -78,7 +78,8 @@ class DaCeTranslator(
         self, inp: stages.ProgramCall
     ) -> stages.ProgramSource[languages.SDFG, LanguageSettings]:
         """Generate DaCe SDFG file from the ITIR definition."""
-        program: itir.FencilDefinition = inp.program
+        program = inp.program
+        assert isinstance(program, itir.FencilDefinition)
         arg_types = [tt.from_value(arg) for arg in inp.args]
 
         sdfg = self.generate_sdfg(
