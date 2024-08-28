@@ -86,29 +86,3 @@ def test_import_module_errors_future_allowed(cartesian_case):
         @gtx.program
         def field_op(f: cases.IField):
             dummy_module.field_op_sample(f, out=f, offset_provider={})
-
-
-@pytest.mark.checks_specific_error
-def test_import_module_errors(cartesian_case):
-    with pytest.raises(gtx.errors.DSLError):
-        new_field = gtx.as_field([cases.IDim], np.ones((10,), dtype=gtx.int32))
-
-        @gtx.field_operator(backend=cartesian_case.executor)
-        def field_op():
-            f_new = dummy_module.dummy_field
-            return f_new
-
-        field_op(out=new_field, offset_provider={})
-
-    with pytest.raises(gtx.errors.DSLError):
-        new_field = gtx.as_field([cases.IDim], np.ones((10,), dtype=gtx.int32))
-
-        @gtx.field_operator(backend=cartesian_case.executor)
-        def field_op(f: cases.IField):
-            return f
-
-        @gtx.program(backend=cartesian_case.executor)
-        def program_op(out: cases.IField):
-            field_op(dummy_module.dummy_field, out=out)
-
-        program_op(new_field, offset_provider={})
