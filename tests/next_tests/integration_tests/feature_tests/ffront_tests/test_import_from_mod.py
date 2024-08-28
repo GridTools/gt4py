@@ -23,8 +23,6 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 from next_tests.dummy_package import dummy_module
 
-from next_tests.dummy_package.dummy_module import field_op_sample
-
 
 def test_import_dims_module(cartesian_case):
     @gtx.field_operator
