@@ -334,9 +334,9 @@ class TrivialGPUMapPromoter(dace_transformation.SingleStateTransformation):
         - Intermediate access node can only have in and out degree of 1.
         - The trivial map exit can only have one output.
         """
-        trivial_map_exit: dace_nodes.MapExit = self.trivial_map(state=graph, sdfg=sdfg)
+        trivial_map_exit: dace_nodes.MapExit = self.trivial_map_exit
+        trivial_map: dace_nodes.Map = trivial_map_exit.map
         trivial_map_entry: dace_nodes.MapEntry = graph.entry_node(trivial_map_exit)
-        trivial_map: dace_nodes.Map = trivial_map_entry.map
         second_map: dace_nodes.Map = self.second_map_entry.map
         access_node: dace_nodes.AccessNode = self.access_node
 
