@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -278,6 +272,17 @@ def as_fieldop(
         )
 
     return applied_as_fieldop
+
+
+@_register_builtin_type_synthesizer
+def cond(
+    pred: ts.ScalarType, true_branch: ts.DataType, false_branch: ts.DataType
+) -> ts.FieldType | ts.DeferredType:
+    assert isinstance(pred, ts.ScalarType) and pred.kind == ts.ScalarKind.BOOL
+    assert true_branch == false_branch
+    assert isinstance(true_branch, (ts.FieldType, ts.DeferredType))
+
+    return true_branch
 
 
 @_register_builtin_type_synthesizer

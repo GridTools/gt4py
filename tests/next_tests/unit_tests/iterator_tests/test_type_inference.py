@@ -1,16 +1,11 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 # TODO: test failure when something is not typed after inference is run
 # TODO: test lift with no args
 # TODO: lambda function that is not called
@@ -176,6 +171,29 @@ def expression_test_cases():
             )(im.ref("inp1", float_i_field), im.ref("inp2", float_i_field)),
             ts.TupleType(types=[float_i_field, float_i_field]),
         ),
+        # cond
+        (
+            im.call("cond")(
+                False,
+                im.call(
+                    im.call("as_fieldop")(
+                        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+                        im.call("cartesian_domain")(
+                            im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
+                        ),
+                    )
+                )(im.ref("inp", float_i_field), 1.0),
+                im.call(
+                    im.call("as_fieldop")(
+                        "deref",
+                        im.call("cartesian_domain")(
+                            im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
+                        ),
+                    )
+                )(im.ref("inp", float_i_field)),
+            ),
+            float_i_field,
+        ),
     )
 
 
@@ -220,6 +238,19 @@ def test_late_offset_axis():
         testee, offset_provider=mesh.offset_provider, allow_undeclared_symbols=True
     )
     assert result.type == it_on_e_of_e_type
+
+
+def test_cast_first_arg_inference():
+    # since cast_ is a grammar builtin whose return type is given by its second argument it is
+    # easy to forget inferring the types of the first argument and its children. Simply check
+    # if the first argument has a type inferred correctly here.
+    testee = im.call("cast_")(
+        im.plus(im.literal_from_value(1), im.literal_from_value(2)), "float64"
+    )
+    result = itir_type_inference.infer(testee, offset_provider={}, allow_undeclared_symbols=True)
+
+    assert result.args[0].type == int_type
+    assert result.type == float64_type
 
 
 # TODO(tehrengruber): Rewrite tests to use itir.Program
