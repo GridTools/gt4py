@@ -83,8 +83,7 @@ def test_import_module_errors_future_allowed(cartesian_case):
 
         @gtx.field_operator
         def field_op(f: cases.IField):
-            f_new = field_op_sample(f)
-            return f_new
+            return f
 
         @gtx.program
         def field_op(f: cases.IField):
