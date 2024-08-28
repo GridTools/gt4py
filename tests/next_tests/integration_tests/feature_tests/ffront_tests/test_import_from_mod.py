@@ -108,7 +108,7 @@ def test_import_module_errors(cartesian_case):
             return f
 
         @gtx.program(backend=cartesian_case.executor)
-        def program_op(f: cases.IField, out: cases.IField):
+        def program_op(out: cases.IField):
             field_op(dummy_module.dummy_field, out=out)
 
-        program_op(dummy_module.dummy_field, new_field, offset_provider={})
+        program_op(new_field, offset_provider={})
