@@ -77,15 +77,11 @@ def test_import_module_errors(cartesian_case):
             return f_new
 
     with pytest.raises(TypeError):
+        new_field = gtx.as_field([cases.IDim], np.ones((10,), dtype=gtx.int32))
 
-        @gtx.field_operator
-        def field_op(f: cases.IField):
+        @gtx.field_operator(backend=cartesian_case.executor)
+        def field_op():
             f_new = dummy_module.dummy_field
             return f_new
 
-    with pytest.raises(TypeError):
-
-        @gtx.field_operator
-        def field_op(f: cases.IField):
-            val_new = dummy_module.dummy_int
-            return f
+        field_op(out=new_field, offset_provider={})
