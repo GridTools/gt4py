@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import copy
-from typing import Any, Mapping, Optional, Sequence, Union
+from typing import Any, Mapping, Optional, Union
 
 import dace
 from dace import (
@@ -46,6 +46,9 @@ class BaseMapPromoter(dace_transformation.SingleStateTransformation):
 
     To influence what to promote the user must implement the `map_to_promote()`
     and `source_map()` function. They have to return the map entry node.
+
+    The order of the parameter the map to promote has is unspecific, while the
+    source map is not modified.
 
     Args:
         only_inner_maps: Only match Maps that are internal, i.e. inside another Map.
@@ -225,37 +228,18 @@ class BaseMapPromoter(dace_transformation.SingleStateTransformation):
     def apply(self, graph: Union[dace.SDFGState, dace.SDFG], sdfg: dace.SDFG) -> None:
         """Performs the actual Map promoting.
 
-        Add all parameters that `self.source_map` has but `self.map_to_promote`
-        lacks to `self.map_to_promote` the range of these new dimensions is taken
-        from the source map.
-        The order of the parameters the Map has after the promotion is unspecific.
+        After this call the map to promote will have the same map parameters
+        and ranges as the source map has. The function assumes that `can_be_applied()`
+        returned `True`.
         """
         map_to_promote: dace_nodes.Map = self.map_to_promote(state=graph, sdfg=sdfg).map
         source_map: dace_nodes.Map = self.source_map(state=graph, sdfg=sdfg).map
-        source_params: Sequence[str] = source_map.params
-        source_ranges: dace_subsets.Range = source_map.range
 
-        missing_params: Sequence[str] = self.missing_map_params(  # type: ignore[assignment]  # Will never be `None`
-            map_to_promote=map_to_promote,
-            source_map=source_map,
-            be_strict=False,
-        )
-
-        # Maps the map parameter of the source map to its index, i.e. which map
-        #  parameter it is.
-        map_source_param_to_idx: dict[str, int] = {p: i for i, p in enumerate(source_params)}
-
-        promoted_params = list(map_to_promote.params)
-        promoted_ranges = list(map_to_promote.range.ranges)
-
-        for missing_param in missing_params:
-            promoted_params.append(missing_param)
-            promoted_ranges.append(source_ranges[map_source_param_to_idx[missing_param]])
-
-        # Now update the map properties
-        #  This action will also remove the tiles
-        map_to_promote.range = dace_subsets.Range(promoted_ranges)
-        map_to_promote.params = promoted_params
+        # The simplest implementation is just to copy the important parts.
+        #  Note that we only copy the ranges and parameters all other stuff in the
+        #  associated Map object is not modified.
+        map_to_promote.params = copy.deepcopy(source_map.params)
+        map_to_promote.range = copy.deepcopy(source_map.range)
 
     def missing_map_params(
         self,

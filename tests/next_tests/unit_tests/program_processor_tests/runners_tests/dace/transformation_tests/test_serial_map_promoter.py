@@ -69,7 +69,9 @@ def test_serial_map_promotion():
 
     assert util._count_nodes(sdfg, dace_nodes.MapEntry) == 2
     assert len(map_entry_1d.map.params) == 1
+    assert len(map_entry_1d.map.range) == 1
     assert len(map_entry_2d.map.params) == 2
+    assert len(map_entry_2d.map.range) == 2
 
     # Now apply the promotion
     sdfg.apply_transformations(
@@ -82,5 +84,11 @@ def test_serial_map_promotion():
 
     assert util._count_nodes(sdfg, dace_nodes.MapEntry) == 2
     assert len(map_entry_1d.map.params) == 2
+    assert len(map_entry_1d.map.range) == 2
     assert len(map_entry_2d.map.params) == 2
+    assert len(map_entry_2d.map.range) == 2
     assert set(map_entry_1d.map.params) == set(map_entry_2d.map.params)
+    assert all(
+        rng_1d == rng_2d
+        for rng_1d, rng_2d in zip(map_entry_1d.map.range.ranges, map_entry_2d.map.range.ranges)
+    )
