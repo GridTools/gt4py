@@ -131,15 +131,12 @@ class GTIRToOIR(eve.NodeTranslator):
     def visit_HorizontalRestriction(
         self, node: gtir.HorizontalRestriction, **kwargs: Any
     ) -> oir.HorizontalRestriction:
-        body_stmts = []
-        for stmt in node.body:
-            stmt_or_stmts = self.visit(stmt, **kwargs)
-            stmts = utils.flatten_list(
-                [stmt_or_stmts] if isinstance(stmt_or_stmts, oir.Stmt) else stmt_or_stmts
-            )
-            body_stmts.extend(stmts)
+        body = []
+        for statement in node.body:
+            oir_statement = self.visit(statement, **kwargs)
+            body.extend(utils.flatten_list(utils.listify(oir_statement)))
 
-        return oir.HorizontalRestriction(mask=node.mask, body=body_stmts)
+        return oir.HorizontalRestriction(mask=node.mask, body=body)
 
     def visit_While(
         self, node: gtir.While, *, mask: Optional[oir.Expr] = None, **kwargs: Any
