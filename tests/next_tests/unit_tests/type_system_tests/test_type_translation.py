@@ -18,6 +18,8 @@ from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
+from ... import dummy_package
+
 
 class CustomInt32DType:
     @property
@@ -185,3 +187,15 @@ def test_generic_variadic_dims(value, expected_dims):
 )
 def test_as_from_dtype(dtype):
     assert type_translation.as_dtype(type_translation.from_dtype(dtype)) == dtype
+
+
+def test_from_value_module():
+    assert isinstance(
+        type_translation.from_value(dummy_package), type_translation.UnknownPythonObject
+    )
+    assert type_translation.from_value(dummy_package).dummy_module.dummy_int == ts.ScalarType(
+        kind=ts.ScalarKind.INT32
+    )
+    assert type_translation.from_value(dummy_package.dummy_module.dummy_int) == ts.ScalarType(
+        kind=ts.ScalarKind.INT32
+    )
