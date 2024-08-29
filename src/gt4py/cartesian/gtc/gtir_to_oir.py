@@ -143,20 +143,16 @@ class GTIRToOIR(eve.NodeTranslator):
 
     def visit_While(
         self, node: gtir.While, *, mask: Optional[oir.Expr] = None, **kwargs: Any
-    ) -> Union[oir.While, oir.MaskStmt]:
-        body_stmts: List[oir.Stmt] = []
-        for st in node.body:
-            st_or_sts = self.visit(st, **kwargs)
-            sts = utils.flatten_list([st_or_sts] if isinstance(st_or_sts, oir.Stmt) else st_or_sts)
-            body_stmts.extend(sts)
+    ) -> oir.While:
+        body: List[oir.Stmt] = []
+        for statement in node.body:
+            oir_statement = self.visit(statement, **kwargs)
+            body.extend(utils.flatten_list(utils.listify(oir_statement)))
 
-        cond: oir.Expr = self.visit(node.cond)
+        condition: oir.Expr = self.visit(node.cond)
         if mask:
-            cond = oir.BinaryOp(op=common.LogicalOperator.AND, left=mask, right=cond)
-        stmt: Union[oir.While, oir.MaskStmt] = oir.While(cond=cond, body=body_stmts, loc=node.loc)
-        if mask is not None:
-            stmt = oir.MaskStmt(body=[stmt], mask=mask, loc=node.loc)
-        return stmt
+            condition = oir.BinaryOp(op=common.LogicalOperator.AND, left=mask, right=condition)
+        return oir.While(cond=condition, body=body, loc=node.loc)
 
     def visit_FieldIfStmt(
         self,
