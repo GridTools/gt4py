@@ -121,13 +121,12 @@ class GTIRToOIR(eve.NodeTranslator):
     def visit_ParAssignStmt(
         self, node: gtir.ParAssignStmt, *, mask: Optional[oir.Expr] = None, **kwargs: Any
     ) -> Union[oir.AssignStmt, oir.MaskStmt]:
-        stmt: Union[oir.AssignStmt, oir.MaskStmt] = oir.AssignStmt(
-            left=self.visit(node.left), right=self.visit(node.right)
-        )
-        if mask is not None:
-            # Wrap inside MaskStmt
-            stmt = oir.MaskStmt(body=[stmt], mask=mask, loc=node.loc)
-        return stmt
+        statement = oir.AssignStmt(left=self.visit(node.left), right=self.visit(node.right))
+        if mask is None:
+            return statement
+
+        # Wrap inside MaskStmt
+        return oir.MaskStmt(body=[statement], mask=mask, loc=node.loc)
 
     def visit_HorizontalRestriction(
         self, node: gtir.HorizontalRestriction, **kwargs: Any
