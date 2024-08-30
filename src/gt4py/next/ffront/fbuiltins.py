@@ -227,7 +227,7 @@ UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES = ["isfinite", "isinf", "isnan"]
 
 def _make_unary_math_builtin(name: str) -> None:
     def impl(value: common.Field | core_defs.ScalarT, /) -> common.Field | core_defs.ScalarT:
-        # TODO(havogt): enable once we have a failing test (see `test_math_builtin_execution.py`)
+        # TODO(havogt): enable tests in `test_math_builtin_execution.py`
         assert core_defs.is_scalar_type(
             value
         )  # default implementation for scalars, Fields are handled via dispatch
