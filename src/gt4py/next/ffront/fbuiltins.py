@@ -9,6 +9,7 @@
 import dataclasses
 import functools
 import inspect
+import math
 from builtins import bool, float, int, tuple
 from typing import Any, Callable, Generic, ParamSpec, Tuple, TypeAlias, TypeVar, Union, cast
 
@@ -227,9 +228,11 @@ UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES = ["isfinite", "isinf", "isnan"]
 def _make_unary_math_builtin(name: str) -> None:
     def impl(value: common.Field | core_defs.ScalarT, /) -> common.Field | core_defs.ScalarT:
         # TODO(havogt): enable once we have a failing test (see `test_math_builtin_execution.py`)
-        # assert core_defs.is_scalar_type(value) # default implementation for scalars, Fields are handled via dispatch # noqa: ERA001 [commented-out-code]
-        # return getattr(math, name)(value)# noqa: ERA001 [commented-out-code]
-        raise NotImplementedError()
+        assert core_defs.is_scalar_type(
+            value
+        )  # default implementation for scalars, Fields are handled via dispatch
+
+        return getattr(math, name)(value)
 
     impl.__name__ = name
     globals()[name] = BuiltInFunction(impl)
