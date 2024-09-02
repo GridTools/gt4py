@@ -30,6 +30,10 @@ def set_dace_settings() -> Generator[None, None, None]:
         especially inside `can_be_applied()` are not ignored.
     - `compiler.allow_view_arguments` allow that NumPy views can be passed to
         `CompiledSDFG` objects as arguments.
+
+    Note:
+        This fixture will be automatically used by all tests inside this folder and
+        its subfolders due to the autouse option.
     """
     with dace.config.temporary_config():
         dace.Config.set("optimizer", "match_exception", value=True)
