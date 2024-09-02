@@ -35,14 +35,18 @@ def split_dict_by_key(pred: Callable, d: dict):
 
 
 def _merge_domains(
-    original_domains: Dict[str, SymbolicDomain], additional_domains: Dict[str, SymbolicDomain]
+    original_domains: Dict[str, SymbolicDomain],
+    additional_domains: Dict[str, SymbolicDomain],
 ) -> Dict[str, SymbolicDomain]:
     new_domains = {**original_domains}
-    for key, value in additional_domains.items():
-        if key in original_domains:
-            new_domains[key] = domain_union([original_domains[key], value])
+    for key, domain in additional_domains.items():
+        original_domain = original_domains.get(key)
+        if original_domain is None:
+            new_domains[key] = domain
+        elif domain is None:
+            new_domains[key] = original_domain
         else:
-            new_domains[key] = value
+            new_domains[key] = domain_union([original_domain, domain])
 
     return new_domains
 
@@ -77,6 +81,8 @@ def extract_shifts_and_translate_domains(
         ]
         if new_domains:
             accessed_domains[in_field_id] = domain_union(new_domains)
+        else:
+            accessed_domains.setdefault(in_field_id, None)
 
 
 def infer_as_fieldop(

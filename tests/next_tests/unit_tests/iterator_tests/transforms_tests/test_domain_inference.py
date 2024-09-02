@@ -74,7 +74,7 @@ def setup_test_as_fieldop(
     testee = im.as_fieldop(stencil)(*refs)
     expected = im.as_fieldop(stencil, domain)(*refs)
     expected_domains = {
-        ref: SymbolicDomain.from_expr(im.domain(domain_type, d))
+        ref: SymbolicDomain.from_expr(im.domain(domain_type, d)) if d is not None else None
         for ref, d in expected_domain_dict.items()
     }
     return testee, expected, expected_domains
@@ -89,7 +89,7 @@ def run_test_program(
     assert folded_program == expected
 
 
-def run_test_expr(
+def run_test_expr(  # TODO: extend this for unused input
     testee: itir.FunCall,
     expected: itir.FunCall,
     domain: itir.FunCall,
@@ -119,7 +119,7 @@ def constant_fold_domain_exprs(arg: itir.Node) -> itir.Node:
 
 def constant_fold_accessed_domains(domains: Dict[str, SymbolicDomain]) -> Dict[str, SymbolicDomain]:
     return {
-        k: SymbolicDomain.from_expr(constant_fold_domain_exprs(v.as_expr()))
+        k: SymbolicDomain.from_expr(constant_fold_domain_exprs(v.as_expr())) if v is not None else v
         for k, v in domains.items()
     }
 
@@ -190,9 +190,6 @@ def test_multi_length_shift(offset_provider):
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
 
-@pytest.mark.xfail(
-    reason="this still fails, decide ẃhat to do when we have tried the GTIR lowering"
-)  # TODO
 def test_unused_input(offset_provider):
     stencil = im.lambda_("arg0", "arg1")(im.deref("arg0"))
 
