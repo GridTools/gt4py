@@ -14,7 +14,7 @@ that explains the general structure and requirements on the SDFGs.
 
 from .auto_opt import gt_auto_optimize, gt_set_iteration_order, gt_simplify
 from .gpu_utils import GPUSetBlockSize, gt_gpu_transformation, gt_set_gpu_blocksize
-from .k_blocking import KBlocking
+from .loop_blocking import LoopBlocking
 from .map_orderer import MapIterationOrder
 from .map_promoter import SerialMapPromoter
 from .map_serial_fusion import SerialMapFusion
@@ -22,7 +22,7 @@ from .map_serial_fusion import SerialMapFusion
 
 __all__ = [
     "GPUSetBlockSize",
-    "KBlocking",
+    "LoopBlocking",
     "MapIterationOrder",
     "SerialMapFusion",
     "SerialMapPromoter",

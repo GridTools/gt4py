@@ -118,9 +118,8 @@ def gt_auto_optimize(
     4. Afterwards it will process the map ranges and iteration order. For this
         the function assumes that the dimension indicated by `leading_dim` is the
         one with stride one.
-    5. If requested the function will now apply blocking, on the dimension indicated
-        by `leading_dim`. (The reason that it is not done in the kernel optimization
-        phase is a restriction dictated by the implementation.)
+    5. If requested the function will now apply loop blocking, on the dimension
+        indicated by `leading_dim`.
     6. If requested the SDFG will be transformed to GPU. For this the
         `gt_gpu_transformation()` function is used, that might apply several other
         optimizations.
@@ -226,7 +225,7 @@ def gt_auto_optimize(
         # Phase 5: Apply blocking
         if blocking_dim is not None:
             sdfg.apply_transformations_once_everywhere(
-                gtx_transformations.KBlocking(
+                gtx_transformations.LoopBlocking(
                     blocking_size=blocking_size,
                     blocking_parameter=blocking_dim,
                 ),

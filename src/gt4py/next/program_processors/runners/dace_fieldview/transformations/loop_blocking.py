@@ -23,20 +23,20 @@ from gt4py.next.program_processors.runners.dace_fieldview import utility as gtx_
 
 
 @dace_properties.make_properties
-class KBlocking(dace_transformation.SingleStateTransformation):
-    """Applies k-Blocking with separation on a Map.
+class LoopBlocking(dace_transformation.SingleStateTransformation):
+    """Applies loop blocking, also known as k-blocking, on a Map.
 
     This transformation takes a multidimensional Map and performs blocking on a
-    single dimension, that is commonly called "k". All dimensions except `k` are
-    unaffected by this transformation. In the outer Map will be replace the `k`
-    range, currently `k = 0:N`, with `__coarse_k = 0:N:B`, where `N` is the
+    single dimension, the loop variable is called `I` here. All dimensions except
+    `I` are unaffected by this transformation. In the outer Map will be replace the
+    `I` range, currently `I = 0:N`, with `__coarse_I = 0:N:B`, where `N` is the
     original size of the range and `B` is the blocking size. The transformation
-    will then create an inner sequential map with `k = __coarse_k:(__coarse_k + B)`.
+    will then create an inner sequential map with `I = __coarse_I:(__coarse_I + B)`.
 
     What makes this transformation different from simple blocking, is that
     the inner map will not just be inserted right after the outer Map.
     Instead the transformation will first identify all nodes that does not depend
-    on the blocking parameter and relocate them between the outer and inner map.
+    on the blocking parameter `I` and relocate them between the outer and inner map.
     Thus these operations will only be performed once, per inner loop.
 
     Args:
@@ -51,12 +51,13 @@ class KBlocking(dace_transformation.SingleStateTransformation):
     blocking_size = dace_properties.Property(
         dtype=int,
         allow_none=True,
-        desc="Size of the inner k Block.",
+        desc="Size of the inner blocks; 'B' in the above description.",
     )
     blocking_parameter = dace_properties.Property(
         dtype=str,
         allow_none=True,
-        desc="Name of the iteration variable on which to block (must be an exact match).",
+        desc="Name of the iteration variable on which to block (must be an exact match);"
+        " 'I' in the above description.",
     )
 
     outer_entry = dace_transformation.transformation.PatternNode(dace_nodes.MapEntry)
