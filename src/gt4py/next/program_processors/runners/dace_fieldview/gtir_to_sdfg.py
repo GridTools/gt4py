@@ -1,16 +1,11 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 """
 Contains visitors to lower GTIR to DaCe SDFG.
 
@@ -148,12 +143,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             (
                 neighbor_tables[dim.value].max_neighbors
                 if dim.kind == gtx_common.DimensionKind.LOCAL
-                # we reuse the same symbol for field size passed as scalar argument to the gt4py program
-                else dace.symbol(f"__{name}_size_{i}", dtype)
+                else dace.symbol(dace_fieldview_util.field_size_symbol_name(name, i), dtype)
             )
             for i, dim in enumerate(dims)
         ]
-        strides = [dace.symbol(f"__{name}_stride_{i}", dtype) for i in range(len(dims))]
+        strides = [
+            dace.symbol(dace_fieldview_util.field_stride_symbol_name(name, i), dtype)
+            for i in range(len(dims))
+        ]
         return shape, strides
 
     def _add_storage(
@@ -175,8 +172,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             sdfg.add_array(name, sym_shape, dtype, strides=sym_strides, transient=transient)
         elif isinstance(symbol_type, ts.ScalarType):
             dtype = dace_fieldview_util.as_dace_type(symbol_type)
-            # scalar arguments passed to the program are represented as symbols in DaCe SDFG
-            sdfg.add_symbol(name, dtype)
+            # Scalar arguments passed to the program are represented as symbols in DaCe SDFG.
+            # The field size is sometimes passed as scalar argument to the program, so we have to
+            # check if the shape symbol was already allocated by `_make_array_shape_and_strides`.
+            # We assume that the scalar argument for field size always follows the field argument.
+            if name in sdfg.symbols:
+                assert sdfg.symbols[name].dtype == dtype
+            else:
+                sdfg.add_symbol(name, dtype)
         else:
             raise RuntimeError(f"Data type '{type(symbol_type)}' not supported.")
 
@@ -279,6 +282,12 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             head_state._debuginfo = dace_fieldview_util.debug_info(stmt, default=sdfg.debuginfo)
             self.visit(stmt, sdfg=sdfg, state=head_state)
 
+        # Create the call signature for the SDFG.
+        #  Only the arguments required by the GT4Py program, i.e. `node.params`, are added
+        #  as positional arguments. The implicit arguments, such as the offset providers or
+        #  the arguments created by the translation process, must be passed as keyword arguments.
+        sdfg.arg_names = [str(a) for a in node.params]
+
         sdfg.validate()
         return sdfg
 
@@ -314,7 +323,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             state.add_nedge(
                 expr_node,
                 target_node,
-                dace.Memlet(data=target_node.data, subset=subset),
+                dace.Memlet(data=target_node.data, subset=subset, other_subset=subset),
             )
 
     def visit_FunCall(

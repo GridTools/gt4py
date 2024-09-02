@@ -1,16 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+# FIXME[#1582](havogt): remove after refactoring to GTIR
 
 import dataclasses
 from typing import Any, Callable, Optional
@@ -338,7 +334,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             f"Call to object of type '{type(node.func.type).__name__}' not understood."
         )
 
-    def _visit_astype(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
+    def _visit_astype(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         assert len(node.args) == 2 and isinstance(node.args[1], foast.Name)
         obj, new_type = node.args[0], node.args[1].id
         return lowering_utils.process_elements(
@@ -349,7 +345,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             obj.type,
         )
 
-    def _visit_where(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
+    def _visit_where(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         condition, true_value, false_value = node.args
 
         lowered_condition = self.visit(condition, **kwargs)

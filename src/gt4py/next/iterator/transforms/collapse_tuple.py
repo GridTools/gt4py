@@ -1,16 +1,11 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 from __future__ import annotations
 
 import dataclasses
@@ -258,7 +253,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
                     new_args.append(arg)
 
             if bound_vars:
-                return self.fp_transform(im.let(*bound_vars.items())(im.call(node.fun)(*new_args)))  # type: ignore[arg-type]  # mypy not smart enough
+                return self.fp_transform(im.let(*bound_vars.items())(im.call(node.fun)(*new_args)))
         return None
 
     def transform_inline_trivial_make_tuple(self, node: ir.FunCall) -> Optional[ir.Node]:
@@ -303,7 +298,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
                     inner_vars[arg_sym] = arg
             if outer_vars:
                 return self.fp_transform(
-                    im.let(*outer_vars.items())(  # type: ignore[arg-type]  # mypy not smart enough
+                    im.let(*outer_vars.items())(
                         self.fp_transform(im.let(*inner_vars.items())(original_inner_expr))
                     )
                 )
