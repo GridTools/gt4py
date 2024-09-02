@@ -468,6 +468,15 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             return new_node
         return node
 
+    def visit_Attribute(self, node: foast.Attribute, **kwargs: Any) -> foast.Attribute:
+        new_value = self.visit(node.value, **kwargs)
+        return foast.Attribute(
+            value=new_value,
+            attr=node.attr,
+            location=node.location,
+            type=getattr(new_value.type, node.attr),
+        )
+
     def visit_Subscript(self, node: foast.Subscript, **kwargs: Any) -> foast.Subscript:
         new_value = self.visit(node.value, **kwargs)
         new_type: Optional[ts.TypeSpec] = None
