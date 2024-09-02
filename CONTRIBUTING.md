@@ -187,11 +187,9 @@ As mentioned above, we use several tools to help us write high-quality code. New
 
 <!-- Reference links -->
 
-[commitizen]: https://commitizen-tools.github.io/commitizen/
 [conventional-commits]: https://www.conventionalcommits.org/en/v1.0.0/#summary
 [coverage]: https://coverage.readthedocs.io/
 [ruff]: https://astral.sh/ruff
-[google-style-guide]: https://google.github.io/styleguide/pyguide.html
 [jupytext]: https://jupytext.readthedocs.io/
 [pre-commit]: https://pre-commit.com/
 [pytest]: https://docs.pytest.org/
@@ -199,6 +197,5 @@ As mentioned above, we use several tools to help us write high-quality code. New
 [pytest-xdist]: https://pytest-xdist.readthedocs.io/en/latest/
 [sphinx]: https://www.sphinx-doc.org
 [sphinx-autodoc]: https://www.sphinx-doc.org/en/master/usage/extensions/autodoc.html
-[sphinx-napoleon]: https://sphinxcontrib-napoleon.readthedocs.io/en/latest/index.html#
-[sphinx-rest]: https://www.sphinx-doc.org/en/master/usage/restructuredtext/basics.html
-[tox]: https://tox.wiki/en/latest/#
+[sphinx-napoleon]: https://sphinxcontrib-napoleon.readthedocs.io/en/latest/index.html
+[tox]: https://tox.wiki/en/latest/
