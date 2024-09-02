@@ -245,7 +245,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 [offset_provider.origin_axis, local_dim], ts.ScalarType(scalar_kind)
             )
             # We store all connectivity tables as transient arrays here; later, while building
-            # the field operator expressions, we change to non-transient (i.e. allocated extrenally)
+            # the field operator expressions, we change to non-transient (i.e. allocated externally)
             # the tables that are actually used. This way, we avoid adding SDFG arguments for
             # the connectivity tables that are not used. The remaining unused transient arrays
             # are removed by the dace simplify pass.
