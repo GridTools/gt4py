@@ -56,9 +56,11 @@ def all_nodes_between(
     """
 
     def next_nodes(node: dace_nodes.Node) -> Iterable[dace_nodes.Node]:
-        if reverse:
-            return (edge.src for edge in graph.in_edges(node))
-        return (edge.dst for edge in graph.out_edges(node))
+        return (
+            (edge.src for edge in graph.in_edges(node))
+            if reverse
+            else (edge.dst for edge in graph.out_edges(node))
+        )
 
     if reverse:
         begin, end = end, begin
