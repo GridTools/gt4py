@@ -26,9 +26,9 @@ SettingT_co = TypeVar("SettingT_co", bound=languages.LanguageSettings, covariant
 
 @dataclasses.dataclass(frozen=True)
 class ProgramCall:
-    """Iterator IR representaion of a program together with arguments to be passed to it."""
+    """ITIR/GTIR representation of a program together with arguments to be passed to it."""
 
-    program: itir.FencilDefinition
+    program: itir.FencilDefinition | itir.Program
     args: tuple[Any, ...]
     kwargs: dict[str, Any]
 

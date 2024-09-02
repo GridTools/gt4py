@@ -6,47 +6,48 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-# FIXME[#1582](havogt): remove after refactoring to GTIR
 
 import dataclasses
 from typing import Any, Callable, Optional
 
-from gt4py.eve import NodeTranslator, PreserveLocationVisitor
+from gt4py import eve
+from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Never
-from gt4py.eve.utils import UIDGenerator
 from gt4py.next.ffront import (
     dialect_ast_enums,
+    experimental as experimental_builtins,
     fbuiltins,
     field_operator_ast as foast,
+    foast_introspection,
     lowering_utils,
     stages as ffront_stages,
     type_specifications as ts_ffront,
 )
-from gt4py.next.ffront.experimental import EXPERIMENTAL_FUN_BUILTIN_NAMES
-from gt4py.next.ffront.fbuiltins import FUN_BUILTIN_NAMES, MATH_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
-from gt4py.next.ffront.foast_introspection import StmtReturnKind, deduce_stmt_return_kind
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
-def foast_to_itir(inp: ffront_stages.FoastOperatorDefinition) -> itir.Expr:
+def foast_to_gtir(inp: ffront_stages.FoastOperatorDefinition) -> itir.Expr:
     return FieldOperatorLowering.apply(inp.foast_node)
 
 
 def promote_to_list(node: foast.Symbol | foast.Expr) -> Callable[[itir.Expr], itir.Expr]:
     if not type_info.contains_local_field(node.type):
-        return lambda x: im.promote_to_lifted_stencil("make_const_list")(x)
+        return lambda x: im.op_as_fieldop("make_const_list")(x)
     return lambda x: x
 
 
 @dataclasses.dataclass
-class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
+class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     """
-    Lower FieldOperator AST (FOAST) to Iterator IR (ITIR).
+    Lower FieldOperator AST (FOAST) to GTIR.
 
-    The strategy is to lower every expression to lifted stencils,
-    i.e. taking iterators and returning iterator.
+    Most expressions are lowered to `as_fieldop`ed stencils.
+    Pure scalar expressions are kept as scalar operations as they might appear outside of the stencil context,
+    e.g. in `cond`.
+    In arithemtic operations that involve a field and a scalar, the scalar is implicitly broadcasted to a field
+    in the `as_fieldop` call.
 
     Examples
     --------
@@ -67,7 +68,9 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
     [Sym(id=SymbolName('inp'))]
     """
 
-    uid_generator: UIDGenerator = dataclasses.field(default_factory=UIDGenerator)
+    uid_generator: eve_utils.UIDGenerator = dataclasses.field(
+        default_factory=eve_utils.UIDGenerator
+    )
 
     @classmethod
     def apply(cls, node: foast.LocatedNode) -> itir.Expr:
@@ -86,66 +89,14 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
     ) -> itir.FunctionDefinition:
         func_definition: itir.FunctionDefinition = self.visit(node.definition, **kwargs)
 
-        new_body = func_definition.expr
-
         return itir.FunctionDefinition(
-            id=func_definition.id, params=func_definition.params, expr=new_body
+            id=func_definition.id, params=func_definition.params, expr=func_definition.expr
         )
 
     def visit_ScanOperator(
         self, node: foast.ScanOperator, **kwargs: Any
     ) -> itir.FunctionDefinition:
-        # note: we don't need the axis here as this is handled by the program
-        #  decorator
-        assert isinstance(node.type, ts_ffront.ScanOperatorType)
-
-        # We are lowering node.forward and node.init to iterators, but here we expect values -> `deref`.
-        # In iterator IR we didn't properly specify if this is legal,
-        # however after lift-inlining the expressions are transformed back to literals.
-        forward = im.deref(self.visit(node.forward, **kwargs))
-        init = lowering_utils.process_elements(
-            im.deref, self.visit(node.init, **kwargs), node.init.type
-        )
-
-        # lower definition function
-        func_definition: itir.FunctionDefinition = self.visit(node.definition, **kwargs)
-        new_body = im.let(
-            func_definition.params[0].id,
-            # promote carry to iterator of tuples
-            # (this is the only place in the lowering were a variable is captured in a lifted lambda)
-            lowering_utils.to_tuples_of_iterator(
-                im.promote_to_const_iterator(func_definition.params[0].id),
-                [*node.type.definition.pos_or_kw_args.values()][0],  # noqa: RUF015 [unnecessary-iterable-allocation-for-first-element]
-            ),
-        )(
-            # the function itself returns a tuple of iterators, deref element-wise
-            lowering_utils.process_elements(
-                im.deref, func_definition.expr, node.type.definition.returns
-            )
-        )
-
-        stencil_args: list[itir.Expr] = []
-        assert not node.type.definition.pos_only_args and not node.type.definition.kw_only_args
-        for param, arg_type in zip(
-            func_definition.params[1:],
-            [*node.type.definition.pos_or_kw_args.values()][1:],
-            strict=True,
-        ):
-            if isinstance(arg_type, ts.TupleType):
-                # convert into iterator of tuples
-                stencil_args.append(lowering_utils.to_iterator_of_tuples(param.id, arg_type))
-
-                new_body = im.let(
-                    param.id, lowering_utils.to_tuples_of_iterator(param.id, arg_type)
-                )(new_body)
-            else:
-                stencil_args.append(im.ref(param.id))
-
-        definition = itir.Lambda(params=func_definition.params, expr=new_body)
-
-        body = im.lift(im.call("scan")(definition, forward, init))(*stencil_args)
-
-        return itir.FunctionDefinition(id=node.id, params=definition.params[1:], expr=body)
+        raise NotImplementedError("TODO")
 
     def visit_Stmt(self, node: foast.Stmt, **kwargs: Any) -> Never:
         raise AssertionError("Statements must always be visited in the context of a function.")
@@ -166,8 +117,6 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
     def visit_IfStmt(
         self, node: foast.IfStmt, *, inner_expr: Optional[itir.Expr], **kwargs: Any
     ) -> itir.Expr:
-        # the lowered if call doesn't need to be lifted as the condition can only originate
-        # from a scalar value (and not a field)
         assert (
             isinstance(node.condition.type, ts.ScalarType)
             and node.condition.type.kind == ts.ScalarKind.BOOL
@@ -175,11 +124,13 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
 
         cond = self.visit(node.condition, **kwargs)
 
-        return_kind: StmtReturnKind = deduce_stmt_return_kind(node)
+        return_kind = foast_introspection.deduce_stmt_return_kind(node)
 
         common_symbols: dict[str, foast.Symbol] = node.annex.propagated_symbols
 
-        if return_kind is StmtReturnKind.NO_RETURN:
+        if return_kind is foast_introspection.StmtReturnKind.NO_RETURN:
+            # FIXME[#1582](havogt): document why this case should be handled in this way, not by the more general CONDITIONAL_RETURN
+
             # pack the common symbols into a tuple
             common_symrefs = im.make_tuple(*(im.ref(sym) for sym in common_symbols.keys()))
 
@@ -192,10 +143,8 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
                 inner_expr = im.let(sym, im.tuple_get(i, im.ref("__if_stmt_result")))(inner_expr)
 
             # here we assume neither branch returns
-            return im.let("__if_stmt_result", im.if_(im.deref(cond), true_branch, false_branch))(
-                inner_expr
-            )
-        elif return_kind is StmtReturnKind.CONDITIONAL_RETURN:
+            return im.let("__if_stmt_result", im.cond(cond, true_branch, false_branch))(inner_expr)
+        elif return_kind is foast_introspection.StmtReturnKind.CONDITIONAL_RETURN:
             common_syms = tuple(im.sym(sym) for sym in common_symbols.keys())
             common_symrefs = tuple(im.ref(sym) for sym in common_symbols.keys())
 
@@ -209,17 +158,17 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             false_branch = self.visit(node.false_branch, inner_expr=inner_expr, **kwargs)
 
             return im.let(inner_expr_name, inner_expr_evaluator)(
-                im.if_(im.deref(cond), true_branch, false_branch)
+                im.cond(cond, true_branch, false_branch)
             )
 
-        assert return_kind is StmtReturnKind.UNCONDITIONAL_RETURN
+        assert return_kind is foast_introspection.StmtReturnKind.UNCONDITIONAL_RETURN
 
         # note that we do not duplicate `inner_expr` here since if both branches
         #  return, `inner_expr` is ignored.
         true_branch = self.visit(node.true_branch, inner_expr=inner_expr, **kwargs)
         false_branch = self.visit(node.false_branch, inner_expr=inner_expr, **kwargs)
 
-        return im.if_(im.deref(cond), true_branch, false_branch)
+        return im.cond(cond, true_branch, false_branch)
 
     def visit_Assign(
         self, node: foast.Assign, *, inner_expr: Optional[itir.Expr], **kwargs: Any
@@ -258,18 +207,12 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         return self._map(node.op.value, node.left, node.right)
 
     def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs: Any) -> itir.FunCall:
-        op = "if_"
-        args = (node.condition, node.true_expr, node.false_expr)
-        lowered_args: list[itir.Expr] = [
-            lowering_utils.to_iterator_of_tuples(self.visit(arg, **kwargs), arg.type)
-            for arg in args
-        ]
-        if any(type_info.contains_local_field(arg.type) for arg in args):
-            lowered_args = [promote_to_list(arg)(larg) for arg, larg in zip(args, lowered_args)]
-            op = im.call("map_")(op)
-
-        return lowering_utils.to_tuples_of_iterator(
-            im.promote_to_lifted_stencil(im.call(op))(*lowered_args), node.type
+        assert (
+            isinstance(node.condition.type, ts.ScalarType)
+            and node.condition.type.kind == ts.ScalarKind.BOOL
+        )
+        return im.cond(
+            self.visit(node.condition), self.visit(node.true_expr), self.visit(node.false_expr)
         )
 
     def visit_Compare(self, node: foast.Compare, **kwargs: Any) -> itir.FunCall:
@@ -279,32 +222,34 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         match node.args[0]:
             case foast.Subscript(value=foast.Name(id=offset_name), index=int(offset_index)):
                 shift_offset = im.shift(offset_name, offset_index)
+                return im.as_fieldop(im.lambda_("__it")(im.deref(shift_offset("__it"))))(
+                    self.visit(node.func, **kwargs)
+                )
             case foast.Name(id=offset_name):
-                return im.lifted_neighbors(str(offset_name), self.visit(node.func, **kwargs))
+                return im.as_fieldop_neighbors(str(offset_name), self.visit(node.func, **kwargs))
             case foast.Call(func=foast.Name(id="as_offset")):
+                # TODO(havogt): discuss this representation
                 func_args = node.args[0]
                 offset_dim = func_args.args[0]
                 assert isinstance(offset_dim, foast.Name)
-                shift_offset = im.shift(
-                    offset_dim.id, im.deref(self.visit(func_args.args[1], **kwargs))
-                )
+                shift_offset = im.shift(offset_dim.id, im.deref("__offset"))
+                return im.as_fieldop(
+                    im.lambda_("__it", "__offset")(im.deref(shift_offset("__it")))
+                )(self.visit(node.func, **kwargs), self.visit(func_args.args[1], **kwargs))
             case _:
                 raise FieldOperatorLoweringError("Unexpected shift arguments!")
-        return im.lift(im.lambda_("it")(im.deref(shift_offset("it"))))(
-            self.visit(node.func, **kwargs)
-        )
 
     def visit_Call(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         if type_info.type_class(node.func.type) is ts.FieldType:
             return self._visit_shift(node, **kwargs)
-        elif isinstance(node.func, foast.Name) and node.func.id in MATH_BUILTIN_NAMES:
+        elif isinstance(node.func, foast.Name) and node.func.id in fbuiltins.MATH_BUILTIN_NAMES:
             return self._visit_math_built_in(node, **kwargs)
         elif isinstance(node.func, foast.Name) and node.func.id in (
-            FUN_BUILTIN_NAMES + EXPERIMENTAL_FUN_BUILTIN_NAMES
+            fbuiltins.FUN_BUILTIN_NAMES + experimental_builtins.EXPERIMENTAL_FUN_BUILTIN_NAMES
         ):
             visitor = getattr(self, f"_visit_{node.func.id}")
             return visitor(node, **kwargs)
-        elif isinstance(node.func, foast.Name) and node.func.id in TYPE_BUILTIN_NAMES:
+        elif isinstance(node.func, foast.Name) and node.func.id in fbuiltins.TYPE_BUILTIN_NAMES:
             return self._visit_type_constr(node, **kwargs)
         elif isinstance(
             node.func.type,
@@ -324,9 +269,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
 
             # scan operators return an iterator of tuples, transform into tuples of iterator again
             if isinstance(node.func.type, ts_ffront.ScanOperatorType):
-                result = lowering_utils.to_tuples_of_iterator(
-                    result, node.func.type.definition.returns
-                )
+                raise NotImplementedError("TODO")
 
             return result
 
@@ -336,26 +279,37 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
 
     def _visit_astype(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         assert len(node.args) == 2 and isinstance(node.args[1], foast.Name)
-        obj, new_type = node.args[0], node.args[1].id
-        return lowering_utils.process_elements(
-            lambda x: im.promote_to_lifted_stencil(
-                im.lambda_("it")(im.call("cast_")("it", str(new_type)))
-            )(x),
-            self.visit(obj, **kwargs),
-            obj.type,
-        )
+        obj, new_type = self.visit(node.args[0], **kwargs), node.args[1].id
 
-    def _visit_where(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
-        condition, true_value, false_value = node.args
+        def create_cast(expr: itir.Expr) -> itir.FunCall:
+            return im.as_fieldop(
+                im.lambda_("__val")(im.call("cast_")(im.deref("__val"), str(new_type)))
+            )(expr)
 
-        lowered_condition = self.visit(condition, **kwargs)
-        return lowering_utils.process_elements(
-            lambda tv, fv: im.promote_to_lifted_stencil("if_")(lowered_condition, tv, fv),
-            [self.visit(true_value, **kwargs), self.visit(false_value, **kwargs)],
+        if not isinstance(node.type, ts.TupleType):  # to keep the IR simpler
+            return create_cast(obj)
+
+        return lowering_utils.process_elements(create_cast, obj, node.type)
+
+    def _visit_where(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
+        if not isinstance(node.type, ts.TupleType):  # to keep the IR simpler
+            return im.op_as_fieldop("if_")(*self.visit(node.args))
+
+        cond_ = self.visit(node.args[0])
+        cond_symref_name = f"__cond_{eve_utils.content_hash(cond_)}"
+
+        def create_if(true_: itir.Expr, false_: itir.Expr) -> itir.FunCall:
+            return im.op_as_fieldop("if_")(im.ref(cond_symref_name), true_, false_)
+
+        result = lowering_utils.process_elements(
+            create_if,
+            (self.visit(node.args[1]), self.visit(node.args[2])),
             node.type,
         )
 
-    _visit_concat_where = _visit_where
+        return im.let(cond_symref_name, cond_)(result)
+
+    _visit_concat_where = _visit_where  # TODO(havogt): upgrade concat_where
 
     def _visit_broadcast(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         return self.visit(node.args[0], **kwargs)
@@ -369,8 +323,8 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         # TODO(havogt): deal with nested reductions of the form neighbor_sum(neighbor_sum(field(off1)(off2)))
         it = self.visit(node.args[0], **kwargs)
         assert isinstance(node.kwargs["axis"].type, ts.DimensionType)
-        val = im.call(im.call("reduce")(op, im.deref(init_expr)))
-        return im.promote_to_lifted_stencil(val)(it)
+        val = im.call(im.call("reduce")(op, init_expr))
+        return im.op_as_fieldop(val)(it)
 
     def _visit_neighbor_sum(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         dtype = type_info.extract_dtype(node.type)
@@ -394,24 +348,20 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             target_type = fbuiltins.BUILTINS[node_kind]
             source_type = {**fbuiltins.BUILTINS, "string": str}[node.args[0].type.__str__().lower()]
             if target_type is bool and source_type is not bool:
-                return im.promote_to_const_iterator(
-                    im.literal(str(bool(source_type(node.args[0].value))), "bool")
-                )
-            return im.promote_to_const_iterator(im.literal(str(node.args[0].value), node_kind))
+                return im.literal(str(bool(source_type(node.args[0].value))), "bool")
+            return im.literal(str(node.args[0].value), node_kind)
         raise FieldOperatorLoweringError(
             f"Encountered a type cast, which is not supported: {node}."
         )
 
     def _make_literal(self, val: Any, type_: ts.TypeSpec) -> itir.Expr:
-        # TODO(havogt): lifted nullary lambdas are not supported in iterator.embedded due to an implementation detail;
-        # the following constructs work if they are removed by inlining.
         if isinstance(type_, ts.TupleType):
             return im.make_tuple(
                 *(self._make_literal(val, type_) for val, type_ in zip(val, type_.types))
             )
-        elif isinstance(type_, ts.ScalarType):
+        if isinstance(type_, ts.ScalarType):
             typename = type_.kind.name.lower()
-            return im.promote_to_const_iterator(im.literal(str(val), typename))
+            return im.literal(str(val), typename)
         raise ValueError(f"Unsupported literal type '{type_}'.")
 
     def visit_Constant(self, node: foast.Constant, **kwargs: Any) -> itir.Expr:
@@ -419,11 +369,17 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
 
     def _map(self, op: itir.Expr | str, *args: Any, **kwargs: Any) -> itir.FunCall:
         lowered_args = [self.visit(arg, **kwargs) for arg in args]
+        if all(
+            isinstance(t, ts.ScalarType)
+            for arg in args
+            for t in type_info.primitive_constituents(arg.type)
+        ):
+            return im.call(op)(*lowered_args)  # scalar operation
         if any(type_info.contains_local_field(arg.type) for arg in args):
             lowered_args = [promote_to_list(arg)(larg) for arg, larg in zip(args, lowered_args)]
             op = im.call("map_")(op)
 
-        return im.promote_to_lifted_stencil(im.call(op))(*lowered_args)
+        return im.op_as_fieldop(im.call(op))(*lowered_args)
 
 
 class FieldOperatorLoweringError(Exception): ...

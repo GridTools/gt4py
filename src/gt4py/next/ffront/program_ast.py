@@ -72,12 +72,17 @@ class TupleExpr(Expr):
     elts: list[Expr]
 
 
+class Attribute(Expr):
+    attr: str
+    value: Expr
+
+
 class Constant(Expr):
     value: Any  # TODO(tehrengruber): be more restrictive
 
 
 class Dict(Expr):
-    keys_: list[Name]
+    keys_: list[Union[Name | Attribute]]
     values_: list[TupleExpr]
 
 
