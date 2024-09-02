@@ -41,6 +41,7 @@ def field_stride_symbol_name(field_name: str, axis: int) -> str:
 def debug_info(
     node: gtir.Node, *, default: Optional[dace.dtypes.DebugInfo] = None
 ) -> Optional[dace.dtypes.DebugInfo]:
+    """Include the GT4Py node location as debug information in the corresponding SDFG nodes."""
     location = node.location
     if location:
         return dace.dtypes.DebugInfo(

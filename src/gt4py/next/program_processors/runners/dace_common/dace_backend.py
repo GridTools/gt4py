@@ -23,7 +23,7 @@ except ImportError:
     cp = None
 
 
-def convert_arg(arg: Any, sdfg_param: str, use_field_canonical_representation: bool) -> Any:
+def _convert_arg(arg: Any, sdfg_param: str, use_field_canonical_representation: bool) -> Any:
     if not isinstance(arg, gtx_common.Field):
         return arg
     # field domain offsets are not supported
@@ -50,12 +50,12 @@ def convert_arg(arg: Any, sdfg_param: str, use_field_canonical_representation: b
         return cp.moveaxis(arg.ndarray, range(ndim), dim_indices)
 
 
-def get_args(
+def _get_args(
     sdfg: dace.SDFG, args: Sequence[Any], use_field_canonical_representation: bool
 ) -> dict[str, Any]:
     sdfg_params: Sequence[str] = sdfg.arg_names
     return {
-        sdfg_param: convert_arg(arg, sdfg_param, use_field_canonical_representation)
+        sdfg_param: _convert_arg(arg, sdfg_param, use_field_canonical_representation)
         for sdfg_param, arg in zip(sdfg_params, args)
     }
 
@@ -73,7 +73,7 @@ def _ensure_is_on_device(
     return connectivity_arg
 
 
-def get_connectivity_args(
+def _get_connectivity_args(
     neighbor_tables: Mapping[str, gtx_common.NeighborTable], device: dace.dtypes.DeviceType
 ) -> dict[str, Any]:
     return {
@@ -84,7 +84,7 @@ def get_connectivity_args(
     }
 
 
-def get_shape_args(
+def _get_shape_args(
     arrays: Mapping[str, dace.data.Array], args: Mapping[str, Any]
 ) -> Mapping[str, int]:
     shape_args: dict[str, int] = {}
@@ -100,7 +100,7 @@ def get_shape_args(
     return shape_args
 
 
-def get_stride_args(
+def _get_stride_args(
     arrays: Mapping[str, dace.data.Array], args: Mapping[str, Any]
 ) -> Mapping[str, int]:
     stride_args = {}
@@ -144,15 +144,15 @@ def get_sdfg_args(
         neighbor_tables[offset] = connectivity
     device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
 
-    dace_args = get_args(sdfg, args, use_field_canonical_representation)
+    dace_args = _get_args(sdfg, args, use_field_canonical_representation)
     dace_field_args = {n: v for n, v in dace_args.items() if not np.isscalar(v)}
-    dace_conn_args = get_connectivity_args(neighbor_tables, device)
+    dace_conn_args = _get_connectivity_args(neighbor_tables, device)
     # keep only connectivity tables that are used in the sdfg
     dace_conn_args = {n: v for n, v in dace_conn_args.items() if n in sdfg.arrays}
-    dace_shapes = get_shape_args(sdfg.arrays, dace_field_args)
-    dace_conn_shapes = get_shape_args(sdfg.arrays, dace_conn_args)
-    dace_strides = get_stride_args(sdfg.arrays, dace_field_args)
-    dace_conn_strides = get_stride_args(sdfg.arrays, dace_conn_args)
+    dace_shapes = _get_shape_args(sdfg.arrays, dace_field_args)
+    dace_conn_shapes = _get_shape_args(sdfg.arrays, dace_conn_args)
+    dace_strides = _get_stride_args(sdfg.arrays, dace_field_args)
+    dace_conn_strides = _get_stride_args(sdfg.arrays, dace_conn_args)
     all_args = {
         **dace_args,
         **dace_conn_args,

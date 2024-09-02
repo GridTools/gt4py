@@ -105,6 +105,10 @@ class DaCeTranslationStepFactory(factory.Factory):
         model = DaCeTranslator
 
 
+def _no_bindings(inp: stages.ProgramSource) -> stages.CompilableSource:
+    return stages.CompilableSource(program_source=inp, binding_source=None)
+
+
 class DaCeWorkflowFactory(factory.Factory):
     class Meta:
         model = recipes.OTFCompileWorkflow
@@ -119,6 +123,7 @@ class DaCeWorkflowFactory(factory.Factory):
         DaCeTranslationStepFactory,
         device_type=factory.SelfAttribute("..device_type"),
     )
+    bindings = _no_bindings
     compilation = factory.SubFactory(
         dace_workflow.DaCeCompilationStepFactory,
         cache_lifetime=factory.LazyFunction(lambda: config.BUILD_CACHE_LIFETIME),
