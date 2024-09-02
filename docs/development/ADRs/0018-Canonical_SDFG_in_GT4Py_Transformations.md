@@ -36,7 +36,7 @@ The following rules, especially affects transformations and how they operate:
    - [Rational]: As a consequence the number of "interstate transients" (transients that are used in multiple states) remains constant during intrastate transformations.
    - [Note 1]: It is allowed to run them after one another, as long as they are strictly separated.
    - [Note 2]: It is allowed that _intrastate_ transformation act in a way to allow state fusion by later intrastate transformations.
-   - [Note 3]: The DaCe simplification pass violates this rule, for that reason this pass must always be called on its own, see also rule 2.
+   - [Note 3]: The DaCe simplification pass violates this rule; for that reason, this pass must always be called on its own. See also rule 2.
 
 2. It is invalid to call the simplification pass directly, i.e. the usage of `SDFG.simplify()` is not allowed, the only valid way to call simplify is to call the `gt_simplify()` function provided by GT4Py.
    - [Rational]: It was observed that some sub passes in simplify have a negative impact and that additional passes might be needed in the future.
