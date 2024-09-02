@@ -111,13 +111,8 @@ def gt_auto_optimize(
 
     1. Some general simplification transformations, beyond classical simplify,
         are applied to the SDFG.
-    2. In this phase the function tries to reduce the number of maps. This
-        process mostly relies on the map fusion transformation. If
-        `aggressive_fusion` is set the function will also promote certain Maps, to
-        make them fusable. For this it will add dummy dimensions. However, currently
-        the function will only add horizonal dimensions.
-        In this phase some optimizations inside the bigger kernels themselves might
-        be applied as well.
+    2. Tries to create larger kernels by fusing smaller ones, see
+        `gt_auto_fuse_top_level_maps()` for more details.
     3. After the function created big kernels/maps it will apply some optimization,
         inside the kernels itself. For example fuse maps inside them.
     4. Afterwards it will process the map ranges and iteration order. For this
@@ -140,8 +135,8 @@ def gt_auto_optimize(
         sdfg: The SDFG that should be optimized in place.
         gpu: Optimize for GPU or CPU.
         leading_dim: Leading dimension, indicates where the stride is 1.
-        aggressive_fusion: Be more aggressive in fusion, will lead to the promotion
-            of certain maps.
+        aggressive_fusion: Be more aggressive during phase 2, will lead to the promotion
+            of certain maps (over computation) but will lead to larger kernels.
         max_optimization_rounds_p2: Maximum number of optimization rounds in phase 2.
         make_persistent: Turn all transients to persistent lifetime, thus they are
             allocated over the whole lifetime of the program, even if the kernel exits.
@@ -198,7 +193,7 @@ def gt_auto_optimize(
 
         # Phase 2: Kernel Creation
         #   Try to create kernels as large as possible.
-        sdfg = _gt_auto_optimize_phase_2(
+        sdfg = gt_auto_fuse_top_level_maps(
             sdfg=sdfg,
             aggressive_fusion=aggressive_fusion,
             max_optimization_rounds=max_optimization_rounds_p2,
@@ -277,7 +272,7 @@ def gt_auto_optimize(
         return sdfg
 
 
-def _gt_auto_optimize_phase_2(
+def gt_auto_fuse_top_level_maps(
     sdfg: dace.SDFG,
     aggressive_fusion: bool = True,
     max_optimization_rounds: int = 100,
@@ -306,6 +301,10 @@ def _gt_auto_optimize_phase_2(
             performed.
         validate: Perform validation during the steps.
         validate_all: Perform extensive validation.
+
+    Note:
+        Calling this function directly is most likely an error. Instead you should
+        call `gt_auto_optimize()` directly.
     """
     # Compute the SDFG hash to see if something has changed.
     sdfg_hash = sdfg.hash_sdfg()

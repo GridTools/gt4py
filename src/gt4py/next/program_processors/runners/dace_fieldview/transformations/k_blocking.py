@@ -143,8 +143,8 @@ class KBlocking(dace_transformation.SingleStateTransformation):
             sdfg=sdfg,
         )
 
-    @staticmethod
     def _rewire_map_scope(
+        self,
         outer_entry: dace_nodes.MapEntry,
         outer_exit: dace_nodes.MapExit,
         inner_entry: dace_nodes.MapEntry,
@@ -469,8 +469,8 @@ class KBlocking(dace_transformation.SingleStateTransformation):
 
         return (independent_nodes, dependent_nodes)
 
-    @staticmethod
     def classify_node(
+        self,
         node_to_classify: dace_nodes.Node,
         outer_entry: dace_nodes.MapEntry,
         blocking_parameter: str,
