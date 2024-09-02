@@ -400,5 +400,6 @@ if TYPE_CHECKING:
     __primitive_translators: list[PrimitiveTranslator] = [
         translate_as_field_op,
         translate_cond,
+        translate_literal,
         translate_symbol_ref,
     ]

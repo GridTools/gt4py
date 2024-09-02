@@ -452,6 +452,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             inputs=set(input_memlets.keys()),
             outputs=set(node.data for node, _ in lambda_nodes),
             symbol_mapping=nsdfg_symbols_mapping,
+            debuginfo=dace_fieldview_util.debug_info(node, default=sdfg.debuginfo),
         )
 
         for connector, memlet in input_memlets.items():
