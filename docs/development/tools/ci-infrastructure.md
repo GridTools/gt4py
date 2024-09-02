@@ -85,7 +85,7 @@ flowchart LR
 
 The `Test Eve`, `Test Storage (CPU)`, `Test Cartesian (CPU)`, and `Test Next (CPU)` workflows run the automated tests for the respective subpackages. In all cases only tests are run that do not require the presence of a GPU.
 
-The `Code Quality` workflow runs pre-commit to check code quality requirements through tools like **mypy** or **flake8**.
+The `Code Quality` workflow runs pre-commit to check code quality requirements through tools like **mypy** or **ruff**.
 
 Code coverage workflows are currently disabled.
 

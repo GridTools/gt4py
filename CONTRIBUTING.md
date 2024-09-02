@@ -106,8 +106,8 @@ pre-commit run
 # Check all the files in the repository: -a / --all-files
 pre-commit run -a
 
-# Run only some of the tools (e.g. flake8)
-pre-commit run -a flake8
+# Run only some of the tools (e.g. ruff)
+pre-commit run -a ruff
 ```
 
 ### Unit and Regression Tests
@@ -175,9 +175,7 @@ Before submitting a pull request, check that it meets the following criteria:
 
 As mentioned above, we use several tools to help us write high-quality code. New tools could be added in the future, especially if they do not add a large overhead to our workflow and they bring extra benefits to keep our codebase in shape. The most important ones which we currently rely on are:
 
-- [Black][black] for autoformatting source code.
-- [isort][isort] for autoformatting import statements.
-- [Flake8][flake8] for style enforcement and code linting.
+- [ruff][ruff] for style enforcement and code linting.
 - [pre-commit][pre-commit] for automating the execution of QA tools.
 - [pytest][pytest] for writing readable tests, extended with:
   - [Coverage.py][coverage] and [pytest-cov][pytest-cov] for test coverage reports.
@@ -189,16 +187,13 @@ As mentioned above, we use several tools to help us write high-quality code. New
 
 <!-- Reference links -->
 
-[black]: https://black.readthedocs.io/en/stable/
 [commitizen]: https://commitizen-tools.github.io/commitizen/
 [conventional-commits]: https://www.conventionalcommits.org/en/v1.0.0/#summary
 [coverage]: https://coverage.readthedocs.io/
-[flake8]: https://flake8.pycqa.org/
+[ruff]: https://astral.sh/ruff
 [google-style-guide]: https://google.github.io/styleguide/pyguide.html
-[isort]: https://pycqa.github.io/isort/
 [jupytext]: https://jupytext.readthedocs.io/
 [pre-commit]: https://pre-commit.com/
-[pylint]: https://pylint.pycqa.org/
 [pytest]: https://docs.pytest.org/
 [pytest-cov]: https://pypi.org/project/pytest-cov/
 [pytest-xdist]: https://pytest-xdist.readthedocs.io/en/latest/
