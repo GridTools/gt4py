@@ -228,7 +228,8 @@ class GTFNTranslationStep(
         self, inp: stages.ProgramCall
     ) -> stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings]:
         """Generate GTFN C++ code from the ITIR definition."""
-        program: itir.FencilDefinition = inp.program
+        program = inp.program
+        assert isinstance(program, itir.FencilDefinition)
 
         # handle regular parameters and arguments of the program (i.e. what the user defined in
         #  the program)

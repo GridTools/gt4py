@@ -49,6 +49,7 @@ class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
     )
     GTFN_GPU = "gt4py.next.program_processors.runners.gtfn.run_gtfn_gpu"
     ROUNDTRIP = "gt4py.next.program_processors.runners.roundtrip.default"
+    GTIR_EMBEDDED = "gt4py.next.program_processors.runners.roundtrip.gtir"
     ROUNDTRIP_WITH_TEMPORARIES = "gt4py.next.program_processors.runners.roundtrip.with_temporaries"
     DOUBLE_ROUNDTRIP = "gt4py.next.program_processors.runners.double_roundtrip.backend"
 
