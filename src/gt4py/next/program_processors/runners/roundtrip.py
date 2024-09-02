@@ -21,6 +21,7 @@ import factory
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from gt4py.next import allocators as next_allocators, backend as next_backend, common, config
+from gt4py.next.ffront import foast_to_gtir, past_to_itir, stages as ffront_stages
 from gt4py.next.iterator import embedded, ir as itir, transforms as itir_transforms
 from gt4py.next.iterator.transforms import fencil_to_program
 from gt4py.next.otf import stages, workflow
@@ -269,4 +270,18 @@ default = next_backend.Backend(
 )
 with_temporaries = next_backend.Backend(
     executor=executor_with_temporaries, allocator=next_allocators.StandardCPUFieldBufferAllocator()
+)
+
+gtir = next_backend.Backend(
+    executor=executor,
+    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
+    transforms_fop=next_backend.FieldopTransformWorkflow(
+        past_to_itir=past_to_itir.PastToItirFactory(to_gtir=True),
+        foast_to_itir=workflow.CachedStep(
+            step=foast_to_gtir.foast_to_gtir, hash_function=ffront_stages.fingerprint_stage
+        ),
+    ),
+    transforms_prog=next_backend.ProgramTransformWorkflow(
+        past_to_itir=past_to_itir.PastToItirFactory(to_gtir=True)
+    ),
 )
