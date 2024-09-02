@@ -21,7 +21,7 @@ from gt4py.next.program_processors.runners.dace_fieldview import (
 )
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture()
 def set_dace_settings() -> Generator[None, None, None]:
     """Sets the common DaCe settings for the tests.
 
@@ -30,12 +30,8 @@ def set_dace_settings() -> Generator[None, None, None]:
         especially inside `can_be_applied()` are not ignored.
     - `compiler.allow_view_arguments` allow that NumPy views can be passed to
         `CompiledSDFG` objects as arguments.
-
-    Note:
-        This fixture will be automatically used by all tests inside this folder and
-        its subfolders due to the autouse option.
     """
     with dace.config.temporary_config():
-        dace.Config.set("optimizer", "match_exception", value=True)
+        dace.Config.set("optimizer", "match_exception", value=False)
         dace.Config.set("compiler", "allow_view_arguments", value=True)
         yield

@@ -10,6 +10,7 @@ from typing import Callable
 import dace
 import copy
 import numpy as np
+import pytest
 
 from dace.sdfg import nodes as dace_nodes
 
@@ -17,6 +18,9 @@ from gt4py.next.program_processors.runners.dace_fieldview import (
     transformations as gtx_transformations,
 )
 from . import util
+
+
+pytestmark = pytest.mark.usefixtures("set_dace_settings")
 
 
 def test_serial_map_promotion():

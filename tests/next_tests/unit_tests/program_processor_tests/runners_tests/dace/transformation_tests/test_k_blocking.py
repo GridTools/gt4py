@@ -10,12 +10,15 @@ from typing import Callable
 import dace
 import copy
 import numpy as np
+import pytest
 
 from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation
 
 from gt4py.next.program_processors.runners.dace_fieldview import (
     transformations as gtx_transformations,
 )
+
+pytestmark = pytest.mark.usefixtures("set_dace_settings")
 
 
 def _get_simple_sdfg() -> tuple[dace.SDFG, Callable[[np.ndarray, np.ndarray], np.ndarray]]:

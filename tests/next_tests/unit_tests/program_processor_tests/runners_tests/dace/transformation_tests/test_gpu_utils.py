@@ -10,6 +10,7 @@ from typing import Callable
 import dace
 import copy
 import numpy as np
+import pytest
 
 from dace.sdfg import nodes as dace_nodes
 
@@ -17,6 +18,8 @@ from gt4py.next.program_processors.runners.dace_fieldview.transformations import
     gpu_utils as gtx_dace_fieldview_gpu_utils,
 )
 from . import util
+
+pytestmark = pytest.mark.usefixtures("set_dace_settings")
 
 
 def _get_trivial_gpu_promotable(
