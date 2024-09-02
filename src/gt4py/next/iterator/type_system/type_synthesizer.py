@@ -279,10 +279,14 @@ def as_fieldop(
 @_register_builtin_type_synthesizer
 def cond(
     pred: ts.ScalarType,
-    true_branch: ts.DataType | ts.TupleType,
-    false_branch: ts.DataType | ts.TupleType,
+    true_branch: ts.DataType,
+    false_branch: ts.DataType,
 ) -> ts.FieldType | ts.DeferredType:
-    def cond_per_element(pred: ts.ScalarType, true_branch: ts.DataType, false_branch: ts.DataType):
+    def type_synthesizer_per_element(
+            pred: ts.ScalarType,
+            true_branch: ts.FieldType | ts.DeferredType,
+            false_branch: ts.FieldType | ts.DeferredType
+    ):
         assert isinstance(pred, ts.ScalarType) and pred.kind == ts.ScalarKind.BOOL
         assert true_branch == false_branch
         assert isinstance(true_branch, (ts.FieldType, ts.DeferredType))
@@ -292,7 +296,7 @@ def cond(
     return tree_map(
         collection_type=ts.TupleType,
         result_collection_constructor=lambda elts: ts.TupleType(types=[*elts]),
-    )(functools.partial(cond_per_element, pred))(true_branch, false_branch)
+    )(functools.partial(type_synthesizer_per_element, pred))(true_branch, false_branch)
 
 
 @_register_builtin_type_synthesizer
