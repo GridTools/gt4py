@@ -29,7 +29,7 @@ def _convert_arg(arg: Any, sdfg_param: str, use_field_canonical_representation: 
     # field domain offsets are not supported
     non_zero_offsets = [
         (dim, dim_range)
-        for dim, dim_range in zip(arg.domain.dims, arg.domain.ranges)
+        for dim, dim_range in zip(arg.domain.dims, arg.domain.ranges, strict=True)
         if dim_range.start != 0
     ]
     if non_zero_offsets:
@@ -56,7 +56,7 @@ def _get_args(
     sdfg_params: Sequence[str] = sdfg.arg_names
     return {
         sdfg_param: _convert_arg(arg, sdfg_param, use_field_canonical_representation)
-        for sdfg_param, arg in zip(sdfg_params, args)
+        for sdfg_param, arg in zip(sdfg_params, args, strict=True)
     }
 
 
@@ -89,7 +89,7 @@ def _get_shape_args(
 ) -> Mapping[str, int]:
     shape_args: dict[str, int] = {}
     for name, value in args.items():
-        for sym, size in zip(arrays[name].shape, value.shape):
+        for sym, size in zip(arrays[name].shape, value.shape, strict=True):
             if isinstance(sym, dace.symbol):
                 assert sym.name not in shape_args
                 shape_args[sym.name] = size
@@ -105,7 +105,7 @@ def _get_stride_args(
 ) -> Mapping[str, int]:
     stride_args = {}
     for name, value in args.items():
-        for sym, stride_size in zip(arrays[name].strides, value.strides):
+        for sym, stride_size in zip(arrays[name].strides, value.strides, strict=True):
             stride, remainder = divmod(stride_size, value.itemsize)
             if remainder != 0:
                 raise ValueError(
