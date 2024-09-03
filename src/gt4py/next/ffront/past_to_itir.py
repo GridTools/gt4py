@@ -31,6 +31,7 @@ from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.otf import stages, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
+
 # FIXME[#1582](havogt): remove `to_gtir` arg after refactoring to GTIR
 def past_to_itir(inp: AOT_PRG, to_gtir: bool = False) -> stages.AOTProgram:
     """
@@ -80,10 +81,7 @@ def past_to_itir(inp: AOT_PRG, to_gtir: bool = False) -> stages.AOTProgram:
     lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
 
     itir_program = ProgramLowering.apply(
-        inp.data.past_node,
-        function_definitions=lowered_funcs,
-        grid_type=grid_type,
-        to_gtir=to_gtir
+        inp.data.past_node, function_definitions=lowered_funcs, grid_type=grid_type, to_gtir=to_gtir
     )
 
     if config.DEBUG or inp.data.debug:
@@ -96,7 +94,9 @@ def past_to_itir(inp: AOT_PRG, to_gtir: bool = False) -> stages.AOTProgram:
 
 
 # FIXME[#1582](havogt): remove `to_gtir` arg after refactoring to GTIR
-def past_to_itir_factory(cached: bool = True, to_gtir: bool = False) -> workflow.Workflow[AOT_PRG, stages.AOTProgram]:
+def past_to_itir_factory(
+    cached: bool = True, to_gtir: bool = False
+) -> workflow.Workflow[AOT_PRG, stages.AOTProgram]:
     wf = workflow.make_step(functools.partial(past_to_itir, to_gtir=to_gtir))
     if cached:
         wf = workflow.CachedStep(wf, hash_function=ffront_stages.fingerprint_stage)
