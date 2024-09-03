@@ -176,8 +176,6 @@ def infer_let(
     transformed_call = im.let(
         *((str(param.id), call) for param, call in zip(let_expr.fun.params, transformed_calls_args))
     )(transformed_calls_expr)
-    # TODO: mypy error "let" has incompatible type "*Generator[tuple[str, Expr], None, None]";
-    #  expected "Iterable[tuple[str | Sym, Expr | str]]"
 
     return transformed_call, accessed_domains_outer
 

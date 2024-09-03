@@ -951,7 +951,7 @@ def test_make_tuple_in_set_at_expr(offset_provider):
         im.as_fieldop("deref", domain)("in_field1"), im.as_fieldop("deref", domain)("in_field2")
     )
     expected_domains_dict = {"in_field1": {IDim: (0, 11)}, "in_field2": {IDim: (0, 11)}}
-    expected_domains = {  # TODO: conversion is ugly
+    expected_domains = {
         ref: SymbolicDomain.from_expr(im.domain(common.GridType.CARTESIAN, d))
         for ref, d in expected_domains_dict.items()
     }
