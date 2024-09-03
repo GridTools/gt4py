@@ -283,9 +283,9 @@ def cond(
     false_branch: ts.DataType,
 ) -> ts.FieldType | ts.DeferredType:
     def type_synthesizer_per_element(
-            pred: ts.ScalarType,
-            true_branch: ts.FieldType | ts.DeferredType,
-            false_branch: ts.FieldType | ts.DeferredType
+        pred: ts.ScalarType,
+        true_branch: ts.FieldType | ts.DeferredType,
+        false_branch: ts.FieldType | ts.DeferredType,
     ):
         assert isinstance(pred, ts.ScalarType) and pred.kind == ts.ScalarKind.BOOL
         assert true_branch == false_branch
