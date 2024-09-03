@@ -87,11 +87,13 @@ def extract_shifts_and_translate_domains(
 
 def infer_as_fieldop(
     applied_fieldop: itir.FunCall,
-    target_domain: SymbolicDomain | itir.FunCall,
+    target_domain: SymbolicDomain,
     offset_provider: common.OffsetProvider,
 ) -> tuple[itir.FunCall, Dict[str, SymbolicDomain]]:
     assert isinstance(applied_fieldop, itir.FunCall)
     assert cpm.is_call_to(applied_fieldop.fun, "as_fieldop")
+    if target_domain is None:
+        raise ValueError("'target_domain' cannot be 'None'.")
 
     # `as_fieldop(stencil)(inputs...)`
     stencil, inputs = applied_fieldop.fun.args[0], applied_fieldop.args
@@ -113,9 +115,6 @@ def infer_as_fieldop(
         else:
             raise ValueError(f"Unsupported expression of type '{type(in_field)}'.")
         input_ids.append(id_)
-
-    if isinstance(target_domain, itir.FunCall):
-        target_domain = SymbolicDomain.from_expr(target_domain)
 
     extract_shifts_and_translate_domains(
         stencil, input_ids, target_domain, offset_provider, accessed_domains
@@ -168,10 +167,8 @@ def infer_let(
 
     transformed_calls_args: list[itir.Expr] = []
     for param, arg in zip(let_expr.fun.params, let_expr.args):
-        if param.id not in accessed_domains_let_args:
-            raise ValueError(f"Let param `{param.id}` is never accessed. Can not infer its domain.")
         transformed_calls_arg, accessed_domains_arg = infer_expr(
-            arg, accessed_domains_let_args[param.id], offset_provider
+            arg, accessed_domains_let_args.get(param.id, None), offset_provider
         )
         accessed_domains_outer = _merge_domains(accessed_domains_outer, accessed_domains_arg)
         transformed_calls_args.append(transformed_calls_arg)

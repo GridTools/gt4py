@@ -74,7 +74,7 @@ def setup_test_as_fieldop(
     testee = im.as_fieldop(stencil)(*refs)
     expected = im.as_fieldop(stencil, domain)(*refs)
     expected_domains = {
-        ref: SymbolicDomain.from_expr(im.domain(domain_type, d)) if d is not None else None
+        ref: im.domain(domain_type, d) if d is not None else None
         for ref, d in expected_domain_dict.items()
     }
     return testee, expected, expected_domains
@@ -89,7 +89,7 @@ def run_test_program(
     assert folded_program == expected
 
 
-def run_test_expr(  # TODO: extend this for unused input
+def run_test_expr(
     testee: itir.FunCall,
     expected: itir.FunCall,
     domain: itir.FunCall,
@@ -101,6 +101,10 @@ def run_test_expr(  # TODO: extend this for unused input
     )
     folded_call = constant_fold_domain_exprs(actual_call)
     folded_domains = constant_fold_accessed_domains(actual_domains) if actual_domains else None
+    expected_domains = {
+        ref: SymbolicDomain.from_expr(d) if d is not None else None
+        for ref, d in expected_domains.items()
+    }
 
     assert folded_call == expected
     assert folded_domains == expected_domains
@@ -186,20 +190,6 @@ def test_multi_length_shift(offset_provider):
     expected_accessed_domains = {"in_field1": {IDim: (3, 14)}}
     testee, expected, expected_domains = setup_test_as_fieldop(
         stencil, domain, expected_accessed_domains, offset_provider
-    )
-    run_test_expr(testee, expected, domain, expected_domains, offset_provider)
-
-
-def test_unused_input(offset_provider):
-    stencil = im.lambda_("arg0", "arg1")(im.deref("arg0"))
-
-    domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
-    expected_accessed_domains = {"in_field1": {IDim: (0, 11)}, "in_field2": None}
-    testee, expected, expected_domains = setup_test_as_fieldop(
-        stencil,
-        domain,
-        expected_accessed_domains,
-        offset_provider,
     )
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
@@ -419,6 +409,29 @@ def test_nested_stencils_n_times(offset_provider, iterations):
     folded_call = constant_fold_domain_exprs(actual_call)
     assert folded_call == expected
     assert folded_domains == expected_domains
+
+
+def test_unused_input(offset_provider):
+    stencil = im.lambda_("arg0", "arg1")(im.deref("arg0"))
+
+    domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
+    expected_accessed_domains = {"in_field1": {IDim: (0, 11)}, "in_field2": None}
+    testee, expected, expected_domains = setup_test_as_fieldop(
+        stencil,
+        domain,
+        expected_accessed_domains,
+        offset_provider,
+    )
+    run_test_expr(testee, expected, domain, expected_domains, offset_provider)
+
+
+def test_let_unused_field(offset_provider):
+    testee = im.let("a", "c")("b")
+    domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
+    expected = im.let("a", "c")("b")
+    expected_domains = {"b": domain, "c": None}
+
+    run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
 
 def test_program(offset_provider):
@@ -662,21 +675,13 @@ def test_cond(offset_provider):
     assert folded_domains == expected_domains
 
 
-def test_let_unused_var(offset_provider):
-    testee = im.let("a", 1)("b")
-    domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
-
-    with pytest.raises(ValueError, match=r"Let param `a` is never accessed."):
-        infer_expr(testee, SymbolicDomain.from_expr(domain), offset_provider)
-
-
-# TODO(SF-N): revisit what should happen here
-@pytest.mark.xfail(reason="not supported yet")
 def test_let_scalar_expr(offset_provider):
-    testee = im.let("a", 1)(im.plus("a", "a"))
+    testee = im.let("a", 1)(im.op_as_fieldop(im.plus)("a", "b"))
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
+    expected = im.let("a", 1)(im.op_as_fieldop(im.plus, domain)("a", "b"))
+    expected_domains = {"b": domain}
 
-    res = infer_expr(testee, SymbolicDomain.from_expr(domain), offset_provider)
+    run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
 
 def test_simple_let(offset_provider):
@@ -684,9 +689,7 @@ def test_simple_let(offset_provider):
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     expected = im.let("a", shift_fieldop_factory("Ioff", 1, domain)("in_field"))("a")
 
-    expected_domains = {
-        "in_field": SymbolicDomain.from_expr(translate_domain(domain, {"Ioff": 1}, offset_provider))
-    }
+    expected_domains = {"in_field": translate_domain(domain, {"Ioff": 1}, offset_provider)}
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
 
@@ -695,9 +698,7 @@ def test_simple_let2(offset_provider):
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     expected = im.let("a", "in_field")(shift_fieldop_factory("Ioff", 1, domain)("a"))
 
-    expected_domains = {
-        "in_field": SymbolicDomain.from_expr(translate_domain(domain, {"Ioff": 1}, offset_provider))
-    }
+    expected_domains = {"in_field": translate_domain(domain, {"Ioff": 1}, offset_provider)}
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
 
@@ -716,18 +717,19 @@ def test_let(offset_provider):
     expected2 = shift_fieldop_factory("Ioff", 1, domain)(
         shift_fieldop_factory("Ioff", 1, domain_a)("in_field")
     )
-    expected_domains = {
-        "in_field": SymbolicDomain.from_expr(translate_domain(domain, {"Ioff": 2}, offset_provider))
-    }
+    expected_domains = {"in_field": translate_domain(domain, {"Ioff": 2}, offset_provider)}
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
+    expected_domains_sym = {
+        "in_field": SymbolicDomain.from_expr(translate_domain(domain, {"Ioff": 2}, offset_provider))
+    }
     actual_call2, actual_domains2 = infer_expr(
         testee2, SymbolicDomain.from_expr(domain), offset_provider
     )
     folded_domains2 = constant_fold_accessed_domains(actual_domains2)
     folded_call2 = constant_fold_domain_exprs(actual_call2)
     assert folded_call2 == expected2
-    assert expected_domains == folded_domains2
+    assert expected_domains_sym == folded_domains2
 
 
 def test_let_two_inputs(offset_provider):
@@ -745,8 +747,8 @@ def test_let_two_inputs(offset_provider):
         ("inner2", shift_fieldop_factory("Ioff", -1, domain)("in_field2")),
     )(im.as_fieldop(multiply_stencil, domain)("inner1", "inner2"))
     expected_domains = {
-        "in_field1": SymbolicDomain.from_expr(domain_p1),
-        "in_field2": SymbolicDomain.from_expr(domain_m1),
+        "in_field1": domain_p1,
+        "in_field2": domain_m1,
     }
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
@@ -771,7 +773,7 @@ def test_nested_let_in_body(offset_provider):
             shift_fieldop_factory("Ioff", 1, domain)("inner2")
         )
     )
-    expected_domains = {"outer": SymbolicDomain.from_expr(domain_p3)}
+    expected_domains = {"outer": domain_p3}
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
 
@@ -795,7 +797,7 @@ def test_nested_let_arg(offset_provider):
             domain,
         )("a", "in_field")
     )
-    expected_domains = {"in_field": SymbolicDomain.from_expr(domain_rp2)}
+    expected_domains = {"in_field": domain_rp2}
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
 
@@ -817,7 +819,7 @@ def test_nested_let_arg_shadowed(offset_provider):
             shift_fieldop_factory("Ioff", 1, domain)("a")
         )
     )
-    expected_domains = {"in_field": SymbolicDomain.from_expr(domain_p6)}
+    expected_domains = {"in_field": domain_p6}
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
 
@@ -841,8 +843,8 @@ def test_nested_let_arg_shadowed2(offset_provider):
         im.let("in_field1", "in_field2")("in_field1"),
     )
     expected_domains = {
-        "in_field1": SymbolicDomain.from_expr(domain_p1),
-        "in_field2": SymbolicDomain.from_expr(domain),
+        "in_field1": domain_p1,
+        "in_field2": domain,
     }
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
@@ -868,7 +870,7 @@ def test_double_nested_let_fun_expr(offset_provider):
         )
     )
 
-    expected_domains = {"outer": SymbolicDomain.from_expr(domain_p2)}
+    expected_domains = {"outer": domain_p2}
 
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
@@ -892,7 +894,7 @@ def test_nested_let_args(offset_provider):
         ),
     )(shift_fieldop_factory("Ioff", -1, domain)("inner"))
 
-    expected_domains = {"outer": SymbolicDomain.from_expr(domain_m1)}
+    expected_domains = {"outer": domain_m1}
 
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
