@@ -147,6 +147,9 @@ def get_map_variable(dim: gtx_common.Dimension) -> str:
 def get_tuple_fields(
     tuple_name: str, tuple_type: ts.TupleType, flatten: bool = False
 ) -> list[tuple[str, ts.DataType]]:
+    """
+    Creates a list of fields with the corresponding data types for all elements of the given tuple.
+    """
     fields = [(f"{tuple_name}_{i}", field_type) for i, field_type in enumerate(tuple_type.types)]
     if flatten:
         expanded_fields = [

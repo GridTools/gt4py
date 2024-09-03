@@ -165,8 +165,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         and have to be passed as array arguments to the SDFG.
 
         Returns:
-            List of names for the data containers or symbols allocated as storage. This is a list
-            because in case of tuples we flat the tuple fields and allocate storage for each field.
+            List of data containers or symbols allocated as storage. This is a list, not a single value,
+            because in case of tuples we flat the tuple fields (eventually nested) and allocate storage
+            for each tuple element.
         """
         tuple_fields = []
         if isinstance(symbol_type, ts.TupleType):
