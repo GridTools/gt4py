@@ -118,9 +118,10 @@ pygments==2.18.0          # via -r requirements-dev.in, devtools, ipython, nbmak
 pyparsing==3.1.4          # via matplotlib
 pyproject-api==1.7.1      # via tox
 pyproject-hooks==1.1.0    # via build, pip-tools
-pytest==8.3.2             # via -r requirements-dev.in, gt4py (pyproject.toml), nbmake, pytest-cache, pytest-cov, pytest-factoryboy, pytest-instafail, pytest-xdist
+pytest==8.3.2             # via -r requirements-dev.in, gt4py (pyproject.toml), nbmake, pytest-cache, pytest-cov, pytest-custom-exit-code, pytest-factoryboy, pytest-instafail, pytest-xdist
 pytest-cache==1.0         # via -r requirements-dev.in
 pytest-cov==5.0.0         # via -r requirements-dev.in
+pytest-custom-exit-code==0.3.0  # via -r requirements-dev.in
 pytest-factoryboy==2.7.0  # via -r requirements-dev.in
 pytest-instafail==0.5.0   # via -r requirements-dev.in
 pytest-xdist==3.6.1       # via -r requirements-dev.in
@@ -172,4 +173,4 @@ zipp==3.20.1              # via importlib-metadata, importlib-resources
 
 # The following packages are considered to be unsafe in a requirements file:
 pip==24.2                 # via pip-tools, pipdeptree
-setuptools==74.0.0        # via gt4py (pyproject.toml), pip-tools, setuptools-scm
+setuptools==74.1.0        # via gt4py (pyproject.toml), pip-tools, setuptools-scm
