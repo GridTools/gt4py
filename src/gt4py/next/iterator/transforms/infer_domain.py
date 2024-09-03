@@ -15,7 +15,7 @@ from gt4py.next import common
 from gt4py.next.common import Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
-from gt4py.next.iterator.transforms.global_tmps import AUTO_DOMAIN, SymbolicDomain, domain_union
+from gt4py.next.iterator.transforms.global_tmps import SymbolicDomain, domain_union
 from gt4py.next.iterator.transforms.trace_shifts import TraceShifts
 
 
@@ -209,30 +209,12 @@ def infer_expr(
         raise ValueError(f"Unsupported expression: {expr}")
 
 
-def _validate_temporary_usage(body: list[itir.Stmt], temporaries: list[str]):
-    assigned_targets = set()
-    for stmt in body:
-        assert isinstance(stmt, itir.SetAt)  # TODO: extend for if-statements when they land
-        assert isinstance(
-            stmt.target, itir.SymRef
-        )  # TODO: stmt.target can be an expr, e.g. make_tuple
-        if stmt.target.id in assigned_targets:
-            raise ValueError("Temporaries can only be used once within a program.")
-        if stmt.target.id in temporaries:
-            assigned_targets.add(stmt.target.id)
-
-
 def infer_program(
     program: itir.Program,
     offset_provider: Dict[str, Dimension],
 ) -> itir.Program:
     accessed_domains: dict[str, SymbolicDomain | None] = {}
     transformed_set_ats: list[itir.SetAt] = []
-
-    temporaries: list[str] = [tmp.id for tmp in program.declarations]
-
-    # TODO(tehrengruber): disabled since it breaks with tuples
-    # _validate_temporary_usage(program.body, temporaries)
 
     for set_at in reversed(program.body):
         assert isinstance(set_at, itir.SetAt)
@@ -243,11 +225,8 @@ def infer_program(
         assert isinstance(
             set_at.target, itir.SymRef
         )  # TODO: stmt.target can be an expr, e.g. make_tuple
-        if set_at.target.id in temporaries:
-            # ignore temporaries as their domain is the `AUTO_DOMAIN` placeholder
-            assert set_at.domain == AUTO_DOMAIN
-        else:
-            accessed_domains[set_at.target.id] = SymbolicDomain.from_expr(set_at.domain)
+
+        accessed_domains[set_at.target.id] = SymbolicDomain.from_expr(set_at.domain)
         transformed_call, current_accessed_domains = infer_expr(
             set_at.expr, accessed_domains[set_at.target.id], offset_provider
         )
@@ -264,31 +243,14 @@ def infer_program(
 
         for field in current_accessed_domains:
             if field in accessed_domains:
-                # multiple accesses to the same field -> compute union of accessed domains
-                if field in temporaries:
-                    if accessed_domains[field] is None:
-                        accessed_domains[field] = current_accessed_domains[field]
-                    elif current_accessed_domains[field] is None:
-                        accessed_domains[field] = accessed_domains[field]
-                    else:
-                        accessed_domains[field] = domain_union(
-                            [accessed_domains[field], current_accessed_domains[field]]  # type: ignore[list-item]  # ensured by if condition
-                        )
-                else:
-                    # TODO(tehrengruber): if domain_ref is an external field the domain must
-                    #  already be larger. This should be checked, but would require additions
-                    #  to the IR.
-                    pass
+                # TODO(tehrengruber): if domain_ref is an external field the domain must
+                #  already be larger. This should be checked, but would require additions
+                #  to the IR.
+                pass
             else:
                 accessed_domains[field] = current_accessed_domains[field]
 
     new_declarations = copy.deepcopy(program.declarations)
-    for temporary in new_declarations:
-        temporary.domain = (
-            SymbolicDomain.as_expr(accessed_domains[temporary.id])  # type: ignore[arg-type]  # ensured by if condition
-            if accessed_domains[temporary.id] is not None
-            else None
-        )
 
     return itir.Program(
         id=program.id,

@@ -17,7 +17,7 @@ from gt4py import eve
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms.infer_domain import infer_program, infer_expr
-from gt4py.next.iterator.transforms.global_tmps import SymbolicDomain, AUTO_DOMAIN
+from gt4py.next.iterator.transforms.global_tmps import SymbolicDomain
 import pytest
 from gt4py.eve.extended_typing import Dict
 from gt4py.next.common import Dimension, DimensionKind
@@ -443,15 +443,15 @@ def test_program(offset_provider):
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     domain_tmp = im.domain(common.GridType.CARTESIAN, {IDim: (0, 12)})
 
-    params = [im.sym(name) for name in ["in_field", "out_field", "_gtmp_auto_domain"]]
+    params = [im.sym(name) for name in ["in_field", "out_field"]]
 
     testee = itir.Program(
         id="forward_diff_with_tmp",
         function_definitions=[],
         params=params,
-        declarations=[itir.Temporary(id="tmp", domain=AUTO_DOMAIN, dtype=float_type)],
+        declarations=[itir.Temporary(id="tmp", domain=domain_tmp, dtype=float_type)],
         body=[
-            itir.SetAt(expr=applied_as_fieldop_tmp, domain=AUTO_DOMAIN, target=im.ref("tmp")),
+            itir.SetAt(expr=applied_as_fieldop_tmp, domain=domain_tmp, target=im.ref("tmp")),
             itir.SetAt(expr=applied_as_fieldop, domain=domain, target=im.ref("out_field")),
         ],
     )
@@ -484,19 +484,19 @@ def test_program_two_tmps(offset_provider):
     domain_tmp1 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 13)})
     domain_tmp2 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 12)})
 
-    params = [im.sym(name) for name in ["in_field", "out_field", "_gtmp_auto_domain"]]
+    params = [im.sym(name) for name in ["in_field", "out_field"]]
 
     testee = itir.Program(
         id="forward_diff_with_two_tmps",
         function_definitions=[],
         params=params,
         declarations=[
-            itir.Temporary(id="tmp1", domain=AUTO_DOMAIN, dtype=float_type),
-            itir.Temporary(id="tmp2", domain=AUTO_DOMAIN, dtype=float_type),
+            itir.Temporary(id="tmp1", domain=domain_tmp1, dtype=float_type),
+            itir.Temporary(id="tmp2", domain=domain_tmp2, dtype=float_type),
         ],
         body=[
-            itir.SetAt(expr=as_fieldop_tmp1, domain=AUTO_DOMAIN, target=im.ref("tmp1")),
-            itir.SetAt(expr=as_fieldop_tmp2, domain=AUTO_DOMAIN, target=im.ref("tmp2")),
+            itir.SetAt(expr=as_fieldop_tmp1, domain=domain_tmp1, target=im.ref("tmp1")),
+            itir.SetAt(expr=as_fieldop_tmp2, domain=domain_tmp2, target=im.ref("tmp2")),
             itir.SetAt(expr=as_fieldop, domain=domain, target=im.ref("out_field")),
         ],
     )
@@ -523,36 +523,6 @@ def test_program_two_tmps(offset_provider):
     run_test_program(testee, expected, offset_provider)
 
 
-@pytest.mark.xfail(
-    reason="this currently fails since _validate_temporary_usage is not called"
-)  # TODO
-def test_program_ValueError(offset_provider):
-    with pytest.raises(ValueError, match=r"Temporaries can only be used once within a program."):
-        stencil = im.lambda_("arg0")(im.deref("arg0"))
-
-        as_fieldop_tmp = im.as_fieldop(stencil)(im.ref("in_field"))
-        as_fieldop = im.as_fieldop(stencil)(im.ref("tmp"))
-
-        domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
-
-        params = [im.sym(name) for name in ["in_field", "out_field", "_gtmp_auto_domain"]]
-
-        infer_program(
-            itir.Program(
-                id="forward_diff_with_tmp",
-                function_definitions=[],
-                params=params,
-                declarations=[itir.Temporary(id="tmp", domain=AUTO_DOMAIN, dtype=float_type)],
-                body=[
-                    itir.SetAt(expr=as_fieldop_tmp, domain=AUTO_DOMAIN, target=im.ref("tmp")),
-                    itir.SetAt(expr=as_fieldop_tmp, domain=AUTO_DOMAIN, target=im.ref("tmp")),
-                    itir.SetAt(expr=as_fieldop, domain=domain, target=im.ref("out_field")),
-                ],
-            ),
-            offset_provider,
-        )
-
-
 def test_program_tree_tmps_two_inputs(offset_provider):
     stencil = im.lambda_("arg0", "arg1")(
         im.minus(im.deref(im.shift("Ioff", 1)("arg0")), im.deref("arg1"))
@@ -574,25 +544,22 @@ def test_program_tree_tmps_two_inputs(offset_provider):
     domain_tmp2 = im.domain(common.GridType.CARTESIAN, {IDim: (-1, 12)})
     domain_tmp3 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     domain_out = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
-    params = [
-        im.sym(name)
-        for name in ["in_field1", "in_field2", "out_field1", "out_field2", "_gtmp_auto_domain"]
-    ]
+    params = [im.sym(name) for name in ["in_field1", "in_field2", "out_field1", "out_field2"]]
 
     testee = itir.Program(
         id="differences_three_tmps_two_inputs",
         function_definitions=[],
         params=params,
         declarations=[
-            itir.Temporary(id="tmp1", domain=AUTO_DOMAIN, dtype=float_type),
-            itir.Temporary(id="tmp2", domain=AUTO_DOMAIN, dtype=float_type),
-            itir.Temporary(id="tmp3", domain=AUTO_DOMAIN, dtype=float_type),
+            itir.Temporary(id="tmp1", domain=domain_tmp1, dtype=float_type),
+            itir.Temporary(id="tmp2", domain=domain_tmp2, dtype=float_type),
+            itir.Temporary(id="tmp3", domain=domain_tmp3, dtype=float_type),
         ],
         body=[
-            itir.SetAt(expr=as_fieldop_tmp1, domain=AUTO_DOMAIN, target=im.ref("tmp1")),
-            itir.SetAt(expr=as_fieldop_tmp2, domain=AUTO_DOMAIN, target=im.ref("tmp2")),
+            itir.SetAt(expr=as_fieldop_tmp1, domain=domain_tmp1, target=im.ref("tmp1")),
+            itir.SetAt(expr=as_fieldop_tmp2, domain=domain_tmp2, target=im.ref("tmp2")),
             itir.SetAt(expr=as_fieldop_out1, domain=domain_out, target=im.ref("out_field1")),
-            itir.SetAt(expr=as_fieldop_tmp3, domain=AUTO_DOMAIN, target=im.ref("tmp3")),
+            itir.SetAt(expr=as_fieldop_tmp3, domain=domain_tmp3, target=im.ref("tmp3")),
             itir.SetAt(expr=as_fieldop_out2, domain=domain_out, target=im.ref("out_field2")),
         ],
     )
@@ -912,15 +879,15 @@ def test_program_let(offset_provider):
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     domain_lm1 = im.domain(common.GridType.CARTESIAN, {IDim: (-1, 11)})
 
-    params = [im.sym(name) for name in ["in_field", "out_field", "outer", "_gtmp_auto_domain"]]
+    params = [im.sym(name) for name in ["in_field", "out_field", "outer"]]
 
     testee = itir.Program(
         id="forward_diff_with_tmp",
         function_definitions=[],
         params=params,
-        declarations=[itir.Temporary(id="tmp", domain=AUTO_DOMAIN, dtype=float_type)],
+        declarations=[itir.Temporary(id="tmp", domain=domain_lm1, dtype=float_type)],
         body=[
-            itir.SetAt(expr=let_tmp, domain=AUTO_DOMAIN, target=im.ref("tmp")),
+            itir.SetAt(expr=let_tmp, domain=domain_lm1, target=im.ref("tmp")),
             itir.SetAt(expr=as_fieldop, domain=domain, target=im.ref("out_field")),
         ],
     )
