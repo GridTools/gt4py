@@ -32,7 +32,6 @@ if TYPE_CHECKING:
 
 
 IteratorIndexDType: TypeAlias = dace.int32  # type of iterator indexes
-LetSymbol: TypeAlias = tuple[gtir.Literal | gtir.SymRef, ts.DataType]
 TemporaryData: TypeAlias = tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]
 
 
@@ -44,7 +43,7 @@ class PrimitiveTranslator(Protocol):
         sdfg: dace.SDFG,
         state: dace.SDFGState,
         sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-        let_symbols: dict[str, LetSymbol],
+        reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
     ) -> list[TemporaryData]:
         """Creates the dataflow subgraph representing a GTIR primitive function.
 
@@ -56,9 +55,9 @@ class PrimitiveTranslator(Protocol):
             sdfg: The SDFG where the primitive subgraph should be instantiated
             state: The SDFG state where the result of the primitive function should be made available
             sdfg_builder: The object responsible for visiting child nodes of the primitive node.
-            let_symbols: Mapping of symbols (i.e. lambda parameters and/or local constants
-                         like the identity value in a reduction context) to temporary fields
-                         or symbolic expressions.
+            reduce_identity: The value of the reduction identity, in case the primitive node
+                is visited in the context of a reduction expression. This value is used
+                by the `neighbors` primitive to provide the default value of skip neighbors.
 
         Returns:
             A list of data access nodes and the associated GT4Py data type, which provide
@@ -76,13 +75,13 @@ def _parse_arg_expr(
     domain: list[
         tuple[gtx_common.Dimension, dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]
     ],
-    let_symbols: dict[str, LetSymbol],
+    reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
 ) -> gtir_to_tasklet.IteratorExpr | gtir_to_tasklet.MemletExpr:
     fields: list[TemporaryData] = sdfg_builder.visit(
         node,
         sdfg=sdfg,
         head_state=state,
-        let_symbols=let_symbols,
+        reduce_identity=reduce_identity,
     )
 
     assert len(fields) == 1
@@ -118,7 +117,6 @@ def _create_temporary_field(
     ],
     node_type: ts.FieldType,
     output_desc: dace.data.Data,
-    output_field_type: ts.DataType,
 ) -> tuple[dace.nodes.AccessNode, ts.FieldType]:
     domain_dims, domain_lbs, domain_ubs = zip(*domain)
     field_dims = list(domain_dims)
@@ -155,7 +153,7 @@ def translate_as_field_op(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    let_symbols: dict[str, LetSymbol],
+    reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
 ) -> list[TemporaryData]:
     """Generates the dataflow subgraph for the `as_fieldop` builtin function."""
     assert isinstance(node, gtir.FunCall)
@@ -174,36 +172,17 @@ def translate_as_field_op(
     domain = dace_fieldview_util.get_domain(domain_expr)
     assert isinstance(node.type, ts.FieldType)
 
-    reduce_identity: Optional[gtir_to_tasklet.SymbolExpr] = None
     if cpm.is_applied_reduce(stencil_expr.expr):
-        # 'reduce' is a reserved keyword of the DSL and we will never find a user-defined symbol
-        # with this name. Since 'reduce' will never collide with a user-defined symbol, it is safe
-        # to use it internally to store the reduce identity value as a let-symbol.
-        if "reduce" in let_symbols:
+        if reduce_identity is not None:
             raise NotImplementedError("nested reductions not supported.")
 
         # the reduce identity value is used to fill the skip values in neighbors list
         _, _, reduce_identity = gtir_to_tasklet.get_reduce_params(stencil_expr.expr)
 
-        # we store the reduce identity value as a constant let-symbol
-        let_symbols = let_symbols | {
-            "reduce": (
-                gtir.Literal(value=str(reduce_identity.value), type=stencil_expr.expr.type),
-                reduce_identity.dtype,
-            )
-        }
-
-    elif "reduce" in let_symbols:
-        # a parent node is a reduction node, so we are visiting the current node in the context of a reduction
-        reduce_symbol, _ = let_symbols["reduce"]
-        assert isinstance(reduce_symbol, gtir.Literal)
-        reduce_identity = gtir_to_tasklet.SymbolExpr(
-            reduce_symbol.value, dace_fieldview_util.as_dace_type(reduce_symbol.type)
-        )
-
     # first visit the list of arguments and build a symbol map
     stencil_args = [
-        _parse_arg_expr(arg, sdfg, state, sdfg_builder, domain, let_symbols) for arg in node.args
+        _parse_arg_expr(arg, sdfg, state, sdfg_builder, domain, reduce_identity)
+        for arg in node.args
     ]
 
     # represent the field operator as a mapped tasklet graph, which will range over the field domain
@@ -223,9 +202,7 @@ def translate_as_field_op(
         last_node_connector = None
 
     # allocate local temporary storage for the result field
-    field_node, field_type = _create_temporary_field(
-        sdfg, state, domain, node.type, output_desc, output_expr.dtype
-    )
+    field_node, field_type = _create_temporary_field(sdfg, state, domain, node.type, output_desc)
 
     # assume tasklet with single output
     output_subset = [dace_fieldview_util.get_map_variable(dim) for dim, _, _ in domain]
@@ -267,7 +244,7 @@ def translate_cond(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    let_symbols: dict[str, LetSymbol],
+    reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
 ) -> list[TemporaryData]:
     """Generates the dataflow subgraph for the `cond` builtin function."""
     assert cpm.is_call_to(node, "cond")
@@ -309,13 +286,13 @@ def translate_cond(
         true_expr,
         sdfg=sdfg,
         head_state=true_state,
-        let_symbols=let_symbols,
+        reduce_identity=reduce_identity,
     )
     false_br_args = sdfg_builder.visit(
         false_expr,
         sdfg=sdfg,
         head_state=false_state,
-        let_symbols=let_symbols,
+        reduce_identity=reduce_identity,
     )
 
     output_nodes = []
@@ -412,7 +389,7 @@ def translate_literal(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    let_symbols: dict[str, LetSymbol],
+    reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
 ) -> list[TemporaryData]:
     """Generates the dataflow subgraph for a `ir.Literal` node."""
     assert isinstance(node, gtir.Literal)
@@ -428,24 +405,13 @@ def translate_symbol_ref(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    let_symbols: dict[str, LetSymbol],
+    reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
 ) -> list[TemporaryData]:
     """Generates the dataflow subgraph for a `ir.SymRef` node."""
     assert isinstance(node, gtir.SymRef)
 
     sym_value = str(node.id)
-    if sym_value in let_symbols:
-        let_node, sym_type = let_symbols[sym_value]
-        if isinstance(let_node, gtir.Literal):
-            # this branch handles the case a let-symbol is mapped to some constant value
-            return sdfg_builder.visit(let_node)
-        # The `let_symbols` dictionary maps a `gtir.SymRef` string to a temporary
-        # data container. These symbols are visited and initialized in a state
-        # that preceeds the current state, therefore a new access node needs to
-        # be created in the state where they are accessed.
-        sym_value = str(let_node.id)
-    else:
-        sym_type = sdfg_builder.get_symbol_type(sym_value)
+    sym_type = sdfg_builder.get_symbol_type(sym_value)
 
     # Create new access node in current state. It is possible that multiple
     # access nodes are created in one state for the same data container.
@@ -470,7 +436,7 @@ def translate_make_tuple(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    let_symbols: dict[str, LetSymbol],
+    reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
 ) -> list[TemporaryData]:
     assert cpm.is_call_to(node, "make_tuple")
     tuple_args = [
@@ -478,7 +444,7 @@ def translate_make_tuple(
             arg,
             sdfg=sdfg,
             head_state=state,
-            let_symbols=let_symbols,
+            reduce_identity=reduce_identity,
         )
         for arg in node.args
     ]
@@ -490,7 +456,7 @@ def translate_tuple_get(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    let_symbols: dict[str, LetSymbol],
+    reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
 ) -> list[TemporaryData]:
     assert cpm.is_call_to(node, "tuple_get")
     assert len(node.args) == 2
@@ -506,7 +472,7 @@ def translate_tuple_get(
             node.args[1].args[index],
             sdfg=sdfg,
             head_state=state,
-            let_symbols=let_symbols,
+            reduce_identity=reduce_identity,
         )
     elif isinstance(node.args[1], gtir.SymRef):
         # call to `tuple_get` can appear on the argument itself, in case of tuple arguments
@@ -521,7 +487,7 @@ def translate_tuple_get(
             node.args[1],
             sdfg=sdfg,
             head_state=state,
-            let_symbols=let_symbols,
+            reduce_identity=reduce_identity,
         )
         data_nodes = tuple_args[index : index + 1]
         # remove isolated access nodes
