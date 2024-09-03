@@ -3,6 +3,7 @@
 <!-- List format (alphabetical order):  Surname, Name. Employer/Affiliation -->
 
 - Benedicic, Lucas. ETH Zurich - CSCS
+- Cattaneo, Roman. SSAI/NASA-GSFC
 - Cruz, Felipe. ETH Zurich - CSCS
 - Dahm, Johann. Allen Institute for AI
 - Davis, Eddie. Allen Institute for AI
