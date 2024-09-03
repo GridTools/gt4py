@@ -35,9 +35,9 @@ def split_dict_by_key(pred: Callable, d: dict):
 
 
 def _merge_domains(
-    original_domains: Dict[str, SymbolicDomain],
-    additional_domains: Dict[str, SymbolicDomain],
-) -> Dict[str, SymbolicDomain]:
+    original_domains: Dict[str, SymbolicDomain | None],
+    additional_domains: Dict[str, SymbolicDomain | None],
+) -> Dict[str, SymbolicDomain | None]:
     new_domains = {**original_domains}
     for key, domain in additional_domains.items():
         original_domain = original_domains.get(key)
@@ -69,7 +69,7 @@ def extract_shifts_and_translate_domains(
     input_ids: list[str],
     target_domain: SymbolicDomain,
     offset_provider: common.OffsetProvider,
-    accessed_domains: Dict[str, SymbolicDomain],
+    accessed_domains: Dict[str, SymbolicDomain | None],
 ):
     shifts_results = trace_shifts(stencil, input_ids, SymbolicDomain.as_expr(target_domain))
 
@@ -87,9 +87,9 @@ def extract_shifts_and_translate_domains(
 
 def infer_as_fieldop(
     applied_fieldop: itir.FunCall,
-    target_domain: SymbolicDomain,
+    target_domain: SymbolicDomain | None,
     offset_provider: common.OffsetProvider,
-) -> tuple[itir.FunCall, Dict[str, SymbolicDomain]]:
+) -> tuple[itir.FunCall, Dict[str, SymbolicDomain | None]]:
     assert isinstance(applied_fieldop, itir.FunCall)
     assert cpm.is_call_to(applied_fieldop.fun, "as_fieldop")
     if target_domain is None:
@@ -102,7 +102,7 @@ def infer_as_fieldop(
     assert not isinstance(stencil, itir.Lambda) or len(stencil.params) == len(applied_fieldop.args)
 
     input_ids: list[str] = []
-    accessed_domains: Dict[str, SymbolicDomain] = {}
+    accessed_domains: Dict[str, SymbolicDomain | None] = {}
 
     # Assign ids for all inputs to `as_fieldop`. `SymRef`s stay as is, nested `as_fieldop` get a
     # temporary id.
@@ -150,9 +150,9 @@ def infer_as_fieldop(
 
 def infer_let(
     let_expr: itir.FunCall,
-    input_domain: SymbolicDomain,
+    input_domain: SymbolicDomain | None,
     offset_provider: common.OffsetProvider,
-) -> tuple[itir.FunCall, Dict[str, SymbolicDomain]]:
+) -> tuple[itir.FunCall, Dict[str, SymbolicDomain | None]]:
     assert cpm.is_let(let_expr)
     assert isinstance(let_expr.fun, itir.Lambda)
     transformed_calls_expr, accessed_domains = infer_expr(
@@ -184,9 +184,9 @@ def infer_let(
 
 def infer_expr(
     expr: itir.Expr,
-    domain: SymbolicDomain,
+    domain: SymbolicDomain | None,
     offset_provider: common.OffsetProvider,
-) -> tuple[itir.Expr, Dict[str, SymbolicDomain]]:
+) -> tuple[itir.Expr, Dict[str, SymbolicDomain | None]]:
     if isinstance(expr, itir.SymRef):
         return expr, {str(expr.id): domain}
     elif isinstance(expr, itir.Literal):
@@ -198,7 +198,7 @@ def infer_expr(
     elif cpm.is_call_to(expr, itir.GTIR_BUILTINS):
         # TODO(tehrengruber): double check
         infered_args_expr = []
-        actual_domains: Dict[str, SymbolicDomain] = {}
+        actual_domains: Dict[str, SymbolicDomain | None] = {}
         for arg in expr.args:
             infered_arg_expr, actual_domains_arg = infer_expr(arg, domain, offset_provider)
             infered_args_expr.append(infered_arg_expr)
@@ -228,7 +228,7 @@ def infer_program(
     program: itir.Program,
     offset_provider: Dict[str, Dimension],
 ) -> itir.Program:
-    accessed_domains: dict[str, SymbolicDomain] = {}
+    accessed_domains: dict[str, SymbolicDomain | None] = {}
     transformed_set_ats: list[itir.SetAt] = []
 
     temporaries: list[str] = [tmp.id for tmp in program.declarations]
@@ -257,7 +257,9 @@ def infer_program(
             0,
             itir.SetAt(
                 expr=transformed_call,
-                domain=SymbolicDomain.as_expr(accessed_domains[set_at.target.id]),
+                domain=SymbolicDomain.as_expr(accessed_domains[set_at.target.id])  # type: ignore[arg-type]  # ensured by if condition
+                if accessed_domains[set_at.target.id] is not None
+                else None,
                 target=set_at.target,
             ),
         )
@@ -266,9 +268,14 @@ def infer_program(
             if field in accessed_domains:
                 # multiple accesses to the same field -> compute union of accessed domains
                 if field in temporaries:
-                    accessed_domains[field] = domain_union(
-                        [accessed_domains[field], current_accessed_domains[field]]
-                    )
+                    if accessed_domains[field] is None:
+                        accessed_domains[field] = current_accessed_domains[field]
+                    elif current_accessed_domains[field] is None:
+                        accessed_domains[field] = accessed_domains[field]
+                    else:
+                        accessed_domains[field] = domain_union(
+                            [accessed_domains[field], current_accessed_domains[field]]  # type: ignore[list-item]  # ensured by if condition
+                        )
                 else:
                     # TODO(tehrengruber): if domain_ref is an external field the domain must
                     #  already be larger. This should be checked, but would require additions
@@ -279,7 +286,11 @@ def infer_program(
 
     new_declarations = copy.deepcopy(program.declarations)
     for temporary in new_declarations:
-        temporary.domain = SymbolicDomain.as_expr(accessed_domains[temporary.id])
+        temporary.domain = (
+            SymbolicDomain.as_expr(accessed_domains[temporary.id])  # type: ignore[arg-type]  # ensured by if condition
+            if accessed_domains[temporary.id] is not None
+            else None
+        )
 
     return itir.Program(
         id=program.id,
