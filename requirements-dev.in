@@ -24,6 +24,7 @@ pygments>=2.7.3
 pytest   # constraints in gt4py['testing']
 pytest-cache>=1.0
 pytest-cov>=2.8
+pytest-custom-exit-code>=0.3.0 
 pytest-factoryboy>=2.0.3
 pytest-xdist[psutil]>=2.4
 pytest-instafail>=0.5.0
