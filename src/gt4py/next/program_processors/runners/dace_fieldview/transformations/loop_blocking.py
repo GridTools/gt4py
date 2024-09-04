@@ -426,7 +426,6 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                 `used_symbol` properties of a Tasklet to determine if a Tasklet is dependent.
         """
         outer_entry: dace_nodes.MapEntry = self.outer_entry
-        blocking_parameter: str = self.blocking_parameter
         independent_nodes: set[dace_nodes.Node] = set()  # `\mathcal{I}`
 
         while True:
@@ -443,10 +442,9 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             # Now classify each node
             found_new_independent_node = False
             for node_to_classify in nodes_to_classify:
-                class_res = self.classify_node(
+                class_res = self._classify_node(
                     node_to_classify=node_to_classify,
                     outer_entry=outer_entry,
-                    blocking_parameter=blocking_parameter,
                     independent_nodes=independent_nodes,
                     state=state,
                     sdfg=sdfg,
@@ -470,11 +468,10 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
         return (independent_nodes, dependent_nodes)
 
-    def classify_node(
+    def _classify_node(
         self,
         node_to_classify: dace_nodes.Node,
         outer_entry: dace_nodes.MapEntry,
-        blocking_parameter: str,
         independent_nodes: set[dace_nodes.Node],
         state: dace.SDFGState,
         sdfg: dace.SDFG,
@@ -484,10 +481,10 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         The general rule to classify if a node is independent are:
         - The node must be a Tasklet or an AccessNode, in all other cases the
             partition does not exist.
-        - `free_symbols` of the nodes shall not contain the `blocking_parameter`.
+        - `free_symbols` of the nodes shall not contain the blocking parameter.
         - All incoming _empty_ edges must be connected to the map entry.
         - A node either has only empty Memlets or none of them.
-        - Incoming Memlets does not depend on the `blocking_parameter`.
+        - Incoming Memlets does not depend on the blocking parameter.
         - All incoming edges must start either at `outer_entry` or at dependent nodes.
         - All output Memlets are non empty.
 
@@ -501,7 +498,6 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         Args:
             node_to_classify: The node that should be classified.
             outer_entry: The entry of the map that should be partitioned.
-            blocking_parameter: The iteration parameter that should be blocked.
             independent_nodes: The set of nodes that was already classified as
                 independent, in which case it is added to `independent_nodes`.
             state: The state containing the map.
@@ -569,7 +565,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         # Test if the body of the Tasklet depends on the block variable.
         if (
             isinstance(node_to_classify, dace_nodes.Tasklet)
-            and blocking_parameter in node_to_classify.free_symbols
+            and self.blocking_parameter in node_to_classify.free_symbols
         ):
             return False
 
@@ -594,7 +590,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
             # If a subset needs the block variable then the node is not independent
             #  but dependent.
-            if any(blocking_parameter in subset.free_symbols for subset in subsets_to_inspect):
+            if any(self.blocking_parameter in subset.free_symbols for subset in subsets_to_inspect):
                 return False
 
             # The edge must either originate from `outer_entry` or from an independent

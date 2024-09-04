@@ -139,12 +139,8 @@ def find_downstream_consumers(
                 new_edges = state.in_edges_by_connector(curr_edge.src, "IN_" + target_conn)
             to_visit.extend(new_edges)
 
-        elif only_tasklets and (not isinstance(next_node, dace_nodes.Tasklet)):
-            # We are only interested in Tasklets but have not found one. Thus we
-            #  ignore the node.
-            pass
-
-        else:
+        elif isinstance(next_node, dace_nodes.Tasklet) or not only_tasklets:
+            # We have found a consumer.
             found.add((next_node, curr_edge))
 
     return found
