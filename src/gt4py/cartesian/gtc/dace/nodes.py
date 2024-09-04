@@ -59,8 +59,8 @@ class PickledProperty:
             b64string = d["pickle"]
             byte_repr = base64.b64decode(b64string)
             return pickle.loads(byte_repr)
-        else:
-            return d
+
+        return d
 
 
 class PickledDataclassProperty(PickledProperty, dace.properties.DataclassProperty):
