@@ -59,6 +59,22 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         desc="Name of the iteration variable on which to block (must be an exact match);"
         " 'I' in the above description.",
     )
+    independent_nodes = dace_properties.Property(
+        dtype=set,
+        allow_none=True,
+        default=None,
+        optional=True,
+        optional_condition=lambda _: False,
+        desc="Set of nodes that are independent of the blocking parameter.",
+    )
+    dependent_nodes = dace_properties.Property(
+        dtype=set,
+        allow_none=True,
+        default=None,
+        optional=True,
+        optional_condition=lambda _: False,
+        desc="Set of nodes that are dependent on the blocking parameter.",
+    )
 
     outer_entry = dace_transformation.transformation.PatternNode(dace_nodes.MapEntry)
 
@@ -111,7 +127,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             return False
         if map_range[map_params.index(block_var)][2] != 1:
             return False
-        if self.partition_map_output(graph, sdfg) is None:
+        if not self.partition_map_output(graph, sdfg):
             return False
 
         return True
@@ -127,22 +143,24 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         """
 
         # Now compute the partitions of the nodes.
-        independent_nodes, dependent_nodes = self.partition_map_output(graph, sdfg)  # type: ignore[misc]  # Guaranteed to be not `None`.
+        self.partition_map_output(graph, sdfg)  # type: ignore[misc]  # Guaranteed to be not `None`.
 
         # Modify the outer map and create the inner map.
         (outer_entry, outer_exit), (inner_entry, inner_exit) = self._prepare_inner_outer_maps(graph)
 
         # Reconnect the edges
-        _rewire_map_scope(
+        self._rewire_map_scope(
             outer_entry=outer_entry,
             outer_exit=outer_exit,
             inner_entry=inner_entry,
             inner_exit=inner_exit,
-            independent_nodes=independent_nodes,
-            dependent_nodes=dependent_nodes,
             state=graph,
             sdfg=sdfg,
         )
+
+        # Clear the old partitions
+        self.independent_nodes = None
+        self.dependent_nodes = None
 
     def _prepare_inner_outer_maps(
         self,
@@ -211,10 +229,10 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         self,
         state: dace.SDFGState,
         sdfg: dace.SDFG,
-    ) -> tuple[set[dace_nodes.Node], set[dace_nodes.Node]] | None:
-        """Partition the of the nodes of the Map.
+    ) -> bool:
+        """Computes the partition the of the nodes of the Map.
 
-        The outputs will be two sets, defined as:
+        The function divides the nodes into two sets, defined as:
         - The independent nodes `\mathcal{I}`:
             These are the nodes, whose output does not depend on the blocked
             dimension. These nodes can be relocated between the outer and inner map.
@@ -240,7 +258,9 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         that are inside the scope and are not classified as dependent or independent
         are known as "inner nodes".
 
-        In case the function fails to compute the partition `None` is returned.
+        If the function is able to compute the partition `True` is returned and the
+        member variables are updated. If the partition does not exists the function
+        will return `False` and the respective member variables will be `None`.
 
         Args:
             state: The state on which we operate.
@@ -251,7 +271,10 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             - Currently this function only considers the input Memlets and the
                 `used_symbol` properties of a Tasklet to determine if a Tasklet is dependent.
         """
-        independent_nodes: set[dace_nodes.Node] = set()  # `\mathcal{I}`
+
+        # Clear the previous partition.
+        self.independent_nodes = set()
+        self.dependent_nodes = None
 
         while True:
             # Find all the nodes that we have to classify in this iteration.
@@ -260,23 +283,23 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             nodes_to_classify: set[dace_nodes.Node] = {
                 edge.dst for edge in state.out_edges(self.outer_entry)
             }
-            for independent_node in independent_nodes:
+            for independent_node in self.independent_nodes:
                 nodes_to_classify.update({edge.dst for edge in state.out_edges(independent_node)})
-            nodes_to_classify.difference_update(independent_nodes)
+            nodes_to_classify.difference_update(self.independent_nodes)
 
             # Now classify each node
             found_new_independent_node = False
             for node_to_classify in nodes_to_classify:
                 class_res = self._classify_node(
                     node_to_classify=node_to_classify,
-                    independent_nodes=independent_nodes,
                     state=state,
                     sdfg=sdfg,
                 )
 
                 # Check if the partition exists.
                 if class_res is None:
-                    return None
+                    self.independent_nodes = None
+                    return False
                 if class_res is True:
                     found_new_independent_node = True
 
@@ -286,18 +309,17 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
         # After the independent set is computed compute the set of dependent nodes
         #  as the set of all nodes adjacent to `outer_entry` that are not dependent.
-        dependent_nodes: set[dace_nodes.Node] = {
+        self.dependent_nodes = {
             edge.dst
             for edge in state.out_edges(self.outer_entry)
-            if edge.dst not in independent_nodes
+            if edge.dst not in self.independent_nodes
         }
 
-        return (independent_nodes, dependent_nodes)
+        return True
 
     def _classify_node(
         self,
         node_to_classify: dace_nodes.Node,
-        independent_nodes: set[dace_nodes.Node],
         state: dace.SDFGState,
         sdfg: dace.SDFG,
     ) -> bool | None:
@@ -315,15 +337,13 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
         Returns:
             The function returns `True` if `node_to_classify` is considered independent.
-            In this case the function will add the node to `independent_nodes`.
+            In this case the function will add the node to `self.independent_nodes`.
             If the function returns `False` the node was classified as a dependent node.
             The function will return `None` if the node can not be classified, in this
             case the partition does not exist.
 
         Args:
             node_to_classify: The node that should be classified.
-            independent_nodes: The set of nodes that was already classified as
-                independent, in which case it is added to `independent_nodes`.
             state: The state containing the map.
             sdfg: The SDFG that is processed.
         """
@@ -420,183 +440,179 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
             # The edge must either originate from `outer_entry` or from an independent
             #  node if not it is dependent.
-            if not (in_edge.src is outer_entry or in_edge.src in independent_nodes):
+            if not (in_edge.src is outer_entry or in_edge.src in self.independent_nodes):
                 return False
 
         # Loop ended normally, thus we classify the node as independent.
-        independent_nodes.add(node_to_classify)
+        self.independent_nodes.add(node_to_classify)
         return True
 
+    def _rewire_map_scope(
+        self,
+        outer_entry: dace_nodes.MapEntry,
+        outer_exit: dace_nodes.MapExit,
+        inner_entry: dace_nodes.MapEntry,
+        inner_exit: dace_nodes.MapExit,
+        state: dace.SDFGState,
+        sdfg: dace.SDFG,
+    ) -> None:
+        """Rewire the edges inside the scope defined by the outer map.
 
-def _rewire_map_scope(
-    outer_entry: dace_nodes.MapEntry,
-    outer_exit: dace_nodes.MapExit,
-    inner_entry: dace_nodes.MapEntry,
-    inner_exit: dace_nodes.MapExit,
-    independent_nodes: set[dace_nodes.Node],
-    dependent_nodes: set[dace_nodes.Node],
-    state: dace.SDFGState,
-    sdfg: dace.SDFG,
-) -> None:
-    """Rewire the edges inside the scope defined by the outer map.
+        The function assumes that the outer and inner map were obtained by a call
+        to `_prepare_inner_outer_maps()`. The function will now rewire the connections of these
+        nodes such that the dependent nodes are inside the scope of the inner map,
+        while the independent nodes remain outside.
 
-    The function assumes that the outer and inner map were obtained by a call
-    to `_prepare_inner_outer_maps()`. The function will now rewire the connections of these
-    nodes such that the dependent nodes are inside the scope of the inner map,
-    while the independent nodes remain outside.
+        Args:
+            outer_entry: The entry node of the outer map.
+            outer_exit: The exit node of the outer map.
+            inner_entry: The entry node of the inner map.
+            inner_exit: The exit node of the inner map.
+            state: The state of the map.
+            sdfg: The SDFG we operate on.
+        """
 
-    Args:
-        outer_entry: The entry node of the outer map.
-        outer_exit: The exit node of the outer map.
-        inner_entry: The entry node of the inner map.
-        inner_exit: The exit node of the inner map.
-        independent_nodes: The set of independent nodes.
-        dependent_nodes: The set of dependent nodes.
-        state: The state of the map.
-        sdfg: The SDFG we operate on.
-    """
+        # Contains the nodes that are already have been handled.
+        relocated_nodes: set[dace_nodes.Node] = set()
 
-    # Contains the nodes that are already have been handled.
-    relocated_nodes: set[dace_nodes.Node] = set()
+        # We now handle all independent nodes, this means that all of their
+        #  _output_ edges have to go through the new inner map and the Memlets need
+        #  modifications, because of the block parameter.
+        for independent_node in self.independent_nodes:
+            for out_edge in state.out_edges(independent_node):
+                edge_dst: dace_nodes.Node = out_edge.dst
+                relocated_nodes.add(edge_dst)
 
-    # We now handle all independent nodes, this means that all of their
-    #  _output_ edges have to go through the new inner map and the Memlets need
-    #  modifications, because of the block parameter.
-    for independent_node in independent_nodes:
-        for out_edge in state.out_edges(independent_node):
-            edge_dst: dace_nodes.Node = out_edge.dst
-            relocated_nodes.add(edge_dst)
+                # If destination of this edge is also independent we do not need
+                #  to handle it, because that node will also be before the new
+                #  inner serial map.
+                if edge_dst in self.independent_nodes:
+                    continue
 
-            # If destination of this edge is also independent we do not need
-            #  to handle it, because that node will also be before the new
-            #  inner serial map.
-            if edge_dst in independent_nodes:
-                continue
+                # Now split `out_edge` such that it passes through the new inner entry.
+                #  We do not need to modify the subsets, i.e. replacing the variable
+                #  on which we block, because the node is independent and the outgoing
+                #  new inner map entry iterate over the blocked variable.
+                new_map_conn = inner_entry.next_connector()
+                dace_helpers.redirect_edge(
+                    state=state,
+                    edge=out_edge,
+                    new_dst=inner_entry,
+                    new_dst_conn="IN_" + new_map_conn,
+                )
+                # TODO(phimuell): Check if there might be a subset error.
+                state.add_edge(
+                    inner_entry,
+                    "OUT_" + new_map_conn,
+                    out_edge.dst,
+                    out_edge.dst_conn,
+                    copy.deepcopy(out_edge.data),
+                )
+                inner_entry.add_in_connector("IN_" + new_map_conn)
+                inner_entry.add_out_connector("OUT_" + new_map_conn)
 
-            # Now split `out_edge` such that it passes through the new inner entry.
-            #  We do not need to modify the subsets, i.e. replacing the variable
-            #  on which we block, because the node is independent and the outgoing
-            #  new inner map entry iterate over the blocked variable.
-            new_map_conn = inner_entry.next_connector()
-            dace_helpers.redirect_edge(
-                state=state,
-                edge=out_edge,
-                new_dst=inner_entry,
-                new_dst_conn="IN_" + new_map_conn,
-            )
-            # TODO(phimuell): Check if there might be a subset error.
-            state.add_edge(
-                inner_entry,
-                "OUT_" + new_map_conn,
-                out_edge.dst,
-                out_edge.dst_conn,
-                copy.deepcopy(out_edge.data),
-            )
-            inner_entry.add_in_connector("IN_" + new_map_conn)
-            inner_entry.add_out_connector("OUT_" + new_map_conn)
+        # Now we handle the dependent nodes, they differ from the independent nodes
+        #  in that they _after_ the new inner map entry. Thus, we will modify incoming edges.
+        for dependent_node in self.dependent_nodes:
+            for in_edge in state.in_edges(dependent_node):
+                edge_src: dace_nodes.Node = in_edge.src
 
-    # Now we handle the dependent nodes, they differ from the independent nodes
-    #  in that they _after_ the new inner map entry. Thus, we will modify incoming edges.
-    for dependent_node in dependent_nodes:
-        for in_edge in state.in_edges(dependent_node):
-            edge_src: dace_nodes.Node = in_edge.src
+                # Since the independent nodes were already processed, and they process
+                #  their output we have to check for this. We do this by checking if
+                #  the source of the edge is the new inner map entry.
+                if edge_src is inner_entry:
+                    assert dependent_node in relocated_nodes
+                    continue
 
-            # Since the independent nodes were already processed, and they process
-            #  their output we have to check for this. We do this by checking if
-            #  the source of the edge is the new inner map entry.
-            if edge_src is inner_entry:
-                assert dependent_node in relocated_nodes
-                continue
+                # A dependent node has at least one connection to the outer map entry.
+                #  And these are the only connections that we must handle, since other
+                #  connections come from independent nodes, and were already handled
+                #  or are inner nodes.
+                if edge_src is not outer_entry:
+                    continue
 
-            # A dependent node has at least one connection to the outer map entry.
-            #  And these are the only connections that we must handle, since other
-            #  connections come from independent nodes, and were already handled
-            #  or are inner nodes.
-            if edge_src is not outer_entry:
-                continue
+                # If we encounter an empty Memlet we just just attach it to the
+                #  new inner map entry. Note the partition function ensures that
+                #  either all edges are empty or non.
+                if in_edge.data.is_empty():
+                    assert (
+                        edge_src is outer_entry
+                    ), f"Found an empty edge that does not go to the outer map entry, but to '{edge_src}'."
+                    dace_helpers.redirect_edge(state=state, edge=in_edge, new_src=inner_entry)
+                    continue
 
-            # If we encounter an empty Memlet we just just attach it to the
-            #  new inner map entry. Note the partition function ensures that
-            #  either all edges are empty or non.
-            if in_edge.data.is_empty():
+                # Because of the definition of a dependent node and the processing
+                #  order, their incoming edges either point to the outer map or
+                #  are already handled.
                 assert (
                     edge_src is outer_entry
-                ), f"Found an empty edge that does not go to the outer map entry, but to '{edge_src}'."
-                dace_helpers.redirect_edge(state=state, edge=in_edge, new_src=inner_entry)
-                continue
+                ), f"Expected to find source '{outer_entry}' but found '{edge_src}'."
+                edge_conn: str = in_edge.src_conn[4:]
 
-            # Because of the definition of a dependent node and the processing
-            #  order, their incoming edges either point to the outer map or
-            #  are already handled.
-            assert (
-                edge_src is outer_entry
-            ), f"Expected to find source '{outer_entry}' but found '{edge_src}'."
-            edge_conn: str = in_edge.src_conn[4:]
+                # Must be before the handling of the modification below
+                #  Note that this will remove the original edge from the SDFG.
+                dace_helpers.redirect_edge(
+                    state=state,
+                    edge=in_edge,
+                    new_src=inner_entry,
+                    new_src_conn="OUT_" + edge_conn,
+                )
 
-            # Must be before the handling of the modification below
-            #  Note that this will remove the original edge from the SDFG.
+                # In a valid SDFG only one edge can go into an input connector of a Map.
+                if "IN_" + edge_conn in inner_entry.in_connectors:
+                    # We have found this edge multiple times already.
+                    #  To ensure that there is no error, we will create a new
+                    #  Memlet that reads the whole array.
+                    piping_edge = next(state.in_edges_by_connector(inner_entry, "IN_" + edge_conn))
+                    data_name = piping_edge.data.data
+                    piping_edge.data = dace.Memlet.from_array(
+                        data_name, sdfg.arrays[data_name], piping_edge.data.wcr
+                    )
+
+                else:
+                    # This is the first time we found this connection.
+                    #  so we just create the edge.
+                    state.add_edge(
+                        outer_entry,
+                        "OUT_" + edge_conn,
+                        inner_entry,
+                        "IN_" + edge_conn,
+                        copy.deepcopy(in_edge.data),
+                    )
+                    inner_entry.add_in_connector("IN_" + edge_conn)
+                    inner_entry.add_out_connector("OUT_" + edge_conn)
+
+        # In certain cases it might happen that we need to create an empty
+        #  Memlet between the outer map entry and the inner one.
+        if state.in_degree(inner_entry) == 0:
+            state.add_edge(
+                outer_entry,
+                None,
+                inner_entry,
+                None,
+                dace.Memlet(),
+            )
+
+        # Handle the Map exits
+        #  This is simple reconnecting, there would be possibilities for improvements
+        #  but we do not use them for now.
+        for in_edge in state.in_edges(outer_exit):
+            edge_conn = in_edge.dst_conn[3:]
             dace_helpers.redirect_edge(
                 state=state,
                 edge=in_edge,
-                new_src=inner_entry,
-                new_src_conn="OUT_" + edge_conn,
+                new_dst=inner_exit,
+                new_dst_conn="IN_" + edge_conn,
             )
+            state.add_edge(
+                inner_exit,
+                "OUT_" + edge_conn,
+                outer_exit,
+                in_edge.dst_conn,
+                copy.deepcopy(in_edge.data),
+            )
+            inner_exit.add_in_connector("IN_" + edge_conn)
+            inner_exit.add_out_connector("OUT_" + edge_conn)
 
-            # In a valid SDFG only one edge can go into an input connector of a Map.
-            if "IN_" + edge_conn in inner_entry.in_connectors:
-                # We have found this edge multiple times already.
-                #  To ensure that there is no error, we will create a new
-                #  Memlet that reads the whole array.
-                piping_edge = next(state.in_edges_by_connector(inner_entry, "IN_" + edge_conn))
-                data_name = piping_edge.data.data
-                piping_edge.data = dace.Memlet.from_array(
-                    data_name, sdfg.arrays[data_name], piping_edge.data.wcr
-                )
-
-            else:
-                # This is the first time we found this connection.
-                #  so we just create the edge.
-                state.add_edge(
-                    outer_entry,
-                    "OUT_" + edge_conn,
-                    inner_entry,
-                    "IN_" + edge_conn,
-                    copy.deepcopy(in_edge.data),
-                )
-                inner_entry.add_in_connector("IN_" + edge_conn)
-                inner_entry.add_out_connector("OUT_" + edge_conn)
-
-    # In certain cases it might happen that we need to create an empty
-    #  Memlet between the outer map entry and the inner one.
-    if state.in_degree(inner_entry) == 0:
-        state.add_edge(
-            outer_entry,
-            None,
-            inner_entry,
-            None,
-            dace.Memlet(),
-        )
-
-    # Handle the Map exits
-    #  This is simple reconnecting, there would be possibilities for improvements
-    #  but we do not use them for now.
-    for in_edge in state.in_edges(outer_exit):
-        edge_conn = in_edge.dst_conn[3:]
-        dace_helpers.redirect_edge(
-            state=state,
-            edge=in_edge,
-            new_dst=inner_exit,
-            new_dst_conn="IN_" + edge_conn,
-        )
-        state.add_edge(
-            inner_exit,
-            "OUT_" + edge_conn,
-            outer_exit,
-            in_edge.dst_conn,
-            copy.deepcopy(in_edge.data),
-        )
-        inner_exit.add_in_connector("IN_" + edge_conn)
-        inner_exit.add_out_connector("OUT_" + edge_conn)
-
-    # TODO(phimuell): Use a less expensive method.
-    dace.sdfg.propagation.propagate_memlets_state(sdfg, state)
+        # TODO(phimuell): Use a less expensive method.
+        dace.sdfg.propagation.propagate_memlets_state(sdfg, state)
