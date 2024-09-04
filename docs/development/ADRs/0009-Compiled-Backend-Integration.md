@@ -56,7 +56,7 @@ The interface for step two is defined in the `fencil_processors.pipeline.Binding
 
 The output of this step is a `BindingsModule` instance and also safely hashable.
 
-This would could be usefeul as an endpoint to use the Python bindings as an example for handcrafted bindings to other languages or for distribution of the generated bindings in a self-contained library with it's own build system.
+This would could be useful as an endpoint to use the Python bindings as an example for handcrafted bindings to other languages or for distribution of the generated bindings in a self-contained library with it's own build system.
 
 **Step 3a:**
 
