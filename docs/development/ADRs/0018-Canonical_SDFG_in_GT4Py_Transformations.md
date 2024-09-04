@@ -13,7 +13,7 @@ Their main intent is to reduce the complexity of the GT4Py specific transformati
 
 ## Context
 
-The canonical is outlined in this document was mainly designed from the perspective of the optimization pipeline.
+The canonical form outlined in this document was mainly designed from the perspective of the optimization pipeline.
 Thus it emphasizes a form that can be handled in a simple and efficient way by a transformation.
 In the pipeline we distinguish between:
 
