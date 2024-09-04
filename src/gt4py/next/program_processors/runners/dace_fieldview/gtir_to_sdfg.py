@@ -30,6 +30,7 @@ from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_builtin_translators,
     gtir_to_tasklet,
+    transformations as gtx_transformations,
     utility as dace_fieldview_util,
 )
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
@@ -531,5 +532,5 @@ def build_sdfg_from_gtir(
     # we can remove unnecesssary data connectors (not done by dace simplify pass)
     sdfg.apply_transformations_repeated(dace_dataflow.PruneConnectors)
 
-    sdfg.simplify()
+    gtx_transformations.gt_simplify(sdfg)
     return sdfg

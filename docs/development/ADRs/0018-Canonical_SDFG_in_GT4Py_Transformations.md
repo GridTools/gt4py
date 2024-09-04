@@ -69,7 +69,7 @@ For the SDFG state machine we assume that:
 #### Transients
 
 The rules we impose on transients are a bit more complicated, however, while sounding restrictive, they are very permissive.
-It is important to note that these rules only have to be met after after _simplify()_ was called once on the SDFG:
+It is important to note that these rules only have to be met after _simplify()_ was called once on the SDFG:
 
 6. Downstream of a write access, i.e., in all states that follow the state where the access node is located, there are no other access nodes that are used to write to the same array.
 
@@ -102,7 +102,7 @@ It is important to note that these rules only have to be met after after _simpli
    - [Note]: To prevent some issues caused by the violation of rule 4 by _simplify()_, this set is extended with the transient sink nodes and all scalars.
      Excess interstate transients, that will be kept alive that way, will be removed by later calls to _simplify()_.
 
-10. Every AccessNode within a map scope must refer to a data descriptor whose lifetime must be `dace.dtypes.AllocationLifetime.Scope` and its storage class should _preferably_ be `dace.dtypes.StorageType.Register`.
+10. Every AccessNode within a map scope must refer to a data descriptor whose lifetime must be `dace.dtypes.AllocationLifetime.Scope` and its storage class should either be `dace.dtypes.StorageType.Default` or _preferably_ `dace.dtypes.StorageType.Register`.
     - [Rationale 1]: This makes optimizations operating inside maps/kernels simpler, as it guarantees that the AccessNode does not propagate outside.
     - [Rationale 2]: The storage type avoids the need to dynamically allocate memory inside a kernel.
 
@@ -112,7 +112,7 @@ For maps we assume the following:
 
 11. The names of map variables (iteration variables) follow the following pattern.
 
-    - 11.1: All map variables iterating over the same dimension (disregarding the actual range), have the same deterministic name, that includes the `gtx.Dimension.value` string.
+    - 11.1: All map variables iterating over the same dimension (disregarding the actual range) have the same deterministic name, that includes the `gtx.Dimension.value` string.
     - 11.2: The name of horizontal dimensions (`kind` attribute) always end in `__gtx_horizontal`.
     - 11.3: The name of vertical dimensions (`kind` attribute) always end in `__gtx_vertical`.
     - 11.4: The name of local dimensions always ends in `__gtx_localdim`.
@@ -121,7 +121,7 @@ For maps we assume the following:
 
 12. Two map ranges, i.e. the pair map/iteration variable and range, can only be fused if they have the same name _and_ cover the same range.
     - [Rationale 1]: Because of rule 11, we will only fuse maps that actually makes sense to fuse.
-    - [Rationale 2]: This allows to fusing maps without performing a renaming on the map variables.
+    - [Rationale 2]: This allows fusing maps without renaming the map variables.
     - [Note]: This rule might be dropped in the future.
 
 ## Consequences
