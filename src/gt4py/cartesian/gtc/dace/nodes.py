@@ -55,11 +55,12 @@ class PickledProperty:
         # wrong format (non pickle).
         # Best mitigation is to give back the object plain if it does
         # not contain any pickling information
-        if isinstance(d, dict) and "pickle" not in d.keys():
+        if isinstance(d, dict) and "pickle" in d.keys():
+            b64string = d["pickle"]
+            byte_repr = base64.b64decode(b64string)
+            return pickle.loads(byte_repr)
+        else:
             return d
-        b64string = d["pickle"]
-        byte_repr = base64.b64decode(b64string)
-        return pickle.loads(byte_repr)
 
 
 class PickledDataclassProperty(PickledProperty, dace.properties.DataclassProperty):
