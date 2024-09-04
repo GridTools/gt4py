@@ -50,6 +50,13 @@ class PickledProperty:
 
     @classmethod
     def from_json(cls, d, sdfg=None):
+        # DaCe won't serialize attr with default values by default
+        # which would lead the deserializer to push a default in the
+        # wrong format (non pickle).
+        # Best mitigation is to give back the object plain if it does
+        # not contain any pickling information
+        if isinstance(d, dict) and "pickle" not in d.keys():
+            return d
         b64string = d["pickle"]
         byte_repr = base64.b64decode(b64string)
         return pickle.loads(byte_repr)
