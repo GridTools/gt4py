@@ -17,8 +17,9 @@ import dace.data
 import numpy as np
 
 from gt4py import eve
-from gt4py.cartesian.gtc import common, daceir as dcir, oir
+from gt4py.cartesian.gtc import common, oir
 from gt4py.cartesian.gtc.common import CartesianOffset, VariableKOffset
+from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
 
 

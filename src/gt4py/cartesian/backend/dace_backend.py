@@ -120,7 +120,7 @@ def _set_expansion_orders(sdfg: dace.SDFG):
 
 
 def _set_tile_sizes(sdfg: dace.SDFG):
-    import gt4py.cartesian.gtc.daceir as dcir  # avoid circular import
+    import gt4py.cartesian.gtc.dace.daceir as dcir  # avoid circular import
 
     for node, _ in filter(
         lambda n: isinstance(n[0], StencilComputation), sdfg.all_nodes_recursive()
