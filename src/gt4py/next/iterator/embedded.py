@@ -334,6 +334,13 @@ def can_deref(it):
 
 
 @builtins.if_.register(EMBEDDED)
+def cond(cond_, t, f):
+    if hasattr(cond_, "as_scalar"):
+        cond_ = cond_.as_scalar()
+    return t if cond_ else f
+
+
+@builtins.if_.register(EMBEDDED)
 def if_(cond, t, f):
     # ensure someone doesn't accidentally pass an iterator
     assert not hasattr(cond, "shift")

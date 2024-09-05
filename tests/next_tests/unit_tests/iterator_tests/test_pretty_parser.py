@@ -72,6 +72,17 @@ def test_as_fieldop():
     assert actual == expected
 
 
+def test_cond():
+    testee = "cond(s1 > s2, x, y)"
+    expected = im.cond(
+        im.greater(ir.SymRef(id="s1"), ir.SymRef(id="s2")),
+        ir.SymRef(id="x"),
+        ir.SymRef(id="y"),
+    )
+    actual = pparse(testee)
+    assert actual == expected
+
+
 def test_bool_arithmetic():
     testee = "¬(¬a ∨ b ∧ (c ∨ d))"
     expected = ir.FunCall(

@@ -180,6 +180,9 @@ class ToIrTransformer(lark_visitors.Transformer):
     def as_fieldop(self, arg: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="as_fieldop"), args=[arg])
 
+    def cond(self, cond_: ir.Expr, t: ir.Expr, f: ir.Expr) -> ir.FunCall:
+        return ir.FunCall(fun=ir.SymRef(id="cond"), args=[cond_, t, f])
+
     def astype(self, arg: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="cast_"), args=[arg])
 

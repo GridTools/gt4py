@@ -33,6 +33,11 @@ def can_deref(*args):
 
 
 @builtin_dispatch
+def cond(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def shift(*args):
     raise BackendNotSelectedError()
 
@@ -398,6 +403,7 @@ MATH_BUILTINS = (
 BUILTINS = {
     "deref",
     "can_deref",
+    "cond",
     "shift",
     "neighbors",
     "list_get",
