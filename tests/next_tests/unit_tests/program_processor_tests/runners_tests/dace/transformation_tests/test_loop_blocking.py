@@ -11,6 +11,7 @@ import dace
 import copy
 import numpy as np
 import pytest
+import time
 
 from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation
 
@@ -28,7 +29,7 @@ def _get_simple_sdfg() -> tuple[dace.SDFG, Callable[[np.ndarray, np.ndarray], np
     can be taken out. This is because how it is constructed. However, applying
     some simplistic transformations this can be done.
     """
-    sdfg = dace.SDFG("only_dependent")
+    sdfg = dace.SDFG(f"test_sdfg__{int(time.time() * 1000)}")
     state = sdfg.add_state("state", is_start_block=True)
     sdfg.add_symbol("N", dace.int32)
     sdfg.add_symbol("M", dace.int32)
@@ -51,7 +52,7 @@ def _get_chained_sdfg() -> tuple[dace.SDFG, Callable[[np.ndarray, np.ndarray], n
 
     The bottom Tasklet is the only dependent Tasklet.
     """
-    sdfg = dace.SDFG("only_dependent")
+    sdfg = dace.SDFG(f"test_sdfg__{int(time.time() * 1000)}")
     state = sdfg.add_state("state", is_start_block=True)
     sdfg.add_symbol("N", dace.int32)
     sdfg.add_symbol("M", dace.int32)

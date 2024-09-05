@@ -11,6 +11,7 @@ import dace
 import copy
 import numpy as np
 import pytest
+import time
 
 from dace.sdfg import nodes as dace_nodes
 
@@ -42,7 +43,7 @@ def _get_trivial_gpu_promotable(
     Args:
         tasklet_code: The body of the Tasklet inside the trivial map.
     """
-    sdfg = dace.SDFG("TrivailGPUPromotable")
+    sdfg = dace.SDFG(f"test_sdfg__{int(time.time() * 1000)}")
     state = sdfg.add_state("state", is_start_block=True)
     sdfg.add_symbol("N", dace.int32)
 
