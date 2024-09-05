@@ -12,7 +12,6 @@ import pytest
 import dace
 import copy
 import numpy as np
-import time
 from dace.sdfg import nodes as dace_nodes
 from dace.transformation import dataflow as dace_dataflow
 
@@ -39,7 +38,7 @@ def _make_serial_sdfg_1(
         N: The size of the arrays.
     """
     shape = (N, N)
-    sdfg = dace.SDFG(f"test_sdfg__{int(time.time() * 1000)}")
+    sdfg = dace.SDFG(util.unique_name("serial_sdfg1"))
     state = sdfg.add_state(is_start_block=True)
 
     for name in ["a", "b", "tmp"]:
@@ -94,7 +93,7 @@ def _make_serial_sdfg_2(
         N: The size of the arrays.
     """
     shape = (N, N)
-    sdfg = dace.SDFG(f"test_sdfg__{int(time.time() * 1000)}")
+    sdfg = dace.SDFG(util.unique_name("serial_sdfg2"))
     state = sdfg.add_state(is_start_block=True)
 
     for name in ["a", "b", "c", "tmp_1", "tmp_2"]:
@@ -166,7 +165,7 @@ def _make_serial_sdfg_3(
     input_shape = (N_input,)
     output_shape = (N_output,)
 
-    sdfg = dace.SDFG(f"test_sdfg__{int(time.time() * 1000)}")
+    sdfg = dace.SDFG(util.unique_name("serial_sdfg3"))
     state = sdfg.add_state(is_start_block=True)
 
     for name, shape in [

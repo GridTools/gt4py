@@ -11,7 +11,6 @@ import dace
 import copy
 import numpy as np
 import pytest
-import time
 
 from dace.sdfg import nodes as dace_nodes
 
@@ -29,7 +28,7 @@ def test_serial_map_promotion():
     N = 10
     shape_1d = (N,)
     shape_2d = (N, N)
-    sdfg = dace.SDFG(f"test_sdfg__{int(time.time() * 1000)}")
+    sdfg = dace.SDFG(util.unique_name("serial_promotable_sdfg"))
     state = sdfg.add_state(is_start_block=True)
 
     # 1D Arrays

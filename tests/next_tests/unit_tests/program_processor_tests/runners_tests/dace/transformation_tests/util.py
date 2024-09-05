@@ -7,14 +7,11 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from typing import Union, Literal, overload
+import uuid
 
 import dace
 from dace.sdfg import nodes as dace_nodes
 from dace.transformation import dataflow as dace_dataflow
-
-__all__ = [
-    "_count_nodes",
-]
 
 
 @overload
@@ -57,3 +54,8 @@ def _count_nodes(
     if return_nodes:
         return found_nodes
     return len(found_nodes)
+
+
+def unique_name(name: str) -> str:
+    """Adds a unique string to `name`."""
+    return f"{name}_{str(uuid.uuid1()).replace('-', '_')}"
