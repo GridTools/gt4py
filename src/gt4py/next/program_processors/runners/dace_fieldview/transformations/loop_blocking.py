@@ -143,7 +143,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         """
 
         # Now compute the partitions of the nodes.
-        self.partition_map_output(graph, sdfg)  # type: ignore[misc]  # Guaranteed to be not `None`.
+        self.partition_map_output(graph, sdfg)
 
         # Modify the outer map and create the inner map.
         (outer_entry, outer_exit), (inner_entry, inner_exit) = self._prepare_inner_outer_maps(graph)
