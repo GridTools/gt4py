@@ -535,9 +535,5 @@ def build_sdfg_from_gtir(
     sdfg = sdfg_genenerator.visit(program)
     assert isinstance(sdfg, dace.SDFG)
 
-    # nested-SDFGs for let-lambda may contain unused symbols, in which case
-    # we can remove unnecesssary data connectors (not done by dace simplify pass)
-    sdfg.apply_transformations_repeated(dace_dataflow.PruneConnectors)
-
     gtx_transformations.gt_simplify(sdfg)
     return sdfg
