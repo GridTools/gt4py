@@ -61,7 +61,7 @@ def shift_fieldop_factory(dim: str, offset: int, domain: Optional[itir.FunCall] 
 def setup_test_as_fieldop(
     stencil: itir.Lambda | Literal["deref"],
     domain: itir.FunCall,
-    expected_domain_dict: Dict[str, Dict[str | Dimension, tuple[itir.Expr, itir.Expr]]],
+    expected_domain_dict: dict[str, dict[str | Dimension, tuple[itir.Expr, itir.Expr]]],
     offset_provider: common.OffsetProvider,
     *,
     refs: Iterable[itir.SymRef] = None,
@@ -93,7 +93,7 @@ def run_test_expr(
     testee: itir.FunCall,
     expected: itir.FunCall,
     domain: itir.FunCall,
-    expected_domains: Dict[str, SymbolicDomain],
+    expected_domains: dict[str, SymbolicDomain],
     offset_provider: common.OffsetProvider,
 ):
     actual_call, actual_domains = infer_expr(
@@ -121,7 +121,7 @@ def constant_fold_domain_exprs(arg: itir.Node) -> itir.Node:
     return _ConstantFoldDomainsExprs().visit(arg)
 
 
-def constant_fold_accessed_domains(domains: Dict[str, SymbolicDomain]) -> Dict[str, SymbolicDomain]:
+def constant_fold_accessed_domains(domains: dict[str, SymbolicDomain]) -> dict[str, SymbolicDomain]:
     return {
         k: SymbolicDomain.from_expr(constant_fold_domain_exprs(v.as_expr())) if v is not None else v
         for k, v in domains.items()
@@ -130,7 +130,7 @@ def constant_fold_accessed_domains(domains: Dict[str, SymbolicDomain]) -> Dict[s
 
 def translate_domain(
     domain: itir.FunCall,
-    shifts: Dict[Union[common.Dimension, str], tuple[itir.Expr, itir.Expr]],
+    shifts: dict[Union[common.Dimension, str], tuple[itir.Expr, itir.Expr]],
     offset_provider: common.OffsetProvider,
 ) -> SymbolicDomain:
     shift_tuples = [
