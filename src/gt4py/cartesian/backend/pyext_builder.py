@@ -1,23 +1,17 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import contextlib
 import copy
 import io
 import os
 import shutil
-from typing import Any, Dict, List, Optional, Tuple, Type, Union, cast, overload
+from typing import Any, Dict, List, Literal, Optional, Tuple, Type, Union, cast, overload
 
 import pybind11
 import setuptools
@@ -48,6 +42,8 @@ def get_cuda_compute_capability():
 def get_gt_pyext_build_opts(
     *,
     debug_mode: bool = False,
+    opt_level: Literal["0", "1", "2", "3", "s"] = "3",
+    extra_opt_flags: str = "",
     add_profile_info: bool = False,
     uses_openmp: bool = True,
     uses_cuda: bool = False,
@@ -80,6 +76,9 @@ def get_gt_pyext_build_opts(
             "-ftemplate-depth={}".format(gt_config.build_settings["cpp_template_depth"]),
             "-fvisibility=hidden",
             "-fPIC",
+            # A compiler is allowed to choose if `char` is signed or unsigned. We force the signed behavior
+            # because `char` is used to represent the `int8` type in GT4Py programs.
+            "-fsigned-char",
             "-isystem{}".format(gt_include_path),
             "-isystem{}".format(gt_config.build_settings["boost_include_path"]),
             "-DBOOST_PP_VARIADICS",
@@ -112,9 +111,12 @@ def get_gt_pyext_build_opts(
             "--compiler-options",
             "-fPIC",
         ]
-    extra_link_args = gt_config.build_settings["extra_link_args"]
+    extra_link_args = copy.deepcopy(gt_config.build_settings["extra_link_args"])
 
-    mode_flags = ["-O0", "-ggdb"] if debug_mode else ["-O3", "-DNDEBUG"]
+    mode_flags = (
+        ["-O0", "-ggdb"] if debug_mode else [f"-O{opt_level}", "-DNDEBUG", *extra_opt_flags.split()]
+    )
+
     extra_compile_args["cxx"].extend(mode_flags)
     extra_compile_args["cuda"].extend(mode_flags)
     extra_link_args.extend(mode_flags)
@@ -225,7 +227,11 @@ def build_pybind_ext(
     py_extension = setuptools.Extension(
         name,
         sources,
-        include_dirs=[pybind11.get_include(), pybind11.get_include(user=True), *include_dirs],
+        include_dirs=[
+            pybind11.get_include(),
+            pybind11.get_include(user=True),
+            *include_dirs,
+        ],
         library_dirs=[*library_dirs],
         libraries=[*libraries],
         language="c++",

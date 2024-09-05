@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import enum
 from typing import Callable, Optional
@@ -84,7 +78,11 @@ def apply_common_transforms(
         Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
     ] = None,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
-) -> itir.FencilDefinition | FencilWithTemporaries:
+) -> itir.FencilDefinition | FencilWithTemporaries | itir.Program:
+    if isinstance(ir, itir.Program):
+        # TODO(havogt): during refactoring to GTIR, we bypass transformations in case we already translated to itir.Program
+        # (currently the case when using the roundtrip backend)
+        return ir
     icdlv_uids = eve_utils.UIDGenerator()
 
     if lift_mode is None:
@@ -92,6 +90,7 @@ def apply_common_transforms(
     assert isinstance(lift_mode, LiftMode)
     ir = MergeLet().visit(ir)
     ir = InlineFundefs().visit(ir)
+
     ir = PruneUnreferencedFundefs().visit(ir)
     ir = PropagateDeref.apply(ir)
     ir = NormalizeShifts().visit(ir)
@@ -115,8 +114,7 @@ def apply_common_transforms(
         # is constant-folded the surrounding tuple_get calls can be removed.
         inlined = CollapseTuple.apply(
             inlined,
-            # to limit number of times global type inference is executed, only in the last iterations.
-            use_global_type_inference=inlined == ir,
+            offset_provider=offset_provider,
             # TODO(tehrengruber): disabled since it increases compile-time too much right now
             flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
         )
@@ -162,7 +160,8 @@ def apply_common_transforms(
     if unconditionally_collapse_tuples:
         ir = CollapseTuple.apply(
             ir,
-            ignore_tuple_size=unconditionally_collapse_tuples,
+            ignore_tuple_size=True,
+            offset_provider=offset_provider,
             # TODO(tehrengruber): disabled since it increases compile-time too much right now
             flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
         )

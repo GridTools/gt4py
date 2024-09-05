@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -181,7 +175,7 @@ class GTFNTranslationStep(
         self,
         program: itir.FencilDefinition,
         offset_provider: dict[str, Connectivity | Dimension],
-    ) -> itir.FencilDefinition | global_tmps.FencilWithTemporaries:
+    ) -> itir.FencilDefinition | global_tmps.FencilWithTemporaries | itir.Program:
         if not self.enable_itir_transforms:
             return program
 
@@ -234,7 +228,8 @@ class GTFNTranslationStep(
         self, inp: stages.ProgramCall
     ) -> stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings]:
         """Generate GTFN C++ code from the ITIR definition."""
-        program: itir.FencilDefinition = inp.program
+        program = inp.program
+        assert isinstance(program, itir.FencilDefinition)
 
         # handle regular parameters and arguments of the program (i.e. what the user defined in
         #  the program)

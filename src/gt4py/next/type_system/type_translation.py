@@ -1,19 +1,16 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+from __future__ import annotations
 
 import builtins
 import collections.abc
+import dataclasses
 import functools
 import types
 import typing
@@ -22,6 +19,7 @@ from typing import Any, ForwardRef, Optional
 import numpy as np
 import numpy.typing as npt
 
+from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
 from gt4py.next.type_system import type_info, type_specifications as ts
@@ -162,13 +160,24 @@ def from_type_hint(
 
             # TODO(tehrengruber): print better error when no return type annotation is given
             return ts.FunctionType(
-                pos_only_args=new_args,  # type: ignore[arg-type] # checked in assert
-                pos_or_kw_args=kwargs,  # type: ignore[arg-type] # checked in assert
+                pos_only_args=new_args,
+                pos_or_kw_args=kwargs,
                 kw_only_args={},  # TODO
                 returns=returns,
             )
-
     raise ValueError(f"'{type_hint}' type is not supported.")
+
+
+@dataclasses.dataclass(frozen=True)
+class UnknownPythonObject(ts.TypeSpec):
+    _object: Any
+
+    def __getattr__(self, key: str) -> ts.TypeSpec:
+        value = getattr(self._object, key)
+        return from_value(value)
+
+    def __deepcopy__(self, _: dict[int, Any]) -> UnknownPythonObject:
+        return UnknownPythonObject(self._object)  # don't deep copy the module
 
 
 def from_value(value: Any) -> ts.TypeSpec:
@@ -209,6 +218,8 @@ def from_value(value: Any) -> ts.TypeSpec:
         elems = [from_value(el) for el in value]
         assert all(isinstance(elem, ts.DataType) for elem in elems)
         return ts.TupleType(types=elems)  # type: ignore[arg-type] # checked in assert
+    elif isinstance(value, types.ModuleType):
+        return UnknownPythonObject(_object=value)
     else:
         type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
         symbol_type = from_type_hint(type_)
@@ -219,3 +230,43 @@ def from_value(value: Any) -> ts.TypeSpec:
         return symbol_type
     else:
         raise ValueError(f"Impossible to map '{value}' value to a 'Symbol'.")
+
+
+def as_dtype(type_: ts.ScalarType) -> core_defs.DType:
+    """
+    Translate a `ts.ScalarType` to a `core_defs.DType`
+
+    >>> as_dtype(ts.ScalarType(kind=ts.ScalarKind.BOOL))  # doctest:+ELLIPSIS
+    BoolDType(...)
+    """
+    if type_.kind == ts.ScalarKind.BOOL:
+        return core_defs.BoolDType()
+    elif type_.kind == ts.ScalarKind.INT32:
+        return core_defs.Int32DType()
+    elif type_.kind == ts.ScalarKind.INT64:
+        return core_defs.Int64DType()
+    elif type_.kind == ts.ScalarKind.FLOAT32:
+        return core_defs.Float32DType()
+    elif type_.kind == ts.ScalarKind.FLOAT64:
+        return core_defs.Float64DType()
+    raise ValueError(f"Scalar type '{type_}' not supported.")
+
+
+def from_dtype(dtype: core_defs.DType) -> ts.ScalarType:
+    """
+    Translate a `core_defs.DType` to a `ts.ScalarType`
+
+    >>> from_dtype(core_defs.BoolDType())  # doctest:+ELLIPSIS
+    ScalarType(kind=...BOOL...)
+    """
+    if dtype == core_defs.BoolDType():
+        return ts.ScalarType(kind=ts.ScalarKind.BOOL)
+    elif dtype == core_defs.Int32DType():
+        return ts.ScalarType(kind=ts.ScalarKind.INT32)
+    elif dtype == core_defs.Int64DType():
+        return ts.ScalarType(kind=ts.ScalarKind.INT64)
+    elif dtype == core_defs.Float32DType():
+        return ts.ScalarType(kind=ts.ScalarKind.FLOAT32)
+    elif dtype == core_defs.Float64DType():
+        return ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    raise ValueError(f"DType '{dtype}' not supported.")

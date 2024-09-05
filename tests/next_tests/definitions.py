@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """Contains definition of test-exclusion matrices, see ADR 15."""
 
@@ -55,6 +49,7 @@ class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
     )
     GTFN_GPU = "gt4py.next.program_processors.runners.gtfn.run_gtfn_gpu"
     ROUNDTRIP = "gt4py.next.program_processors.runners.roundtrip.default"
+    GTIR_EMBEDDED = "gt4py.next.program_processors.runners.roundtrip.gtir"
     ROUNDTRIP_WITH_TEMPORARIES = "gt4py.next.program_processors.runners.roundtrip.with_temporaries"
     DOUBLE_ROUNDTRIP = "gt4py.next.program_processors.runners.double_roundtrip.backend"
 
@@ -93,12 +88,13 @@ class ProgramFormatterId(_PythonObjectIdMixin, str, enum.Enum):
     ITIR_PRETTY_PRINTER = (
         "gt4py.next.program_processors.formatters.pretty_print.format_itir_and_check"
     )
-    ITIR_TYPE_CHECKER = "gt4py.next.program_processors.formatters.type_check.check_type_inference"
     LISP_FORMATTER = "gt4py.next.program_processors.formatters.lisp.format_lisp"
 
 
 # Test markers
 REQUIRES_ATLAS = "requires_atlas"
+# TODO(havogt): Remove, skipped during refactoring to GTIR
+STARTS_FROM_GTIR_PROGRAM = "starts_from_gtir_program"
 USES_APPLIED_SHIFTS = "uses_applied_shifts"
 USES_CONSTANT_FIELDS = "uses_constant_fields"
 USES_DYNAMIC_OFFSETS = "uses_dynamic_offsets"
@@ -136,6 +132,7 @@ REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE = (
 # Common list of feature markers to skip
 COMMON_SKIP_TEST_LIST = [
     (REQUIRES_ATLAS, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
+    (STARTS_FROM_GTIR_PROGRAM, SKIP, UNSUPPORTED_MESSAGE),
     (USES_APPLIED_SHIFTS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_IF_STMTS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_NEGATIVE_MODULO, XFAIL, UNSUPPORTED_MESSAGE),
@@ -176,11 +173,7 @@ BACKEND_SKIP_TEST_MATRIX = {
     EmbeddedIds.NUMPY_EXECUTION: EMBEDDED_SKIP_LIST,
     EmbeddedIds.CUPY_EXECUTION: EMBEDDED_SKIP_LIST,
     OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST,
-    OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST
-    + [
-        # awaiting dace fix, see https://github.com/spcl/dace/pull/1442
-        (USES_FLOORDIV, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE)
-    ],
+    OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST,
     ProgramBackendId.GTFN_CPU: GTFN_SKIP_TEST_LIST
     + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
     ProgramBackendId.GTFN_CPU_IMPERATIVE: GTFN_SKIP_TEST_LIST

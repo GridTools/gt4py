@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -48,22 +42,21 @@ CUPY_DEVICE: Final[Literal[None, core_defs.DeviceType.CUDA, core_defs.DeviceType
 
 FieldLike = Union["cp.ndarray", np.ndarray, ArrayInterface, CUDAArrayInterface]
 
-assert allocators.is_valid_nplike_allocation_ns(np)
-
 _CPUBufferAllocator = allocators.NDArrayBufferAllocator(
-    device_type=core_defs.DeviceType.CPU, array_ns=np
+    device_type=core_defs.DeviceType.CPU, array_utils=allocators.numpy_array_utils
 )
 
 _GPUBufferAllocator: Optional[allocators.NDArrayBufferAllocator] = None
 if cp:
-    assert allocators.is_valid_nplike_allocation_ns(cp)
+    assert isinstance(allocators.cupy_array_utils, allocators.ArrayUtils)
+
     if CUPY_DEVICE == core_defs.DeviceType.CUDA:
         _GPUBufferAllocator = allocators.NDArrayBufferAllocator(
-            device_type=core_defs.DeviceType.CUDA, array_ns=cp
+            device_type=core_defs.DeviceType.CUDA, array_utils=allocators.cupy_array_utils
         )
     else:
         _GPUBufferAllocator = allocators.NDArrayBufferAllocator(
-            device_type=core_defs.DeviceType.ROCM, array_ns=cp
+            device_type=core_defs.DeviceType.ROCM, array_utils=allocators.cupy_array_utils
         )
 
 

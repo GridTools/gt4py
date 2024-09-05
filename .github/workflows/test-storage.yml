@@ -4,9 +4,11 @@ on:
   push:
     branches:
     - main
+    - gtir  # TODO(tehrengruber): remove after GTIR refactoring #1582
   pull_request:
     branches:
     - main
+    - gtir  # TODO(tehrengruber): remove after GTIR refactoring #1582
     paths:  # Run when gt4py.storage files (or package settings) are changed
     - "src/gt4py/storage/**"
     - "src/gt4py/cartesian/backend/**"   # For DaCe storages
@@ -22,7 +24,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.8", "3.9", "3.10", "3.11"]
-        backends: [internal-cpu, dace-cpu]
+        tox-factor: [internal, dace]
         os: ["ubuntu-latest"]
       fail-fast: false
 
@@ -49,7 +51,7 @@ jobs:
       run: |
         pyversion=${{ matrix.python-version }}
         pyversion_no_dot=${pyversion//./}
-        tox run -e storage-py${pyversion_no_dot}-${{ matrix.backends }}
+        tox run -e storage-py${pyversion_no_dot}-${{ matrix.tox-factor }}-cpu
     #     mv coverage.json coverage-py${{ matrix.python-version }}-${{ matrix.os }}.json
     # - name: Upload coverage.json artifact
     #   uses: actions/upload-artifact@v3

@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from dataclasses import dataclass
 from typing import Any
@@ -54,13 +48,15 @@ class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                     return foast.Constant(value=value, location=node.location)
         return node
 
-    def visit_Attribute(self, node: foast.Attribute, **kwargs: Any) -> foast.Constant:
+    def visit_Attribute(
+        self, node: foast.Attribute, **kwargs: Any
+    ) -> foast.Constant | foast.Attribute:
         value = self.visit(node.value, **kwargs)
         if isinstance(value, foast.Constant):
             if hasattr(value.value, node.attr):
                 return foast.Constant(value=getattr(value.value, node.attr), location=node.location)
             raise errors.MissingAttributeError(node.location, node.attr)
-        raise errors.DSLError(node.location, "Attribute access only applicable to constants.")
+        return node
 
     def visit_FunctionDefinition(
         self, node: foast.FunctionDefinition, **kwargs: Any
