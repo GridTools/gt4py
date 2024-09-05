@@ -62,15 +62,6 @@ darglint==1.6
 deepdiff==5.6.0
 devtools==0.6
 factory-boy==3.3.0
-flake8-bugbear==20.11.1
-flake8-builtins==1.5.3
-flake8-debugger==4.0.0
-flake8-docstrings==1.5.0
-flake8-eradicate==1.3.0
-flake8-mutable==1.2.0
-flake8-pyproject==1.2.2
-flake8-rst-docstrings==0.0.14
-flake8==5.0.4
 frozendict==2.3
 gridtools-cpp==2.3.4
 hypothesis==6.0.0
@@ -95,6 +86,7 @@ pybind11==2.10.1
 pygments==2.7.3
 pytest-cache==1.0
 pytest-cov==2.8
+pytest-custom-exit-code==0.3.0
 pytest-factoryboy==2.0.3
 pytest-instafail==0.5.0
 pytest-xdist[psutil]==2.4
