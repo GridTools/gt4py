@@ -14,7 +14,7 @@ the domain was deduced relative to _the_ `out` argument. We decided to deduce th
 
 ## Context
 
-The compute domain in field view is deduced relative to the shape of fields in the `out` argument. This is straigh-forward for a single field.
+The compute domain in field view is deduced relative to the shape of fields in the `out` argument. This is straight-forward for a single field.
 For multiple fields we would need to check at call-time if all fields are sliced in the correct way.
 Additionally, expressing absolute domains is desirable for some use-cases.
 In summary, we need to revisit the domain handling in field view.

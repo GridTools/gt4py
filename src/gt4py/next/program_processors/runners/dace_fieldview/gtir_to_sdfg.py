@@ -19,7 +19,6 @@ import dataclasses
 from typing import Any, Dict, List, Optional, Protocol, Sequence, Set, Tuple, Union
 
 import dace
-import dace.transformation.dataflow as dace_dataflow
 
 from gt4py import eve
 from gt4py.eve import concepts
@@ -396,13 +395,21 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         lambda_symbols = self.global_symbols | {
             pname: type_ for pname, (_, type_) in lambda_args_mapping.items()
         }
+        # obtain the set of symbols that are used in the lambda node and all its child nodes
+        used_symbols = {str(sym.id) for sym in eve.walk_values(node).if_isinstance(gtir.SymRef)}
 
         nsdfg = dace.SDFG(f"{sdfg.label}_nested")
         nstate = nsdfg.add_state("lambda")
 
+        # add sdfg storage for the symbols that need to be passed as input parameters,
+        # that is only the symbols that are used in the context of the lambda node
         self._add_sdfg_params(
             nsdfg,
-            [gtir.Sym(id=p_name, type=p_type) for p_name, p_type in lambda_symbols.items()],
+            [
+                gtir.Sym(id=p_name, type=p_type)
+                for p_name, p_type in lambda_symbols.items()
+                if p_name in used_symbols
+            ],
         )
 
         lambda_nodes = GTIRToSDFG(self.offset_provider, lambda_symbols.copy()).visit(
