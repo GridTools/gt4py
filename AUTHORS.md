@@ -24,6 +24,7 @@
 - Madonna, Alberto. ETH Zurich - CSCS
 - Mariotti, Kean. ETH Zurich - CSCS
 - Müller, Christoph. MeteoSwiss
+- Müller, Philip. ETH Zurich - CSCS
 - Osuna, Carlos. MeteoSwiss
 - Paone, Edoardo. ETH Zurich - CSCS
 - Röthlin, Matthias. MeteoSwiss
