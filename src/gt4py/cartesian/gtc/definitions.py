@@ -456,7 +456,7 @@ class FrameTuple(tuple):
 class Boundary(FrameTuple):
     """Frame size around one central origin (pairs of integers).
 
-    Negative numbers represent a boundary region substracting from
+    Negative numbers represent a boundary region subtracting from
     the wrapped area.
     """
 

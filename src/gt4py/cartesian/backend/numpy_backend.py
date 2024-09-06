@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import pathlib
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, Type, Union, cast
 
@@ -51,7 +53,7 @@ class ModuleGenerator(BaseModuleGenerator):
         return f"computation.run({', '.join(params)})"
 
     @property
-    def backend(self) -> "NumpyBackend":
+    def backend(self) -> NumpyBackend:
         return cast(NumpyBackend, self.builder.backend)
 
 
@@ -98,7 +100,7 @@ class NumpyBackend(BaseBackend, CLIBackendMixin):
         super().generate_bindings(language_name)
         return {self.builder.module_path.name: self.make_module_source()}
 
-    def generate(self) -> Type["StencilObject"]:
+    def generate(self) -> Type[StencilObject]:
         self.check_options(self.builder.options)
         src_dir = self.builder.module_path.parent
         if not self.builder.options._impl_opts.get("disable-code-generation", False):

@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import numbers
 import textwrap
 from dataclasses import dataclass, field
@@ -249,7 +251,7 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     NativeFuncCall = as_fmt("{func}({', '.join(arg for arg in args)}{mask_arg})")
 
     def visit_VectorAssign(
-        self, node: npir.VectorAssign, *, ctx: "BlockContext", **kwargs: Any
+        self, node: npir.VectorAssign, *, ctx: BlockContext, **kwargs: Any
     ) -> Union[str, Collection[str]]:
         left = self.visit(node.left, horizontal_mask=node.horizontal_mask, **kwargs)
         right = self.visit(node.right, horizontal_mask=node.horizontal_mask, **kwargs)

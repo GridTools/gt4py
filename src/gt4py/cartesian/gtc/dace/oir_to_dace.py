@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Dict
 
@@ -92,7 +94,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
             )
 
     def visit_VerticalLoop(
-        self, node: oir.VerticalLoop, *, ctx: "OirSDFGBuilder.SDFGContext", **kwargs
+        self, node: oir.VerticalLoop, *, ctx: OirSDFGBuilder.SDFGContext, **kwargs
     ):
         declarations = {
             acc.name: ctx.decls[acc.name]

@@ -8,6 +8,8 @@
 
 """Functions for turning an SDFG into a GPU SDFG."""
 
+from __future__ import annotations
+
 import copy
 from typing import Any, Optional, Sequence, Union
 
@@ -144,7 +146,7 @@ def gt_set_gpu_blocksize(
 
 
 def _gpu_block_parser(
-    self: "GPUSetBlockSize",
+    self: GPUSetBlockSize,
     val: Any,
 ) -> None:
     """Used by the setter of `GPUSetBlockSize.block_size`."""
