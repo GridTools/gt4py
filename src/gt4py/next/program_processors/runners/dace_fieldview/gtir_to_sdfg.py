@@ -542,16 +542,4 @@ def build_sdfg_from_gtir(
     assert isinstance(sdfg, dace.SDFG)
 
     gtx_transformations.gt_simplify(sdfg)
-
-    sdfg.apply_transformations_repeated(
-        gtx_transformations.SerialMapFusion(),
-        validate=True,
-        validate_all=False,
-    )
-    sdfg.apply_transformations_repeated(
-        dace.transformation.dataflow.trivial_tasklet_elimination.TrivialTaskletElimination(),
-        validate=True,
-        validate_all=False,
-    )
-
     return sdfg
