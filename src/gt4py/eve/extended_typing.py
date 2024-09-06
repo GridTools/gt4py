@@ -37,22 +37,22 @@ from typing_extensions import *  # type: ignore[assignment,no-redef]  # noqa: F4
 
 if _sys.version_info >= (3, 9):
     # Standard library already supports PEP 585 (Type Hinting Generics In Standard Collections)
-    from builtins import (  # type: ignore[assignment]  # isort:skip
-        tuple as Tuple,
-        list as List,
+    from builtins import (  # type: ignore[assignment]
         dict as Dict,
-        set as Set,
         frozenset as FrozenSet,
+        list as List,
+        set as Set,
+        tuple as Tuple,
         type as Type,
     )
-    from collections import (  # isort:skip
+    from collections import (
         ChainMap as ChainMap,
         Counter as Counter,
         OrderedDict as OrderedDict,
         defaultdict as defaultdict,
         deque as deque,
     )
-    from collections.abc import (  # isort:skip
+    from collections.abc import (
         AsyncGenerator as AsyncGenerator,
         AsyncIterable as AsyncIterable,
         AsyncIterator as AsyncIterator,
@@ -74,14 +74,14 @@ if _sys.version_info >= (3, 9):
         MutableSet as MutableSet,
         Reversible as Reversible,
         Sequence as Sequence,
+        Set as AbstractSet,
+        ValuesView as ValuesView,
     )
-    from collections.abc import Set as AbstractSet  # isort:skip
-    from collections.abc import ValuesView as ValuesView  # isort:skip
-    from contextlib import (  # isort:skip
+    from contextlib import (
         AbstractAsyncContextManager as AsyncContextManager,
+        AbstractContextManager as ContextManager,
     )
-    from contextlib import AbstractContextManager as ContextManager  # isort:skip
-    from re import Match as Match, Pattern as Pattern  # isort:skip
+    from re import Match as Match, Pattern as Pattern
 
 
 # These fallbacks are useful for public symbols not exported by default.
@@ -661,7 +661,10 @@ def infer_type(
                     arg_types.append(annotations.get(p.name, None) or Any)
                 elif p.kind == _inspect.Parameter.KEYWORD_ONLY:
                     kwonly_arg_types[p.name] = annotations.get(p.name, None) or Any
-                elif p.kind in (_inspect.Parameter.VAR_POSITIONAL, _inspect.Parameter.VAR_KEYWORD):
+                elif p.kind in (
+                    _inspect.Parameter.VAR_POSITIONAL,
+                    _inspect.Parameter.VAR_KEYWORD,
+                ):
                     raise TypeError("Variadic callables are not supported")
 
             result: Any = Callable[arg_types, return_type]
