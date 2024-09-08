@@ -403,7 +403,6 @@ MATH_BUILTINS = (
 BUILTINS = {
     "deref",
     "can_deref",
-    "cond",
     "shift",
     "neighbors",
     "list_get",
@@ -436,6 +435,7 @@ BUILTINS = {
     "unstructured_domain",
     "named_range",
     "as_fieldop",
+    "cond",
     *MATH_BUILTINS,
 }
 
