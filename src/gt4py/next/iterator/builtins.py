@@ -23,17 +23,17 @@ def as_fieldop(*args):
 
 
 @builtin_dispatch
+def cond(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def deref(*args):
     raise BackendNotSelectedError()
 
 
 @builtin_dispatch
 def can_deref(*args):
-    raise BackendNotSelectedError()
-
-
-@builtin_dispatch
-def cond(*args):
     raise BackendNotSelectedError()
 
 
