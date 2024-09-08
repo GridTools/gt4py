@@ -162,6 +162,17 @@ def test_as_fieldop():
     assert actual == expected
 
 
+def test_cond():
+    testee = im.cond(
+        im.greater(ir.SymRef(id="s1"), ir.SymRef(id="s2")),
+        ir.SymRef(id="x"),
+        ir.SymRef(id="y"),
+    )
+    expected = "cond(s1 > s2, x, y)"
+    actual = pformat(testee)
+    assert actual == expected
+
+
 def test_bool_arithmetic():
     testee = ir.FunCall(
         fun=ir.SymRef(id="not_"),
