@@ -187,7 +187,7 @@ class Program:
         return past_to_itir.PastToItirFactory()(no_args_past).program
 
     @functools.cached_property
-    def _implicit_offset_provider(self):
+    def _implicit_offset_provider(self) -> common.OffsetProvider:
         """
         Add all implicit offset providers.
 

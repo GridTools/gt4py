@@ -595,8 +595,6 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             and isinstance(right.type, ts.ScalarType)
             and type_info.is_integral(right.type)
         ):
-            # this relies on the convention that for each dimension we have an offset provider
-            # with the same name as the dimension
             return ts.OffsetType(source=left.type.dim, target=(left.type.dim,))
         if isinstance(left.type, ts.OffsetType):
             raise errors.DSLError(
