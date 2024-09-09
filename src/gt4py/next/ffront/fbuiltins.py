@@ -226,13 +226,18 @@ UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES = ["isfinite", "isinf", "isnan"]
 
 
 def _make_unary_math_builtin(name: str) -> None:
+    if name.startswith("arc") and not hasattr(math, name):
+        _math_builtin = getattr(math, f"a{name[3:]}")
+    else:
+        _math_builtin = getattr(math, name)
+
     def impl(value: common.Field | core_defs.ScalarT, /) -> common.Field | core_defs.ScalarT:
         # TODO(havogt): enable tests in `test_math_builtin_execution.py`
         assert core_defs.is_scalar_type(
             value
         )  # default implementation for scalars, Fields are handled via dispatch
 
-        return getattr(math, name)(value)
+        return _math_builtin(value)
 
     impl.__name__ = name
     globals()[name] = BuiltInFunction(impl)
