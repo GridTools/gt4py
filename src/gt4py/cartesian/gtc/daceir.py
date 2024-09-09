@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -195,18 +189,12 @@ class IndexWithExtent(eve.Node):
         return IndexWithExtent(
             axis=self.axis,
             value=value,
-            extent=(
-                min(self.extent[0], other.extent[0]),
-                max(self.extent[1], other.extent[1]),
-            ),
+            extent=(min(self.extent[0], other.extent[0]), max(self.extent[1], other.extent[1])),
         )
 
     @property
     def idx_range(self):
-        return (
-            f"{self.value}{self.extent[0]:+d}",
-            f"{self.value}{self.extent[1] + 1:+d}",
-        )
+        return (f"{self.value}{self.extent[0]:+d}", f"{self.value}{self.extent[1] + 1:+d}")
 
     def to_dace_symbolic(self):
         if isinstance(self.value, AxisBound):
@@ -249,10 +237,7 @@ class DomainInterval(eve.Node):
 
     @classmethod
     def union(cls, first, second):
-        return cls(
-            start=min(first.start, second.start),
-            end=max(first.end, second.end),
-        )
+        return cls(start=min(first.start, second.start), end=max(first.end, second.end))
 
     @classmethod
     def intersection(cls, axis, first, second):
@@ -281,14 +266,10 @@ class DomainInterval(eve.Node):
     def shifted(self, offset: int):
         return DomainInterval(
             start=AxisBound(
-                axis=self.start.axis,
-                level=self.start.level,
-                offset=self.start.offset + offset,
+                axis=self.start.axis, level=self.start.level, offset=self.start.offset + offset
             ),
             end=AxisBound(
-                axis=self.end.axis,
-                level=self.end.level,
-                offset=self.end.offset + offset,
+                axis=self.end.axis, level=self.end.level, offset=self.end.offset + offset
             ),
         )
 
@@ -305,9 +286,7 @@ class TileInterval(eve.Node):
 
     @property
     def free_symbols(self) -> Set[eve.SymbolRef]:
-        res = {
-            self.axis.tile_symbol(),
-        }
+        res = {self.axis.tile_symbol()}
         if self.domain_limit.level == common.LevelMarker.END:
             res.add(self.axis.domain_symbol())
         return res
@@ -324,8 +303,7 @@ class TileInterval(eve.Node):
     @property
     def overapproximated_size(self):
         return "{tile_size}{halo_size:+d}".format(
-            tile_size=self.tile_size,
-            halo_size=self.end_offset - self.start_offset,
+            tile_size=self.tile_size, halo_size=self.end_offset - self.start_offset
         )
 
     @classmethod
@@ -371,11 +349,7 @@ class Range(eve.Node):
     def from_axis_and_interval(
         cls, axis: Axis, interval: Union[DomainInterval, TileInterval], stride=1
     ):
-        return cls(
-            var=axis.iteration_symbol(),
-            interval=interval,
-            stride=stride,
-        )
+        return cls(var=axis.iteration_symbol(), interval=interval, stride=stride)
 
     @property
     def free_symbols(self) -> Set[eve.SymbolRef]:
@@ -429,9 +403,7 @@ class GridSubset(eve.Node):
         if isinstance(interval, oir.Interval):
             interval = DomainInterval(
                 start=AxisBound(
-                    level=interval.start.level,
-                    offset=interval.start.offset,
-                    axis=Axis.K,
+                    level=interval.start.level, offset=interval.start.offset, axis=Axis.K
                 ),
                 end=AxisBound(level=interval.end.level, offset=interval.end.offset, axis=Axis.K),
             )
@@ -464,9 +436,7 @@ class GridSubset(eve.Node):
         if isinstance(interval, (DomainInterval, oir.Interval)):
             res_interval = DomainInterval(
                 start=AxisBound(
-                    level=interval.start.level,
-                    offset=interval.start.offset,
-                    axis=Axis.K,
+                    level=interval.start.level, offset=interval.start.offset, axis=Axis.K
                 ),
                 end=AxisBound(level=interval.end.level, offset=interval.end.offset, axis=Axis.K),
             )
@@ -640,8 +610,7 @@ class FieldAccessInfo(eve.Node):
             end=AxisBound(level=common.LevelMarker.END, offset=0, axis=axis),
         )
         res_interval = DomainInterval.union(
-            full_interval,
-            self.global_grid_subset.intervals.get(axis, full_interval),
+            full_interval, self.global_grid_subset.intervals.get(axis, full_interval)
         )
         if isinstance(interval, DomainInterval):
             interval_union = DomainInterval.union(interval, res_interval)

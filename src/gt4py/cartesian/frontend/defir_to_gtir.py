@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import copy
 import functools
@@ -196,10 +190,7 @@ class UnrollVectorExpressions(IRNodeMapper):
                     data_type = DataType.INT32
                     data_index = [ScalarLiteral(value=index, data_type=data_type)]
                     element_ref = FieldRef(
-                        name=node.name,
-                        offset=node.offset,
-                        data_index=data_index,
-                        loc=node.loc,
+                        name=node.name, offset=node.offset, data_index=data_index, loc=node.loc
                     )
                     field_list.append(element_ref)
             # matrix
@@ -398,9 +389,7 @@ class DefIRToGTIR(IRNodeVisitor):
                 stmts.append(decl_or_stmt)
         start, end = self.visit(node.interval)
         interval = gtir.Interval(
-            start=start,
-            end=end,
-            loc=location_to_source_location(node.interval.loc),
+            start=start, end=end, loc=location_to_source_location(node.interval.loc)
         )
         return gtir.VerticalLoop(
             interval=interval,
@@ -525,8 +514,7 @@ class DefIRToGTIR(IRNodeVisitor):
         }
 
         return gtir.HorizontalRestriction(
-            mask=common.HorizontalMask(**axes),
-            body=self.visit(node.body),
+            mask=common.HorizontalMask(**axes), body=self.visit(node.body)
         )
 
     def visit_While(self, node: While) -> gtir.While:

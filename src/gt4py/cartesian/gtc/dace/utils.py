@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import re
 from dataclasses import dataclass, field
@@ -100,13 +94,7 @@ class AccessInfoCollector(eve.NodeVisitor):
         return ctx.access_infos
 
     def visit_VerticalLoopSection(
-        self,
-        node: oir.VerticalLoopSection,
-        *,
-        block_extents,
-        ctx,
-        grid_subset=None,
-        **kwargs: Any,
+        self, node: oir.VerticalLoopSection, *, block_extents, ctx, grid_subset=None, **kwargs: Any
     ) -> Dict[str, "dcir.FieldAccessInfo"]:
         inner_ctx = self.Context(axes=ctx.axes)
 
@@ -129,9 +117,12 @@ class AccessInfoCollector(eve.NodeVisitor):
         k_grid = dcir.GridSubset.from_interval(grid_subset.intervals[dcir.Axis.K], dcir.Axis.K)
         inner_infos = {name: info.apply_iteration(k_grid) for name, info in inner_infos.items()}
 
-        ctx.access_infos.update({
-            name: info.union(ctx.access_infos.get(name, info)) for name, info in inner_infos.items()
-        })
+        ctx.access_infos.update(
+            {
+                name: info.union(ctx.access_infos.get(name, info))
+                for name, info in inner_infos.items()
+            }
+        )
 
         return ctx.access_infos
 
@@ -167,9 +158,12 @@ class AccessInfoCollector(eve.NodeVisitor):
 
         inner_infos = {name: info.apply_iteration(ij_grid) for name, info in inner_infos.items()}
 
-        ctx.access_infos.update({
-            name: info.union(ctx.access_infos.get(name, info)) for name, info in inner_infos.items()
-        })
+        ctx.access_infos.update(
+            {
+                name: info.union(ctx.access_infos.get(name, info))
+                for name, info in inner_infos.items()
+            }
+        )
 
         return ctx.access_infos
 

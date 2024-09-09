@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import pathlib
 import re
@@ -69,8 +63,7 @@ def tuple_st(min_value, max_value):
 
 
 @pytest.mark.parametrize(
-    "backend",
-    ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])],
+    "backend", ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])]
 )
 def test_basic(decorator, backend):
     @decorator(backend=backend)
@@ -255,8 +248,7 @@ def test_optional_arg_noprovide():
             outp = inp  # noqa: F841 [unused-variable]
 
     frozen_stencil = stencil.freeze(
-        domain=(3, 3, 10),
-        origin={"inp": (2, 2, 0), "outp": (2, 2, 0), "unused_field": (0, 0, 0)},
+        domain=(3, 3, 10), origin={"inp": (2, 2, 0), "outp": (2, 2, 0), "unused_field": (0, 0, 0)}
     )
 
     inp = OriginWrapper(
@@ -419,10 +411,7 @@ def test_nondace_raises(decorator):
     )
     outp = OriginWrapper(
         array=gt_storage.zeros(
-            dtype=np.float64,
-            shape=(10, 10, 10),
-            aligned_index=(0, 0, 0),
-            backend="numpy",
+            dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend="numpy"
         ),
         origin=(0, 0, 0),
     )

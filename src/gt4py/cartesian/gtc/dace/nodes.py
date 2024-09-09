@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import base64
 import pickle
@@ -56,9 +50,17 @@ class PickledProperty:
 
     @classmethod
     def from_json(cls, d, sdfg=None):
-        b64string = d["pickle"]
-        byte_repr = base64.b64decode(b64string)
-        return pickle.loads(byte_repr)
+        # DaCe won't serialize attr with default values by default
+        # which would lead the deserializer to push a default in the
+        # wrong format (non pickle).
+        # Best mitigation is to give back the object plain if it does
+        # not contain any pickling information
+        if isinstance(d, dict) and "pickle" in d.keys():
+            b64string = d["pickle"]
+            byte_repr = base64.b64decode(b64string)
+            return pickle.loads(byte_repr)
+
+        return d
 
 
 class PickledDataclassProperty(PickledProperty, dace.properties.DataclassProperty):
@@ -92,14 +94,10 @@ class StencilComputation(library.LibraryNode):
         dtype=dace.DeviceType, default=dace.DeviceType.CPU, allow_none=True
     )
     expansion_specification = PickledListProperty(
-        element_type=ExpansionItem,
-        allow_none=True,
-        setter=_set_expansion_order,
+        element_type=ExpansionItem, allow_none=True, setter=_set_expansion_order
     )
     tile_sizes = PickledDictProperty(
-        key_type=dcir.Axis,
-        value_type=int,
-        default={dcir.Axis.I: 8, dcir.Axis.J: 8, dcir.Axis.K: 8},
+        key_type=dcir.Axis, value_type=int, default={dcir.Axis.I: 8, dcir.Axis.J: 8, dcir.Axis.K: 8}
     )
 
     tile_sizes_interpretation = dace.properties.Property(
@@ -144,10 +142,12 @@ class StencilComputation(library.LibraryNode):
                 for decl in declarations.values()
                 if isinstance(decl, oir.ScalarDecl)
             }
-            self.symbol_mapping.update({
-                axis.domain_symbol(): dace.symbol(axis.domain_symbol(), dtype=dace.int32)
-                for axis in dcir.Axis.dims_horizontal()
-            })
+            self.symbol_mapping.update(
+                {
+                    axis.domain_symbol(): dace.symbol(axis.domain_symbol(), dtype=dace.int32)
+                    for axis in dcir.Axis.dims_horizontal()
+                }
+            )
             self.access_infos = compute_dcir_access_infos(
                 oir_node,
                 oir_decls=declarations,

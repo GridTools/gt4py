@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from dataclasses import dataclass
 from typing import Dict
@@ -125,30 +119,20 @@ class OirSDFGBuilder(eve.NodeVisitor):
             library_node.add_in_connector("__in_" + field)
             subset = ctx.make_input_dace_subset(node, field)
             state.add_edge(
-                access_node,
-                None,
-                library_node,
-                "__in_" + field,
-                dace.Memlet(field, subset=subset),
+                access_node, None, library_node, "__in_" + field, dace.Memlet(field, subset=subset)
             )
         for field in access_collection.write_fields():
             access_node = state.add_access(field, debuginfo=dace.DebugInfo(0))
             library_node.add_out_connector("__out_" + field)
             subset = ctx.make_output_dace_subset(node, field)
             state.add_edge(
-                library_node,
-                "__out_" + field,
-                access_node,
-                None,
-                dace.Memlet(field, subset=subset),
+                library_node, "__out_" + field, access_node, None, dace.Memlet(field, subset=subset)
             )
 
         return
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs):
-        ctx = OirSDFGBuilder.SDFGContext(
-            stencil=node,
-        )
+        ctx = OirSDFGBuilder.SDFGContext(stencil=node)
         for param in node.params:
             if isinstance(param, oir.FieldDecl):
                 dim_strs = [d for i, d in enumerate("IJK") if param.dimensions[i]] + [

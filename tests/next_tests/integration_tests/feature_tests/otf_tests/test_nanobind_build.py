@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import math
 
@@ -32,7 +26,7 @@ def test_gtfn_cpp_with_cmake(program_source_with_name):
     build_the_program = workflow.make_step(nanobind.bind_source).chain(
         compiler.Compiler(
             cache_lifetime=config.BuildCacheLifetime.SESSION, builder_factory=cmake.CMakeFactory()
-        ),
+        )
     )
     compiled_program = build_the_program(example_program_source)
     buf = (np.zeros(shape=(6, 5), dtype=np.float32), (0, 0))
@@ -51,7 +45,7 @@ def test_gtfn_cpp_with_compiledb(program_source_with_name):
         compiler.Compiler(
             cache_lifetime=config.BuildCacheLifetime.SESSION,
             builder_factory=compiledb.CompiledbFactory(),
-        ),
+        )
     )
     compiled_program = build_the_program(example_program_source)
     buf = (np.zeros(shape=(6, 5), dtype=np.float32), (0, 0))

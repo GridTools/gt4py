@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -126,6 +120,17 @@ class _PrettyPrinter(TemplatedGenerator):
 
     UnaryOp = as_fmt("{op}{operand}")
 
+    IfStmt = as_fmt(
+        textwrap.dedent(
+            """
+            if {condition}:
+                {true_branch}
+            else:
+                {false_branch}
+            """
+        ).strip()
+    )
+
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs: Any) -> str:
         if node.op is dialect_ast_enums.UnaryOperator.NOT:
             op = "not "
@@ -234,7 +239,7 @@ def pretty_format(node: foast.LocatedNode) -> str:
     >>> @field_operator
     ... def field_op(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
     ...     return a + 1.0
-    >>> print(pretty_format(field_op.foast_node))
+    >>> print(pretty_format(field_op.foast_stage.foast_node))
     @field_operator
     def field_op(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
       return a + 1.0

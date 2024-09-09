@@ -1,16 +1,11 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 import textwrap
 
 from gt4py.eve.utils import UIDGenerator
@@ -190,11 +185,7 @@ def test_if_eligible_extraction():
     # if statement.
 
     # if ((a ∧ b) ∧ (a ∧ b)) then c else d
-    testee = im.if_(
-        im.and_(im.and_("a", "b"), im.and_("a", "b")),
-        "c",
-        "d",
-    )
+    testee = im.if_(im.and_(im.and_("a", "b"), im.and_("a", "b")), "c", "d")
     # (λ(_cs_1) → if _cs_1 ∧ _cs_1 then c else d)(a ∧ b)
     expected = im.let("_cs_1", im.and_("a", "b"))(im.if_(im.and_("_cs_1", "_cs_1"), "c", "d"))
 
@@ -212,17 +203,7 @@ def test_extract_subexpression_conversion_to_assignment_stmt_form():
         return isinstance(node, ir.FunCall) and isinstance(node.fun, ir.Lambda)
 
     testee = im.plus(
-        im.let(
-            (
-                "c",
-                im.let(
-                    ("a", 1),
-                    ("b", 2),
-                )(im.plus("a", "b")),
-            ),
-            ("d", 3),
-        )(im.plus("c", "d")),
-        4,
+        im.let(("c", im.let(("a", 1), ("b", 2))(im.plus("a", "b"))), ("d", 3))(im.plus("c", "d")), 4
     )
 
     expected = textwrap.dedent(

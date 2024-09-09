@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import functools
 
@@ -77,12 +71,19 @@ class DaCeBackendFactory(GTFNBackendFactory):
             lambda o: f"run_dace_{o.name_device}{o.name_temps}{o.name_cached}{o.name_postfix}"
         )
         auto_optimize = factory.Trait(
-            otf_workflow__translation__auto_optimize=True,
-            name_temps="_opt",
+            otf_workflow__translation__auto_optimize=True, name_temps="_opt"
         )
         use_field_canonical_representation: bool = False
 
 
 run_dace_cpu = DaCeBackendFactory(cached=True, auto_optimize=True)
+run_dace_cpu_with_temporaries = DaCeBackendFactory(
+    cached=True, auto_optimize=True, use_temporaries=True
+)
+run_dace_cpu_noopt = DaCeBackendFactory(cached=True, auto_optimize=False)
 
 run_dace_gpu = DaCeBackendFactory(gpu=True, cached=True, auto_optimize=True)
+run_dace_gpu_with_temporaries = DaCeBackendFactory(
+    gpu=True, cached=True, auto_optimize=True, use_temporaries=True
+)
+run_dace_gpu_noopt = DaCeBackendFactory(gpu=True, cached=True, auto_optimize=False)

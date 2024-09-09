@@ -1,20 +1,19 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+import dataclasses
 import warnings
+from collections import OrderedDict
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import field
 from inspect import currentframe, getframeinfo
 from pathlib import Path
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, ClassVar, Optional
 
 import dace
 import numpy as np
@@ -23,11 +22,20 @@ from dace.transformation.auto import auto_optimize as autoopt
 
 import gt4py.next.iterator.ir as itir
 from gt4py.next import common
+from gt4py.next.ffront import decorator
 from gt4py.next.iterator import transforms as itir_transforms
-from gt4py.next.type_system import type_translation
+from gt4py.next.iterator.type_system import inference as itir_type_inference
+from gt4py.next.type_system import type_specifications as ts
 
 from .itir_to_sdfg import ItirToSDFG
-from .utility import connectivity_identifier, filter_neighbor_tables, get_sorted_dims
+from .utility import (
+    as_dace_type,
+    connectivity_identifier,
+    field_size_symbol_name,
+    field_stride_symbol_name,
+    filter_connectivities,
+    get_sorted_dims,
+)
 
 
 try:
@@ -37,7 +45,7 @@ except ImportError:
 
 
 def convert_arg(arg: Any, sdfg_param: str, use_field_canonical_representation: bool):
-    if not common.is_field(arg):
+    if not isinstance(arg, common.Field):
         return arg
     # field domain offsets are not supported
     non_zero_offsets = [
@@ -67,6 +75,10 @@ def preprocess_program(
     program: itir.FencilDefinition,
     offset_provider: Mapping[str, Any],
     lift_mode: itir_transforms.LiftMode,
+    symbolic_domain_sizes: Optional[dict[str, str]] = None,
+    temporary_extraction_heuristics: Optional[
+        Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
+    ] = None,
     unroll_reduce: bool = False,
 ):
     node = itir_transforms.apply_common_transforms(
@@ -75,8 +87,12 @@ def preprocess_program(
         force_inline_lambda_args=True,
         lift_mode=lift_mode,
         offset_provider=offset_provider,
+        symbolic_domain_sizes=symbolic_domain_sizes,
+        temporary_extraction_heuristics=temporary_extraction_heuristics,
         unroll_reduce=unroll_reduce,
     )
+
+    node = itir_type_inference.infer(node, offset_provider=offset_provider)
 
     if isinstance(node, itir_transforms.global_tmps.FencilWithTemporaries):
         fencil_definition = node.fencil
@@ -118,8 +134,7 @@ def _ensure_is_on_device(
 
 
 def get_connectivity_args(
-    neighbor_tables: Mapping[str, common.NeighborTable],
-    device: dace.dtypes.DeviceType,
+    neighbor_tables: Mapping[str, common.NeighborTable], device: dace.dtypes.DeviceType
 ) -> dict[str, Any]:
     return {
         connectivity_identifier(offset): _ensure_is_on_device(offset_provider.table, device)
@@ -181,12 +196,17 @@ def get_sdfg_args(
     """
     offset_provider = kwargs["offset_provider"]
 
-    neighbor_tables = filter_neighbor_tables(offset_provider)
+    neighbor_tables: dict[str, common.NeighborTable] = {}
+    for offset, connectivity in filter_connectivities(offset_provider).items():
+        assert isinstance(connectivity, common.NeighborTable)
+        neighbor_tables[offset] = connectivity
     device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
 
     dace_args = get_args(sdfg, args, use_field_canonical_representation)
     dace_field_args = {n: v for n, v in dace_args.items() if not np.isscalar(v)}
     dace_conn_args = get_connectivity_args(neighbor_tables, device)
+    # keep only connectivity tables that are used in the sdfg
+    dace_conn_args = {n: v for n, v in dace_conn_args.items() if n in sdfg.arrays}
     dace_shapes = get_shape_args(sdfg.arrays, dace_field_args)
     dace_conn_shapes = get_shape_args(sdfg.arrays, dace_conn_args)
     dace_strides = get_stride_args(sdfg.arrays, dace_field_args)
@@ -210,12 +230,16 @@ def get_sdfg_args(
 
 def build_sdfg_from_itir(
     program: itir.FencilDefinition,
-    *args,
+    arg_types: list[ts.TypeSpec],
     offset_provider: dict[str, Any],
     auto_optimize: bool = False,
     on_gpu: bool = False,
     column_axis: Optional[common.Dimension] = None,
     lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE,
+    symbolic_domain_sizes: Optional[dict[str, str]] = None,
+    temporary_extraction_heuristics: Optional[
+        Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
+    ] = None,
     load_sdfg_from_file: bool = False,
     save_sdfg: bool = True,
     use_field_canonical_representation: bool = True,
@@ -224,18 +248,16 @@ def build_sdfg_from_itir(
 
     Args:
         program:             The Fencil that should be translated.
-        *args:               Arguments for which the fencil should be called.
+        arg_types:           Types of the arguments passed to the fencil.
         offset_provider:     The set of offset providers that should be used.
         auto_optimize:       Apply DaCe's `auto_optimize` heuristic.
         on_gpu:              Performs the translation for GPU, defaults to `False`.
         column_axis:         The column axis to be used, defaults to `None`.
         lift_mode:           Which lift mode should be used, defaults `FORCE_INLINE`.
+        symbolic_domain_sizes: Used for generation of liskov bindings when temporaries are enabled.
         load_sdfg_from_file: Allows to read the SDFG from file, instead of generating it, for debug only.
         save_sdfg:           If `True`, the default the SDFG is stored as a file and can be loaded, this allows to skip the lowering step, requires `load_sdfg_from_file` set to `True`.
         use_field_canonical_representation: If `True`,  assume that the fields dimensions are sorted alphabetically.
-
-    Notes:
-        Currently only the `FORCE_INLINE` liftmode is supported and the value of `lift_mode` is ignored.
     """
 
     sdfg_filename = f"_dacegraphs/gt4py/{program.id}.sdfg"
@@ -244,10 +266,10 @@ def build_sdfg_from_itir(
         sdfg.validate()
         return sdfg
 
-    arg_types = [type_translation.from_value(arg) for arg in args]
-
     # visit ITIR and generate SDFG
-    program, tmps = preprocess_program(program, offset_provider, lift_mode)
+    program, tmps = preprocess_program(
+        program, offset_provider, lift_mode, symbolic_domain_sizes, temporary_extraction_heuristics
+    )
     sdfg_genenerator = ItirToSDFG(
         arg_types, offset_provider, tmps, use_field_canonical_representation, column_axis
     )
@@ -265,9 +287,7 @@ def build_sdfg_from_itir(
                 getframeinfo(currentframe()),  # type: ignore[arg-type]
             )
             nested_sdfg.debuginfo = dace.dtypes.DebugInfo(
-                start_line=frameinfo.lineno,
-                end_line=frameinfo.lineno,
-                filename=frameinfo.filename,
+                start_line=frameinfo.lineno, end_line=frameinfo.lineno, filename=frameinfo.filename
             )
 
     # TODO(edopao): remove `inline_loop_blocks` when DaCe transformations support LoopRegion construct
@@ -294,3 +314,195 @@ def build_sdfg_from_itir(
         sdfg.save(sdfg_filename)
 
     return sdfg
+
+
+@dataclasses.dataclass(frozen=True)
+class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
+    """Extension of GT4Py Program implementing the SDFGConvertible interface."""
+
+    sdfg_closure_vars: dict[str, Any] = field(default_factory=dict)
+
+    # Being a ClassVar ensures that in an SDFG with multiple nested GT4Py Programs,
+    # there is no name mangling of the connectivity tables used across the nested SDFGs
+    # since they share the same memory address.
+    connectivity_tables_data_descriptors: ClassVar[
+        dict[str, dace.data.Array]
+    ] = {}  # symbolically defined
+
+    def __sdfg__(self, *args, **kwargs) -> dace.sdfg.sdfg.SDFG:
+        if "dace" not in self.backend.executor.name.lower():  # type: ignore[union-attr]
+            raise ValueError("The SDFG can be generated only for the DaCe backend.")
+
+        params = {str(p.id): p.type for p in self.itir.params}
+        fields = {str(p.id): p.type for p in self.itir.params if hasattr(p.type, "dims")}
+        arg_types = [*params.values()]
+
+        dace_parsed_args = [*args, *kwargs.values()]
+        gt4py_program_args = [*params.values()]
+        _crosscheck_dace_parsing(dace_parsed_args, gt4py_program_args)
+
+        if self.connectivities is None:
+            raise ValueError(
+                "[DaCe Orchestration] Connectivities -at compile time- are required to generate the SDFG. Use `with_connectivities` method."
+            )
+        offset_provider = self.connectivities  # tables are None at this point
+
+        sdfg = self.backend.executor.otf_workflow.step.translation.generate_sdfg(  # type: ignore[union-attr]
+            self.itir,
+            arg_types,
+            offset_provider=offset_provider,
+            column_axis=kwargs.get("column_axis", None),
+        )
+        self.sdfg_closure_vars["sdfg.arrays"] = sdfg.arrays  # use it in __sdfg_closure__
+
+        # Halo exchange related metadata, i.e. gt4py_program_input_fields, gt4py_program_output_fields, offset_providers_per_input_field
+        # Add them as dynamic properties to the SDFG
+
+        input_fields = [
+            str(in_field.id)
+            for closure in self.itir.closures
+            for in_field in closure.inputs
+            if str(in_field.id) in fields
+        ]
+        sdfg.gt4py_program_input_fields = {
+            in_field: dim
+            for in_field in input_fields
+            for dim in fields[in_field].dims  # type: ignore[union-attr]
+            if dim.kind == common.DimensionKind.HORIZONTAL
+        }
+
+        output_fields = []
+        for closure in self.itir.closures:
+            output = closure.output
+            if isinstance(output, itir.SymRef):
+                if str(output.id) in fields:
+                    output_fields.append(str(output.id))
+            else:
+                for arg in output.args:
+                    if str(arg.id) in fields:  # type: ignore[attr-defined]
+                        output_fields.append(str(arg.id))  # type: ignore[attr-defined]
+        sdfg.gt4py_program_output_fields = {
+            output: dim
+            for output in output_fields
+            for dim in fields[output].dims  # type: ignore[union-attr]
+            if dim.kind == common.DimensionKind.HORIZONTAL
+        }
+
+        sdfg.offset_providers_per_input_field = {}
+        itir_tmp = itir_transforms.apply_common_transforms(
+            self.itir, offset_provider=offset_provider
+        )
+        for closure in itir_tmp.closures:  # type: ignore[union-attr]
+            shifts = itir_transforms.trace_shifts.TraceShifts.apply(closure)
+            for k, v in shifts.items():
+                if not isinstance(k, str):
+                    continue
+                if k not in sdfg.gt4py_program_input_fields:
+                    continue
+                sdfg.offset_providers_per_input_field.setdefault(k, []).extend(list(v))
+
+        return sdfg
+
+    def __sdfg_closure__(self, reevaluate: Optional[dict[str, str]] = None) -> dict[str, Any]:
+        """
+        Returns the closure arrays of the SDFG represented by this object
+        as a mapping between array name and the corresponding value.
+
+        The connectivity tables are defined symbolically, i.e. table sizes & strides are DaCe symbols.
+        The need to define the connectivity tables in the `__sdfg_closure__` arises from the fact that
+        the offset providers are not part of GT4Py Program's arguments.
+        Keep in mind, that `__sdfg_closure__` is called after `__sdfg__` method.
+        """
+        offset_provider = self.connectivities
+
+        # Define DaCe symbols
+        connectivity_table_size_symbols = {
+            field_size_symbol_name(connectivity_identifier(k), axis): dace.symbol(
+                field_size_symbol_name(connectivity_identifier(k), axis)
+            )
+            for k, v in offset_provider.items()  # type: ignore[union-attr]
+            for axis in [0, 1]
+            if hasattr(v, "table")
+            and connectivity_identifier(k) in self.sdfg_closure_vars["sdfg.arrays"]
+        }
+
+        connectivity_table_stride_symbols = {
+            field_stride_symbol_name(connectivity_identifier(k), axis): dace.symbol(
+                field_stride_symbol_name(connectivity_identifier(k), axis)
+            )
+            for k, v in offset_provider.items()  # type: ignore[union-attr]
+            for axis in [0, 1]
+            if hasattr(v, "table")
+            and connectivity_identifier(k) in self.sdfg_closure_vars["sdfg.arrays"]
+        }
+
+        symbols = {**connectivity_table_size_symbols, **connectivity_table_stride_symbols}
+
+        # Define the storage location (e.g. CPU, GPU) of the connectivity tables
+        if "storage" not in Program.connectivity_tables_data_descriptors:
+            for k, v in offset_provider.items():  # type: ignore[union-attr]
+                if not hasattr(v, "table"):
+                    continue
+                if connectivity_identifier(k) in self.sdfg_closure_vars["sdfg.arrays"]:
+                    Program.connectivity_tables_data_descriptors["storage"] = (
+                        self.sdfg_closure_vars["sdfg.arrays"][connectivity_identifier(k)].storage
+                    )
+                    break
+
+        # Build the closure dictionary
+        closure_dict = {}
+        for k, v in offset_provider.items():  # type: ignore[union-attr]
+            conn_id = connectivity_identifier(k)
+            if hasattr(v, "table") and conn_id in self.sdfg_closure_vars["sdfg.arrays"]:
+                if conn_id not in Program.connectivity_tables_data_descriptors:
+                    Program.connectivity_tables_data_descriptors[conn_id] = dace.data.Array(
+                        dtype=dace.int64 if v.index_type == np.int64 else dace.int32,
+                        shape=[
+                            symbols[field_size_symbol_name(conn_id, 0)],
+                            symbols[field_size_symbol_name(conn_id, 1)],
+                        ],
+                        strides=[
+                            symbols[field_stride_symbol_name(conn_id, 0)],
+                            symbols[field_stride_symbol_name(conn_id, 1)],
+                        ],
+                        storage=Program.connectivity_tables_data_descriptors["storage"],
+                    )
+                closure_dict[conn_id] = Program.connectivity_tables_data_descriptors[conn_id]
+
+        return closure_dict
+
+    def __sdfg_signature__(self) -> tuple[Sequence[str], Sequence[str]]:
+        args = []
+        for arg in self.past_stage.past_node.params:
+            args.append(arg.id)
+        return (args, [])
+
+
+def _crosscheck_dace_parsing(dace_parsed_args: list[Any], gt4py_program_args: list[Any]) -> bool:
+    for dace_parsed_arg, gt4py_program_arg in zip(dace_parsed_args, gt4py_program_args):
+        if isinstance(dace_parsed_arg, dace.data.Scalar):
+            assert dace_parsed_arg.dtype == as_dace_type(gt4py_program_arg)
+        elif isinstance(
+            dace_parsed_arg, (bool, int, float, str, np.bool_, np.integer, np.floating, np.str_)
+        ):  # compile-time constant scalar
+            assert isinstance(gt4py_program_arg, ts.ScalarType)
+            if isinstance(dace_parsed_arg, (bool, np.bool_)):
+                assert gt4py_program_arg.kind == ts.ScalarKind.BOOL
+            elif isinstance(dace_parsed_arg, (int, np.integer)):
+                assert gt4py_program_arg.kind in [ts.ScalarKind.INT32, ts.ScalarKind.INT64]
+            elif isinstance(dace_parsed_arg, (float, np.floating)):
+                assert gt4py_program_arg.kind in [ts.ScalarKind.FLOAT32, ts.ScalarKind.FLOAT64]
+            elif isinstance(dace_parsed_arg, (str, np.str_)):
+                assert gt4py_program_arg.kind == ts.ScalarKind.STRING
+        elif isinstance(dace_parsed_arg, dace.data.Array):
+            assert isinstance(gt4py_program_arg, ts.FieldType)
+            assert len(dace_parsed_arg.shape) == len(gt4py_program_arg.dims)
+            assert dace_parsed_arg.dtype == as_dace_type(gt4py_program_arg.dtype)
+        elif isinstance(
+            dace_parsed_arg, (dace.data.Structure, dict, OrderedDict)
+        ):  # offset_provider
+            continue
+        else:
+            raise ValueError(f"Unresolved case for {dace_parsed_arg} (==, !=) {gt4py_program_arg}")
+
+    return True

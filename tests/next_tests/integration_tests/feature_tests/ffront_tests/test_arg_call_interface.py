@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import itertools
 import re
@@ -124,13 +118,7 @@ def test_call_field_operator_from_program(cartesian_case):
 
     @program
     def testee(
-        a: IField,
-        b: IField,
-        c: IField,
-        out1: IField,
-        out2: IField,
-        out3: IField,
-        out4: IField,
+        a: IField, b: IField, c: IField, out1: IField, out2: IField, out3: IField, out4: IField
     ):
         foo(a, b, c, out=out1)
         foo(a, y=b, z=c, out=out2)
@@ -230,9 +218,7 @@ def test_scan_wrong_return_type(cartesian_case):
     ):
 
         @scan_operator(axis=KDim, forward=True, init=0)
-        def testee_scan(
-            state: int32,
-        ) -> float:
+        def testee_scan(state: int32) -> float:
             return 1.0
 
         @program
@@ -250,9 +236,7 @@ def test_scan_wrong_state_type(cartesian_case):
     ):
 
         @scan_operator(axis=KDim, forward=True, init=0)
-        def testee_scan(
-            state: float,
-        ) -> int32:
+        def testee_scan(state: float) -> int32:
             return 1
 
         @program

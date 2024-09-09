@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 
@@ -115,12 +109,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
         assert "module_name" in kwargs
         entry_params = self.visit(node.parameters, external_arg=True, **kwargs)
         sid_params = self.visit(node.parameters, external_arg=False, **kwargs)
-        return self.generic_visit(
-            node,
-            entry_params=entry_params,
-            sid_params=sid_params,
-            **kwargs,
-        )
+        return self.generic_visit(node, entry_params=entry_params, sid_params=sid_params, **kwargs)
 
     Program = bindings_main_template()
 
@@ -151,8 +140,7 @@ class GTBaseBackend(BaseGTBackend, CLIBackendMixin):
 
         # Generate and return the Python wrapper class
         return self.make_module(
-            pyext_module_name=pyext_module_name,
-            pyext_file_path=pyext_file_path,
+            pyext_module_name=pyext_module_name, pyext_file_path=pyext_file_path
         )
 
 

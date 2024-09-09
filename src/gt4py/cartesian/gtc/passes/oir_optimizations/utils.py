@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
 import re
@@ -95,11 +89,7 @@ class AccessCollector(gt4py.eve.NodeVisitor):
             )
         )
 
-    def visit_AssignStmt(
-        self,
-        node: oir.AssignStmt,
-        **kwargs: Any,
-    ) -> None:
+    def visit_AssignStmt(self, node: oir.AssignStmt, **kwargs: Any) -> None:
         self.visit(node.right, is_write=False, **kwargs)
         self.visit(node.left, is_write=True, **kwargs)
 
@@ -173,16 +163,18 @@ class AccessCollector(gt4py.eve.NodeVisitor):
 
     class GeneralAccessCollection(GenericAccessCollection[GeneralAccess, GeneralOffsetTuple]):
         def cartesian_accesses(self) -> "AccessCollector.CartesianAccessCollection":
-            return AccessCollector.CartesianAccessCollection([
-                CartesianAccess(
-                    field=acc.field,
-                    offset=cast(Tuple[int, int, int], acc.offset),
-                    data_index=acc.data_index,
-                    is_write=acc.is_write,
-                )
-                for acc in self._ordered_accesses
-                if acc.offset[2] is not None
-            ])
+            return AccessCollector.CartesianAccessCollection(
+                [
+                    CartesianAccess(
+                        field=acc.field,
+                        offset=cast(Tuple[int, int, int], acc.offset),
+                        data_index=acc.data_index,
+                        is_write=acc.is_write,
+                    )
+                    for acc in self._ordered_accesses
+                    if acc.offset[2] is not None
+                ]
+            )
 
         def has_variable_access(self) -> bool:
             return any(acc.offset[2] is None for acc in self._ordered_accesses)

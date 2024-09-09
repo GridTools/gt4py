@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import pathlib
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, Type, Union, cast
@@ -42,12 +36,14 @@ class ModuleGenerator(BaseModuleGenerator):
         comp_pkg = (
             self.builder.caching.module_prefix + "computation" + self.builder.caching.module_postfix
         )
-        return "\n".join([
-            *super().generate_imports().splitlines(),
-            "import pathlib",
-            "from gt4py.cartesian.utils import make_module_from_file",
-            f'computation = make_module_from_file("{comp_pkg}", pathlib.Path(__file__).parent / "{comp_pkg}.py")',
-        ])
+        return "\n".join(
+            [
+                *super().generate_imports().splitlines(),
+                "import pathlib",
+                "from gt4py.cartesian.utils import make_module_from_file",
+                f'computation = make_module_from_file("{comp_pkg}", pathlib.Path(__file__).parent / "{comp_pkg}.py")',
+            ]
+        )
 
     def generate_implementation(self) -> str:
         params = [f"{p.name}={p.name}" for p in self.builder.gtir.params]
@@ -115,12 +111,7 @@ class NumpyBackend(BaseBackend, CLIBackendMixin):
         oir_pipeline = self.builder.options.backend_opts.get(
             "oir_pipeline",
             DefaultPipeline(
-                skip=[
-                    IJCacheDetection,
-                    KCacheDetection,
-                    PruneKCacheFills,
-                    PruneKCacheFlushes,
-                ]
+                skip=[IJCacheDetection, KCacheDetection, PruneKCacheFills, PruneKCacheFlushes]
             ),
         )
         oir_node = oir_pipeline.run(base_oir)

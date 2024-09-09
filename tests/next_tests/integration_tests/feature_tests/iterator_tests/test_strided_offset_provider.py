@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import numpy as np
 import pytest
@@ -39,12 +33,7 @@ def foo(inp):
 
 @fendef(offset_provider={"O": LocA2LocAB_offset_provider})
 def fencil(size, out, inp):
-    closure(
-        unstructured_domain(named_range(LocA, 0, size)),
-        foo,
-        out,
-        [inp],
-    )
+    closure(unstructured_domain(named_range(LocA, 0, size)), foo, out, [inp])
 
 
 @pytest.mark.uses_strided_neighbor_offset
@@ -56,12 +45,7 @@ def test_strided_offset_provider(program_processor):
     LocAB_size = LocA_size * max_neighbors
 
     rng = np.random.default_rng()
-    inp = gtx.as_field(
-        [LocAB],
-        rng.normal(
-            size=(LocAB_size,),
-        ),
-    )
+    inp = gtx.as_field([LocAB], rng.normal(size=(LocAB_size,)))
     out = gtx.as_field([LocA], np.zeros((LocA_size,)))
     ref = np.sum(inp.asnumpy().reshape(LocA_size, max_neighbors), axis=-1)
 

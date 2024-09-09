@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import collections
 import enum
@@ -436,9 +430,9 @@ class FrameTuple(tuple):
             raise ValueError("Incompatible instance '{obj}'".format(obj=other))
 
         right_func = right_func or left_func
-        return type(self)([
-            tuple([left_func(a[0], b[0]), right_func(a[1], b[1])]) for a, b in zip(self, other)
-        ])
+        return type(self)(
+            [tuple([left_func(a[0], b[0]), right_func(a[1], b[1])]) for a, b in zip(self, other)]
+        )
 
     def _reduce(self, reduce_func, out_type=tuple):
         return out_type([reduce_func(d[0], d[1]) for d in self])

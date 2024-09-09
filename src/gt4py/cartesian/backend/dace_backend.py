@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import copy
 import os
@@ -48,7 +42,6 @@ from gt4py.cartesian.gtc.dace.utils import array_dimensions, replace_strides
 from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
 from gt4py.cartesian.gtc.passes.gtir_k_boundary import compute_k_boundary
 from gt4py.cartesian.gtc.passes.gtir_pipeline import GtirPipeline
-from gt4py.cartesian.gtc.passes.oir_optimizations.inlining import MaskInlining
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_fields_extents
 from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline
 from gt4py.cartesian.utils import shash
@@ -67,8 +60,7 @@ def _serialize_sdfg(sdfg: dace.SDFG):
 
 def _specialize_transient_strides(sdfg: dace.SDFG, layout_map):
     repldict = replace_strides(
-        [array for array in sdfg.arrays.values() if array.transient],
-        layout_map,
+        [array for array in sdfg.arrays.values() if array.transient], layout_map
     )
     sdfg.replace_dict(repldict)
     for state in sdfg.nodes():
@@ -86,12 +78,14 @@ def _get_expansion_priority_cpu(node: StencilComputation):
     expansion_priority = []
     if node.has_splittable_regions():
         expansion_priority.append(["Sections", "Stages", "I", "J", "K"])
-    expansion_priority.extend([
-        ["TileJ", "TileI", "IMap", "JMap", "Sections", "K", "Stages"],
-        ["TileJ", "TileI", "IMap", "JMap", "Sections", "Stages", "K"],
-        ["TileJ", "TileI", "Sections", "Stages", "IMap", "JMap", "K"],
-        ["TileJ", "TileI", "Sections", "K", "Stages", "JMap", "IMap"],
-    ])
+    expansion_priority.extend(
+        [
+            ["TileJ", "TileI", "IMap", "JMap", "Sections", "K", "Stages"],
+            ["TileJ", "TileI", "IMap", "JMap", "Sections", "Stages", "K"],
+            ["TileJ", "TileI", "Sections", "Stages", "IMap", "JMap", "K"],
+            ["TileJ", "TileI", "Sections", "K", "Stages", "JMap", "IMap"],
+        ]
+    )
     return expansion_priority
 
 
@@ -219,9 +213,7 @@ def _sdfg_add_arrays_and_edges(
             ranges = [
                 (o - max(0, e), o - max(0, e) + s - 1, 1)
                 for o, e, s in zip(
-                    origin,
-                    field_info[name].boundary.lower_indices,
-                    inner_sdfg.arrays[name].shape,
+                    origin, field_info[name].boundary.lower_indices, inner_sdfg.arrays[name].shape
                 )
             ]
             ranges += [(0, d, 1) for d in field_info[name].data_dims]
@@ -360,7 +352,7 @@ class SDFGManager:
             except FileNotFoundError:
                 base_oir = GTIRToOIR().visit(self.builder.gtir)
                 oir_pipeline = self.builder.options.backend_opts.get(
-                    "oir_pipeline", DefaultPipeline(skip=[MaskInlining])
+                    "oir_pipeline", DefaultPipeline()
                 )
                 oir_node = oir_pipeline.run(base_oir)
                 sdfg = OirSDFGBuilder().visit(oir_node)
@@ -487,16 +479,18 @@ class DaCeComputationCodegen:
                         threadlocal_fmt,
                         "}}",
                     ]
-                    res.extend([
-                        fmt.format(
-                            name=name,
-                            sdfg_id=array_sdfg.sdfg_id,
-                            dtype=array.dtype.ctype,
-                            size=f"omp_max_threads * ({array.total_size})",
-                            local_size=array.total_size,
-                        )
-                        for fmt in fmts
-                    ])
+                    res.extend(
+                        [
+                            fmt.format(
+                                name=name,
+                                sdfg_id=array_sdfg.sdfg_id,
+                                dtype=array.dtype.ctype,
+                                size=f"omp_max_threads * ({array.total_size})",
+                                local_size=array.total_size,
+                            )
+                            for fmt in fmts
+                        ]
+                    )
         return res
 
     @staticmethod
@@ -613,18 +607,22 @@ class DaCeComputationCodegen:
             # api field strides
             fmt = "gt::sid::get_stride<{dim}>(gt::sid::get_strides(__{name}_sid))"
 
-            symbols.update({
-                f"__{name}_{dim}_stride": fmt.format(
-                    dim=f"gt::stencil::dim::{dim.lower()}", name=name
-                )
-                for dim in dims
-            })
-            symbols.update({
-                f"__{name}_d{dim}_stride": fmt.format(
-                    dim=f"gt::integral_constant<int, {3 + dim}>", name=name
-                )
-                for dim in range(data_ndim)
-            })
+            symbols.update(
+                {
+                    f"__{name}_{dim}_stride": fmt.format(
+                        dim=f"gt::stencil::dim::{dim.lower()}", name=name
+                    )
+                    for dim in dims
+                }
+            )
+            symbols.update(
+                {
+                    f"__{name}_d{dim}_stride": fmt.format(
+                        dim=f"gt::integral_constant<int, {3 + dim}>", name=name
+                    )
+                    for dim in range(data_ndim)
+                }
+            )
 
             # api field pointers
             fmt = """gt::sid::multi_shifted(
@@ -738,12 +736,14 @@ class DaCeBindingsCodegen:
 
 class DaCePyExtModuleGenerator(PyExtModuleGenerator):
     def generate_imports(self):
-        return "\n".join([
-            *super().generate_imports().splitlines(),
-            "import dace",
-            "import copy",
-            "from gt4py.cartesian.backend.dace_stencil_object import DaCeStencilObject",
-        ])
+        return "\n".join(
+            [
+                *super().generate_imports().splitlines(),
+                "import dace",
+                "import copy",
+                "from gt4py.cartesian.backend.dace_stencil_object import DaCeStencilObject",
+            ]
+        )
 
     def generate_base_class_name(self):
         return "DaCeStencilObject"
@@ -776,8 +776,7 @@ class BaseDaceBackend(BaseGTBackend, CLIBackendMixin):
 
         # Generate and return the Python wrapper class
         return self.make_module(
-            pyext_module_name=pyext_module_name,
-            pyext_file_path=pyext_file_path,
+            pyext_module_name=pyext_module_name, pyext_file_path=pyext_file_path
         )
 
 
@@ -816,10 +815,7 @@ class DaceGPUBackend(BaseDaceBackend):
         ),
     }
     MODULE_GENERATOR_CLASS = DaCeCUDAPyExtModuleGenerator
-    options = {
-        **BaseGTBackend.GT_BACKEND_OPTS,
-        "device_sync": {"versioning": True, "type": bool},
-    }
+    options = {**BaseGTBackend.GT_BACKEND_OPTS, "device_sync": {"versioning": True, "type": bool}}
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
         return self.make_extension(stencil_ir=self.builder.gtir, uses_cuda=True)

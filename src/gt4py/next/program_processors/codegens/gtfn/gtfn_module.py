@@ -1,22 +1,15 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
 import dataclasses
 import functools
-import warnings
 from typing import Any, Callable, Final, Optional
 
 import factory
@@ -28,7 +21,7 @@ from gt4py.next import common
 from gt4py.next.common import Connectivity, Dimension
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.transforms import LiftMode, pass_manager
+from gt4py.next.iterator.transforms import LiftMode, fencil_to_program, global_tmps, pass_manager
 from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
 from gt4py.next.program_processors.codegens.gtfn.codegen import GTFNCodegen, GTFNIMCodegen
@@ -133,8 +126,7 @@ class GTFNTranslationStep(
         return parameters, arg_exprs
 
     def _process_connectivity_args(
-        self,
-        offset_provider: dict[str, Connectivity | Dimension],
+        self, offset_provider: dict[str, Connectivity | Dimension]
     ) -> tuple[list[interface.Parameter], list[str]]:
         parameters: list[interface.Parameter] = []
         arg_exprs: list[str] = []
@@ -183,26 +175,13 @@ class GTFNTranslationStep(
         self,
         program: itir.FencilDefinition,
         offset_provider: dict[str, Connectivity | Dimension],
-        runtime_lift_mode: Optional[LiftMode],
-    ) -> itir.FencilDefinition:
-        # TODO(tehrengruber): Remove `lift_mode` from call interface. It has been implicitly added
-        #  to the interface of all (or at least all of concern) backends, but instead should be
-        #  configured in the backend itself (like it is here), until then we respect the argument
-        #  here and warn the user if it differs from the one configured.
-        lift_mode = runtime_lift_mode or self.lift_mode
-        if runtime_lift_mode and runtime_lift_mode != self.lift_mode:
-            warnings.warn(
-                f"GTFN Backend was configured for LiftMode `{self.lift_mode!s}`, but "
-                f"overriden to be {runtime_lift_mode!s} at runtime.",
-                stacklevel=2,
-            )
-
+    ) -> itir.FencilDefinition | global_tmps.FencilWithTemporaries | itir.Program:
         if not self.enable_itir_transforms:
             return program
 
         apply_common_transforms = functools.partial(
             pass_manager.apply_common_transforms,
-            lift_mode=lift_mode,
+            lift_mode=self.lift_mode,
             offset_provider=offset_provider,
             # sid::composite (via hymap) supports assigning from tuple with more elements to tuple with fewer elements
             unconditionally_collapse_tuples=True,
@@ -229,13 +208,13 @@ class GTFNTranslationStep(
         program: itir.FencilDefinition,
         offset_provider: dict[str, Connectivity | Dimension],
         column_axis: Optional[common.Dimension],
-        runtime_lift_mode: Optional[LiftMode] = None,
     ) -> str:
-        new_program = self._preprocess_program(program, offset_provider, runtime_lift_mode)
+        new_program = self._preprocess_program(program, offset_provider)
+        program_itir = fencil_to_program.FencilToProgram().apply(
+            new_program
+        )  # TODO(havogt): should be removed after refactoring to combined IR
         gtfn_ir = GTFN_lowering.apply(
-            new_program,
-            offset_provider=offset_provider,
-            column_axis=column_axis,
+            program_itir, offset_provider=offset_provider, column_axis=column_axis
         )
 
         if self.use_imperative_backend:
@@ -246,11 +225,11 @@ class GTFNTranslationStep(
         return codegen.format_source("cpp", generated_code, style="LLVM")
 
     def __call__(
-        self,
-        inp: stages.ProgramCall,
+        self, inp: stages.ProgramCall
     ) -> stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings]:
         """Generate GTFN C++ code from the ITIR definition."""
-        program: itir.FencilDefinition = inp.program
+        program = inp.program
+        assert isinstance(program, itir.FencilDefinition)
 
         # handle regular parameters and arguments of the program (i.e. what the user defined in
         #  the program)
@@ -279,7 +258,6 @@ class GTFNTranslationStep(
             program,
             inp.kwargs["offset_provider"],
             inp.kwargs.get("column_axis", None),
-            inp.kwargs.get("lift_mode", None),
         )
         source_code = interface.format_source(
             self._language_settings(),

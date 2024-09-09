@@ -1,16 +1,11 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 import copy
 import dataclasses
 import itertools
@@ -22,12 +17,11 @@ import numpy as np
 
 import gt4py.eve.codegen
 from gt4py import eve
-from gt4py.next import Dimension, StridedNeighborOffsetProvider, type_inference as next_typing
-from gt4py.next.common import _DEFAULT_SKIP_VALUE as neighbor_skip_value
-from gt4py.next.iterator import ir as itir, type_inference as itir_typing
-from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
+from gt4py.next import Dimension
+from gt4py.next.common import _DEFAULT_SKIP_VALUE as neighbor_skip_value, Connectivity
+from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir import FunCall, Lambda
-from gt4py.next.iterator.type_inference import Val
+from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_specifications as ts
 
 from .utility import (
@@ -35,8 +29,8 @@ from .utility import (
     as_dace_type,
     connectivity_identifier,
     dace_debuginfo,
-    filter_neighbor_tables,
     flatten_list,
+    get_used_connectivities,
     map_nested_sdfg_symbols,
     new_array_symbols,
     unique_name,
@@ -55,10 +49,19 @@ _TYPE_MAPPING = {
 }
 
 
-def itir_type_as_dace_type(type_: next_typing.Type):
-    if isinstance(type_, itir_typing.Primitive):
-        return _TYPE_MAPPING[type_.name]
-    raise NotImplementedError()
+def itir_type_as_dace_type(type_: ts.TypeSpec):
+    # TODO(tehrengruber): this function just converts the scalar type of whatever it is given,
+    #  let it be a field, iterator, or directly a scalar. The caller should take care of the
+    #  extraction.
+    dtype: ts.TypeSpec
+    if isinstance(type_, ts.FieldType):
+        dtype = type_.dtype
+    elif isinstance(type_, it_ts.IteratorType):
+        dtype = type_.element_type
+    else:
+        dtype = type_
+    assert isinstance(dtype, ts.ScalarType)
+    return _TYPE_MAPPING[dtype.kind.name.lower()]
 
 
 def get_reduce_identity_value(op_name_: str, type_: Any):
@@ -184,7 +187,7 @@ def _visit_lift_in_neighbors_reduction(
     transformer: "PythonTaskletCodegen",
     node: itir.FunCall,
     node_args: Sequence[IteratorExpr | list[ValueExpr]],
-    offset_provider: NeighborTableOffsetProvider,
+    offset_provider: Connectivity,
     map_entry: dace.nodes.MapEntry,
     map_exit: dace.nodes.MapExit,
     neighbor_index_node: dace.nodes.AccessNode,
@@ -202,12 +205,7 @@ def _visit_lift_in_neighbors_reduction(
                 lifted_indices.pop(origin_dim)
                 lifted_indices[neighbor_dim] = neighbor_index_node
                 lifted_args.append(
-                    IteratorExpr(
-                        arg.field,
-                        lifted_indices,
-                        arg.dtype,
-                        arg.dimensions,
-                    )
+                    IteratorExpr(arg.field, lifted_indices, arg.dtype, arg.dimensions)
                 )
             else:
                 lifted_args.append(arg)
@@ -234,7 +232,7 @@ def _visit_lift_in_neighbors_reduction(
             assert isinstance(y, ValueExpr)
             input_nodes[x] = y.value
 
-    neighbor_tables = filter_neighbor_tables(transformer.offset_provider)
+    neighbor_tables = get_used_connectivities(node.args[0], transformer.offset_provider)
     connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
 
     parent_sdfg = transformer.context.body
@@ -283,11 +281,7 @@ def _visit_lift_in_neighbors_reduction(
             parent_state.add_edge(access_node, None, nested_sdfg_node, inner_connector, memlet)
         else:
             parent_state.add_memlet_path(
-                access_node,
-                map_entry,
-                nested_sdfg_node,
-                dst_conn=inner_connector,
-                memlet=memlet,
+                access_node, map_entry, nested_sdfg_node, dst_conn=inner_connector, memlet=memlet
             )
 
     parent_state.add_memlet_path(
@@ -300,7 +294,13 @@ def _visit_lift_in_neighbors_reduction(
 
     if offset_provider.has_skip_values:
         # check neighbor validity on if/else inter-state edge
-        start_state = lift_context.body.add_state("start", is_start_block=True)
+        # use one branch for connectivity case
+        start_state = lift_context.body.add_state_before(
+            lift_context.body.start_state,
+            "start",
+            condition=f"{lifted_index_connectors[0]} != {neighbor_skip_value}",
+        )
+        # use the other branch for skip value case
         skip_neighbor_state = lift_context.body.add_state("skip_neighbor")
         skip_neighbor_state.add_edge(
             skip_neighbor_state.add_tasklet(
@@ -315,11 +315,6 @@ def _visit_lift_in_neighbors_reduction(
             start_state,
             skip_neighbor_state,
             dace.InterstateEdge(condition=f"{lifted_index_connectors[0]} == {neighbor_skip_value}"),
-        )
-        lift_context.body.add_edge(
-            start_state,
-            lift_context.state,
-            dace.InterstateEdge(condition=f"{lifted_index_connectors[0]} != {neighbor_skip_value}"),
         )
 
     return [ValueExpr(neighbor_value_node, inner_outputs[0].dtype)]
@@ -337,7 +332,7 @@ def builtin_neighbors(
     offset_dim = offset_literal.value
     assert isinstance(offset_dim, str)
     offset_provider = transformer.offset_provider[offset_dim]
-    if not isinstance(offset_provider, NeighborTableOffsetProvider):
+    if not isinstance(offset_provider, Connectivity):
         raise NotImplementedError(
             "Neighbor reduction only implemented for connectivity based on neighbor tables."
         )
@@ -556,11 +551,7 @@ def builtin_can_deref(
     expr_code = " and ".join(f"{v} != {neighbor_skip_value}" for v in internals)
 
     return transformer.add_expr_tasklet(
-        list(zip(args, internals)),
-        expr_code,
-        dace.dtypes.bool,
-        "can_deref",
-        dace_debuginfo=di,
+        list(zip(args, internals)), expr_code, dace.dtypes.bool, "can_deref", dace_debuginfo=di
     )
 
 
@@ -581,7 +572,6 @@ def builtin_if(
         node_taskgen = PythonTaskletCodegen(
             transformer.offset_provider,
             node_context,
-            transformer.node_types,
             transformer.use_field_canonical_representation,
         )
         return node_taskgen.visit(arg)
@@ -699,9 +689,7 @@ def builtin_list_get(
         transformer.context.body.add_scalar(result_name, args[1].dtype, transient=True)
         result_node = transformer.context.state.add_access(result_name)
         transformer.context.state.add_nedge(
-            args[1].value,
-            result_node,
-            dace.Memlet(data=args[1].value.data, subset=index_value),
+            args[1].value, result_node, dace.Memlet(data=args[1].value.data, subset=index_value)
         )
         return [ValueExpr(result_node, args[1].dtype)]
 
@@ -723,15 +711,9 @@ def builtin_cast(
     target_type = node_args[1]
     assert isinstance(target_type, itir.SymRef)
     expr = _MATH_BUILTINS_MAPPING[target_type.id].format(*internals)
-    node_type = transformer.node_types[id(node)]
-    assert isinstance(node_type, itir_typing.Val)
-    type_ = itir_type_as_dace_type(node_type.dtype)
+    type_ = itir_type_as_dace_type(node.type)  # type: ignore[arg-type]  # ensure by type inference
     return transformer.add_expr_tasklet(
-        list(zip(args, internals)),
-        expr,
-        type_,
-        "cast",
-        dace_debuginfo=di,
+        list(zip(args, internals)), expr, type_, "cast", dace_debuginfo=di
     )
 
 
@@ -808,12 +790,7 @@ class GatherLambdaSymbolsPass(eve.NodeVisitor):
     _symbol_map: dict[str, TaskletExpr | tuple[ValueExpr]]
     _parent_symbol_map: dict[str, TaskletExpr]
 
-    def __init__(
-        self,
-        sdfg,
-        state,
-        parent_symbol_map,
-    ):
+    def __init__(self, sdfg, state, parent_symbol_map):
         self._sdfg = sdfg
         self._state = state
         self._symbol_map = {}
@@ -883,7 +860,6 @@ class GatherLambdaSymbolsPass(eve.NodeVisitor):
 class GatherOutputSymbolsPass(eve.NodeVisitor):
     _sdfg: dace.SDFG
     _state: dace.SDFGState
-    _node_types: dict[int, next_typing.Type]
     _symbol_map: dict[str, TaskletExpr]
 
     @property
@@ -891,44 +867,34 @@ class GatherOutputSymbolsPass(eve.NodeVisitor):
         """Dictionary of symbols referenced from the output expression."""
         return self._symbol_map
 
-    def __init__(
-        self,
-        sdfg,
-        state,
-        node_types,
-    ):
+    def __init__(self, sdfg, state):
         self._sdfg = sdfg
         self._state = state
-        self._node_types = node_types
         self._symbol_map = {}
 
     def visit_SymRef(self, node: itir.SymRef):
         param = str(node.id)
         if param not in _GENERAL_BUILTIN_MAPPING and param not in self._symbol_map:
-            node_type = self._node_types[id(node)]
-            assert isinstance(node_type, Val)
             access_node = self._state.add_access(param, debuginfo=self._sdfg.debuginfo)
             self._symbol_map[param] = ValueExpr(
-                access_node, dtype=itir_type_as_dace_type(node_type.dtype)
+                access_node,
+                dtype=itir_type_as_dace_type(node.type),  # type: ignore[arg-type]  # ensure by type inference
             )
 
 
 class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
     offset_provider: dict[str, Any]
     context: Context
-    node_types: dict[int, next_typing.Type]
     use_field_canonical_representation: bool
 
     def __init__(
         self,
         offset_provider: dict[str, Any],
         context: Context,
-        node_types: dict[int, next_typing.Type],
         use_field_canonical_representation: bool,
     ):
         self.offset_provider = offset_provider
         self.context = context
-        self.node_types = node_types
         self.use_field_canonical_representation = use_field_canonical_representation
 
     def get_sorted_field_dimensions(self, dims: Sequence[str]):
@@ -946,7 +912,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
     ]:
         func_name = f"lambda_{abs(hash(node)):x}"
         neighbor_tables = (
-            filter_neighbor_tables(self.offset_provider) if use_neighbor_tables else {}
+            get_used_connectivities(node, self.offset_provider) if use_neighbor_tables else {}
         )
         connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
 
@@ -1006,7 +972,6 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         lambda_taskgen = PythonTaskletCodegen(
             self.offset_provider,
             lambda_context,
-            self.node_types,
             self.use_field_canonical_representation,
         )
 
@@ -1022,9 +987,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                     result_name, debuginfo=lambda_sdfg.debuginfo
                 )
                 lambda_state.add_nedge(
-                    expr.value,
-                    result_access,
-                    dace.Memlet(data=result_access.data, subset="0"),
+                    expr.value, result_access, dace.Memlet(data=result_access.data, subset="0")
                 )
                 result = ValueExpr(value=result_access, dtype=expr.dtype)
             else:
@@ -1051,9 +1014,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         return value
 
     def visit_Literal(self, node: itir.Literal) -> list[SymbolExpr]:
-        node_type = self.node_types[id(node)]
-        assert isinstance(node_type, Val)
-        return [SymbolExpr(node.value, itir_type_as_dace_type(node_type.dtype))]
+        return [SymbolExpr(node.value, itir_type_as_dace_type(node.type))]
 
     def visit_FunCall(self, node: itir.FunCall) -> list[ValueExpr] | IteratorExpr:
         node.fun.location = node.location
@@ -1101,7 +1062,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                         store, self.context.body.arrays[store]
                     )
 
-        neighbor_tables = filter_neighbor_tables(self.offset_provider)
+        neighbor_tables = get_used_connectivities(node.fun, self.offset_provider)
         for offset in neighbor_tables.keys():
             var = connectivity_identifier(offset)
             nsdfg_inputs[var] = dace.Memlet.from_array(var, self.context.body.arrays[var])
@@ -1164,11 +1125,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             internals = [f"{arg.value.data}_v" for arg in args]
             expr = f"{internals[0]}[{', '.join(internals[1:])}]"
             return self.add_expr_tasklet(
-                list(zip(args, internals)),
-                expr,
-                iterator.dtype,
-                "deref",
-                dace_debuginfo=di,
+                list(zip(args, internals)), expr, iterator.dtype, "deref", dace_debuginfo=di
             )
 
         else:
@@ -1197,25 +1154,19 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
 
             # we create a mapped tasklet for array slicing
             index_name = unique_name(f"_i_{neighbor_dim}")
-            map_ranges = {
-                index_name: f"0:{offset_provider.max_neighbors}",
-            }
-            src_subset = ",".join([
-                f"_i_{dim}" if dim in iterator.indices else index_name for dim in sorted_dims
-            ])
+            map_ranges = {index_name: f"0:{offset_provider.max_neighbors}"}
+            src_subset = ",".join(
+                [f"_i_{dim}" if dim in iterator.indices else index_name for dim in sorted_dims]
+            )
             self.context.state.add_mapped_tasklet(
                 "deref",
                 map_ranges,
                 inputs={k: v for k, v in zip(deref_connectors, deref_memlets)},
-                outputs={
-                    "_out": dace.Memlet.from_array(result_name, result_array),
-                },
+                outputs={"_out": dace.Memlet.from_array(result_name, result_array)},
                 code=f"_out[{index_name}] = _inp[{src_subset}]",
                 external_edges=True,
                 input_nodes={node.data: node for node in deref_nodes},
-                output_nodes={
-                    result_name: result_node,
-                },
+                output_nodes={result_name: result_node},
                 debuginfo=di,
             )
             return [ValueExpr(result_node, iterator.dtype)]
@@ -1257,7 +1208,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         offset_node = self.visit(tail[1])[0]
         assert offset_node.dtype in dace.dtypes.INTEGER_TYPES
 
-        if isinstance(self.offset_provider[offset_dim], NeighborTableOffsetProvider):
+        if isinstance(self.offset_provider[offset_dim], Connectivity):
             offset_provider = self.offset_provider[offset_dim]
             connectivity = self.context.state.add_access(
                 connectivity_identifier(offset_dim), debuginfo=di
@@ -1266,32 +1217,18 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             shifted_dim = offset_provider.origin_axis.value
             target_dim = offset_provider.neighbor_axis.value
             args = [
-                ValueExpr(connectivity, offset_provider.table.dtype),
+                ValueExpr(connectivity, _INDEX_DTYPE),
                 ValueExpr(iterator.indices[shifted_dim], offset_node.dtype),
                 offset_node,
             ]
             internals = [f"{arg.value.data}_v" for arg in args]
             expr = f"{internals[0]}[{internals[1]}, {internals[2]}]"
-        elif isinstance(self.offset_provider[offset_dim], StridedNeighborOffsetProvider):
-            offset_provider = self.offset_provider[offset_dim]
-
-            shifted_dim = offset_provider.origin_axis.value
-            target_dim = offset_provider.neighbor_axis.value
-            args = [
-                ValueExpr(iterator.indices[shifted_dim], offset_node.dtype),
-                offset_node,
-            ]
-            internals = [f"{arg.value.data}_v" for arg in args]
-            expr = f"{internals[0]} * {offset_provider.max_neighbors} + {internals[1]}"
         else:
             assert isinstance(self.offset_provider[offset_dim], Dimension)
 
             shifted_dim = self.offset_provider[offset_dim].value
             target_dim = shifted_dim
-            args = [
-                ValueExpr(iterator.indices[shifted_dim], offset_node.dtype),
-                offset_node,
-            ]
+            args = [ValueExpr(iterator.indices[shifted_dim], offset_node.dtype), offset_node]
             internals = [f"{arg.value.data}_v" for arg in args]
             expr = f"{internals[0]} + {internals[1]}"
 
@@ -1322,9 +1259,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
 
     def _visit_reduce(self, node: itir.FunCall):
         di = dace_debuginfo(node, self.context.body.debuginfo)
-        node_type = self.node_types[id(node)]
-        assert isinstance(node_type, itir_typing.Val)
-        reduce_dtype = itir_type_as_dace_type(node_type.dtype)
+        reduce_dtype = itir_type_as_dace_type(node.type)  # type: ignore[arg-type]  # ensure by type inference
 
         if len(node.args) == 1:
             assert (
@@ -1505,9 +1440,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             arg.value if isinstance(arg, SymbolExpr) else f"{arg.value.data}_v" for arg in args
         ]
         expr = fmt.format(*internals)
-        node_type = self.node_types[id(node)]
-        assert isinstance(node_type, itir_typing.Val)
-        type_ = itir_type_as_dace_type(node_type.dtype)
+        type_ = itir_type_as_dace_type(node.type)  # type: ignore[arg-type]  # ensure by type inference
         return self.add_expr_tasklet(
             expr_args,
             expr,
@@ -1573,7 +1506,6 @@ def closure_to_tasklet_sdfg(
     domain: dict[str, str],
     inputs: Sequence[tuple[str, ts.TypeSpec]],
     connectivities: Sequence[tuple[dace.ndarray, str]],
-    node_types: dict[int, next_typing.Type],
     use_field_canonical_representation: bool,
 ) -> tuple[Context, Sequence[ValueExpr]]:
     body = dace.SDFG("tasklet_toplevel")
@@ -1611,9 +1543,7 @@ def closure_to_tasklet_sdfg(
         body.add_array(name, shape=shape, strides=strides, dtype=arr.dtype)
 
     context = Context(body, state, symbol_map)
-    translator = PythonTaskletCodegen(
-        offset_provider, context, node_types, use_field_canonical_representation
-    )
+    translator = PythonTaskletCodegen(offset_provider, context, use_field_canonical_representation)
 
     args = [itir.SymRef(id=name) for name, _ in inputs]
     if is_scan(node.stencil):

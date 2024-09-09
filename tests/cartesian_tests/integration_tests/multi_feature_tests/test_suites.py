@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import numpy as np
 import pytest
@@ -594,13 +588,9 @@ class TestNotSpecifiedTwoOptionalFields(TestTwoOptionalFields):
 
 
 class TestNon3DFields(gt_testing.StencilTestSuite):
-    dtypes = {
-        "field_in": np.float64,
-        "another_field": np.float64,
-        "field_out": np.float64,
-    }
+    dtypes = {"field_in": np.float64, "another_field": np.float64, "field_out": np.float64}
     domain_range = [(4, 10), (4, 10), (4, 10)]
-    backends = ["gt:cpu_ifirst", "gt:cpu_kfirst", "gt:gpu", "dace:cpu", "dace:gpu"]
+    backends = ALL_BACKENDS
     symbols = {
         "field_in": gt_testing.field(
             in_range=(-10, 10), axes="K", boundary=[(0, 0), (0, 0), (0, 0)]
@@ -684,10 +674,7 @@ class TestNon3DFields(gt_testing.StencilTestSuite):
 
 
 class TestReadOutsideKInterval1(gt_testing.StencilTestSuite):
-    dtypes = {
-        "field_in": np.float64,
-        "field_out": np.float64,
-    }
+    dtypes = {"field_in": np.float64, "field_out": np.float64}
     domain_range = [(4, 4), (4, 4), (4, 4)]
     backends = ALL_BACKENDS
     symbols = {
@@ -710,10 +697,7 @@ class TestReadOutsideKInterval1(gt_testing.StencilTestSuite):
 
 
 class TestReadOutsideKInterval2(gt_testing.StencilTestSuite):
-    dtypes = {
-        "field_in": np.float64,
-        "field_out": np.float64,
-    }
+    dtypes = {"field_in": np.float64, "field_out": np.float64}
     domain_range = [(4, 4), (4, 4), (4, 4)]
     backends = ALL_BACKENDS
     symbols = {
@@ -734,10 +718,7 @@ class TestReadOutsideKInterval2(gt_testing.StencilTestSuite):
 
 
 class TestReadOutsideKInterval3(gt_testing.StencilTestSuite):
-    dtypes = {
-        "field_in": np.float64,
-        "field_out": np.float64,
-    }
+    dtypes = {"field_in": np.float64, "field_out": np.float64}
     domain_range = [(4, 4), (4, 4), (4, 4)]
     backends = ALL_BACKENDS
     symbols = {
@@ -777,11 +758,7 @@ def _skip_dace_cpu_gcc_error(backends):
 
 
 class TestVariableKRead(gt_testing.StencilTestSuite):
-    dtypes = {
-        "field_in": np.float32,
-        "field_out": np.float32,
-        "index": np.int32,
-    }
+    dtypes = {"field_in": np.float32, "field_out": np.float32, "index": np.int32}
     domain_range = [(2, 2), (2, 2), (2, 8)]
     backends = _skip_dace_cpu_gcc_error(ALL_BACKENDS)
     symbols = {
@@ -803,11 +780,7 @@ class TestVariableKRead(gt_testing.StencilTestSuite):
 
 
 class TestVariableKAndReadOutside(gt_testing.StencilTestSuite):
-    dtypes = {
-        "field_in": np.float64,
-        "field_out": np.float64,
-        "index": np.int32,
-    }
+    dtypes = {"field_in": np.float64, "field_out": np.float64, "index": np.int32}
     domain_range = [(2, 2), (2, 2), (2, 8)]
     backends = _skip_dace_cpu_gcc_error(ALL_BACKENDS)
     symbols = {
@@ -834,10 +807,7 @@ class TestVariableKAndReadOutside(gt_testing.StencilTestSuite):
 
 
 class TestDiagonalKOffset(gt_testing.StencilTestSuite):
-    dtypes = {
-        "field_in": np.float64,
-        "field_out": np.float64,
-    }
+    dtypes = {"field_in": np.float64, "field_out": np.float64}
     domain_range = [(2, 2), (2, 2), (2, 8)]
     backends = ALL_BACKENDS
     symbols = {
@@ -861,10 +831,7 @@ class TestDiagonalKOffset(gt_testing.StencilTestSuite):
 
 
 class TestHorizontalRegions(gt_testing.StencilTestSuite):
-    dtypes = {
-        "field_in": np.float32,
-        "field_out": np.float32,
-    }
+    dtypes = {"field_in": np.float32, "field_out": np.float32}
     domain_range = [(4, 4), (4, 4), (2, 2)]
     backends = ALL_BACKENDS
     symbols = {
@@ -899,10 +866,7 @@ class TestHorizontalRegions(gt_testing.StencilTestSuite):
 
 
 class TestHorizontalRegionsCorners(gt_testing.StencilTestSuite):
-    dtypes = {
-        "field_in": np.float32,
-        "field_out": np.float32,
-    }
+    dtypes = {"field_in": np.float32, "field_out": np.float32}
     domain_range = [(4, 4), (4, 4), (2, 2)]
     backends = ALL_BACKENDS
     symbols = {
@@ -988,10 +952,7 @@ class TestVectorGenAssignment(gt_testing.StencilTestSuite):
 
 
 class TestMatrixAssignment(gt_testing.StencilTestSuite):
-    dtypes = {
-        "field_in": np.float32,
-        "field_out": np.float32,
-    }
+    dtypes = {"field_in": np.float32, "field_out": np.float32}
     domain_range = [(2, 2), (2, 2), (2, 2)]
     backends = ALL_BACKENDS
     symbols = {
@@ -1132,10 +1093,7 @@ class TestMaskedMatmul(gt_testing.StencilTestSuite):
     backends = ALL_BACKENDS
     symbols = {
         "matrix": gt_testing.field(
-            in_range=(-10, 10),
-            axes="K",
-            boundary=[(0, 0), (0, 0), (0, 0)],
-            data_dims=(4, 6),
+            in_range=(-10, 10), axes="K", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(4, 6)
         ),
         "field_1": gt_testing.field(
             in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(6,)

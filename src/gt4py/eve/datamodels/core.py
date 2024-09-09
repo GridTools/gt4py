@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """Data Model class creation and other utils.
 
@@ -208,15 +202,9 @@ def field_type_validator_factory(
 ) -> FieldTypeValidatorFactory:
     """Create a factory of field type validators from a factory of regular type validators."""
     if use_cache:
-        factory = cast(
-            type_val.TypeValidatorFactory,
-            utils.optional_lru_cache(func=factory),
-        )
+        factory = cast(type_val.TypeValidatorFactory, utils.optional_lru_cache(func=factory))
 
-    def _field_type_validator_factory(
-        type_annotation: TypeAnnotation,
-        name: str,
-    ) -> FieldValidator:
+    def _field_type_validator_factory(type_annotation: TypeAnnotation, name: str) -> FieldValidator:
         """Field type validator for datamodels, supporting forward references."""
         if isinstance(type_annotation, ForwardRef):
             return ForwardRefValidator(factory)
@@ -267,7 +255,7 @@ def datamodel(
     cls: Literal[None] = None,
     /,
     *,
-    repr: bool = _REPR_DEFAULT,  # noqa: A002 [builtin-argument-shadowing]
+    repr: bool = _REPR_DEFAULT,
     eq: bool = _EQ_DEFAULT,
     order: bool = _ORDER_DEFAULT,
     unsafe_hash: bool = _UNSAFE_HASH_DEFAULT,
@@ -286,7 +274,7 @@ def datamodel(  # redefinion of unused symbol
     cls: Type[_T],
     /,
     *,
-    repr: bool = _REPR_DEFAULT,  # noqa: A002 [builtin-argument-shadowing]
+    repr: bool = _REPR_DEFAULT,
     eq: bool = _EQ_DEFAULT,
     order: bool = _ORDER_DEFAULT,
     unsafe_hash: bool = _UNSAFE_HASH_DEFAULT,
@@ -379,7 +367,7 @@ def datamodel(  # redefinion of unused symbol
     }
 
     if cls is None:  # called as: @datamodel()
-        return functools.partial(_make_datamodel, **datamodel_options)
+        return functools.partial(_make_datamodel, **datamodel_options)  # type: ignore[arg-type, return-value]
     else:  # called as: @datamodel
         return _make_datamodel(
             cls,
@@ -446,9 +434,7 @@ else:
             cls,
             /,
             *,
-            repr: (  # noqa: A002 [builtin-argument-shadowing]
-                bool | None | Literal["inherited"]
-            ) = "inherited",
+            repr: (bool | None | Literal["inherited"]) = "inherited",  # noqa: A002 [builtin-argument-shadowing]
             eq: bool | None | Literal["inherited"] = "inherited",
             order: bool | None | Literal["inherited"] = "inherited",
             unsafe_hash: bool | None | Literal["inherited"] = "inherited",
@@ -494,11 +480,7 @@ else:
                 raise TypeError("Subclasses of a frozen DataModel cannot be unfrozen.")
 
             _make_datamodel(
-                cls,
-                slots=False,
-                generic=generic,
-                **datamodel_kwargs,
-                _stacklevel_offset=1,
+                cls, slots=False, generic=generic, **datamodel_kwargs, _stacklevel_offset=1
             )
 
 
@@ -731,8 +713,7 @@ _DataModelT = TypeVar("_DataModelT", bound=DataModel)
 
 
 def update_forward_refs(
-    model_cls: Type[_DataModelT],
-    localns: Optional[Dict[str, Any]] = None,
+    model_cls: Type[_DataModelT], localns: Optional[Dict[str, Any]] = None
 ) -> Type[_DataModelT]:
     """Update Data Model class meta-information replacing forwarded type annotations with actual types.
 
@@ -1111,11 +1092,7 @@ def _make_datamodel(
             )
             if attr_value_in_cls is NOTHING:
                 # The field has no definition in the class dict, it's only an annotation
-                setattr(
-                    cls,
-                    key,
-                    attrs.field(converter=converter, validator=type_validator),
-                )
+                setattr(cls, key, attrs.field(converter=converter, validator=type_validator))
 
             else:
                 # The field contains the default value in the class dict
@@ -1159,9 +1136,7 @@ def _make_datamodel(
             if base_field_attr:
                 # Create a new field in the current class cloning the existing
                 # definition and add the new validator (attrs recommendation)
-                field_c_attr = _make_counting_attr_from_attribute(
-                    base_field_attr,
-                )
+                field_c_attr = _make_counting_attr_from_attribute(base_field_attr)
                 setattr(cls, qualified_field_name, field_c_attr)
             else:
                 raise TypeError(

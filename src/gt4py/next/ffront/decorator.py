@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 # TODO(tehrengruber): This file contains to many different components. Split
 #  into components for each dialect.
@@ -24,39 +18,28 @@ import types
 import typing
 import warnings
 from collections.abc import Callable
-from typing import Generic, TypeVar
+from typing import Any, Generic, Optional, TypeVar
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
-from gt4py.eve import utils as eve_utils
-from gt4py.eve.extended_typing import Any, Optional
+from gt4py.eve import extended_typing as xtyping
 from gt4py.next import (
     allocators as next_allocators,
     backend as next_backend,
     embedded as next_embedded,
     errors,
 )
-from gt4py.next.common import Dimension, GridType
+from gt4py.next.common import Connectivity, Dimension, GridType
 from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
-    dialect_ast_enums,
     field_operator_ast as foast,
     past_process_args,
     past_to_itir,
-    program_ast as past,
     stages as ffront_stages,
     transform_utils,
     type_specifications as ts_ffront,
 )
-from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
-from gt4py.next.ffront.foast_to_itir import FieldOperatorLowering
-from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.ffront.gtcallable import GTCallable
-from gt4py.next.ffront.past_passes.closure_var_type_deduction import (
-    ClosureVarTypeDeduction as ProgramClosureVarTypeDeduction,
-)
-from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeDeduction
-from gt4py.next.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils.ir_makers import (
     literal_from_value,
@@ -89,10 +72,14 @@ class Program:
         definition: The Python function object corresponding to the PAST node.
         grid_type: The grid type (cartesian or unstructured) to be used. If not explicitly given
             it will be deduced from actually occurring dimensions.
+        connectivities: A dictionary holding static/compile-time information about the offset providers.
+            For now, it is used for ahead of time compilation in DaCe orchestrated programs,
+            i.e. DaCe programs that call GT4Py Programs -SDFGConvertible interface-.
     """
 
     definition_stage: ffront_stages.ProgramDefinition
     backend: Optional[next_backend.Backend]
+    connectivities: Optional[dict[str, Connectivity]]
 
     @classmethod
     def from_function(
@@ -100,12 +87,10 @@ class Program:
         definition: types.FunctionType,
         backend: Optional[next_backend],
         grid_type: Optional[GridType] = None,
+        connectivities: Optional[dict[str, Connectivity]] = None,
     ) -> Program:
         program_def = ffront_stages.ProgramDefinition(definition=definition, grid_type=grid_type)
-        return cls(
-            definition_stage=program_def,
-            backend=backend,
-        )
+        return cls(definition_stage=program_def, backend=backend, connectivities=connectivities)
 
     # needed in testing
     @property
@@ -114,33 +99,16 @@ class Program:
 
     @functools.cached_property
     def past_stage(self):
-        if self.backend is not None and self.backend.transformer is not None:
-            return self.backend.transformer.func_to_past(self.definition_stage)
-        return next_backend.DEFAULT_TRANSFORMS.func_to_past(self.definition_stage)
+        # backwards compatibility for backends that do not support the full toolchain
+        if self.backend is not None and self.backend.transforms_prog is not None:
+            return self.backend.transforms_prog.func_to_past(self.definition_stage)
+        return next_backend.DEFAULT_PROG_TRANSFORMS.func_to_past(self.definition_stage)
 
+    # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self):
-        function_closure_vars = transform_utils._filter_closure_vars_by_type(
-            self.past_stage.closure_vars, GTCallable
-        )
-        misnamed_functions = [
-            f"{name} vs. {func.id}"
-            for name, func in function_closure_vars.items()
-            if name != func.__gt_itir__().id
-        ]
-        if misnamed_functions:
-            raise RuntimeError(
-                f"The following symbols resolve to a function with a mismatching name: {','.join(misnamed_functions)}."
-            )
-
-        undefined_symbols = [
-            symbol.id
-            for symbol in self.past_stage.past_node.closure_vars
-            if symbol.id not in self.past_stage.closure_vars
-        ]
-        if undefined_symbols:
-            raise RuntimeError(
-                f"The following closure variables are undefined: {', '.join(undefined_symbols)}."
-            )
+        if self.backend is not None and self.backend.transforms_prog is not None:
+            self.backend.transforms_prog.past_lint(self.past_stage)
+        return next_backend.DEFAULT_PROG_TRANSFORMS.past_lint(self.past_stage)
 
     @property
     def __name__(self) -> str:
@@ -157,6 +125,9 @@ class Program:
 
     def with_backend(self, backend: ppi.ProgramExecutor) -> Program:
         return dataclasses.replace(self, backend=backend)
+
+    def with_connectivities(self, connectivities: dict[str, Connectivity]) -> Program:
+        return dataclasses.replace(self, connectivities=connectivities)
 
     def with_grid_type(self, grid_type: GridType) -> Program:
         return dataclasses.replace(
@@ -210,8 +181,8 @@ class Program:
             args=[],
             kwargs={},
         )
-        if self.backend is not None and self.backend.transformer is not None:
-            return self.backend.transformer.past_to_itir(no_args_past)
+        if self.backend is not None and self.backend.transforms_prog is not None:
+            return self.backend.transforms_prog.past_to_itir(no_args_past).program
         return past_to_itir.PastToItirFactory()(no_args_past).program
 
     @functools.cached_property
@@ -244,14 +215,25 @@ class Program:
         ppi.ensure_processor_kind(self.backend.executor, ppi.ProgramExecutor)
 
         self.backend(
-            self.definition_stage,
-            *args,
-            **(kwargs | {"offset_provider": offset_provider}),
+            self.definition_stage, *args, **(kwargs | {"offset_provider": offset_provider})
         )
+
+
+try:
+    from gt4py.next.program_processors.runners.dace_iterator import Program
+except ImportError:
+    pass
 
 
 @dataclasses.dataclass(frozen=True)
 class ProgramFromPast(Program):
+    """
+    This version of program has no DSL definition associated with it.
+
+    PAST nodes can be built programmatically from field operators or from scratch.
+    This wrapper provides the appropriate toolchain entry points.
+    """
+
     past_stage: ffront_stages.PastProgramDefinition
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs):
@@ -262,6 +244,12 @@ class ProgramFromPast(Program):
 
         ppi.ensure_processor_kind(self.backend.executor, ppi.ProgramExecutor)
         self.backend(self.past_stage, *args, **(kwargs | {"offset_provider": offset_provider}))
+
+    # TODO(ricoh): linting should become optional, up to the backend.
+    def __post_init__(self):
+        if self.backend is not None and self.backend.transforms_prog is not None:
+            self.backend.transforms_prog.past_lint(self.past_stage)
+        return next_backend.DEFAULT_PROG_TRANSFORMS.past_lint(self.past_stage)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -298,10 +286,7 @@ class ProgramWithBoundArgs(Program):
                     raise ValueError(f"Parameter '{name}' already set as a bound argument.")
 
             type_info.accepts_args(
-                new_type,
-                with_args=arg_types,
-                with_kwargs=kwarg_types,
-                raise_exception=True,
+                new_type, with_args=arg_types, with_kwargs=kwarg_types, raise_exception=True
             )
         except ValueError as err:
             bound_arg_names = ", ".join([f"'{bound_arg}'" for bound_arg in self.bound_args.keys()])
@@ -337,10 +322,7 @@ class ProgramWithBoundArgs(Program):
                 )
                 new_clos.inputs.pop(index)
             params = [sym(inp.id) for inp in new_clos.inputs]
-            expr = itir.FunCall(
-                fun=new_clos.stencil,
-                args=new_args,
-            )
+            expr = itir.FunCall(fun=new_clos.stencil, args=new_args)
             new_clos.stencil = itir.Lambda(params=params, expr=expr)
         return new_itir
 
@@ -382,9 +364,7 @@ def program(
 
     def program_inner(definition: types.FunctionType) -> Program:
         return Program.from_function(
-            definition,
-            DEFAULT_BACKEND if backend is eve.NOTHING else backend,
-            grid_type,
+            definition, DEFAULT_BACKEND if backend is eve.NOTHING else backend, grid_type
         )
 
     return program_inner if definition is None else program_inner(definition)
@@ -415,12 +395,8 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             it will be deduced from actually occurring dimensions.
     """
 
-    foast_node: OperatorNodeT
-    closure_vars: dict[str, Any]
-    definition: Optional[types.FunctionType]
+    definition_stage: ffront_stages.FieldOperatorDefinition
     backend: Optional[ppi.ProgramExecutor]
-    grid_type: Optional[GridType]
-    operator_attributes: Optional[dict[str, Any]] = None
     _program_cache: dict = dataclasses.field(
         init=False, default_factory=dict
     )  # init=False ensure the cache is not copied in calls to replace
@@ -435,39 +411,37 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         operator_node_cls: type[OperatorNodeT] = foast.FieldOperator,
         operator_attributes: Optional[dict[str, Any]] = None,
     ) -> FieldOperator[OperatorNodeT]:
-        operator_attributes = operator_attributes or {}
-
-        source_def = SourceDefinition.from_function(definition)
-        closure_vars = get_closure_vars_from_function(definition)
-        annotations = typing.get_type_hints(definition)
-        foast_definition_node = FieldOperatorParser.apply(source_def, closure_vars, annotations)
-        loc = foast_definition_node.location
-        operator_attribute_nodes = {
-            key: foast.Constant(value=value, type=type_translation.from_value(value), location=loc)
-            for key, value in operator_attributes.items()
-        }
-        untyped_foast_node = operator_node_cls(
-            id=foast_definition_node.id,
-            definition=foast_definition_node,
-            location=loc,
-            **operator_attribute_nodes,
-        )
-        foast_node = FieldOperatorTypeDeduction.apply(untyped_foast_node)
         return cls(
-            foast_node=foast_node,
-            closure_vars=closure_vars,
-            definition=definition,
+            definition_stage=ffront_stages.FieldOperatorDefinition(
+                definition=definition,
+                grid_type=grid_type,
+                node_class=operator_node_cls,
+                attributes=operator_attributes or {},
+            ),
             backend=backend,
-            grid_type=grid_type,
-            operator_attributes=operator_attributes,
         )
+
+    # TODO(ricoh): linting should become optional, up to the backend.
+    def __post_init__(self):
+        """This ensures that DSL linting occurs at decoration time."""
+        _ = self.foast_stage
+
+    @functools.cached_property
+    def foast_stage(self) -> ffront_stages.FoastOperatorDefinition:
+        if self.backend is not None and self.backend.transforms_fop is not None:
+            return self.backend.transforms_fop.func_to_foast(self.definition_stage)
+        return next_backend.DEFAULT_FIELDOP_TRANSFORMS.func_to_foast(self.definition_stage)
 
     @property
     def __name__(self) -> str:
-        return self.definition.__name__
+        return self.definition_stage.definition.__name__
+
+    @property
+    def definition(self) -> str:
+        return self.definition_stage.definition
 
     def __gt_type__(self) -> ts.CallableType:
-        type_ = self.foast_node.type
+        type_ = self.foast_stage.foast_node.type
         assert isinstance(type_, ts.CallableType)
         return type_
 
@@ -475,108 +449,49 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         return dataclasses.replace(self, backend=backend)
 
     def with_grid_type(self, grid_type: GridType) -> FieldOperator:
-        return dataclasses.replace(self, grid_type=grid_type)
+        return dataclasses.replace(
+            self, definition_stage=dataclasses.replace(self.definition_stage, grid_type=grid_type)
+        )
 
     def __gt_itir__(self) -> itir.FunctionDefinition:
-        if hasattr(self, "__cached_itir"):
-            return getattr(self, "__cached_itir")
-
-        itir_node: itir.FunctionDefinition = FieldOperatorLowering.apply(self.foast_node)
-
-        object.__setattr__(self, "__cached_itir", itir_node)
-
-        return itir_node
+        if self.backend is not None and self.backend.transforms_fop is not None:
+            return self.backend.transforms_fop.foast_to_itir(self.foast_stage)
+        return next_backend.DEFAULT_FIELDOP_TRANSFORMS.foast_to_itir(self.foast_stage)
 
     def __gt_closure_vars__(self) -> dict[str, Any]:
-        return self.closure_vars
+        return self.foast_stage.closure_vars
 
     def as_program(
         self, arg_types: list[ts.TypeSpec], kwarg_types: dict[str, ts.TypeSpec]
     ) -> Program:
-        # TODO(tehrengruber): implement mechanism to deduce default values
-        #  of arg and kwarg types
-        # TODO(tehrengruber): check foast operator has no out argument that clashes
-        #  with the out argument of the program we generate here.
-        hash_ = eve_utils.content_hash((
-            tuple(arg_types),
-            tuple((name, arg) for name, arg in kwarg_types.items()),
-        ))
-        try:
-            return self._program_cache[hash_]
-        except KeyError:
-            pass
-
-        loc = self.foast_node.location
-        # use a new UID generator to allow caching
-        param_sym_uids = eve_utils.UIDGenerator()
-
-        type_ = self.__gt_type__()
-        params_decl: list[past.Symbol] = [
-            past.DataSymbol(
-                id=param_sym_uids.sequential_id(prefix="__sym"),
-                type=arg_type,
-                namespace=dialect_ast_enums.Namespace.LOCAL,
-                location=loc,
+        foast_with_types = (
+            ffront_stages.FoastWithTypes(
+                foast_op_def=self.foast_stage,
+                arg_types=tuple(arg_types),
+                kwarg_types=kwarg_types,
+                closure_vars={self.foast_stage.foast_node.id: self},
+            ),
+        )
+        past_stage = None
+        if self.backend is not None and self.backend.transforms_fop is not None:
+            past_stage = self.backend.transforms_fop.foast_to_past_closure.foast_to_past(
+                foast_with_types
             )
-            for arg_type in arg_types
-        ]
-        params_ref = [past.Name(id=pdecl.id, location=loc) for pdecl in params_decl]
-        out_sym: past.Symbol = past.DataSymbol(
-            id="out",
-            type=type_info.return_type(type_, with_args=arg_types, with_kwargs=kwarg_types),
-            namespace=dialect_ast_enums.Namespace.LOCAL,
-            location=loc,
-        )
-        out_ref = past.Name(id="out", location=loc)
-
-        if self.foast_node.id in self.closure_vars:
-            raise RuntimeError("A closure variable has the same name as the field operator itself.")
-        closure_vars = {self.foast_node.id: self}
-        closure_symbols = [
-            past.Symbol(
-                id=self.foast_node.id,
-                type=ts.DeferredType(constraint=None),
-                namespace=dialect_ast_enums.Namespace.CLOSURE,
-                location=loc,
-            ),
-        ]
-
-        untyped_past_node = past.Program(
-            id=f"__field_operator_{self.foast_node.id}",
-            type=ts.DeferredType(constraint=ts_ffront.ProgramType),
-            params=[*params_decl, out_sym],
-            body=[
-                past.Call(
-                    func=past.Name(id=self.foast_node.id, location=loc),
-                    args=params_ref,
-                    kwargs={"out": out_ref},
-                    location=loc,
+        else:
+            past_stage = (
+                next_backend.DEFAULT_FIELDOP_TRANSFORMS.foast_to_past_closure.foast_to_past(
+                    ffront_stages.FoastWithTypes(
+                        foast_op_def=self.foast_stage,
+                        arg_types=tuple(arg_types),
+                        kwarg_types=kwarg_types,
+                        closure_vars={self.foast_stage.foast_node.id: self},
+                    ),
                 )
-            ],
-            closure_vars=closure_symbols,
-            location=loc,
-        )
-        untyped_past_node = ProgramClosureVarTypeDeduction.apply(untyped_past_node, closure_vars)
-        past_node = ProgramTypeDeduction.apply(untyped_past_node)
+            )
+        return ProgramFromPast(definition_stage=None, past_stage=past_stage, backend=self.backend)
 
-        self._program_cache[hash_] = ProgramFromPast(
-            definition_stage=None,
-            past_stage=ffront_stages.PastProgramDefinition(
-                past_node=past_node,
-                closure_vars=closure_vars,
-                grid_type=self.grid_type,
-            ),
-            backend=self.backend,
-        )
-
-        return self._program_cache[hash_]
-
-    def __call__(
-        self,
-        *args,
-        **kwargs,
-    ) -> None:
-        if not next_embedded.context.within_context() and self.backend is not None:
+    def __call__(self, *args, **kwargs) -> None:
+        if not next_embedded.context.within_valid_context() and self.backend is not None:
             # non embedded execution
             if "offset_provider" not in kwargs:
                 raise errors.MissingArgumentError(None, "offset_provider", True)
@@ -585,34 +500,54 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             if "out" not in kwargs:
                 raise errors.MissingArgumentError(None, "out", True)
             out = kwargs.pop("out")
-            args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
-            # TODO(tehrengruber): check all offset providers are given
-            # deduce argument types
-            arg_types = []
-            for arg in args:
-                arg_types.append(type_translation.from_value(arg))
-            kwarg_types = {}
-            for name, arg in kwargs.items():
-                kwarg_types[name] = type_translation.from_value(arg)
-
-            return self.as_program(arg_types, kwarg_types)(
-                *args, out, offset_provider=offset_provider, **kwargs
+            args, kwargs = type_info.canonicalize_arguments(
+                self.foast_stage.foast_node.type, args, kwargs
+            )
+            return self.backend(
+                self.definition_stage,
+                *args,
+                out=out,
+                offset_provider=offset_provider,
+                from_fieldop=self,
+                **kwargs,
             )
         else:
-            if self.operator_attributes is not None and any(
+            attributes = (
+                self.definition_stage.attributes
+                if self.definition_stage
+                else self.foast_stage.attributes
+            )
+            if attributes is not None and any(
                 has_scan_op_attribute := [
-                    attribute in self.operator_attributes
-                    for attribute in ["init", "axis", "forward"]
+                    attribute in attributes for attribute in ["init", "axis", "forward"]
                 ]
             ):
                 assert all(has_scan_op_attribute)
-                forward = self.operator_attributes["forward"]
-                init = self.operator_attributes["init"]
-                axis = self.operator_attributes["axis"]
-                op = embedded_operators.ScanOperator(self.definition, forward, init, axis)
+                forward = attributes["forward"]
+                init = attributes["init"]
+                axis = attributes["axis"]
+                op = embedded_operators.ScanOperator(
+                    self.definition_stage.definition, forward, init, axis
+                )
             else:
-                op = embedded_operators.EmbeddedOperator(self.definition)
+                op = embedded_operators.EmbeddedOperator(self.definition_stage.definition)
             return embedded_operators.field_operator_call(op, args, kwargs)
+
+
+@dataclasses.dataclass(frozen=True)
+class FieldOperatorFromFoast(FieldOperator):
+    """
+    This version of the field operator does not have a DSL definition.
+
+    FieldOperator AST nodes can be programmatically built, which may be
+    particularly useful in testing and debugging.
+    This class provides the appropriate toolchain entry points.
+    """
+
+    foast_stage: ffront_stages.FoastOperatorDefinition
+
+    def __call__(self, *args, **kwargs) -> None:
+        return self.backend(self.foast_stage, *args, from_fieldop=self, **kwargs)
 
 
 @typing.overload
@@ -644,13 +579,9 @@ def field_operator(definition=None, *, backend=eve.NOTHING, grid_type=None):
         ...     ...
     """
 
-    def field_operator_inner(
-        definition: types.FunctionType,
-    ) -> FieldOperator[foast.FieldOperator]:
+    def field_operator_inner(definition: types.FunctionType) -> FieldOperator[foast.FieldOperator]:
         return FieldOperator.from_function(
-            definition,
-            DEFAULT_BACKEND if backend is eve.NOTHING else backend,
-            grid_type,
+            definition, DEFAULT_BACKEND if backend is eve.NOTHING else backend, grid_type
         )
 
     return field_operator_inner if definition is None else field_operator_inner(definition)
@@ -730,3 +661,29 @@ def scan_operator(
         )
 
     return scan_operator_inner if definition is None else scan_operator_inner(definition)
+
+
+@ffront_stages.add_content_to_fingerprint.register
+def add_fieldop_to_fingerprint(obj: FieldOperator, hasher: xtyping.HashlibAlgorithm) -> None:
+    ffront_stages.add_content_to_fingerprint(obj.definition_stage, hasher)
+    ffront_stages.add_content_to_fingerprint(obj.backend, hasher)
+
+
+@ffront_stages.add_content_to_fingerprint.register
+def add_foast_fieldop_to_fingerprint(
+    obj: FieldOperatorFromFoast, hasher: xtyping.HashlibAlgorithm
+) -> None:
+    ffront_stages.add_content_to_fingerprint(obj.foast_stage, hasher)
+    ffront_stages.add_content_to_fingerprint(obj.backend, hasher)
+
+
+@ffront_stages.add_content_to_fingerprint.register
+def add_program_to_fingerprint(obj: Program, hasher: xtyping.HashlibAlgorithm) -> None:
+    ffront_stages.add_content_to_fingerprint(obj.definition_stage, hasher)
+    ffront_stages.add_content_to_fingerprint(obj.backend, hasher)
+
+
+@ffront_stages.add_content_to_fingerprint.register
+def add_past_program_to_fingerprint(obj: ProgramFromPast, hasher: xtyping.HashlibAlgorithm) -> None:
+    ffront_stages.add_content_to_fingerprint(obj.past_stage, hasher)
+    ffront_stages.add_content_to_fingerprint(obj.backend, hasher)

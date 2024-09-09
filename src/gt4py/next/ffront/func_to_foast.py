@@ -1,26 +1,30 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
 import ast
 import builtins
-from typing import Any, Callable, Iterable, Mapping, Type, cast
+import dataclasses
+import typing
+from typing import Any, Callable, Iterable, Mapping, Type
+
+import factory
 
 import gt4py.eve as eve
 from gt4py.next import errors
-from gt4py.next.ffront import dialect_ast_enums, fbuiltins, field_operator_ast as foast
+from gt4py.next.ffront import (
+    dialect_ast_enums,
+    fbuiltins,
+    field_operator_ast as foast,
+    source_utils,
+    stages as ffront_stages,
+)
 from gt4py.next.ffront.ast_passes import (
     SingleAssignTargetPass,
     SingleStaticAssignPass,
@@ -35,7 +39,72 @@ from gt4py.next.ffront.foast_passes.dead_closure_var_elimination import DeadClos
 from gt4py.next.ffront.foast_passes.iterable_unpack import UnpackedAssignPass
 from gt4py.next.ffront.foast_passes.type_alias_replacement import TypeAliasReplacement
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
+from gt4py.next.otf import workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
+
+
+@workflow.make_step
+def func_to_foast(
+    inp: ffront_stages.FieldOperatorDefinition[ffront_stages.OperatorNodeT],
+) -> ffront_stages.FoastOperatorDefinition[ffront_stages.OperatorNodeT]:
+    source_def = source_utils.SourceDefinition.from_function(inp.definition)
+    closure_vars = source_utils.get_closure_vars_from_function(inp.definition)
+    annotations = typing.get_type_hints(inp.definition)
+    foast_definition_node = FieldOperatorParser.apply(source_def, closure_vars, annotations)
+    loc = foast_definition_node.location
+    operator_attribute_nodes = {
+        key: foast.Constant(value=value, type=type_translation.from_value(value), location=loc)
+        for key, value in inp.attributes.items()
+    }
+    untyped_foast_node = inp.node_class(
+        id=foast_definition_node.id,
+        definition=foast_definition_node,
+        location=loc,
+        **operator_attribute_nodes,
+    )
+    foast_node = FieldOperatorTypeDeduction.apply(untyped_foast_node)
+    return ffront_stages.FoastOperatorDefinition(
+        foast_node=foast_node,
+        closure_vars=closure_vars,
+        grid_type=inp.grid_type,
+        attributes=inp.attributes,
+    )
+
+
+@dataclasses.dataclass(frozen=True)
+class OptionalFuncToFoast(workflow.SkippableStep):
+    step: workflow.Workflow[
+        ffront_stages.FieldOperatorDefinition, ffront_stages.FoastOperatorDefinition
+    ] = func_to_foast
+
+    def skip_condition(
+        self, inp: ffront_stages.FieldOperatorDefinition | ffront_stages.FoastOperatorDefinition
+    ) -> bool:
+        match inp:
+            case ffront_stages.FieldOperatorDefinition():
+                return False
+            case ffront_stages.FoastOperatorDefinition():
+                return True
+
+
+@dataclasses.dataclass(frozen=True)
+class OptionalFuncToFoastFactory(factory.Factory):
+    class Meta:
+        model = OptionalFuncToFoast
+
+    class Params:
+        workflow: workflow.Workflow[
+            ffront_stages.FieldOperatorDefinition, ffront_stages.FoastOperatorDefinition
+        ] = func_to_foast
+        cached = factory.Trait(
+            step=factory.LazyAttribute(
+                lambda o: workflow.CachedStep(
+                    step=o.workflow, hash_function=ffront_stages.fingerprint_stage
+                )
+            )
+        )
+
+    step = factory.LazyAttribute(lambda o: o.workflow)
 
 
 class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
@@ -141,7 +210,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                         ],  # this is a constraint type that will not be inferred (as the function is polymorphic)
                         pos_or_kw_args={},
                         kw_only_args={},
-                        returns=cast(ts.DataType, type_translation.from_type_hint(value)),
+                        returns=typing.cast(ts.DataType, type_translation.from_type_hint(value)),
                     ),
                     namespace=dialect_ast_enums.Namespace.CLOSURE,
                     location=location,
@@ -225,9 +294,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                     )
 
             return foast.TupleTargetAssign(
-                targets=new_targets,
-                value=self.visit(node.value),
-                location=self.get_location(node),
+                targets=new_targets, value=self.visit(node.value), location=self.get_location(node)
             )
 
         if not isinstance(target, ast.Name):
@@ -267,9 +334,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
         return foast.Assign(
             target=foast.Symbol[ts.FieldType](
-                id=node.target.id,
-                location=self.get_location(node.target),
-                type=target_type,
+                id=node.target.id, location=self.get_location(node.target), type=target_type
             ),
             value=self.visit(node.value) if node.value else None,
             location=self.get_location(node),
@@ -299,22 +364,17 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             ) from None
 
         return foast.Subscript(
-            value=self.visit(node.value),
-            index=index,
-            location=self.get_location(node),
+            value=self.visit(node.value), index=index, location=self.get_location(node)
         )
 
     def visit_Attribute(self, node: ast.Attribute) -> Any:
         return foast.Attribute(
-            value=self.visit(node.value),
-            attr=node.attr,
-            location=self.get_location(node),
+            value=self.visit(node.value), attr=node.attr, location=self.get_location(node)
         )
 
     def visit_Tuple(self, node: ast.Tuple, **kwargs: Any) -> foast.TupleExpr:
         return foast.TupleExpr(
-            elts=[self.visit(item) for item in node.elts],
-            location=self.get_location(node),
+            elts=[self.visit(item) for item in node.elts], location=self.get_location(node)
         )
 
     def visit_Return(self, node: ast.Return, **kwargs: Any) -> foast.Return:
@@ -481,8 +541,4 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                 loc, f"Constants of type {type(node.value)} are not permitted."
             ) from None
 
-        return foast.Constant(
-            value=node.value,
-            location=loc,
-            type=type_,
-        )
+        return foast.Constant(value=node.value, location=loc, type=type_)

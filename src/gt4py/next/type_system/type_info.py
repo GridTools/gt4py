@@ -1,22 +1,15 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import functools
 import types
-import typing
 from collections.abc import Callable, Iterator
-from typing import Any, Generic, Protocol, Type, TypeGuard, TypeVar, cast
+from typing import Any, Generic, Literal, Protocol, Type, TypeGuard, TypeVar, cast, overload
 
 import numpy as np
 
@@ -88,23 +81,20 @@ def type_class(symbol_type: ts.TypeSpec) -> Type[ts.TypeSpec]:
     )
 
 
-@typing.overload
+@overload
 def primitive_constituents(
-    symbol_type: ts.TypeSpec,
-    with_path_arg: typing.Literal[False] = False,
+    symbol_type: ts.TypeSpec, with_path_arg: Literal[False] = False
 ) -> XIterable[ts.TypeSpec]: ...
 
 
-@typing.overload
+@overload
 def primitive_constituents(
-    symbol_type: ts.TypeSpec,
-    with_path_arg: typing.Literal[True],
+    symbol_type: ts.TypeSpec, with_path_arg: Literal[True]
 ) -> XIterable[tuple[ts.TypeSpec, tuple[int, ...]]]: ...
 
 
 def primitive_constituents(
-    symbol_type: ts.TypeSpec,
-    with_path_arg: bool = False,
+    symbol_type: ts.TypeSpec, with_path_arg: bool = False
 ) -> XIterable[ts.TypeSpec] | XIterable[tuple[ts.TypeSpec, tuple[int, ...]]]:
     """
     Return the primitive types contained in a composite type.
@@ -146,14 +136,12 @@ class TupleConstructorType(Protocol, Generic[_R]):
     def __call__(self, *args: Any) -> _R: ...
 
 
-# TODO(havogt): the complicated typing is a hint that this function needs refactoring
 def apply_to_primitive_constituents(
-    symbol_type: ts.TypeSpec,
-    fun: (Callable[[ts.TypeSpec], _T] | Callable[[ts.TypeSpec, tuple[int, ...]], _T]),
-    _path: tuple[int, ...] = (),
-    *,
+    fun: Callable[..., _T],
+    *symbol_types: ts.TypeSpec,
     with_path_arg: bool = False,
     tuple_constructor: TupleConstructorType[_R] = lambda *elements: ts.TupleType(types=[*elements]),  # type: ignore[assignment] # probably related to https://github.com/python/mypy/issues/10854
+    _path: tuple[int, ...] = (),
 ) -> _T | _R:
     """
     Apply function to all primitive constituents of a type.
@@ -162,26 +150,40 @@ def apply_to_primitive_constituents(
     >>> tuple_type = ts.TupleType(types=[int_type, int_type])
     >>> print(
     ...     apply_to_primitive_constituents(
-    ...         tuple_type, lambda primitive_type: ts.FieldType(dims=[], dtype=primitive_type)
+    ...         lambda primitive_type: ts.FieldType(dims=[], dtype=primitive_type),
+    ...         tuple_type,
     ...     )
     ... )
     tuple[Field[[], int64], Field[[], int64]]
+
+    >>> apply_to_primitive_constituents(
+    ...     lambda primitive_type, path: (path, primitive_type),
+    ...     tuple_type,
+    ...     with_path_arg=True,
+    ...     tuple_constructor=lambda *elements: dict(elements),
+    ... )
+    {(0,): ScalarType(kind=<ScalarKind.INT64: 64>, shape=None), (1,): ScalarType(kind=<ScalarKind.INT64: 64>, shape=None)}
     """
-    if isinstance(symbol_type, ts.TupleType):
-        return tuple_constructor(*[
-            apply_to_primitive_constituents(
-                el,
-                fun,
-                _path=(*_path, i),
-                with_path_arg=with_path_arg,
-                tuple_constructor=tuple_constructor,
-            )
-            for i, el in enumerate(symbol_type.types)
-        ])
+    if isinstance(symbol_types[0], ts.TupleType):
+        assert all(isinstance(symbol_type, ts.TupleType) for symbol_type in symbol_types)
+        return tuple_constructor(
+            *[
+                apply_to_primitive_constituents(
+                    fun,
+                    *el_types,
+                    _path=(*_path, i),
+                    with_path_arg=with_path_arg,
+                    tuple_constructor=tuple_constructor,
+                )
+                for i, el_types in enumerate(
+                    zip(*(symbol_type.types for symbol_type in symbol_types))  # type: ignore[attr-defined]  # ensured by assert above
+                )
+            ]
+        )
     if with_path_arg:
-        return fun(symbol_type, _path)  # type: ignore[call-arg] # mypy not aware of `with_path_arg`
+        return fun(*symbol_types, path=_path)
     else:
-        return fun(symbol_type)  # type: ignore[call-arg] # mypy not aware of `with_path_arg`
+        return fun(*symbol_types)
 
 
 def extract_dtype(symbol_type: ts.TypeSpec) -> ts.ScalarType:
@@ -221,10 +223,26 @@ def is_floating_point(symbol_type: ts.TypeSpec) -> bool:
     >>> is_floating_point(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)))
     True
     """
-    return extract_dtype(symbol_type).kind in [
-        ts.ScalarKind.FLOAT32,
-        ts.ScalarKind.FLOAT64,
-    ]
+    return extract_dtype(symbol_type).kind in [ts.ScalarKind.FLOAT32, ts.ScalarKind.FLOAT64]
+
+
+def is_integer(symbol_type: ts.TypeSpec) -> bool:
+    """
+    Check if ``symbol_type`` is an integral type.
+
+    Examples:
+    ---------
+    >>> is_integer(ts.ScalarType(kind=ts.ScalarKind.INT32))
+    True
+    >>> is_integer(ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
+    False
+    >>> is_integer(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32)))
+    False
+    """
+    return isinstance(symbol_type, ts.ScalarType) and symbol_type.kind in {
+        ts.ScalarKind.INT32,
+        ts.ScalarKind.INT64,
+    }
 
 
 def is_integral(symbol_type: ts.TypeSpec) -> bool:
@@ -240,10 +258,7 @@ def is_integral(symbol_type: ts.TypeSpec) -> bool:
     >>> is_integral(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32)))
     True
     """
-    return extract_dtype(symbol_type).kind in [
-        ts.ScalarKind.INT32,
-        ts.ScalarKind.INT64,
-    ]
+    return is_integer(extract_dtype(symbol_type))
 
 
 def is_number(symbol_type: ts.TypeSpec) -> bool:
@@ -441,7 +456,9 @@ def is_concretizable(symbol_type: ts.TypeSpec, to_type: ts.TypeSpec) -> bool:
     return False
 
 
-def promote(*types: ts.FieldType | ts.ScalarType) -> ts.FieldType | ts.ScalarType:
+def promote(
+    *types: ts.FieldType | ts.ScalarType, always_field: bool = False
+) -> ts.FieldType | ts.ScalarType:
     """
     Promote a set of field or scalar types to a common type.
 
@@ -464,7 +481,7 @@ def promote(*types: ts.FieldType | ts.ScalarType) -> ts.FieldType | ts.ScalarTyp
      ...
     ValueError: Dimensions can not be promoted. Could not determine order of the following dimensions: J, K.
     """
-    if all(isinstance(type_, ts.ScalarType) for type_ in types):
+    if not always_field and all(isinstance(type_, ts.ScalarType) for type_ in types):
         if not all(type_ == types[0] for type_ in types):
             raise ValueError("Could not promote scalars of different dtype (not implemented).")
         if not all(type_.shape is None for type_ in types):  # type: ignore[union-attr]
@@ -675,7 +692,7 @@ def function_signature_incompatibilities_func(
     num_pos_params = len(func_type.pos_only_args) + len(func_type.pos_or_kw_args)
     assert len(args) >= num_pos_params
     for i, (a_arg, b_arg) in enumerate(
-        zip(func_type.pos_only_args + list(func_type.pos_or_kw_args.values()), args)
+        zip(list(func_type.pos_only_args) + list(func_type.pos_or_kw_args.values()), args)
     ):
         if (
             b_arg is not UNDEFINED_ARG

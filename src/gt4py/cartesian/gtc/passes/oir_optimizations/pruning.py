@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from typing import Any, Dict
 
@@ -41,9 +35,7 @@ class NoFieldAccessPruning(eve.NodeTranslator):
         if not horizontal_executions:
             return eve.NOTHING
         return oir.VerticalLoopSection(
-            interval=node.interval,
-            horizontal_executions=horizontal_executions,
-            loc=node.loc,
+            interval=node.interval, horizontal_executions=horizontal_executions, loc=node.loc
         )
 
     def visit_VerticalLoop(self, node: oir.VerticalLoop) -> Any:
@@ -51,10 +43,7 @@ class NoFieldAccessPruning(eve.NodeTranslator):
         if not sections:
             return eve.NOTHING
         return oir.VerticalLoop(
-            loop_order=node.loop_order,
-            sections=sections,
-            caches=node.caches,
-            loc=node.loc,
+            loop_order=node.loop_order, sections=sections, caches=node.caches, loc=node.loc
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs):

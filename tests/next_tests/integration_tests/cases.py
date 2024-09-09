@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -144,10 +138,7 @@ class ConstInitializer(DataInitializer):
         dtype: np.typing.DTypeLike,
     ) -> FieldValue:
         return constructors.full(
-            domain=common.domain(sizes),
-            fill_value=self.value,
-            dtype=dtype,
-            allocator=allocator,
+            domain=common.domain(sizes), fill_value=self.value, dtype=dtype, allocator=allocator
         )
 
 
@@ -422,13 +413,7 @@ def verify(
     Else, ``inout`` will not be passed and compared to ``ref``.
     """
     if out:
-        run(
-            case,
-            fieldview_prog,
-            *args,
-            out=out,
-            offset_provider=offset_provider,
-        )
+        run(case, fieldview_prog, *args, out=out, offset_provider=offset_provider)
     else:
         run(case, fieldview_prog, *args, offset_provider=offset_provider)
 
@@ -465,7 +450,7 @@ def verify_with_default_data(
             ``comparison(ref, <out | inout>)`` and should return a boolean.
     """
     inps, kwfields = get_default_data(case, fieldop)
-    ref_args = tuple(i.asnumpy() if common.is_field(i) else i for i in inps)
+    ref_args = tuple(i.asnumpy() if isinstance(i, common.Field) else i for i in inps)
     verify(
         case,
         fieldop,
@@ -478,9 +463,7 @@ def verify_with_default_data(
 
 
 @pytest.fixture
-def cartesian_case(
-    exec_alloc_descriptor: test_definitions.ExecutionAndAllocatorDescriptor,
-):
+def cartesian_case(exec_alloc_descriptor: test_definitions.ExecutionAndAllocatorDescriptor):
     yield Case(
         exec_alloc_descriptor if exec_alloc_descriptor.executor else None,
         offset_provider={
@@ -496,8 +479,7 @@ def cartesian_case(
 
 @pytest.fixture
 def unstructured_case(
-    mesh_descriptor,
-    exec_alloc_descriptor: test_definitions.ExecutionAndAllocatorDescriptor,
+    mesh_descriptor, exec_alloc_descriptor: test_definitions.ExecutionAndAllocatorDescriptor
 ):
     yield Case(
         exec_alloc_descriptor if exec_alloc_descriptor.executor else None,
@@ -572,8 +554,7 @@ def get_param_size(param_type: ts.TypeSpec, sizes: dict[gtx.Dimension, int]) -> 
 
 
 def extend_sizes(
-    sizes: dict[gtx.Dimension, int],
-    extend: Optional[dict[gtx.Dimension, tuple[int, int]]] = None,
+    sizes: dict[gtx.Dimension, int], extend: Optional[dict[gtx.Dimension, tuple[int, int]]] = None
 ) -> dict[gtx.Dimension, int]:
     """Calculate the sizes per dimension given a set of extensions."""
     sizes = sizes.copy()
@@ -584,8 +565,7 @@ def extend_sizes(
 
 
 def get_default_data(
-    case: Case,
-    fieldview_prog: decorator.FieldOperator | decorator.Program,
+    case: Case, fieldview_prog: decorator.FieldOperator | decorator.Program
 ) -> tuple[tuple[gtx.Field | ScalarValue | tuple, ...], dict[str, gtx.Field]]:
     """
     Allocate default data for a fieldview code object given a test case.

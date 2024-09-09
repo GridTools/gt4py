@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from gt4py.cartesian.gtc.common import HorizontalInterval, HorizontalMask, LevelMarker
 from gt4py.cartesian.gtc.passes.oir_optimizations.pruning import (
@@ -56,7 +50,7 @@ def test_no_field_access_pruning():
                             )
                         ],
                         declarations=[LocalScalarFactory(name="bar")],
-                    ),
+                    )
                 ]
             ),
         ]
@@ -76,8 +70,8 @@ def test_no_field_write_access_pruning():
                             AssignStmtFactory(
                                 left=FieldAccessFactory(name="foo"), right=LiteralFactory()
                             )
-                        ],
-                    ),
+                        ]
+                    )
                 ]
             ),
             VerticalLoopFactory(
@@ -90,10 +84,10 @@ def test_no_field_write_access_pruning():
                             )
                         ],
                         declarations=[LocalScalarFactory(name="bar")],
-                    ),
+                    )
                 ]
             ),
-        ],
+        ]
     )
     transformed = NoFieldAccessPruning().visit(testee)
     assert len(transformed.vertical_loops) == 1
@@ -106,9 +100,7 @@ def test_unreachable_stmt_pruning():
     testee = StencilFactory(
         vertical_loops__0__sections__0__horizontal_executions=[
             HorizontalExecutionFactory(
-                body=[
-                    AssignStmtFactory(left__name=out_name, right__name=in_name),
-                ]
+                body=[AssignStmtFactory(left__name=out_name, right__name=in_name)]
             ),
             HorizontalExecutionFactory(
                 body=[

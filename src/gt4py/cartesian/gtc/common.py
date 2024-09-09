@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -406,10 +400,7 @@ def _make_root_validator(impl: datamodels.RootValidator) -> datamodels.RootValid
 
 
 def assign_stmt_dtype_validation(*, strict: bool) -> datamodels.RootValidator:
-    def _impl(
-        cls: Type[datamodels.DataModel],
-        instance: datamodels.DataModel,
-    ) -> None:
+    def _impl(cls: Type[datamodels.DataModel], instance: datamodels.DataModel) -> None:
         assert isinstance(instance, AssignStmt)
         verify_and_get_common_dtype(cls, [instance.left, instance.right], strict=strict)
 
@@ -865,10 +856,7 @@ OP_TO_UFUNC_NAME: Final[
         ComparisonOperator.EQ: "equal",
         ComparisonOperator.NE: "not_equal",
     },
-    LogicalOperator: {
-        LogicalOperator.AND: "logical_and",
-        LogicalOperator.OR: "logical_or",
-    },
+    LogicalOperator: {LogicalOperator.AND: "logical_and", LogicalOperator.OR: "logical_or"},
     NativeFunction: {
         NativeFunction.ABS: "abs",
         NativeFunction.MIN: "minimum",

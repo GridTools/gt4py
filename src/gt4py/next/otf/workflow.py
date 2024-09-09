@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -84,15 +78,16 @@ class ReplaceEnabledWorkflowMixin(Workflow[StartT_contra, EndT_co], Protocol):
         return dataclasses.replace(self, **kwargs)
 
 
-class ChainableWorkflowMixin(Workflow[StartT, EndT]):
-    def chain(self, next_step: Workflow[EndT, NewEndT]) -> ChainableWorkflowMixin[StartT, NewEndT]:
+class ChainableWorkflowMixin(Workflow[StartT, EndT_co], Protocol[StartT, EndT_co]):
+    def chain(
+        self, next_step: Workflow[EndT_co, NewEndT]
+    ) -> ChainableWorkflowMixin[StartT, NewEndT]:
         return make_step(self).chain(next_step)
 
 
 @dataclasses.dataclass(frozen=True)
 class NamedStepSequence(
-    ChainableWorkflowMixin[StartT, EndT],
-    ReplaceEnabledWorkflowMixin[StartT, EndT],
+    ChainableWorkflowMixin[StartT, EndT], ReplaceEnabledWorkflowMixin[StartT, EndT]
 ):
     """
     Workflow with linear succession of named steps.
@@ -253,8 +248,7 @@ class CachedStep(
 
 @dataclasses.dataclass(frozen=True)
 class SkippableStep(
-    ChainableWorkflowMixin[StartT, EndT],
-    ReplaceEnabledWorkflowMixin[StartT, EndT],
+    ChainableWorkflowMixin[StartT, EndT], ReplaceEnabledWorkflowMixin[StartT, EndT]
 ):
     step: Workflow[StartT, EndT]
 
@@ -265,3 +259,26 @@ class SkippableStep(
 
     def skip_condition(self, inp: StartT) -> bool:
         raise NotImplementedError()
+
+
+@dataclasses.dataclass
+class InputWithArgs(Generic[StartT]):
+    data: StartT
+    args: tuple[Any]
+    kwargs: dict[str, Any]
+
+
+@dataclasses.dataclass(frozen=True)
+class NamedStepSequenceWithArgs(NamedStepSequence[InputWithArgs[StartT], EndT]):
+    def __call__(self, inp: InputWithArgs[StartT]) -> EndT:
+        args = inp.args
+        kwargs = inp.kwargs
+        step_result: Any = inp.data
+        fields = {f.name: f for f in dataclasses.fields(self)}
+        for step_name in self.step_order:
+            step = getattr(self, step_name)
+            if fields[step_name].metadata.get("takes_args", False):
+                step_result = step(InputWithArgs(step_result, args, kwargs))
+            else:
+                step_result = step(step_result)
+        return step_result

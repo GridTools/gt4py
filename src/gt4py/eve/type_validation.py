@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """Generic interface and implementations of run-time type validation for arbitrary values."""
 
@@ -20,7 +14,7 @@ import abc
 import collections.abc
 import dataclasses
 import functools
-import typing as _typing
+import typing
 
 from . import exceptions, extended_typing as xtyping, utils
 from .extended_typing import (
@@ -78,11 +72,7 @@ class TypeValidator(Protocol):
 
 class FixedTypeValidator(Protocol):
     @abc.abstractmethod
-    def __call__(
-        self,
-        value: Any,
-        **kwargs: Any,
-    ) -> None:
+    def __call__(self, value: Any, **kwargs: Any) -> None:
         """Protocol for callables checking that ``value`` matches a fixed type_annotation.
 
         Arguments:
@@ -211,7 +201,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
                 else:
                     return self.make_is_instance_of(name, type_annotation)
 
-            if isinstance(type_annotation, _typing.TypeVar):
+            if isinstance(type_annotation, typing.TypeVar):
                 if type_annotation.__bound__:
                     return self.make_is_instance_of(name, type_annotation.__bound__)
                 else:
@@ -229,7 +219,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
             origin_type = xtyping.get_origin(type_annotation)
             type_args = xtyping.get_args(type_annotation)
 
-            if origin_type is Literal:
+            if origin_type in {typing.Literal, xtyping.Literal}:
                 if len(type_args) == 1:
                     return self.make_is_literal(name, type_args[0])
                 else:
@@ -485,8 +475,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
 
 
 simple_type_validator_factory: Final = cast(
-    TypeValidatorFactory,
-    utils.optional_lru_cache(SimpleTypeValidatorFactory(), typed=True),
+    TypeValidatorFactory, utils.optional_lru_cache(SimpleTypeValidatorFactory(), typed=True)
 )
 """Public (with optional cache) entry point for :class:`SimpleTypeValidatorFactory`."""
 

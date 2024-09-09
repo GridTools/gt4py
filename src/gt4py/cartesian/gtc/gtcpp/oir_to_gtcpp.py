@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import functools
 import itertools
@@ -162,9 +156,7 @@ class OIRToGTCpp(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     def visit_BinaryOp(self, node: oir.BinaryOp, **kwargs: Any) -> gtcpp.BinaryOp:
         return gtcpp.BinaryOp(
-            op=node.op,
-            left=self.visit(node.left, **kwargs),
-            right=self.visit(node.right, **kwargs),
+            op=node.op, left=self.visit(node.left, **kwargs), right=self.visit(node.right, **kwargs)
         )
 
     def visit_TernaryOp(self, node: oir.TernaryOp, **kwargs: Any) -> gtcpp.TernaryOp:
@@ -329,11 +321,7 @@ class OIRToGTCpp(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         return gtcpp.GTStage(functor=functor_name, args=stage_args)
 
     def visit_VerticalLoop(
-        self,
-        node: oir.VerticalLoop,
-        *,
-        comp_ctx: GTComputationContext,
-        **kwargs: Any,
+        self, node: oir.VerticalLoop, *, comp_ctx: GTComputationContext, **kwargs: Any
     ) -> gtcpp.GTMultiStage:
         # the following visit assumes that temporaries are already available in comp_ctx
         stages = list(

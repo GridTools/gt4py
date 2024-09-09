@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -26,17 +20,20 @@ import factory
 
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
-from gt4py.next import allocators as next_allocators, backend as next_backend, common
+from gt4py.next import allocators as next_allocators, backend as next_backend, common, config
+from gt4py.next.ffront import foast_to_gtir, past_to_itir, stages as ffront_stages
 from gt4py.next.iterator import embedded, ir as itir, transforms as itir_transforms
-from gt4py.next.iterator.transforms import global_tmps as gtmps_transform
+from gt4py.next.iterator.transforms import fencil_to_program
 from gt4py.next.otf import stages, workflow
 from gt4py.next.program_processors import modular_executor, processor_interface as ppi
+from gt4py.next.type_system import type_specifications as ts
 
 
-def _create_tmp(axes: str, origin: str, shape: str, dtype: Any) -> str:
-    if isinstance(dtype, tuple):
-        return f"({','.join(_create_tmp(axes, origin, shape, dt) for dt in dtype)},)"
+def _create_tmp(axes: str, origin: str, shape: str, dtype: ts.TypeSpec) -> str:
+    if isinstance(dtype, ts.TupleType):
+        return f"({','.join(_create_tmp(axes, origin, shape, dt) for dt in dtype.types)},)"
     else:
+        assert isinstance(dtype, ts.ScalarType)
         return (
             f"gtx.as_field([{axes}], np.empty({shape}, dtype=np.dtype('{dtype}')), origin={origin})"
         )
@@ -52,14 +49,6 @@ class EmbeddedDSL(codegen.TemplatedGenerator):
     FunCall = as_fmt("{fun}({','.join(args)})")
     Lambda = as_mako("(lambda ${','.join(params)}: ${expr})")
     StencilClosure = as_mako("closure(${domain}, ${stencil}, ${output}, [${','.join(inputs)}])")
-    FencilDefinition = as_mako(
-        """
-${''.join(function_definitions)}
-@fendef
-def ${id}(${','.join(params)}):
-    ${'\\n    '.join(closures)}
-    """
-    )
     FunctionDefinition = as_mako(
         """
 @fundef
@@ -67,34 +56,22 @@ def ${id}(${','.join(params)}):
     return ${expr}
     """
     )
+    Program = as_mako(
+        """
+${''.join(function_definitions)}
+@fendef
+def ${id}(${','.join(params)}):
+    ${'\\n    '.join(declarations)}
+    ${'\\n    '.join(body)}
+    """
+    )
+    SetAt = as_mako("set_at(${expr}, ${domain}, ${target})")
 
-    # extension required by global_tmps
-    def visit_FencilWithTemporaries(
-        self, node: gtmps_transform.FencilWithTemporaries, **kwargs: Any
-    ) -> str:
-        params = self.visit(node.params)
-
-        tmps = "\n    ".join(self.visit(node.tmps))
-        args = ", ".join(params + [tmp.id for tmp in node.tmps])
-        params = ", ".join(params)
-        fencil = self.visit(node.fencil)
-        return (
-            fencil
-            + "\n"
-            + f"def {node.fencil.id}_wrapper({params}, **kwargs):\n    "
-            + tmps
-            + f"\n    {node.fencil.id}({args}, **kwargs)\n"
-        )
-
-    def visit_Temporary(self, node: gtmps_transform.Temporary, **kwargs: Any) -> str:
+    def visit_Temporary(self, node: itir.Temporary, **kwargs: Any) -> str:
         assert (
             isinstance(node.domain, itir.FunCall)
             and isinstance(node.domain.fun, itir.SymRef)
-            and node.domain.fun.id
-            in (
-                "cartesian_domain",
-                "unstructured_domain",
-            )
+            and node.domain.fun.id in ("cartesian_domain", "unstructured_domain")
         )
         assert all(
             isinstance(r, itir.FunCall) and r.fun == itir.SymRef(id="named_range")
@@ -104,10 +81,9 @@ def ${id}(${','.join(params)}):
         axes = ", ".join(label for label, _, _ in domain_ranges)
         origin = "{" + ", ".join(f"{label}: -{start}" for label, start, _ in domain_ranges) + "}"
         shape = "(" + ", ".join(f"{stop}-{start}" for _, start, stop in domain_ranges) + ")"
+        assert node.dtype
         return f"{node.id} = {_create_tmp(axes, origin, shape, node.dtype)}"
 
-
-_BACKEND_NAME = "roundtrip"
 
 _FENCIL_CACHE: dict[int, Callable] = {}
 
@@ -135,11 +111,15 @@ def fencil_generator(
     #  caching mechanism
     cache_key = hash((ir, lift_mode, debug, use_embedded, tuple(offset_provider.items())))
     if cache_key in _FENCIL_CACHE:
+        if debug:
+            print(f"Using cached fencil for key {cache_key}")
         return _FENCIL_CACHE[cache_key]
 
     ir = itir_transforms.apply_common_transforms(
         ir, lift_mode=lift_mode, offset_provider=offset_provider
     )
+
+    ir = fencil_to_program.FencilToProgram.apply(ir)
 
     program = EmbeddedDSL.apply(ir)
 
@@ -155,8 +135,8 @@ def fencil_generator(
         .if_isinstance(str)
         .to_set()
     )
-    axis_literals: Iterable[str] = (
-        ir.pre_walk_values().if_isinstance(itir.AxisLiteral).getattr("value").to_set()
+    axis_literals_set: Iterable[itir.AxisLiteral] = (
+        ir.pre_walk_values().if_isinstance(itir.AxisLiteral).to_set()
     )
 
     if use_embedded:
@@ -178,7 +158,10 @@ def fencil_generator(
         if debug:
             print(source_file_name)
         offset_literals = [f'{o} = offset("{o}")' for o in offset_literals]
-        axis_literals = [f'{o} = gtx.Dimension("{o}")' for o in axis_literals]
+        axis_literals = [
+            f'{o.value} = gtx.Dimension("{o.value}", kind=gtx.DimensionKind("{o.kind}"))'
+            for o in axis_literals_set
+        ]
         source_file.write(header)
         source_file.write("\n".join(offset_literals))
         source_file.write("\n")
@@ -194,12 +177,8 @@ def fencil_generator(
         if not debug:
             pathlib.Path(source_file_name).unlink(missing_ok=True)
 
-    assert isinstance(ir, (itir.FencilDefinition, gtmps_transform.FencilWithTemporaries))
-    fencil_name = (
-        ir.fencil.id + "_wrapper"
-        if isinstance(ir, gtmps_transform.FencilWithTemporaries)
-        else ir.id
-    )
+    assert isinstance(ir, itir.Program)
+    fencil_name = ir.id
     fencil = getattr(mod, fencil_name)
 
     _FENCIL_CACHE[cache_key] = fencil
@@ -213,10 +192,11 @@ def execute_roundtrip(
     *args: Any,
     column_axis: Optional[common.Dimension] = None,
     offset_provider: dict[str, embedded.NeighborTableOffsetProvider],
-    debug: bool = False,
+    debug: Optional[bool] = None,
     lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE,
     dispatch_backend: Optional[ppi.ProgramExecutor] = None,
 ) -> None:
+    debug = debug if debug is not None else config.DEBUG
     fencil = fencil_generator(
         ir,
         offset_provider=offset_provider,
@@ -225,10 +205,7 @@ def execute_roundtrip(
         use_embedded=dispatch_backend is None,
     )
 
-    new_kwargs: dict[str, Any] = {
-        "offset_provider": offset_provider,
-        "column_axis": column_axis,
-    }
+    new_kwargs: dict[str, Any] = {"offset_provider": offset_provider, "column_axis": column_axis}
     if dispatch_backend:
         new_kwargs["backend"] = dispatch_backend
 
@@ -237,15 +214,16 @@ def execute_roundtrip(
 
 @dataclasses.dataclass(frozen=True)
 class Roundtrip(workflow.Workflow[stages.ProgramCall, stages.CompiledProgram]):
-    debug: bool = False
+    debug: Optional[bool] = None
     lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE
     use_embedded: bool = True
 
     def __call__(self, inp: stages.ProgramCall) -> stages.CompiledProgram:
+        debug = config.DEBUG if self.debug is None else self.debug
         return fencil_generator(
             inp.program,
             offset_provider=inp.kwargs.get("offset_provider", None),
-            debug=self.debug,
+            debug=debug,
             lift_mode=self.lift_mode,
             use_embedded=self.use_embedded,
         )
@@ -282,8 +260,28 @@ class RoundtripExecutorFactory(factory.Factory):
 
 
 executor = RoundtripExecutorFactory(name="roundtrip")
+executor_with_temporaries = RoundtripExecutorFactory(
+    name="roundtrip_with_temporaries",
+    roundtrip_workflow=RoundtripFactory(lift_mode=itir_transforms.LiftMode.USE_TEMPORARIES),
+)
 
-backend = next_backend.Backend(
+default = next_backend.Backend(
+    executor=executor, allocator=next_allocators.StandardCPUFieldBufferAllocator()
+)
+with_temporaries = next_backend.Backend(
+    executor=executor_with_temporaries, allocator=next_allocators.StandardCPUFieldBufferAllocator()
+)
+
+gtir = next_backend.Backend(
     executor=executor,
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
+    transforms_fop=next_backend.FieldopTransformWorkflow(
+        past_to_itir=past_to_itir.PastToItirFactory(to_gtir=True),
+        foast_to_itir=workflow.CachedStep(
+            step=foast_to_gtir.foast_to_gtir, hash_function=ffront_stages.fingerprint_stage
+        ),
+    ),
+    transforms_prog=next_backend.ProgramTransformWorkflow(
+        past_to_itir=past_to_itir.PastToItirFactory(to_gtir=True)
+    ),
 )

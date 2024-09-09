@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
 
@@ -38,12 +32,7 @@ Koff = gtx.FieldOffset("Koff", KDim, (KDim,))
 
 @gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0, True))
 def _scan(
-    state: tuple[float, float, bool],
-    w: float,
-    z_q: float,
-    z_a: float,
-    z_b: float,
-    z_c: float,
+    state: tuple[float, float, bool], w: float, z_q: float, z_a: float, z_b: float, z_c: float
 ) -> tuple[float, float, bool]:
     z_q_m1, w_m1, first = state
     z_g = z_b + z_a * z_q_m1
@@ -78,11 +67,7 @@ def solve_nonhydro_stencil_52_like(
     dummy: gtx.Field[[Cell, KDim], bool],
 ):
     _solve_nonhydro_stencil_52_like(
-        z_alpha,
-        z_beta,
-        z_q,
-        w,
-        out=(z_q[:, 1:], w[:, 1:], dummy[:, 1:]),
+        z_alpha, z_beta, z_q, w, out=(z_q[:, 1:], w[:, 1:], dummy[:, 1:])
     )
 
 
@@ -109,11 +94,7 @@ def solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(
     w: gtx.Field[[Cell, KDim], float],
 ):
     _solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(
-        z_alpha,
-        z_beta,
-        z_q,
-        w,
-        out=(z_q[:, 1:], w[:, 1:]),
+        z_alpha, z_beta, z_q, w, out=(z_q[:, 1:], w[:, 1:])
     )
 
 
@@ -168,10 +149,7 @@ def solve_nonhydro_stencil_52_like_z_q_tup(
 
 
 def reference(
-    z_alpha: np.array,
-    z_beta: np.array,
-    z_q_ref: np.array,
-    w_ref: np.array,
+    z_alpha: np.array, z_beta: np.array, z_q_ref: np.array, w_ref: np.array
 ) -> tuple[np.ndarray, np.ndarray]:
     z_q = np.copy(z_q_ref)
     w = np.copy(w_ref)

@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -21,7 +15,6 @@ from typing import Any, cast
 
 import factory
 
-from gt4py.eve import utils as eve_utils
 from gt4py.next import errors
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -73,7 +66,9 @@ class OptionalFuncToPastFactory(factory.Factory):
         workflow = func_to_past
         cached = factory.Trait(
             step=factory.LazyAttribute(
-                lambda o: workflow.CachedStep(step=o.workflow, hash_function=eve_utils.content_hash)
+                lambda o: workflow.CachedStep(
+                    step=o.workflow, hash_function=ffront_stages.fingerprint_stage
+                )
             )
         )
 
@@ -86,10 +81,7 @@ class ProgramParser(DialectParser[past.Program]):
 
     @classmethod
     def _postprocess_dialect_ast(
-        cls,
-        output_node: past.Program,
-        closure_vars: dict[str, Any],
-        annotations: dict[str, Any],
+        cls, output_node: past.Program, closure_vars: dict[str, Any], annotations: dict[str, Any]
     ) -> past.Program:
         output_node = ClosureVarTypeDeduction.apply(output_node, closure_vars)
         return ProgramTypeDeduction.apply(output_node)
@@ -169,6 +161,19 @@ class ProgramParser(DialectParser[past.Program]):
 
     def visit_Name(self, node: ast.Name) -> past.Name:
         return past.Name(id=node.id, location=self.get_location(node))
+
+    def visit_Attribute(self, node: ast.Attribute) -> past.Attribute:
+        if not isinstance(node.ctx, ast.Load):
+            raise errors.DSLError(
+                self.get_location(node), "`node.ctx` can only be of type ast.Load"
+            )
+        assert isinstance(node.value, (ast.Name, ast.Attribute))
+
+        return past.Attribute(
+            attr=node.attr,
+            value=self.visit(node.value),
+            location=self.get_location(node),
+        )
 
     def visit_Dict(self, node: ast.Dict) -> past.Dict:
         return past.Dict(

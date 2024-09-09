@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from typing import Sequence
 
@@ -119,11 +113,13 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
 
         cfg = ""
         if dep.name == "nanobind":
-            cfg = "\n".join([
-                "nanobind_build_library(nanobind-static)",
-                f"nanobind_compile_options({dep.target})",
-                f"nanobind_link_options({dep.target})",
-            ])
+            cfg = "\n".join(
+                [
+                    "nanobind_build_library(nanobind-static)",
+                    f"nanobind_compile_options({dep.target})",
+                    f"nanobind_link_options({dep.target})",
+                ]
+            )
         lnk = f"target_link_libraries({dep.target} PUBLIC {lib_name})"
         return cfg + "\n" + lnk
 

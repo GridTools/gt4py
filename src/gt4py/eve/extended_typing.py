@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """
 Typing definitions working across different Python versions (via `typing_extensions`).
@@ -34,7 +28,7 @@ import sys as _sys
 import types as _types
 import typing as _typing
 from typing import *  # noqa: F403 [undefined-local-with-import-star]
-from typing import overload  # Only needed to avoid false flake8 errors
+from typing import overload
 
 import numpy.typing as npt
 import typing_extensions as _typing_extensions
@@ -127,10 +121,15 @@ def __dir__() -> List[str]:
     return self_func.__cached_dir
 
 
-_T = TypeVar("_T")
-
 # -- Common type aliases --
 NoArgsCallable = Callable[[], Any]
+
+_A = TypeVar("_A", contravariant=True)
+_R = TypeVar("_R", covariant=True)
+
+
+class ArgsOnlyCallable(Protocol[_A, _R]):
+    def __call__(self, *args: _A) -> _R: ...
 
 
 # -- Typing annotations --
@@ -143,9 +142,7 @@ if _sys.version_info >= (3, 9):
     ]
 else:
     SolvedTypeAnnotation = Union[  # type: ignore[misc]  # mypy consider this assignment a redefinition
-        Type,
-        _typing._SpecialForm,
-        _typing._GenericAlias,  # type: ignore[attr-defined]  # _GenericAlias is not exported in stub
+        Type, _typing._SpecialForm, _typing._GenericAlias  # type: ignore[attr-defined]  # _GenericAlias is not exported in stub
     ]
 
 TypeAnnotation = Union[ForwardRef, SolvedTypeAnnotation]
@@ -209,15 +206,20 @@ ReadableBuffer: TypeAlias = Union[ReadOnlyBuffer, WriteableBuffer]
 class HashlibAlgorithm(Protocol):
     """Used in the hashlib module of the standard library."""
 
-    digest_size: int
-    block_size: int
-    name: str
+    @property
+    def block_size(self) -> int: ...
+
+    @property
+    def digest_size(self) -> int: ...
+
+    @property
+    def name(self) -> str: ...
 
     def __init__(self, data: ReadableBuffer = ...) -> None: ...
 
-    def copy(self) -> HashlibAlgorithm: ...
+    def copy(self) -> Self: ...
 
-    def update(self, data: ReadableBuffer) -> None: ...
+    def update(self, data: Buffer, /) -> None: ...
 
     def digest(self) -> bytes: ...
 
@@ -318,153 +320,6 @@ class DevToolsPrettyPrintable(Protocol):
 
 
 # -- Added functionality --
-class NonProtocolABCMeta(_typing._ProtocolMeta):
-    """Subclass of :cls:`typing.Protocol`'s metaclass doing instance and subclass checks as ABCMeta."""
-
-    __instancecheck__ = _abc.ABCMeta.__instancecheck__  # type: ignore[assignment]
-    __subclasshook__ = None  # type: ignore[assignment]
-
-
-class NonProtocolABC(metaclass=NonProtocolABCMeta):
-    pass
-
-
-_ProtoT = TypeVar("_ProtoT", bound=_abc.ABCMeta)
-
-
-@overload
-def extended_runtime_checkable(
-    *,
-    instance_check_shortcut: bool = True,
-    subclass_check_with_data_members: bool = False,
-) -> Callable[[_ProtoT], _ProtoT]: ...
-
-
-@overload
-def extended_runtime_checkable(
-    maybe_cls: _ProtoT,
-    *,
-    instance_check_shortcut: bool = True,
-    subclass_check_with_data_members: bool = False,
-) -> _ProtoT: ...
-
-
-def extended_runtime_checkable(
-    maybe_cls: Optional[_ProtoT] = None,
-    *,
-    instance_check_shortcut: bool = True,
-    subclass_check_with_data_members: bool = False,
-) -> _ProtoT | Callable[[_ProtoT], _ProtoT]:
-    """Emulates :func:`typing.runtime_checkable` with optional performance shortcuts.
-
-    If all optional shortcuts are set to ``False``, it behaves exactly
-    as :func:`typing.runtime_checkable`.
-
-    Keyword Arguments:
-        instance_check_shortcut: instance checks only use the instance type
-            instead of checking the instance data for members added at runtime.
-        subclass_check_with_data_members: subclass checks also work for
-            protocols with data members.
-    """
-
-    def _decorator(cls: _ProtoT) -> _ProtoT:
-        cls = _typing.runtime_checkable(cls)
-        if not (instance_check_shortcut or subclass_check_with_data_members):
-            return cls
-
-        if instance_check_shortcut:
-            # Monkey patch the decorated protocol class using our custom
-            # metaclass, which assumes that no data members have been
-            # added at runtime and therefore the expensive instance members
-            # checks can be replaced by (cached) tests with class members
-            cls.__class__ = NonProtocolABCMeta  # type: ignore[assignment]
-
-        if subclass_check_with_data_members:
-            assert "__subclasshook__" in cls.__dict__
-            if cls.__subclasshook__.__module__ not in (  # type: ignore[attr-defined]
-                "typing",
-                "typing_extensions",
-                "extended_typing",
-            ):
-                raise TypeError(
-                    "Cannot use 'subclass_check_with_data_members' with custom '__subclasshook__' definitions."
-                )
-
-            _allow_reckless_class_checks = getattr(
-                _typing,
-                (
-                    "_allow_reckless_class_checks"
-                    if hasattr(_typing, "_allow_reckless_class_checks")
-                    else "_allow_reckless_class_cheks"
-                ),  # There is a typo in 3.8 and 3.9
-            )
-
-            _get_protocol_attrs = (
-                _typing._get_protocol_attrs  # type: ignore[attr-defined]  # private member
-            )
-            _is_callable_members_only = (
-                _typing._is_callable_members_only  # type: ignore[attr-defined]  # private member
-            )
-
-            # Define a patched version of the proto hook which ignores
-            # __is_callable_members_only() result at certain points
-            def _patched_proto_hook(other):  # type: ignore[no-untyped-def]
-                if not cls.__dict__.get("_is_protocol", False):
-                    return NotImplemented
-
-                # First, perform various sanity checks.
-                if not getattr(cls, "_is_runtime_protocol", False):
-                    if _allow_reckless_class_checks():
-                        return NotImplemented
-                    raise TypeError(
-                        "Instance and class checks can only be used with"
-                        " @runtime_checkable protocols"
-                    )
-                if not _is_callable_members_only(cls) and _allow_reckless_class_checks():
-                    return NotImplemented
-                    # PATCHED: a TypeError should be raised here if not
-                    # `allow_reckless_class_checks()` but we ignored in
-                    # this patched version`
-                if not isinstance(other, type):
-                    # Same error message as for issubclass(1, int).
-                    raise TypeError("issubclass() arg 1 must be a class")
-
-                # Second, perform the actual structural compatibility check.
-                for attr in _get_protocol_attrs(cls):
-                    for base in other.__mro__:
-                        # Check if the members appears in the class dictionary...
-                        if callable(getattr(cls, attr, None)):  # Method member
-                            if attr in base.__dict__:
-                                if base.__dict__[attr] is None:
-                                    return NotImplemented
-                                break
-                        elif attr in base.__dict__ or (  # Data member
-                            base_annotations := getattr(base, "__annotations__", {})
-                            and isinstance(base_annotations, _collections_abc.Mapping)
-                            and attr in base_annotations
-                        ):
-                            break
-
-                        # ...or in annotations, if it is a sub-protocol.
-                        base_annotations = getattr(base, "__annotations__", {})
-                        if (
-                            isinstance(base_annotations, _collections_abc.Mapping)
-                            and attr in base_annotations
-                            and issubclass(other, Generic)
-                            and other._is_protocol
-                        ):
-                            break
-                    else:
-                        return NotImplemented
-                return True
-
-            cls.__subclasshook__ = _patched_proto_hook  # type: ignore[attr-defined,method-assign]
-
-        return cls
-
-    return _decorator(maybe_cls) if maybe_cls is not None else _decorator
-
-
 _ArtefactTypes: tuple[type, ...] = tuple()
 if _sys.version_info >= (3, 9):
     _ArtefactTypes = (_types.GenericAlias,)  # type: ignore[attr-defined]  # GenericAlias only from >= 3.8
@@ -509,6 +364,9 @@ else:
 def has_type_parameters(cls: Type) -> bool:
     """Return ``True`` if obj is a generic class with type parameters."""
     return issubclass(cls, Generic) and len(getattr(cls, "__parameters__", [])) > 0  # type: ignore[arg-type]  # Generic not considered as a class
+
+
+_T = TypeVar("_T")
 
 
 def get_actual_type(obj: _T) -> Type[_T]:
@@ -696,10 +554,7 @@ class CallableKwargsInfo:
 
 
 def infer_type(
-    value: Any,
-    *,
-    annotate_callable_kwargs: bool = False,
-    none_as_type: bool = True,
+    value: Any, *, annotate_callable_kwargs: bool = False, none_as_type: bool = True
 ) -> TypeAnnotation:
     """Generate a typing definition from a value.
 
