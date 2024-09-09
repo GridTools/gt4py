@@ -17,8 +17,6 @@ import functools
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.iterator.type_system import type_specifications as gtir_ts
-from gt4py.next.program_processors.runners import dace_fieldview as dace_backend
 from gt4py.next.type_system import type_specifications as ts
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     Cell,
@@ -34,6 +32,7 @@ import numpy as np
 import pytest
 
 pytestmark = pytest.mark.requires_dace
+dace_backend = pytest.importorskip("gt4py.next.program_processors.runners.dace_fieldview")
 
 
 N = 10
