@@ -197,6 +197,12 @@ class Program:
 
         This function adds these implicit offset providers.
         """
+        # TODO(tehrengruber): We add all dimensions here regardless of whether they are cartesian
+        #  or unstructured. While it is conceptually fine, but somewhat meaningless,
+        #  to do something `Cell+1` the GTFN backend for example doesn't support these. We should
+        #  find a way to avoid adding these dimensions, but since we don't have the grid type here
+        #  and since the dimensions don't this information either, we just add all dimensions here
+        #  and filter them out in the backends that don't support this.
         implicit_offset_provider = {}
         params = self.past_stage.past_node.params
         for param in params:
