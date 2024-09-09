@@ -226,10 +226,14 @@ UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES = ["isfinite", "isinf", "isnan"]
 
 
 def _make_unary_math_builtin(name: str) -> None:
-    if name.startswith("arc") and not hasattr(math, name):
-        _math_builtin = getattr(math, f"a{name[3:]}")
-    else:
+    if hasattr(math, name):
         _math_builtin = getattr(math, name)
+    elif name.startswith("arc"):
+        _math_builtin = getattr(math, f"a{name[3:]}")
+    elif name in __builtins__:
+        _math_builtin = __builtins__[name]
+    else:
+        raise AssertionError(f"Invalid  find builtin '{name}'.")
 
     def impl(value: common.Field | core_defs.ScalarT, /) -> common.Field | core_defs.ScalarT:
         # TODO(havogt): enable tests in `test_math_builtin_execution.py`
