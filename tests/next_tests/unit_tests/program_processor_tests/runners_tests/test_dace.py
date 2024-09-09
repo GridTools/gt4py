@@ -25,6 +25,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     exec_alloc_descriptor,
 )
 
+pytestmark = pytest.mark.requires_dace
 compiled_sdfg = pytest.importorskip("dace.codegen.compiled_sdfg")
 
 
