@@ -443,6 +443,8 @@ def test_offset_field(cartesian_case):
     @gtx.field_operator
     def testee(a: cases.IKField, offset_field: cases.IKField) -> gtx.Field[[IDim, KDim], bool]:
         a_i = a(as_offset(Ioff, offset_field))
+        # note: this leads to an access to offset_field in
+        # IDim: (0, out.size[I]), KDim: (0, out.size[K]+1)
         a_i_k = a_i(as_offset(Koff, offset_field))
         b_i = a(Ioff[1])
         b_i_k = b_i(Koff[1])
@@ -450,9 +452,11 @@ def test_offset_field(cartesian_case):
 
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
     a = cases.allocate(cartesian_case, testee, "a").extend({IDim: (0, 1), KDim: (0, 1)})()
-    offset_field = cases.allocate(cartesian_case, testee, "offset_field").strategy(
-        cases.ConstInitializer(1)
-    )()
+    offset_field = (
+        cases.allocate(cartesian_case, testee, "offset_field")
+        .strategy(cases.ConstInitializer(1))
+        .extend({KDim: (0, 1)})()
+    )  # see comment at a_i_k for domain bounds
 
     cases.verify(
         cartesian_case,
@@ -461,11 +465,9 @@ def test_offset_field(cartesian_case):
         offset_field,
         out=out,
         offset_provider={"Ioff": IDim, "Koff": KDim},
-        ref=np.full_like(offset_field.asnumpy(), True, dtype=bool),
+        ref=ref,
         comparison=lambda out, ref: np.all(out == ref),
     )
-
-    assert np.allclose(out.asnumpy(), ref)
 
 
 def test_nested_tuple_return(cartesian_case):

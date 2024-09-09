@@ -316,9 +316,9 @@ class NdArrayField(
         return _remapping_premap(self, conn_fields[0])
 
     def __call__(
-            self,
-            index_field: common.ConnectivityField | fbuiltins.FieldOffset,
-            *args: common.ConnectivityField | fbuiltins.FieldOffset,
+        self,
+        index_field: common.ConnectivityField | fbuiltins.FieldOffset,
+        *args: common.ConnectivityField | fbuiltins.FieldOffset,
     ) -> common.Field:
         return functools.reduce(
             lambda field, current_index_field: field.premap(current_index_field),

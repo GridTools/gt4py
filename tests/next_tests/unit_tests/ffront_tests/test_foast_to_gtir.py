@@ -27,6 +27,7 @@ from gt4py.next import (
     min_over,
     neighbor_sum,
     where,
+    common,
 )
 from gt4py.next.ffront import type_specifications as ts_ffront
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
@@ -115,6 +116,22 @@ def test_premap():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.as_fieldop(im.lambda_("__it")(im.deref(im.shift("TOff", 1)("__it"))))("inp")
+
+    assert lowered.expr == reference
+
+
+def test_premap_cartesian_syntax():
+    def foo(inp: gtx.Field[[TDim], float64]):
+        return inp(TDim + 1)
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.as_fieldop(
+        im.lambda_("__it")(
+            im.deref(im.shift(common.dimension_to_implicit_offset(TDim.value), 1)("__it"))
+        )
+    )("inp")
 
     assert lowered.expr == reference
 

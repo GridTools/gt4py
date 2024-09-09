@@ -26,6 +26,7 @@ from gt4py.eve import extended_typing as xtyping
 from gt4py.next import (
     allocators as next_allocators,
     backend as next_backend,
+    common,
     embedded as next_embedded,
     errors,
 )
@@ -187,12 +188,23 @@ class Program:
 
     @functools.cached_property
     def _implicit_offset_provider(self):
+        """
+        Add all implicit offset providers.
+
+        Each dimension implicitly defines an offset provider such that we can allow syntax like::
+
+            field(TDim + 1)
+
+        This function adds these implicit offset providers.
+        """
         implicit_offset_provider = {}
         params = self.past_stage.past_node.params
         for param in params:
             if isinstance(param.type, ts.FieldType):
                 for dim in param.type.dims:
-                    implicit_offset_provider.update({f"{dim.value}off": dim})
+                    implicit_offset_provider.update(
+                        {common.dimension_to_implicit_offset(dim.value): dim}
+                    )
         return implicit_offset_provider
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs: Any) -> None:

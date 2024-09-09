@@ -70,6 +70,20 @@ class DimensionKind(StrEnum):
         return self.value
 
 
+def dimension_to_implicit_offset(dim: str) -> str:
+    """
+    Return name of offset implicitly defined by a dimension.
+
+    Each dimension implicitly also defines an offset, such that we can allow syntax like::
+
+        field(TDim + 1)
+
+    without having to explicitly define an offset for ``TDim``. This function defines the respective
+    naming convention.
+    """
+    return f"_{dim}Off"
+
+
 @dataclasses.dataclass(frozen=True)
 class Dimension:
     value: str
@@ -86,7 +100,9 @@ class Dimension:
         from gt4py.next.ffront import fbuiltins
 
         assert isinstance(self.value, str)
-        return fbuiltins.FieldOffset(f"{self.value}off", source=self, target=(self,))[offset]
+        return fbuiltins.FieldOffset(
+            dimension_to_implicit_offset(self.value), source=self, target=(self,)
+        )[offset]
 
     def __sub__(self, offset: int) -> ConnectivityField:
         return self + (-offset)
