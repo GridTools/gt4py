@@ -20,7 +20,7 @@ from gt4py.next.program_processors.runners.dace_fieldview import (
 from . import util
 
 
-pytestmark = pytest.mark.usefixtures("set_dace_settings")
+pytestmark = [pytest.mark.requires_dace, pytest.mark.usefixtures("set_dace_settings")]
 
 
 def test_serial_map_promotion():
