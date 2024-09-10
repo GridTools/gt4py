@@ -78,7 +78,7 @@ After a cycle, we have a working implementation of the iterator IR to DaCe SDFG 
 
 **Solution**: The iterator type inference pass should provide the concrete type of all value-expressions.
 
-#### Partial suppot for iterator IR grammar
+#### Partial support for iterator IR grammar
 
 - First order functions: in DaCe SDFG's, first order functions could be represented by associating a nested SDFG (function equivalent in DaCe) with an access node (variable equivalent in DaCe), which is not a thing as far as I know. There is no practical solution to support this in the SDFG lowering, such ITIR will always be rejected and should not be generated from ITIR passes.
 - Lambdas: in DaCe SDFG's, an immediate call to an instantiation of a lambda function can be represented as a nested SDFG. Currently, the DaCe backend does not support this, but the solution should be fairly straightforward. Lambda support is necessary as they are essential for CSE in ITIR.
