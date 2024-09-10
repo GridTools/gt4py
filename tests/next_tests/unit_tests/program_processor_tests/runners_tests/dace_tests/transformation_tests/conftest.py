@@ -22,6 +22,7 @@ def set_dace_settings() -> Generator[None, None, None]:
         `CompiledSDFG` objects as arguments.
     """
     import dace
+
     with dace.config.temporary_config():
         dace.Config.set("optimizer", "match_exception", value=False)
         dace.Config.set("compiler", "allow_view_arguments", value=True)
