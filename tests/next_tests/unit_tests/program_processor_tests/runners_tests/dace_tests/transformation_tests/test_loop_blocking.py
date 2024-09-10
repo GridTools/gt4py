@@ -9,8 +9,11 @@
 import copy
 from typing import Callable
 
-import dace
 import numpy as np
+import pytest
+
+
+dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation
 
 from gt4py.next.program_processors.runners.dace_fieldview import (

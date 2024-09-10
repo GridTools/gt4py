@@ -9,8 +9,11 @@
 
 import copy
 
-import dace
 import numpy as np
+import pytest
+
+
+dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes
 from dace.transformation import dataflow as dace_dataflow
 

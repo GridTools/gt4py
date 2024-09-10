@@ -12,7 +12,6 @@ import ctypes
 import unittest
 from typing import Any
 
-import dace
 import numpy as np
 import pytest
 
@@ -29,6 +28,8 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 )
 
 from . import pytestmark
+
+dace = pytest.importorskip("dace")
 
 
 def get_scalar_values_from_sdfg_args(
