@@ -15,7 +15,7 @@ from dace.transformation import dataflow as dace_dataflow
 
 
 @overload
-def _count_nodes(
+def count_nodes(
     graph: Union[dace.SDFG, dace.SDFGState],
     node_type: tuple[type, ...] | type,
     return_nodes: Literal[False],
@@ -23,14 +23,14 @@ def _count_nodes(
 
 
 @overload
-def _count_nodes(
+def count_nodes(
     graph: Union[dace.SDFG, dace.SDFGState],
     node_type: tuple[type, ...] | type,
     return_nodes: Literal[True],
 ) -> list[dace_nodes.Node]: ...
 
 
-def _count_nodes(
+def count_nodes(
     graph: Union[dace.SDFG, dace.SDFGState],
     node_type: tuple[type, ...] | type,
     return_nodes: bool = False,
