@@ -9,4 +9,4 @@
 import pytest
 
 
-pytestmark = pytest.mark.requires_dace
+dace = pytest.importorskip("dace")
