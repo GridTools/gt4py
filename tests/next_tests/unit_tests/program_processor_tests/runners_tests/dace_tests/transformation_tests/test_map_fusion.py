@@ -15,13 +15,12 @@ import numpy as np
 from dace.sdfg import nodes as dace_nodes
 from dace.transformation import dataflow as dace_dataflow
 
-from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace_fieldview import (
     transformations as gtx_transformations,
 )
 from . import util
 
-pytestmark = [pytest.mark.requires_dace, pytest.mark.usefixtures("set_dace_settings")]
+from . import pytestmark
 
 
 def _make_serial_sdfg_1(

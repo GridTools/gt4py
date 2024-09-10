@@ -19,7 +19,7 @@ from gt4py.next.program_processors.runners.dace_fieldview import (
 )
 from . import util
 
-pytestmark = [pytest.mark.requires_dace, pytest.mark.usefixtures("set_dace_settings")]
+from . import pytestmark
 
 
 def _get_simple_sdfg() -> tuple[dace.SDFG, Callable[[np.ndarray, np.ndarray], np.ndarray]]:

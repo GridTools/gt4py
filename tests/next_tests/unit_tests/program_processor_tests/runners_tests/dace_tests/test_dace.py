@@ -25,8 +25,8 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     exec_alloc_descriptor,
 )
 
-pytestmark = pytest.mark.requires_dace
-compiled_sdfg = pytest.importorskip("dace.codegen.compiled_sdfg")
+import dace
+from . import pytestmark
 
 
 def get_scalar_values_from_sdfg_args(
@@ -69,23 +69,25 @@ def test_dace_fastcall(cartesian_case, monkeypatch):
 
     # Wrap `compiled_sdfg.CompiledSDFG.fast_call` with mock object
     mock_fast_call = unittest.mock.MagicMock()
-    mock_fast_call_attr = getattr(compiled_sdfg.CompiledSDFG, "fast_call")
+    mock_fast_call_attr = getattr(dace.codegen.compiled_sdfg.CompiledSDFG, "fast_call")
 
     def mocked_fast_call(self, *args, **kwargs):
         mock_fast_call.__call__(*args, **kwargs)
         return mock_fast_call_attr(self, *args, **kwargs)
 
-    monkeypatch.setattr(compiled_sdfg.CompiledSDFG, "fast_call", mocked_fast_call)
+    monkeypatch.setattr(dace.codegen.compiled_sdfg.CompiledSDFG, "fast_call", mocked_fast_call)
 
     # Wrap `compiled_sdfg.CompiledSDFG._construct_args` with mock object
     mock_construct_args = unittest.mock.MagicMock()
-    mock_construct_args_attr = getattr(compiled_sdfg.CompiledSDFG, "_construct_args")
+    mock_construct_args_attr = getattr(dace.codegen.compiled_sdfg.CompiledSDFG, "_construct_args")
 
     def mocked_construct_args(self, *args, **kwargs):
         mock_construct_args.__call__(*args, **kwargs)
         return mock_construct_args_attr(self, *args, **kwargs)
 
-    monkeypatch.setattr(compiled_sdfg.CompiledSDFG, "_construct_args", mocked_construct_args)
+    monkeypatch.setattr(
+        dace.codegen.compiled_sdfg.CompiledSDFG, "_construct_args", mocked_construct_args
+    )
 
     # Reset mock objects and run/verify GT4Py program
     def verify_testee():

@@ -31,8 +31,8 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 import numpy as np
 import pytest
 
-pytestmark = pytest.mark.requires_dace
-dace_backend = pytest.importorskip("gt4py.next.program_processors.runners.dace_fieldview")
+from gt4py.next.program_processors.runners import dace_fieldview as dace_backend
+from . import pytestmark
 
 
 N = 10

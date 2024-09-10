@@ -19,7 +19,7 @@ from gt4py.next.program_processors.runners.dace_fieldview.transformations import
 )
 from . import util
 
-pytestmark = [pytest.mark.requires_dace, pytest.mark.usefixtures("set_dace_settings")]
+from . import pytestmark
 
 
 def _get_trivial_gpu_promotable(

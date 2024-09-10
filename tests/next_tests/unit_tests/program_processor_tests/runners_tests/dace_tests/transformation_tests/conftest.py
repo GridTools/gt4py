@@ -9,8 +9,16 @@
 from typing import Any, Optional, Sequence, Union, overload, Literal, Generator
 
 import pytest
+import dace
+import copy
+import numpy as np
+from dace.sdfg import nodes as dace_nodes
+from dace.transformation import dataflow as dace_dataflow
 
-dace = pytest.importorskip("dace")
+from gt4py.next import common as gtx_common
+from gt4py.next.program_processors.runners.dace_fieldview import (
+    transformations as gtx_transformations,
+)
 
 
 @pytest.fixture()
