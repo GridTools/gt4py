@@ -116,7 +116,7 @@ def get_domain(
         axis = named_range.args[0]
         assert isinstance(axis, gtir.AxisLiteral)
         bounds = [
-            dace.symbolic.SymExpr(gtir_python_codegen.get_source(arg))
+            dace.symbolic.pystr_to_symbolic(gtir_python_codegen.get_source(arg))
             for arg in named_range.args[1:3]
         ]
         dim = gtx_common.Dimension(axis.value, axis.kind)
@@ -144,6 +144,22 @@ def get_map_variable(dim: gtx_common.Dimension) -> str:
     return f"i_{dim.value}_gtx_{dim.kind}{suffix}"
 
 
+def flatten_tuples(data: Any) -> list[Any]:
+    def _visit_tuple(results: tuple[Any]) -> list[Any]:
+        tuple_fields = []
+        for r in results:
+            if isinstance(r, tuple):
+                tuple_fields.extend(_visit_tuple(r))
+            else:
+                tuple_fields.append(r)
+        return tuple_fields
+
+    if isinstance(data, tuple):
+        return _visit_tuple(data)
+    else:
+        return [data]
+
+
 def get_tuple_fields(
     tuple_name: str, tuple_type: ts.TupleType, flatten: bool = False
 ) -> list[tuple[str, ts.DataType]]:
@@ -161,3 +177,12 @@ def get_tuple_fields(
         return list(itertools.chain(*expanded_fields))
     else:
         return fields
+
+
+def get_tuple_type(tuple_data: tuple[Any, ...]) -> ts.TupleType:
+    """
+    Compute the `ts.TupleType` corresponding to the structure of a tuple of data nodes.
+    """
+    return ts.TupleType(
+        types=[get_tuple_type(d) if isinstance(d, tuple) else d.data_type for d in tuple_data]
+    )
