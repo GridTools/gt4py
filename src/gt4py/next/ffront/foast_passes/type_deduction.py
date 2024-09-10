@@ -589,6 +589,18 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def _deduce_binop_type(
         self, node: foast.BinOp, *, left: foast.Expr, right: foast.Expr, **kwargs: Any
     ) -> Optional[ts.TypeSpec]:
+        # e.g. `IDim+1`
+        if (
+            isinstance(left.type, ts.DimensionType)
+            and isinstance(right.type, ts.ScalarType)
+            and type_info.is_integral(right.type)
+        ):
+            return ts.OffsetType(source=left.type.dim, target=(left.type.dim,))
+        if isinstance(left.type, ts.OffsetType):
+            raise errors.DSLError(
+                node.location, f"Type '{left.type}' can not be used in operator '{node.op}'."
+            )
+
         logical_ops = {
             dialect_ast_enums.BinaryOperator.BIT_AND,
             dialect_ast_enums.BinaryOperator.BIT_OR,
