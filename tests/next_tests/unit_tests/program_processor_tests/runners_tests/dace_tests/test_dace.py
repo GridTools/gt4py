@@ -9,14 +9,17 @@
 """Test specific features of DaCe backends."""
 
 import ctypes
+import unittest
 from typing import Any
+
+import dace
 import numpy as np
 import pytest
-import unittest
 
 import gt4py.next as gtx
 from gt4py.next import int32
 from gt4py.next.ffront.fbuiltins import where
+
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
     cartesian_case,
@@ -25,7 +28,6 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     exec_alloc_descriptor,
 )
 
-import dace
 from . import pytestmark
 
 
@@ -69,7 +71,7 @@ def test_dace_fastcall(cartesian_case, monkeypatch):
 
     # Wrap `compiled_sdfg.CompiledSDFG.fast_call` with mock object
     mock_fast_call = unittest.mock.MagicMock()
-    mock_fast_call_attr = getattr(dace.codegen.compiled_sdfg.CompiledSDFG, "fast_call")
+    mock_fast_call_attr = dace.codegen.compiled_sdfg.CompiledSDFG.fast_call
 
     def mocked_fast_call(self, *args, **kwargs):
         mock_fast_call.__call__(*args, **kwargs)
@@ -79,7 +81,7 @@ def test_dace_fastcall(cartesian_case, monkeypatch):
 
     # Wrap `compiled_sdfg.CompiledSDFG._construct_args` with mock object
     mock_construct_args = unittest.mock.MagicMock()
-    mock_construct_args_attr = getattr(dace.codegen.compiled_sdfg.CompiledSDFG, "_construct_args")
+    mock_construct_args_attr = dace.codegen.compiled_sdfg.CompiledSDFG._construct_args
 
     def mocked_construct_args(self, *args, **kwargs):
         mock_construct_args.__call__(*args, **kwargs)

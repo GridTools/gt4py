@@ -6,21 +6,15 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Callable
 import dace
-import copy
-import numpy as np
-import pytest
-
 from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next.program_processors.runners.dace_fieldview import (
     transformations as gtx_transformations,
 )
-from . import util
-
 
 from . import pytestmark
+from . import util
 
 
 def test_serial_map_promotion():

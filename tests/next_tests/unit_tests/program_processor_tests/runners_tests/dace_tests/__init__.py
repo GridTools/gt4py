@@ -8,5 +8,6 @@
 
 import pytest
 
+
 pytest.importorskip("dace")
 pytestmark = pytest.mark.requires_dace

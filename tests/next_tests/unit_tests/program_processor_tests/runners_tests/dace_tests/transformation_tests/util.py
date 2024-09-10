@@ -6,12 +6,11 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Union, Literal, overload
 import uuid
+from typing import Literal, Union, overload
 
 import dace
 from dace.sdfg import nodes as dace_nodes
-from dace.transformation import dataflow as dace_dataflow
 
 
 @overload
