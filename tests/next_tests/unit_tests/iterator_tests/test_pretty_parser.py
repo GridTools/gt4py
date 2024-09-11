@@ -74,11 +74,7 @@ def test_as_fieldop():
 
 def test_cond():
     testee = "cond(s1 > s2, x, y)"
-    expected = im.cond(
-        im.greater(ir.SymRef(id="s1"), ir.SymRef(id="s2")),
-        ir.SymRef(id="x"),
-        ir.SymRef(id="y"),
-    )
+    expected = im.cond(im.greater("s1", "s2"), "x", "y")
     actual = pparse(testee)
     assert actual == expected
 
