@@ -14,10 +14,15 @@ Note: this test module covers the fieldview flavour of ITIR.
 
 import copy
 import functools
+
+import numpy as np
+import pytest
+
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_specifications as ts
+
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     Cell,
     Edge,
@@ -28,10 +33,9 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     simple_mesh,
     skip_value_mesh,
 )
-import numpy as np
-import pytest
 
-pytestmark = pytest.mark.requires_dace
+from . import pytestmark
+
 dace_backend = pytest.importorskip("gt4py.next.program_processors.runners.dace_fieldview")
 
 
@@ -825,7 +829,7 @@ def test_gtir_neighbors_as_input():
         im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
     )
     testee = gtir.Program(
-        id=f"neighbors_as_input",
+        id="neighbors_as_input",
         function_definitions=[],
         params=[
             gtir.Sym(id="v2e_field", type=V2E_FTYPE),
@@ -892,7 +896,7 @@ def test_gtir_neighbors_as_output():
         ),
     )
     testee = gtir.Program(
-        id=f"neighbors_as_output",
+        id="neighbors_as_output",
         function_definitions=[],
         params=[
             gtir.Sym(id="edges", type=EFTYPE),
@@ -1086,7 +1090,7 @@ def test_gtir_reduce_dot_product():
     )
 
     testee = gtir.Program(
-        id=f"reduce_dot_product",
+        id="reduce_dot_product",
         function_definitions=[],
         params=[
             gtir.Sym(id="edges", type=EFTYPE),
@@ -1145,7 +1149,7 @@ def test_gtir_reduce_with_cond_neighbors():
         im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
     )
     testee = gtir.Program(
-        id=f"reduce_with_cond_neighbors",
+        id="reduce_with_cond_neighbors",
         function_definitions=[],
         params=[
             gtir.Sym(id="pred", type=ts.ScalarType(ts.ScalarKind.BOOL)),

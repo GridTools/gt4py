@@ -6,11 +6,9 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Optional, Sequence, Union, overload, Literal, Generator
+from typing import Generator
 
 import pytest
-
-dace = pytest.importorskip("dace")
 
 
 @pytest.fixture()
@@ -23,6 +21,8 @@ def set_dace_settings() -> Generator[None, None, None]:
     - `compiler.allow_view_arguments` allow that NumPy views can be passed to
         `CompiledSDFG` objects as arguments.
     """
+    import dace
+
     with dace.config.temporary_config():
         dace.Config.set("optimizer", "match_exception", value=False)
         dace.Config.set("compiler", "allow_view_arguments", value=True)
