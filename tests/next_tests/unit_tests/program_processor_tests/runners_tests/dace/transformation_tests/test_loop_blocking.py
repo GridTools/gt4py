@@ -305,3 +305,35 @@ def test_chained_access() -> None:
 
     assert isinstance(inner_tasklet, dace_nodes.Tasklet)
     assert inner_tasklet not in first_level_tasklets
+
+
+def test_direct_map_exit_connection() -> dace.SDFG:
+    """Generates a SDFG with a mapped independent tasklet connected to the map exit.
+
+    Because the tasklet is connected to the map exit it can not be independent.
+    """
+    sdfg = dace.SDFG(util.unique_name("mapped_tasklet_sdfg"))
+    state = sdfg.add_state("state", is_start_block=True)
+    sdfg.add_array("a", (10,), dace.float64, transient=False)
+    sdfg.add_array("b", (10, 30), dace.float64, transient=False)
+    tsklt, me, mx = state.add_mapped_tasklet(
+        name="comp",
+        map_ranges=dict(i=f"0:10", j=f"0:30"),
+        inputs=dict(__in0=dace.Memlet("a[i]")),
+        outputs=dict(__out=dace.Memlet("b[i, j]")),
+        code="__out = __in0 + 1",
+        external_edges=True,
+    )
+
+    assert all(out_edge.dst is tsklt for out_edge in state.out_edges(me))
+    assert all(in_edge.src is tsklt for in_edge in state.in_edges(mx))
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(blocking_size=5, blocking_parameter="j"),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 1
+
+    assert all(isinstance(out_edge.dst, dace_nodes.MapEntry) for out_edge in state.out_edges(me))
+    assert all(isinstance(in_edge.src, dace_nodes.MapExit) for in_edge in state.in_edges(mx))
