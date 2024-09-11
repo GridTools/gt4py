@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import abc
 import os
 import textwrap
@@ -134,7 +136,7 @@ class PyExtModuleGenerator(BaseModuleGenerator):
         self.pyext_file_path = None
 
     def __call__(
-        self, args_data: ModuleData, builder: Optional["StencilBuilder"] = None, **kwargs: Any
+        self, args_data: ModuleData, builder: Optional[StencilBuilder] = None, **kwargs: Any
     ) -> str:
         self.pyext_module_name = kwargs["pyext_module_name"]
         self.pyext_file_path = kwargs["pyext_file_path"]
@@ -229,7 +231,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
     PYEXT_GENERATOR_CLASS: Type[BackendCodegen]
 
     @abc.abstractmethod
-    def generate(self) -> Type["StencilObject"]:
+    def generate(self) -> Type[StencilObject]:
         pass
 
     def generate_computation(self) -> Dict[str, Union[str, Dict]]:

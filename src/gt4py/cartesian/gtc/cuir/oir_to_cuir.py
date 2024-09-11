@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import functools
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Set, Union, cast
@@ -93,7 +95,7 @@ class OIRToCUIR(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     ) -> cuir.VariableKOffset:
         return cuir.VariableKOffset(k=self.visit(node.k, **kwargs))
 
-    def _mask_to_expr(self, mask: common.HorizontalMask, ctx: "Context") -> cuir.Expr:
+    def _mask_to_expr(self, mask: common.HorizontalMask, ctx: Context) -> cuir.Expr:
         mask_expr: List[cuir.Expr] = []
         for axis_index, interval in enumerate(mask.intervals):
             if interval.is_single_index():
@@ -140,7 +142,7 @@ class OIRToCUIR(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         *,
         ij_caches: Dict[str, cuir.IJCacheDecl],
         k_caches: Dict[str, cuir.KCacheDecl],
-        ctx: "Context",
+        ctx: Context,
         **kwargs: Any,
     ) -> Union[cuir.FieldAccess, cuir.IJCacheAccess, cuir.KCacheAccess]:
         data_index = self.visit(
@@ -226,7 +228,7 @@ class OIRToCUIR(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         )
 
     def visit_VerticalLoop(
-        self, node: oir.VerticalLoop, *, symtable: Dict[str, Any], ctx: "Context", **kwargs: Any
+        self, node: oir.VerticalLoop, *, symtable: Dict[str, Any], ctx: Context, **kwargs: Any
     ) -> cuir.Kernel:
         assert not any(c.fill or c.flush for c in node.caches if isinstance(c, oir.KCache))
         ij_caches = {

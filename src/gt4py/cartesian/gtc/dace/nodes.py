@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import base64
 import pickle
 import typing
@@ -28,13 +30,13 @@ from .expansion_specification import ExpansionItem, make_expansion_order
 
 
 def _set_expansion_order(
-    node: "StencilComputation", expansion_order: Union[List[ExpansionItem], List[str]]
+    node: StencilComputation, expansion_order: Union[List[ExpansionItem], List[str]]
 ):
     res = make_expansion_order(node, expansion_order)
     node._expansion_specification = res
 
 
-def _set_tile_sizes_interpretation(node: "StencilComputation", tile_sizes_interpretation: str):
+def _set_tile_sizes_interpretation(node: StencilComputation, tile_sizes_interpretation: str):
     valid_values = {"shape", "strides"}
     if tile_sizes_interpretation not in valid_values:
         raise ValueError(f"tile_sizes_interpretation must be one in {valid_values}.")

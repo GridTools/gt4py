@@ -8,6 +8,8 @@
 
 """Caching strategies for stencil generation."""
 
+from __future__ import annotations
+
 import abc
 import inspect
 import pathlib
@@ -29,7 +31,7 @@ if TYPE_CHECKING:
 class CachingStrategy(abc.ABC):
     name: str
 
-    def __init__(self, builder: "StencilBuilder"):
+    def __init__(self, builder: StencilBuilder):
         self.builder = builder
 
     @property
@@ -176,7 +178,7 @@ class JITCachingStrategy(CachingStrategy):
 
     def __init__(
         self,
-        builder: "StencilBuilder",
+        builder: StencilBuilder,
         *,
         root_path: Optional[str] = None,
         dir_name: Optional[str] = None,
@@ -368,7 +370,7 @@ class NoCachingStrategy(CachingStrategy):
 
     name = "nocaching"
 
-    def __init__(self, builder: "StencilBuilder", *, output_path: pathlib.Path = pathlib.Path(".")):
+    def __init__(self, builder: StencilBuilder, *, output_path: pathlib.Path = pathlib.Path(".")):
         super().__init__(builder)
         self._output_path = output_path
 
@@ -411,7 +413,7 @@ class NoCachingStrategy(CachingStrategy):
 
 
 def strategy_factory(
-    name: str, builder: "StencilBuilder", *args: Any, **kwargs: Any
+    name: str, builder: StencilBuilder, *args: Any, **kwargs: Any
 ) -> CachingStrategy:
     strategies = {"jit": JITCachingStrategy, "nocaching": NoCachingStrategy}
     return strategies[name](builder, *args, **kwargs)

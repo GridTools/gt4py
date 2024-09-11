@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 from typing import Any, List, Optional, Tuple, Union
 
 from gt4py import eve
@@ -156,22 +158,22 @@ class IJExtent(LocNode):
     j: Tuple[int, int]
 
     @classmethod
-    def zero(cls) -> "IJExtent":
+    def zero(cls) -> IJExtent:
         return cls(i=(0, 0), j=(0, 0))
 
     @classmethod
-    def from_offset(cls, offset: Union[CartesianOffset, VariableKOffset]) -> "IJExtent":
+    def from_offset(cls, offset: Union[CartesianOffset, VariableKOffset]) -> IJExtent:
         if isinstance(offset, VariableKOffset):
             return cls(i=(0, 0), j=(0, 0))
         return cls(i=(offset.i, offset.i), j=(offset.j, offset.j))
 
-    def union(*extents: "IJExtent") -> "IJExtent":
+    def union(*extents: IJExtent) -> IJExtent:
         return IJExtent(
             i=(min(e.i[0] for e in extents), max(e.i[1] for e in extents)),
             j=(min(e.j[0] for e in extents), max(e.j[1] for e in extents)),
         )
 
-    def __add__(self, other: "IJExtent") -> "IJExtent":
+    def __add__(self, other: IJExtent) -> IJExtent:
         return IJExtent(
             i=(self.i[0] + other.i[0], self.i[1] + other.i[1]),
             j=(self.j[0] + other.j[0], self.j[1] + other.j[1]),
@@ -182,17 +184,17 @@ class KExtent(LocNode):
     k: Tuple[int, int]
 
     @classmethod
-    def zero(cls) -> "KExtent":
+    def zero(cls) -> KExtent:
         return cls(k=(0, 0))
 
     @classmethod
-    def from_offset(cls, offset: Union[CartesianOffset, VariableKOffset]) -> "KExtent":
+    def from_offset(cls, offset: Union[CartesianOffset, VariableKOffset]) -> KExtent:
         MAX_OFFSET = 1000
         if isinstance(offset, VariableKOffset):
             return cls(k=(-MAX_OFFSET, MAX_OFFSET))
         return cls(k=(offset.k, offset.k))
 
-    def union(*extents: "KExtent") -> "KExtent":
+    def union(*extents: KExtent) -> KExtent:
         return KExtent(k=(min(e.k[0] for e in extents), max(e.k[1] for e in extents)))
 
 

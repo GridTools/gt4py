@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, List
 
 import dace
@@ -32,7 +34,7 @@ def get_dace_debuginfo(node: common.LocNode):
 
 
 class HorizontalIntervalRemover(eve.NodeTranslator):
-    def visit_HorizontalMask(self, node: common.HorizontalMask, *, axis: "dcir.Axis"):
+    def visit_HorizontalMask(self, node: common.HorizontalMask, *, axis: dcir.Axis):
         mask_attrs = dict(i=node.i, j=node.j)
         mask_attrs[axis.lower()] = self.visit(getattr(node, axis.lower()))
         return common.HorizontalMask(**mask_attrs)
@@ -42,7 +44,7 @@ class HorizontalIntervalRemover(eve.NodeTranslator):
 
 
 class HorizontalMaskRemover(eve.NodeTranslator):
-    def visit_Tasklet(self, node: "dcir.Tasklet"):
+    def visit_Tasklet(self, node: dcir.Tasklet):
         res_body = []
         for stmt in node.stmts:
             newstmt = self.visit(stmt)
@@ -161,7 +163,7 @@ class HorizontalExecutionSplitter(eve.NodeTranslator):
         return oir.VerticalLoopSection(interval=node.interval, horizontal_executions=res_hes)
 
 
-def split_horizontal_executions_regions(node: "StencilComputation"):
+def split_horizontal_executions_regions(node: StencilComputation):
     extents: List[Extent] = []
 
     node.oir_node = HorizontalExecutionSplitter().visit(
