@@ -134,6 +134,65 @@ def _get_chained_sdfg() -> tuple[dace.SDFG, Callable[[np.ndarray, np.ndarray], n
     return sdfg, lambda a, b: (a + (2 * b.reshape((-1, 1)) + 3))
 
 
+def _get_sdfg_with_empty_memlet(
+    first_tasklet_indiependent: bool,
+) -> tuple[
+    dace.SDFG, dace_nodes.MapEntry, dace_nodes.Tasklet, dace_nodes.AccessNode, dace_nodes.Tasklet
+]:
+    """Generates an SDFG with an empty tasklet.
+
+    The map contains two (serial) tasklets, connected through an access node.
+    The first tasklet has an empty memlet that connects it to the map entry.
+    Depending on `first_tasklet_indiependent` the tasklet is either independent
+    or not. The second tasklet has an additional in connector that access an array.
+
+    Returns:
+        The function returns the SDFG, the map entry and the first tasklet (that
+        is either dependent or independent), the access node between the tasklets
+        and the second tasklet that is always dependent.
+    """
+    sdfg = dace.SDFG(util.unique_name("empty_memlet_sdfg"))
+    state = sdfg.add_state("state", is_start_block=True)
+    sdfg.add_symbol("N", dace.int32)
+    sdfg.add_symbol("M", dace.int32)
+    sdfg.add_array("a", ("N", "M"), dace.float64, transient=False)
+    sdfg.add_array("b", ("N", "M"), dace.float64, transient=False)
+    sdfg.add_scalar("tmp", dtype=dace.float64, transient=True)
+    a, b, tmp = (state.add_access(name) for name in ["a", "b", "tmp"])
+
+    # This is the first tasklet.
+    task1 = state.add_tasklet(
+        "task1",
+        inputs={},
+        outputs={"__out0"},
+        code="__out0 = 1.0" if first_tasklet_indiependent else "__out0 = j",
+    )
+    task2 = state.add_tasklet(
+        "task2", inputs={"__in0", "__in1"}, outputs={"__out0"}, code="__out0 = __in0 + __in1"
+    )
+
+    # Now create the map
+    mentry, mexit = state.add_map("map", ndrange={"i": "0:N", "j": "0:M"})
+
+    state.add_edge(a, None, mentry, "IN_a", dace.Memlet("a[0:N, 0:M]"))
+    state.add_edge(mentry, "OUT_a", task2, "__in1", dace.Memlet("a[i, j]"))
+    state.add_edge(task2, "__out0", mexit, "IN_b", dace.Memlet("b[i, j]"))
+    state.add_edge(mexit, "OUT_b", b, None, dace.Memlet("b[0:N, 0:M]"))
+
+    state.add_edge(mentry, None, task1, None, dace.Memlet())
+    state.add_edge(task1, "__out0", tmp, None, dace.Memlet("tmp[0]"))
+    state.add_edge(tmp, None, task2, "__in0", dace.Memlet("tmp[0]"))
+
+    mentry.add_in_connector("IN_a")
+    mentry.add_out_connector("OUT_a")
+    mexit.add_in_connector("IN_b")
+    mexit.add_out_connector("OUT_b")
+
+    sdfg.validate()
+
+    return sdfg, mentry, task1, tmp, task2
+
+
 def test_only_dependent():
     """Just applying the transformation to the SDFG.
 
@@ -337,3 +396,51 @@ def test_direct_map_exit_connection() -> dace.SDFG:
 
     assert all(isinstance(out_edge.dst, dace_nodes.MapEntry) for out_edge in state.out_edges(me))
     assert all(isinstance(in_edge.src, dace_nodes.MapExit) for in_edge in state.in_edges(mx))
+
+
+def test_empty_memlet_1():
+    sdfg, mentry, itask, tmp, task2 = _get_sdfg_with_empty_memlet(first_tasklet_indiependent=True)
+    state: dace.SDFGState = next(iter(sdfg.nodes()))
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(blocking_size=5, blocking_parameter="j"),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 1
+
+    scope_dict = state.scope_dict()
+    assert scope_dict[mentry] is None
+    assert scope_dict[itask] is mentry
+    assert scope_dict[tmp] is mentry
+    assert scope_dict[task2] is not mentry
+    assert scope_dict[task2] is not None
+    assert all(
+        isinstance(in_edge.src, dace_nodes.MapEntry) and in_edge.src is not mentry
+        for in_edge in state.in_edges(task2)
+    )
+
+
+def test_empty_memlet_2():
+    sdfg, mentry, dtask, tmp, task2 = _get_sdfg_with_empty_memlet(first_tasklet_indiependent=False)
+    state: dace.SDFGState = next(iter(sdfg.nodes()))
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(blocking_size=5, blocking_parameter="j"),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 1
+
+    # Find the inner map entry
+    assert all(
+        isinstance(out_edge.dst, dace_nodes.MapEntry) for out_edge in state.out_edges(mentry)
+    )
+    inner_mentry = next(iter(state.out_edges(mentry))).dst
+
+    scope_dict = state.scope_dict()
+    assert scope_dict[mentry] is None
+    assert scope_dict[inner_mentry] is mentry
+    assert scope_dict[dtask] is inner_mentry
+    assert scope_dict[tmp] is inner_mentry
+    assert scope_dict[task2] is inner_mentry
