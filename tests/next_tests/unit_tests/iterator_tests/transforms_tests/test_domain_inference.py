@@ -999,25 +999,23 @@ def test_domain_tuple(offset_provider):
     assert expected_domains == constant_fold_accessed_domains(actual_domains)
 
 
-# def test_as_fieldop_tuple_get(offset_provider):
-#     testee = im.as_fieldop(
-#         im.lambda_("a")(im.plus(im.tuple_get(0, im.ref("a")), im.tuple_get(1, im.ref("a"))))
-#     )("in_field")
-#     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
-#     expected = im.as_fieldop(
-#         im.lambda_("a")(im.plus(im.tuple_get(0, im.ref("a")), im.tuple_get(0, im.ref("a")))), domain
-#     )("in_field")
-#     expected_domains = {
-#         "a": (
-#             SymbolicDomain.from_expr(im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})),
-#             SymbolicDomain.from_expr(im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})),
-#         )
-#     }
-#
-#     actual, actual_domains = infer_expr(testee, SymbolicDomain.from_expr(domain), offset_provider)
-#
-#     assert expected == actual
-#     assert expected_domains == constant_fold_accessed_domains(actual_domains)
+def test_as_fieldop_tuple_get(offset_provider):
+    testee = im.op_as_fieldop(im.plus)(im.tuple_get(0, im.ref("a")), im.tuple_get(1, im.ref("a")))
+    domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
+    expected = im.op_as_fieldop(im.plus, domain)(
+        im.tuple_get(0, im.ref("a")), im.tuple_get(1, im.ref("a"))
+    )
+    expected_domains = {
+        "a": (
+            SymbolicDomain.from_expr(im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})),
+            SymbolicDomain.from_expr(im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})),
+        )
+    }
+
+    actual, actual_domains = infer_expr(testee, SymbolicDomain.from_expr(domain), offset_provider)
+
+    assert expected == actual
+    assert expected_domains == constant_fold_accessed_domains(actual_domains)
 
 
 def test_make_tuple_domain_error(offset_provider):
@@ -1034,6 +1032,6 @@ def test_make_tuple_domain_error(offset_provider):
     # infer_expr(make_tuple(a, b), domain=(domain1, domain2)) -> accessed_domain["a"] = domain1, accessed_domain["b"] = domain2
     # infer_expr(tuple_get(0, make_tuple(a, b)), domain=domain1) -> accessed_domain["a"] = domain1, accessed_domain["b"] = None
     # infer_expr(tuple_get(1, a), domain=domain1) -> accessed_domain["a"] = (None, domain1)  # TODO: tuple could be longer
-    # TODO infer_expr(as_fieldop(plus)(tuple_get(1, a), tuple_get(0, a)), domain=domain1) -> accessed_domain["a"] = (domain1, domain1)  # TODO: tuple could be longer # this trequires extension of merge domain
+    # infer_expr(as_fieldop(plus)(tuple_get(1, a), tuple_get(0, a)), domain=domain1) -> accessed_domain["a"] = (domain1, domain1)  # TODO: tuple could be longer # this trequires extension of merge domain
     # infer_expr(a, domain=(domain1, domain2)) -> accessed_domain["a"] = (domain1, domain2)
     # infer_expr(make_tuple(a, b), domain=domain1) -> error main must be a tuple

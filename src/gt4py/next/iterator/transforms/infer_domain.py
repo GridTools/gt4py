@@ -54,12 +54,21 @@ def _merge_domains(
             new_domains[key] = domain_union([original_domain, domain])
         elif isinstance(domain, tuple) and isinstance(original_domain, tuple):
             new_domains[key] = tuple(
-                domain_union([d1, d2]) for d1 in original_domain for d2 in domain
+                domain_union([d1, d2])
+                if d1 is not None and d2 is not None
+                else (d1 if d2 is None else d2)
+                for d1 in original_domain
+                for d2 in domain
             )
         elif isinstance(domain, tuple):
-            new_domains[key] = tuple(domain_union([d, original_domain]) for d in domain)
+            new_domains[key] = tuple(
+                domain_union([d, original_domain]) if d is not None else original_domain
+                for d in domain
+            )
         elif isinstance(original_domain, tuple):
-            new_domains[key] = tuple(domain_union([domain, d]) for d in original_domain)
+            new_domains[key] = tuple(
+                domain_union([domain, d]) if d is not None else domain for d in original_domain
+            )
 
     return new_domains
 
@@ -212,7 +221,7 @@ def infer_expr(
         if cpm.is_call_to(expr, "make_tuple"):
             if (
                 not isinstance(domain, tuple) or not len(domain) <= len(expr.args)
-            ):  # It is possible that there are less domains than tuple args, e.g. in im.tuple_get(0, im.make_tuple(a, b), domain=domain)
+            ):  # There may be less domains than tuple args, e.g. in im.tuple_get(0, im.make_tuple(a, b), domain=domain)
                 raise ValueError(
                     "infer_expr needs a domain for each tuple element and domain must be a tuple."
                 )
@@ -220,45 +229,40 @@ def infer_expr(
                 infered_arg_expr, actual_domains_arg = infer_expr(arg, domain[i], offset_provider)
                 infered_args_expr.append(infered_arg_expr)
                 actual_domains = _merge_domains(actual_domains, actual_domains_arg)
+        elif cpm.is_call_to(expr, "tuple_get"):
+            idx, tuple_arg = expr.args
+            assert isinstance(idx, itir.Literal)
+            assert isinstance(domain, SymbolicDomain)
+            if cpm.is_call_to(tuple_arg, "make_tuple"):
+                domain = tuple(
+                    None if i != int(idx.value) else domain for i in range(len(tuple_arg.args))
+                )
+            infered_arg_expr, actual_domains_arg = infer_expr(tuple_arg, domain, offset_provider)
+            if actual_domains_arg and isinstance(tuple_arg, itir.SymRef):
+                all(isinstance(value, SymbolicDomain) for value in actual_domains_arg.values())
+                actual_domains_arg = {
+                    str(tuple_arg.id): tuple(
+                        None if i != int(idx.value) else actual_domains_arg[tuple_arg.id]
+                        for i in range(int(idx.value) + 1)
+                    )
+                }
+            infered_args_expr = im.tuple_get(idx.value, infered_arg_expr)
+            actual_domains = _merge_domains(actual_domains, actual_domains_arg)
+            return infered_args_expr, actual_domains
         else:
             for arg in expr.args:
-                if cpm.is_call_to(expr, "tuple_get") and isinstance(
-                    arg, (itir.Literal, itir.SymRef)
+                infered_arg_expr, actual_domains_arg = infer_expr(
+                    arg, domain, offset_provider
+                )  # We need domain here instead of None because im.cond and im.make_tuple can have an as_fieldop as argument and then we need to pass the domain
+                infered_args_expr.append(infered_arg_expr)
+                # The following condition is necessary to prevent that condition in im.cond get an entry in actual_domains
+                if (
+                    cpm.is_call_to(arg, "make_tuple")
+                    or isinstance(arg, itir.FunCall)
+                    and isinstance(arg.fun, itir.FunCall)
+                    or isinstance(arg, itir.SymRef)
                 ):
-                    infered_arg_expr, actual_domains_arg = infer_expr(arg, domain, offset_provider)
-                    infered_args_expr.append(infered_arg_expr)
-                    if actual_domains_arg and isinstance(arg, itir.SymRef):
-                        actual_domains_arg = {
-                            str(infered_arg_expr.id): tuple(
-                                None
-                                if i != int(expr.args[0].value)
-                                else actual_domains_arg[infered_arg_expr.id]
-                                for i in range(
-                                    len(expr.args[1].args)
-                                    if isinstance(expr.args[1], tuple)
-                                    else int(expr.args[0].value) + 1
-                                )
-                            )
-                        }
                     actual_domains = _merge_domains(actual_domains, actual_domains_arg)
-                    if cpm.is_call_to(expr.args[1], "make_tuple"):
-                        domain = tuple(
-                            None if i != int(expr.args[0].value) else domain
-                            for i in range(len(expr.args[1].args))
-                        )
-                else:
-                    infered_arg_expr, actual_domains_arg = infer_expr(
-                        arg, domain, offset_provider
-                    )  # We need domain here instead of None because im.cond and im.make_tuple can have an as_fieldop as argument and then we need to pass the domain
-                    infered_args_expr.append(infered_arg_expr)
-                    # The following condition is necessary to prevent that condition in im.cond get an entry in actual_domains
-                    if (
-                        cpm.is_call_to(arg, "make_tuple")
-                        or isinstance(arg, itir.FunCall)
-                        and isinstance(arg.fun, itir.FunCall)
-                        or isinstance(arg, itir.SymRef)
-                    ):
-                        actual_domains = _merge_domains(actual_domains, actual_domains_arg)
 
         return im.call(expr.fun)(*infered_args_expr), actual_domains
     else:
