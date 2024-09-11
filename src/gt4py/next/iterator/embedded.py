@@ -1664,7 +1664,7 @@ def as_fieldop(fun: Callable, domain: runtime.CartesianDomain | runtime.Unstruct
 
 @builtins.cond.register(EMBEDDED)
 def cond(cond_: common.Field | Scalar, t: tuple | TupleField, f: tuple | TupleField):
-    if isinstance(cond_, common.Field) and len(cond_.domain.dims) == 0:
+    if isinstance(cond_, common.Field) and cond_.domain.ndim == 0:
         # promote zero-dimensional field to scalar
         cond_ = cond_.as_scalar()
     return t if cond_ else f
