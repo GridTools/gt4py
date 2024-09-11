@@ -27,7 +27,7 @@ def _get_simple_sdfg() -> tuple[dace.SDFG, Callable[[np.ndarray, np.ndarray], np
 
     The k blocking transformation can be applied to the SDFG, however no node
     can be taken out. This is because how it is constructed. However, applying
-    some simplistic transformations this can be done.
+    some simplistic transformations will enable the transformation.
     """
     sdfg = dace.SDFG(util.unique_name("simple_block_sdfg"))
     state = sdfg.add_state("state", is_start_block=True)
@@ -150,11 +150,12 @@ def test_only_dependent():
     ref = reff(a, b)
 
     # Apply the transformation
-    sdfg.apply_transformations_repeated(
+    count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(blocking_size=10, blocking_parameter="j"),
         validate=True,
         validate_all=True,
     )
+    assert count > 0
 
     assert len(sdfg.states()) == 1
     state = sdfg.states()[0]
@@ -214,11 +215,12 @@ def test_intermediate_access_node():
     assert np.allclose(ref, c)
 
     # Apply the transformation.
-    sdfg.apply_transformations_repeated(
+    count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(blocking_size=10, blocking_parameter="j"),
         validate=True,
         validate_all=True,
     )
+    assert count > 0
 
     # Inspect if the SDFG was modified correctly.
     #  We only inspect `tmp` which now has to be between the two maps.
