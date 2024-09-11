@@ -589,31 +589,29 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 head_state.add_edge(src_node, None, nsdfg_node, connector, memlet)
 
         def make_temps(
-            data: gtir_builtin_translators.TemporaryResult,
-        ) -> gtir_builtin_translators.TemporaryResult:
-            if isinstance(data, tuple):
-                return tuple(make_temps(x) for x in data)
-            elif data.data_node.data in lambda_arg_nodes:
-                return lambda_arg_nodes[data.data_node.data]
-            elif data.data_node.data in self.global_symbols:
-                data_node = head_state.add_access(data.data_node.data)
-                return gtir_builtin_translators.TemporaryData(data_node, data.data_type)
+            x: gtir_builtin_translators.TemporaryData,
+        ) -> gtir_builtin_translators.TemporaryData:
+            if x.data_node.data in lambda_arg_nodes:
+                return lambda_arg_nodes[x.data_node.data]
+            elif x.data_node.data in self.global_symbols:
+                data_node = head_state.add_access(x.data_node.data)
+                return gtir_builtin_translators.TemporaryData(data_node, x.data_type)
             else:
-                connector = data.data_node.data
-                desc = data.data_node.desc(nsdfg)
+                connector = x.data_node.data
+                desc = x.data_node.desc(nsdfg)
                 # make lambda result non-transient and map it to external temporary
                 desc.transient = False
                 # isolated access node will make validation fail
-                if nstate.degree(data.data_node) == 0:
-                    nstate.remove_node(data.data_node)
+                if nstate.degree(x.data_node) == 0:
+                    nstate.remove_node(x.data_node)
                 temp, _ = sdfg.add_temp_transient_like(desc)
                 dst_node = head_state.add_access(temp)
                 head_state.add_edge(
                     nsdfg_node, connector, dst_node, None, dace.Memlet.from_array(temp, desc)
                 )
-                return gtir_builtin_translators.TemporaryData(dst_node, data.data_type)
+                return gtir_builtin_translators.TemporaryData(dst_node, x.data_type)
 
-        return make_temps(lambda_results)
+        return dace_fieldview_util.visit_tuples(lambda_results, make_temps)
 
     def visit_Literal(
         self,

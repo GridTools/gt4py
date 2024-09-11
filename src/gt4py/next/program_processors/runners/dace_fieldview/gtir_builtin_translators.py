@@ -290,51 +290,54 @@ def translate_cond(
     sdfg.add_edge(cond_state, false_state, dace.InterstateEdge(condition=(f"not bool({cond})")))
     sdfg.add_edge(false_state, state, dace.InterstateEdge())
 
-    true_br_results = sdfg_builder.visit(
+    true_br_args = sdfg_builder.visit(
         true_expr,
         sdfg=sdfg,
         head_state=true_state,
         reduce_identity=reduce_identity,
     )
-    false_br_results = sdfg_builder.visit(
+    false_br_args = sdfg_builder.visit(
         false_expr,
         sdfg=sdfg,
         head_state=false_state,
         reduce_identity=reduce_identity,
     )
 
-    true_br_args = dace_fieldview_util.flatten_tuples(true_br_results)
-    false_br_args = dace_fieldview_util.flatten_tuples(false_br_results)
-
-    # TODO(edopao): replicate structure on output for nested tuples
-
-    output_nodes = []
-    for true_br, false_br in zip(true_br_args, false_br_args, strict=True):
-        assert isinstance(true_br, TemporaryData)
-        true_br_node, true_br_type = true_br.data_node, true_br.data_type
-        assert isinstance(true_br_node, dace.nodes.AccessNode)
-        assert isinstance(false_br, TemporaryData)
-        false_br_node = false_br.data_node
-        assert isinstance(false_br_node, dace.nodes.AccessNode)
-        desc = true_br_node.desc(sdfg)
+    def make_temps(x: TemporaryData) -> TemporaryData:
+        desc = x.data_node.desc(sdfg)
         data_name, _ = sdfg.add_temp_transient_like(desc)
-        output_nodes.append(TemporaryData(state.add_access(data_name), true_br_type))
+        data_node = state.add_access(data_name)
 
+        return TemporaryData(data_node, x.data_type)
+
+    temp_args = dace_fieldview_util.visit_tuples(true_br_args, make_temps)
+
+    true_br_nodes = dace_fieldview_util.flatten_tuples(true_br_args)
+    false_br_nodes = dace_fieldview_util.flatten_tuples(false_br_args)
+    temp_nodes = dace_fieldview_util.flatten_tuples(temp_args)
+
+    for true_br, false_br, temp in zip(true_br_nodes, false_br_nodes, temp_nodes, strict=True):
+        assert true_br.data_type == false_br.data_type
+        true_br_node = true_br.data_node
+        false_br_node = false_br.data_node
+
+        data_name = temp.data_node.data
+        data_desc = temp.data_node.desc(sdfg)
         true_br_output_node = true_state.add_access(data_name)
         true_state.add_nedge(
             true_br_node,
             true_br_output_node,
-            dace.Memlet.from_array(data_name, desc),
+            dace.Memlet.from_array(data_name, data_desc),
         )
 
         false_br_output_node = false_state.add_access(data_name)
         false_state.add_nedge(
             false_br_node,
             false_br_output_node,
-            dace.Memlet.from_array(data_name, desc),
+            dace.Memlet.from_array(data_name, data_desc),
         )
 
-    return output_nodes[0] if len(output_nodes) == 1 else tuple(output_nodes)
+    return temp_args
 
 
 def _get_data_nodes(

@@ -312,8 +312,7 @@ def test_gtir_tuple_return():
         body=[
             gtir.SetAt(
                 expr=im.make_tuple(
-                    im.make_tuple(im.op_as_fieldop("plus", domain)("x", "y"), gtir.SymRef(id="x")),
-                    gtir.SymRef(id="y"),
+                    im.make_tuple(im.op_as_fieldop("plus", domain)("x", "y"), "x"), "y"
                 ),
                 domain=domain,
                 target=gtir.SymRef(id="z"),
@@ -323,13 +322,10 @@ def test_gtir_tuple_return():
 
     a = np.random.rand(N)
     b = np.random.rand(N)
-    c = np.empty_like(a)
-    d = np.empty_like(a)
-    e = np.empty_like(a)
 
     sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
 
-    z_fields = (c, d, e)
+    z_fields = (np.empty_like(a), np.empty_like(a), np.empty_like(a))
     z_symbols = dict(
         __z_0_0_size_0=FSYMBOLS["__x_size_0"],
         __z_0_0_stride_0=FSYMBOLS["__x_stride_0"],
@@ -340,9 +336,9 @@ def test_gtir_tuple_return():
     )
 
     sdfg(a, b, *z_fields, **FSYMBOLS, **z_symbols)
-    assert np.allclose(c, a + b)
-    assert np.allclose(d, a)
-    assert np.allclose(e, b)
+    assert np.allclose(z_fields[0], a + b)
+    assert np.allclose(z_fields[1], a)
+    assert np.allclose(z_fields[2], b)
 
 
 def test_gtir_tuple_target():
@@ -568,6 +564,58 @@ def test_gtir_cond():
         d = np.empty_like(a)
         sdfg(a, b, c, d, s1, s2, scalar=1.0, **FSYMBOLS)
         assert np.allclose(d, (a + b + 1) if s1 > s2 else (a + c + 1))
+
+
+def test_gtir_cond_with_tuple_return():
+    domain = im.call("cartesian_domain")(
+        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
+    )
+    testee = gtir.Program(
+        id="cond_with_tuple_return",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="x", type=IFTYPE),
+            gtir.Sym(id="y", type=IFTYPE),
+            gtir.Sym(id="w", type=IFTYPE),
+            gtir.Sym(id="z", type=ts.TupleType(types=[IFTYPE, IFTYPE])),
+            gtir.Sym(id="pred", type=ts.ScalarType(ts.ScalarKind.BOOL)),
+            gtir.Sym(id="size", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.tuple_get(
+                    0,
+                    im.cond(
+                        gtir.SymRef(id="pred"),
+                        im.make_tuple(im.make_tuple("x", "y"), "w"),
+                        im.make_tuple(im.make_tuple("y", "x"), "w"),
+                    ),
+                ),
+                domain=domain,
+                target=gtir.SymRef(id="z"),
+            )
+        ],
+    )
+
+    a = np.random.rand(N)
+    b = np.random.rand(N)
+    c = np.random.rand(N)
+
+    z_symbols = dict(
+        __z_0_size_0=FSYMBOLS["__x_size_0"],
+        __z_0_stride_0=FSYMBOLS["__x_stride_0"],
+        __z_1_size_0=FSYMBOLS["__x_size_0"],
+        __z_1_stride_0=FSYMBOLS["__x_stride_0"],
+    )
+
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
+
+    for s in [False, True]:
+        z_fields = (np.empty_like(a), np.empty_like(a))
+        sdfg(a, b, c, *z_fields, pred=np.bool_(s), **FSYMBOLS, **z_symbols)
+        assert np.allclose(z_fields[0], a if s else b)
+        assert np.allclose(z_fields[1], b if s else a)
 
 
 def test_gtir_cond_nested():
@@ -1588,6 +1636,52 @@ def test_gtir_let_lambda_with_cond():
         b = np.empty_like(a)
         sdfg(a, b, pred=np.bool_(s), **FSYMBOLS)
         assert np.allclose(b, a if s else a * 2)
+
+
+def test_gtir_let_lambda_with_tuple():
+    domain = im.call("cartesian_domain")(
+        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
+    )
+    testee = gtir.Program(
+        id="let_lambda_with_tuple",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="x", type=IFTYPE),
+            gtir.Sym(id="y", type=IFTYPE),
+            gtir.Sym(id="z", type=ts.TupleType(types=[IFTYPE, IFTYPE])),
+            gtir.Sym(id="size", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.let(
+                    "t",
+                    im.make_tuple(
+                        im.make_tuple(im.op_as_fieldop("plus", domain)("x", "y"), "x"), "y"
+                    ),
+                )(im.make_tuple(im.tuple_get(1, im.tuple_get(0, "t")), im.tuple_get(1, "t"))),
+                domain=domain,
+                target=gtir.SymRef(id="z"),
+            )
+        ],
+    )
+
+    a = np.random.rand(N)
+    b = np.random.rand(N)
+
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
+
+    z_fields = (np.empty_like(a), np.empty_like(a))
+    z_symbols = dict(
+        __z_0_size_0=FSYMBOLS["__x_size_0"],
+        __z_0_stride_0=FSYMBOLS["__x_stride_0"],
+        __z_1_size_0=FSYMBOLS["__x_size_0"],
+        __z_1_stride_0=FSYMBOLS["__x_stride_0"],
+    )
+
+    sdfg(a, b, *z_fields, **FSYMBOLS, **z_symbols)
+    assert np.allclose(z_fields[0], a)
+    assert np.allclose(z_fields[1], b)
 
 
 def test_gtir_if_values():

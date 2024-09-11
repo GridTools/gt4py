@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import itertools
-from typing import Any, Mapping, Optional
+from typing import Any, Callable, Mapping, Optional
 
 import dace
 
@@ -145,9 +145,9 @@ def get_map_variable(dim: gtx_common.Dimension) -> str:
 
 
 def flatten_tuples(data: Any) -> list[Any]:
-    def _visit_tuple(results: tuple[Any]) -> list[Any]:
+    def _visit_tuple(t: tuple[Any]) -> list[Any]:
         tuple_fields = []
-        for r in results:
+        for r in t:
             if isinstance(r, tuple):
                 tuple_fields.extend(_visit_tuple(r))
             else:
@@ -186,3 +186,14 @@ def get_tuple_type(tuple_data: tuple[Any, ...]) -> ts.TupleType:
     return ts.TupleType(
         types=[get_tuple_type(d) if isinstance(d, tuple) else d.data_type for d in tuple_data]
     )
+
+
+def visit_tuples(data: Any, fun: Callable[[Any], Any]) -> Any:
+    """
+    Helper method to visit a tuple (possibly nested) of fields and return some data
+    with the same original tuple structure.
+    """
+    if isinstance(data, tuple):
+        return tuple(visit_tuples(x, fun) for x in data)
+    else:
+        return fun(data)
