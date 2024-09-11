@@ -18,7 +18,7 @@ import dace.library
 import dace.subsets
 
 from gt4py import eve
-from gt4py.cartesian.gtc import daceir as dcir
+from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.dace.expansion.tasklet_codegen import TaskletCodegen
 from gt4py.cartesian.gtc.dace.expansion.utils import get_dace_debuginfo
 from gt4py.cartesian.gtc.dace.symbol_utils import data_type_to_dace_typeclass

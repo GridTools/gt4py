@@ -17,7 +17,7 @@ import dace.library
 import dace.subsets
 import sympy
 
-from gt4py.cartesian.gtc import daceir as dcir
+from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.dace.expansion.daceir_builder import DaCeIRBuilder
 from gt4py.cartesian.gtc.dace.expansion.sdfg_builder import StencilComputationSDFGBuilder
 

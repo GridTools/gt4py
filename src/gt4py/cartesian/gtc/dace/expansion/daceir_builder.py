@@ -18,7 +18,8 @@ import dace.library
 import dace.subsets
 
 from gt4py import eve
-from gt4py.cartesian.gtc import common, daceir as dcir, oir
+from gt4py.cartesian.gtc import common, oir
+from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.dace.expansion_specification import Loop, Map, Sections, Stages
 from gt4py.cartesian.gtc.dace.utils import (
     compute_dcir_access_infos,
@@ -68,7 +69,13 @@ def _access_iter(node: oir.HorizontalExecution, get_outputs: bool):
     ).unique(key=lambda x: x[2])
 
 
-def _get_tasklet_inout_memlets(node: oir.HorizontalExecution, *, get_outputs, global_ctx, **kwargs):
+def _get_tasklet_inout_memlets(
+    node: oir.HorizontalExecution,
+    *,
+    get_outputs: bool,
+    global_ctx: DaCeIRBuilder.GlobalContext,
+    **kwargs,
+):
     access_infos = compute_dcir_access_infos(
         node,
         block_extents=global_ctx.library_node.get_extents,
@@ -190,12 +197,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
     @dataclass
     class IterationContext:
         grid_subset: dcir.GridSubset
-        parent: Optional[DaCeIRBuilder.IterationContext]
-
-        @classmethod
-        def init(cls, *args, **kwargs):
-            res = cls(*args, parent=None, **kwargs)
-            return res
+        parent: Optional[DaCeIRBuilder.IterationContext] = None
 
         def push_axes_extents(self, axes_extents) -> DaCeIRBuilder.IterationContext:
             res = self.grid_subset
@@ -611,7 +613,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
         scope_nodes,
         item: Map,
         *,
-        global_ctx,
+        global_ctx: DaCeIRBuilder.GlobalContext,
         iteration_ctx: DaCeIRBuilder.IterationContext,
         symbol_collector: DaCeIRBuilder.SymbolCollector,
         **kwargs,
@@ -787,19 +789,13 @@ class DaCeIRBuilder(eve.NodeTranslator):
     def visit_VerticalLoop(
         self, node: oir.VerticalLoop, *, global_ctx: DaCeIRBuilder.GlobalContext, **kwargs
     ):
-        start, end = (node.sections[0].interval.start, node.sections[0].interval.end)
-
-        overall_interval = dcir.DomainInterval(
-            start=dcir.AxisBound(axis=dcir.Axis.K, level=start.level, offset=start.offset),
-            end=dcir.AxisBound(axis=dcir.Axis.K, level=end.level, offset=end.offset),
-        )
         overall_extent = Extent.zeros(2)
         for he in node.walk_values().if_isinstance(oir.HorizontalExecution):
             overall_extent = overall_extent.union(global_ctx.library_node.get_extents(he))
 
-        iteration_ctx = DaCeIRBuilder.IterationContext.init(
+        iteration_ctx = DaCeIRBuilder.IterationContext(
             grid_subset=dcir.GridSubset.from_gt4py_extent(overall_extent).set_interval(
-                axis=dcir.Axis.K, interval=overall_interval
+                axis=dcir.Axis.K, interval=node.sections[0].interval
             )
         )
 
@@ -849,7 +845,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
 
         read_fields = set(memlet.field for memlet in read_memlets)
         write_fields = set(memlet.field for memlet in write_memlets)
-        res = dcir.NestedSDFG(
+        return dcir.NestedSDFG(
             label=global_ctx.library_node.label,
             states=self.to_state(computations, grid_subset=iteration_ctx.grid_subset),
             field_decls=field_decls,
@@ -857,5 +853,3 @@ class DaCeIRBuilder(eve.NodeTranslator):
             write_memlets=[memlet for memlet in field_memlets if memlet.field in write_fields],
             symbol_decls=list(symbol_collector.symbol_decls.values()),
         )
-
-        return res

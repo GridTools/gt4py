@@ -17,7 +17,7 @@ import dace.subsets
 
 import gt4py.cartesian.gtc.oir as oir
 from gt4py import eve
-from gt4py.cartesian.gtc import daceir as dcir
+from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.dace.nodes import StencilComputation
 from gt4py.cartesian.gtc.dace.symbol_utils import data_type_to_dace_typeclass
 from gt4py.cartesian.gtc.dace.utils import compute_dcir_access_infos, make_dace_subset

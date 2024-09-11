@@ -20,7 +20,8 @@ import dace.subsets
 import numpy as np
 from dace import library
 
-from gt4py.cartesian.gtc import common, daceir as dcir, oir
+from gt4py.cartesian.gtc import common, oir
+from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.dace.expansion.expansion import StencilComputationExpansion
 from gt4py.cartesian.gtc.definitions import Extent
 from gt4py.cartesian.gtc.oir import Decl, FieldDecl, VerticalLoop, VerticalLoopSection
@@ -215,10 +216,8 @@ class StencilComputation(library.LibraryNode):
     def tile_strides(self):
         if self.tile_sizes_interpretation == "strides":
             return self.tile_sizes
-        else:
-            overall_extent: Extent = next(iter(self.extents.values()))
-            for extent in self.extents.values():
-                overall_extent |= extent
-            return {
-                key: value + overall_extent[key.to_idx()] for key, value in self.tile_sizes.items()
-            }
+
+        overall_extent: Extent = next(iter(self.extents.values()))
+        for extent in self.extents.values():
+            overall_extent |= extent
+        return {key: value + overall_extent[key.to_idx()] for key, value in self.tile_sizes.items()}
