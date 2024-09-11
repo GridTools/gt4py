@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
 import functools
@@ -162,6 +156,17 @@ def _collect_offset_definitions(
                 )
             else:
                 assert grid_type == common.GridType.UNSTRUCTURED
+                # TODO(tehrengruber): The implicit offset providers added to support syntax like
+                #  `KDim+1` can also include horizontal dimensions. Cartesian shifts in this
+                #  dimension are not supported by the backend and also never occur in user code.
+                #  We just skip these here for now, but this is not a clean solution. Not having
+                #  any unstructured dimensions in here would be preferred.
+                if (
+                    dim.kind == common.DimensionKind.HORIZONTAL
+                    and offset_name == common.dimension_to_implicit_offset(dim.value)
+                ):
+                    continue
+
                 if not dim.kind == common.DimensionKind.VERTICAL:
                     raise ValueError(
                         "Mapping an offset to a horizontal dimension in unstructured is not allowed."

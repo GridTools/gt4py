@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 # TODO(tehrengruber): This file contains to many different components. Split
 #  into components for each dialect.
@@ -32,6 +26,7 @@ from gt4py.eve import extended_typing as xtyping
 from gt4py.next import (
     allocators as next_allocators,
     backend as next_backend,
+    common,
     embedded as next_embedded,
     errors,
 )
@@ -191,7 +186,35 @@ class Program:
             return self.backend.transforms_prog.past_to_itir(no_args_past).program
         return past_to_itir.PastToItirFactory()(no_args_past).program
 
+    @functools.cached_property
+    def _implicit_offset_provider(self) -> dict[common.Tag, common.OffsetProviderElem]:
+        """
+        Add all implicit offset providers.
+
+        Each dimension implicitly defines an offset provider such that we can allow syntax like::
+
+            field(TDim + 1)
+
+        This function adds these implicit offset providers.
+        """
+        # TODO(tehrengruber): We add all dimensions here regardless of whether they are cartesian
+        #  or unstructured. While it is conceptually fine, but somewhat meaningless,
+        #  to do something `Cell+1` the GTFN backend for example doesn't support these. We should
+        #  find a way to avoid adding these dimensions, but since we don't have the grid type here
+        #  and since the dimensions don't this information either, we just add all dimensions here
+        #  and filter them out in the backends that don't support this.
+        implicit_offset_provider = {}
+        params = self.past_stage.past_node.params
+        for param in params:
+            if isinstance(param.type, ts.FieldType):
+                for dim in param.type.dims:
+                    implicit_offset_provider.update(
+                        {common.dimension_to_implicit_offset(dim.value): dim}
+                    )
+        return implicit_offset_provider
+
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs: Any) -> None:
+        offset_provider = offset_provider | self._implicit_offset_provider
         if self.backend is None:
             warnings.warn(
                 UserWarning(

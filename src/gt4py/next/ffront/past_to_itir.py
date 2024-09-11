@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -21,7 +15,7 @@ import devtools
 import factory
 
 from gt4py.eve import NodeTranslator, concepts, traits
-from gt4py.next import common, config
+from gt4py.next import common, config, errors
 from gt4py.next.ffront import (
     fbuiltins,
     gtcallable,
@@ -39,6 +33,8 @@ from gt4py.next.type_system import type_info, type_specifications as ts
 
 @dataclasses.dataclass(frozen=True)
 class PastToItir(workflow.ChainableWorkflowMixin):
+    to_gtir: bool = False  # FIXME[#1582](havogt): remove after refactoring to GTIR
+
     def __call__(self, inp: ffront_stages.PastClosure) -> stages.ProgramCall:
         all_closure_vars = transform_utils._get_closure_vars_recursively(inp.closure_vars)
         offsets_and_dimensions = transform_utils._filter_closure_vars_by_type(
@@ -54,7 +50,10 @@ class PastToItir(workflow.ChainableWorkflowMixin):
         lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
 
         itir_program = ProgramLowering.apply(
-            inp.past_node, function_definitions=lowered_funcs, grid_type=grid_type
+            inp.past_node,
+            function_definitions=lowered_funcs,
+            grid_type=grid_type,
+            to_gtir=self.to_gtir,
         )
 
         if config.DEBUG or "debug" in inp.kwargs:
@@ -114,6 +113,7 @@ def _flatten_tuple_expr(node: past.Expr) -> list[past.Name | past.Subscript]:
     raise ValueError("Only 'past.Name', 'past.Subscript' or 'past.TupleExpr' thereof are allowed.")
 
 
+@dataclasses.dataclass
 class ProgramLowering(
     traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrait, NodeTranslator
 ):
@@ -150,6 +150,9 @@ class ProgramLowering(
     [Sym(id=SymbolName('inp')), Sym(id=SymbolName('out')), Sym(id=SymbolName('__inp_size_0')), Sym(id=SymbolName('__out_size_0'))]
     """
 
+    grid_type: common.GridType
+    to_gtir: bool = False  # FIXME[#1582](havogt): remove after refactoring to GTIR
+
     # TODO(tehrengruber): enable doctests again. For unknown / obscure reasons
     #  the above doctest fails when executed using `pytest --doctest-modules`.
 
@@ -159,11 +162,11 @@ class ProgramLowering(
         node: past.Program,
         function_definitions: list[itir.FunctionDefinition],
         grid_type: common.GridType,
+        to_gtir: bool = False,  # FIXME[#1582](havogt): remove after refactoring to GTIR
     ) -> itir.FencilDefinition:
-        return cls(grid_type=grid_type).visit(node, function_definitions=function_definitions)
-
-    def __init__(self, grid_type: common.GridType):
-        self.grid_type = grid_type
+        return cls(grid_type=grid_type, to_gtir=to_gtir).visit(
+            node, function_definitions=function_definitions
+        )
 
     def _gen_size_params_from_program(self, node: past.Program) -> list[itir.Sym]:
         """Generate symbols for each field param and dimension."""
@@ -196,7 +199,7 @@ class ProgramLowering(
         *,
         function_definitions: list[itir.FunctionDefinition],
         **kwargs: Any,
-    ) -> itir.FencilDefinition:
+    ) -> itir.FencilDefinition | itir.Program:
         # The ITIR does not support dynamically getting the size of a field. As
         #  a workaround we add additional arguments to the fencil definition
         #  containing the size of all fields. The caller of a program is (e.g.
@@ -207,15 +210,50 @@ class ProgramLowering(
         if any("domain" not in body_entry.kwargs for body_entry in node.body):
             params = params + self._gen_size_params_from_program(node)
 
-        closures: list[itir.StencilClosure] = []
-        for stmt in node.body:
-            closures.append(self._visit_stencil_call(stmt, **kwargs))
+        if self.to_gtir:
+            set_ats = [self._visit_stencil_call_as_set_at(stmt, **kwargs) for stmt in node.body]
+            return itir.Program(
+                id=node.id,
+                function_definitions=function_definitions,
+                params=params,
+                declarations=[],
+                body=set_ats,
+            )
+        else:
+            closures = [self._visit_stencil_call_as_closure(stmt, **kwargs) for stmt in node.body]
+            return itir.FencilDefinition(
+                id=node.id,
+                function_definitions=function_definitions,
+                params=params,
+                closures=closures,
+            )
 
-        return itir.FencilDefinition(
-            id=node.id, function_definitions=function_definitions, params=params, closures=closures
+    def _visit_stencil_call_as_set_at(self, node: past.Call, **kwargs: Any) -> itir.SetAt:
+        assert isinstance(node.kwargs["out"].type, ts.TypeSpec)
+        assert type_info.is_type_or_tuple_of_type(node.kwargs["out"].type, ts.FieldType)
+
+        node_kwargs = {**node.kwargs}
+        domain = node_kwargs.pop("domain", None)
+        output, lowered_domain = self._visit_stencil_call_out_arg(
+            node_kwargs.pop("out"), domain, **kwargs
         )
 
-    def _visit_stencil_call(self, node: past.Call, **kwargs: Any) -> itir.StencilClosure:
+        assert isinstance(node.func.type, (ts_ffront.FieldOperatorType, ts_ffront.ScanOperatorType))
+
+        args, node_kwargs = type_info.canonicalize_arguments(
+            node.func.type, node.args, node_kwargs, use_signature_ordering=True
+        )
+
+        lowered_args, lowered_kwargs = self.visit(args, **kwargs), self.visit(node_kwargs, **kwargs)
+
+        return itir.SetAt(
+            expr=im.call(node.func.id)(*lowered_args, *lowered_kwargs.values()),
+            domain=lowered_domain,
+            target=output,
+        )
+
+    # FIXME[#1582](havogt): remove after refactoring to GTIR
+    def _visit_stencil_call_as_closure(self, node: past.Call, **kwargs: Any) -> itir.StencilClosure:
         assert isinstance(node.kwargs["out"].type, ts.TypeSpec)
         assert type_info.is_type_or_tuple_of_type(node.kwargs["out"].type, ts.FieldType)
 
@@ -251,7 +289,9 @@ class ProgramLowering(
         else:
             # field operators return a tuple of iterators, deref element-wise
             stencil_body = lowering_utils.process_elements(
-                im.deref, im.call(node.func.id)(*stencil_args), node.func.type.definition.returns
+                im.deref,
+                im.call(node.func.id)(*stencil_args),
+                node.func.type.definition.returns,
             )
 
         return itir.StencilClosure(
@@ -399,9 +439,10 @@ class ProgramLowering(
         node_dims = cast(ts.FieldType, node.type).dims
         assert isinstance(node_dims, list)
         if isinstance(node.type, ts.FieldType) and len(out_field_slice_) != len(node_dims):
-            raise ValueError(
+            raise errors.DSLError(
+                node.location,
                 f"Too many indices for field '{out_field_name}': field is {len(node_dims)}"
-                f"-dimensional, but {len(out_field_slice_)} were indexed."
+                f"-dimensional, but {len(out_field_slice_)} were indexed.",
             )
         return out_field_slice_
 

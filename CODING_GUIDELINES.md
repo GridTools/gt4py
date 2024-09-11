@@ -222,9 +222,7 @@ https://testandcode.com/116
 
 [doctest]: https://docs.python.org/3/library/doctest.html
 [google-style-guide]: https://google.github.io/styleguide/pyguide.html
-[mypy]: https://mypy.readthedocs.io/
 [mypy-error-codes]: https://mypy.readthedocs.io/en/stable/error_code_list.html
-[pre-commit]: https://pre-commit.com/
 [pylint]: https://pylint.pycqa.org/
 [ruff-formatter]: https://docs.astral.sh/ruff/formatter/
 [ruff-linter]: https://docs.astral.sh/ruff/linter/
@@ -233,4 +231,3 @@ https://testandcode.com/116
 [sphinx-autodoc]: https://www.sphinx-doc.org/en/master/usage/extensions/autodoc.html
 [sphinx-napoleon]: https://sphinxcontrib-napoleon.readthedocs.io/en/latest/index.html#
 [sphinx-rest]: https://www.sphinx-doc.org/en/master/usage/restructuredtext/basics.html
-[ci-docs]: docs/development/CI/infrastructure.md
