@@ -339,8 +339,11 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
         # only transform things inside of function definitions and leave the rest as is
         if kwargs["inside_fun"]:
+            # we are inside a function, visit as usual
             return super().visit(node, **kwargs)
         else:
+            # we are outside of a function, don't transform anything (i.e. don't call any `vist_`
+            # methods on `node`), but just visit child nodes.
             return self.generic_visit(node, **kwargs)
 
     def visit_ScanPassDefinition(

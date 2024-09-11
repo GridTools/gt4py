@@ -176,7 +176,7 @@ class ProgramLowering(
                 .filter(lambda dims: len(dims) > 0)
                 .to_list()
             )
-            if len(fields_dims) > 0:  # param has no field constituent otherwise
+            if len(fields_dims) > 0:  # otherwise `param` has no constituent which is of `FieldType`
                 assert all(field_dims == fields_dims[0] for field_dims in fields_dims)
                 for dim_idx in range(len(fields_dims[0])):
                     size_params.append(

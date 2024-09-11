@@ -108,8 +108,8 @@ def _field_constituents_shape_and_dims(
                 assert hasattr(arg, "shape") and len(arg.shape) == len(dims)
                 yield (arg.shape, dims)
             else:
-                pass
+                yield from []  # ignore 0-dim fields
         case ts.ScalarType():
-            pass
+            yield from []  # ignore scalars
         case _:
             raise ValueError("Expected 'FieldType' or 'TupleType' thereof.")
