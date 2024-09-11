@@ -208,9 +208,10 @@ class Program:
         for param in params:
             if isinstance(param.type, ts.FieldType):
                 for dim in param.type.dims:
-                    implicit_offset_provider.update(
-                        {common.dimension_to_implicit_offset(dim.value): dim}
-                    )
+                    if dim.kind in (common.DimensionKind.HORIZONTAL, common.DimensionKind.VERTICAL):
+                        implicit_offset_provider.update(
+                            {common.dimension_to_implicit_offset(dim.value): dim}
+                        )
         return implicit_offset_provider
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs: Any) -> None:
