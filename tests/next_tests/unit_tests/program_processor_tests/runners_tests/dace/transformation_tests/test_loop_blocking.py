@@ -136,6 +136,7 @@ def _get_chained_sdfg() -> tuple[dace.SDFG, Callable[[np.ndarray, np.ndarray], n
 
 def _get_sdfg_with_empty_memlet(
     first_tasklet_indiependent: bool,
+    only_empty_memlets: bool,
 ) -> tuple[
     dace.SDFG, dace_nodes.MapEntry, dace_nodes.Tasklet, dace_nodes.AccessNode, dace_nodes.Tasklet
 ]:
@@ -146,6 +147,10 @@ def _get_sdfg_with_empty_memlet(
     Depending on `first_tasklet_indiependent` the tasklet is either independent
     or not. The second tasklet has an additional in connector that access an array.
 
+    If `only_empty_memlets` is given then the second memlet will only depend
+    on the input of the first tasklet. However, since it is connected to the
+    map exit, it will classified as dependent.
+
     Returns:
         The function returns the SDFG, the map entry and the first tasklet (that
         is either dependent or independent), the access node between the tasklets
@@ -155,10 +160,14 @@ def _get_sdfg_with_empty_memlet(
     state = sdfg.add_state("state", is_start_block=True)
     sdfg.add_symbol("N", dace.int32)
     sdfg.add_symbol("M", dace.int32)
-    sdfg.add_array("a", ("N", "M"), dace.float64, transient=False)
     sdfg.add_array("b", ("N", "M"), dace.float64, transient=False)
+    b = state.add_access("b")
     sdfg.add_scalar("tmp", dtype=dace.float64, transient=True)
-    a, b, tmp = (state.add_access(name) for name in ["a", "b", "tmp"])
+    tmp = state.add_access("tmp")
+
+    if not only_empty_memlets:
+        sdfg.add_array("a", ("N", "M"), dace.float64, transient=False)
+        a = state.add_access("a")
 
     # This is the first tasklet.
     task1 = state.add_tasklet(
@@ -167,15 +176,23 @@ def _get_sdfg_with_empty_memlet(
         outputs={"__out0"},
         code="__out0 = 1.0" if first_tasklet_indiependent else "__out0 = j",
     )
-    task2 = state.add_tasklet(
-        "task2", inputs={"__in0", "__in1"}, outputs={"__out0"}, code="__out0 = __in0 + __in1"
-    )
+
+    if only_empty_memlets:
+        task2 = state.add_tasklet(
+            "task2", inputs={"__in0"}, outputs={"__out0"}, code="__out0 = __in0 + 1.0"
+        )
+    else:
+        task2 = state.add_tasklet(
+            "task2", inputs={"__in0", "__in1"}, outputs={"__out0"}, code="__out0 = __in0 + __in1"
+        )
 
     # Now create the map
     mentry, mexit = state.add_map("map", ndrange={"i": "0:N", "j": "0:M"})
 
-    state.add_edge(a, None, mentry, "IN_a", dace.Memlet("a[0:N, 0:M]"))
-    state.add_edge(mentry, "OUT_a", task2, "__in1", dace.Memlet("a[i, j]"))
+    if not only_empty_memlets:
+        state.add_edge(a, None, mentry, "IN_a", dace.Memlet("a[0:N, 0:M]"))
+        state.add_edge(mentry, "OUT_a", task2, "__in1", dace.Memlet("a[i, j]"))
+
     state.add_edge(task2, "__out0", mexit, "IN_b", dace.Memlet("b[i, j]"))
     state.add_edge(mexit, "OUT_b", b, None, dace.Memlet("b[0:N, 0:M]"))
 
@@ -183,8 +200,9 @@ def _get_sdfg_with_empty_memlet(
     state.add_edge(task1, "__out0", tmp, None, dace.Memlet("tmp[0]"))
     state.add_edge(tmp, None, task2, "__in0", dace.Memlet("tmp[0]"))
 
-    mentry.add_in_connector("IN_a")
-    mentry.add_out_connector("OUT_a")
+    if not only_empty_memlets:
+        mentry.add_in_connector("IN_a")
+        mentry.add_out_connector("OUT_a")
     mexit.add_in_connector("IN_b")
     mexit.add_out_connector("OUT_b")
 
@@ -399,7 +417,10 @@ def test_direct_map_exit_connection() -> dace.SDFG:
 
 
 def test_empty_memlet_1():
-    sdfg, mentry, itask, tmp, task2 = _get_sdfg_with_empty_memlet(first_tasklet_indiependent=True)
+    sdfg, mentry, itask, tmp, task2 = _get_sdfg_with_empty_memlet(
+        first_tasklet_indiependent=True,
+        only_empty_memlets=False,
+    )
     state: dace.SDFGState = next(iter(sdfg.nodes()))
 
     count = sdfg.apply_transformations_repeated(
@@ -422,7 +443,10 @@ def test_empty_memlet_1():
 
 
 def test_empty_memlet_2():
-    sdfg, mentry, dtask, tmp, task2 = _get_sdfg_with_empty_memlet(first_tasklet_indiependent=False)
+    sdfg, mentry, dtask, tmp, task2 = _get_sdfg_with_empty_memlet(
+        first_tasklet_indiependent=False,
+        only_empty_memlets=False,
+    )
     state: dace.SDFGState = next(iter(sdfg.nodes()))
 
     count = sdfg.apply_transformations_repeated(
@@ -436,6 +460,40 @@ def test_empty_memlet_2():
     assert all(
         isinstance(out_edge.dst, dace_nodes.MapEntry) for out_edge in state.out_edges(mentry)
     )
+    inner_mentry = next(iter(state.out_edges(mentry))).dst
+
+    scope_dict = state.scope_dict()
+    assert scope_dict[mentry] is None
+    assert scope_dict[inner_mentry] is mentry
+    assert scope_dict[dtask] is inner_mentry
+    assert scope_dict[tmp] is inner_mentry
+    assert scope_dict[task2] is inner_mentry
+
+
+def test_empty_memlet_3():
+    # This is the only interesting case with only empty memlet.
+    sdfg, mentry, dtask, tmp, task2 = _get_sdfg_with_empty_memlet(
+        first_tasklet_indiependent=False,
+        only_empty_memlets=True,
+    )
+    state: dace.SDFGState = next(iter(sdfg.nodes()))
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(blocking_size=5, blocking_parameter="j"),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 1
+
+    # The top map only has a single output, which is the empty edge, that is holding
+    #  the inner map entry in the scope.
+    assert all(out_edge.data.is_empty() for out_edge in state.out_edges(mentry))
+    assert state.in_degree(mentry) == 0
+    assert state.out_degree(mentry) == 1
+    assert all(
+        isinstance(out_edge.dst, dace_nodes.MapEntry) for out_edge in state.out_edges(mentry)
+    )
+
     inner_mentry = next(iter(state.out_edges(mentry))).dst
 
     scope_dict = state.scope_dict()
