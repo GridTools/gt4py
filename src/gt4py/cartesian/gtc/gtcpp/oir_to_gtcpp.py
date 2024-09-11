@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import functools
 import itertools
 from dataclasses import dataclass, field
@@ -110,7 +112,7 @@ class OIRToGTCpp(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
         def add_temporaries(
             self, temporaries: List[gtcpp.Temporary]
-        ) -> "OIRToGTCpp.GTComputationContext":
+        ) -> OIRToGTCpp.GTComputationContext:
             self.temporaries.extend(temporaries)
             return self
 
@@ -118,7 +120,7 @@ class OIRToGTCpp(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         def arguments(self) -> List[gtcpp.Arg]:
             return [gtcpp.Arg(name=name) for name in self._arguments]
 
-        def add_arguments(self, arguments: Set[str]) -> "OIRToGTCpp.GTComputationContext":
+        def add_arguments(self, arguments: Set[str]) -> OIRToGTCpp.GTComputationContext:
             self._arguments.update(arguments)
             return self
 
@@ -221,7 +223,7 @@ class OIRToGTCpp(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         )
 
     def _mask_to_expr(
-        self, mask: common.HorizontalMask, comp_ctx: "GTComputationContext"
+        self, mask: common.HorizontalMask, comp_ctx: GTComputationContext
     ) -> gtcpp.Expr:
         mask_expr: List[gtcpp.Expr] = []
         for axis_index, interval in enumerate(mask.intervals):
@@ -288,8 +290,8 @@ class OIRToGTCpp(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         self,
         node: oir.HorizontalExecution,
         *,
-        prog_ctx: "ProgramContext",
-        comp_ctx: "GTComputationContext",
+        prog_ctx: ProgramContext,
+        comp_ctx: GTComputationContext,
         interval: gtcpp.GTInterval,
         **kwargs: Any,
     ) -> gtcpp.GTStage:

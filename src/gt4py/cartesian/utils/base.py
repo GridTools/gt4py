@@ -34,10 +34,6 @@ def slugify(value: str, *, replace_spaces=True, valid_symbols="-_.()", invalid_m
     return slug
 
 
-# def stringify(value):
-#     pass
-
-
 def jsonify(value, indent=2):
     return json.dumps(value, indent=indent, default=lambda obj: str(obj))
 

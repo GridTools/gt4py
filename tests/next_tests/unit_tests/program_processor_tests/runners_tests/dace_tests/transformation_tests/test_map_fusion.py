@@ -6,22 +6,23 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Optional, Sequence, Union, Literal, overload
 
-import pytest
-import dace
 import copy
+
 import numpy as np
+import pytest
+
+
+dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes
 from dace.transformation import dataflow as dace_dataflow
 
-from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace_fieldview import (
     transformations as gtx_transformations,
 )
-from . import util
 
-pytestmark = pytest.mark.usefixtures("set_dace_settings")
+from . import pytestmark
+from . import util
 
 
 def _make_serial_sdfg_1(
