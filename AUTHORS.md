@@ -11,7 +11,7 @@
 - Ehrengruber, Till. ETH Zurich - CSCS
 - Elbert, Oliver D. NOAA-GFDL
 - Faghih-Naini, Sara. ECMWF
-- Farabullini, Nicoletta. ETH Zurich - C2SM
+- Farabullini, Nicoletta. ETH Zurich - EXCLAIM
 - George, Rhea. Allen Institute for AI
 - González Paredes, Enrique. ETH Zurich - CSCS
 - Gopal, Abishek. ETH Zurich - EXCLAIM
