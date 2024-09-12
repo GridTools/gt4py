@@ -145,11 +145,11 @@ def _get_sdfg_with_empty_memlet(
     The map contains two (serial) tasklets, connected through an access node.
     The first tasklet has an empty memlet that connects it to the map entry.
     Depending on `first_tasklet_indiependent` the tasklet is either independent
-    or not. The second tasklet has an additional in connector that access an array.
+    or not. The second tasklet has an additional in connector that accesses an array.
 
     If `only_empty_memlets` is given then the second memlet will only depend
     on the input of the first tasklet. However, since it is connected to the
-    map exit, it will classified as dependent.
+    map exit, it will be classified as dependent.
 
     Returns:
         The function returns the SDFG, the map entry and the first tasklet (that
@@ -232,7 +232,7 @@ def test_only_dependent():
         validate=True,
         validate_all=True,
     )
-    assert count > 0
+    assert count == 1
 
     assert len(sdfg.states()) == 1
     state = sdfg.states()[0]
@@ -297,7 +297,7 @@ def test_intermediate_access_node():
         validate=True,
         validate_all=True,
     )
-    assert count > 0
+    assert count == 1
 
     # Inspect if the SDFG was modified correctly.
     #  We only inspect `tmp` which now has to be between the two maps.
@@ -331,12 +331,12 @@ def test_chained_access() -> None:
     c[:] = 0
 
     # Apply the transformation.
-    ret = sdfg.apply_transformations_repeated(
+    count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(blocking_size=10, blocking_parameter="j"),
         validate=True,
         validate_all=True,
     )
-    assert ret == 1, f"Expected that the transformation was applied 1 time, but it was {ret}."
+    assert count == 1
 
     # Now run the SDFG to see if it is still the same
     sdfg(a=a, b=b, c=c, M=M, N=N)

@@ -500,7 +500,8 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                 #  this preconditions on SDFG should ensure that, but there are a few
                 #  super hard edge cases.
                 #  TODO(phimuell): Add an intermediate here in this case
-                assert isinstance(independent_node, dace_nodes.AccessNode)
+                if not isinstance(independent_node, dace_nodes.AccessNode):
+                    raise NotImplementedError()
 
                 # Now split `out_edge` such that it passes through the new inner entry.
                 #  We do not need to modify the subsets, i.e. replacing the variable
