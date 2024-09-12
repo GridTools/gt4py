@@ -29,7 +29,6 @@ from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_builtin_translators,
-    gtir_python_codegen,
     gtir_to_tasklet,
     transformations as gtx_transformations,
     utility as dace_fieldview_util,
@@ -222,31 +221,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         in case the transient arrays containing the expression result are not guaranteed
         to have the same memory layout as the target array.
         """
-        results = self.visit(node, sdfg=sdfg, head_state=head_state, reduce_identity=None)
-
-        def _visit_results(results: tuple[Any]) -> list[dace.nodes.AccessNode]:
-            field_nodes = []
-            for r in results:
-                if isinstance(r, tuple):
-                    field_nodes.extend(_visit_results(r))
-                else:
-                    assert isinstance(r, gtir_builtin_translators.TemporaryData)
-                    desc = sdfg.arrays[r.data_node.data]
-                    if desc.transient or not use_temp:
-                        field_nodes.append(r.data_node)
-                    else:
-                        temp, _ = sdfg.add_temp_transient_like(desc)
-                        temp_node = head_state.add_access(temp)
-                        head_state.add_nedge(
-                            r.data_node, temp_node, dace.Memlet.from_array(r.data_node, desc)
-                        )
-                        field_nodes.append(temp_node)
-            return field_nodes
-
-        if isinstance(results, tuple):
-            field_nodes = _visit_results(results)
-        else:
-            field_nodes = [results.data_node]
+        result = self.visit(node, sdfg=sdfg, head_state=head_state, reduce_identity=None)
 
         # sanity check: each statement should preserve the property of single exit state (aka head state),
         # i.e. eventually only introduce internal branches, and keep the same head state
@@ -254,7 +229,20 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         assert len(sink_states) == 1
         assert sink_states[0] == head_state
 
-        return field_nodes
+        def make_temps(field: gtir_builtin_translators.Field) -> dace.nodes.AccessNode:
+            desc = sdfg.arrays[field.data_node.data]
+            if desc.transient or not use_temp:
+                return field.data_node
+            else:
+                temp, _ = sdfg.add_temp_transient_like(desc)
+                temp_node = head_state.add_access(temp)
+                head_state.add_nedge(
+                    field.data_node, temp_node, dace.Memlet.from_array(field.data_node.data, desc)
+                )
+                return temp_node
+
+        temp_result = dace_fieldview_util.visit_tuples(result, make_temps)
+        return dace_fieldview_util.flatten_tuples(temp_result)
 
     def _add_sdfg_params(self, sdfg: dace.SDFG, node_params: Sequence[gtir.Sym]) -> list[str]:
         """Helper function to add storage for node parameters and connectivity tables."""
@@ -407,7 +395,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
         reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
-    ) -> gtir_builtin_translators.TemporaryResult:
+    ) -> gtir_builtin_translators.FieldopResult:
         # use specialized dataflow builder classes for each builtin function
         if cpm.is_call_to(node, "cond"):
             return gtir_builtin_translators.translate_cond(
@@ -421,12 +409,12 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             return gtir_builtin_translators.translate_tuple_get(
                 node, sdfg, head_state, self, reduce_identity
             )
-        elif cpm.is_call_to(node.fun, "as_fieldop"):
+        elif cpm.is_applied_as_fieldop(node):
             return gtir_builtin_translators.translate_as_field_op(
                 node, sdfg, head_state, self, reduce_identity
             )
         elif isinstance(node.fun, gtir.Lambda):
-            node_args = [
+            lambda_args = [
                 self.visit(
                     arg,
                     sdfg=sdfg,
@@ -441,15 +429,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 sdfg=sdfg,
                 head_state=head_state,
                 reduce_identity=reduce_identity,
-                args=node_args,
+                args=lambda_args,
             )
         else:
-            python_code = gtir_python_codegen.get_source(node)
-            symbolic_expr = dace.symbolic.pystr_to_symbolic(python_code, simplify=True)
-            literal_node = gtir.Literal(value=str(symbolic_expr), type=node.type)
-            return gtir_builtin_translators.translate_literal(
-                literal_node, sdfg, head_state, self, reduce_identity=None
-            )
+            raise NotImplementedError(f"Unexpected 'FunCall' expression ({node}).")
 
     def visit_Lambda(
         self,
@@ -457,8 +440,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
         reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
-        args: list[gtir_builtin_translators.TemporaryResult],
-    ) -> gtir_builtin_translators.TemporaryResult:
+        args: list[gtir_builtin_translators.FieldopResult],
+    ) -> gtir_builtin_translators.FieldopResult:
         """
         Translates a `Lambda` node to a nested SDFG in the current state.
 
@@ -501,7 +484,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             ],
         )
 
-        lambda_results = lambda_translator.visit(
+        lambda_result = lambda_translator.visit(
             node.expr,
             sdfg=nsdfg,
             head_state=nstate,
@@ -510,8 +493,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         def _flatten_tuples(
             name: str,
-            arg: gtir_builtin_translators.TemporaryResult,
-        ) -> list[tuple[str, gtir_builtin_translators.TemporaryData]]:
+            arg: gtir_builtin_translators.FieldopResult,
+        ) -> list[tuple[str, gtir_builtin_translators.Field]]:
             if isinstance(arg, tuple):
                 tuple_type = dace_fieldview_util.get_tuple_type(arg)
                 tuple_field_names = [
@@ -525,7 +508,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             else:
                 return [(name, arg)]
 
-        lambda_arg_nodes = dict(
+        lambda_result_nodes = dict(
             itertools.chain(*[_flatten_tuples(pname, arg) for pname, arg in lambda_args])
         )
 
@@ -540,8 +523,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             if nsdfg_datadesc.transient:
                 continue
             datadesc: Optional[dace.dtypes.Array] = None
-            if nsdfg_dataname in lambda_arg_nodes:
-                src_node = lambda_arg_nodes[nsdfg_dataname].data_node
+            if nsdfg_dataname in lambda_result_nodes:
+                src_node = lambda_result_nodes[nsdfg_dataname].data_node
                 dataname = src_node.data
                 datadesc = src_node.desc(sdfg)
 
@@ -566,7 +549,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         lambda_outputs = {
             result.data_node.data
-            for result in dace_fieldview_util.flatten_tuples(lambda_results)
+            for result in dace_fieldview_util.flatten_tuples(lambda_result)
             if result.data_node.data not in lambda_symbols
         }
 
@@ -581,21 +564,21 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             )
 
             for connector, memlet in input_memlets.items():
-                if connector in lambda_arg_nodes:
-                    src_node = lambda_arg_nodes[connector].data_node
+                if connector in lambda_result_nodes:
+                    src_node = lambda_result_nodes[connector].data_node
                 else:
                     src_node = head_state.add_access(memlet.data)
 
                 head_state.add_edge(src_node, None, nsdfg_node, connector, memlet)
 
         def make_temps(
-            x: gtir_builtin_translators.TemporaryData,
-        ) -> gtir_builtin_translators.TemporaryData:
-            if x.data_node.data in lambda_arg_nodes:
-                return lambda_arg_nodes[x.data_node.data]
+            x: gtir_builtin_translators.Field,
+        ) -> gtir_builtin_translators.Field:
+            if x.data_node.data in lambda_result_nodes:
+                return lambda_result_nodes[x.data_node.data]
             elif x.data_node.data in self.global_symbols:
                 data_node = head_state.add_access(x.data_node.data)
-                return gtir_builtin_translators.TemporaryData(data_node, x.data_type)
+                return gtir_builtin_translators.Field(data_node, x.data_type)
             else:
                 connector = x.data_node.data
                 desc = x.data_node.desc(nsdfg)
@@ -609,9 +592,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 head_state.add_edge(
                     nsdfg_node, connector, dst_node, None, dace.Memlet.from_array(temp, desc)
                 )
-                return gtir_builtin_translators.TemporaryData(dst_node, x.data_type)
+                return gtir_builtin_translators.Field(dst_node, x.data_type)
 
-        return dace_fieldview_util.visit_tuples(lambda_results, make_temps)
+        return dace_fieldview_util.visit_tuples(lambda_result, make_temps)
 
     def visit_Literal(
         self,
@@ -619,7 +602,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
         reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
-    ) -> gtir_builtin_translators.TemporaryResult:
+    ) -> gtir_builtin_translators.FieldopResult:
         return gtir_builtin_translators.translate_literal(
             node, sdfg, head_state, self, reduce_identity=None
         )
@@ -630,7 +613,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
         reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
-    ) -> gtir_builtin_translators.TemporaryResult:
+    ) -> gtir_builtin_translators.FieldopResult:
         return gtir_builtin_translators.translate_symbol_ref(
             node, sdfg, head_state, self, reduce_identity=None
         )
