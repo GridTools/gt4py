@@ -238,6 +238,7 @@ def infer_expr(
                 infered_arg_expr, actual_domains_arg = infer_expr(arg, domain[i], offset_provider)
                 infered_args_expr.append(infered_arg_expr)
                 actual_domains = _merge_domains(actual_domains, actual_domains_arg)
+            return im.call(expr.fun)(*infered_args_expr), actual_domains
         elif cpm.is_call_to(expr, "tuple_get"):
             idx, tuple_arg = expr.args
             assert isinstance(idx, itir.Literal)
@@ -251,22 +252,15 @@ def infer_expr(
             infered_args_expr = im.tuple_get(idx.value, infered_arg_expr)
             actual_domains = _merge_domains(actual_domains, actual_domains_arg)
             return infered_args_expr, actual_domains
-        else:
-            for arg in expr.args:
-                infered_arg_expr, actual_domains_arg = infer_expr(
-                    arg, domain, offset_provider
-                )  # We need domain here instead of None because im.cond and im.make_tuple can have an as_fieldop as argument and then we need to pass the domain
+        elif cpm.is_call_to(expr, "cond"):
+            cond, true_val, false_val = expr.args
+            for arg in [true_val, false_val]:
+                infered_arg_expr, actual_domains_arg = infer_expr(arg, domain, offset_provider)
                 infered_args_expr.append(infered_arg_expr)
-                # The following condition is necessary to prevent that condition in im.cond get an entry in actual_domains
-                if (
-                    cpm.is_call_to(arg, "make_tuple")
-                    or isinstance(arg, itir.FunCall)
-                    and isinstance(arg.fun, itir.FunCall)
-                    or isinstance(arg, itir.SymRef)
-                ):
-                    actual_domains = _merge_domains(actual_domains, actual_domains_arg)
-
-        return im.call(expr.fun)(*infered_args_expr), actual_domains
+                actual_domains = _merge_domains(actual_domains, actual_domains_arg)
+            return im.call(expr.fun)(cond, *infered_args_expr), actual_domains
+        else:
+            raise ValueError(f"Unsupported expression: {expr}")
     else:
         raise ValueError(f"Unsupported expression: {expr}")
 
@@ -277,6 +271,7 @@ def infer_program(
 ) -> itir.Program:
     accessed_domains: ACCESSED_DOMAINS = {}
     transformed_set_ats: list[itir.SetAt] = []
+    assert not program.function_definitions  # TODO(tehrengruber): error message
 
     for set_at in reversed(program.body):
         assert isinstance(set_at, itir.SetAt)
