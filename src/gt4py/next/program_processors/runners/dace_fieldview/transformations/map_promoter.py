@@ -374,16 +374,16 @@ class SerialMapPromoter(BaseMapPromoter):
             #  Map fusion can actually inspect them.
             self.apply(graph=state, sdfg=sdfg)
 
-            # Now create the map fusion object that we can then use to check if
-            #  the fusion is possible or not.
-            serial_fuser = gtx_transformations.SerialMapFusion(
+            # TODO(phimuell): Switch to `can_be_applied_to()` as soon as we
+            #  have updated DaCe.
+            serial_fuser = gtx_transformations.MapFusionSerial(
                 only_inner_maps=self.only_inner_maps,
                 only_toplevel_maps=self.only_toplevel_maps,
             )
             candidate = {
-                type(serial_fuser).map_exit1: first_map_exit,
-                type(serial_fuser).access_node: access_node,
-                type(serial_fuser).map_entry2: second_map_entry,
+                type(serial_fuser).map_exit_1: first_map_exit,
+                type(serial_fuser).intermediate_access_node: access_node,
+                type(serial_fuser).map_entry_2: second_map_entry,
             }
             state_id = sdfg.node_id(state)
             serial_fuser.setup_match(sdfg, sdfg.cfg_id, state_id, candidate, 0, override=True)

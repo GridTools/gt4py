@@ -221,7 +221,7 @@ def test_exclusive_itermediate():
     # Now apply the optimizations.
     assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
     sdfg.apply_transformations(
-        gtx_transformations.SerialMapFusion(),
+        gtx_transformations.MapFusionSerial(),
         validate=True,
         validate_all=True,
     )
@@ -258,7 +258,7 @@ def test_shared_itermediate():
     # Now apply the optimizations.
     assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
     sdfg.apply_transformations(
-        gtx_transformations.SerialMapFusion(),
+        gtx_transformations.MapFusionSerial(),
         validate=True,
         validate_all=True,
     )
@@ -294,13 +294,13 @@ def test_pure_output_node():
 
     # The first fusion will only bring it down to two maps.
     sdfg.apply_transformations(
-        gtx_transformations.SerialMapFusion(),
+        gtx_transformations.MapFusionSerial(),
         validate=True,
         validate_all=True,
     )
     assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
     sdfg.apply_transformations(
-        gtx_transformations.SerialMapFusion(),
+        gtx_transformations.MapFusionSerial(),
         validate=True,
         validate_all=True,
     )
@@ -332,7 +332,7 @@ def test_array_intermediate():
 
     # Now perform the fusion
     sdfg.apply_transformations(
-        gtx_transformations.SerialMapFusion(only_toplevel_maps=True),
+        gtx_transformations.MapFusionSerial(only_toplevel_maps=True),
         validate=True,
         validate_all=True,
     )
@@ -392,7 +392,7 @@ def test_interstate_transient():
 
     # Now apply the transformation
     sdfg.apply_transformations_repeated(
-        gtx_transformations.SerialMapFusion(),
+        gtx_transformations.MapFusionSerial(),
         validate=True,
         validate_all=True,
     )
@@ -442,7 +442,7 @@ def test_indirect_access():
 
     # Now "apply" the transformation
     sdfg.apply_transformations_repeated(
-        gtx_transformations.SerialMapFusion(),
+        gtx_transformations.MapFusionSerial(),
         validate=True,
         validate_all=True,
     )

@@ -8,7 +8,7 @@
 
 """Common functionality for the transformations/optimization pipeline."""
 
-from typing import Iterable, Union, Any, Optional
+from typing import Any, Optional
 
 import dace
 from dace.transformation.passes import simplify as dace_passes_simplify
@@ -77,7 +77,3 @@ def gt_simplify(
         verbose=False,
         skip=skip,
     ).apply_pass(sdfg, {})
-
-
-
-

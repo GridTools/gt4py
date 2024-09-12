@@ -99,7 +99,7 @@ def gt_gpu_transformation(
             validate_all=False,
         )
         sdfg.apply_transformations_repeated(
-            gtx_transformations.SerialMapFusion(
+            gtx_transformations.MapFusionSerial(
                 only_toplevel_maps=True,
             ),
             validate=validate,
