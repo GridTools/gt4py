@@ -137,7 +137,7 @@ def _get_chained_sdfg() -> tuple[dace.SDFG, Callable[[np.ndarray, np.ndarray], n
 
 
 def _get_sdfg_with_empty_memlet(
-    first_tasklet_indiependent: bool,
+    first_tasklet_independent: bool,
     only_empty_memlets: bool,
 ) -> tuple[
     dace.SDFG, dace_nodes.MapEntry, dace_nodes.Tasklet, dace_nodes.AccessNode, dace_nodes.Tasklet
@@ -146,7 +146,7 @@ def _get_sdfg_with_empty_memlet(
 
     The map contains two (serial) tasklets, connected through an access node.
     The first tasklet has an empty memlet that connects it to the map entry.
-    Depending on `first_tasklet_indiependent` the tasklet is either independent
+    Depending on `first_tasklet_independent` the tasklet is either independent
     or not. The second tasklet has an additional in connector that accesses an array.
 
     If `only_empty_memlets` is given then the second memlet will only depend
@@ -176,7 +176,7 @@ def _get_sdfg_with_empty_memlet(
         "task1",
         inputs={},
         outputs={"__out0"},
-        code="__out0 = 1.0" if first_tasklet_indiependent else "__out0 = j",
+        code="__out0 = 1.0" if first_tasklet_independent else "__out0 = j",
     )
 
     if only_empty_memlets:
@@ -420,7 +420,7 @@ def test_direct_map_exit_connection() -> dace.SDFG:
 
 def test_empty_memlet_1():
     sdfg, mentry, itask, tmp, task2 = _get_sdfg_with_empty_memlet(
-        first_tasklet_indiependent=True,
+        first_tasklet_independent=True,
         only_empty_memlets=False,
     )
     state: dace.SDFGState = next(iter(sdfg.nodes()))
@@ -446,7 +446,7 @@ def test_empty_memlet_1():
 
 def test_empty_memlet_2():
     sdfg, mentry, dtask, tmp, task2 = _get_sdfg_with_empty_memlet(
-        first_tasklet_indiependent=False,
+        first_tasklet_independent=False,
         only_empty_memlets=False,
     )
     state: dace.SDFGState = next(iter(sdfg.nodes()))
@@ -475,7 +475,7 @@ def test_empty_memlet_2():
 def test_empty_memlet_3():
     # This is the only interesting case with only empty memlet.
     sdfg, mentry, dtask, tmp, task2 = _get_sdfg_with_empty_memlet(
-        first_tasklet_indiependent=False,
+        first_tasklet_independent=False,
         only_empty_memlets=True,
     )
     state: dace.SDFGState = next(iter(sdfg.nodes()))
