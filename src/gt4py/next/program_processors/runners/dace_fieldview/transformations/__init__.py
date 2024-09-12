@@ -12,7 +12,7 @@ Please also see [ADR0018](https://github.com/GridTools/gt4py/tree/main/docs/deve
 that explains the general structure and requirements on the SDFGs.
 """
 
-from .auto_opt import gt_auto_optimize
+from .auto_optimize import gt_auto_optimize
 from .gpu_utils import GPUSetBlockSize, gt_gpu_transformation, gt_set_gpu_blocksize
 from .loop_blocking import LoopBlocking
 from .map_fusion_parallel import MapFusionParallel

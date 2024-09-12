@@ -70,7 +70,6 @@ def gt_simplify(
         However, currently nothing is customized yet, and the function just calls
         the simplification pass directly.
     """
-
     return dace_passes_simplify.SimplifyPass(
         validate=validate,
         validate_all=validate_all,
