@@ -1,0 +1,39 @@
+exclude = []
+source_roots = [
+    "src",
+]
+exact = true
+forbid_circular_dependencies = true
+
+[[modules]]
+path = "gt4py._core"
+depends_on = [
+    { path = "gt4py.eve" },
+]
+
+[[modules]]
+path = "gt4py.cartesian"
+depends_on = [
+    { path = "gt4py.eve" },
+    { path = "gt4py.storage" },
+]
+
+[[modules]]
+path = "gt4py.eve"
+depends_on = []
+
+[[modules]]
+path = "gt4py.next"
+depends_on = [
+    { path = "gt4py._core" },
+    { path = "gt4py.eve" },
+    { path = "gt4py.storage" },
+]
+
+[[modules]]
+path = "gt4py.storage"
+depends_on = [
+    { path = "gt4py._core" },
+    { path = "gt4py.cartesian" },
+    { path = "gt4py.eve" },
+]

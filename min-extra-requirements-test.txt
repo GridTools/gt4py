@@ -102,6 +102,7 @@ sphinx==4.4
 sphinx_rtd_theme==1.0
 sympy==1.9
 tabulate==0.8.10
+tach==0.10.7
 tomli==2.0.1; python_version < "3.11"
 tox==3.2.0
 types-tabulate==0.8.10
