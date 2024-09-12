@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
@@ -17,7 +19,7 @@ from gt4py.cartesian.gtc import common
 
 
 if TYPE_CHECKING:
-    import gt4py.cartesian.gtc.daceir as dcir
+    import gt4py.cartesian.gtc.dace.daceir as dcir
 
 
 def data_type_to_dace_typeclass(data_type):
@@ -36,7 +38,7 @@ def get_axis_bound_str(axis_bound, var_name):
         return f"{axis_bound.offset}"
 
 
-def get_axis_bound_dace_symbol(axis_bound: "dcir.AxisBound"):
+def get_axis_bound_dace_symbol(axis_bound: dcir.AxisBound):
     from gt4py.cartesian.gtc.common import LevelMarker
 
     if axis_bound is None:
