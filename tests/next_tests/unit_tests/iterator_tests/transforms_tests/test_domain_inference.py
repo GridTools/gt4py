@@ -945,7 +945,7 @@ def test_make_tuple(offset_provider):
     assert expected_domains == constant_fold_accessed_domains(actual_domains)
 
 
-def test_make_tuple_tuple_get_1(offset_provider):
+def test_tuple_get_1_make_tuple(offset_provider):
     testee = im.tuple_get(1, im.make_tuple(im.ref("a"), im.ref("b"), im.ref("c")))
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     expected = im.tuple_get(1, im.make_tuple(im.ref("a"), im.ref("b"), im.ref("c")))
@@ -955,9 +955,100 @@ def test_make_tuple_tuple_get_1(offset_provider):
         "c": None,
     }
 
+    actual, actual_domains = infer_expr(testee, SymbolicDomain.from_expr(domain), offset_provider)
+
+    assert expected == actual
+    assert expected_domains == constant_fold_accessed_domains(actual_domains)
+
+
+def test_tuple_get_1_nested_make_tuple(offset_provider):
+    testee = im.tuple_get(1, im.make_tuple(im.ref("a"), im.make_tuple(im.ref("b"), im.ref("c"))))
+    domain1 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
+    domain2 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 12)})
+    expected = im.tuple_get(1, im.make_tuple(im.ref("a"), im.make_tuple(im.ref("b"), im.ref("c"))))
+    expected_domains = {
+        "a": None,
+        "b": SymbolicDomain.from_expr(domain1),
+        "c": SymbolicDomain.from_expr(domain2),
+    }
+
     actual, actual_domains = infer_expr(
-        testee, SymbolicDomain.from_expr(domain), offset_provider
-    )  # Todo: if a
+        testee,
+        (SymbolicDomain.from_expr(domain1), SymbolicDomain.from_expr(domain2)),
+        offset_provider,
+    )
+
+    assert expected == actual
+    assert expected_domains == constant_fold_accessed_domains(actual_domains)
+
+
+def test_tuple_get_let_arg_make_tuple(offset_provider):
+    testee = im.tuple_get(1, im.let("a", im.make_tuple(im.ref("b"), im.ref("c")))("d"))
+    domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
+    expected = im.tuple_get(1, im.let("a", im.make_tuple(im.ref("b"), im.ref("c")))("d"))
+    expected_domains = {
+        "b": None,
+        "c": None,
+        "d": (
+            None,
+            SymbolicDomain.from_expr(domain),
+        ),
+    }
+
+    actual, actual_domains = infer_expr(
+        testee,
+        SymbolicDomain.from_expr(im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})),
+        offset_provider,
+    )
+
+    assert expected == actual
+    assert expected_domains == constant_fold_accessed_domains(actual_domains)
+
+
+def test_tuple_get_let_make_tuple(offset_provider):
+    testee = im.tuple_get(1, im.let("a", "b")(im.make_tuple(im.ref("c"), im.ref("d"))))
+    domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
+    expected = im.tuple_get(1, im.let("a", "b")(im.make_tuple(im.ref("c"), im.ref("d"))))
+    expected_domains = {
+        "c": None,
+        "d": SymbolicDomain.from_expr(domain),
+        "b": None,
+    }
+
+    actual, actual_domains = infer_expr(
+        testee,
+        SymbolicDomain.from_expr(domain),
+        offset_provider,
+    )
+
+    assert expected == actual
+    assert expected_domains == constant_fold_accessed_domains(actual_domains)
+
+
+def test_nested_make_tuple(offset_provider):
+    testee = im.make_tuple(im.make_tuple(im.ref("a"), im.ref("b")), im.ref("c"))
+    domain1 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
+    domain2_1 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 12)})
+    domain2_2 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 13)})
+    domain3 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 14)})
+    expected = im.make_tuple(im.make_tuple(im.ref("a"), im.ref("b")), im.ref("c"))
+    expected_domains = {
+        "a": SymbolicDomain.from_expr(domain1),
+        "b": (SymbolicDomain.from_expr(domain2_1), SymbolicDomain.from_expr(domain2_2)),
+        "c": SymbolicDomain.from_expr(domain3),
+    }
+
+    actual, actual_domains = infer_expr(
+        testee,
+        (
+            (
+                SymbolicDomain.from_expr(domain1),
+                (SymbolicDomain.from_expr(domain2_1), SymbolicDomain.from_expr(domain2_2)),
+            ),
+            SymbolicDomain.from_expr(domain3),
+        ),
+        offset_provider,
+    )
 
     assert expected == actual
     assert expected_domains == constant_fold_accessed_domains(actual_domains)
@@ -980,12 +1071,12 @@ def test_tuple_get_1(offset_provider):
 def test_domain_tuple(offset_provider):
     testee = im.ref("a")
     domain1 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
-    domain2 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 13)})
+    domain2 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 12)})
     expected = im.ref("a")
     expected_domains = {
         "a": (
-            SymbolicDomain.from_expr(im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})),
-            SymbolicDomain.from_expr(im.domain(common.GridType.CARTESIAN, {IDim: (0, 13)})),
+            SymbolicDomain.from_expr(domain1),
+            SymbolicDomain.from_expr(domain2),
         )
     }
 
@@ -1007,8 +1098,8 @@ def test_as_fieldop_tuple_get(offset_provider):
     )
     expected_domains = {
         "a": (
-            SymbolicDomain.from_expr(im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})),
-            SymbolicDomain.from_expr(im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})),
+            SymbolicDomain.from_expr(domain),
+            SymbolicDomain.from_expr(domain),
         )
     }
 
@@ -1023,15 +1114,8 @@ def test_make_tuple_domain_error(offset_provider):
         testee = im.make_tuple(
             im.as_fieldop("deref")("in_field1"), im.as_fieldop("deref")("in_field2")
         )
-        domain1 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
+        domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
 
         actual, actual_domains = infer_expr(
-            testee, SymbolicDomain.from_expr(domain1), offset_provider
+            testee, SymbolicDomain.from_expr(domain), offset_provider
         )
-
-    # infer_expr(make_tuple(a, b), domain=(domain1, domain2)) -> accessed_domain["a"] = domain1, accessed_domain["b"] = domain2
-    # infer_expr(tuple_get(0, make_tuple(a, b)), domain=domain1) -> accessed_domain["a"] = domain1, accessed_domain["b"] = None
-    # infer_expr(tuple_get(1, a), domain=domain1) -> accessed_domain["a"] = (None, domain1)  # TODO: tuple could be longer
-    # infer_expr(as_fieldop(plus)(tuple_get(1, a), tuple_get(0, a)), domain=domain1) -> accessed_domain["a"] = (domain1, domain1)  # TODO: tuple could be longer # this trequires extension of merge domain
-    # infer_expr(a, domain=(domain1, domain2)) -> accessed_domain["a"] = (domain1, domain2)
-    # infer_expr(make_tuple(a, b), domain=domain1) -> error main must be a tuple

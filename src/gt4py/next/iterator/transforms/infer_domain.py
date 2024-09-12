@@ -190,7 +190,14 @@ def infer_let(
     transformed_calls_args: list[itir.Expr] = []
     for param, arg in zip(let_expr.fun.params, let_expr.args):
         transformed_calls_arg, accessed_domains_arg = infer_expr(
-            arg, accessed_domains_let_args.get(param.id, None), offset_provider
+            arg,
+            accessed_domains_let_args.get(
+                param.id,
+                None
+                if (not isinstance(arg, tuple) and not cpm.is_call_to(arg, "make_tuple"))
+                else tuple(None for _ in arg.args),
+            ),
+            offset_provider,
         )
         accessed_domains_outer = _merge_domains(accessed_domains_outer, accessed_domains_arg)
         transformed_calls_args.append(transformed_calls_arg)
@@ -225,6 +232,8 @@ def infer_expr(
                 raise ValueError(
                     "infer_expr needs a domain for each tuple element and domain must be a tuple."
                 )
+            # This is to pad the domain length to the length of the tuple
+            domain = (*domain, *(None for _ in range(len(expr.args) - len(domain))))
             for i, arg in enumerate(expr.args):
                 infered_arg_expr, actual_domains_arg = infer_expr(arg, domain[i], offset_provider)
                 infered_args_expr.append(infered_arg_expr)
@@ -232,20 +241,13 @@ def infer_expr(
         elif cpm.is_call_to(expr, "tuple_get"):
             idx, tuple_arg = expr.args
             assert isinstance(idx, itir.Literal)
-            assert isinstance(domain, SymbolicDomain)
-            if cpm.is_call_to(tuple_arg, "make_tuple"):
-                domain = tuple(
-                    None if i != int(idx.value) else domain for i in range(len(tuple_arg.args))
-                )
-            infered_arg_expr, actual_domains_arg = infer_expr(tuple_arg, domain, offset_provider)
-            if actual_domains_arg and isinstance(tuple_arg, itir.SymRef):
-                all(isinstance(value, SymbolicDomain) for value in actual_domains_arg.values())
-                actual_domains_arg = {
-                    str(tuple_arg.id): tuple(
-                        None if i != int(idx.value) else actual_domains_arg[tuple_arg.id]
-                        for i in range(int(idx.value) + 1)
-                    )
-                }
+            child_domain = tuple(
+                None if i != int(idx.value) else domain for i in range(int(idx.value) + 1)
+            )
+            infered_arg_expr, actual_domains_arg = infer_expr(
+                tuple_arg, child_domain, offset_provider
+            )
+
             infered_args_expr = im.tuple_get(idx.value, infered_arg_expr)
             actual_domains = _merge_domains(actual_domains, actual_domains_arg)
             return infered_args_expr, actual_domains
