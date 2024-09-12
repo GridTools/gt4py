@@ -142,9 +142,15 @@ def gt_auto_optimize(
         # Phase 3: Optimizing the kernels, i.e. the larger maps, themselves.
         #   Currently this only applies fusion inside Maps.
         sdfg.apply_transformations_repeated(
-            gtx_transformations.MapFusionSerial(
-                only_inner_maps=True,
-            ),
+            [
+                gtx_transformations.MapFusionSerial(
+                    only_inner_maps=True,
+                ),
+                gtx_transformations.MapFusionParallel(
+                    only_inner_maps=True,
+                    only_if_common_ancestor=False,  # TODO(phimuell): Should we?
+                ),
+            ],
             validate=validate,
             validate_all=validate_all,
         )
@@ -258,9 +264,15 @@ def gt_auto_fuse_top_level_maps(
         # TODO(phimuell): Add parallel fusion transformation. Should it run after
         #                   or with the serial one?
         sdfg.apply_transformations_repeated(
-            gtx_transformations.MapFusionSerial(
-                only_toplevel_maps=True,
-            ),
+            [
+                gtx_transformations.MapFusionSerial(
+                    only_toplevel_maps=True,
+                ),
+                gtx_transformations.MapFusionParallel(
+                    only_toplevel_maps=True,
+                    only_if_common_ancestor=True,  # TODO(phimuell): Is this good?
+                ),
+            ],
             validate=validate,
             validate_all=validate_all,
         )
