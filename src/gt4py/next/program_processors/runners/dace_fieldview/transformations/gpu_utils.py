@@ -12,7 +12,11 @@ import copy
 from typing import Any, Optional, Sequence, Union
 
 import dace
-from dace import properties as dace_properties, transformation as dace_transformation
+from dace import (
+    data as dace_data,
+    properties as dace_properties,
+    transformation as dace_transformation,
+)
 from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next.program_processors.runners.dace_fieldview import (
@@ -87,23 +91,12 @@ def gt_gpu_transformation(
         # A Tasklet, outside of a Map, that writes into an array on GPU can not work
         #  `sdfg.appyl_gpu_transformations()` puts Map around it (if said Tasklet
         #  would write into a Scalar that then goes into a GPU Map, nothing would
-        #  happen. So we might end up with lot of these trivial Maps, that results
+        #  happen). So we might end up with lot of these trivial Maps, that results
         #  in a single kernel launch. To prevent this we will try to fuse them.
-        # NOTE: The current implementation has a bug, because promotion and fusion
-        #   are two different steps. Because of this the function will implicitly
-        #   fuse everything together it can find.
-        # TODO(phimuell): Fix the issue described above.
         sdfg.apply_transformations_once_everywhere(
             TrivialGPUMapPromoter(),
             validate=False,
             validate_all=False,
-        )
-        sdfg.apply_transformations_repeated(
-            gtx_transformations.MapFusionSerial(
-                only_toplevel_maps=True,
-            ),
-            validate=validate,
-            validate_all=validate_all,
         )
 
     # Set the GPU block size if it is known.
@@ -289,26 +282,49 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
 class TrivialGPUMapPromoter(dace_transformation.SingleStateTransformation):
     """Serial Map promoter for empty GPU maps.
 
-    In CPU mode a Tasklet can be outside of a map, however, this is not
-    possible in GPU mode. For this reason DaCe wraps such Tasklets in a
-    trivial Map.
-    This transformation will look for such Maps and promote them, such
-    that they can be fused with downstream maps.
+    A tasklet outside of map can not write to GPU memory, this can only be done
+    from within a map (a scalar is possible). For that reason DaCe's GPU
+    transformation wraps such tasklets in trivial maps.
+    Under certain condition the transformation will fuse the trivial tasklet with
+    a downstream (serial) map.
+
+    Args:
+        only_gpu_maps: Only apply to GPU maps; `True` by default.
 
     Note:
         - This transformation should not be run on its own, instead it
             is run within the context of `gt_gpu_transformation()`.
         - This transformation must be run after the GPU Transformation.
-        - Currently the transformation does not do the fusion on its own.
-            Instead map fusion must be run afterwards.
-        - The transformation assumes that the upper Map is a trivial Tasklet.
-            Which should be the majority of all cases.
     """
+
+    only_gpu_maps = dace_properties.Property(
+        dtype=bool,
+        default=True,
+        desc="Only promote maps that are GPU maps (debug option).",
+    )
+    do_not_fuse = dace_properties.Property(
+        dtype=bool,
+        default=False,
+        desc="Only perform the promotion, do not fuse (debug option).",
+    )
 
     # Pattern Matching
     trivial_map_exit = dace_transformation.transformation.PatternNode(dace_nodes.MapExit)
     access_node = dace_transformation.transformation.PatternNode(dace_nodes.AccessNode)
     second_map_entry = dace_transformation.transformation.PatternNode(dace_nodes.MapEntry)
+
+    def __init__(
+        self,
+        only_gpu_maps: Optional[bool] = None,
+        do_not_fuse: Optional[bool] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        if only_gpu_maps is not None:
+            self.only_gpu_maps = bool(only_gpu_maps)
+        if do_not_fuse is not None:
+            self.do_not_fuse = bool(do_not_fuse)
 
     @classmethod
     def expressions(cls) -> Any:
@@ -330,7 +346,7 @@ class TrivialGPUMapPromoter(dace_transformation.SingleStateTransformation):
         The tests includes:
         - Schedule of the maps.
         - If the map is trivial.
-        - If the trivial map was not used to define a symbol.
+        - If the trivial map was not used to define a symbol (will be lifted soon).
         - Intermediate access node can only have in and out degree of 1.
         - The trivial map exit can only have one output.
         """
@@ -339,26 +355,42 @@ class TrivialGPUMapPromoter(dace_transformation.SingleStateTransformation):
         trivial_map_entry: dace_nodes.MapEntry = graph.entry_node(trivial_map_exit)
         second_map: dace_nodes.Map = self.second_map_entry.map
         access_node: dace_nodes.AccessNode = self.access_node
+        access_desc: dace_data.Data = access_node.desc(sdfg)
 
         # The kind of maps we are interested only have one parameter.
         if len(trivial_map.params) != 1:
             return False
-
-        # Check if it is a GPU map
-        for map_to_check in [trivial_map, second_map]:
-            if map_to_check.schedule not in [
-                dace.dtypes.ScheduleType.GPU_Device,
-                dace.dtypes.ScheduleType.GPU_Default,
-            ]:
-                return False
-
-        # Check if the map is trivial.
         for rng in trivial_map.range.ranges:
             if rng[0] != rng[1]:
                 return False
 
+        # This is a cheap way to check if the two maps can be fused.
+        #  TODO(phimuell): Use `can_be_applied_to()` to really check this.
+        if graph.in_degree(access_node) != 1:
+            return False
+        if graph.out_degree(access_node) != 1:
+            return False
+        if graph.out_degree(trivial_map_exit) != 1:
+            return False
+        if isinstance(access_desc, dace_data.View):
+            return False
+
+        # We require that the two schedule are the same.
+        if trivial_map.schedule != second_map.schedule:
+            return False
+
+        # Check if only GPU maps are involved (this is more a testing debug feature).
+        if self.only_gpu_maps:
+            for map_to_check in [trivial_map, second_map]:
+                if map_to_check.schedule not in [
+                    dace.dtypes.ScheduleType.GPU_Device,
+                    dace.dtypes.ScheduleType.GPU_Default,
+                ]:
+                    return False
+
         # Now we have to ensure that the symbol is not used inside the scope of the
         #  map, if it is, then the symbol is just there to define a symbol.
+        #  TODO(phimuell): Use the way how `TrivialMapElimination` get rid of them.
         scope_view = graph.scope_subgraph(
             trivial_map_entry,
             include_entry=False,
@@ -367,24 +399,42 @@ class TrivialGPUMapPromoter(dace_transformation.SingleStateTransformation):
         if any(map_param in scope_view.free_symbols for map_param in trivial_map.params):
             return False
 
-        # ensuring that the trivial map exit and the intermediate node have degree
-        #  one is a cheap way to ensure that the map can be merged into the
-        #  second map.
-        if graph.in_degree(access_node) != 1:
-            return False
-        if graph.out_degree(access_node) != 1:
-            return False
-        if graph.out_degree(trivial_map_exit) != 1:
-            return False
-
         return True
 
     def apply(self, graph: Union[dace.SDFGState, dace.SDFG], sdfg: dace.SDFG) -> None:
         """Performs the Map Promoting.
 
-        The function essentially copies the parameters and the ranges from the
-        bottom map to the top one.
+        The function will first perform the promotion of the trivial map and then
+        perform the merging of the two maps in one go.
         """
+        trivial_map_exit: dace_nodes.MapExit = self.trivial_map_exit
+        second_map_entry: dace_nodes.MapEntry = self.second_map_entry
+        access_node: dace_nodes.AccessNode = self.access_node
+
+        # Promote the maps.
+        self._promote_map()
+
+        # Perform the fusing if requested.
+        if self.do_not_fuse:
+            gtx_transformations.MapFusionSerial.apply_to(
+                sdfg=sdfg,
+                map_exit_1=trivial_map_exit,
+                intermediate_access_node=access_node,
+                map_entry_2=second_map_entry,
+                verify=True,
+            )
+
+    def _promote_map(self) -> None:
+        """Performs the map promoting.
+
+        Essentially this function will copy the parameters and the range from
+        the non trivial map (`self.second_map_entry.map`) to the trivial map
+        (`self.trivial_map_exit.map`).
+        """
+        assert isinstance(self.trivial_map_exit, dace_nodes.MapExit)
+        assert isinstance(self.second_map_entry, dace_nodes.MapEntry)
+        assert isinstance(self.access_node, dace_nodes.AccessNode)
+
         trivial_map: dace_nodes.Map = self.trivial_map_exit.map
         second_map: dace_nodes.Map = self.second_map_entry.map
 

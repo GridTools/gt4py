@@ -92,7 +92,7 @@ def test_trivial_gpu_map_promoter():
     org_second_map_ranges = copy.deepcopy(second_map_entry.map.range)
 
     nb_runs = sdfg.apply_transformations_once_everywhere(
-        gtx_dace_fieldview_gpu_utils.TrivialGPUMapPromoter(),
+        gtx_dace_fieldview_gpu_utils.TrivialGPUMapPromoter(do_not_fuse=True),
         validate=True,
         validate_all=True,
     )
@@ -132,7 +132,7 @@ def test_trivial_gpu_map_promoter():
     org_second_map_params = list(second_map_entry.map.params)
 
     nb_runs = sdfg.apply_transformations_once_everywhere(
-        gtx_dace_fieldview_gpu_utils.TrivialGPUMapPromoter(),
+        gtx_dace_fieldview_gpu_utils.TrivialGPUMapPromoter(do_not_fuse=True),
         validate=True,
         validate_all=True,
     )
