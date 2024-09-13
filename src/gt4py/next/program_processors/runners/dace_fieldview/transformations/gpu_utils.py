@@ -96,7 +96,7 @@ def gt_gpu_transformation(
         #  happen). So we might end up with lot of these trivial Maps, that results
         #  in a single kernel launch. To prevent this we will try to fuse them.
         sdfg.apply_transformations_once_everywhere(
-            TrivialGPUMapPromoter(),
+            TrivialGPUMapElimination(),
             validate=False,
             validate_all=False,
         )
@@ -281,8 +281,8 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
 
 
 @dace_properties.make_properties
-class TrivialGPUMapPromoter(dace_transformation.SingleStateTransformation):
-    """Serial Map promoter for empty GPU maps.
+class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
+    """Eliminate certain kind of trivial GPU maps.
 
     A tasklet outside of map can not write to GPU memory, this can only be done
     from within a map (a scalar is possible). For that reason DaCe's GPU
@@ -348,9 +348,7 @@ class TrivialGPUMapPromoter(dace_transformation.SingleStateTransformation):
         The tests includes:
         - Schedule of the maps.
         - If the map is trivial.
-        - If the trivial map was not used to define a symbol (will be lifted soon).
-        - Intermediate access node can only have in and out degree of 1.
-        - The trivial map exit can only have one output.
+        - Tests if the maps can be fused.
         """
         trivial_map_exit: dace_nodes.MapExit = self.trivial_map_exit
         trivial_map: dace_nodes.Map = trivial_map_exit.map
@@ -365,6 +363,10 @@ class TrivialGPUMapPromoter(dace_transformation.SingleStateTransformation):
         for rng in trivial_map.range.ranges:
             if rng[0] != rng[1]:
                 return False
+        if not all(
+            in_edge.dst_conn.startswith("IN_") for in_edge in graph.in_edges(trivial_map_entry)
+        ):
+            return False
 
         # This is a cheap way to check if the two maps can be fused.
         #  TODO(phimuell): Use `can_be_applied_to()` to really check this.
@@ -389,18 +391,6 @@ class TrivialGPUMapPromoter(dace_transformation.SingleStateTransformation):
                     dace.dtypes.ScheduleType.GPU_Default,
                 ]:
                     return False
-
-        # Now we have to ensure that the symbol is not used inside the scope of the
-        #  map, if it is, then the symbol is just there to define a symbol.
-        #  TODO(phimuell): Use the way how `TrivialMapElimination` get rid of them.
-        scope_view = graph.scope_subgraph(
-            trivial_map_entry,
-            include_entry=False,
-            include_exit=False,
-        )
-        if any(map_param in scope_view.free_symbols for map_param in trivial_map.params):
-            return False
-
         return True
 
     def apply(self, graph: Union[dace.SDFGState, dace.SDFG], sdfg: dace.SDFG) -> None:
@@ -414,7 +404,7 @@ class TrivialGPUMapPromoter(dace_transformation.SingleStateTransformation):
         access_node: dace_nodes.AccessNode = self.access_node
 
         # Promote the maps.
-        self._promote_map()
+        self._promote_map(graph)
 
         # Perform the fusing if requested.
         if self.do_not_fuse:
@@ -426,7 +416,7 @@ class TrivialGPUMapPromoter(dace_transformation.SingleStateTransformation):
                 verify=True,
             )
 
-    def _promote_map(self) -> None:
+    def _promote_map(self, state: dace.SDFGState) -> None:
         """Performs the map promoting.
 
         Essentially this function will copy the parameters and the range from
@@ -437,8 +427,15 @@ class TrivialGPUMapPromoter(dace_transformation.SingleStateTransformation):
         assert isinstance(self.second_map_entry, dace_nodes.MapEntry)
         assert isinstance(self.access_node, dace_nodes.AccessNode)
 
+        trivial_map_exit: dace_nodes.MapExit = self.trivial_map_exit
         trivial_map: dace_nodes.Map = self.trivial_map_exit.map
+        trivial_map_entry: dace_nodes.MapEntry = state.entry_node(trivial_map_exit)
         second_map: dace_nodes.Map = self.second_map_entry.map
 
+        # Replace the symbols of the map with their value.
+        scope = state.scope_subgraph(trivial_map_entry)
+        scope.replace(trivial_map.params[0], trivial_map.range[0][0])
+
+        # Now copy parameter and the ranges from the second to the trivial map.
         trivial_map.params = copy.deepcopy(second_map.params)
         trivial_map.range = copy.deepcopy(second_map.range)

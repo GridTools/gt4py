@@ -354,9 +354,6 @@ class SerialMapPromoter(BaseMapPromoter):
 
         Note:
             The current implementation uses a very hacky way to test this.
-
-        Todo:
-            Find a better way of doing it.
         """
         first_map_exit: dace_nodes.MapExit = self.exit_first_map
         access_node: dace_nodes.AccessNode = self.access_node
