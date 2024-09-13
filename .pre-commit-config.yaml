@@ -15,6 +15,7 @@ repos:
   hooks:
   - id: pretty-format-ini
     args: [--autofix]
+    exclude: tox.ini
   - id: pretty-format-toml
     args: [--autofix]
   - id: pretty-format-yaml
@@ -49,7 +50,7 @@ repos:
   ## version = re.search('ruff==([0-9\.]*)', open("constraints.txt").read())[1]
   ## print(f"rev: v{version}")
   ##]]]
-  rev: v0.6.3
+  rev: v0.6.4
   ##[[[end]]]
   hooks:
     # Run the linter.
@@ -106,7 +107,7 @@ repos:
     - numpy==1.24.4
     - packaging==24.1
     - pybind11==2.13.5
-    - setuptools==74.0.0
+    - setuptools==74.1.2
     - tabulate==0.9.0
     - typing-extensions==4.12.2
     - xxhash==3.0.0
