@@ -84,7 +84,7 @@ def _get_trivial_gpu_promotable(
     return sdfg, trivial_map_entry, second_map_entry
 
 
-def test_trivial_gpu_map_promoter():
+def test_trivial_gpu_map_promoter_1():
     """Tests if the GPU map promoter works.
 
     By using a body such as `__out = 3.0`, the transformation will apply.
@@ -102,7 +102,7 @@ def test_trivial_gpu_map_promoter():
         nb_runs == 1
     ), f"Expected that 'TrivialGPUMapElimination' applies once but it applied {nb_runs}."
     trivial_map_params = trivial_map_entry.map.params
-    trivial_map_ranges = trivial_map_ranges.map.range
+    trivial_map_ranges = trivial_map_entry.map.range
     second_map_params = second_map_entry.map.params
     second_map_ranges = second_map_entry.map.range
 
@@ -121,7 +121,7 @@ def test_trivial_gpu_map_promoter():
     assert sdfg.is_valid()
 
 
-def test_trivial_gpu_map_promoter():
+def test_trivial_gpu_map_promoter_2():
     """Test if the GPU promoter does not fuse a special trivial map.
 
     By using a body such as `__out = __trivial_gpu_it` inside the
@@ -181,7 +181,7 @@ def test_set_gpu_properties():
 
     gtx_dace_fieldview_gpu_utils.gt_set_gpu_blocksize(
         sdfg=sdfg,
-        gpu_block_size=(10, "11", 12),
+        block_size=(10, "11", 12),
         launch_factor_2d=2,
         block_size_2d=(2, 2, 2),
         launch_bounds_3d=200,
