@@ -1,16 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+from __future__ import annotations
 
 import pathlib
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, Type, Union, cast
@@ -57,7 +53,7 @@ class ModuleGenerator(BaseModuleGenerator):
         return f"computation.run({', '.join(params)})"
 
     @property
-    def backend(self) -> "NumpyBackend":
+    def backend(self) -> NumpyBackend:
         return cast(NumpyBackend, self.builder.backend)
 
 
@@ -104,7 +100,7 @@ class NumpyBackend(BaseBackend, CLIBackendMixin):
         super().generate_bindings(language_name)
         return {self.builder.module_path.name: self.make_module_source()}
 
-    def generate(self) -> Type["StencilObject"]:
+    def generate(self) -> Type[StencilObject]:
         self.check_options(self.builder.options)
         src_dir = self.builder.module_path.parent
         if not self.builder.options._impl_opts.get("disable-code-generation", False):

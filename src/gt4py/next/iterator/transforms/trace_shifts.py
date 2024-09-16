@@ -1,18 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 import dataclasses
-import enum
 import sys
 from collections.abc import Callable
 from typing import Any, Final, Iterable, Literal, Optional
@@ -51,11 +45,11 @@ def copy_recorded_shifts(from_: ir.Node, to: ir.Node) -> None:
     to.annex.recorded_shifts = from_.annex.recorded_shifts
 
 
-class Sentinel(enum.Enum):
-    VALUE = enum.auto()
-    TYPE = enum.auto()
+class Sentinel(eve.StrEnum):
+    VALUE = "VALUE"
+    TYPE = "TYPE"
 
-    ALL_NEIGHBORS = enum.auto()
+    ALL_NEIGHBORS = "ALL_NEIGHBORS"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -143,6 +137,11 @@ def _can_deref(x):
 
 
 def _shift(*offsets):
+    assert all(
+        isinstance(offset, ir.OffsetLiteral) or offset in [Sentinel.ALL_NEIGHBORS, Sentinel.VALUE]
+        for offset in offsets
+    )
+
     def apply(arg):
         assert isinstance(arg, Tracer)
         return arg.shift(offsets)

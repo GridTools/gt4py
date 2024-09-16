@@ -1,16 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass
@@ -22,7 +18,7 @@ import dace.library
 import dace.subsets
 
 from gt4py import eve
-from gt4py.cartesian.gtc import daceir as dcir
+from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.dace.expansion.tasklet_codegen import TaskletCodegen
 from gt4py.cartesian.gtc.dace.expansion.utils import get_dace_debuginfo
 from gt4py.cartesian.gtc.dace.symbol_utils import data_type_to_dace_typeclass
@@ -91,8 +87,8 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         node: dcir.Memlet,
         *,
         scope_node: dcir.ComputationNode,
-        sdfg_ctx: "StencilComputationSDFGBuilder.SDFGContext",
-        node_ctx: "StencilComputationSDFGBuilder.NodeContext",
+        sdfg_ctx: StencilComputationSDFGBuilder.SDFGContext,
+        node_ctx: StencilComputationSDFGBuilder.NodeContext,
         connector_prefix="",
         symtable: ChainMap[eve.SymbolRef, dcir.Decl],
     ) -> None:
@@ -124,8 +120,8 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         entry_node: dace.nodes.Node,
         exit_node: dace.nodes.Node,
         *,
-        sdfg_ctx: "StencilComputationSDFGBuilder.SDFGContext",
-        node_ctx: "StencilComputationSDFGBuilder.NodeContext",
+        sdfg_ctx: StencilComputationSDFGBuilder.SDFGContext,
+        node_ctx: StencilComputationSDFGBuilder.NodeContext,
     ) -> None:
         if not sdfg_ctx.state.in_degree(entry_node) and None in node_ctx.input_node_and_conns:
             sdfg_ctx.state.add_edge(
@@ -140,8 +136,8 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         self,
         node: dcir.Tasklet,
         *,
-        sdfg_ctx: "StencilComputationSDFGBuilder.SDFGContext",
-        node_ctx: "StencilComputationSDFGBuilder.NodeContext",
+        sdfg_ctx: StencilComputationSDFGBuilder.SDFGContext,
+        node_ctx: StencilComputationSDFGBuilder.NodeContext,
         symtable: ChainMap[eve.SymbolRef, dcir.Decl],
         **kwargs,
     ) -> None:
@@ -189,8 +185,8 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         self,
         node: dcir.DomainMap,
         *,
-        node_ctx: "StencilComputationSDFGBuilder.NodeContext",
-        sdfg_ctx: "StencilComputationSDFGBuilder.SDFGContext",
+        node_ctx: StencilComputationSDFGBuilder.NodeContext,
+        sdfg_ctx: StencilComputationSDFGBuilder.SDFGContext,
         **kwargs,
     ) -> None:
         ndranges = {
@@ -251,7 +247,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         self,
         node: dcir.DomainLoop,
         *,
-        sdfg_ctx: "StencilComputationSDFGBuilder.SDFGContext",
+        sdfg_ctx: StencilComputationSDFGBuilder.SDFGContext,
         **kwargs,
     ) -> None:
         sdfg_ctx = sdfg_ctx.add_loop(node.index_range)
@@ -262,7 +258,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         self,
         node: dcir.ComputationState,
         *,
-        sdfg_ctx: "StencilComputationSDFGBuilder.SDFGContext",
+        sdfg_ctx: StencilComputationSDFGBuilder.SDFGContext,
         **kwargs,
     ) -> None:
         sdfg_ctx.add_state()
@@ -291,7 +287,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         self,
         node: dcir.FieldDecl,
         *,
-        sdfg_ctx: "StencilComputationSDFGBuilder.SDFGContext",
+        sdfg_ctx: StencilComputationSDFGBuilder.SDFGContext,
         non_transients: Set[eve.SymbolRef],
         **kwargs,
     ) -> None:
@@ -310,7 +306,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         self,
         node: dcir.SymbolDecl,
         *,
-        sdfg_ctx: "StencilComputationSDFGBuilder.SDFGContext",
+        sdfg_ctx: StencilComputationSDFGBuilder.SDFGContext,
         **kwargs,
     ) -> None:
         if node.name not in sdfg_ctx.sdfg.symbols:
@@ -320,8 +316,8 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         self,
         node: dcir.NestedSDFG,
         *,
-        sdfg_ctx: Optional["StencilComputationSDFGBuilder.SDFGContext"] = None,
-        node_ctx: Optional["StencilComputationSDFGBuilder.NodeContext"] = None,
+        sdfg_ctx: Optional[StencilComputationSDFGBuilder.SDFGContext] = None,
+        node_ctx: Optional[StencilComputationSDFGBuilder.NodeContext] = None,
         symtable: ChainMap[eve.SymbolRef, Any],
         **kwargs,
     ) -> dace.nodes.NestedSDFG:

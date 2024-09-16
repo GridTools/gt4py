@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import functools
 import warnings
@@ -107,7 +101,10 @@ def compilation_hash(otf_closure: stages.ProgramCall) -> int:
             # As the frontend types contain lists they are not hashable. As a workaround we just
             # use content_hash here.
             content_hash(tuple(from_value(arg) for arg in otf_closure.args)),
-            id(offset_provider) if offset_provider else None,
+            # Directly using the `id` of the offset provider is not possible as the decorator adds
+            # the implicitly defined ones (i.e. to allow the `TDim + 1` syntax) resulting in a
+            # different `id` every time. Instead use the `id` of each individual offset provider.
+            tuple((k, id(v)) for (k, v) in offset_provider.items()) if offset_provider else None,
             otf_closure.kwargs.get("column_axis", None),
         )
     )

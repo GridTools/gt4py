@@ -1,20 +1,15 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
 import dataclasses
+import functools
 import inspect
 
 from gt4py.eve.extended_typing import Callable, Iterable, Optional, Union
@@ -22,6 +17,7 @@ from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_info, type_specifications as ts
+from gt4py.next.utils import tree_map
 
 
 @dataclasses.dataclass
@@ -282,13 +278,25 @@ def as_fieldop(
 
 @_register_builtin_type_synthesizer
 def cond(
-    pred: ts.ScalarType, true_branch: ts.DataType, false_branch: ts.DataType
+    pred: ts.ScalarType,
+    true_branch: ts.DataType,
+    false_branch: ts.DataType,
 ) -> ts.FieldType | ts.DeferredType:
-    assert isinstance(pred, ts.ScalarType) and pred.kind == ts.ScalarKind.BOOL
-    assert true_branch == false_branch
-    assert isinstance(true_branch, (ts.FieldType, ts.DeferredType))
+    def type_synthesizer_per_element(
+        pred: ts.ScalarType,
+        true_branch: ts.FieldType | ts.DeferredType,
+        false_branch: ts.FieldType | ts.DeferredType,
+    ):
+        assert isinstance(pred, ts.ScalarType) and pred.kind == ts.ScalarKind.BOOL
+        assert true_branch == false_branch
+        assert isinstance(true_branch, (ts.FieldType, ts.DeferredType))
 
-    return true_branch
+        return true_branch
+
+    return tree_map(
+        collection_type=ts.TupleType,
+        result_collection_constructor=lambda elts: ts.TupleType(types=[*elts]),
+    )(functools.partial(type_synthesizer_per_element, pred))(true_branch, false_branch)
 
 
 @_register_builtin_type_synthesizer

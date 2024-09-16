@@ -1,16 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+from __future__ import annotations
 
 import functools
 from dataclasses import dataclass, field
@@ -99,7 +95,7 @@ class OIRToCUIR(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     ) -> cuir.VariableKOffset:
         return cuir.VariableKOffset(k=self.visit(node.k, **kwargs))
 
-    def _mask_to_expr(self, mask: common.HorizontalMask, ctx: "Context") -> cuir.Expr:
+    def _mask_to_expr(self, mask: common.HorizontalMask, ctx: Context) -> cuir.Expr:
         mask_expr: List[cuir.Expr] = []
         for axis_index, interval in enumerate(mask.intervals):
             if interval.is_single_index():
@@ -146,7 +142,7 @@ class OIRToCUIR(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         *,
         ij_caches: Dict[str, cuir.IJCacheDecl],
         k_caches: Dict[str, cuir.KCacheDecl],
-        ctx: "Context",
+        ctx: Context,
         **kwargs: Any,
     ) -> Union[cuir.FieldAccess, cuir.IJCacheAccess, cuir.KCacheAccess]:
         data_index = self.visit(
@@ -232,7 +228,7 @@ class OIRToCUIR(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         )
 
     def visit_VerticalLoop(
-        self, node: oir.VerticalLoop, *, symtable: Dict[str, Any], ctx: "Context", **kwargs: Any
+        self, node: oir.VerticalLoop, *, symtable: Dict[str, Any], ctx: Context, **kwargs: Any
     ) -> cuir.Kernel:
         assert not any(c.fill or c.flush for c in node.caches if isinstance(c, oir.KCache))
         ij_caches = {

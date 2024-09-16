@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import functools
 import types
@@ -142,7 +136,6 @@ class TupleConstructorType(Protocol, Generic[_R]):
     def __call__(self, *args: Any) -> _R: ...
 
 
-# TODO(havogt): the complicated typing is a hint that this function needs refactoring
 def apply_to_primitive_constituents(
     fun: Callable[..., _T],
     *symbol_types: ts.TypeSpec,
@@ -725,20 +718,23 @@ def function_signature_incompatibilities_field(
     args: list[ts.TypeSpec],
     kwargs: dict[str, ts.TypeSpec],
 ) -> Iterator[str]:
-    if len(args) != 1:
-        yield f"Function takes 1 argument, but {len(args)} were given."
+    if len(args) < 1:
+        yield f"Function takes at least 1 argument, but {len(args)} were given."
         return
-
-    if not isinstance(args[0], ts.OffsetType):
-        yield f"Expected first argument to be of type '{ts.OffsetType}', got '{args[0]}'."
-        return
+    for arg in args:
+        if not isinstance(arg, ts.OffsetType):
+            yield f"Expected arguments to be of type '{ts.OffsetType}', got '{arg}'."
+            return
+        if len(args) > 1 and len(arg.target) > 1:
+            yield f"Function takes only 1 argument in unstructured case, but {len(args)} were given."
+            return
 
     if kwargs:
         yield f"Got unexpected keyword argument(s) '{', '.join(kwargs.keys())}'."
         return
 
-    source_dim = args[0].source
-    target_dims = args[0].target
+    source_dim = args[0].source  # type: ignore[attr-defined] # ensured by loop above
+    target_dims = args[0].target  # type: ignore[attr-defined] # ensured by loop above
     # TODO: This code does not handle ellipses for dimensions. Fix it.
     assert field_type.dims is not ...
     if field_type.dims and source_dim not in field_type.dims:

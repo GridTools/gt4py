@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 #
 import typing
@@ -23,6 +17,8 @@ from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts, type_translation
+
+from ... import dummy_package
 
 
 class CustomInt32DType:
@@ -191,3 +187,15 @@ def test_generic_variadic_dims(value, expected_dims):
 )
 def test_as_from_dtype(dtype):
     assert type_translation.as_dtype(type_translation.from_dtype(dtype)) == dtype
+
+
+def test_from_value_module():
+    assert isinstance(
+        type_translation.from_value(dummy_package), type_translation.UnknownPythonObject
+    )
+    assert type_translation.from_value(dummy_package).dummy_module.dummy_int == ts.ScalarType(
+        kind=ts.ScalarKind.INT32
+    )
+    assert type_translation.from_value(dummy_package.dummy_module.dummy_int) == ts.ScalarType(
+        kind=ts.ScalarKind.INT32
+    )
