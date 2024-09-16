@@ -8,7 +8,7 @@
 
 import dataclasses
 import functools
-from typing import Any, ClassVar, Iterable, Optional, Type, TypeGuard, Union, Callable
+from typing import Any, Callable, ClassVar, Iterable, Optional, Type, TypeGuard, Union
 
 import gt4py.eve as eve
 from gt4py.eve import utils as eve_utils
@@ -247,8 +247,10 @@ def _process_elements(
     obj: Expr,
     type_: ts.TypeSpec,
     *,
-    tuple_constructor: Callable[..., Expr] = lambda *elements: FunCall(fun=SymRef(id="make_tuple"), args=list(elements))
-):
+    tuple_constructor: Callable[..., Expr] = lambda *elements: FunCall(
+        fun=SymRef(id="make_tuple"), args=list(elements)
+    ),
+) -> Expr:
     """
     Recursively applies a processing function to all primitive constituents of a tuple.
 
@@ -263,8 +265,7 @@ def _process_elements(
     """
     assert isinstance(type_, ts.TypeSpec)
 
-    def _gen_constituent_expr(el_type: ts.ScalarType | ts.FieldType,
-                                     path: tuple[int, ...]) -> Expr:
+    def _gen_constituent_expr(el_type: ts.ScalarType | ts.FieldType, path: tuple[int, ...]) -> Expr:
         # construct expression for the currently processed element
         el = functools.reduce(
             lambda cur_expr, i: FunCall(
@@ -282,6 +283,7 @@ def _process_elements(
         tuple_constructor=tuple_constructor,
     )
     return result
+
 
 @dataclasses.dataclass(frozen=True)
 class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
@@ -515,10 +517,11 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         lowered_output = self.visit(node)
 
         # just a sanity check, identity function otherwise
-        def check_el_type(el_expr: Expr, el_type: ts.ScalarType | ts.FieldType):
+        def check_el_type(el_expr: Expr, el_type: ts.ScalarType | ts.FieldType) -> Expr:
             assert isinstance(el_type, ts.FieldType)
             return el_expr
 
+        assert isinstance(node.type, ts.TypeSpec)
         lowered_output_as_sid = _process_elements(
             check_el_type,
             lowered_output,
@@ -589,13 +592,14 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             lowered_input = self.visit(input_, **kwargs)
 
             # convert scalar elements into SIDs, leave rest as is
-            def convert_el_to_sid(el_expr: Expr, el_type: ts.ScalarType | ts.FieldType):
+            def convert_el_to_sid(el_expr: Expr, el_type: ts.ScalarType | ts.FieldType) -> Expr:
                 if isinstance(el_type, ts.ScalarType):
                     return SidFromScalar(arg=el_expr)
                 else:
                     assert isinstance(el_type, ts.FieldType)
                     return el_expr
 
+            assert isinstance(input_.type, ts.TypeSpec)
             lowered_input_as_sid = _process_elements(
                 convert_el_to_sid,
                 lowered_input,

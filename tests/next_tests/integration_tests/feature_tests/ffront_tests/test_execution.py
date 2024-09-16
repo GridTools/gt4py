@@ -252,7 +252,9 @@ def test_mixed_field_scalar_tuple_arg(unstructured_case):
 
 
 @pytest.mark.uses_tuple_args
-@pytest.mark.xfail(reason="Not implemented in frontend (implicit size arg handling needs to be adopted) and GTIR embedded backend.")
+@pytest.mark.xfail(
+    reason="Not implemented in frontend (implicit size arg handling needs to be adopted) and GTIR embedded backend."
+)
 def test_tuple_arg_with_different_but_promotable_dims(unstructured_case):
     @gtx.field_operator
     def testee(a: tuple[cases.VField, cases.VKField]) -> cases.VKField:
@@ -261,7 +263,7 @@ def test_tuple_arg_with_different_but_promotable_dims(unstructured_case):
     cases.verify_with_default_data(
         unstructured_case,
         testee,
-        ref=lambda a: field_utils.asnumpy(a[0])[:, np.newaxis] + 2 * field_utils.asnumpy(a[1])
+        ref=lambda a: field_utils.asnumpy(a[0])[:, np.newaxis] + 2 * field_utils.asnumpy(a[1]),
     )
 
 
@@ -275,7 +277,7 @@ def test_tuple_arg_with_unpromotable_dims(unstructured_case):
     cases.verify_with_default_data(
         unstructured_case,
         testee,
-        ref=lambda a: field_utils.asnumpy(a[0])[:, np.newaxis] + 2 * field_utils.asnumpy(a[1])
+        ref=lambda a: field_utils.asnumpy(a[0])[:, np.newaxis] + 2 * field_utils.asnumpy(a[1]),
     )
 
 
