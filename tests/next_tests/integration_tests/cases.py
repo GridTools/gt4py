@@ -55,6 +55,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     mesh_descriptor,
 )
 
+from gt4py.next import utils as gt_utils
 
 # mypy does not accept [IDim, ...] as a type
 
@@ -450,7 +451,9 @@ def verify_with_default_data(
             ``comparison(ref, <out | inout>)`` and should return a boolean.
     """
     inps, kwfields = get_default_data(case, fieldop)
-    ref_args = tuple(i.asnumpy() if isinstance(i, common.Field) else i for i in inps)
+    ref_args: tuple = gt_utils.tree_map(
+        lambda x: x.asnumpy() if isinstance(x, common.Field) else x
+    )(inps)
     verify(
         case,
         fieldop,
