@@ -227,7 +227,7 @@ def test_zero_dim_tuple_arg(unstructured_case):
         return broadcast(a[0] + 2 * a[1][0] + 3 * a[1][1], (Vertex,))
 
     def ref(a):
-        a = gt_utils.tree_map(lambda x: x.ndarray)(a)  # unwrap 0d field
+        a = gt_utils.tree_map(lambda x: x[()])(a)  # unwrap 0d field
         return np.full(
             [unstructured_case.default_sizes[Vertex]], a[0] + 2 * a[1][0] + 3 * a[1][1], dtype=int32
         )
@@ -246,8 +246,7 @@ def test_mixed_field_scalar_tuple_arg(cartesian_case):
         testee,
         ref=lambda a: np.full(
             [cartesian_case.default_sizes[IDim]], a[0] + 2 * a[1][0] + 5 * a[1][2], dtype=int32
-        )
-        + 3 * field_utils.asnumpy(a[1][1]),
+        ) + 3 * a[1][1],
     )
 
 
@@ -263,7 +262,7 @@ def test_tuple_arg_with_different_but_promotable_dims(cartesian_case):
     cases.verify_with_default_data(
         cartesian_case,
         testee,
-        ref=lambda a: field_utils.asnumpy(a[0])[:, np.newaxis] + 2 * field_utils.asnumpy(a[1]),
+        ref=lambda a: a[0][:, np.newaxis] + 2 * a[1],
     )
 
 
@@ -277,7 +276,7 @@ def test_tuple_arg_with_unpromotable_dims(unstructured_case):
     cases.verify_with_default_data(
         unstructured_case,
         testee,
-        ref=lambda a: field_utils.asnumpy(a[0])[:, np.newaxis] + 2 * field_utils.asnumpy(a[1]),
+        ref=lambda a: a[0][:, np.newaxis] + 2 * a[1],
     )
 
 
