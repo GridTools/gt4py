@@ -297,6 +297,7 @@ def test_scalar_arg_with_field(cartesian_case):
     cases.verify(cartesian_case, testee, a, b, out=out, ref=ref)
 
 
+@pytest.mark.uses_scalar_in_domain_and_fo
 def test_scalar_in_domain_spec_and_fo_call(cartesian_case):
     @gtx.field_operator
     def testee_op(size: gtx.IndexType) -> gtx.Field[[IDim], gtx.IndexType]:
