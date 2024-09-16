@@ -246,7 +246,8 @@ def test_mixed_field_scalar_tuple_arg(cartesian_case):
         testee,
         ref=lambda a: np.full(
             [cartesian_case.default_sizes[IDim]], a[0] + 2 * a[1][0] + 5 * a[1][2], dtype=int32
-        ) + 3 * a[1][1],
+        )
+        + 3 * a[1][1],
     )
 
 
