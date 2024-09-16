@@ -327,17 +327,11 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
 
         return fun
 
-    def initialize_context(self, inputs: Iterable[ir.Sym | ir.SymRef]) -> dict[str, Any]:
-        ctx: dict[str, Any] = {**_START_CTX}
-        for inp in inputs:
-            self.shift_recorder.register_node(inp)
-            ctx[inp.id] = ArgTracer(arg=inp, shift_recorder=self.shift_recorder)
-        return ctx
-
     @classmethod
     def trace_stencil(
         cls, stencil: ir.Expr, *, num_args: Optional[int] = None, save_to_annex: bool = False
     ):
+        # If we get a lambda we can deduce the number of arguments.
         if isinstance(stencil, ir.Lambda):
             assert num_args is None or num_args == len(stencil.params)
             num_args = len(stencil.params)
@@ -351,7 +345,14 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
         sys.setrecursionlimit(100000000)
 
         instance = cls()
-        ctx = instance.initialize_context(args)
+
+        # initialize context with all built-ins and the iterator argument tracers
+        ctx: dict[str, Any] = {**_START_CTX}
+        for arg in args:
+            instance.shift_recorder.register_node(arg)
+            ctx[arg.id] = ArgTracer(arg=arg, shift_recorder=instance.shift_recorder)
+
+        # actually trace stencil
         instance.visit(im.call(stencil)(*args), ctx=ctx)
 
         sys.setrecursionlimit(old_recursionlimit)
