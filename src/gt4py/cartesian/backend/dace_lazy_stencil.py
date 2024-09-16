@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, Set, Tuple
 
 import dace
@@ -22,7 +24,7 @@ if TYPE_CHECKING:
 
 
 class DaCeLazyStencil(LazyStencil, SDFGConvertible):
-    def __init__(self, builder: "StencilBuilder"):
+    def __init__(self, builder: StencilBuilder):
         if "dace" not in builder.backend.name:
             raise ValueError("Trying to build a DaCeLazyStencil for non-dace backend.")
         super().__init__(builder=builder)

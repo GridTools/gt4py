@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import copy
 import dataclasses
 import itertools
@@ -184,7 +186,7 @@ class Context:
 
 
 def _visit_lift_in_neighbors_reduction(
-    transformer: "PythonTaskletCodegen",
+    transformer: PythonTaskletCodegen,
     node: itir.FunCall,
     node_args: Sequence[IteratorExpr | list[ValueExpr]],
     offset_provider: Connectivity,
@@ -321,7 +323,7 @@ def _visit_lift_in_neighbors_reduction(
 
 
 def builtin_neighbors(
-    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
+    transformer: PythonTaskletCodegen, node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
     sdfg: dace.SDFG = transformer.context.body
     state: dace.SDFGState = transformer.context.state
@@ -514,7 +516,7 @@ def builtin_neighbors(
 
 
 def builtin_can_deref(
-    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
+    transformer: PythonTaskletCodegen, node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
     di = dace_debuginfo(node, transformer.context.body.debuginfo)
     # first visit shift, to get set of indices for deref
@@ -556,7 +558,7 @@ def builtin_can_deref(
 
 
 def builtin_if(
-    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
+    transformer: PythonTaskletCodegen, node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
     assert len(node_args) == 3
     sdfg = transformer.context.body
@@ -677,7 +679,7 @@ def builtin_if(
 
 
 def builtin_list_get(
-    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
+    transformer: PythonTaskletCodegen, node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
     di = dace_debuginfo(node, transformer.context.body.debuginfo)
     args = list(itertools.chain(*transformer.visit(node_args)))
@@ -703,7 +705,7 @@ def builtin_list_get(
 
 
 def builtin_cast(
-    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
+    transformer: PythonTaskletCodegen, node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
     di = dace_debuginfo(node, transformer.context.body.debuginfo)
     args = transformer.visit(node_args[0])
@@ -718,7 +720,7 @@ def builtin_cast(
 
 
 def builtin_make_const_list(
-    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
+    transformer: PythonTaskletCodegen, node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
     di = dace_debuginfo(node, transformer.context.body.debuginfo)
     args = [transformer.visit(arg)[0] for arg in node_args]
@@ -754,14 +756,14 @@ def builtin_make_const_list(
 
 
 def builtin_make_tuple(
-    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
+    transformer: PythonTaskletCodegen, node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
     args = [transformer.visit(arg) for arg in node_args]
     return args
 
 
 def builtin_tuple_get(
-    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
+    transformer: PythonTaskletCodegen, node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
     elements = transformer.visit(node_args[1])
     index = node_args[0]
@@ -771,7 +773,7 @@ def builtin_tuple_get(
 
 
 _GENERAL_BUILTIN_MAPPING: dict[
-    str, Callable[["PythonTaskletCodegen", itir.Expr, list[itir.Expr]], list[ValueExpr]]
+    str, Callable[[PythonTaskletCodegen, itir.Expr, list[itir.Expr]], list[ValueExpr]]
 ] = {
     "can_deref": builtin_can_deref,
     "cast_": builtin_cast,

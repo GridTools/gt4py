@@ -19,6 +19,8 @@ Analysis is required to generate valid code (complying with the parallel model)
 - `FieldIfStmt` expansion to comply with the parallel model
 """
 
+from __future__ import annotations
+
 from typing import Any, Dict, List, Set, Tuple, Type
 
 from gt4py import eve
@@ -77,7 +79,7 @@ class ParAssignStmt(common.AssignStmt[FieldAccess, Expr], Stmt):
     @datamodels.root_validator
     @classmethod
     def no_write_and_read_with_offset_of_same_field(
-        cls: Type["ParAssignStmt"], instance: "ParAssignStmt"
+        cls: Type[ParAssignStmt], instance: ParAssignStmt
     ) -> None:
         if isinstance(instance.left, FieldAccess):
             offset_reads = (
@@ -203,7 +205,7 @@ class VerticalLoop(LocNode):
     @datamodels.root_validator
     @classmethod
     def _no_write_and_read_with_horizontal_offset(
-        cls: Type["VerticalLoop"], instance: "VerticalLoop"
+        cls: Type[VerticalLoop], instance: VerticalLoop
     ) -> None:
         """
         In the same VerticalLoop a field must not be written and read with a horizontal offset.

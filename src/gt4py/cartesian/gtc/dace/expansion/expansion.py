@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import copy
 from typing import TYPE_CHECKING, Dict, List
 
@@ -15,7 +17,7 @@ import dace.library
 import dace.subsets
 import sympy
 
-from gt4py.cartesian.gtc import daceir as dcir
+from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.dace.expansion.daceir_builder import DaCeIRBuilder
 from gt4py.cartesian.gtc.dace.expansion.sdfg_builder import StencilComputationSDFGBuilder
 
@@ -65,7 +67,7 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
 
     @staticmethod
     def _fix_context(
-        nsdfg, node: "StencilComputation", parent_state: dace.SDFGState, daceir: dcir.NestedSDFG
+        nsdfg, node: StencilComputation, parent_state: dace.SDFGState, daceir: dcir.NestedSDFG
     ):
         """Apply changes to StencilComputation and the SDFG it is embedded in to satisfy post-expansion constraints.
 
@@ -120,7 +122,7 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
 
     @staticmethod
     def _get_parent_arrays(
-        node: "StencilComputation", parent_state: dace.SDFGState, parent_sdfg: dace.SDFG
+        node: StencilComputation, parent_state: dace.SDFGState, parent_sdfg: dace.SDFG
     ) -> Dict[str, dace.data.Data]:
         parent_arrays: Dict[str, dace.data.Data] = {}
         for edge in (e for e in parent_state.in_edges(node) if e.dst_conn is not None):
@@ -131,7 +133,7 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
 
     @staticmethod
     def expansion(
-        node: "StencilComputation", parent_state: dace.SDFGState, parent_sdfg: dace.SDFG
+        node: StencilComputation, parent_state: dace.SDFGState, parent_sdfg: dace.SDFG
     ) -> dace.nodes.NestedSDFG:
         """Expand the coarse SDFG in parent_sdfg to a NestedSDFG with all the states."""
         split_horizontal_executions_regions(node)

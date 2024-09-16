@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import copy
 import os
 import pathlib
@@ -16,7 +18,6 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type
 import dace
 import dace.data
 from dace.sdfg.utils import inline_sdfgs
-from dace.serialize import dumps
 
 from gt4py import storage as gt_storage
 from gt4py.cartesian import config as gt_config
@@ -52,10 +53,6 @@ from gt4py.eve.codegen import MakoTemplate as as_mako
 if TYPE_CHECKING:
     from gt4py.cartesian.stencil_builder import StencilBuilder
     from gt4py.cartesian.stencil_object import StencilObject
-
-
-def _serialize_sdfg(sdfg: dace.SDFG):
-    return dumps(sdfg)
 
 
 def _specialize_transient_strides(sdfg: dace.SDFG, layout_map):
@@ -123,7 +120,7 @@ def _set_expansion_orders(sdfg: dace.SDFG):
 
 
 def _set_tile_sizes(sdfg: dace.SDFG):
-    import gt4py.cartesian.gtc.daceir as dcir  # avoid circular import
+    import gt4py.cartesian.gtc.dace.daceir as dcir  # avoid circular import
 
     for node, _ in filter(
         lambda n: isinstance(n[0], StencilComputation), sdfg.all_nodes_recursive()
@@ -302,7 +299,7 @@ def freeze_origin_domain_sdfg(inner_sdfg, arg_names, field_info, *, origin, doma
         for node in states[0].nodes():
             state.remove_node(node)
 
-    # make sure that symbols are passed throught o inner sdfg
+    # make sure that symbols are passed through to inner sdfg
     for symbol in nsdfg.sdfg.free_symbols:
         if symbol not in wrapper_sdfg.symbols:
             wrapper_sdfg.add_symbol(symbol, nsdfg.sdfg.symbols[symbol])
@@ -531,7 +528,7 @@ class DaCeComputationCodegen:
         return generated_code
 
     @classmethod
-    def apply(cls, stencil_ir: gtir.Stencil, builder: "StencilBuilder", sdfg: dace.SDFG):
+    def apply(cls, stencil_ir: gtir.Stencil, builder: StencilBuilder, sdfg: dace.SDFG):
         self = cls()
         with dace.config.temporary_config():
             # To prevent conflict with 3rd party usage of DaCe config always make sure that any
@@ -765,7 +762,7 @@ class BaseDaceBackend(BaseGTBackend, CLIBackendMixin):
     GT_BACKEND_T = "dace"
     PYEXT_GENERATOR_CLASS = DaCeExtGenerator  # type: ignore
 
-    def generate(self) -> Type["StencilObject"]:
+    def generate(self) -> Type[StencilObject]:
         self.check_options(self.builder.options)
 
         pyext_module_name: Optional[str]
