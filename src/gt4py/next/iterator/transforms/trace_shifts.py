@@ -346,7 +346,7 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
 
         instance = cls()
 
-        # initialize context with all built-ins and the iterator argument tracers
+        # initialize shift recorder & context with all built-ins and the iterator argument tracers
         ctx: dict[str, Any] = {**_START_CTX}
         for arg in args:
             instance.shift_recorder.register_node(arg)
