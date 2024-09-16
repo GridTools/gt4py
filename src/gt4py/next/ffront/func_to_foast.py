@@ -300,7 +300,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         if not isinstance(target, ast.Name):
             raise errors.DSLError(self.get_location(node), "Can only assign to names.")
         new_value = self.visit(node.value)
-        constraint_type: Type[ts.DataType] = ts.DataType
+        constraint_type: Type[ts.TypeSpec] = ts.TypeSpec
         if isinstance(new_value, foast.TupleExpr):
             constraint_type = ts.TupleType
         elif (
@@ -308,6 +308,8 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             and type_info.type_class(new_value.type) is ts.ScalarType
         ):
             constraint_type = ts.ScalarType
+        else:
+            pass
         return foast.Assign(
             target=foast.DataSymbol(
                 id=target.id,

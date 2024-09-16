@@ -236,6 +236,10 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         return im.ref(node.id)
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs: Any) -> itir.Expr:
+        if isinstance(node.type, ts.OffsetType):
+            # TODO(havogt): problem is that we need to resolve `E2V[0]` -> `E2V, 0` (not as tuple) as it needs to be inserted as `X` in `shift(X)`
+            raise NotImplementedError("Offsets can only be used inlined in the premap operation.")
+
         return im.tuple_get(node.index, self.visit(node.value, **kwargs))
 
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs: Any) -> itir.Expr:
