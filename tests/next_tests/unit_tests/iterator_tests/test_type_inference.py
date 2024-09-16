@@ -173,7 +173,7 @@ def expression_test_cases():
         ),
         # cond
         (
-            im.call("cond")(
+            im.cond(
                 False,
                 im.call(
                     im.call("as_fieldop")(
@@ -193,6 +193,14 @@ def expression_test_cases():
                 )(im.ref("inp", float_i_field)),
             ),
             float_i_field,
+        ),
+        (
+            im.cond(
+                False,
+                im.make_tuple(im.ref("inp", float_i_field), im.ref("inp", float_i_field)),
+                im.make_tuple(im.ref("inp", float_i_field), im.ref("inp", float_i_field)),
+            ),
+            ts.TupleType(types=[float_i_field, float_i_field]),
         ),
     )
 
