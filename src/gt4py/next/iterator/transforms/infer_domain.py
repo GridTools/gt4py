@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import copy
+import itertools
 from typing import Callable, TypeAlias
 
 from gt4py.eve import utils as eve_utils
@@ -57,8 +58,7 @@ def _merge_domains(
                 domain_union([d1, d2])
                 if d1 is not None and d2 is not None
                 else (d1 if d2 is None else d2)
-                for d1 in original_domain
-                for d2 in domain
+                for d1, d2 in itertools.zip_longest(original_domain, domain, fillvalue=None)
             )
         elif isinstance(domain, tuple):
             new_domains[key] = tuple(
@@ -226,12 +226,14 @@ def infer_expr(
         infered_args_expr = []
         actual_domains: ACCESSED_DOMAINS = {}
         if cpm.is_call_to(expr, "make_tuple"):
+            if not isinstance(domain, tuple):
+                domain = (
+                    (domain,) * (len(expr.args))
+                )  # TODO: Still open how to handle IR in this case, example: out @ c⟨ IDimₕ: [0, __out_size_0) ⟩ ← {__sym_1, __sym_2};
             if (
-                not isinstance(domain, tuple) or not len(domain) <= len(expr.args)
+                not len(domain) <= len(expr.args)
             ):  # There may be less domains than tuple args, e.g. in im.tuple_get(0, im.make_tuple(a, b), domain=domain)
-                raise ValueError(
-                    "infer_expr needs a domain for each tuple element and domain must be a tuple."
-                )
+                raise ValueError("infer_expr needs a domain for each tuple element.")
             # This is to pad the domain length to the length of the tuple
             domain = (*domain, *(None for _ in range(len(expr.args) - len(domain))))
             for i, arg in enumerate(expr.args):
@@ -259,6 +261,12 @@ def infer_expr(
                 infered_args_expr.append(infered_arg_expr)
                 actual_domains = _merge_domains(actual_domains, actual_domains_arg)
             return im.call(expr.fun)(cond, *infered_args_expr), actual_domains
+        elif (
+            cpm.is_call_to(expr, itir.ARITHMETIC_BUILTINS)
+            or cpm.is_call_to(expr, itir.TYPEBUILTINS)
+            or cpm.is_call_to(expr, "cast_")
+        ):
+            return expr, actual_domains
         else:
             raise ValueError(f"Unsupported expression: {expr}")
     else:
