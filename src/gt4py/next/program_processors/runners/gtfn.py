@@ -101,7 +101,10 @@ def compilation_hash(otf_closure: stages.ProgramCall) -> int:
             # As the frontend types contain lists they are not hashable. As a workaround we just
             # use content_hash here.
             content_hash(tuple(from_value(arg) for arg in otf_closure.args)),
-            id(offset_provider) if offset_provider else None,
+            # Directly using the `id` of the offset provider is not possible as the decorator adds
+            # the implicitly defined ones (i.e. to allow the `TDim + 1` syntax) resulting in a
+            # different `id` every time. Instead use the `id` of each individual offset provider.
+            tuple((k, id(v)) for (k, v) in offset_provider.items()) if offset_provider else None,
             otf_closure.kwargs.get("column_axis", None),
         )
     )

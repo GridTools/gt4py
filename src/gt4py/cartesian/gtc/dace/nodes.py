@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import base64
 import pickle
 import typing
@@ -18,7 +20,8 @@ import dace.subsets
 import numpy as np
 from dace import library
 
-from gt4py.cartesian.gtc import common, daceir as dcir, oir
+from gt4py.cartesian.gtc import common, oir
+from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.dace.expansion.expansion import StencilComputationExpansion
 from gt4py.cartesian.gtc.definitions import Extent
 from gt4py.cartesian.gtc.oir import Decl, FieldDecl, VerticalLoop, VerticalLoopSection
@@ -28,13 +31,13 @@ from .expansion_specification import ExpansionItem, make_expansion_order
 
 
 def _set_expansion_order(
-    node: "StencilComputation", expansion_order: Union[List[ExpansionItem], List[str]]
+    node: StencilComputation, expansion_order: Union[List[ExpansionItem], List[str]]
 ):
     res = make_expansion_order(node, expansion_order)
     node._expansion_specification = res
 
 
-def _set_tile_sizes_interpretation(node: "StencilComputation", tile_sizes_interpretation: str):
+def _set_tile_sizes_interpretation(node: StencilComputation, tile_sizes_interpretation: str):
     valid_values = {"shape", "strides"}
     if tile_sizes_interpretation not in valid_values:
         raise ValueError(f"tile_sizes_interpretation must be one in {valid_values}.")
@@ -50,9 +53,17 @@ class PickledProperty:
 
     @classmethod
     def from_json(cls, d, sdfg=None):
-        b64string = d["pickle"]
-        byte_repr = base64.b64decode(b64string)
-        return pickle.loads(byte_repr)
+        # DaCe won't serialize attr with default values by default
+        # which would lead the deserializer to push a default in the
+        # wrong format (non pickle).
+        # Best mitigation is to give back the object plain if it does
+        # not contain any pickling information
+        if isinstance(d, dict) and "pickle" in d.keys():
+            b64string = d["pickle"]
+            byte_repr = base64.b64decode(b64string)
+            return pickle.loads(byte_repr)
+
+        return d
 
 
 class PickledDataclassProperty(PickledProperty, dace.properties.DataclassProperty):
@@ -205,10 +216,8 @@ class StencilComputation(library.LibraryNode):
     def tile_strides(self):
         if self.tile_sizes_interpretation == "strides":
             return self.tile_sizes
-        else:
-            overall_extent: Extent = next(iter(self.extents.values()))
-            for extent in self.extents.values():
-                overall_extent |= extent
-            return {
-                key: value + overall_extent[key.to_idx()] for key, value in self.tile_sizes.items()
-            }
+
+        overall_extent: Extent = next(iter(self.extents.values()))
+        for extent in self.extents.values():
+            overall_extent |= extent
+        return {key: value + overall_extent[key.to_idx()] for key, value in self.tile_sizes.items()}

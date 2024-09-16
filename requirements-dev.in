@@ -11,7 +11,6 @@ cogapp>=3.3
 coverage[toml]>=5.0
 darglint>=1.6
 hypothesis   # constraints in gt4py['testing']
-isort>=5.10
 jupytext>=1.14
 mypy>=1.0
 matplotlib>=3.3
@@ -24,6 +23,7 @@ pygments>=2.7.3
 pytest   # constraints in gt4py['testing']
 pytest-cache>=1.0
 pytest-cov>=2.8
+pytest-custom-exit-code>=0.3.0 
 pytest-factoryboy>=2.0.3
 pytest-xdist[psutil]>=2.4
 pytest-instafail>=0.5.0

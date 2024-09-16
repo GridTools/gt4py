@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import copy
 import inspect
 import os
@@ -58,7 +60,7 @@ def add_optional_fields(
 
 @dataclass(frozen=True)
 class DaCeFrozenStencil(FrozenStencil, SDFGConvertible):
-    stencil_object: "DaCeStencilObject"
+    stencil_object: DaCeStencilObject
     origin: Dict[str, Tuple[int, ...]]
     domain: Tuple[int, ...]
     sdfg: dace.SDFG
@@ -95,7 +97,7 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
         return domain, origins_tuple
 
     def freeze(
-        self: "DaCeStencilObject", *, origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]
+        self: DaCeStencilObject, *, origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]
     ) -> DaCeFrozenStencil:
         key = DaCeStencilObject._get_domain_origin_key(domain, origin)
         if key in self._frozen_cache:
@@ -135,8 +137,8 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
         self,
         constant_args: Dict[str, Any],
         given_args: Set[str],
-        parent_closure: Optional["dace.frontend.python.common.SDFGClosure"] = None,
-    ) -> "dace.frontend.python.common.SDFGClosure":
+        parent_closure: Optional[dace.frontend.python.common.SDFGClosure] = None,
+    ) -> dace.frontend.python.common.SDFGClosure:
         return dace.frontend.python.common.SDFGClosure()
 
     def __sdfg__(self, *args, **kwargs) -> dace.SDFG:
