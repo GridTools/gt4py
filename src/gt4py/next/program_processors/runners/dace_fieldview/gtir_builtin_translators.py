@@ -395,6 +395,23 @@ def translate_symbol_ref(
     return [(sym_node, sym_type)]
 
 
+def translate_scalar_expr(
+    node: gtir.Node,
+    sdfg: dace.SDFG,
+    state: dace.SDFGState,
+    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
+    reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
+) -> list[TemporaryData]:
+    assert isinstance(node, gtir.FunCall)
+    assert isinstance(node.type, ts.ScalarType)
+
+    python_code = gtir_python_codegen.get_source(node)
+    scalar_node = gtir.Literal(value=str(python_code), type=node.type)
+    return sdfg_builder.visit(
+        scalar_node, sdfg=sdfg, head_state=state, reduce_identity=reduce_identity
+    )
+
+
 if TYPE_CHECKING:
     # Use type-checking to assert that all translator functions implement the `PrimitiveTranslator` protocol
     __primitive_translators: list[PrimitiveTranslator] = [
@@ -402,4 +419,5 @@ if TYPE_CHECKING:
         translate_cond,
         translate_literal,
         translate_symbol_ref,
+        translate_scalar_expr,
     ]

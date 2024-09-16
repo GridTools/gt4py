@@ -28,7 +28,6 @@ from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_builtin_translators,
-    gtir_python_codegen,
     gtir_to_tasklet,
     transformations as gtx_transformations,
     utility as dace_fieldview_util,
@@ -367,13 +366,12 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 reduce_identity=reduce_identity,
                 args=node_args,
             )
-        else:
-            python_code = gtir_python_codegen.get_source(node)
-            symbolic_expr = dace.symbolic.pystr_to_symbolic(python_code, simplify=True)
-            literal_node = gtir.Literal(value=str(symbolic_expr), type=node.type)
-            return gtir_builtin_translators.translate_literal(
-                literal_node, sdfg, head_state, self, reduce_identity=None
+        elif isinstance(node.type, ts.ScalarType):
+            return gtir_builtin_translators.translate_scalar_expr(
+                node, sdfg, head_state, self, reduce_identity
             )
+        else:
+            raise NotImplementedError(f"Unexpected 'FunCall' expression ({node}).")
 
     def visit_Lambda(
         self,
