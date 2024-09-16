@@ -277,43 +277,29 @@ def infer_program(
     program: itir.Program,
     offset_provider: dict[str, Dimension],
 ) -> itir.Program:
-    accessed_domains: ACCESSED_DOMAINS = {}
     transformed_set_ats: list[itir.SetAt] = []
     assert not program.function_definitions  # TODO(tehrengruber): error message
 
-    for set_at in reversed(program.body):
+    for set_at in program.body:
         assert isinstance(set_at, itir.SetAt)
         if isinstance(set_at.expr, itir.SymRef):
-            transformed_set_ats.insert(0, set_at)
+            transformed_set_ats.append(set_at)
             continue
         assert isinstance(set_at.expr, itir.Expr)
         assert isinstance(
             set_at.target, itir.SymRef
         )  # TODO: stmt.target can be an expr, e.g. make_tuple
 
-        accessed_domains[set_at.target.id] = SymbolicDomain.from_expr(set_at.domain)
-        transformed_call, current_accessed_domains = infer_expr(
-            set_at.expr, accessed_domains[set_at.target.id], offset_provider
+        transformed_call, _unused_domain = infer_expr(
+            set_at.expr, SymbolicDomain.from_expr(set_at.domain), offset_provider
         )
-        transformed_set_ats.insert(
-            0,
+        transformed_set_ats.append(
             itir.SetAt(
                 expr=transformed_call,
-                domain=SymbolicDomain.as_expr(accessed_domains[set_at.target.id])  # type: ignore[arg-type]  # ensured by if condition
-                if accessed_domains[set_at.target.id] is not None
-                else None,
+                domain=(set_at.domain),
                 target=set_at.target,
             ),
         )
-
-        for field in current_accessed_domains:
-            if field in accessed_domains:
-                # TODO(tehrengruber): if domain_ref is an external field the domain must
-                #  already be larger. This should be checked, but would require additions
-                #  to the IR.
-                pass
-            else:
-                accessed_domains[field] = current_accessed_domains[field]
 
     new_declarations = copy.deepcopy(program.declarations)
 
