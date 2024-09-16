@@ -87,7 +87,6 @@ def _parse_fieldop_arg(
 ) -> gtir_to_tasklet.IteratorExpr | gtir_to_tasklet.MemletExpr:
     arg = sdfg_builder.visit(
         node,
-        sdfg=sdfg,
         head_state=state,
         reduce_identity=reduce_identity,
     )
@@ -292,13 +291,11 @@ def translate_cond(
 
     true_br_args = sdfg_builder.visit(
         true_expr,
-        sdfg=sdfg,
         head_state=true_state,
         reduce_identity=reduce_identity,
     )
     false_br_args = sdfg_builder.visit(
         false_expr,
-        sdfg=sdfg,
         head_state=false_state,
         reduce_identity=reduce_identity,
     )
@@ -351,9 +348,12 @@ def _get_data_nodes(
         sym_node = state.add_access(sym_name)
         return Field(sym_node, sym_type)
     elif isinstance(sym_type, ts.ScalarType):
-        sym_node = _get_symbolic_value(
-            sdfg, state, sdfg_builder, sym_name, sym_type, temp_name=f"__{sym_name}"
-        )
+        if sdfg_builder.is_program():
+            sym_node = _get_symbolic_value(
+                sdfg, state, sdfg_builder, sym_name, sym_type, temp_name=f"__{sym_name}"
+            )
+        else:
+            sym_node = state.add_access(sym_name)
         return Field(sym_node, sym_type)
     elif isinstance(sym_type, ts.TupleType):
         tuple_fields = dace_fieldview_util.get_tuple_fields(sym_name, sym_type)
@@ -443,7 +443,6 @@ def translate_make_tuple(
     return tuple(
         sdfg_builder.visit(
             arg,
-            sdfg=sdfg,
             head_state=state,
             reduce_identity=reduce_identity,
         )
@@ -468,17 +467,11 @@ def translate_tuple_get(
 
     data_nodes = sdfg_builder.visit(
         node.args[1],
-        sdfg=sdfg,
         head_state=state,
         reduce_identity=reduce_identity,
     )
     if isinstance(data_nodes, Field):
         raise ValueError(f"Invalid tuple expression {node}")
-    unused_arg_nodes = tuple(arg for i, arg in enumerate(data_nodes) if i != index)
-    unused_access_nodes = [
-        arg.data_node for arg in dace_fieldview_util.flatten_tuples(unused_arg_nodes)
-    ]
-    state.remove_nodes_from([node for node in unused_access_nodes if state.degree(node) == 0])
     return data_nodes[index]
 
 
@@ -495,7 +488,7 @@ def translate_scalar_expr(
     python_code = gtir_python_codegen.get_source(node)
     scalar_node = gtir.Literal(value=str(python_code), type=node.type)
     return sdfg_builder.visit(
-        scalar_node, sdfg=sdfg, head_state=state, reduce_identity=reduce_identity
+        scalar_node, head_state=state, reduce_identity=reduce_identity
     )
 
 
