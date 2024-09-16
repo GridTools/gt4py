@@ -68,7 +68,6 @@ IKFloatField: TypeAlias = gtx.Field[[IDim, KDim], np.float64]  # type: ignore [v
 IJKField: TypeAlias = gtx.Field[[IDim, JDim, KDim], np.int32]  # type: ignore [valid-type]
 IJKFloatField: TypeAlias = gtx.Field[[IDim, JDim, KDim], np.float64]  # type: ignore [valid-type]
 VField: TypeAlias = gtx.Field[[Vertex], np.int32]  # type: ignore [valid-type]
-VKField: TypeAlias = gtx.Field[[Vertex, KDim], np.int32]  # type: ignore [valid-type]
 EField: TypeAlias = gtx.Field[[Edge], np.int32]  # type: ignore [valid-type]
 CField: TypeAlias = gtx.Field[[Cell], np.int32]  # type: ignore [valid-type]
 EmptyField: TypeAlias = gtx.Field[[], np.int32]  # type: ignore [valid-type]

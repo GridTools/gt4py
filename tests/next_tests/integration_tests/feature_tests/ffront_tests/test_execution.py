@@ -236,16 +236,16 @@ def test_zero_dim_tuple_arg(unstructured_case):
 
 
 @pytest.mark.uses_tuple_args
-def test_mixed_field_scalar_tuple_arg(unstructured_case):
+def test_mixed_field_scalar_tuple_arg(cartesian_case):
     @gtx.field_operator
-    def testee(a: tuple[int32, tuple[int32, cases.VField, int32]]) -> cases.VField:
+    def testee(a: tuple[int32, tuple[int32, cases.IField, int32]]) -> cases.IField:
         return a[0] + 2 * a[1][0] + 3 * a[1][1] + 5 * a[1][2]
 
     cases.verify_with_default_data(
-        unstructured_case,
+        cartesian_case,
         testee,
         ref=lambda a: np.full(
-            [unstructured_case.default_sizes[Vertex]], a[0] + 2 * a[1][0] + 5 * a[1][2], dtype=int32
+            [cartesian_case.default_sizes[IDim]], a[0] + 2 * a[1][0] + 5 * a[1][2], dtype=int32
         )
         + 3 * field_utils.asnumpy(a[1][1]),
     )
@@ -255,13 +255,13 @@ def test_mixed_field_scalar_tuple_arg(unstructured_case):
 @pytest.mark.xfail(
     reason="Not implemented in frontend (implicit size arg handling needs to be adopted) and GTIR embedded backend."
 )
-def test_tuple_arg_with_different_but_promotable_dims(unstructured_case):
+def test_tuple_arg_with_different_but_promotable_dims(cartesian_case):
     @gtx.field_operator
-    def testee(a: tuple[cases.VField, cases.VKField]) -> cases.VKField:
+    def testee(a: tuple[cases.IField, cases.IJField]) -> cases.IJField:
         return a[0] + 2 * a[1]
 
     cases.verify_with_default_data(
-        unstructured_case,
+        cartesian_case,
         testee,
         ref=lambda a: field_utils.asnumpy(a[0])[:, np.newaxis] + 2 * field_utils.asnumpy(a[1]),
     )
@@ -271,7 +271,7 @@ def test_tuple_arg_with_different_but_promotable_dims(unstructured_case):
 @pytest.mark.xfail(reason="Iterator of tuple approach in lowering does not allow this.")
 def test_tuple_arg_with_unpromotable_dims(unstructured_case):
     @gtx.field_operator
-    def testee(a: tuple[cases.VField, cases.EField]) -> cases.VKField:
+    def testee(a: tuple[cases.VField, cases.EField]) -> cases.VField:
         return a[0] + 2 * a[1](V2E[0])
 
     cases.verify_with_default_data(
