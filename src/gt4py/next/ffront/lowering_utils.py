@@ -113,6 +113,7 @@ def process_elements(
         objs: The object whose elements are to be transformed.
         current_el_type: A type with the same structure as the elements of `objs`. The leaf-types
             are not used and thus not relevant.
+        with_type: If True, the last argument passed to `process_func` will be its type.
     """
     if isinstance(objs, itir.Expr):
         objs = (objs,)
