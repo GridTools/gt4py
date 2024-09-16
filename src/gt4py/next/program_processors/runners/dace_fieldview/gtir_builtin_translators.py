@@ -487,9 +487,7 @@ def translate_scalar_expr(
 
     python_code = gtir_python_codegen.get_source(node)
     scalar_node = gtir.Literal(value=str(python_code), type=node.type)
-    return sdfg_builder.visit(
-        scalar_node, head_state=state, reduce_identity=reduce_identity
-    )
+    return sdfg_builder.visit(scalar_node, head_state=state, reduce_identity=reduce_identity)
 
 
 if TYPE_CHECKING:

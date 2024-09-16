@@ -129,7 +129,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             if isinstance(sym_type, ts.TupleType):
                 flat_map |= {
                     fname: ftype
-                    for fname, ftype in dace_fieldview_util.get_tuple_fields(sym_name, sym_type, flatten=True)
+                    for fname, ftype in dace_fieldview_util.get_tuple_fields(
+                        sym_name, sym_type, flatten=True
+                    )
                 }
         return flat_map[symbol_name]
 
@@ -549,7 +551,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             if isinstance(sym_type, ts.ScalarType):
                 symbols = {sym_name}
             elif isinstance(sym_type, ts.TupleType):
-                symbols  = {
+                symbols = {
                     fname
                     for fname, ftype in dace_fieldview_util.get_tuple_fields(
                         sym_name, sym_type, flatten=True
@@ -557,7 +559,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     if isinstance(ftype, ts.ScalarType)
                 }
             else:
-                symbols = {}
+                symbols = set()
 
             for sym in symbols:
                 if sym in lambda_arg_nodes:
@@ -565,9 +567,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     assert isinstance(arg_node.desc(self.sdfg), dace.data.Scalar)
                     input_memlets[sym] = (arg_node, dace.Memlet(data=arg_node.data, subset="0"))
                 else:
-                    temp = self.visit(gtir.SymRef(id=sym), head_state=head_state, reduce_identity=None)
+                    temp = self.visit(
+                        gtir.SymRef(id=sym), head_state=head_state, reduce_identity=None
+                    )
                     assert isinstance(temp.data_node.desc(self.sdfg), dace.data.Scalar)
-                    input_memlets[sym] = (temp.data_node, dace.Memlet(data=temp.data_node.data, subset="0"))
+                    input_memlets[sym] = (
+                        temp.data_node,
+                        dace.Memlet(data=temp.data_node.data, subset="0"),
+                    )
 
         nsdfg_symbols_mapping: dict[str, dace.symbolic.SymExpr] = {}
         for nsdfg_dataname, nsdfg_datadesc in nsdfg.arrays.items():
@@ -591,8 +598,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     strict=True,
                 )
                 if isinstance(nested_symbol, dace.symbol)
-            }                
-            input_memlets[nsdfg_dataname] = (src_node, dace.Memlet.from_array(src_node.data, datadesc))
+            }
+            input_memlets[nsdfg_dataname] = (
+                src_node,
+                dace.Memlet.from_array(src_node.data, datadesc),
+            )
 
         # Process lambda outputs
         #
