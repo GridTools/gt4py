@@ -18,6 +18,7 @@ repos:
     exclude: tox.ini
   - id: pretty-format-toml
     args: [--autofix]
+    exclude: tach.toml
   - id: pretty-format-yaml
     args: [--autofix, --preserve-quotes, --indent, "2"]
 

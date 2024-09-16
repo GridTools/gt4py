@@ -1,39 +1,39 @@
-exact = true
 exclude = []
-forbid_circular_dependencies = true
 source_roots = [
-  "src"
+    "src",
 ]
+exact = true
+forbid_circular_dependencies = true
 
 [[modules]]
-depends_on = [
-  {path = "gt4py.eve"}
-]
 path = "gt4py._core"
+depends_on = [
+    { path = "gt4py.eve" },
+]
 
 [[modules]]
-depends_on = [
-  {path = "gt4py.eve"},
-  {path = "gt4py.storage"}
-]
 path = "gt4py.cartesian"
+depends_on = [
+    { path = "gt4py.eve" },
+    { path = "gt4py.storage" },
+]
 
 [[modules]]
-depends_on = []
 path = "gt4py.eve"
+depends_on = []
 
 [[modules]]
-depends_on = [
-  {path = "gt4py._core"},
-  {path = "gt4py.eve"},
-  {path = "gt4py.storage"}
-]
 path = "gt4py.next"
+depends_on = [
+    { path = "gt4py._core" },
+    { path = "gt4py.eve" },
+    { path = "gt4py.storage" },
+]
 
 [[modules]]
-depends_on = [
-  {path = "gt4py._core"},
-  {path = "gt4py.cartesian"}, # for backward-compatibility the cartesian allocators are in `gt4py.storage`
-  {path = "gt4py.eve"}
-]
 path = "gt4py.storage"
+depends_on = [
+    { path = "gt4py._core" },
+    { path = "gt4py.cartesian" },  # for backward-compatibility the cartesian allocators are in `gt4py.storage`
+    { path = "gt4py.eve" },
+]
