@@ -207,7 +207,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
     def _visit_expression(
         self, node: gtir.Expr, sdfg: dace.SDFG, head_state: dace.SDFGState, use_temp: bool = True
-    ) -> list[dace.nodes.AccessNode]:
+    ) -> list[gtir_builtin_translators.Field]:
         """
         Specialized visit method for fieldview expressions.
 
@@ -229,17 +229,17 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         assert len(sink_states) == 1
         assert sink_states[0] == head_state
 
-        def make_temps(field: gtir_builtin_translators.Field) -> dace.nodes.AccessNode:
+        def make_temps(field: gtir_builtin_translators.Field) -> gtir_builtin_translators.Field:
             desc = sdfg.arrays[field.data_node.data]
             if desc.transient or not use_temp:
-                return field.data_node
+                return field
             else:
                 temp, _ = sdfg.add_temp_transient_like(desc)
                 temp_node = head_state.add_access(temp)
                 head_state.add_nedge(
                     field.data_node, temp_node, dace.Memlet.from_array(field.data_node.data, desc)
                 )
-                return temp_node
+                return gtir_builtin_translators.Field(temp_node, field.data_type)
 
         temp_result = dace_fieldview_util.visit_tuples(result, make_temps)
         return dace_fieldview_util.flatten_tuples(temp_result)
@@ -253,9 +253,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             assert isinstance(param.type, (ts.DataType))
             sdfg_args += self._add_storage(sdfg, pname, param.type, transient=False)
             self.global_symbols[pname] = param.type
-        # besides the types of the gt4py program arguments, we also need to store the types
-        # of the tuple-element fields that is included in the `sdfg_args` list
-        self.global_symbols.update(dict(sdfg_args))
 
         # add SDFG storage for connectivity tables
         for offset, offset_provider in dace_fieldview_util.filter_connectivities(
@@ -290,6 +287,17 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         sdfg = dace.SDFG(node.id)
         sdfg.debuginfo = dace_fieldview_util.debug_info(node, default=sdfg.debuginfo)
+
+        # ensure that all symbol names are valid strings (e.g. no unicode-strings)
+        symrefs = {str(sym.id) for sym in eve.walk_values(node).if_isinstance(gtir.SymRef)}
+        symrefs_mapping = {
+            sym: sdfg.temp_data_name() for sym in symrefs if not dace.dtypes.validate_name(sym)
+        }
+        if symrefs_mapping:
+            for x in eve.walk_values(node).if_isinstance(gtir.Sym, gtir.SymRef):
+                ir_sym = str(x.id)
+                x.id = symrefs_mapping.get(ir_sym, ir_sym)
+
         entry_state = sdfg.add_state("program_entry", is_start_block=True)
 
         # declarations of temporaries result in transient array definitions in the SDFG
@@ -333,11 +341,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
           The SDFG head state, eventually updated if the target write requires a new state.
         """
 
-        expr_nodes = self._visit_expression(stmt.expr, sdfg, state)
+        temp_fields = self._visit_expression(stmt.expr, sdfg, state)
 
         # the target expression could be a `SymRef` to an output node or a `make_tuple` expression
         # in case the statement returns more than one field
-        target_nodes = self._visit_expression(stmt.target, sdfg, state, use_temp=False)
+        target_fields = self._visit_expression(stmt.target, sdfg, state, use_temp=False)
 
         # convert domain expression to dictionary to ease access to dimension boundaries
         domain = dace_fieldview_util.get_domain_ranges(stmt.domain)
@@ -354,37 +362,36 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         ]
 
         target_state: Optional[dace.SDFGState] = None
-        for expr_node, target_node in zip(expr_nodes, target_nodes, strict=True):
-            target_array = sdfg.arrays[target_node.data]
-            assert not target_array.transient
-            target_symbol_type = self.global_symbols[target_node.data]
+        for temp, target in zip(temp_fields, target_fields, strict=True):
+            target_desc = sdfg.arrays[target.data_node.data]
+            assert not target_desc.transient
 
-            if isinstance(target_symbol_type, ts.FieldType):
+            if isinstance(target.data_type, ts.FieldType):
                 subset = ",".join(
-                    f"{domain[dim][0]}:{domain[dim][1]}" for dim in target_symbol_type.dims
+                    f"{domain[dim][0]}:{domain[dim][1]}" for dim in target.data_type.dims
                 )
             else:
                 assert len(domain) == 0
                 subset = "0"
 
-            if target_node.data in state_input_data:
+            if target.data_node.data in state_input_data:
                 # if inout argument, write the result in separate next state
                 # this is needed to avoid undefined behavior for expressions like: X, Y = X + 1, X
                 if not target_state:
                     target_state = sdfg.add_state_after(state, f"post_{state.label}")
                 # create new access nodes in the target state
                 target_state.add_nedge(
-                    target_state.add_access(expr_node.data),
-                    target_state.add_access(target_node.data),
-                    dace.Memlet(data=target_node.data, subset=subset, other_subset=subset),
+                    target_state.add_access(temp.data_node.data),
+                    target_state.add_access(target.data_node.data),
+                    dace.Memlet(data=target.data_node.data, subset=subset, other_subset=subset),
                 )
                 # remove isolated access node
-                state.remove_node(target_node)
+                state.remove_node(target.data_node)
             else:
                 state.add_nedge(
-                    expr_node,
-                    target_node,
-                    dace.Memlet(data=target_node.data, subset=subset, other_subset=subset),
+                    temp.data_node,
+                    target.data_node,
+                    dace.Memlet(data=target.data_node.data, subset=subset, other_subset=subset),
                 )
 
         return target_state or state
@@ -508,23 +515,35 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             else:
                 return [(name, arg)]
 
-        lambda_result_nodes = dict(
+        # Process lambda inputs
+        #
+        lambda_arg_nodes = dict(
             itertools.chain(*[_flatten_tuples(pname, arg) for pname, arg in lambda_args])
         )
-
-        connectivity_arrays = {
+        connectivity_tables = {
             dace_fieldview_util.connectivity_identifier(offset)
             for offset in dace_fieldview_util.filter_connectivities(self.offset_provider)
         }
 
         input_memlets = {}
         nsdfg_symbols_mapping: dict[str, dace.symbolic.SymExpr] = {}
+        for sym_name, sym_type in lambda_symbols.items():
+            if isinstance(sym_type, ts.ScalarType):
+                nsdfg_symbols_mapping[sym_name] = sym_name
+            elif isinstance(sym_type, ts.TupleType):
+                nsdfg_symbols_mapping |= {
+                    fname: fname
+                    for fname, ftype in dace_fieldview_util.get_tuple_fields(
+                        sym_name, sym_type, flatten=True
+                    )
+                    if isinstance(ftype, ts.ScalarType)
+                }
         for nsdfg_dataname, nsdfg_datadesc in nsdfg.arrays.items():
             if nsdfg_datadesc.transient:
                 continue
             datadesc: Optional[dace.dtypes.Array] = None
-            if nsdfg_dataname in lambda_result_nodes:
-                src_node = lambda_result_nodes[nsdfg_dataname].data_node
+            if nsdfg_dataname in lambda_arg_nodes:
+                src_node = lambda_arg_nodes[nsdfg_dataname].data_node
                 dataname = src_node.data
                 datadesc = src_node.desc(sdfg)
 
@@ -541,16 +560,24 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 dataname = nsdfg_dataname
                 datadesc = sdfg.arrays[nsdfg_dataname]
                 # ensure that connectivity tables are non-transient arrays in parent SDFG
-                if dataname in connectivity_arrays:
+                if dataname in connectivity_tables:
                     datadesc.transient = False
 
             if datadesc:
                 input_memlets[nsdfg_dataname] = dace.Memlet.from_array(dataname, datadesc)
 
+        # Process lambda outputs
+        #
+        lambda_output_nodes = dace_fieldview_util.flatten_tuples(lambda_result)
+        # sanity check on isolated nodes
+        assert all(
+            nstate.degree(x.data_node) == 0
+            for x in lambda_output_nodes
+            if x.data_node.data in input_memlets
+        )
+        # keep only non-isolated output nodes
         lambda_outputs = {
-            result.data_node.data
-            for result in dace_fieldview_util.flatten_tuples(lambda_result)
-            if result.data_node.data not in lambda_symbols
+            x.data_node.data for x in lambda_output_nodes if x.data_node.data not in input_memlets
         }
 
         if lambda_outputs:
@@ -564,8 +591,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             )
 
             for connector, memlet in input_memlets.items():
-                if connector in lambda_result_nodes:
-                    src_node = lambda_result_nodes[connector].data_node
+                if connector in lambda_arg_nodes:
+                    src_node = lambda_arg_nodes[connector].data_node
                 else:
                     src_node = head_state.add_access(memlet.data)
 
@@ -574,12 +601,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         def make_temps(
             x: gtir_builtin_translators.Field,
         ) -> gtir_builtin_translators.Field:
-            if x.data_node.data in lambda_result_nodes:
-                return lambda_result_nodes[x.data_node.data]
-            elif x.data_node.data in self.global_symbols:
-                data_node = head_state.add_access(x.data_node.data)
-                return gtir_builtin_translators.Field(data_node, x.data_type)
-            else:
+            if x.data_node.data in lambda_outputs:
                 connector = x.data_node.data
                 desc = x.data_node.desc(nsdfg)
                 # make lambda result non-transient and map it to external temporary
@@ -593,6 +615,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     nsdfg_node, connector, dst_node, None, dace.Memlet.from_array(temp, desc)
                 )
                 return gtir_builtin_translators.Field(dst_node, x.data_type)
+            elif x.data_node.data in lambda_arg_nodes:
+                nstate.remove_node(x.data_node)
+                return lambda_arg_nodes[x.data_node.data]
+            else:
+                nstate.remove_node(x.data_node)
+                data_node = head_state.add_access(x.data_node.data)
+                return gtir_builtin_translators.Field(data_node, x.data_type)
 
         return dace_fieldview_util.visit_tuples(lambda_result, make_temps)
 
