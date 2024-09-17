@@ -74,7 +74,7 @@ def exec_alloc_descriptor(request):
     for marker, skip_mark, msg in next_tests.definitions.BACKEND_SKIP_TEST_MATRIX.get(
         backend_id, []
     ):
-        if request.node.get_closest_marker(marker):
+        if marker == next_tests.definitions.ALL or request.node.get_closest_marker(marker):
             skip_mark(msg.format(marker=marker, backend=backend_id))
 
     backup_backend = decorator.DEFAULT_BACKEND

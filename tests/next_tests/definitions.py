@@ -92,6 +92,9 @@ class ProgramFormatterId(_PythonObjectIdMixin, str, enum.Enum):
 
 
 # Test markers
+# Special marker that skips all tests. This is not a regular pytest marker, but handled explicitly
+# to avoid needing to mark all tests.
+ALL = "all"
 REQUIRES_ATLAS = "requires_atlas"
 # TODO(havogt): Remove, skipped during refactoring to GTIR
 STARTS_FROM_GTIR_PROGRAM = "starts_from_gtir_program"
@@ -183,12 +186,16 @@ BACKEND_SKIP_TEST_MATRIX = {
     ProgramBackendId.GTFN_GPU: GTFN_SKIP_TEST_LIST
     + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
     ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES: GTFN_SKIP_TEST_LIST
-    + [(USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE)],
+    + [
+        (ALL, XFAIL, UNSUPPORTED_MESSAGE),
+        (USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE)
+    ],
     ProgramFormatterId.GTFN_CPP_FORMATTER: [
         (USES_REDUCTION_WITH_ONLY_SPARSE_FIELDS, XFAIL, REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE)
     ],
     ProgramBackendId.ROUNDTRIP: [(USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE)],
     ProgramBackendId.ROUNDTRIP_WITH_TEMPORARIES: [
+        (ALL, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_STRIDED_NEIGHBOR_OFFSET, XFAIL, UNSUPPORTED_MESSAGE),
