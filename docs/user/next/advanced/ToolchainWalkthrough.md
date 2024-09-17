@@ -23,14 +23,14 @@ OFFSET_PROVIDER = {"Ioff": I}
 ```mermaid
 graph LR
 
-fdef("DataArgsPair[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("DataArgsPair[FoastOperatorDefinition, AOT]")
+fdef("CompilableProgram[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("CompilableProgram[FoastOperatorDefinition, AOT]")
 foast -->|foast_to_itir| itir_expr(itir.Expr)
-foast -->|field_view_op_to_prog| past("DataArgsPair[PastProgramDefinition, AOT]")
+foast -->|field_view_op_to_prog| past("CompilableProgram[PastProgramDefinition, AOT]")
 past -->|past_lint| past
-past -->|field_view_prog_args_transform| tapast("DataArgsPair[PastProgramDefinition, AOT]")
+past -->|field_view_prog_args_transform| tapast("CompilableProgram[PastProgramDefinition, AOT]")
 tapast -->|past_to_itir| pcall(AOTProgram)
 
-pdef("DataArgsPair[ProgramDefinition, AOT]") -->|func_to_past| past("DataArgsPair[PastProgramDefinition, AOT]")
+pdef("CompilableProgram[ProgramDefinition, AOT]") -->|func_to_past| past("CompilableProgram[PastProgramDefinition, AOT]")
 ```
 
 # Walkthrough from Field Operator
@@ -56,14 +56,14 @@ gtx.ffront.stages.FieldOperatorDefinition?
 ```mermaid
 graph LR
 
-fdef("DataArgsPair[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("DataArgsPair[FoastOperatorDefinition, AOT]")
+fdef("CompilableProgram[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("CompilableProgram[FoastOperatorDefinition, AOT]")
 foast -->|foast_to_itir| itir_expr(itir.Expr)
-foast -->|field_view_op_to_prog| past("DataArgsPair[PastProgramDefinition, AOT]")
+foast -->|field_view_op_to_prog| past("CompilableProgram[PastProgramDefinition, AOT]")
 past -->|past_lint| past
-past -->|field_view_prog_args_transform| tapast("DataArgsPair[PastProgramDefinition, AOT]")
+past -->|field_view_prog_args_transform| tapast("CompilableProgram[PastProgramDefinition, AOT]")
 tapast -->|past_to_itir| pcall(AOTProgram)
 
-pdef("DataArgsPair[ProgramDefinition, AOT]") -->|func_to_past| past("DataArgsPair[PastProgramDefinition, AOT]")
+pdef("CompilableProgram[ProgramDefinition, AOT]") -->|func_to_past| past("CompilableProgram[PastProgramDefinition, AOT]")
 
 style fdef fill:red
 style foast fill:red
@@ -73,7 +73,7 @@ linkStyle 0 stroke:red,stroke-width:4px,color:pink
 ```python
 
 foast = backend.DEFAULT_TRANSFORMS.func_to_foast(
-    gtx.otf.workflow.DataArgsPair(start, gtx.otf.arguments.CompileTimeArgs.empty())
+    gtx.otf.recipes.CompilableProgram(start, gtx.otf.arguments.CompileTimeArgs.empty())
 )
 ```
 
@@ -88,14 +88,14 @@ This also happens inside the `decorator.FieldOperator.__gt_itir__` method during
 ```mermaid
 graph LR
 
-fdef("DataArgsPair[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("DataArgsPair[FoastOperatorDefinition, AOT]")
+fdef("CompilableProgram[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("CompilableProgram[FoastOperatorDefinition, AOT]")
 foast -->|foast_to_itir| itir_expr(itir.Expr)
-foast -->|field_view_op_to_prog| past("DataArgsPair[PastProgramDefinition, AOT]")
+foast -->|field_view_op_to_prog| past("CompilableProgram[PastProgramDefinition, AOT]")
 past -->|past_lint| past
-past -->|field_view_prog_args_transform| tapast("DataArgsPair[PastProgramDefinition, AOT]")
+past -->|field_view_prog_args_transform| tapast("CompilableProgram[PastProgramDefinition, AOT]")
 tapast -->|past_to_itir| pcall(AOTProgram)
 
-pdef("DataArgsPair[ProgramDefinition, AOT]") -->|func_to_past| past("DataArgsPair[PastProgramDefinition, AOT]")
+pdef("CompilableProgram[ProgramDefinition, AOT]") -->|func_to_past| past("CompilableProgram[PastProgramDefinition, AOT]")
 
 style foast fill:red
 style itir_expr fill:red
@@ -117,14 +117,14 @@ This auto-generates a program for us, directly in PAST representation and forwar
 ```mermaid
 graph LR
 
-fdef("DataArgsPair[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("DataArgsPair[FoastOperatorDefinition, AOT]")
+fdef("CompilableProgram[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("CompilableProgram[FoastOperatorDefinition, AOT]")
 foast -->|foast_to_itir| itir_expr(itir.Expr)
-foast -->|field_view_op_to_prog| past("DataArgsPair[PastProgramDefinition, AOT]")
+foast -->|field_view_op_to_prog| past("CompilableProgram[PastProgramDefinition, AOT]")
 past -->|past_lint| past
-past -->|field_view_prog_args_transform| tapast("DataArgsPair[PastProgramDefinition, AOT]")
+past -->|field_view_prog_args_transform| tapast("CompilableProgram[PastProgramDefinition, AOT]")
 tapast -->|past_to_itir| pcall(AOTProgram)
 
-pdef("DataArgsPair[ProgramDefinition, AOT]") -->|func_to_past| past("DataArgsPair[PastProgramDefinition, AOT]")
+pdef("CompilableProgram[ProgramDefinition, AOT]") -->|func_to_past| past("CompilableProgram[PastProgramDefinition, AOT]")
 
 style foast fill:red
 style past fill:red
@@ -146,7 +146,7 @@ aot_args = gtx.otf.arguments.CompileTimeArgs.from_concrete_no_size(
 ```
 
 ```python
-pclos = backend.DEFAULT_TRANSFORMS.field_view_op_to_prog(gtx.otf.workflow.DataArgsPair(data=foast.data, args=aot_args))
+pclos = backend.DEFAULT_TRANSFORMS.field_view_op_to_prog(gtx.otf.recipes.CompilableProgram(data=foast.data, args=aot_args))
 ```
 
 ```python
@@ -160,14 +160,14 @@ This checks the generated (or manually passed) PAST node.
 ```mermaid
 graph LR
 
-fdef("DataArgsPair[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("DataArgsPair[FoastOperatorDefinition, AOT]")
+fdef("CompilableProgram[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("CompilableProgram[FoastOperatorDefinition, AOT]")
 foast -->|foast_to_itir| itir_expr(itir.Expr)
-foast -->|field_view_op_to_prog| past("DataArgsPair[PastProgramDefinition, AOT]")
+foast -->|field_view_op_to_prog| past("CompilableProgram[PastProgramDefinition, AOT]")
 past -->|past_lint| past
-past -->|field_view_prog_args_transform| tapast("DataArgsPair[PastProgramDefinition, AOT]")
+past -->|field_view_prog_args_transform| tapast("CompilableProgram[PastProgramDefinition, AOT]")
 tapast -->|past_to_itir| pcall(AOTProgram)
 
-pdef("DataArgsPair[ProgramDefinition, AOT]") -->|func_to_past| past("DataArgsPair[PastProgramDefinition, AOT]")
+pdef("CompilableProgram[ProgramDefinition, AOT]") -->|func_to_past| past("CompilableProgram[PastProgramDefinition, AOT]")
 
 style past fill:red
 %%style tapast fill:red
@@ -185,14 +185,14 @@ This turns data arguments (or rather, their compile-time standins) passed as key
 ```mermaid
 graph LR
 
-fdef("DataArgsPair[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("DataArgsPair[FoastOperatorDefinition, AOT]")
+fdef("CompilableProgram[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("CompilableProgram[FoastOperatorDefinition, AOT]")
 foast -->|foast_to_itir| itir_expr(itir.Expr)
-foast -->|field_view_op_to_prog| past("DataArgsPair[PastProgramDefinition, AOT]")
+foast -->|field_view_op_to_prog| past("CompilableProgram[PastProgramDefinition, AOT]")
 past -->|past_lint| past
-past -->|field_view_prog_args_transform| tapast("DataArgsPair[PastProgramDefinition, AOT]")
+past -->|field_view_prog_args_transform| tapast("CompilableProgram[PastProgramDefinition, AOT]")
 tapast -->|past_to_itir| pcall(AOTProgram)
 
-pdef("DataArgsPair[ProgramDefinition, AOT]") -->|func_to_past| past("DataArgsPair[PastProgramDefinition, AOT]")
+pdef("CompilableProgram[ProgramDefinition, AOT]") -->|func_to_past| past("CompilableProgram[PastProgramDefinition, AOT]")
 
 style past fill:red
 style tapast fill:red
@@ -218,14 +218,14 @@ still forwarding the call arguments
 ```mermaid
 graph LR
 
-fdef("DataArgsPair[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("DataArgsPair[FoastOperatorDefinition, AOT]")
+fdef("CompilableProgram[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("CompilableProgram[FoastOperatorDefinition, AOT]")
 foast -->|foast_to_itir| itir_expr(itir.Expr)
-foast -->|field_view_op_to_prog| past("DataArgsPair[PastProgramDefinition, AOT]")
+foast -->|field_view_op_to_prog| past("CompilableProgram[PastProgramDefinition, AOT]")
 past -->|past_lint| past
-past -->|field_view_prog_args_transform| tapast("DataArgsPair[PastProgramDefinition, AOT]")
+past -->|field_view_prog_args_transform| tapast("CompilableProgram[PastProgramDefinition, AOT]")
 tapast -->|past_to_itir| pcall(AOTProgram)
 
-pdef("DataArgsPair[ProgramDefinition, AOT]") -->|func_to_past| past("DataArgsPair[PastProgramDefinition, AOT]")
+pdef("CompilableProgram[ProgramDefinition, AOT]") -->|func_to_past| past("CompilableProgram[PastProgramDefinition, AOT]")
 
 style tapast fill:red
 style pcall fill:red
@@ -261,14 +261,14 @@ using the default step order
 ```mermaid
 graph LR
 
-fdef("DataArgsPair[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("DataArgsPair[FoastOperatorDefinition, AOT]")
+fdef("CompilableProgram[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("CompilableProgram[FoastOperatorDefinition, AOT]")
 foast -->|foast_to_itir| itir_expr(itir.Expr)
-foast -->|field_view_op_to_prog| past("DataArgsPair[PastProgramDefinition, AOT]")
+foast -->|field_view_op_to_prog| past("CompilableProgram[PastProgramDefinition, AOT]")
 past -->|past_lint| past
-past -->|field_view_prog_args_transform| tapast("DataArgsPair[PastProgramDefinition, AOT]")
+past -->|field_view_prog_args_transform| tapast("CompilableProgram[PastProgramDefinition, AOT]")
 tapast -->|past_to_itir| pcall(AOTProgram)
 
-pdef("DataArgsPair[ProgramDefinition, AOT]") -->|func_to_past| past("DataArgsPair[PastProgramDefinition, AOT]")
+pdef("CompilableProgram[ProgramDefinition, AOT]") -->|func_to_past| past("CompilableProgram[PastProgramDefinition, AOT]")
 
 style fdef fill:red
 style foast fill:red
@@ -282,7 +282,7 @@ linkStyle 0,2,3,4,5 stroke:red,stroke-width:4px,color:pink
 
 ```python
 pitir2 = backend.DEFAULT_TRANSFORMS(
-    gtx.otf.workflow.DataArgsPair(data=start, args=aot_args)
+    gtx.otf.recipes.CompilableProgram(data=start, args=aot_args)
 )
 assert pitir2 == pitir
 ```
@@ -313,7 +313,7 @@ Note that it is the exact same call but with a different input stage
 
 ```python
 pitir3 = backend.DEFAULT_TRANSFORMS(
-    gtx.otf.workflow.DataArgsPair(
+    gtx.otf.recipes.CompilableProgram(
         data=foast.data,
         args=aot_args
     )
@@ -344,14 +344,14 @@ p_start.__class__?
 ```mermaid
 graph LR
 
-fdef("DataArgsPair[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("DataArgsPair[FoastOperatorDefinition, AOT]")
+fdef("CompilableProgram[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("CompilableProgram[FoastOperatorDefinition, AOT]")
 foast -->|foast_to_itir| itir_expr(itir.Expr)
-foast -->|field_view_op_to_prog| past("DataArgsPair[PastProgramDefinition, AOT]")
+foast -->|field_view_op_to_prog| past("CompilableProgram[PastProgramDefinition, AOT]")
 past -->|past_lint| past
-past -->|field_view_prog_args_transform| tapast("DataArgsPair[PastProgramDefinition, AOT]")
+past -->|field_view_prog_args_transform| tapast("CompilableProgram[PastProgramDefinition, AOT]")
 tapast -->|past_to_itir| pcall(AOTProgram)
 
-pdef("DataArgsPair[ProgramDefinition, AOT]") -->|func_to_past| past("DataArgsPair[PastProgramDefinition, AOT]")
+pdef("CompilableProgram[ProgramDefinition, AOT]") -->|func_to_past| past("CompilableProgram[PastProgramDefinition, AOT]")
 
 style pdef fill:red
 style past fill:red
@@ -360,7 +360,7 @@ linkStyle 6 stroke:red,stroke-width:4px,color:pink
 
 ```python
 p_past = backend.DEFAULT_TRANSFORMS.func_to_past(
-    gtx.otf.workflow.DataArgsPair(data=p_start, args=gtx.otf.arguments.CompileTimeArgs.empty()))
+    gtx.otf.recipes.CompilableProgram(data=p_start, args=gtx.otf.arguments.CompileTimeArgs.empty()))
 ```
 
 ## Full Program Toolchain
@@ -368,14 +368,14 @@ p_past = backend.DEFAULT_TRANSFORMS.func_to_past(
 ```mermaid
 graph LR
 
-fdef("DataArgsPair[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("DataArgsPair[FoastOperatorDefinition, AOT]")
+fdef("CompilableProgram[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("CompilableProgram[FoastOperatorDefinition, AOT]")
 foast -->|foast_to_itir| itir_expr(itir.Expr)
-foast -->|field_view_op_to_prog| past("DataArgsPair[PastProgramDefinition, AOT]")
+foast -->|field_view_op_to_prog| past("CompilableProgram[PastProgramDefinition, AOT]")
 past -->|past_lint| past
-past -->|field_view_prog_args_transform| tapast("DataArgsPair[PastProgramDefinition, AOT]")
+past -->|field_view_prog_args_transform| tapast("CompilableProgram[PastProgramDefinition, AOT]")
 tapast -->|past_to_itir| pcall(AOTProgram)
 
-pdef("DataArgsPair[ProgramDefinition, AOT]") -->|func_to_past| past("DataArgsPair[PastProgramDefinition, AOT]")
+pdef("CompilableProgram[ProgramDefinition, AOT]") -->|func_to_past| past("CompilableProgram[PastProgramDefinition, AOT]")
 
 style pdef fill:red
 style past fill:red
@@ -388,7 +388,7 @@ linkStyle 3,4,5,6 stroke:red,stroke-width:4px,color:pink
 
 ```python
 p_itir1 = backend.DEFAULT_TRANSFORMS(
-    gtx.otf.workflow.DataArgsPair(
+    gtx.otf.recipes.CompilableProgram(
         data=p_start,
         args=jit_args
     )
@@ -397,7 +397,7 @@ p_itir1 = backend.DEFAULT_TRANSFORMS(
 
 ```python
 p_itir2 = backend.DEFAULT_TRANSFORMS(
-    gtx.otf.workflow.DataArgsPair(
+    gtx.otf.recipes.CompilableProgram(
         data=p_past.data,
         args=aot_args
     )

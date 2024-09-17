@@ -20,7 +20,7 @@ from gt4py.next.ffront import (
 from gt4py.next.ffront.past_passes import closure_var_type_deduction, type_deduction
 from gt4py.next.ffront.stages import AOT_FOP, AOT_PRG
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import workflow
+from gt4py.next.otf import recipes, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
@@ -56,7 +56,7 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
 
     Example:
         >>> from gt4py import next as gtx
-        >>> from gt4py.next.otf import arguments
+        >>> from gt4py.next.otf import arguments, recipes
         >>> IDim = gtx.Dimension("I")
 
         >>> @gtx.field_operator
@@ -73,7 +73,7 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
         ...     offset_provider={"I", IDim},
         ... )
 
-        >>> copy_program = op_to_prog(workflow.DataArgsPair(copy.foast_stage, compile_time_args))
+        >>> copy_program = op_to_prog(recipes.CompilableProgram(copy.foast_stage, compile_time_args))
 
         >>> print(copy_program.data.past_node.id)
         __field_operator_copy
@@ -149,7 +149,7 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
         )
         past_node = type_deduction.ProgramTypeDeduction.apply(untyped_past_node)
 
-        return workflow.DataArgsPair(
+        return recipes.CompilableProgram(
             data=ffront_stages.PastProgramDefinition(
                 past_node=past_node,
                 closure_vars=fieldop_itir_closure_vars,

@@ -14,11 +14,11 @@ from gt4py.next.ffront import (
     stages as ffront_stages,
     type_specifications as ts_ffront,
 )
-from gt4py.next.otf import arguments, workflow
+from gt4py.next.otf import arguments, recipes, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
-AOT_PRG: TypeAlias = workflow.DataArgsPair[
+AOT_PRG: TypeAlias = recipes.CompilableProgram[
     ffront_stages.PastProgramDefinition, arguments.CompileTimeArgs
 ]
 
@@ -27,7 +27,7 @@ def transform_program_args(inp: AOT_PRG) -> AOT_PRG:
     rewritten_args, size_args, kwargs = _process_args(
         past_node=inp.data.past_node, args=list(inp.args.args), kwargs=inp.args.kwargs
     )
-    return workflow.DataArgsPair(
+    return recipes.CompilableProgram(
         data=inp.data,
         args=arguments.CompileTimeArgs(
             args=tuple((*rewritten_args, *(size_args))),

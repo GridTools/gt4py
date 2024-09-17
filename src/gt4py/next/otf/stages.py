@@ -12,10 +12,12 @@ import dataclasses
 from typing import Any, Generic, Optional, Protocol, TypeAlias, TypeVar
 
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import arguments, languages, workflow
+from gt4py.next.otf import arguments, languages, recipes
 from gt4py.next.otf.binding import interface
 
 
+PrgT = TypeVar("PrgT")
+ArgT = TypeVar("ArgT")
 SrcL = TypeVar("SrcL", bound=languages.LanguageTag)
 TgtL = TypeVar("TgtL", bound=languages.LanguageTag)
 SettingT = TypeVar("SettingT", bound=languages.LanguageSettings)
@@ -24,7 +26,7 @@ TgtL_co = TypeVar("TgtL_co", bound=languages.LanguageTag, covariant=True)
 SettingT_co = TypeVar("SettingT_co", bound=languages.LanguageSettings, covariant=True)
 
 
-AOTProgram: TypeAlias = workflow.DataArgsPair[
+AOTProgram: TypeAlias = recipes.CompilableProgram[
     itir.FencilDefinition | itir.Program, arguments.CompileTimeArgs
 ]
 

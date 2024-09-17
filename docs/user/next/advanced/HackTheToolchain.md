@@ -3,7 +3,7 @@ import dataclasses
 import typing
 
 from gt4py import next as gtx
-from gt4py.next.otf import workflow
+from gt4py.next.otf import recipes, workflow
 from gt4py.next.ffront import stages as ff_stages
 from gt4py import eve
 ```
@@ -22,7 +22,7 @@ cached_lowering_toolchain = gtx.backend.DEFAULT_TRANSFORMS.replace(
 ## Skip Steps / Change Order
 
 ```python
-DUMMY_FOP = workflow.DataArgsPair(data=ff_stages.FieldOperatorDefinition(definition=None), args=None)
+DUMMY_FOP = recipes.CompilableProgram(data=ff_stages.FieldOperatorDefinition(definition=None), args=None)
 ```
 
 ```python

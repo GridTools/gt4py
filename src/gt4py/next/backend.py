@@ -35,7 +35,7 @@ from gt4py.next.ffront.stages import (
     PRG,
 )
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import arguments, stages, workflow
+from gt4py.next.otf import arguments, recipes, stages, workflow
 from gt4py.next.program_processors import modular_executor
 
 
@@ -45,7 +45,7 @@ IT_PRG: typing.TypeAlias = itir.FencilDefinition
 
 
 INPUT_DATA: typing.TypeAlias = DSL_FOP | FOP | DSL_PRG | PRG | IT_PRG
-INPUT_PAIR: typing.TypeAlias = workflow.DataArgsPair[INPUT_DATA, ARGS | CARG]
+INPUT_PAIR: typing.TypeAlias = recipes.CompilableProgram[INPUT_DATA, ARGS | CARG]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -58,14 +58,14 @@ class Transforms(workflow.MultiWorkflow[INPUT_PAIR, stages.AOTProgram]):
     as well as their AST representations. Even to Iterator IR programs, although in that
     case it will be a no-op.
 
-    The input to the workflow as well as each step must be a `DataArgsPair`. The arguments
-    inside the `DataArgsPair` passed to the whole workflow may be concrete (`JITArgs`)
+    The input to the workflow as well as each step must be a `CompilableProgram`. The arguments
+    inside the `CompilableProgram` passed to the whole workflow may be concrete (`JITArgs`)
     or compile-time (`CompileTimeArgs`). The individual steps (apart from `.aotify_args`)
     require compile-time arguments. Some of the steps can work with an empty `CompileTimeArgs` instance.
     """
 
     aotify_args: workflow.Workflow[
-        workflow.DataArgsPair[INPUT_DATA, ARGS], workflow.DataArgsPair[INPUT_DATA, CARG]
+        recipes.CompilableProgram[INPUT_DATA, ARGS], recipes.CompilableProgram[INPUT_DATA, CARG]
     ] = dataclasses.field(default_factory=arguments.adapted_jit_to_aot_args_factory)
 
     func_to_foast: workflow.Workflow[AOT_DSL_FOP, AOT_FOP] = dataclasses.field(
@@ -151,7 +151,7 @@ class Backend(Generic[core_defs.DeviceTypeT]):
 
     def compile(self, program: INPUT_DATA, compile_time_args: CARG) -> stages.CompiledProgram:
         return self.executor.otf_workflow(
-            self.transforms(workflow.DataArgsPair(data=program, args=compile_time_args))
+            self.transforms(recipes.CompilableProgram(data=program, args=compile_time_args))
         )
 
     @property

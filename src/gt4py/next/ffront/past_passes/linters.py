@@ -10,7 +10,7 @@ from typing import Any
 
 from gt4py.next.ffront import gtcallable, stages as ffront_stages, transform_utils
 from gt4py.next.ffront.stages import AOT_PRG, PRG
-from gt4py.next.otf import workflow
+from gt4py.next.otf import recipes, workflow
 
 
 @workflow.make_step
@@ -54,4 +54,4 @@ def linter_factory(cached: bool = True, adapter: bool = True) -> workflow.Workfl
 
 
 def adapted_linter_factory(**kwargs: Any) -> workflow.Workflow[AOT_PRG, AOT_PRG]:
-    return workflow.DataOnlyAdapter(linter_factory(**kwargs))
+    return recipes.DataOnlyAdapter(linter_factory(**kwargs))
