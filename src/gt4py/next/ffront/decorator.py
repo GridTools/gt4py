@@ -255,9 +255,9 @@ class FrozenProgram:
     def jit(
         self, *args: Any, offset_provider: dict[str, Dimension | Connectivity], **kwargs: Any
     ) -> stages.CompiledProgram:
-        if self.backend is not None:
-            return self.backend.jit(self.program, *args, offset_provider=offset_provider, **kwargs)
-        raise ValueError("Can not JIT-compile programs without backend (embedded execution).")
+        if self.backend is None:
+            raise ValueError("Can not JIT-compile programs without backend (embedded execution).")
+        return self.backend.jit(self.program, *args, offset_provider=offset_provider, **kwargs)
 
     def __call__(
         self, *args: Any, offset_provider: dict[str, Dimension | Connectivity], **kwargs: Any
