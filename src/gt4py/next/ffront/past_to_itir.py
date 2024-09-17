@@ -78,6 +78,10 @@ def past_to_itir(inp: AOT_PRG, to_gtir: bool = False) -> stages.AOTProgram:
     gt_callables = transform_utils._filter_closure_vars_by_type(
         all_closure_vars, gtcallable.GTCallable
     ).values()
+    # TODO(ricoh): The following calls to .__gt_itir__, which will use whatever
+    # backend is set for each of these field operators (GTCallables). Instead
+    # we should use the current toolchain to lower these to ITIR. This will require
+    # making this step aware of the toolchain it is called by (it can be part of multiple).
     lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
 
     itir_program = ProgramLowering.apply(
