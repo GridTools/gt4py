@@ -1,21 +1,17 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import typing
-from typing import Callable, Iterable, Optional, Union
+from typing import Callable, Optional, Union
 
 from gt4py._core import definitions as core_defs
+from gt4py.eve.extended_typing import Dict, Tuple
+from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
@@ -85,6 +81,8 @@ def ensure_expr(literal_or_expr: Union[str, core_defs.Scalar, itir.Expr]) -> iti
         return ref(literal_or_expr)
     elif core_defs.is_scalar_type(literal_or_expr):
         return literal_from_value(literal_or_expr)
+    elif literal_or_expr is None:
+        return itir.NoneLiteral()
     assert isinstance(literal_or_expr, itir.Expr)
     return literal_or_expr
 
@@ -245,8 +243,13 @@ def tuple_get(index: str | int, tuple_expr):
 
 
 def if_(cond, true_val, false_val):
-    """Create a not_ FunCall, shorthand for ``call("if_")(expr)``."""
+    """Create a if_ FunCall, shorthand for ``call("if_")(expr)``."""
     return call("if_")(cond, true_val, false_val)
+
+
+def cond(cond, true_val, false_val):
+    """Create a cond FunCall, shorthand for ``call("cond")(expr)``."""
+    return call("cond")(cond, true_val, false_val)
 
 
 def lift(expr):
@@ -270,7 +273,7 @@ class let:
     def __init__(self, var: str | itir.Sym, init_form: itir.Expr | str): ...
 
     @typing.overload
-    def __init__(self, *args: Iterable[tuple[str | itir.Sym, itir.Expr | str]]): ...
+    def __init__(self, *args: tuple[str | itir.Sym, itir.Expr | str]): ...
 
     def __init__(self, *args):
         if all(isinstance(arg, tuple) and len(arg) == 2 for arg in args):
@@ -360,6 +363,20 @@ def lifted_neighbors(offset, it) -> itir.Expr:
     return lift(lambda_("it")(neighbors(offset, "it")))(it)
 
 
+def as_fieldop_neighbors(
+    offset: str | itir.OffsetLiteral, it: str | itir.Expr, domain: Optional[itir.FunCall] = None
+) -> itir.Expr:
+    """
+    Create a fieldop for neighbors call.
+
+    Examples
+    --------
+    >>> str(as_fieldop_neighbors("off", "a"))
+    '(⇑(λ(it) → neighbors(offₒ, it)))(a)'
+    """
+    return as_fieldop(lambda_("it")(neighbors(offset, "it")), domain)(it)
+
+
 def promote_to_const_iterator(expr: str | itir.Expr) -> itir.Expr:
     """
     Create a lifted nullary lambda that captures `expr`.
@@ -398,9 +415,40 @@ def promote_to_lifted_stencil(op: str | itir.SymRef | Callable) -> Callable[...,
     return _impl
 
 
-def map_(op):
-    """Create a `map_` call."""
-    return call(call("map_")(op))
+def domain(
+    grid_type: Union[common.GridType, str],
+    ranges: Dict[Union[common.Dimension, str], Tuple[itir.Expr, itir.Expr]],
+) -> itir.FunCall:
+    """
+    >>> str(
+    ...     domain(
+    ...         common.GridType.CARTESIAN,
+    ...         {
+    ...             common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (0, 10),
+    ...             common.Dimension(value="JDim", kind=common.DimensionKind.HORIZONTAL): (0, 20),
+    ...         },
+    ...     )
+    ... )
+    'c⟨ IDimₕ: [0, 10), JDimₕ: [0, 20) ⟩'
+    >>> str(domain(common.GridType.CARTESIAN, {"IDim": (0, 10), "JDim": (0, 20)}))
+    'c⟨ IDimₕ: [0, 10), JDimₕ: [0, 20) ⟩'
+    >>> str(domain(common.GridType.UNSTRUCTURED, {"IDim": (0, 10), "JDim": (0, 20)}))
+    'u⟨ IDimₕ: [0, 10), JDimₕ: [0, 20) ⟩'
+    """
+    if isinstance(grid_type, common.GridType):
+        grid_type = f"{grid_type!s}_domain"
+    return call(grid_type)(
+        *[
+            call("named_range")(
+                itir.AxisLiteral(value=d.value, kind=d.kind)
+                if isinstance(d, common.Dimension)
+                else itir.AxisLiteral(value=d),
+                r[0],
+                r[1],
+            )
+            for d, r in ranges.items()
+        ]
+    )
 
 
 def as_fieldop(expr: itir.Expr, domain: Optional[itir.FunCall] = None) -> call:
@@ -424,3 +472,37 @@ def as_fieldop(expr: itir.Expr, domain: Optional[itir.FunCall] = None) -> call:
             )
         )
     )
+
+
+def op_as_fieldop(
+    op: str | itir.SymRef | Callable, domain: Optional[itir.FunCall] = None
+) -> Callable[..., itir.FunCall]:
+    """
+    Promotes a function `op` to a field_operator.
+
+    Args:
+        op: a function from values to value.
+        domain: the domain of the returned field.
+
+    Returns:
+        A function from Fields to Field.
+
+    Examples:
+        >>> str(op_as_fieldop("op")("a", "b"))
+        '(⇑(λ(__arg0, __arg1) → op(·__arg0, ·__arg1)))(a, b)'
+    """
+    if isinstance(op, (str, itir.SymRef, itir.Lambda)):
+        op = call(op)
+
+    def _impl(*its: itir.Expr) -> itir.FunCall:
+        args = [
+            f"__arg{i}" for i in range(len(its))
+        ]  # TODO: `op` must not contain `SymRef(id="__argX")`
+        return as_fieldop(lambda_(*args)(op(*[deref(arg) for arg in args])), domain)(*its)
+
+    return _impl
+
+
+def map_(op):
+    """Create a `map_` call."""
+    return call(call("map_")(op))

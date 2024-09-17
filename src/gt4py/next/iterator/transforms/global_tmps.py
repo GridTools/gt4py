@@ -1,16 +1,11 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 from __future__ import annotations
 
 import copy
@@ -21,6 +16,7 @@ from typing import Any, Callable, Final, Iterable, Literal, Optional, Sequence
 
 import gt4py.next as gtx
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
+from gt4py.eve.extended_typing import Dict, Tuple
 from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next import common
@@ -451,12 +447,56 @@ class SymbolicDomain:
         return cls(node.fun.id, ranges)  # type: ignore[attr-defined]  # ensure by assert above
 
     def as_expr(self) -> ir.FunCall:
-        return im.call(self.grid_type)(
-            *[
-                im.call("named_range")(ir.AxisLiteral(value=d.value, kind=d.kind), r.start, r.stop)
-                for d, r in self.ranges.items()
-            ]
-        )
+        converted_ranges: dict[common.Dimension | str, tuple[ir.Expr, ir.Expr]] = {
+            key: (value.start, value.stop) for key, value in self.ranges.items()
+        }
+        return im.domain(self.grid_type, converted_ranges)
+
+    def translate(
+        self: SymbolicDomain,
+        shift: Tuple[ir.OffsetLiteral, ...],
+        offset_provider: Dict[str, common.Dimension],
+    ) -> SymbolicDomain:
+        dims = list(self.ranges.keys())
+        new_ranges = {dim: self.ranges[dim] for dim in dims}
+        if len(shift) == 0:
+            return self
+        if len(shift) == 2:
+            off, val = shift
+            assert isinstance(off.value, str) and isinstance(val.value, int)
+            nbt_provider = offset_provider[off.value]
+            if isinstance(nbt_provider, common.Dimension):
+                current_dim = nbt_provider
+                # cartesian offset
+                new_ranges[current_dim] = SymbolicRange.translate(
+                    self.ranges[current_dim], val.value
+                )
+            elif isinstance(nbt_provider, common.Connectivity):
+                # unstructured shift
+                # note: ugly but cheap re-computation, but should disappear
+                horizontal_sizes = _max_domain_sizes_by_location_type(offset_provider)
+
+                old_dim = nbt_provider.origin_axis
+                new_dim = nbt_provider.neighbor_axis
+
+                assert new_dim not in new_ranges or old_dim == new_dim
+
+                # TODO(tehrengruber): Do we need symbolic sizes, e.g., for ICON?
+                new_range = SymbolicRange(
+                    im.literal("0", ir.INTEGER_INDEX_BUILTIN),
+                    im.literal(str(horizontal_sizes[new_dim.value]), ir.INTEGER_INDEX_BUILTIN),
+                )
+                new_ranges = dict(
+                    (dim, range_) if dim != old_dim else (new_dim, new_range)
+                    for dim, range_ in new_ranges.items()
+                )
+            else:
+                raise AssertionError()
+            return SymbolicDomain(self.grid_type, new_ranges)
+        elif len(shift) > 2:
+            return self.translate(shift[0:2], offset_provider).translate(shift[2:], offset_provider)
+        else:
+            raise AssertionError("Number of shifts must be a multiple of 2.")
 
 
 def domain_union(domains: list[SymbolicDomain]) -> SymbolicDomain:
@@ -474,6 +514,7 @@ def domain_union(domains: list[SymbolicDomain]) -> SymbolicDomain:
             [domain.ranges[dim].stop for domain in domains],
         )
         new_domain_ranges[dim] = SymbolicRange(start, stop)
+
     return SymbolicDomain(domains[0].grid_type, new_domain_ranges)
 
 

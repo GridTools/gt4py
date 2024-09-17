@@ -1,16 +1,13 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+from __future__ import annotations
+
 import copy
 import dataclasses
 import itertools
@@ -189,7 +186,7 @@ class Context:
 
 
 def _visit_lift_in_neighbors_reduction(
-    transformer: "PythonTaskletCodegen",
+    transformer: PythonTaskletCodegen,
     node: itir.FunCall,
     node_args: Sequence[IteratorExpr | list[ValueExpr]],
     offset_provider: Connectivity,
@@ -299,7 +296,13 @@ def _visit_lift_in_neighbors_reduction(
 
     if offset_provider.has_skip_values:
         # check neighbor validity on if/else inter-state edge
-        start_state = lift_context.body.add_state("start", is_start_block=True)
+        # use one branch for connectivity case
+        start_state = lift_context.body.add_state_before(
+            lift_context.body.start_state,
+            "start",
+            condition=f"{lifted_index_connectors[0]} != {neighbor_skip_value}",
+        )
+        # use the other branch for skip value case
         skip_neighbor_state = lift_context.body.add_state("skip_neighbor")
         skip_neighbor_state.add_edge(
             skip_neighbor_state.add_tasklet(
@@ -315,17 +318,12 @@ def _visit_lift_in_neighbors_reduction(
             skip_neighbor_state,
             dace.InterstateEdge(condition=f"{lifted_index_connectors[0]} == {neighbor_skip_value}"),
         )
-        lift_context.body.add_edge(
-            start_state,
-            lift_context.state,
-            dace.InterstateEdge(condition=f"{lifted_index_connectors[0]} != {neighbor_skip_value}"),
-        )
 
     return [ValueExpr(neighbor_value_node, inner_outputs[0].dtype)]
 
 
 def builtin_neighbors(
-    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
+    transformer: PythonTaskletCodegen, node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
     sdfg: dace.SDFG = transformer.context.body
     state: dace.SDFGState = transformer.context.state
@@ -518,7 +516,7 @@ def builtin_neighbors(
 
 
 def builtin_can_deref(
-    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
+    transformer: PythonTaskletCodegen, node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
     di = dace_debuginfo(node, transformer.context.body.debuginfo)
     # first visit shift, to get set of indices for deref
@@ -560,7 +558,7 @@ def builtin_can_deref(
 
 
 def builtin_if(
-    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
+    transformer: PythonTaskletCodegen, node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
     assert len(node_args) == 3
     sdfg = transformer.context.body
@@ -681,7 +679,7 @@ def builtin_if(
 
 
 def builtin_list_get(
-    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
+    transformer: PythonTaskletCodegen, node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
     di = dace_debuginfo(node, transformer.context.body.debuginfo)
     args = list(itertools.chain(*transformer.visit(node_args)))
@@ -707,7 +705,7 @@ def builtin_list_get(
 
 
 def builtin_cast(
-    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
+    transformer: PythonTaskletCodegen, node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
     di = dace_debuginfo(node, transformer.context.body.debuginfo)
     args = transformer.visit(node_args[0])
@@ -722,7 +720,7 @@ def builtin_cast(
 
 
 def builtin_make_const_list(
-    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
+    transformer: PythonTaskletCodegen, node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
     di = dace_debuginfo(node, transformer.context.body.debuginfo)
     args = [transformer.visit(arg)[0] for arg in node_args]
@@ -758,14 +756,14 @@ def builtin_make_const_list(
 
 
 def builtin_make_tuple(
-    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
+    transformer: PythonTaskletCodegen, node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
     args = [transformer.visit(arg) for arg in node_args]
     return args
 
 
 def builtin_tuple_get(
-    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
+    transformer: PythonTaskletCodegen, node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
     elements = transformer.visit(node_args[1])
     index = node_args[0]
@@ -775,7 +773,7 @@ def builtin_tuple_get(
 
 
 _GENERAL_BUILTIN_MAPPING: dict[
-    str, Callable[["PythonTaskletCodegen", itir.Expr, list[itir.Expr]], list[ValueExpr]]
+    str, Callable[[PythonTaskletCodegen, itir.Expr, list[itir.Expr]], list[ValueExpr]]
 ] = {
     "can_deref": builtin_can_deref,
     "cast_": builtin_cast,

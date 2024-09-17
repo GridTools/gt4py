@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -27,6 +21,7 @@ import factory
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from gt4py.next import allocators as next_allocators, backend as next_backend, common, config
+from gt4py.next.ffront import foast_to_gtir, past_to_itir, stages as ffront_stages
 from gt4py.next.iterator import embedded, ir as itir, transforms as itir_transforms
 from gt4py.next.otf import stages, workflow
 from gt4py.next.program_processors import modular_executor, processor_interface as ppi
@@ -272,4 +267,18 @@ default = next_backend.Backend(
 )
 with_temporaries = next_backend.Backend(
     executor=executor_with_temporaries, allocator=next_allocators.StandardCPUFieldBufferAllocator()
+)
+
+gtir = next_backend.Backend(
+    executor=executor,
+    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
+    transforms_fop=next_backend.FieldopTransformWorkflow(
+        past_to_itir=past_to_itir.PastToItirFactory(to_gtir=True),
+        foast_to_itir=workflow.CachedStep(
+            step=foast_to_gtir.foast_to_gtir, hash_function=ffront_stages.fingerprint_stage
+        ),
+    ),
+    transforms_prog=next_backend.ProgramTransformWorkflow(
+        past_to_itir=past_to_itir.PastToItirFactory(to_gtir=True)
+    ),
 )

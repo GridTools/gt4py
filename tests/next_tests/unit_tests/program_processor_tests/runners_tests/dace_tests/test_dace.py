@@ -1,27 +1,24 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 """Test specific features of DaCe backends."""
 
 import ctypes
+import unittest
 from typing import Any
+
 import numpy as np
 import pytest
-import unittest
 
 import gt4py.next as gtx
 from gt4py.next import int32
 from gt4py.next.ffront.fbuiltins import where
+
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
     cartesian_case,
@@ -30,7 +27,9 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     exec_alloc_descriptor,
 )
 
-compiled_sdfg = pytest.importorskip("dace.codegen.compiled_sdfg")
+from . import pytestmark
+
+dace = pytest.importorskip("dace")
 
 
 def get_scalar_values_from_sdfg_args(
@@ -73,23 +72,25 @@ def test_dace_fastcall(cartesian_case, monkeypatch):
 
     # Wrap `compiled_sdfg.CompiledSDFG.fast_call` with mock object
     mock_fast_call = unittest.mock.MagicMock()
-    mock_fast_call_attr = getattr(compiled_sdfg.CompiledSDFG, "fast_call")
+    mock_fast_call_attr = dace.codegen.compiled_sdfg.CompiledSDFG.fast_call
 
     def mocked_fast_call(self, *args, **kwargs):
         mock_fast_call.__call__(*args, **kwargs)
         return mock_fast_call_attr(self, *args, **kwargs)
 
-    monkeypatch.setattr(compiled_sdfg.CompiledSDFG, "fast_call", mocked_fast_call)
+    monkeypatch.setattr(dace.codegen.compiled_sdfg.CompiledSDFG, "fast_call", mocked_fast_call)
 
     # Wrap `compiled_sdfg.CompiledSDFG._construct_args` with mock object
     mock_construct_args = unittest.mock.MagicMock()
-    mock_construct_args_attr = getattr(compiled_sdfg.CompiledSDFG, "_construct_args")
+    mock_construct_args_attr = dace.codegen.compiled_sdfg.CompiledSDFG._construct_args
 
     def mocked_construct_args(self, *args, **kwargs):
         mock_construct_args.__call__(*args, **kwargs)
         return mock_construct_args_attr(self, *args, **kwargs)
 
-    monkeypatch.setattr(compiled_sdfg.CompiledSDFG, "_construct_args", mocked_construct_args)
+    monkeypatch.setattr(
+        dace.codegen.compiled_sdfg.CompiledSDFG, "_construct_args", mocked_construct_args
+    )
 
     # Reset mock objects and run/verify GT4Py program
     def verify_testee():

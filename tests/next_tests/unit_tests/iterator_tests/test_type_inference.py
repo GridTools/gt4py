@@ -1,16 +1,11 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 # TODO: test failure when something is not typed after inference is run
 # TODO: test lift with no args
 # TODO: lambda function that is not called
@@ -178,7 +173,7 @@ def expression_test_cases():
         ),
         # cond
         (
-            im.call("cond")(
+            im.cond(
                 False,
                 im.call(
                     im.call("as_fieldop")(
@@ -198,6 +193,14 @@ def expression_test_cases():
                 )(im.ref("inp", float_i_field)),
             ),
             float_i_field,
+        ),
+        (
+            im.cond(
+                False,
+                im.make_tuple(im.ref("inp", float_i_field), im.ref("inp", float_i_field)),
+                im.make_tuple(im.ref("inp", float_i_field), im.ref("inp", float_i_field)),
+            ),
+            ts.TupleType(types=[float_i_field, float_i_field]),
         ),
     )
 
