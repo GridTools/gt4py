@@ -11,7 +11,7 @@ from typing import Callable, Optional
 
 from gt4py.eve import utils as eve_utils
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.transforms import fencil_to_program
+from gt4py.next.iterator.transforms import fencil_to_program, infer_domain
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
@@ -83,6 +83,16 @@ def apply_common_transforms(
     if isinstance(ir, itir.Program):
         # TODO(havogt): during refactoring to GTIR, we bypass transformations in case we already translated to itir.Program
         # (currently the case when using the roundtrip backend)
+        # TODO should not be here
+        ir = InlineFundefs().visit(ir)
+        ir = PruneUnreferencedFundefs().visit(ir)
+        ir = InlineLambdas.apply(ir, opcount_preserving=True)
+        print(ir)
+        ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
+        ir = CollapseTuple.apply(
+            ir,
+            offset_provider=offset_provider
+        )  # uses type inference and therefore should only run after domain propagation, but makes some simple cases work for now
         return ir
     icdlv_uids = eve_utils.UIDGenerator()
 
