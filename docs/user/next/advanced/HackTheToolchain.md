@@ -120,11 +120,3 @@ class PartiallyModularDiamond(
             y=self.track_x(x)
         )
 ```
-
-```python
-
-```
-
-```python
-
-```
