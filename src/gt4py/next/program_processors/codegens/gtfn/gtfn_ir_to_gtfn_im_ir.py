@@ -258,25 +258,23 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             self.imp_list_ir.append(InitStmt(lhs=gtfn_ir_common.Sym(id=f"{lam_idx}"), rhs=node))
             return gtfn_ir_common.SymRef(id=f"{lam_idx}")
         if isinstance(node.fun, gtfn_ir.Lambda):
+            localized_symbols = {**kwargs["localized_symbols"]}  # create a new scope
+
             lam_idx = self.uids.sequential_id(prefix="lam")
             params = [self.visit(param, **kwargs) for param in node.fun.params]
             args = [self.visit(arg, **kwargs) for arg in node.args]
             for param, arg in zip(params, args):
-                if param.id in self.sym_table:
-                    kwargs["localized_symbols"][param.id] = (
-                        f"{param.id}_{self.uids.sequential_id()}_local"
+                localized_symbols[param.id] = new_symbol = (
+                    f"{param.id}_{self.uids.sequential_id()}_local"
+                )
+                self.imp_list_ir.append(
+                    InitStmt(
+                        lhs=gtfn_ir_common.Sym(id=new_symbol),
+                        rhs=arg,
                     )
-                    self.imp_list_ir.append(
-                        InitStmt(
-                            lhs=gtfn_ir_common.Sym(id=kwargs["localized_symbols"][param.id]),
-                            rhs=arg,
-                        )
-                    )
-                else:
-                    self.imp_list_ir.append(
-                        InitStmt(lhs=gtfn_ir_common.Sym(id=f"{param.id}"), rhs=arg)
-                    )
-            expr = self.visit(node.fun.expr, **kwargs)
+                )
+            new_kwargs = {**kwargs, "localized_symbols": localized_symbols}
+            expr = self.visit(node.fun.expr, **new_kwargs)
             self.imp_list_ir.append(InitStmt(lhs=gtfn_ir_common.Sym(id=f"{lam_idx}"), rhs=expr))
             return gtfn_ir_common.SymRef(id=f"{lam_idx}")
         if _is_reduce(node):
