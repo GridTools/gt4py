@@ -24,6 +24,7 @@ import gt4py.next.iterator.ir as itir
 from gt4py.next import common
 from gt4py.next.ffront import decorator
 from gt4py.next.iterator import transforms as itir_transforms
+from gt4py.next.iterator.transforms import program_to_fencil
 from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.type_system import type_specifications as ts
 
@@ -95,7 +96,7 @@ def preprocess_program(
     node = itir_type_inference.infer(node, offset_provider=offset_provider)
 
     if isinstance(node, itir.Program):
-        fencil_definition = node
+        fencil_definition = program_to_fencil.program_to_fencil(node)
         tmps = node.declarations
         assert all(isinstance(tmp, itir.Temporary) for tmp in tmps)
     else:
@@ -388,7 +389,8 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         itir_tmp = itir_transforms.apply_common_transforms(
             self.itir, offset_provider=offset_provider
         )
-        for closure in itir_tmp.closures:  # type: ignore[union-attr]
+        itir_tmp_fencil = program_to_fencil.program_to_fencil(itir_tmp)
+        for closure in itir_tmp_fencil.closures:
             shifts = itir_transforms.trace_shifts.TraceShifts.apply(closure)
             for k, v in shifts.items():
                 if not isinstance(k, str):
