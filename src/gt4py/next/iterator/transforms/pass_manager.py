@@ -182,6 +182,11 @@ def apply_common_transforms(
     ir = FuseMaps().visit(ir)
     ir = CollapseListGet().visit(ir)
 
+    assert isinstance(ir, (itir.FencilDefinition, FencilWithTemporaries))
+    ir = fencil_to_program.FencilToProgram().apply(
+        ir
+    )  # FIXME[#1582](havogt): should be removed after refactoring to combined IR
+
     if unroll_reduce:
         for _ in range(10):
             unrolled = UnrollReduce.apply(ir, offset_provider=offset_provider)
