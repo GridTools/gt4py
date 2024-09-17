@@ -14,9 +14,9 @@ from gt4py import eve
 from gt4py.eve import utils as eve_utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.transforms import trace_shifts
 from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda
 from gt4py.next.iterator.transforms.inline_lifts import InlineLifts
-from gt4py.next.iterator.transforms.trace_shifts import TraceShifts, copy_recorded_shifts
 
 
 def is_center_derefed_only(node: itir.Node) -> bool:
@@ -58,7 +58,7 @@ class InlineCenterDerefLiftVars(eve.NodeTranslator):
     def visit_StencilClosure(self, node: itir.StencilClosure, **kwargs):
         # TODO(tehrengruber): move the analysis out of this pass and just make it a requirement
         #  such that we don't need to run in multiple times if multiple passes use it.
-        TraceShifts.apply(node, save_to_annex=True)
+        trace_shifts.trace_stencil(node.stencil, num_args=len(node.inputs), save_to_annex=True)
         return self.generic_visit(node, **kwargs)
 
     def visit_FunCall(self, node: itir.FunCall, **kwargs):
@@ -74,7 +74,7 @@ class InlineCenterDerefLiftVars(eve.NodeTranslator):
                     eligible_params[i] = True
                     bound_arg_name = self.uids.sequential_id(prefix="_icdlv")
                     capture_lift = im.promote_to_const_iterator(bound_arg_name)
-                    copy_recorded_shifts(from_=param, to=capture_lift)
+                    trace_shifts.copy_recorded_shifts(from_=param, to=capture_lift)
                     new_args.append(capture_lift)
                     # since we deref an applied lift here we can (but don't need to) immediately
                     # inline

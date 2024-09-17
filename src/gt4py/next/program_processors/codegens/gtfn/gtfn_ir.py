@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import ClassVar, Optional, Union
 
-from gt4py.eve import Coerced, SymbolName
+from gt4py.eve import Coerced, SymbolName, datamodels
 from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
@@ -96,15 +96,59 @@ class Backend(Node):
     domain: Union[SymRef, CartesianDomain, UnstructuredDomain]
 
 
+def _is_ref_or_tuple_expr_of_ref(expr: Expr) -> bool:
+    if (
+        isinstance(expr, FunCall)
+        and isinstance(expr.fun, SymRef)
+        and expr.fun.id == "tuple_get"
+        and len(expr.args) == 2
+        and _is_ref_or_tuple_expr_of_ref(expr.args[1])
+    ):
+        return True
+    if (
+        isinstance(expr, FunCall)
+        and isinstance(expr.fun, SymRef)
+        and expr.fun.id == "make_tuple"
+        and all(_is_ref_or_tuple_expr_of_ref(arg) for arg in expr.args)
+    ):
+        return True
+    if isinstance(expr, SymRef):
+        return True
+    return False
+
+
 class SidComposite(Expr):
-    values: list[Union[SymRef, SidComposite]]
+    values: list[Expr]
+
+    @datamodels.validator("values")
+    def _values_validator(
+        self: datamodels.DataModelTP, attribute: datamodels.Attribute, value: list[Expr]
+    ) -> None:
+        if not all(
+            isinstance(el, (SidFromScalar, SidComposite)) or _is_ref_or_tuple_expr_of_ref(el)
+            for el in value
+        ):
+            raise ValueError(
+                "Only 'SymRef', tuple expr of 'SymRef', 'SidFromScalar', or 'SidComposite' allowed."
+            )
+
+
+class SidFromScalar(Expr):
+    arg: Expr
+
+    @datamodels.validator("arg")
+    def _arg_validator(
+        self: datamodels.DataModelTP, attribute: datamodels.Attribute, value: Expr
+    ) -> None:
+        if not _is_ref_or_tuple_expr_of_ref(value):
+            raise ValueError("Only 'SymRef' or tuple expr of 'SymRef' allowed.")
 
 
 class StencilExecution(Node):
     backend: Backend
     stencil: SymRef
     output: Union[SymRef, SidComposite]
-    inputs: list[SymRef]
+    inputs: list[Union[SymRef, SidComposite, SidFromScalar]]
 
 
 class Scan(Node):

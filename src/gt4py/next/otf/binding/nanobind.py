@@ -16,7 +16,7 @@ import gt4py.eve as eve
 from gt4py.eve.codegen import JinjaTemplate as as_jinja, TemplatedGenerator
 from gt4py.next.otf import languages, stages, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
-from gt4py.next.type_system import type_info as ti, type_specifications as ts
+from gt4py.next.type_system import type_specifications as ts
 
 
 SrcL = TypeVar("SrcL", bound=languages.NanobindSrcL, covariant=True)
@@ -38,8 +38,8 @@ class BufferSID(Expr):
     # TODO(havogt): we can fix the dimension with `unit_stride_dim: int` once we have the "frozen stencil" mechanism
 
 
-class CompositeSID(Expr):
-    elems: Sequence[Union[BufferSID, CompositeSID]]
+class Tuple(Expr):
+    elems: list[Union[Expr, str]]
 
 
 class FunctionCall(Expr):
@@ -152,15 +152,7 @@ class BindingCodeGenerator(TemplatedGenerator):
         renamed = f"gridtools::sid::rename_numbered_dimensions<{', '.join(dims)}>({shifted})"
         return renamed
 
-    def visit_CompositeSID(self, node: CompositeSID, **kwargs: Any) -> str:
-        kwargs["composite_ids"] = (
-            f"gridtools::integral_constant<int,{i}>" for i in range(len(node.elems))
-        )
-        return self.generic_visit(node, **kwargs)
-
-    CompositeSID = as_jinja(
-        "gridtools::sid::composite::keys<{{','.join(composite_ids)}}>::make_values({{','.join(elems)}})"
-    )
+    Tuple = as_jinja("""gridtools::tuple({{','.join(elems)}})""")
 
     DimensionType = as_jinja("""generated::{{name}}_t""")
 
@@ -169,17 +161,16 @@ def _tuple_get(index: int, var: str) -> str:
     return f"gridtools::tuple_util::get<{index}>({var})"
 
 
-def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | CompositeSID:
+def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | Tuple:
     if isinstance(type_, ts.FieldType):
         return BufferSID(
             source_buffer=name,
             dimensions=[DimensionType(name=dim.value) for dim in type_.dims],
             scalar_type=type_.dtype,
         )
-    elif ti.is_tuple_of_type(type_, ts.FieldType):
-        return CompositeSID(
-            elems=[make_argument(_tuple_get(i, name), t) for i, t in enumerate(type_.types)]
-        )
+    elif isinstance(type_, ts.TupleType):
+        elements = [make_argument(_tuple_get(i, name), t) for i, t in enumerate(type_.types)]
+        return Tuple(elems=elements)
     elif isinstance(type_, ts.ScalarType):
         return name
     else:

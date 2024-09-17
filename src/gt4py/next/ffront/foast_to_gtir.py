@@ -319,15 +319,19 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         assert len(node.args) == 2 and isinstance(node.args[1], foast.Name)
         obj, new_type = self.visit(node.args[0], **kwargs), node.args[1].id
 
-        def create_cast(expr: itir.Expr) -> itir.FunCall:
-            return im.as_fieldop(
-                im.lambda_("__val")(im.call("cast_")(im.deref("__val"), str(new_type)))
-            )(expr)
+        def create_cast(expr: itir.Expr, t: ts.TypeSpec) -> itir.FunCall:
+            if isinstance(t, ts.FieldType):
+                return im.as_fieldop(
+                    im.lambda_("__val")(im.call("cast_")(im.deref("__val"), str(new_type)))
+                )(expr)
+            else:
+                assert isinstance(t, ts.ScalarType)
+                return im.call("cast_")(expr, str(new_type))
 
         if not isinstance(node.type, ts.TupleType):  # to keep the IR simpler
-            return create_cast(obj)
+            return create_cast(obj, node.type)
 
-        return lowering_utils.process_elements(create_cast, obj, node.type)
+        return lowering_utils.process_elements(create_cast, obj, node.type, with_type=True)
 
     def _visit_where(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         if not isinstance(node.type, ts.TupleType):  # to keep the IR simpler

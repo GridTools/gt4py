@@ -10,7 +10,7 @@ import dataclasses
 from typing import Any, Dict, Iterable, Iterator, List, Optional, TypeGuard, Union
 
 import gt4py.eve as eve
-from gt4py.eve import NodeTranslator
+from gt4py.eve import NodeTranslator, concepts
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next import common
 from gt4py.next.program_processors.codegens.gtfn import gtfn_ir, gtfn_ir_common
@@ -258,25 +258,23 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             self.imp_list_ir.append(InitStmt(lhs=gtfn_ir_common.Sym(id=f"{lam_idx}"), rhs=node))
             return gtfn_ir_common.SymRef(id=f"{lam_idx}")
         if isinstance(node.fun, gtfn_ir.Lambda):
+            localized_symbols = {**kwargs["localized_symbols"]}  # create a new scope
+
             lam_idx = self.uids.sequential_id(prefix="lam")
             params = [self.visit(param, **kwargs) for param in node.fun.params]
             args = [self.visit(arg, **kwargs) for arg in node.args]
             for param, arg in zip(params, args):
-                if param.id in self.sym_table:
-                    kwargs["localized_symbols"][param.id] = (
-                        f"{param.id}_{self.uids.sequential_id()}_local"
+                localized_symbols[param.id] = new_symbol = (
+                    f"{param.id}_{self.uids.sequential_id()}_local"
+                )
+                self.imp_list_ir.append(
+                    InitStmt(
+                        lhs=gtfn_ir_common.Sym(id=new_symbol),
+                        rhs=arg,
                     )
-                    self.imp_list_ir.append(
-                        InitStmt(
-                            lhs=gtfn_ir_common.Sym(id=kwargs["localized_symbols"][param.id]),
-                            rhs=arg,
-                        )
-                    )
-                else:
-                    self.imp_list_ir.append(
-                        InitStmt(lhs=gtfn_ir_common.Sym(id=f"{param.id}"), rhs=arg)
-                    )
-            expr = self.visit(node.fun.expr, **kwargs)
+                )
+            new_kwargs = {**kwargs, "localized_symbols": localized_symbols}
+            expr = self.visit(node.fun.expr, **new_kwargs)
             self.imp_list_ir.append(InitStmt(lhs=gtfn_ir_common.Sym(id=f"{lam_idx}"), rhs=expr))
             return gtfn_ir_common.SymRef(id=f"{lam_idx}")
         if _is_reduce(node):
@@ -323,6 +321,22 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         return ImperativeFunctionDefinition(
             id=node.id, params=node.params, fun=[*self.imp_list_ir, ReturnStmt(ret=ret)]
         )
+
+    def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
+        kwargs = {
+            **kwargs,
+            "inside_fun": kwargs.get("inside_fun", False)
+            or isinstance(node, gtfn_ir.FunctionDefinition),
+        }
+
+        # only transform things inside of function definitions and leave the rest as is
+        if kwargs["inside_fun"]:
+            # we are inside a function, visit as usual
+            return super().visit(node, **kwargs)
+        else:
+            # we are outside of a function, don't transform anything (i.e. don't call any `vist_`
+            # methods on `node`), but just visit child nodes.
+            return self.generic_visit(node, **kwargs)
 
     def visit_ScanPassDefinition(
         self, node: gtfn_ir.ScanPassDefinition, **kwargs: Any

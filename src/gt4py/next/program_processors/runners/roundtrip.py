@@ -116,21 +116,9 @@ def fencil_generator(
             print(f"Using cached fencil for key {cache_key}")
         return _FENCIL_CACHE[cache_key]
 
-    if isinstance(ir, itir.Program):
-        # TODO should not be here
-        ir = inline_fundefs.InlineFundefs().visit(ir)
-        ir = inline_lambdas.InlineLambdas.apply(ir, opcount_preserving=True)
-        print(ir)
-        ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
-        ir = collapse_tuple.CollapseTuple.apply(
-            ir,
-            offset_provider=offset_provider
-        )  # uses type inference and therefore should only run after domain propagation, but makes some simple cases work for now
-    else:
-        ir = itir_transforms.apply_common_transforms(
-            ir, lift_mode=lift_mode, offset_provider=offset_provider
-        )
-        ir = fencil_to_program.FencilToProgram.apply(ir)
+    ir = itir_transforms.apply_common_transforms(
+        ir, lift_mode=lift_mode, offset_provider=offset_provider
+    )
 
     program = EmbeddedDSL.apply(ir)
 

@@ -19,6 +19,7 @@ from gt4py.eve import utils as eve_utils
 from gt4py.next import (
     astype,
     broadcast,
+    common,
     float32,
     float64,
     int32,
@@ -27,7 +28,6 @@ from gt4py.next import (
     min_over,
     neighbor_sum,
     where,
-    common,
 )
 from gt4py.next.ffront import type_specifications as ts_ffront
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
@@ -291,6 +291,18 @@ def test_astype():
     assert lowered.expr == reference
 
 
+def test_astype_scalar():
+    def foo(a: float64):
+        return astype(a, int32)
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.call("cast_")("a", "int32")
+
+    assert lowered.expr == reference
+
+
 def test_astype_tuple():
     def foo(a: tuple[gtx.Field[[TDim], float64], gtx.Field[[TDim], float64]]):
         return astype(a, int32)
@@ -306,6 +318,24 @@ def test_astype_tuple():
         im.as_fieldop(im.lambda_("__val")(im.call("cast_")(im.deref("__val"), "int32")))(
             im.tuple_get(1, "a")
         ),
+    )
+
+    assert lowered_inlined.expr == reference
+
+
+def test_astype_tuple_scalar_and_field():
+    def foo(a: tuple[gtx.Field[[TDim], float64], float64]):
+        return astype(a, int32)
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+    lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
+
+    reference = im.make_tuple(
+        im.as_fieldop(im.lambda_("__val")(im.call("cast_")(im.deref("__val"), "int32")))(
+            im.tuple_get(0, "a")
+        ),
+        im.call("cast_")(im.tuple_get(1, "a"), "int32"),
     )
 
     assert lowered_inlined.expr == reference

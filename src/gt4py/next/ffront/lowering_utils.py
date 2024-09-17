@@ -102,6 +102,7 @@ def process_elements(
     process_func: Callable[..., itir.Expr],
     objs: itir.Expr | Iterable[itir.Expr],
     current_el_type: ts.TypeSpec,
+    with_type: bool = False,
 ) -> itir.FunCall:
     """
     Recursively applies a processing function to all primitive constituents of a tuple.
@@ -112,13 +113,19 @@ def process_elements(
         objs: The object whose elements are to be transformed.
         current_el_type: A type with the same structure as the elements of `objs`. The leaf-types
             are not used and thus not relevant.
+        current_el_type: A type with the same structure as the elements of `objs`. Unless `with_type=True`
+            the leaf-types are not used and thus not relevant.
+        with_type: If True, the last argument passed to `process_func` will be its type.
     """
     if isinstance(objs, itir.Expr):
         objs = (objs,)
 
     let_ids = tuple(f"__val_{eve_utils.content_hash(obj)}" for obj in objs)
     body = _process_elements_impl(
-        process_func, tuple(im.ref(let_id) for let_id in let_ids), current_el_type
+        process_func,
+        tuple(im.ref(let_id) for let_id in let_ids),
+        current_el_type,
+        with_type=with_type,
     )
 
     return im.let(*(zip(let_ids, objs, strict=True)))(body)
@@ -131,6 +138,7 @@ def _process_elements_impl(
     process_func: Callable[..., itir.Expr],
     _current_el_exprs: Iterable[T],
     current_el_type: ts.TypeSpec,
+    with_type: bool,
 ) -> itir.Expr:
     if isinstance(current_el_type, ts.TupleType):
         result = im.make_tuple(
@@ -141,6 +149,7 @@ def _process_elements_impl(
                         im.tuple_get(i, current_el_expr) for current_el_expr in _current_el_exprs
                     ),
                     current_el_type.types[i],
+                    with_type=with_type,
                 )
                 for i in range(len(current_el_type.types))
             )
@@ -148,6 +157,9 @@ def _process_elements_impl(
     elif type_info.contains_local_field(current_el_type):
         raise NotImplementedError("Processing fields with local dimension is not implemented.")
     else:
-        result = process_func(*_current_el_exprs)
+        if with_type:
+            result = process_func(*_current_el_exprs, current_el_type)
+        else:
+            result = process_func(*_current_el_exprs)
 
     return result
