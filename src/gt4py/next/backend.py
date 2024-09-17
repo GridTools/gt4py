@@ -147,9 +147,9 @@ class Backend(Generic[core_defs.DeviceTypeT]):
         if not isinstance(program, IT_PRG):
             args, kwargs = signature.convert_to_positional(program, *args, **kwargs)
         aot_args = arguments.CompileTimeArgs.from_concrete_no_size(*args, **kwargs)
-        return self.aot(program, aot_args)
+        return self.compile(program, aot_args)
 
-    def aot(self, program: INPUT_DATA, compile_time_args: CARG) -> stages.CompiledProgram:
+    def compile(self, program: INPUT_DATA, compile_time_args: CARG) -> stages.CompiledProgram:
         return self.executor.otf_workflow(
             self.transforms(workflow.DataArgsPair(data=program, args=compile_time_args))
         )
