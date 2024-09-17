@@ -14,6 +14,7 @@ from gt4py.next.iterator import ir
 
 class InlineFundefs(PreserveLocationVisitor, NodeTranslator):
     def visit_SymRef(self, node: ir.SymRef, *, symtable: Dict[str, Any]):
+        # TODO(tehrengruber): This breaks when the symbol is shadowed
         if node.id in symtable and isinstance((symbol := symtable[node.id]), ir.FunctionDefinition):
             return ir.Lambda(
                 params=self.generic_visit(symbol.params, symtable=symtable),
@@ -21,7 +22,7 @@ class InlineFundefs(PreserveLocationVisitor, NodeTranslator):
             )
         return self.generic_visit(node)
 
-    def visit_FencilDefinition(self, node: ir.FencilDefinition):
+    def visit_Program(self, node: ir.Program):
         return self.generic_visit(node, symtable=node.annex.symtable)
 
 
@@ -37,7 +38,7 @@ class PruneUnreferencedFundefs(PreserveLocationVisitor, NodeTranslator):
         referenced.add(node.id)
         return node
 
-    def visit_FencilDefinition(self, node: ir.FencilDefinition):
+    def visit_Program(self, node: ir.Program):
         referenced: Set[str] = set()
         self.generic_visit(node, referenced=referenced, second_pass=False)
         return self.generic_visit(node, referenced=referenced, second_pass=True)
