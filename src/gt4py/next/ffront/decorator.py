@@ -240,6 +240,10 @@ class FrozenProgram:
         init=False, default=None
     )
 
+    def __post_init__(self) -> None:
+        if self.backend is None:
+            raise ValueError("Can not JIT-compile programs without backend (embedded execution).")
+
     @property
     def definition(self) -> str:
         return self.program.definition
@@ -255,8 +259,6 @@ class FrozenProgram:
     def jit(
         self, *args: Any, offset_provider: dict[str, Dimension | Connectivity], **kwargs: Any
     ) -> stages.CompiledProgram:
-        if self.backend is None:
-            raise ValueError("Can not JIT-compile programs without backend (embedded execution).")
         return self.backend.jit(self.program, *args, offset_provider=offset_provider, **kwargs)
 
     def __call__(
