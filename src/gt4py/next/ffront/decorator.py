@@ -299,9 +299,7 @@ class ProgramFromPast(Program):
             )
 
         ppi.ensure_processor_kind(self.backend.executor, ppi.ProgramExecutor)
-        self.backend(
-            self.definition_stage, *args, **(kwargs | {"offset_provider": offset_provider})
-        )
+        self.backend(self.past_stage, *args, **(kwargs | {"offset_provider": offset_provider}))
 
     # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self):
