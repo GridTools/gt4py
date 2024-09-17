@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 
-pytest.importorskip("atlas4py")  # isort: skip
+pytest.importorskip("atlas4py")
 
 from gt4py import next as gtx
 from gt4py.next import allocators, neighbor_sum

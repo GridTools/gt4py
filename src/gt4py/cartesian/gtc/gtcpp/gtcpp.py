@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import enum
 from typing import Any, List, Tuple, Union
 
@@ -134,10 +136,10 @@ class GTExtent(LocNode):
     k: Tuple[int, int]
 
     @classmethod
-    def zero(cls) -> "GTExtent":
+    def zero(cls) -> GTExtent:
         return cls(i=(0, 0), j=(0, 0), k=(0, 0))
 
-    def __add__(self, offset: Union[common.CartesianOffset, VariableKOffset]) -> "GTExtent":
+    def __add__(self, offset: Union[common.CartesianOffset, VariableKOffset]) -> GTExtent:
         if isinstance(offset, common.CartesianOffset):
             return GTExtent(
                 i=(min(self.i[0], offset.i), max(self.i[1], offset.i)),

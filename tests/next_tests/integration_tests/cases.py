@@ -466,7 +466,11 @@ def verify_with_default_data(
 def cartesian_case(exec_alloc_descriptor: test_definitions.ExecutionAndAllocatorDescriptor):
     yield Case(
         exec_alloc_descriptor if exec_alloc_descriptor.executor else None,
-        offset_provider={"Ioff": IDim, "Joff": JDim, "Koff": KDim},
+        offset_provider={
+            "Ioff": IDim,
+            "Joff": JDim,
+            "Koff": KDim,
+        },
         default_sizes={IDim: 10, JDim: 10, KDim: 10},
         grid_type=common.GridType.CARTESIAN,
         allocator=exec_alloc_descriptor.allocator,

@@ -13,6 +13,7 @@ from typing import Any, Callable, Optional
 from gt4py import eve
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Never
+from gt4py.next import common
 from gt4py.next.ffront import (
     dialect_ast_enums,
     experimental as experimental_builtins,
@@ -219,25 +220,62 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return self._map(node.op.value, node.left, node.right)
 
     def _visit_shift(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
-        match node.args[0]:
-            case foast.Subscript(value=foast.Name(id=offset_name), index=int(offset_index)):
-                shift_offset = im.shift(offset_name, offset_index)
-                return im.as_fieldop(im.lambda_("__it")(im.deref(shift_offset("__it"))))(
-                    self.visit(node.func, **kwargs)
-                )
-            case foast.Name(id=offset_name):
-                return im.as_fieldop_neighbors(str(offset_name), self.visit(node.func, **kwargs))
-            case foast.Call(func=foast.Name(id="as_offset")):
-                # TODO(havogt): discuss this representation
-                func_args = node.args[0]
-                offset_dim = func_args.args[0]
-                assert isinstance(offset_dim, foast.Name)
-                shift_offset = im.shift(offset_dim.id, im.deref("__offset"))
-                return im.as_fieldop(
-                    im.lambda_("__it", "__offset")(im.deref(shift_offset("__it")))
-                )(self.visit(node.func, **kwargs), self.visit(func_args.args[1], **kwargs))
-            case _:
-                raise FieldOperatorLoweringError("Unexpected shift arguments!")
+        current_expr = self.visit(node.func, **kwargs)
+
+        for arg in node.args:
+            match arg:
+                # `field(Off[idx])`
+                case foast.Subscript(value=foast.Name(id=offset_name), index=int(offset_index)):
+                    current_expr = im.as_fieldop(
+                        im.lambda_("__it")(im.deref(im.shift(offset_name, offset_index)("__it")))
+                    )(current_expr)
+                # `field(Dim + idx)`
+                case foast.BinOp(
+                    op=dialect_ast_enums.BinaryOperator.ADD
+                    | dialect_ast_enums.BinaryOperator.SUB,
+                    left=foast.Name(id=dimension),  # TODO(tehrengruber): use type of lhs
+                    right=foast.Constant(value=offset_index),
+                ):
+                    if arg.op == dialect_ast_enums.BinaryOperator.SUB:
+                        offset_index *= -1
+                    current_expr = im.as_fieldop(
+                        # TODO(SF-N): we rely on the naming-convention that the cartesian dimensions
+                        #  are passed suffixed with `off`, e.g. the `K` is passed as `Koff` in the
+                        #  offset provider. This is a rather unclean solution and should be
+                        #  improved.
+                        im.lambda_("__it")(
+                            im.deref(
+                                im.shift(
+                                    common.dimension_to_implicit_offset(dimension), offset_index
+                                )("__it")
+                            )
+                        )
+                    )(current_expr)
+                # `field(Off)`
+                case foast.Name(id=offset_name):
+                    # only a single unstructured shift is supported so returning here is fine even though we
+                    # are in a loop.
+                    assert len(node.args) == 1 and len(arg.type.target) > 1  # type: ignore[attr-defined] # ensured by pattern
+                    return im.as_fieldop_neighbors(
+                        str(offset_name), self.visit(node.func, **kwargs)
+                    )
+                # `field(as_offset(Off, offset_field))`
+                case foast.Call(func=foast.Name(id="as_offset")):
+                    func_args = arg
+                    # TODO(tehrengruber): Discuss representation. We could use the type system to
+                    #  deduce the offset dimension instead of (e.g. to allow aliasing).
+                    offset_dim = func_args.args[0]
+                    assert isinstance(offset_dim, foast.Name)
+                    offset_field = self.visit(func_args.args[1], **kwargs)
+                    current_expr = im.as_fieldop(
+                        im.lambda_("__it", "__offset")(
+                            im.deref(im.shift(offset_dim.id, im.deref("__offset"))("__it"))
+                        )
+                    )(current_expr, offset_field)
+                case _:
+                    raise FieldOperatorLoweringError("Unexpected shift arguments!")
+
+        return current_expr
 
     def visit_Call(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         if type_info.type_class(node.func.type) is ts.FieldType:

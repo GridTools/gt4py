@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import dataclasses
 import re
 from dataclasses import dataclass
@@ -162,7 +164,7 @@ class AccessCollector(gt4py.eve.NodeVisitor):
         pass
 
     class GeneralAccessCollection(GenericAccessCollection[GeneralAccess, GeneralOffsetTuple]):
-        def cartesian_accesses(self) -> "AccessCollector.CartesianAccessCollection":
+        def cartesian_accesses(self) -> AccessCollector.CartesianAccessCollection:
             return AccessCollector.CartesianAccessCollection(
                 [
                     CartesianAccess(
@@ -182,7 +184,7 @@ class AccessCollector(gt4py.eve.NodeVisitor):
     @classmethod
     def apply(
         cls, node: gt4py.eve.RootNode, **kwargs: Any
-    ) -> "AccessCollector.GeneralAccessCollection":
+    ) -> AccessCollector.GeneralAccessCollection:
         result = cls.GeneralAccessCollection([])
         cls().visit(node, accesses=result._ordered_accesses, **kwargs)
         return result
@@ -233,7 +235,7 @@ class StencilExtentComputer(gt4py.eve.NodeVisitor):
         self.add_k = add_k
         self.zero_extent = Extent.zeros(ndims=2)
 
-    def visit_Stencil(self, node: oir.Stencil) -> "Context":
+    def visit_Stencil(self, node: oir.Stencil) -> Context:
         ctx = self.Context()
         for vloop in reversed(node.vertical_loops):
             self.visit(vloop, ctx=ctx)

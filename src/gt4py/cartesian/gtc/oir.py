@@ -13,6 +13,8 @@ OIR represents a computation at the level of GridTools stages and multistages,
 e.g. stage merging, staged computations to compute-on-the-fly, cache annotations, etc.
 """
 
+from __future__ import annotations
+
 from typing import Any, List, Optional, Tuple, Type, Union
 
 from gt4py import eve
@@ -125,7 +127,7 @@ class Temporary(FieldDecl):
     pass
 
 
-def _check_interval(instance: Union["Interval", "UnboundedInterval"]) -> None:
+def _check_interval(instance: Union[Interval, UnboundedInterval]) -> None:
     start, end = instance.start, instance.end
     if (
         start is not None
@@ -152,18 +154,18 @@ class Interval(LocNode):
 
     @datamodels.root_validator
     @classmethod
-    def check(cls: Type["Interval"], instance: "Interval") -> None:
+    def check(cls: Type[Interval], instance: Interval) -> None:
         _check_interval(instance)
 
-    def covers(self, other: "Interval") -> bool:
+    def covers(self, other: Interval) -> bool:
         outer_starts_lower = self.start < other.start or self.start == other.start
         outer_ends_higher = self.end > other.end or self.end == other.end
         return outer_starts_lower and outer_ends_higher
 
-    def intersects(self, other: "Interval") -> bool:
+    def intersects(self, other: Interval) -> bool:
         return not (other.start >= self.end or self.start >= other.end)
 
-    def shifted(self, offset: Optional[int]) -> Union["Interval", "UnboundedInterval"]:
+    def shifted(self, offset: Optional[int]) -> Union[Interval, UnboundedInterval]:
         if offset is None:
             return UnboundedInterval()
         start = AxisBound(level=self.start.level, offset=self.start.offset + offset)
@@ -181,10 +183,10 @@ class UnboundedInterval:
 
     @datamodels.root_validator
     @classmethod
-    def check(cls: Type["UnboundedInterval"], instance: "UnboundedInterval") -> None:
+    def check(cls: Type[UnboundedInterval], instance: UnboundedInterval) -> None:
         _check_interval(instance)
 
-    def covers(self, other: Union[Interval, "UnboundedInterval"]) -> bool:
+    def covers(self, other: Union[Interval, UnboundedInterval]) -> bool:
         if self.start is None and self.end is None:
             return True
         if (
@@ -209,7 +211,7 @@ class UnboundedInterval:
         assert isinstance(other, Interval)
         return Interval(start=self.start, end=self.end).covers(other)
 
-    def intersects(self, other: Union[Interval, "UnboundedInterval"]) -> bool:
+    def intersects(self, other: Union[Interval, UnboundedInterval]) -> bool:
         no_overlap_high = (
             self.end is not None and other.start is not None and other.start >= self.end
         )
@@ -218,7 +220,7 @@ class UnboundedInterval:
         )
         return not (no_overlap_low or no_overlap_high)
 
-    def shifted(self, offset: Optional[int]) -> "UnboundedInterval":
+    def shifted(self, offset: Optional[int]) -> UnboundedInterval:
         if offset is None:
             return UnboundedInterval()
 
@@ -274,7 +276,7 @@ class VerticalLoop(LocNode):
 
     @datamodels.root_validator
     @classmethod
-    def valid_section_intervals(cls: Type["VerticalLoop"], instance: "VerticalLoop") -> None:
+    def valid_section_intervals(cls: Type[VerticalLoop], instance: VerticalLoop) -> None:
         starts, ends = zip(*((s.interval.start, s.interval.end) for s in instance.sections))
         if instance.loop_order == common.LoopOrder.BACKWARD:
             starts, ends = starts[:-1], ends[1:]

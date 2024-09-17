@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import abc
 import numbers
 import sys
@@ -121,11 +123,11 @@ class BaseModuleGenerator(abc.ABC):
 
     TEMPLATE_RESOURCE = "stencil_module.py.in"
 
-    _builder: Optional["StencilBuilder"]
+    _builder: Optional[StencilBuilder]
     args_data: ModuleData
     template: jinja2.Template
 
-    def __init__(self, builder: Optional["StencilBuilder"] = None):
+    def __init__(self, builder: Optional[StencilBuilder] = None):
         self._builder = builder
         self.args_data = ModuleData()
         self.template = jinja2.Template(
@@ -135,7 +137,7 @@ class BaseModuleGenerator(abc.ABC):
         )
 
     def __call__(
-        self, args_data: ModuleData, builder: Optional["StencilBuilder"] = None, **kwargs: Any
+        self, args_data: ModuleData, builder: Optional[StencilBuilder] = None, **kwargs: Any
     ) -> str:
         """
         Generate source code for a Python module containing a StencilObject.
@@ -176,7 +178,7 @@ class BaseModuleGenerator(abc.ABC):
         return module_source
 
     @property
-    def builder(self) -> "StencilBuilder":
+    def builder(self) -> StencilBuilder:
         """
         Expose the builder reference.
 
@@ -205,7 +207,7 @@ class BaseModuleGenerator(abc.ABC):
         """
         Generate the name of the stencil class.
 
-        This should ususally be deferred to the chosen caching strategy via
+        This should usually be deferred to the chosen caching strategy via
         the builder object (see default implementation).
         """
         return self.builder.class_name

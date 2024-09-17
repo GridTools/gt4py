@@ -46,8 +46,6 @@ def dace_env():
         dace.config.Config.set("compiler", "cpu", "args", value="")
         dace.config.Config.set("compiler", "allow_view_arguments", value=True)
         dace.config.Config.set("default_build_folder", value=str(gt_cache_path))
-        # Need to serialize `StencilComputation` library nodes because they contain OIR for `VerticalLoop`
-        dace.config.Config.set("testing", "serialize_all_fields", value=True)
         yield
 
 

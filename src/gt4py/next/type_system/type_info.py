@@ -718,20 +718,23 @@ def function_signature_incompatibilities_field(
     args: list[ts.TypeSpec],
     kwargs: dict[str, ts.TypeSpec],
 ) -> Iterator[str]:
-    if len(args) != 1:
-        yield f"Function takes 1 argument, but {len(args)} were given."
+    if len(args) < 1:
+        yield f"Function takes at least 1 argument, but {len(args)} were given."
         return
-
-    if not isinstance(args[0], ts.OffsetType):
-        yield f"Expected first argument to be of type '{ts.OffsetType}', got '{args[0]}'."
-        return
+    for arg in args:
+        if not isinstance(arg, ts.OffsetType):
+            yield f"Expected arguments to be of type '{ts.OffsetType}', got '{arg}'."
+            return
+        if len(args) > 1 and len(arg.target) > 1:
+            yield f"Function takes only 1 argument in unstructured case, but {len(args)} were given."
+            return
 
     if kwargs:
         yield f"Got unexpected keyword argument(s) '{', '.join(kwargs.keys())}'."
         return
 
-    source_dim = args[0].source
-    target_dims = args[0].target
+    source_dim = args[0].source  # type: ignore[attr-defined] # ensured by loop above
+    target_dims = args[0].target  # type: ignore[attr-defined] # ensured by loop above
     # TODO: This code does not handle ellipses for dimensions. Fix it.
     assert field_type.dims is not ...
     if field_type.dims and source_dim not in field_type.dims:

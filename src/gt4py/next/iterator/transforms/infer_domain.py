@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import copy
+import itertools
 from typing import Callable, TypeAlias
 
 from gt4py.eve import utils as eve_utils
@@ -54,12 +55,20 @@ def _merge_domains(
             new_domains[key] = domain_union([original_domain, domain])
         elif isinstance(domain, tuple) and isinstance(original_domain, tuple):
             new_domains[key] = tuple(
-                domain_union([d1, d2]) for d1 in original_domain for d2 in domain
+                domain_union([d1, d2])
+                if d1 is not None and d2 is not None
+                else (d1 if d2 is None else d2)
+                for d1, d2 in itertools.zip_longest(original_domain, domain, fillvalue=None)
             )
         elif isinstance(domain, tuple):
-            new_domains[key] = tuple(domain_union([d, original_domain]) for d in domain)
+            new_domains[key] = tuple(
+                domain_union([d, original_domain]) if d is not None else original_domain
+                for d in domain
+            )
         elif isinstance(original_domain, tuple):
-            new_domains[key] = tuple(domain_union([domain, d]) for d in original_domain)
+            new_domains[key] = tuple(
+                domain_union([domain, d]) if d is not None else domain for d in original_domain
+            )
 
     return new_domains
 
@@ -181,7 +190,14 @@ def infer_let(
     transformed_calls_args: list[itir.Expr] = []
     for param, arg in zip(let_expr.fun.params, let_expr.args):
         transformed_calls_arg, accessed_domains_arg = infer_expr(
-            arg, accessed_domains_let_args.get(param.id, None), offset_provider
+            arg,
+            accessed_domains_let_args.get(
+                param.id,
+                None
+                if (not isinstance(arg, tuple) and not cpm.is_call_to(arg, "make_tuple"))
+                else tuple(None for _ in arg.args),
+            ),
+            offset_provider,
         )
         accessed_domains_outer = _merge_domains(accessed_domains_outer, accessed_domains_arg)
         transformed_calls_args.append(transformed_calls_arg)
@@ -210,57 +226,49 @@ def infer_expr(
         infered_args_expr = []
         actual_domains: ACCESSED_DOMAINS = {}
         if cpm.is_call_to(expr, "make_tuple"):
+            if not isinstance(domain, tuple):
+                domain = (
+                    (domain,) * (len(expr.args))
+                )  # TODO: Still open how to handle IR in this case, example: out @ c⟨ IDimₕ: [0, __out_size_0) ⟩ ← {__sym_1, __sym_2};
             if (
-                not isinstance(domain, tuple) or not len(domain) <= len(expr.args)
-            ):  # It is possible that there are less domains than tuple args, e.g. in im.tuple_get(0, im.make_tuple(a, b), domain=domain)
-                raise ValueError(
-                    "infer_expr needs a domain for each tuple element and domain must be a tuple."
-                )
+                not len(domain) <= len(expr.args)
+            ):  # There may be less domains than tuple args, e.g. in im.tuple_get(0, im.make_tuple(a, b), domain=domain)
+                raise ValueError("infer_expr needs a domain for each tuple element.")
+            # This is to pad the domain length to the length of the tuple
+            domain = (*domain, *(None for _ in range(len(expr.args) - len(domain))))
             for i, arg in enumerate(expr.args):
                 infered_arg_expr, actual_domains_arg = infer_expr(arg, domain[i], offset_provider)
                 infered_args_expr.append(infered_arg_expr)
                 actual_domains = _merge_domains(actual_domains, actual_domains_arg)
-        else:
-            for arg in expr.args:
-                if cpm.is_call_to(expr, "tuple_get") and isinstance(
-                    arg, (itir.Literal, itir.SymRef)
-                ):
-                    infered_arg_expr, actual_domains_arg = infer_expr(arg, domain, offset_provider)
-                    infered_args_expr.append(infered_arg_expr)
-                    if actual_domains_arg and isinstance(arg, itir.SymRef):
-                        actual_domains_arg = {
-                            str(infered_arg_expr.id): tuple(
-                                None
-                                if i != int(expr.args[0].value)
-                                else actual_domains_arg[infered_arg_expr.id]
-                                for i in range(
-                                    len(expr.args[1].args)
-                                    if isinstance(expr.args[1], tuple)
-                                    else int(expr.args[0].value) + 1
-                                )
-                            )
-                        }
-                    actual_domains = _merge_domains(actual_domains, actual_domains_arg)
-                    if cpm.is_call_to(expr.args[1], "make_tuple"):
-                        domain = tuple(
-                            None if i != int(expr.args[0].value) else domain
-                            for i in range(len(expr.args[1].args))
-                        )
-                else:
-                    infered_arg_expr, actual_domains_arg = infer_expr(
-                        arg, domain, offset_provider
-                    )  # We need domain here instead of None because im.cond and im.make_tuple can have an as_fieldop as argument and then we need to pass the domain
-                    infered_args_expr.append(infered_arg_expr)
-                    # The following condition is necessary to prevent that condition in im.cond get an entry in actual_domains
-                    if (
-                        cpm.is_call_to(arg, "make_tuple")
-                        or isinstance(arg, itir.FunCall)
-                        and isinstance(arg.fun, itir.FunCall)
-                        or isinstance(arg, itir.SymRef)
-                    ):
-                        actual_domains = _merge_domains(actual_domains, actual_domains_arg)
+            return im.call(expr.fun)(*infered_args_expr), actual_domains
+        elif cpm.is_call_to(expr, "tuple_get"):
+            idx, tuple_arg = expr.args
+            assert isinstance(idx, itir.Literal)
+            child_domain = tuple(
+                None if i != int(idx.value) else domain for i in range(int(idx.value) + 1)
+            )
+            infered_arg_expr, actual_domains_arg = infer_expr(
+                tuple_arg, child_domain, offset_provider
+            )
 
-        return im.call(expr.fun)(*infered_args_expr), actual_domains
+            infered_args_expr = im.tuple_get(idx.value, infered_arg_expr)
+            actual_domains = _merge_domains(actual_domains, actual_domains_arg)
+            return infered_args_expr, actual_domains
+        elif cpm.is_call_to(expr, "cond"):
+            cond, true_val, false_val = expr.args
+            for arg in [true_val, false_val]:
+                infered_arg_expr, actual_domains_arg = infer_expr(arg, domain, offset_provider)
+                infered_args_expr.append(infered_arg_expr)
+                actual_domains = _merge_domains(actual_domains, actual_domains_arg)
+            return im.call(expr.fun)(cond, *infered_args_expr), actual_domains
+        elif (
+            cpm.is_call_to(expr, itir.ARITHMETIC_BUILTINS)
+            or cpm.is_call_to(expr, itir.TYPEBUILTINS)
+            or cpm.is_call_to(expr, "cast_")
+        ):
+            return expr, actual_domains
+        else:
+            raise ValueError(f"Unsupported expression: {expr}")
     else:
         raise ValueError(f"Unsupported expression: {expr}")
 
@@ -269,42 +277,29 @@ def infer_program(
     program: itir.Program,
     offset_provider: dict[str, Dimension],
 ) -> itir.Program:
-    accessed_domains: ACCESSED_DOMAINS = {}
     transformed_set_ats: list[itir.SetAt] = []
+    assert not program.function_definitions  # TODO(tehrengruber): error message
 
-    for set_at in reversed(program.body):
+    for set_at in program.body:
         assert isinstance(set_at, itir.SetAt)
         if isinstance(set_at.expr, itir.SymRef):
-            transformed_set_ats.insert(0, set_at)
+            transformed_set_ats.append(set_at)
             continue
         assert isinstance(set_at.expr, itir.Expr)
         assert isinstance(
             set_at.target, itir.SymRef
         )  # TODO: stmt.target can be an expr, e.g. make_tuple
 
-        accessed_domains[set_at.target.id] = SymbolicDomain.from_expr(set_at.domain)
-        transformed_call, current_accessed_domains = infer_expr(
-            set_at.expr, accessed_domains[set_at.target.id], offset_provider
+        transformed_call, _unused_domain = infer_expr(
+            set_at.expr, SymbolicDomain.from_expr(set_at.domain), offset_provider
         )
-        transformed_set_ats.insert(
-            0,
+        transformed_set_ats.append(
             itir.SetAt(
                 expr=transformed_call,
-                domain=SymbolicDomain.as_expr(accessed_domains[set_at.target.id])  # type: ignore[arg-type]  # ensured by if condition
-                if accessed_domains[set_at.target.id] is not None
-                else None,
+                domain=(set_at.domain),
                 target=set_at.target,
             ),
         )
-
-        for field in current_accessed_domains:
-            if field in accessed_domains:
-                # TODO(tehrengruber): if domain_ref is an external field the domain must
-                #  already be larger. This should be checked, but would require additions
-                #  to the IR.
-                pass
-            else:
-                accessed_domains[field] = current_accessed_domains[field]
 
     new_declarations = copy.deepcopy(program.declarations)
 

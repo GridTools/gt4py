@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import abc
 from typing import Any, Dict, Optional, Type, Union
 
@@ -19,12 +21,12 @@ REGISTRY = gt_utils.Registry()
 AnyStencilFunc = Union[StencilFunc, AnnotatedStencilFunc]
 
 
-def from_name(name: str) -> Optional[Type["Frontend"]]:
+def from_name(name: str) -> Optional[Type[Frontend]]:
     """Return frontend by name."""
     return REGISTRY.get(name, None)
 
 
-def register(frontend_cls: Type["Frontend"]) -> None:
+def register(frontend_cls: Type[Frontend]) -> None:
     """Register a new frontend."""
     return REGISTRY.register(frontend_cls.name, frontend_cls)
 
