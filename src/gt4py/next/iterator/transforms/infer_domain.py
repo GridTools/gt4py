@@ -11,8 +11,8 @@ from gt4py.eve.extended_typing import Dict, Tuple
 from gt4py.next.common import Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
-from gt4py.next.iterator.transforms.global_tmps import AUTO_DOMAIN, SymbolicDomain, domain_union
 from gt4py.next.iterator.transforms import trace_shifts
+from gt4py.next.iterator.transforms.global_tmps import AUTO_DOMAIN, SymbolicDomain, domain_union
 
 
 def _merge_domains(
@@ -27,6 +27,7 @@ def _merge_domains(
 
     return new_domains
 
+
 def extract_shifts_and_translate_domains(
     stencil: itir.Expr,
     input_ids: list[str],
@@ -34,10 +35,7 @@ def extract_shifts_and_translate_domains(
     offset_provider: Dict[str, Dimension],
     accessed_domains: Dict[str, SymbolicDomain],
 ):
-    shifts_results = trace_shifts.trace_stencil(
-        stencil,
-        num_args=len(input_ids)
-    )
+    shifts_results = trace_shifts.trace_stencil(stencil, num_args=len(input_ids))
 
     for in_field_id, shifts_list in zip(input_ids, shifts_results, strict=True):
         new_domains = [
