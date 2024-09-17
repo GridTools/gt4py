@@ -12,7 +12,7 @@ from gt4py.next.common import Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms.global_tmps import AUTO_DOMAIN, SymbolicDomain, domain_union
-from gt4py.next.iterator.transforms.trace_shifts import TraceShifts
+from gt4py.next.iterator.transforms import trace_shifts
 
 
 def _merge_domains(
@@ -27,20 +27,6 @@ def _merge_domains(
 
     return new_domains
 
-
-# FIXME[#1582](tehrengruber): Use new TraceShift API when #1592 is merged.
-def trace_shifts(
-    stencil: itir.Expr, input_ids: list[str], domain: itir.Expr
-) -> dict[str, set[tuple[itir.OffsetLiteral, ...]]]:
-    node = itir.StencilClosure(
-        stencil=stencil,
-        inputs=[im.ref(id_) for id_ in input_ids],
-        output=im.ref("__dummy"),
-        domain=domain,
-    )
-    return TraceShifts.apply(node, inputs_only=True)  # type: ignore[return-value]  # ensured by inputs_only=True
-
-
 def extract_shifts_and_translate_domains(
     stencil: itir.Expr,
     input_ids: list[str],
@@ -48,11 +34,12 @@ def extract_shifts_and_translate_domains(
     offset_provider: Dict[str, Dimension],
     accessed_domains: Dict[str, SymbolicDomain],
 ):
-    shifts_results = trace_shifts(stencil, input_ids, SymbolicDomain.as_expr(target_domain))
+    shifts_results = trace_shifts.trace_stencil(
+        stencil,
+        num_args=len(input_ids)
+    )
 
-    for in_field_id in input_ids:
-        shifts_list = shifts_results[in_field_id]
-
+    for in_field_id, shifts_list in zip(input_ids, shifts_results, strict=True):
         new_domains = [
             SymbolicDomain.translate(target_domain, shift, offset_provider) for shift in shifts_list
         ]
