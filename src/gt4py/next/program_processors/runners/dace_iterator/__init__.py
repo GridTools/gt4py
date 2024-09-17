@@ -391,13 +391,15 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         )
         itir_tmp_fencil = program_to_fencil.program_to_fencil(itir_tmp)
         for closure in itir_tmp_fencil.closures:
-            shifts = itir_transforms.trace_shifts.TraceShifts.apply(closure)
-            for k, v in shifts.items():
-                if not isinstance(k, str):
+            params_shifts = itir_transforms.trace_shifts.trace_stencil(
+                closure.stencil, num_args=len(closure.inputs)
+            )
+            for param, shifts in zip(closure.inputs, params_shifts):
+                if not isinstance(param.id, str):
                     continue
-                if k not in sdfg.gt4py_program_input_fields:
+                if param.id not in sdfg.gt4py_program_input_fields:
                     continue
-                sdfg.offset_providers_per_input_field.setdefault(k, []).extend(list(v))
+                sdfg.offset_providers_per_input_field.setdefault(param.id, []).extend(list(shifts))
 
         return sdfg
 

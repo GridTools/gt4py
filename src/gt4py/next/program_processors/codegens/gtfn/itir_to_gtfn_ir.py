@@ -7,7 +7,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
-from typing import Any, ClassVar, Iterable, Optional, Type, TypeGuard, Union
+import functools
+from typing import Any, Callable, ClassVar, Iterable, Optional, Type, TypeGuard, Union
 
 import gt4py.eve as eve
 from gt4py.eve import utils as eve_utils
@@ -31,6 +32,7 @@ from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import (
     ScanExecution,
     ScanPassDefinition,
     SidComposite,
+    SidFromScalar,
     StencilExecution,
     TagDefinition,
     TaggedValues,
@@ -238,6 +240,49 @@ class _CannonicalizeUnstructuredDomain(eve.NodeTranslator):
             raise TypeError(f"Expected a 'Program', got '{type(node).__name__}'.")
 
         return cls().visit(node)
+
+
+def _process_elements(
+    process_func: Callable[..., Expr],
+    obj: Expr,
+    type_: ts.TypeSpec,
+    *,
+    tuple_constructor: Callable[..., Expr] = lambda *elements: FunCall(
+        fun=SymRef(id="make_tuple"), args=list(elements)
+    ),
+) -> Expr:
+    """
+    Recursively applies a processing function to all primitive constituents of a tuple.
+
+    Be aware that this function duplicates the `obj` expression and should hence be used with care.
+
+    Arguments:
+        process_func: A callable that takes a gtfn_ir.Expr representing a leaf-element of `obj`.
+        obj: The object whose elements are to be transformed.
+        type_: A type with the same structure as the elements of `obj`.
+        tuple_constructor: By default all transformed tuple elements are just put in a tuple again.
+            This can be customized by passing a different Callable.
+    """
+    assert isinstance(type_, ts.TypeSpec)
+
+    def _gen_constituent_expr(el_type: ts.ScalarType | ts.FieldType, path: tuple[int, ...]) -> Expr:
+        # construct expression for the currently processed element
+        el = functools.reduce(
+            lambda cur_expr, i: FunCall(
+                fun=SymRef(id="tuple_get"), args=[IntegralConstant(value=i), cur_expr]
+            ),
+            path,
+            obj,
+        )
+        return process_func(el, el_type)
+
+    result = type_info.apply_to_primitive_constituents(
+        _gen_constituent_expr,
+        type_,
+        with_path_arg=True,
+        tuple_constructor=tuple_constructor,
+    )
+    return result
 
 
 @dataclasses.dataclass(frozen=True)
@@ -469,11 +514,23 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         )
 
     def _visit_output_argument(self, node: itir.Expr) -> SidComposite | SymRef:
-        if isinstance(node, itir.SymRef):
-            return self.visit(node)
-        elif isinstance(node, itir.FunCall) and node.fun == itir.SymRef(id="make_tuple"):
-            return SidComposite(values=[self._visit_output_argument(v) for v in node.args])
-        raise ValueError("Expected 'SymRef' or 'make_tuple' in output argument.")
+        lowered_output = self.visit(node)
+
+        # just a sanity check, identity function otherwise
+        def check_el_type(el_expr: Expr, el_type: ts.ScalarType | ts.FieldType) -> Expr:
+            assert isinstance(el_type, ts.FieldType)
+            return el_expr
+
+        assert isinstance(node.type, ts.TypeSpec)
+        lowered_output_as_sid = _process_elements(
+            check_el_type,
+            lowered_output,
+            node.type,
+            tuple_constructor=lambda *elements: SidComposite(values=list(elements)),
+        )
+
+        assert isinstance(lowered_output_as_sid, (SidComposite, SymRef))
+        return lowered_output_as_sid
 
     @staticmethod
     def _merge_scans(
@@ -530,6 +587,29 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         stencil = node.expr.fun.args[0]  # type: ignore[attr-defined] # checked in assert
         domain = node.domain
         inputs = node.expr.args
+        lowered_inputs = []
+        for input_ in inputs:
+            lowered_input = self.visit(input_, **kwargs)
+
+            # convert scalar elements into SIDs, leave rest as is
+            def convert_el_to_sid(el_expr: Expr, el_type: ts.ScalarType | ts.FieldType) -> Expr:
+                if isinstance(el_type, ts.ScalarType):
+                    return SidFromScalar(arg=el_expr)
+                else:
+                    assert isinstance(el_type, ts.FieldType)
+                    return el_expr
+
+            assert isinstance(input_.type, ts.TypeSpec)
+            lowered_input_as_sid = _process_elements(
+                convert_el_to_sid,
+                lowered_input,
+                input_.type,
+                tuple_constructor=lambda *elements: SidComposite(values=list(elements)),
+            )
+
+            assert isinstance(lowered_input_as_sid, (SidComposite, SidFromScalar, SymRef))
+            lowered_inputs.append(lowered_input_as_sid)
+
         backend = Backend(domain=self.visit(domain, stencil=stencil, **kwargs))
         if _is_scan(stencil):
             scan_id = self.uids.sequential_id(prefix="_scan")
@@ -550,7 +630,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             return ScanExecution(
                 backend=backend,
                 scans=[scan],
-                args=[self._visit_output_argument(node.target), *self.visit(inputs)],
+                args=[self._visit_output_argument(node.target), *lowered_inputs],
                 axis=SymRef(id=column_axis.value),
             )
         return StencilExecution(
@@ -561,7 +641,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 **kwargs,
             ),
             output=self._visit_output_argument(node.target),
-            inputs=self.visit(inputs, **kwargs),
+            inputs=lowered_inputs,
             backend=backend,
         )
 

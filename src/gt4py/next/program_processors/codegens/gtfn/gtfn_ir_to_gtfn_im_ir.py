@@ -10,7 +10,7 @@ import dataclasses
 from typing import Any, Dict, Iterable, Iterator, List, Optional, TypeGuard, Union
 
 import gt4py.eve as eve
-from gt4py.eve import NodeTranslator
+from gt4py.eve import NodeTranslator, concepts
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next import common
 from gt4py.next.program_processors.codegens.gtfn import gtfn_ir, gtfn_ir_common
@@ -321,6 +321,22 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         return ImperativeFunctionDefinition(
             id=node.id, params=node.params, fun=[*self.imp_list_ir, ReturnStmt(ret=ret)]
         )
+
+    def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
+        kwargs = {
+            **kwargs,
+            "inside_fun": kwargs.get("inside_fun", False)
+            or isinstance(node, gtfn_ir.FunctionDefinition),
+        }
+
+        # only transform things inside of function definitions and leave the rest as is
+        if kwargs["inside_fun"]:
+            # we are inside a function, visit as usual
+            return super().visit(node, **kwargs)
+        else:
+            # we are outside of a function, don't transform anything (i.e. don't call any `vist_`
+            # methods on `node`), but just visit child nodes.
+            return self.generic_visit(node, **kwargs)
 
     def visit_ScanPassDefinition(
         self, node: gtfn_ir.ScanPassDefinition, **kwargs: Any
