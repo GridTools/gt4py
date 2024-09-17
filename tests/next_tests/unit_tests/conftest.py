@@ -70,7 +70,7 @@ def program_processor(request) -> tuple[ppi.ProgramProcessor, bool]:
     for marker, skip_mark, msg in next_tests.definitions.BACKEND_SKIP_TEST_MATRIX.get(
         processor_id, []
     ):
-        if marker == next_tests.definitions.ALL or request.node.get_closest_marker(marker):
+        if request.node.get_closest_marker(marker):
             skip_mark(msg.format(marker=marker, backend=processor_id))
 
     return processor, is_backend
