@@ -39,7 +39,7 @@ class PruneUnreferencedFundefs(PreserveLocationVisitor, NodeTranslator):
         referenced.add(node.id)
         return node
 
-    def visit_FencilDefinition(self, node: ir.FencilDefinition):
+    def visit_Program(self, node: ir.Program):
         referenced: Set[str] = set()
         self.generic_visit(node, referenced=referenced, second_pass=False)
         return self.generic_visit(node, referenced=referenced, second_pass=True)

@@ -9,7 +9,7 @@
 import dataclasses
 from typing import ClassVar, Optional
 
-import gt4py.next.iterator.ir_utils.common_pattern_matcher as common_pattern_matcher
+import gt4py.next.iterator.ir_utils.common_pattern_matcher as cpm
 from gt4py import eve
 from gt4py.eve import utils as eve_utils
 from gt4py.next.iterator import ir as itir
@@ -50,27 +50,30 @@ class InlineCenterDerefLiftVars(eve.NodeTranslator):
     uids: eve_utils.UIDGenerator
 
     @classmethod
-    def apply(cls, node: itir.FencilDefinition, uids: Optional[eve_utils.UIDGenerator] = None):
+    def apply(cls, node: itir.Program, uids: Optional[eve_utils.UIDGenerator] = None):
         if not uids:
             uids = eve_utils.UIDGenerator()
         return cls(uids=uids).visit(node)
 
-    def visit_StencilClosure(self, node: itir.StencilClosure, **kwargs):
+    def visit_FunCall(self, node: itir.FunCall, **kwargs):
         # TODO(tehrengruber): move the analysis out of this pass and just make it a requirement
         #  such that we don't need to run in multiple times if multiple passes use it.
-        trace_shifts.trace_stencil(node.stencil, num_args=len(node.inputs), save_to_annex=True)
-        return self.generic_visit(node, **kwargs)
+        if cpm.is_call_to(node.fun, "as_fieldop"):
+            assert len(node.fun.args) in [1, 2]
+            trace_shifts.trace_stencil(
+                node.fun.args[0], num_args=len(node.args), save_to_annex=True
+            )
 
-    def visit_FunCall(self, node: itir.FunCall, **kwargs):
         node = self.generic_visit(node)
-        if common_pattern_matcher.is_let(node):
+
+        if cpm.is_let(node):
             assert isinstance(node.fun, itir.Lambda)  # to make mypy happy
             eligible_params = [False] * len(node.fun.params)
             new_args = []
             bound_scalars: dict[str, itir.Expr] = {}
 
             for i, (param, arg) in enumerate(zip(node.fun.params, node.args)):
-                if common_pattern_matcher.is_applied_lift(arg) and is_center_derefed_only(param):
+                if cpm.is_applied_lift(arg) and is_center_derefed_only(param):
                     eligible_params[i] = True
                     bound_arg_name = self.uids.sequential_id(prefix="_icdlv")
                     capture_lift = im.promote_to_const_iterator(bound_arg_name)

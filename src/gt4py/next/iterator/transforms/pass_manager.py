@@ -80,20 +80,15 @@ def apply_common_transforms(
     ] = None,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
 ) -> itir.Program:
-    if isinstance(ir, itir.Program):
-        # TODO(havogt): during refactoring to GTIR, we bypass transformations in case we already translated to itir.Program
-        # (currently the case when using the roundtrip backend)
-        # TODO should not be here
-        ir = InlineFundefs().visit(ir)
-        ir = PruneUnreferencedFundefs().visit(ir)
-        ir = InlineLambdas.apply(ir, opcount_preserving=True)
-        print(ir)
-        ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
-        ir = CollapseTuple.apply(
-            ir,
-            offset_provider=offset_provider
-        )  # uses type inference and therefore should only run after domain propagation, but makes some simple cases work for now
-        return ir
+    if isinstance(ir, (itir.FencilDefinition, FencilWithTemporaries)):
+        ir = fencil_to_program.FencilToProgram().apply(
+            ir
+        )  # FIXME[#1582](havogt): should be removed after refactoring to combined IR
+    else:
+        assert isinstance(ir, itir.Program)
+        # FIXME[#1582](havogt): note: currently the case when using the roundtrip backend
+        pass
+
     icdlv_uids = eve_utils.UIDGenerator()
 
     if lift_mode is None:
@@ -141,6 +136,8 @@ def apply_common_transforms(
         raise RuntimeError("Inlining 'lift' and 'lambdas' did not converge.")
 
     if lift_mode != LiftMode.FORCE_INLINE:
+        # FIXME[#1582](tehrengruber): implement new temporary pass here
+        raise NotImplementedError()
         assert offset_provider is not None
         ir = CreateGlobalTmps().visit(
             ir,
