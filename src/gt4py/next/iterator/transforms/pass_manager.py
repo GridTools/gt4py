@@ -11,6 +11,7 @@ from typing import Callable, Optional
 
 from gt4py.eve import utils as eve_utils
 from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator.transforms import fencil_to_program
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
@@ -78,7 +79,7 @@ def apply_common_transforms(
         Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
     ] = None,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
-) -> itir.FencilDefinition | FencilWithTemporaries | itir.Program:
+) -> itir.Program:
     if isinstance(ir, itir.Program):
         # TODO(havogt): during refactoring to GTIR, we bypass transformations in case we already translated to itir.Program
         # (currently the case when using the roundtrip backend)
@@ -174,6 +175,11 @@ def apply_common_transforms(
     ir = FuseMaps().visit(ir)
     ir = CollapseListGet().visit(ir)
 
+    assert isinstance(ir, (itir.FencilDefinition, FencilWithTemporaries))
+    ir = fencil_to_program.FencilToProgram().apply(
+        ir
+    )  # FIXME[#1582](havogt): should be removed after refactoring to combined IR
+
     if unroll_reduce:
         for _ in range(10):
             unrolled = UnrollReduce.apply(ir, offset_provider=offset_provider)
@@ -191,12 +197,12 @@ def apply_common_transforms(
     ir = ScanEtaReduction().visit(ir)
 
     if common_subexpression_elimination:
-        ir = CommonSubexpressionElimination().visit(ir)
+        ir = CommonSubexpressionElimination.apply(ir, offset_provider=offset_provider)  # type: ignore[type-var]  # always an itir.Program
         ir = MergeLet().visit(ir)
 
     ir = InlineLambdas.apply(
         ir, opcount_preserving=True, force_inline_lambda_args=force_inline_lambda_args
     )
 
-    assert isinstance(ir, (itir.FencilDefinition, FencilWithTemporaries))
+    assert isinstance(ir, itir.Program)
     return ir
