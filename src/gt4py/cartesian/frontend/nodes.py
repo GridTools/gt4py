@@ -133,6 +133,8 @@ storing a reference to the piece of source code which originated the node.
 
 """
 
+from __future__ import annotations
+
 import enum
 import operator
 import sys
@@ -704,7 +706,7 @@ class AxisInterval(Node):
 
         return self.start.level == self.end.level and self.start.offset == self.end.offset - 1
 
-    def disjoint_from(self, other: "AxisInterval") -> bool:
+    def disjoint_from(self, other: AxisInterval) -> bool:
         def get_offset(bound: AxisBound) -> int:
             return (
                 0 + bound.offset if bound.level == LevelMarker.START else sys.maxsize + bound.offset

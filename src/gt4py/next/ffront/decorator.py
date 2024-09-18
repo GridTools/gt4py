@@ -26,6 +26,7 @@ from gt4py.eve import extended_typing as xtyping
 from gt4py.next import (
     allocators as next_allocators,
     backend as next_backend,
+    common,
     embedded as next_embedded,
     errors,
 )
@@ -91,11 +92,7 @@ class Program:
         connectivities: Optional[dict[str, Connectivity]] = None,
     ) -> Program:
         program_def = ffront_stages.ProgramDefinition(definition=definition, grid_type=grid_type)
-        return cls(
-            definition_stage=program_def,
-            backend=backend,
-            connectivities=connectivities,
-        )
+        return cls(definition_stage=program_def, backend=backend, connectivities=connectivities)
 
     # needed in testing
     @property
@@ -197,6 +194,34 @@ class Program:
             return self.backend.transforms.past_to_itir(no_args_past).data
         return next_backend.DEFAULT_TRANSFORMS.past_to_itir(no_args_past).data
 
+    @functools.cached_property
+    def _implicit_offset_provider(self) -> dict[common.Tag, common.OffsetProviderElem]:
+        """
+        Add all implicit offset providers.
+
+        Each dimension implicitly defines an offset provider such that we can allow syntax like::
+
+            field(TDim + 1)
+
+        This function adds these implicit offset providers.
+        """
+        # TODO(tehrengruber): We add all dimensions here regardless of whether they are cartesian
+        #  or unstructured. While it is conceptually fine, but somewhat meaningless,
+        #  to do something `Cell+1` the GTFN backend for example doesn't support these. We should
+        #  find a way to avoid adding these dimensions, but since we don't have the grid type here
+        #  and since the dimensions don't this information either, we just add all dimensions here
+        #  and filter them out in the backends that don't support this.
+        implicit_offset_provider = {}
+        params = self.past_stage.past_node.params
+        for param in params:
+            if isinstance(param.type, ts.FieldType):
+                for dim in param.type.dims:
+                    if dim.kind in (common.DimensionKind.HORIZONTAL, common.DimensionKind.VERTICAL):
+                        implicit_offset_provider.update(
+                            {common.dimension_to_implicit_offset(dim.value): dim}
+                        )
+        return implicit_offset_provider
+
     def __call__(
         self, *args: Any, offset_provider: dict[str, Dimension | Connectivity], **kwargs: Any
     ) -> None:
@@ -208,6 +233,7 @@ class Program:
                 stacklevel=2,
             )
             with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
+                # TODO(ricoh): check if rewriting still needed
                 rewritten_args, size_args, kwargs = past_process_args._process_args(
                     self.past_stage.past_node, args, kwargs
                 )
@@ -215,6 +241,7 @@ class Program:
             return
 
         ppi.ensure_processor_kind(self.backend.executor, ppi.ProgramExecutor)
+
         self.backend(
             self.definition_stage, *args, **(kwargs | {"offset_provider": offset_provider})
         )

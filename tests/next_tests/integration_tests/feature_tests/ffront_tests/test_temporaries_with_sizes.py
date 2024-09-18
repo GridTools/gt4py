@@ -108,4 +108,4 @@ def test_temporary_symbols(testee, mesh_descriptor):
 
     params = ["num_vertices", "num_edges", "num_cells"]
     for param in params:
-        assert any([param == str(p) for p in itir_with_tmp.fencil.params])
+        assert any([param == str(p) for p in itir_with_tmp.params])

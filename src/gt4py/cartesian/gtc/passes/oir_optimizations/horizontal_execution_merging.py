@@ -137,7 +137,7 @@ class OnTheFlyMerging(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     """Merges consecutive horizontal executions inside parallel vertical loops by introducing redundant computations.
 
     Limitations:
-    * Works on the level of whole horizontal executions, no full dependency analysis is performed (common subexpression and dead code eliminitation at a later stage can work around this limitation).
+    * Works on the level of whole horizontal executions, no full dependency analysis is performed (common subexpression and dead code elimination at a later stage can work around this limitation).
     * The chosen default merge limits are totally arbitrary.
     """
 

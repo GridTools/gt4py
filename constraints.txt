@@ -9,23 +9,23 @@ alabaster==0.7.13         # via sphinx
 annotated-types==0.7.0    # via pydantic
 asttokens==2.4.1          # via devtools, stack-data
 astunparse==1.6.3 ; python_version < "3.9"  # via dace, gt4py (pyproject.toml)
-attrs==24.2.0             # via flake8-bugbear, flake8-eradicate, gt4py (pyproject.toml), hypothesis, jsonschema, referencing
-babel==2.15.0             # via sphinx
+attrs==24.2.0             # via gt4py (pyproject.toml), hypothesis, jsonschema, referencing
+babel==2.16.0             # via sphinx
 backcall==0.2.0           # via ipython
 black==24.8.0             # via gt4py (pyproject.toml)
 boltons==24.0.0           # via gt4py (pyproject.toml)
 bracex==2.5               # via wcmatch
-build==1.2.1              # via pip-tools
-bump-my-version==0.25.0   # via -r requirements-dev.in
+build==1.2.2              # via pip-tools
+bump-my-version==0.26.0   # via -r requirements-dev.in
 cached-property==1.5.2    # via gt4py (pyproject.toml)
-cachetools==5.4.0         # via tox
-certifi==2024.7.4         # via requests
+cachetools==5.5.0         # via tox
+certifi==2024.8.30        # via requests
 cfgv==3.4.0               # via pre-commit
 chardet==5.2.0            # via tox
 charset-normalizer==3.3.2  # via requests
 clang-format==18.1.8      # via -r requirements-dev.in, gt4py (pyproject.toml)
 click==8.1.7              # via black, bump-my-version, gt4py (pyproject.toml), pip-tools, rich-click
-cmake==3.30.2             # via gt4py (pyproject.toml)
+cmake==3.30.3             # via gt4py (pyproject.toml)
 cogapp==3.4.1             # via -r requirements-dev.in
 colorama==0.4.6           # via tox
 comm==0.2.2               # via ipykernel
@@ -37,43 +37,35 @@ dace==0.16.1              # via gt4py (pyproject.toml)
 darglint==1.8.1           # via -r requirements-dev.in
 debugpy==1.8.5            # via ipykernel
 decorator==5.1.1          # via ipython
-deepdiff==7.0.1           # via gt4py (pyproject.toml)
+deepdiff==8.0.1           # via gt4py (pyproject.toml)
 devtools==0.12.2          # via gt4py (pyproject.toml)
 dill==0.3.8               # via dace
 distlib==0.3.8            # via virtualenv
-docutils==0.20.1          # via restructuredtext-lint, sphinx, sphinx-rtd-theme
-eradicate==2.3.0          # via flake8-eradicate
+docutils==0.20.1          # via sphinx, sphinx-rtd-theme
+eval-type-backport==0.2.0  # via tach
 exceptiongroup==1.2.2     # via hypothesis, pytest
 execnet==2.1.1            # via pytest-cache, pytest-xdist
-executing==2.0.1          # via devtools, stack-data
-factory-boy==3.3.0        # via gt4py (pyproject.toml), pytest-factoryboy
-faker==26.2.0             # via factory-boy
+executing==2.1.0          # via devtools, stack-data
+factory-boy==3.3.1        # via gt4py (pyproject.toml), pytest-factoryboy
+faker==28.4.1             # via factory-boy
 fastjsonschema==2.20.0    # via nbformat
-filelock==3.15.4          # via tox, virtualenv
-flake8==7.1.1             # via -r requirements-dev.in, flake8-bugbear, flake8-builtins, flake8-debugger, flake8-docstrings, flake8-eradicate, flake8-mutable, flake8-pyproject, flake8-rst-docstrings
-flake8-bugbear==24.4.26   # via -r requirements-dev.in
-flake8-builtins==2.5.0    # via -r requirements-dev.in
-flake8-debugger==4.1.2    # via -r requirements-dev.in
-flake8-docstrings==1.7.0  # via -r requirements-dev.in
-flake8-eradicate==1.5.0   # via -r requirements-dev.in
-flake8-mutable==1.2.0     # via -r requirements-dev.in
-flake8-pyproject==1.2.3   # via -r requirements-dev.in
-flake8-rst-docstrings==0.3.0  # via -r requirements-dev.in
+filelock==3.16.0          # via tox, virtualenv
 fonttools==4.53.1         # via matplotlib
 fparser==0.1.4            # via dace
 frozendict==2.4.4         # via gt4py (pyproject.toml)
+gitdb==4.0.11             # via gitpython
+gitpython==3.1.43         # via tach
 gridtools-cpp==2.3.4      # via gt4py (pyproject.toml)
-hypothesis==6.109.0       # via -r requirements-dev.in, gt4py (pyproject.toml)
+hypothesis==6.112.0       # via -r requirements-dev.in, gt4py (pyproject.toml)
 identify==2.6.0           # via pre-commit
-idna==3.7                 # via requests
+idna==3.8                 # via requests
 imagesize==1.4.1          # via sphinx
-importlib-metadata==8.2.0  # via build, jupyter-client, sphinx
-importlib-resources==6.4.0 ; python_version < "3.9"  # via gt4py (pyproject.toml), jsonschema, jsonschema-specifications, matplotlib
+importlib-metadata==8.5.0  # via build, jupyter-client, sphinx
+importlib-resources==6.4.5 ; python_version < "3.9"  # via gt4py (pyproject.toml), jsonschema, jsonschema-specifications, matplotlib
 inflection==0.5.1         # via pytest-factoryboy
 iniconfig==2.0.0          # via pytest
 ipykernel==6.29.5         # via nbmake
 ipython==8.12.3           # via ipykernel
-isort==5.13.2             # via -r requirements-dev.in
 jedi==0.19.1              # via ipython
 jinja2==3.1.4             # via dace, gt4py (pyproject.toml), sphinx
 jsonschema==4.23.0        # via nbformat
@@ -81,29 +73,28 @@ jsonschema-specifications==2023.12.1  # via jsonschema
 jupyter-client==8.6.2     # via ipykernel, nbclient
 jupyter-core==5.7.2       # via ipykernel, jupyter-client, nbformat
 jupytext==1.16.4          # via -r requirements-dev.in
-kiwisolver==1.4.5         # via matplotlib
-lark==1.1.9               # via gt4py (pyproject.toml)
+kiwisolver==1.4.7         # via matplotlib
+lark==1.2.2               # via gt4py (pyproject.toml)
 mako==1.3.5               # via gt4py (pyproject.toml)
 markdown-it-py==3.0.0     # via jupytext, mdit-py-plugins, rich
 markupsafe==2.1.5         # via jinja2, mako
 matplotlib==3.7.5         # via -r requirements-dev.in
 matplotlib-inline==0.1.7  # via ipykernel, ipython
-mccabe==0.7.0             # via flake8
-mdit-py-plugins==0.4.1    # via jupytext
+mdit-py-plugins==0.4.2    # via jupytext
 mdurl==0.1.2              # via markdown-it-py
 mpmath==1.3.0             # via sympy
-mypy==1.11.1              # via -r requirements-dev.in
+mypy==1.11.2              # via -r requirements-dev.in
 mypy-extensions==1.0.0    # via black, mypy
-nanobind==2.0.0           # via gt4py (pyproject.toml)
+nanobind==2.1.0           # via gt4py (pyproject.toml)
 nbclient==0.6.8           # via nbmake
 nbformat==5.10.4          # via jupytext, nbclient, nbmake
 nbmake==1.5.4             # via -r requirements-dev.in
 nest-asyncio==1.6.0       # via ipykernel, nbclient
-networkx==3.1             # via dace
+networkx==3.1             # via dace, tach
 ninja==1.11.1.1           # via gt4py (pyproject.toml)
 nodeenv==1.9.1            # via pre-commit
 numpy==1.24.4             # via contourpy, dace, gt4py (pyproject.toml), matplotlib, scipy
-ordered-set==4.1.0        # via deepdiff
+orderly-set==5.2.2        # via deepdiff
 packaging==24.1           # via black, build, gt4py (pyproject.toml), ipykernel, jupytext, matplotlib, pipdeptree, pyproject-api, pytest, pytest-factoryboy, setuptools-scm, sphinx, tox
 parso==0.8.4              # via jedi
 pathspec==0.12.1          # via black
@@ -111,50 +102,49 @@ pexpect==4.9.0            # via ipython
 pickleshare==0.7.5        # via ipython
 pillow==10.4.0            # via matplotlib
 pip-tools==7.4.1          # via -r requirements-dev.in
-pipdeptree==2.23.1        # via -r requirements-dev.in
+pipdeptree==2.23.3        # via -r requirements-dev.in
 pkgutil-resolve-name==1.3.10  # via jsonschema
-platformdirs==4.2.2       # via black, jupyter-core, tox, virtualenv
+platformdirs==4.3.2       # via black, jupyter-core, tox, virtualenv
 pluggy==1.5.0             # via pytest, tox
 ply==3.11                 # via dace
 pre-commit==3.5.0         # via -r requirements-dev.in
-prompt-toolkit==3.0.36    # via ipython, questionary
+prompt-toolkit==3.0.36    # via ipython, questionary, tach
 psutil==6.0.0             # via -r requirements-dev.in, ipykernel, pytest-xdist
 ptyprocess==0.7.0         # via pexpect
 pure-eval==0.2.3          # via stack-data
-pybind11==2.13.1          # via gt4py (pyproject.toml)
-pycodestyle==2.12.1       # via flake8, flake8-debugger
-pydantic==2.8.2           # via bump-my-version, pydantic-settings
-pydantic-core==2.20.1     # via pydantic
-pydantic-settings==2.4.0  # via bump-my-version
-pydocstyle==6.3.0         # via flake8-docstrings
-pyflakes==3.2.0           # via flake8
-pygments==2.18.0          # via -r requirements-dev.in, devtools, flake8-rst-docstrings, ipython, nbmake, rich, sphinx
-pyparsing==3.1.2          # via matplotlib
+pybind11==2.13.5          # via gt4py (pyproject.toml)
+pydantic==2.9.1           # via bump-my-version, pydantic-settings, tach
+pydantic-core==2.23.3     # via pydantic
+pydantic-settings==2.5.2  # via bump-my-version
+pydot==2.0.0              # via tach
+pygments==2.18.0          # via -r requirements-dev.in, devtools, ipython, nbmake, rich, sphinx
+pyparsing==3.1.4          # via matplotlib, pydot
 pyproject-api==1.7.1      # via tox
 pyproject-hooks==1.1.0    # via build, pip-tools
-pytest==8.3.2             # via -r requirements-dev.in, gt4py (pyproject.toml), nbmake, pytest-cache, pytest-cov, pytest-factoryboy, pytest-instafail, pytest-xdist
+pytest==8.3.3             # via -r requirements-dev.in, gt4py (pyproject.toml), nbmake, pytest-cache, pytest-cov, pytest-custom-exit-code, pytest-factoryboy, pytest-instafail, pytest-xdist
 pytest-cache==1.0         # via -r requirements-dev.in
 pytest-cov==5.0.0         # via -r requirements-dev.in
+pytest-custom-exit-code==0.3.0  # via -r requirements-dev.in
 pytest-factoryboy==2.7.0  # via -r requirements-dev.in
 pytest-instafail==0.5.0   # via -r requirements-dev.in
 pytest-xdist==3.6.1       # via -r requirements-dev.in
 python-dateutil==2.9.0.post0  # via faker, jupyter-client, matplotlib
 python-dotenv==1.0.1      # via pydantic-settings
-pytz==2024.1              # via babel
-pyyaml==6.0.2             # via dace, jupytext, pre-commit
-pyzmq==26.1.0             # via ipykernel, jupyter-client
+pytz==2024.2              # via babel
+pyyaml==6.0.2             # via dace, jupytext, pre-commit, tach
+pyzmq==26.2.0             # via ipykernel, jupyter-client
 questionary==2.0.1        # via bump-my-version
 referencing==0.35.1       # via jsonschema, jsonschema-specifications
 requests==2.32.3          # via sphinx
-restructuredtext-lint==1.4.0  # via flake8-rst-docstrings
-rich==13.7.1              # via bump-my-version, rich-click
+rich==13.8.1              # via bump-my-version, rich-click, tach
 rich-click==1.8.3         # via bump-my-version
 rpds-py==0.20.0           # via jsonschema, referencing
-ruff==0.5.6               # via -r requirements-dev.in
+ruff==0.6.4               # via -r requirements-dev.in
 scipy==1.10.1             # via gt4py (pyproject.toml)
 setuptools-scm==8.1.0     # via fparser
 six==1.16.0               # via asttokens, astunparse, python-dateutil
-snowballstemmer==2.2.0    # via pydocstyle, sphinx
+smmap==5.0.1              # via gitdb
+snowballstemmer==2.2.0    # via sphinx
 sortedcontainers==2.4.0   # via hypothesis
 sphinx==7.1.2             # via -r requirements-dev.in, sphinx-rtd-theme, sphinxcontrib-jquery
 sphinx-rtd-theme==2.0.0   # via -r requirements-dev.in
@@ -166,25 +156,28 @@ sphinxcontrib-jsmath==1.0.1  # via sphinx
 sphinxcontrib-qthelp==1.0.3  # via sphinx
 sphinxcontrib-serializinghtml==1.1.5  # via sphinx
 stack-data==0.6.3         # via ipython
+stdlib-list==0.10.0       # via tach
 sympy==1.12.1             # via dace, gt4py (pyproject.toml)
 tabulate==0.9.0           # via gt4py (pyproject.toml)
-tomli==2.0.1 ; python_version < "3.11"  # via -r requirements-dev.in, black, build, coverage, flake8-pyproject, jupytext, mypy, pip-tools, pyproject-api, pytest, setuptools-scm, tox
-tomlkit==0.13.0           # via bump-my-version
+tach==0.10.7              # via -r requirements-dev.in
+tomli==2.0.1 ; python_version < "3.11"  # via -r requirements-dev.in, black, build, coverage, jupytext, mypy, pip-tools, pyproject-api, pytest, setuptools-scm, tox
+tomli-w==1.0.0            # via tach
+tomlkit==0.13.2           # via bump-my-version
 toolz==0.12.1             # via cytoolz
 tornado==6.4.1            # via ipykernel, jupyter-client
-tox==4.17.0               # via -r requirements-dev.in
+tox==4.18.1               # via -r requirements-dev.in
 traitlets==5.14.3         # via comm, ipykernel, ipython, jupyter-client, jupyter-core, matplotlib-inline, nbclient, nbformat
 types-tabulate==0.9.0.20240106  # via -r requirements-dev.in
 typing-extensions==4.12.2  # via annotated-types, black, gt4py (pyproject.toml), ipython, mypy, pydantic, pydantic-core, pytest-factoryboy, rich, rich-click, setuptools-scm
-urllib3==2.2.2            # via requests
-virtualenv==20.26.3       # via pre-commit, tox
+urllib3==2.2.3            # via requests
+virtualenv==20.26.4       # via pre-commit, tox
 wcmatch==9.0              # via bump-my-version
 wcwidth==0.2.13           # via prompt-toolkit
-websockets==12.0          # via dace
+websockets==13.0.1        # via dace
 wheel==0.44.0             # via astunparse, pip-tools
 xxhash==3.0.0             # via gt4py (pyproject.toml)
-zipp==3.19.2              # via importlib-metadata, importlib-resources
+zipp==3.20.1              # via importlib-metadata, importlib-resources
 
 # The following packages are considered to be unsafe in a requirements file:
 pip==24.2                 # via pip-tools, pipdeptree
-setuptools==72.1.0        # via gt4py (pyproject.toml), pip-tools, setuptools-scm
+setuptools==74.1.2        # via gt4py (pyproject.toml), pip-tools, setuptools-scm

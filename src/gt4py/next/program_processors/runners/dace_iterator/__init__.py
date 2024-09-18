@@ -24,6 +24,7 @@ import gt4py.next.iterator.ir as itir
 from gt4py.next import common
 from gt4py.next.ffront import decorator
 from gt4py.next.iterator import transforms as itir_transforms
+from gt4py.next.iterator.transforms import program_to_fencil
 from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.type_system import type_specifications as ts
 
@@ -94,18 +95,12 @@ def preprocess_program(
 
     node = itir_type_inference.infer(node, offset_provider=offset_provider)
 
-    if isinstance(node, itir_transforms.global_tmps.FencilWithTemporaries):
-        fencil_definition = node.fencil
-        tmps = node.tmps
-
-    elif isinstance(node, itir.FencilDefinition):
-        fencil_definition = node
-        tmps = []
-
+    if isinstance(node, itir.Program):
+        fencil_definition = program_to_fencil.program_to_fencil(node)
+        tmps = node.declarations
+        assert all(isinstance(tmp, itir.Temporary) for tmp in tmps)
     else:
-        raise TypeError(
-            f"Expected 'FencilDefinition' or 'FencilWithTemporaries', got '{type(program).__name__}'."
-        )
+        raise TypeError(f"Expected 'Program', got '{type(node).__name__}'.")
 
     return fencil_definition, tmps
 
@@ -345,7 +340,9 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             raise ValueError(
                 "[DaCe Orchestration] Connectivities -at compile time- are required to generate the SDFG. Use `with_connectivities` method."
             )
-        offset_provider = self.connectivities  # tables are None at this point
+        offset_provider = (
+            self.connectivities | self._implicit_offset_provider
+        )  # tables are None at this point
 
         sdfg = self.backend.executor.otf_workflow.step.translation.generate_sdfg(  # type: ignore[union-attr]
             self.itir,
@@ -392,14 +389,17 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         itir_tmp = itir_transforms.apply_common_transforms(
             self.itir, offset_provider=offset_provider
         )
-        for closure in itir_tmp.closures:  # type: ignore[union-attr]
-            shifts = itir_transforms.trace_shifts.TraceShifts.apply(closure)
-            for k, v in shifts.items():
-                if not isinstance(k, str):
+        itir_tmp_fencil = program_to_fencil.program_to_fencil(itir_tmp)
+        for closure in itir_tmp_fencil.closures:
+            params_shifts = itir_transforms.trace_shifts.trace_stencil(
+                closure.stencil, num_args=len(closure.inputs)
+            )
+            for param, shifts in zip(closure.inputs, params_shifts):
+                if not isinstance(param.id, str):
                     continue
-                if k not in sdfg.gt4py_program_input_fields:
+                if param.id not in sdfg.gt4py_program_input_fields:
                     continue
-                sdfg.offset_providers_per_input_field.setdefault(k, []).extend(list(v))
+                sdfg.offset_providers_per_input_field.setdefault(param.id, []).extend(list(shifts))
 
         return sdfg
 

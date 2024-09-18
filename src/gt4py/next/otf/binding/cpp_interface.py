@@ -38,31 +38,22 @@ def render_scalar_type(scalar_type: ts.ScalarType) -> str:
             )
 
 
-def _render_function_param(param: interface.Parameter, index: int) -> str:
-    if isinstance(param.type_, ts.ScalarType):
-        return f"{render_scalar_type(param.type_)} {param.name}"
-    elif ti.is_type_or_tuple_of_type(
-        param.type_, ts.FieldType
-    ):  # TODO(havogt): add support for scalar tuples
-        return f"BufferT{index}&& {param.name}"
-    else:
-        raise ValueError(f"Type '{param.type_}' is not supported in C++ interfaces.")
-
-
 def render_function_declaration(function: interface.Function, body: str) -> str:
-    rendered_params = [
-        _render_function_param(param, index) for index, param in enumerate(function.parameters)
-    ]
+    template_params: list[str] = []
+    rendered_params: list[str] = []
+    for index, param in enumerate(function.parameters):
+        if isinstance(param.type_, ts.ScalarType):
+            rendered_params.append(f"{render_scalar_type(param.type_)} {param.name}")
+        elif ti.is_type_or_tuple_of_type(param.type_, (ts.FieldType, ts.ScalarType)):
+            template_param = f"ArgT{index}"
+            template_params.append(f"class {template_param}")
+            rendered_params.append(f"{template_param}&& {param.name}")
+        else:
+            raise ValueError(f"Type '{param.type_}' is not supported in C++ interfaces.")
+
     rendered_decl = f"""decltype(auto) {function.name}({", ".join(rendered_params)}) {{
         {body}
     }}"""
-    template_params = [
-        f"class BufferT{index}"
-        for index, param in enumerate(function.parameters)
-        if ti.is_type_or_tuple_of_type(
-            param.type_, ts.FieldType
-        )  # TODO(havogt): add support for scalar tuples
-    ]
     if template_params:
         return f"""
         template <{', '.join(template_params)}>

@@ -70,6 +70,20 @@ class DimensionKind(StrEnum):
         return self.value
 
 
+def dimension_to_implicit_offset(dim: str) -> str:
+    """
+    Return name of offset implicitly defined by a dimension.
+
+    Each dimension implicitly also defines an offset, such that we can allow syntax like::
+
+        field(TDim + 1)
+
+    without having to explicitly define an offset for ``TDim``. This function defines the respective
+    naming convention.
+    """
+    return f"_{dim}Off"
+
+
 @dataclasses.dataclass(frozen=True)
 class Dimension:
     value: str
@@ -80,6 +94,18 @@ class Dimension:
 
     def __call__(self, val: int) -> NamedIndex:
         return NamedIndex(self, val)
+
+    def __add__(self, offset: int) -> ConnectivityField:
+        # TODO(sf-n): just to avoid circular import. Move or refactor the FieldOffset to avoid this.
+        from gt4py.next.ffront import fbuiltins
+
+        assert isinstance(self.value, str)
+        return fbuiltins.FieldOffset(
+            dimension_to_implicit_offset(self.value), source=self, target=(self,)
+        )[offset]
+
+    def __sub__(self, offset: int) -> ConnectivityField:
+        return self + (-offset)
 
 
 class Infinity(enum.Enum):
@@ -672,7 +698,11 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
 
     # Operators
     @abc.abstractmethod
-    def __call__(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> Field: ...
+    def __call__(
+        self,
+        index_field: ConnectivityField | fbuiltins.FieldOffset,
+        *args: ConnectivityField | fbuiltins.FieldOffset,
+    ) -> Field: ...
 
     @abc.abstractmethod
     def __getitem__(self, item: AnyIndexSpec) -> Self: ...
@@ -992,7 +1022,11 @@ class CartesianConnectivity(ConnectivityField[Dims[DomainDimT], DimT]):
         assert isinstance(image_range, UnitRange)
         return (named_range((self.domain_dim, image_range - self.offset)),)
 
-    def premap(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> ConnectivityField:
+    def premap(
+        self,
+        index_field: ConnectivityField | fbuiltins.FieldOffset,
+        *args: ConnectivityField | fbuiltins.FieldOffset,
+    ) -> ConnectivityField:
         raise NotImplementedError()
 
     __call__ = premap

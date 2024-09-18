@@ -173,14 +173,13 @@ class SimpleTemporaryExtractionHeuristics:
 
     closure: ir.StencilClosure
 
-    @functools.cached_property
-    def closure_shifts(
-        self,
-    ) -> dict[int, set[tuple[ir.OffsetLiteral, ...]]]:
-        return trace_shifts.TraceShifts.apply(self.closure, inputs_only=False)  # type: ignore[return-value] # TODO fix weird `apply` overloads
+    def __post_init__(self) -> None:
+        trace_shifts.trace_stencil(
+            self.closure.stencil, num_args=len(self.closure.inputs), save_to_annex=True
+        )
 
     def __call__(self, expr: ir.Expr) -> bool:
-        shifts = self.closure_shifts[id(expr)]
+        shifts = expr.annex.recorded_shifts
         if len(shifts) > 1:
             return True
         return False
@@ -565,8 +564,9 @@ def update_domains(
 
         closures.append(closure)
 
-        local_shifts = trace_shifts.TraceShifts.apply(closure)
-        for param, shift_chains in local_shifts.items():
+        local_shifts = trace_shifts.trace_stencil(closure.stencil, num_args=len(closure.inputs))
+        for param_sym, shift_chains in zip(closure.inputs, local_shifts):
+            param = param_sym.id
             assert isinstance(param, str)
             consumed_domains: list[SymbolicDomain] = (
                 [SymbolicDomain.from_expr(domains[param])] if param in domains else []

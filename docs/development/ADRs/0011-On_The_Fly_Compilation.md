@@ -195,7 +195,7 @@ _edit 2023-03-29_
 
 `NamedStepSequence` solves the following problem:
 
-By making it possible to quickly create a variant of an existing workflow (using `workflow.replace`), they make it unneccessary to escalate sub-workflow configuration.
+By making it possible to quickly create a variant of an existing workflow (using `workflow.replace`), they make it unnecessary to escalate sub-workflow configuration.
 
 Coming back to the above example of `ExampleWorkflow`, instead of:
 
@@ -277,7 +277,7 @@ This greatly simplifies accessing already compiled and cached (across runs) GT4P
 
 Whereas when using the `BuildData` one only requires to run steps 1) and 2) to get the cached project folder and the rest can be accessed from there. These steps can be skipped as well by implementing more aggressive caching (for production environments where the GT4Py source is kept constant).
 
-Looking at the build systems implemented at the time of writing, `CMakeProject` and `CompiledbProject`, one might wrongly conclude that existence of certain directories or files suffice. This is only the case because `CompiledbProject` is based on `CMakeProject` and they therefore share some implementation details, which are by no means guaranteed to be standardizeable across multiple conceptually different build systems.
+Looking at the build systems implemented at the time of writing, `CMakeProject` and `CompiledbProject`, one might wrongly conclude that existence of certain directories or files suffice. This is only the case because `CompiledbProject` is based on `CMakeProject` and they therefore share some implementation details, which are by no means guaranteed to be standardizable across multiple conceptually different build systems.
 
 #### Revise If
 
