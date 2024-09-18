@@ -131,6 +131,8 @@ def infer_as_fieldop(
     assert cpm.is_call_to(applied_fieldop.fun, "as_fieldop")
     if target_domain is None:
         raise ValueError("'target_domain' cannot be 'None'.")
+    if not isinstance(target_domain, SymbolicDomain):
+        raise ValueError("'target_domain' needs to be a 'SymbolicDomain'.")
 
     # `as_fieldop(stencil)(inputs...)`
     stencil, inputs = applied_fieldop.fun.args[0], applied_fieldop.args
