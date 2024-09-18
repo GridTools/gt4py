@@ -498,7 +498,7 @@ class SymbolicDomain:
             raise AssertionError("Number of shifts must be a multiple of 2.")
 
 
-def domain_union(domains: list[SymbolicDomain]) -> SymbolicDomain:
+def domain_union(*domains: SymbolicDomain) -> SymbolicDomain:
     """Return the (set) union of a list of domains."""
     new_domain_ranges = {}
     assert all(domain.grid_type == domains[0].grid_type for domain in domains)
@@ -617,7 +617,7 @@ def update_domains(
                     consumed_domain.ranges.keys() == consumed_domains[0].ranges.keys()
                     for consumed_domain in consumed_domains
                 ):  # scalar otherwise
-                    domains[param] = domain_union(consumed_domains).as_expr()
+                    domains[param] = domain_union(*consumed_domains).as_expr()
 
     return FencilWithTemporaries(
         fencil=ir.FencilDefinition(

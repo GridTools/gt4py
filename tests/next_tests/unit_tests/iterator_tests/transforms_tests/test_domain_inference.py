@@ -341,7 +341,7 @@ def test_two_params_same_arg(offset_provider):
         "in_field": {IDim: (0, 12)},
     }
     testee, expected, expected_domains = setup_test_as_fieldop(
-        stencil, domain, expected_accessed_domains, offset_provider, refs=["in_field", "in_field"]
+        stencil, domain, expected_accessed_domains, refs=["in_field", "in_field"]
     )
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
