@@ -35,7 +35,7 @@ from gt4py.next.ffront.stages import (
     PRG,
 )
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import arguments, recipes, stages, workflow
+from gt4py.next.otf import arguments, stages, toolchain, workflow
 from gt4py.next.program_processors import modular_executor
 
 
@@ -45,7 +45,7 @@ IT_PRG: typing.TypeAlias = itir.FencilDefinition
 
 
 INPUT_DATA: typing.TypeAlias = DSL_FOP | FOP | DSL_PRG | PRG | IT_PRG
-INPUT_PAIR: typing.TypeAlias = recipes.CompilableProgram[INPUT_DATA, ARGS | CARG]
+INPUT_PAIR: typing.TypeAlias = toolchain.CompilableProgram[INPUT_DATA, ARGS | CARG]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -65,7 +65,7 @@ class Transforms(workflow.MultiWorkflow[INPUT_PAIR, stages.AOTProgram]):
     """
 
     aotify_args: workflow.Workflow[
-        recipes.CompilableProgram[INPUT_DATA, ARGS], recipes.CompilableProgram[INPUT_DATA, CARG]
+        toolchain.CompilableProgram[INPUT_DATA, ARGS], toolchain.CompilableProgram[INPUT_DATA, CARG]
     ] = dataclasses.field(default_factory=arguments.adapted_jit_to_aot_args_factory)
 
     func_to_foast: workflow.Workflow[AOT_DSL_FOP, AOT_FOP] = dataclasses.field(
@@ -151,7 +151,7 @@ class Backend(Generic[core_defs.DeviceTypeT]):
 
     def compile(self, program: INPUT_DATA, compile_time_args: CARG) -> stages.CompiledProgram:
         return self.executor.otf_workflow(
-            self.transforms(recipes.CompilableProgram(data=program, args=compile_time_args))
+            self.transforms(toolchain.CompilableProgram(data=program, args=compile_time_args))
         )
 
     @property

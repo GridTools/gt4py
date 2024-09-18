@@ -47,7 +47,7 @@ from gt4py.next.iterator.ir_utils.ir_makers import (
     ref,
     sym,
 )
-from gt4py.next.otf import arguments, recipes, stages
+from gt4py.next.otf import arguments, stages, toolchain
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
@@ -105,7 +105,7 @@ class Program:
     @functools.cached_property
     def past_stage(self):
         # backwards compatibility for backends that do not support the full toolchain
-        no_args_def = recipes.CompilableProgram(
+        no_args_def = toolchain.CompilableProgram(
             self.definition_stage, arguments.CompileTimeArgs.empty()
         )
         if self.backend is not None and self.backend.transforms is not None:
@@ -114,7 +114,9 @@ class Program:
 
     # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self):
-        no_args_past = recipes.CompilableProgram(self.past_stage, arguments.CompileTimeArgs.empty())
+        no_args_past = toolchain.CompilableProgram(
+            self.past_stage, arguments.CompileTimeArgs.empty()
+        )
         if self.backend is not None and self.backend.transforms is not None:
             return self.backend.transforms.past_lint(no_args_past).data
         return next_backend.DEFAULT_TRANSFORMS.past_lint(no_args_past).data
@@ -183,7 +185,7 @@ class Program:
 
     @functools.cached_property
     def itir(self) -> itir.FencilDefinition:
-        no_args_past = recipes.CompilableProgram(
+        no_args_past = toolchain.CompilableProgram(
             data=ffront_stages.PastProgramDefinition(
                 past_node=self.past_stage.past_node,
                 closure_vars=self.past_stage.closure_vars,
@@ -492,10 +494,10 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     def foast_stage(self) -> ffront_stages.FoastOperatorDefinition:
         if self.backend is not None and self.backend.transforms is not None:
             return self.backend.transforms.func_to_foast(
-                recipes.CompilableProgram(self.definition_stage, args=None)
+                toolchain.CompilableProgram(self.definition_stage, args=None)
             ).data
         return next_backend.DEFAULT_TRANSFORMS.func_to_foast(
-            recipes.CompilableProgram(self.definition_stage, None)
+            toolchain.CompilableProgram(self.definition_stage, None)
         ).data
 
     @property
@@ -522,10 +524,10 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     def __gt_itir__(self) -> itir.FunctionDefinition:
         if self.backend is not None and self.backend.transforms is not None:
             return self.backend.transforms.foast_to_itir(
-                recipes.CompilableProgram(self.foast_stage, arguments.CompileTimeArgs.empty())
+                toolchain.CompilableProgram(self.foast_stage, arguments.CompileTimeArgs.empty())
             )
         return next_backend.DEFAULT_TRANSFORMS.foast_to_itir(
-            recipes.CompilableProgram(self.foast_stage, arguments.CompileTimeArgs.empty())
+            toolchain.CompilableProgram(self.foast_stage, arguments.CompileTimeArgs.empty())
         )
 
     def __gt_closure_vars__(self) -> dict[str, Any]:
@@ -533,7 +535,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
     def as_program(self, compiletime_args: arguments.CompileTimeArgs) -> Program:
         foast_with_types = (
-            recipes.CompilableProgram(
+            toolchain.CompilableProgram(
                 data=self.foast_stage,
                 args=compiletime_args,
             ),

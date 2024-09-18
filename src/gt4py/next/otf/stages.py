@@ -12,7 +12,7 @@ import dataclasses
 from typing import Any, Generic, Optional, Protocol, TypeAlias, TypeVar
 
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import arguments, languages, recipes
+from gt4py.next.otf import arguments, languages, toolchain
 from gt4py.next.otf.binding import interface
 
 
@@ -26,7 +26,7 @@ TgtL_co = TypeVar("TgtL_co", bound=languages.LanguageTag, covariant=True)
 SettingT_co = TypeVar("SettingT_co", bound=languages.LanguageSettings, covariant=True)
 
 
-AOTProgram: TypeAlias = recipes.CompilableProgram[
+AOTProgram: TypeAlias = toolchain.CompilableProgram[
     itir.FencilDefinition | itir.Program, arguments.CompileTimeArgs
 ]
 

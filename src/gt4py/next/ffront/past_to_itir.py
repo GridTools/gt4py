@@ -39,7 +39,7 @@ def past_to_itir(inp: AOT_PRG, to_gtir: bool = False) -> stages.AOTProgram:
 
     Example:
         >>> from gt4py import next as gtx
-        >>> from gt4py.next.otf import arguments, recipes
+        >>> from gt4py.next.otf import arguments, toolchain
         >>> IDim = gtx.Dimension("I")
 
         >>> @gtx.field_operator
@@ -59,7 +59,7 @@ def past_to_itir(inp: AOT_PRG, to_gtir: bool = False) -> stages.AOTProgram:
         ... )  # this will include field dim size arguments automatically.
 
         >>> itir_copy = past_to_itir(
-        ...     recipes.CompilableProgram(copy_program.past_stage, compile_time_args)
+        ...     toolchain.CompilableProgram(copy_program.past_stage, compile_time_args)
         ... )
 
         >>> print(itir_copy.data.id)

@@ -25,7 +25,7 @@ from gt4py.next.ffront.dialect_parser import DialectParser
 from gt4py.next.ffront.past_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeDeduction
 from gt4py.next.ffront.stages import AOT_DSL_PRG, AOT_PRG, DSL_PRG, PRG
-from gt4py.next.otf import recipes, workflow
+from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
@@ -82,7 +82,7 @@ def adapted_func_to_past_factory(**kwargs: Any) -> workflow.Workflow[AOT_DSL_PRG
     """
     Wrap an adapter around the DSL definition -> PAST definition step to fit into transform toolchains.
     """
-    return recipes.DataOnlyAdapter(func_to_past_factory(**kwargs))
+    return toolchain.DataOnlyAdapter(func_to_past_factory(**kwargs))
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)

@@ -73,7 +73,7 @@ linkStyle 0 stroke:red,stroke-width:4px,color:pink
 ```python
 
 foast = backend.DEFAULT_TRANSFORMS.func_to_foast(
-    gtx.otf.recipes.CompilableProgram(start, gtx.otf.arguments.CompileTimeArgs.empty())
+    gtx.otf.toolchain.CompilableProgram(start, gtx.otf.arguments.CompileTimeArgs.empty())
 )
 ```
 
@@ -146,7 +146,7 @@ aot_args = gtx.otf.arguments.CompileTimeArgs.from_concrete_no_size(
 ```
 
 ```python
-pclos = backend.DEFAULT_TRANSFORMS.field_view_op_to_prog(gtx.otf.recipes.CompilableProgram(data=foast.data, args=aot_args))
+pclos = backend.DEFAULT_TRANSFORMS.field_view_op_to_prog(gtx.otf.toolchain.CompilableProgram(data=foast.data, args=aot_args))
 ```
 
 ```python
@@ -282,7 +282,7 @@ linkStyle 0,2,3,4,5 stroke:red,stroke-width:4px,color:pink
 
 ```python
 pitir2 = backend.DEFAULT_TRANSFORMS(
-    gtx.otf.recipes.CompilableProgram(data=start, args=aot_args)
+    gtx.otf.toolchain.CompilableProgram(data=start, args=aot_args)
 )
 assert pitir2 == pitir
 ```
@@ -313,7 +313,7 @@ Note that it is the exact same call but with a different input stage
 
 ```python
 pitir3 = backend.DEFAULT_TRANSFORMS(
-    gtx.otf.recipes.CompilableProgram(
+    gtx.otf.toolchain.CompilableProgram(
         data=foast.data,
         args=aot_args
     )
@@ -360,7 +360,7 @@ linkStyle 6 stroke:red,stroke-width:4px,color:pink
 
 ```python
 p_past = backend.DEFAULT_TRANSFORMS.func_to_past(
-    gtx.otf.recipes.CompilableProgram(data=p_start, args=gtx.otf.arguments.CompileTimeArgs.empty()))
+    gtx.otf.toolchain.CompilableProgram(data=p_start, args=gtx.otf.arguments.CompileTimeArgs.empty()))
 ```
 
 ## Full Program Toolchain
@@ -388,7 +388,7 @@ linkStyle 3,4,5,6 stroke:red,stroke-width:4px,color:pink
 
 ```python
 p_itir1 = backend.DEFAULT_TRANSFORMS(
-    gtx.otf.recipes.CompilableProgram(
+    gtx.otf.toolchain.CompilableProgram(
         data=p_start,
         args=jit_args
     )
@@ -397,7 +397,7 @@ p_itir1 = backend.DEFAULT_TRANSFORMS(
 
 ```python
 p_itir2 = backend.DEFAULT_TRANSFORMS(
-    gtx.otf.recipes.CompilableProgram(
+    gtx.otf.toolchain.CompilableProgram(
         data=p_past.data,
         args=aot_args
     )

@@ -10,7 +10,7 @@ import pytest
 
 from gt4py import next as gtx
 from gt4py.next.ffront import stages
-from gt4py.next.otf import arguments, recipes
+from gt4py.next.otf import arguments, toolchain
 
 
 @pytest.fixture
@@ -94,15 +94,15 @@ def test_fingerprint_stage_field_op_def(fieldop, samecode_fieldop, different_fie
 
 def test_fingerprint_stage_foast_op_def(fieldop, samecode_fieldop, different_fieldop):
     foast = gtx.backend.DEFAULT_TRANSFORMS.func_to_foast(
-        recipes.CompilableProgram(fieldop.definition_stage, arguments.CompileTimeArgs.empty())
+        toolchain.CompilableProgram(fieldop.definition_stage, arguments.CompileTimeArgs.empty())
     ).data
     samecode = gtx.backend.DEFAULT_TRANSFORMS.func_to_foast(
-        recipes.CompilableProgram(
+        toolchain.CompilableProgram(
             samecode_fieldop.definition_stage, arguments.CompileTimeArgs.empty()
         )
     ).data
     different = gtx.backend.DEFAULT_TRANSFORMS.func_to_foast(
-        recipes.CompilableProgram(
+        toolchain.CompilableProgram(
             different_fieldop.definition_stage, arguments.CompileTimeArgs.empty()
         )
     ).data
@@ -122,15 +122,15 @@ def test_fingerprint_stage_program_def(program, samecode_program, different_prog
 
 def test_fingerprint_stage_past_def(program, samecode_program, different_program):
     past = gtx.backend.DEFAULT_TRANSFORMS.func_to_past(
-        recipes.CompilableProgram(program.definition_stage, arguments.CompileTimeArgs.empty())
+        toolchain.CompilableProgram(program.definition_stage, arguments.CompileTimeArgs.empty())
     )
     samecode = gtx.backend.DEFAULT_TRANSFORMS.func_to_past(
-        recipes.CompilableProgram(
+        toolchain.CompilableProgram(
             samecode_program.definition_stage, arguments.CompileTimeArgs.empty()
         )
     )
     different = gtx.backend.DEFAULT_TRANSFORMS.func_to_past(
-        recipes.CompilableProgram(
+        toolchain.CompilableProgram(
             different_program.definition_stage, arguments.CompileTimeArgs.empty()
         )
     )

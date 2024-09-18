@@ -30,7 +30,7 @@ import numpy as np
 from typing_extensions import Self
 
 from gt4py.next import common
-from gt4py.next.otf import recipes, workflow
+from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
@@ -149,12 +149,12 @@ def jit_to_aot_args(
 
 def adapted_jit_to_aot_args_factory() -> (
     workflow.Workflow[
-        recipes.CompilableProgram[DATA_T, JITArgs],
-        recipes.CompilableProgram[DATA_T, CompileTimeArgs],
+        toolchain.CompilableProgram[DATA_T, JITArgs],
+        toolchain.CompilableProgram[DATA_T, CompileTimeArgs],
     ]
 ):
     """Wrap `jit_to_aot` into a workflow adapter to fit into backend transform workflows."""
-    return recipes.ArgsOnlyAdapter(jit_to_aot_args)
+    return toolchain.ArgsOnlyAdapter(jit_to_aot_args)
 
 
 def connectivity_or_dimension(

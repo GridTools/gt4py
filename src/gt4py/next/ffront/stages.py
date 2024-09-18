@@ -21,7 +21,7 @@ import xxhash
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
 from gt4py.next.ffront import field_operator_ast as foast, program_ast as past, source_utils
-from gt4py.next.otf import arguments, recipes
+from gt4py.next.otf import arguments, toolchain
 
 
 OperatorNodeT = TypeVar("OperatorNodeT", bound=foast.LocatedNode)
@@ -37,7 +37,7 @@ class FieldOperatorDefinition(Generic[OperatorNodeT]):
 
 
 DSL_FOP: typing.TypeAlias = FieldOperatorDefinition
-AOT_DSL_FOP: typing.TypeAlias = recipes.CompilableProgram[DSL_FOP, arguments.CompileTimeArgs]
+AOT_DSL_FOP: typing.TypeAlias = toolchain.CompilableProgram[DSL_FOP, arguments.CompileTimeArgs]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -50,7 +50,7 @@ class FoastOperatorDefinition(Generic[OperatorNodeT]):
 
 
 FOP: typing.TypeAlias = FoastOperatorDefinition
-AOT_FOP: typing.TypeAlias = recipes.CompilableProgram[FOP, arguments.CompileTimeArgs]
+AOT_FOP: typing.TypeAlias = toolchain.CompilableProgram[FOP, arguments.CompileTimeArgs]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -61,7 +61,7 @@ class ProgramDefinition:
 
 
 DSL_PRG: typing.TypeAlias = ProgramDefinition
-AOT_DSL_PRG: typing.TypeAlias = recipes.CompilableProgram[DSL_PRG, arguments.CompileTimeArgs]
+AOT_DSL_PRG: typing.TypeAlias = toolchain.CompilableProgram[DSL_PRG, arguments.CompileTimeArgs]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -73,7 +73,7 @@ class PastProgramDefinition:
 
 
 PRG: typing.TypeAlias = PastProgramDefinition
-AOT_PRG: typing.TypeAlias = recipes.CompilableProgram[PRG, arguments.CompileTimeArgs]
+AOT_PRG: typing.TypeAlias = toolchain.CompilableProgram[PRG, arguments.CompileTimeArgs]
 
 
 def fingerprint_stage(obj: Any, algorithm: Optional[str | xtyping.HashlibAlgorithm] = None) -> str:
@@ -101,7 +101,7 @@ for t in (str, int):
 @add_content_to_fingerprint.register(FieldOperatorDefinition)
 @add_content_to_fingerprint.register(FoastOperatorDefinition)
 @add_content_to_fingerprint.register(PastProgramDefinition)
-@add_content_to_fingerprint.register(recipes.CompilableProgram)
+@add_content_to_fingerprint.register(toolchain.CompilableProgram)
 @add_content_to_fingerprint.register(arguments.CompileTimeArgs)
 def add_stage_to_fingerprint(obj: Any, hasher: xtyping.HashlibAlgorithm) -> None:
     add_content_to_fingerprint(obj.__class__, hasher)

@@ -37,7 +37,7 @@ from gt4py.next.ffront.foast_passes.iterable_unpack import UnpackedAssignPass
 from gt4py.next.ffront.foast_passes.type_alias_replacement import TypeAliasReplacement
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from gt4py.next.ffront.stages import AOT_DSL_FOP, AOT_FOP, DSL_FOP, FOP
-from gt4py.next.otf import recipes, workflow
+from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
@@ -98,7 +98,7 @@ def func_to_foast_factory(cached: bool = True) -> workflow.Workflow[DSL_FOP, FOP
 
 def adapted_func_to_foast_factory(**kwargs: Any) -> workflow.Workflow[AOT_DSL_FOP, AOT_FOP]:
     """Wrap the `func_to_foast step in an adapter to fit into transform toolchains.`"""
-    return recipes.DataOnlyAdapter(func_to_foast_factory(**kwargs))
+    return toolchain.DataOnlyAdapter(func_to_foast_factory(**kwargs))
 
 
 class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
