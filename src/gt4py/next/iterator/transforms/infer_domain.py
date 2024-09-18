@@ -41,12 +41,11 @@ def split_dict_by_key(pred: Callable, d: dict):
 
 
 # TODO(tehrengruber): Revisit whether we want to move this behaviour to `domain_union`.
-def _domain_union_with_none(d1: SymbolicDomain | None, d2: SymbolicDomain | None):
-    if d1 is None:
-        return d2
-    elif d2 is None:
-        return d1
-    return domain_union([d1, d2])
+def _domain_union_with_none(*domains: SymbolicDomain | None):
+    domains = [*filter(lambda x: x is not None, domains)]
+    if len(domains) == 0:
+        return None
+    return domain_union(*domains)
 
 
 def canonicalize_domain_structure(d1: DOMAIN, d2: DOMAIN) -> tuple[DOMAIN, DOMAIN]:
@@ -112,25 +111,25 @@ def extract_accessed_domains(
         new_domains = [
             SymbolicDomain.translate(target_domain, shift, offset_provider) for shift in shifts_list
         ]
-        assert in_field_id not in accessed_domains
-        if new_domains:
-            accessed_domains[in_field_id] = domain_union(new_domains)
-        else:
-            # argument is never accessed
-            accessed_domains[in_field_id] = None
+        # `None` means field is never accessed
+        accessed_domains[in_field_id] = _domain_union_with_none(
+            accessed_domains.get(in_field_id, None), *new_domains
+        )
 
     return accessed_domains
 
 
 def infer_as_fieldop(
     applied_fieldop: itir.FunCall,
-    target_domain: SymbolicDomain | None,
+    target_domain: DOMAIN,
     offset_provider: common.OffsetProvider,
 ) -> tuple[itir.FunCall, ACCESSED_DOMAINS]:
     assert isinstance(applied_fieldop, itir.FunCall)
     assert cpm.is_call_to(applied_fieldop.fun, "as_fieldop")
     if target_domain is None:
         raise ValueError("'target_domain' cannot be 'None'.")
+    if not isinstance(target_domain, SymbolicDomain):
+        raise ValueError("'target_domain' needs to be a 'SymbolicDomain'.")
 
     # `as_fieldop(stencil)(inputs...)`
     stencil, inputs = applied_fieldop.fun.args[0], applied_fieldop.args
@@ -224,6 +223,7 @@ def infer_make_tuple(
     domain: DOMAIN,
     offset_provider: common.OffsetProvider,
 ) -> tuple[itir.Expr, ACCESSED_DOMAINS]:
+    assert cpm.is_call_to(expr, "make_tuple")
     infered_args_expr = []
     actual_domains: ACCESSED_DOMAINS = {}
     if not isinstance(domain, tuple):
@@ -248,6 +248,7 @@ def infer_tuple_get(
     domain: DOMAIN,
     offset_provider: common.OffsetProvider,
 ) -> tuple[itir.Expr, ACCESSED_DOMAINS]:
+    assert cpm.is_call_to(expr, "tuple_get")
     actual_domains: ACCESSED_DOMAINS = {}
     idx, tuple_arg = expr.args
     assert isinstance(idx, itir.Literal)
@@ -264,6 +265,7 @@ def infer_cond(
     domain: DOMAIN,
     offset_provider: common.OffsetProvider,
 ) -> tuple[itir.Expr, ACCESSED_DOMAINS]:
+    assert cpm.is_call_to(expr, "cond")
     infered_args_expr = []
     actual_domains: ACCESSED_DOMAINS = {}
     cond, true_val, false_val = expr.args
