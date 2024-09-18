@@ -1708,13 +1708,17 @@ def test_gtir_if_scalars():
             gtir.SetAt(
                 expr=im.let("f", im.tuple_get(0, "x"))(
                     im.let("y", im.tuple_get(1, "x"))(
-                        im.op_as_fieldop("plus", domain)(
-                            "f",
-                            im.cond(
-                                "pred",
-                                im.call("cast_")(im.tuple_get(0, "y"), "float64"),
-                                im.call("cast_")(im.tuple_get(1, "y"), "float64"),
-                            ),
+                        im.let("y_0", im.tuple_get(0, "y"))(
+                            im.let("y_1", im.tuple_get(1, "y"))(
+                                im.op_as_fieldop("plus", domain)(
+                                    "f",
+                                    im.cond(
+                                        "pred",
+                                        im.call("cast_")("y_0", "float64"),
+                                        im.call("cast_")("y_1", "float64"),
+                                    ),
+                                )
+                            )
                         )
                     )
                 ),
