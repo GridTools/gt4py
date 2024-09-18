@@ -411,8 +411,12 @@ def translate_scalar_expr(
 
     for arg_expr in node.args:
         if isinstance(arg_expr, gtir.SymRef):
+            # this is the case of scalar values represented as SDFG symbols or
+            # of reverved symbols, e.g. 'float64' used as type argument to `cast_`
             scalar_expr_args.append(arg_expr)
         else:
+            # we visit the argument expression and obtain the access node to
+            # a scalar data container, which will be connected to the tasklet
             arg_node, arg_type = sdfg_builder.visit(
                 arg_expr,
                 sdfg=sdfg,
@@ -429,6 +433,7 @@ def translate_scalar_expr(
             connectors.append(param)
             scalar_expr_args.append(gtir.SymRef(id=param))
 
+    # we visit the scalar expression replacing the input arguments with the corresponding data connectors
     scalar_node = gtir.FunCall(fun=node.fun, args=scalar_expr_args)
     python_code = gtir_python_codegen.get_source(scalar_node)
     tasklet_node = sdfg_builder.add_tasklet(
@@ -438,6 +443,7 @@ def translate_scalar_expr(
         {"__out"},
         f"__out = {python_code}",
     )
+    # create edges for the input data connectors
     for arg_node, conn in zip(args, connectors, strict=True):
         state.add_edge(
             arg_node,
@@ -446,7 +452,7 @@ def translate_scalar_expr(
             conn,
             dace.Memlet(data=arg_node.data, subset="0"),
         )
-
+    # finally, create temporary for the result value
     temp_name, _ = sdfg.add_scalar(
         sdfg.temp_data_name(),
         dace_fieldview_util.as_dace_type(node.type),
