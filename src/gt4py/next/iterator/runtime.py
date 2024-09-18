@@ -207,3 +207,8 @@ def closure(*args):  # TODO remove
 @builtin_dispatch
 def set_at(*args):
     return BackendNotSelectedError()
+
+@builtin_dispatch
+def if_stmt(*args):
+    return BackendNotSelectedError()
+

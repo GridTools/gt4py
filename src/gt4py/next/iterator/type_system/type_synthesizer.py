@@ -291,7 +291,7 @@ def cond(
     ):
         assert isinstance(pred, ts.ScalarType) and pred.kind == ts.ScalarKind.BOOL
         assert true_branch == false_branch
-        assert isinstance(true_branch, (ts.FieldType, ts.DeferredType))
+        assert isinstance(true_branch, (ts.FieldType, ts.ScalarType, ts.DeferredType))
 
         return true_branch
 

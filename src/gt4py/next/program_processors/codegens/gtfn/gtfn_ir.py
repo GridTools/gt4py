@@ -146,7 +146,10 @@ class SidFromScalar(Expr):
         pass
 
 
-class StencilExecution(Node):
+class Stmt(Node):
+    pass
+
+class StencilExecution(Stmt):
     backend: Backend
     stencil: SymRef
     output: Union[SymRef, SidComposite]
@@ -160,11 +163,17 @@ class Scan(Node):
     init: Expr
 
 
-class ScanExecution(Node):
+class ScanExecution(Stmt):
     backend: Backend
     scans: list[Scan]
     args: list[Expr]
     axis: SymRef
+
+
+class IfStmt(Stmt):
+    cond: Expr
+    true_branch: list[Stmt]
+    false_branch: list[Stmt]
 
 
 class TemporaryAllocation(Node):
@@ -201,7 +210,7 @@ class Program(Node, ValidatedSymbolTableTrait):
     function_definitions: list[
         Union[FunctionDefinition, ScanPassDefinition, ImperativeFunctionDefinition]
     ]
-    executions: list[Union[StencilExecution, ScanExecution]]
+    executions: list[Stmt]
     offset_definitions: list[TagDefinition]
     grid_type: common.GridType
     temporaries: list[TemporaryAllocation]

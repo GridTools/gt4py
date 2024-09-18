@@ -180,6 +180,35 @@ class CreateGlobalTmps2(eve.NodeTranslator):
 
         return cls(uids=uids).visit(node)
 
+    def make_temporary_for_as_fieldop(self, node: itir.FunCall, tmp_name: str, **kwargs):
+        assert cpm.is_call_to(node.fun, "as_fieldop")
+        declarations = kwargs["declarations"]
+        new_body = kwargs["new_body"]
+
+        stencil, domain = node.fun.args
+
+        scalar_type = apply_to_primitive_constituents(
+            type_info.extract_dtype, node.type
+        )
+
+        # TODO
+        node = copy.deepcopy(node)
+        node.args = self.visit(node.args, declarations=declarations, new_body=new_body)
+
+        declarations.append(
+            itir.Temporary(id=tmp_name, domain=domain, dtype=scalar_type)
+        )
+        new_body.append(
+            itir.SetAt(
+                expr=node,
+                domain=domain,
+                target=im.ref(tmp_name)
+            )
+        )
+
+        return im.ref(tmp_name)
+
+
     def visit_FunCall(self, node: itir.FunCall, **kwargs):
         declarations = kwargs["declarations"]
         new_body = kwargs["new_body"]
@@ -195,48 +224,83 @@ class CreateGlobalTmps2(eve.NodeTranslator):
 
         node = self.generic_visit(node, **kwargs)
 
+        # TODO: check result is not a let anymore
+
         if cpm.is_call_to(node, "as_fieldop"):  # don't look at local-view
             return node
 
         if cpm.is_call_to(node.fun, "as_fieldop"):
             tmp_name = self.uids.sequential_id(prefix="__tmp")
-            stencil, domain = node.fun.args
-
-            scalar_type = apply_to_primitive_constituents(
-                type_info.extract_dtype, node.type
-            )
-
-            # TODO
-            node = copy.deepcopy(node)
-            node.args = self.visit(node.args, declarations=declarations, new_body=new_body)
-
-            declarations.append(
-                itir.Temporary(id=tmp_name, domain=domain, dtype=scalar_type)
-            )
-            new_body.append(
-                itir.SetAt(
-                    expr=node,
-                    domain=domain,
-                    target=im.ref(tmp_name)
-                )
-            )
-
-            return im.ref(tmp_name)
+            return self.make_temporary_for_as_fieldop(node, tmp_name, declarations=declarations, new_body=new_body)
 
         return node
+
+    def visit_SetAt(self, node: itir.SetAt, **kwargs):
+        declarations = kwargs["declarations"]
+        new_body = kwargs["new_body"]
+
+        if cpm.is_call_to(node.expr, "cond"):
+            cond, true_val, false_val = node.expr.args
+
+            # TODO: the new bodies can contain conds again, visit recursively
+            true_body, false_body = [], []
+            true_val = self.visit(true_val, declarations=declarations, new_body=true_body)
+            false_val = self.visit(false_val, declarations=declarations, new_body=false_body)
+
+            # TODO: only one level, extend to multiple
+            true_body = [*true_body, itir.SetAt(
+                        expr=true_val,
+                        domain=node.domain,
+                        target=node.target
+                    )]
+            new_true_body = []
+            for stmt in true_body:
+                new_true_body.append(
+                    self.visit(stmt, declarations=declarations, new_body=new_true_body)
+                )
+
+            false_body = [*false_body, itir.SetAt(
+                expr=false_val,
+                domain=node.domain,
+                target=node.target
+            )]
+            new_false_body = []
+            for stmt in false_body:
+                new_false_body.append(
+                    self.visit(stmt, declarations=declarations, new_body=new_false_body)
+                )
+
+            return itir.IfStmt(
+                cond=cond,
+                true_branch=new_true_body,
+                false_branch=new_false_body
+            )
+
+        if isinstance(node.expr, itir.FunCall) and cpm.is_call_to(node.expr.fun, "as_fieldop"):
+            # do not create a temporary for the outer-most as_fieldop
+            stencil = node.expr.fun.args[0]
+            domain = node.expr.fun.args[1] if len(node.expr.fun.args) > 1 else None
+            new_expr = im.as_fieldop(stencil, domain)(
+                *self.visit(node.expr.args, declarations=declarations, new_body=new_body)
+            )
+        else:
+            new_expr = self.visit(node.expr, declarations=declarations, new_body=new_body)
+
+        return itir.SetAt(
+            expr=new_expr,
+            domain=node.domain,
+            target=node.target
+        )
+
 
     def visit_Program(self, node: itir.Program):
         declarations = node.declarations
         new_body = []
 
         for stmt in node.body:
-            if isinstance(stmt, itir.SetAt):
+            if isinstance(stmt, (itir.SetAt, itir.IfStmt)):
                 new_body.append(
-                    itir.SetAt(
-                        expr=self.visit(stmt.expr, declarations=declarations, new_body=new_body),
-                        domain=stmt.domain,
-                        target=stmt.target
-                    )
+                    self.visit(stmt, declarations=declarations, new_body=new_body)
                 )
             else:
                 raise NotImplementedError()
@@ -296,6 +360,12 @@ def apply_common_transforms(
     ir = PropagateDeref.apply(ir)
     ir = NormalizeShifts().visit(ir)
 
+    # note: this increases the size of the tree
+    ir = InlineLambdas.apply(  # the domain inference can not handle "user" functions, see test_if_stmt_else_branch_returns
+        ir,
+        opcount_preserving=True,
+        force_inline_lambda_args=True
+    )
     ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
 
     for _ in range(10):
@@ -373,7 +443,7 @@ def apply_common_transforms(
             ignore_tuple_size=True,
             offset_provider=offset_provider,
             # TODO(tehrengruber): disabled since it increases compile-time too much right now
-            flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
+            #flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
         )
 
     if lift_mode == LiftMode.FORCE_INLINE:

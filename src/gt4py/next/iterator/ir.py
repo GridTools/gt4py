@@ -40,7 +40,8 @@ class Node(eve.Node):
         return hash(type(self)) ^ hash(
             tuple(
                 hash(tuple(v)) if isinstance(v, list) else hash(v)
-                for v in self.iter_children_values()
+                # TODO(tehrengruber): revisit. without this we get duplications, e.g. in test_astype_on_tuples
+                for (k, v) in self.iter_children_items() if k not in ["location", "type"]
             )
         )
 
@@ -210,6 +211,12 @@ class SetAt(Stmt):  # from JAX array.at[...].set()
     target: Expr  # `make_tuple` or SymRef
 
 
+class IfStmt(Stmt):
+    cond: Expr
+    true_branch: list[Stmt]
+    false_branch: list[Stmt]
+
+
 class Temporary(Node):
     id: Coerced[eve.SymbolName]
     domain: Optional[Expr] = None
@@ -241,3 +248,4 @@ StencilClosure.__hash__ = Node.__hash__  # type: ignore[method-assign]
 FencilDefinition.__hash__ = Node.__hash__  # type: ignore[method-assign]
 Program.__hash__ = Node.__hash__  # type: ignore[method-assign]
 SetAt.__hash__ = Node.__hash__  # type: ignore[method-assign]
+IfStmt.__hash__ = Node.__hash__  # type: ignore[method-assign]
