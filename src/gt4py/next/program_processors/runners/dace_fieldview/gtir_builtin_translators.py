@@ -560,13 +560,13 @@ def translate_symbol_ref(
     """Generates the dataflow subgraph for a `ir.SymRef` node."""
     assert isinstance(node, gtir.SymRef)
 
-    sym_value = str(node.id)
-    sym_type = sdfg_builder.get_symbol_type(sym_value)
+    sym_name = str(node.id)
+    sym_type = sdfg_builder.get_symbol_type(sym_name)
 
     # Create new access node in current state. It is possible that multiple
     # access nodes are created in one state for the same data container.
     # We rely on the dace simplify pass to remove duplicated access nodes.
-    return _get_data_nodes(sdfg, state, sdfg_builder, sym_value, sym_type)
+    return _get_data_nodes(sdfg, state, sdfg_builder, sym_name, sym_type)
 
 
 if TYPE_CHECKING:
