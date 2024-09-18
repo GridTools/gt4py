@@ -170,7 +170,7 @@ class IndexWithExtent(eve.Node):
     def overapproximated_size(self):
         return self.size
 
-    def union(self, other: "IndexWithExtent"):
+    def union(self, other: IndexWithExtent):
         assert self.axis == other.axis
         if isinstance(self.value, int) or (isinstance(self.value, str) and self.value.isdigit()):
             value = other.value
@@ -273,7 +273,7 @@ class DomainInterval(eve.Node):
             ),
         )
 
-    def is_subset_of(self, other: "DomainInterval") -> bool:
+    def is_subset_of(self, other: DomainInterval) -> bool:
         return self.start >= other.start and self.end <= other.end
 
 
@@ -390,7 +390,7 @@ class GridSubset(eve.Node):
     def overapproximated_shape(self):
         return tuple(interval.overapproximated_size for _, interval in self.items())
 
-    def restricted_to_index(self, axis: Axis, extent=(0, 0)) -> "GridSubset":
+    def restricted_to_index(self, axis: Axis, extent=(0, 0)) -> GridSubset:
         intervals = dict(self.intervals)
         intervals[axis] = IndexWithExtent.from_axis(axis, extent=extent)
         return GridSubset(intervals=intervals)
@@ -399,7 +399,7 @@ class GridSubset(eve.Node):
         self,
         axis: Axis,
         interval: Union[DomainInterval, IndexWithExtent, TileInterval, oir.Interval],
-    ) -> "GridSubset":
+    ) -> GridSubset:
         if isinstance(interval, oir.Interval):
             interval = DomainInterval(
                 start=AxisBound(
@@ -587,7 +587,7 @@ class FieldAccessInfo(eve.Node):
             global_grid_subset=self.global_grid_subset,
         )
 
-    def union(self, other: "FieldAccessInfo"):
+    def union(self, other: FieldAccessInfo):
         grid_subset = self.grid_subset.union(other.grid_subset)
         global_subset = self.global_grid_subset.union(other.global_grid_subset)
         variable_offset_axes = [
@@ -625,7 +625,7 @@ class FieldAccessInfo(eve.Node):
             global_grid_subset=self.global_grid_subset,
         )
 
-    def untile(self, tile_axes: Sequence[Axis]) -> "FieldAccessInfo":
+    def untile(self, tile_axes: Sequence[Axis]) -> FieldAccessInfo:
         res_intervals = {}
         for axis, interval in self.grid_subset.intervals.items():
             if isinstance(interval, TileInterval) and axis in tile_axes:
@@ -715,7 +715,7 @@ class FieldDecl(Decl):
     def is_dynamic(self) -> bool:
         return self.access_info.is_dynamic
 
-    def with_set_access_info(self, access_info: FieldAccessInfo) -> "FieldDecl":
+    def with_set_access_info(self, access_info: FieldAccessInfo) -> FieldDecl:
         return FieldDecl(
             name=self.name,
             dtype=self.dtype,

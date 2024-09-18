@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Dict
 
@@ -15,7 +17,7 @@ import dace.subsets
 
 import gt4py.cartesian.gtc.oir as oir
 from gt4py import eve
-from gt4py.cartesian.gtc import daceir as dcir
+from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.dace.nodes import StencilComputation
 from gt4py.cartesian.gtc.dace.symbol_utils import data_type_to_dace_typeclass
 from gt4py.cartesian.gtc.dace.utils import compute_dcir_access_infos, make_dace_subset
@@ -92,7 +94,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
             )
 
     def visit_VerticalLoop(
-        self, node: oir.VerticalLoop, *, ctx: "OirSDFGBuilder.SDFGContext", **kwargs
+        self, node: oir.VerticalLoop, *, ctx: OirSDFGBuilder.SDFGContext, **kwargs
     ):
         declarations = {
             acc.name: ctx.decls[acc.name]

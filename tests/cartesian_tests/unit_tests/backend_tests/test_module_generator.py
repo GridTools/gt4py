@@ -78,7 +78,6 @@ def sample_stencil_with_args(
     used_scalar: float,  # type: ignore
     unused_scalar: bool,  # type: ignore
 ):
-    # flake8: noqa
     with computation(PARALLEL), interval(...):  # type: ignore
         used_io_field = used_in_field[1, 0, 0] + used_scalar  # type: ignore
 
