@@ -112,7 +112,7 @@ def _is_ref_or_tuple_expr_of_ref(expr: Expr) -> bool:
         and all(_is_ref_or_tuple_expr_of_ref(arg) for arg in expr.args)
     ):
         return True
-    if isinstance(expr, SymRef):
+    if isinstance(expr, (SymRef, Literal)):
         return True
     return False
 
@@ -140,15 +140,17 @@ class SidFromScalar(Expr):
     def _arg_validator(
         self: datamodels.DataModelTP, attribute: datamodels.Attribute, value: Expr
     ) -> None:
-        if not _is_ref_or_tuple_expr_of_ref(value):
-            raise ValueError("Only 'SymRef' or tuple expr of 'SymRef' allowed.")
+        # TODO: e.g. 1+1 in test_nested_scalar_arg
+        #if not _is_ref_or_tuple_expr_of_ref(value):
+        #    raise ValueError("Only 'SymRef' or tuple expr of 'SymRef' allowed.")
+        pass
 
 
 class StencilExecution(Node):
     backend: Backend
     stencil: SymRef
     output: Union[SymRef, SidComposite]
-    inputs: list[Union[SymRef, SidComposite, SidFromScalar]]
+    inputs: list[Union[SymRef, SidComposite, SidFromScalar, FunCall]]  # TODO: StencilExecution only for tuple_get
 
 
 class Scan(Node):

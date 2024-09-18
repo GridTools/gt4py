@@ -14,7 +14,7 @@ from gt4py.next.ffront import type_info as ti_ffront
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_info, type_specifications as ts
-
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 
 def to_tuples_of_iterator(expr: itir.Expr | str, arg_type: ts.TypeSpec) -> itir.FunCall:
     """
@@ -96,6 +96,14 @@ def to_iterator_of_tuples(expr: itir.Expr | str, arg_type: ts.TypeSpec) -> itir.
     )
     return im.let(param, expr)(im.lift(im.lambda_(*lift_params)(stencil_expr))(*lift_args))
 
+
+def process_syntactic_elements(
+    process_func: Callable[..., itir.Expr],
+    expr: itir.Expr
+):
+    if cpm.is_call_to(expr, "make_tuple"):
+        return im.make_tuple(*(process_syntactic_elements(process_func, arg) for arg in expr.args))
+    return process_func(expr)
 
 # TODO(tehrengruber): The code quality of this function is poor. We should rewrite it.
 def process_elements(

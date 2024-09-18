@@ -504,6 +504,10 @@ class SymbolicDomain:
 def domain_union(domains: list[SymbolicDomain]) -> SymbolicDomain:
     """Return the (set) union of a list of domains."""
     new_domain_ranges = {}
+    try:
+        all(domain.grid_type == domains[0].grid_type for domain in domains)
+    except:
+        breakpoint()
     assert all(domain.grid_type == domains[0].grid_type for domain in domains)
     assert all(domain.ranges.keys() == domains[0].ranges.keys() for domain in domains)
     for dim in domains[0].ranges.keys():

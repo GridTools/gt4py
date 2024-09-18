@@ -17,7 +17,7 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms.global_tmps import SymbolicDomain, domain_union
 from gt4py.next.iterator.transforms import trace_shifts
-
+from gt4py.next.utils import tree_map
 
 DOMAIN_TYPES: TypeAlias = SymbolicDomain | None
 ACCESSED_DOMAINS: TypeAlias = dict[str, DOMAIN_TYPES | tuple[DOMAIN_TYPES]]
@@ -38,6 +38,24 @@ def split_dict_by_key(pred: Callable, d: dict):
     return a, b
 
 
+def domain_union_with_none(d1, d2):
+    if d1 is None:
+        return d2
+    elif d2 is None:
+        return d1
+    return domain_union([d1, d2])
+
+
+def promote_non_domains(d1, d2):
+    if d1 is None and isinstance(d2, tuple):
+        return promote_non_domains((None,) * len(d2), d2)
+    if d2 is None and isinstance(d1, tuple):
+        return promote_non_domains(d1, (None,) * len(d1))
+    if isinstance(d1, tuple) and isinstance(d2, tuple):
+        return tuple(zip(*(promote_non_domains(el1, el2) for el1, el2 in itertools.zip_longest(d1, d2, fillvalue=None))))
+    return d1, d2
+
+
 def _merge_domains(
     original_domains: ACCESSED_DOMAINS,
     additional_domains: ACCESSED_DOMAINS,
@@ -46,29 +64,9 @@ def _merge_domains(
 
     for key, domain in additional_domains.items():
         original_domain = original_domains.get(key)
-
-        if original_domain is None:
-            new_domains[key] = domain
-        elif domain is None:
-            new_domains[key] = original_domain
-        elif not isinstance(domain, tuple) and not isinstance(original_domain, tuple):
-            new_domains[key] = domain_union([original_domain, domain])
-        elif isinstance(domain, tuple) and isinstance(original_domain, tuple):
-            new_domains[key] = tuple(
-                domain_union([d1, d2])
-                if d1 is not None and d2 is not None
-                else (d1 if d2 is None else d2)
-                for d1, d2 in itertools.zip_longest(original_domain, domain, fillvalue=None)
-            )
-        elif isinstance(domain, tuple):
-            new_domains[key] = tuple(
-                domain_union([d, original_domain]) if d is not None else original_domain
-                for d in domain
-            )
-        elif isinstance(original_domain, tuple):
-            new_domains[key] = tuple(
-                domain_union([domain, d]) if d is not None else domain for d in original_domain
-            )
+        # breaks without in test_tuple_arg with original_domain, domain = None, ((tuple_domain))
+        original_domain, domain = promote_non_domains(original_domain, domain)
+        new_domains[key] = tree_map(domain_union_with_none, fillvalue=None)(original_domain, domain)
 
     return new_domains
 
@@ -271,9 +269,6 @@ def infer_program(
             transformed_set_ats.append(set_at)
             continue
         assert isinstance(set_at.expr, itir.Expr)
-        assert isinstance(
-            set_at.target, itir.SymRef
-        )  # TODO: stmt.target can be an expr, e.g. make_tuple
 
         transformed_call, _unused_domain = infer_expr(
             set_at.expr, SymbolicDomain.from_expr(set_at.domain), offset_provider
@@ -281,7 +276,7 @@ def infer_program(
         transformed_set_ats.append(
             itir.SetAt(
                 expr=transformed_call,
-                domain=(set_at.domain),
+                domain=set_at.domain,
                 target=set_at.target,
             ),
         )

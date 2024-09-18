@@ -97,7 +97,37 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     def visit_ScanOperator(
         self, node: foast.ScanOperator, **kwargs: Any
     ) -> itir.FunctionDefinition:
-        raise NotImplementedError("TODO")
+        # note: we don't need the axis here as this is handled by the program
+        #  decorator
+        assert isinstance(node.type, ts_ffront.ScanOperatorType)
+
+        # We are lowering node.forward and node.init to iterators, but here we expect values -> `deref`.
+        # In iterator IR we didn't properly specify if this is legal,
+        # however after lift-inlining the expressions are transformed back to literals.
+        forward = self.visit(node.forward, **kwargs)
+        init = self.visit(node.init, **kwargs)
+
+        # lower definition function
+        func_definition: itir.FunctionDefinition = self.visit(node.definition, **kwargs)
+        new_body = func_definition.expr
+
+        stencil_args: list[itir.Expr] = []
+        assert not node.type.definition.pos_only_args and not node.type.definition.kw_only_args
+        for param, arg_type in zip(
+                func_definition.params[1:],
+                [*node.type.definition.pos_or_kw_args.values()][1:],
+                strict=True,
+        ):
+            new_body = im.let(
+                param.id, im.deref(param.id)
+            )(new_body)
+            stencil_args.append(im.ref(param.id))
+
+        definition = itir.Lambda(params=func_definition.params, expr=new_body)
+
+        body = im.as_fieldop(im.call("scan")(definition, forward, init))(*stencil_args)
+
+        return itir.FunctionDefinition(id=node.id, params=definition.params[1:], expr=body)
 
     def visit_Stmt(self, node: foast.Stmt, **kwargs: Any) -> Never:
         raise AssertionError("Statements must always be visited in the context of a function.")
@@ -306,8 +336,8 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
             )
 
             # scan operators return an iterator of tuples, transform into tuples of iterator again
-            if isinstance(node.func.type, ts_ffront.ScanOperatorType):
-                raise NotImplementedError("TODO")
+            #if isinstance(node.func.type, ts_ffront.ScanOperatorType):
+            #    raise NotImplementedError("TODO")
 
             return result
 
@@ -354,7 +384,14 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     _visit_concat_where = _visit_where  # TODO(havogt): upgrade concat_where
 
     def _visit_broadcast(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
-        return self.visit(node.args[0], **kwargs)
+        lowered_arg = self.visit(node.args[0], **kwargs)
+        # TODO: do in GTFN backend only
+        if all(
+            isinstance(t, ts.ScalarType)
+            for t in type_info.primitive_constituents(node.args[0].type)
+        ):
+            return im.as_fieldop("deref")(lowered_arg)
+        return lowered_arg
 
     def _visit_math_built_in(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         return self._map(self.visit(node.func, **kwargs), *node.args)
