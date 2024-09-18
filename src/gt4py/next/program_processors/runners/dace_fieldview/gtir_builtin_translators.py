@@ -410,11 +410,14 @@ def translate_scalar_expr(
     scalar_expr_args = []
 
     for arg_expr in node.args:
+        is_symbol = True
         if isinstance(arg_expr, gtir.SymRef):
-            # this is the case of scalar values represented as SDFG symbols or
-            # of reverved symbols, e.g. 'float64' used as type argument to `cast_`
-            scalar_expr_args.append(arg_expr)
-        else:
+            try:
+                sdfg_builder.get_symbol_type(arg_expr.id)
+            except KeyError:
+                is_symbol = False
+
+        if is_symbol:
             # we visit the argument expression and obtain the access node to
             # a scalar data container, which will be connected to the tasklet
             arg_node, arg_type = sdfg_builder.visit(
@@ -432,6 +435,10 @@ def translate_scalar_expr(
             args.append(arg_node)
             connectors.append(param)
             scalar_expr_args.append(gtir.SymRef(id=param))
+        else:
+            # this is the case of reverved symbols, e.g. 'float64' used as type argument to `cast_`
+            assert isinstance(arg_expr, gtir.SymRef)
+            scalar_expr_args.append(arg_expr)
 
     # we visit the scalar expression replacing the input arguments with the corresponding data connectors
     scalar_node = gtir.FunCall(fun=node.fun, args=scalar_expr_args)
