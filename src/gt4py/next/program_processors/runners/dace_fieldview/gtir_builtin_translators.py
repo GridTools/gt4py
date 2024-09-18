@@ -337,7 +337,7 @@ def _get_symbolic_value(
         f"__out = {symbolic_expr}",
     )
     temp_name, _ = sdfg.add_scalar(
-        f"__{temp_name or 'tmp'}",
+        temp_name or sdfg.temp_data_name(),
         dace_fieldview_util.as_dace_type(scalar_type),
         find_new_name=True,
         transient=True,
@@ -462,17 +462,20 @@ def translate_symbol_ref(
     """Generates the dataflow subgraph for a `ir.SymRef` node."""
     assert isinstance(node, gtir.SymRef)
 
-    sym_value = str(node.id)
-    sym_type = sdfg_builder.get_symbol_type(sym_value)
+    sym_name = str(node.id)
+    sym_type = sdfg_builder.get_symbol_type(sym_name)
 
     # Create new access node in current state. It is possible that multiple
     # access nodes are created in one state for the same data container.
     # We rely on the dace simplify pass to remove duplicated access nodes.
     if isinstance(sym_type, ts.FieldType):
-        sym_node = state.add_access(sym_value)
+        sym_node = state.add_access(sym_name)
+    elif sym_name in sdfg.arrays:
+        # access the existing scalar container
+        sym_node = state.add_access(sym_name)
     else:
         sym_node = _get_symbolic_value(
-            sdfg, state, sdfg_builder, sym_value, sym_type, temp_name=sym_value
+            sdfg, state, sdfg_builder, sym_name, sym_type, temp_name=f"__{sym_name}"
         )
 
     return [(sym_node, sym_type)]
