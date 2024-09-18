@@ -606,6 +606,41 @@ def test_program_tree_tmps_two_inputs(offset_provider):
     run_test_program(testee, expected, offset_provider)
 
 
+def test_program_make_tuple(offset_provider):
+    domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
+    params = [im.sym(name) for name in ["in_field", "out_field"]]
+
+    testee = itir.Program(
+        id="make_tuple_prog",
+        function_definitions=[],
+        params=params,
+        declarations=[],
+        body=[
+            itir.SetAt(
+                expr=im.make_tuple(im.as_fieldop("deref")("in_field"), "in_field"),
+                domain=domain,
+                target=im.ref("out_field"),
+            ),
+        ],
+    )
+
+    expected = itir.Program(
+        id="make_tuple_prog",
+        function_definitions=[],
+        params=params,
+        declarations=[],
+        body=[
+            itir.SetAt(
+                expr=im.make_tuple(im.as_fieldop("deref", domain)("in_field"), "in_field"),
+                domain=domain,
+                target=im.ref("out_field"),
+            ),
+        ],
+    )
+
+    run_test_program(testee, expected, offset_provider)
+
+
 def test_cond(offset_provider):
     stencil1 = im.lambda_("arg0")(im.minus(im.deref(im.shift("Ioff", 1)("arg0")), im.deref("arg0")))
     field_1 = im.as_fieldop(stencil1)(im.ref("in_field1"))
@@ -1131,7 +1166,7 @@ def test_make_tuple_2tuple_get(offset_provider):
     assert expected_domains == constant_fold_accessed_domains(actual_domains)
 
 
-def test_make_tuple_domain_error(offset_provider):
+def test_make_tuple_non_tuple_domain(offset_provider):
     testee = im.make_tuple(im.as_fieldop("deref")("in_field1"), im.as_fieldop("deref")("in_field2"))
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
 
@@ -1142,7 +1177,6 @@ def test_make_tuple_domain_error(offset_provider):
         "in_field1": SymbolicDomain.from_expr(domain),
         "in_field2": SymbolicDomain.from_expr(domain),
     }
-    actual, actual_domains = infer_expr(testee, SymbolicDomain.from_expr(domain), offset_provider)
 
     actual, actual_domains = infer_expr(testee, SymbolicDomain.from_expr(domain), offset_provider)
 
