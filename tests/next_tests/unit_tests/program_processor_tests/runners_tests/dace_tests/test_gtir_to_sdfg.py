@@ -382,10 +382,10 @@ def test_gtir_update():
         im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
     )
     stencil1 = im.as_fieldop(
-        im.lambda_("a")(im.plus(im.deref("a"), 1.0)),
+        im.lambda_("a")(im.plus(im.deref("a"), 0 - 1.0)),
         domain,
     )("x")
-    stencil2 = im.op_as_fieldop("plus", domain)("x", 1.0)
+    stencil2 = im.op_as_fieldop("plus", domain)("x", 0 - 1.0)
 
     for i, stencil in enumerate([stencil1, stencil2]):
         testee = gtir.Program(
@@ -407,7 +407,7 @@ def test_gtir_update():
         sdfg = dace_backend.build_sdfg_from_gtir(testee, {})
 
         a = np.random.rand(N)
-        ref = a + 1.0
+        ref = a - 1.0
 
         sdfg(a, **FSYMBOLS)
         assert np.allclose(a, ref)

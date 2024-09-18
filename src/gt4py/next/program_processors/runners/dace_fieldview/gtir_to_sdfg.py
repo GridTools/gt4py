@@ -452,6 +452,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             return gtir_builtin_translators.translate_scalar_expr(
                 node, sdfg, head_state, self, reduce_identity
             )
+        elif isinstance(node.type, ts.ScalarType):
+            return gtir_builtin_translators.translate_scalar_expr(
+                node, sdfg, head_state, self, reduce_identity
+            )
         else:
             raise NotImplementedError(f"Unexpected 'FunCall' expression ({node}).")
 
