@@ -124,7 +124,7 @@ def extract_accessed_domains(
 
 def infer_as_fieldop(
     applied_fieldop: itir.FunCall,
-    target_domain: SymbolicDomain | None,
+    target_domain: DOMAIN,
     offset_provider: common.OffsetProvider,
 ) -> tuple[itir.FunCall, ACCESSED_DOMAINS]:
     assert isinstance(applied_fieldop, itir.FunCall)
@@ -224,6 +224,7 @@ def infer_make_tuple(
     domain: DOMAIN,
     offset_provider: common.OffsetProvider,
 ) -> tuple[itir.Expr, ACCESSED_DOMAINS]:
+    assert cpm.is_call_to(expr, "make_tuple")
     infered_args_expr = []
     actual_domains: ACCESSED_DOMAINS = {}
     if not isinstance(domain, tuple):
@@ -248,6 +249,7 @@ def infer_tuple_get(
     domain: DOMAIN,
     offset_provider: common.OffsetProvider,
 ) -> tuple[itir.Expr, ACCESSED_DOMAINS]:
+    assert cpm.is_call_to(expr, "tuple_get")
     actual_domains: ACCESSED_DOMAINS = {}
     idx, tuple_arg = expr.args
     assert isinstance(idx, itir.Literal)
@@ -264,6 +266,7 @@ def infer_cond(
     domain: DOMAIN,
     offset_provider: common.OffsetProvider,
 ) -> tuple[itir.Expr, ACCESSED_DOMAINS]:
+    assert cpm.is_call_to(expr, "cond")
     infered_args_expr = []
     actual_domains: ACCESSED_DOMAINS = {}
     cond, true_val, false_val = expr.args
