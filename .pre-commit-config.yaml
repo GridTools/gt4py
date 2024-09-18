@@ -18,6 +18,7 @@ repos:
     exclude: tox.ini
   - id: pretty-format-toml
     args: [--autofix]
+    exclude: tach.toml
   - id: pretty-format-yaml
     args: [--autofix, --preserve-quotes, --indent, "2"]
 
@@ -61,6 +62,11 @@ repos:
     # Run the formatter.
   - id: ruff-format
 
+- repo: https://github.com/gauge-sh/tach-pre-commit
+  rev: v0.10.7
+  hooks:
+  - id: tach
+
 - repo: https://github.com/pre-commit/mirrors-mypy
   ##[[[cog
   ## import re
@@ -91,14 +97,14 @@ repos:
     - boltons==24.0.0
     - cached-property==1.5.2
     - click==8.1.7
-    - cmake==3.30.2
+    - cmake==3.30.3
     - cytoolz==0.12.3
     - deepdiff==8.0.1
     - devtools==0.12.2
     - factory-boy==3.3.1
     - frozendict==2.4.4
     - gridtools-cpp==2.3.4
-    - importlib-resources==6.4.4
+    - importlib-resources==6.4.5
     - jinja2==3.1.4
     - lark==1.2.2
     - mako==1.3.5
