@@ -405,11 +405,64 @@ def translate_scalar_expr(
     assert isinstance(node, gtir.FunCall)
     assert isinstance(node.type, ts.ScalarType)
 
-    python_code = gtir_python_codegen.get_source(node)
-    scalar_node = gtir.Literal(value=str(python_code), type=node.type)
-    return sdfg_builder.visit(
-        scalar_node, sdfg=sdfg, head_state=state, reduce_identity=reduce_identity
+    args = []
+    connectors = []
+    scalar_expr_args = []
+
+    for arg_expr in node.args:
+        if isinstance(arg_expr, gtir.SymRef):
+            scalar_expr_args.append(arg_expr)
+        else:
+            arg_node, arg_type = sdfg_builder.visit(
+                arg_expr,
+                sdfg=sdfg,
+                head_state=state,
+                reduce_identity=reduce_identity,
+            )[0]
+            if not (
+                isinstance(arg_type, ts.ScalarType)
+                and isinstance(arg_node.desc(sdfg), dace.data.Scalar)
+            ):
+                raise ValueError(f"Invalid argument to scalar expression {arg_expr}.")
+            param = f"__in_{arg_node.data}"
+            args.append(arg_node)
+            connectors.append(param)
+            scalar_expr_args.append(gtir.SymRef(id=param))
+
+    scalar_node = gtir.FunCall(fun=node.fun, args=scalar_expr_args)
+    python_code = gtir_python_codegen.get_source(scalar_node)
+    tasklet_node = sdfg_builder.add_tasklet(
+        "scalar_expr",
+        state,
+        set(connectors),
+        {"__out"},
+        f"__out = {python_code}",
     )
+    for arg_node, conn in zip(args, connectors, strict=True):
+        state.add_edge(
+            arg_node,
+            None,
+            tasklet_node,
+            conn,
+            dace.Memlet(data=arg_node.data, subset="0"),
+        )
+
+    temp_name, _ = sdfg.add_scalar(
+        sdfg.temp_data_name(),
+        dace_fieldview_util.as_dace_type(node.type),
+        find_new_name=True,
+        transient=True,
+    )
+    temp_node = state.add_access(temp_name)
+    state.add_edge(
+        tasklet_node,
+        "__out",
+        temp_node,
+        None,
+        dace.Memlet(data=temp_name, subset="0"),
+    )
+
+    return [(temp_node, node.type)]
 
 
 if TYPE_CHECKING:
