@@ -112,15 +112,17 @@ def _(lhs: ts.ScalarType, rhs: ts.ScalarType) -> ts.ScalarType | ts.TupleType:
 
 
 @_register_builtin_type_synthesizer
-def deref(it: it_ts.IteratorType) -> ts.DataType:
+def deref(it: it_ts.IteratorType | ts.DeferredType) -> ts.DataType | ts.DeferredType:
+    if isinstance(it, ts.DeferredType):
+        return ts.DeferredType(constraint=None)
     assert isinstance(it, it_ts.IteratorType)
     assert _is_derefable_iterator_type(it)
     return it.element_type
 
 
 @_register_builtin_type_synthesizer
-def can_deref(it: it_ts.IteratorType) -> ts.ScalarType:
-    assert isinstance(it, it_ts.IteratorType)
+def can_deref(it: it_ts.IteratorType | ts.DeferredType) -> ts.ScalarType:
+    assert isinstance(it, ts.DeferredType) or isinstance(it, it_ts.IteratorType)
     # note: We don't check if the iterator is derefable here as the iterator only needs to
     # to have a valid position. Consider a nested reduction, e.g.
     #  `reduce(plus, 0)(neighbors(V2Eₒ, (↑(λ(a) → reduce(plus, 0)(neighbors(E2Vₒ, a))))(it))`
@@ -338,7 +340,11 @@ def reduce(op: TypeSynthesizer, init: ts.TypeSpec) -> TypeSynthesizer:
 @_register_builtin_type_synthesizer
 def shift(*offset_literals, offset_provider) -> TypeSynthesizer:
     @TypeSynthesizer
-    def apply_shift(it: it_ts.IteratorType) -> it_ts.IteratorType:
+    def apply_shift(
+        it: it_ts.IteratorType | ts.DeferredType,
+    ) -> it_ts.IteratorType | ts.DeferredType:
+        if isinstance(it, ts.DeferredType):
+            return ts.DeferredType(constraint=None)
         assert isinstance(it, it_ts.IteratorType)
         if it.position_dims == "unknown":  # nothing to do here
             return it
