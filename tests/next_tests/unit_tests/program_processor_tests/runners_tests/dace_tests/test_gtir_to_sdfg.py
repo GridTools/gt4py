@@ -1695,8 +1695,10 @@ def test_gtir_if_scalars():
         id="if_scalars",
         function_definitions=[],
         params=[
-            gtir.Sym(id="x", type=IFTYPE),
-            gtir.Sym(id="y", type=ts.TupleType(types=[SIZE_TYPE, SIZE_TYPE])),
+            gtir.Sym(
+                id="x",
+                type=ts.TupleType(types=[IFTYPE, ts.TupleType(types=[SIZE_TYPE, SIZE_TYPE])]),
+            ),
             gtir.Sym(id="z", type=IFTYPE),
             gtir.Sym(id="pred", type=ts.ScalarType(ts.ScalarKind.BOOL)),
             gtir.Sym(id="size", type=SIZE_TYPE),
@@ -1704,13 +1706,17 @@ def test_gtir_if_scalars():
         declarations=[],
         body=[
             gtir.SetAt(
-                expr=im.op_as_fieldop("plus", domain)(
-                    "x",
-                    im.cond(
-                        "pred",
-                        im.call("cast_")(im.tuple_get(0, "y"), "float64"),
-                        im.call("cast_")(im.tuple_get(1, "y"), "float64"),
-                    ),
+                expr=im.let("f", im.tuple_get(0, "x"))(
+                    im.let("y", im.tuple_get(1, "x"))(
+                        im.op_as_fieldop("plus", domain)(
+                            "f",
+                            im.cond(
+                                "pred",
+                                im.call("cast_")(im.tuple_get(0, "y"), "float64"),
+                                im.call("cast_")(im.tuple_get(1, "y"), "float64"),
+                            ),
+                        )
+                    )
                 ),
                 domain=domain,
                 target=gtir.SymRef(id="z"),
@@ -1724,9 +1730,13 @@ def test_gtir_if_scalars():
     d2 = np.random.randint(0, 1000)
 
     sdfg = dace_backend.build_sdfg_from_gtir(testee, {})
+    x_symbols = dict(
+        __x_0_size_0=FSYMBOLS["__x_size_0"],
+        __x_0_stride_0=FSYMBOLS["__x_stride_0"],
+    )
 
     for s in [False, True]:
-        sdfg(a, y_0=d1, y_1=d2, z=b, pred=np.bool_(s), **FSYMBOLS)
+        sdfg(x_0=a, x_1_0=d1, x_1_1=d2, z=b, pred=np.bool_(s), **FSYMBOLS, **x_symbols)
         assert np.allclose(b, (a + d1 if s else a + d2))
 
 

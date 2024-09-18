@@ -155,7 +155,12 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         return shape, strides
 
     def _add_storage(
-        self, sdfg: dace.SDFG, name: str, symbol_type: ts.DataType, transient: bool = True
+        self,
+        sdfg: dace.SDFG,
+        name: str,
+        symbol_type: ts.DataType,
+        transient: bool = True,
+        is_tuple_member: bool = False,
     ) -> list[tuple[str, ts.DataType]]:
         """
         Add storage for data containers used in the SDFG. For fields, it allocates dace arrays,
@@ -175,7 +180,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             for tname, tsymbol_type in dace_fieldview_util.get_tuple_fields(
                 name, symbol_type, flatten=True
             ):
-                tuple_fields.extend(self._add_storage(sdfg, tname, tsymbol_type, transient))
+                tuple_fields.extend(
+                    self._add_storage(sdfg, tname, tsymbol_type, transient, is_tuple_member=True)
+                )
         elif isinstance(symbol_type, ts.FieldType):
             dtype = dace_fieldview_util.as_dace_type(symbol_type.dtype)
             # use symbolic shape, which allows to invoke the program with fields of different size;
@@ -184,11 +191,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             sdfg.add_array(name, sym_shape, dtype, strides=sym_strides, transient=transient)
         elif isinstance(symbol_type, ts.ScalarType):
             dtype = dace_fieldview_util.as_dace_type(symbol_type)
-            # Scalar arguments passed to the program are represented as symbols in DaCe SDFG.
+            # Scalar arguments passed to the program are represented as symbols in DaCe SDFG;
+            # the exception are members of tuple arguments, that are represented as scalar containers.
             # The field size is sometimes passed as scalar argument to the program, so we have to
             # check if the shape symbol was already allocated by `_make_array_shape_and_strides`.
             # We assume that the scalar argument for field size always follows the field argument.
-            if name in sdfg.symbols:
+            if is_tuple_member:
+                sdfg.add_scalar(name, dtype, transient=transient)
+            elif name in sdfg.symbols:
                 assert sdfg.symbols[name].dtype == dtype
             else:
                 sdfg.add_symbol(name, dtype)
@@ -472,15 +482,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             for pname, arg in lambda_args
         }
 
-        # obtain the set of symbols that are used in the lambda node and all its child nodes
-        used_gtir_symbols = {
-            str(sym.id) for sym in eve.walk_values(node).if_isinstance(gtir.SymRef)
-        }
         # inherit symbols from parent scope but eventually override with local symbols
         lambda_symbols = {
-            p_name: p_type
-            for p_name, p_type in (self.global_symbols | lambda_arg_types).items()
-            if p_name in used_gtir_symbols
+            p_name: p_type for p_name, p_type in (self.global_symbols | lambda_arg_types).items()
         }
 
         lambda_translator = GTIRToSDFG(self.offset_provider, lambda_symbols)
@@ -531,21 +535,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         input_memlets = {}
         nsdfg_symbols_mapping: dict[str, dace.symbolic.SymExpr] = {}
-        for sym_name, sym_type in lambda_symbols.items():
-            if isinstance(sym_type, ts.ScalarType):
-                nsdfg_symbols_mapping[sym_name] = sym_name
-            elif isinstance(sym_type, ts.TupleType):
-                nsdfg_symbols_mapping |= {
-                    fname: fname
-                    for fname, ftype in dace_fieldview_util.get_tuple_fields(
-                        sym_name, sym_type, flatten=True
-                    )
-                    if isinstance(ftype, ts.ScalarType)
-                }
         for nsdfg_dataname, nsdfg_datadesc in nsdfg.arrays.items():
             if nsdfg_datadesc.transient:
                 continue
-            datadesc: Optional[dace.dtypes.Array] = None
+            datadesc: Optional[dace.dtypes.Data] = None
             if nsdfg_dataname in lambda_arg_nodes:
                 src_node = lambda_arg_nodes[nsdfg_dataname].data_node
                 dataname = src_node.data
