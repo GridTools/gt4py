@@ -7,8 +7,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 # TODO(SF-N): test scan operator
-# TODO((tehrengruber): the domain inference pass can run before we extract temporaries, then we
-#  don't need support for it and can remove the respective parts from the pass
 
 import numpy as np
 from typing import Iterable, Optional, Literal, Union
@@ -53,16 +51,13 @@ def unstructured_offset_provider():
         )
     }
 
-
-def shift_fieldop_factory(dim: str, offset: int, domain: Optional[itir.FunCall] = None):
-    return im.as_fieldop(im.lambda_("it")(im.deref(im.shift(dim, offset)("it"))), domain)
-
+def premap_field(field: itir.Expr, dim: str, offset: int, domain: Optional[itir.FunCall] = None) -> itir.Expr:
+    return im.as_fieldop(im.lambda_("it")(im.deref(im.shift(dim, offset)("it"))), domain)(field)
 
 def setup_test_as_fieldop(
     stencil: itir.Lambda | Literal["deref"],
     domain: itir.FunCall,
-    expected_domain_dict: dict[str, dict[str | Dimension, tuple[itir.Expr, itir.Expr]]],
-    offset_provider: common.OffsetProvider,
+    expected_domain: dict[str, dict[str | Dimension, tuple[itir.Expr, itir.Expr]]],
     *,
     refs: Iterable[itir.SymRef] = None,
     domain_type: str = common.GridType.CARTESIAN,
@@ -75,7 +70,7 @@ def setup_test_as_fieldop(
     expected = im.as_fieldop(stencil, domain)(*refs)
     expected_domains = {
         ref: im.domain(domain_type, d) if d is not None else None
-        for ref, d in expected_domain_dict.items()
+        for ref, d in expected_domain.items()
     }
     return testee, expected, expected_domains
 
@@ -170,7 +165,7 @@ def test_forward_difference_x(offset_provider):
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     expected_accessed_domains = {"in_field1": {IDim: (0, 12)}}
     testee, expected, expected_domains = setup_test_as_fieldop(
-        stencil, domain, expected_accessed_domains, offset_provider
+        stencil, domain, expected_accessed_domains
     )
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
@@ -179,7 +174,7 @@ def test_deref(offset_provider):
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     expected_accessed_domains = {"in_field": {IDim: (0, 11)}}
     testee, expected, expected_domains = setup_test_as_fieldop(
-        "deref", domain, expected_accessed_domains, offset_provider, refs=["in_field"]
+        "deref", domain, expected_accessed_domains, refs=["in_field"]
     )
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
@@ -200,7 +195,7 @@ def test_multi_length_shift(offset_provider):
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     expected_accessed_domains = {"in_field1": {IDim: (3, 14)}}
     testee, expected, expected_domains = setup_test_as_fieldop(
-        stencil, domain, expected_accessed_domains, offset_provider
+        stencil, domain, expected_accessed_domains
     )
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
@@ -214,7 +209,6 @@ def test_unstructured_shift(unstructured_offset_provider):
         stencil,
         domain,
         expected_accessed_domains,
-        unstructured_offset_provider,
         domain_type=common.GridType.UNSTRUCTURED,
     )
     run_test_expr(testee, expected, domain, expected_domains, unstructured_offset_provider)
@@ -240,7 +234,7 @@ def test_laplace(offset_provider):
     expected_accessed_domains = {"in_field1": {IDim: (-1, 12), JDim: (-1, 8)}}
 
     testee, expected, expected_domains = setup_test_as_fieldop(
-        stencil, domain, expected_accessed_domains, offset_provider
+        stencil, domain, expected_accessed_domains
     )
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
@@ -261,7 +255,6 @@ def test_shift_x_y_two_inputs(offset_provider):
         stencil,
         domain,
         expected_accessed_domains,
-        offset_provider,
     )
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
@@ -281,7 +274,6 @@ def test_shift_x_y_two_inputs_literal(offset_provider):
         stencil,
         domain,
         expected_accessed_domains,
-        offset_provider,
         refs=(im.ref("in_field1"), 2),
     )
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
@@ -323,7 +315,6 @@ def test_shift_x_y_z_three_inputs(offset_provider):
         stencil,
         im.domain(common.GridType.CARTESIAN, domain_dict),
         expected_domain_dict,
-        offset_provider,
     )
     run_test_expr(
         testee,
@@ -431,7 +422,6 @@ def test_unused_input(offset_provider):
         stencil,
         domain,
         expected_accessed_domains,
-        offset_provider,
     )
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
@@ -698,18 +688,18 @@ def test_let_scalar_expr(offset_provider):
 
 
 def test_simple_let(offset_provider):
-    testee = im.let("a", shift_fieldop_factory("Ioff", 1)("in_field"))("a")
+    testee = im.let("a", premap_field("in_field", "Ioff", 1))("a")
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
-    expected = im.let("a", shift_fieldop_factory("Ioff", 1, domain)("in_field"))("a")
+    expected = im.let("a", premap_field("in_field", "Ioff", 1, domain))("a")
 
     expected_domains = {"in_field": translate_domain(domain, {"Ioff": 1}, offset_provider)}
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
 
 def test_simple_let2(offset_provider):
-    testee = im.let("a", "in_field")(shift_fieldop_factory("Ioff", 1)("a"))
+    testee = im.let("a", "in_field")(premap_field("a", "Ioff", 1))
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
-    expected = im.let("a", "in_field")(shift_fieldop_factory("Ioff", 1, domain)("a"))
+    expected = im.let("a", "in_field")(premap_field("a", "Ioff", 1, domain))
 
     expected_domains = {"in_field": translate_domain(domain, {"Ioff": 1}, offset_provider)}
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
@@ -718,18 +708,16 @@ def test_simple_let2(offset_provider):
 def test_let(offset_provider):
     testee = im.let(
         "a",
-        shift_fieldop_factory("Ioff", 1)("in_field"),
-    )(shift_fieldop_factory("Ioff", 1)("a"))
-    testee2 = shift_fieldop_factory("Ioff", 1)(shift_fieldop_factory("Ioff", 1)("in_field"))
+        premap_field("in_field", "Ioff", 1),
+    )(premap_field("a", "Ioff", 1))
+    testee2 = premap_field(premap_field("in_field", "Ioff", 1), "Ioff", 1)
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     domain_a = translate_domain(domain, {"Ioff": 1}, offset_provider)
     expected = im.let(
         "a",
-        shift_fieldop_factory("Ioff", 1, domain_a)("in_field"),
-    )(shift_fieldop_factory("Ioff", 1, domain)("a"))
-    expected2 = shift_fieldop_factory("Ioff", 1, domain)(
-        shift_fieldop_factory("Ioff", 1, domain_a)("in_field")
-    )
+        premap_field("in_field", "Ioff", 1, domain_a),
+    )(premap_field("a", "Ioff", 1, domain))
+    expected2 = premap_field(premap_field("in_field", "Ioff", 1, domain_a), "Ioff", 1, domain)
     expected_domains = {"in_field": translate_domain(domain, {"Ioff": 2}, offset_provider)}
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
@@ -749,15 +737,15 @@ def test_let_two_inputs(offset_provider):
     multiply_stencil = im.lambda_("it1", "it2")(im.multiplies_(im.deref("it1"), im.deref("it2")))
 
     testee = im.let(
-        ("inner1", shift_fieldop_factory("Ioff", 1)("in_field1")),
-        ("inner2", shift_fieldop_factory("Ioff", -1)("in_field2")),
+        ("inner1", premap_field("in_field1", "Ioff", 1)),
+        ("inner2", premap_field("in_field2", "Ioff", -1)),
     )(im.as_fieldop(multiply_stencil)("inner1", "inner2"))
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     domain_p1 = translate_domain(domain, {"Ioff": 1}, offset_provider)
     domain_m1 = translate_domain(domain, {"Ioff": -1}, offset_provider)
     expected = im.let(
-        ("inner1", shift_fieldop_factory("Ioff", 1, domain)("in_field1")),
-        ("inner2", shift_fieldop_factory("Ioff", -1, domain)("in_field2")),
+        ("inner1", premap_field("in_field1", "Ioff", 1, domain)),
+        ("inner2", premap_field("in_field2", "Ioff", -1, domain)),
     )(im.as_fieldop(multiply_stencil, domain)("inner1", "inner2"))
     expected_domains = {
         "in_field1": domain_p1,
@@ -767,9 +755,9 @@ def test_let_two_inputs(offset_provider):
 
 
 def test_nested_let_in_body(offset_provider):
-    testee = im.let("inner1", shift_fieldop_factory("Ioff", 1)("outer"))(
-        im.let("inner2", shift_fieldop_factory("Ioff", 1)("inner1"))(
-            shift_fieldop_factory("Ioff", 1)("inner2")
+    testee = im.let("inner1", premap_field("outer", "Ioff", 1))(
+        im.let("inner2", premap_field("inner1", "Ioff", 1))(
+            premap_field("inner2", "Ioff", 1)
         )
     )
 
@@ -780,10 +768,10 @@ def test_nested_let_in_body(offset_provider):
 
     expected = im.let(
         "inner1",
-        shift_fieldop_factory("Ioff", 1, domain_p2)("outer"),
+        premap_field("outer", "Ioff", 1, domain_p2),
     )(
-        im.let("inner2", shift_fieldop_factory("Ioff", 1, domain_p1)("inner1"))(
-            shift_fieldop_factory("Ioff", 1, domain)("inner2")
+        im.let("inner2", premap_field("inner1", "Ioff", 1, domain_p1))(
+            premap_field("inner2", "Ioff", 1, domain)
         )
     )
     expected_domains = {"outer": domain_p3}
@@ -815,8 +803,8 @@ def test_nested_let_arg(offset_provider):
 
 
 def test_nested_let_arg_shadowed(offset_provider):
-    testee = im.let("a", shift_fieldop_factory("Ioff", 3)("in_field"))(
-        im.let("a", shift_fieldop_factory("Ioff", 2)("a"))(shift_fieldop_factory("Ioff", 1)("a"))
+    testee = im.let("a", premap_field("in_field", "Ioff", 3))(
+        im.let("a", premap_field("a", "Ioff", 2))(premap_field("a", "Ioff", 1))
     )
 
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
@@ -826,10 +814,10 @@ def test_nested_let_arg_shadowed(offset_provider):
 
     expected = im.let(
         "a",
-        shift_fieldop_factory("Ioff", 3, domain_p3)("in_field"),
+        premap_field("in_field", "Ioff", 3, domain_p3),
     )(
-        im.let("a", shift_fieldop_factory("Ioff", 2, domain_p1)("a"))(
-            shift_fieldop_factory("Ioff", 1, domain)("a")
+        im.let("a", premap_field("a", "Ioff", 2, domain_p1))(
+            premap_field("a", "Ioff", 1, domain)
         )
     )
     expected_domains = {"in_field": domain_p6}
@@ -842,7 +830,7 @@ def test_nested_let_arg_shadowed2(offset_provider):
     testee = im.as_fieldop(
         im.lambda_("it1", "it2")(im.multiplies_(im.deref("it1"), im.deref("it2")))
     )(
-        shift_fieldop_factory("Ioff", 1)("in_field1"),  # only here we access `in_field1`
+        premap_field("in_field1", "Ioff", 1),  # only here we access `in_field1`
         im.let("in_field1", "in_field2")("in_field1"),  # here we actually access `in_field2`
     )
 
@@ -852,7 +840,7 @@ def test_nested_let_arg_shadowed2(offset_provider):
     expected = im.as_fieldop(
         im.lambda_("it1", "it2")(im.multiplies_(im.deref("it1"), im.deref("it2"))), domain
     )(
-        shift_fieldop_factory("Ioff", 1, domain)("in_field1"),
+        premap_field("in_field1", "Ioff", 1, domain),
         im.let("in_field1", "in_field2")("in_field1"),
     )
     expected_domains = {
@@ -863,10 +851,10 @@ def test_nested_let_arg_shadowed2(offset_provider):
 
 
 def test_double_nested_let_fun_expr(offset_provider):
-    testee = im.let("inner1", shift_fieldop_factory("Ioff", 1)("outer"))(
-        im.let("inner2", shift_fieldop_factory("Ioff", -1)("inner1"))(
-            im.let("inner3", shift_fieldop_factory("Ioff", -1)("inner2"))(
-                shift_fieldop_factory("Ioff", 3)("inner3")
+    testee = im.let("inner1", premap_field("outer", "Ioff", 1))(
+        im.let("inner2", premap_field("inner1", "Ioff", -1))(
+            im.let("inner3", premap_field("inner2", "Ioff", -1))(
+                premap_field("inner3", "Ioff", 3)
             )
         )
     )
@@ -875,10 +863,10 @@ def test_double_nested_let_fun_expr(offset_provider):
     domain_p2 = translate_domain(domain, {"Ioff": 2}, offset_provider)
     domain_p3 = translate_domain(domain, {"Ioff": 3}, offset_provider)
 
-    expected = im.let("inner1", shift_fieldop_factory("Ioff", 1, domain_p1)("outer"))(
-        im.let("inner2", shift_fieldop_factory("Ioff", -1, domain_p2)("inner1"))(
-            im.let("inner3", shift_fieldop_factory("Ioff", -1, domain_p3)("inner2"))(
-                shift_fieldop_factory("Ioff", 3, domain)("inner3")
+    expected = im.let("inner1", premap_field("outer", "Ioff", 1, domain_p1))(
+        im.let("inner2", premap_field("inner1", "Ioff", -1, domain_p2))(
+            im.let("inner3", premap_field("inner2", "Ioff", -1, domain_p3))(
+                premap_field("inner3", "Ioff", 3, domain)
             )
         )
     )
@@ -891,10 +879,10 @@ def test_double_nested_let_fun_expr(offset_provider):
 def test_nested_let_args(offset_provider):
     testee = im.let(
         "inner",
-        im.let("inner_arg", shift_fieldop_factory("Ioff", 1)("outer"))(
-            shift_fieldop_factory("Ioff", -1)("inner_arg")
+        im.let("inner_arg", premap_field("outer", "Ioff", 1))(
+            premap_field("inner_arg", "Ioff", -1)
         ),
-    )(shift_fieldop_factory("Ioff", -1)("inner"))
+    )(premap_field("inner", "Ioff", -1))
 
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     domain_m1 = translate_domain(domain, {"Ioff": -1}, offset_provider)
@@ -902,10 +890,10 @@ def test_nested_let_args(offset_provider):
 
     expected = im.let(
         "inner",
-        im.let("inner_arg", shift_fieldop_factory("Ioff", 1, domain_m2)("outer"))(
-            shift_fieldop_factory("Ioff", -1, domain_m1)("inner_arg")
+        im.let("inner_arg", premap_field("outer", "Ioff", 1, domain_m2))(
+            premap_field("inner_arg", "Ioff", -1, domain_m1)
         ),
-    )(shift_fieldop_factory("Ioff", -1, domain)("inner"))
+    )(premap_field("inner", "Ioff", -1, domain))
 
     expected_domains = {"outer": domain_m1}
 
@@ -916,8 +904,8 @@ def test_program_let(offset_provider):
     stencil_tmp = im.lambda_("arg0")(
         im.minus(im.deref(im.shift("Ioff", -1)("arg0")), im.deref("arg0"))
     )
-    let_tmp = im.let("inner", shift_fieldop_factory("Ioff", -1)("outer"))(
-        shift_fieldop_factory("Ioff", -1)("inner")
+    let_tmp = im.let("inner", premap_field("outer", "Ioff", -1))(
+        premap_field("inner", "Ioff", -1)
     )
     as_fieldop = im.as_fieldop(stencil_tmp)(im.ref("tmp"))
 
@@ -938,8 +926,8 @@ def test_program_let(offset_provider):
         ],
     )
 
-    expected_let = im.let("inner", shift_fieldop_factory("Ioff", -1, domain_lm2_rm1)("outer"))(
-        shift_fieldop_factory("Ioff", -1, domain_lm1)("inner")
+    expected_let = im.let("inner", premap_field("outer", "Ioff", -1, domain_lm2_rm1))(
+        premap_field("inner", "Ioff", -1, domain_lm1)
     )
     expected_as_fieldop = im.as_fieldop(stencil_tmp, domain)(im.ref("tmp"))
 
