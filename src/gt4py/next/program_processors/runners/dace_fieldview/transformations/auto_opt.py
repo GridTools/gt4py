@@ -8,7 +8,7 @@
 
 """Fast access to the auto optimization on DaCe."""
 
-from typing import Any, Final, Optional, Sequence
+from typing import Any, Final, Iterable, Optional, Sequence
 
 import dace
 from dace.transformation import dataflow as dace_dataflow
@@ -36,30 +36,30 @@ def gt_simplify(
     sdfg: dace.SDFG,
     validate: bool = True,
     validate_all: bool = False,
-    skip: Optional[set[str]] = None,
+    skip: Optional[Iterable[str]] = GT_SIMPLIFY_DEFAULT_SKIP_SET,
 ) -> Any:
     """Performs simplifications on the SDFG in place.
 
     Instead of calling `sdfg.simplify()` directly, you should use this function,
     as it is specially tuned for GridTool based SDFGs.
 
-    By default this function will run the normal DaCe simplify pass. However, if
-    `skip` is not set or `None` then the parts listed in `GT_SIMPLIFY_DEFAULT_SKIP_SET`
-    will be skipped.
+    By default this function will run the normal DaCe simplify pass, but skip
+    passes listed in `GT_SIMPLIFY_DEFAULT_SKIP_SET`. If `skip` is passed it
+    will be forwarded to DaCe, i.e. `GT_SIMPLIFY_DEFAULT_SKIP_SET` are not
+    added automatically.
 
     Args:
         sdfg: The SDFG to optimize.
         validate: Perform validation after the pass has run.
         validate_all: Perform extensive validation.
-        skip: List of simplify passes that should not be applied.
+        skip: List of simplify passes that should not be applied, defaults
+            to `GT_SIMPLIFY_DEFAULT_SKIP_SET`.
     """
-    if skip is None:
-        skip = GT_SIMPLIFY_DEFAULT_SKIP_SET
     return dace_passes_simplify.SimplifyPass(
         validate=validate,
         validate_all=validate_all,
         verbose=False,
-        skip=skip,
+        skip=set(skip) if skip is not None else skip,
     ).apply_pass(sdfg, {})
 
 
