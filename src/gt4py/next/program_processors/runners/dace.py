@@ -43,7 +43,7 @@ run_dace_gpu_noopt = DaCeIteratorBackendFactory(gpu=True, cached=True, auto_opti
 
 run_dace_fieldview_cpu = next_backend.Backend(
     executor=modular_executor.ModularExecutor(
-        otf_workflow=dace_fieldview_workflow.DaCeWorkflowFactory(), name="dace_fieldview_cpu"
+        otf_workflow=dace_fieldview_workflow.DaCeWorkflowFactory(), name="run_dace_cpu.gtir"
     ),
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
     transforms_fop=next_backend.FieldopTransformWorkflow(
