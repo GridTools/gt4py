@@ -369,32 +369,6 @@ def translate_literal(
     return [(data_node, data_type)]
 
 
-def translate_symbol_ref(
-    node: gtir.Node,
-    sdfg: dace.SDFG,
-    state: dace.SDFGState,
-    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
-) -> list[TemporaryData]:
-    """Generates the dataflow subgraph for a `ir.SymRef` node."""
-    assert isinstance(node, gtir.SymRef)
-
-    sym_value = str(node.id)
-    sym_type = sdfg_builder.get_symbol_type(sym_value)
-
-    # Create new access node in current state. It is possible that multiple
-    # access nodes are created in one state for the same data container.
-    # We rely on the dace simplify pass to remove duplicated access nodes.
-    if isinstance(sym_type, ts.FieldType):
-        sym_node = state.add_access(sym_value)
-    else:
-        sym_node = _get_symbolic_value(
-            sdfg, state, sdfg_builder, sym_value, sym_type, temp_name=sym_value
-        )
-
-    return [(sym_node, sym_type)]
-
-
 def translate_scalar_expr(
     node: gtir.Node,
     sdfg: dace.SDFG,
@@ -478,12 +452,38 @@ def translate_scalar_expr(
     return [(temp_node, node.type)]
 
 
+def translate_symbol_ref(
+    node: gtir.Node,
+    sdfg: dace.SDFG,
+    state: dace.SDFGState,
+    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
+    reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
+) -> list[TemporaryData]:
+    """Generates the dataflow subgraph for a `ir.SymRef` node."""
+    assert isinstance(node, gtir.SymRef)
+
+    sym_value = str(node.id)
+    sym_type = sdfg_builder.get_symbol_type(sym_value)
+
+    # Create new access node in current state. It is possible that multiple
+    # access nodes are created in one state for the same data container.
+    # We rely on the dace simplify pass to remove duplicated access nodes.
+    if isinstance(sym_type, ts.FieldType):
+        sym_node = state.add_access(sym_value)
+    else:
+        sym_node = _get_symbolic_value(
+            sdfg, state, sdfg_builder, sym_value, sym_type, temp_name=sym_value
+        )
+
+    return [(sym_node, sym_type)]
+
+
 if TYPE_CHECKING:
     # Use type-checking to assert that all translator functions implement the `PrimitiveTranslator` protocol
     __primitive_translators: list[PrimitiveTranslator] = [
         translate_as_field_op,
         translate_cond,
         translate_literal,
-        translate_symbol_ref,
         translate_scalar_expr,
+        translate_symbol_ref,
     ]
