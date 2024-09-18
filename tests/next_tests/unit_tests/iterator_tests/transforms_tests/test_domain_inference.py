@@ -51,8 +51,12 @@ def unstructured_offset_provider():
         )
     }
 
-def premap_field(field: itir.Expr, dim: str, offset: int, domain: Optional[itir.FunCall] = None) -> itir.Expr:
+
+def premap_field(
+    field: itir.Expr, dim: str, offset: int, domain: Optional[itir.FunCall] = None
+) -> itir.Expr:
     return im.as_fieldop(im.lambda_("it")(im.deref(im.shift(dim, offset)("it"))), domain)(field)
+
 
 def setup_test_as_fieldop(
     stencil: itir.Lambda | Literal["deref"],
@@ -323,6 +327,23 @@ def test_shift_x_y_z_three_inputs(offset_provider):
         expected_domains,
         offset_provider,
     )
+
+
+def test_two_params_same_arg(offset_provider):
+    stencil = im.lambda_("arg0", "arg1")(
+        im.plus(
+            im.deref("arg0"),
+            im.deref(im.shift("Ioff", 1)("arg1")),
+        )
+    )
+    domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
+    expected_accessed_domains = {
+        "in_field": {IDim: (0, 12)},
+    }
+    testee, expected, expected_domains = setup_test_as_fieldop(
+        stencil, domain, expected_accessed_domains, offset_provider, refs=["in_field", "in_field"]
+    )
+    run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
 
 def test_nested_stencils(offset_provider):
@@ -756,9 +777,7 @@ def test_let_two_inputs(offset_provider):
 
 def test_nested_let_in_body(offset_provider):
     testee = im.let("inner1", premap_field("outer", "Ioff", 1))(
-        im.let("inner2", premap_field("inner1", "Ioff", 1))(
-            premap_field("inner2", "Ioff", 1)
-        )
+        im.let("inner2", premap_field("inner1", "Ioff", 1))(premap_field("inner2", "Ioff", 1))
     )
 
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
@@ -815,11 +834,7 @@ def test_nested_let_arg_shadowed(offset_provider):
     expected = im.let(
         "a",
         premap_field("in_field", "Ioff", 3, domain_p3),
-    )(
-        im.let("a", premap_field("a", "Ioff", 2, domain_p1))(
-            premap_field("a", "Ioff", 1, domain)
-        )
-    )
+    )(im.let("a", premap_field("a", "Ioff", 2, domain_p1))(premap_field("a", "Ioff", 1, domain)))
     expected_domains = {"in_field": domain_p6}
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
@@ -853,9 +868,7 @@ def test_nested_let_arg_shadowed2(offset_provider):
 def test_double_nested_let_fun_expr(offset_provider):
     testee = im.let("inner1", premap_field("outer", "Ioff", 1))(
         im.let("inner2", premap_field("inner1", "Ioff", -1))(
-            im.let("inner3", premap_field("inner2", "Ioff", -1))(
-                premap_field("inner3", "Ioff", 3)
-            )
+            im.let("inner3", premap_field("inner2", "Ioff", -1))(premap_field("inner3", "Ioff", 3))
         )
     )
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
@@ -904,9 +917,7 @@ def test_program_let(offset_provider):
     stencil_tmp = im.lambda_("arg0")(
         im.minus(im.deref(im.shift("Ioff", -1)("arg0")), im.deref("arg0"))
     )
-    let_tmp = im.let("inner", premap_field("outer", "Ioff", -1))(
-        premap_field("inner", "Ioff", -1)
-    )
+    let_tmp = im.let("inner", premap_field("outer", "Ioff", -1))(premap_field("inner", "Ioff", -1))
     as_fieldop = im.as_fieldop(stencil_tmp)(im.ref("tmp"))
 
     domain_lm2_rm1 = im.domain(common.GridType.CARTESIAN, {IDim: (-2, 10)})

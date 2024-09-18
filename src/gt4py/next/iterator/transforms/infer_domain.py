@@ -41,12 +41,11 @@ def split_dict_by_key(pred: Callable, d: dict):
 
 
 # TODO(tehrengruber): Revisit whether we want to move this behaviour to `domain_union`.
-def _domain_union_with_none(d1: SymbolicDomain | None, d2: SymbolicDomain | None):
-    if d1 is None:
-        return d2
-    elif d2 is None:
-        return d1
-    return domain_union([d1, d2])
+def _domain_union_with_none(*domains: SymbolicDomain | None):
+    domains = [*filter(lambda x: x is not None, domains)]
+    if len(domains) == 0:
+        return None
+    return domain_union(*domains)
 
 
 def canonicalize_domain_structure(d1: DOMAIN, d2: DOMAIN) -> tuple[DOMAIN, DOMAIN]:
@@ -112,12 +111,10 @@ def extract_accessed_domains(
         new_domains = [
             SymbolicDomain.translate(target_domain, shift, offset_provider) for shift in shifts_list
         ]
-        assert in_field_id not in accessed_domains
-        if new_domains:
-            accessed_domains[in_field_id] = domain_union(new_domains)
-        else:
-            # argument is never accessed
-            accessed_domains[in_field_id] = None
+        # `None` means field is never accessed
+        accessed_domains[in_field_id] = _domain_union_with_none(
+            accessed_domains.get(in_field_id, None), *new_domains
+        )
 
     return accessed_domains
 
