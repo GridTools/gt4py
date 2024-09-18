@@ -8,7 +8,7 @@
 
 """Fast access to the auto optimization on DaCe."""
 
-from typing import Any, Optional, Sequence
+from typing import Any, Final, Optional, Sequence
 
 import dace
 from dace.transformation import dataflow as dace_dataflow
@@ -19,6 +19,17 @@ from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace_fieldview import (
     transformations as gtx_transformations,
 )
+
+
+GT_SIMPLIFY_DEFAULT_SKIP_SET: Final[set[str]] = {"ScalarToSymbolPromotion", "ConstantPropagation"}
+"""Set of simplify passes `gt_simplify()` skips by default.
+
+The following passes are included:
+- `ScalarToSymbolPromotion`: The lowering has sometimes to turn a scalar into a
+    symbol or vice versa and at a later point to invert this again. However, this
+    pass has some problems with this pattern so for the time being it is disabled.
+- `ConstantPropagation`: Same reasons as `ScalarToSymbolPromotion`.
+"""
 
 
 def gt_simplify(
@@ -32,19 +43,18 @@ def gt_simplify(
     Instead of calling `sdfg.simplify()` directly, you should use this function,
     as it is specially tuned for GridTool based SDFGs.
 
+    By default this function will run the normal DaCe simplify pass. However, if
+    `skip` is not set or `None` then the parts listed in `GT_SIMPLIFY_DEFAULT_SKIP_SET`
+    will be skipped.
+
     Args:
         sdfg: The SDFG to optimize.
         validate: Perform validation after the pass has run.
         validate_all: Perform extensive validation.
         skip: List of simplify passes that should not be applied.
-
-    Note:
-        The reason for this function is that we can influence how simplify works.
-        Since some parts in simplify might break things in the SDFG.
-        However, currently nothing is customized yet, and the function just calls
-        the simplification pass directly.
     """
-
+    if skip is None:
+        skip = GT_SIMPLIFY_DEFAULT_SKIP_SET
     return dace_passes_simplify.SimplifyPass(
         validate=validate,
         validate_all=validate_all,
