@@ -11,9 +11,8 @@
 from typing import Any, Final, Iterable, Optional, Sequence
 
 import dace
-from dace.transformation import dataflow as dace_dataflow
+from dace.transformation import dataflow as dace_dataflow, passes as dace_passes
 from dace.transformation.auto import auto_optimize as dace_aoptimize
-from dace.transformation.passes import simplify as dace_passes_simplify
 
 from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace_fieldview import (
@@ -48,6 +47,9 @@ def gt_simplify(
     will be forwarded to DaCe, i.e. `GT_SIMPLIFY_DEFAULT_SKIP_SET` are not
     added automatically.
 
+    Passes that are replaced:
+    - Instead of `InlineSDFGs` the function will run `gt_inline_nested_sdfg()`.
+
     Args:
         sdfg: The SDFG to optimize.
         validate: Perform validation after the pass has run.
@@ -55,11 +57,23 @@ def gt_simplify(
         skip: List of simplify passes that should not be applied, defaults
             to `GT_SIMPLIFY_DEFAULT_SKIP_SET`.
     """
-    return dace_passes_simplify.SimplifyPass(
+    if skip is None:
+        skip = set()
+
+    if "InlineSDFGs" not in skip:
+        gt_inline_nested_sdfg(
+            sdfg=sdfg,
+            multistate=True,
+            permissive=False,
+            validate=validate,
+            validate_all=validate_all,
+        )
+
+    return dace_passes.SimplifyPass(
         validate=validate,
         validate_all=validate_all,
         verbose=False,
-        skip=set(skip) if skip is not None else skip,
+        skip=set(skip) | {"InlineSDFGs"},
     ).apply_pass(sdfg, {})
 
 
@@ -89,6 +103,58 @@ def gt_set_iteration_order(
         validate=validate,
         validate_all=validate_all,
     )
+
+
+def gt_inline_nested_sdfg(
+    sdfg: dace.SDFG,
+    multistate: bool = True,
+    permissive: bool = False,
+    validate: bool = True,
+    validate_all: bool = False,
+) -> dace.SDFG:
+    """Perform inlining of nested SDFG into their parent SDFG.
+
+    The function uses DaCe's `InlineSDFG` transformation, the same used in simplify.
+    However, before the inline transformation is run the function will run some
+    cleaning passes that allows inlining nested SDFG.
+    As a side effect, the function will split stages into more states.
+
+    Args:
+        sdfg: The SDFG that should be processed, will be modified in place and returned.
+        multistate: Allow inlining of multistate nested SDFG, defaults to `True`.
+        permissive: Be less strict on the accepted SDFGs.
+        validate: Perform validation after the transformation has finished.
+        validate_all: Performs extensive validation.
+    """
+    first_iteration = True
+    i = 0
+    while True:
+        print(f"ITERATION: {i}")
+        nb_preproccess = sdfg.apply_transformations_repeated(
+            [dace_dataflow.PruneSymbols, dace_dataflow.PruneConnectors],
+            validate=False,
+            validate_all=validate_all,
+        )
+        if (nb_preproccess == 0) and (not first_iteration):
+            break
+
+        # Create and configure the inline pass
+        inline_sdfg = dace_passes.InlineSDFGs()
+        inline_sdfg.progress = False
+        inline_sdfg.permissive = permissive
+        inline_sdfg.multistate = multistate
+
+        # Apply the inline pass
+        nb_inlines = inline_sdfg.apply_pass(sdfg, {})
+
+        # Check result, if needed and test if we can stop
+        if validate_all or validate:
+            sdfg.validate()
+        if nb_inlines == 0:
+            break
+        first_iteration = False
+
+    return sdfg
 
 
 def gt_auto_optimize(
