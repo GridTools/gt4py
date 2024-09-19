@@ -4,7 +4,7 @@ CSCS provides a way of running CI on it's machines. This is currently only avail
 
 ## Initial Setup
 
-Follow the steps in the [CSCS-CI documentation](https://gitlab.com/cscs-ci/ci-testing/containerised_ci_doc). As mentioned in the documentation, you will require the help of someone who can register the project to be allowed to run CI on CSCS machines.
+Follow the steps in the [CSCS-CI documentation](https://confluence.cscs.ch/x/UAXJMw). As mentioned in the documentation, you will require the help of someone who can register the project to be allowed to run CI on CSCS machines.
 
 ## Current Configuration
 

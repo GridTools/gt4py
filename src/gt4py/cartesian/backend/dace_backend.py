@@ -42,7 +42,6 @@ from gt4py.cartesian.gtc.dace.utils import array_dimensions, replace_strides
 from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
 from gt4py.cartesian.gtc.passes.gtir_k_boundary import compute_k_boundary
 from gt4py.cartesian.gtc.passes.gtir_pipeline import GtirPipeline
-from gt4py.cartesian.gtc.passes.oir_optimizations.inlining import MaskInlining
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_fields_extents
 from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline
 from gt4py.cartesian.utils import shash
@@ -353,7 +352,7 @@ class SDFGManager:
             except FileNotFoundError:
                 base_oir = GTIRToOIR().visit(self.builder.gtir)
                 oir_pipeline = self.builder.options.backend_opts.get(
-                    "oir_pipeline", DefaultPipeline(skip=[MaskInlining])
+                    "oir_pipeline", DefaultPipeline()
                 )
                 oir_node = oir_pipeline.run(base_oir)
                 sdfg = OirSDFGBuilder().visit(oir_node)

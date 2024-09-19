@@ -3,6 +3,7 @@
 <!-- List format (alphabetical order):  Surname, Name. Employer/Affiliation -->
 
 - Benedicic, Lucas. ETH Zurich - CSCS
+- Cattaneo, Roman. SSAI/NASA-GSFC
 - Cruz, Felipe. ETH Zurich - CSCS
 - Dahm, Johann. Allen Institute for AI
 - Davis, Eddie. Allen Institute for AI
@@ -23,6 +24,7 @@
 - Madonna, Alberto. ETH Zurich - CSCS
 - Mariotti, Kean. ETH Zurich - CSCS
 - Müller, Christoph. MeteoSwiss
+- Müller, Philip. ETH Zurich - CSCS
 - Osuna, Carlos. MeteoSwiss
 - Paone, Edoardo. ETH Zurich - CSCS
 - Röthlin, Matthias. MeteoSwiss

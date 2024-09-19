@@ -162,6 +162,19 @@ class ProgramParser(DialectParser[past.Program]):
     def visit_Name(self, node: ast.Name) -> past.Name:
         return past.Name(id=node.id, location=self.get_location(node))
 
+    def visit_Attribute(self, node: ast.Attribute) -> past.Attribute:
+        if not isinstance(node.ctx, ast.Load):
+            raise errors.DSLError(
+                self.get_location(node), "`node.ctx` can only be of type ast.Load"
+            )
+        assert isinstance(node.value, (ast.Name, ast.Attribute))
+
+        return past.Attribute(
+            attr=node.attr,
+            value=self.visit(node.value),
+            location=self.get_location(node),
+        )
+
     def visit_Dict(self, node: ast.Dict) -> past.Dict:
         return past.Dict(
             keys_=[self.visit(cast(ast.AST, param)) for param in node.keys],

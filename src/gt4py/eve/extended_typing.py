@@ -28,7 +28,7 @@ import sys as _sys
 import types as _types
 import typing as _typing
 from typing import *  # noqa: F403 [undefined-local-with-import-star]
-from typing import overload  # Only needed to avoid false flake8 errors
+from typing import overload
 
 import numpy.typing as npt
 import typing_extensions as _typing_extensions

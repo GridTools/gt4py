@@ -117,7 +117,7 @@ class LocalTemporariesToScalars(TemporariesToScalarsBase):
 
 
 class WriteBeforeReadTemporariesToScalars(TemporariesToScalarsBase):
-    """Replaces temporay fields that are always written before read by scalars.
+    """Replaces temporary fields that are always written before read by scalars.
 
     Note that temporaries used in horizontal regions in a single horizontal execution
     may not be scalarized.

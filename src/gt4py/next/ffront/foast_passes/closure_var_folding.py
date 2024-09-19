@@ -48,13 +48,15 @@ class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                     return foast.Constant(value=value, location=node.location)
         return node
 
-    def visit_Attribute(self, node: foast.Attribute, **kwargs: Any) -> foast.Constant:
+    def visit_Attribute(
+        self, node: foast.Attribute, **kwargs: Any
+    ) -> foast.Constant | foast.Attribute:
         value = self.visit(node.value, **kwargs)
         if isinstance(value, foast.Constant):
             if hasattr(value.value, node.attr):
                 return foast.Constant(value=getattr(value.value, node.attr), location=node.location)
             raise errors.MissingAttributeError(node.location, node.attr)
-        raise errors.DSLError(node.location, "Attribute access only applicable to constants.")
+        return node
 
     def visit_FunctionDefinition(
         self, node: foast.FunctionDefinition, **kwargs: Any

@@ -5,7 +5,6 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-
 from typing import Any, Optional, cast
 
 from gt4py.eve import NodeTranslator, traits
@@ -112,6 +111,15 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             slice_=self.visit(node.slice_, **kwargs),
             type=value.type,
             location=node.location,
+        )
+
+    def visit_Attribute(self, node: past.Attribute, **kwargs: Any) -> past.Attribute:
+        new_value = self.visit(node.value, **kwargs)
+        return past.Attribute(
+            value=new_value,
+            attr=node.attr,
+            location=node.location,
+            type=getattr(new_value.type, node.attr),
         )
 
     def visit_TupleExpr(self, node: past.TupleExpr, **kwargs: Any) -> past.TupleExpr:
