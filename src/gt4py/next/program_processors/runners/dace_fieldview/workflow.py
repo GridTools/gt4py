@@ -18,12 +18,6 @@ import factory
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, config
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.transforms import (
-    collapse_tuple,
-    infer_domain,
-    inline_fundefs,
-    inline_lambdas,
-)
 from gt4py.next.otf import languages, recipes, stages, step_types, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.languages import LanguageSettings
@@ -48,27 +42,14 @@ class DaCeTranslator(
 
     def generate_sdfg(
         self,
-        program: itir.Program,
+        ir: itir.Program,
         offset_provider: dict[str, common.Dimension | common.Connectivity],
         column_axis: Optional[common.Dimension],
     ) -> dace.SDFG:
-        program = inline_fundefs.InlineFundefs().visit(program)
-        program = inline_fundefs.PruneUnreferencedFundefs().visit(program)
-        program = inline_lambdas.InlineLambdas.apply(program)
-        try:
-            node = collapse_tuple.CollapseTuple.apply(
-                program
-            )  # uses type inference and therefore should only run after domain propagation, but makes some simple cases work for now
-            assert isinstance(node, itir.Program)
-            program = node
-        except Exception:
-            ...
-        cartesian_offset_provider = {
-            k: v for k, v in offset_provider.items() if isinstance(v, common.Dimension)
-        }
-        program = infer_domain.infer_program(program, offset_provider=cartesian_offset_provider)
-        sdfg = gtir_to_sdfg.build_sdfg_from_gtir(program=program, offset_provider=offset_provider)
-        return sdfg
+        # TODO(edopao): Call IR transformations and domain inference, finally lower IR to SDFG
+        raise NotImplementedError
+
+        return gtir_to_sdfg.build_sdfg_from_gtir(program=ir, offset_provider=offset_provider)
 
     def __call__(
         self, inp: stages.ProgramCall
