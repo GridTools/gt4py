@@ -79,8 +79,9 @@ class EmbeddedIds(_PythonObjectIdMixin, str, enum.Enum):
 
 
 class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
-    DACE_CPU = "gt4py.next.program_processors.runners.dace.run_dace_cpu"
-    DACE_GPU = "gt4py.next.program_processors.runners.dace.run_dace_gpu"
+    DACE_CPU = "gt4py.next.program_processors.runners.dace.itir_cpu"
+    DACE_GPU = "gt4py.next.program_processors.runners.dace.itir_gpu"
+    GTIR_DACE_CPU = "gt4py.next.program_processors.runners.dace.gtir_cpu"
 
 
 class ProgramFormatterId(_PythonObjectIdMixin, str, enum.Enum):
@@ -92,6 +93,9 @@ class ProgramFormatterId(_PythonObjectIdMixin, str, enum.Enum):
 
 
 # Test markers
+# Special marker that skips all tests. This is not a regular pytest marker, but handled explicitly
+# to avoid needing to mark all tests.
+ALL = "all"
 REQUIRES_ATLAS = "requires_atlas"
 # TODO(havogt): Remove, skipped during refactoring to GTIR
 STARTS_FROM_GTIR_PROGRAM = "starts_from_gtir_program"
@@ -151,6 +155,9 @@ DACE_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
     (USES_TUPLE_RETURNS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_ZERO_DIMENSIONAL_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
 ]
+GTIR_DACE_SKIP_TEST_LIST = [
+    (ALL, SKIP, UNSUPPORTED_MESSAGE),
+]
 EMBEDDED_SKIP_LIST = [
     (USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE),
     (CHECKS_SPECIFIC_ERROR, XFAIL, UNSUPPORTED_MESSAGE),
@@ -176,6 +183,7 @@ BACKEND_SKIP_TEST_MATRIX = {
     EmbeddedIds.CUPY_EXECUTION: EMBEDDED_SKIP_LIST,
     OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST,
+    OptionalProgramBackendId.GTIR_DACE_CPU: GTIR_DACE_SKIP_TEST_LIST,
     ProgramBackendId.GTFN_CPU: GTFN_SKIP_TEST_LIST
     + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
     ProgramBackendId.GTFN_CPU_IMPERATIVE: GTFN_SKIP_TEST_LIST
