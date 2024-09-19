@@ -595,7 +595,7 @@ def test_K_offset_write(backend):
             pytest.skip(
                 "gt:gpu backend with CUDA 11 is not capable of K offset write, update CUDA if possible"
             )
-            
+
     arraylib = get_array_library(backend)
     array_shape = (1, 1, 4)
     K_values = arraylib.arange(start=40, stop=44)
@@ -662,7 +662,7 @@ def test_K_offset_write(backend):
     assert (B[:, :, :] == A[:, :, :]).all()
 
 
-@pytest.mark.parametrize("backend", ["gt:gpu"])
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_K_offset_write_conditional(backend):
     if backend == "cuda":
         pytest.skip("Cuda backend is not capable of K offset write")
