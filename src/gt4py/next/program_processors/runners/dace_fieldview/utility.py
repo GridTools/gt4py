@@ -115,7 +115,7 @@ def get_domain(
         axis = named_range.args[0]
         assert isinstance(axis, gtir.AxisLiteral)
         bounds = [
-            dace.symbolic.SymExpr(gtir_python_codegen.get_source(arg))
+            dace.symbolic.pystr_to_symbolic(gtir_python_codegen.get_source(arg))
             for arg in named_range.args[1:3]
         ]
         dim = gtx_common.Dimension(axis.value, axis.kind)

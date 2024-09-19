@@ -527,7 +527,8 @@ class LambdaToTasklet(eve.NodeVisitor):
         if isinstance(index_expr, SymbolExpr) and isinstance(offset_expr, SymbolExpr):
             # purely symbolic expression which can be interpreted at compile time
             new_index = SymbolExpr(
-                dace.symbolic.SymExpr(index_expr.value) + offset_expr.value, index_expr.dtype
+                dace.symbolic.pystr_to_symbolic(index_expr.value) + offset_expr.value,
+                index_expr.dtype,
             )
         else:
             # the offset needs to be calculated by means of a tasklet (i.e. dynamic offset)
