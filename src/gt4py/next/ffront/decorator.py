@@ -243,7 +243,9 @@ class Program:
         ppi.ensure_processor_kind(self.backend.executor, ppi.ProgramExecutor)
 
         self.backend(
-            self.definition_stage, *args, **(kwargs | {"offset_provider": offset_provider | self._implicit_offset_provider})
+            self.definition_stage,
+            *args,
+            **(kwargs | {"offset_provider": offset_provider | self._implicit_offset_provider}),
         )
 
     def freeze(self) -> FrozenProgram:
