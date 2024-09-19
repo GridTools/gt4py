@@ -23,7 +23,7 @@ import dace
 
 from gt4py import eve
 from gt4py.eve import concepts
-from gt4py.next import common as gtx_common, utils
+from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
@@ -254,8 +254,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 )
                 return gtir_builtin_translators.Field(temp_node, field.data_type)
 
-        temp_result = utils.tree_map(make_temps)(result)
-        return list(utils.flatten_nested_tuple((temp_result,)))
+        temp_result = gtx_utils.tree_map(make_temps)(result)
+        return list(gtx_utils.flatten_nested_tuple((temp_result,)))
 
     def _add_sdfg_params(self, sdfg: dace.SDFG, node_params: Sequence[gtir.Sym]) -> list[str]:
         """Helper function to add storage for node parameters and connectivity tables."""
@@ -300,17 +300,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         sdfg = dace.SDFG(node.id)
         sdfg.debuginfo = dace_common_util.debug_info(node, default=sdfg.debuginfo)
-
-        # ensure that all symbol names are valid strings (e.g. no unicode-strings)
-        symrefs = {str(sym.id) for sym in eve.walk_values(node).if_isinstance(gtir.SymRef)}
-        symrefs_mapping = {
-            sym: sdfg.temp_data_name() for sym in symrefs if not dace.dtypes.validate_name(sym)
-        }
-        if symrefs_mapping:
-            for x in eve.walk_values(node).if_isinstance(gtir.Sym, gtir.SymRef):
-                ir_sym = str(x.id)
-                x.id = symrefs_mapping.get(ir_sym, ir_sym)
-
         entry_state = sdfg.add_state("program_entry", is_start_block=True)
 
         # declarations of temporaries result in transient array definitions in the SDFG
@@ -577,7 +566,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         # Process lambda outputs
         #
         lambda_output_nodes: list[gtir_builtin_translators.Field] = list(
-            utils.flatten_nested_tuple(lambda_result)
+            gtx_utils.flatten_nested_tuple(lambda_result)
         )
         # sanity check on isolated nodes
         assert all(
@@ -633,7 +622,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 data_node = head_state.add_access(x.data_node.data)
                 return gtir_builtin_translators.Field(data_node, x.data_type)
 
-        return utils.tree_map(make_temps)(lambda_result)
+        return gtx_utils.tree_map(make_temps)(lambda_result)
 
     def visit_Literal(
         self,

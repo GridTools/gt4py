@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Optional, Protocol, TypeAlias
 import dace
 import dace.subsets as sbs
 
-from gt4py.next import common as gtx_common, utils
+from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.iterator.type_system import type_specifications as gtir_ts
@@ -311,11 +311,11 @@ def translate_cond(
 
         return Field(data_node, x.data_type)
 
-    result = utils.tree_map(make_temps)(true_br)
+    result = gtx_utils.tree_map(make_temps)(true_br)
 
-    true_br_nodes: list[Field] = list(utils.flatten_nested_tuple((true_br,)))
-    false_br_nodes: list[Field] = list(utils.flatten_nested_tuple((false_br,)))
-    result_nodes: list[Field] = list(utils.flatten_nested_tuple((result,)))
+    true_br_nodes: list[Field] = list(gtx_utils.flatten_nested_tuple((true_br,)))
+    false_br_nodes: list[Field] = list(gtx_utils.flatten_nested_tuple((false_br,)))
+    result_nodes: list[Field] = list(gtx_utils.flatten_nested_tuple((result,)))
 
     for true_br, false_br, temp in zip(true_br_nodes, false_br_nodes, result_nodes, strict=True):
         assert true_br.data_type == false_br.data_type
@@ -461,7 +461,7 @@ def translate_tuple_get(
     if isinstance(data_nodes, Field):
         raise ValueError(f"Invalid tuple expression {node}")
     unused_arg_nodes: list[Field] = list(
-        utils.flatten_nested_tuple(tuple(arg for i, arg in enumerate(data_nodes) if i != index))
+        gtx_utils.flatten_nested_tuple(tuple(arg for i, arg in enumerate(data_nodes) if i != index))
     )
     state.remove_nodes_from(
         [arg.data_node for arg in unused_arg_nodes if state.degree(arg.data_node) == 0]
