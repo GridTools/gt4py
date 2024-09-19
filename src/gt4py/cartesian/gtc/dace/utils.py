@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
@@ -15,8 +17,9 @@ import dace.data
 import numpy as np
 
 from gt4py import eve
-from gt4py.cartesian.gtc import common, daceir as dcir, oir
-from gt4py.cartesian.gtc.common import CartesianOffset
+from gt4py.cartesian.gtc import common, oir
+from gt4py.cartesian.gtc.common import CartesianOffset, VariableKOffset
+from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
 
 
@@ -54,7 +57,9 @@ def replace_strides(arrays, get_layout_map):
     return symbol_mapping
 
 
-def get_tasklet_symbol(name, offset, is_target):
+def get_tasklet_symbol(
+    name: eve.SymbolRef, offset: Union[CartesianOffset, VariableKOffset], is_target: bool
+):
     if is_target:
         return f"gtOUT__{name}"
 
@@ -83,19 +88,19 @@ class AccessInfoCollector(eve.NodeVisitor):
 
     @dataclass
     class Context:
-        axes: Dict[str, List["dcir.Axis"]]
-        access_infos: Dict[str, "dcir.FieldAccessInfo"] = field(default_factory=dict)
+        axes: Dict[str, List[dcir.Axis]]
+        access_infos: Dict[str, dcir.FieldAccessInfo] = field(default_factory=dict)
 
     def visit_VerticalLoop(
         self, node: oir.VerticalLoop, *, block_extents, ctx, **kwargs: Any
-    ) -> Dict[str, "dcir.FieldAccessInfo"]:
+    ) -> Dict[str, dcir.FieldAccessInfo]:
         for section in reversed(node.sections):
             self.visit(section, block_extents=block_extents, ctx=ctx, **kwargs)
         return ctx.access_infos
 
     def visit_VerticalLoopSection(
         self, node: oir.VerticalLoopSection, *, block_extents, ctx, grid_subset=None, **kwargs: Any
-    ) -> Dict[str, "dcir.FieldAccessInfo"]:
+    ) -> Dict[str, dcir.FieldAccessInfo]:
         inner_ctx = self.Context(axes=ctx.axes)
 
         if grid_subset is None:
@@ -135,7 +140,7 @@ class AccessInfoCollector(eve.NodeVisitor):
         k_interval,
         grid_subset=None,
         **kwargs,
-    ) -> Dict[str, "dcir.FieldAccessInfo"]:
+    ) -> Dict[str, dcir.FieldAccessInfo]:
         horizontal_extent = block_extents(node)
 
         inner_ctx = self.Context(axes=ctx.axes)
@@ -186,7 +191,7 @@ class AccessInfoCollector(eve.NodeVisitor):
 
     @staticmethod
     def _global_grid_subset(
-        region: common.HorizontalMask, he_grid: "dcir.GridSubset", offset: List[Optional[int]]
+        region: common.HorizontalMask, he_grid: dcir.GridSubset, offset: List[Optional[int]]
     ):
         res: Dict[
             dcir.Axis, Union[dcir.DomainInterval, dcir.TileInterval, dcir.IndexWithExtent]
@@ -226,7 +231,7 @@ class AccessInfoCollector(eve.NodeVisitor):
         he_grid,
         grid_subset,
         is_write,
-    ) -> "dcir.FieldAccessInfo":
+    ) -> dcir.FieldAccessInfo:
         # Check we have expression offsets in K
         # OR write offsets in K
         offset = [offset_node.to_dict()[k] for k in "ijk"]
@@ -265,7 +270,7 @@ class AccessInfoCollector(eve.NodeVisitor):
         is_write: bool = False,
         is_conditional: bool = False,
         region=None,
-        ctx: "AccessInfoCollector.Context",
+        ctx: AccessInfoCollector.Context,
         **kwargs,
     ):
         self.visit(
@@ -335,8 +340,8 @@ def compute_dcir_access_infos(
 
 
 def make_dace_subset(
-    context_info: "dcir.FieldAccessInfo",
-    access_info: "dcir.FieldAccessInfo",
+    context_info: dcir.FieldAccessInfo,
+    access_info: dcir.FieldAccessInfo,
     data_dims: Tuple[int, ...],
 ) -> dace.subsets.Range:
     clamped_access_info = access_info
@@ -358,10 +363,8 @@ def make_dace_subset(
     return dace.subsets.Range(res_ranges)
 
 
-def untile_memlets(
-    memlets: Sequence["dcir.Memlet"], axes: Sequence["dcir.Axis"]
-) -> List["dcir.Memlet"]:
-    res_memlets: List["dcir.Memlet"] = []
+def untile_memlets(memlets: Sequence[dcir.Memlet], axes: Sequence[dcir.Axis]) -> List[dcir.Memlet]:
+    res_memlets: List[dcir.Memlet] = []
     for memlet in memlets:
         res_memlets.append(
             dcir.Memlet(
@@ -386,7 +389,7 @@ def union_node_grid_subsets(nodes: List[eve.Node]):
     return grid_subset
 
 
-def _union_memlets(*memlets: "dcir.Memlet") -> List["dcir.Memlet"]:
+def _union_memlets(*memlets: dcir.Memlet) -> List[dcir.Memlet]:
     res: Dict[str, dcir.Memlet] = {}
     for memlet in memlets:
         res[memlet.field] = memlet.union(res.get(memlet.field, memlet))
@@ -412,7 +415,7 @@ def flatten_list(list_or_node: Union[List[Any], eve.Node]):
 
 def collect_toplevel_computation_nodes(
     list_or_node: Union[List[Any], eve.Node],
-) -> List["dcir.ComputationNode"]:
+) -> List[dcir.ComputationNode]:
     class ComputationNodeCollector(eve.NodeVisitor):
         def visit_ComputationNode(self, node: dcir.ComputationNode, *, collection: List):
             collection.append(node)
@@ -424,7 +427,7 @@ def collect_toplevel_computation_nodes(
 
 def collect_toplevel_iteration_nodes(
     list_or_node: Union[List[Any], eve.Node],
-) -> List["dcir.IterationNode"]:
+) -> List[dcir.IterationNode]:
     class IterationNodeCollector(eve.NodeVisitor):
         def visit_IterationNode(self, node: dcir.IterationNode, *, collection: List):
             collection.append(node)

@@ -756,11 +756,51 @@ def _is_concrete_position(pos: Position) -> TypeGuard[ConcretePosition]:
 
 def _get_axes(
     field_or_tuple: LocatedField | tuple,
+    *,
+    ignore_zero_dims=False,
 ) -> Sequence[common.Dimension]:  # arbitrary nesting of tuples of LocatedField
+    """
+    Get axes of a field or tuple of fields and check them to be equal.
+
+    Set `ignore_zero_dims` to ignore zero-dimensional fields both in the check and the return value.
+    In case all arguments are zero-dimensional return an empty sequence.
+
+    >>> from gt4py import next as gtx
+    >>> IDim = gtx.Dimension("I")
+    >>> i_field: LocatedField = _wrap_field(
+    ...     gtx.empty({IDim: range(3, 10)}, allocator=gtx.itir_python)
+    ... )
+
+    >>> _get_axes((i_field, i_field))
+    (Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>),)
+
+    >>> JDim = gtx.Dimension("J")
+    >>> j_field: LocatedField = _wrap_field(
+    ...     gtx.empty({JDim: range(3, 10)}, allocator=gtx.itir_python)
+    ... )
+    >>> _get_axes((i_field, j_field))
+    Traceback (most recent call last):
+      ...
+    ValueError: Fields are defined on different axes.
+
+    >>> zero_dim_field: LocatedField = _wrap_field(gtx.empty({}, allocator=gtx.itir_python))
+    >>> _get_axes((i_field, zero_dim_field))
+    Traceback (most recent call last):
+      ...
+    ValueError: Fields are defined on different axes.
+
+    >>> _get_axes((i_field, zero_dim_field), ignore_zero_dims=True)
+    (Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>),)
+    """
     if isinstance(field_or_tuple, tuple):
-        first = _get_axes(field_or_tuple[0])
-        assert all(first == _get_axes(f) for f in field_or_tuple)
-        return first
+        els_axes = []
+        for f in field_or_tuple:
+            el_axes = _get_axes(f, ignore_zero_dims=ignore_zero_dims)
+            if not ignore_zero_dims or len(el_axes) > 0:
+                els_axes.append(el_axes)
+        if not all(els_axes[0] == axes for axes in els_axes):
+            raise ValueError("Fields are defined on different axes.")
+        return els_axes[0] if els_axes else []
     else:
         return field_or_tuple.dims
 
@@ -889,7 +929,7 @@ class MDIterator:
 
         assert self.pos is not None
         shifted_pos = self.pos.copy()
-        axes = _get_axes(self.field)
+        axes = _get_axes(self.field, ignore_zero_dims=True)
 
         if __debug__:
             if not all(axis.value in shifted_pos.keys() for axis in axes if axis is not None):
@@ -929,7 +969,7 @@ def make_in_iterator(
     inp_: common.Field, pos: Position, *, column_dimension: Optional[common.Dimension]
 ) -> ItIterator:
     inp = _wrap_field(inp_)
-    axes = _get_axes(inp)
+    axes = _get_axes(inp, ignore_zero_dims=True)
     sparse_dimensions = _get_sparse_dimensions(axes)
     new_pos: Position = pos.copy()
     for sparse_dim in set(sparse_dimensions):
@@ -1153,7 +1193,11 @@ class IndexField(common.Field):
         assert self._cur_index is not None
         return self._cur_index
 
-    def premap(self, index_field: common.ConnectivityField | fbuiltins.FieldOffset) -> common.Field:
+    def premap(
+        self,
+        index_field: common.ConnectivityField | fbuiltins.FieldOffset,
+        *args: common.ConnectivityField | fbuiltins.FieldOffset,
+    ) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
@@ -1273,7 +1317,11 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
     def asnumpy(self) -> np.ndarray:
         raise NotImplementedError()
 
-    def premap(self, index_field: common.ConnectivityField | fbuiltins.FieldOffset) -> common.Field:
+    def premap(
+        self,
+        index_field: common.ConnectivityField | fbuiltins.FieldOffset,
+        *args: common.ConnectivityField | fbuiltins.FieldOffset,
+    ) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 

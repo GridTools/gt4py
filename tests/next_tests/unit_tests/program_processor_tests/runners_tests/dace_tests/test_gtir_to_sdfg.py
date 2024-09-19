@@ -14,10 +14,15 @@ Note: this test module covers the fieldview flavour of ITIR.
 
 import copy
 import functools
+
+import numpy as np
+import pytest
+
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_specifications as ts
+
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     Cell,
     Edge,
@@ -28,10 +33,9 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     simple_mesh,
     skip_value_mesh,
 )
-import numpy as np
-import pytest
 
-pytestmark = pytest.mark.requires_dace
+from . import pytestmark
+
 dace_backend = pytest.importorskip("gt4py.next.program_processors.runners.dace_fieldview")
 
 
@@ -171,10 +175,10 @@ def test_gtir_update():
         im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
     )
     stencil1 = im.as_fieldop(
-        im.lambda_("a")(im.plus(im.deref("a"), 1.0)),
+        im.lambda_("a")(im.plus(im.deref("a"), 0 - 1.0)),
         domain,
     )("x")
-    stencil2 = im.op_as_fieldop("plus", domain)("x", 1.0)
+    stencil2 = im.op_as_fieldop("plus", domain)("x", 0 - 1.0)
 
     for i, stencil in enumerate([stencil1, stencil2]):
         testee = gtir.Program(
@@ -196,7 +200,7 @@ def test_gtir_update():
         sdfg = dace_backend.build_sdfg_from_gtir(testee, {})
 
         a = np.random.rand(N)
-        ref = a + 1.0
+        ref = a - 1.0
 
         sdfg(a, **FSYMBOLS)
         assert np.allclose(a, ref)
@@ -825,7 +829,7 @@ def test_gtir_neighbors_as_input():
         im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
     )
     testee = gtir.Program(
-        id=f"neighbors_as_input",
+        id="neighbors_as_input",
         function_definitions=[],
         params=[
             gtir.Sym(id="v2e_field", type=V2E_FTYPE),
@@ -892,7 +896,7 @@ def test_gtir_neighbors_as_output():
         ),
     )
     testee = gtir.Program(
-        id=f"neighbors_as_output",
+        id="neighbors_as_output",
         function_definitions=[],
         params=[
             gtir.Sym(id="edges", type=EFTYPE),
@@ -1086,7 +1090,7 @@ def test_gtir_reduce_dot_product():
     )
 
     testee = gtir.Program(
-        id=f"reduce_dot_product",
+        id="reduce_dot_product",
         function_definitions=[],
         params=[
             gtir.Sym(id="edges", type=EFTYPE),
@@ -1145,7 +1149,7 @@ def test_gtir_reduce_with_cond_neighbors():
         im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
     )
     testee = gtir.Program(
-        id=f"reduce_with_cond_neighbors",
+        id="reduce_with_cond_neighbors",
         function_definitions=[],
         params=[
             gtir.Sym(id="pred", type=ts.ScalarType(ts.ScalarKind.BOOL)),
@@ -1376,6 +1380,50 @@ def test_gtir_let_lambda_with_cond():
         b = np.empty_like(a)
         sdfg(a, b, pred=np.bool_(s), **FSYMBOLS)
         assert np.allclose(b, a if s else a * 2)
+
+
+def test_gtir_if_scalars():
+    domain = im.call("cartesian_domain")(
+        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
+    )
+    testee = gtir.Program(
+        id="if_scalars",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="x", type=IFTYPE),
+            gtir.Sym(id="y_0", type=SIZE_TYPE),
+            gtir.Sym(id="y_1", type=SIZE_TYPE),
+            gtir.Sym(id="z", type=IFTYPE),
+            gtir.Sym(id="pred", type=ts.ScalarType(ts.ScalarKind.BOOL)),
+            gtir.Sym(id="size", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.op_as_fieldop("plus", domain)(
+                    "x",
+                    im.cond(
+                        "pred",
+                        im.call("cast_")("y_0", "float64"),
+                        im.call("cast_")("y_1", "float64"),
+                    ),
+                ),
+                domain=domain,
+                target=gtir.SymRef(id="z"),
+            )
+        ],
+    )
+
+    a = np.random.rand(N)
+    b = np.empty_like(a)
+    d1 = np.random.randint(0, 1000)
+    d2 = np.random.randint(0, 1000)
+
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, {})
+
+    for s in [False, True]:
+        sdfg(a, y_0=d1, y_1=d2, z=b, pred=np.bool_(s), **FSYMBOLS)
+        assert np.allclose(b, (a + d1 if s else a + d2))
 
 
 def test_gtir_if_values():

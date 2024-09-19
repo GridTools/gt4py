@@ -6,20 +6,22 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Callable
-import dace
 import copy
+from typing import Callable
+
 import numpy as np
 import pytest
 
+
+dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation
 
 from gt4py.next.program_processors.runners.dace_fieldview import (
     transformations as gtx_transformations,
 )
-from . import util
 
-pytestmark = [pytest.mark.requires_dace, pytest.mark.usefixtures("set_dace_settings")]
+from . import pytestmark
+from . import util
 
 
 def _get_simple_sdfg() -> tuple[dace.SDFG, Callable[[np.ndarray, np.ndarray], np.ndarray]]:
@@ -38,7 +40,7 @@ def _get_simple_sdfg() -> tuple[dace.SDFG, Callable[[np.ndarray, np.ndarray], np
     _, c = sdfg.add_array("c", ("N", "M"), dace.float64, transient=False)
     state.add_mapped_tasklet(
         name="comp",
-        map_ranges=dict(i=f"0:N", j=f"0:M"),
+        map_ranges=dict(i="0:N", j="0:M"),
         inputs=dict(__in0=dace.Memlet("a[i, j]"), __in1=dace.Memlet("b[i]")),
         outputs=dict(__out=dace.Memlet("c[i, j]")),
         code="__out = __in0 + __in1",

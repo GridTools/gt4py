@@ -24,51 +24,13 @@ import gt4py.next.iterator.ir as itir
 from gt4py.next import common
 from gt4py.next.ffront import decorator
 from gt4py.next.iterator import transforms as itir_transforms
+from gt4py.next.iterator.transforms import program_to_fencil
 from gt4py.next.iterator.type_system import inference as itir_type_inference
+from gt4py.next.program_processors.runners.dace_common import utility as dace_common_util
 from gt4py.next.type_system import type_specifications as ts
 
 from .itir_to_sdfg import ItirToSDFG
-from .utility import (
-    as_dace_type,
-    connectivity_identifier,
-    field_size_symbol_name,
-    field_stride_symbol_name,
-    filter_connectivities,
-    get_sorted_dims,
-)
-
-
-try:
-    import cupy as cp
-except ImportError:
-    cp = None
-
-
-def convert_arg(arg: Any, sdfg_param: str, use_field_canonical_representation: bool):
-    if not isinstance(arg, common.Field):
-        return arg
-    # field domain offsets are not supported
-    non_zero_offsets = [
-        (dim, dim_range)
-        for dim, dim_range in zip(arg.domain.dims, arg.domain.ranges)
-        if dim_range.start != 0
-    ]
-    if non_zero_offsets:
-        dim, dim_range = non_zero_offsets[0]
-        raise RuntimeError(
-            f"Field '{sdfg_param}' passed as array slice with offset {dim_range.start} on dimension {dim.value}."
-        )
-    if not use_field_canonical_representation:
-        return arg.ndarray
-    # the canonical representation requires alphabetical ordering of the dimensions in field domain definition
-    sorted_dims = get_sorted_dims(arg.domain.dims)
-    ndim = len(sorted_dims)
-    dim_indices = [dim_index for dim_index, _ in sorted_dims]
-    if isinstance(arg.ndarray, np.ndarray):
-        return np.moveaxis(arg.ndarray, range(ndim), dim_indices)
-    else:
-        assert cp is not None and isinstance(arg.ndarray, cp.ndarray)
-        return cp.moveaxis(arg.ndarray, range(ndim), dim_indices)
+from .utility import as_dace_type
 
 
 def preprocess_program(
@@ -94,138 +56,14 @@ def preprocess_program(
 
     node = itir_type_inference.infer(node, offset_provider=offset_provider)
 
-    if isinstance(node, itir_transforms.global_tmps.FencilWithTemporaries):
-        fencil_definition = node.fencil
-        tmps = node.tmps
-
-    elif isinstance(node, itir.FencilDefinition):
-        fencil_definition = node
-        tmps = []
-
+    if isinstance(node, itir.Program):
+        fencil_definition = program_to_fencil.program_to_fencil(node)
+        tmps = node.declarations
+        assert all(isinstance(tmp, itir.Temporary) for tmp in tmps)
     else:
-        raise TypeError(
-            f"Expected 'FencilDefinition' or 'FencilWithTemporaries', got '{type(program).__name__}'."
-        )
+        raise TypeError(f"Expected 'Program', got '{type(node).__name__}'.")
 
     return fencil_definition, tmps
-
-
-def get_args(
-    sdfg: dace.SDFG, args: Sequence[Any], use_field_canonical_representation: bool
-) -> dict[str, Any]:
-    sdfg_params: Sequence[str] = sdfg.arg_names
-    return {
-        sdfg_param: convert_arg(arg, sdfg_param, use_field_canonical_representation)
-        for sdfg_param, arg in zip(sdfg_params, args)
-    }
-
-
-def _ensure_is_on_device(
-    connectivity_arg: np.typing.NDArray, device: dace.dtypes.DeviceType
-) -> np.typing.NDArray:
-    if device == dace.dtypes.DeviceType.GPU:
-        if not isinstance(connectivity_arg, cp.ndarray):
-            warnings.warn(
-                "Copying connectivity to device. For performance make sure connectivity is provided on device.",
-                stacklevel=2,
-            )
-            return cp.asarray(connectivity_arg)
-    return connectivity_arg
-
-
-def get_connectivity_args(
-    neighbor_tables: Mapping[str, common.NeighborTable], device: dace.dtypes.DeviceType
-) -> dict[str, Any]:
-    return {
-        connectivity_identifier(offset): _ensure_is_on_device(offset_provider.table, device)
-        for offset, offset_provider in neighbor_tables.items()
-    }
-
-
-def get_shape_args(
-    arrays: Mapping[str, dace.data.Array], args: Mapping[str, Any]
-) -> Mapping[str, int]:
-    shape_args: dict[str, int] = {}
-    for name, value in args.items():
-        for sym, size in zip(arrays[name].shape, value.shape):
-            if isinstance(sym, dace.symbol):
-                assert sym.name not in shape_args
-                shape_args[sym.name] = size
-            elif sym != size:
-                raise RuntimeError(
-                    f"Expected shape {arrays[name].shape} for arg {name}, got {value.shape}."
-                )
-    return shape_args
-
-
-def get_stride_args(
-    arrays: Mapping[str, dace.data.Array], args: Mapping[str, Any]
-) -> Mapping[str, int]:
-    stride_args = {}
-    for name, value in args.items():
-        for sym, stride_size in zip(arrays[name].strides, value.strides):
-            stride, remainder = divmod(stride_size, value.itemsize)
-            if remainder != 0:
-                raise ValueError(
-                    f"Stride ({stride_size} bytes) for argument '{sym}' must be a multiple of item size ({value.itemsize} bytes)."
-                )
-            if isinstance(sym, dace.symbol):
-                assert sym.name not in stride_args
-                stride_args[str(sym)] = stride
-            elif sym != stride:
-                raise RuntimeError(
-                    f"Expected stride {arrays[name].strides} for arg {name}, got {value.strides}."
-                )
-    return stride_args
-
-
-def get_sdfg_args(
-    sdfg: dace.SDFG,
-    *args,
-    check_args: bool = False,
-    on_gpu: bool = False,
-    use_field_canonical_representation: bool = True,
-    **kwargs,
-) -> dict[str, Any]:
-    """Extracts the arguments needed to call the SDFG.
-
-    This function can handle the same arguments that are passed to dace runner.
-
-    Args:
-        sdfg:               The SDFG for which we want to get the arguments.
-    """
-    offset_provider = kwargs["offset_provider"]
-
-    neighbor_tables: dict[str, common.NeighborTable] = {}
-    for offset, connectivity in filter_connectivities(offset_provider).items():
-        assert isinstance(connectivity, common.NeighborTable)
-        neighbor_tables[offset] = connectivity
-    device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
-
-    dace_args = get_args(sdfg, args, use_field_canonical_representation)
-    dace_field_args = {n: v for n, v in dace_args.items() if not np.isscalar(v)}
-    dace_conn_args = get_connectivity_args(neighbor_tables, device)
-    # keep only connectivity tables that are used in the sdfg
-    dace_conn_args = {n: v for n, v in dace_conn_args.items() if n in sdfg.arrays}
-    dace_shapes = get_shape_args(sdfg.arrays, dace_field_args)
-    dace_conn_shapes = get_shape_args(sdfg.arrays, dace_conn_args)
-    dace_strides = get_stride_args(sdfg.arrays, dace_field_args)
-    dace_conn_strides = get_stride_args(sdfg.arrays, dace_conn_args)
-    all_args = {
-        **dace_args,
-        **dace_conn_args,
-        **dace_shapes,
-        **dace_conn_shapes,
-        **dace_strides,
-        **dace_conn_strides,
-    }
-
-    if check_args:
-        # return only arguments expected in SDFG signature (note hat `signature_arglist` takes time)
-        sdfg_sig = sdfg.signature_arglist(with_types=False)
-        return {key: all_args[key] for key in sdfg_sig}
-
-    return all_args
 
 
 def build_sdfg_from_itir(
@@ -345,7 +183,9 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             raise ValueError(
                 "[DaCe Orchestration] Connectivities -at compile time- are required to generate the SDFG. Use `with_connectivities` method."
             )
-        offset_provider = self.connectivities  # tables are None at this point
+        offset_provider = (
+            self.connectivities | self._implicit_offset_provider
+        )  # tables are None at this point
 
         sdfg = self.backend.executor.otf_workflow.step.translation.generate_sdfg(  # type: ignore[union-attr]
             self.itir,
@@ -392,14 +232,17 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         itir_tmp = itir_transforms.apply_common_transforms(
             self.itir, offset_provider=offset_provider
         )
-        for closure in itir_tmp.closures:  # type: ignore[union-attr]
-            shifts = itir_transforms.trace_shifts.TraceShifts.apply(closure)
-            for k, v in shifts.items():
-                if not isinstance(k, str):
+        itir_tmp_fencil = program_to_fencil.program_to_fencil(itir_tmp)
+        for closure in itir_tmp_fencil.closures:
+            params_shifts = itir_transforms.trace_shifts.trace_stencil(
+                closure.stencil, num_args=len(closure.inputs)
+            )
+            for param, shifts in zip(closure.inputs, params_shifts):
+                if not isinstance(param.id, str):
                     continue
-                if k not in sdfg.gt4py_program_input_fields:
+                if param.id not in sdfg.gt4py_program_input_fields:
                     continue
-                sdfg.offset_providers_per_input_field.setdefault(k, []).extend(list(v))
+                sdfg.offset_providers_per_input_field.setdefault(param.id, []).extend(list(shifts))
 
         return sdfg
 
@@ -417,23 +260,31 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
 
         # Define DaCe symbols
         connectivity_table_size_symbols = {
-            field_size_symbol_name(connectivity_identifier(k), axis): dace.symbol(
-                field_size_symbol_name(connectivity_identifier(k), axis)
+            dace_common_util.field_size_symbol_name(
+                dace_common_util.connectivity_identifier(k), axis
+            ): dace.symbol(
+                dace_common_util.field_size_symbol_name(
+                    dace_common_util.connectivity_identifier(k), axis
+                )
             )
             for k, v in offset_provider.items()  # type: ignore[union-attr]
             for axis in [0, 1]
             if hasattr(v, "table")
-            and connectivity_identifier(k) in self.sdfg_closure_vars["sdfg.arrays"]
+            and dace_common_util.connectivity_identifier(k) in self.sdfg_closure_vars["sdfg.arrays"]
         }
 
         connectivity_table_stride_symbols = {
-            field_stride_symbol_name(connectivity_identifier(k), axis): dace.symbol(
-                field_stride_symbol_name(connectivity_identifier(k), axis)
+            dace_common_util.field_stride_symbol_name(
+                dace_common_util.connectivity_identifier(k), axis
+            ): dace.symbol(
+                dace_common_util.field_stride_symbol_name(
+                    dace_common_util.connectivity_identifier(k), axis
+                )
             )
             for k, v in offset_provider.items()  # type: ignore[union-attr]
             for axis in [0, 1]
             if hasattr(v, "table")
-            and connectivity_identifier(k) in self.sdfg_closure_vars["sdfg.arrays"]
+            and dace_common_util.connectivity_identifier(k) in self.sdfg_closure_vars["sdfg.arrays"]
         }
 
         symbols = {**connectivity_table_size_symbols, **connectivity_table_stride_symbols}
@@ -443,27 +294,32 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             for k, v in offset_provider.items():  # type: ignore[union-attr]
                 if not hasattr(v, "table"):
                     continue
-                if connectivity_identifier(k) in self.sdfg_closure_vars["sdfg.arrays"]:
+                if (
+                    dace_common_util.connectivity_identifier(k)
+                    in self.sdfg_closure_vars["sdfg.arrays"]
+                ):
                     Program.connectivity_tables_data_descriptors["storage"] = (
-                        self.sdfg_closure_vars["sdfg.arrays"][connectivity_identifier(k)].storage
+                        self.sdfg_closure_vars[
+                            "sdfg.arrays"
+                        ][dace_common_util.connectivity_identifier(k)].storage
                     )
                     break
 
         # Build the closure dictionary
         closure_dict = {}
         for k, v in offset_provider.items():  # type: ignore[union-attr]
-            conn_id = connectivity_identifier(k)
+            conn_id = dace_common_util.connectivity_identifier(k)
             if hasattr(v, "table") and conn_id in self.sdfg_closure_vars["sdfg.arrays"]:
                 if conn_id not in Program.connectivity_tables_data_descriptors:
                     Program.connectivity_tables_data_descriptors[conn_id] = dace.data.Array(
                         dtype=dace.int64 if v.index_type == np.int64 else dace.int32,
                         shape=[
-                            symbols[field_size_symbol_name(conn_id, 0)],
-                            symbols[field_size_symbol_name(conn_id, 1)],
+                            symbols[dace_common_util.field_size_symbol_name(conn_id, 0)],
+                            symbols[dace_common_util.field_size_symbol_name(conn_id, 1)],
                         ],
                         strides=[
-                            symbols[field_stride_symbol_name(conn_id, 0)],
-                            symbols[field_stride_symbol_name(conn_id, 1)],
+                            symbols[dace_common_util.field_stride_symbol_name(conn_id, 0)],
+                            symbols[dace_common_util.field_stride_symbol_name(conn_id, 1)],
                         ],
                         storage=Program.connectivity_tables_data_descriptors["storage"],
                     )

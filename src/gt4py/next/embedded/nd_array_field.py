@@ -315,7 +315,16 @@ class NdArrayField(
         assert len(conn_fields) == 1
         return _remapping_premap(self, conn_fields[0])
 
-    __call__ = premap  # type: ignore[assignment]
+    def __call__(
+        self,
+        index_field: common.ConnectivityField | fbuiltins.FieldOffset,
+        *args: common.ConnectivityField | fbuiltins.FieldOffset,
+    ) -> common.Field:
+        return functools.reduce(
+            lambda field, current_index_field: field.premap(current_index_field),
+            [index_field, *args],
+            self,
+        )
 
     def restrict(self, index: common.AnyIndexSpec) -> NdArrayField:
         new_domain, buffer_slice = self._slice(index)

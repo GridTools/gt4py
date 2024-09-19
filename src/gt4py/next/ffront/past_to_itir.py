@@ -15,7 +15,7 @@ import devtools
 import factory
 
 from gt4py.eve import NodeTranslator, concepts, traits
-from gt4py.next import common, config
+from gt4py.next import common, config, errors
 from gt4py.next.ffront import (
     fbuiltins,
     gtcallable,
@@ -172,10 +172,14 @@ class ProgramLowering(
         """Generate symbols for each field param and dimension."""
         size_params = []
         for param in node.params:
-            if type_info.is_type_or_tuple_of_type(param.type, ts.FieldType):
-                fields_dims: list[list[common.Dimension]] = (
-                    type_info.primitive_constituents(param.type).getattr("dims").to_list()
-                )
+            fields_dims: list[list[common.Dimension]] = (
+                type_info.primitive_constituents(param.type)
+                .if_isinstance(ts.FieldType)
+                .getattr("dims")
+                .filter(lambda dims: len(dims) > 0)
+                .to_list()
+            )
+            if len(fields_dims) > 0:  # otherwise `param` has no constituent which is of `FieldType`
                 assert all(field_dims == fields_dims[0] for field_dims in fields_dims)
                 for dim_idx in range(len(fields_dims[0])):
                     size_params.append(
@@ -435,9 +439,10 @@ class ProgramLowering(
         node_dims = cast(ts.FieldType, node.type).dims
         assert isinstance(node_dims, list)
         if isinstance(node.type, ts.FieldType) and len(out_field_slice_) != len(node_dims):
-            raise ValueError(
+            raise errors.DSLError(
+                node.location,
                 f"Too many indices for field '{out_field_name}': field is {len(node_dims)}"
-                f"-dimensional, but {len(out_field_slice_)} were indexed."
+                f"-dimensional, but {len(out_field_slice_)} were indexed.",
             )
         return out_field_slice_
 

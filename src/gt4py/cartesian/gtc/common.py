@@ -178,7 +178,7 @@ class NativeFunction(eve.StrEnum):
     CEIL = "ceil"
     TRUNC = "trunc"
 
-    IR_OP_TO_NUM_ARGS: ClassVar[Dict["NativeFunction", int]]
+    IR_OP_TO_NUM_ARGS: ClassVar[Dict[NativeFunction, int]]
 
     @property
     def arity(self) -> int:
@@ -229,8 +229,8 @@ class LevelMarker(eve.StrEnum):
 
 @enum.unique
 class ExprKind(eve.IntEnum):
-    SCALAR: "ExprKind" = typing.cast("ExprKind", enum.auto())
-    FIELD: "ExprKind" = typing.cast("ExprKind", enum.auto())
+    SCALAR: ExprKind = typing.cast("ExprKind", enum.auto())
+    FIELD: ExprKind = typing.cast("ExprKind", enum.auto())
 
 
 class LocNode(eve.Node):
@@ -343,7 +343,7 @@ class FieldAccess(eve.GenericNode, Generic[ExprT, VariableKOffsetT]):
     kind: ExprKind = ExprKind.FIELD
 
     @classmethod
-    def centered(cls, *, name: str, loc: Optional[eve.SourceLocation] = None) -> "FieldAccess":
+    def centered(cls, *, name: str, loc: Optional[eve.SourceLocation] = None) -> FieldAccess:
         return cls(name=name, loc=loc, offset=CartesianOffset.zero())
 
     @datamodels.validator("data_index")
@@ -721,7 +721,7 @@ class HorizontalInterval(eve.Node):
     end: Optional[AxisBound]
 
     @classmethod
-    def compute_domain(cls, start_offset: int = 0, end_offset: int = 0) -> "HorizontalInterval":
+    def compute_domain(cls, start_offset: int = 0, end_offset: int = 0) -> HorizontalInterval:
         return cls(start=AxisBound.start(start_offset), end=AxisBound.end(end_offset))
 
     @classmethod
@@ -731,7 +731,7 @@ class HorizontalInterval(eve.Node):
     @classmethod
     def at_endpt(
         cls, level: LevelMarker, start_offset: int, end_offset: Optional[int] = None
-    ) -> "HorizontalInterval":
+    ) -> HorizontalInterval:
         if end_offset is None:
             end_offset = start_offset + 1
         return cls(
