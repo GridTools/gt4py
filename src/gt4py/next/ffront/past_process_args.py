@@ -108,8 +108,9 @@ def _field_constituents_shape_and_dims(
                 yield from _field_constituents_shape_and_dims(el, el_type)
         case ts.FieldType():
             dims = type_info.extract_dims(arg_type)
-            if dims and not isinstance(arg, arguments.CompileTimeArg):
-                print(arg)
+            if isinstance(arg, arguments.CompileTimeArg):
+                yield (tuple(), dims)
+            elif dims:
                 assert hasattr(arg, "shape") and len(arg.shape) == len(dims)
                 yield (arg.shape, dims)
             else:
