@@ -102,11 +102,15 @@ def get_tuple_fields(
 
     Examples
     --------
-    >>> t = ts.TupleType(types=[ts.ScalarType, ts.TupleType(types=[ts.FieldType, ts.ScalarType])])
-    >>> get_tuple_fields("a", t)
-    [("a_0", ts.ScalarType), ("a_1", ts.TupleType(types=[ts.FieldType, ts.ScalarType]))]
-    >>> get_tuple_fields("a", t, flatten=True)
-    [("a_0", ts.ScalarType), ("a_1_0", ts.FieldType), ("a_1_1", ts.ScalarType)]
+    >>> sty = ts.ScalarType(kind=ts.ScalarKind.INT32)
+    >>> fty = ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
+    >>> t = ts.TupleType(types=[sty, ts.TupleType(types=[fty, sty])])
+    >>> assert get_tuple_fields("a", t) == [("a_0", sty), ("a_1", ts.TupleType(types=[fty, sty]))]
+    >>> assert get_tuple_fields("a", t, flatten=True) == [
+    ...     ("a_0", sty),
+    ...     ("a_1_0", fty),
+    ...     ("a_1_1", sty),
+    ... ]
     """
     fields = [(f"{tuple_name}_{i}", field_type) for i, field_type in enumerate(tuple_type.types)]
     if flatten:
