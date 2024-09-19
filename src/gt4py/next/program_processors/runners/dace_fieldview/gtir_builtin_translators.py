@@ -19,6 +19,7 @@ from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.iterator.type_system import type_specifications as gtir_ts
+from gt4py.next.program_processors.runners.dace_common import utility as dace_common_util
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_python_codegen,
     gtir_to_tasklet,
@@ -448,7 +449,7 @@ def translate_tuple_get(
 
     if not isinstance(node.args[0], gtir.Literal):
         raise ValueError("Tuple can only be subscripted with compile-time constants.")
-    assert node.args[0].type == dace_fieldview_util.as_scalar_type(gtir.INTEGER_INDEX_BUILTIN)
+    assert node.args[0].type == dace_common_util.as_scalar_type(gtir.INTEGER_INDEX_BUILTIN)
     index = int(node.args[0].value)
 
     data_nodes = sdfg_builder.visit(
@@ -497,19 +498,16 @@ def translate_scalar_expr(
         if visit_expr:
             # we visit the argument expression and obtain the access node to
             # a scalar data container, which will be connected to the tasklet
-            arg_node = sdfg_builder.visit(
+            arg = sdfg_builder.visit(
                 arg_expr,
                 sdfg=sdfg,
                 head_state=state,
                 reduce_identity=reduce_identity,
             )
-            if not (
-                isinstance(arg_node, Field)
-                and isinstance(arg_node.data_node.desc(sdfg), dace.data.Scalar)
-            ):
+            if not (isinstance(arg, Field) and isinstance(arg.data_type, ts.ScalarType)):
                 raise ValueError(f"Invalid argument to scalar expression {arg_expr}.")
-            param = f"__in_{arg_node.data_node.data}"
-            args.append(arg_node)
+            param = f"__in_{arg.data_node.data}"
+            args.append(arg.data_node)
             connectors.append(param)
             scalar_expr_args.append(gtir.SymRef(id=param))
         else:
@@ -527,13 +525,13 @@ def translate_scalar_expr(
         code=f"__out = {python_code}",
     )
     # create edges for the input data connectors
-    for arg, conn in zip(args, connectors, strict=True):
+    for arg_node, conn in zip(args, connectors, strict=True):
         state.add_edge(
-            arg.data_node,
+            arg_node,
             None,
             tasklet_node,
             conn,
-            dace.Memlet(data=arg.data_node.data, subset="0"),
+            dace.Memlet(data=arg_node.data, subset="0"),
         )
     # finally, create temporary for the result value
     temp_name, _ = sdfg.add_scalar(

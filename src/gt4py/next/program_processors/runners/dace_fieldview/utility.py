@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import itertools
-from typing import Any, Callable, Mapping, Optional
+from typing import Any, Callable
 
 import dace
 
@@ -44,56 +44,6 @@ def as_dace_type(type_: ts.TypeSpec) -> dace.typeclass:
             return dace.float64
         case _:
             raise ValueError(f"Scalar type '{scalar_type}' not supported.")
-
-
-def as_scalar_type(typestr: str) -> ts.ScalarType:
-    """Obtain GT4Py scalar type from generic numpy string representation."""
-    try:
-        kind = getattr(ts.ScalarKind, typestr.upper())
-    except AttributeError as ex:
-        raise ValueError(f"Data type {typestr} not supported.") from ex
-    return ts.ScalarType(kind)
-
-
-def connectivity_identifier(name: str) -> str:
-    return f"connectivity_{name}"
-
-
-def debug_info(
-    node: gtir.Node, *, default: Optional[dace.dtypes.DebugInfo] = None
-) -> Optional[dace.dtypes.DebugInfo]:
-    location = node.location
-    if location:
-        return dace.dtypes.DebugInfo(
-            start_line=location.line,
-            start_column=location.column if location.column else 0,
-            end_line=location.end_line if location.end_line else -1,
-            end_column=location.end_column if location.end_column else 0,
-            filename=location.filename,
-        )
-    return default
-
-
-def field_size_symbol_name(field_name: str, axis: int) -> str:
-    return f"__{field_name}_size_{axis}"
-
-
-def field_stride_symbol_name(field_name: str, axis: int) -> str:
-    return f"__{field_name}_stride_{axis}"
-
-
-def filter_connectivities(offset_provider: Mapping[str, Any]) -> dict[str, gtx_common.Connectivity]:
-    """
-    Filter offset providers of type `Connectivity`.
-
-    In other words, filter out the cartesian offset providers.
-    Returns a new dictionary containing only `Connectivity` values.
-    """
-    return {
-        offset: table
-        for offset, table in offset_provider.items()
-        if isinstance(table, gtx_common.Connectivity)
-    }
 
 
 def get_domain(
