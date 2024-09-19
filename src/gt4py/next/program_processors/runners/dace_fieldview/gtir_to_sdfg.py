@@ -23,7 +23,7 @@ import dace
 
 from gt4py import eve
 from gt4py.eve import concepts
-from gt4py.next import common as gtx_common
+from gt4py.next import common as gtx_common, utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
@@ -254,8 +254,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 )
                 return gtir_builtin_translators.Field(temp_node, field.data_type)
 
-        temp_result = dace_fieldview_util.visit_tuples(result, make_temps)
-        return dace_fieldview_util.flatten_tuples(temp_result)
+        temp_result = utils.tree_map(make_temps)(result)
+        return list(utils.flatten_nested_tuple((temp_result,)))
 
     def _add_sdfg_params(self, sdfg: dace.SDFG, node_params: Sequence[gtir.Sym]) -> list[str]:
         """Helper function to add storage for node parameters and connectivity tables."""
@@ -576,7 +576,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         # Process lambda outputs
         #
-        lambda_output_nodes = dace_fieldview_util.flatten_tuples(lambda_result)
+        lambda_output_nodes: list[gtir_builtin_translators.Field] = list(
+            utils.flatten_nested_tuple(lambda_result)
+        )
         # sanity check on isolated nodes
         assert all(
             nstate.degree(x.data_node) == 0
@@ -631,7 +633,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 data_node = head_state.add_access(x.data_node.data)
                 return gtir_builtin_translators.Field(data_node, x.data_type)
 
-        return dace_fieldview_util.visit_tuples(lambda_result, make_temps)
+        return utils.tree_map(make_temps)(lambda_result)
 
     def visit_Literal(
         self,

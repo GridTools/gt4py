@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import itertools
-from typing import Any, Callable
+from typing import Any
 
 import dace
 
@@ -94,27 +94,11 @@ def get_map_variable(dim: gtx_common.Dimension) -> str:
     return f"i_{dim.value}_gtx_{dim.kind}{suffix}"
 
 
-def flatten_tuples(data: Any) -> list[Any]:
-    def _visit_tuple(t: tuple[Any]) -> list[Any]:
-        tuple_fields = []
-        for r in t:
-            if isinstance(r, tuple):
-                tuple_fields.extend(_visit_tuple(r))
-            else:
-                tuple_fields.append(r)
-        return tuple_fields
-
-    if isinstance(data, tuple):
-        return _visit_tuple(data)
-    else:
-        return [data]
-
-
 def get_tuple_fields(
     tuple_name: str, tuple_type: ts.TupleType, flatten: bool = False
 ) -> list[tuple[str, ts.DataType]]:
     """
-    Creates a list of fields with the corresponding data types for all elements of the given tuple.
+    Creates a list of fields with the corresponding data type for all elements of the given tuple.
     """
     fields = [(f"{tuple_name}_{i}", field_type) for i, field_type in enumerate(tuple_type.types)]
     if flatten:
@@ -129,21 +113,10 @@ def get_tuple_fields(
         return fields
 
 
-def get_tuple_type(tuple_data: tuple[Any, ...]) -> ts.TupleType:
+def get_tuple_type(data: tuple[Any, ...]) -> ts.TupleType:
     """
     Compute the `ts.TupleType` corresponding to the structure of a tuple of data nodes.
     """
     return ts.TupleType(
-        types=[get_tuple_type(d) if isinstance(d, tuple) else d.data_type for d in tuple_data]
+        types=[get_tuple_type(d) if isinstance(d, tuple) else d.data_type for d in data]
     )
-
-
-def visit_tuples(data: Any, fun: Callable[[Any], Any]) -> Any:
-    """
-    Helper method to visit a tuple (possibly nested) of fields and return some data
-    with the same original tuple structure.
-    """
-    if isinstance(data, tuple):
-        return tuple(visit_tuples(x, fun) for x in data)
-    else:
-        return fun(data)

@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Optional, Protocol, TypeAlias
 import dace
 import dace.subsets as sbs
 
-from gt4py.next import common as gtx_common
+from gt4py.next import common as gtx_common, utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.iterator.type_system import type_specifications as gtir_ts
@@ -291,13 +291,13 @@ def translate_cond(
     sdfg.add_edge(cond_state, false_state, dace.InterstateEdge(condition=(f"not bool({cond})")))
     sdfg.add_edge(false_state, state, dace.InterstateEdge())
 
-    true_br_args = sdfg_builder.visit(
+    true_br = sdfg_builder.visit(
         true_expr,
         sdfg=sdfg,
         head_state=true_state,
         reduce_identity=reduce_identity,
     )
-    false_br_args = sdfg_builder.visit(
+    false_br = sdfg_builder.visit(
         false_expr,
         sdfg=sdfg,
         head_state=false_state,
@@ -311,11 +311,11 @@ def translate_cond(
 
         return Field(data_node, x.data_type)
 
-    result = dace_fieldview_util.visit_tuples(true_br_args, make_temps)
+    result = utils.tree_map(make_temps)(true_br)
 
-    true_br_nodes = dace_fieldview_util.flatten_tuples(true_br_args)
-    false_br_nodes = dace_fieldview_util.flatten_tuples(false_br_args)
-    result_nodes = dace_fieldview_util.flatten_tuples(result)
+    true_br_nodes: list[Field] = list(utils.flatten_nested_tuple((true_br,)))
+    false_br_nodes: list[Field] = list(utils.flatten_nested_tuple((false_br,)))
+    result_nodes: list[Field] = list(utils.flatten_nested_tuple((result,)))
 
     for true_br, false_br, temp in zip(true_br_nodes, false_br_nodes, result_nodes, strict=True):
         assert true_br.data_type == false_br.data_type
@@ -460,11 +460,12 @@ def translate_tuple_get(
     )
     if isinstance(data_nodes, Field):
         raise ValueError(f"Invalid tuple expression {node}")
-    unused_arg_nodes = tuple(arg for i, arg in enumerate(data_nodes) if i != index)
-    unused_access_nodes = [
-        arg.data_node for arg in dace_fieldview_util.flatten_tuples(unused_arg_nodes)
-    ]
-    state.remove_nodes_from([node for node in unused_access_nodes if state.degree(node) == 0])
+    unused_arg_nodes: list[Field] = list(
+        utils.flatten_nested_tuple(tuple(arg for i, arg in enumerate(data_nodes) if i != index))
+    )
+    state.remove_nodes_from(
+        [arg.data_node for arg in unused_arg_nodes if state.degree(arg.data_node) == 0]
+    )
     return data_nodes[index]
 
 
