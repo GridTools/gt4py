@@ -178,7 +178,7 @@ def iter_size_args(args: tuple[Any, ...]) -> Iterator[int]:
     for arg in args:
         match arg:
             case tuple():
-                yield from iter_size_args((arg[0],))
+                yield from iter_size_args(arg)
             case common.Field():
                 yield from arg.ndarray.shape
             case _:
