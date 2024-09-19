@@ -12,7 +12,13 @@ Please also see [ADR0018](https://github.com/GridTools/gt4py/tree/main/docs/deve
 that explains the general structure and requirements on the SDFGs.
 """
 
-from .auto_opt import gt_auto_optimize, gt_inline_nested_sdfg, gt_set_iteration_order, gt_simplify
+from .auto_opt import (
+    GT_SIMPLIFY_DEFAULT_SKIP_SET,
+    gt_auto_optimize,
+    gt_inline_nested_sdfg,
+    gt_set_iteration_order,
+    gt_simplify,
+)
 from .gpu_utils import GPUSetBlockSize, gt_gpu_transformation, gt_set_gpu_blocksize
 from .loop_blocking import LoopBlocking
 from .map_orderer import MapIterationOrder
@@ -21,6 +27,7 @@ from .map_serial_fusion import SerialMapFusion
 
 
 __all__ = [
+    "GT_SIMPLIFY_DEFAULT_SKIP_SET",
     "GPUSetBlockSize",
     "LoopBlocking",
     "MapIterationOrder",

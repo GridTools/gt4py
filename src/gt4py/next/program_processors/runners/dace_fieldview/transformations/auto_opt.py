@@ -35,19 +35,19 @@ def gt_simplify(
     sdfg: dace.SDFG,
     validate: bool = True,
     validate_all: bool = False,
-    skip: Iterable[str] = GT_SIMPLIFY_DEFAULT_SKIP_SET,
+    skip: Optional[Iterable[str]] = None,
 ) -> Any:
     """Performs simplifications on the SDFG in place.
 
     Instead of calling `sdfg.simplify()` directly, you should use this function,
     as it is specially tuned for GridTool based SDFGs.
 
-    By default this function will run the normal DaCe simplify pass, but skip
-    passes listed in `GT_SIMPLIFY_DEFAULT_SKIP_SET`. If `skip` is given it will
-    not be modified, i.e. `GT_SIMPLIFY_DEFAULT_SKIP_SET` is not added by default.
+    This function runs the DaCe simplification pass, but the following passes are
+    replaced:
+    - `InlineSDFGs`: Instead `gt_inline_nested_sdfg()` will be called.
 
-    Passes that are replaced:
-    - `InlineSDFGs`: Instead the `gt_inline_nested_sdfg()` will be used.
+    Furthermore, by default, or if `None` is passed fro `skip` the passes listed in
+    `GT_SIMPLIFY_DEFAULT_SKIP_SET` will be skipped.
 
     Args:
         sdfg: The SDFG to optimize.
@@ -57,7 +57,7 @@ def gt_simplify(
             to `GT_SIMPLIFY_DEFAULT_SKIP_SET`.
     """
     # Ensure that `skip` is a `set`
-    skip = set(skip)
+    skip = GT_SIMPLIFY_DEFAULT_SKIP_SET if skip is None else set(skip)
 
     if "InlineSDFGs" not in skip:
         gt_inline_nested_sdfg(
@@ -72,7 +72,7 @@ def gt_simplify(
         validate=validate,
         validate_all=validate_all,
         verbose=False,
-        skip=set(skip) | {"InlineSDFGs"},
+        skip=(skip | {"InlineSDFGs"}),
     ).apply_pass(sdfg, {})
 
 
