@@ -17,6 +17,7 @@ from gt4py.next import Dimension, DimensionKind
 from gt4py.next.common import Connectivity
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir import Expr, FunCall, Literal, Sym, SymRef
+from gt4py.next.program_processors.runners.dace_common import utility as dace_common_util
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation as tt
 
 from .itir_to_tasklet import (
@@ -32,13 +33,7 @@ from .itir_to_tasklet import (
 from .utility import (
     add_mapped_nested_sdfg,
     as_dace_type,
-    connectivity_identifier,
-    dace_debuginfo,
-    field_size_symbol_name,
-    field_stride_symbol_name,
-    filter_connectivities,
     flatten_list,
-    get_sorted_dims,
     get_used_connectivities,
     map_nested_sdfg_symbols,
     new_array_symbols,
@@ -87,7 +82,7 @@ def _get_scan_dim(
     sorted_dims = [
         dim
         for _, dim in (
-            get_sorted_dims(output_type.dims)
+            dace_common_util.get_sorted_dims(output_type.dims)
             if use_field_canonical_representation
             else enumerate(output_type.dims)
         )
@@ -110,18 +105,21 @@ def _make_array_shape_and_strides(
         The output tuple fields are arrays of dace symbolic expressions.
     """
     dtype = dace.int32
-    sorted_dims = get_sorted_dims(dims) if sort_dims else list(enumerate(dims))
-    neighbor_tables = filter_connectivities(offset_provider)
+    sorted_dims = dace_common_util.get_sorted_dims(dims) if sort_dims else list(enumerate(dims))
+    neighbor_tables = dace_common_util.filter_connectivities(offset_provider)
     shape = [
         (
             neighbor_tables[dim.value].max_neighbors
             if dim.kind == DimensionKind.LOCAL
             # we reuse the same gt4py symbol for field size passed as scalar argument which is used in closure domain
-            else dace.symbol(field_size_symbol_name(name, i), dtype)
+            else dace.symbol(dace_common_util.field_size_symbol_name(name, i), dtype)
         )
         for i, dim in sorted_dims
     ]
-    strides = [dace.symbol(field_stride_symbol_name(name, i), dtype) for i, _ in sorted_dims]
+    strides = [
+        dace.symbol(dace_common_util.field_stride_symbol_name(name, i), dtype)
+        for i, _ in sorted_dims
+    ]
     return shape, strides
 
 
@@ -241,7 +239,9 @@ class ItirToSDFG(eve.NodeVisitor):
         field_type = self.storage_types[field_name]
         assert isinstance(field_type, ts.FieldType)
         if self.use_field_canonical_representation:
-            field_index = [index[dim.value] for _, dim in get_sorted_dims(field_type.dims)]
+            field_index = [
+                index[dim.value] for _, dim in dace_common_util.get_sorted_dims(field_type.dims)
+            ]
         else:
             field_index = [index[dim.value] for dim in field_type.dims]
         subset = ", ".join(field_index)
@@ -263,7 +263,7 @@ class ItirToSDFG(eve.NodeVisitor):
 
     def visit_FencilDefinition(self, node: itir.FencilDefinition):
         program_sdfg = dace.SDFG(name=node.id)
-        program_sdfg.debuginfo = dace_debuginfo(node)
+        program_sdfg.debuginfo = dace_common_util.debug_info(node)
         entry_state = program_sdfg.add_state("program_entry", is_start_block=True)
 
         # Filter neighbor tables from offset providers.
@@ -293,7 +293,10 @@ class ItirToSDFG(eve.NodeVisitor):
                 [offset_provider.origin_axis, local_dim], ts.ScalarType(scalar_kind)
             )
             self.add_storage(
-                program_sdfg, connectivity_identifier(offset), type_, sort_dimensions=False
+                program_sdfg,
+                dace_common_util.connectivity_identifier(offset),
+                type_,
+                sort_dimensions=False,
             )
 
         # Create a nested SDFG for all stencil closures.
@@ -352,13 +355,15 @@ class ItirToSDFG(eve.NodeVisitor):
 
         # Create the closure's nested SDFG and single state.
         closure_sdfg = dace.SDFG(name="closure")
-        closure_sdfg.debuginfo = dace_debuginfo(node)
+        closure_sdfg.debuginfo = dace_common_util.debug_info(node)
         closure_state = closure_sdfg.add_state("closure_entry")
         closure_init_state = closure_sdfg.add_state_before(closure_state, "closure_init", True)
 
         input_names = [str(inp.id) for inp in node.inputs]
         neighbor_tables = get_used_connectivities(node, self.offset_provider)
-        connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
+        connectivity_names = [
+            dace_common_util.connectivity_identifier(offset) for offset in neighbor_tables.keys()
+        ]
 
         output_nodes = self.get_output_nodes(node, closure_sdfg, closure_state)
         output_names = [k for k, _ in output_nodes.items()]
@@ -563,7 +568,9 @@ class ItirToSDFG(eve.NodeVisitor):
         assert isinstance(node.output, SymRef)
         neighbor_tables = get_used_connectivities(node, self.offset_provider)
         input_names = [str(inp.id) for inp in node.inputs]
-        connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
+        connectivity_names = [
+            dace_common_util.connectivity_identifier(offset) for offset in neighbor_tables.keys()
+        ]
 
         # find the scan dimension, same as output dimension, and exclude it from the map domain
         map_ranges = {}
@@ -578,7 +585,7 @@ class ItirToSDFG(eve.NodeVisitor):
 
         # the scan operator is implemented as an SDFG to be nested in the closure SDFG
         scan_sdfg = dace.SDFG(name="scan")
-        scan_sdfg.debuginfo = dace_debuginfo(node)
+        scan_sdfg.debuginfo = dace_common_util.debug_info(node)
 
         # the carry value of the scan operator exists only in the scope of the scan sdfg
         scan_carry_name = unique_var_name()
@@ -725,7 +732,9 @@ class ItirToSDFG(eve.NodeVisitor):
     ) -> tuple[dace.SDFG, dict[str, str | dace.subsets.Subset], list[str]]:
         neighbor_tables = get_used_connectivities(node, self.offset_provider)
         input_names = [str(inp.id) for inp in node.inputs]
-        connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
+        connectivity_names = [
+            dace_common_util.connectivity_identifier(offset) for offset in neighbor_tables.keys()
+        ]
 
         # find the scan dimension, same as output dimension, and exclude it from the map domain
         map_ranges = {}

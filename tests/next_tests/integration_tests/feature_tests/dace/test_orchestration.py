@@ -152,11 +152,11 @@ def test_sdfgConvertible_connectivities(unstructured_case):
         offset_provider,
         rows=3,
         cols=2,
-        __connectivity_E2V=e2v.table,
-        ____connectivity_E2V_stride_0=get_stride_from_numpy_to_dace(
+        connectivity_E2V=e2v.table,
+        __connectivity_E2V_stride_0=get_stride_from_numpy_to_dace(
             xp.asnumpy(e2v.table) if backend == run_dace_gpu else e2v.table, 0
         ),
-        ____connectivity_E2V_stride_1=get_stride_from_numpy_to_dace(
+        __connectivity_E2V_stride_1=get_stride_from_numpy_to_dace(
             xp.asnumpy(e2v.table) if backend == run_dace_gpu else e2v.table, 1
         ),
     )
@@ -174,11 +174,11 @@ def test_sdfgConvertible_connectivities(unstructured_case):
         offset_provider,
         rows=3,
         cols=2,
-        __connectivity_E2V=e2v.table,
-        ____connectivity_E2V_stride_0=get_stride_from_numpy_to_dace(
+        connectivity_E2V=e2v.table,
+        __connectivity_E2V_stride_0=get_stride_from_numpy_to_dace(
             xp.asnumpy(e2v.table) if backend == run_dace_gpu else e2v.table, 0
         ),
-        ____connectivity_E2V_stride_1=get_stride_from_numpy_to_dace(
+        __connectivity_E2V_stride_1=get_stride_from_numpy_to_dace(
             xp.asnumpy(e2v.table) if backend == run_dace_gpu else e2v.table, 1
         ),
     )
