@@ -49,7 +49,7 @@ class CMakeFactory(
         bindings_name = f"{name}_bindings.{source.program_source.language_settings.file_extension}"
         cmake_languages = [cmake_lists.Language(name="CXX")]
         if source.program_source.language is languages.Cuda:
-            cmake_languages = [*cmake_languages, cmake_lists.Language(name="CUDA")]
+            cmake_languages = [*cmake_languages, cmake_lists.Language(name="HIP")]
         cmake_lists_src = cmake_lists.generate_cmakelists_source(
             name, source.library_deps, [header_name, bindings_name], languages=cmake_languages
         )

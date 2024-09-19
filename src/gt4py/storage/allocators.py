@@ -259,7 +259,7 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.DeviceTypeT]):
             buffer, dtype, shape, padded_shape, item_size, strides, byte_offset
         )
 
-        if self.device_type == core_defs.DeviceType.ROCM:
+        if False: #self.device_type == core_defs.DeviceType.ROCM:
             # until we can rely on dlpack
             ndarray.__hip_array_interface__ = {  # type: ignore[attr-defined]
                 "shape": ndarray.shape,  # type: ignore[union-attr]
