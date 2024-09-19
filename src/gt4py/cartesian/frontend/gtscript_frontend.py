@@ -708,6 +708,7 @@ class IRMaker(ast.NodeVisitor):
         fields: dict,
         parameters: dict,
         local_symbols: dict,
+        backend_name: str,
         *,
         domain: nodes.Domain,
         temp_decls: Optional[Dict[str, nodes.FieldDecl]] = None,
@@ -721,6 +722,7 @@ class IRMaker(ast.NodeVisitor):
             isinstance(value, (type, np.dtype)) for value in local_symbols.values()
         )
 
+        self.backend_name = backend_name
         self.fields = fields
         self.parameters = parameters
         self.local_symbols = local_symbols
@@ -1437,15 +1439,21 @@ class IRMaker(ast.NodeVisitor):
                         message="Assignment to non-zero offsets is not supported in IJ.",
                         loc=nodes.Location.from_ast_node(t),
                     )
+                # Case of K-offset
                 if (
                     len(spatial_offset) == 3
                     and spatial_offset[2] != 0
-                    and self.iteration_order == nodes.IterationOrder.PARALLEL
                 ):
-                    raise GTScriptSyntaxError(
-                        message="Assignment to non-zero offsets in K is not available in PARALLEL. Choose FORWARD or BACKWARD.",
-                        loc=nodes.Location.from_ast_node(t),
-                    )
+                    if (self.iteration_order == nodes.IterationOrder.PARALLEL):
+                        raise GTScriptSyntaxError(
+                            message="Assignment to non-zero offsets in K is not available in PARALLEL. Choose FORWARD or BACKWARD.",
+                            loc=nodes.Location.from_ast_node(t))
+                    if self.backend_name == "gt:gpu":
+                        import cupy as cp
+                        if cp.cuda.get_local_runtime_version() < 12000:
+                            raise GTScriptSyntaxError(
+                                message="Assignment to non-zero offsets in K is not available in gt:gpu for CUDA<12. Please update CUDA.",
+                                loc=nodes.Location.from_ast_node(t))
 
             if not self._is_known(name):
                 if name in self.temp_decls:
@@ -2064,6 +2072,7 @@ class GTScriptParser(ast.NodeVisitor):
             fields=fields_decls,
             parameters=parameter_decls,
             local_symbols={},  # Not used
+            backend_name=self.options.backend_opts["backend_name"],
             domain=domain,
             temp_decls=temp_decls,
             dtypes=self.dtypes,
