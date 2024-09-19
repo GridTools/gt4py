@@ -33,11 +33,7 @@ Edge = common.Dimension(value="Edge", kind=common.DimensionKind.HORIZONTAL)
 
 @pytest.fixture
 def offset_provider():
-    return {
-        "Ioff": IDim,
-        "Joff": JDim,
-        "Koff": KDim,
-    }
+    return {"Ioff": IDim, "Joff": JDim, "Koff": KDim}
 
 
 @pytest.fixture
@@ -124,8 +120,8 @@ def constant_fold_domain_exprs(arg: itir.Node) -> itir.Node:
 
 
 def constant_fold_accessed_domains(
-    domains: dict[str, SymbolicDomain | tuple[SymbolicDomain, ...] | None],  # TODO: type annotation
-) -> dict[str, itir.Expr | tuple[itir.Expr, ...] | None]:  # TODO: type annotation
+    domains: infer_domain.ACCESSED_DOMAINS,
+) -> infer_domain.ACCESSED_DOMAINS:
     def fold_domain(domain: SymbolicDomain | None):
         if domain is None:
             return domain
@@ -277,27 +273,11 @@ def test_shift_x_y_z_three_inputs(offset_provider):
             im.deref(im.shift("Koff", -1)("arg2")),
         )
     )
-    domain_dict = {
-        IDim: (0, 11),
-        JDim: (0, 7),
-        KDim: (0, 3),
-    }
+    domain_dict = {IDim: (0, 11), JDim: (0, 7), KDim: (0, 3)}
     expected_domains = {
-        "in_field1": {
-            IDim: (1, 12),
-            JDim: (0, 7),
-            KDim: (0, 3),
-        },
-        "in_field2": {
-            IDim: (0, 11),
-            JDim: (1, 8),
-            KDim: (0, 3),
-        },
-        "in_field3": {
-            IDim: (0, 11),
-            JDim: (0, 7),
-            KDim: (-1, 2),
-        },
+        "in_field1": {IDim: (1, 12), JDim: (0, 7), KDim: (0, 3)},
+        "in_field2": {IDim: (0, 11), JDim: (1, 8), KDim: (0, 3)},
+        "in_field3": {IDim: (0, 11), JDim: (0, 7), KDim: (-1, 2)},
     }
     testee, expected = setup_test_as_fieldop(
         stencil,
@@ -706,10 +686,7 @@ def test_nested_let_arg_shadowed2(offset_provider):
         premap_field("in_field1", "Ioff", 1, domain),
         im.let("in_field1", "in_field2")("in_field1"),
     )
-    expected_domains = {
-        "in_field1": domain_p1,
-        "in_field2": domain,
-    }
+    expected_domains = {"in_field1": domain_p1, "in_field2": domain}
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
 
@@ -849,11 +826,7 @@ def test_tuple_get_1_nested_make_tuple(offset_provider):
     domain1 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     domain2 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 12)})
     expected = im.tuple_get(1, im.make_tuple(im.ref("a"), im.make_tuple(im.ref("b"), im.ref("c"))))
-    expected_domains = {
-        "a": None,
-        "b": domain1,
-        "c": domain2,
-    }
+    expected_domains = {"a": None, "b": domain1, "c": domain2}
 
     actual, actual_domains = infer_domain.infer_expr(
         testee,
@@ -869,11 +842,7 @@ def test_tuple_get_let_arg_make_tuple(offset_provider):
     testee = im.tuple_get(1, im.let("a", im.make_tuple(im.ref("b"), im.ref("c")))("d"))
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     expected = im.tuple_get(1, im.let("a", im.make_tuple(im.ref("b"), im.ref("c")))("d"))
-    expected_domains = {
-        "b": None,
-        "c": None,
-        "d": (None, domain),
-    }
+    expected_domains = {"b": None, "c": None, "d": (None, domain)}
 
     actual, actual_domains = infer_domain.infer_expr(
         testee,
@@ -889,11 +858,7 @@ def test_tuple_get_let_make_tuple(offset_provider):
     testee = im.tuple_get(1, im.let("a", "b")(im.make_tuple(im.ref("c"), im.ref("d"))))
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     expected = im.tuple_get(1, im.let("a", "b")(im.make_tuple(im.ref("c"), im.ref("d"))))
-    expected_domains = {
-        "c": None,
-        "d": domain,
-        "b": None,
-    }
+    expected_domains = {"c": None, "d": domain, "b": None}
 
     actual, actual_domains = infer_domain.infer_expr(
         testee,
@@ -912,11 +877,7 @@ def test_nested_make_tuple(offset_provider):
     domain2_2 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 13)})
     domain3 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 14)})
     expected = im.make_tuple(im.make_tuple(im.ref("a"), im.ref("b")), im.ref("c"))
-    expected_domains = {
-        "a": domain1,
-        "b": (domain2_1, domain2_2),
-        "c": domain3,
-    }
+    expected_domains = {"a": domain1, "b": (domain2_1, domain2_2), "c": domain3}
 
     actual, actual_domains = infer_domain.infer_expr(
         testee,
@@ -1005,10 +966,7 @@ def test_make_tuple_non_tuple_domain(offset_provider):
     expected = im.make_tuple(
         im.as_fieldop("deref", domain)("in_field1"), im.as_fieldop("deref", domain)("in_field2")
     )
-    expected_domains = {
-        "in_field1": domain,
-        "in_field2": domain,
-    }
+    expected_domains = {"in_field1": domain, "in_field2": domain}
 
     actual, actual_domains = infer_domain.infer_expr(
         testee, SymbolicDomain.from_expr(domain), offset_provider

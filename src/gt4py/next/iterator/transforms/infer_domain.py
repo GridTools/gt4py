@@ -190,7 +190,6 @@ def infer_let(
         let_expr.fun.expr, input_domain, offset_provider
     )
 
-    # TODO(tehrengruber): describe and tidy up
     let_params = {param_sym.id for param_sym in let_expr.fun.params}
     accessed_domains_let_args, accessed_domains_outer = split_dict_by_key(
         lambda k: k in let_params, accessed_domains
