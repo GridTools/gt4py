@@ -83,10 +83,12 @@ class SDFGBuilder(DataflowBuilder, Protocol):
 
     @abc.abstractmethod
     def get_symbol_type(self, symbol_name: str) -> ts.FieldType | ts.ScalarType:
+        """Retrieve the GT4Py type of a symbol used in the program."""
         pass
 
     @abc.abstractmethod
     def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
+        """Visit a node of the GT4Py IR."""
         pass
 
 
@@ -404,7 +406,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         nstate = nsdfg.add_state("lambda")
 
         # add sdfg storage for the symbols that need to be passed as input parameters,
-        # that is only the symbols that are used in the context of the lambda node
+        # that are only the symbols used in the context of the lambda node
         self._add_sdfg_params(
             nsdfg,
             [gtir.Sym(id=p_name, type=p_type) for p_name, p_type in lambda_symbols.items()],
