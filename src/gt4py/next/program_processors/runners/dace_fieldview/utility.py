@@ -98,7 +98,15 @@ def get_tuple_fields(
     tuple_name: str, tuple_type: ts.TupleType, flatten: bool = False
 ) -> list[tuple[str, ts.DataType]]:
     """
-    Creates a list of fields with the corresponding data type for all elements of the given tuple.
+    Creates a list of names with the corresponding data type for all elements of the given tuple.
+
+    Examples
+    --------
+    >>> t = ts.TupleType(types=[ts.ScalarType, ts.TupleType(types=[ts.FieldType, ts.ScalarType])])
+    >>> get_tuple_fields("a", t)
+    [("a_0", ts.ScalarType), ("a_1", ts.TupleType(types=[ts.FieldType, ts.ScalarType]))]
+    >>> get_tuple_fields("a", t, flatten=True)
+    [("a_0", ts.ScalarType), ("a_1_0", ts.FieldType), ("a_1_1", ts.ScalarType)]
     """
     fields = [(f"{tuple_name}_{i}", field_type) for i, field_type in enumerate(tuple_type.types)]
     if flatten:
