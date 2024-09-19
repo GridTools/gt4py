@@ -20,6 +20,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+# TODO(ricoh): This overlaps with `canonicalize_arguments`, solutions:
+# - merge the two
+# - extract the signature gathering functionality from canonicalize_arguments
+#   and use it to pass the signature through the toolchain so that the
+#   decorate step can take care of it. Then get rid of all pre-toolchain
+#   arguments rearranging (including this module)
+
 from __future__ import annotations
 
 import functools
