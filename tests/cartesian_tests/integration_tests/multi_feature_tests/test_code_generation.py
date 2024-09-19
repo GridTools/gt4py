@@ -661,6 +661,7 @@ def test_K_offset_write_conditional(backend):
         pytest.skip("Cuda backend is not capable of K offset write")
     if backend == "gt:gpu":
         import cupy as cp
+
         if cp.cuda.get_local_runtime_version() < 12000:
             pytest.skip(
                 "gt:gpu backend with CUDA 11 is not capable of K offset write, update CUDA if possible"

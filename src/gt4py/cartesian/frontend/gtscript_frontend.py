@@ -1440,20 +1440,20 @@ class IRMaker(ast.NodeVisitor):
                         loc=nodes.Location.from_ast_node(t),
                     )
                 # Case of K-offset
-                if (
-                    len(spatial_offset) == 3
-                    and spatial_offset[2] != 0
-                ):
-                    if (self.iteration_order == nodes.IterationOrder.PARALLEL):
+                if len(spatial_offset) == 3 and spatial_offset[2] != 0:
+                    if self.iteration_order == nodes.IterationOrder.PARALLEL:
                         raise GTScriptSyntaxError(
                             message="Assignment to non-zero offsets in K is not available in PARALLEL. Choose FORWARD or BACKWARD.",
-                            loc=nodes.Location.from_ast_node(t))
+                            loc=nodes.Location.from_ast_node(t),
+                        )
                     if self.backend_name == "gt:gpu":
                         import cupy as cp
+
                         if cp.cuda.get_local_runtime_version() < 12000:
                             raise GTScriptSyntaxError(
                                 message="Assignment to non-zero offsets in K is not available in gt:gpu for CUDA<12. Please update CUDA.",
-                                loc=nodes.Location.from_ast_node(t))
+                                loc=nodes.Location.from_ast_node(t),
+                            )
 
             if not self._is_known(name):
                 if name in self.temp_decls:
