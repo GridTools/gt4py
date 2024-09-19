@@ -35,7 +35,7 @@ def gt_simplify(
     sdfg: dace.SDFG,
     validate: bool = True,
     validate_all: bool = False,
-    skip: Optional[Iterable[str]] = GT_SIMPLIFY_DEFAULT_SKIP_SET,
+    skip: Iterable[str] = GT_SIMPLIFY_DEFAULT_SKIP_SET,
 ) -> Any:
     """Performs simplifications on the SDFG in place.
 
@@ -43,12 +43,11 @@ def gt_simplify(
     as it is specially tuned for GridTool based SDFGs.
 
     By default this function will run the normal DaCe simplify pass, but skip
-    passes listed in `GT_SIMPLIFY_DEFAULT_SKIP_SET`. If `skip` is passed it
-    will be forwarded to DaCe, i.e. `GT_SIMPLIFY_DEFAULT_SKIP_SET` are not
-    added automatically.
+    passes listed in `GT_SIMPLIFY_DEFAULT_SKIP_SET`. If `skip` is given it will
+    not be modified, i.e. `GT_SIMPLIFY_DEFAULT_SKIP_SET` is not added by default.
 
     Passes that are replaced:
-    - Instead of `InlineSDFGs` the function will run `gt_inline_nested_sdfg()`.
+    - `InlineSDFGs`: Instead the `gt_inline_nested_sdfg()` will be used.
 
     Args:
         sdfg: The SDFG to optimize.
@@ -57,8 +56,8 @@ def gt_simplify(
         skip: List of simplify passes that should not be applied, defaults
             to `GT_SIMPLIFY_DEFAULT_SKIP_SET`.
     """
-    if skip is None:
-        skip = set()
+    # Ensure that `skip` is a `set`
+    skip = set(skip)
 
     if "InlineSDFGs" not in skip:
         gt_inline_nested_sdfg(
@@ -116,7 +115,7 @@ def gt_inline_nested_sdfg(
 
     The function uses DaCe's `InlineSDFG` transformation, the same used in simplify.
     However, before the inline transformation is run the function will run some
-    cleaning passes that allows inlining nested SDFG.
+    cleaning passes that allows inlining nested SDFGs.
     As a side effect, the function will split stages into more states.
 
     Args:
