@@ -83,15 +83,9 @@ def builtin_if(*args: Any) -> str:
     return f"{true_val} if {cond} else {false_val}"
 
 
-def builtin_tuple_get(*args: Any) -> str:
-    index, tuple_ = args
-    return f"{tuple_}_{index}"
-
-
 GENERAL_BUILTIN_MAPPING: dict[str, Callable[[Any], str]] = {
     "cast_": builtin_cast,
     "if_": builtin_if,
-    "tuple_get": builtin_tuple_get,
 }
 
 
