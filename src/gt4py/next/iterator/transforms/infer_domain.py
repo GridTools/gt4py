@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import itertools
+import typing
 from typing import Callable, TypeAlias
 
 from gt4py.eve import utils as eve_utils
@@ -41,11 +42,11 @@ def split_dict_by_key(pred: Callable, d: dict):
 
 
 # TODO(tehrengruber): Revisit whether we want to move this behaviour to `domain_union`.
-def _domain_union_with_none(*domains: SymbolicDomain | None):
-    domains = [*filter(lambda x: x is not None, domains)]
-    if len(domains) == 0:
+def _domain_union_with_none(*domains: SymbolicDomain | None) -> SymbolicDomain | None:
+    filtered_domains: list[SymbolicDomain] = [d for d in domains if d is not None]
+    if len(filtered_domains) == 0:
         return None
-    return domain_union(*domains)
+    return domain_union(*filtered_domains)
 
 
 def canonicalize_domain_structure(d1: DOMAIN, d2: DOMAIN) -> tuple[DOMAIN, DOMAIN]:
@@ -103,7 +104,7 @@ def extract_accessed_domains(
     target_domain: SymbolicDomain,
     offset_provider: common.OffsetProvider,
 ) -> ACCESSED_DOMAINS:
-    accessed_domains: ACCESSED_DOMAINS = {}
+    accessed_domains: dict[str, SymbolicDomain | None] = {}
 
     shifts_results = trace_shifts.trace_stencil(stencil, num_args=len(input_ids))
 
@@ -116,7 +117,7 @@ def extract_accessed_domains(
             accessed_domains.get(in_field_id, None), *new_domains
         )
 
-    return accessed_domains
+    return typing.cast(ACCESSED_DOMAINS, accessed_domains)
 
 
 def infer_as_fieldop(
