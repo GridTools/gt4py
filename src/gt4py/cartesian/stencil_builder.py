@@ -274,11 +274,12 @@ class StencilBuilder:
 
     @property
     def gtir_pipeline(self) -> GtirPipeline:
-        self.options.backend_opts["backend_name"] = self.backend.name
         return self._build_data.get("gtir_pipeline") or self._build_data.setdefault(
             "gtir_pipeline",
             GtirPipeline(
-                self.frontend.generate(self.definition, self.externals, self.dtypes, self.options),
+                self.frontend.generate(
+                    self.definition, self.externals, self.dtypes, self.options, self.backend.name
+                ),
                 self.stencil_id,
             ),
         )

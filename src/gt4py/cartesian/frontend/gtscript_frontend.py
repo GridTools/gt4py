@@ -1449,7 +1449,7 @@ class IRMaker(ast.NodeVisitor):
                     if self.backend_name == "gt:gpu":
                         import cupy as cp
 
-                        if cp.cuda.get_local_runtime_version() < 12000:
+                        if cp.cuda.runtime.runtimeGetVersion() < 12000:
                             raise GTScriptSyntaxError(
                                 message="Assignment to non-zero offsets in K is not available in gt:gpu for CUDA<12. Please update CUDA.",
                                 loc=nodes.Location.from_ast_node(t),
@@ -2014,7 +2014,7 @@ class GTScriptParser(ast.NodeVisitor):
 
         return api_signature, fields_decls, parameter_decls
 
-    def run(self):
+    def run(self, backend_name: str):
         assert (
             isinstance(self.ast_root, ast.Module)
             and "body" in self.ast_root._fields
@@ -2072,7 +2072,7 @@ class GTScriptParser(ast.NodeVisitor):
             fields=fields_decls,
             parameters=parameter_decls,
             local_symbols={},  # Not used
-            backend_name=self.options.backend_opts["backend_name"],
+            backend_name=backend_name,
             domain=domain,
             temp_decls=temp_decls,
             dtypes=self.dtypes,
@@ -2128,14 +2128,14 @@ class GTScriptFrontend(Frontend):
         return GTScriptParser.annotate_definition(definition, externals)
 
     @classmethod
-    def generate(cls, definition, externals, dtypes, options):
+    def generate(cls, definition, externals, dtypes, options, backend_name):
         if options.build_info is not None:
             start_time = time.perf_counter()
 
         if not hasattr(definition, "_gtscript_"):
             cls.prepare_stencil_definition(definition, externals)
         translator = GTScriptParser(definition, externals=externals, dtypes=dtypes, options=options)
-        definition_ir = translator.run()
+        definition_ir = translator.run(backend_name)
 
         # GTIR only supports LatLonGrids
         if definition_ir.domain != nodes.Domain.LatLonGrid():

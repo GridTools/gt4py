@@ -63,7 +63,7 @@ def parse_definition(
     )
     definition_ir = gt_frontend.GTScriptParser(
         definition_func, externals=externals or {}, options=build_options, dtypes=dtypes
-    ).run()
+    ).run("numpy")
 
     setattr(definition_func, "__annotations__", original_annotations)
 
