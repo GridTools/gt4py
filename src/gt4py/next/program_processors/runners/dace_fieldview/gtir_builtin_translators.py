@@ -482,14 +482,19 @@ def translate_scalar_expr(
     scalar_expr_args = []
 
     for arg_expr in node.args:
-        is_symbol = True
+        visit_expr = True
         if isinstance(arg_expr, gtir.SymRef):
             try:
-                sdfg_builder.get_symbol_type(arg_expr.id)
+                # `gt_symbol` refers to symbols defined in the GT4Py program
+                gt_symbol_type = sdfg_builder.get_symbol_type(arg_expr.id)
+                if not isinstance(gt_symbol_type, ts.ScalarType):
+                    raise ValueError(f"Invalid argument to scalar expression {arg_expr}.")
             except KeyError:
-                is_symbol = False
+                # this is the case of non-variable argument, e.g. target type such as `float64`,
+                # used in a casting expression like `cast_(variable, float64)`
+                visit_expr = False
 
-        if is_symbol:
+        if visit_expr:
             # we visit the argument expression and obtain the access node to
             # a scalar data container, which will be connected to the tasklet
             arg_node = sdfg_builder.visit(
@@ -508,7 +513,6 @@ def translate_scalar_expr(
             connectors.append(param)
             scalar_expr_args.append(gtir.SymRef(id=param))
         else:
-            # this is the case of reverved symbols, e.g. 'float64' used as type argument to `cast_`
             assert isinstance(arg_expr, gtir.SymRef)
             scalar_expr_args.append(arg_expr)
 
@@ -516,11 +520,11 @@ def translate_scalar_expr(
     scalar_node = gtir.FunCall(fun=node.fun, args=scalar_expr_args)
     python_code = gtir_python_codegen.get_source(scalar_node)
     tasklet_node = sdfg_builder.add_tasklet(
-        "scalar_expr",
-        state,
-        set(connectors),
-        {"__out"},
-        f"__out = {python_code}",
+        name="scalar_expr",
+        state=state,
+        inputs=set(connectors),
+        outputs={"__out"},
+        code=f"__out = {python_code}",
     )
     # create edges for the input data connectors
     for arg, conn in zip(args, connectors, strict=True):
@@ -560,13 +564,14 @@ def translate_symbol_ref(
     """Generates the dataflow subgraph for a `ir.SymRef` node."""
     assert isinstance(node, gtir.SymRef)
 
-    sym_name = str(node.id)
-    sym_type = sdfg_builder.get_symbol_type(sym_name)
+    symbol_name = str(node.id)
+    # we retrieve the type of the symbol in the GT4Py prgram
+    gt_symbol_type = sdfg_builder.get_symbol_type(symbol_name)
 
     # Create new access node in current state. It is possible that multiple
     # access nodes are created in one state for the same data container.
     # We rely on the dace simplify pass to remove duplicated access nodes.
-    return _get_data_nodes(sdfg, state, sdfg_builder, sym_name, sym_type)
+    return _get_data_nodes(sdfg, state, sdfg_builder, symbol_name, gt_symbol_type)
 
 
 if TYPE_CHECKING:
