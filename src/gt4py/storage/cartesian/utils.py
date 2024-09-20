@@ -33,10 +33,16 @@ except ImportError:
     cp = None
 
 
-CUPY_DEVICE: Final[Literal[None, core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM]] = (
+CUPY_DEVICE: Final[
+    Literal[None, core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM]
+] = (
     None
     if not cp
-    else (core_defs.DeviceType.ROCM if cp.cuda.get_hipcc_path() else core_defs.DeviceType.CUDA)
+    else (
+        core_defs.DeviceType.ROCM
+        if cp.cuda.get_hipcc_path()
+        else core_defs.DeviceType.CUDA
+    )
 )
 
 
@@ -52,11 +58,13 @@ if cp:
 
     if CUPY_DEVICE == core_defs.DeviceType.CUDA:
         _GPUBufferAllocator = allocators.NDArrayBufferAllocator(
-            device_type=core_defs.DeviceType.CUDA, array_utils=allocators.cupy_array_utils
+            device_type=core_defs.DeviceType.CUDA,
+            array_utils=allocators.cupy_array_utils,
         )
     else:
         _GPUBufferAllocator = allocators.NDArrayBufferAllocator(
-            device_type=core_defs.DeviceType.ROCM, array_utils=allocators.cupy_array_utils
+            device_type=core_defs.DeviceType.ROCM,
+            array_utils=allocators.cupy_array_utils,
         )
 
 
@@ -68,7 +76,8 @@ def _compute_padded_shape(shape, items_per_alignment, order_idx):
     padded_shape = list(shape)
     if len(order_idx) > 0:
         padded_shape[order_idx[-1]] = int(
-            math.ceil(padded_shape[order_idx[-1]] / items_per_alignment) * items_per_alignment
+            math.ceil(padded_shape[order_idx[-1]] / items_per_alignment)
+            * items_per_alignment
         )
     return padded_shape
 
@@ -156,7 +165,9 @@ def normalize_storage_spec(
         aligned_index = tuple(aligned_index)
 
         if any(i < 0 for i in aligned_index):
-            raise ValueError("aligned_index ({}) contains negative value.".format(aligned_index))
+            raise ValueError(
+                "aligned_index ({}) contains negative value.".format(aligned_index)
+            )
     else:
         raise TypeError("aligned_index must be an iterable of ints.")
 
@@ -188,27 +199,49 @@ def asarray(
         # extract the buffer from a gt4py.next.Field
         # TODO(havogt): probably `Field` should provide the array interface methods when applicable
         array = array.ndarray
-    if device == "gpu" or (not device and hasattr(array, "__cuda_array_interface__")):
-        return cp.asarray(array)
-    if device == "cpu" or (
-        not device and (hasattr(array, "__array_interface__") or hasattr(array, "__array__"))
-    ):
-        return np.asarray(array)
 
-    if device:
+    xp = None
+    if device == "cpu":
+        xp = np
+    elif device == "gpu":
+        xp = cp
+    elif not device:
+        if hasattr(array, "__array_interface__") or hasattr(array, "__array__"):
+            xp = np
+        elif cp is not None and hasattr(array, "__cuda_array_interface__"):
+            xp = cp
+        elif hasattr(array, "__dlpack_device__"):
+            kind, _ = array.__dlpack_device__()
+            if kind in [core_defs.DeviceType.CPU, core_defs.DeviceType.CPU_PINNED]:
+                xp = np
+            elif cp is not None and kind in [
+                core_defs.DeviceType.CUDA,
+                core_defs.DeviceType.ROCM,
+            ]:
+                xp = cp
+
+    if xp is np and device:
+        # CPU device should always be 0
         raise ValueError(f"Invalid device: {device!s}")
+
+    if xp:  
+        return xp.asarray(array)
 
     raise TypeError(f"Cannot convert {type(array)} to ndarray")
 
 
-def get_dims(obj: Union[core_defs.GTDimsInterface, npt.NDArray]) -> Optional[Tuple[str, ...]]:
+def get_dims(
+    obj: Union[core_defs.GTDimsInterface, npt.NDArray]
+) -> Optional[Tuple[str, ...]]:
     dims = getattr(obj, "__gt_dims__", None)
     if dims is None:
         return dims
     return tuple(str(d) for d in dims)
 
 
-def get_origin(obj: Union[core_defs.GTDimsInterface, npt.NDArray]) -> Optional[Tuple[int, ...]]:
+def get_origin(
+    obj: Union[core_defs.GTDimsInterface, npt.NDArray]
+) -> Optional[Tuple[int, ...]]:
     origin = getattr(obj, "__gt_origin__", None)
     if origin is None:
         return origin
@@ -243,7 +276,12 @@ def allocate_gpu(
 ) -> Tuple["cp.ndarray", "cp.ndarray"]:
     assert _GPUBufferAllocator is not None, "GPU allocation library or device not found"
     device = core_defs.Device(  # type: ignore[type-var]
-        core_defs.DeviceType.ROCM if gt_config.GT4PY_USE_HIP else core_defs.DeviceType.CUDA, 0
+        (
+            core_defs.DeviceType.ROCM
+            if gt_config.GT4PY_USE_HIP
+            else core_defs.DeviceType.CUDA
+        ),
+        0,
     )
     buffer = _GPUBufferAllocator.allocate(
         shape,
