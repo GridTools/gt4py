@@ -53,6 +53,8 @@ stages:
   variables:
     CUDA_VERSION: 12.4.1
     CUPY_PACKAGE: cupy-cuda12x
+    SLURM_PARTITION: debug
+    SLURM_TIMELIMIT: '00:15:00'
 
 build_py311_baseimage_x86_64:
   extends: .build_baseimage_x86_64
@@ -99,6 +101,9 @@ build_py38_baseimage_x86_64:
   extends: [.container-builder-cscs-zen2, .build_image]
 .build_image_aarch64:
   extends: [.container-builder-cscs-gh200, .build_image]
+  variables:
+    SLURM_PARTITION: debug
+    SLURM_TIMELIMIT: '00:15:00'
 
 build_py311_image_x86_64:
   extends: .build_image_x86_64
@@ -182,6 +187,8 @@ build_py38_image_x86_64:
     # Another problem, observed in test stage, is that gpu tests hang in combination with CUDA MPS,
     # when high test parallelism is used.
     NUM_PROCESSES: 16
+    SLURM_PARTITION: debug
+    SLURM_TIMELIMIT: '00:15:00'
 
 test_py311_x86_64:
   extends: [.test_helper_x86_64]
