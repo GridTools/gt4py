@@ -12,7 +12,7 @@ from typing import Any
 import dace
 import numpy as np
 
-from gt4py.next import common as gtx_common
+from gt4py.next import common as gtx_common, utils as gtx_utils
 
 from . import utility as dace_util
 
@@ -54,9 +54,10 @@ def _get_args(
     sdfg: dace.SDFG, args: Sequence[Any], use_field_canonical_representation: bool
 ) -> dict[str, Any]:
     sdfg_params: Sequence[str] = sdfg.arg_names
+    flat_args: Sequence[Any] = list(gtx_utils.flatten_nested_tuple(tuple(args)))
     return {
         sdfg_param: _convert_arg(arg, sdfg_param, use_field_canonical_representation)
-        for sdfg_param, arg in zip(sdfg_params, args, strict=True)
+        for sdfg_param, arg in zip(sdfg_params, flat_args, strict=True)
     }
 
 
