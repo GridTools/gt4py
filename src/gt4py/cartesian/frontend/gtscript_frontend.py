@@ -708,6 +708,7 @@ class IRMaker(ast.NodeVisitor):
         fields: dict,
         parameters: dict,
         local_symbols: dict,
+        backend_name: str,
         *,
         domain: nodes.Domain,
         temp_decls: Optional[Dict[str, nodes.FieldDecl]] = None,
@@ -721,6 +722,7 @@ class IRMaker(ast.NodeVisitor):
             isinstance(value, (type, np.dtype)) for value in local_symbols.values()
         )
 
+        self.backend_name = backend_name
         self.fields = fields
         self.parameters = parameters
         self.local_symbols = local_symbols
@@ -1432,11 +1434,26 @@ class IRMaker(ast.NodeVisitor):
         for t in node.targets[0].elts if isinstance(node.targets[0], ast.Tuple) else node.targets:
             name, spatial_offset, data_index = self._parse_assign_target(t)
             if spatial_offset:
-                if any(offset != 0 for offset in spatial_offset):
+                if spatial_offset[0] != 0 or spatial_offset[1] != 0:
                     raise GTScriptSyntaxError(
-                        message="Assignment to non-zero offsets is not supported.",
+                        message="Assignment to non-zero offsets is not supported in IJ.",
                         loc=nodes.Location.from_ast_node(t),
                     )
+                # Case of K-offset
+                if len(spatial_offset) == 3 and spatial_offset[2] != 0:
+                    if self.iteration_order == nodes.IterationOrder.PARALLEL:
+                        raise GTScriptSyntaxError(
+                            message="Assignment to non-zero offsets in K is not available in PARALLEL. Choose FORWARD or BACKWARD.",
+                            loc=nodes.Location.from_ast_node(t),
+                        )
+                    if self.backend_name == "gt:gpu" or self.backend_name == "dace:gpu":
+                        import cupy as cp
+
+                        if cp.cuda.runtime.runtimeGetVersion() < 12000:
+                            raise GTScriptSyntaxError(
+                                message=f"Assignment to non-zero offsets in K is not available in {self.backend_name} for CUDA<12. Please update CUDA.",
+                                loc=nodes.Location.from_ast_node(t),
+                            )
 
             if not self._is_known(name):
                 if name in self.temp_decls:
@@ -1997,7 +2014,7 @@ class GTScriptParser(ast.NodeVisitor):
 
         return api_signature, fields_decls, parameter_decls
 
-    def run(self):
+    def run(self, backend_name: str):
         assert (
             isinstance(self.ast_root, ast.Module)
             and "body" in self.ast_root._fields
@@ -2055,6 +2072,7 @@ class GTScriptParser(ast.NodeVisitor):
             fields=fields_decls,
             parameters=parameter_decls,
             local_symbols={},  # Not used
+            backend_name=backend_name,
             domain=domain,
             temp_decls=temp_decls,
             dtypes=self.dtypes,
@@ -2110,14 +2128,14 @@ class GTScriptFrontend(Frontend):
         return GTScriptParser.annotate_definition(definition, externals)
 
     @classmethod
-    def generate(cls, definition, externals, dtypes, options):
+    def generate(cls, definition, externals, dtypes, options, backend_name):
         if options.build_info is not None:
             start_time = time.perf_counter()
 
         if not hasattr(definition, "_gtscript_"):
             cls.prepare_stencil_definition(definition, externals)
         translator = GTScriptParser(definition, externals=externals, dtypes=dtypes, options=options)
-        definition_ir = translator.run()
+        definition_ir = translator.run(backend_name)
 
         # GTIR only supports LatLonGrids
         if definition_ir.domain != nodes.Domain.LatLonGrid():
