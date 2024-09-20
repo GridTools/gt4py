@@ -320,34 +320,35 @@ class DaCeIRBuilder(eve.NodeTranslator):
         *,
         is_target: bool,
         targets: Set[eve.SymbolRef],
-        offset_in_K_fields: Set[eve.SymbolRef],
+        var_offset_fields: Set[eve.SymbolRef],
+        K_write_with_offset: Set[eve.SymbolRef],
         **kwargs: Any,
     ) -> Union[dcir.IndexAccess, dcir.ScalarAccess]:
-        """Generate the relevant accessor to match the memlet that was previously setup
+        """Generate the relevant accessor to match the memlet that was previously setup.
 
-        This function was written when offset writing was forbidden. It has been refactor
-        to allow offset write in K with minimum changes.
+        When a Field is written in K, we force the usage of the OUT memlet throughout the stencil
+        to make sure all side effects are being properly resolved. Frontend checks ensure that no
+        parallel code issues sips here.
         """
 
         res: Union[dcir.IndexAccess, dcir.ScalarAccess]
-        if node.name in offset_in_K_fields:
-            is_target = is_target or node.name in targets
+        if node.name in var_offset_fields.union(K_write_with_offset):
+            # If write in K, we consider the variable to always be a target
+            is_target = is_target or node.name in targets or node.name in K_write_with_offset
             name = get_tasklet_symbol(node.name, node.offset, is_target=is_target)
-            if is_target:
-                res = dcir.IndexAccess(
-                    name=name,
-                    offset=self.visit(
-                        node.offset,
-                        is_target=is_target,
-                        targets=targets,
-                        offset_in_K_fields=offset_in_K_fields,
-                        **kwargs,
-                    ),
-                    data_index=node.data_index,
-                    dtype=node.dtype,
-                )
-            else:
-                res = dcir.ScalarAccess(name=name, dtype=node.dtype)
+            res = dcir.IndexAccess(
+                name=name,
+                offset=self.visit(
+                    node.offset,
+                    is_target=is_target,
+                    targets=targets,
+                    var_offset_fields=var_offset_fields,
+                    K_write_with_offset=K_write_with_offset,
+                    **kwargs,
+                ),
+                data_index=node.data_index,
+                dtype=node.dtype,
+            )
         else:
             is_target = is_target or (
                 node.name in targets and node.offset == common.CartesianOffset.zero()
@@ -810,21 +811,22 @@ class DaCeIRBuilder(eve.NodeTranslator):
             )
         )
 
-        # Offsets in K can be both:
-        # - read indexed via an expression,
-        # - write offset in K (both in expression and on scalar)
-        # We get all indexed via expression
-        offset_in_K_fields = {
+        # Variable offsets
+        var_offset_fields = {
             acc.name
             for acc in node.walk_values().if_isinstance(oir.FieldAccess)
             if isinstance(acc.offset, oir.VariableKOffset)
         }
-        # We add write offset to K
+
+        # We book keep - all write offset to K
+        K_write_with_offset = set()
         for assign_node in node.walk_values().if_isinstance(oir.AssignStmt):
             if isinstance(assign_node.left, oir.FieldAccess):
-                acc = assign_node.left
-                if isinstance(acc.offset, common.CartesianOffset) and acc.offset.k != 0:
-                    offset_in_K_fields.add(acc.name)
+                if (
+                    isinstance(assign_node.left.offset, common.CartesianOffset)
+                    and assign_node.left.offset.k != 0
+                ):
+                    K_write_with_offset.add(assign_node.left.name)
 
         sections_idx = next(
             idx
@@ -842,7 +844,8 @@ class DaCeIRBuilder(eve.NodeTranslator):
                 global_ctx=global_ctx,
                 iteration_ctx=iteration_ctx,
                 symbol_collector=symbol_collector,
-                offset_in_K_fields=offset_in_K_fields,
+                var_offset_fields=var_offset_fields,
+                K_write_with_offset=K_write_with_offset,
                 **kwargs,
             )
         )
