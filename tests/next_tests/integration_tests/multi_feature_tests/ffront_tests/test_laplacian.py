@@ -89,14 +89,14 @@ def test_ffront_lap(cartesian_case):
     in_field = square(in_field)
     out_field = cases.allocate(cartesian_case, lap_program, "out_field")()
 
-    # cases.verify(
-    #     cartesian_case,
-    #     lap_program,
-    #     in_field,
-    #     out_field,
-    #     inout=out_field[1:-1, 1:-1],
-    #     ref=lap_ref(in_field.ndarray),
-    # )
+    cases.verify(
+        cartesian_case,
+        lap_program,
+        in_field,
+        out_field,
+        inout=out_field[1:-1, 1:-1],
+        ref=lap_ref(in_field.ndarray),
+    )
 
 
 def test_ffront_skewedlap(cartesian_case):
