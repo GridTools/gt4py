@@ -225,6 +225,7 @@ class Program:
     def __call__(
         self, *args: Any, offset_provider: dict[str, Dimension | Connectivity], **kwargs: Any
     ) -> None:
+        offset_provider = offset_provider | self._implicit_offset_provider
         if self.backend is None:
             warnings.warn(
                 UserWarning(
@@ -245,7 +246,7 @@ class Program:
         self.backend(
             self.definition_stage,
             *args,
-            **(kwargs | {"offset_provider": offset_provider | self._implicit_offset_provider}),
+            **(kwargs | {"offset_provider": offset_provider}),
         )
 
     def freeze(self) -> FrozenProgram:
@@ -330,7 +331,12 @@ class ProgramFromPast(Program):
             )
 
         ppi.ensure_processor_kind(self.backend.executor, ppi.ProgramExecutor)
-        self.backend(self.past_stage, *args, **(kwargs | {"offset_provider": offset_provider}))
+        # TODO(ricoh): add test that does the equivalent of IDim + 1 in a ProgramFromPast
+        self.backend(
+            self.past_stage,
+            *args,
+            **(kwargs | {"offset_provider": offset_provider | self._implicit_offset_provider}),
+        )
 
     # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self):
