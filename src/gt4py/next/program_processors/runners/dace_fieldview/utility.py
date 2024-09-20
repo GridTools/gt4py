@@ -8,8 +8,6 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping, Optional
-
 import dace
 
 from gt4py.next import common as gtx_common
@@ -45,56 +43,6 @@ def as_dace_type(type_: ts.TypeSpec) -> dace.typeclass:
             raise ValueError(f"Scalar type '{scalar_type}' not supported.")
 
 
-def as_scalar_type(typestr: str) -> ts.ScalarType:
-    """Obtain GT4Py scalar type from generic numpy string representation."""
-    try:
-        kind = getattr(ts.ScalarKind, typestr.upper())
-    except AttributeError as ex:
-        raise ValueError(f"Data type {typestr} not supported.") from ex
-    return ts.ScalarType(kind)
-
-
-def connectivity_identifier(name: str) -> str:
-    return f"connectivity_{name}"
-
-
-def debug_info(
-    node: gtir.Node, *, default: Optional[dace.dtypes.DebugInfo] = None
-) -> Optional[dace.dtypes.DebugInfo]:
-    location = node.location
-    if location:
-        return dace.dtypes.DebugInfo(
-            start_line=location.line,
-            start_column=location.column if location.column else 0,
-            end_line=location.end_line if location.end_line else -1,
-            end_column=location.end_column if location.end_column else 0,
-            filename=location.filename,
-        )
-    return default
-
-
-def field_size_symbol_name(field_name: str, axis: int) -> str:
-    return f"__{field_name}_size_{axis}"
-
-
-def field_stride_symbol_name(field_name: str, axis: int) -> str:
-    return f"__{field_name}_stride_{axis}"
-
-
-def filter_connectivities(offset_provider: Mapping[str, Any]) -> dict[str, gtx_common.Connectivity]:
-    """
-    Filter offset providers of type `Connectivity`.
-
-    In other words, filter out the cartesian offset providers.
-    Returns a new dictionary containing only `Connectivity` values.
-    """
-    return {
-        offset: table
-        for offset, table in offset_provider.items()
-        if isinstance(table, gtx_common.Connectivity)
-    }
-
-
 def get_domain(
     node: gtir.Expr,
 ) -> list[tuple[gtx_common.Dimension, dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]]:
@@ -115,7 +63,7 @@ def get_domain(
         axis = named_range.args[0]
         assert isinstance(axis, gtir.AxisLiteral)
         bounds = [
-            dace.symbolic.SymExpr(gtir_python_codegen.get_source(arg))
+            dace.symbolic.pystr_to_symbolic(gtir_python_codegen.get_source(arg))
             for arg in named_range.args[1:3]
         ]
         dim = gtx_common.Dimension(axis.value, axis.kind)

@@ -8,20 +8,20 @@
 
 # TODO(SF-N): test scan operator
 
+import pytest
 import numpy as np
 from typing import Iterable, Optional, Literal, Union
 
 from gt4py import eve
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.transforms.infer_domain import infer_program, infer_expr
+from gt4py.next.iterator.transforms import infer_domain
 from gt4py.next.iterator.transforms.global_tmps import SymbolicDomain
-import pytest
-from gt4py.eve.extended_typing import Dict
-from gt4py.next.common import Dimension, DimensionKind
+from gt4py.next.common import Dimension
 from gt4py.next import common, NeighborTableOffsetProvider
 from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
+from gt4py.next import utils
 
 float_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
 IDim = common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)
@@ -33,11 +33,7 @@ Edge = common.Dimension(value="Edge", kind=common.DimensionKind.HORIZONTAL)
 
 @pytest.fixture
 def offset_provider():
-    return {
-        "Ioff": IDim,
-        "Joff": JDim,
-        "Koff": KDim,
-    }
+    return {"Ioff": IDim, "Joff": JDim, "Koff": KDim}
 
 
 @pytest.fixture
@@ -61,28 +57,22 @@ def premap_field(
 def setup_test_as_fieldop(
     stencil: itir.Lambda | Literal["deref"],
     domain: itir.FunCall,
-    expected_domain: dict[str, dict[str | Dimension, tuple[itir.Expr, itir.Expr]]],
     *,
     refs: Iterable[itir.SymRef] = None,
-    domain_type: str = common.GridType.CARTESIAN,
-) -> tuple[itir.FunCall, itir.FunCall, itir.FunCall]:
+) -> tuple[itir.FunCall, itir.FunCall]:
     if refs is None:
         assert isinstance(stencil, itir.Lambda)
         refs = [f"in_field{i+1}" for i in range(0, len(stencil.params))]
 
     testee = im.as_fieldop(stencil)(*refs)
     expected = im.as_fieldop(stencil, domain)(*refs)
-    expected_domains = {
-        ref: im.domain(domain_type, d) if d is not None else None
-        for ref, d in expected_domain.items()
-    }
-    return testee, expected, expected_domains
+    return testee, expected
 
 
 def run_test_program(
     testee: itir.Program, expected: itir.Program, offset_provider: common.OffsetProvider
 ) -> None:
-    actual_program = infer_program(testee, offset_provider)
+    actual_program = infer_domain.infer_program(testee, offset_provider)
 
     folded_program = constant_fold_domain_exprs(actual_program)
     assert folded_program == expected
@@ -92,18 +82,27 @@ def run_test_expr(
     testee: itir.FunCall,
     expected: itir.FunCall,
     domain: itir.FunCall,
-    expected_domains: dict[str, SymbolicDomain],
+    expected_domains: dict[str, itir.Expr | dict[str | Dimension, tuple[itir.Expr, itir.Expr]]],
     offset_provider: common.OffsetProvider,
 ):
-    actual_call, actual_domains = infer_expr(
+    actual_call, actual_domains = infer_domain.infer_expr(
         testee, SymbolicDomain.from_expr(domain), offset_provider
     )
     folded_call = constant_fold_domain_exprs(actual_call)
     folded_domains = constant_fold_accessed_domains(actual_domains) if actual_domains else None
-    expected_domains = {
-        ref: SymbolicDomain.from_expr(d) if d is not None else None
-        for ref, d in expected_domains.items()
-    }
+
+    grid_type = str(domain.fun.id)
+
+    def canonicalize_domain(d):
+        if isinstance(d, dict):
+            return im.domain(grid_type, d)
+        elif isinstance(d, itir.FunCall):
+            return d
+        elif d is None:
+            return None
+        raise AssertionError()
+
+    expected_domains = {ref: canonicalize_domain(d) for ref, d in expected_domains.items()}
 
     assert folded_call == expected
     assert folded_domains == expected_domains
@@ -121,21 +120,14 @@ def constant_fold_domain_exprs(arg: itir.Node) -> itir.Node:
 
 
 def constant_fold_accessed_domains(
-    domains: dict[str, SymbolicDomain | tuple[SymbolicDomain] | None],
-) -> dict[str, SymbolicDomain | tuple[SymbolicDomain] | None]:
-    def fold_domain(domain):
-        return (
-            SymbolicDomain.from_expr(constant_fold_domain_exprs(domain.as_expr()))
-            if domain is not None
-            else domain
-        )
+    domains: infer_domain.ACCESSED_DOMAINS,
+) -> infer_domain.ACCESSED_DOMAINS:
+    def fold_domain(domain: SymbolicDomain | None):
+        if domain is None:
+            return domain
+        return constant_fold_domain_exprs(domain.as_expr())
 
-    return {
-        k: fold_domain(v)
-        if isinstance(v, SymbolicDomain)
-        else (tuple(fold_domain(d) for d in v) if v is not None else None)
-        for k, v in domains.items()
-    }
+    return {k: utils.tree_map(fold_domain)(v) for k, v in domains.items()}
 
 
 def translate_domain(
@@ -167,19 +159,15 @@ def translate_domain(
 def test_forward_difference_x(offset_provider):
     stencil = im.lambda_("arg0")(im.minus(im.deref(im.shift("Ioff", 1)("arg0")), im.deref("arg0")))
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
-    expected_accessed_domains = {"in_field1": {IDim: (0, 12)}}
-    testee, expected, expected_domains = setup_test_as_fieldop(
-        stencil, domain, expected_accessed_domains
-    )
+    expected_domains = {"in_field1": {IDim: (0, 12)}}
+    testee, expected = setup_test_as_fieldop(stencil, domain)
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
 
 def test_deref(offset_provider):
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
-    expected_accessed_domains = {"in_field": {IDim: (0, 11)}}
-    testee, expected, expected_domains = setup_test_as_fieldop(
-        "deref", domain, expected_accessed_domains, refs=["in_field"]
-    )
+    expected_domains = {"in_field": {IDim: (0, 11)}}
+    testee, expected = setup_test_as_fieldop("deref", domain, refs=["in_field"])
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
 
@@ -197,23 +185,19 @@ def test_multi_length_shift(offset_provider):
         )
     )
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
-    expected_accessed_domains = {"in_field1": {IDim: (3, 14)}}
-    testee, expected, expected_domains = setup_test_as_fieldop(
-        stencil, domain, expected_accessed_domains
-    )
+    expected_domains = {"in_field1": {IDim: (3, 14)}}
+    testee, expected = setup_test_as_fieldop(stencil, domain)
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
 
 def test_unstructured_shift(unstructured_offset_provider):
     stencil = im.lambda_("arg0")(im.deref(im.shift("E2V", 1)("arg0")))
     domain = im.domain(common.GridType.UNSTRUCTURED, {Edge: (0, 1)})
-    expected_accessed_domains = {"in_field1": {Vertex: (0, 2)}}
+    expected_domains = {"in_field1": {Vertex: (0, 2)}}
 
-    testee, expected, expected_domains = setup_test_as_fieldop(
+    testee, expected = setup_test_as_fieldop(
         stencil,
         domain,
-        expected_accessed_domains,
-        domain_type=common.GridType.UNSTRUCTURED,
     )
     run_test_expr(testee, expected, domain, expected_domains, unstructured_offset_provider)
 
@@ -235,11 +219,9 @@ def test_laplace(offset_provider):
         )
     )
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11), JDim: (0, 7)})
-    expected_accessed_domains = {"in_field1": {IDim: (-1, 12), JDim: (-1, 8)}}
+    expected_domains = {"in_field1": {IDim: (-1, 12), JDim: (-1, 8)}}
 
-    testee, expected, expected_domains = setup_test_as_fieldop(
-        stencil, domain, expected_accessed_domains
-    )
+    testee, expected = setup_test_as_fieldop(stencil, domain)
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
 
@@ -251,14 +233,13 @@ def test_shift_x_y_two_inputs(offset_provider):
         )
     )
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11), JDim: (0, 7)})
-    expected_accessed_domains = {
+    expected_domains = {
         "in_field1": {IDim: (-1, 10), JDim: (0, 7)},
         "in_field2": {IDim: (0, 11), JDim: (1, 8)},
     }
-    testee, expected, expected_domains = setup_test_as_fieldop(
+    testee, expected = setup_test_as_fieldop(
         stencil,
         domain,
-        expected_accessed_domains,
     )
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
@@ -271,13 +252,12 @@ def test_shift_x_y_two_inputs_literal(offset_provider):
         )
     )
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11), JDim: (0, 7)})
-    expected_accessed_domains = {
+    expected_domains = {
         "in_field1": {IDim: (-1, 10), JDim: (0, 7)},
     }
-    testee, expected, expected_domains = setup_test_as_fieldop(
+    testee, expected = setup_test_as_fieldop(
         stencil,
         domain,
-        expected_accessed_domains,
         refs=(im.ref("in_field1"), 2),
     )
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
@@ -293,32 +273,15 @@ def test_shift_x_y_z_three_inputs(offset_provider):
             im.deref(im.shift("Koff", -1)("arg2")),
         )
     )
-    domain_dict = {
-        IDim: (0, 11),
-        JDim: (0, 7),
-        KDim: (0, 3),
+    domain_dict = {IDim: (0, 11), JDim: (0, 7), KDim: (0, 3)}
+    expected_domains = {
+        "in_field1": {IDim: (1, 12), JDim: (0, 7), KDim: (0, 3)},
+        "in_field2": {IDim: (0, 11), JDim: (1, 8), KDim: (0, 3)},
+        "in_field3": {IDim: (0, 11), JDim: (0, 7), KDim: (-1, 2)},
     }
-    expected_domain_dict = {
-        "in_field1": {
-            IDim: (1, 12),
-            JDim: (0, 7),
-            KDim: (0, 3),
-        },
-        "in_field2": {
-            IDim: (0, 11),
-            JDim: (1, 8),
-            KDim: (0, 3),
-        },
-        "in_field3": {
-            IDim: (0, 11),
-            JDim: (0, 7),
-            KDim: (-1, 2),
-        },
-    }
-    testee, expected, expected_domains = setup_test_as_fieldop(
+    testee, expected = setup_test_as_fieldop(
         stencil,
         im.domain(common.GridType.CARTESIAN, domain_dict),
-        expected_domain_dict,
     )
     run_test_expr(
         testee,
@@ -337,12 +300,10 @@ def test_two_params_same_arg(offset_provider):
         )
     )
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
-    expected_accessed_domains = {
+    expected_domains = {
         "in_field": {IDim: (0, 12)},
     }
-    testee, expected, expected_domains = setup_test_as_fieldop(
-        stencil, domain, expected_accessed_domains, refs=["in_field", "in_field"]
-    )
+    testee, expected = setup_test_as_fieldop(stencil, domain, refs=["in_field", "in_field"])
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
 
@@ -371,14 +332,10 @@ def test_nested_stencils(offset_provider):
     expected = im.as_fieldop(stencil, domain)(im.ref("in_field1"), expected_inner)
 
     expected_domains = {
-        "in_field1": SymbolicDomain.from_expr(
-            im.domain(common.GridType.CARTESIAN, {IDim: (1, 12), JDim: (-1, 7)})
-        ),
-        "in_field2": SymbolicDomain.from_expr(
-            translate_domain(domain, {"Ioff": 0, "Joff": -2}, offset_provider)
-        ),
+        "in_field1": im.domain(common.GridType.CARTESIAN, {IDim: (1, 12), JDim: (-1, 7)}),
+        "in_field2": translate_domain(domain, {"Ioff": 0, "Joff": -2}, offset_provider),
     }
-    actual_call, actual_domains = infer_expr(
+    actual_call, actual_domains = infer_domain.infer_expr(
         testee, SymbolicDomain.from_expr(domain), offset_provider
     )
     folded_domains = constant_fold_accessed_domains(actual_domains)
@@ -414,17 +371,15 @@ def test_nested_stencils_n_times(offset_provider, iterations):
     testee = testee
 
     expected_domains = {
-        "in_field1": SymbolicDomain.from_expr(
-            im.domain(common.GridType.CARTESIAN, {IDim: (1, 12), JDim: (0, 7 + iterations - 1)})
+        "in_field1": im.domain(
+            common.GridType.CARTESIAN, {IDim: (1, 12), JDim: (0, 7 + iterations - 1)}
         ),
-        "in_field2": SymbolicDomain.from_expr(
-            im.domain(
-                common.GridType.CARTESIAN, {IDim: (0, 11), JDim: (iterations, 7 + iterations)}
-            )
+        "in_field2": im.domain(
+            common.GridType.CARTESIAN, {IDim: (0, 11), JDim: (iterations, 7 + iterations)}
         ),
     }
 
-    actual_call, actual_domains = infer_expr(
+    actual_call, actual_domains = infer_domain.infer_expr(
         testee, SymbolicDomain.from_expr(domain), offset_provider
     )
 
@@ -438,11 +393,10 @@ def test_unused_input(offset_provider):
     stencil = im.lambda_("arg0", "arg1")(im.deref("arg0"))
 
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
-    expected_accessed_domains = {"in_field1": {IDim: (0, 11)}, "in_field2": None}
-    testee, expected, expected_domains = setup_test_as_fieldop(
+    expected_domains = {"in_field1": {IDim: (0, 11)}, "in_field2": None}
+    testee, expected = setup_test_as_fieldop(
         stencil,
         domain,
-        expected_accessed_domains,
     )
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
@@ -451,7 +405,7 @@ def test_let_unused_field(offset_provider):
     testee = im.let("a", "c")("b")
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     expected = im.let("a", "c")("b")
-    expected_domains = {"b": domain, "c": None}
+    expected_domains = {"b": {IDim: (0, 11)}, "c": None}
 
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
@@ -489,128 +443,6 @@ def test_program(offset_provider):
         body=[
             itir.SetAt(expr=expected_expr_tmp, domain=domain_tmp, target=im.ref("tmp")),
             itir.SetAt(expr=expected_epxr, domain=domain, target=im.ref("out_field")),
-        ],
-    )
-
-    run_test_program(testee, expected, offset_provider)
-
-
-def test_program_two_tmps(offset_provider):
-    stencil = im.lambda_("arg0")(im.minus(im.deref(im.shift("Ioff", 1)("arg0")), im.deref("arg0")))
-
-    as_fieldop_tmp1 = im.as_fieldop(stencil)(im.ref("in_field"))
-    as_fieldop_tmp2 = im.as_fieldop(stencil)(im.ref("tmp1"))
-    as_fieldop = im.as_fieldop(stencil)(im.ref("tmp2"))
-
-    domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
-    domain_tmp1 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 13)})
-    domain_tmp2 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 12)})
-
-    params = [im.sym(name) for name in ["in_field", "out_field"]]
-
-    testee = itir.Program(
-        id="forward_diff_with_two_tmps",
-        function_definitions=[],
-        params=params,
-        declarations=[
-            itir.Temporary(id="tmp1", domain=domain_tmp1, dtype=float_type),
-            itir.Temporary(id="tmp2", domain=domain_tmp2, dtype=float_type),
-        ],
-        body=[
-            itir.SetAt(expr=as_fieldop_tmp1, domain=domain_tmp1, target=im.ref("tmp1")),
-            itir.SetAt(expr=as_fieldop_tmp2, domain=domain_tmp2, target=im.ref("tmp2")),
-            itir.SetAt(expr=as_fieldop, domain=domain, target=im.ref("out_field")),
-        ],
-    )
-
-    expected_expr_tmp1 = im.as_fieldop(stencil, domain_tmp1)(im.ref("in_field"))
-    expected_expr_tmp2 = im.as_fieldop(stencil, domain_tmp2)(im.ref("tmp1"))
-    expected_expr = im.as_fieldop(stencil, domain)(im.ref("tmp2"))
-
-    expected = itir.Program(
-        id="forward_diff_with_two_tmps",
-        function_definitions=[],
-        params=params,
-        declarations=[
-            itir.Temporary(id="tmp1", domain=domain_tmp1, dtype=float_type),
-            itir.Temporary(id="tmp2", domain=domain_tmp2, dtype=float_type),
-        ],
-        body=[
-            itir.SetAt(expr=expected_expr_tmp1, domain=domain_tmp1, target=im.ref("tmp1")),
-            itir.SetAt(expr=expected_expr_tmp2, domain=domain_tmp2, target=im.ref("tmp2")),
-            itir.SetAt(expr=expected_expr, domain=domain, target=im.ref("out_field")),
-        ],
-    )
-
-    run_test_program(testee, expected, offset_provider)
-
-
-def test_program_tree_tmps_two_inputs(offset_provider):
-    stencil = im.lambda_("arg0", "arg1")(
-        im.minus(im.deref(im.shift("Ioff", 1)("arg0")), im.deref("arg1"))
-    )
-    stencil_tmp = im.lambda_("arg0")(
-        im.minus(im.deref(im.shift("Ioff", 1)("arg0")), im.deref("arg0"))
-    )
-    stencil_tmp_minus = im.lambda_("arg0", "arg1")(
-        im.minus(im.deref(im.shift("Ioff", -1)("arg0")), im.deref("arg1"))
-    )
-
-    as_fieldop_tmp1 = im.as_fieldop(stencil)(im.ref("in_field1"), im.ref("in_field2"))
-    as_fieldop_tmp2 = im.as_fieldop(stencil_tmp)(im.ref("tmp1"))
-    as_fieldop_out1 = im.as_fieldop(stencil_tmp)(im.ref("tmp2"))
-    as_fieldop_tmp3 = im.as_fieldop(stencil)(im.ref("tmp1"), im.ref("in_field2"))
-    as_fieldop_out2 = im.as_fieldop(stencil_tmp_minus)(im.ref("tmp2"), im.ref("tmp3"))
-
-    domain_tmp1 = im.domain(common.GridType.CARTESIAN, {IDim: (-1, 13)})
-    domain_tmp2 = im.domain(common.GridType.CARTESIAN, {IDim: (-1, 12)})
-    domain_tmp3 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
-    domain_out = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
-    params = [im.sym(name) for name in ["in_field1", "in_field2", "out_field1", "out_field2"]]
-
-    testee = itir.Program(
-        id="differences_three_tmps_two_inputs",
-        function_definitions=[],
-        params=params,
-        declarations=[
-            itir.Temporary(id="tmp1", domain=domain_tmp1, dtype=float_type),
-            itir.Temporary(id="tmp2", domain=domain_tmp2, dtype=float_type),
-            itir.Temporary(id="tmp3", domain=domain_tmp3, dtype=float_type),
-        ],
-        body=[
-            itir.SetAt(expr=as_fieldop_tmp1, domain=domain_tmp1, target=im.ref("tmp1")),
-            itir.SetAt(expr=as_fieldop_tmp2, domain=domain_tmp2, target=im.ref("tmp2")),
-            itir.SetAt(expr=as_fieldop_out1, domain=domain_out, target=im.ref("out_field1")),
-            itir.SetAt(expr=as_fieldop_tmp3, domain=domain_tmp3, target=im.ref("tmp3")),
-            itir.SetAt(expr=as_fieldop_out2, domain=domain_out, target=im.ref("out_field2")),
-        ],
-    )
-
-    expected_expr_tmp1 = im.as_fieldop(stencil, domain_tmp1)(
-        im.ref("in_field1"), im.ref("in_field2")
-    )
-    expected_expr_tmp2 = im.as_fieldop(stencil_tmp, domain_tmp2)(im.ref("tmp1"))
-    expected_expr_out1 = im.as_fieldop(stencil_tmp, domain_out)(im.ref("tmp2"))
-    expected_expr_tmp3 = im.as_fieldop(stencil, domain_tmp3)(im.ref("tmp1"), im.ref("in_field2"))
-    expected_expr_out2 = im.as_fieldop(stencil_tmp_minus, domain_out)(
-        im.ref("tmp2"), im.ref("tmp3")
-    )
-
-    expected = itir.Program(
-        id="differences_three_tmps_two_inputs",
-        function_definitions=[],
-        params=params,
-        declarations=[
-            itir.Temporary(id="tmp1", domain=domain_tmp1, dtype=float_type),
-            itir.Temporary(id="tmp2", domain=domain_tmp2, dtype=float_type),
-            itir.Temporary(id="tmp3", domain=domain_tmp3, dtype=float_type),
-        ],
-        body=[
-            itir.SetAt(expr=expected_expr_tmp1, domain=domain_tmp1, target=im.ref("tmp1")),
-            itir.SetAt(expr=expected_expr_tmp2, domain=domain_tmp2, target=im.ref("tmp2")),
-            itir.SetAt(expr=expected_expr_out1, domain=domain_out, target=im.ref("out_field1")),
-            itir.SetAt(expr=expected_expr_tmp3, domain=domain_tmp3, target=im.ref("tmp3")),
-            itir.SetAt(expr=expected_expr_out2, domain=domain_out, target=im.ref("out_field2")),
         ],
     )
 
@@ -685,14 +517,13 @@ def test_cond(offset_provider):
 
     expected = im.cond(cond, expected_field_1, expected_field_2)
 
-    actual_call, actual_domains = infer_expr(
+    actual_call, actual_domains = infer_domain.infer_expr(
         testee, SymbolicDomain.from_expr(domain), offset_provider
     )
 
     folded_domains = constant_fold_accessed_domains(actual_domains)
     expected_domains = {
-        ref: SymbolicDomain.from_expr(im.domain(common.GridType.CARTESIAN, d))
-        for ref, d in expected_domains_dict.items()
+        ref: im.domain(common.GridType.CARTESIAN, d) for ref, d in expected_domains_dict.items()
     }
     folded_call = constant_fold_domain_exprs(actual_call)
     assert folded_call == expected
@@ -703,7 +534,7 @@ def test_let_scalar_expr(offset_provider):
     testee = im.let("a", 1)(im.op_as_fieldop(im.plus)("a", "b"))
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     expected = im.let("a", 1)(im.op_as_fieldop(im.plus, domain)("a", "b"))
-    expected_domains = {"b": domain}
+    expected_domains = {"b": {IDim: (0, 11)}}
 
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
@@ -742,10 +573,8 @@ def test_let(offset_provider):
     expected_domains = {"in_field": translate_domain(domain, {"Ioff": 2}, offset_provider)}
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
-    expected_domains_sym = {
-        "in_field": SymbolicDomain.from_expr(translate_domain(domain, {"Ioff": 2}, offset_provider))
-    }
-    actual_call2, actual_domains2 = infer_expr(
+    expected_domains_sym = {"in_field": translate_domain(domain, {"Ioff": 2}, offset_provider)}
+    actual_call2, actual_domains2 = infer_domain.infer_expr(
         testee2, SymbolicDomain.from_expr(domain), offset_provider
     )
     folded_domains2 = constant_fold_accessed_domains(actual_domains2)
@@ -807,7 +636,6 @@ def test_nested_let_arg(offset_provider):
     )
 
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
-    domain_rp2 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 12)})
 
     expected = im.let("a", "in_field")(
         im.as_fieldop(
@@ -817,7 +645,7 @@ def test_nested_let_arg(offset_provider):
             domain,
         )("a", "in_field")
     )
-    expected_domains = {"in_field": domain_rp2}
+    expected_domains = {"in_field": {IDim: (0, 12)}}
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
 
@@ -858,10 +686,7 @@ def test_nested_let_arg_shadowed2(offset_provider):
         premap_field("in_field1", "Ioff", 1, domain),
         im.let("in_field1", "in_field2")("in_field1"),
     )
-    expected_domains = {
-        "in_field1": domain_p1,
-        "in_field2": domain,
-    }
+    expected_domains = {"in_field1": domain_p1, "in_field2": domain}
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
 
@@ -965,11 +790,10 @@ def test_make_tuple(offset_provider):
     )
     expected_domains_dict = {"in_field1": {IDim: (0, 11)}, "in_field2": {IDim: (0, 13)}}
     expected_domains = {
-        ref: SymbolicDomain.from_expr(im.domain(common.GridType.CARTESIAN, d))
-        for ref, d in expected_domains_dict.items()
+        ref: im.domain(common.GridType.CARTESIAN, d) for ref, d in expected_domains_dict.items()
     }
 
-    actual, actual_domains = infer_expr(
+    actual, actual_domains = infer_domain.infer_expr(
         testee,
         (SymbolicDomain.from_expr(domain1), SymbolicDomain.from_expr(domain2)),
         offset_provider,
@@ -985,11 +809,13 @@ def test_tuple_get_1_make_tuple(offset_provider):
     expected = im.tuple_get(1, im.make_tuple(im.ref("a"), im.ref("b"), im.ref("c")))
     expected_domains = {
         "a": None,
-        "b": SymbolicDomain.from_expr(im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})),
+        "b": im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)}),
         "c": None,
     }
 
-    actual, actual_domains = infer_expr(testee, SymbolicDomain.from_expr(domain), offset_provider)
+    actual, actual_domains = infer_domain.infer_expr(
+        testee, SymbolicDomain.from_expr(domain), offset_provider
+    )
 
     assert expected == actual
     assert expected_domains == constant_fold_accessed_domains(actual_domains)
@@ -1000,13 +826,9 @@ def test_tuple_get_1_nested_make_tuple(offset_provider):
     domain1 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     domain2 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 12)})
     expected = im.tuple_get(1, im.make_tuple(im.ref("a"), im.make_tuple(im.ref("b"), im.ref("c"))))
-    expected_domains = {
-        "a": None,
-        "b": SymbolicDomain.from_expr(domain1),
-        "c": SymbolicDomain.from_expr(domain2),
-    }
+    expected_domains = {"a": None, "b": domain1, "c": domain2}
 
-    actual, actual_domains = infer_expr(
+    actual, actual_domains = infer_domain.infer_expr(
         testee,
         (SymbolicDomain.from_expr(domain1), SymbolicDomain.from_expr(domain2)),
         offset_provider,
@@ -1020,16 +842,9 @@ def test_tuple_get_let_arg_make_tuple(offset_provider):
     testee = im.tuple_get(1, im.let("a", im.make_tuple(im.ref("b"), im.ref("c")))("d"))
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     expected = im.tuple_get(1, im.let("a", im.make_tuple(im.ref("b"), im.ref("c")))("d"))
-    expected_domains = {
-        "b": None,
-        "c": None,
-        "d": (
-            None,
-            SymbolicDomain.from_expr(domain),
-        ),
-    }
+    expected_domains = {"b": None, "c": None, "d": (None, domain)}
 
-    actual, actual_domains = infer_expr(
+    actual, actual_domains = infer_domain.infer_expr(
         testee,
         SymbolicDomain.from_expr(im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})),
         offset_provider,
@@ -1043,13 +858,9 @@ def test_tuple_get_let_make_tuple(offset_provider):
     testee = im.tuple_get(1, im.let("a", "b")(im.make_tuple(im.ref("c"), im.ref("d"))))
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     expected = im.tuple_get(1, im.let("a", "b")(im.make_tuple(im.ref("c"), im.ref("d"))))
-    expected_domains = {
-        "c": None,
-        "d": SymbolicDomain.from_expr(domain),
-        "b": None,
-    }
+    expected_domains = {"c": None, "d": domain, "b": None}
 
-    actual, actual_domains = infer_expr(
+    actual, actual_domains = infer_domain.infer_expr(
         testee,
         SymbolicDomain.from_expr(domain),
         offset_provider,
@@ -1066,13 +877,9 @@ def test_nested_make_tuple(offset_provider):
     domain2_2 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 13)})
     domain3 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 14)})
     expected = im.make_tuple(im.make_tuple(im.ref("a"), im.ref("b")), im.ref("c"))
-    expected_domains = {
-        "a": SymbolicDomain.from_expr(domain1),
-        "b": (SymbolicDomain.from_expr(domain2_1), SymbolicDomain.from_expr(domain2_2)),
-        "c": SymbolicDomain.from_expr(domain3),
-    }
+    expected_domains = {"a": domain1, "b": (domain2_1, domain2_2), "c": domain3}
 
-    actual, actual_domains = infer_expr(
+    actual, actual_domains = infer_domain.infer_expr(
         testee,
         (
             (
@@ -1092,11 +899,11 @@ def test_tuple_get_1(offset_provider):
     testee = im.tuple_get(1, im.ref("a"))
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     expected = im.tuple_get(1, im.ref("a"))
-    expected_domains = {
-        "a": (None, SymbolicDomain.from_expr(im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})))
-    }
+    expected_domains = {"a": (None, domain)}
 
-    actual, actual_domains = infer_expr(testee, SymbolicDomain.from_expr(domain), offset_provider)
+    actual, actual_domains = infer_domain.infer_expr(
+        testee, SymbolicDomain.from_expr(domain), offset_provider
+    )
 
     assert expected == actual
     assert expected_domains == constant_fold_accessed_domains(actual_domains)
@@ -1107,14 +914,9 @@ def test_domain_tuple(offset_provider):
     domain1 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     domain2 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 12)})
     expected = im.ref("a")
-    expected_domains = {
-        "a": (
-            SymbolicDomain.from_expr(domain1),
-            SymbolicDomain.from_expr(domain2),
-        )
-    }
+    expected_domains = {"a": (domain1, domain2)}
 
-    actual, actual_domains = infer_expr(
+    actual, actual_domains = infer_domain.infer_expr(
         testee,
         (SymbolicDomain.from_expr(domain1), SymbolicDomain.from_expr(domain2)),
         offset_provider,
@@ -1130,14 +932,11 @@ def test_as_fieldop_tuple_get(offset_provider):
     expected = im.op_as_fieldop(im.plus, domain)(
         im.tuple_get(0, im.ref("a")), im.tuple_get(1, im.ref("a"))
     )
-    expected_domains = {
-        "a": (
-            SymbolicDomain.from_expr(domain),
-            SymbolicDomain.from_expr(domain),
-        )
-    }
+    expected_domains = {"a": (domain, domain)}
 
-    actual, actual_domains = infer_expr(testee, SymbolicDomain.from_expr(domain), offset_provider)
+    actual, actual_domains = infer_domain.infer_expr(
+        testee, SymbolicDomain.from_expr(domain), offset_provider
+    )
 
     assert expected == actual
     assert expected_domains == constant_fold_accessed_domains(actual_domains)
@@ -1148,14 +947,9 @@ def test_make_tuple_2tuple_get(offset_provider):
     domain1 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     domain2 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     expected = im.make_tuple(im.tuple_get(0, im.ref("a")), im.tuple_get(1, im.ref("a")))
-    expected_domains = {
-        "a": (
-            SymbolicDomain.from_expr(domain1),
-            SymbolicDomain.from_expr(domain2),
-        )
-    }
+    expected_domains = {"a": (domain1, domain2)}
 
-    actual, actual_domains = infer_expr(
+    actual, actual_domains = infer_domain.infer_expr(
         testee,
         (SymbolicDomain.from_expr(domain1), SymbolicDomain.from_expr(domain2)),
         offset_provider,
@@ -1172,12 +966,11 @@ def test_make_tuple_non_tuple_domain(offset_provider):
     expected = im.make_tuple(
         im.as_fieldop("deref", domain)("in_field1"), im.as_fieldop("deref", domain)("in_field2")
     )
-    expected_domains = {
-        "in_field1": SymbolicDomain.from_expr(domain),
-        "in_field2": SymbolicDomain.from_expr(domain),
-    }
+    expected_domains = {"in_field1": domain, "in_field2": domain}
 
-    actual, actual_domains = infer_expr(testee, SymbolicDomain.from_expr(domain), offset_provider)
+    actual, actual_domains = infer_domain.infer_expr(
+        testee, SymbolicDomain.from_expr(domain), offset_provider
+    )
 
     assert expected == actual
     assert expected_domains == constant_fold_accessed_domains(actual_domains)
@@ -1189,7 +982,7 @@ def test_arithmetic_builtin(offset_provider):
     expected = im.plus(im.ref("in_field1"), im.ref("in_field2"))
     expected_domains = {}
 
-    actual_call, actual_domains = infer_expr(
+    actual_call, actual_domains = infer_domain.infer_expr(
         testee, SymbolicDomain.from_expr(domain), offset_provider
     )
     folded_call = constant_fold_domain_exprs(actual_call)

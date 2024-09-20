@@ -7,30 +7,15 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import itertools
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, Mapping
 
 import dace
 
 import gt4py.next.iterator.ir as itir
 from gt4py import eve
-from gt4py.next import Dimension
 from gt4py.next.common import Connectivity
+from gt4py.next.program_processors.runners.dace_common import utility as dace_common_util
 from gt4py.next.type_system import type_specifications as ts
-
-
-def dace_debuginfo(
-    node: itir.Node, debuginfo: Optional[dace.dtypes.DebugInfo] = None
-) -> Optional[dace.dtypes.DebugInfo]:
-    location = node.location
-    if location:
-        return dace.dtypes.DebugInfo(
-            start_line=location.line,
-            start_column=location.column if location.column else 0,
-            end_line=location.end_line if location.end_line else -1,
-            end_column=location.end_column if location.end_column else 0,
-            filename=location.filename,
-        )
-    return debuginfo
 
 
 def as_dace_type(type_: ts.ScalarType) -> dace.dtypes.typeclass:
@@ -47,36 +32,12 @@ def as_dace_type(type_: ts.ScalarType) -> dace.dtypes.typeclass:
     raise ValueError(f"Scalar type '{type_}' not supported.")
 
 
-def filter_connectivities(offset_provider: Mapping[str, Any]) -> dict[str, Connectivity]:
-    return {
-        offset: table
-        for offset, table in offset_provider.items()
-        if isinstance(table, Connectivity)
-    }
-
-
 def get_used_connectivities(
     node: itir.Node, offset_provider: Mapping[str, Any]
 ) -> dict[str, Connectivity]:
-    connectivities = filter_connectivities(offset_provider)
+    connectivities = dace_common_util.filter_connectivities(offset_provider)
     offset_dims = set(eve.walk_values(node).if_isinstance(itir.OffsetLiteral).getattr("value"))
     return {offset: connectivities[offset] for offset in offset_dims if offset in connectivities}
-
-
-def connectivity_identifier(name: str) -> str:
-    return f"__connectivity_{name}"
-
-
-def field_size_symbol_name(field_name: str, axis: int) -> str:
-    return f"__{field_name}_size_{axis}"
-
-
-def field_stride_symbol_name(field_name: str, axis: int) -> str:
-    return f"__{field_name}_stride_{axis}"
-
-
-def get_sorted_dims(dims: Sequence[Dimension]) -> Sequence[tuple[int, Dimension]]:
-    return sorted(enumerate(dims), key=lambda v: v[1].value)
 
 
 def map_nested_sdfg_symbols(
