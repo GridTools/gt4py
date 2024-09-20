@@ -15,6 +15,7 @@ from gt4py.eve import utils as eve_utils
 from gt4py.eve.concepts import SymbolName
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import (
     Backend,
@@ -206,14 +207,6 @@ def _bool_from_literal(node: itir.Node) -> bool:
     assert isinstance(node, itir.Literal)
     assert type_info.is_logical(node.type) and node.value in ("True", "False")
     return node.value == "True"
-
-
-def _is_applied_as_fieldop(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
-    return (
-        isinstance(arg, itir.FunCall)
-        and isinstance(arg.fun, itir.FunCall)
-        and arg.fun.fun == itir.SymRef(id="as_fieldop")
-    )
 
 
 class _CannonicalizeUnstructuredDomain(eve.NodeTranslator):
@@ -583,7 +576,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_SetAt(
         self, node: itir.SetAt, *, extracted_functions: list, **kwargs: Any
     ) -> Union[StencilExecution, ScanExecution]:
-        assert _is_applied_as_fieldop(node.expr)
+        assert cpm.is_applied_as_fieldop(node.expr)
         stencil = node.expr.fun.args[0]  # type: ignore[attr-defined] # checked in assert
         domain = node.domain
         inputs = node.expr.args
