@@ -234,12 +234,11 @@ def asarray(
             ]:
                 xp = cp
 
-    if xp is np and device:
-        # CPU device should always be 0
-        raise ValueError(f"Invalid device: {device!s}")
-
     if xp:
         return xp.asarray(array)
+
+    if device is not None:
+        raise ValueError(f"Invalid device: {device!s}")
 
     raise TypeError(f"Cannot convert {type(array)} to ndarray")
 
@@ -286,8 +285,7 @@ def allocate_gpu(
 ) -> Tuple["cp.ndarray", "cp.ndarray"]:
     assert _GPUBufferAllocator is not None, "GPU allocation library or device not found"
     device = core_defs.Device(  # type: ignore[type-var]
-        (core_defs.DeviceType.ROCM if gt_config.GT4PY_USE_HIP else core_defs.DeviceType.CUDA),
-        0,
+        (core_defs.DeviceType.ROCM if gt_config.GT4PY_USE_HIP else core_defs.DeviceType.CUDA), 0
     )
     buffer = _GPUBufferAllocator.allocate(
         shape,
