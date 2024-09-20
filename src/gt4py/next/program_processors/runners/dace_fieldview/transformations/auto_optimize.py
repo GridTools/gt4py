@@ -210,10 +210,13 @@ def gt_auto_optimize(
         # TODO(phimuell): Fix the bug, it uses the tile value and not the stack array value.
         dace_aoptimize.move_small_arrays_to_stack(sdfg)
         if make_persistent:
-            # TODO(phimuell): Allow to also to set the lifetime to `SDFG`.
-            #  NOTE: This function does also manipulate the `wcr_nonatomic` property
-            #   of some edges, for whatever reason.
-            dace_aoptimize.make_transients_persistent(sdfg, device)
+            # NOTE: This function makes all wcr on the top level atomic. This behaviour
+            #   comes from DaCe, where it is unknown why this is done.
+            gtx_transformations.gt_make_transients_persistent(
+                sdfg=sdfg,
+                device=device,
+                make_wcr_atomic_on_gpu=True,
+            )
 
         return sdfg
 

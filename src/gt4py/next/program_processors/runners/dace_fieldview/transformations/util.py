@@ -153,3 +153,93 @@ def gt_inline_nested_sdfg(
         first_iteration = False
 
     return sdfg
+
+
+def gt_make_transients_persistent(
+    sdfg: dace.SDFG,
+    device: dace.DeviceType,
+    make_wcr_atomic_on_gpu: bool = True,
+) -> dict[int, set[str]]:
+    """
+    Changes the lifetime of certain transients to `Persistent`.
+
+    A persistent lifetime means that the transient is allocated only the very first
+    time and only deallocated if the underlying `CompiledSDFG` object goes out of
+    scope or if the exit handler of the SDFG is called. The main advantage is,
+    that memory must not be allocated, however, the SDFG can not be called by
+    different threads.
+    This function was copied from DaCe.
+
+    Args:
+        sdfg: The SDFG to process.
+        device: The device type.
+        make_wcr_atomic_on_gpu: Reset the `wcr_nonatomic` property of
+            all memlets, enabled by default. See note for more info.
+
+    Returns:
+        A dictionary mapping SDFG IDs to a set of transient arrays that
+        were made persistent.
+
+    Notes:
+        For unknown reasons the DaCe counterpart of this function, resets the
+        `wcr_nonatomic` property of every memlet, but only on GPU and only on the
+        top level SDFG, i.e. not on the nested SDFGs. This means that every
+        reduction (on the top level on GPU) becomes atomic in every situation.
+        However, this behaviour might change in GT4Py, but if desired, it can
+        disabled explicitly.
+    """
+    result: dict[int, set[str]] = {}
+    for nsdfg in sdfg.all_sdfgs_recursive():
+        fsyms: set[str] = nsdfg.free_symbols
+        modify_lifetime: set[str] = set()
+        not_modify_lifetime: set[str] = set()
+
+        for state in nsdfg.states():
+            for dnode in state.data_nodes():
+                if dnode.data in not_modify_lifetime:
+                    continue
+
+                if dnode.data in nsdfg.constants_prop:
+                    not_modify_lifetime.add(dnode.data)
+                    continue
+
+                desc = dnode.desc(nsdfg)
+                if not desc.transient or type(desc) not in {dace.data.Array, dace.data.Scalar}:
+                    not_modify_lifetime.add(dnode.data)
+                    continue
+                if desc.storage == dace.StorageType.Register:
+                    not_modify_lifetime.add(dnode.data)
+                    continue
+
+                if desc.lifetime == dace.AllocationLifetime.External:
+                    not_modify_lifetime.add(dnode.data)
+                    continue
+
+                try:
+                    # The symbols describing the total size must be a subset of the
+                    #  free symbols of the SDFG (symbols passed as argument).
+                    # NOTE: This ignores the renaming of symbols through the
+                    #   `symbol_mapping` property of nested SDFGs.
+                    if not set(map(str, desc.total_size.free_symbols)).issubset(fsyms):
+                        not_modify_lifetime.add(dnode.data)
+                        continue
+                except AttributeError:  # total_size is an integer / has no free symbols
+                    pass
+
+                # Make it persistent.
+                modify_lifetime.add(dnode.data)
+
+        # Now setting the lifetime.
+        result[nsdfg.cfg_id] = modify_lifetime - not_modify_lifetime
+        for aname in result[nsdfg.cfg_id]:
+            nsdfg.arrays[aname].lifetime = dace.AllocationLifetime.Persistent
+
+    if device == dace.DeviceType.GPU and make_wcr_atomic_on_gpu:
+        # Make all WCR atomic.
+        # NOTE: This is not an "error", DaCe does this only on GPU and only on
+        #   the top levels.
+        for state in sdfg.states():
+            for edge in state.edges():
+                edge.data.wcr_nonatomic = False
+
+    return result

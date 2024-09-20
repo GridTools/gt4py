@@ -22,6 +22,7 @@ from .map_promoter import SerialMapPromoter
 from .util import (
     GT_SIMPLIFY_DEFAULT_SKIP_SET,
     gt_inline_nested_sdfg,
+    gt_make_transients_persistent,
     gt_set_iteration_order,
     gt_simplify,
 )
@@ -42,4 +43,5 @@ __all__ = [
     "gt_set_iteration_order",
     "gt_set_gpu_blocksize",
     "gt_simplify",
+    "gt_make_transients_persistent",
 ]
