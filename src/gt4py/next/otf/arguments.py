@@ -183,6 +183,22 @@ def find_first_field(tuple_arg: tuple[Any, ...]) -> Optional[common.Field]:
     return None
 
 
+def find_first_field_type(
+    tuple_arg: tuple[Any, ...],
+) -> Optional[CompileTimeArg]:
+    for element in tuple_arg:
+        match type_translation.from_value(element):
+            case ts.TupleType():
+                found = find_first_field_type(element)
+                if found:
+                    return found
+            case ts.FieldType():
+                return element
+            case _:
+                pass
+    return None
+
+
 def iter_size_args(args: tuple[Any, ...], inside_tuple: bool = False) -> Iterator[int]:
     """
     Yield the size of each field argument in each dimension.
@@ -216,7 +232,10 @@ def iter_size_compile_args(
     for arg in args:
         match argt := type_translation.from_value(arg):
             case ts.TupleType():
-                yield from iter_size_compile_args((CompileTimeArg(t) for t in argt))
+                # we only need the first field, because all fields in a tuple must have the same dims and sizes
+                first_field = find_first_field_type(typing.cast(tuple, arg))
+                if first_field:
+                    yield from iter_size_compile_args((first_field,))
             case ts.FieldType():
                 yield from [
                     CompileTimeArg(ts.ScalarType(kind=ts.ScalarKind.INT32)) for dim in argt.dims
