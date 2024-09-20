@@ -169,6 +169,7 @@ class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         NativeFunction.FLOOR: "std::floor",
         NativeFunction.CEIL: "std::ceil",
         NativeFunction.TRUNC: "std::trunc",
+        NativeFunction.INT: "int",
     }
 
     def visit_NativeFunction(self, func: NativeFunction, **kwargs: Any) -> str:

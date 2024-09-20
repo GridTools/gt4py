@@ -178,7 +178,9 @@ class NativeFunction(eve.StrEnum):
     CEIL = "ceil"
     TRUNC = "trunc"
 
-    IR_OP_TO_NUM_ARGS: ClassVar[Dict[NativeFunction, int]]
+    INT = "int"
+
+    IR_OP_TO_NUM_ARGS: ClassVar[Dict["NativeFunction", int]]
 
     @property
     def arity(self) -> int:
@@ -217,6 +219,7 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
         NativeFunction.FLOOR: 1,
         NativeFunction.CEIL: 1,
         NativeFunction.TRUNC: 1,
+        NativeFunction.INT: 1,
     }.items()
 }
 
@@ -551,6 +554,8 @@ def native_func_call_dtype_propagation(*, strict: bool = True) -> datamodels.Roo
     def _impl(cls: Type[NativeFuncCall], instance: NativeFuncCall) -> None:
         if instance.func in (NativeFunction.ISFINITE, NativeFunction.ISINF, NativeFunction.ISNAN):
             instance.dtype = DataType.BOOL  # type: ignore[attr-defined]
+        elif instance.func in (NativeFunction.INT):
+            instance.dtype = DataType.INT32
         else:
             # assumes all NativeFunction args have a common dtype
             common_dtype = verify_and_get_common_dtype(cls, instance.args, strict=strict)
@@ -887,6 +892,7 @@ OP_TO_UFUNC_NAME: Final[
         NativeFunction.FLOOR: "floor",
         NativeFunction.CEIL: "ceil",
         NativeFunction.TRUNC: "trunc",
+        NativeFunction.INT: "int",
     },
 }
 
