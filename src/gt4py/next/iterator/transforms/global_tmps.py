@@ -16,7 +16,7 @@ from typing import Any, Callable, Final, Iterable, Literal, Optional, Sequence
 
 import gt4py.next as gtx
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
-from gt4py.eve.extended_typing import Dict, Tuple
+from gt4py.eve.extended_typing import Tuple
 from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next import common
@@ -173,14 +173,13 @@ class SimpleTemporaryExtractionHeuristics:
 
     closure: ir.StencilClosure
 
-    @functools.cached_property
-    def closure_shifts(
-        self,
-    ) -> dict[int, set[tuple[ir.OffsetLiteral, ...]]]:
-        return trace_shifts.TraceShifts.apply(self.closure, inputs_only=False)  # type: ignore[return-value] # TODO fix weird `apply` overloads
+    def __post_init__(self) -> None:
+        trace_shifts.trace_stencil(
+            self.closure.stencil, num_args=len(self.closure.inputs), save_to_annex=True
+        )
 
     def __call__(self, expr: ir.Expr) -> bool:
-        shifts = self.closure_shifts[id(expr)]
+        shifts = expr.annex.recorded_shifts
         if len(shifts) > 1:
             return True
         return False
@@ -455,7 +454,7 @@ class SymbolicDomain:
     def translate(
         self: SymbolicDomain,
         shift: Tuple[ir.OffsetLiteral, ...],
-        offset_provider: Dict[str, common.Dimension],
+        offset_provider: common.OffsetProvider,
     ) -> SymbolicDomain:
         dims = list(self.ranges.keys())
         new_ranges = {dim: self.ranges[dim] for dim in dims}
@@ -499,7 +498,7 @@ class SymbolicDomain:
             raise AssertionError("Number of shifts must be a multiple of 2.")
 
 
-def domain_union(domains: list[SymbolicDomain]) -> SymbolicDomain:
+def domain_union(*domains: SymbolicDomain) -> SymbolicDomain:
     """Return the (set) union of a list of domains."""
     new_domain_ranges = {}
     assert all(domain.grid_type == domains[0].grid_type for domain in domains)
@@ -564,8 +563,9 @@ def update_domains(
 
         closures.append(closure)
 
-        local_shifts = trace_shifts.TraceShifts.apply(closure)
-        for param, shift_chains in local_shifts.items():
+        local_shifts = trace_shifts.trace_stencil(closure.stencil, num_args=len(closure.inputs))
+        for param_sym, shift_chains in zip(closure.inputs, local_shifts):
+            param = param_sym.id
             assert isinstance(param, str)
             consumed_domains: list[SymbolicDomain] = (
                 [SymbolicDomain.from_expr(domains[param])] if param in domains else []
@@ -617,7 +617,7 @@ def update_domains(
                     consumed_domain.ranges.keys() == consumed_domains[0].ranges.keys()
                     for consumed_domain in consumed_domains
                 ):  # scalar otherwise
-                    domains[param] = domain_union(consumed_domains).as_expr()
+                    domains[param] = domain_union(*consumed_domains).as_expr()
 
     return FencilWithTemporaries(
         fencil=ir.FencilDefinition(

@@ -19,10 +19,16 @@ from .map_fusion_parallel import MapFusionParallel
 from .map_fusion_serial import MapFusionSerial
 from .map_orderer import MapIterationOrder
 from .map_promoter import SerialMapPromoter
-from .util import gt_set_iteration_order, gt_simplify
+from .util import (
+    GT_SIMPLIFY_DEFAULT_SKIP_SET,
+    gt_inline_nested_sdfg,
+    gt_set_iteration_order,
+    gt_simplify,
+)
 
 
 __all__ = [
+    "GT_SIMPLIFY_DEFAULT_SKIP_SET",
     "GPUSetBlockSize",
     "LoopBlocking",
     "MapIterationOrder",
@@ -32,6 +38,7 @@ __all__ = [
     "SerialMapPromoterGPU",
     "gt_auto_optimize",
     "gt_gpu_transformation",
+    "gt_inline_nested_sdfg",
     "gt_set_iteration_order",
     "gt_set_gpu_blocksize",
     "gt_simplify",
