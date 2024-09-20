@@ -158,7 +158,6 @@ def gt_inline_nested_sdfg(
 def gt_make_transients_persistent(
     sdfg: dace.SDFG,
     device: dace.DeviceType,
-    make_wcr_atomic_on_gpu: bool = True,
 ) -> dict[int, set[str]]:
     """
     Changes the lifetime of certain transients to `Persistent`.
@@ -168,25 +167,20 @@ def gt_make_transients_persistent(
     scope or if the exit handler of the SDFG is called. The main advantage is,
     that memory must not be allocated, however, the SDFG can not be called by
     different threads.
-    This function was copied from DaCe.
 
     Args:
         sdfg: The SDFG to process.
         device: The device type.
-        make_wcr_atomic_on_gpu: Reset the `wcr_nonatomic` property of
-            all memlets, enabled by default. See note for more info.
 
     Returns:
         A dictionary mapping SDFG IDs to a set of transient arrays that
         were made persistent.
 
     Notes:
-        For unknown reasons the DaCe counterpart of this function, resets the
-        `wcr_nonatomic` property of every memlet, but only on GPU and only on the
-        top level SDFG, i.e. not on the nested SDFGs. This means that every
-        reduction (on the top level on GPU) becomes atomic in every situation.
-        However, this behaviour might change in GT4Py, but if desired, it can
-        disabled explicitly.
+        This function was copied from DaCe. Furthermore, the DaCe version does
+        also resets the `wcr_nonatomic` property, i.e. makes every reduction
+        atomic. However, this is only done for GPU and for the top level.
+        This function does not do this.
     """
     result: dict[int, set[str]] = {}
     for nsdfg in sdfg.all_sdfgs_recursive():
@@ -233,13 +227,5 @@ def gt_make_transients_persistent(
         result[nsdfg.cfg_id] = modify_lifetime - not_modify_lifetime
         for aname in result[nsdfg.cfg_id]:
             nsdfg.arrays[aname].lifetime = dace.AllocationLifetime.Persistent
-
-    if device == dace.DeviceType.GPU and make_wcr_atomic_on_gpu:
-        # Make all WCR atomic.
-        # NOTE: This is not an "error", DaCe does this only on GPU and only on
-        #   the top levels.
-        for state in sdfg.states():
-            for edge in state.edges():
-                edge.data.wcr_nonatomic = False
 
     return result

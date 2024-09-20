@@ -210,13 +210,18 @@ def gt_auto_optimize(
         # TODO(phimuell): Fix the bug, it uses the tile value and not the stack array value.
         dace_aoptimize.move_small_arrays_to_stack(sdfg)
         if make_persistent:
-            # NOTE: This function makes all wcr on the top level atomic. This behaviour
-            #   comes from DaCe, where it is unknown why this is done.
-            gtx_transformations.gt_make_transients_persistent(
-                sdfg=sdfg,
-                device=device,
-                make_wcr_atomic_on_gpu=True,
-            )
+            gtx_transformations.gt_make_transients_persistent(sdfg=sdfg, device=device)
+
+            if device == dace.DeviceType.GPU:
+                # NOTE: For unknown reasons the counterpart of the
+                #   `gt_make_transients_persistent()` function in DaCe, resets the
+                #   `wcr_nonatomic` property of every memlet, i.e. makes it atomic.
+                #   However, it does this only for edges on the top level and on GPU.
+                #   For compatibility with DaCe (and until we found out why) the GT4Py
+                #   auto optimizer will emulate this behaviour.
+                for state in sdfg.states():
+                    for edge in state.edges():
+                        edge.data.wcr_nonatomic = False
 
         return sdfg
 
