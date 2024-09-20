@@ -169,26 +169,40 @@ def connectivity_or_dimension(
             raise ValueError
 
 
+def find_first_field(tuple_arg: tuple[Any, ...]) -> Optional[common.Field]:
+    for element in tuple_arg:
+        match element:
+            case tuple():
+                found = find_first_field(element)
+                if found:
+                    return found
+            case common.Field():
+                return element
+            case _:
+                pass
+    return None
+
+
 def iter_size_args(args: tuple[Any, ...], inside_tuple: bool = False) -> Iterator[int]:
     """
     Yield the size of each field argument in each dimension.
 
     This can be used to generate domain size arguments for FieldView Programs that use an implicit domain.
     """
-    yielded = False
+    print(f"iter_size_args: matching args {tuple(type(arg) for arg in args)}")
     for arg in args:
+        print(f"iter_size_args: matching arg {arg}")
         match arg:
             case tuple():
-                # TODO(ricoh) getting size args for the first element is not correct
-                #  as the first argument might not be a field
-                yield from iter_size_args(arg, inside_tuple=True)
+                # we only need the first field, because all fields in a tuple must have the same dims and sizes
+                first_field = find_first_field(arg)
+                if first_field:
+                    yield from iter_size_args((first_field,))
             case common.Field():
+                print(f"iter_size_args: yielding from {arg.ndarray.shape}")
                 yield from arg.ndarray.shape
-                yielded = True
             case _:
                 pass
-        if inside_tuple and yielded:
-            break
 
 
 def iter_size_compile_args(
