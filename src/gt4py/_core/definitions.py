@@ -382,6 +382,7 @@ class DeviceType(enum.IntEnum):
     CUDA_MANAGED = 13
     ONE_API = 14
 
+
 CPUDeviceTyping: TypeAlias = Literal[DeviceType.CPU]
 CUDADeviceTyping: TypeAlias = Literal[DeviceType.CUDA]
 CPUPinnedDeviceTyping: TypeAlias = Literal[DeviceType.CPU_PINNED]
