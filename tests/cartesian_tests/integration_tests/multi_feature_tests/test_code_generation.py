@@ -588,12 +588,12 @@ def test_K_offset_write(backend):
     # Cuda generates bad code for the K offset
     if backend == "cuda":
         pytest.skip("cuda K-offset write generates bad code")
-    if backend == "gt:gpu":
+    if backend == "gt:gpu" or "dace:gpu":
         import cupy as cp
 
         if cp.cuda.runtime.runtimeGetVersion() < 12000:
             pytest.skip(
-                "gt:gpu backend with CUDA 11 is not capable of K offset write, update CUDA if possible"
+                f"{backend} backend with CUDA 11 and/or GCC 10.3 is not capable of K offset write, update CUDA/GCC if possible"
             )
 
     arraylib = get_array_library(backend)
