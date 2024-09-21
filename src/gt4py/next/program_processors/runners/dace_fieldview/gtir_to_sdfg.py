@@ -26,6 +26,7 @@ from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
+from gt4py.next.program_processors.runners.dace_common import utility as dace_common_util
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_builtin_translators,
     gtir_to_tasklet,
@@ -83,10 +84,12 @@ class SDFGBuilder(DataflowBuilder, Protocol):
 
     @abc.abstractmethod
     def get_symbol_type(self, symbol_name: str) -> ts.FieldType | ts.ScalarType:
+        """Retrieve the GT4Py type of a symbol used in the program."""
         pass
 
     @abc.abstractmethod
     def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
+        """Visit a node of the GT4Py IR."""
         pass
 
 
@@ -140,17 +143,17 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             Two lists of symbols, one for the shape and the other for the strides of the array.
         """
         dtype = dace.int32
-        neighbor_tables = dace_fieldview_util.filter_connectivities(self.offset_provider)
+        neighbor_tables = dace_common_util.filter_connectivities(self.offset_provider)
         shape = [
             (
                 neighbor_tables[dim.value].max_neighbors
                 if dim.kind == gtx_common.DimensionKind.LOCAL
-                else dace.symbol(dace_fieldview_util.field_size_symbol_name(name, i), dtype)
+                else dace.symbol(dace_common_util.field_size_symbol_name(name, i), dtype)
             )
             for i, dim in enumerate(dims)
         ]
         strides = [
-            dace.symbol(dace_fieldview_util.field_stride_symbol_name(name, i), dtype)
+            dace.symbol(dace_common_util.field_stride_symbol_name(name, i), dtype)
             for i in range(len(dims))
         ]
         return shape, strides
@@ -236,7 +239,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             self.global_symbols[pname] = param.type
 
         # add SDFG storage for connectivity tables
-        for offset, offset_provider in dace_fieldview_util.filter_connectivities(
+        for offset, offset_provider in dace_common_util.filter_connectivities(
             self.offset_provider
         ).items():
             scalar_kind = tt.get_scalar_kind(offset_provider.index_type)
@@ -249,7 +252,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             # the tables that are actually used. This way, we avoid adding SDFG arguments for
             # the connectivity tables that are not used. The remaining unused transient arrays
             # are removed by the dace simplify pass.
-            self._add_storage(sdfg, dace_fieldview_util.connectivity_identifier(offset), type_)
+            self._add_storage(sdfg, dace_common_util.connectivity_identifier(offset), type_)
 
     def visit_Program(self, node: gtir.Program) -> dace.SDFG:
         """Translates `ir.Program` to `dace.SDFG`.
@@ -264,7 +267,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             raise NotImplementedError("Functions expected to be inlined as lambda calls.")
 
         sdfg = dace.SDFG(node.id)
-        sdfg.debuginfo = dace_fieldview_util.debug_info(node, default=sdfg.debuginfo)
+        sdfg.debuginfo = dace_common_util.debug_info(node, default=sdfg.debuginfo)
         entry_state = sdfg.add_state("program_entry", is_start_block=True)
 
         # declarations of temporaries result in transient array definitions in the SDFG
@@ -284,7 +287,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         for i, stmt in enumerate(node.body):
             # include `debuginfo` only for `ir.Program` and `ir.Stmt` nodes: finer granularity would be too messy
             head_state = sdfg.add_state_after(head_state, f"stmt_{i}")
-            head_state._debuginfo = dace_fieldview_util.debug_info(stmt, default=sdfg.debuginfo)
+            head_state._debuginfo = dace_common_util.debug_info(stmt, default=sdfg.debuginfo)
             self.visit(stmt, sdfg=sdfg, state=head_state)
 
         # Create the call signature for the SDFG.
@@ -366,6 +369,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 reduce_identity=reduce_identity,
                 args=node_args,
             )
+        elif isinstance(node.type, ts.ScalarType):
+            return gtir_builtin_translators.translate_scalar_expr(
+                node, sdfg, head_state, self, reduce_identity
+            )
         else:
             raise NotImplementedError(f"Unexpected 'FunCall' expression ({node}).")
 
@@ -395,21 +402,15 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         lambda_symbols = self.global_symbols | {
             pname: type_ for pname, (_, type_) in lambda_args_mapping.items()
         }
-        # obtain the set of symbols that are used in the lambda node and all its child nodes
-        used_symbols = {str(sym.id) for sym in eve.walk_values(node).if_isinstance(gtir.SymRef)}
 
         nsdfg = dace.SDFG(f"{sdfg.label}_nested")
         nstate = nsdfg.add_state("lambda")
 
         # add sdfg storage for the symbols that need to be passed as input parameters,
-        # that is only the symbols that are used in the context of the lambda node
+        # that are only the symbols used in the context of the lambda node
         self._add_sdfg_params(
             nsdfg,
-            [
-                gtir.Sym(id=p_name, type=p_type)
-                for p_name, p_type in lambda_symbols.items()
-                if p_name in used_symbols
-            ],
+            [gtir.Sym(id=p_name, type=p_type) for p_name, p_type in lambda_symbols.items()],
         )
 
         lambda_nodes = GTIRToSDFG(self.offset_provider, lambda_symbols.copy()).visit(
@@ -420,8 +421,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         )
 
         connectivity_arrays = {
-            dace_fieldview_util.connectivity_identifier(offset)
-            for offset in dace_fieldview_util.filter_connectivities(self.offset_provider)
+            dace_common_util.connectivity_identifier(offset)
+            for offset in dace_common_util.filter_connectivities(self.offset_provider)
         }
         nsdfg_symbols_mapping: dict[str, dace.symbolic.SymExpr] = {}
 
@@ -460,7 +461,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             inputs=set(input_memlets.keys()),
             outputs=set(node.data for node, _ in lambda_nodes),
             symbol_mapping=nsdfg_symbols_mapping,
-            debuginfo=dace_fieldview_util.debug_info(node, default=sdfg.debuginfo),
+            debuginfo=dace_common_util.debug_info(node, default=sdfg.debuginfo),
         )
 
         for connector, memlet in input_memlets.items():
