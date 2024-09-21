@@ -14,7 +14,6 @@ from gt4py.next.iterator import ir
 
 class InlineFundefs(PreserveLocationVisitor, NodeTranslator):
     def visit_SymRef(self, node: ir.SymRef, *, symtable: Dict[str, Any]):
-        # TODO(tehrengruber): This breaks when the symbol is shadowed
         if node.id in symtable and isinstance((symbol := symtable[node.id]), ir.FunctionDefinition):
             return ir.Lambda(
                 params=self.generic_visit(symbol.params, symtable=symtable),
