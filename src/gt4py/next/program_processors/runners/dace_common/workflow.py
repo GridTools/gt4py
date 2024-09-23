@@ -150,25 +150,23 @@ def convert_args(
 
         if sdfg_program._lastargs:
             use_fast_call = True
-            args_mapping = zip(sdfg.arg_names, args, inp.sdfg_arg_position, strict=True)
+            field_args: dict[str, common.Field] = {}
             # Check all positional arguments
-            for param, arg, pos in args_mapping:
+            for arg, param, pos in zip(args, sdfg.arg_names, inp.sdfg_arg_position, strict=True):
                 use_fast_call &= check_arg(arg, param, pos)
-                if not use_fast_call:
+                if use_fast_call:
+                    if isinstance(arg, common.Field):
+                        field_args[param] = arg
+                else:
                     break
 
             # Now check the values passed as keyword arguments, used for symbolic
             # shape and strides of fields
             if use_fast_call:
-                field_args = {
-                    param: arg for param, arg, _ in args_mapping if isinstance(arg, common.Field)
-                }
                 field_symbols = dace_backend.get_field_symbols(sdfg, field_args)
-                positional_params = set(sdfg.arg_names)
                 for param, arg in field_symbols.items():
-                    if param not in positional_params:
-                        pos = inp.sdfg_kwarg_position[param]
-                        assert check_arg(arg, param, pos)
+                    pos = inp.sdfg_kwarg_position[param]
+                    assert check_arg(arg, param, pos)
 
                 return sdfg_program.fast_call(*sdfg_program._lastargs)
 
