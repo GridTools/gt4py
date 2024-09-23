@@ -398,6 +398,10 @@ class CallInliner(ast.NodeTransformer):
         # Assertions are removed in the AssertionChecker later.
         return node
 
+    def visit_While(self, node: ast.While):
+        node.body = self._process_stmts(node.body)
+        return node
+
     def visit_Assign(self, node: ast.Assign):
         if (
             isinstance(node.value, ast.Call)
