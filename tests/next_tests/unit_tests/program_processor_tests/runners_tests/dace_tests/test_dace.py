@@ -41,22 +41,6 @@ def get_scalar_values_from_sdfg_args(
     ]
 
 
-def enable_fast_call(test_func):
-    def test_wrapper(cartesian_case, monkeypatch):
-        prev_fast_call = cartesian_case.executor.otf_workflow.use_fast_call
-        try:
-            cartesian_case.executor.otf_workflow.use_fast_call = True
-            test_func(cartesian_case, monkeypatch)
-        except:
-            # re-raise exception to make the test fail
-            raise
-        finally:
-            cartesian_case.executor.otf_workflow.use_fast_call = prev_fast_call
-
-    return test_wrapper
-
-
-@enable_fast_call
 def test_dace_fastcall(cartesian_case, monkeypatch):
     """Test reuse of SDFG arguments between program calls by means of SDFG fastcall API."""
 
