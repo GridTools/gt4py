@@ -430,8 +430,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         el = node.args[0]
         if isinstance(el, foast.Constant):
             val, val_str = el.value, str(el.value)
-        elif isinstance(el, foast.UnaryOp):
-            assert hasattr(el.operand, "value")
+        elif isinstance(el, foast.UnaryOp) and isinstance(el.operand, foast.Constant):
             val, val_str = el.operand.value, str(el.op) + str(el.operand.value)
         else:
             raise FieldOperatorLoweringError(
