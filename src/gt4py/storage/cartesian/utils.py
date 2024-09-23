@@ -61,11 +61,11 @@ if cp:
             array_utils=allocators.cupy_array_utils,
         )
 
-        class ROCmNDArray(cp.ndarray):
-            def __new__(cls, input_array: "cp.ndarray") -> ROCmNDArray:
+        class CUDAArrayInterfaceNDArray(cp.ndarray):
+            def __new__(cls, input_array: "cp.ndarray") -> CUDAArrayInterfaceNDArray:
                 return (
                     input_array
-                    if isinstance(input_array, ROCmNDArray)
+                    if isinstance(input_array, CUDAArrayInterfaceNDArray)
                     else cp.asarray(input_array).view(cls)
                 )
 
@@ -209,7 +209,7 @@ def cpu_copy(array: Union[np.ndarray, "cp.ndarray"]) -> np.ndarray:
 def asarray(
     array: FieldLike, *, device: Literal["cpu", "gpu", None] = None
 ) -> np.ndarray | cp.ndarray:
-    if hasattr(array, "ndarray"):
+    while hasattr(array, "ndarray"):
         # extract the buffer from a gt4py.next.Field
         # TODO(havogt): probably `Field` should provide the array interface methods when applicable
         array = array.ndarray
@@ -218,21 +218,26 @@ def asarray(
     if device == "cpu":
         xp = np
     elif device == "gpu":
+        assert cp is not None
         xp = cp
     elif not device:
-        if hasattr(array, "__array_interface__") or hasattr(array, "__array__"):
-            xp = np
-        elif cp is not None and hasattr(array, "__cuda_array_interface__"):
-            xp = cp
-        elif hasattr(array, "__dlpack_device__"):
+        if hasattr(array, "__dlpack_device__"):
             kind, _ = array.__dlpack_device__()
             if kind in [core_defs.DeviceType.CPU, core_defs.DeviceType.CPU_PINNED]:
                 xp = np
-            elif cp is not None and kind in [
+            elif kind in [
                 core_defs.DeviceType.CUDA,
                 core_defs.DeviceType.ROCM,
             ]:
+                if cp is None:
+                    raise RuntimeError("Cupy is required for GPU arrays")
                 xp = cp
+        elif hasattr(array, "__cuda_array_interface__"):
+            if cp is None:
+                raise RuntimeError("Cupy is required for GPU arrays")
+            xp = cp
+        elif hasattr(array, "__array_interface__") or hasattr(array, "__array__"):
+            xp = np
 
     if xp:
         return xp.asarray(array)
@@ -283,6 +288,7 @@ def allocate_gpu(
     alignment_bytes: int,
     aligned_index: Optional[Sequence[int]],
 ) -> Tuple["cp.ndarray", "cp.ndarray"]:
+    assert cp is not None
     assert _GPUBufferAllocator is not None, "GPU allocation library or device not found"
     device = core_defs.Device(  # type: ignore[type-var]
         (core_defs.DeviceType.ROCM if gt_config.GT4PY_USE_HIP else core_defs.DeviceType.CUDA), 0
@@ -298,7 +304,7 @@ def allocate_gpu(
 
     buffer_ndarray = cast("cp.ndarray", buffer.ndarray)
 
-    if cp is not None and cp.cuda.get_hipcc_path() is not None:
-        buffer_ndarray = ROCmNDArray(buffer_ndarray)
+    if not hasattr(buffer_ndarray, "__cuda_array_interface__"):
+        buffer_ndarray = CUDAArrayInterfaceNDArray(buffer_ndarray)
 
     return buffer.buffer, buffer_ndarray
