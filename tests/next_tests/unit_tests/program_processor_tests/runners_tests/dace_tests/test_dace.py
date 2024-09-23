@@ -76,7 +76,12 @@ def test_dace_fastcall(cartesian_case, monkeypatch):
 
     def mocked_fast_call(self, *args, **kwargs):
         mock_fast_call.__call__(*args, **kwargs)
-        return mock_fast_call_attr(self, *args, **kwargs)
+        fast_call_result = mock_fast_call_attr(self, *args, **kwargs)
+        # reset scalar arguments to invalid value to verify that they are overidden at next call
+        for arg in self._lastargs[0]:
+            if not isinstance(arg, ctypes.c_void_p):
+                arg = None
+        return fast_call_result
 
     monkeypatch.setattr(dace.codegen.compiled_sdfg.CompiledSDFG, "fast_call", mocked_fast_call)
 
