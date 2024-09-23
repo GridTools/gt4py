@@ -86,7 +86,7 @@ def _get_connectivity_args(
 
 def _get_shape_args(
     arrays: Mapping[str, dace.data.Array], args: Mapping[str, Any]
-) -> Mapping[str, int]:
+) -> dict[str, int]:
     shape_args: dict[str, int] = {}
     for name, value in args.items():
         for sym, size in zip(arrays[name].shape, value.shape, strict=True):
@@ -102,7 +102,7 @@ def _get_shape_args(
 
 def _get_stride_args(
     arrays: Mapping[str, dace.data.Array], args: Mapping[str, Any]
-) -> Mapping[str, int]:
+) -> dict[str, int]:
     stride_args = {}
     for name, value in args.items():
         for sym, stride_size in zip(arrays[name].strides, value.strides, strict=True):

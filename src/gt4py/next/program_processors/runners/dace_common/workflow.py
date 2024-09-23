@@ -20,16 +20,20 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common, config
 from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.compilation import cache
-from gt4py.next.program_processors.runners.dace_common import dace_backend, utility as dace_utils
+from gt4py.next.program_processors.runners.dace_common import (
+    dace_backend,
+    defs as dace_defs,
+    utility as dace_utils,
+)
 
 
 class CompiledDaceProgram(stages.CompiledProgram):
     sdfg_program: dace.CompiledSDFG
-    # Map SDFG positional arguments to their positions in program ABI;
+    # Map SDFG positional arguments to the position in program ABI;
     # scalar arguments that are not used in the SDFG will not be present.
     sdfg_arg_position: list[Optional[int]]
-    # Map arguments for connectivity tables to their positions in program ABI;
-    # consider only the connectivity array, skip shape and stride (assume fixed layout).
+    # Map arguments for connectivity tables to the position in program ABI;
+    # consider only the connectivity arrays, skip shape and stride symbols.
     sdfg_kwarg_position: dict[str, int]
 
     def __init__(self, program: dace.CompiledSDFG):
@@ -49,6 +53,10 @@ class CompiledDaceProgram(stages.CompiledProgram):
             for param, pos in sdfg_arg_pos_mapping.items()
             if param not in program.sdfg.arg_names and param in program.sdfg.arrays
         }
+        assert all(
+            param.startswith(dace_defs.CONNECTIVITY_PREFIX)
+            for param in self.sdfg_kwarg_position.keys()
+        )
         self.sdfg_program = program
 
     def __call__(self, *args: Any, **kwargs: Any) -> None:
