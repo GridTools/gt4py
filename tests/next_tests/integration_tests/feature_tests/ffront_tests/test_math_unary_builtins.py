@@ -135,7 +135,7 @@ def test_unary_neg_float_conversion(cartesian_case):
         return inp_f
 
     size = cartesian_case.default_sizes[IDim]
-    inp = cartesian_case.as_field([IDim], np.full(size, -1.0, dtype=float))
+    ref = cartesian_case.as_field([IDim], np.full(size, -1.0, dtype=float))
     out = cases.allocate(cartesian_case, uneg_float, cases.RETURN)()
     cases.verify(cartesian_case, uneg_float, out=out, ref=inp)
 
