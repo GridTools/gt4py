@@ -14,7 +14,6 @@ import dace
 
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
-from gt4py.next.program_processors.runners.dace_common import defs as dace_defs
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -28,12 +27,7 @@ def as_scalar_type(typestr: str) -> ts.ScalarType:
 
 
 def connectivity_identifier(name: str) -> str:
-    return f"{dace_defs.CONNECTIVITY_PREFIX}_{name}"
-
-
-def is_connectivity_symbol(name: str) -> bool:
-    connectivity_symbol_prefix = f"__{dace_defs.CONNECTIVITY_PREFIX}"
-    return name.startswith(connectivity_symbol_prefix)
+    return f"connectivity_{name}"
 
 
 def field_size_symbol_name(field_name: str, axis: int) -> str:
