@@ -11,6 +11,7 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.next import (
+    broadcast,
     cbrt,
     ceil,
     cos,
@@ -31,9 +32,9 @@ from gt4py.next import (
     trunc,
 )
 
-from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import IDim, cartesian_case, unstructured_case
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+from tests.next_tests.integration_tests import cases
+from tests.next_tests.integration_tests.cases import IDim, cartesian_case, unstructured_case
+from tests.next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     exec_alloc_descriptor,
 )
 
@@ -125,6 +126,30 @@ def test_unary_neg(cartesian_case):
         return -inp
 
     cases.verify_with_default_data(cartesian_case, uneg, ref=lambda inp1: -inp1)
+
+
+def test_unary_neg_float_conversion(cartesian_case):
+    @gtx.field_operator
+    def uneg_float() -> cases.IFloatField:
+        inp_f = broadcast(float(-1), (IDim,))
+        return inp_f
+
+    size = cartesian_case.default_sizes[IDim]
+    inp = cartesian_case.as_field([IDim], np.full(size, -1.0, dtype=float))
+    out = cases.allocate(cartesian_case, uneg_float, cases.RETURN)()
+    cases.verify(cartesian_case, uneg_float, out=out, ref=inp)
+
+
+def test_unary_neg_bool_conversion(cartesian_case):
+    @gtx.field_operator
+    def uneg_bool() -> cases.IBoolField:
+        inp_f = broadcast(bool(-1), (IDim,))
+        return inp_f
+
+    size = cartesian_case.default_sizes[IDim]
+    inp = cartesian_case.as_field([IDim], np.full(size, True, dtype=bool))
+    out = cases.allocate(cartesian_case, uneg_bool, cases.RETURN)()
+    cases.verify(cartesian_case, uneg_bool, out=out, ref=inp)
 
 
 def test_unary_invert(cartesian_case):
