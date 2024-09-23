@@ -14,7 +14,6 @@ from typing import Any, Optional
 
 import dace
 import factory
-import numpy as np
 from dace.codegen.compiled_sdfg import _array_interface_ptr as get_array_interface_ptr
 
 from gt4py._core import definitions as core_defs
@@ -129,7 +128,7 @@ def convert_args(
             for DaCe `fast_call` API.
             For scalar arguments, override the corrsponding parameter in program ABI.
             """
-            if isinstance(arg, (common.Field, np.ndarray)):
+            if dace.dtypes.is_array(arg):
                 desc = sdfg.arrays[param]
                 assert isinstance(desc, dace.data.Array)
                 assert isinstance(sdfg_program._lastargs[0][pos], ctypes.c_void_p)
