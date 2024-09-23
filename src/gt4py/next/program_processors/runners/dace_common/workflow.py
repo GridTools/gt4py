@@ -48,7 +48,8 @@ class CompiledDaceProgram(stages.CompiledProgram):
         self.sdfg_kwarg_position = {
             param: pos
             for param, pos in sdfg_arg_pos_mapping.items()
-            if param not in program.sdfg.arg_names and param in program.sdfg.arrays
+            if (not dace_utils.is_connectivity_symbol(param))
+            and (param not in program.sdfg.arg_names)
         }
         self.sdfg_program = program
 
@@ -153,25 +154,22 @@ def convert_args(
             # the data pointer should remain the same otherwise fast-call cannot be used and
             # the args list needs to be reconstructed.
             use_fast_call = True
+            field_args: dict[str, common.Field] = {}
             for arg, param, pos in zip(args, sdfg.arg_names, inp.sdfg_arg_position, strict=True):
                 use_fast_call &= check_arg(arg, param, pos)
-                if not use_fast_call:
+                if use_fast_call:
+                    if isinstance(arg, common.Field):
+                        field_args[param] = arg
+                else:
                     break
 
-            # Now check the arrays containing the connectivity tables, passed as keyword arguments
+            # Now check the values passed as keyword arguments, which applies only to dace symbols
             if use_fast_call:
-                connectivities = {
-                    dace_utils.connectivity_identifier(name): offset
-                    for name, offset in offset_provider.items()
-                    if isinstance(offset, common.NeighborTable)
-                }
-                for param, pos in inp.sdfg_kwarg_position.items():
-                    arg = connectivities[param].table
-                    use_fast_call &= check_arg(arg, param, pos)
-                    if not use_fast_call:
-                        break
+                field_symbols = dace_backend.get_field_symbols(sdfg, field_args)
+                for param, arg in field_symbols.items():
+                    pos = inp.sdfg_kwarg_position[param]
+                    assert check_arg(arg, param, pos)
 
-            if use_fast_call:
                 return sdfg_program.fast_call(*sdfg_program._lastargs)
 
         sdfg_args = dace_backend.get_sdfg_args(

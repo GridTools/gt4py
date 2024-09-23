@@ -86,7 +86,7 @@ def _get_connectivity_args(
 
 def _get_shape_args(
     arrays: Mapping[str, dace.data.Array], args: Mapping[str, Any]
-) -> Mapping[str, int]:
+) -> dict[str, int]:
     shape_args: dict[str, int] = {}
     for name, value in args.items():
         for sym, size in zip(arrays[name].shape, value.shape, strict=True):
@@ -102,7 +102,7 @@ def _get_shape_args(
 
 def _get_stride_args(
     arrays: Mapping[str, dace.data.Array], args: Mapping[str, Any]
-) -> Mapping[str, int]:
+) -> dict[str, int]:
     stride_args = {}
     for name, value in args.items():
         for sym, stride_size in zip(arrays[name].strides, value.strides, strict=True):
@@ -168,3 +168,10 @@ def get_sdfg_args(
         return {key: all_args[key] for key in sdfg_sig}
 
     return all_args
+
+
+def get_field_symbols(sdfg: dace.SDFG, field_args: dict[str, gtx_common.Field]) -> dict[str, int]:
+    """Extracts shape and stride symbols for the given field arguments."""
+    dace_shapes = _get_shape_args(sdfg.arrays, field_args)
+    dace_strides = _get_stride_args(sdfg.arrays, field_args)
+    return dace_shapes | dace_strides
