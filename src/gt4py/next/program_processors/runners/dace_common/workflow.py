@@ -20,11 +20,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common, config
 from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.compilation import cache
-from gt4py.next.program_processors.runners.dace_common import (
-    dace_backend,
-    defs as dace_defs,
-    utility as dace_utils,
-)
+from gt4py.next.program_processors.runners.dace_common import dace_backend, defs as dace_defs
 
 
 class CompiledDaceProgram(stages.CompiledProgram):

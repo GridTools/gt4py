@@ -25,9 +25,7 @@ class DaCeIteratorBackendFactory(GTFNBackendFactory):
             use_field_canonical_representation=factory.SelfAttribute(
                 "..use_field_canonical_representation"
             ),
-            use_fast_call=factory.SelfAttribute(
-                "..use_fast_call"
-            ),
+            use_fast_call=factory.SelfAttribute("..use_fast_call"),
         )
         name = factory.LazyAttribute(
             lambda o: f"run_dace_{o.name_device}{o.name_temps}{o.name_cached}{o.name_postfix}"

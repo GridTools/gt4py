@@ -123,7 +123,7 @@ class DaCeWorkflowFactory(factory.Factory):
         cmake_build_type: config.CMakeBuildType = factory.LazyFunction(
             lambda: config.CMAKE_BUILD_TYPE
         )
-        use_fast_call: bool = False,
+        use_fast_call: bool = False
         use_field_canonical_representation: bool = False
 
     translation = factory.SubFactory(
