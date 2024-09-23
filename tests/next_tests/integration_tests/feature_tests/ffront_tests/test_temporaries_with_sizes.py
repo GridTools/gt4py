@@ -66,6 +66,9 @@ def testee():
 
 
 def test_verification(testee, run_gtfn_with_temporaries_and_symbolic_sizes, mesh_descriptor):
+    # FIXME[#1582](tehrengruber): enable when temporary pass has been implemented
+    pytest.xfail("Temporary pass not implemented.")
+
     unstructured_case = Case(
         run_gtfn_with_temporaries_and_symbolic_sizes,
         offset_provider=mesh_descriptor.offset_provider,
@@ -99,6 +102,9 @@ def test_verification(testee, run_gtfn_with_temporaries_and_symbolic_sizes, mesh
 
 
 def test_temporary_symbols(testee, mesh_descriptor):
+    # FIXME[#1582](tehrengruber): enable when temporary pass has been implemented
+    pytest.xfail("Temporary pass not implemented.")
+
     itir_with_tmp = apply_common_transforms(
         testee.itir,
         lift_mode=LiftMode.USE_TEMPORARIES,

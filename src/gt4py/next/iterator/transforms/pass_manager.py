@@ -80,10 +80,15 @@ def apply_common_transforms(
     ] = None,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
 ) -> itir.Program:
-    if isinstance(ir, itir.Program):
-        # TODO(havogt): during refactoring to GTIR, we bypass transformations in case we already translated to itir.Program
-        # (currently the case when using the roundtrip backend)
-        return ir
+    if isinstance(ir, (itir.FencilDefinition, FencilWithTemporaries)):
+        ir = fencil_to_program.FencilToProgram().apply(
+            ir
+        )  # FIXME[#1582](havogt): should be removed after refactoring to combined IR
+    else:
+        assert isinstance(ir, itir.Program)
+        # FIXME[#1582](havogt): note: currently the case when using the roundtrip backend
+        pass
+
     icdlv_uids = eve_utils.UIDGenerator()
 
     if lift_mode is None:
@@ -131,6 +136,8 @@ def apply_common_transforms(
         raise RuntimeError("Inlining 'lift' and 'lambdas' did not converge.")
 
     if lift_mode != LiftMode.FORCE_INLINE:
+        # FIXME[#1582](tehrengruber): implement new temporary pass here
+        raise NotImplementedError()
         assert offset_provider is not None
         ir = CreateGlobalTmps().visit(
             ir,
@@ -174,11 +181,6 @@ def apply_common_transforms(
 
     ir = FuseMaps().visit(ir)
     ir = CollapseListGet().visit(ir)
-
-    assert isinstance(ir, (itir.FencilDefinition, FencilWithTemporaries))
-    ir = fencil_to_program.FencilToProgram().apply(
-        ir
-    )  # FIXME[#1582](havogt): should be removed after refactoring to combined IR
 
     if unroll_reduce:
         for _ in range(10):
