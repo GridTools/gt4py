@@ -164,10 +164,9 @@ def convert_args(
                     param: arg for param, arg, _ in args_mapping if isinstance(arg, common.Field)
                 }
                 field_symbols = dace_backend.get_field_symbols(sdfg, field_args)
-                positional_params = set(sdfg.arg_names)
                 for param, arg in field_symbols.items():
-                    if param not in positional_params:
-                        pos = inp.sdfg_kwarg_position[param]
+                    pos = inp.sdfg_kwarg_position.get(param, None)
+                    if pos:
                         assert check_arg(arg, param, pos)
 
                 return sdfg_program.fast_call(*sdfg_program._lastargs)
