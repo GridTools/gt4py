@@ -147,7 +147,7 @@ def test_unary_neg_bool_conversion(cartesian_case):
         return inp_f
 
     size = cartesian_case.default_sizes[IDim]
-    inp = cartesian_case.as_field([IDim], np.full(size, True, dtype=bool))
+    ref = cartesian_case.as_field([IDim], np.full(size, True, dtype=bool))
     out = cases.allocate(cartesian_case, uneg_bool, cases.RETURN)()
     cases.verify(cartesian_case, uneg_bool, out=out, ref=inp)
 
