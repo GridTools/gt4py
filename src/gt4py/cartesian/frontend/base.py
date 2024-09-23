@@ -74,6 +74,7 @@ class Frontend(abc.ABC):
         externals: Dict[str, Any],
         dtypes: Dict[Type, Type],
         options: BuildOptions,
+        backend_name: str,
     ) -> gtir.Stencil:
         """
         Generate a StencilDefinition from a stencil Python function.
