@@ -1,3 +1,16 @@
+# :warning: :warning: :warning: Unstable `develop` :warning: :warning: :warning:
+
+Here be :dragon:
+
+Features/fixex in development present in the branch:
+
+- [Feature] cast to `int` in stencils (e.g. `a = int(b)`): <https://github.com/FlorianDeconinck/gt4py/tree/cartesian/cast_to_int>
+- [Fix] `while` with `gtscript.function` now behaves as expected: <https://github.com/FlorianDeconinck/gt4py/tree/fix/function_in_while>
+
+We now resume your regurlarly schedule  gt4py README.
+
+-----
+
 [![logo](https://raw.githubusercontent.com/GridTools/gt4py/gh-pages/v1.0/_static/logo.svg)](https://GridTools.github.io/gt4py)
 
 ![license](https://img.shields.io/github/license/GridTools/gt4py)
