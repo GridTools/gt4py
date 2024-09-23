@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import collections.abc
+import functools
 import math
 import numbers
 from typing import Any, Final, Literal, Optional, Sequence, Tuple, Union, cast
@@ -82,7 +83,7 @@ if cp:
                 }
 
     else:
-        raise ValueError("Cupy is available but no suitable device was found.")
+        raise ValueError("CuPy is available but no suitable device was found.")
 
 
 def _idx_from_order(order):
@@ -230,11 +231,11 @@ def asarray(
                 core_defs.DeviceType.ROCM,
             ]:
                 if cp is None:
-                    raise RuntimeError("Cupy is required for GPU arrays")
+                    raise RuntimeError("CuPy is required for GPU arrays")
                 xp = cp
         elif hasattr(array, "__cuda_array_interface__"):
             if cp is None:
-                raise RuntimeError("Cupy is required for GPU arrays")
+                raise RuntimeError("CuPy is required for GPU arrays")
             xp = cp
         elif hasattr(array, "__array_interface__") or hasattr(array, "__array__"):
             xp = np
@@ -304,7 +305,20 @@ def allocate_gpu(
 
     buffer_ndarray = cast("cp.ndarray", buffer.ndarray)
 
-    if not hasattr(buffer_ndarray, "__cuda_array_interface__"):
-        buffer_ndarray = CUDAArrayInterfaceNDArray(buffer_ndarray)
-
     return buffer.buffer, buffer_ndarray
+
+
+if CUPY_DEVICE == core_defs.DeviceType.ROCM:
+
+    @functools.wraps(allocate_gpu)
+    def allocate_gpu_rocm(
+        shape: Sequence[int],
+        layout_map: allocators.BufferLayoutMap,
+        dtype: DTypeLike,
+        alignment_bytes: int,
+        aligned_index: Optional[Sequence[int]],
+    ) -> Tuple["cp.ndarray", "cp.ndarray"]:
+        buffer, ndarray = allocate_gpu(shape, layout_map, dtype, alignment_bytes, aligned_index)
+        return buffer, CUDAArrayInterfaceNDArray(ndarray)
+
+    allocate_gpu = allocate_gpu_rocm
