@@ -14,6 +14,7 @@ from typing import Any, Optional
 
 import dace
 import factory
+import numpy as np
 from dace.codegen.compiled_sdfg import _array_interface_ptr as get_array_interface_ptr
 
 from gt4py._core import definitions as core_defs
@@ -129,7 +130,7 @@ def convert_args(
             for field arguments, the data pointer should be the same otherwise
             fast-call cannot be used and the args list has to be reconstructed.
             """
-            if isinstance(arg, common.Field):
+            if isinstance(arg, (common.Field, np.ndarray)):
                 desc = sdfg.arrays[param]
                 assert isinstance(desc, dace.data.Array)
                 assert isinstance(sdfg_program._lastargs[0][pos], ctypes.c_void_p)
