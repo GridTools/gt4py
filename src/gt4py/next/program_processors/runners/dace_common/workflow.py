@@ -121,6 +121,7 @@ def _get_ctype_value(arg: Any, dtype: dace.dtypes.dataclass) -> Any:
 def convert_args(
     inp: CompiledDaceProgram,
     device: core_defs.DeviceType = core_defs.DeviceType.CPU,
+    use_fast_call: bool = False,
     use_field_canonical_representation: bool = False,
 ) -> stages.CompiledProgram:
     sdfg_program = inp.sdfg_program
@@ -130,56 +131,28 @@ def convert_args(
     def decorated_program(
         *args: Any, offset_provider: dict[str, common.Connectivity | common.Dimension]
     ) -> Any:
-        def check_arg(arg: Any, param: str, pos: Optional[int]) -> bool:
-            """
-            For array arguments, check if the array buffer can be used
-            for DaCe `fast_call` API.
-            For scalar arguments, override the corrsponding parameter in program ABI.
-            """
-            if dace.dtypes.is_array(arg):
-                desc = sdfg.arrays[param]
-                assert isinstance(desc, dace.data.Array)
-                assert isinstance(sdfg_program._lastargs[0][pos], ctypes.c_void_p)
-                data_ptr = get_array_interface_ptr(arg, desc.storage)
-                if sdfg_program._lastargs[0][pos].value != data_ptr:
-                    return False
-
-            elif param in sdfg.arrays:
-                desc = sdfg.arrays[param]
-                assert isinstance(desc, dace.data.Scalar)
-                sdfg_program._lastargs[0][pos] = _get_ctype_value(arg, desc.dtype)
-
-            elif pos:
-                sym_dtype = sdfg.symbols[param]
-                sdfg_program._lastargs[0][pos] = _get_ctype_value(arg, sym_dtype)
-
-            return True
-
-        if sdfg_program._lastargs:
-            # The scalar arguments should be replaced with the actual value; for field arguments,
-            # the data pointer should remain the same otherwise fast-call cannot be used and
-            # the args list needs to be reconstructed.
-            use_fast_call = True
+        if sdfg_program._lastargs and use_fast_call:
+            # The scalar arguments should be overridden with the new value;
+            # for field arguments, DaCe fast_call will reuse the same memory buffer.
             for arg, param, pos in zip(args, sdfg.arg_names, inp.sdfg_arg_position, strict=True):
-                use_fast_call &= check_arg(arg, param, pos)
-                if not use_fast_call:
-                    break
+                if dace.dtypes.is_array(arg):
+                    desc = sdfg.arrays[param]
+                    assert isinstance(desc, dace.data.Array)
+                    assert isinstance(sdfg_program._lastargs[0][pos], ctypes.c_void_p)
+                    data_ptr = get_array_interface_ptr(arg, desc.storage)
+                    if sdfg_program._lastargs[0][pos].value != data_ptr:
+                        raise RuntimeError(f"Invalid memory buffer for argument {param}.")
 
-            # Now check the arrays containing the connectivity tables, passed as keyword arguments
-            if use_fast_call:
-                connectivities = {
-                    dace_utils.connectivity_identifier(name): offset
-                    for name, offset in offset_provider.items()
-                    if isinstance(offset, common.NeighborTable)
-                }
-                for param, pos in inp.sdfg_kwarg_position.items():
-                    arg = connectivities[param].table
-                    use_fast_call &= check_arg(arg, param, pos)
-                    if not use_fast_call:
-                        break
+                elif param in sdfg.arrays:
+                    desc = sdfg.arrays[param]
+                    assert isinstance(desc, dace.data.Scalar)
+                    sdfg_program._lastargs[0][pos] = _get_ctype_value(arg, desc.dtype)
 
-            if use_fast_call:
-                return sdfg_program.fast_call(*sdfg_program._lastargs)
+                elif pos:
+                    sym_dtype = sdfg.symbols[param]
+                    sdfg_program._lastargs[0][pos] = _get_ctype_value(arg, sym_dtype)
+
+            return sdfg_program.fast_call(*sdfg_program._lastargs)
 
         sdfg_args = dace_backend.get_sdfg_args(
             sdfg,
