@@ -126,9 +126,9 @@ def convert_args(
     ) -> Any:
         def check_arg(arg: Any, param: str, pos: Optional[int]) -> bool:
             """
-            The scalar arguments should be replaced with the actual value;
-            for field arguments, the data pointer should be the same otherwise
-            fast-call cannot be used and the args list has to be reconstructed.
+            For array arguments, check if the array buffer can be used
+            for DaCe `fast_call` API.
+            For scalar arguments, override the corrsponding parameter in program ABI.
             """
             if isinstance(arg, (common.Field, np.ndarray)):
                 desc = sdfg.arrays[param]
@@ -150,9 +150,11 @@ def convert_args(
             return True
 
         if sdfg_program._lastargs:
+            # The scalar arguments should be replaced with the actual value; for field arguments,
+            # the data pointer should remain the same otherwise fast-call cannot be used and
+            # the args list needs to be reconstructed.
             use_fast_call = True
             field_args: dict[str, common.Field] = {}
-            # Check all positional arguments
             for arg, param, pos in zip(args, sdfg.arg_names, inp.sdfg_arg_position, strict=True):
                 use_fast_call &= check_arg(arg, param, pos)
                 if use_fast_call:
@@ -161,8 +163,7 @@ def convert_args(
                 else:
                     break
 
-            # Now check the values passed as keyword arguments, used for symbolic
-            # shape and strides of fields
+            # Now check the values passed as keyword arguments, which applies only to dace symbols
             if use_fast_call:
                 field_symbols = dace_backend.get_field_symbols(sdfg, field_args)
                 for param, arg in field_symbols.items():

@@ -170,9 +170,8 @@ def get_sdfg_args(
     return all_args
 
 
-def get_field_symbols(sdfg: dace.SDFG, args: dict[str, gtx_common.Field]) -> dict[str, int]:
+def get_field_symbols(sdfg: dace.SDFG, field_args: dict[str, gtx_common.Field]) -> dict[str, int]:
     """Extracts shape and stride symbols for the given field arguments."""
-    field_args = {name: arg.ndarray for name, arg in args.items()}
     dace_shapes = _get_shape_args(sdfg.arrays, field_args)
     dace_strides = _get_stride_args(sdfg.arrays, field_args)
     return dace_shapes | dace_strides
