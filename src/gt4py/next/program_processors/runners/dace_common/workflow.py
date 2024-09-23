@@ -25,12 +25,11 @@ from gt4py.next.program_processors.runners.dace_common import dace_backend, util
 
 class CompiledDaceProgram(stages.CompiledProgram):
     sdfg_program: dace.CompiledSDFG
-    # Map SDFG positional arguments to their position in program ABI;
-    # scalar arguments that are not used in the SDFG will be excluded.
+    # Map SDFG positional arguments to their positions in program ABI;
+    # scalar arguments that are not used in the SDFG will not be present.
     sdfg_arg_position: list[Optional[int]]
-    # Map keyword arguments to their position in program ABI; exclude symbols
-    # for shape and strides of connectivity tables, since a change in offset provider
-    # will anyway trigger a new lowering of the program, therefore a new SDFG.
+    # Map arguments for connectivity tables to their positions in program ABI;
+    # consider only the connectivity array, skip shape and stride (assume fixed layout).
     sdfg_kwarg_position: dict[str, int]
 
     def __init__(self, program: dace.CompiledSDFG):
