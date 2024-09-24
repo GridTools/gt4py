@@ -503,11 +503,16 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         return foast.CompareOperator.NOTEQ
 
     def _verify_builtin_type_constructor(self, node: ast.Call) -> None:
-        if len(node.args) > 0 and not isinstance(node.args[0], ast.Constant):
-            raise errors.DSLError(
-                self.get_location(node),
-                f"'{self._func_name(node)}()' only takes literal arguments.",
-            )
+        if len(node.args) > 0:
+            arg = node.args[0]
+            if not (
+                isinstance(arg, ast.Constant)
+                or (isinstance(arg, ast.UnaryOp) and isinstance(arg.operand, ast.Constant))
+            ):
+                raise errors.DSLError(
+                    self.get_location(node),
+                    f"'{self._func_name(node)}()' only takes literal arguments.",
+                )
 
     def _func_name(self, node: ast.Call) -> str:
         return node.func.id  # type: ignore[attr-defined] # We want this to fail if the attribute does not exist unexpectedly.
