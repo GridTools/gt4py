@@ -38,6 +38,7 @@ class CompiledDaceProgram(stages.CompiledProgram):
         sdfg_arg_pos_mapping = {param: pos for pos, param in enumerate(sdfg_arglist)}
         sdfg_used_symbols = program.sdfg.used_symbols(all_symbols=False)
 
+        self.sdfg_program = program
         self.sdfg_arg_position = [
             sdfg_arg_pos_mapping[param]
             if param in program.sdfg.arrays or param in sdfg_used_symbols
@@ -53,7 +54,6 @@ class CompiledDaceProgram(stages.CompiledProgram):
             param.startswith(dace_defs.CONNECTIVITY_PREFIX)
             for param in self.sdfg_conn_position.keys()
         )
-        self.sdfg_program = program
 
     def __call__(self, *args: Any, **kwargs: Any) -> None:
         self.sdfg_program(*args, **kwargs)
@@ -139,7 +139,7 @@ def convert_args(
             # the data pointer should remain the same otherwise fast-call cannot be used and
             # the arguments list has to be reconstructed.
             for arg, param, pos in zip(args, sdfg.arg_names, inp.sdfg_arg_position, strict=True):
-                if dace.dtypes.is_array(arg):
+                if isinstance(arg, common.Field):
                     desc = sdfg.arrays[param]
                     assert isinstance(desc, dace.data.Array)
                     assert isinstance(sdfg_program._lastargs[0][pos], ctypes.c_void_p)

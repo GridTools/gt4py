@@ -121,17 +121,16 @@ def get_sdfg_conn_args(
     """
     device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
 
-    neighbor_tables: dict[str, gtx_common.NeighborTable] = {}
+    neighbor_tables = {}
     for offset, connectivity in dace_util.filter_connectivities(offset_provider).items():
         assert isinstance(connectivity, gtx_common.NeighborTable)
-        neighbor_tables[offset] = connectivity
+        connectivity_name = dace_util.connectivity_identifier(offset)
+        neighbor_tables[connectivity_name] = connectivity.table
 
     return {
-        dace_util.connectivity_identifier(offset): _ensure_is_on_device(
-            offset_provider.table, device
-        )
-        for offset, offset_provider in neighbor_tables.items()
-        if dace_util.connectivity_identifier(offset) in sdfg.arrays
+        connectivity_name: _ensure_is_on_device(table, device)
+        for connectivity_name, table in neighbor_tables.items()
+        if connectivity_name in sdfg.arrays
     }
 
 
