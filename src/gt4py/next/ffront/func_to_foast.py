@@ -511,8 +511,9 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     def _verify_builtin_type_constructor(self, node: ast.Call) -> None:
         if len(node.args) > 0:
             arg = node.args[0]
-            if not isinstance(arg, ast.Constant) or not (
-                isinstance(arg, ast.UnaryOp) and isinstance(arg.operand, ast.Constant)
+            if not (
+                isinstance(arg, ast.Constant)
+                or (isinstance(arg, ast.UnaryOp) and isinstance(arg.operand, ast.Constant))
             ):
                 raise errors.DSLError(
                     self.get_location(node),

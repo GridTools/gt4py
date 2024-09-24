@@ -434,7 +434,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             val, val_str = el.operand.value, str(el.op) + str(el.operand.value)
         else:
             raise FieldOperatorLoweringError(
-                f"Encountered a type cast, which is not supported: {node}."
+                f"Type cast only supports literal arguments, {node.type} not supported."
             )
 
         node_kind = self.visit(node.type).kind.name.lower()

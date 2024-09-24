@@ -137,7 +137,7 @@ def test_unary_neg_float_conversion(cartesian_case):
     size = cartesian_case.default_sizes[IDim]
     ref = cartesian_case.as_field([IDim], np.full(size, -1.0, dtype=float))
     out = cases.allocate(cartesian_case, uneg_float, cases.RETURN)()
-    cases.verify(cartesian_case, uneg_float, out=out, ref=inp)
+    cases.verify(cartesian_case, uneg_float, out=out, ref=ref)
 
 
 def test_unary_neg_bool_conversion(cartesian_case):
@@ -149,7 +149,7 @@ def test_unary_neg_bool_conversion(cartesian_case):
     size = cartesian_case.default_sizes[IDim]
     ref = cartesian_case.as_field([IDim], np.full(size, True, dtype=bool))
     out = cases.allocate(cartesian_case, uneg_bool, cases.RETURN)()
-    cases.verify(cartesian_case, uneg_bool, out=out, ref=inp)
+    cases.verify(cartesian_case, uneg_bool, out=out, ref=ref)
 
 
 def test_unary_invert(cartesian_case):
