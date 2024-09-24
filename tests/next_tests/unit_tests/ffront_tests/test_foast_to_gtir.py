@@ -398,19 +398,15 @@ def test_unary_plus():
 @pytest.mark.parametrize("var, var_type", [("-1", "float64"), ("True", "bool")])
 def test_unary_op_type_conversion(var, var_type):
     def unary_float():
-        tmp = float(-1)
-        return tmp
+        return float(-1)
 
     def unary_bool():
-        tmp = bool(-1)
-        return tmp
+        return bool(-1)
 
     fun = unary_bool if var_type == "bool" else unary_float
     parsed = FieldOperatorParser.apply_to_function(fun)
     lowered = FieldOperatorLowering.apply(parsed)
-    reference = im.let(ssa.unique_name("tmp", 0), im.literal(var, var_type))(
-        ssa.unique_name("tmp", 0)
-    )
+    reference = im.literal(var, var_type)
 
     assert lowered.expr == reference
 
