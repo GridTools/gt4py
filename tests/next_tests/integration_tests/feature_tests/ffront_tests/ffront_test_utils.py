@@ -33,10 +33,13 @@ class NoBackend(next_backend.Backend):
 
 
 no_backend = NoBackend(
-    name=None,
+    name="no_backend",
     executor=lambda *args, **kwargs: None,
     allocator=lambda *args, **kwargs: None,
-    transforms=None,
+    # TODO(tehrengruber): We don't want any transformations, but since `decorator.FieldOperator`
+    #  and `decorator.Program` unconditionally do linting on construction we need the
+    #  transformations. When this is up to the backend we can remove this again.
+    transforms=next_backend.DEFAULT_TRANSFORMS,
 )
 
 
