@@ -569,9 +569,9 @@ def test_builtin_float_constructors():
         im.promote_to_const_iterator(im.literal("0.1", "float64")),
         im.promote_to_const_iterator(im.literal("0.1", "float32")),
         im.promote_to_const_iterator(im.literal("0.1", "float64")),
-        im.promote_to_const_iterator(im.literal(".1", "float64")),
-        im.promote_to_const_iterator(im.literal(".1", "float32")),
-        im.promote_to_const_iterator(im.literal(".1", "float64")),
+        im.promote_to_const_iterator(im.literal("0.1", "float64")),
+        im.promote_to_const_iterator(im.literal("0.1", "float32")),
+        im.promote_to_const_iterator(im.literal("0.1", "float64")),
     )
 
     assert lowered.expr == reference

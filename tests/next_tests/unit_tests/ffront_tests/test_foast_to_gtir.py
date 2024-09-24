@@ -878,9 +878,9 @@ def test_builtin_float_constructors():
         im.literal("0.1", "float64"),
         im.literal("0.1", "float32"),
         im.literal("0.1", "float64"),
-        im.literal(".1", "float64"),
-        im.literal(".1", "float32"),
-        im.literal(".1", "float64"),
+        im.literal("0.1", "float64"),
+        im.literal("0.1", "float32"),
+        im.literal("0.1", "float64"),
     )
 
     assert lowered.expr == reference
