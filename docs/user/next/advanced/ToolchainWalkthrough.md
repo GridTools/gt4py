@@ -247,7 +247,7 @@ pprint.pprint(jit_args)
 ```
 
 ```python
-gtx.program_processors.runners.roundtrip(pitir)(*jit_args.args, **jit_args.kwargs)
+gtx.program_processors.runners.roundtrip.executor(pitir)(*jit_args.args, **jit_args.kwargs)
 ```
 
 ```python
