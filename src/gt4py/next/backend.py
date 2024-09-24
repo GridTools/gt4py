@@ -125,8 +125,10 @@ class Transforms(workflow.MultiWorkflow[INPUT_PAIR, stages.CompilableProgram]):
                 )
             case PRG():
                 steps.extend(["past_lint", "field_view_prog_args_transform", "past_to_itir"])
-            case _:
+            case IT_PRG():
                 pass
+            case _:
+                raise ValueError("Unexpected input.")
         return steps
 
 
@@ -136,6 +138,7 @@ DEFAULT_TRANSFORMS: Transforms = Transforms()
 @dataclasses.dataclass(frozen=True)
 class Backend(Generic[core_defs.DeviceTypeT]):
     name: str
+    # TODO(tehrengruber): Rename to something more meaningful, e.g. `frontend_transforms`.
     executor: workflow.Workflow[stages.CompilableProgram, stages.CompiledProgram]
     allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
     transforms: workflow.Workflow[INPUT_PAIR, stages.CompilableProgram]

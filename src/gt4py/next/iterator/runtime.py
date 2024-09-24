@@ -91,7 +91,7 @@ class FendefDispatcher:
                 )
                 compiled_program(*args, offset_provider=offset_provider)
             elif isinstance(backend, program_formatter.ProgramFormatter):
-                return backend(itir_node, *args, offset_provider=offset_provider)
+                return backend(itir_node, *args, offset_provider=offset_provider, column_axis=column_axis)
             else:
                 raise ValueError(
                     "Backend must be a 'gt4py.next.backend.Backend' or "
