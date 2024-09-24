@@ -290,7 +290,7 @@ assert pitir2 == pitir
 #### Pass The result to the compile workflow and execute
 
 ```python
-example_compiled = gtx.program_processors.runners.roundtrip.otf_workflow(pitir2)
+example_compiled = gtx.program_processors.runners.roundtrip.executor(pitir2)
 ```
 
 ```python
