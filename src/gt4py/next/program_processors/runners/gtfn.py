@@ -23,9 +23,7 @@ from gt4py.next.otf import arguments, recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
-from gt4py.next.program_processors import modular_executor
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
-from gt4py.next.type_system.type_translation import from_value
 
 
 # TODO(ricoh): Add support for the whole range of arguments that can be passed to a fencil.
@@ -101,7 +99,7 @@ def extract_connectivity_args(
     return args
 
 
-def compilation_hash(otf_closure: stages.AOTProgram) -> int:
+def compilation_hash(otf_closure: stages.CompilableProgram) -> int:
     """Given closure compute a hash uniquely determining if we need to recompile."""
     offset_provider = otf_closure.args.offset_provider
     return hash(
@@ -109,7 +107,7 @@ def compilation_hash(otf_closure: stages.AOTProgram) -> int:
             otf_closure.data,
             # As the frontend types contain lists they are not hashable. As a workaround we just
             # use content_hash here.
-            content_hash(tuple(from_value(arg) for arg in otf_closure.args.args)),
+            content_hash(tuple(arg for arg in otf_closure.args.args)),
             # Directly using the `id` of the offset provider is not possible as the decorator adds
             # the implicitly defined ones (i.e. to allow the `TDim + 1` syntax) resulting in a
             # different `id` every time. Instead use the `id` of each individual offset provider.
@@ -165,10 +163,7 @@ class GTFNBackendFactory(factory.Factory):
         )
         cached = factory.Trait(
             executor=factory.LazyAttribute(
-                lambda o: modular_executor.ModularExecutor(
-                    otf_workflow=workflow.CachedStep(o.otf_workflow, hash_function=o.hash_function),
-                    name=o.name,
-                )
+                lambda o: workflow.CachedStep(o.otf_workflow, hash_function=o.hash_function)
             ),
             name_cached="_cached",
         )
@@ -182,13 +177,12 @@ class GTFNBackendFactory(factory.Factory):
         otf_workflow = factory.SubFactory(
             GTFNCompileWorkflowFactory, device_type=factory.SelfAttribute("..device_type")
         )
-        name = factory.LazyAttribute(
-            lambda o: f"run_gtfn_{o.name_device}{o.name_temps}{o.name_cached}{o.name_postfix}"
-        )
 
-    executor = factory.LazyAttribute(
-        lambda o: modular_executor.ModularExecutor(otf_workflow=o.otf_workflow, name=o.name)
+    name = factory.LazyAttribute(
+        lambda o: f"run_gtfn_{o.name_device}{o.name_temps}{o.name_cached}{o.name_postfix}"
     )
+
+    executor = factory.LazyAttribute(lambda o: o.otf_workflow)
     allocator = next_allocators.StandardCPUFieldBufferAllocator()
     transforms = backend.DEFAULT_TRANSFORMS
 

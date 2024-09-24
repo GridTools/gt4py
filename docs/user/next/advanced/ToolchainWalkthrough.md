@@ -247,7 +247,7 @@ pprint.pprint(jit_args)
 ```
 
 ```python
-gtx.program_processors.runners.roundtrip.executor.otf_workflow(pitir)(*jit_args.args, **jit_args.kwargs)
+gtx.program_processors.runners.roundtrip(pitir)(*jit_args.args, **jit_args.kwargs)
 ```
 
 ```python
@@ -290,7 +290,7 @@ assert pitir2 == pitir
 #### Pass The result to the compile workflow and execute
 
 ```python
-example_compiled = gtx.program_processors.runners.roundtrip.executor.otf_workflow(pitir2)
+example_compiled = gtx.program_processors.runners.roundtrip.otf_workflow(pitir2)
 ```
 
 ```python

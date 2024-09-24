@@ -13,32 +13,37 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import backend as next_backend, common
+from gt4py._core import definitions as core_defs
+from gt4py.next import backend as next_backend, common, allocators as next_allocators
 from gt4py.next.ffront import decorator
-from gt4py.next.iterator import ir as itir
-from gt4py.next.program_processors import processor_interface as ppi
 
 import next_tests
 
 
-@ppi.program_executor
-def no_exec(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
-    """Temporary default backend to not accidentally test the wrong backend."""
-    raise ValueError("No backend selected! Backend selection is mandatory in tests.")
-
-
 class NoBackend(next_backend.Backend):
+    """Temporary default backend to not accidentally test the wrong backend."""
+
     def __call__(self, program, *args, **kwargs) -> None:
         raise ValueError("No backend selected! Backend selection is mandatory in tests.")
 
+    def __gt_allocator__(
+        self,
+    ) -> next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]:
+        raise ValueError("No backend selected! Backend selection is mandatory in tests.")
 
-no_backend = NoBackend(executor=no_exec, transforms=None, allocator=None)
+
+no_backend = NoBackend(
+    name=None,
+    executor=lambda *args, **kwargs: None,
+    allocator=lambda *args, **kwargs: None,
+    transforms=None,
+)
 
 
 @pytest.fixture(
     params=[
         next_tests.definitions.ProgramBackendId.ROUNDTRIP,
-        # next_tests.definitions.ProgramBackendId.GTIR_EMBEDDED, # FIXME[#1582](havogt): enable once all incredients for GTIR are available
+        # next_tests.definitions.ProgramBackendId.GTIR_EMBEDDED, # FIXME[#1582](havogt): enable once all ingredients for GTIR are available
         next_tests.definitions.ProgramBackendId.GTFN_CPU,
         next_tests.definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE,
         next_tests.definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES,

@@ -33,7 +33,7 @@ from gt4py.next.type_system import type_info, type_specifications as ts
 
 
 # FIXME[#1582](havogt): remove `to_gtir` arg after refactoring to GTIR
-def past_to_itir(inp: AOT_PRG, to_gtir: bool = False) -> stages.AOTProgram:
+def past_to_itir(inp: AOT_PRG, to_gtir: bool = False) -> stages.CompilableProgram:
     """
     Lower a PAST program definition to Iterator IR.
 
@@ -92,7 +92,7 @@ def past_to_itir(inp: AOT_PRG, to_gtir: bool = False) -> stages.AOTProgram:
     if config.DEBUG or inp.data.debug:
         devtools.debug(itir_program)
 
-    return stages.AOTProgram(
+    return stages.CompilableProgram(
         data=itir_program,
         args=dataclasses.replace(inp.args, column_axis=_column_axis(all_closure_vars)),
     )
@@ -101,7 +101,7 @@ def past_to_itir(inp: AOT_PRG, to_gtir: bool = False) -> stages.AOTProgram:
 # FIXME[#1582](havogt): remove `to_gtir` arg after refactoring to GTIR
 def past_to_itir_factory(
     cached: bool = True, to_gtir: bool = False
-) -> workflow.Workflow[AOT_PRG, stages.AOTProgram]:
+) -> workflow.Workflow[AOT_PRG, stages.CompilableProgram]:
     wf = workflow.make_step(functools.partial(past_to_itir, to_gtir=to_gtir))
     if cached:
         wf = workflow.CachedStep(wf, hash_function=ffront_stages.fingerprint_stage)

@@ -31,7 +31,7 @@ from typing_extensions import Self
 
 from gt4py.next import common
 from gt4py.next.otf import toolchain, workflow
-from gt4py.next.type_system import type_specifications as ts, type_translation
+from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
 DATA_T = typing.TypeVar("DATA_T")
@@ -47,25 +47,6 @@ class JITArgs:
     @classmethod
     def from_signature(cls, *args: Any, **kwargs: Any) -> Self:
         return cls(args=args, kwargs=kwargs)
-
-
-@dataclasses.dataclass(frozen=True)
-class CompileTimeArg:
-    """Standin (at compile-time) for a GTX program argument, retaining only the type information."""
-
-    gt_type: ts.TypeSpec
-
-    def __gt_type__(self) -> ts.TypeSpec:
-        return self.gt_type
-
-    @classmethod
-    def from_concrete(cls, value: Any) -> Self | tuple[Self | tuple, ...]:
-        gt_type = type_translation.from_value(value)
-        match gt_type:
-            case ts.TupleType():
-                return tuple(cls.from_concrete(element) for element in value)
-            case _:
-                return cls(gt_type)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -104,15 +85,15 @@ class CompileTimeConnectivity(common.Connectivity):
 class CompileTimeArgs:
     """Compile-time standins for arguments to a GTX program to be used in ahead-of-time compilation."""
 
-    args: tuple[CompileTimeArg | tuple, ...]
-    kwargs: dict[str, CompileTimeArg | tuple]
+    args: tuple[ts.TypeSpec, ...]
+    kwargs: dict[str, ts.TypeSpec]
     offset_provider: dict[str, common.Connectivity | common.Dimension]
     column_axis: Optional[common.Dimension]
 
     @classmethod
     def from_concrete_no_size(cls, *args: Any, **kwargs: Any) -> Self:
         """Convert concrete GTX program arguments into their compile-time counterparts."""
-        compile_args = tuple(CompileTimeArg.from_concrete(arg) for arg in args)
+        compile_args = tuple(type_translation.from_value(arg) for arg in args)
         kwargs_copy = kwargs.copy()
         offset_provider = kwargs_copy.pop("offset_provider", {})
         return cls(
@@ -121,7 +102,7 @@ class CompileTimeArgs:
             # offset_provider={k: connectivity_or_dimension(v) for k, v in offset_provider.items()},  # noqa: ERA001 [commented-out-code]
             column_axis=kwargs_copy.pop("column_axis", None),
             kwargs={
-                k: CompileTimeArg.from_concrete(v) for k, v in kwargs_copy.items() if v is not None
+                k: type_translation.from_value(v) for k, v in kwargs_copy.items() if v is not None
             },
         )
 
@@ -183,31 +164,13 @@ def find_first_field(tuple_arg: tuple[Any, ...]) -> Optional[common.Field]:
     return None
 
 
-def find_first_field_type(
-    tuple_arg: tuple[Any, ...],
-) -> Optional[CompileTimeArg]:
-    for element in tuple_arg:
-        match type_translation.from_value(element):
-            case ts.TupleType():
-                found = find_first_field_type(element)
-                if found:
-                    return found
-            case ts.FieldType():
-                return element
-            case _:
-                pass
-    return None
-
-
-def iter_size_args(args: tuple[Any, ...], inside_tuple: bool = False) -> Iterator[int]:
+def iter_size_args(args: tuple[Any, ...]) -> Iterator[int]:
     """
     Yield the size of each field argument in each dimension.
 
     This can be used to generate domain size arguments for FieldView Programs that use an implicit domain.
     """
-    print(f"iter_size_args: matching args {tuple(type(arg) for arg in args)}")
     for arg in args:
-        print(f"iter_size_args: matching arg {arg}")
         match arg:
             case tuple():
                 # we only need the first field, because all fields in a tuple must have the same dims and sizes
@@ -215,30 +178,26 @@ def iter_size_args(args: tuple[Any, ...], inside_tuple: bool = False) -> Iterato
                 if first_field:
                     yield from iter_size_args((first_field,))
             case common.Field():
-                print(f"iter_size_args: yielding from {arg.ndarray.shape}")
                 yield from arg.ndarray.shape
             case _:
                 pass
 
 
 def iter_size_compile_args(
-    args: Iterable[CompileTimeArg | tuple],
-) -> Iterator[CompileTimeArg | tuple]:
+    args: Iterable[ts.TypeSpec],
+) -> Iterator[ts.TypeSpec]:
     """
     Yield a compile-time size argument for every compile-time field argument in each dimension.
 
     This can be used inside transformation workflows to generate compile-time domain size arguments for FieldView Programs that use an implicit domain.
     """
     for arg in args:
-        match argt := type_translation.from_value(arg):
-            case ts.TupleType():
-                # we only need the first field, because all fields in a tuple must have the same dims and sizes
-                first_field = find_first_field_type(typing.cast(tuple, arg))
-                if first_field:
-                    yield from iter_size_compile_args((first_field,))
-            case ts.FieldType():
-                yield from [
-                    CompileTimeArg(ts.ScalarType(kind=ts.ScalarKind.INT32)) for dim in argt.dims
-                ]
-            case _:
-                pass
+        field_constituents: list[ts.FieldType] = typing.cast(
+            list[ts.FieldType],
+            type_info.primitive_constituents(arg).if_isinstance(ts.FieldType).to_list(),
+        )
+        if field_constituents:
+            # we only need the first field, because all fields in a tuple must have the same dims and sizes
+            yield from [
+                ts.ScalarType(kind=ts.ScalarKind.INT32) for dim in field_constituents[0].dims
+            ]

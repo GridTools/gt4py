@@ -49,11 +49,10 @@ from gt4py.next.iterator.ir_utils.ir_makers import (
     sym,
 )
 from gt4py.next.otf import arguments, stages, toolchain
-from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
-DEFAULT_BACKEND: Callable = None
+DEFAULT_BACKEND: Optional[next_backend.Backend] = None
 
 
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
@@ -131,7 +130,7 @@ class Program:
         else:
             raise RuntimeError(f"Program '{self}' does not have a backend set.")
 
-    def with_backend(self, backend: ppi.ProgramExecutor) -> Program:
+    def with_backend(self, backend: next_backend.Backend) -> Program:
         return dataclasses.replace(self, backend=backend)
 
     def with_connectivities(self, connectivities: dict[str, Connectivity]) -> Program:
@@ -234,14 +233,14 @@ class Program:
                 stacklevel=2,
             )
             with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
-                # TODO(ricoh): check if rewriting still needed
-                rewritten_args, size_args, kwargs = past_process_args._process_args(
-                    self.past_stage.past_node, args, kwargs
+                # TODO: remove or make dependency on self.past_stage optional
+                past_process_args._validate_args(
+                    self.past_stage.past_node,
+                    arg_types=[type_translation.from_value(arg) for arg in args],
+                    kwarg_types={k: type_translation.from_value(v) for k, v in kwargs.items()},
                 )
-                ctx.run(self.definition_stage.definition, *rewritten_args, **kwargs)
+                ctx.run(self.definition_stage.definition, *args, **kwargs)
             return
-
-        ppi.ensure_processor_kind(self.backend.executor, ppi.ProgramExecutor)
 
         self.backend(
             self.definition_stage,
@@ -280,7 +279,7 @@ class FrozenProgram:
     def definition(self) -> str:
         return self.program.definition
 
-    def with_backend(self, backend: ppi.ProgramExecutor) -> FrozenProgram:
+    def with_backend(self, backend: next_backend.Backend) -> FrozenProgram:
         return self.__class__(program=self.program, backend=backend)
 
     def with_grid_type(self, grid_type: GridType) -> FrozenProgram:
@@ -296,8 +295,6 @@ class FrozenProgram:
     def __call__(
         self, *args: Any, offset_provider: dict[str, Dimension | Connectivity], **kwargs: Any
     ) -> None:
-        ppi.ensure_processor_kind(self.backend.executor, ppi.ProgramExecutor)
-
         args, kwargs = signature.convert_to_positional(self.program, *args, **kwargs)
 
         if not self._compiled_program:
@@ -330,7 +327,6 @@ class ProgramFromPast(Program):
                 "Programs created from a PAST node (without a function definition) can not be executed in embedded mode"
             )
 
-        ppi.ensure_processor_kind(self.backend.executor, ppi.ProgramExecutor)
         # TODO(ricoh): add test that does the equivalent of IDim + 1 in a ProgramFromPast
         self.backend(
             self.past_stage,
@@ -426,7 +422,7 @@ def program(definition: types.FunctionType) -> Program: ...
 
 @typing.overload
 def program(
-    *, backend: Optional[ppi.ProgramExecutor]
+    *, backend: Optional[next_backend.Backend]
 ) -> Callable[[types.FunctionType], Program]: ...
 
 
@@ -495,7 +491,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     """
 
     definition_stage: ffront_stages.FieldOperatorDefinition
-    backend: Optional[ppi.ProgramExecutor]
+    backend: Optional[next_backend.Backend]
     _program_cache: dict = dataclasses.field(
         init=False, default_factory=dict
     )  # init=False ensure the cache is not copied in calls to replace
@@ -504,7 +500,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     def from_function(
         cls,
         definition: types.FunctionType,
-        backend: Optional[ppi.ProgramExecutor],
+        backend: Optional[next_backend.Backend],
         grid_type: Optional[GridType] = None,
         *,
         operator_node_cls: type[OperatorNodeT] = foast.FieldOperator,
@@ -525,6 +521,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         """This ensures that DSL linting occurs at decoration time."""
         _ = self.foast_stage
 
+    # TODO: rename to compilable program something
     @functools.cached_property
     def foast_stage(self) -> ffront_stages.FoastOperatorDefinition:
         if self.backend is not None and self.backend.transforms is not None:
@@ -548,7 +545,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         assert isinstance(type_, ts.CallableType)
         return type_
 
-    def with_backend(self, backend: ppi.ProgramExecutor) -> FieldOperator:
+    def with_backend(self, backend: next_backend.Backend) -> FieldOperator:
         return dataclasses.replace(self, backend=backend)
 
     def with_grid_type(self, grid_type: GridType) -> FieldOperator:
@@ -556,6 +553,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             self, definition_stage=dataclasses.replace(self.definition_stage, grid_type=grid_type)
         )
 
+    # TODO: remove
     def __gt_itir__(self) -> itir.FunctionDefinition:
         if self.backend is not None and self.backend.transforms is not None:
             return self.backend.transforms.foast_to_itir(
@@ -647,13 +645,13 @@ class FieldOperatorFromFoast(FieldOperator):
 
 @typing.overload
 def field_operator(
-    definition: types.FunctionType, *, backend: Optional[ppi.ProgramExecutor]
+    definition: types.FunctionType, *, backend: Optional[next_backend.Backend]
 ) -> FieldOperator[foast.FieldOperator]: ...
 
 
 @typing.overload
 def field_operator(
-    *, backend: Optional[ppi.ProgramExecutor]
+    *, backend: Optional[next_backend.Backend]
 ) -> Callable[[types.FunctionType], FieldOperator[foast.FieldOperator]]: ...
 
 

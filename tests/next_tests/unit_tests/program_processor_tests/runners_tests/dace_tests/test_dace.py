@@ -10,6 +10,7 @@
 
 import ctypes
 import unittest
+import unittest.mock
 from typing import Any
 
 import numpy as np
@@ -20,9 +21,7 @@ from gt4py.next import int32
 from gt4py.next.ffront.fbuiltins import where
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import (
-    cartesian_case,
-)
+from next_tests.integration_tests.cases import cartesian_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     exec_alloc_descriptor,
 )
@@ -44,7 +43,7 @@ def get_scalar_values_from_sdfg_args(
 def test_dace_fastcall(cartesian_case, monkeypatch):
     """Test reuse of SDFG arguments between program calls by means of SDFG fastcall API."""
 
-    if not cartesian_case.executor or "dace" not in cartesian_case.executor.__name__:
+    if not cartesian_case.backend or "dace" not in cartesian_case.backend.name:
         pytest.skip("DaCe-specific testcase.")
 
     @gtx.field_operator
