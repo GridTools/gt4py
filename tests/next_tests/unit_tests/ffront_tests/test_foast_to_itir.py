@@ -177,13 +177,13 @@ def test_unary_ops():
     assert lowered.expr == reference
 
 
-@pytest.mark.parametrize("var, var_type", [("-1", "float64"), ("True", "bool")])
+@pytest.mark.parametrize("var, var_type", [("-1.0", "float64"), ("True", "bool")])
 def test_unary_op_type_conversion(var, var_type):
     def unary_float():
-        return float(-1.0)
+        return float(-1)
 
     def unary_bool():
-        return bool(-1.0)
+        return bool(-1)
 
     fun = unary_bool if var_type == "bool" else unary_float
     parsed = FieldOperatorParser.apply_to_function(fun)

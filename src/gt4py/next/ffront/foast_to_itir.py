@@ -456,7 +456,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             val = source_type(el.value)
         elif isinstance(el, foast.UnaryOp) and isinstance(el.operand, foast.Constant):
             operand = source_type(el.operand.value)
-            val = eval(f"lambda arg: {el.op}")(operand)
+            val = eval(f"lambda arg: {el.op}arg")(operand)
         else:
             raise FieldOperatorLoweringError(
                 f"Type cast only supports literal arguments, {node.type} not supported."
