@@ -54,6 +54,7 @@ from gt4py.next.embedded import (
 )
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import builtins, runtime
+from gt4py.next.otf import arguments
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
@@ -142,36 +143,6 @@ class NeighborTableOffsetProvider:
 
     data_ptr = _dace_data_ptr
     __descriptor__ = _dace_descriptor
-
-
-@dataclasses.dataclass(frozen=True)
-class CompileTimeConnectivity:
-    max_neighbors: int
-    has_skip_values: bool
-    origin_axis: common.Dimension
-    neighbor_axis: common.Dimension
-    index_type: type[int] | type[np.int32] | type[np.int64]
-
-    def mapped_index(
-        self, cur_index: int | np.integer, neigh_index: int | np.integer
-    ) -> Optional[int | np.integer]:
-        raise NotImplementedError(
-            "A CompileTimeConnectivity instance should not call `mapped_index`."
-        )
-
-    @classmethod
-    def from_connectivity(cls, connectivity: common.Connectivity) -> Self:
-        return cls(
-            max_neighbors=connectivity.max_neighbors,
-            has_skip_values=connectivity.has_skip_values,
-            origin_axis=connectivity.origin_axis,
-            neighbor_axis=connectivity.neighbor_axis,
-            index_type=connectivity.index_type,
-        )
-
-    @property
-    def table(self):
-        return None
 
 
 class StridedNeighborOffsetProvider:
@@ -1763,6 +1734,11 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
             kwargs["column_axis"],
             common.UnitRange(0, 0),  # empty: indicates column operation, will update later
         )
+
+    import inspect
+
+    if len(args) < len(inspect.getfullargspec(fun).args):
+        args = (*args, *arguments.iter_size_args(args))
 
     with embedded_context.new_context(**context_vars) as ctx:
         ctx.run(fun, *args)

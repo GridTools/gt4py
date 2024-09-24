@@ -39,11 +39,14 @@ def get_param_description(name: str, obj: Any) -> interface.Parameter:
 
 @dataclasses.dataclass(frozen=True)
 class GTFNTranslationStep(
-    workflow.ChainableWorkflowMixin[
-        stages.ProgramCall,
+    workflow.ReplaceEnabledWorkflowMixin[
+        stages.AOTProgram,
         stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
     ],
-    step_types.TranslationStep[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
+    workflow.ChainableWorkflowMixin[
+        stages.AOTProgram,
+        stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
+    ],
 ):
     language_settings: Optional[languages.LanguageWithHeaderFilesSettings] = None
     # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
@@ -202,22 +205,22 @@ class GTFNTranslationStep(
         return codegen.format_source("cpp", generated_code, style="LLVM")
 
     def __call__(
-        self, inp: stages.ProgramCall
+        self, inp: stages.AOTProgram
     ) -> stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings]:
         """Generate GTFN C++ code from the ITIR definition."""
-        program = inp.program
+        program: itir.FencilDefinition | itir.Program = inp.data
         assert isinstance(program, itir.FencilDefinition)
 
         # handle regular parameters and arguments of the program (i.e. what the user defined in
         #  the program)
         regular_parameters, regular_args_expr = self._process_regular_arguments(
-            program, inp.args, inp.kwargs["offset_provider"]
+            program, inp.args.args, inp.args.offset_provider
         )
 
         # handle connectivity parameters and arguments (i.e. what the user provided in the offset
         #  provider)
         connectivity_parameters, connectivity_args_expr = self._process_connectivity_args(
-            inp.kwargs["offset_provider"]
+            inp.args.offset_provider
         )
 
         # combine into a format that is aligned with what the backend expects
@@ -233,8 +236,8 @@ class GTFNTranslationStep(
         decl_src = cpp_interface.render_function_declaration(function, body=decl_body)
         stencil_src = self.generate_stencil_source(
             program,
-            inp.kwargs["offset_provider"],
-            inp.kwargs.get("column_axis", None),
+            inp.args.offset_provider,
+            inp.args.column_axis,
         )
         source_code = interface.format_source(
             self._language_settings(),
@@ -254,6 +257,7 @@ class GTFNTranslationStep(
             source_code=source_code,
             language=self._language(),
             language_settings=self._language_settings(),
+            implicit_domain=inp.data.implicit_domain,
         )
         return module
 
@@ -312,8 +316,8 @@ class GTFNTranslationStepFactory(factory.Factory):
         model = GTFNTranslationStep
 
 
-translate_program_cpu: Final[step_types.TranslationStep] = GTFNTranslationStep()
+translate_program_cpu: Final[step_types.TranslationStep] = GTFNTranslationStepFactory()
 
-translate_program_gpu: Final[step_types.TranslationStep] = GTFNTranslationStep(
+translate_program_gpu: Final[step_types.TranslationStep] = GTFNTranslationStepFactory(
     device_type=core_defs.DeviceType.CUDA
 )
