@@ -51,13 +51,10 @@ def past_to_itir(inp: AOT_PRG, to_gtir: bool = False) -> stages.CompilableProgra
         ...     copy(a, out=out)
 
         >>> compile_time_args = arguments.CompileTimeArgs(
-        ...     args=tuple(
-        ...         param.type
-        ...         for param in copy_program.past_stage.past_node.params
-        ...     ),
+        ...     args=tuple(param.type for param in copy_program.past_stage.past_node.params),
         ...     kwargs={},
         ...     offset_provider={"I": IDim},
-        ...     column_axis=None
+        ...     column_axis=None,
         ... )  # this will include field dim size arguments automatically.
 
         >>> itir_copy = past_to_itir(
