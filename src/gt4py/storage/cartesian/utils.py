@@ -210,7 +210,7 @@ def cpu_copy(array: Union[np.ndarray, "cp.ndarray"]) -> np.ndarray:
 def asarray(
     array: FieldLike, *, device: Literal["cpu", "gpu", None] = None
 ) -> np.ndarray | cp.ndarray:
-    while hasattr(array, "ndarray"):
+    if hasattr(array, "ndarray"):
         # extract the buffer from a gt4py.next.Field
         # TODO(havogt): probably `Field` should provide the array interface methods when applicable
         array = array.ndarray
