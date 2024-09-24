@@ -104,18 +104,14 @@ class Program:
         no_args_def = toolchain.CompilableProgram(
             self.definition_stage, arguments.CompileTimeArgs.empty()
         )
-        if self.backend is not None and self.backend.transforms is not None:
-            return self.backend.transforms.func_to_past(no_args_def).data
-        return next_backend.DEFAULT_TRANSFORMS.func_to_past(no_args_def).data
+        return self._frontend_transforms.func_to_past(no_args_def).data
 
     # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self):
         no_args_past = toolchain.CompilableProgram(
             self.past_stage, arguments.CompileTimeArgs.empty()
         )
-        if self.backend is not None and self.backend.transforms is not None:
-            return self.backend.transforms.past_lint(no_args_past).data
-        return next_backend.DEFAULT_TRANSFORMS.past_lint(no_args_past).data
+        return self._frontend_transforms.past_lint(no_args_past).data
 
     @property
     def __name__(self) -> str:
@@ -129,6 +125,15 @@ class Program:
             return self.backend.__gt_allocator__
         else:
             raise RuntimeError(f"Program '{self}' does not have a backend set.")
+
+    @property
+    def _frontend_transforms(self) -> next_backend.Transforms:
+        if self.backend is None:
+            return next_backend.DEFAULT_TRANSFORMS
+        # TODO(tehrengruber): This class relies heavily on `self.backend.transforms` being
+        #  a `next_backend.Transforms`, but the backend type annotation does not reflect that.
+        assert isinstance(self.backend.transforms, next_backend.Transforms)
+        return self.backend.transforms
 
     def with_backend(self, backend: next_backend.Backend) -> Program:
         return dataclasses.replace(self, backend=backend)
@@ -189,9 +194,7 @@ class Program:
             ),
             args=arguments.CompileTimeArgs.empty(),
         )
-        if self.backend is not None and self.backend.transforms is not None:
-            return self.backend.transforms.past_to_itir(no_args_past).data
-        return next_backend.DEFAULT_TRANSFORMS.past_to_itir(no_args_past).data
+        return self._frontend_transforms.past_to_itir(no_args_past).data
 
     @functools.cached_property
     def _implicit_offset_provider(self) -> dict[common.Tag, common.OffsetProviderElem]:
@@ -310,6 +313,8 @@ except ImportError:
     pass
 
 
+# TODO(tehrengruber): This class does not follow the Liskov-Substitution principle as it doesn't
+#  have a program definition. Revisit.
 @dataclasses.dataclass(frozen=True)
 class ProgramFromPast(Program):
     """
@@ -336,9 +341,7 @@ class ProgramFromPast(Program):
 
     # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self):
-        if self.backend is not None and self.backend.transforms is not None:
-            self.backend.transforms.past_lint(self.past_stage)
-        return next_backend.DEFAULT_TRANSFORMS.past_lint(self.past_stage)
+        return self._frontend_transforms.past_lint(self.past_stage)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -521,15 +524,10 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         """This ensures that DSL linting occurs at decoration time."""
         _ = self.foast_stage
 
-    # TODO: rename to compilable program something
     @functools.cached_property
     def foast_stage(self) -> ffront_stages.FoastOperatorDefinition:
-        if self.backend is not None and self.backend.transforms is not None:
-            return self.backend.transforms.func_to_foast(
-                toolchain.CompilableProgram(self.definition_stage, args=None)
-            ).data
-        return next_backend.DEFAULT_TRANSFORMS.func_to_foast(
-            toolchain.CompilableProgram(self.definition_stage, None)
+        return self._frontend_transforms.func_to_foast(
+            toolchain.CompilableProgram(data=self.definition_stage, args=None)
         ).data
 
     @property
@@ -539,6 +537,15 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     @property
     def definition(self) -> str:
         return self.definition_stage.definition
+
+    @property
+    def _frontend_transforms(self) -> next_backend.Transforms:
+        if self.backend is None:
+            return next_backend.DEFAULT_TRANSFORMS
+        # TODO(tehrengruber): This class relies heavily on `self.backend.transforms` being
+        #  a `next_backend.Transforms`, but the backend type annotation does not reflect that.
+        assert isinstance(self.backend.transforms, next_backend.Transforms)
+        return self.backend.transforms
 
     def __gt_type__(self) -> ts.CallableType:
         type_ = self.foast_stage.foast_node.type
@@ -553,13 +560,8 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             self, definition_stage=dataclasses.replace(self.definition_stage, grid_type=grid_type)
         )
 
-    # TODO: remove
     def __gt_itir__(self) -> itir.FunctionDefinition:
-        if self.backend is not None and self.backend.transforms is not None:
-            return self.backend.transforms.foast_to_itir(
-                toolchain.CompilableProgram(self.foast_stage, arguments.CompileTimeArgs.empty())
-            )
-        return next_backend.DEFAULT_TRANSFORMS.foast_to_itir(
+        return self._frontend_transforms.foast_to_itir(
             toolchain.CompilableProgram(self.foast_stage, arguments.CompileTimeArgs.empty())
         )
 
@@ -573,15 +575,10 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 args=compiletime_args,
             ),
         )
-        past_stage = None
-        if self.backend is not None and self.backend.transforms is not None:
-            past_stage = self.backend.transforms.field_view_op_to_prog.foast_to_past(
-                foast_with_types
-            ).data
-        else:
-            past_stage = next_backend.DEFAULT_TRANSFORMS.foast_to_past_closure.foast_to_past(
-                foast_with_types
-            ).data
+
+        past_stage = self._frontend_transforms.field_view_op_to_prog.foast_to_past(
+            foast_with_types
+        ).data
         return ProgramFromPast(definition_stage=None, past_stage=past_stage, backend=self.backend)
 
     def __call__(self, *args, **kwargs) -> None:

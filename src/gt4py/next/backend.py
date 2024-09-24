@@ -125,7 +125,7 @@ class Transforms(workflow.MultiWorkflow[INPUT_PAIR, stages.CompilableProgram]):
                 )
             case PRG():
                 steps.extend(["past_lint", "field_view_prog_args_transform", "past_to_itir"])
-            case IT_PRG():
+            case itir.FencilDefinition() | itir.Program():
                 pass
             case _:
                 raise ValueError("Unexpected input.")
