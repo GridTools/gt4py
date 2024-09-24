@@ -406,21 +406,22 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
     def _visit_type_constr(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         el = node.args[0]
+        node_kind = self.visit(node.type).kind.name.lower()
+        source_type = {**fbuiltins.BUILTINS, "string": str}[el.type.__str__().lower()]
+        target_type = fbuiltins.BUILTINS[node_kind]
+
         if isinstance(el, foast.Constant):
-            val, val_str = el.value, str(el.value)
+            val = source_type(el.value)
         elif isinstance(el, foast.UnaryOp) and isinstance(el.operand, foast.Constant):
-            val, val_str = el.operand.value, str(el.op) + str(el.operand.value)
+            operand = source_type(el.operand.value)
+            val = eval(f"lambda arg: {el.op}arg")(operand)
         else:
             raise FieldOperatorLoweringError(
                 f"Type cast only supports literal arguments, {node.type} not supported."
             )
+        val = target_type(val)
 
-        node_kind = self.visit(node.type).kind.name.lower()
-        target_type = fbuiltins.BUILTINS[node_kind]
-        source_type = {**fbuiltins.BUILTINS, "string": str}[el.type.__str__().lower()]
-        if target_type is bool and source_type is not bool:
-            return im.literal(str(bool(source_type(val))), "bool")
-        return im.literal(val_str, node_kind)
+        return im.literal(str(val), node_kind)
 
     def _make_literal(self, val: Any, type_: ts.TypeSpec) -> itir.Expr:
         if isinstance(type_, ts.TupleType):

@@ -395,7 +395,7 @@ def test_unary_plus():
     assert lowered.expr == reference
 
 
-@pytest.mark.parametrize("var, var_type", [("-1", "float64"), ("True", "bool")])
+@pytest.mark.parametrize("var, var_type", [("-1.0", "float64"), ("True", "bool")])
 def test_unary_op_type_conversion(var, var_type):
     def unary_float():
         return float(-1)

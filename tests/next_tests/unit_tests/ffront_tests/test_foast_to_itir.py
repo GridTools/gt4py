@@ -180,10 +180,10 @@ def test_unary_ops():
 @pytest.mark.parametrize("var, var_type", [("-1", "float64"), ("True", "bool")])
 def test_unary_op_type_conversion(var, var_type):
     def unary_float():
-        return float(-1)
+        return float(-1.0)
 
     def unary_bool():
-        return bool(-1)
+        return bool(-1.0)
 
     fun = unary_bool if var_type == "bool" else unary_float
     parsed = FieldOperatorParser.apply_to_function(fun)
