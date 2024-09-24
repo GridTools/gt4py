@@ -50,12 +50,14 @@ def past_to_itir(inp: AOT_PRG, to_gtir: bool = False) -> stages.CompilableProgra
         ... def copy_program(a: gtx.Field[[IDim], gtx.float32], out: gtx.Field[[IDim], gtx.float32]):
         ...     copy(a, out=out)
 
-        >>> compile_time_args = arguments.CompileTimeArgs.from_concrete(
-        ...     *(
-        ...         arguments.CompileTimeArg(param.type)
+        >>> compile_time_args = arguments.CompileTimeArgs(
+        ...     args=tuple(
+        ...         param.type
         ...         for param in copy_program.past_stage.past_node.params
         ...     ),
-        ...     offset_provider={"I", IDim},
+        ...     kwargs={},
+        ...     offset_provider={"I": IDim},
+        ...     column_axis=None
         ... )  # this will include field dim size arguments automatically.
 
         >>> itir_copy = past_to_itir(

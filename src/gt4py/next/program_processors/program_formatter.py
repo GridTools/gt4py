@@ -52,6 +52,7 @@ def program_formatter(func: Callable[..., str]) -> ProgramFormatter:
         ...     return "foo"
 
         >>> isinstance(format_foo, ProgramFormatter)
+        True
     """
 
     return WrappedProgramFormatter(formatter=func)
