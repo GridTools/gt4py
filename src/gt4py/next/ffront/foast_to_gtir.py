@@ -419,8 +419,8 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         target_type = fbuiltins.BUILTINS[node_kind]
         source_type = {**fbuiltins.BUILTINS, "string": str}[el.type.__str__().lower()]
         if target_type is bool and source_type is not bool:
-            return im.promote_to_const_iterator(im.literal(str(bool(source_type(val))), "bool"))
-        return im.promote_to_const_iterator(im.literal(val_str, node_kind))
+            return im.literal(str(bool(source_type(val))), "bool")
+        return im.literal(val_str, node_kind)
 
     def _make_literal(self, val: Any, type_: ts.TypeSpec) -> itir.Expr:
         if isinstance(type_, ts.TupleType):

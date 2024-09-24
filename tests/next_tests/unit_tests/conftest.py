@@ -17,24 +17,24 @@ from gt4py.next.iterator import runtime
 from gt4py.next.program_processors import processor_interface as ppi
 
 
-import next_tests
+import tests.next_tests
 
 
 @pytest.fixture(
     params=[
         (None, True),
-        (next_tests.definitions.ProgramBackendId.ROUNDTRIP, True),
-        (next_tests.definitions.ProgramBackendId.ROUNDTRIP_WITH_TEMPORARIES, True),
-        (next_tests.definitions.ProgramBackendId.DOUBLE_ROUNDTRIP, True),
-        (next_tests.definitions.ProgramBackendId.GTFN_CPU, True),
-        (next_tests.definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE, True),
-        (next_tests.definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES, True),
+        (tests.next_tests.definitions.ProgramBackendId.ROUNDTRIP, True),
+        (tests.next_tests.definitions.ProgramBackendId.ROUNDTRIP_WITH_TEMPORARIES, True),
+        (tests.next_tests.definitions.ProgramBackendId.DOUBLE_ROUNDTRIP, True),
+        (tests.next_tests.definitions.ProgramBackendId.GTFN_CPU, True),
+        (tests.next_tests.definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE, True),
+        (tests.next_tests.definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES, True),
         # pytest.param((definitions.ProgramBackendId.GTFN_GPU, True), marks=pytest.mark.requires_gpu), # TODO(havogt): update tests to use proper allocation
-        (next_tests.definitions.ProgramFormatterId.LISP_FORMATTER, False),
-        (next_tests.definitions.ProgramFormatterId.ITIR_PRETTY_PRINTER, False),
-        (next_tests.definitions.ProgramFormatterId.GTFN_CPP_FORMATTER, False),
+        (tests.next_tests.definitions.ProgramFormatterId.LISP_FORMATTER, False),
+        (tests.next_tests.definitions.ProgramFormatterId.ITIR_PRETTY_PRINTER, False),
+        (tests.next_tests.definitions.ProgramFormatterId.GTFN_CPP_FORMATTER, False),
         pytest.param(
-            (next_tests.definitions.OptionalProgramBackendId.DACE_CPU, True),
+            (tests.next_tests.definitions.OptionalProgramBackendId.DACE_CPU, True),
             marks=pytest.mark.requires_dace,
         ),
         # TODO(havogt): update tests to use proper allocation
@@ -61,10 +61,10 @@ def program_processor(request) -> tuple[ppi.ProgramProcessor, bool]:
     if is_backend:
         processor = processor.executor
 
-    for marker, skip_mark, msg in next_tests.definitions.BACKEND_SKIP_TEST_MATRIX.get(
+    for marker, skip_mark, msg in tests.next_tests.definitions.BACKEND_SKIP_TEST_MATRIX.get(
         processor_id, []
     ):
-        if marker == next_tests.definitions.ALL or request.node.get_closest_marker(marker):
+        if marker == tests.next_tests.definitions.ALL or request.node.get_closest_marker(marker):
             skip_mark(msg.format(marker=marker, backend=processor_id))
 
     return processor, is_backend

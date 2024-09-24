@@ -408,9 +408,9 @@ def test_unary_op_type_conversion(var, var_type):
     fun = unary_bool if var_type == "bool" else unary_float
     parsed = FieldOperatorParser.apply_to_function(fun)
     lowered = FieldOperatorLowering.apply(parsed)
-    reference = im.let(
-        ssa.unique_name("tmp", 0), im.promote_to_const_iterator(im.literal(var, var_type))
-    )(ssa.unique_name("tmp", 0))
+    reference = im.let(ssa.unique_name("tmp", 0), im.literal(var, var_type))(
+        ssa.unique_name("tmp", 0)
+    )
 
     assert lowered.expr == reference
 
