@@ -18,7 +18,7 @@ from dace.codegen.compiled_sdfg import _array_interface_ptr as get_array_interfa
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, config
-from gt4py.next.otf import languages, stages, step_types, workflow
+from gt4py.next.otf import arguments, languages, stages, step_types, workflow
 from gt4py.next.otf.compilation import cache
 from gt4py.next.program_processors.runners.dace_common import (
     dace_backend,
@@ -133,8 +133,15 @@ def convert_args(
         cp = None
 
     def decorated_program(
-        *args: Any, offset_provider: dict[str, common.Connectivity | common.Dimension]
+        *args: Any,
+        offset_provider: dict[str, common.Connectivity | common.Dimension],
+        out: Any = None,
     ) -> Any:
+        if out is not None:
+            args = (*args, out)
+        if len(sdfg.arg_names) > len(args):
+            args = (*args, *arguments.iter_size_args(args))
+
         def check_arg(arg: Any, param: str, pos: Optional[int]) -> bool:
             """
             For array arguments, check if the array buffer can be used

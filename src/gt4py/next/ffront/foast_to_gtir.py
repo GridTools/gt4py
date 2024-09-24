@@ -24,13 +24,33 @@ from gt4py.next.ffront import (
     stages as ffront_stages,
     type_specifications as ts_ffront,
 )
+from gt4py.next.ffront.stages import AOT_FOP, FOP
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
 def foast_to_gtir(inp: ffront_stages.FoastOperatorDefinition) -> itir.Expr:
+    """
+    Lower a FOAST field operator node to GTIR.
+
+    See the docstring of `FieldOperatorLowering` for details.
+    """
     return FieldOperatorLowering.apply(inp.foast_node)
+
+
+def foast_to_gtir_factory(cached: bool = True) -> workflow.Workflow[FOP, itir.Expr]:
+    """Wrap `foast_to_gtir` into a chainable and, optionally, cached workflow step."""
+    wf = foast_to_gtir
+    if cached:
+        wf = workflow.CachedStep(step=wf, hash_function=ffront_stages.fingerprint_stage)
+    return wf
+
+
+def adapted_foast_to_gtir_factory(**kwargs: Any) -> workflow.Workflow[AOT_FOP, itir.Expr]:
+    """Wrap the `foast_to_gtir` workflow step into an adapter to fit into backend transform workflows."""
+    return toolchain.StripArgsAdapter(foast_to_gtir_factory(**kwargs))
 
 
 def promote_to_list(node: foast.Symbol | foast.Expr) -> Callable[[itir.Expr], itir.Expr]:
