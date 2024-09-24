@@ -35,7 +35,7 @@ from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
     field_operator_ast as foast,
     past_process_args,
-    past_to_itir,
+    signature,
     stages as ffront_stages,
     transform_utils,
     type_specifications as ts_ffront,
@@ -48,6 +48,7 @@ from gt4py.next.iterator.ir_utils.ir_makers import (
     ref,
     sym,
 )
+from gt4py.next.otf import arguments, stages, toolchain
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
@@ -101,15 +102,21 @@ class Program:
     @functools.cached_property
     def past_stage(self):
         # backwards compatibility for backends that do not support the full toolchain
-        if self.backend is not None and self.backend.transforms_prog is not None:
-            return self.backend.transforms_prog.func_to_past(self.definition_stage)
-        return next_backend.DEFAULT_PROG_TRANSFORMS.func_to_past(self.definition_stage)
+        no_args_def = toolchain.CompilableProgram(
+            self.definition_stage, arguments.CompileTimeArgs.empty()
+        )
+        if self.backend is not None and self.backend.transforms is not None:
+            return self.backend.transforms.func_to_past(no_args_def).data
+        return next_backend.DEFAULT_TRANSFORMS.func_to_past(no_args_def).data
 
     # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self):
-        if self.backend is not None and self.backend.transforms_prog is not None:
-            self.backend.transforms_prog.past_lint(self.past_stage)
-        return next_backend.DEFAULT_PROG_TRANSFORMS.past_lint(self.past_stage)
+        no_args_past = toolchain.CompilableProgram(
+            self.past_stage, arguments.CompileTimeArgs.empty()
+        )
+        if self.backend is not None and self.backend.transforms is not None:
+            return self.backend.transforms.past_lint(no_args_past).data
+        return next_backend.DEFAULT_TRANSFORMS.past_lint(no_args_past).data
 
     @property
     def __name__(self) -> str:
@@ -175,16 +182,17 @@ class Program:
 
     @functools.cached_property
     def itir(self) -> itir.FencilDefinition:
-        no_args_past = ffront_stages.PastClosure(
-            past_node=self.past_stage.past_node,
-            closure_vars=self.past_stage.closure_vars,
-            grid_type=self.definition_stage.grid_type,
-            args=[],
-            kwargs={},
+        no_args_past = toolchain.CompilableProgram(
+            data=ffront_stages.PastProgramDefinition(
+                past_node=self.past_stage.past_node,
+                closure_vars=self.past_stage.closure_vars,
+                grid_type=self.definition_stage.grid_type,
+            ),
+            args=arguments.CompileTimeArgs.empty(),
         )
-        if self.backend is not None and self.backend.transforms_prog is not None:
-            return self.backend.transforms_prog.past_to_itir(no_args_past).program
-        return past_to_itir.PastToItirFactory()(no_args_past).program
+        if self.backend is not None and self.backend.transforms is not None:
+            return self.backend.transforms.past_to_itir(no_args_past).data
+        return next_backend.DEFAULT_TRANSFORMS.past_to_itir(no_args_past).data
 
     @functools.cached_property
     def _implicit_offset_provider(self) -> dict[common.Tag, common.OffsetProviderElem]:
@@ -214,12 +222,14 @@ class Program:
                         )
         return implicit_offset_provider
 
-    def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs: Any) -> None:
+    def __call__(
+        self, *args: Any, offset_provider: dict[str, Dimension | Connectivity], **kwargs: Any
+    ) -> None:
         offset_provider = offset_provider | self._implicit_offset_provider
         if self.backend is None:
             warnings.warn(
                 UserWarning(
-                    f"Field View Program '{self.itir.id}': Using Python execution, consider selecting a perfomance backend."
+                    f"Field View Program '{self.definition_stage.definition.__name__}': Using Python execution, consider selecting a perfomance backend."
                 ),
                 stacklevel=2,
             )
@@ -234,8 +244,67 @@ class Program:
         ppi.ensure_processor_kind(self.backend.executor, ppi.ProgramExecutor)
 
         self.backend(
-            self.definition_stage, *args, **(kwargs | {"offset_provider": offset_provider})
+            self.definition_stage,
+            *args,
+            **(kwargs | {"offset_provider": offset_provider}),
         )
+
+    def freeze(self) -> FrozenProgram:
+        if self.backend is None:
+            raise ValueError("Can not freeze a program without backend (embedded execution).")
+        return FrozenProgram(
+            self.definition_stage if self.definition_stage else self.past_stage,
+            backend=self.backend,
+        )
+
+
+@dataclasses.dataclass(frozen=True)
+class FrozenProgram:
+    """
+    Simplified program instance, which skips the whole toolchain after the first execution.
+
+    Does not work in embedded execution.
+    """
+
+    program: ffront_stages.DSL_PRG | ffront_stages.PRG
+    backend: next_backend.Backend
+    _compiled_program: Optional[stages.CompiledProgram] = dataclasses.field(
+        init=False, default=None
+    )
+
+    def __post_init__(self) -> None:
+        if self.backend is None:
+            raise ValueError("Can not JIT-compile programs without backend (embedded execution).")
+
+    @property
+    def definition(self) -> str:
+        return self.program.definition
+
+    def with_backend(self, backend: ppi.ProgramExecutor) -> FrozenProgram:
+        return self.__class__(program=self.program, backend=backend)
+
+    def with_grid_type(self, grid_type: GridType) -> FrozenProgram:
+        return self.__class__(
+            program=dataclasses.replace(self.program, grid_type=grid_type), backend=self.backend
+        )
+
+    def jit(
+        self, *args: Any, offset_provider: dict[str, Dimension | Connectivity], **kwargs: Any
+    ) -> stages.CompiledProgram:
+        return self.backend.jit(self.program, *args, offset_provider=offset_provider, **kwargs)
+
+    def __call__(
+        self, *args: Any, offset_provider: dict[str, Dimension | Connectivity], **kwargs: Any
+    ) -> None:
+        ppi.ensure_processor_kind(self.backend.executor, ppi.ProgramExecutor)
+
+        args, kwargs = signature.convert_to_positional(self.program, *args, **kwargs)
+
+        if not self._compiled_program:
+            super().__setattr__(
+                "_compiled_program", self.jit(*args, offset_provider=offset_provider, **kwargs)
+            )
+        self._compiled_program(*args, offset_provider=offset_provider, **kwargs)
 
 
 try:
@@ -255,20 +324,25 @@ class ProgramFromPast(Program):
 
     past_stage: ffront_stages.PastProgramDefinition
 
-    def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs):
+    def __call__(self, *args: Any, offset_provider: dict[str, Dimension], **kwargs: Any) -> None:
         if self.backend is None:
             raise NotImplementedError(
                 "Programs created from a PAST node (without a function definition) can not be executed in embedded mode"
             )
 
         ppi.ensure_processor_kind(self.backend.executor, ppi.ProgramExecutor)
-        self.backend(self.past_stage, *args, **(kwargs | {"offset_provider": offset_provider}))
+        # TODO(ricoh): add test that does the equivalent of IDim + 1 in a ProgramFromPast
+        self.backend(
+            self.past_stage,
+            *args,
+            **(kwargs | {"offset_provider": offset_provider | self._implicit_offset_provider}),
+        )
 
     # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self):
-        if self.backend is not None and self.backend.transforms_prog is not None:
-            self.backend.transforms_prog.past_lint(self.past_stage)
-        return next_backend.DEFAULT_PROG_TRANSFORMS.past_lint(self.past_stage)
+        if self.backend is not None and self.backend.transforms is not None:
+            self.backend.transforms.past_lint(self.past_stage)
+        return next_backend.DEFAULT_TRANSFORMS.past_lint(self.past_stage)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -357,12 +431,13 @@ def program(
 
 
 def program(
-    definition=None,
+    definition: Optional[types.FunctionType] = None,
     *,
     # `NOTHING` -> default backend, `None` -> no backend (embedded execution)
-    backend=eve.NOTHING,
-    grid_type=None,
-) -> Program | Callable[[types.FunctionType], Program]:
+    backend: next_backend.Backend | eve.NOTHING = eve.NOTHING,
+    grid_type: Optional[GridType] = None,
+    frozen: bool = False,
+) -> Program | FrozenProgram | Callable[[types.FunctionType], Program | FrozenProgram]:
     """
     Generate an implementation of a program from a Python function object.
 
@@ -382,9 +457,14 @@ def program(
     """
 
     def program_inner(definition: types.FunctionType) -> Program:
-        return Program.from_function(
-            definition, DEFAULT_BACKEND if backend is eve.NOTHING else backend, grid_type
+        program = Program.from_function(
+            definition,
+            DEFAULT_BACKEND if backend is eve.NOTHING else backend,
+            grid_type,
         )
+        if frozen:
+            return program.freeze()
+        return program
 
     return program_inner if definition is None else program_inner(definition)
 
@@ -447,9 +527,13 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
     @functools.cached_property
     def foast_stage(self) -> ffront_stages.FoastOperatorDefinition:
-        if self.backend is not None and self.backend.transforms_fop is not None:
-            return self.backend.transforms_fop.func_to_foast(self.definition_stage)
-        return next_backend.DEFAULT_FIELDOP_TRANSFORMS.func_to_foast(self.definition_stage)
+        if self.backend is not None and self.backend.transforms is not None:
+            return self.backend.transforms.func_to_foast(
+                toolchain.CompilableProgram(self.definition_stage, args=None)
+            ).data
+        return next_backend.DEFAULT_TRANSFORMS.func_to_foast(
+            toolchain.CompilableProgram(self.definition_stage, None)
+        ).data
 
     @property
     def __name__(self) -> str:
@@ -473,40 +557,33 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         )
 
     def __gt_itir__(self) -> itir.FunctionDefinition:
-        if self.backend is not None and self.backend.transforms_fop is not None:
-            return self.backend.transforms_fop.foast_to_itir(self.foast_stage)
-        return next_backend.DEFAULT_FIELDOP_TRANSFORMS.foast_to_itir(self.foast_stage)
+        if self.backend is not None and self.backend.transforms is not None:
+            return self.backend.transforms.foast_to_itir(
+                toolchain.CompilableProgram(self.foast_stage, arguments.CompileTimeArgs.empty())
+            )
+        return next_backend.DEFAULT_TRANSFORMS.foast_to_itir(
+            toolchain.CompilableProgram(self.foast_stage, arguments.CompileTimeArgs.empty())
+        )
 
     def __gt_closure_vars__(self) -> dict[str, Any]:
         return self.foast_stage.closure_vars
 
-    def as_program(
-        self, arg_types: list[ts.TypeSpec], kwarg_types: dict[str, ts.TypeSpec]
-    ) -> Program:
+    def as_program(self, compiletime_args: arguments.CompileTimeArgs) -> Program:
         foast_with_types = (
-            ffront_stages.FoastWithTypes(
-                foast_op_def=self.foast_stage,
-                arg_types=tuple(arg_types),
-                kwarg_types=kwarg_types,
-                closure_vars={self.foast_stage.foast_node.id: self},
+            toolchain.CompilableProgram(
+                data=self.foast_stage,
+                args=compiletime_args,
             ),
         )
         past_stage = None
-        if self.backend is not None and self.backend.transforms_fop is not None:
-            past_stage = self.backend.transforms_fop.foast_to_past_closure.foast_to_past(
+        if self.backend is not None and self.backend.transforms is not None:
+            past_stage = self.backend.transforms.field_view_op_to_prog.foast_to_past(
                 foast_with_types
-            )
+            ).data
         else:
-            past_stage = (
-                next_backend.DEFAULT_FIELDOP_TRANSFORMS.foast_to_past_closure.foast_to_past(
-                    ffront_stages.FoastWithTypes(
-                        foast_op_def=self.foast_stage,
-                        arg_types=tuple(arg_types),
-                        kwarg_types=kwarg_types,
-                        closure_vars={self.foast_stage.foast_node.id: self},
-                    ),
-                )
-            )
+            past_stage = next_backend.DEFAULT_TRANSFORMS.foast_to_past_closure.foast_to_past(
+                foast_with_types
+            ).data
         return ProgramFromPast(definition_stage=None, past_stage=past_stage, backend=self.backend)
 
     def __call__(self, *args, **kwargs) -> None:
@@ -527,7 +604,6 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 *args,
                 out=out,
                 offset_provider=offset_provider,
-                from_fieldop=self,
                 **kwargs,
             )
         else:
@@ -566,7 +642,7 @@ class FieldOperatorFromFoast(FieldOperator):
     foast_stage: ffront_stages.FoastOperatorDefinition
 
     def __call__(self, *args, **kwargs) -> None:
-        return self.backend(self.foast_stage, *args, from_fieldop=self, **kwargs)
+        return self.backend(self.foast_stage, *args, **kwargs)
 
 
 @typing.overload

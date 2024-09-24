@@ -13,6 +13,7 @@ import importlib.util
 import pathlib
 import tempfile
 import textwrap
+import typing
 from collections.abc import Callable, Iterable
 from typing import Any, Optional
 
@@ -21,9 +22,9 @@ import factory
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from gt4py.next import allocators as next_allocators, backend as next_backend, common, config
-from gt4py.next.ffront import foast_to_gtir, past_to_itir, stages as ffront_stages
-from gt4py.next.iterator import embedded, ir as itir, transforms as itir_transforms
-from gt4py.next.otf import stages, workflow
+from gt4py.next.ffront import foast_to_gtir, past_to_itir
+from gt4py.next.iterator import ir as itir, transforms as itir_transforms
+from gt4py.next.otf import arguments, stages, workflow
 from gt4py.next.program_processors import modular_executor, processor_interface as ppi
 from gt4py.next.type_system import type_specifications as ts
 
@@ -92,8 +93,8 @@ def fencil_generator(
     debug: bool,
     lift_mode: itir_transforms.LiftMode,
     use_embedded: bool,
-    offset_provider: dict[str, embedded.NeighborTableOffsetProvider],
-) -> Callable:
+    offset_provider: dict[str, common.Connectivity | common.Dimension],
+) -> stages.CompiledProgram:
     """
     Generate a directly executable fencil from an ITIR node.
 
@@ -112,7 +113,7 @@ def fencil_generator(
     if cache_key in _FENCIL_CACHE:
         if debug:
             print(f"Using cached fencil for key {cache_key}")
-        return _FENCIL_CACHE[cache_key]
+        return typing.cast(stages.CompiledProgram, _FENCIL_CACHE[cache_key])
 
     ir = itir_transforms.apply_common_transforms(
         ir, lift_mode=lift_mode, offset_provider=offset_provider
@@ -165,7 +166,6 @@ def fencil_generator(
         source_file.write("\n".join(axis_literals))
         source_file.write("\n")
         source_file.write(program)
-
     try:
         spec = importlib.util.spec_from_file_location("module.name", source_file_name)
         mod = importlib.util.module_from_spec(spec)  # type: ignore
@@ -180,50 +180,47 @@ def fencil_generator(
 
     _FENCIL_CACHE[cache_key] = fencil
 
-    return fencil
-
-
-@ppi.program_executor  # type: ignore[arg-type]
-def execute_roundtrip(
-    ir: itir.Node,
-    *args: Any,
-    column_axis: Optional[common.Dimension] = None,
-    offset_provider: dict[str, embedded.NeighborTableOffsetProvider],
-    debug: Optional[bool] = None,
-    lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE,
-    dispatch_backend: Optional[ppi.ProgramExecutor] = None,
-) -> None:
-    debug = debug if debug is not None else config.DEBUG
-    fencil = fencil_generator(
-        ir,
-        offset_provider=offset_provider,
-        debug=debug,
-        lift_mode=lift_mode,
-        use_embedded=dispatch_backend is None,
-    )
-
-    new_kwargs: dict[str, Any] = {"offset_provider": offset_provider, "column_axis": column_axis}
-    if dispatch_backend:
-        new_kwargs["backend"] = dispatch_backend
-
-    return fencil(*args, **new_kwargs)
+    return typing.cast(stages.CompiledProgram, fencil)
 
 
 @dataclasses.dataclass(frozen=True)
-class Roundtrip(workflow.Workflow[stages.ProgramCall, stages.CompiledProgram]):
+class Roundtrip(workflow.Workflow[stages.AOTProgram, stages.CompiledProgram]):
     debug: Optional[bool] = None
     lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE
     use_embedded: bool = True
+    dispatch_backend: Optional[ppi.ProgramExecutor] = None
 
-    def __call__(self, inp: stages.ProgramCall) -> stages.CompiledProgram:
+    def __call__(self, inp: stages.AOTProgram) -> stages.CompiledProgram:
         debug = config.DEBUG if self.debug is None else self.debug
-        return fencil_generator(
-            inp.program,
-            offset_provider=inp.kwargs.get("offset_provider", None),
+
+        fencil = fencil_generator(
+            inp.data,
+            offset_provider=inp.args.offset_provider,
             debug=debug,
             lift_mode=self.lift_mode,
             use_embedded=self.use_embedded,
         )
+
+        def decorated_fencil(
+            *args: Any,
+            offset_provider: dict[str, common.Connectivity | common.Dimension],
+            out: Any = None,
+            column_axis: Optional[common.Dimension] = None,
+            **kwargs: Any,
+        ) -> None:
+            if out is not None:
+                args = (*args, out)
+            if not column_axis:
+                column_axis = inp.args.column_axis
+            fencil(
+                *args,
+                offset_provider=offset_provider,
+                backend=self.dispatch_backend,
+                column_axis=inp.args.column_axis,
+                **kwargs,
+            )
+
+        return decorated_fencil
 
 
 class RoundtripFactory(factory.Factory):
@@ -236,10 +233,16 @@ class RoundtripExecutor(modular_executor.ModularExecutor):
     dispatch_backend: Optional[ppi.ProgramExecutor] = None
 
     def __call__(self, program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
-        kwargs["backend"] = self.dispatch_backend
-        self.otf_workflow(stages.ProgramCall(program=program, args=args, kwargs=kwargs))(
-            *args, **kwargs
-        )
+        argspec = arguments.CompileTimeArgs.from_concrete_no_size(*args, **kwargs)
+        self.otf_workflow(
+            stages.AOTProgram(
+                data=program,
+                args=dataclasses.replace(
+                    argspec,
+                    kwargs=argspec.kwargs,
+                ),
+            )
+        )(*args, **kwargs)
 
 
 class RoundtripExecutorFactory(factory.Factory):
@@ -263,22 +266,21 @@ executor_with_temporaries = RoundtripExecutorFactory(
 )
 
 default = next_backend.Backend(
-    executor=executor, allocator=next_allocators.StandardCPUFieldBufferAllocator()
+    executor=executor,
+    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
+    transforms=next_backend.DEFAULT_TRANSFORMS,
 )
 with_temporaries = next_backend.Backend(
-    executor=executor_with_temporaries, allocator=next_allocators.StandardCPUFieldBufferAllocator()
+    executor=executor_with_temporaries,
+    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
+    transforms=next_backend.DEFAULT_TRANSFORMS,
 )
 
 gtir = next_backend.Backend(
     executor=executor,
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
-    transforms_fop=next_backend.FieldopTransformWorkflow(
-        past_to_itir=past_to_itir.PastToItirFactory(to_gtir=True),
-        foast_to_itir=workflow.CachedStep(
-            step=foast_to_gtir.foast_to_gtir, hash_function=ffront_stages.fingerprint_stage
-        ),
-    ),
-    transforms_prog=next_backend.ProgramTransformWorkflow(
-        past_to_itir=past_to_itir.PastToItirFactory(to_gtir=True)
+    transforms=next_backend.Transforms(
+        past_to_itir=past_to_itir.past_to_itir_factory(to_gtir=True),
+        foast_to_itir=foast_to_gtir.adapted_foast_to_gtir_factory(cached=True),
     ),
 )

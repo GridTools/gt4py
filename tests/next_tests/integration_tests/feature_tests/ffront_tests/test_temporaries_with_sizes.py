@@ -33,6 +33,7 @@ from next_tests.toy_connectivity import Cell, Edge
 @pytest.fixture
 def run_gtfn_with_temporaries_and_symbolic_sizes():
     return backend.Backend(
+        transforms=backend.DEFAULT_TRANSFORMS,
         executor=modular_executor.ModularExecutor(
             name="run_gtfn_with_temporaries_and_sizes",
             otf_workflow=run_gtfn_with_temporaries.executor.otf_workflow.replace(
