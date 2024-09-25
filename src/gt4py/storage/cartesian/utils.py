@@ -61,27 +61,6 @@ if cp:
             device_type=core_defs.DeviceType.ROCM,
             array_utils=allocators.cupy_array_utils,
         )
-
-        class CUDAArrayInterfaceNDArray(cp.ndarray):
-            def __new__(cls, input_array: "cp.ndarray") -> CUDAArrayInterfaceNDArray:
-                return (
-                    input_array
-                    if isinstance(input_array, CUDAArrayInterfaceNDArray)
-                    else cp.asarray(input_array).view(cls)
-                )
-
-            @property
-            def __cuda_array_interface__(self) -> dict:
-                return {
-                    "shape": self.shape,
-                    "typestr": self.dtype.descr[0][1],
-                    "descr": self.dtype.descr,
-                    "stream": 1,
-                    "version": 3,
-                    "strides": self.strides,
-                    "data": (self.data.ptr, False),
-                }
-
     else:
         raise ValueError("CuPy is available but no suitable device was found.")
 
@@ -282,7 +261,7 @@ def allocate_cpu(
     return buffer.buffer, cast(np.ndarray, buffer.ndarray)
 
 
-def allocate_gpu(
+def _allocate_gpu(
     shape: Sequence[int],
     layout_map: allocators.BufferLayoutMap,
     dtype: DTypeLike,
@@ -292,7 +271,8 @@ def allocate_gpu(
     assert cp is not None
     assert _GPUBufferAllocator is not None, "GPU allocation library or device not found"
     device = core_defs.Device(  # type: ignore[type-var]
-        (core_defs.DeviceType.ROCM if gt_config.GT4PY_USE_HIP else core_defs.DeviceType.CUDA), 0
+        (core_defs.DeviceType.ROCM if gt_config.GT4PY_USE_HIP else core_defs.DeviceType.CUDA),
+        0,
     )
     buffer = _GPUBufferAllocator.allocate(
         shape,
@@ -308,17 +288,41 @@ def allocate_gpu(
     return buffer.buffer, buffer_ndarray
 
 
+allocate_gpu = _allocate_gpu
+
 if CUPY_DEVICE == core_defs.DeviceType.ROCM:
 
-    @functools.wraps(allocate_gpu)
-    def allocate_gpu_rocm(
+    class CUDAArrayInterfaceNDArray(cp.ndarray):
+        def __new__(cls, input_array: "cp.ndarray") -> CUDAArrayInterfaceNDArray:
+            return (
+                input_array
+                if isinstance(input_array, CUDAArrayInterfaceNDArray)
+                else cp.asarray(input_array).view(cls)
+            )
+
+        @property
+        def __cuda_array_interface__(self) -> dict:
+            return {
+                "shape": self.shape,
+                "typestr": self.dtype.descr[0][1],
+                "descr": self.dtype.descr,
+                "stream": 1,
+                "version": 3,
+                "strides": self.strides,
+                "data": (self.data.ptr, False),
+            }
+
+        __hip_array_interface__ = __cuda_array_interface__
+
+    @functools.wraps(_allocate_gpu)
+    def _allocate_gpu_rocm(
         shape: Sequence[int],
         layout_map: allocators.BufferLayoutMap,
         dtype: DTypeLike,
         alignment_bytes: int,
         aligned_index: Optional[Sequence[int]],
     ) -> Tuple["cp.ndarray", "cp.ndarray"]:
-        buffer, ndarray = allocate_gpu(shape, layout_map, dtype, alignment_bytes, aligned_index)
+        buffer, ndarray = _allocate_gpu(shape, layout_map, dtype, alignment_bytes, aligned_index)
         return buffer, CUDAArrayInterfaceNDArray(ndarray)
 
-    allocate_gpu = allocate_gpu_rocm
+    allocate_gpu = _allocate_gpu_rocm
