@@ -176,9 +176,7 @@ def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
     if gtx.allocators.is_field_allocator_for(
         unstructured_case.executor.allocator, core_defs.DeviceType.CPU
     ):
-        verify_testee(unstructured_case.offset_provider)
-        verify_testee(unstructured_case.offset_provider)
-        mock_construct_args.assert_not_called()
+        offset_provider = unstructured_case.offset_provider
     else:
         assert gtx.allocators.is_field_allocator_for(
             unstructured_case.executor.allocator, gtx.allocators.CUPY_DEVICE
@@ -191,7 +189,7 @@ def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
         # (unless cupy reuses the same cupy array from the its memory pool).
         # Here we copy the connectivity to gpu memory, to ensure that fast_call
         # is called.
-        cupy_offset_provider = {
+        offset_provider = {
             "E2V": gtx.NeighborTableOffsetProvider(
                 table=cp.asarray(connectivity_E2V.table),
                 origin_axis=connectivity_E2V.origin_axis,
@@ -201,6 +199,6 @@ def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
             )
         }
 
-        verify_testee(cupy_offset_provider)
-        verify_testee(cupy_offset_provider)
-        mock_construct_args.assert_not_called()
+    verify_testee(offset_provider)
+    verify_testee(offset_provider)
+    mock_construct_args.assert_not_called()
