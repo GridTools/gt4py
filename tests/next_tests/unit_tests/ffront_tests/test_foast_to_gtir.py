@@ -395,6 +395,22 @@ def test_unary_plus():
     assert lowered.expr == reference
 
 
+@pytest.mark.parametrize("var, var_type", [("-1.0", "float64"), ("True", "bool")])
+def test_unary_op_type_conversion(var, var_type):
+    def unary_float():
+        return float(-1)
+
+    def unary_bool():
+        return bool(-1)
+
+    fun = unary_bool if var_type == "bool" else unary_float
+    parsed = FieldOperatorParser.apply_to_function(fun)
+    lowered = FieldOperatorLowering.apply(parsed)
+    reference = im.literal(var, var_type)
+
+    assert lowered.expr == reference
+
+
 def test_unpacking():
     """Unpacking assigns should get separated."""
 
@@ -862,9 +878,9 @@ def test_builtin_float_constructors():
         im.literal("0.1", "float64"),
         im.literal("0.1", "float32"),
         im.literal("0.1", "float64"),
-        im.literal(".1", "float64"),
-        im.literal(".1", "float32"),
-        im.literal(".1", "float64"),
+        im.literal("0.1", "float64"),
+        im.literal("0.1", "float32"),
+        im.literal("0.1", "float64"),
     )
 
     assert lowered.expr == reference
