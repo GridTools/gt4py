@@ -504,7 +504,7 @@ def test_cond(offset_provider):
 
     cond = im.deref("cond_")
 
-    testee = im.cond(cond, field_1, field_2)
+    testee = im.if_(cond, field_1, field_2)
 
     domain = im.domain(common.GridType.CARTESIAN, {"IDim": (0, 11)})
     domain_tmp = translate_domain(domain, {"Ioff": -1}, offset_provider)
@@ -515,7 +515,7 @@ def test_cond(offset_provider):
     expected_field_1 = im.as_fieldop(stencil1, domain)(im.ref("in_field1"))
     expected_field_2 = im.as_fieldop(stencil2, domain)(im.ref("in_field2"), expected_tmp2)
 
-    expected = im.cond(cond, expected_field_1, expected_field_2)
+    expected = im.if_(cond, expected_field_1, expected_field_2)
 
     actual_call, actual_domains = infer_domain.infer_expr(
         testee, SymbolicDomain.from_expr(domain), offset_provider

@@ -136,13 +136,24 @@ def can_deref(it: it_ts.IteratorType | ts.DeferredType) -> ts.ScalarType:
 
 
 @_register_builtin_type_synthesizer
-def if_(cond: ts.ScalarType, true_branch: ts.DataType, false_branch: ts.DataType) -> ts.DataType:
-    assert isinstance(cond, ts.ScalarType) and cond.kind == ts.ScalarKind.BOOL
-    # TODO(tehrengruber): Enable this or a similar check. In case the true- and false-branch are
-    #  iterators defined on different positions this fails. For the GTFN backend we also don't
-    #  want this, but for roundtrip it is totally fine.
-    # assert true_branch == false_branch  # noqa: ERA001
-    return true_branch
+def if_(pred: ts.ScalarType, true_branch: ts.DataType, false_branch: ts.DataType) -> ts.DataType:
+    def type_synthesizer_per_element(
+        pred: ts.ScalarType,
+        true_branch: ts.DataType,
+        false_branch: ts.DataType,
+    ):
+        assert isinstance(pred, ts.ScalarType) and pred.kind == ts.ScalarKind.BOOL
+        # TODO(tehrengruber): Enable this or a similar check. In case the true- and false-branch are
+        #  iterators defined on different positions this fails. For the GTFN backend we also don't
+        #  want this, but for roundtrip it is totally fine.
+        # assert true_branch == false_branch  # noqa: ERA001
+
+        return true_branch
+
+    return tree_map(
+        collection_type=ts.TupleType,
+        result_collection_constructor=lambda elts: ts.TupleType(types=[*elts]),
+    )(functools.partial(type_synthesizer_per_element, pred))(true_branch, false_branch)
 
 
 @_register_builtin_type_synthesizer
@@ -276,24 +287,6 @@ def as_fieldop(
         )
 
     return applied_as_fieldop
-
-
-@_register_builtin_type_synthesizer
-def cond(pred: ts.ScalarType, true_branch: ts.DataType, false_branch: ts.DataType) -> ts.DataType:
-    def type_synthesizer_per_element(
-        pred: ts.ScalarType,
-        true_branch: ts.DataType,
-        false_branch: ts.DataType,
-    ):
-        assert isinstance(pred, ts.ScalarType) and pred.kind == ts.ScalarKind.BOOL
-        assert true_branch == false_branch
-
-        return true_branch
-
-    return tree_map(
-        collection_type=ts.TupleType,
-        result_collection_constructor=lambda elts: ts.TupleType(types=[*elts]),
-    )(functools.partial(type_synthesizer_per_element, pred))(true_branch, false_branch)
 
 
 @_register_builtin_type_synthesizer

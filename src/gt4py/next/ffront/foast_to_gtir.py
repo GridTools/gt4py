@@ -65,10 +65,9 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     Lower FieldOperator AST (FOAST) to GTIR.
 
     Most expressions are lowered to `as_fieldop`ed stencils.
-    Pure scalar expressions are kept as scalar operations as they might appear outside of the stencil context,
-    e.g. in `cond`.
-    In arithemtic operations that involve a field and a scalar, the scalar is implicitly broadcasted to a field
-    in the `as_fieldop` call.
+    Pure scalar expressions are kept as scalar operations as they might appear outside of the
+    stencil context. In arithemtic operations that involve a field and a scalar, the scalar is
+    implicitly broadcasted to a field in the `as_fieldop` call.
 
     Examples
     --------
@@ -164,7 +163,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 inner_expr = im.let(sym, im.tuple_get(i, im.ref("__if_stmt_result")))(inner_expr)
 
             # here we assume neither branch returns
-            return im.let("__if_stmt_result", im.cond(cond, true_branch, false_branch))(inner_expr)
+            return im.let("__if_stmt_result", im.if_(cond, true_branch, false_branch))(inner_expr)
         elif return_kind is foast_introspection.StmtReturnKind.CONDITIONAL_RETURN:
             common_syms = tuple(im.sym(sym) for sym in common_symbols.keys())
             common_symrefs = tuple(im.ref(sym) for sym in common_symbols.keys())
@@ -179,7 +178,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
             false_branch = self.visit(node.false_branch, inner_expr=inner_expr, **kwargs)
 
             return im.let(inner_expr_name, inner_expr_evaluator)(
-                im.cond(cond, true_branch, false_branch)
+                im.if_(cond, true_branch, false_branch)
             )
 
         assert return_kind is foast_introspection.StmtReturnKind.UNCONDITIONAL_RETURN
@@ -189,7 +188,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         true_branch = self.visit(node.true_branch, inner_expr=inner_expr, **kwargs)
         false_branch = self.visit(node.false_branch, inner_expr=inner_expr, **kwargs)
 
-        return im.cond(cond, true_branch, false_branch)
+        return im.if_(cond, true_branch, false_branch)
 
     def visit_Assign(
         self, node: foast.Assign, *, inner_expr: Optional[itir.Expr], **kwargs: Any
@@ -232,7 +231,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
             isinstance(node.condition.type, ts.ScalarType)
             and node.condition.type.kind == ts.ScalarKind.BOOL
         )
-        return im.cond(
+        return im.if_(
             self.visit(node.condition), self.visit(node.true_expr), self.visit(node.false_expr)
         )
 
