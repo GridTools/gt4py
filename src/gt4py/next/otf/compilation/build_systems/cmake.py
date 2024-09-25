@@ -22,7 +22,9 @@ from gt4py.next.otf.compilation.build_systems import cmake_lists
 @dataclasses.dataclass
 class CMakeFactory(
     compiler.BuildSystemProjectGenerator[
-        languages.Cpp | languages.Cuda | languages.Hip, languages.LanguageWithHeaderFilesSettings, languages.Python
+        languages.Cpp | languages.Cuda | languages.Hip,
+        languages.LanguageWithHeaderFilesSettings,
+        languages.Python,
     ]
 ):
     """Create a CMakeProject from a ``CompilableSource`` stage object with given CMake settings."""

@@ -56,7 +56,11 @@ class DaCeTranslator(
         offset_provider: dict[str, common.Dimension | common.Connectivity],
         column_axis: Optional[common.Dimension],
     ) -> dace.SDFG:
-        on_gpu = True if self.device_type in [core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM] else False
+        on_gpu = (
+            True
+            if self.device_type in [core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM]
+            else False
+        )
 
         return build_sdfg_from_itir(
             program,
