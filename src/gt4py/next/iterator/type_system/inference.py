@@ -499,6 +499,11 @@ class ITIRTypeInference(eve.NodeTranslator):
             lambda dtype: ts.FieldType(dims=domain.dims, dtype=dtype), node.dtype
         )
 
+    def visit_IfStmt(self, node: itir.IfStmt, *, ctx) -> None:
+        self.visit(node.cond, ctx=ctx)  # TODO: check is boolean
+        self.visit(node.true_branch, ctx=ctx)
+        self.visit(node.false_branch, ctx=ctx)
+
     def visit_SetAt(self, node: itir.SetAt, *, ctx) -> None:
         self.visit(node.expr, ctx=ctx)
         self.visit(node.domain, ctx=ctx)

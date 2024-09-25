@@ -211,6 +211,12 @@ class SetAt(Stmt):  # from JAX array.at[...].set()
     target: Expr  # `make_tuple` or SymRef
 
 
+class IfStmt(Stmt):
+    cond: Expr
+    true_branch: list[Stmt]
+    false_branch: list[Stmt]
+
+
 class Temporary(Node):
     id: Coerced[eve.SymbolName]
     domain: Optional[Expr] = None
@@ -243,3 +249,4 @@ StencilClosure.__hash__ = Node.__hash__  # type: ignore[method-assign]
 FencilDefinition.__hash__ = Node.__hash__  # type: ignore[method-assign]
 Program.__hash__ = Node.__hash__  # type: ignore[method-assign]
 SetAt.__hash__ = Node.__hash__  # type: ignore[method-assign]
+IfStmt.__hash__ = Node.__hash__  # type: ignore[method-assign]
