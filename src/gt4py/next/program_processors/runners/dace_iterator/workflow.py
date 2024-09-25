@@ -61,7 +61,7 @@ class DaCeTranslator(
     ) -> stages.ProgramSource[languages.SDFG, LanguageSettings]:
         """Generate DaCe SDFG file from the ITIR definition."""
         program: itir.FencilDefinition = inp.program
-        on_gpu = True if self.device_type == core_defs.DeviceType.CUDA else False
+        on_gpu = True if self.device_type in [core_defs.DeviceType.CUDA, core_defs.DeciveType.ROCM] else False
 
         # ITIR parameters
         column_axis: Optional[Dimension] = inp.kwargs.get("column_axis", None)

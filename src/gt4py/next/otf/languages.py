@@ -72,3 +72,7 @@ class Cpp(NanobindSrcL):
 
 class Cuda(NanobindSrcL):
     settings_class = LanguageWithHeaderFilesSettings
+
+
+class Hip(NanobindSrcL):
+    settings_class = LanguageWithHeaderFilesSettings

@@ -28,7 +28,7 @@ from gt4py.next.otf.compilation.build_systems import cmake_lists
 @dataclasses.dataclass
 class CMakeFactory(
     compiler.BuildSystemProjectGenerator[
-        languages.Cpp | languages.Cuda, languages.LanguageWithHeaderFilesSettings, languages.Python
+        languages.Cpp | languages.Cuda | languages.Hip, languages.LanguageWithHeaderFilesSettings, languages.Python
     ]
 ):
     """Create a CMakeProject from a ``CompilableSource`` stage object with given CMake settings."""
@@ -40,7 +40,7 @@ class CMakeFactory(
     def __call__(
         self,
         source: stages.CompilableSource[
-            languages.Cpp | languages.Cuda,
+            languages.Cpp | languages.Cuda | languages.Hip,
             languages.LanguageWithHeaderFilesSettings,
             languages.Python,
         ],
@@ -56,6 +56,8 @@ class CMakeFactory(
         cmake_languages = [cmake_lists.Language(name="CXX")]
         if source.program_source.language is languages.Cuda:
             cmake_languages = [*cmake_languages, cmake_lists.Language(name="CUDA")]
+        elif source.program_source.language is languages.Hip:
+            cmake_languages = [*cmake_languages, cmake_lists.Language(name="HIP")]
         cmake_lists_src = cmake_lists.generate_cmakelists_source(
             name, source.library_deps, [header_name, bindings_name], languages=cmake_languages
         )

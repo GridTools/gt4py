@@ -72,6 +72,13 @@ class GTFNTranslationStep(
                     file_extension="cu",
                     header_extension="cuh",
                 )
+            case core_defs.DeviceType.ROCM:
+                return languages.LanguageWithHeaderFilesSettings(
+                    formatter_key=cpp_interface.CPP_DEFAULT.formatter_key,
+                    formatter_style=cpp_interface.CPP_DEFAULT.formatter_style,
+                    file_extension="hip",
+                    header_extension="h",
+                )
             case core_defs.DeviceType.CPU:
                 return cpp_interface.CPP_DEFAULT
             case _:
@@ -301,7 +308,7 @@ class GTFNTranslationStep(
 
     def _backend_header(self) -> str:
         match self.device_type:
-            case core_defs.DeviceType.CUDA:
+            case core_defs.DeviceType.CUDA | core_defs.DeviceType.ROCM:
                 return "gridtools/fn/backend/gpu.hpp"
             case core_defs.DeviceType.CPU:
                 return "gridtools/fn/backend/naive.hpp"
@@ -310,7 +317,7 @@ class GTFNTranslationStep(
 
     def _backend_type(self) -> str:
         match self.device_type:
-            case core_defs.DeviceType.CUDA:
+            case core_defs.DeviceType.CUDA | core_defs.DeviceType.ROCM:
                 return "gridtools::fn::backend::gpu<generated::block_sizes_t>{}"
             case core_defs.DeviceType.CPU:
                 return "gridtools::fn::backend::naive{}"
@@ -321,6 +328,8 @@ class GTFNTranslationStep(
         match self.device_type:
             case core_defs.DeviceType.CUDA:
                 return languages.Cuda
+            case core_defs.DeviceType.ROCM:
+                return languages.Hip
             case core_defs.DeviceType.CPU:
                 return languages.Cpp
             case _:
@@ -335,7 +344,7 @@ class GTFNTranslationStep(
 
     def _library_name(self) -> str:
         match self.device_type:
-            case core_defs.DeviceType.CUDA:
+            case core_defs.DeviceType.CUDA | core_defs.DeviceType.ROCM:
                 return "gridtools_gpu"
             case core_defs.DeviceType.CPU:
                 return "gridtools_cpu"
