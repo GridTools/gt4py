@@ -255,10 +255,8 @@ def _cc_create_compiledb(
     prog_src_name = f"{name}.{header_ext}"
     binding_src_name = f"{name}.{src_ext}"
     cmake_languages = [cmake_lists.Language(name="CXX")]
-    if prototype_program_source.language is languages.Cuda:
-        cmake_languages = [*cmake_languages, cmake_lists.Language(name="CUDA")]
-    elif prototype_program_source.language is languages.Hip:
-        cmake_languages = [*cmake_languages, cmake_lists.Language(name="HIP")]
+    if (src_lang := prototype_program_source.language) in [languages.CUDA, languages.HIP]:
+        cmake_languages = [*cmake_languages, cmake_lists.Language(name=src_lang.__name__)]
 
     prototype_project = cmake.CMakeProject(
         generator_name="Ninja",

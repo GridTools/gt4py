@@ -188,7 +188,7 @@ def create_bindings(
     program_source
         The program source for which the bindings are created
     """
-    if program_source.language not in [languages.Cpp, languages.Cuda, languages.Hip]:
+    if program_source.language not in [languages.CPP, languages.CUDA, languages.HIP]:
         raise ValueError(
             f"Can only create bindings for C++ program sources, received '{program_source.language}'."
         )

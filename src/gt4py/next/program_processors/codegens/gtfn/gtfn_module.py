@@ -289,11 +289,11 @@ class GTFNTranslationStep(
     def _language(self) -> type[languages.NanobindSrcL]:
         match self.device_type:
             case core_defs.DeviceType.CUDA:
-                return languages.Cuda
+                return languages.CUDA
             case core_defs.DeviceType.ROCM:
-                return languages.Hip
+                return languages.HIP
             case core_defs.DeviceType.CPU:
-                return languages.Cpp
+                return languages.CPP
             case _:
                 raise self._not_implemented_for_device_type()
 
