@@ -15,7 +15,6 @@ import pytest
 
 import gt4py._core.definitions as core_defs
 import gt4py.next as gtx
-from gt4py.next import common as gtx_common
 from gt4py.next.ffront.fbuiltins import where
 
 from next_tests.integration_tests import cases
@@ -145,7 +144,7 @@ def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
         pytest.skip("requires dace backend")
 
     connectivity_E2V = unstructured_case.offset_provider["E2V"]
-    assert isinstance(connectivity_E2V, gtx_common.NeighborTable)
+    assert isinstance(connectivity_E2V, gtx.common.NeighborTable)
 
     # check that test connectivities are allocated on host memory
     # this is an assumption to test that fast_call cannot be used for gpu tests
@@ -194,13 +193,12 @@ def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
         # Here we copy the connectivity to gpu memory, to ensure that fast_call
         # is called.
         cupy_offset_provider = {
-            "E2V": gtx_common.NeighborTable(
-                max_neighbors=connectivity_E2V.max_neighbors,
-                has_skip_values=connectivity_E2V.has_skip_values,
+            "E2V": gtx.NeighborTableOffsetProvider(
+                table=cp.asarray(connectivity_E2V.table),
                 origin_axis=connectivity_E2V.origin_axis,
                 neighbor_axis=connectivity_E2V.neighbor_axis,
-                index_type=connectivity_E2V.index_type,
-                table=cp.asarray(connectivity_E2V.table),
+                max_neighbors=connectivity_E2V.max_neighbors,
+                has_skip_values=connectivity_E2V.has_skip_values,
             )
         }
 
