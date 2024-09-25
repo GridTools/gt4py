@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ctypes
 import dataclasses
+import re
 from typing import Any, Optional
 
 import dace
@@ -20,7 +21,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common, config
 from gt4py.next.otf import arguments, languages, stages, step_types, workflow
 from gt4py.next.otf.compilation import cache
-from gt4py.next.program_processors.runners.dace_common import dace_backend, defs as dace_defs
+from gt4py.next.program_processors.runners.dace_common import dace_backend
 
 
 class CompiledDaceProgram(stages.CompiledProgram):
@@ -33,27 +34,12 @@ class CompiledDaceProgram(stages.CompiledProgram):
     sdfg_conn_position: dict[str, int]
 
     def __init__(self, program: dace.CompiledSDFG):
-        # extract position of arguments in program ABI
-        sdfg_arglist = program.sdfg.signature_arglist(with_types=False)
-        sdfg_arg_pos_mapping = {param: pos for pos, param in enumerate(sdfg_arglist)}
-        sdfg_used_symbols = program.sdfg.used_symbols(all_symbols=False)
-
-        self.sdfg_program = program
-        self.sdfg_arg_position = [
-            sdfg_arg_pos_mapping[param]
-            if param in program.sdfg.arrays or param in sdfg_used_symbols
-            else None
-            for param in program.sdfg.arg_names
+        # method `signature_arglist` returns an ordered dictionary
+        self.sdfg_arglist = [
+            (i, arg_name, arg_type)
+            for i, (arg_name, arg_type) in enumerate(program.sdfg.arglist().items())
         ]
-        self.sdfg_conn_position = {
-            param: pos
-            for param, pos in sdfg_arg_pos_mapping.items()
-            if param not in program.sdfg.arg_names and param in program.sdfg.arrays
-        }
-        assert all(
-            param.startswith(dace_defs.CONNECTIVITY_PREFIX)
-            for param in self.sdfg_conn_position.keys()
-        )
+        self.sdfg_program = program
 
     def __call__(self, *args: Any, **kwargs: Any) -> None:
         self.sdfg_program(*args, **kwargs)
@@ -134,40 +120,34 @@ def convert_args(
             args = (*args, *arguments.iter_size_args(args))
 
         if sdfg_program._lastargs:
+            kwargs = dict(zip(sdfg.arg_names, args, strict=True))
+            kwargs.update(dace_backend.get_sdfg_conn_args(sdfg, offset_provider, on_gpu))
+
             use_fast_call = True
+            last_call_args = sdfg_program._lastargs[0]
             # The scalar arguments should be overridden with the new value; for field arguments,
             # the data pointer should remain the same otherwise fast-call cannot be used and
             # the arguments list has to be reconstructed.
-            for arg, param, pos in zip(args, sdfg.arg_names, inp.sdfg_arg_position, strict=True):
-                if isinstance(arg, common.Field):
-                    desc = sdfg.arrays[param]
-                    assert isinstance(desc, dace.data.Array)
-                    assert isinstance(sdfg_program._lastargs[0][pos], ctypes.c_void_p)
-                    data_ptr = get_array_interface_ptr(arg, desc.storage)
-                    if sdfg_program._lastargs[0][pos].value != data_ptr:
+            for i, arg_name, arg_type in inp.sdfg_arglist:
+                if isinstance(arg_type, dace.data.Array):
+                    assert arg_name in kwargs, f"Array argument '{arg_name}' was not passed."
+                    data_ptr = get_array_interface_ptr(kwargs[arg_name], arg_type.storage)
+                    assert isinstance(last_call_args[i], ctypes.c_void_p)
+                    if last_call_args[i].value != data_ptr:
                         use_fast_call = False
                         break
-                elif param in sdfg.arrays:
-                    desc = sdfg.arrays[param]
-                    assert isinstance(desc, dace.data.Scalar)
-                    sdfg_program._lastargs[0][pos] = _get_ctype_value(arg, desc.dtype)
-                elif pos:
-                    sym_dtype = sdfg.symbols[param]
-                    sdfg_program._lastargs[0][pos] = _get_ctype_value(arg, sym_dtype)
+                elif isinstance(arg_type, dace.data.Scalar):
+                    if arg_name in kwargs:
+                        last_call_args[i] = _get_ctype_value(kwargs[arg_name], arg_type.dtype)
+                    else:
+                        # shape and strides of arrays are supposed not to change, and can therefore be omitted
+                        assert re.match(
+                            "__.+_(size|stride)_\d+", arg_name
+                        ), f"Scalar argument '{arg_name}' was not passed."
+                else:
+                    raise ValueError(f"Unsupported data type {arg_type}")
 
             if use_fast_call:
-                # Special handling of the connectivity tables, passed as keyword arguments
-                # The connectivity arrays can be allocated on host, and the backend ensures
-                # that they are copied to device memory for gpu execution.
-                connectivities = dace_backend.get_sdfg_conn_args(sdfg, offset_provider, on_gpu)
-                for param, arg in connectivities.items():
-                    desc = sdfg.arrays[param]
-                    assert isinstance(desc, dace.data.Array)
-                    pos = inp.sdfg_conn_position[param]
-                    sdfg_program._lastargs[0][pos] = ctypes.c_void_p(
-                        get_array_interface_ptr(arg, desc.storage)
-                    )
-
                 return sdfg_program.fast_call(*sdfg_program._lastargs)
 
         sdfg_args = dace_backend.get_sdfg_args(
