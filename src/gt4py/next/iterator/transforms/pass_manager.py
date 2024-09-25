@@ -96,7 +96,7 @@ def apply_common_transforms(
     ir = MergeLet().visit(ir)
     ir = inline_fundefs.InlineFundefs().visit(ir)
 
-    ir = inline_fundefs.prune_unreferenced_fundefs(ir)
+    ir = inline_fundefs.prune_unreferenced_fundefs(ir)  # type: ignore[arg-type] # all previous passes return itir.Program
     ir = PropagateDeref.apply(ir)
     ir = NormalizeShifts().visit(ir)
 
