@@ -328,3 +328,5 @@ elif CUPY_DEVICE == core_defs.DeviceType.ROCM:
     allocate_gpu = _allocate_gpu_rocm
 elif CUPY_DEVICE is not None:
     raise ValueError("CuPy is available but no suitable device was found.")
+else:
+    allocate_gpu = None
