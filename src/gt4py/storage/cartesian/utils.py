@@ -282,7 +282,7 @@ def allocate_cpu(
     return buffer.buffer, cast(np.ndarray, buffer.ndarray)
 
 
-def allocate_gpu(
+def _allocate_gpu(
     shape: Sequence[int],
     layout_map: allocators.BufferLayoutMap,
     dtype: DTypeLike,
@@ -308,17 +308,21 @@ def allocate_gpu(
     return buffer.buffer, buffer_ndarray
 
 
-if CUPY_DEVICE == core_defs.DeviceType.ROCM:
+if CUPY_DEVICE == core_defs.DeviceType.CUDA:
+    allocate_gpu = _allocate_gpu
+elif CUPY_DEVICE == core_defs.DeviceType.ROCM:
 
-    @functools.wraps(allocate_gpu)
-    def allocate_gpu_rocm(
+    @functools.wraps(_allocate_gpu)
+    def _allocate_gpu_rocm(
         shape: Sequence[int],
         layout_map: allocators.BufferLayoutMap,
         dtype: DTypeLike,
         alignment_bytes: int,
         aligned_index: Optional[Sequence[int]],
     ) -> Tuple["cp.ndarray", "cp.ndarray"]:
-        buffer, ndarray = allocate_gpu(shape, layout_map, dtype, alignment_bytes, aligned_index)
+        buffer, ndarray = _allocate_gpu(shape, layout_map, dtype, alignment_bytes, aligned_index)
         return buffer, CUDAArrayInterfaceNDArray(ndarray)
 
-    allocate_gpu = allocate_gpu_rocm
+    allocate_gpu = _allocate_gpu_rocm
+else:
+    raise ValueError("CuPy is available but no suitable device was found.")
