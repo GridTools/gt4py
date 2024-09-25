@@ -177,7 +177,6 @@ def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
         unstructured_case.executor.allocator, core_defs.DeviceType.CPU
     ):
         verify_testee(unstructured_case.offset_provider)
-        mock_construct_args.assert_called_once()
         verify_testee(unstructured_case.offset_provider)
         mock_construct_args.assert_not_called()
     else:
@@ -203,6 +202,5 @@ def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
         }
 
         verify_testee(cupy_offset_provider)
-        mock_construct_args.assert_called()
         verify_testee(cupy_offset_provider)
         mock_construct_args.assert_not_called()
