@@ -77,7 +77,7 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
                 {{"\\n".join(source_names)}}
         )
         {% for src in source_names %}
-            {% if not src.endswith("h") %}
+            {% if src.endswith("cu") %}
             set_source_files_properties({{src}} PROPERTIES LANGUAGE HIP)
             {% endif %}
         {% endfor %}

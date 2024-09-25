@@ -188,7 +188,7 @@ def asarray(
         # extract the buffer from a gt4py.next.Field
         # TODO(havogt): probably `Field` should provide the array interface methods when applicable
         array = array.ndarray
-    if device == "gpu" or (not device and hasattr(array, "__cuda_array_interface__")):
+    if device == "gpu" or (not device):# and hasattr(array, "__cuda_array_interface__")):
         return cp.asarray(array)
     if device == "cpu" or (
         not device and (hasattr(array, "__array_interface__") or hasattr(array, "__array__"))
