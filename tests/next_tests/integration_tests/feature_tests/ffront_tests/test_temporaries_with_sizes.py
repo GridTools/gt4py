@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import pytest
 from numpy import int32, int64
@@ -39,6 +33,7 @@ from next_tests.toy_connectivity import Cell, Edge
 @pytest.fixture
 def run_gtfn_with_temporaries_and_symbolic_sizes():
     return backend.Backend(
+        transforms=backend.DEFAULT_TRANSFORMS,
         executor=modular_executor.ModularExecutor(
             name="run_gtfn_with_temporaries_and_sizes",
             otf_workflow=run_gtfn_with_temporaries.executor.otf_workflow.replace(
@@ -72,6 +67,9 @@ def testee():
 
 
 def test_verification(testee, run_gtfn_with_temporaries_and_symbolic_sizes, mesh_descriptor):
+    # FIXME[#1582](tehrengruber): enable when temporary pass has been implemented
+    pytest.xfail("Temporary pass not implemented.")
+
     unstructured_case = Case(
         run_gtfn_with_temporaries_and_symbolic_sizes,
         offset_provider=mesh_descriptor.offset_provider,
@@ -105,6 +103,9 @@ def test_verification(testee, run_gtfn_with_temporaries_and_symbolic_sizes, mesh
 
 
 def test_temporary_symbols(testee, mesh_descriptor):
+    # FIXME[#1582](tehrengruber): enable when temporary pass has been implemented
+    pytest.xfail("Temporary pass not implemented.")
+
     itir_with_tmp = apply_common_transforms(
         testee.itir,
         lift_mode=LiftMode.USE_TEMPORARIES,
@@ -113,4 +114,4 @@ def test_temporary_symbols(testee, mesh_descriptor):
 
     params = ["num_vertices", "num_edges", "num_cells"]
     for param in params:
-        assert any([param == str(p) for p in itir_with_tmp.fencil.params])
+        assert any([param == str(p) for p in itir_with_tmp.params])

@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """
 GridTools Intermediate Representation.
@@ -24,6 +18,8 @@ Analysis is required to generate valid code (complying with the parallel model)
 - extent analysis to define the extended compute domain
 - `FieldIfStmt` expansion to comply with the parallel model
 """
+
+from __future__ import annotations
 
 from typing import Any, Dict, List, Set, Tuple, Type
 
@@ -83,7 +79,7 @@ class ParAssignStmt(common.AssignStmt[FieldAccess, Expr], Stmt):
     @datamodels.root_validator
     @classmethod
     def no_write_and_read_with_offset_of_same_field(
-        cls: Type["ParAssignStmt"], instance: "ParAssignStmt"
+        cls: Type[ParAssignStmt], instance: ParAssignStmt
     ) -> None:
         if isinstance(instance.left, FieldAccess):
             offset_reads = (
@@ -209,7 +205,7 @@ class VerticalLoop(LocNode):
     @datamodels.root_validator
     @classmethod
     def _no_write_and_read_with_horizontal_offset(
-        cls: Type["VerticalLoop"], instance: "VerticalLoop"
+        cls: Type[VerticalLoop], instance: VerticalLoop
     ) -> None:
         """
         In the same VerticalLoop a field must not be written and read with a horizontal offset.

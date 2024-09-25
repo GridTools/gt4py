@@ -1,16 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+from __future__ import annotations
 
 import abc
 import os
@@ -20,7 +16,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union
 
 import gt4py.cartesian.gtc.utils
 import gt4py.cartesian.gtc.utils as gtc_utils
-from gt4py.cartesian import backend as gt_backend, utils as gt_utils
+from gt4py.cartesian import backend as gt_backend, config as gt_config, utils as gt_utils
 from gt4py.cartesian.backend import Backend
 from gt4py.cartesian.backend.module_generator import BaseModuleGenerator, ModuleData
 from gt4py.cartesian.gtc import gtir
@@ -140,7 +136,7 @@ class PyExtModuleGenerator(BaseModuleGenerator):
         self.pyext_file_path = None
 
     def __call__(
-        self, args_data: ModuleData, builder: Optional["StencilBuilder"] = None, **kwargs: Any
+        self, args_data: ModuleData, builder: Optional[StencilBuilder] = None, **kwargs: Any
     ) -> str:
         self.pyext_module_name = kwargs["pyext_module_name"]
         self.pyext_file_path = kwargs["pyext_file_path"]
@@ -222,6 +218,8 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
         "add_profile_info": {"versioning": True, "type": bool},
         "clean": {"versioning": False, "type": bool},
         "debug_mode": {"versioning": True, "type": bool},
+        "opt_level": {"versioning": True, "type": str},
+        "extra_opt_flags": {"versioning": True, "type": str},
         "verbose": {"versioning": False, "type": bool},
         "oir_pipeline": {"versioning": True, "type": OirPipeline},
     }
@@ -233,7 +231,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
     PYEXT_GENERATOR_CLASS: Type[BackendCodegen]
 
     @abc.abstractmethod
-    def generate(self) -> Type["StencilObject"]:
+    def generate(self) -> Type[StencilObject]:
         pass
 
     def generate_computation(self) -> Dict[str, Union[str, Dict]]:
@@ -278,7 +276,10 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
         gt_pyext_sources: Dict[str, Any]
         if not self.builder.options._impl_opts.get("disable-code-generation", False):
             gt_pyext_files = self.make_extension_sources(stencil_ir=stencil_ir)
-            gt_pyext_sources = {**gt_pyext_files["computation"], **gt_pyext_files["bindings"]}
+            gt_pyext_sources = {
+                **gt_pyext_files["computation"],
+                **gt_pyext_files["bindings"],
+            }
         else:
             # Pass NOTHING to the self.builder means try to reuse the source code files
             gt_pyext_files = {}
@@ -297,6 +298,12 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
             clean=self.builder.options.backend_opts.get("clean", False),
             **gt_backend.pyext_builder.get_gt_pyext_build_opts(
                 debug_mode=self.builder.options.backend_opts.get("debug_mode", False),
+                opt_level=self.builder.options.backend_opts.get(
+                    "opt_level", gt_config.GT4PY_COMPILE_OPT_LEVEL
+                ),
+                extra_opt_flags=self.builder.options.backend_opts.get(
+                    "extra_opt_flags", gt_config.GT4PY_EXTRA_COMPILE_OPT_FLAGS
+                ),
                 add_profile_info=self.builder.options.backend_opts.get("add_profile_info", False),
                 uses_cuda=uses_cuda,
                 gt_version=2,

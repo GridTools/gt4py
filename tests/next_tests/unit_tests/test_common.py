@@ -1,21 +1,17 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 import operator
 from typing import Optional, Pattern
 
 import pytest
 
+import gt4py.next.common as common
 from gt4py.next.common import (
     Dimension,
     DimensionKind,
@@ -30,8 +26,8 @@ from gt4py.next.common import (
 )
 
 
-IDim = Dimension("IDim")
 ECDim = Dimension("ECDim")
+IDim = Dimension("IDim")
 JDim = Dimension("JDim")
 KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
 
@@ -404,6 +400,41 @@ def test_domain_dims_ranges_length_mismatch():
         Domain(dims=dims, ranges=ranges)
 
 
+def test_domain_slice_at():
+    # Create a sample domain
+    domain = Domain(
+        NamedRange(IDim, UnitRange(0, 10)),
+        NamedRange(JDim, UnitRange(5, 15)),
+        NamedRange(KDim, UnitRange(20, 30)),
+    )
+
+    # Test indexing with slices
+    result = domain.slice_at[slice(2, 5), slice(5, 7), slice(7, 10)]
+    expected_result = Domain(
+        NamedRange(IDim, UnitRange(2, 5)),
+        NamedRange(JDim, UnitRange(10, 12)),
+        NamedRange(KDim, UnitRange(27, 30)),
+    )
+    assert result == expected_result
+
+    # Test indexing with out-of-range slices
+    result = domain.slice_at[slice(2, 15), slice(5, 7), slice(7, 10)]
+    expected_result = Domain(
+        NamedRange(IDim, UnitRange(2, 10)),
+        NamedRange(JDim, UnitRange(10, 12)),
+        NamedRange(KDim, UnitRange(27, 30)),
+    )
+    assert result == expected_result
+
+    # Test indexing with incorrect types
+    with pytest.raises(TypeError):
+        domain.slice_at["a", 7, 25]
+
+    # Test indexing with incorrect number of indices
+    with pytest.raises(ValueError, match="not match the number of dimensions"):
+        domain.slice_at[slice(2, 5), slice(7, 10)]
+
+
 def test_domain_dim_index():
     dims = [Dimension("X"), Dimension("Y"), Dimension("Z")]
     ranges = [UnitRange(0, 1), UnitRange(0, 1), UnitRange(0, 1)]
@@ -578,3 +609,25 @@ def test_dimension_promotion(
             promote_dims(*dim_list)
 
         assert exc_info.match(expected_error_msg)
+
+
+class TestCartesianConnectivity:
+    def test_for_translation(self):
+        offset = 5
+        I = common.Dimension("I")
+
+        result = common.CartesianConnectivity.for_translation(I, offset)
+        assert isinstance(result, common.CartesianConnectivity)
+        assert result.domain_dim == I
+        assert result.codomain == I
+        assert result.offset == offset
+
+    def test_for_relocation(self):
+        I = common.Dimension("I")
+        I_half = common.Dimension("I_half")
+
+        result = common.CartesianConnectivity.for_relocation(I, I_half)
+        assert isinstance(result, common.CartesianConnectivity)
+        assert result.domain_dim == I_half
+        assert result.codomain == I
+        assert result.offset == 0

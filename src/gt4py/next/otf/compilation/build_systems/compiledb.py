@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -70,6 +64,7 @@ class CompiledbFactory(
             cmake_flags=self.cmake_extra_flags or [],
             language=source.program_source.language,
             language_settings=source.program_source.language_settings,
+            implicit_domain=source.program_source.implicit_domain,
         )
 
         if self.renew_compiledb or not (
@@ -219,6 +214,7 @@ def _cc_prototype_program_source(
     cmake_flags: list[str],
     language: type[SrcL],
     language_settings: languages.LanguageWithHeaderFilesSettings,
+    implicit_domain: bool,
 ) -> stages.ProgramSource:
     name = _cc_prototype_program_name(deps, build_type.value, cmake_flags)
     return stages.ProgramSource(
@@ -227,6 +223,7 @@ def _cc_prototype_program_source(
         library_deps=deps,
         language=language,
         language_settings=language_settings,
+        implicit_domain=implicit_domain,
     )
 
 

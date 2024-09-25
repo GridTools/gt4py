@@ -1,26 +1,27 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
 import ast
 import builtins
-from typing import Any, Callable, Iterable, Mapping, Type, cast
+import typing
+from typing import Any, Callable, Iterable, Mapping, Type
 
 import gt4py.eve as eve
 from gt4py.next import errors
-from gt4py.next.ffront import dialect_ast_enums, fbuiltins, field_operator_ast as foast
+from gt4py.next.ffront import (
+    dialect_ast_enums,
+    fbuiltins,
+    field_operator_ast as foast,
+    source_utils,
+    stages as ffront_stages,
+)
 from gt4py.next.ffront.ast_passes import (
     SingleAssignTargetPass,
     SingleStaticAssignPass,
@@ -35,7 +36,69 @@ from gt4py.next.ffront.foast_passes.dead_closure_var_elimination import DeadClos
 from gt4py.next.ffront.foast_passes.iterable_unpack import UnpackedAssignPass
 from gt4py.next.ffront.foast_passes.type_alias_replacement import TypeAliasReplacement
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
+from gt4py.next.ffront.stages import AOT_DSL_FOP, AOT_FOP, DSL_FOP, FOP
+from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
+
+
+def func_to_foast(inp: DSL_FOP) -> FOP:
+    """
+    Turn a DSL field operator definition into a FOAST operator definition, adding metadata.
+
+    Examples:
+
+        >>> from gt4py import next as gtx
+        >>> IDim = gtx.Dimension("I")
+
+        >>> const = gtx.float32(2.0)
+        >>> def dsl_operator(a: gtx.Field[[IDim], gtx.float32]) -> gtx.Field[[IDim], gtx.float32]:
+        ...     return a * const
+
+        >>> dsl_operator_def = gtx.ffront.stages.FieldOperatorDefinition(definition=dsl_operator)
+        >>> foast_definition = func_to_foast(dsl_operator_def)
+
+        >>> print(foast_definition.foast_node.id)
+        dsl_operator
+
+        >>> print(foast_definition.closure_vars)
+        {'const': 2.0}
+    """
+    source_def = source_utils.SourceDefinition.from_function(inp.definition)
+    closure_vars = source_utils.get_closure_vars_from_function(inp.definition)
+    annotations = typing.get_type_hints(inp.definition)
+    foast_definition_node = FieldOperatorParser.apply(source_def, closure_vars, annotations)
+    loc = foast_definition_node.location
+    operator_attribute_nodes = {
+        key: foast.Constant(value=value, type=type_translation.from_value(value), location=loc)
+        for key, value in inp.attributes.items()
+    }
+    untyped_foast_node = inp.node_class(
+        id=foast_definition_node.id,
+        definition=foast_definition_node,
+        location=loc,
+        **operator_attribute_nodes,
+    )
+    foast_node = FieldOperatorTypeDeduction.apply(untyped_foast_node)
+    return ffront_stages.FoastOperatorDefinition(
+        foast_node=foast_node,
+        closure_vars=closure_vars,
+        grid_type=inp.grid_type,
+        attributes=inp.attributes,
+        debug=inp.debug,
+    )
+
+
+def func_to_foast_factory(cached: bool = True) -> workflow.Workflow[DSL_FOP, FOP]:
+    """Wrap `func_to_foast` in a chainable and optionally cached workflow step."""
+    wf = workflow.make_step(func_to_foast)
+    if cached:
+        wf = workflow.CachedStep(step=wf, hash_function=ffront_stages.fingerprint_stage)
+    return wf
+
+
+def adapted_func_to_foast_factory(**kwargs: Any) -> workflow.Workflow[AOT_DSL_FOP, AOT_FOP]:
+    """Wrap the `func_to_foast step in an adapter to fit into transform toolchains.`"""
+    return toolchain.DataOnlyAdapter(func_to_foast_factory(**kwargs))
 
 
 class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
@@ -141,7 +204,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                         ],  # this is a constraint type that will not be inferred (as the function is polymorphic)
                         pos_or_kw_args={},
                         kw_only_args={},
-                        returns=cast(ts.DataType, type_translation.from_type_hint(value)),
+                        returns=typing.cast(ts.DataType, type_translation.from_type_hint(value)),
                     ),
                     namespace=dialect_ast_enums.Namespace.CLOSURE,
                     location=location,
@@ -440,11 +503,16 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         return foast.CompareOperator.NOTEQ
 
     def _verify_builtin_type_constructor(self, node: ast.Call) -> None:
-        if len(node.args) > 0 and not isinstance(node.args[0], ast.Constant):
-            raise errors.DSLError(
-                self.get_location(node),
-                f"'{self._func_name(node)}()' only takes literal arguments.",
-            )
+        if len(node.args) > 0:
+            arg = node.args[0]
+            if not (
+                isinstance(arg, ast.Constant)
+                or (isinstance(arg, ast.UnaryOp) and isinstance(arg.operand, ast.Constant))
+            ):
+                raise errors.DSLError(
+                    self.get_location(node),
+                    f"'{self._func_name(node)}()' only takes literal arguments.",
+                )
 
     def _func_name(self, node: ast.Call) -> str:
         return node.func.id  # type: ignore[attr-defined] # We want this to fail if the attribute does not exist unexpectedly.

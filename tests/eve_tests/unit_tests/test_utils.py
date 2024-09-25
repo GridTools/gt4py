@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import copy
 import dataclasses
@@ -22,6 +16,31 @@ import pytest
 
 from gt4py import eve
 from gt4py.eve.utils import XIterable
+
+
+def test_first():
+    from gt4py.eve.utils import first
+
+    # Test case 1: Non-empty iterable
+    iterable = [1, 2, 3, 4, 5]
+    result = first(iterable)
+    assert result == 1
+
+    # Test case 2: Empty iterable with default value
+    iterable = []
+    default = "default"
+    result = first(iterable, default=default)
+    assert result == default
+
+    # Test case 3: Empty iterable without default value
+    iterable = []
+    with pytest.raises(StopIteration):
+        first(iterable)
+
+    # Test case 4: Iterable with single element
+    iterable = [42]
+    result = first(iterable)
+    assert result == 42
 
 
 def test_getitem_():

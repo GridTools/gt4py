@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import functools
 import warnings
@@ -25,7 +19,7 @@ from gt4py.eve.utils import content_hash
 from gt4py.next import backend, common, config
 from gt4py.next.iterator import transforms
 from gt4py.next.iterator.transforms import global_tmps
-from gt4py.next.otf import recipes, stages, workflow
+from gt4py.next.otf import arguments, recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
@@ -47,14 +41,23 @@ def convert_arg(arg: Any) -> Any:
 
 
 def convert_args(
-    inp: stages.CompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
+    inp: stages.ExtendedCompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
 ) -> stages.CompiledProgram:
     def decorated_program(
-        *args: Any, offset_provider: dict[str, common.Connectivity | common.Dimension]
+        *args: Any,
+        offset_provider: dict[str, common.Connectivity | common.Dimension],
+        out: Any = None,
     ) -> None:
+        if out is not None:
+            args = (*args, out)
         converted_args = [convert_arg(arg) for arg in args]
         conn_args = extract_connectivity_args(offset_provider, device)
-        return inp(*converted_args, *conn_args)
+        # generate implicit domain size arguments only if necessary, using `iter_size_args()`
+        return inp(
+            *converted_args,
+            *(arguments.iter_size_args(args) if inp.implicit_domain else ()),
+            *conn_args,
+        )
 
     return decorated_program
 
@@ -98,19 +101,20 @@ def extract_connectivity_args(
     return args
 
 
-def compilation_hash(otf_closure: stages.ProgramCall) -> int:
+def compilation_hash(otf_closure: stages.AOTProgram) -> int:
     """Given closure compute a hash uniquely determining if we need to recompile."""
-    offset_provider = otf_closure.kwargs["offset_provider"]
+    offset_provider = otf_closure.args.offset_provider
     return hash(
         (
-            otf_closure.program,
+            otf_closure.data,
             # As the frontend types contain lists they are not hashable. As a workaround we just
             # use content_hash here.
-            content_hash(tuple(from_value(arg) for arg in otf_closure.args)),
-            id(offset_provider) if offset_provider else None,
-            otf_closure.kwargs.get("column_axis", None),
-            # TODO(tehrengruber): Remove `lift_mode` from call interface.
-            otf_closure.kwargs.get("lift_mode", None),
+            content_hash(tuple(from_value(arg) for arg in otf_closure.args.args)),
+            # Directly using the `id` of the offset provider is not possible as the decorator adds
+            # the implicitly defined ones (i.e. to allow the `TDim + 1` syntax) resulting in a
+            # different `id` every time. Instead use the `id` of each individual offset provider.
+            tuple((k, id(v)) for (k, v) in offset_provider.items()) if offset_provider else None,
+            otf_closure.args.column_axis,
         )
     )
 
@@ -129,7 +133,8 @@ class GTFNCompileWorkflowFactory(factory.Factory):
         )
 
     translation = factory.SubFactory(
-        gtfn_module.GTFNTranslationStepFactory, device_type=factory.SelfAttribute("..device_type")
+        gtfn_module.GTFNTranslationStepFactory,
+        device_type=factory.SelfAttribute("..device_type"),
     )
     bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableSource] = (
         nanobind.bind_source
@@ -185,6 +190,7 @@ class GTFNBackendFactory(factory.Factory):
         lambda o: modular_executor.ModularExecutor(otf_workflow=o.otf_workflow, name=o.name)
     )
     allocator = next_allocators.StandardCPUFieldBufferAllocator()
+    transforms = backend.DEFAULT_TRANSFORMS
 
 
 run_gtfn = GTFNBackendFactory()

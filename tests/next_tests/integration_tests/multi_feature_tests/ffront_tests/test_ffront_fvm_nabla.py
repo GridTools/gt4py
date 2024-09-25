@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from typing import Tuple
 
@@ -18,7 +12,7 @@ import numpy as np
 import pytest
 
 
-pytest.importorskip("atlas4py")  # isort: skip
+pytest.importorskip("atlas4py")
 
 from gt4py import next as gtx
 from gt4py.next import allocators, neighbor_sum
@@ -87,7 +81,9 @@ def test_ffront_compute_zavgS(exec_alloc_descriptor):
         atlas_utils.AtlasTable(setup.edges2node_connectivity).asnumpy(), Edge, Vertex, 2, False
     )
 
-    compute_zavgS.with_backend(executor)(pp, S_M[0], out=zavgS, offset_provider={"E2V": e2v})
+    compute_zavgS.with_backend(exec_alloc_descriptor)(
+        pp, S_M[0], out=zavgS, offset_provider={"E2V": e2v}
+    )
 
     assert_close(-199755464.25741270, np.min(zavgS.asnumpy()))
     assert_close(388241977.58389181, np.max(zavgS.asnumpy()))
@@ -113,7 +109,7 @@ def test_ffront_nabla(exec_alloc_descriptor):
         atlas_utils.AtlasTable(setup.nodes2edge_connectivity).asnumpy(), Vertex, Edge, 7
     )
 
-    pnabla.with_backend(executor)(
+    pnabla.with_backend(exec_alloc_descriptor)(
         pp, S_M, sign, vol, out=(pnabla_MXX, pnabla_MYY), offset_provider={"E2V": e2v, "V2E": v2e}
     )
 

@@ -1,22 +1,17 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import numpy as np
 import pytest
 
 import gt4py.next as gtx
 from gt4py.next import (
+    broadcast,
     cbrt,
     ceil,
     cos,
@@ -131,6 +126,30 @@ def test_unary_neg(cartesian_case):
         return -inp
 
     cases.verify_with_default_data(cartesian_case, uneg, ref=lambda inp1: -inp1)
+
+
+def test_unary_neg_float_conversion(cartesian_case):
+    @gtx.field_operator
+    def uneg_float() -> cases.IFloatField:
+        inp_f = broadcast(float(-1), (IDim,))
+        return inp_f
+
+    size = cartesian_case.default_sizes[IDim]
+    ref = cartesian_case.as_field([IDim], np.full(size, -1.0, dtype=float))
+    out = cases.allocate(cartesian_case, uneg_float, cases.RETURN)()
+    cases.verify(cartesian_case, uneg_float, out=out, ref=ref)
+
+
+def test_unary_neg_bool_conversion(cartesian_case):
+    @gtx.field_operator
+    def uneg_bool() -> cases.IBoolField:
+        inp_f = broadcast(bool(-1), (IDim,))
+        return inp_f
+
+    size = cartesian_case.default_sizes[IDim]
+    ref = cartesian_case.as_field([IDim], np.full(size, True, dtype=bool))
+    out = cases.allocate(cartesian_case, uneg_bool, cases.RETURN)()
+    cases.verify(cartesian_case, uneg_bool, out=out, ref=ref)
 
 
 def test_unary_invert(cartesian_case):

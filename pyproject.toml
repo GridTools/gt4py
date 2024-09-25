@@ -11,7 +11,7 @@ classifiers = [
   'Environment :: Console',
   'Environment :: GPU :: NVIDIA CUDA',
   'Intended Audience :: Science/Research',
-  'License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)',
+  'License :: OSI Approved :: BSD License',
   'Operating System :: POSIX',
   'Programming Language :: Python',
   'Programming Language :: Python :: 3.8',
@@ -36,7 +36,7 @@ dependencies = [
   'devtools>=0.6',
   'factory-boy>=3.3.0',
   'frozendict>=2.3',
-  'gridtools-cpp>=2.3.2,==2.*',
+  'gridtools-cpp>=2.3.4,==2.*',
   "importlib-resources>=5.0;python_version<'3.9'",
   'jinja2>=3.0.0',
   'lark>=1.1.2',
@@ -62,7 +62,7 @@ keywords = [
   'portable',
   'hpc'
 ]
-license = {text = 'GPL-3.0-or-later'}
+license = {file = 'LICENSE'}
 name = 'gt4py'
 readme = 'README.md'
 requires-python = '>=3.8'
@@ -75,12 +75,12 @@ all-cuda12 = ['gt4py[cuda12,dace,formatting,jax-cuda12,performance,testing]']
 # Other extras
 cuda11 = ['cupy-cuda11x>=12.0']
 cuda12 = ['cupy-cuda12x>=12.0']
-dace = ['dace>=0.15.1,<0.16', 'sympy>=1.9']
+dace = ['dace>=0.16.1', 'sympy>=1.9,<1.13']  # see https://github.com/spcl/dace/pull/1620
 formatting = ['clang-format>=9.0']
 gpu = ['cupy>=12.0']
-jax-cpu = ['jax[cpu]>=0.4.13']
-jax-cuda11 = ['jax[cuda11_pip]>=0.4.13']
-jax-cuda12 = ['jax[cuda12_pip]>=0.4.13']
+jax-cpu = ['jax[cpu]>=0.4.18; python_version>="3.10"']
+jax-cuda11 = ['jax[cuda11_pip]>=0.4.18; python_version>="3.10"']
+jax-cuda12 = ['jax[cuda12_pip]>=0.4.18; python_version>="3.10"']
 performance = ['scipy>=1.9.2']
 rocm-43 = ['cupy-rocm-4-3']
 testing = ['hypothesis>=6.0.0', 'pytest>=7.0']
@@ -99,7 +99,7 @@ Source = 'https://github.com/GridTools/gt4py'
 allow_dirty = false
 commit = false
 commit_args = ''
-current_version = '1.0.3'
+current_version = "1.0.4"
 ignore_missing_version = false
 message = 'Bump version: {current_version} → {new_version}'
 parse = '(?P<major>\d+)\.(?P<minor>\d+)(\.(?P<patch>\d+))?'
@@ -234,9 +234,11 @@ module = 'gt4py.next.iterator.runtime'
 
 [tool.pytest.ini_options]
 markers = [
+  'all: special marker that skips all tests',
   'requires_atlas: tests that require `atlas4py` bindings package',
   'requires_dace: tests that require `dace` package',
   'requires_gpu: tests that require a NVidia GPU (`cupy` and `cudatoolkit` are required)',
+  'starts_from_gtir_program: tests that require backend to start lowering from GTIR program',
   'uses_applied_shifts: tests that require backend support for applied-shifts',
   'uses_constant_fields: tests that require backend support for constant fields',
   'uses_dynamic_offsets: tests that require backend support for dynamic offsets',
@@ -293,7 +295,6 @@ docstring-code-format = true
 ignore = [
   'E501'  # [line-too-long]
 ]
-ignore-init-module-imports = true
 select = ['E', 'F', 'I', 'B', 'A', 'T10', 'ERA', 'NPY', 'RUF']
 typing-modules = ['gt4py.eve.extended_typing']
 unfixable = []

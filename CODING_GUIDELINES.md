@@ -105,7 +105,7 @@ We highly encourage the [doctest][doctest] format for code examples in docstring
 In general, you should structure new Python modules in the following way:
 
 1. _shebang_ line: `#! /usr/bin/env python3` (only for **executable scripts**!).
-2. License header (see `LICENSE_HEADER.txt`).
+2. License header (see `HEADER.txt`).
 3. Module docstring.
 4. Imports, alphabetically ordered within each block (fixed automatically by `ruff-formatter`):
    1. Block of imports from the standard library.
@@ -222,9 +222,7 @@ https://testandcode.com/116
 
 [doctest]: https://docs.python.org/3/library/doctest.html
 [google-style-guide]: https://google.github.io/styleguide/pyguide.html
-[mypy]: https://mypy.readthedocs.io/
 [mypy-error-codes]: https://mypy.readthedocs.io/en/stable/error_code_list.html
-[pre-commit]: https://pre-commit.com/
 [pylint]: https://pylint.pycqa.org/
 [ruff-formatter]: https://docs.astral.sh/ruff/formatter/
 [ruff-linter]: https://docs.astral.sh/ruff/linter/
@@ -233,4 +231,3 @@ https://testandcode.com/116
 [sphinx-autodoc]: https://www.sphinx-doc.org/en/master/usage/extensions/autodoc.html
 [sphinx-napoleon]: https://sphinxcontrib-napoleon.readthedocs.io/en/latest/index.html#
 [sphinx-rest]: https://www.sphinx-doc.org/en/master/usage/restructuredtext/basics.html
-[ci-docs]: docs/development/CI/infrastructure.md

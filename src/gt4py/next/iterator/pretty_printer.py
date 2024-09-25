@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """A pretty printer for the functional IR.
 
@@ -20,7 +14,7 @@ Inspired by P. Yelland, “A New Approach to Optimal Code Formatting”, 2015
 # TODO(tehrengruber): add support for printing the types of itir.Sym, itir.Literal nodes
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterator, Sequence
 from typing import Final
 
 from gt4py.eve import NodeTranslator
@@ -43,7 +37,7 @@ BINARY_OPS: Final = {
 }
 
 # replacements for builtin unary operations
-UNARY_OPS: Final = {"deref": "·", "lift": "↑", "not_": "¬"}
+UNARY_OPS: Final = {"deref": "·", "lift": "↑", "not_": "¬", "as_fieldop": "⇑"}
 
 # operator precedence
 PRECEDENCE: Final = {
@@ -63,6 +57,7 @@ PRECEDENCE: Final = {
     "deref": 7,
     "not_": 7,
     "lift": 7,
+    "as_fieldop": 7,
     "tuple_get": 8,
     "__call__": 8,
 }
@@ -126,13 +121,11 @@ class PrettyPrinter(NodeTranslator):
 
     def _hinterleave(
         self, blocks: Sequence[list[str]], sep: str, *, indent: bool = False
-    ) -> Iterable[list[str]]:
-        if not blocks:
-            return blocks
-        do_indent = self._indent if indent else lambda x: x
-        for block in blocks[:-1]:
-            yield do_indent(self._hmerge(block, [sep]))
-        yield do_indent(blocks[-1])
+    ) -> Iterator[list[str]]:
+        if blocks:
+            do_indent = self._indent if indent else lambda x: x
+            yield from (do_indent(self._hmerge(block, [sep])) for block in blocks[:-1])
+            yield do_indent(blocks[-1])
 
     def visit_Sym(self, node: ir.Sym, *, prec: int) -> list[str]:
         return [node.id]
@@ -144,7 +137,12 @@ class PrettyPrinter(NodeTranslator):
         return [str(node.value) + "ₒ"]
 
     def visit_AxisLiteral(self, node: ir.AxisLiteral, *, prec: int) -> list[str]:
-        return [str(node.value)]
+        kind = ""
+        if node.kind == ir.DimensionKind.HORIZONTAL:
+            kind = "ₕ"
+        elif node.kind == ir.DimensionKind.VERTICAL:
+            kind = "ᵥ"
+        return [str(node.value) + kind]
 
     def visit_SymRef(self, node: ir.SymRef, *, prec: int) -> list[str]:
         return [node.id]
@@ -272,6 +270,35 @@ class PrettyPrinter(NodeTranslator):
         )
         return self._optimum(h, v)
 
+    def visit_Temporary(self, node: ir.Temporary, *, prec: int) -> list[str]:
+        start, end = [node.id + " = temporary("], [");"]
+        args = []
+        if node.domain is not None:
+            args.append(self._hmerge(["domain="], self.visit(node.domain, prec=0)))
+        if node.dtype is not None:
+            args.append(self._hmerge(["dtype="], [str(node.dtype)]))
+        hargs = self._hmerge(*self._hinterleave(args, ", "))
+        vargs = self._vmerge(*self._hinterleave(args, ","))
+        oargs = self._optimum(hargs, vargs)
+        h = self._hmerge(start, oargs, end)
+        v = self._vmerge(start, self._indent(oargs), end)
+        return self._optimum(h, v)
+
+    def visit_SetAt(self, node: ir.SetAt, *, prec: int) -> list[str]:
+        expr = self.visit(node.expr, prec=0)
+        domain = self.visit(node.domain, prec=0)
+        target = self.visit(node.target, prec=0)
+
+        head = self._hmerge(target, [" @ "], domain)
+        foot = self._hmerge([" ← "], expr, [";"])
+
+        h = self._hmerge(head, foot)
+        v = self._vmerge(
+            head,
+            self._indent(self._indent(foot)),
+        )
+        return self._optimum(h, v)
+
     def visit_FencilDefinition(self, node: ir.FencilDefinition, *, prec: int) -> list[str]:
         assert prec == 0
         function_definitions = self.visit(node.function_definitions, prec=0)
@@ -289,6 +316,31 @@ class PrettyPrinter(NodeTranslator):
 
         return self._vmerge(
             params, self._indent(function_definitions), self._indent(closures), ["}"]
+        )
+
+    def visit_Program(self, node: ir.Program, *, prec: int) -> list[str]:
+        assert prec == 0
+        function_definitions = self.visit(node.function_definitions, prec=0)
+        body = self.visit(node.body, prec=0)
+        declarations = self.visit(node.declarations, prec=0)
+        params = self.visit(node.params, prec=0)
+
+        hparams = self._hmerge([node.id + "("], *self._hinterleave(params, ", "), [") {"])
+        vparams = self._vmerge(
+            [node.id + "("], *self._hinterleave(params, ",", indent=True), [") {"]
+        )
+        params = self._optimum(hparams, vparams)
+
+        function_definitions = self._vmerge(*function_definitions)
+        declarations = self._vmerge(*declarations)
+        body = self._vmerge(*body)
+
+        return self._vmerge(
+            params,
+            self._indent(function_definitions),
+            self._indent(declarations),
+            self._indent(body),
+            ["}"],
         )
 
     @classmethod

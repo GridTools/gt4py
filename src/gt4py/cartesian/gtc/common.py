@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -184,7 +178,7 @@ class NativeFunction(eve.StrEnum):
     CEIL = "ceil"
     TRUNC = "trunc"
 
-    IR_OP_TO_NUM_ARGS: ClassVar[Dict["NativeFunction", int]]
+    IR_OP_TO_NUM_ARGS: ClassVar[Dict[NativeFunction, int]]
 
     @property
     def arity(self) -> int:
@@ -235,8 +229,8 @@ class LevelMarker(eve.StrEnum):
 
 @enum.unique
 class ExprKind(eve.IntEnum):
-    SCALAR: "ExprKind" = typing.cast("ExprKind", enum.auto())
-    FIELD: "ExprKind" = typing.cast("ExprKind", enum.auto())
+    SCALAR: ExprKind = typing.cast("ExprKind", enum.auto())
+    FIELD: ExprKind = typing.cast("ExprKind", enum.auto())
 
 
 class LocNode(eve.Node):
@@ -349,7 +343,7 @@ class FieldAccess(eve.GenericNode, Generic[ExprT, VariableKOffsetT]):
     kind: ExprKind = ExprKind.FIELD
 
     @classmethod
-    def centered(cls, *, name: str, loc: Optional[eve.SourceLocation] = None) -> "FieldAccess":
+    def centered(cls, *, name: str, loc: Optional[eve.SourceLocation] = None) -> FieldAccess:
         return cls(name=name, loc=loc, offset=CartesianOffset.zero())
 
     @datamodels.validator("data_index")
@@ -727,7 +721,7 @@ class HorizontalInterval(eve.Node):
     end: Optional[AxisBound]
 
     @classmethod
-    def compute_domain(cls, start_offset: int = 0, end_offset: int = 0) -> "HorizontalInterval":
+    def compute_domain(cls, start_offset: int = 0, end_offset: int = 0) -> HorizontalInterval:
         return cls(start=AxisBound.start(start_offset), end=AxisBound.end(end_offset))
 
     @classmethod
@@ -737,7 +731,7 @@ class HorizontalInterval(eve.Node):
     @classmethod
     def at_endpt(
         cls, level: LevelMarker, start_offset: int, end_offset: Optional[int] = None
-    ) -> "HorizontalInterval":
+    ) -> HorizontalInterval:
         if end_offset is None:
             end_offset = start_offset + 1
         return cls(

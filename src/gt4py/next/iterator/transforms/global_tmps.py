@@ -1,31 +1,27 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+from __future__ import annotations
+
 import copy
 import dataclasses
 import functools
 from collections.abc import Mapping
 from typing import Any, Callable, Final, Iterable, Literal, Optional, Sequence
 
-import gt4py.eve as eve
 import gt4py.next as gtx
-from gt4py.eve import Coerced, NodeTranslator, PreserveLocationVisitor
+from gt4py.eve import NodeTranslator, PreserveLocationVisitor
+from gt4py.eve.extended_typing import Tuple
 from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next import common
-from gt4py.next.iterator import ir, type_inference
-from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
+from gt4py.next.iterator import ir
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.pretty_printer import PrettyPrinter
 from gt4py.next.iterator.transforms import trace_shifts
 from gt4py.next.iterator.transforms.cse import extract_subexpression
@@ -33,6 +29,11 @@ from gt4py.next.iterator.transforms.eta_reduction import EtaReduction
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
 from gt4py.next.iterator.transforms.prune_closure_inputs import PruneClosureInputs
 from gt4py.next.iterator.transforms.symbol_ref_utils import collect_symbol_refs
+from gt4py.next.iterator.type_system import (
+    inference as itir_type_inference,
+    type_specifications as it_ts,
+)
+from gt4py.next.type_system import type_specifications as ts
 
 
 """Iterator IR extension for global temporaries.
@@ -54,38 +55,17 @@ AUTO_DOMAIN: Final = ir.FunCall(fun=ir.SymRef(id="_gtmp_auto_domain"), args=[])
 # Iterator IR extension nodes
 
 
-class Temporary(ir.Node):
-    """Iterator IR extension: declaration of a temporary buffer."""
-
-    id: Coerced[eve.SymbolName]
-    domain: Optional[ir.Expr] = None
-    dtype: Optional[Any] = None
-
-
-class FencilWithTemporaries(ir.Node, SymbolTableTrait):
+class FencilWithTemporaries(
+    ir.Node, SymbolTableTrait
+):  # TODO(havogt): remove and use new `itir.Program` instead.
     """Iterator IR extension: declaration of a fencil with temporary buffers."""
 
     fencil: ir.FencilDefinition
     params: list[ir.Sym]
-    tmps: list[Temporary]
+    tmps: list[ir.Temporary]
 
 
 # Extensions for `PrettyPrinter` for easier debugging
-
-
-def pformat_Temporary(printer: PrettyPrinter, node: Temporary, *, prec: int) -> list[str]:
-    start, end = [node.id + " = temporary("], [");"]
-    args = []
-    if node.domain is not None:
-        args.append(printer._hmerge(["domain="], printer.visit(node.domain, prec=0)))
-    if node.dtype is not None:
-        args.append(printer._hmerge(["dtype="], [str(node.dtype)]))
-    hargs = printer._hmerge(*printer._hinterleave(args, ", "))
-    vargs = printer._vmerge(*printer._hinterleave(args, ","))
-    oargs = printer._optimum(hargs, vargs)
-    h = printer._hmerge(start, oargs, end)
-    v = printer._vmerge(start, printer._indent(oargs), end)
-    return printer._optimum(h, v)
 
 
 def pformat_FencilWithTemporaries(
@@ -117,7 +97,6 @@ def pformat_FencilWithTemporaries(
     return printer._vmerge(params, printer._indent(body), ["}"])
 
 
-PrettyPrinter.visit_Temporary = pformat_Temporary  # type: ignore
 PrettyPrinter.visit_FencilWithTemporaries = pformat_FencilWithTemporaries  # type: ignore
 
 
@@ -128,24 +107,28 @@ def canonicalize_applied_lift(closure_params: list[str], node: ir.FunCall) -> ir
 
     Transform lift such that the arguments to the applied lift are only symbols.
 
-    >>> expr = im.lift(im.lambda_("a")(im.deref("a")))(im.lift("deref")("inp"))
+    >>> bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
+    >>> it_type = it_ts.IteratorType(position_dims=[], defined_dims=[], element_type=bool_type)
+    >>> expr = im.lift(im.lambda_("a")(im.deref("a")))(im.lift("deref")(im.ref("inp", it_type)))
     >>> print(expr)
     (↑(λ(a) → ·a))((↑deref)(inp))
     >>> print(canonicalize_applied_lift(["inp"], expr))
     (↑(λ(inp) → (λ(a) → ·a)((↑deref)(inp))))(inp)
     """
-    assert (
-        isinstance(node, ir.FunCall)
-        and isinstance(node.fun, ir.FunCall)
-        and node.fun.fun == ir.SymRef(id="lift")
-    )
-    stencil = node.fun.args[0]
+    assert cpm.is_applied_lift(node)
+    stencil = node.fun.args[0]  # type: ignore[attr-defined]  # ensured by is_applied lift
     it_args = node.args
     if any(not isinstance(it_arg, ir.SymRef) for it_arg in it_args):
-        used_closure_params = collect_symbol_refs(node)
-        assert not (set(used_closure_params) - set(closure_params))
-        return im.lift(im.lambda_(*used_closure_params)(im.call(stencil)(*it_args)))(
-            *used_closure_params
+        closure_param_refs = collect_symbol_refs(node, as_ref=True)
+        assert not ({str(ref.id) for ref in closure_param_refs} - set(closure_params))
+        new_node = im.lift(
+            im.lambda_(*[im.sym(param.id) for param in closure_param_refs])(
+                im.call(stencil)(*it_args)
+            )
+        )(*closure_param_refs)
+        # ensure all types are inferred
+        return itir_type_inference.infer(
+            new_node, inplace=True, allow_undeclared_symbols=True, offset_provider={}
         )
     return node
 
@@ -162,11 +145,12 @@ class TemporaryExtractionPredicate:
 
     def __call__(self, expr: ir.Expr, num_occurences: int) -> bool:
         """Determine if `expr` is an applied lift that should be extracted as a temporary."""
-        if not is_applied_lift(expr):
+        if not cpm.is_applied_lift(expr):
             return False
         # do not extract when the result is a list (i.e. a lift expression used in a `reduce` call)
         # as we can not create temporaries for these stencils
-        if isinstance(expr.annex.type.dtype, type_inference.List):
+        assert isinstance(expr.type, it_ts.IteratorType)
+        if isinstance(expr.type.element_type, it_ts.ListType):
             return False
         if self.heuristics and not self.heuristics(expr):
             return False
@@ -189,18 +173,19 @@ class SimpleTemporaryExtractionHeuristics:
 
     closure: ir.StencilClosure
 
-    @functools.cached_property
-    def closure_shifts(self):
-        return trace_shifts.TraceShifts.apply(self.closure, inputs_only=False)
+    def __post_init__(self) -> None:
+        trace_shifts.trace_stencil(
+            self.closure.stencil, num_args=len(self.closure.inputs), save_to_annex=True
+        )
 
     def __call__(self, expr: ir.Expr) -> bool:
-        shifts = self.closure_shifts[id(expr)]
+        shifts = expr.annex.recorded_shifts
         if len(shifts) > 1:
             return True
         return False
 
 
-def _closure_parameter_argument_mapping(closure: ir.StencilClosure):
+def _closure_parameter_argument_mapping(closure: ir.StencilClosure) -> dict[str, ir.Expr]:
     """
     Create a mapping from the closures parameters to the closure arguments.
 
@@ -208,7 +193,7 @@ def _closure_parameter_argument_mapping(closure: ir.StencilClosure):
     to `arg`. In case the stencil is a scan, a mapping from closure inputs to scan pass (i.e. first
     arg is ignored) is returned.
     """
-    is_scan = isinstance(closure.stencil, ir.FunCall) and closure.stencil.fun == im.ref("scan")
+    is_scan = cpm.is_call_to(closure.stencil, "scan")
 
     if is_scan:
         stencil = closure.stencil.args[0]  # type: ignore[attr-defined]  # ensured by is_scan
@@ -229,7 +214,7 @@ def _ensure_expr_does_not_capture(expr: ir.Expr, whitelist: list[ir.Sym]) -> Non
 
 def split_closures(
     node: ir.FencilDefinition,
-    offset_provider,
+    offset_provider: common.OffsetProvider,
     *,
     extraction_heuristics: Optional[
         Callable[[ir.StencilClosure], Callable[[ir.Expr], bool]]
@@ -248,16 +233,16 @@ def split_closures(
     """
     if not extraction_heuristics:
         # extract all (eligible) lifts
-        def always_extract_heuristics(_):
+        def always_extract_heuristics(_: ir.StencilClosure) -> Callable[[ir.Expr], bool]:
             return lambda _: True
 
         extraction_heuristics = always_extract_heuristics
 
     uid_gen_tmps = UIDGenerator(prefix="_tmp")
 
-    type_inference.infer_all(node, offset_provider=offset_provider, save_to_annex=True)
+    node = itir_type_inference.infer(node, offset_provider=offset_provider)
 
-    tmps: list[ir.Sym] = []
+    tmps: list[tuple[str, ts.DataType]] = []
 
     closures: list[ir.StencilClosure] = []
     for closure in reversed(node.closures):
@@ -265,13 +250,14 @@ def split_closures(
         while closure_stack:
             current_closure: ir.StencilClosure = closure_stack.pop()
 
-            if current_closure.stencil == im.ref("deref"):
+            if (
+                isinstance(current_closure.stencil, ir.SymRef)
+                and current_closure.stencil.id == "deref"
+            ):
                 closures.append(current_closure)
                 continue
 
-            is_scan: bool = isinstance(
-                current_closure.stencil, ir.FunCall
-            ) and current_closure.stencil.fun == im.ref("scan")
+            is_scan: bool = cpm.is_call_to(current_closure.stencil, "scan")
             current_closure_stencil = (
                 current_closure.stencil if not is_scan else current_closure.stencil.args[0]  # type: ignore[attr-defined]  # ensured by is_scan
             )
@@ -298,18 +284,22 @@ def split_closures(
                     )
 
                     # make sure the arguments to the applied lift are only symbols
-                    # (otherwise we would need to canonicalize using `canonicalize_applied_lift`
-                    # this doesn't seem to be necessary right now as we extract the lifts
-                    # in post-order of the tree)
+                    if not all(isinstance(arg, ir.SymRef) for arg in lift_expr.args):
+                        lift_expr = canonicalize_applied_lift(
+                            [str(param.id) for param in current_closure_stencil.params], lift_expr
+                        )
                     assert all(isinstance(arg, ir.SymRef) for arg in lift_expr.args)
 
                     # create a mapping from the closures parameters to the closure arguments
                     closure_param_arg_mapping = _closure_parameter_argument_mapping(current_closure)
 
-                    stencil: ir.Node = lift_expr.fun.args[0]  # usually an ir.Lambda or scan
+                    # usually an ir.Lambda or scan
+                    stencil: ir.Node = lift_expr.fun.args[0]  # type: ignore[attr-defined] # ensured by canonicalize_applied_lift
 
                     # allocate a new temporary
-                    tmps.append(tmp_sym)
+                    assert isinstance(stencil.type, ts.FunctionType)
+                    assert isinstance(stencil.type.returns, ts.DataType)
+                    tmps.append((tmp_sym.id, stencil.type.returns))
 
                     # create a new closure that executes the stencil of the applied lift and
                     # writes the result to the newly created temporary
@@ -360,14 +350,13 @@ def split_closures(
         fencil=ir.FencilDefinition(
             id=node.id,
             function_definitions=node.function_definitions,
-            params=node.params
-            + [ir.Sym(id=tmp.id) for tmp in tmps]
-            + [ir.Sym(id=AUTO_DOMAIN.fun.id)],  # type: ignore[attr-defined]  # value is a global constant
+            params=node.params + [im.sym(name) for name, _ in tmps] + [im.sym(AUTO_DOMAIN.fun.id)],  # type: ignore[attr-defined]  # value is a global constant
             closures=list(reversed(closures)),
             location=node.location,
+            implicit_domain=node.implicit_domain,
         ),
         params=node.params,
-        tmps=[Temporary(id=tmp.id) for tmp in tmps],
+        tmps=[ir.Temporary(id=name, dtype=type_) for name, type_ in tmps],
     )
 
 
@@ -414,7 +403,7 @@ def _max_domain_sizes_by_location_type(offset_provider: Mapping[str, Any]) -> di
             )
             sizes[provider.neighbor_axis.value] = max(
                 sizes.get(provider.neighbor_axis.value, 0),
-                provider.table.max(),  # type: ignore[attr-defined] # TODO(havogt): improve typing for NDArrayObject
+                provider.table.max() + 1,  # type: ignore[attr-defined] # TODO(havogt): improve typing for NDArrayObject
             )
     return sizes
 
@@ -431,16 +420,18 @@ class SymbolicRange:
 @dataclasses.dataclass
 class SymbolicDomain:
     grid_type: Literal["unstructured_domain", "cartesian_domain"]
-    ranges: dict[str, SymbolicRange]
+    ranges: dict[
+        common.Dimension, SymbolicRange
+    ]  # TODO(havogt): remove `AxisLiteral` by `Dimension` everywhere
 
     @classmethod
-    def from_expr(cls, node: ir.Node):
+    def from_expr(cls, node: ir.Node) -> SymbolicDomain:
         assert isinstance(node, ir.FunCall) and node.fun in [
             im.ref("unstructured_domain"),
             im.ref("cartesian_domain"),
         ]
 
-        ranges: dict[str, SymbolicRange] = {}
+        ranges: dict[common.Dimension, SymbolicRange] = {}
         for named_range in node.args:
             assert (
                 isinstance(named_range, ir.FunCall)
@@ -450,19 +441,65 @@ class SymbolicDomain:
             axis_literal, lower_bound, upper_bound = named_range.args
             assert isinstance(axis_literal, ir.AxisLiteral)
 
-            ranges[axis_literal.value] = SymbolicRange(lower_bound, upper_bound)
+            ranges[common.Dimension(value=axis_literal.value, kind=axis_literal.kind)] = (
+                SymbolicRange(lower_bound, upper_bound)
+            )
         return cls(node.fun.id, ranges)  # type: ignore[attr-defined]  # ensure by assert above
 
-    def as_expr(self):
-        return im.call(self.grid_type)(
-            *[
-                im.call("named_range")(ir.AxisLiteral(value=d), r.start, r.stop)
-                for d, r in self.ranges.items()
-            ]
-        )
+    def as_expr(self) -> ir.FunCall:
+        converted_ranges: dict[common.Dimension | str, tuple[ir.Expr, ir.Expr]] = {
+            key: (value.start, value.stop) for key, value in self.ranges.items()
+        }
+        return im.domain(self.grid_type, converted_ranges)
+
+    def translate(
+        self: SymbolicDomain,
+        shift: Tuple[ir.OffsetLiteral, ...],
+        offset_provider: common.OffsetProvider,
+    ) -> SymbolicDomain:
+        dims = list(self.ranges.keys())
+        new_ranges = {dim: self.ranges[dim] for dim in dims}
+        if len(shift) == 0:
+            return self
+        if len(shift) == 2:
+            off, val = shift
+            assert isinstance(off.value, str) and isinstance(val.value, int)
+            nbt_provider = offset_provider[off.value]
+            if isinstance(nbt_provider, common.Dimension):
+                current_dim = nbt_provider
+                # cartesian offset
+                new_ranges[current_dim] = SymbolicRange.translate(
+                    self.ranges[current_dim], val.value
+                )
+            elif isinstance(nbt_provider, common.Connectivity):
+                # unstructured shift
+                # note: ugly but cheap re-computation, but should disappear
+                horizontal_sizes = _max_domain_sizes_by_location_type(offset_provider)
+
+                old_dim = nbt_provider.origin_axis
+                new_dim = nbt_provider.neighbor_axis
+
+                assert new_dim not in new_ranges or old_dim == new_dim
+
+                # TODO(tehrengruber): Do we need symbolic sizes, e.g., for ICON?
+                new_range = SymbolicRange(
+                    im.literal("0", ir.INTEGER_INDEX_BUILTIN),
+                    im.literal(str(horizontal_sizes[new_dim.value]), ir.INTEGER_INDEX_BUILTIN),
+                )
+                new_ranges = dict(
+                    (dim, range_) if dim != old_dim else (new_dim, new_range)
+                    for dim, range_ in new_ranges.items()
+                )
+            else:
+                raise AssertionError()
+            return SymbolicDomain(self.grid_type, new_ranges)
+        elif len(shift) > 2:
+            return self.translate(shift[0:2], offset_provider).translate(shift[2:], offset_provider)
+        else:
+            raise AssertionError("Number of shifts must be a multiple of 2.")
 
 
-def domain_union(domains: list[SymbolicDomain]) -> SymbolicDomain:
+def domain_union(*domains: SymbolicDomain) -> SymbolicDomain:
     """Return the (set) union of a list of domains."""
     new_domain_ranges = {}
     assert all(domain.grid_type == domains[0].grid_type for domain in domains)
@@ -477,6 +514,7 @@ def domain_union(domains: list[SymbolicDomain]) -> SymbolicDomain:
             [domain.ranges[dim].stop for domain in domains],
         )
         new_domain_ranges[dim] = SymbolicRange(start, stop)
+
     return SymbolicDomain(domains[0].grid_type, new_domain_ranges)
 
 
@@ -500,7 +538,7 @@ def update_domains(
     node: FencilWithTemporaries,
     offset_provider: Mapping[str, Any],
     symbolic_sizes: Optional[dict[str, str]],
-):
+) -> FencilWithTemporaries:
     horizontal_sizes = _max_domain_sizes_by_location_type(offset_provider)
     closures: list[ir.StencilClosure] = []
     domains = dict[str, ir.FunCall]()
@@ -526,8 +564,9 @@ def update_domains(
 
         closures.append(closure)
 
-        local_shifts = trace_shifts.TraceShifts.apply(closure)
-        for param, shift_chains in local_shifts.items():
+        local_shifts = trace_shifts.trace_stencil(closure.stencil, num_args=len(closure.inputs))
+        for param_sym, shift_chains in zip(closure.inputs, local_shifts):
+            param = param_sym.id
             assert isinstance(param, str)
             consumed_domains: list[SymbolicDomain] = (
                 [SymbolicDomain.from_expr(domains[param])] if param in domains else []
@@ -537,13 +576,14 @@ def update_domains(
                 for offset_name, offset in _group_offsets(shift_chain):
                     if isinstance(offset_provider[offset_name], gtx.Dimension):
                         # cartesian shift
-                        dim = offset_provider[offset_name].value
+                        dim = offset_provider[offset_name]
+                        assert offset is not trace_shifts.Sentinel.ALL_NEIGHBORS
                         consumed_domain.ranges[dim] = consumed_domain.ranges[dim].translate(offset)
                     elif isinstance(offset_provider[offset_name], common.Connectivity):
                         # unstructured shift
                         nbt_provider = offset_provider[offset_name]
-                        old_axis = nbt_provider.origin_axis.value
-                        new_axis = nbt_provider.neighbor_axis.value
+                        old_axis = nbt_provider.origin_axis
+                        new_axis = nbt_provider.neighbor_axis
 
                         assert new_axis not in consumed_domain.ranges or old_axis == new_axis
 
@@ -551,13 +591,13 @@ def update_domains(
                             new_range = SymbolicRange(
                                 im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                                 im.literal(
-                                    str(horizontal_sizes[new_axis]), ir.INTEGER_INDEX_BUILTIN
+                                    str(horizontal_sizes[new_axis.value]), ir.INTEGER_INDEX_BUILTIN
                                 ),
                             )
                         else:
                             new_range = SymbolicRange(
                                 im.literal("0", ir.INTEGER_INDEX_BUILTIN),
-                                im.ref(symbolic_sizes[new_axis]),
+                                im.ref(symbolic_sizes[new_axis.value]),
                             )
                         consumed_domain.ranges = dict(
                             (axis, range_) if axis != old_axis else (new_axis, new_range)
@@ -578,7 +618,7 @@ def update_domains(
                     consumed_domain.ranges.keys() == consumed_domains[0].ranges.keys()
                     for consumed_domain in consumed_domains
                 ):  # scalar otherwise
-                    domains[param] = domain_union(consumed_domains).as_expr()
+                    domains[param] = domain_union(*consumed_domains).as_expr()
 
     return FencilWithTemporaries(
         fencil=ir.FencilDefinition(
@@ -587,6 +627,7 @@ def update_domains(
             params=node.fencil.params[:-1],  # remove `_gtmp_auto_domain` param again
             closures=list(reversed(closures)),
             location=node.fencil.location,
+            implicit_domain=node.fencil.implicit_domain,
         ),
         params=node.params,
         tmps=node.tmps,
@@ -594,14 +635,16 @@ def update_domains(
 
 
 def _tuple_constituents(node: ir.Expr) -> Iterable[ir.Expr]:
-    if isinstance(node, ir.FunCall) and node.fun == im.ref("make_tuple"):
+    if cpm.is_call_to(node, "make_tuple"):
         for arg in node.args:
             yield from _tuple_constituents(arg)
     else:
         yield node
 
 
-def collect_tmps_info(node: FencilWithTemporaries, *, offset_provider) -> FencilWithTemporaries:
+def collect_tmps_info(
+    node: FencilWithTemporaries, *, offset_provider: common.OffsetProvider
+) -> FencilWithTemporaries:
     """Perform type inference for finding the types of temporaries and sets the temporary size."""
     tmps = {tmp.id for tmp in node.tmps}
     domains: dict[str, ir.Expr] = {}
@@ -614,40 +657,24 @@ def collect_tmps_info(node: FencilWithTemporaries, *, offset_provider) -> Fencil
             assert output_field.id not in domains or domains[output_field.id] == closure.domain
             domains[output_field.id] = closure.domain
 
-    def convert_type(dtype):
-        if isinstance(dtype, type_inference.Primitive):
-            return dtype.name
-        elif isinstance(dtype, type_inference.Tuple):
-            return tuple(convert_type(el) for el in dtype)
-        elif isinstance(dtype, type_inference.List):
-            raise NotImplementedError("Temporaries with dtype list not supported.")
-        raise AssertionError()
-
-    all_types = type_inference.infer_all(node.fencil, offset_provider=offset_provider)
-    fencil_type = all_types[id(node.fencil)]
-    assert isinstance(fencil_type, type_inference.FencilDefinitionType)
-    assert isinstance(fencil_type.params, type_inference.Tuple)
-    types = dict[str, ir.Expr]()
-    for param in node.fencil.params:
-        if param.id in tmps:
-            dtype = all_types[id(param)]
-            assert isinstance(dtype, type_inference.Val)
-            types[param.id] = convert_type(dtype.dtype)
-
-    return FencilWithTemporaries(
+    new_node = FencilWithTemporaries(
         fencil=node.fencil,
         params=node.params,
         tmps=[
-            Temporary(id=tmp.id, domain=domains[tmp.id], dtype=types[tmp.id]) for tmp in node.tmps
+            ir.Temporary(id=tmp.id, domain=domains[tmp.id], dtype=tmp.dtype) for tmp in node.tmps
         ],
     )
+    # TODO(tehrengruber): type inference is only really needed to infer the types of the temporaries
+    #  and write them to the params of the inner fencil. This should be cleaned up after we
+    #  refactored the IR.
+    return itir_type_inference.infer(new_node, offset_provider=offset_provider)
 
 
-def validate_no_dynamic_offsets(node: ir.Node):
+def validate_no_dynamic_offsets(node: ir.Node) -> None:
     """Vaidate we have no dynamic offsets, e.g. `shift(Ioff, deref(...))(...)`"""
     for call_node in node.walk_values().if_isinstance(ir.FunCall):
         assert isinstance(call_node, ir.FunCall)
-        if call_node.fun == im.ref("shift"):
+        if cpm.is_call_to(call_node, "shift"):
             if any(not isinstance(arg, ir.OffsetLiteral) for arg in call_node.args):
                 raise NotImplementedError("Dynamic offsets not supported in temporary pass.")
 

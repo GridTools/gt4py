@@ -1,34 +1,27 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
 import dataclasses
 import functools
-import warnings
 from typing import Any, Callable, Final, Optional
 
 import factory
 import numpy as np
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import codegen, trees, utils
+from gt4py.eve import codegen
 from gt4py.next import common
 from gt4py.next.common import Connectivity, Dimension
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.transforms import LiftMode, pass_manager
+from gt4py.next.iterator.transforms import LiftMode, fencil_to_program, pass_manager
 from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
 from gt4py.next.program_processors.codegens.gtfn.codegen import GTFNCodegen, GTFNIMCodegen
@@ -46,11 +39,14 @@ def get_param_description(name: str, obj: Any) -> interface.Parameter:
 
 @dataclasses.dataclass(frozen=True)
 class GTFNTranslationStep(
-    workflow.ChainableWorkflowMixin[
-        stages.ProgramCall,
+    workflow.ReplaceEnabledWorkflowMixin[
+        stages.AOTProgram,
         stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
     ],
-    step_types.TranslationStep[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
+    workflow.ChainableWorkflowMixin[
+        stages.AOTProgram,
+        stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
+    ],
 ):
     language_settings: Optional[languages.LanguageWithHeaderFilesSettings] = None
     # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
@@ -93,21 +89,6 @@ class GTFNTranslationStep(
         parameters: list[interface.Parameter] = []
         arg_exprs: list[str] = []
 
-        # TODO(tehrengruber): The backend expects all arguments to a stencil closure to be a SID
-        #  so transform all scalar arguments that are used in a closure into one before we pass
-        #  them to the generated source. This is not a very clean solution and will fail when
-        #  the respective parameter is used elsewhere, e.g. in a domain construction, as it is
-        #  expected to be scalar there (instead of a SID). We could solve this by:
-        #   1.) Extending the backend to support scalar arguments in a closure (as in embedded
-        #       backend).
-        #   2.) Use SIDs for all arguments and deref when a scalar is required.
-        closure_scalar_parameters = (
-            trees.pre_walk_values(utils.XIterable(program.closures).getattr("inputs").to_list())
-            .if_isinstance(itir.SymRef)
-            .getattr("id")
-            .map(str)
-            .to_list()
-        )
         for obj, program_param in zip(args, program.params):
             # parameter
             parameter = get_param_description(program_param.id, obj)
@@ -115,14 +96,7 @@ class GTFNTranslationStep(
 
             arg = f"std::forward<decltype({parameter.name})>({parameter.name})"
 
-            # argument conversion expression
-            if (
-                isinstance(parameter.type_, ts.ScalarType)
-                and parameter.name in closure_scalar_parameters
-            ):
-                # convert into sid
-                arg = f"gridtools::stencil::global_parameter({arg})"
-            elif isinstance(parameter.type_, ts.FieldType):
+            if isinstance(parameter.type_, ts.FieldType):
                 for dim in parameter.type_.dims:
                     if (
                         isinstance(
@@ -189,26 +163,15 @@ class GTFNTranslationStep(
         self,
         program: itir.FencilDefinition,
         offset_provider: dict[str, Connectivity | Dimension],
-        runtime_lift_mode: Optional[LiftMode],
-    ) -> itir.FencilDefinition:
-        # TODO(tehrengruber): Remove `lift_mode` from call interface. It has been implicitly added
-        #  to the interface of all (or at least all of concern) backends, but instead should be
-        #  configured in the backend itself (like it is here), until then we respect the argument
-        #  here and warn the user if it differs from the one configured.
-        lift_mode = runtime_lift_mode or self.lift_mode
-        if runtime_lift_mode and runtime_lift_mode != self.lift_mode:
-            warnings.warn(
-                f"GTFN Backend was configured for LiftMode `{self.lift_mode!s}`, but "
-                f"overriden to be {runtime_lift_mode!s} at runtime.",
-                stacklevel=2,
-            )
-
+    ) -> itir.Program:
         if not self.enable_itir_transforms:
-            return program
+            return fencil_to_program.FencilToProgram().apply(
+                program
+            )  # FIXME[#1582](tehrengruber): should be removed after refactoring to combined IR
 
         apply_common_transforms = functools.partial(
             pass_manager.apply_common_transforms,
-            lift_mode=lift_mode,
+            lift_mode=self.lift_mode,
             offset_provider=offset_provider,
             # sid::composite (via hymap) supports assigning from tuple with more elements to tuple with fewer elements
             unconditionally_collapse_tuples=True,
@@ -235,9 +198,8 @@ class GTFNTranslationStep(
         program: itir.FencilDefinition,
         offset_provider: dict[str, Connectivity | Dimension],
         column_axis: Optional[common.Dimension],
-        runtime_lift_mode: Optional[LiftMode] = None,
     ) -> str:
-        new_program = self._preprocess_program(program, offset_provider, runtime_lift_mode)
+        new_program = self._preprocess_program(program, offset_provider)
         gtfn_ir = GTFN_lowering.apply(
             new_program, offset_provider=offset_provider, column_axis=column_axis
         )
@@ -250,21 +212,22 @@ class GTFNTranslationStep(
         return codegen.format_source("cpp", generated_code, style="LLVM")
 
     def __call__(
-        self, inp: stages.ProgramCall
+        self, inp: stages.AOTProgram
     ) -> stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings]:
         """Generate GTFN C++ code from the ITIR definition."""
-        program: itir.FencilDefinition = inp.program
+        program: itir.FencilDefinition | itir.Program = inp.data
+        assert isinstance(program, itir.FencilDefinition)
 
         # handle regular parameters and arguments of the program (i.e. what the user defined in
         #  the program)
         regular_parameters, regular_args_expr = self._process_regular_arguments(
-            program, inp.args, inp.kwargs["offset_provider"]
+            program, inp.args.args, inp.args.offset_provider
         )
 
         # handle connectivity parameters and arguments (i.e. what the user provided in the offset
         #  provider)
         connectivity_parameters, connectivity_args_expr = self._process_connectivity_args(
-            inp.kwargs["offset_provider"]
+            inp.args.offset_provider
         )
 
         # combine into a format that is aligned with what the backend expects
@@ -280,15 +243,13 @@ class GTFNTranslationStep(
         decl_src = cpp_interface.render_function_declaration(function, body=decl_body)
         stencil_src = self.generate_stencil_source(
             program,
-            inp.kwargs["offset_provider"],
-            inp.kwargs.get("column_axis", None),
-            inp.kwargs.get("lift_mode", None),
+            inp.args.offset_provider,
+            inp.args.column_axis,
         )
         source_code = interface.format_source(
             self._language_settings(),
             f"""
                     #include <{self._backend_header()}>
-                    #include <gridtools/stencil/global_parameter.hpp>
                     #include <gridtools/sid/dimension_to_tuple_like.hpp>
                     {stencil_src}
                     {decl_src}
@@ -303,6 +264,7 @@ class GTFNTranslationStep(
             source_code=source_code,
             language=self._language(),
             language_settings=self._language_settings(),
+            implicit_domain=inp.data.implicit_domain,
         )
         return module
 
@@ -363,8 +325,8 @@ class GTFNTranslationStepFactory(factory.Factory):
         model = GTFNTranslationStep
 
 
-translate_program_cpu: Final[step_types.TranslationStep] = GTFNTranslationStep()
+translate_program_cpu: Final[step_types.TranslationStep] = GTFNTranslationStepFactory()
 
-translate_program_gpu: Final[step_types.TranslationStep] = GTFNTranslationStep(
+translate_program_gpu: Final[step_types.TranslationStep] = GTFNTranslationStepFactory(
     device_type=core_defs.DeviceType.CUDA
 )

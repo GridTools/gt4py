@@ -1,16 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+from __future__ import annotations
 
 import copy
 import inspect
@@ -56,7 +52,7 @@ def add_optional_fields(
     for name, info in parameter_info.items():
         if info.access == AccessKind.NONE and name in kwargs and name not in sdfg.symbols:
             if isinstance(kwargs[name], dace.data.Scalar):
-                sdfg.add_symbol(name, stype=kwargs[name].dtype)
+                sdfg.add_scalar(name, dtype=kwargs[name].dtype)
             else:
                 sdfg.add_symbol(name, stype=dace.typeclass(type(kwargs[name])))
     return sdfg
@@ -64,7 +60,7 @@ def add_optional_fields(
 
 @dataclass(frozen=True)
 class DaCeFrozenStencil(FrozenStencil, SDFGConvertible):
-    stencil_object: "DaCeStencilObject"
+    stencil_object: DaCeStencilObject
     origin: Dict[str, Tuple[int, ...]]
     domain: Tuple[int, ...]
     sdfg: dace.SDFG
@@ -101,7 +97,7 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
         return domain, origins_tuple
 
     def freeze(
-        self: "DaCeStencilObject", *, origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]
+        self: DaCeStencilObject, *, origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]
     ) -> DaCeFrozenStencil:
         key = DaCeStencilObject._get_domain_origin_key(domain, origin)
         if key in self._frozen_cache:
@@ -141,8 +137,8 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
         self,
         constant_args: Dict[str, Any],
         given_args: Set[str],
-        parent_closure: Optional["dace.frontend.python.common.SDFGClosure"] = None,
-    ) -> "dace.frontend.python.common.SDFGClosure":
+        parent_closure: Optional[dace.frontend.python.common.SDFGClosure] = None,
+    ) -> dace.frontend.python.common.SDFGClosure:
         return dace.frontend.python.common.SDFGClosure()
 
     def __sdfg__(self, *args, **kwargs) -> dace.SDFG:

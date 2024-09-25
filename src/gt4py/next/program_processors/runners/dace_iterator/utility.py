@@ -1,41 +1,21 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 import itertools
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, Mapping
 
 import dace
 
 import gt4py.next.iterator.ir as itir
 from gt4py import eve
-from gt4py.next import Dimension
-from gt4py.next.common import NeighborTable
+from gt4py.next.common import Connectivity
+from gt4py.next.program_processors.runners.dace_common import utility as dace_common_util
 from gt4py.next.type_system import type_specifications as ts
-
-
-def dace_debuginfo(
-    node: itir.Node, debuginfo: Optional[dace.dtypes.DebugInfo] = None
-) -> Optional[dace.dtypes.DebugInfo]:
-    location = node.location
-    if location:
-        return dace.dtypes.DebugInfo(
-            start_line=location.line,
-            start_column=location.column if location.column else 0,
-            end_line=location.end_line if location.end_line else -1,
-            end_column=location.end_column if location.end_column else 0,
-            filename=location.filename,
-        )
-    return debuginfo
 
 
 def as_dace_type(type_: ts.ScalarType) -> dace.dtypes.typeclass:
@@ -52,36 +32,12 @@ def as_dace_type(type_: ts.ScalarType) -> dace.dtypes.typeclass:
     raise ValueError(f"Scalar type '{type_}' not supported.")
 
 
-def as_scalar_type(typestr: str) -> ts.ScalarType:
-    try:
-        kind = getattr(ts.ScalarKind, typestr.upper())
-    except AttributeError as ex:
-        raise ValueError(f"Data type {typestr} not supported.") from ex
-    return ts.ScalarType(kind)
-
-
-def filter_neighbor_tables(offset_provider: Mapping[str, Any]) -> dict[str, NeighborTable]:
-    return {
-        offset: table
-        for offset, table in offset_provider.items()
-        if isinstance(table, NeighborTable)
-    }
-
-
-def get_used_neighbor_tables(
+def get_used_connectivities(
     node: itir.Node, offset_provider: Mapping[str, Any]
-) -> dict[str, NeighborTable]:
-    neighbor_tables = filter_neighbor_tables(offset_provider)
+) -> dict[str, Connectivity]:
+    connectivities = dace_common_util.filter_connectivities(offset_provider)
     offset_dims = set(eve.walk_values(node).if_isinstance(itir.OffsetLiteral).getattr("value"))
-    return {offset: neighbor_tables[offset] for offset in offset_dims if offset in neighbor_tables}
-
-
-def connectivity_identifier(name: str) -> str:
-    return f"__connectivity_{name}"
-
-
-def get_sorted_dims(dims: Sequence[Dimension]) -> Sequence[tuple[int, Dimension]]:
-    return sorted(enumerate(dims), key=lambda v: v[1].value)
+    return {offset: connectivities[offset] for offset in offset_dims if offset in connectivities}
 
 
 def map_nested_sdfg_symbols(
@@ -200,6 +156,6 @@ def new_array_symbols(name: str, ndim: int) -> tuple[list[dace.symbol], list[dac
 def flatten_list(node_list: list[Any]) -> list[Any]:
     return list(
         itertools.chain.from_iterable(
-            [flatten_list(e) if e.__class__ == list else [e] for e in node_list]
+            [flatten_list(e) if isinstance(e, list) else [e] for e in node_list]
         )
     )

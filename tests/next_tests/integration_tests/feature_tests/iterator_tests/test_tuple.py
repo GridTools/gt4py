@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import numpy as np
 import pytest
@@ -330,3 +324,65 @@ def test_field_of_2_extra_dim_input(program_processor):
     run_processor(tuple_tuple_input[dom], program_processor, inp, out=out, offset_provider={})
     if validate:
         assert np.allclose(np.sum(inp, axis=(3, 4)), out)
+
+
+@pytest.mark.uses_tuple_args
+def test_scalar_tuple_args(program_processor):
+    @fundef
+    def stencil(inp):
+        inp_deref = deref(inp)
+        return (
+            tuple_get(0, inp_deref)
+            + 2 * tuple_get(0, tuple_get(1, inp_deref))
+            + 3 * tuple_get(1, tuple_get(1, inp_deref))
+        )
+
+    program_processor, validate = program_processor
+
+    shape = [5]
+
+    out = gtx.as_field([IDim], np.zeros(shape, dtype=np.int32))
+
+    dom = {IDim: range(0, shape[0])}
+    run_processor(
+        stencil[dom],
+        program_processor,
+        (1, (2, 3)),
+        out=out,
+        offset_provider={},
+    )
+    if validate:
+        assert np.allclose((1 + 2 * 2 + 3 * 3), out.asnumpy())
+
+
+@pytest.mark.uses_tuple_args
+def test_mixed_field_scalar_tuple_arg(program_processor):
+    @fundef
+    def stencil(inp):
+        inp_deref = deref(inp)
+        return (
+            tuple_get(0, inp_deref)
+            + 2.0 * tuple_get(0, tuple_get(1, inp_deref))
+            + 3.0 * tuple_get(1, tuple_get(1, inp_deref))
+            + 5.0 * tuple_get(2, tuple_get(1, inp_deref))
+        )
+
+    program_processor, validate = program_processor
+
+    shape = [5]
+
+    rng = np.random.default_rng()
+
+    inp = gtx.as_field([IDim], rng.normal(size=shape))
+    out = gtx.as_field([IDim], np.zeros(shape))
+
+    dom = {IDim: range(0, shape[0])}
+    run_processor(
+        stencil[dom],
+        program_processor,
+        (1.0, (2.0, inp, 3.0)),
+        out=out,
+        offset_provider={},
+    )
+    if validate:
+        assert np.allclose((1 + 2 * 2 + 3 * inp.asnumpy() + 5 * 3), out.asnumpy())

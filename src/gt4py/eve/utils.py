@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """General utility functions. Some functionalities are directly imported from dependencies."""
 
@@ -52,6 +46,7 @@ from boltons.strutils import (
 from . import extended_typing as xtyping
 from .extended_typing import (
     Any,
+    ArgsOnlyCallable,
     Callable,
     Collection,
     Dict,
@@ -82,6 +77,15 @@ except ModuleNotFoundError:
 
 
 T = TypeVar("T")
+
+
+def first(iterable: Iterable[T], *, default: Union[T, NothingType] = NOTHING) -> T:
+    try:
+        return next(iter(iterable))
+    except StopIteration as error:
+        if default is not NOTHING:
+            return cast(T, default)
+        raise error
 
 
 def isinstancechecker(type_info: Union[Type, Iterable[Type]]) -> Callable[[Any], bool]:
@@ -227,7 +231,29 @@ def itemgetter_(key: Any, default: Any = NOTHING) -> Callable[[Any], Any]:
 
 
 _P = ParamSpec("_P")
+_S = TypeVar("_S")
 _T = TypeVar("_T")
+
+
+@dataclasses.dataclass(frozen=True)
+class IndexerCallable(Generic[_S, _T]):
+    """
+    An indexer class applying the wrapped function to the index arguments.
+
+    Examples:
+        >>> indexer = IndexerCallable(lambda x: x**2)
+        >>> indexer[3]
+        9
+
+        >>> indexer = IndexerCallable(lambda a, b: a + b)
+        >>> indexer[3, 4]
+        7
+    """
+
+    func: ArgsOnlyCallable[_S, _T]
+
+    def __getitem__(self, key: _S | Tuple[_S, ...]) -> _T:
+        return self.func(*key) if isinstance(key, tuple) else self.func(key)
 
 
 class fluid_partial(functools.partial):
@@ -401,12 +427,14 @@ def content_hash(*args: Any, hash_algorithm: str | xtyping.HashlibAlgorithm | No
 
     """
     if hash_algorithm is None:
-        hash_algorithm = xxhash.xxh64()  # type: ignore[assignment]
+        hasher = xxhash.xxh64()
     elif isinstance(hash_algorithm, str):
-        hash_algorithm = hashlib.new(hash_algorithm)  # type: ignore[assignment]
+        hasher = hashlib.new(hash_algorithm)
+    else:
+        hasher = hash_algorithm
 
-    hash_algorithm.update(pickle.dumps(args))  # type: ignore[union-attr]
-    result = hash_algorithm.hexdigest()  # type: ignore[union-attr]
+    hasher.update(pickle.dumps(args))
+    result = hasher.hexdigest()
     assert isinstance(result, str)
 
     return result

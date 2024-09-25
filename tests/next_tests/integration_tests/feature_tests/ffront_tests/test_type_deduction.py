@@ -1,16 +1,11 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 import re
 from typing import Optional, Pattern
 
@@ -510,7 +505,7 @@ def test_notting_int():
 
 
 @pytest.fixture
-def remap_setup():
+def premap_setup():
     X = Dimension("X")
     Y = Dimension("Y")
     Y2XDim = Dimension("Y2X", kind=DimensionKind.LOCAL)
@@ -518,52 +513,52 @@ def remap_setup():
     return X, Y, Y2XDim, Y2X
 
 
-def test_remap(remap_setup):
-    X, Y, Y2XDim, Y2X = remap_setup
+def test_premap(premap_setup):
+    X, Y, Y2XDim, Y2X = premap_setup
 
-    def remap_fo(bar: Field[[X], int64]) -> Field[[Y], int64]:
+    def premap_fo(bar: Field[[X], int64]) -> Field[[Y], int64]:
         return bar(Y2X[0])
 
-    parsed = FieldOperatorParser.apply_to_function(remap_fo)
+    parsed = FieldOperatorParser.apply_to_function(premap_fo)
 
     assert parsed.body.stmts[0].value.type == ts.FieldType(
         dims=[Y], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)
     )
 
 
-def test_remap_nbfield(remap_setup):
-    X, Y, Y2XDim, Y2X = remap_setup
+def test_premap_nbfield(premap_setup):
+    X, Y, Y2XDim, Y2X = premap_setup
 
-    def remap_fo(bar: Field[[X], int64]) -> Field[[Y, Y2XDim], int64]:
+    def premap_fo(bar: Field[[X], int64]) -> Field[[Y, Y2XDim], int64]:
         return bar(Y2X)
 
-    parsed = FieldOperatorParser.apply_to_function(remap_fo)
+    parsed = FieldOperatorParser.apply_to_function(premap_fo)
 
     assert parsed.body.stmts[0].value.type == ts.FieldType(
         dims=[Y, Y2XDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)
     )
 
 
-def test_remap_reduce(remap_setup):
-    X, Y, Y2XDim, Y2X = remap_setup
+def test_premap_reduce(premap_setup):
+    X, Y, Y2XDim, Y2X = premap_setup
 
-    def remap_fo(bar: Field[[X], int32]) -> Field[[Y], int32]:
+    def premap_fo(bar: Field[[X], int32]) -> Field[[Y], int32]:
         return 2 * neighbor_sum(bar(Y2X), axis=Y2XDim)
 
-    parsed = FieldOperatorParser.apply_to_function(remap_fo)
+    parsed = FieldOperatorParser.apply_to_function(premap_fo)
 
     assert parsed.body.stmts[0].value.type == ts.FieldType(
         dims=[Y], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32)
     )
 
 
-def test_remap_reduce_sparse(remap_setup):
-    X, Y, Y2XDim, Y2X = remap_setup
+def test_premap_reduce_sparse(premap_setup):
+    X, Y, Y2XDim, Y2X = premap_setup
 
-    def remap_fo(bar: Field[[Y, Y2XDim], int32]) -> Field[[Y], int32]:
+    def premap_fo(bar: Field[[Y, Y2XDim], int32]) -> Field[[Y], int32]:
         return 5 * neighbor_sum(bar, axis=Y2XDim)
 
-    parsed = FieldOperatorParser.apply_to_function(remap_fo)
+    parsed = FieldOperatorParser.apply_to_function(premap_fo)
 
     assert parsed.body.stmts[0].value.type == ts.FieldType(
         dims=[Y], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32)
