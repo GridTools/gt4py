@@ -34,28 +34,28 @@ def prune_unreferenced_fundefs(program: itir.Program) -> itir.Program:
 
     >>> from gt4py.next.iterator.ir_utils import ir_makers as im
     >>> fun1 = itir.FunctionDefinition(
-    ...      id="fun1",
-    ...      params=[im.sym("a")],
-    ...      expr=im.call("deref")("a"),
-    ...  )
+    ...     id="fun1",
+    ...     params=[im.sym("a")],
+    ...     expr=im.call("deref")("a"),
+    ... )
     >>> fun2 = itir.FunctionDefinition(
-    ...      id="fun2",
-    ...      params=[im.sym("a")],
-    ...      expr=im.call("deref")("a"),
-    ...  )
+    ...     id="fun2",
+    ...     params=[im.sym("a")],
+    ...     expr=im.call("deref")("a"),
+    ... )
     >>> program = itir.Program(
-    ...      id="testee",
-    ...      function_definitions=[fun1, fun2],
-    ...      params=[im.sym("inp"), im.sym("out")],
-    ...      declarations=[],
-    ...      body=[
-    ...          itir.SetAt(
-    ...              expr=im.call("fun1")("inp"),
-    ...              domain=im.domain("cartesian_domain", {"IDim": (0, 10)}),
-    ...              target=im.ref("out")
-    ...          )
-    ...      ],
-    ...  )
+    ...     id="testee",
+    ...     function_definitions=[fun1, fun2],
+    ...     params=[im.sym("inp"), im.sym("out")],
+    ...     declarations=[],
+    ...     body=[
+    ...         itir.SetAt(
+    ...             expr=im.call("fun1")("inp"),
+    ...             domain=im.domain("cartesian_domain", {"IDim": (0, 10)}),
+    ...             target=im.ref("out"),
+    ...         )
+    ...     ],
+    ... )
     >>> print(prune_unreferenced_fundefs(program))
     testee(inp, out) {
       fun1 = λ(a) → ·a;
