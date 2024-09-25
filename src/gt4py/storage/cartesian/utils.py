@@ -326,6 +326,3 @@ if CUPY_DEVICE == core_defs.DeviceType.ROCM:
         return buffer, CUDAArrayInterfaceNDArray(ndarray)
 
     allocate_gpu = _allocate_gpu_rocm
-
-else:
-    assert CUPY_DEVICE == core_defs.DeviceType.CUDA
