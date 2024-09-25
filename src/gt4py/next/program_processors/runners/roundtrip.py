@@ -182,7 +182,7 @@ def fencil_generator(
 
 @dataclasses.dataclass(frozen=True)
 class Roundtrip(workflow.Workflow[stages.CompilableProgram, stages.CompiledProgram]):
-    debug: Optional[bool] = True  # TODO
+    debug: Optional[bool] = None
     lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE
     use_embedded: bool = True
     dispatch_backend: Optional[next_backend.Backend] = None
