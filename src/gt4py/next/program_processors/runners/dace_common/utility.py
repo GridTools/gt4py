@@ -44,7 +44,7 @@ def field_stride_symbol_name(field_name: str, axis: int) -> str:
 
 
 def is_field_symbol(name: str) -> bool:
-    return FIELD_SYMBOL_RE.match(name)
+    return FIELD_SYMBOL_RE.match(name) is not None
 
 
 def debug_info(
