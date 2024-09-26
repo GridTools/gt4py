@@ -72,7 +72,7 @@ def make_program_source(name: str) -> stages.ProgramSource:
         entry_point=entry_point,
         source_code=src,
         library_deps=[interface.LibraryDependency("gridtools_cpu", "master")],
-        language=languages.Cpp,
+        language=languages.CPP,
         language_settings=cpp_interface.CPP_DEFAULT,
         implicit_domain=False,
     )

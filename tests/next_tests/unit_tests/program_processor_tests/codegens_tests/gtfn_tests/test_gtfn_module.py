@@ -68,4 +68,4 @@ def test_codegen(fencil_example):
     )
     assert module.entry_point.name == fencil.id
     assert any(d.name == "gridtools_cpu" for d in module.library_deps)
-    assert module.language is languages.Cpp
+    assert module.language is languages.CPP

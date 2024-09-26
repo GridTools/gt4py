@@ -108,7 +108,7 @@ def convert_args(
 ) -> stages.CompiledProgram:
     sdfg_program = inp.sdfg_program
     sdfg = sdfg_program.sdfg
-    on_gpu = True if device == core_defs.DeviceType.CUDA else False
+    on_gpu = True if device in [core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM] else False
 
     def decorated_program(
         *args: Any,
