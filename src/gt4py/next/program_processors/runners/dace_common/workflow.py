@@ -127,7 +127,8 @@ def convert_args(
                     if last_call_args[i].value != data_ptr:
                         use_fast_call = False
                         break
-                elif isinstance(arg_type, dace.data.Scalar):
+                else:
+                    assert isinstance(arg_type, dace.data.Scalar)
                     assert isinstance(last_call_args[i], ctypes._SimpleCData)
                     if arg_name in kwargs:
                         # override the scalar value used in previous program call
@@ -138,8 +139,6 @@ def convert_args(
                         assert dace_utils.is_field_symbol(
                             arg_name
                         ), f"Argument '{arg_name}' not found."
-                else:
-                    raise ValueError(f"Unsupported data type {arg_type}")
 
             if use_fast_call:
                 return sdfg_program.fast_call(*sdfg_program._lastargs)
