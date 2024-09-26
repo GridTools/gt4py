@@ -10,8 +10,7 @@ from __future__ import annotations
 
 import ctypes
 import dataclasses
-import re
-from typing import Any, Optional
+from typing import Any
 
 import dace
 import factory
@@ -21,25 +20,24 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common, config
 from gt4py.next.otf import arguments, languages, stages, step_types, workflow
 from gt4py.next.otf.compilation import cache
-from gt4py.next.program_processors.runners.dace_common import dace_backend
+from gt4py.next.program_processors.runners.dace_common import dace_backend, utility as dace_utils
 
 
 class CompiledDaceProgram(stages.CompiledProgram):
     sdfg_program: dace.CompiledSDFG
-    # Map SDFG positional arguments to the position in program ABI;
+
+    # Sorted list of SDFG arguments as they appear in program ABI and corresponding data type;
     # scalar arguments that are not used in the SDFG will not be present.
-    sdfg_arg_position: list[Optional[int]]
-    # Map arguments for connectivity tables to the position in program ABI;
-    # consider only the connectivity arrays, skip shape and stride symbols.
-    sdfg_conn_position: dict[str, int]
+    sdfg_arglist: list[tuple[str, dace.dtypes.Data]]
 
     def __init__(self, program: dace.CompiledSDFG):
-        # method `signature_arglist` returns an ordered dictionary
-        self.sdfg_arglist = [
-            (i, arg_name, arg_type)
-            for i, (arg_name, arg_type) in enumerate(program.sdfg.arglist().items())
-        ]
         self.sdfg_program = program
+        # `dace.CompiledSDFG.arglist()` returns an ordered dictionary that maps the argument
+        # name to its data type, in the same order as arguments appear in the program ABI.
+        # This is also the same order of arguments in `dace.CompiledSDFG._lastargs[0]`.
+        self.sdfg_arglist = [
+            (arg_name, arg_type) for arg_name, arg_type in program.sdfg.arglist().items()
+        ]
 
     def __call__(self, *args: Any, **kwargs: Any) -> None:
         self.sdfg_program(*args, **kwargs)
@@ -93,13 +91,6 @@ class DaCeCompilationStepFactory(factory.Factory):
         model = DaCeCompiler
 
 
-def _get_ctype_value(arg: Any, dtype: dace.dtypes.dataclass) -> Any:
-    if not isinstance(arg, (ctypes._SimpleCData, ctypes._Pointer)):
-        actype = dtype.as_ctypes()
-        return actype(arg)
-    return arg
-
-
 def convert_args(
     inp: CompiledDaceProgram,
     device: core_defs.DeviceType = core_defs.DeviceType.CPU,
@@ -126,24 +117,27 @@ def convert_args(
             use_fast_call = True
             last_call_args = sdfg_program._lastargs[0]
             # The scalar arguments should be overridden with the new value; for field arguments,
-            # the data pointer should remain the same otherwise fast-call cannot be used and
+            # the data pointer should remain the same otherwise fast_call cannot be used and
             # the arguments list has to be reconstructed.
-            for i, arg_name, arg_type in inp.sdfg_arglist:
+            for i, (arg_name, arg_type) in enumerate(inp.sdfg_arglist):
                 if isinstance(arg_type, dace.data.Array):
-                    assert arg_name in kwargs, f"Array argument '{arg_name}' was not passed."
+                    assert arg_name in kwargs, f"Argument '{arg_name}' not found."
                     data_ptr = get_array_interface_ptr(kwargs[arg_name], arg_type.storage)
                     assert isinstance(last_call_args[i], ctypes.c_void_p)
                     if last_call_args[i].value != data_ptr:
                         use_fast_call = False
                         break
                 elif isinstance(arg_type, dace.data.Scalar):
+                    assert isinstance(last_call_args[i], ctypes._SimpleCData)
                     if arg_name in kwargs:
-                        last_call_args[i] = _get_ctype_value(kwargs[arg_name], arg_type.dtype)
+                        # override the scalar value used in previous program call
+                        actype = arg_type.dtype.as_ctypes()
+                        last_call_args[i] = actype(kwargs[arg_name])
                     else:
                         # shape and strides of arrays are supposed not to change, and can therefore be omitted
-                        assert re.match(
-                            "__.+_(size|stride)_\d+", arg_name
-                        ), f"Scalar argument '{arg_name}' was not passed."
+                        assert dace_utils.is_field_symbol(
+                            arg_name
+                        ), f"Argument '{arg_name}' not found."
                 else:
                     raise ValueError(f"Unsupported data type {arg_type}")
 

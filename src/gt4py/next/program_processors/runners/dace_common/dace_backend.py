@@ -74,7 +74,7 @@ def _ensure_is_on_device(
 
 
 def _get_shape_args(
-    arrays: Mapping[str, dace.data.Array], args: Mapping[str, Any]
+    arrays: Mapping[str, dace.data.Array], args: Mapping[str, np.typing.NDArray]
 ) -> dict[str, int]:
     shape_args: dict[str, int] = {}
     for name, value in args.items():
@@ -90,7 +90,7 @@ def _get_shape_args(
 
 
 def _get_stride_args(
-    arrays: Mapping[str, dace.data.Array], args: Mapping[str, Any]
+    arrays: Mapping[str, dace.data.Array], args: Mapping[str, np.typing.NDArray]
 ) -> dict[str, int]:
     stride_args = {}
     for name, value in args.items():
@@ -114,24 +114,21 @@ def get_sdfg_conn_args(
     sdfg: dace.SDFG,
     offset_provider: dict[str, Any],
     on_gpu: bool,
-) -> dict[str, Any]:
+) -> dict[str, np.typing.NDArray]:
     """
     Extracts the connectivity tables that are used in the sdfg and ensures
     that the memory buffers are allocated for the target device.
     """
     device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
 
-    neighbor_tables = {}
+    connectivity_args = {}
     for offset, connectivity in dace_util.filter_connectivities(offset_provider).items():
         assert isinstance(connectivity, gtx_common.NeighborTable)
-        connectivity_name = dace_util.connectivity_identifier(offset)
-        neighbor_tables[connectivity_name] = connectivity.table
+        param = dace_util.connectivity_identifier(offset)
+        if param in sdfg.arrays:
+            connectivity_args[param] = _ensure_is_on_device(connectivity.table, device)
 
-    return {
-        connectivity_name: _ensure_is_on_device(table, device)
-        for connectivity_name, table in neighbor_tables.items()
-        if connectivity_name in sdfg.arrays
-    }
+    return connectivity_args
 
 
 def get_sdfg_args(

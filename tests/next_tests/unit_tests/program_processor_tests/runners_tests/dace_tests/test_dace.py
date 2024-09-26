@@ -8,6 +8,7 @@
 
 """Test specific features of DaCe backends."""
 
+import ctypes
 import unittest
 
 import numpy as np
@@ -37,29 +38,30 @@ dace = pytest.importorskip("dace")
 def make_mocks(monkeypatch):
     # Wrap `compiled_sdfg.CompiledSDFG.fast_call` with mock object
     mock_fast_call = unittest.mock.MagicMock()
-    mock_fast_call_attr = dace.codegen.compiled_sdfg.CompiledSDFG.fast_call
+    dace_fast_call = dace.codegen.compiled_sdfg.CompiledSDFG.fast_call
 
     def mocked_fast_call(self, *args, **kwargs):
         mock_fast_call.__call__(*args, **kwargs)
-        fast_call_result = mock_fast_call_attr(self, *args, **kwargs)
+        fast_call_result = dace_fast_call(self, *args, **kwargs)
         # invalidate all scalar positional arguments to ensure that they are properly set
         # next time the SDFG is executed before fast_call
         positional_args = set(self.sdfg.arg_names)
         sdfg_arglist = self.sdfg.arglist()
         for i, (arg_name, arg_type) in enumerate(sdfg_arglist.items()):
             if arg_name in positional_args and isinstance(arg_type, dace.data.Scalar):
-                self._lastargs[0][i] = None
+                assert isinstance(self._lastargs[0][i], ctypes.c_int)
+                self._lastargs[0][i].value = -1
         return fast_call_result
 
     monkeypatch.setattr(dace.codegen.compiled_sdfg.CompiledSDFG, "fast_call", mocked_fast_call)
 
     # Wrap `compiled_sdfg.CompiledSDFG._construct_args` with mock object
     mock_construct_args = unittest.mock.MagicMock()
-    mock_construct_args_attr = dace.codegen.compiled_sdfg.CompiledSDFG._construct_args
+    dace_construct_args = dace.codegen.compiled_sdfg.CompiledSDFG._construct_args
 
     def mocked_construct_args(self, *args, **kwargs):
         mock_construct_args.__call__(*args, **kwargs)
-        return mock_construct_args_attr(self, *args, **kwargs)
+        return dace_construct_args(self, *args, **kwargs)
 
     monkeypatch.setattr(
         dace.codegen.compiled_sdfg.CompiledSDFG, "_construct_args", mocked_construct_args
@@ -184,11 +186,12 @@ def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
 
         import cupy as cp
 
-        # Test connectivities are numpy arrays, by default, and they are copied
-        # to gpu memory at each program call, therefore fast_call cannot be used
-        # (unless cupy reuses the same cupy array from the its memory pool).
-        # Here we copy the connectivity to gpu memory, to ensure that fast_call
-        # is called.
+        # The test connectivities are numpy arrays, by default, and they are copied
+        # to gpu memory at each program call (see `dace_backend._ensure_is_on_device`),
+        # therefore fast_call cannot be used (unless cupy reuses the same cupy array
+        # from the its memory pool, but this behavior is random and unpredictable).
+        # Here we copy the connectivity to gpu memory, and resuse the same cupy array
+        # on multiple program calls, in order to ensure that fast_call is used.
         offset_provider = {
             "E2V": gtx.NeighborTableOffsetProvider(
                 table=cp.asarray(connectivity_E2V.table),
