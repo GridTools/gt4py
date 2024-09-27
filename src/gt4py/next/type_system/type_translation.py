@@ -25,6 +25,16 @@ from gt4py.next import common
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
+class SizeArg:
+    def __gt_type__(self) -> ts.ScalarType:
+        return ts.ScalarType(kind=ts.ScalarKind.INT32)
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, SizeArg):
+            return True
+        return False
+
+
 def get_scalar_kind(dtype: npt.DTypeLike) -> ts.ScalarKind:
     # make int & float precision platform independent.
     dt: np.dtype

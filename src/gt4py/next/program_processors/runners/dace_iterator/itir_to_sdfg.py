@@ -77,7 +77,8 @@ def _get_scan_dim(
             - scan_dim_index: domain index of the scan dimension
             - scan_dim_dtype: data type along the scan dimension
     """
-    output_type = cast(ts.FieldType, storage_types[output.id])
+    output_type = storage_types[output.id]
+    assert isinstance(output_type, ts.FieldType)
     sorted_dims = [
         dim
         for _, dim in (
@@ -235,7 +236,8 @@ class ItirToSDFG(eve.NodeVisitor):
         return tmp_symbols
 
     def create_memlet_at(self, field_name: str, index: dict[str, str]):
-        field_type = cast(ts.FieldType, self.storage_types[field_name])
+        field_type = self.storage_types[field_name]
+        assert isinstance(field_type, ts.FieldType)
         if self.use_field_canonical_representation:
             field_index = [
                 index[dim.value] for _, dim in dace_common_util.get_sorted_dims(field_type.dims)
@@ -433,6 +435,18 @@ class ItirToSDFG(eve.NodeVisitor):
                     program_arg_syms[name] = value
                 else:
                     program_arg_syms[name] = SymbolExpr(name, dtype)
+            else:
+                assert isinstance(type_, ts.FieldType)
+                # make shape symbols (corresponding to field size) available as arguments to domain visitor
+                if name in input_names or name in output_names:
+                    field_symbols = [
+                        val
+                        for val in closure_sdfg.arrays[name].shape
+                        if isinstance(val, dace.symbol) and str(val) not in input_names
+                    ]
+                    for sym in field_symbols:
+                        sym_name = str(sym)
+                        program_arg_syms[sym_name] = SymbolExpr(sym, sym.dtype)
         closure_ctx = Context(closure_sdfg, closure_state, program_arg_syms)
         closure_domain = self._visit_domain(node.domain, closure_ctx)
 
