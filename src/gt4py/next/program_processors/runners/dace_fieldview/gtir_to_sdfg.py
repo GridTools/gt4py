@@ -25,6 +25,7 @@ from gt4py.eve import concepts
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.iterator.transforms import symbol_ref_utils
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace_common import utility as dace_common_util
 from gt4py.next.program_processors.runners.dace_fieldview import (
@@ -34,6 +35,9 @@ from gt4py.next.program_processors.runners.dace_fieldview import (
     utility as dace_fieldview_util,
 )
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
+
+
+FIELD_SYMBOL_DTYPE = dace.int32
 
 
 class DataflowBuilder(Protocol):
@@ -142,7 +146,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         Returns:
             Two lists of symbols, one for the shape and the other for the strides of the array.
         """
-        dtype = dace.int32
+        dtype = FIELD_SYMBOL_DTYPE
         neighbor_tables = dace_common_util.filter_connectivities(self.offset_provider)
         shape = [
             (
@@ -158,8 +162,22 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         ]
         return shape, strides
 
+    def _make_array_offset(
+        self, name: str, dims: Sequence[gtx_common.Dimension]
+    ) -> list[dace.symbol]:
+        dtype = FIELD_SYMBOL_DTYPE
+        return [
+            dace.symbol(dace_common_util.field_offset_symbol_name(name, i), dtype)
+            for i in range(len(dims))
+        ]
+
     def _add_storage(
-        self, sdfg: dace.SDFG, name: str, symbol_type: ts.DataType, transient: bool = True
+        self,
+        sdfg: dace.SDFG,
+        name: str,
+        symbol_type: ts.DataType,
+        transient: bool = True,
+        with_offset: bool = False,
     ) -> None:
         """
         Add storage for data containers used in the SDFG. For fields, it allocates dace arrays,
@@ -174,7 +192,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             # use symbolic shape, which allows to invoke the program with fields of different size;
             # and symbolic strides, which enables decoupling the memory layout from generated code.
             sym_shape, sym_strides = self._make_array_shape_and_strides(name, symbol_type.dims)
-            sdfg.add_array(name, sym_shape, dtype, strides=sym_strides, transient=transient)
+            sym_offset = self._make_array_offset(name, symbol_type.dims) if with_offset else None
+            sdfg.add_array(
+                name, sym_shape, dtype, strides=sym_strides, offset=sym_offset, transient=transient
+            )
         elif isinstance(symbol_type, ts.ScalarType):
             dtype = dace_fieldview_util.as_dace_type(symbol_type)
             # Scalar arguments passed to the program are represented as symbols in DaCe SDFG.
@@ -228,14 +249,16 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         return field_nodes
 
-    def _add_sdfg_params(self, sdfg: dace.SDFG, node_params: Sequence[gtir.Sym]) -> None:
+    def _add_sdfg_params(
+        self, sdfg: dace.SDFG, node_params: Sequence[gtir.Sym], with_offset: bool = False
+    ) -> None:
         """Helper function to add storage for node parameters and connectivity tables."""
 
         # add non-transient arrays and/or SDFG symbols for the program arguments
         for param in node_params:
             pname = str(param.id)
             assert isinstance(param.type, (ts.FieldType, ts.ScalarType))
-            self._add_storage(sdfg, pname, param.type, transient=False)
+            self._add_storage(sdfg, pname, param.type, transient=False, with_offset=with_offset)
             self.global_symbols[pname] = param.type
 
         # add SDFG storage for connectivity tables
@@ -399,9 +422,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         lambda_args_mapping = {str(p.id): arg for p, arg in zip(node.params, args, strict=True)}
 
         # inherit symbols from parent scope but eventually override with local symbols
-        lambda_symbols = self.global_symbols | {
-            pname: type_ for pname, (_, type_) in lambda_args_mapping.items()
-        }
+        referenced_symbols = set(
+            symbol_ref_utils.collect_symbol_refs(node.expr, self.global_symbols.keys())
+        )
+        lambda_symbols = {
+            pname: type_
+            for pname, type_ in self.global_symbols.items()
+            if pname in referenced_symbols
+        } | {pname: type_ for pname, (_, type_) in lambda_args_mapping.items()}
 
         nsdfg = dace.SDFG(f"{sdfg.label}_nested")
         nstate = nsdfg.add_state("lambda")
@@ -411,6 +439,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         self._add_sdfg_params(
             nsdfg,
             [gtir.Sym(id=p_name, type=p_type) for p_name, p_type in lambda_symbols.items()],
+            with_offset=True,
         )
 
         lambda_nodes = GTIRToSDFG(self.offset_provider, lambda_symbols.copy()).visit(
@@ -428,32 +457,31 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         input_memlets = {}
         for nsdfg_dataname, nsdfg_datadesc in nsdfg.arrays.items():
-            if nsdfg_datadesc.transient:
-                continue
-            datadesc: Optional[dace.dtypes.Array] = None
-            if nsdfg_dataname in lambda_args_mapping:
-                src_node, _ = lambda_args_mapping[nsdfg_dataname]
-                dataname = src_node.data
-                datadesc = src_node.desc(sdfg)
+            if not nsdfg_datadesc.transient:
+                datadesc: Optional[dace.dtypes.Array] = None
+                if nsdfg_dataname in lambda_args_mapping:
+                    src_node, _ = lambda_args_mapping[nsdfg_dataname]
+                    dataname = src_node.data
+                    datadesc = src_node.desc(sdfg)
+                else:
+                    dataname = nsdfg_dataname
+                    datadesc = sdfg.arrays[nsdfg_dataname]
 
-                nsdfg_symbols_mapping |= {
-                    str(nested_symbol): parent_symbol
-                    for nested_symbol, parent_symbol in zip(
-                        [*nsdfg_datadesc.shape, *nsdfg_datadesc.strides],
-                        [*datadesc.shape, *datadesc.strides],
-                        strict=True,
-                    )
-                    if isinstance(nested_symbol, dace.symbol)
-                }
-            else:
-                dataname = nsdfg_dataname
-                datadesc = sdfg.arrays[nsdfg_dataname]
                 # ensure that connectivity tables are non-transient arrays in parent SDFG
                 if dataname in connectivity_arrays:
                     datadesc.transient = False
 
-            if datadesc:
                 input_memlets[nsdfg_dataname] = dace.Memlet.from_array(dataname, datadesc)
+
+                nsdfg_symbols_mapping |= {
+                    str(nested_symbol): parent_symbol
+                    for nested_symbol, parent_symbol in zip(
+                        [*nsdfg_datadesc.shape, *nsdfg_datadesc.strides, *nsdfg_datadesc.offset],
+                        [*datadesc.shape, *datadesc.strides, *datadesc.offset],
+                        strict=True,
+                    )
+                    if isinstance(nested_symbol, dace.symbol)
+                }
 
         nsdfg_node = head_state.add_nested_sdfg(
             nsdfg,

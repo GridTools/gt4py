@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import enum
 import re
 from typing import Any, Final, Mapping, Optional, Sequence
 
@@ -19,7 +20,10 @@ from gt4py.next.type_system import type_specifications as ts
 
 
 # regex to match the symbols for field shape and strides
-FIELD_SYMBOL_RE: Final[re.Pattern] = re.compile("__.+_(size|stride)_\d+")
+FIELD_SYMBOL_RE: Final[re.Pattern] = re.compile("__.+_(offset|size|stride)_\d+")
+
+# symbol types used for field memory layout
+FieldSymbol = enum.Enum("FieldSymbol", ["offset", "size", "stride"])
 
 
 def as_scalar_type(typestr: str) -> ts.ScalarType:
@@ -35,12 +39,20 @@ def connectivity_identifier(name: str) -> str:
     return f"connectivity_{name}"
 
 
+def _field_symbol_name(field_name: str, axis: int, suffix: FieldSymbol) -> str:
+    return f"__{field_name}_{suffix.name}_{axis}"
+
+
+def field_offset_symbol_name(field_name: str, axis: int) -> str:
+    return _field_symbol_name(field_name, axis, FieldSymbol.offset)
+
+
 def field_size_symbol_name(field_name: str, axis: int) -> str:
-    return f"__{field_name}_size_{axis}"
+    return _field_symbol_name(field_name, axis, FieldSymbol.size)
 
 
 def field_stride_symbol_name(field_name: str, axis: int) -> str:
-    return f"__{field_name}_stride_{axis}"
+    return _field_symbol_name(field_name, axis, FieldSymbol.stride)
 
 
 def is_field_symbol(name: str) -> bool:
