@@ -66,7 +66,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
     Most expressions are lowered to `as_fieldop`ed stencils.
     Pure scalar expressions are kept as scalar operations as they might appear outside of the
-    stencil context. In arithemtic operations that involve a field and a scalar, the scalar is
+    stencil context. In arithmetic operations that involve a field and a scalar, the scalar is
     implicitly broadcasted to a field in the `as_fieldop` call.
 
     Examples
