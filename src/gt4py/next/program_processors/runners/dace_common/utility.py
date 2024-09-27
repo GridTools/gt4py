@@ -20,10 +20,10 @@ from gt4py.next.type_system import type_specifications as ts
 
 
 # regex to match the symbols for field shape and strides
-FIELD_SYMBOL_RE: Final[re.Pattern] = re.compile("__.+_(offset|size|stride)_\d+")
+FIELD_SYMBOL_RE: Final[re.Pattern] = re.compile("__.+_(size|stride)_\d+")
 
 # symbol types used for field memory layout
-FieldSymbol = enum.Enum("FieldSymbol", ["offset", "size", "stride"])
+FieldSymbol = enum.Enum("FieldSymbol", ["size", "stride"])
 
 
 def as_scalar_type(typestr: str) -> ts.ScalarType:
@@ -41,10 +41,6 @@ def connectivity_identifier(name: str) -> str:
 
 def _field_symbol_name(field_name: str, axis: int, suffix: FieldSymbol) -> str:
     return f"__{field_name}_{suffix.name}_{axis}"
-
-
-def field_offset_symbol_name(field_name: str, axis: int) -> str:
-    return _field_symbol_name(field_name, axis, FieldSymbol.offset)
 
 
 def field_size_symbol_name(field_name: str, axis: int) -> str:

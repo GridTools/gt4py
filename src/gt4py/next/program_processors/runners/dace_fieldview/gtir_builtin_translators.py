@@ -116,16 +116,13 @@ def _create_temporary_field(
     node_type: ts.FieldType,
     output_desc: dace.data.Data,
 ) -> tuple[dace.nodes.AccessNode, ts.FieldType]:
-    domain_dims, domain_lbs, domain_ubs = zip(*domain)
+    domain_dims, _, domain_ubs = zip(*domain)
     field_dims = list(domain_dims)
-    field_shape = [
-        # diff between upper and lower bound
-        (ub - lb)
-        for lb, ub in zip(domain_lbs, domain_ubs)
-    ]
-    field_offset: Optional[list[dace.symbolic.SymbolicType]] = None
-    if any(domain_lbs):
-        field_offset = [-lb for lb in domain_lbs]
+    # It should be enough to allocate an array with shape (upper_bound - lower_bound)
+    # but this would require to use array offset for compensate for the start index.
+    # Array offset is known to cause issues to SDFG inlining. Besides, map fusion will
+    # in any case eliminate most of transient arrays.
+    field_shape = list(domain_ubs)
 
     if isinstance(output_desc, dace.data.Array):
         assert isinstance(node_type.dtype, gtir_ts.ListType)
@@ -138,7 +135,7 @@ def _create_temporary_field(
 
     # allocate local temporary storage for the result field
     temp_name, _ = sdfg.add_temp_transient(
-        field_shape, dace_fieldview_util.as_dace_type(field_dtype), offset=field_offset
+        field_shape, dace_fieldview_util.as_dace_type(field_dtype)
     )
     field_node = state.add_access(temp_name)
     field_type = ts.FieldType(field_dims, node_type.dtype)

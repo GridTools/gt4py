@@ -162,22 +162,12 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         ]
         return shape, strides
 
-    def _make_array_offset(
-        self, name: str, dims: Sequence[gtx_common.Dimension]
-    ) -> list[dace.symbol]:
-        dtype = FIELD_SYMBOL_DTYPE
-        return [
-            dace.symbol(dace_common_util.field_offset_symbol_name(name, i), dtype)
-            for i in range(len(dims))
-        ]
-
     def _add_storage(
         self,
         sdfg: dace.SDFG,
         name: str,
         symbol_type: ts.DataType,
         transient: bool = True,
-        with_offset: bool = False,
     ) -> None:
         """
         Add storage for data containers used in the SDFG. For fields, it allocates dace arrays,
@@ -192,10 +182,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             # use symbolic shape, which allows to invoke the program with fields of different size;
             # and symbolic strides, which enables decoupling the memory layout from generated code.
             sym_shape, sym_strides = self._make_array_shape_and_strides(name, symbol_type.dims)
-            sym_offset = self._make_array_offset(name, symbol_type.dims) if with_offset else None
-            sdfg.add_array(
-                name, sym_shape, dtype, strides=sym_strides, offset=sym_offset, transient=transient
-            )
+            sdfg.add_array(name, sym_shape, dtype, strides=sym_strides, transient=transient)
         elif isinstance(symbol_type, ts.ScalarType):
             dtype = dace_fieldview_util.as_dace_type(symbol_type)
             # Scalar arguments passed to the program are represented as symbols in DaCe SDFG.
@@ -249,16 +236,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         return field_nodes
 
-    def _add_sdfg_params(
-        self, sdfg: dace.SDFG, node_params: Sequence[gtir.Sym], with_offset: bool = False
-    ) -> None:
+    def _add_sdfg_params(self, sdfg: dace.SDFG, node_params: Sequence[gtir.Sym]) -> None:
         """Helper function to add storage for node parameters and connectivity tables."""
 
         # add non-transient arrays and/or SDFG symbols for the program arguments
         for param in node_params:
             pname = str(param.id)
             assert isinstance(param.type, (ts.FieldType, ts.ScalarType))
-            self._add_storage(sdfg, pname, param.type, transient=False, with_offset=with_offset)
+            self._add_storage(sdfg, pname, param.type, transient=False)
             self.global_symbols[pname] = param.type
 
         # add SDFG storage for connectivity tables
@@ -439,7 +424,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         self._add_sdfg_params(
             nsdfg,
             [gtir.Sym(id=p_name, type=p_type) for p_name, p_type in lambda_symbols.items()],
-            with_offset=True,
         )
 
         lambda_nodes = GTIRToSDFG(self.offset_provider, lambda_symbols.copy()).visit(
@@ -564,5 +548,5 @@ def build_sdfg_from_gtir(
     sdfg = sdfg_genenerator.visit(program)
     assert isinstance(sdfg, dace.SDFG)
 
-    gtx_transformations.gt_simplify(sdfg, skip=["InlineSDFGs"])
+    gtx_transformations.gt_simplify(sdfg)
     return sdfg
