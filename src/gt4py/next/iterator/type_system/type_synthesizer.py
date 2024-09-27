@@ -70,13 +70,14 @@ def _register_builtin_type_synthesizer(
     *,
     fun_names: Optional[Iterable[str]] = None,
 ):
-    def wrapper(synthesizer: Callable[..., TypeOrTypeSynthesizer]) -> None:
-        # store names in function object for better debuggability
-        synthesizer.fun_names = fun_names or [synthesizer.__name__]  # type: ignore[attr-defined]
-        for f in synthesizer.fun_names:  # type: ignore[attr-defined]
-            builtin_type_synthesizers[f] = TypeSynthesizer(type_synthesizer=synthesizer)
+    if synthesizer is None:
+        return functools.partial(_register_builtin_type_synthesizer, fun_names=fun_names)
 
-    return wrapper(synthesizer) if synthesizer else wrapper
+    # store names in function object for better debuggability
+    synthesizer.fun_names = fun_names or [synthesizer.__name__]  # type: ignore[attr-defined]
+    for f in synthesizer.fun_names:  # type: ignore[attr-defined]
+        builtin_type_synthesizers[f] = TypeSynthesizer(type_synthesizer=synthesizer)
+    return synthesizer
 
 
 @_register_builtin_type_synthesizer(
@@ -137,23 +138,20 @@ def can_deref(it: it_ts.IteratorType | ts.DeferredType) -> ts.ScalarType:
 
 @_register_builtin_type_synthesizer
 def if_(pred: ts.ScalarType, true_branch: ts.DataType, false_branch: ts.DataType) -> ts.DataType:
-    def type_synthesizer_per_element(
-        pred: ts.ScalarType,
-        true_branch: ts.DataType,
-        false_branch: ts.DataType,
-    ):
-        assert isinstance(pred, ts.ScalarType) and pred.kind == ts.ScalarKind.BOOL
-        # TODO(tehrengruber): Enable this or a similar check. In case the true- and false-branch are
-        #  iterators defined on different positions this fails. For the GTFN backend we also don't
-        #  want this, but for roundtrip it is totally fine.
-        # assert true_branch == false_branch  # noqa: ERA001
+    if isinstance(true_branch, ts.TupleType) and isinstance(false_branch, ts.TupleType):
+        return tree_map(
+            collection_type=ts.TupleType,
+            result_collection_constructor=lambda elts: ts.TupleType(types=[*elts]),
+        )(functools.partial(if_, pred))(true_branch, false_branch)
 
-        return true_branch
+    assert not isinstance(true_branch, ts.TupleType) and not isinstance(false_branch, ts.TupleType)
+    assert isinstance(pred, ts.ScalarType) and pred.kind == ts.ScalarKind.BOOL
+    # TODO(tehrengruber): Enable this or a similar check. In case the true- and false-branch are
+    #  iterators defined on different positions this fails. For the GTFN backend we also don't
+    #  want this, but for roundtrip it is totally fine.
+    # assert true_branch == false_branch  # noqa: ERA001
 
-    return tree_map(
-        collection_type=ts.TupleType,
-        result_collection_constructor=lambda elts: ts.TupleType(types=[*elts]),
-    )(functools.partial(type_synthesizer_per_element, pred))(true_branch, false_branch)
+    return true_branch
 
 
 @_register_builtin_type_synthesizer
