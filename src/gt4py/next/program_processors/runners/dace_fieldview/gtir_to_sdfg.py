@@ -37,9 +37,6 @@ from gt4py.next.program_processors.runners.dace_fieldview import (
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
 
 
-FIELD_SYMBOL_DTYPE = dace.int32
-
-
 class DataflowBuilder(Protocol):
     """Visitor interface to build a dataflow subgraph."""
 
@@ -146,7 +143,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         Returns:
             Two lists of symbols, one for the shape and the other for the strides of the array.
         """
-        dtype = FIELD_SYMBOL_DTYPE
+        dtype = dace.int32
         neighbor_tables = dace_common_util.filter_connectivities(self.offset_provider)
         shape = [
             (
