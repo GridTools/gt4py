@@ -564,5 +564,5 @@ def build_sdfg_from_gtir(
     sdfg = sdfg_genenerator.visit(program)
     assert isinstance(sdfg, dace.SDFG)
 
-    gtx_transformations.gt_simplify(sdfg)
+    gtx_transformations.gt_simplify(sdfg, skip=["InlineSDFGs"])
     return sdfg
