@@ -18,10 +18,11 @@ from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.iterator.type_system import type_specifications as gtir_ts
+from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_python_codegen,
     gtir_to_tasklet,
-    utility as dace_fieldview_util,
+    utility as dace_gtir_utils,
 )
 from gt4py.next.type_system import type_specifications as ts
 
@@ -94,7 +95,7 @@ def _parse_arg_expr(
         assert isinstance(arg_type, ts.FieldType)
         indices: dict[gtx_common.Dimension, gtir_to_tasklet.IteratorIndexExpr] = {
             dim: gtir_to_tasklet.SymbolExpr(
-                dace_fieldview_util.get_map_variable(dim),
+                dace_gtir_utils.get_map_variable(dim),
                 IteratorIndexDType,
             )
             for dim, _, _ in domain
@@ -137,8 +138,9 @@ def _create_temporary_field(
         field_dtype = node_type.dtype
 
     # allocate local temporary storage for the result field
+    assert isinstance(field_dtype, ts.ScalarType)
     temp_name, _ = sdfg.add_temp_transient(
-        field_shape, dace_fieldview_util.as_dace_type(field_dtype), offset=field_offset
+        field_shape, dace_utils.as_dace_type(field_dtype), offset=field_offset
     )
     field_node = state.add_access(temp_name)
     field_type = ts.FieldType(field_dims, node_type.dtype)
@@ -167,7 +169,7 @@ def translate_as_field_op(
     assert isinstance(domain_expr, gtir.FunCall)
 
     # add local storage to compute the field operator over the given domain
-    domain = dace_fieldview_util.get_domain(domain_expr)
+    domain = dace_gtir_utils.get_domain(domain_expr)
     assert isinstance(node.type, ts.FieldType)
 
     if cpm.is_applied_reduce(stencil_expr.expr):
@@ -203,14 +205,14 @@ def translate_as_field_op(
     field_node, field_type = _create_temporary_field(sdfg, state, domain, node.type, output_desc)
 
     # assume tasklet with single output
-    output_subset = [dace_fieldview_util.get_map_variable(dim) for dim, _, _ in domain]
+    output_subset = [dace_gtir_utils.get_map_variable(dim) for dim, _, _ in domain]
     if isinstance(output_desc, dace.data.Array):
         # additional local dimension for neighbors
         assert set(output_desc.offset) == {0}
         output_subset.extend(f"0:{size}" for size in output_desc.shape)
 
     # create map range corresponding to the field operator domain
-    map_ranges = {dace_fieldview_util.get_map_variable(dim): f"{lb}:{ub}" for dim, lb, ub in domain}
+    map_ranges = {dace_gtir_utils.get_map_variable(dim): f"{lb}:{ub}" for dim, lb, ub in domain}
     me, mx = sdfg_builder.add_map("field_op", state, map_ranges)
 
     if len(input_connections) == 0:
@@ -338,7 +340,7 @@ def _get_symbolic_value(
     )
     temp_name, _ = sdfg.add_scalar(
         temp_name or sdfg.temp_data_name(),
-        dace_fieldview_util.as_dace_type(scalar_type),
+        dace_utils.as_dace_type(scalar_type),
         find_new_name=True,
         transient=True,
     )
@@ -440,7 +442,7 @@ def translate_scalar_expr(
     # finally, create temporary for the result value
     temp_name, _ = sdfg.add_scalar(
         sdfg.temp_data_name(),
-        dace_fieldview_util.as_dace_type(node.type),
+        dace_utils.as_dace_type(node.type),
         find_new_name=True,
         transient=True,
     )
