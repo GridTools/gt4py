@@ -120,8 +120,12 @@ def _create_temporary_field(
     field_dims = list(domain_dims)
     # It should be enough to allocate an array with shape (upper_bound - lower_bound)
     # but this would require to use array offset for compensate for the start index.
-    # Array offset is known to cause issues to SDFG inlining. Besides, map fusion will
-    # in any case eliminate most of transient arrays.
+    # Suppose that a field operator executes on domain [2,N-2], the dace array to store
+    # the result only needs size (N-4), but this would require to compensate all array
+    # accesses with offset -2 (which corresponds to -lower_bound). Instead, we choose
+    # to allocate (N-2), leaving positions [0:2] unused. The reason is that array offset
+    # is known to cause issues to SDFG inlining. Besides, map fusion will in any case
+    # eliminate most of transient arrays.
     field_shape = list(domain_ubs)
 
     if isinstance(output_desc, dace.data.Array):
