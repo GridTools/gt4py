@@ -38,7 +38,8 @@ def _serialize_source(source: stages.ProgramSource) -> str:
     name: {source.entry_point.name}
     params: {', '.join(parameters)}
     deps: {', '.join(dependencies)}
-    src: {source.source_code}\
+    src: {source.source_code}
+    implicit_domain: {source.implicit_domain}
     """
 
 

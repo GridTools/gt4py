@@ -379,6 +379,8 @@ class DeviceType(enum.IntEnum):
     METAL = 8
     VPI = 9
     ROCM = 10
+    CUDA_MANAGED = 13
+    ONE_API = 14
 
 
 CPUDeviceTyping: TypeAlias = Literal[DeviceType.CPU]
@@ -389,6 +391,8 @@ VulkanDeviceTyping: TypeAlias = Literal[DeviceType.VULKAN]
 MetalDeviceTyping: TypeAlias = Literal[DeviceType.METAL]
 VPIDeviceTyping: TypeAlias = Literal[DeviceType.VPI]
 ROCMDeviceTyping: TypeAlias = Literal[DeviceType.ROCM]
+CUDAManagedDeviceTyping: TypeAlias = Literal[DeviceType.CUDA_MANAGED]
+OneApiDeviceTyping: TypeAlias = Literal[DeviceType.ONE_API]
 
 
 DeviceTypeT = TypeVar(
