@@ -160,11 +160,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         return shape, strides
 
     def _add_storage(
-        self,
-        sdfg: dace.SDFG,
-        name: str,
-        symbol_type: ts.DataType,
-        transient: bool = True,
+        self, sdfg: dace.SDFG, name: str, symbol_type: ts.DataType, transient: bool = True
     ) -> None:
         """
         Add storage for data containers used in the SDFG. For fields, it allocates dace arrays,
@@ -438,31 +434,32 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         input_memlets = {}
         for nsdfg_dataname, nsdfg_datadesc in nsdfg.arrays.items():
-            if not nsdfg_datadesc.transient:
-                datadesc: Optional[dace.dtypes.Array] = None
-                if nsdfg_dataname in lambda_args_mapping:
-                    src_node, _ = lambda_args_mapping[nsdfg_dataname]
-                    dataname = src_node.data
-                    datadesc = src_node.desc(sdfg)
-                else:
-                    dataname = nsdfg_dataname
-                    datadesc = sdfg.arrays[nsdfg_dataname]
+            if nsdfg_datadesc.transient:
+                continue
+            datadesc: Optional[dace.dtypes.Array] = None
+            if nsdfg_dataname in lambda_args_mapping:
+                src_node, _ = lambda_args_mapping[nsdfg_dataname]
+                dataname = src_node.data
+                datadesc = src_node.desc(sdfg)
+            else:
+                dataname = nsdfg_dataname
+                datadesc = sdfg.arrays[nsdfg_dataname]
 
-                # ensure that connectivity tables are non-transient arrays in parent SDFG
-                if dataname in connectivity_arrays:
-                    datadesc.transient = False
+            # ensure that connectivity tables are non-transient arrays in parent SDFG
+            if dataname in connectivity_arrays:
+                datadesc.transient = False
 
-                input_memlets[nsdfg_dataname] = dace.Memlet.from_array(dataname, datadesc)
+            input_memlets[nsdfg_dataname] = dace.Memlet.from_array(dataname, datadesc)
 
-                nsdfg_symbols_mapping |= {
-                    str(nested_symbol): parent_symbol
-                    for nested_symbol, parent_symbol in zip(
-                        [*nsdfg_datadesc.shape, *nsdfg_datadesc.strides, *nsdfg_datadesc.offset],
-                        [*datadesc.shape, *datadesc.strides, *datadesc.offset],
-                        strict=True,
-                    )
-                    if isinstance(nested_symbol, dace.symbol)
-                }
+            nsdfg_symbols_mapping |= {
+                str(nested_symbol): parent_symbol
+                for nested_symbol, parent_symbol in zip(
+                    [*nsdfg_datadesc.shape, *nsdfg_datadesc.strides],
+                    [*datadesc.shape, *datadesc.strides],
+                    strict=True,
+                )
+                if isinstance(nested_symbol, dace.symbol)
+            }
 
         nsdfg_node = head_state.add_nested_sdfg(
             nsdfg,
