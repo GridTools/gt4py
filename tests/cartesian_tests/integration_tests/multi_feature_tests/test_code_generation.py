@@ -610,7 +610,7 @@ def test_function_inline_in_while(backend):
                 count = count + 1
 
     domain = (5, 5, 2)
-    in_arr = np.ones(domain)
-    out_arr = np.ones(domain)
+    in_arr = gt_storage.ones(backend=backend, shape=domain, dtype=np.float64)
+    out_arr = gt_storage.ones(backend=backend, shape=domain, dtype=np.float64)
     test(in_arr, out_arr)
-    assert (out_arr == 460.0).all()
+    assert (out_arr[:, :, :] == 460.0).all()
