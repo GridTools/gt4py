@@ -1603,6 +1603,14 @@ def set_at(expr: common.Field, domain: common.DomainLike, target: common.Mutable
     operators._tuple_assign_field(target, expr, common.domain(domain))
 
 
+@runtime.if_stmt.register(EMBEDDED)
+def if_stmt(cond: bool, true_branch: Callable[[], None], false_branch: Callable[[], None]) -> None:
+    if cond:
+        true_branch()
+    else:
+        false_branch()
+
+
 def _compute_at_position(
     sten: Callable,
     ins: Sequence[common.Field],
