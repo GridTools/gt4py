@@ -16,13 +16,16 @@ from gt4py.eve import utils as eve_utils
 from gt4py.next import common
 from gt4py.next.common import Dimension
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
+from gt4py.next.iterator.ir_utils import (
+    common_pattern_matcher as cpm,
+    domain_utils,
+    ir_makers as im,
+)
 from gt4py.next.iterator.transforms import trace_shifts
-from gt4py.next.iterator.transforms.global_tmps import SymbolicDomain, domain_union
 from gt4py.next.utils import tree_map
 
 
-DOMAIN: TypeAlias = SymbolicDomain | None | tuple["DOMAIN", ...]
+DOMAIN: TypeAlias = domain_utils.SymbolicDomain | None | tuple["DOMAIN", ...]
 ACCESSED_DOMAINS: TypeAlias = dict[str, DOMAIN]
 
 
@@ -41,12 +44,14 @@ def split_dict_by_key(pred: Callable, d: dict):
     return a, b
 
 
-# TODO(tehrengruber): Revisit whether we want to move this behaviour to `domain_union`.
-def _domain_union_with_none(*domains: SymbolicDomain | None) -> SymbolicDomain | None:
-    filtered_domains: list[SymbolicDomain] = [d for d in domains if d is not None]
+# TODO(tehrengruber): Revisit whether we want to move this behaviour to `domain_utils.domain_union`.
+def domain_union_with_none(
+    *domains: domain_utils.SymbolicDomain | None,
+) -> domain_utils.SymbolicDomain | None:
+    filtered_domains: list[domain_utils.SymbolicDomain] = [d for d in domains if d is not None]
     if len(filtered_domains) == 0:
         return None
-    return domain_union(*filtered_domains)
+    return domain_utils.domain_union(*filtered_domains)
 
 
 def canonicalize_domain_structure(d1: DOMAIN, d2: DOMAIN) -> tuple[DOMAIN, DOMAIN]:
@@ -93,7 +98,7 @@ def _merge_domains(
         original_domain, domain = canonicalize_domain_structure(
             original_domains.get(key, None), domain
         )
-        new_domains[key] = tree_map(_domain_union_with_none)(original_domain, domain)
+        new_domains[key] = tree_map(domain_union_with_none)(original_domain, domain)
 
     return new_domains
 
@@ -101,19 +106,20 @@ def _merge_domains(
 def extract_accessed_domains(
     stencil: itir.Expr,
     input_ids: list[str],
-    target_domain: SymbolicDomain,
+    target_domain: domain_utils.SymbolicDomain,
     offset_provider: common.OffsetProvider,
 ) -> ACCESSED_DOMAINS:
-    accessed_domains: dict[str, SymbolicDomain | None] = {}
+    accessed_domains: dict[str, domain_utils.SymbolicDomain | None] = {}
 
     shifts_results = trace_shifts.trace_stencil(stencil, num_args=len(input_ids))
 
     for in_field_id, shifts_list in zip(input_ids, shifts_results, strict=True):
         new_domains = [
-            SymbolicDomain.translate(target_domain, shift, offset_provider) for shift in shifts_list
+            domain_utils.SymbolicDomain.translate(target_domain, shift, offset_provider)
+            for shift in shifts_list
         ]
         # `None` means field is never accessed
-        accessed_domains[in_field_id] = _domain_union_with_none(
+        accessed_domains[in_field_id] = domain_union_with_none(
             accessed_domains.get(in_field_id, None), *new_domains
         )
 
@@ -129,8 +135,8 @@ def infer_as_fieldop(
     assert cpm.is_call_to(applied_fieldop.fun, "as_fieldop")
     if target_domain is None:
         raise ValueError("'target_domain' cannot be 'None'.")
-    if not isinstance(target_domain, SymbolicDomain):
-        raise ValueError("'target_domain' needs to be a 'SymbolicDomain'.")
+    if not isinstance(target_domain, domain_utils.SymbolicDomain):
+        raise ValueError("'target_domain' needs to be a 'domain_utils.SymbolicDomain'.")
 
     # `as_fieldop(stencil)(inputs...)`
     stencil, inputs = applied_fieldop.fun.args[0], applied_fieldop.args
@@ -166,7 +172,7 @@ def infer_as_fieldop(
 
         accessed_domains = _merge_domains(accessed_domains, accessed_domains_tmp)
 
-    transformed_call = im.as_fieldop(stencil, SymbolicDomain.as_expr(target_domain))(
+    transformed_call = im.as_fieldop(stencil, domain_utils.SymbolicDomain.as_expr(target_domain))(
         *transformed_inputs
     )
 
@@ -318,7 +324,7 @@ def infer_program(
         assert isinstance(set_at, itir.SetAt)
 
         transformed_call, _unused_domain = infer_expr(
-            set_at.expr, SymbolicDomain.from_expr(set_at.domain), offset_provider
+            set_at.expr, domain_utils.SymbolicDomain.from_expr(set_at.domain), offset_provider
         )
         transformed_set_ats.append(
             itir.SetAt(
