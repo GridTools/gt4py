@@ -68,6 +68,13 @@ class GTFNTranslationStep(
                     file_extension="cu",
                     header_extension="cuh",
                 )
+            case core_defs.DeviceType.ROCM:
+                return languages.LanguageWithHeaderFilesSettings(
+                    formatter_key=cpp_interface.CPP_DEFAULT.formatter_key,
+                    formatter_style=cpp_interface.CPP_DEFAULT.formatter_style,
+                    file_extension="hip",
+                    header_extension="h",
+                )
             case core_defs.DeviceType.CPU:
                 return cpp_interface.CPP_DEFAULT
             case _:
@@ -263,7 +270,7 @@ class GTFNTranslationStep(
 
     def _backend_header(self) -> str:
         match self.device_type:
-            case core_defs.DeviceType.CUDA:
+            case core_defs.DeviceType.CUDA | core_defs.DeviceType.ROCM:
                 return "gridtools/fn/backend/gpu.hpp"
             case core_defs.DeviceType.CPU:
                 return "gridtools/fn/backend/naive.hpp"
@@ -272,7 +279,7 @@ class GTFNTranslationStep(
 
     def _backend_type(self) -> str:
         match self.device_type:
-            case core_defs.DeviceType.CUDA:
+            case core_defs.DeviceType.CUDA | core_defs.DeviceType.ROCM:
                 return "gridtools::fn::backend::gpu<generated::block_sizes_t>{}"
             case core_defs.DeviceType.CPU:
                 return "gridtools::fn::backend::naive{}"
@@ -282,9 +289,11 @@ class GTFNTranslationStep(
     def _language(self) -> type[languages.NanobindSrcL]:
         match self.device_type:
             case core_defs.DeviceType.CUDA:
-                return languages.Cuda
+                return languages.CUDA
+            case core_defs.DeviceType.ROCM:
+                return languages.HIP
             case core_defs.DeviceType.CPU:
-                return languages.Cpp
+                return languages.CPP
             case _:
                 raise self._not_implemented_for_device_type()
 
@@ -297,7 +306,7 @@ class GTFNTranslationStep(
 
     def _library_name(self) -> str:
         match self.device_type:
-            case core_defs.DeviceType.CUDA:
+            case core_defs.DeviceType.CUDA | core_defs.DeviceType.ROCM:
                 return "gridtools_gpu"
             case core_defs.DeviceType.CPU:
                 return "gridtools_cpu"

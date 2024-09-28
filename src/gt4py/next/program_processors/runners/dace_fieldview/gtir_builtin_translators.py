@@ -237,15 +237,15 @@ def translate_as_field_op(
     return [(field_node, field_type)]
 
 
-def translate_cond(
+def translate_if(
     node: gtir.Node,
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
     reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
 ) -> list[TemporaryData]:
-    """Generates the dataflow subgraph for the `cond` builtin function."""
-    assert cpm.is_call_to(node, "cond")
+    """Generates the dataflow subgraph for the `if_` builtin function (outside of `as_fieldop`)."""
+    assert cpm.is_call_to(node, "if_")
     assert len(node.args) == 3
     cond_expr, true_expr, false_expr = node.args
 
@@ -490,7 +490,7 @@ if TYPE_CHECKING:
     # Use type-checking to assert that all translator functions implement the `PrimitiveTranslator` protocol
     __primitive_translators: list[PrimitiveTranslator] = [
         translate_as_field_op,
-        translate_cond,
+        translate_if,
         translate_literal,
         translate_scalar_expr,
         translate_symbol_ref,

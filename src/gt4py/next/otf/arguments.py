@@ -205,9 +205,7 @@ def iter_size_args(args: tuple[Any, ...], inside_tuple: bool = False) -> Iterato
 
     This can be used to generate domain size arguments for FieldView Programs that use an implicit domain.
     """
-    print(f"iter_size_args: matching args {tuple(type(arg) for arg in args)}")
     for arg in args:
-        print(f"iter_size_args: matching arg {arg}")
         match arg:
             case tuple():
                 # we only need the first field, because all fields in a tuple must have the same dims and sizes
@@ -215,7 +213,6 @@ def iter_size_args(args: tuple[Any, ...], inside_tuple: bool = False) -> Iterato
                 if first_field:
                     yield from iter_size_args((first_field,))
             case common.Field():
-                print(f"iter_size_args: yielding from {arg.ndarray.shape}")
                 yield from arg.ndarray.shape
             case _:
                 pass
