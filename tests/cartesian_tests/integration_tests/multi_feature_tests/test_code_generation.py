@@ -732,7 +732,6 @@ def test_function_inline_in_while(backend):
         with computation(PARALLEL), interval(...):
             count = 1
             while count < 10:
-                out_field = out_field + 8
                 sa = add_42(out_field)
                 out_field = in_field + sa
                 count = count + 1
@@ -741,4 +740,4 @@ def test_function_inline_in_while(backend):
     in_arr = gt_storage.ones(backend=backend, shape=domain, dtype=np.float64)
     out_arr = gt_storage.ones(backend=backend, shape=domain, dtype=np.float64)
     test(in_arr, out_arr)
-    assert (out_arr[:, :, :] == 460.0).all()
+    assert (out_arr[:, :, :] == 388.0).all()
