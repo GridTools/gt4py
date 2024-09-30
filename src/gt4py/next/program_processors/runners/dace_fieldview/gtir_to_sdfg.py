@@ -25,6 +25,7 @@ from gt4py.eve import concepts
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.iterator.transforms import symbol_ref_utils
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
 from gt4py.next.program_processors.runners.dace_fieldview import (
@@ -400,9 +401,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         lambda_args_mapping = {str(p.id): arg for p, arg in zip(node.params, args, strict=True)}
 
         # inherit symbols from parent scope but eventually override with local symbols
-        lambda_symbols = self.global_symbols | {
-            pname: type_ for pname, (_, type_) in lambda_args_mapping.items()
+        lambda_symbols = {
+            sym: self.global_symbols[sym]
+            for sym in symbol_ref_utils.collect_symbol_refs(node.expr, self.global_symbols.keys())
         }
+        lambda_symbols |= {pname: type_ for pname, (_, type_) in lambda_args_mapping.items()}
 
         nsdfg = dace.SDFG(f"{sdfg.label}_nested")
         nstate = nsdfg.add_state("lambda")
@@ -436,25 +439,25 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 src_node, _ = lambda_args_mapping[nsdfg_dataname]
                 dataname = src_node.data
                 datadesc = src_node.desc(sdfg)
-
-                nsdfg_symbols_mapping |= {
-                    str(nested_symbol): parent_symbol
-                    for nested_symbol, parent_symbol in zip(
-                        [*nsdfg_datadesc.shape, *nsdfg_datadesc.strides],
-                        [*datadesc.shape, *datadesc.strides],
-                        strict=True,
-                    )
-                    if isinstance(nested_symbol, dace.symbol)
-                }
             else:
                 dataname = nsdfg_dataname
                 datadesc = sdfg.arrays[nsdfg_dataname]
-                # ensure that connectivity tables are non-transient arrays in parent SDFG
-                if dataname in connectivity_arrays:
-                    datadesc.transient = False
 
-            if datadesc:
-                input_memlets[nsdfg_dataname] = dace.Memlet.from_array(dataname, datadesc)
+            # ensure that connectivity tables are non-transient arrays in parent SDFG
+            if dataname in connectivity_arrays:
+                datadesc.transient = False
+
+            input_memlets[nsdfg_dataname] = sdfg.make_array_memlet(dataname)
+
+            nsdfg_symbols_mapping |= {
+                str(nested_symbol): parent_symbol
+                for nested_symbol, parent_symbol in zip(
+                    [*nsdfg_datadesc.shape, *nsdfg_datadesc.strides],
+                    [*datadesc.shape, *datadesc.strides],
+                    strict=True,
+                )
+                if isinstance(nested_symbol, dace.symbol)
+            }
 
         nsdfg_node = head_state.add_nested_sdfg(
             nsdfg,
@@ -484,9 +487,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 nstate.remove_node(lambda_node)
             temp, _ = sdfg.add_temp_transient_like(desc)
             dst_node = head_state.add_access(temp)
-            head_state.add_edge(
-                nsdfg_node, connector, dst_node, None, dace.Memlet.from_array(temp, desc)
-            )
+            head_state.add_edge(nsdfg_node, connector, dst_node, None, sdfg.make_array_memlet(temp))
             results.append((dst_node, type_))
 
         return results
