@@ -41,7 +41,7 @@ class DataflowBuilder(Protocol):
     """Visitor interface to build a dataflow subgraph."""
 
     @abc.abstractmethod
-    def get_offset_provider(self, offset: str) -> gtx_common.Connectivity | gtx_common.Dimension:
+    def get_offset_provider(self, offset: str) -> gtx_common.OffsetProviderElem:
         pass
 
     @abc.abstractmethod
@@ -108,7 +108,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     from where to continue building the SDFG.
     """
 
-    offset_provider: dict[str, gtx_common.Connectivity | gtx_common.Dimension]
+    offset_provider: gtx_common.OffsetProvider
     global_symbols: dict[str, ts.DataType] = dataclasses.field(default_factory=lambda: {})
     map_uids: eve.utils.UIDGenerator = dataclasses.field(
         init=False, repr=False, default_factory=lambda: eve.utils.UIDGenerator(prefix="map")
@@ -117,7 +117,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         init=False, repr=False, default_factory=lambda: eve.utils.UIDGenerator(prefix="tlet")
     )
 
-    def get_offset_provider(self, offset: str) -> gtx_common.Connectivity | gtx_common.Dimension:
+    def get_offset_provider(self, offset: str) -> gtx_common.OffsetProviderElem:
         return self.offset_provider[offset]
 
     def get_symbol_type(self, symbol_name: str) -> ts.DataType:
@@ -642,7 +642,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
 def build_sdfg_from_gtir(
     program: gtir.Program,
-    offset_provider: dict[str, gtx_common.Connectivity | gtx_common.Dimension],
+    offset_provider: gtx_common.OffsetProvider,
 ) -> dace.SDFG:
     """
     Receives a GTIR program and lowers it to a DaCe SDFG.

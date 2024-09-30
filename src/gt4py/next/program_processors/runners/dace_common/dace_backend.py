@@ -113,7 +113,7 @@ def _get_stride_args(
 
 def get_sdfg_conn_args(
     sdfg: dace.SDFG,
-    offset_provider: dict[str, Any],
+    offset_provider: Mapping[str, Any],
     on_gpu: bool,
 ) -> dict[str, np.typing.NDArray]:
     """

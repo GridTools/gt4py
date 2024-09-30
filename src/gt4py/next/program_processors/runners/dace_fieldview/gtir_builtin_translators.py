@@ -326,19 +326,18 @@ def translate_if(
         false_br_node = false_br.data_node
 
         temp_name = temp.data_node.data
-        temp_desc = temp.data_node.desc(sdfg)
         true_br_output_node = true_state.add_access(temp_name)
         true_state.add_nedge(
             true_br_node,
             true_br_output_node,
-            dace.Memlet.from_array(temp_name, temp_desc),
+            sdfg.make_array_memlet(temp_name),
         )
 
         false_br_output_node = false_state.add_access(temp_name)
         false_state.add_nedge(
             false_br_node,
             false_br_output_node,
-            dace.Memlet.from_array(temp_name, temp_desc),
+            sdfg.make_array_memlet(temp_name),
         )
 
     return result_temps
