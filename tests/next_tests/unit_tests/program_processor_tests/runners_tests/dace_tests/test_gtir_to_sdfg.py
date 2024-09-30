@@ -1270,7 +1270,7 @@ def test_gtir_let_lambda():
     )
 
     a = np.random.rand(N)
-    b = np.empty_like(a)
+    b = np.random.rand(N)
     ref = np.concatenate((b[0:1], a[1 : N - 1] * 8, b[N - 1 : N]))
 
     sdfg = dace_backend.build_sdfg_from_gtir(testee, {})
