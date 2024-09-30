@@ -250,7 +250,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 temp, _ = sdfg.add_temp_transient_like(desc)
                 temp_node = head_state.add_access(temp)
                 head_state.add_nedge(
-                    field.data_node, temp_node, dace.Memlet.from_array(field.data_node.data, desc)
+                    field.data_node, temp_node, sdfg.make_array_memlet(field.data_node.data)
                 )
                 return gtir_builtin_translators.Field(temp_node, field.data_type)
 
