@@ -14,7 +14,7 @@ import numpy as np
 
 from gt4py.next import common as gtx_common
 
-from . import utility as dace_util
+from . import utility as dace_utils
 
 
 try:
@@ -40,7 +40,7 @@ def _convert_arg(arg: Any, sdfg_param: str, use_field_canonical_representation: 
     if not use_field_canonical_representation:
         return arg.ndarray
     # the canonical representation requires alphabetical ordering of the dimensions in field domain definition
-    sorted_dims = dace_util.get_sorted_dims(arg.domain.dims)
+    sorted_dims = dace_utils.get_sorted_dims(arg.domain.dims)
     ndim = len(sorted_dims)
     dim_indices = [dim_index for dim_index, _ in sorted_dims]
     if isinstance(arg.ndarray, np.ndarray):
@@ -122,9 +122,9 @@ def get_sdfg_conn_args(
     device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
 
     connectivity_args = {}
-    for offset, connectivity in dace_util.filter_connectivities(offset_provider).items():
+    for offset, connectivity in dace_utils.filter_connectivities(offset_provider).items():
         assert isinstance(connectivity, gtx_common.NeighborTable)
-        param = dace_util.connectivity_identifier(offset)
+        param = dace_utils.connectivity_identifier(offset)
         if param in sdfg.arrays:
             connectivity_args[param] = _ensure_is_on_device(connectivity.table, device)
 
