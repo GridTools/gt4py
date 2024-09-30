@@ -132,16 +132,12 @@ def constant_fold_accessed_domains(
 
 def translate_domain(
     domain: itir.FunCall,
-    shifts: dict[Union[common.Dimension, str], tuple[itir.Expr, itir.Expr]],
+    shifts: dict[str, tuple[itir.Expr, itir.Expr]],
     offset_provider: common.OffsetProvider,
 ) -> SymbolicDomain:
     shift_tuples = [
         (
-            im.ensure_offset(
-                itir.AxisLiteral(value=d.value, kind=d.kind)
-                if isinstance(d, common.Dimension)
-                else itir.AxisLiteral(value=d)
-            ),
+            im.ensure_offset(d),
             im.ensure_offset(r),
         )
         for d, r in shifts.items()
@@ -149,9 +145,7 @@ def translate_domain(
 
     shift_list = [item for sublist in shift_tuples for item in sublist]
 
-    translated_domain_expr = SymbolicDomain.translate(
-        SymbolicDomain.from_expr(domain), shift_list, offset_provider
-    )
+    translated_domain_expr = SymbolicDomain.from_expr(domain).translate(shift_list, offset_provider)
 
     return constant_fold_domain_exprs(translated_domain_expr.as_expr())
 
