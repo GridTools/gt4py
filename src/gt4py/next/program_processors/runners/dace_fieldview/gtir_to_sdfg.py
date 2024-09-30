@@ -401,14 +401,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         lambda_args_mapping = {str(p.id): arg for p, arg in zip(node.params, args, strict=True)}
 
         # inherit symbols from parent scope but eventually override with local symbols
-        referenced_symbols = set(
-            symbol_ref_utils.collect_symbol_refs(node.expr, self.global_symbols.keys())
-        )
         lambda_symbols = {
-            pname: type_
-            for pname, type_ in self.global_symbols.items()
-            if pname in referenced_symbols
-        } | {pname: type_ for pname, (_, type_) in lambda_args_mapping.items()}
+            sym: self.global_symbols[sym]
+            for sym in symbol_ref_utils.collect_symbol_refs(node.expr, self.global_symbols.keys())
+        }
+        lambda_symbols |= {pname: type_ for pname, (_, type_) in lambda_args_mapping.items()}
 
         nsdfg = dace.SDFG(f"{sdfg.label}_nested")
         nstate = nsdfg.add_state("lambda")
@@ -450,7 +447,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             if dataname in connectivity_arrays:
                 datadesc.transient = False
 
-            input_memlets[nsdfg_dataname] = dace.Memlet.from_array(dataname, datadesc)
+            input_memlets[nsdfg_dataname] = sdfg.make_array_memlet(dataname)
 
             nsdfg_symbols_mapping |= {
                 str(nested_symbol): parent_symbol
@@ -490,9 +487,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 nstate.remove_node(lambda_node)
             temp, _ = sdfg.add_temp_transient_like(desc)
             dst_node = head_state.add_access(temp)
-            head_state.add_edge(
-                nsdfg_node, connector, dst_node, None, dace.Memlet.from_array(temp, desc)
-            )
+            head_state.add_edge(nsdfg_node, connector, dst_node, None, sdfg.make_array_memlet(temp))
             results.append((dst_node, type_))
 
         return results
