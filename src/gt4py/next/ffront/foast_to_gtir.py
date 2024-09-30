@@ -24,13 +24,33 @@ from gt4py.next.ffront import (
     stages as ffront_stages,
     type_specifications as ts_ffront,
 )
+from gt4py.next.ffront.stages import AOT_FOP, FOP
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
 def foast_to_gtir(inp: ffront_stages.FoastOperatorDefinition) -> itir.Expr:
+    """
+    Lower a FOAST field operator node to GTIR.
+
+    See the docstring of `FieldOperatorLowering` for details.
+    """
     return FieldOperatorLowering.apply(inp.foast_node)
+
+
+def foast_to_gtir_factory(cached: bool = True) -> workflow.Workflow[FOP, itir.Expr]:
+    """Wrap `foast_to_gtir` into a chainable and, optionally, cached workflow step."""
+    wf = foast_to_gtir
+    if cached:
+        wf = workflow.CachedStep(step=wf, hash_function=ffront_stages.fingerprint_stage)
+    return wf
+
+
+def adapted_foast_to_gtir_factory(**kwargs: Any) -> workflow.Workflow[AOT_FOP, itir.Expr]:
+    """Wrap the `foast_to_gtir` workflow step into an adapter to fit into backend transform workflows."""
+    return toolchain.StripArgsAdapter(foast_to_gtir_factory(**kwargs))
 
 
 def promote_to_list(node: foast.Symbol | foast.Expr) -> Callable[[itir.Expr], itir.Expr]:
@@ -45,10 +65,9 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     Lower FieldOperator AST (FOAST) to GTIR.
 
     Most expressions are lowered to `as_fieldop`ed stencils.
-    Pure scalar expressions are kept as scalar operations as they might appear outside of the stencil context,
-    e.g. in `cond`.
-    In arithemtic operations that involve a field and a scalar, the scalar is implicitly broadcasted to a field
-    in the `as_fieldop` call.
+    Pure scalar expressions are kept as scalar operations as they might appear outside of the
+    stencil context. In arithmetic operations that involve a field and a scalar, the scalar is
+    implicitly broadcasted to a field in the `as_fieldop` call.
 
     Examples
     --------
@@ -144,7 +163,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 inner_expr = im.let(sym, im.tuple_get(i, im.ref("__if_stmt_result")))(inner_expr)
 
             # here we assume neither branch returns
-            return im.let("__if_stmt_result", im.cond(cond, true_branch, false_branch))(inner_expr)
+            return im.let("__if_stmt_result", im.if_(cond, true_branch, false_branch))(inner_expr)
         elif return_kind is foast_introspection.StmtReturnKind.CONDITIONAL_RETURN:
             common_syms = tuple(im.sym(sym) for sym in common_symbols.keys())
             common_symrefs = tuple(im.ref(sym) for sym in common_symbols.keys())
@@ -159,7 +178,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
             false_branch = self.visit(node.false_branch, inner_expr=inner_expr, **kwargs)
 
             return im.let(inner_expr_name, inner_expr_evaluator)(
-                im.cond(cond, true_branch, false_branch)
+                im.if_(cond, true_branch, false_branch)
             )
 
         assert return_kind is foast_introspection.StmtReturnKind.UNCONDITIONAL_RETURN
@@ -169,7 +188,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         true_branch = self.visit(node.true_branch, inner_expr=inner_expr, **kwargs)
         false_branch = self.visit(node.false_branch, inner_expr=inner_expr, **kwargs)
 
-        return im.cond(cond, true_branch, false_branch)
+        return im.if_(cond, true_branch, false_branch)
 
     def visit_Assign(
         self, node: foast.Assign, *, inner_expr: Optional[itir.Expr], **kwargs: Any
@@ -212,7 +231,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
             isinstance(node.condition.type, ts.ScalarType)
             and node.condition.type.kind == ts.ScalarKind.BOOL
         )
-        return im.cond(
+        return im.if_(
             self.visit(node.condition), self.visit(node.true_expr), self.visit(node.false_expr)
         )
 
@@ -385,16 +404,23 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return self._make_reduction_expr(node, "minimum", init_expr, **kwargs)
 
     def _visit_type_constr(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
-        if isinstance(node.args[0], foast.Constant):
-            node_kind = self.visit(node.type).kind.name.lower()
-            target_type = fbuiltins.BUILTINS[node_kind]
-            source_type = {**fbuiltins.BUILTINS, "string": str}[node.args[0].type.__str__().lower()]
-            if target_type is bool and source_type is not bool:
-                return im.literal(str(bool(source_type(node.args[0].value))), "bool")
-            return im.literal(str(node.args[0].value), node_kind)
-        raise FieldOperatorLoweringError(
-            f"Encountered a type cast, which is not supported: {node}."
-        )
+        el = node.args[0]
+        node_kind = self.visit(node.type).kind.name.lower()
+        source_type = {**fbuiltins.BUILTINS, "string": str}[el.type.__str__().lower()]
+        target_type = fbuiltins.BUILTINS[node_kind]
+
+        if isinstance(el, foast.Constant):
+            val = source_type(el.value)
+        elif isinstance(el, foast.UnaryOp) and isinstance(el.operand, foast.Constant):
+            operand = source_type(el.operand.value)
+            val = eval(f"lambda arg: {el.op}arg")(operand)
+        else:
+            raise FieldOperatorLoweringError(
+                f"Type cast only supports literal arguments, {node.type} not supported."
+            )
+        val = target_type(val)
+
+        return im.literal(str(val), node_kind)
 
     def _make_literal(self, val: Any, type_: ts.TypeSpec) -> itir.Expr:
         if isinstance(type_, ts.TupleType):

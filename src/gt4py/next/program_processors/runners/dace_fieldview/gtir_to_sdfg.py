@@ -406,8 +406,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
     ) -> gtir_builtin_translators.FieldopResult:
         # use specialized dataflow builder classes for each builtin function
-        if cpm.is_call_to(node, "cond"):
-            return gtir_builtin_translators.translate_cond(
+        if cpm.is_call_to(node, "if_"):
+            return gtir_builtin_translators.translate_if(
                 node, sdfg, head_state, self, reduce_identity
             )
         elif cpm.is_call_to(node, "make_tuple"):

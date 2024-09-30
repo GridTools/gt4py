@@ -9,10 +9,10 @@
 from __future__ import annotations
 
 import dataclasses
+import functools
 from typing import Any, Optional, cast
 
 import devtools
-import factory
 
 from gt4py.eve import NodeTranslator, concepts, traits
 from gt4py.next import common, config, errors
@@ -25,48 +25,87 @@ from gt4py.next.ffront import (
     transform_utils,
     type_specifications as ts_ffront,
 )
+from gt4py.next.ffront.stages import AOT_PRG
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.otf import stages, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
-@dataclasses.dataclass(frozen=True)
-class PastToItir(workflow.ChainableWorkflowMixin):
-    to_gtir: bool = False  # FIXME[#1582](havogt): remove after refactoring to GTIR
+# FIXME[#1582](havogt): remove `to_gtir` arg after refactoring to GTIR
+def past_to_itir(inp: AOT_PRG, to_gtir: bool = False) -> stages.AOTProgram:
+    """
+    Lower a PAST program definition to Iterator IR.
 
-    def __call__(self, inp: ffront_stages.PastClosure) -> stages.ProgramCall:
-        all_closure_vars = transform_utils._get_closure_vars_recursively(inp.closure_vars)
-        offsets_and_dimensions = transform_utils._filter_closure_vars_by_type(
-            all_closure_vars, fbuiltins.FieldOffset, common.Dimension
-        )
-        grid_type = transform_utils._deduce_grid_type(
-            inp.grid_type, offsets_and_dimensions.values()
-        )
+    Example:
+        >>> from gt4py import next as gtx
+        >>> from gt4py.next.otf import arguments, toolchain
+        >>> IDim = gtx.Dimension("I")
 
-        gt_callables = transform_utils._filter_closure_vars_by_type(
-            all_closure_vars, gtcallable.GTCallable
-        ).values()
-        lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
+        >>> @gtx.field_operator
+        ... def copy(a: gtx.Field[[IDim], gtx.float32]) -> gtx.Field[[IDim], gtx.float32]:
+        ...     return a
 
-        itir_program = ProgramLowering.apply(
-            inp.past_node,
-            function_definitions=lowered_funcs,
-            grid_type=grid_type,
-            to_gtir=self.to_gtir,
-        )
+        >>> @gtx.program
+        ... def copy_program(a: gtx.Field[[IDim], gtx.float32], out: gtx.Field[[IDim], gtx.float32]):
+        ...     copy(a, out=out)
 
-        if config.DEBUG or "debug" in inp.kwargs:
-            devtools.debug(itir_program)
+        >>> compile_time_args = arguments.CompileTimeArgs.from_concrete(
+        ...     *(
+        ...         arguments.CompileTimeArg(param.type)
+        ...         for param in copy_program.past_stage.past_node.params
+        ...     ),
+        ...     offset_provider={"I", IDim},
+        ... )  # this will include field dim size arguments automatically.
 
-        return stages.ProgramCall(
-            itir_program, inp.args, inp.kwargs | {"column_axis": _column_axis(all_closure_vars)}
-        )
+        >>> itir_copy = past_to_itir(
+        ...     toolchain.CompilableProgram(copy_program.past_stage, compile_time_args)
+        ... )
+
+        >>> print(itir_copy.data.id)
+        copy_program
+
+        >>> print(type(itir_copy.data))
+        <class 'gt4py.next.iterator.ir.FencilDefinition'>
+    """
+    all_closure_vars = transform_utils._get_closure_vars_recursively(inp.data.closure_vars)
+    offsets_and_dimensions = transform_utils._filter_closure_vars_by_type(
+        all_closure_vars, fbuiltins.FieldOffset, common.Dimension
+    )
+    grid_type = transform_utils._deduce_grid_type(
+        inp.data.grid_type, offsets_and_dimensions.values()
+    )
+
+    gt_callables = transform_utils._filter_closure_vars_by_type(
+        all_closure_vars, gtcallable.GTCallable
+    ).values()
+    # TODO(ricoh): The following calls to .__gt_itir__, which will use whatever
+    # backend is set for each of these field operators (GTCallables). Instead
+    # we should use the current toolchain to lower these to ITIR. This will require
+    # making this step aware of the toolchain it is called by (it can be part of multiple).
+    lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
+
+    itir_program = ProgramLowering.apply(
+        inp.data.past_node, function_definitions=lowered_funcs, grid_type=grid_type, to_gtir=to_gtir
+    )
+
+    if config.DEBUG or inp.data.debug:
+        devtools.debug(itir_program)
+
+    return stages.AOTProgram(
+        data=itir_program,
+        args=dataclasses.replace(inp.args, column_axis=_column_axis(all_closure_vars)),
+    )
 
 
-class PastToItirFactory(factory.Factory):
-    class Meta:
-        model = PastToItir
+# FIXME[#1582](havogt): remove `to_gtir` arg after refactoring to GTIR
+def past_to_itir_factory(
+    cached: bool = True, to_gtir: bool = False
+) -> workflow.Workflow[AOT_PRG, stages.AOTProgram]:
+    wf = workflow.make_step(functools.partial(past_to_itir, to_gtir=to_gtir))
+    if cached:
+        wf = workflow.CachedStep(wf, hash_function=ffront_stages.fingerprint_stage)
+    return wf
 
 
 def _column_axis(all_closure_vars: dict[str, Any]) -> Optional[common.Dimension]:
@@ -207,8 +246,10 @@ class ProgramLowering(
 
         params = self.visit(node.params)
 
+        implicit_domain = False
         if any("domain" not in body_entry.kwargs for body_entry in node.body):
             params = params + self._gen_size_params_from_program(node)
+            implicit_domain = True
 
         if self.to_gtir:
             set_ats = [self._visit_stencil_call_as_set_at(stmt, **kwargs) for stmt in node.body]
@@ -218,6 +259,7 @@ class ProgramLowering(
                 params=params,
                 declarations=[],
                 body=set_ats,
+                implicit_domain=implicit_domain,
             )
         else:
             closures = [self._visit_stencil_call_as_closure(stmt, **kwargs) for stmt in node.body]
@@ -226,6 +268,7 @@ class ProgramLowering(
                 function_definitions=function_definitions,
                 params=params,
                 closures=closures,
+                implicit_domain=implicit_domain,
             )
 
     def _visit_stencil_call_as_set_at(self, node: past.Call, **kwargs: Any) -> itir.SetAt:

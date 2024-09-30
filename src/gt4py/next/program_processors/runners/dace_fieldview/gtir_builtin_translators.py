@@ -248,26 +248,26 @@ def translate_as_field_op(
     return result_field
 
 
-def translate_cond(
+def translate_if(
     node: gtir.Node,
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
     reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
 ) -> FieldopResult:
-    """Generates the dataflow subgraph for the `cond` builtin function."""
-    assert cpm.is_call_to(node, "cond")
+    """Generates the dataflow subgraph for the `if_` builtin function."""
+    assert cpm.is_call_to(node, "if_")
     assert len(node.args) == 3
     cond_expr, true_expr, false_expr = node.args
 
     # expect condition as first argument
-    cond = gtir_python_codegen.get_source(cond_expr)
+    if_stmt = gtir_python_codegen.get_source(cond_expr)
 
     # use current head state to terminate the dataflow, and add a entry state
     # to connect the true/false branch states as follows:
     #
     #               ------------
-    #           === |  cond  | ===
+    #           === |   cond   | ===
     #          ||   ------------   ||
     #          \/                  \/
     #     ------------       -------------
@@ -283,12 +283,12 @@ def translate_cond(
 
     # expect true branch as second argument
     true_state = sdfg.add_state(state.label + "_true_branch")
-    sdfg.add_edge(cond_state, true_state, dace.InterstateEdge(condition=f"bool({cond})"))
+    sdfg.add_edge(cond_state, true_state, dace.InterstateEdge(condition=f"bool({if_stmt})"))
     sdfg.add_edge(true_state, state, dace.InterstateEdge())
 
     # and false branch as third argument
     false_state = sdfg.add_state(state.label + "_false_branch")
-    sdfg.add_edge(cond_state, false_state, dace.InterstateEdge(condition=(f"not bool({cond})")))
+    sdfg.add_edge(cond_state, false_state, dace.InterstateEdge(condition=(f"not bool({if_stmt})")))
     sdfg.add_edge(false_state, state, dace.InterstateEdge())
 
     true_br = sdfg_builder.visit(
@@ -577,7 +577,7 @@ if TYPE_CHECKING:
     # Use type-checking to assert that all translator functions implement the `PrimitiveTranslator` protocol
     __primitive_translators: list[PrimitiveTranslator] = [
         translate_as_field_op,
-        translate_cond,
+        translate_if,
         translate_literal,
         translate_make_tuple,
         translate_tuple_get,

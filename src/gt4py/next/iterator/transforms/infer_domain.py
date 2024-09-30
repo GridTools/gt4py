@@ -260,12 +260,12 @@ def infer_tuple_get(
     return infered_args_expr, actual_domains
 
 
-def infer_cond(
+def infer_if(
     expr: itir.Expr,
     domain: DOMAIN,
     offset_provider: common.OffsetProvider,
 ) -> tuple[itir.Expr, ACCESSED_DOMAINS]:
-    assert cpm.is_call_to(expr, "cond")
+    assert cpm.is_call_to(expr, "if_")
     infered_args_expr = []
     actual_domains: ACCESSED_DOMAINS = {}
     cond, true_val, false_val = expr.args
@@ -293,8 +293,8 @@ def infer_expr(
         return infer_make_tuple(expr, domain, offset_provider)
     elif cpm.is_call_to(expr, "tuple_get"):
         return infer_tuple_get(expr, domain, offset_provider)
-    elif cpm.is_call_to(expr, "cond"):
-        return infer_cond(expr, domain, offset_provider)
+    elif cpm.is_call_to(expr, "if_"):
+        return infer_if(expr, domain, offset_provider)
     elif (
         cpm.is_call_to(expr, itir.ARITHMETIC_BUILTINS)
         or cpm.is_call_to(expr, itir.TYPEBUILTINS)

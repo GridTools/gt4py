@@ -545,7 +545,7 @@ def test_gtir_cond():
             gtir.SetAt(
                 expr=im.op_as_fieldop("plus", domain)(
                     "x",
-                    im.cond(
+                    im.if_(
                         im.greater(gtir.SymRef(id="s1"), gtir.SymRef(id="s2")),
                         im.op_as_fieldop("plus", domain)("y", "scalar"),
                         im.op_as_fieldop("plus", domain)("w", "scalar"),
@@ -589,7 +589,7 @@ def test_gtir_cond_with_tuple_return():
             gtir.SetAt(
                 expr=im.tuple_get(
                     0,
-                    im.cond(
+                    im.if_(
                         gtir.SymRef(id="pred"),
                         im.make_tuple(im.make_tuple("x", "y"), "w"),
                         im.make_tuple(im.make_tuple("y", "x"), "w"),
@@ -638,10 +638,10 @@ def test_gtir_cond_nested():
         declarations=[],
         body=[
             gtir.SetAt(
-                expr=im.cond(
+                expr=im.if_(
                     gtir.SymRef(id="pred_1"),
                     im.op_as_fieldop("plus", domain)("x", 1.0),
-                    im.cond(
+                    im.if_(
                         gtir.SymRef(id="pred_2"),
                         im.op_as_fieldop("plus", domain)("x", 2.0),
                         im.op_as_fieldop("plus", domain)("x", 3.0),
@@ -1427,7 +1427,7 @@ def test_gtir_reduce_with_cond_neighbors():
                     ),
                     vertex_domain,
                 )(
-                    im.cond(
+                    im.if_(
                         gtir.SymRef(id="pred"),
                         im.as_fieldop_neighbors("V2E_FULL", "edges", vertex_domain),
                         im.as_fieldop_neighbors("V2E", "edges", vertex_domain),
@@ -1619,7 +1619,7 @@ def test_gtir_let_lambda_with_cond():
             gtir.SetAt(
                 expr=im.let("x1", "x")(
                     im.let("x2", im.op_as_fieldop("multiplies", domain)(2.0, "x"))(
-                        im.cond(
+                        im.if_(
                             gtir.SymRef(id="pred"),
                             im.as_fieldop(im.lambda_("a")(im.deref("a")), domain)("x1"),
                             im.as_fieldop(im.lambda_("a")(im.deref("a")), domain)("x2"),
@@ -1712,7 +1712,7 @@ def test_gtir_if_scalars():
                             im.let("y_1", im.tuple_get(1, "y"))(
                                 im.op_as_fieldop("plus", domain)(
                                     "f",
-                                    im.cond(
+                                    im.if_(
                                         "pred",
                                         im.call("cast_")("y_0", "float64"),
                                         im.call("cast_")("y_1", "float64"),
