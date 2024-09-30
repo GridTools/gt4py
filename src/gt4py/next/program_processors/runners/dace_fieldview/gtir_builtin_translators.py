@@ -19,11 +19,11 @@ from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.iterator.type_system import type_specifications as gtir_ts
-from gt4py.next.program_processors.runners.dace_common import utility as dace_common_util
+from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_python_codegen,
     gtir_to_tasklet,
-    utility as dace_fieldview_util,
+    utility as dace_gtir_utils,
 )
 from gt4py.next.type_system import type_specifications as ts
 
@@ -102,7 +102,7 @@ def _parse_fieldop_arg(
     elif isinstance(arg.data_type, ts.FieldType):
         indices: dict[gtx_common.Dimension, gtir_to_tasklet.IteratorIndexExpr] = {
             dim: gtir_to_tasklet.SymbolExpr(
-                dace_fieldview_util.get_map_variable(dim),
+                dace_gtir_utils.get_map_variable(dim),
                 IteratorIndexDType,
             )
             for dim, _, _ in domain
@@ -126,19 +126,21 @@ def _create_temporary_field(
     node_type: ts.FieldType,
     output_desc: dace.data.Data,
 ) -> Field:
-    domain_dims, domain_lbs, domain_ubs = zip(*domain)
+    domain_dims, _, domain_ubs = zip(*domain)
     field_dims = list(domain_dims)
-    field_shape = [
-        # diff between upper and lower bound
-        (ub - lb)
-        for lb, ub in zip(domain_lbs, domain_ubs)
-    ]
-    field_offset: Optional[list[dace.symbolic.SymbolicType]] = None
-    if any(domain_lbs):
-        field_offset = [-lb for lb in domain_lbs]
+    # It should be enough to allocate an array with shape (upper_bound - lower_bound)
+    # but this would require to use array offset for compensate for the start index.
+    # Suppose that a field operator executes on domain [2,N-2], the dace array to store
+    # the result only needs size (N-4), but this would require to compensate all array
+    # accesses with offset -2 (which corresponds to -lower_bound). Instead, we choose
+    # to allocate (N-2), leaving positions [0:2] unused. The reason is that array offset
+    # is known to cause issues to SDFG inlining. Besides, map fusion will in any case
+    # eliminate most of transient arrays.
+    field_shape = list(domain_ubs)
 
     if isinstance(output_desc, dace.data.Array):
         assert isinstance(node_type.dtype, gtir_ts.ListType)
+        assert isinstance(node_type.dtype.element_type, ts.ScalarType)
         field_dtype = node_type.dtype.element_type
         # extend the array with the local dimensions added by the field operator (e.g. `neighbors`)
         field_shape.extend(output_desc.shape)
@@ -148,9 +150,7 @@ def _create_temporary_field(
         raise ValueError(f"Cannot create field for dace type {output_desc}.")
 
     # allocate local temporary storage
-    temp_name, _ = sdfg.add_temp_transient(
-        field_shape, dace_fieldview_util.as_dace_type(field_dtype), offset=field_offset
-    )
+    temp_name, _ = sdfg.add_temp_transient(field_shape, dace_utils.as_dace_type(field_dtype))
     field_node = state.add_access(temp_name)
     field_type = ts.FieldType(field_dims, node_type.dtype)
 
@@ -178,7 +178,7 @@ def translate_as_field_op(
     assert isinstance(domain_expr, gtir.FunCall)
 
     # add local storage to compute the field operator over the given domain
-    domain = dace_fieldview_util.get_domain(domain_expr)
+    domain = dace_gtir_utils.get_domain(domain_expr)
     assert isinstance(node.type, ts.FieldType)
 
     if cpm.is_applied_reduce(stencil_expr.expr):
@@ -214,14 +214,14 @@ def translate_as_field_op(
     result_field = _create_temporary_field(sdfg, state, domain, node.type, output_desc)
 
     # assume tasklet with single output
-    output_subset = [dace_fieldview_util.get_map_variable(dim) for dim, _, _ in domain]
+    output_subset = [dace_gtir_utils.get_map_variable(dim) for dim, _, _ in domain]
     if isinstance(output_desc, dace.data.Array):
         # additional local dimension for neighbors
         assert set(output_desc.offset) == {0}
         output_subset.extend(f"0:{size}" for size in output_desc.shape)
 
     # create map range corresponding to the field operator domain
-    map_ranges = {dace_fieldview_util.get_map_variable(dim): f"{lb}:{ub}" for dim, lb, ub in domain}
+    map_ranges = {dace_gtir_utils.get_map_variable(dim): f"{lb}:{ub}" for dim, lb, ub in domain}
     me, mx = sdfg_builder.add_map("field_op", state, map_ranges)
 
     if len(input_connections) == 0:
@@ -361,7 +361,7 @@ def _get_data_nodes(
             )
         return Field(sym_node, sym_type)
     elif isinstance(sym_type, ts.TupleType):
-        tuple_fields = dace_fieldview_util.get_tuple_fields(sym_name, sym_type)
+        tuple_fields = dace_gtir_utils.get_tuple_fields(sym_name, sym_type)
         return tuple(
             _get_data_nodes(sdfg, state, sdfg_builder, fname, ftype)
             for fname, ftype in tuple_fields
@@ -387,7 +387,7 @@ def _get_symbolic_value(
     )
     temp_name, _ = sdfg.add_scalar(
         temp_name or sdfg.temp_data_name(),
-        dace_fieldview_util.as_dace_type(scalar_type),
+        dace_utils.as_dace_type(scalar_type),
         find_new_name=True,
         transient=True,
     )
@@ -449,7 +449,7 @@ def translate_tuple_get(
 
     if not isinstance(node.args[0], gtir.Literal):
         raise ValueError("Tuple can only be subscripted with compile-time constants.")
-    assert node.args[0].type == dace_common_util.as_scalar_type(gtir.INTEGER_INDEX_BUILTIN)
+    assert node.args[0].type == dace_utils.as_scalar_type(gtir.INTEGER_INDEX_BUILTIN)
     index = int(node.args[0].value)
 
     data_nodes = sdfg_builder.visit(
@@ -537,7 +537,7 @@ def translate_scalar_expr(
     # finally, create temporary for the result value
     temp_name, _ = sdfg.add_scalar(
         sdfg.temp_data_name(),
-        dace_fieldview_util.as_dace_type(node.type),
+        dace_utils.as_dace_type(node.type),
         find_new_name=True,
         transient=True,
     )

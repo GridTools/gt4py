@@ -1490,6 +1490,9 @@ def test_gtir_let_lambda():
     domain = im.call("cartesian_domain")(
         im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
     )
+    subdomain = im.call("cartesian_domain")(
+        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 1, im.minus("size", 1))
+    )
     testee = gtir.Program(
         id="let_lambda",
         function_definitions=[],
@@ -1505,21 +1508,21 @@ def test_gtir_let_lambda():
                 # `x2` is a let-lambda expression representing `x * 4`
                 #  - note that the let-symbol `x2` is used twice, in a nested let-expression, to test aliasing of the symbol
                 # `x3` is a let-lambda expression simply accessing `x` field symref
-                expr=im.let("x1", im.op_as_fieldop("multiplies", domain)(3.0, "x"))(
+                expr=im.let("x1", im.op_as_fieldop("multiplies", subdomain)(3.0, "x"))(
                     im.let(
                         "x2",
                         im.let("x2", im.op_as_fieldop("multiplies", domain)(2.0, "x"))(
-                            im.op_as_fieldop("plus", domain)("x2", "x2")
+                            im.op_as_fieldop("plus", subdomain)("x2", "x2")
                         ),
                     )(
                         im.let("x3", "x")(
-                            im.op_as_fieldop("plus", domain)(
-                                "x1", im.op_as_fieldop("plus", domain)("x2", "x3")
+                            im.op_as_fieldop("plus", subdomain)(
+                                "x1", im.op_as_fieldop("plus", subdomain)("x2", "x3")
                             )
                         )
                     )
                 ),
-                domain=domain,
+                domain=subdomain,
                 target=gtir.SymRef(id="y"),
             )
         ],
@@ -1527,11 +1530,12 @@ def test_gtir_let_lambda():
 
     a = np.random.rand(N)
     b = np.empty_like(a)
+    ref = np.concatenate((b[0:1], a[1 : N - 1] * 8, b[N - 1 : N]))
 
     sdfg = dace_backend.build_sdfg_from_gtir(testee, {})
 
     sdfg(a, b, **FSYMBOLS)
-    assert np.allclose(b, a * 8)
+    assert np.allclose(b, ref)
 
 
 def test_gtir_let_lambda_with_connectivity():
