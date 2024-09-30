@@ -14,7 +14,6 @@ from typing import Callable, TypeAlias
 
 from gt4py.eve import utils as eve_utils
 from gt4py.next import common
-from gt4py.next.common import Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms import trace_shifts
@@ -307,7 +306,7 @@ def infer_expr(
 
 def infer_program(
     program: itir.Program,
-    offset_provider: dict[str, Dimension],
+    offset_provider: common.OffsetProvider,
 ) -> itir.Program:
     transformed_set_ats: list[itir.SetAt] = []
     assert (
