@@ -17,7 +17,7 @@ from __future__ import annotations
 import abc
 import dataclasses
 import itertools
-from typing import Any, Dict, List, Optional, Protocol, Sequence, Set, Tuple, Union
+from typing import Any, Dict, Iterable, List, Optional, Protocol, Sequence, Set, Tuple, Union
 
 import dace
 
@@ -558,7 +558,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         # Process lambda outputs
         #
-        lambda_output_nodes: list[gtir_builtin_translators.Field] = list(
+        lambda_output_nodes: Iterable[gtir_builtin_translators.Field] = (
             gtx_utils.flatten_nested_tuple(lambda_result)
         )
         # sanity check on isolated nodes
