@@ -219,7 +219,7 @@ def test_ternary():
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.cond("a", "b", "c")
+    reference = im.if_("a", "b", "c")
 
     assert lowered.expr == reference
 
@@ -234,7 +234,7 @@ def test_if_unconditional_return():
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.cond("a", "b", "c")
+    reference = im.if_("a", "b", "c")
 
     assert lowered.expr == reference
 
@@ -252,7 +252,7 @@ def test_if_no_return():
     lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
     lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered_inlined)
 
-    reference = im.tuple_get(0, im.cond("a", im.make_tuple("b"), im.make_tuple("c")))
+    reference = im.tuple_get(0, im.if_("a", im.make_tuple("b"), im.make_tuple("c")))
 
     assert lowered_inlined.expr == reference
 
@@ -272,7 +272,7 @@ def test_if_conditional_return():
     lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
     lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered_inlined)
 
-    reference = im.cond("a", "b", im.cond("a", "c", "b"))
+    reference = im.if_("a", "b", im.if_("a", "c", "b"))
 
     assert lowered_inlined.expr == reference
 

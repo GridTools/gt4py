@@ -25,13 +25,14 @@ from gt4py.eve import concepts
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.iterator.transforms import symbol_ref_utils
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
-from gt4py.next.program_processors.runners.dace_common import utility as dace_common_util
+from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_builtin_translators,
     gtir_to_tasklet,
     transformations as gtx_transformations,
-    utility as dace_fieldview_util,
+    utility as dace_gtir_utils,
 )
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
 
@@ -143,17 +144,17 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             Two lists of symbols, one for the shape and the other for the strides of the array.
         """
         dtype = dace.int32
-        neighbor_tables = dace_common_util.filter_connectivities(self.offset_provider)
+        neighbor_tables = dace_utils.filter_connectivities(self.offset_provider)
         shape = [
             (
                 neighbor_tables[dim.value].max_neighbors
                 if dim.kind == gtx_common.DimensionKind.LOCAL
-                else dace.symbol(dace_common_util.field_size_symbol_name(name, i), dtype)
+                else dace.symbol(dace_utils.field_size_symbol_name(name, i), dtype)
             )
             for i, dim in enumerate(dims)
         ]
         strides = [
-            dace.symbol(dace_common_util.field_stride_symbol_name(name, i), dtype)
+            dace.symbol(dace_utils.field_stride_symbol_name(name, i), dtype)
             for i in range(len(dims))
         ]
         return shape, strides
@@ -170,13 +171,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         and have to be passed as array arguments to the SDFG.
         """
         if isinstance(symbol_type, ts.FieldType):
-            dtype = dace_fieldview_util.as_dace_type(symbol_type.dtype)
+            dtype = dace_utils.as_dace_type(symbol_type.dtype)
             # use symbolic shape, which allows to invoke the program with fields of different size;
             # and symbolic strides, which enables decoupling the memory layout from generated code.
             sym_shape, sym_strides = self._make_array_shape_and_strides(name, symbol_type.dims)
             sdfg.add_array(name, sym_shape, dtype, strides=sym_strides, transient=transient)
         elif isinstance(symbol_type, ts.ScalarType):
-            dtype = dace_fieldview_util.as_dace_type(symbol_type)
+            assert isinstance(symbol_type, ts.ScalarType)
+            dtype = dace_utils.as_dace_type(symbol_type)
             # Scalar arguments passed to the program are represented as symbols in DaCe SDFG.
             # The field size is sometimes passed as scalar argument to the program, so we have to
             # check if the shape symbol was already allocated by `_make_array_shape_and_strides`.
@@ -239,7 +241,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             self.global_symbols[pname] = param.type
 
         # add SDFG storage for connectivity tables
-        for offset, offset_provider in dace_common_util.filter_connectivities(
+        for offset, offset_provider in dace_utils.filter_connectivities(
             self.offset_provider
         ).items():
             scalar_kind = tt.get_scalar_kind(offset_provider.index_type)
@@ -252,7 +254,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             # the tables that are actually used. This way, we avoid adding SDFG arguments for
             # the connectivity tables that are not used. The remaining unused transient arrays
             # are removed by the dace simplify pass.
-            self._add_storage(sdfg, dace_common_util.connectivity_identifier(offset), type_)
+            self._add_storage(sdfg, dace_utils.connectivity_identifier(offset), type_)
 
     def visit_Program(self, node: gtir.Program) -> dace.SDFG:
         """Translates `ir.Program` to `dace.SDFG`.
@@ -267,7 +269,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             raise NotImplementedError("Functions expected to be inlined as lambda calls.")
 
         sdfg = dace.SDFG(node.id)
-        sdfg.debuginfo = dace_common_util.debug_info(node, default=sdfg.debuginfo)
+        sdfg.debuginfo = dace_utils.debug_info(node, default=sdfg.debuginfo)
         entry_state = sdfg.add_state("program_entry", is_start_block=True)
 
         # declarations of temporaries result in transient array definitions in the SDFG
@@ -287,7 +289,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         for i, stmt in enumerate(node.body):
             # include `debuginfo` only for `ir.Program` and `ir.Stmt` nodes: finer granularity would be too messy
             head_state = sdfg.add_state_after(head_state, f"stmt_{i}")
-            head_state._debuginfo = dace_common_util.debug_info(stmt, default=sdfg.debuginfo)
+            head_state._debuginfo = dace_utils.debug_info(stmt, default=sdfg.debuginfo)
             self.visit(stmt, sdfg=sdfg, state=head_state)
 
         # Create the call signature for the SDFG.
@@ -313,7 +315,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         target_nodes = self._visit_expression(stmt.target, sdfg, state)
 
         # convert domain expression to dictionary to ease access to dimension boundaries
-        domain = dace_fieldview_util.get_domain_ranges(stmt.domain)
+        domain = dace_gtir_utils.get_domain_ranges(stmt.domain)
 
         for expr_node, target_node in zip(expr_nodes, target_nodes, strict=True):
             target_array = sdfg.arrays[target_node.data]
@@ -342,8 +344,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
     ) -> list[gtir_builtin_translators.TemporaryData]:
         # use specialized dataflow builder classes for each builtin function
-        if cpm.is_call_to(node, "cond"):
-            return gtir_builtin_translators.translate_cond(
+        if cpm.is_call_to(node, "if_"):
+            return gtir_builtin_translators.translate_if(
                 node, sdfg, head_state, self, reduce_identity
             )
         elif cpm.is_call_to(node.fun, "as_fieldop"):
@@ -399,9 +401,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         lambda_args_mapping = {str(p.id): arg for p, arg in zip(node.params, args, strict=True)}
 
         # inherit symbols from parent scope but eventually override with local symbols
-        lambda_symbols = self.global_symbols | {
-            pname: type_ for pname, (_, type_) in lambda_args_mapping.items()
+        lambda_symbols = {
+            sym: self.global_symbols[sym]
+            for sym in symbol_ref_utils.collect_symbol_refs(node.expr, self.global_symbols.keys())
         }
+        lambda_symbols |= {pname: type_ for pname, (_, type_) in lambda_args_mapping.items()}
 
         nsdfg = dace.SDFG(f"{sdfg.label}_nested")
         nstate = nsdfg.add_state("lambda")
@@ -421,8 +425,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         )
 
         connectivity_arrays = {
-            dace_common_util.connectivity_identifier(offset)
-            for offset in dace_common_util.filter_connectivities(self.offset_provider)
+            dace_utils.connectivity_identifier(offset)
+            for offset in dace_utils.filter_connectivities(self.offset_provider)
         }
         nsdfg_symbols_mapping: dict[str, dace.symbolic.SymExpr] = {}
 
@@ -435,25 +439,25 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 src_node, _ = lambda_args_mapping[nsdfg_dataname]
                 dataname = src_node.data
                 datadesc = src_node.desc(sdfg)
-
-                nsdfg_symbols_mapping |= {
-                    str(nested_symbol): parent_symbol
-                    for nested_symbol, parent_symbol in zip(
-                        [*nsdfg_datadesc.shape, *nsdfg_datadesc.strides],
-                        [*datadesc.shape, *datadesc.strides],
-                        strict=True,
-                    )
-                    if isinstance(nested_symbol, dace.symbol)
-                }
             else:
                 dataname = nsdfg_dataname
                 datadesc = sdfg.arrays[nsdfg_dataname]
-                # ensure that connectivity tables are non-transient arrays in parent SDFG
-                if dataname in connectivity_arrays:
-                    datadesc.transient = False
 
-            if datadesc:
-                input_memlets[nsdfg_dataname] = dace.Memlet.from_array(dataname, datadesc)
+            # ensure that connectivity tables are non-transient arrays in parent SDFG
+            if dataname in connectivity_arrays:
+                datadesc.transient = False
+
+            input_memlets[nsdfg_dataname] = sdfg.make_array_memlet(dataname)
+
+            nsdfg_symbols_mapping |= {
+                str(nested_symbol): parent_symbol
+                for nested_symbol, parent_symbol in zip(
+                    [*nsdfg_datadesc.shape, *nsdfg_datadesc.strides],
+                    [*datadesc.shape, *datadesc.strides],
+                    strict=True,
+                )
+                if isinstance(nested_symbol, dace.symbol)
+            }
 
         nsdfg_node = head_state.add_nested_sdfg(
             nsdfg,
@@ -461,7 +465,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             inputs=set(input_memlets.keys()),
             outputs=set(node.data for node, _ in lambda_nodes),
             symbol_mapping=nsdfg_symbols_mapping,
-            debuginfo=dace_common_util.debug_info(node, default=sdfg.debuginfo),
+            debuginfo=dace_utils.debug_info(node, default=sdfg.debuginfo),
         )
 
         for connector, memlet in input_memlets.items():
@@ -483,9 +487,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 nstate.remove_node(lambda_node)
             temp, _ = sdfg.add_temp_transient_like(desc)
             dst_node = head_state.add_access(temp)
-            head_state.add_edge(
-                nsdfg_node, connector, dst_node, None, dace.Memlet.from_array(temp, desc)
-            )
+            head_state.add_edge(nsdfg_node, connector, dst_node, None, sdfg.make_array_memlet(temp))
             results.append((dst_node, type_))
 
         return results
