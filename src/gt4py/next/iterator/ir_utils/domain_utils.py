@@ -100,12 +100,12 @@ class SymbolicDomain:
             return self
         if len(shift) == 2:
             off, val = shift
-            assert isinstance(off.value, str)
+            assert isinstance(off, itir.OffsetLiteral) and isinstance(off.value, str)
             nbt_provider = offset_provider[off.value]
             if isinstance(nbt_provider, common.Dimension):
-                if val.value is trace_shifts.Sentinel.VALUE:
+                if val is trace_shifts.Sentinel.VALUE:
                     raise NotImplementedError("Dynamic offsets not supported.")
-                assert isinstance(off.value, str) and isinstance(val.value, int)
+                assert isinstance(val, itir.OffsetLiteral) and isinstance(val.value, int)
                 current_dim = nbt_provider
                 # cartesian offset
                 new_ranges[current_dim] = SymbolicRange.translate(
@@ -113,7 +113,9 @@ class SymbolicDomain:
                 )
             elif isinstance(nbt_provider, common.Connectivity):
                 # unstructured shift
-                assert isinstance(val.value, int) or val.value in [
+                assert (
+                    isinstance(val, itir.OffsetLiteral) and isinstance(val.value, int)
+                ) or val in [
                     trace_shifts.Sentinel.ALL_NEIGHBORS,
                     trace_shifts.Sentinel.VALUE,
                 ]
