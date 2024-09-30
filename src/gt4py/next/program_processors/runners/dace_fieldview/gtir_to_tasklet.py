@@ -19,11 +19,11 @@ from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.iterator.type_system import type_specifications as gtir_ts
-from gt4py.next.program_processors.runners.dace_common import utility as dace_common_util
+from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_python_codegen,
     gtir_to_sdfg,
-    utility as dace_fieldview_util,
+    utility as dace_gtir_utils,
 )
 from gt4py.next.type_system import type_specifications as ts
 
@@ -97,8 +97,8 @@ DACE_REDUCTION_MAPPING: dict[str, dace.dtypes.ReductionType] = {
 
 
 def get_reduce_params(node: gtir.FunCall) -> tuple[str, SymbolExpr, SymbolExpr]:
-    assert node.type
-    dtype = dace_fieldview_util.as_dace_type(node.type)
+    assert isinstance(node.type, ts.ScalarType)
+    dtype = dace_utils.as_dace_type(node.type)
 
     assert isinstance(node.fun, gtir.FunCall)
     assert len(node.fun.args) == 2
@@ -196,7 +196,7 @@ class LambdaToTasklet(eve.NodeVisitor):
     ) -> ValueExpr:
         temp_name = self.sdfg.temp_data_name()
         self.sdfg.add_scalar(temp_name, dtype, transient=True)
-        data_type = dace_common_util.as_scalar_type(str(dtype.as_numpy_dtype()))
+        data_type = dace_utils.as_scalar_type(str(dtype.as_numpy_dtype()))
         temp_node = self.state.add_access(temp_name)
         self._add_edge(
             src_node,
@@ -324,7 +324,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         assert all(isinstance(index, SymbolExpr) for index in it.indices.values())
 
         field_desc = it.field.desc(self.sdfg)
-        connectivity = dace_common_util.connectivity_identifier(offset)
+        connectivity = dace_utils.connectivity_identifier(offset)
         # initially, the storage for the connectivty tables is created as transient;
         # when the tables are used, the storage is changed to non-transient,
         # as the corresponding arrays are supposed to be allocated by the SDFG caller
@@ -379,7 +379,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         neighbors_node = self.state.add_access(neighbors_temp)
 
         offset_dim = gtx_common.Dimension(offset)
-        neighbor_idx = dace_fieldview_util.get_map_variable(offset_dim)
+        neighbor_idx = dace_gtir_utils.get_map_variable(offset_dim)
         me, mx = self._add_map(
             f"{offset}_neighbors",
             {
@@ -664,7 +664,7 @@ class LambdaToTasklet(eve.NodeVisitor):
 
     def _visit_shift(self, node: gtir.FunCall) -> IteratorExpr:
         # convert builtin-index type to dace type
-        IndexDType: Final = dace_fieldview_util.as_dace_type(
+        IndexDType: Final = dace_utils.as_dace_type(
             ts.ScalarType(kind=getattr(ts.ScalarKind, gtir.INTEGER_INDEX_BUILTIN.upper()))
         )
 
@@ -694,7 +694,7 @@ class LambdaToTasklet(eve.NodeVisitor):
             # initially, the storage for the connectivity tables is created as transient;
             # when the tables are used, the storage is changed to non-transient,
             # so the corresponding arrays are supposed to be allocated by the SDFG caller
-            offset_table = dace_common_util.connectivity_identifier(offset)
+            offset_table = dace_utils.connectivity_identifier(offset)
             self.sdfg.arrays[offset_table].transient = False
             offset_table_node = self.state.add_access(offset_table)
 
@@ -761,8 +761,8 @@ class LambdaToTasklet(eve.NodeVisitor):
                     connector,
                 )
 
-        assert node.type
-        dtype = dace_fieldview_util.as_dace_type(node.type)
+        assert isinstance(node.type, ts.ScalarType)
+        dtype = dace_utils.as_dace_type(node.type)
 
         return self._get_tasklet_result(dtype, tasklet_node, "result")
 
@@ -792,7 +792,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         return self.input_connections, self._get_tasklet_result(output_dtype, tasklet_node, "__out")
 
     def visit_Literal(self, node: gtir.Literal) -> SymbolExpr:
-        dtype = dace_fieldview_util.as_dace_type(node.type)
+        dtype = dace_utils.as_dace_type(node.type)
         return SymbolExpr(node.value, dtype)
 
     def visit_SymRef(self, node: gtir.SymRef) -> IteratorExpr | MemletExpr | SymbolExpr:
