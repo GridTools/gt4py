@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import abc
 import dataclasses
-from typing import TYPE_CHECKING, Optional, Protocol, TypeAlias
+from typing import TYPE_CHECKING, Iterable, Optional, Protocol, TypeAlias
 
 import dace
 import dace.subsets as sbs
@@ -41,7 +41,7 @@ class Field:
     data_type: ts.FieldType | ts.ScalarType
 
 
-FieldopResult: TypeAlias = Field | tuple["FieldopResult", ...]
+FieldopResult: TypeAlias = Field | tuple[Field | tuple, ...]
 
 
 class PrimitiveTranslator(Protocol):
@@ -93,7 +93,7 @@ def _parse_fieldop_arg(
         reduce_identity=reduce_identity,
     )
 
-    # arguments passed to field opeator should be plain fields, not tuples of fields
+    # arguments passed to field operator should be plain fields, not tuples of fields
     if not isinstance(arg, Field):
         raise ValueError(f"Received {node} as argument to field operator, expected a field.")
 
@@ -291,13 +291,13 @@ def translate_if(
     sdfg.add_edge(cond_state, false_state, dace.InterstateEdge(condition=(f"not bool({if_stmt})")))
     sdfg.add_edge(false_state, state, dace.InterstateEdge())
 
-    true_br = sdfg_builder.visit(
+    true_br_args = sdfg_builder.visit(
         true_expr,
         sdfg=sdfg,
         head_state=true_state,
         reduce_identity=reduce_identity,
     )
-    false_br = sdfg_builder.visit(
+    false_br_args = sdfg_builder.visit(
         false_expr,
         sdfg=sdfg,
         head_state=false_state,
@@ -311,13 +311,16 @@ def translate_if(
 
         return Field(data_node, x.data_type)
 
-    result = gtx_utils.tree_map(make_temps)(true_br)
+    result_temps = gtx_utils.tree_map(make_temps)(true_br_args)
 
-    true_br_nodes: list[Field] = list(gtx_utils.flatten_nested_tuple((true_br,)))
-    false_br_nodes: list[Field] = list(gtx_utils.flatten_nested_tuple((false_br,)))
-    result_nodes: list[Field] = list(gtx_utils.flatten_nested_tuple((result,)))
+    fields: Iterable[tuple[Field, Field, Field]] = zip(
+        gtx_utils.flatten_nested_tuple((true_br_args,)),
+        gtx_utils.flatten_nested_tuple((false_br_args,)),
+        gtx_utils.flatten_nested_tuple((result_temps,)),
+        strict=True,
+    )
 
-    for true_br, false_br, temp in zip(true_br_nodes, false_br_nodes, result_nodes, strict=True):
+    for true_br, false_br, temp in fields:
         assert true_br.data_type == false_br.data_type
         true_br_node = true_br.data_node
         false_br_node = false_br.data_node
@@ -338,7 +341,7 @@ def translate_if(
             dace.Memlet.from_array(temp_name, temp_desc),
         )
 
-    return result
+    return result_temps
 
 
 def _get_data_nodes(

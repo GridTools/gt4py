@@ -187,6 +187,7 @@ def test_gtir_tuple_swap():
             gtir.SetAt(
                 expr=im.make_tuple("y", "x"),
                 domain=domain,
+                # TODO(havogt): add a frontend check for this pattern
                 target=im.make_tuple("x", "y"),
             )
         ],
