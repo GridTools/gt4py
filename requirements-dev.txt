@@ -55,7 +55,8 @@ fparser==0.1.4            # via -c constraints.txt, dace
 frozendict==2.4.4         # via -c constraints.txt, gt4py (pyproject.toml)
 gitdb==4.0.11             # via -c constraints.txt, gitpython
 gitpython==3.1.43         # via -c constraints.txt, tach
-gridtools-cpp==2.3.4      # via -c constraints.txt, gt4py (pyproject.toml)
+--extra-index-url https://test.pypi.org/simple
+gridtools-cpp==2.3.5      # via -c constraints.txt, gt4py (pyproject.toml)
 hypothesis==6.112.0       # via -c constraints.txt, -r requirements-dev.in, gt4py (pyproject.toml)
 identify==2.6.0           # via -c constraints.txt, pre-commit
 idna==3.8                 # via -c constraints.txt, requests
