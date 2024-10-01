@@ -53,7 +53,7 @@ def _convert_arg(arg: Any, sdfg_param: str, use_field_canonical_representation: 
 def _get_args(
     sdfg: dace.SDFG, args: Sequence[Any], use_field_canonical_representation: bool
 ) -> dict[str, Any]:
-    sdfg_params: Iterable[str] = sdfg.arg_names
+    sdfg_params: Sequence[str] = sdfg.arg_names
     flat_args: Iterable[Any] = gtx_utils.flatten_nested_tuple(tuple(args))
     return {
         sdfg_param: _convert_arg(arg, sdfg_param, use_field_canonical_representation)

@@ -462,8 +462,8 @@ def translate_tuple_get(
     )
     if isinstance(data_nodes, Field):
         raise ValueError(f"Invalid tuple expression {node}")
-    unused_arg_nodes: list[Field] = list(
-        gtx_utils.flatten_nested_tuple(tuple(arg for i, arg in enumerate(data_nodes) if i != index))
+    unused_arg_nodes: Iterable[Field] = gtx_utils.flatten_nested_tuple(
+        tuple(arg for i, arg in enumerate(data_nodes) if i != index)
     )
     state.remove_nodes_from(
         [arg.data_node for arg in unused_arg_nodes if state.degree(arg.data_node) == 0]
