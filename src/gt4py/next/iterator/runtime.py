@@ -71,7 +71,7 @@ class FendefDispatcher:
     def __call__(
         self,
         *args,
-        backend: Optional[next_backend.Backend] = None,
+        backend: Optional[next_backend.Backend | program_formatter.ProgramFormatter] = None,
         offset_provider=None,
         column_axis=None,
     ):

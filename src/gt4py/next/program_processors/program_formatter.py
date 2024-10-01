@@ -30,7 +30,7 @@ import gt4py.next.iterator.ir as itir
 
 class ProgramFormatter:
     @abc.abstractmethod
-    def __call__(self, program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> Any: ...
+    def __call__(self, program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> str: ...
 
 
 @dataclasses.dataclass(frozen=True)

@@ -135,10 +135,13 @@ class Transforms(workflow.MultiWorkflow[INPUT_PAIR, stages.CompilableProgram]):
 DEFAULT_TRANSFORMS: Transforms = Transforms()
 
 
+# TODO(tehrengruber): Rename class and `executor` & `transforms` attribute. Maybe:
+#  `Backend` -> `Toolchain`
+#  `transforms` -> `frontend_transforms`
+#  `executor` -> `backend_transforms`
 @dataclasses.dataclass(frozen=True)
 class Backend(Generic[core_defs.DeviceTypeT]):
     name: str
-    # TODO(tehrengruber): Rename to something more meaningful, e.g. `frontend_transforms`.
     executor: workflow.Workflow[stages.CompilableProgram, stages.CompiledProgram]
     allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
     transforms: workflow.Workflow[INPUT_PAIR, stages.CompilableProgram]
