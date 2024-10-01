@@ -373,7 +373,10 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     _visit_concat_where = _visit_where  # TODO(havogt): upgrade concat_where
 
     def _visit_broadcast(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
-        return self.visit(node.args[0], **kwargs)
+        expr = self.visit(node.args[0], **kwargs)
+        if type_info.is_type_or_tuple_of_type(node.args[0].type, ts.ScalarType):
+            return im.as_fieldop(im.ref("deref"))(expr)
+        return expr
 
     def _visit_math_built_in(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         return self._map(self.visit(node.func, **kwargs), *node.args)
