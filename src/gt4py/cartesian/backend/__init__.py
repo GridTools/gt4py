@@ -33,7 +33,7 @@ from .cuda_backend import CudaBackend
 from .gtcpp_backend import GTCpuIfirstBackend, GTCpuKfirstBackend, GTGpuBackend
 from .module_generator import BaseModuleGenerator
 from .numpy_backend import NumpyBackend
-
+from .debug_backend import DebugBackend
 
 __all__ = [
     "REGISTRY",
