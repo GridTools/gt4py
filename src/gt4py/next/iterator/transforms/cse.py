@@ -51,7 +51,7 @@ class _NodeReplacer(PreserveLocationVisitor, NodeTranslator):
         if isinstance(node, itir.FunCall) and isinstance(node.fun, itir.Lambda):
             eligible_params = []
             for arg in node.args:
-                eligible_params.append(isinstance(arg, itir.SymRef) and arg.id.startswith("_cs"))
+                eligible_params.append(isinstance(arg, itir.SymRef)) # and arg.id.startswith("_cs"))  # TODO: document? this is for lets in the global tmp pass, e.g. test_trivial_let
             if any(eligible_params):
                 # note: the inline is opcount preserving anyway so avoid the additional
                 # effort in the inliner by disabling opcount preservation.
@@ -319,7 +319,7 @@ def extract_subexpression(
     subexprs = CollectSubexpressions.apply(node)
 
     # collect multiple occurrences and map them to fresh symbols
-    expr_map = dict[int, itir.SymRef]()
+    expr_map: dict[int, itir.SymRef] = {}
     ignored_ids = set()
     for expr, subexpr_entry in (
         subexprs.items() if not deepest_expr_first else reversed(subexprs.items())
