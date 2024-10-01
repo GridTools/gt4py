@@ -65,7 +65,7 @@ def convert_args(
 def _ensure_is_on_device(
     connectivity_arg: npt.NDArray, device: core_defs.DeviceType
 ) -> npt.NDArray:
-    if device == core_defs.DeviceType.CUDA:
+    if device in [core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM]:
         import cupy as cp
 
         if not isinstance(connectivity_arg, cp.ndarray):
@@ -160,7 +160,7 @@ class GTFNBackendFactory(factory.Factory):
         name_postfix = ""
         gpu = factory.Trait(
             allocator=next_allocators.StandardGPUFieldBufferAllocator(),
-            device_type=core_defs.DeviceType.CUDA,
+            device_type=next_allocators.CUPY_DEVICE or core_defs.DeviceType.CUDA,
             name_device="gpu",
         )
         cached = factory.Trait(

@@ -716,3 +716,28 @@ def test_direct_datadims_index(backend):
     out = gt_storage.zeros(backend=backend, shape=(2, 2, 2), dtype=np.float64)
     test(out, inp)
     assert (out[:] == 42).all()
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_function_inline_in_while(backend):
+    @gtscript.function
+    def add_42(v):
+        return v + 42
+
+    @gtscript.stencil(backend=backend)
+    def test(
+        in_field: Field[np.float64],
+        out_field: Field[np.float64],
+    ):
+        with computation(PARALLEL), interval(...):
+            count = 1
+            while count < 10:
+                sa = add_42(out_field)
+                out_field = in_field + sa
+                count = count + 1
+
+    domain = (5, 5, 2)
+    in_arr = gt_storage.ones(backend=backend, shape=domain, dtype=np.float64)
+    out_arr = gt_storage.ones(backend=backend, shape=domain, dtype=np.float64)
+    test(in_arr, out_arr)
+    assert (out_arr[:, :, :] == 388.0).all()
