@@ -11,7 +11,7 @@ from typing import Callable, Optional
 
 from gt4py.eve import utils as eve_utils
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.transforms import fencil_to_program
+from gt4py.next.iterator.transforms import fencil_to_program, inline_fundefs
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
@@ -20,7 +20,6 @@ from gt4py.next.iterator.transforms.eta_reduction import EtaReduction
 from gt4py.next.iterator.transforms.fuse_maps import FuseMaps
 from gt4py.next.iterator.transforms.global_tmps import CreateGlobalTmps, FencilWithTemporaries
 from gt4py.next.iterator.transforms.inline_center_deref_lift_vars import InlineCenterDerefLiftVars
-from gt4py.next.iterator.transforms.inline_fundefs import InlineFundefs, PruneUnreferencedFundefs
 from gt4py.next.iterator.transforms.inline_into_scan import InlineIntoScan
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
 from gt4py.next.iterator.transforms.inline_lifts import InlineLifts
@@ -95,9 +94,9 @@ def apply_common_transforms(
         lift_mode = LiftMode.FORCE_INLINE
     assert isinstance(lift_mode, LiftMode)
     ir = MergeLet().visit(ir)
-    ir = InlineFundefs().visit(ir)
+    ir = inline_fundefs.InlineFundefs().visit(ir)
 
-    ir = PruneUnreferencedFundefs().visit(ir)
+    ir = inline_fundefs.prune_unreferenced_fundefs(ir)  # type: ignore[arg-type] # all previous passes return itir.Program
     ir = PropagateDeref.apply(ir)
     ir = NormalizeShifts().visit(ir)
 

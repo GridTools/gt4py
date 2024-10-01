@@ -14,7 +14,6 @@ from typing import Callable, TypeAlias
 
 from gt4py.eve import utils as eve_utils
 from gt4py.next import common
-from gt4py.next.common import Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import (
     common_pattern_matcher as cpm,
@@ -29,12 +28,12 @@ DOMAIN: TypeAlias = domain_utils.SymbolicDomain | None | tuple["DOMAIN", ...]
 ACCESSED_DOMAINS: TypeAlias = dict[str, DOMAIN]
 
 
-def split_dict_by_key(pred: Callable, d: dict):
+def _split_dict_by_key(pred: Callable, d: dict):
     """
     Split dictionary into two based on predicate.
 
     >>> d = {1: "a", 2: "b", 3: "c", 4: "d"}
-    >>> split_dict_by_key(lambda k: k % 2 == 0, d)
+    >>> _split_dict_by_key(lambda k: k % 2 == 0, d)
     ({2: 'b', 4: 'd'}, {1: 'a', 3: 'c'})
     """
     a: dict = {}
@@ -45,7 +44,7 @@ def split_dict_by_key(pred: Callable, d: dict):
 
 
 # TODO(tehrengruber): Revisit whether we want to move this behaviour to `domain_utils.domain_union`.
-def domain_union_with_none(
+def _domain_union_with_none(
     *domains: domain_utils.SymbolicDomain | None,
 ) -> domain_utils.SymbolicDomain | None:
     filtered_domains: list[domain_utils.SymbolicDomain] = [d for d in domains if d is not None]
@@ -54,7 +53,7 @@ def domain_union_with_none(
     return domain_utils.domain_union(*filtered_domains)
 
 
-def canonicalize_domain_structure(d1: DOMAIN, d2: DOMAIN) -> tuple[DOMAIN, DOMAIN]:
+def _canonicalize_domain_structure(d1: DOMAIN, d2: DOMAIN) -> tuple[DOMAIN, DOMAIN]:
     """
     Given two domains or composites thereof, canonicalize their structure.
 
@@ -63,24 +62,24 @@ def canonicalize_domain_structure(d1: DOMAIN, d2: DOMAIN) -> tuple[DOMAIN, DOMAI
     specified.
 
     >>> domain = im.domain(common.GridType.CARTESIAN, {})
-    >>> canonicalize_domain_structure((domain,), (domain, domain)) == (
+    >>> _canonicalize_domain_structure((domain,), (domain, domain)) == (
     ...     (domain, None),
     ...     (domain, domain),
     ... )
     True
 
-    >>> canonicalize_domain_structure((domain, None), None) == ((domain, None), (None, None))
+    >>> _canonicalize_domain_structure((domain, None), None) == ((domain, None), (None, None))
     True
     """
     if d1 is None and isinstance(d2, tuple):
-        return canonicalize_domain_structure((None,) * len(d2), d2)
+        return _canonicalize_domain_structure((None,) * len(d2), d2)
     if d2 is None and isinstance(d1, tuple):
-        return canonicalize_domain_structure(d1, (None,) * len(d1))
+        return _canonicalize_domain_structure(d1, (None,) * len(d1))
     if isinstance(d1, tuple) and isinstance(d2, tuple):
         return tuple(
             zip(
                 *(
-                    canonicalize_domain_structure(el1, el2)
+                    _canonicalize_domain_structure(el1, el2)
                     for el1, el2 in itertools.zip_longest(d1, d2, fillvalue=None)
                 )
             )
@@ -95,7 +94,7 @@ def _merge_domains(
     new_domains = {**original_domains}
 
     for key, domain in additional_domains.items():
-        original_domain, domain = canonicalize_domain_structure(
+        original_domain, domain = _canonicalize_domain_structure(
             original_domains.get(key, None), domain
         )
         new_domains[key] = tree_map(domain_union_with_none)(original_domain, domain)
@@ -103,7 +102,7 @@ def _merge_domains(
     return new_domains
 
 
-def extract_accessed_domains(
+def _extract_accessed_domains(
     stencil: itir.Expr,
     input_ids: list[str],
     target_domain: domain_utils.SymbolicDomain,
@@ -158,7 +157,7 @@ def infer_as_fieldop(
             raise ValueError(f"Unsupported expression of type '{type(in_field)}'.")
         input_ids.append(id_)
 
-    accessed_domains: ACCESSED_DOMAINS = extract_accessed_domains(
+    accessed_domains: ACCESSED_DOMAINS = _extract_accessed_domains(
         stencil, input_ids, target_domain, offset_provider
     )
 
@@ -197,7 +196,7 @@ def infer_let(
     )
 
     let_params = {param_sym.id for param_sym in let_expr.fun.params}
-    accessed_domains_let_args, accessed_domains_outer = split_dict_by_key(
+    accessed_domains_let_args, accessed_domains_outer = _split_dict_by_key(
         lambda k: k in let_params, accessed_domains
     )
 
@@ -313,7 +312,7 @@ def infer_expr(
 
 def infer_program(
     program: itir.Program,
-    offset_provider: dict[str, Dimension],
+    offset_provider: common.OffsetProvider,
 ) -> itir.Program:
     transformed_set_ats: list[itir.SetAt] = []
     assert (

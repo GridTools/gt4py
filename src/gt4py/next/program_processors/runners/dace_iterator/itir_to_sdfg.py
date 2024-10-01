@@ -17,7 +17,7 @@ from gt4py.next import Dimension, DimensionKind
 from gt4py.next.common import Connectivity
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir import Expr, FunCall, Literal, Sym, SymRef
-from gt4py.next.program_processors.runners.dace_common import utility as dace_common_util
+from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation as tt
 
 from .itir_to_tasklet import (
@@ -32,7 +32,6 @@ from .itir_to_tasklet import (
 )
 from .utility import (
     add_mapped_nested_sdfg,
-    as_dace_type,
     flatten_list,
     get_used_connectivities,
     map_nested_sdfg_symbols,
@@ -82,7 +81,7 @@ def _get_scan_dim(
     sorted_dims = [
         dim
         for _, dim in (
-            dace_common_util.get_sorted_dims(output_type.dims)
+            dace_utils.get_sorted_dims(output_type.dims)
             if use_field_canonical_representation
             else enumerate(output_type.dims)
         )
@@ -105,20 +104,19 @@ def _make_array_shape_and_strides(
         The output tuple fields are arrays of dace symbolic expressions.
     """
     dtype = dace.int32
-    sorted_dims = dace_common_util.get_sorted_dims(dims) if sort_dims else list(enumerate(dims))
-    neighbor_tables = dace_common_util.filter_connectivities(offset_provider)
+    sorted_dims = dace_utils.get_sorted_dims(dims) if sort_dims else list(enumerate(dims))
+    neighbor_tables = dace_utils.filter_connectivities(offset_provider)
     shape = [
         (
             neighbor_tables[dim.value].max_neighbors
             if dim.kind == DimensionKind.LOCAL
             # we reuse the same gt4py symbol for field size passed as scalar argument which is used in closure domain
-            else dace.symbol(dace_common_util.field_size_symbol_name(name, i), dtype)
+            else dace.symbol(dace_utils.field_size_symbol_name(name, i), dtype)
         )
         for i, dim in sorted_dims
     ]
     strides = [
-        dace.symbol(dace_common_util.field_stride_symbol_name(name, i), dtype)
-        for i, _ in sorted_dims
+        dace.symbol(dace_utils.field_stride_symbol_name(name, i), dtype) for i, _ in sorted_dims
     ]
     return shape, strides
 
@@ -169,11 +167,11 @@ class ItirToSDFG(eve.NodeVisitor):
             shape, strides = _make_array_shape_and_strides(
                 name, type_.dims, self.offset_provider, sort_dimensions
             )
-            dtype = as_dace_type(type_.dtype)
+            dtype = dace_utils.as_dace_type(type_.dtype)
             sdfg.add_array(name, shape=shape, strides=strides, dtype=dtype)
 
         elif isinstance(type_, ts.ScalarType):
-            dtype = as_dace_type(type_)
+            dtype = dace_utils.as_dace_type(type_)
             if name in sdfg.symbols:
                 assert sdfg.symbols[name].dtype == dtype
             else:
@@ -192,7 +190,7 @@ class ItirToSDFG(eve.NodeVisitor):
         for sym in node_params:
             if isinstance(sym.type, ts.ScalarType):
                 name_ = str(sym.id)
-                symbol_map[name_] = SymbolExpr(name_, as_dace_type(sym.type))
+                symbol_map[name_] = SymbolExpr(name_, dace_utils.as_dace_type(sym.type))
 
         tmp_symbols: dict[str, str] = {}
         for tmp in self.tmps:
@@ -215,7 +213,7 @@ class ItirToSDFG(eve.NodeVisitor):
             # to assign optimal stride values.
             tmp_shape, _ = new_array_symbols(tmp_name, len(tmp.type.dims))
             _, tmp_array = program_sdfg.add_array(
-                tmp_name, tmp_shape, as_dace_type(tmp.dtype), transient=True
+                tmp_name, tmp_shape, dace_utils.as_dace_type(tmp.dtype), transient=True
             )
 
             # Loop through all dimensions to visit the symbolic expressions for array shape and offset.
@@ -240,7 +238,7 @@ class ItirToSDFG(eve.NodeVisitor):
         assert isinstance(field_type, ts.FieldType)
         if self.use_field_canonical_representation:
             field_index = [
-                index[dim.value] for _, dim in dace_common_util.get_sorted_dims(field_type.dims)
+                index[dim.value] for _, dim in dace_utils.get_sorted_dims(field_type.dims)
             ]
         else:
             field_index = [index[dim.value] for dim in field_type.dims]
@@ -263,7 +261,7 @@ class ItirToSDFG(eve.NodeVisitor):
 
     def visit_FencilDefinition(self, node: itir.FencilDefinition):
         program_sdfg = dace.SDFG(name=node.id)
-        program_sdfg.debuginfo = dace_common_util.debug_info(node)
+        program_sdfg.debuginfo = dace_utils.debug_info(node)
         entry_state = program_sdfg.add_state("program_entry", is_start_block=True)
 
         # Filter neighbor tables from offset providers.
@@ -294,7 +292,7 @@ class ItirToSDFG(eve.NodeVisitor):
             )
             self.add_storage(
                 program_sdfg,
-                dace_common_util.connectivity_identifier(offset),
+                dace_utils.connectivity_identifier(offset),
                 type_,
                 sort_dimensions=False,
             )
@@ -355,14 +353,14 @@ class ItirToSDFG(eve.NodeVisitor):
 
         # Create the closure's nested SDFG and single state.
         closure_sdfg = dace.SDFG(name="closure")
-        closure_sdfg.debuginfo = dace_common_util.debug_info(node)
+        closure_sdfg.debuginfo = dace_utils.debug_info(node)
         closure_state = closure_sdfg.add_state("closure_entry")
         closure_init_state = closure_sdfg.add_state_before(closure_state, "closure_init", True)
 
         input_names = [str(inp.id) for inp in node.inputs]
         neighbor_tables = get_used_connectivities(node, self.offset_provider)
         connectivity_names = [
-            dace_common_util.connectivity_identifier(offset) for offset in neighbor_tables.keys()
+            dace_utils.connectivity_identifier(offset) for offset in neighbor_tables.keys()
         ]
 
         output_nodes = self.get_output_nodes(node, closure_sdfg, closure_state)
@@ -415,7 +413,7 @@ class ItirToSDFG(eve.NodeVisitor):
         program_arg_syms: dict[str, TaskletExpr] = {}
         for name, type_ in self.storage_types.items():
             if isinstance(type_, ts.ScalarType):
-                dtype = as_dace_type(type_)
+                dtype = dace_utils.as_dace_type(type_)
                 if name in input_names:
                     out_name = unique_var_name()
                     closure_sdfg.add_scalar(out_name, dtype, transient=True)
@@ -569,7 +567,7 @@ class ItirToSDFG(eve.NodeVisitor):
         neighbor_tables = get_used_connectivities(node, self.offset_provider)
         input_names = [str(inp.id) for inp in node.inputs]
         connectivity_names = [
-            dace_common_util.connectivity_identifier(offset) for offset in neighbor_tables.keys()
+            dace_utils.connectivity_identifier(offset) for offset in neighbor_tables.keys()
         ]
 
         # find the scan dimension, same as output dimension, and exclude it from the map domain
@@ -585,11 +583,13 @@ class ItirToSDFG(eve.NodeVisitor):
 
         # the scan operator is implemented as an SDFG to be nested in the closure SDFG
         scan_sdfg = dace.SDFG(name="scan")
-        scan_sdfg.debuginfo = dace_common_util.debug_info(node)
+        scan_sdfg.debuginfo = dace_utils.debug_info(node)
 
         # the carry value of the scan operator exists only in the scope of the scan sdfg
         scan_carry_name = unique_var_name()
-        scan_sdfg.add_scalar(scan_carry_name, dtype=as_dace_type(scan_dtype), transient=True)
+        scan_sdfg.add_scalar(
+            scan_carry_name, dtype=dace_utils.as_dace_type(scan_dtype), transient=True
+        )
 
         # create a loop region for lambda call over the scan dimension
         scan_loop_var = f"i_{scan_dim}"
@@ -647,7 +647,8 @@ class ItirToSDFG(eve.NodeVisitor):
                 )
             else:
                 scan_sdfg.add_scalar(
-                    name, dtype=as_dace_type(cast(ts.ScalarType, self.storage_types[name]))
+                    name,
+                    dtype=dace_utils.as_dace_type(cast(ts.ScalarType, self.storage_types[name])),
                 )
         # add storage to scan SDFG for output
         scan_sdfg.add_array(
@@ -733,7 +734,7 @@ class ItirToSDFG(eve.NodeVisitor):
         neighbor_tables = get_used_connectivities(node, self.offset_provider)
         input_names = [str(inp.id) for inp in node.inputs]
         connectivity_names = [
-            dace_common_util.connectivity_identifier(offset) for offset in neighbor_tables.keys()
+            dace_utils.connectivity_identifier(offset) for offset in neighbor_tables.keys()
         ]
 
         # find the scan dimension, same as output dimension, and exclude it from the map domain
