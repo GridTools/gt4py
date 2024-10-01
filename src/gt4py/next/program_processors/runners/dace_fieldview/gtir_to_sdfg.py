@@ -195,6 +195,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             sym_shape, sym_strides = self._make_array_shape_and_strides(name, symbol_type.dims)
             sdfg.add_array(name, sym_shape, dtype, strides=sym_strides, transient=transient)
 
+            return [(name, symbol_type)]
+
         elif isinstance(symbol_type, ts.ScalarType):
             dtype = dace_utils.as_dace_type(symbol_type)
             # Scalar arguments passed to the program are represented as symbols in DaCe SDFG;
@@ -209,10 +211,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             else:
                 sdfg.add_symbol(name, dtype)
 
-        else:
-            raise RuntimeError(f"Data type '{type(symbol_type)}' not supported.")
+            return [(name, symbol_type)]
 
-        return [(name, symbol_type)]
+        raise RuntimeError(f"Data type '{type(symbol_type)}' not supported.")
 
     def _add_storage_for_temporary(self, temp_decl: gtir.Temporary) -> dict[str, str]:
         """
