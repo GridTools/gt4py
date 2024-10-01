@@ -16,6 +16,7 @@ import gt4py.next as gtx
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.transforms import trace_shifts
 
 
 def _max_domain_sizes_by_location_type(offset_provider: Mapping[str, Any]) -> dict[str, int]:
@@ -86,7 +87,11 @@ class SymbolicDomain:
 
     def translate(
         self: SymbolicDomain,
-        shift: tuple[itir.OffsetLiteral, ...],
+        shift: tuple[
+            itir.OffsetLiteral
+            | Literal[trace_shifts.Sentinel.VALUE, trace_shifts.Sentinel.ALL_NEIGHBORS],
+            ...,
+        ],
         offset_provider: common.OffsetProvider,
     ) -> SymbolicDomain:
         dims = list(self.ranges.keys())
@@ -95,9 +100,12 @@ class SymbolicDomain:
             return self
         if len(shift) == 2:
             off, val = shift
-            assert isinstance(off.value, str) and isinstance(val.value, int)
+            assert isinstance(off, itir.OffsetLiteral) and isinstance(off.value, str)
             nbt_provider = offset_provider[off.value]
             if isinstance(nbt_provider, common.Dimension):
+                if val is trace_shifts.Sentinel.VALUE:
+                    raise NotImplementedError("Dynamic offsets not supported.")
+                assert isinstance(val, itir.OffsetLiteral) and isinstance(val.value, int)
                 current_dim = nbt_provider
                 # cartesian offset
                 new_ranges[current_dim] = SymbolicRange.translate(
@@ -105,6 +113,12 @@ class SymbolicDomain:
                 )
             elif isinstance(nbt_provider, common.Connectivity):
                 # unstructured shift
+                assert (
+                    isinstance(val, itir.OffsetLiteral) and isinstance(val.value, int)
+                ) or val in [
+                    trace_shifts.Sentinel.ALL_NEIGHBORS,
+                    trace_shifts.Sentinel.VALUE,
+                ]
                 # note: ugly but cheap re-computation, but should disappear
                 horizontal_sizes = _max_domain_sizes_by_location_type(offset_provider)
 
