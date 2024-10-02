@@ -189,22 +189,16 @@ class GTFNBackendFactory(factory.Factory):
             lambda o: f"run_gtfn_{o.name_device}{o.name_temps}{o.name_cached}{o.name_postfix}"
         )
 
-    transforms_fop = backend.FieldopTransformWorkflow(
-        past_to_itir=past_to_itir.PastToItirFactory(to_gtir=True),
-        foast_to_itir=workflow.CachedStep(
-            step=foast_to_gtir.foast_to_gtir, hash_function=ffront_stages.fingerprint_stage
-        ),
-    )
-
-    transforms_prog = backend.ProgramTransformWorkflow(
-        past_to_itir=past_to_itir.PastToItirFactory(to_gtir=True)
-    )
-
     executor = factory.LazyAttribute(
         lambda o: modular_executor.ModularExecutor(otf_workflow=o.otf_workflow, name=o.name)
     )
     allocator = next_allocators.StandardCPUFieldBufferAllocator()
-    transforms = backend.DEFAULT_TRANSFORMS
+    transforms = backend.Transforms(
+        past_to_itir=past_to_itir.past_to_itir_factory(to_gtir=True),
+        foast_to_itir=workflow.CachedStep(
+            step=foast_to_gtir.foast_to_gtir, hash_function=ffront_stages.fingerprint_stage
+        ),
+    )
 
 
 run_gtfn = GTFNBackendFactory()

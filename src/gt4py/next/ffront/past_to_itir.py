@@ -83,7 +83,15 @@ def past_to_itir(inp: AOT_PRG, to_gtir: bool = False) -> stages.AOTProgram:
     # backend is set for each of these field operators (GTCallables). Instead
     # we should use the current toolchain to lower these to ITIR. This will require
     # making this step aware of the toolchain it is called by (it can be part of multiple).
-    lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
+    lowered_funcs = []
+    # TODO(tehrengruber): remove this contraption
+    from gt4py.next.ffront.decorator import FieldOperator
+
+    for gt_callable in gt_callables:
+        if isinstance(gt_callable, FieldOperator):
+            lowered_funcs.append(gt_callable.__gt_itir__(to_gtir=True))
+        else:
+            lowered_funcs.append(gt_callable.__gt_itir__())
 
     itir_program = ProgramLowering.apply(
         inp.data.past_node, function_definitions=lowered_funcs, grid_type=grid_type, to_gtir=to_gtir
