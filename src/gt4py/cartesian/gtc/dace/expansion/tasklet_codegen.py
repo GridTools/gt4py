@@ -66,6 +66,10 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
     def visit_VariableKOffset(self, node: common.CartesianOffset, **kwargs):
         return self._visit_offset(node, **kwargs)
 
+    def visit_AbsoluteKIndex(self, node: common.AbsoluteKIndex, **kwargs):
+        idx = self.visit(node.k)
+        return str(idx)
+
     def visit_IndexAccess(
         self,
         node: dcir.IndexAccess,

@@ -24,6 +24,7 @@ from gt4py.cartesian.gtscript import (
     horizontal,
     interval,
     region,
+    K_at,
 )
 from gt4py.storage.cartesian import utils as storage_utils
 
@@ -728,7 +729,7 @@ def test_function_inline_in_while(backend):
     def test(
         in_field: Field[np.float64],
         out_field: Field[np.float64],
-    ):
+    ) -> None:
         with computation(PARALLEL), interval(...):
             count = 1
             while count < 10:
@@ -741,3 +742,35 @@ def test_function_inline_in_while(backend):
     out_arr = gt_storage.ones(backend=backend, shape=domain, dtype=np.float64)
     test(in_arr, out_arr)
     assert (out_arr[:, :, :] == 388.0).all()
+
+
+@pytest.mark.parametrize("backend", ["numpy", "dace:cpu"])
+def test_absolute_K_index(backend):
+    domain = (5, 5, 5)
+
+    in_arr = gt_storage.ones(backend=backend, shape=domain, dtype=np.float64)
+    out_arr = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
+
+    @gtscript.stencil(backend=backend)
+    def test_literal_access(in_field: Field[np.float64], out_field: Field[np.float64]) -> None:
+        with computation(PARALLEL), interval(...):
+            out_field = in_field[K_at(2)]  # in_field[0, 0, idx]  # 42.42
+
+    in_arr[:, :, :] = 1
+    in_arr[:, :, 2] = 42.42
+    out_arr[:, :, :] = 0
+    test_literal_access(in_arr, out_arr)
+    assert (out_arr[:, :, :] == 42.42).all()
+
+    @gtscript.stencil(backend=backend)
+    def test_variable_access(
+        in_field: Field[np.float64], out_field: Field[np.float64], idx: int
+    ) -> None:
+        with computation(PARALLEL), interval(...):
+            out_field = in_field[K_at(idx)]  # in_field[0, 0, idx]  # 42.42
+
+    in_arr[:, :, :] = 1
+    in_arr[:, :, 2] = 42.42
+    out_arr[:, :, :] = 0
+    test_variable_access(in_arr, out_arr, 1)
+    assert (out_arr[:, :, :] == 42.42).all()

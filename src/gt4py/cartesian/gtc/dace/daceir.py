@@ -738,7 +738,7 @@ class VariableKOffset(common.VariableKOffset[Expr]):
 
 
 class IndexAccess(common.FieldAccess, Expr):
-    offset: Optional[Union[common.CartesianOffset, VariableKOffset]]
+    offset: Optional[Union[common.CartesianOffset, VariableKOffset, common.AbsoluteKIndex]]
 
 
 class AssignStmt(common.AssignStmt[Union[ScalarAccess, IndexAccess], Expr], Stmt):

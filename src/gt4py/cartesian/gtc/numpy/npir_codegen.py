@@ -43,38 +43,6 @@ def _slice_string(ch: str, offset: int, interval: Tuple[common.AxisBound, common
     )
 
 
-def _make_slice_access(
-    offset: Tuple[Optional[int], Optional[int], Union[str, Optional[int]]],
-    is_serial: bool,
-    interval: Optional[npir.HorizontalMask] = None,
-) -> List[str]:
-    axes: List[str] = []
-
-    if interval is None:
-        interval = npir.HorizontalMask(
-            i=(common.AxisBound.start(0), common.AxisBound.end(0)),
-            j=(common.AxisBound.start(0), common.AxisBound.end(0)),
-        )
-
-    if offset[0] is not None:
-        axes.append(_slice_string("i", offset[0], interval.i))
-    if offset[1] is not None:
-        axes.append(_slice_string("j", offset[1], interval.j))
-
-    if isinstance(offset[2], numbers.Number):
-        bounds = (
-            (common.AxisBound.start(), common.AxisBound.start(offset=1))
-            if is_serial
-            else (common.AxisBound.start(), common.AxisBound.end())
-        )
-        k_str = "k_" if is_serial else "k"
-        axes.append(_slice_string(k_str, offset[2], bounds))
-    elif isinstance(offset[2], str):
-        axes.append(offset[2])
-
-    return axes
-
-
 ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
     """\
     class Field:
@@ -149,6 +117,40 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     FieldDecl = as_fmt("{name} = Field({name}, _origin_['{name}'], ({', '.join(dimensions)}))")
 
+    def _make_slice_access(
+        self,
+        offset: Tuple[Optional[int], Optional[int], Union[str, Optional[int]]],
+        is_serial: bool,
+        interval: Optional[npir.HorizontalMask] = None,
+    ) -> List[str]:
+        axes: List[str] = []
+
+        if interval is None:
+            interval = npir.HorizontalMask(
+                i=(common.AxisBound.start(0), common.AxisBound.end(0)),
+                j=(common.AxisBound.start(0), common.AxisBound.end(0)),
+            )
+
+        if offset[0] is not None:
+            axes.append(_slice_string("i", offset[0], interval.i))
+        if offset[1] is not None:
+            axes.append(_slice_string("j", offset[1], interval.j))
+
+        if isinstance(offset[2], numbers.Number):
+            bounds = (
+                (common.AxisBound.start(), common.AxisBound.start(offset=1))
+                if is_serial
+                else (common.AxisBound.start(), common.AxisBound.end())
+            )
+            k_str = "k_" if is_serial else "k"
+            axes.append(_slice_string(k_str, offset[2], bounds))
+        elif isinstance(offset[2], str):
+            axes.append(offset[2])
+        elif isinstance(offset[2], npir.AbsoluteKIndex):
+            axes.append(str(self.visit(offset[2].k)))
+
+        return axes
+
     def visit_TemporaryDecl(
         self, node: npir.TemporaryDecl, **kwargs
     ) -> Union[str, Collection[str]]:
@@ -165,13 +167,26 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     VarKOffset = as_fmt("lk + {k}")
 
+    def visit_CallbackCall(self, node: npir.CallbackCall) -> Union[str, Collection[str]]:
+        return self.visit(node.call)
+
     def visit_FieldSlice(self, node: npir.FieldSlice, **kwargs: Any) -> Union[str, Collection[str]]:
-        k_offset = (
-            self.visit(node.k_offset, **kwargs)
-            if isinstance(node.k_offset, npir.VarKOffset)
-            else node.k_offset
-        )
-        offsets: Tuple[Optional[int], Optional[int], Union[str, int, None]] = (
+        need_tile_in_K = False
+        if isinstance(node.k_offset, npir.VarKOffset):
+            k_offset = self.visit(node.k_offset, **kwargs)
+        elif isinstance(node.k_offset, npir.AbsoluteKIndex):
+            k_offset = node.k_offset
+            # The code as been modified to generate B[i:I,j:J,index]
+            # which is correct but will beark because you can't brodcast this
+            # e.g. you can't write:
+            #   > A[1:3, 1:3, 1:3] = B[1:3,1:3,2]
+            # we need to use tile
+            #   > A[1:3, 1:3, 1:3] = np.tile(B[1:3,1:3,2], (1,1,2))
+            need_tile_in_K = True
+        else:
+            k_offset = node.k_offset
+
+        offsets: Tuple[Optional[int], Optional[int], Union[str, int, npir.AbsoluteKIndex, None]] = (
             node.i_offset,
             node.j_offset,
             k_offset,
@@ -182,16 +197,25 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
             decl = kwargs["symtable"][node.name]
             dimensions = decl.dimensions if isinstance(decl, npir.FieldDecl) else [True] * 3
             offsets = cast(
-                Tuple[Optional[int], Optional[int], Union[str, int, None]],
+                Tuple[Optional[int], Optional[int], Union[str, int, npir.AbsoluteKIndex, None]],
                 tuple(off if has_dim else None for has_dim, off in zip(dimensions, offsets)),
             )
 
-        args = _make_slice_access(offsets, kwargs["is_serial"], kwargs.get("horizontal_mask"))
+        args = self._make_slice_access(offsets, kwargs["is_serial"], kwargs.get("horizontal_mask"))
         data_index = self.visit(node.data_index, inside_slice=True, **kwargs)
+        if list(data_index) and need_tile_in_K:
+            raise NotImplementedError(
+                "Numpy backend: can't combine tile in K and data dimensions access"
+            )
 
         access_slice = ", ".join(args + list(data_index))
 
-        return f"{node.name}[{access_slice}]"
+        if need_tile_in_K:
+            field_str = f"np.tile({node.name}[{access_slice}][...,None], (1, 1, K-k))"
+        else:
+            field_str = f"{node.name}[{access_slice}]"
+
+        return field_str
 
     def visit_LocalScalarAccess(
         self,
@@ -201,7 +225,7 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         horizontal_mask: Optional[npir.HorizontalMask] = None,
         **kwargs: Any,
     ) -> Union[str, Collection[str]]:
-        args = _make_slice_access((0, 0, 0), is_serial, horizontal_mask)
+        args = self._make_slice_access((0, 0, 0), is_serial, horizontal_mask)
         if is_serial:
             args[2] = ":"
         return f"{node.name}[{', '.join(args)}]"

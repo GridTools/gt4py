@@ -336,9 +336,17 @@ class VarRef(Ref):
 
 
 @attribclass
+class AbsoluteKIndex(Expr):
+    """See gtc.common.AbsoluteKIndex"""
+
+    k = attribute(of=Any)
+    func_name = "K_at"
+
+
+@attribclass
 class FieldRef(Ref):
     name = attribute(of=str)
-    offset = attribute(of=DictOf[str, UnionOf[int, Expr]])
+    offset = attribute(of=DictOf[str, UnionOf[int, Expr, AbsoluteKIndex]])
     data_index = attribute(of=ListOf[Expr], factory=list)
     loc = attribute(of=Location, optional=True)
 

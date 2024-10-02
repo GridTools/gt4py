@@ -66,6 +66,9 @@ class GTIRToOIR(eve.NodeTranslator):
             loc=node.loc,
         )
 
+    def visit_AbsoluteKIndex(self, node: gtir.AbsoluteKIndex) -> oir.AbsoluteKIndex:
+        return oir.AbsoluteKIndex(k=self.visit(node.k))
+
     def visit_VariableKOffset(self, node: gtir.VariableKOffset) -> oir.VariableKOffset:
         return oir.VariableKOffset(k=self.visit(node.k))
 

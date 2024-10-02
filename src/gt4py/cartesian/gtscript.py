@@ -61,6 +61,11 @@ MATH_BUILTINS = {
     "trunc",
 }
 
+builtins_and_inline_ignore = {
+    "compile_assert",
+    "K_at",
+}
+
 builtins = {
     "I",
     "J",
@@ -82,11 +87,11 @@ builtins = {
     "__gtscript__",
     "__externals__",
     "__INLINED",
-    "compile_assert",
     *MATH_BUILTINS,
+    *builtins_and_inline_ignore,
 }
 
-IGNORE_WHEN_INLINING = {*MATH_BUILTINS, "compile_assert"}
+IGNORE_WHEN_INLINING = {*MATH_BUILTINS, *builtins_and_inline_ignore}
 
 __all__ = [*list(builtins), "function", "stencil", "lazy_stencil"]
 
@@ -595,6 +600,12 @@ JK = (J, K)
 
 IJK = (I, J, K)
 """Tuple of axes I, J, K."""
+
+
+def K_at(value: int):
+    """Stub function used to implement absolute
+    K indexing"""
+    raise RuntimeError("`K_at` stub function only, do not call.")
 
 
 def mask_from_axes(axes):
