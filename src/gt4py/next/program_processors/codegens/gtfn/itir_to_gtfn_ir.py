@@ -25,6 +25,7 @@ from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import (
     CastExpr,
     FunCall,
     FunctionDefinition,
+    IfStmt,
     IntegralConstant,
     Lambda,
     Literal,
@@ -578,13 +579,11 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_Stmt(self, node: itir.Stmt, **kwargs: Any) -> None:
         raise AssertionError("All Stmts need to be handled explicitly.")
 
-    def visit_IfStmt(
-        self, node: itir.IfStmt, **kwargs: Any
-    ):
+    def visit_IfStmt(self, node: itir.IfStmt, **kwargs: Any) -> IfStmt:
         return IfStmt(
             cond=self.visit(node.cond, **kwargs),
             true_branch=self.visit(node.true_branch, **kwargs),
-            false_branch=self.visit(node.false_branch, **kwargs)
+            false_branch=self.visit(node.false_branch, **kwargs),
         )
 
     def visit_SetAt(

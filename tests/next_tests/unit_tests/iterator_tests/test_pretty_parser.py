@@ -231,6 +231,37 @@ def test_set_at():
     assert actual == expected
 
 
+def test_if_stmt():
+    testee = """if (cond) { 
+      y @ cartesian_domain() ← x;
+      if (cond) {
+        y @ cartesian_domain() ← x;
+      } else {
+      }
+    } else {
+      y @ cartesian_domain() ← x;
+    }"""
+    stmt = ir.SetAt(
+        expr=im.ref("x"),
+        domain=im.domain("cartesian_domain", {}),
+        target=im.ref("y"),
+    )
+    expected = ir.IfStmt(
+        cond=im.ref("cond"),
+        true_branch=[
+            stmt,
+            ir.IfStmt(
+                cond=im.ref("cond"),
+                true_branch=[stmt],
+                false_branch=[],
+            ),
+        ],
+        false_branch=[stmt],
+    )
+    actual = pparse(testee)
+    assert actual == expected
+
+
 # TODO(havogt): remove after refactoring to GTIR
 def test_fencil_definition():
     testee = "f(d, x, y) {\n  g = λ(x) → x;\n  y ← (deref)(x) @ cartesian_domain();\n}"

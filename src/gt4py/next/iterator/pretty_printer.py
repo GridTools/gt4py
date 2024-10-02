@@ -312,7 +312,6 @@ class PrettyPrinter(NodeTranslator):
             head, self._indent(true_branch), ["} else {"], self._indent(false_branch), ["}"]
         )
 
-
     def visit_FencilDefinition(self, node: ir.FencilDefinition, *, prec: int) -> list[str]:
         assert prec == 0
         function_definitions = self.visit(node.function_definitions, prec=0)

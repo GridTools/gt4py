@@ -96,20 +96,20 @@ class Backend(Node):
     domain: Union[SymRef, CartesianDomain, UnstructuredDomain]
 
 
-def _is_ref_or_tuple_expr_of_ref(expr: Expr) -> bool:
+def _is_ref_literal_or_tuple_expr_of_ref(expr: Expr) -> bool:
     if (
         isinstance(expr, FunCall)
         and isinstance(expr.fun, SymRef)
         and expr.fun.id == "tuple_get"
         and len(expr.args) == 2
-        and _is_ref_or_tuple_expr_of_ref(expr.args[1])
+        and _is_ref_literal_or_tuple_expr_of_ref(expr.args[1])
     ):
         return True
     if (
         isinstance(expr, FunCall)
         and isinstance(expr.fun, SymRef)
         and expr.fun.id == "make_tuple"
-        and all(_is_ref_or_tuple_expr_of_ref(arg) for arg in expr.args)
+        and all(_is_ref_literal_or_tuple_expr_of_ref(arg) for arg in expr.args)
     ):
         return True
     if isinstance(expr, (SymRef, Literal)):
@@ -125,7 +125,8 @@ class SidComposite(Expr):
         self: datamodels.DataModelTP, attribute: datamodels.Attribute, value: list[Expr]
     ) -> None:
         if not all(
-            isinstance(el, (SidFromScalar, SidComposite)) or _is_ref_or_tuple_expr_of_ref(el)
+            isinstance(el, (SidFromScalar, SidComposite))
+            or _is_ref_literal_or_tuple_expr_of_ref(el)
             for el in value
         ):
             raise ValueError(
@@ -141,13 +142,14 @@ class SidFromScalar(Expr):
         self: datamodels.DataModelTP, attribute: datamodels.Attribute, value: Expr
     ) -> None:
         # TODO: e.g. 1+1 in test_nested_scalar_arg
-        #if not _is_ref_or_tuple_expr_of_ref(value):
+        #if not _is_ref_literal_or_tuple_expr_of_ref(value):
         #    raise ValueError("Only 'SymRef' or tuple expr of 'SymRef' allowed.")
         pass
 
 
 class Stmt(Node):
     pass
+
 
 class StencilExecution(Stmt):
     backend: Backend
