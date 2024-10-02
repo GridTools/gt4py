@@ -16,7 +16,7 @@ from gt4py import eve
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import infer_domain
-from gt4py.next.iterator.transforms.global_tmps import SymbolicDomain
+from gt4py.next.iterator.ir_utils import domain_utils
 from gt4py.next.common import Dimension
 from gt4py.next import common, NeighborTableOffsetProvider
 from gt4py.next.type_system import type_specifications as ts
@@ -86,7 +86,7 @@ def run_test_expr(
     offset_provider: common.OffsetProvider,
 ):
     actual_call, actual_domains = infer_domain.infer_expr(
-        testee, SymbolicDomain.from_expr(domain), offset_provider
+        testee, domain_utils.SymbolicDomain.from_expr(domain), offset_provider
     )
     folded_call = constant_fold_domain_exprs(actual_call)
     folded_domains = constant_fold_accessed_domains(actual_domains) if actual_domains else None
@@ -122,7 +122,7 @@ def constant_fold_domain_exprs(arg: itir.Node) -> itir.Node:
 def constant_fold_accessed_domains(
     domains: infer_domain.ACCESSED_DOMAINS,
 ) -> infer_domain.ACCESSED_DOMAINS:
-    def fold_domain(domain: SymbolicDomain | None):
+    def fold_domain(domain: domain_utils.SymbolicDomain | None):
         if domain is None:
             return domain
         return constant_fold_domain_exprs(domain.as_expr())
@@ -134,7 +134,7 @@ def translate_domain(
     domain: itir.FunCall,
     shifts: dict[str, tuple[itir.Expr, itir.Expr]],
     offset_provider: common.OffsetProvider,
-) -> SymbolicDomain:
+) -> domain_utils.SymbolicDomain:
     shift_tuples = [
         (
             im.ensure_offset(d),
@@ -145,7 +145,7 @@ def translate_domain(
 
     shift_list = [item for sublist in shift_tuples for item in sublist]
 
-    translated_domain_expr = SymbolicDomain.from_expr(domain).translate(shift_list, offset_provider)
+    translated_domain_expr = domain_utils.SymbolicDomain.from_expr(domain).translate(shift_list, offset_provider)
 
     return constant_fold_domain_exprs(translated_domain_expr.as_expr())
 
@@ -330,7 +330,7 @@ def test_nested_stencils(offset_provider):
         "in_field2": translate_domain(domain, {"Ioff": 0, "Joff": -2}, offset_provider),
     }
     actual_call, actual_domains = infer_domain.infer_expr(
-        testee, SymbolicDomain.from_expr(domain), offset_provider
+        testee, domain_utils.SymbolicDomain.from_expr(domain), offset_provider
     )
     folded_domains = constant_fold_accessed_domains(actual_domains)
     folded_call = constant_fold_domain_exprs(actual_call)
@@ -374,7 +374,7 @@ def test_nested_stencils_n_times(offset_provider, iterations):
     }
 
     actual_call, actual_domains = infer_domain.infer_expr(
-        testee, SymbolicDomain.from_expr(domain), offset_provider
+        testee, domain_utils.SymbolicDomain.from_expr(domain), offset_provider
     )
 
     folded_domains = constant_fold_accessed_domains(actual_domains)
@@ -512,7 +512,7 @@ def test_cond(offset_provider):
     expected = im.if_(cond, expected_field_1, expected_field_2)
 
     actual_call, actual_domains = infer_domain.infer_expr(
-        testee, SymbolicDomain.from_expr(domain), offset_provider
+        testee, domain_utils.SymbolicDomain.from_expr(domain), offset_provider
     )
 
     folded_domains = constant_fold_accessed_domains(actual_domains)
@@ -569,7 +569,7 @@ def test_let(offset_provider):
 
     expected_domains_sym = {"in_field": translate_domain(domain, {"Ioff": 2}, offset_provider)}
     actual_call2, actual_domains2 = infer_domain.infer_expr(
-        testee2, SymbolicDomain.from_expr(domain), offset_provider
+        testee2, domain_utils.SymbolicDomain.from_expr(domain), offset_provider
     )
     folded_domains2 = constant_fold_accessed_domains(actual_domains2)
     folded_call2 = constant_fold_domain_exprs(actual_call2)
@@ -789,7 +789,7 @@ def test_make_tuple(offset_provider):
 
     actual, actual_domains = infer_domain.infer_expr(
         testee,
-        (SymbolicDomain.from_expr(domain1), SymbolicDomain.from_expr(domain2)),
+        (domain_utils.SymbolicDomain.from_expr(domain1), domain_utils.SymbolicDomain.from_expr(domain2)),
         offset_provider,
     )
 
@@ -808,7 +808,7 @@ def test_tuple_get_1_make_tuple(offset_provider):
     }
 
     actual, actual_domains = infer_domain.infer_expr(
-        testee, SymbolicDomain.from_expr(domain), offset_provider
+        testee, domain_utils.SymbolicDomain.from_expr(domain), offset_provider
     )
 
     assert expected == actual
@@ -824,7 +824,7 @@ def test_tuple_get_1_nested_make_tuple(offset_provider):
 
     actual, actual_domains = infer_domain.infer_expr(
         testee,
-        (SymbolicDomain.from_expr(domain1), SymbolicDomain.from_expr(domain2)),
+        (domain_utils.SymbolicDomain.from_expr(domain1), domain_utils.SymbolicDomain.from_expr(domain2)),
         offset_provider,
     )
 
@@ -840,7 +840,7 @@ def test_tuple_get_let_arg_make_tuple(offset_provider):
 
     actual, actual_domains = infer_domain.infer_expr(
         testee,
-        SymbolicDomain.from_expr(im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})),
+        domain_utils.SymbolicDomain.from_expr(im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})),
         offset_provider,
     )
 
@@ -856,7 +856,7 @@ def test_tuple_get_let_make_tuple(offset_provider):
 
     actual, actual_domains = infer_domain.infer_expr(
         testee,
-        SymbolicDomain.from_expr(domain),
+        domain_utils.SymbolicDomain.from_expr(domain),
         offset_provider,
     )
 
@@ -877,10 +877,10 @@ def test_nested_make_tuple(offset_provider):
         testee,
         (
             (
-                SymbolicDomain.from_expr(domain1),
-                (SymbolicDomain.from_expr(domain2_1), SymbolicDomain.from_expr(domain2_2)),
+                domain_utils.SymbolicDomain.from_expr(domain1),
+                (domain_utils.SymbolicDomain.from_expr(domain2_1), domain_utils.SymbolicDomain.from_expr(domain2_2)),
             ),
-            SymbolicDomain.from_expr(domain3),
+            domain_utils.SymbolicDomain.from_expr(domain3),
         ),
         offset_provider,
     )
@@ -896,7 +896,7 @@ def test_tuple_get_1(offset_provider):
     expected_domains = {"a": (None, domain)}
 
     actual, actual_domains = infer_domain.infer_expr(
-        testee, SymbolicDomain.from_expr(domain), offset_provider
+        testee, domain_utils.SymbolicDomain.from_expr(domain), offset_provider
     )
 
     assert expected == actual
@@ -912,7 +912,7 @@ def test_domain_tuple(offset_provider):
 
     actual, actual_domains = infer_domain.infer_expr(
         testee,
-        (SymbolicDomain.from_expr(domain1), SymbolicDomain.from_expr(domain2)),
+        (domain_utils.SymbolicDomain.from_expr(domain1), domain_utils.SymbolicDomain.from_expr(domain2)),
         offset_provider,
     )
 
@@ -929,7 +929,7 @@ def test_as_fieldop_tuple_get(offset_provider):
     expected_domains = {"a": (domain, domain)}
 
     actual, actual_domains = infer_domain.infer_expr(
-        testee, SymbolicDomain.from_expr(domain), offset_provider
+        testee, domain_utils.SymbolicDomain.from_expr(domain), offset_provider
     )
 
     assert expected == actual
@@ -945,7 +945,7 @@ def test_make_tuple_2tuple_get(offset_provider):
 
     actual, actual_domains = infer_domain.infer_expr(
         testee,
-        (SymbolicDomain.from_expr(domain1), SymbolicDomain.from_expr(domain2)),
+        (domain_utils.SymbolicDomain.from_expr(domain1), domain_utils.SymbolicDomain.from_expr(domain2)),
         offset_provider,
     )
 
@@ -963,7 +963,7 @@ def test_make_tuple_non_tuple_domain(offset_provider):
     expected_domains = {"in_field1": domain, "in_field2": domain}
 
     actual, actual_domains = infer_domain.infer_expr(
-        testee, SymbolicDomain.from_expr(domain), offset_provider
+        testee, domain_utils.SymbolicDomain.from_expr(domain), offset_provider
     )
 
     assert expected == actual
@@ -977,7 +977,7 @@ def test_arithmetic_builtin(offset_provider):
     expected_domains = {}
 
     actual_call, actual_domains = infer_domain.infer_expr(
-        testee, SymbolicDomain.from_expr(domain), offset_provider
+        testee, domain_utils.SymbolicDomain.from_expr(domain), offset_provider
     )
     folded_call = constant_fold_domain_exprs(actual_call)
 
