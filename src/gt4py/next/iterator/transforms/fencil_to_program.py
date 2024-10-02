@@ -15,7 +15,7 @@ from gt4py.next.iterator.transforms import global_tmps
 class FencilToProgram(eve.NodeTranslator):
     @classmethod
     def apply(
-        cls, node: itir.FencilDefinition | global_tmps.FencilWithTemporaries | itir.Program
+        cls, node: itir.FencilDefinition | itir.Program
     ) -> itir.Program:
         return cls().visit(node)
 
@@ -31,14 +31,4 @@ class FencilToProgram(eve.NodeTranslator):
             declarations=[],
             body=self.visit(node.closures),
             implicit_domain=node.implicit_domain,
-        )
-
-    def visit_FencilWithTemporaries(self, node: global_tmps.FencilWithTemporaries) -> itir.Program:
-        return itir.Program(
-            id=node.fencil.id,
-            function_definitions=node.fencil.function_definitions,
-            params=node.params,
-            declarations=node.tmps,
-            body=self.visit(node.fencil.closures),
-            implicit_domain=node.fencil.implicit_domain,
         )

@@ -97,7 +97,7 @@ def _merge_domains(
         original_domain, domain = _canonicalize_domain_structure(
             original_domains.get(key, None), domain
         )
-        new_domains[key] = tree_map(_domain_union_with_none)(original_domain, domain)
+        new_domains[key] = tree_map(domain_union_with_none)(original_domain, domain)
 
     return new_domains
 
@@ -118,7 +118,7 @@ def _extract_accessed_domains(
             for shift in shifts_list
         ]
         # `None` means field is never accessed
-        accessed_domains[in_field_id] = _domain_union_with_none(
+        accessed_domains[in_field_id] = domain_union_with_none(
             accessed_domains.get(in_field_id, None), *new_domains
         )
 
