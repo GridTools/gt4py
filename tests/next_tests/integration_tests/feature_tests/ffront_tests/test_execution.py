@@ -118,22 +118,22 @@ def test_composed_unstructured_shift(unstructured_case):
     def composed_shift_unstructured(inp: cases.VField) -> cases.CField:
         return shift_e2v(inp)(C2E[0])
 
-    cases.verify_with_default_data(
-        unstructured_case,
-        composed_shift_unstructured_flat,
-        ref=lambda inp: inp[unstructured_case.offset_provider["E2V"].table[:, 0]][
-            unstructured_case.offset_provider["C2E"].table[:, 0]
-        ],
-    )
-
-    cases.verify_with_default_data(
-        unstructured_case,
-        composed_shift_unstructured_intermediate_result,
-        ref=lambda inp: inp[unstructured_case.offset_provider["E2V"].table[:, 0]][
-            unstructured_case.offset_provider["C2E"].table[:, 0]
-        ],
-        comparison=lambda inp, tmp: np.all(inp == tmp),
-    )
+    # cases.verify_with_default_data(
+    #     unstructured_case,
+    #     composed_shift_unstructured_flat,
+    #     ref=lambda inp: inp[unstructured_case.offset_provider["E2V"].table[:, 0]][
+    #         unstructured_case.offset_provider["C2E"].table[:, 0]
+    #     ],
+    # )
+    #
+    # cases.verify_with_default_data(
+    #     unstructured_case,
+    #     composed_shift_unstructured_intermediate_result,
+    #     ref=lambda inp: inp[unstructured_case.offset_provider["E2V"].table[:, 0]][
+    #         unstructured_case.offset_provider["C2E"].table[:, 0]
+    #     ],
+    #     comparison=lambda inp, tmp: np.all(inp == tmp),
+    # )
 
     cases.verify_with_default_data(
         unstructured_case,

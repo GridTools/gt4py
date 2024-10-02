@@ -266,7 +266,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return None
 
     def transform_propagate_to_if_on_tuples(self, node: ir.FunCall) -> Optional[ir.Node]:
-        if not cpm.is_call_to(node, "if_"):
+        if not cpm.is_call_to(node, ("if_", "cond")):
             # TODO(tehrengruber): This significantly increases the size of the tree. Revisit.
             # TODO(tehrengruber): Only inline if type of branch value is a tuple.
             # Examples:
@@ -274,11 +274,11 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
             # `let (b, if cond then {1, 2} else {3, 4})) b[0]`
             #  -> `if cond then let(b, {1, 2})(b[0]) else let(b, {3, 4})(b[0])`
             for i, arg in enumerate(node.args):
-                if cpm.is_call_to(arg, "if_"):
+                if cpm.is_call_to(arg, ("if_", "cond")):
                     cond, true_branch, false_branch = arg.args
                     new_true_branch = self.fp_transform(_with_altered_arg(node, i, true_branch))
                     new_false_branch = self.fp_transform(_with_altered_arg(node, i, false_branch))
-                    return im.if_(cond, new_true_branch, new_false_branch)
+                    return im.call(arg.fun)(cond, new_true_branch, new_false_branch)
         return None
 
     def transform_propagate_nested_let(self, node: ir.FunCall) -> Optional[ir.Node]:

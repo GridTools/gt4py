@@ -13,6 +13,7 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import symbol_ref_utils
 
 
+# TODO: changes taken from #1593
 class InlineFundefs(PreserveLocationVisitor, NodeTranslator):
     def visit_SymRef(self, node: itir.SymRef, *, symtable: Dict[str, Any]):
         if node.id in symtable and isinstance(

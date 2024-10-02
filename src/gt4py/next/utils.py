@@ -7,7 +7,10 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import functools
+import itertools
 from typing import Any, Callable, ClassVar, Optional, ParamSpec, TypeGuard, TypeVar, cast, overload
+
+from gt4py import eve
 
 
 class RecursionGuard:
@@ -85,6 +88,7 @@ def tree_map(
     *args: Callable[_P, _R],
     collection_type: type | tuple[type, ...] = tuple,
     result_collection_constructor: Optional[type | Callable] = None,
+    fillvalue: Any = eve.NOTHING
 ) -> Callable[..., _R | tuple[_R | tuple, ...]] | Callable[[Callable[_P, _R]], Callable[..., Any]]:
     """
     Apply `fun` to each entry of (possibly nested) collections (by default `tuple`s).
@@ -108,6 +112,9 @@ def tree_map(
         ...     [[1, 2], 3]
         ... )
         ((2, 3), 4)
+
+        >>> tree_map(lambda x, y: x + y, fillvalue=42)((1, 0), (1,))
+        (2, 42)
     """
 
     if result_collection_constructor is None:
@@ -123,11 +130,19 @@ def tree_map(
         @functools.wraps(fun)
         def impl(*args: Any | tuple[Any | tuple, ...]) -> _R | tuple[_R | tuple, ...]:
             if isinstance(args[0], collection_type):
-                assert all(
-                    isinstance(arg, collection_type) and len(args[0]) == len(arg) for arg in args
-                )
                 assert result_collection_constructor is not None
-                return result_collection_constructor(impl(*arg) for arg in zip(*args))
+                if fillvalue is eve.NOTHING:
+                    assert all(
+                        isinstance(arg, collection_type) and len(args[0]) == len(arg) for arg in args
+                    )
+                    return result_collection_constructor(impl(*arg) for arg in zip(*args))
+                else:
+                    try:
+                        result_collection_constructor(
+                            impl(*arg) for arg in itertools.zip_longest(*args, fillvalue=fillvalue))
+                    except:
+                        breakpoint()
+                    return result_collection_constructor(impl(*arg) for arg in itertools.zip_longest(*args, fillvalue=fillvalue))
 
             return fun(
                 *cast(_P.args, args)

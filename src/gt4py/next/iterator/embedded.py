@@ -1433,7 +1433,10 @@ def reduce(fun, init):
         # TODO: assert check_that_all_lists_are_compatible(*lists)
         lst = None
         for cur in lists:
-            if isinstance(cur, _List):
+            # TODO(tehrengruber): here we get a tuple when the input to the current as_fieldop is
+            #  the result of another as_fieldop that should return a "field of lists".
+            #  see test_nested_reduction
+            if isinstance(cur, (_List, tuple)):
                 lst = cur
                 break
         # we can check a single argument for length,
@@ -1601,6 +1604,14 @@ def _validate_domain(domain: Domain, offset_provider: OffsetProvider) -> None:
 @runtime.set_at.register(EMBEDDED)
 def set_at(expr: common.Field, domain: common.DomainLike, target: common.MutableField) -> None:
     operators._tuple_assign_field(target, expr, common.domain(domain))
+
+
+@runtime.if_stmt.register(EMBEDDED)
+def if_stmt(cond: bool, true_branch: Callable[[], None], false_branch: Callable[[], None]) -> None:
+    if cond:
+        true_branch()
+    else:
+        false_branch()
 
 
 def _compute_at_position(

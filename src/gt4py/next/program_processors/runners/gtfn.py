@@ -26,7 +26,7 @@ from gt4py.next.otf.compilation.build_systems import compiledb
 from gt4py.next.program_processors import modular_executor
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.type_system.type_translation import from_value
-
+from gt4py.next.ffront import foast_to_gtir, past_to_itir, stages as ffront_stages, foast_to_past
 
 # TODO(ricoh): Add support for the whole range of arguments that can be passed to a fencil.
 def convert_arg(arg: Any) -> Any:
@@ -149,6 +149,9 @@ class GTFNCompileWorkflowFactory(factory.Factory):
     )
 
 
+
+
+
 class GTFNBackendFactory(factory.Factory):
     class Meta:
         model = backend.Backend
@@ -190,7 +193,15 @@ class GTFNBackendFactory(factory.Factory):
         lambda o: modular_executor.ModularExecutor(otf_workflow=o.otf_workflow, name=o.name)
     )
     allocator = next_allocators.StandardCPUFieldBufferAllocator()
-    transforms = backend.DEFAULT_TRANSFORMS
+    transforms = backend.Transforms(
+        past_to_itir=past_to_itir.past_to_itir_factory(to_gtir=True),
+        foast_to_itir=workflow.CachedStep(
+            step=foast_to_gtir.foast_to_gtir, hash_function=ffront_stages.fingerprint_stage
+        ),
+        field_view_op_to_prog=foast_to_past.operator_to_program_factory(
+            foast_to_itir_step=foast_to_gtir.adapted_foast_to_gtir_factory(cached=True)
+        ),
+    )
 
 
 run_gtfn = GTFNBackendFactory()

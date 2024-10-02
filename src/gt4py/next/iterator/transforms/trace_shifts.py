@@ -129,6 +129,10 @@ def _combine(*values):
 
 # implementations of builtins
 def _deref(x):
+    try:
+        return x.deref()
+    except:
+        breakpoint()
     return x.deref()
 
 

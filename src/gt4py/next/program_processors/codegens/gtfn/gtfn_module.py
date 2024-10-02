@@ -82,7 +82,7 @@ class GTFNTranslationStep(
 
     def _process_regular_arguments(
         self,
-        program: itir.FencilDefinition,
+        program: itir.FencilDefinition | itir.Program,
         args: tuple[Any, ...],
         offset_provider: dict[str, Connectivity | Dimension],
     ) -> tuple[list[interface.Parameter], list[str]]:
@@ -161,10 +161,10 @@ class GTFNTranslationStep(
 
     def _preprocess_program(
         self,
-        program: itir.FencilDefinition,
+        program: itir.FencilDefinition | itir.Program,
         offset_provider: dict[str, Connectivity | Dimension],
     ) -> itir.Program:
-        if not self.enable_itir_transforms:
+        if isinstance(program, itir.FencilDefinition) and not self.enable_itir_transforms:
             return fencil_to_program.FencilToProgram().apply(
                 program
             )  # FIXME[#1582](tehrengruber): should be removed after refactoring to combined IR
@@ -195,7 +195,7 @@ class GTFNTranslationStep(
 
     def generate_stencil_source(
         self,
-        program: itir.FencilDefinition,
+        program: itir.FencilDefinition | itir.Program,
         offset_provider: dict[str, Connectivity | Dimension],
         column_axis: Optional[common.Dimension],
     ) -> str:
@@ -216,7 +216,6 @@ class GTFNTranslationStep(
     ) -> stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings]:
         """Generate GTFN C++ code from the ITIR definition."""
         program: itir.FencilDefinition | itir.Program = inp.data
-        assert isinstance(program, itir.FencilDefinition)
 
         # handle regular parameters and arguments of the program (i.e. what the user defined in
         #  the program)
