@@ -34,7 +34,7 @@ repos:
   - id: insert-license
     exclude: ^\..*$
     types: [python]
-    args: [--comment-style, "|#|", --license-filepath, ./LICENSE_HEADER.txt, --fuzzy-match-generates-todo]
+    args: [--comment-style, "|#|", --license-filepath, ./HEADER.txt, --fuzzy-match-generates-todo]
 
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v4.4.0

@@ -29,7 +29,7 @@ from gt4py.next.type_system import type_translation as tt
 @dataclasses.dataclass(frozen=True)
 class DaCeTranslator(
     workflow.ChainableWorkflowMixin[
-        stages.ProgramCall, stages.ProgramSource[languages.SDFG, languages.LanguageSettings]
+        stages.AOTProgram, stages.ProgramSource[languages.SDFG, languages.LanguageSettings]
     ],
     step_types.TranslationStep[languages.SDFG, languages.LanguageSettings],
 ):
@@ -52,21 +52,21 @@ class DaCeTranslator(
         return gtir_to_sdfg.build_sdfg_from_gtir(program=ir, offset_provider=offset_provider)
 
     def __call__(
-        self, inp: stages.ProgramCall
+        self, inp: stages.AOTProgram
     ) -> stages.ProgramSource[languages.SDFG, LanguageSettings]:
         """Generate DaCe SDFG file from the GTIR definition."""
-        program = inp.program
+        program: itir.FencilDefinition | itir.Program = inp.data
         assert isinstance(program, itir.Program)
 
         sdfg = self.generate_sdfg(
             program,
-            inp.kwargs["offset_provider"],
-            inp.kwargs.get("column_axis", None),
+            inp.args.offset_provider,
+            inp.args.column_axis,
         )
 
         param_types = tuple(
             interface.Parameter(param, tt.from_value(arg))
-            for param, arg in zip(sdfg.arg_names, inp.args)
+            for param, arg in zip(sdfg.arg_names, inp.args.args)
         )
 
         module: stages.ProgramSource[languages.SDFG, languages.LanguageSettings] = (
@@ -76,6 +76,7 @@ class DaCeTranslator(
                 library_deps=tuple(),
                 language=languages.SDFG,
                 language_settings=self._language_settings(),
+                implicit_domain=inp.data.implicit_domain,
             )
         )
         return module

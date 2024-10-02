@@ -13,8 +13,6 @@ import dataclasses
 import typing
 from typing import Any, cast
 
-import factory
-
 from gt4py.next import errors
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -26,12 +24,35 @@ from gt4py.next.ffront import (
 from gt4py.next.ffront.dialect_parser import DialectParser
 from gt4py.next.ffront.past_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeDeduction
-from gt4py.next.otf import workflow
+from gt4py.next.ffront.stages import AOT_DSL_PRG, AOT_PRG, DSL_PRG, PRG
+from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
-@workflow.make_step
-def func_to_past(inp: ffront_stages.ProgramDefinition) -> ffront_stages.PastProgramDefinition:
+def func_to_past(inp: DSL_PRG) -> PRG:
+    """
+    Turn a DSL program definition into a PAST Program definition, adding metadata.
+
+    Examples:
+
+        >>> from gt4py import next as gtx
+        >>> IDim = gtx.Dimension("I")
+
+        >>> @gtx.field_operator
+        ... def copy(a: gtx.Field[[IDim], gtx.float32]) -> gtx.Field[[IDim], gtx.float32]:
+        ...     return a
+
+        >>> def dsl_program(a: gtx.Field[[IDim], gtx.float32], out: gtx.Field[[IDim], gtx.float32]):
+        ...     copy(a, out=out)
+
+        >>> dsl_definition = gtx.ffront.stages.ProgramDefinition(definition=dsl_program)
+        >>> past_definition = func_to_past(dsl_definition)
+
+        >>> print(past_definition.past_node.id)
+        dsl_program
+
+        >>> assert "copy" in past_definition.closure_vars
+    """
     source_def = source_utils.SourceDefinition.from_function(inp.definition)
     closure_vars = source_utils.get_closure_vars_from_function(inp.definition)
     annotations = typing.get_type_hints(inp.definition)
@@ -39,40 +60,29 @@ def func_to_past(inp: ffront_stages.ProgramDefinition) -> ffront_stages.PastProg
         past_node=ProgramParser.apply(source_def, closure_vars, annotations),
         closure_vars=closure_vars,
         grid_type=inp.grid_type,
+        debug=inp.debug,
     )
 
 
-@dataclasses.dataclass(frozen=True)
-class OptionalFuncToPast(workflow.SkippableStep):
-    step: workflow.Workflow[
-        ffront_stages.ProgramDefinition, ffront_stages.PastProgramDefinition
-    ] = func_to_past
+def func_to_past_factory(cached: bool = False) -> workflow.Workflow[DSL_PRG, PRG]:
+    """
+    Wrap `func_to_past` in a chainable and optionally cached workflow step.
 
-    def skip_condition(
-        self, inp: ffront_stages.PastProgramDefinition | ffront_stages.ProgramDefinition
-    ) -> bool:
-        match inp:
-            case ffront_stages.ProgramDefinition():
-                return False
-            case ffront_stages.PastProgramDefinition():
-                return True
+    Caching is switched off by default, because whether recompiling is necessary can only be known after
+    the closure variables have been collected (which is done in this step). In special cases where it can
+    be guaranteed that the closure variables do not change, switching caching on should be safe.
+    """
+    wf = workflow.make_step(func_to_past)
+    if cached:
+        wf = workflow.CachedStep(wf, hash_function=ffront_stages.fingerprint_stage)
+    return wf
 
 
-class OptionalFuncToPastFactory(factory.Factory):
-    class Meta:
-        model = OptionalFuncToPast
-
-    class Params:
-        workflow = func_to_past
-        cached = factory.Trait(
-            step=factory.LazyAttribute(
-                lambda o: workflow.CachedStep(
-                    step=o.workflow, hash_function=ffront_stages.fingerprint_stage
-                )
-            )
-        )
-
-        step = factory.LazyAttribute(lambda o: o.workflow)
+def adapted_func_to_past_factory(**kwargs: Any) -> workflow.Workflow[AOT_DSL_PRG, AOT_PRG]:
+    """
+    Wrap an adapter around the DSL definition -> PAST definition step to fit into transform toolchains.
+    """
+    return toolchain.DataOnlyAdapter(func_to_past_factory(**kwargs))
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)

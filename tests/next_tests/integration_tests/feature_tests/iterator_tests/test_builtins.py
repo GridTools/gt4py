@@ -16,6 +16,7 @@ import pytest
 
 import gt4py.next as gtx
 import gt4py.next.program_processors.processor_interface as ppi
+from gt4py.next import common
 from gt4py.next.iterator import builtins as it_builtins
 from gt4py.next.iterator.builtins import (
     and_,

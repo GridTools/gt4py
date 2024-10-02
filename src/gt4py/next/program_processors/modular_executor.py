@@ -13,18 +13,21 @@ from typing import Any, Optional
 
 import gt4py.next.program_processors.processor_interface as ppi
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import stages, workflow
+from gt4py.next.otf import arguments, stages, workflow
 
 
 @dataclasses.dataclass(frozen=True)
 class ModularExecutor(ppi.ProgramExecutor):
-    otf_workflow: workflow.Workflow[stages.ProgramCall, stages.CompiledProgram]
+    otf_workflow: workflow.Workflow[stages.AOTProgram, stages.CompiledProgram]
     name: Optional[str] = None
 
     def __call__(self, program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
-        self.otf_workflow(stages.ProgramCall(program=program, args=args, kwargs=kwargs))(
-            *args, offset_provider=kwargs["offset_provider"]
-        )
+        self.otf_workflow(
+            stages.AOTProgram(
+                data=program,
+                args=arguments.CompileTimeArgs.from_concrete(*args, **kwargs),
+            )
+        )(*args, offset_provider=kwargs["offset_provider"])
 
     @property
     def __name__(self) -> str:

@@ -33,6 +33,7 @@ from next_tests.toy_connectivity import Cell, Edge
 @pytest.fixture
 def run_gtfn_with_temporaries_and_symbolic_sizes():
     return backend.Backend(
+        transforms=backend.DEFAULT_TRANSFORMS,
         executor=modular_executor.ModularExecutor(
             name="run_gtfn_with_temporaries_and_sizes",
             otf_workflow=run_gtfn_with_temporaries.executor.otf_workflow.replace(
@@ -66,6 +67,9 @@ def testee():
 
 
 def test_verification(testee, run_gtfn_with_temporaries_and_symbolic_sizes, mesh_descriptor):
+    # FIXME[#1582](tehrengruber): enable when temporary pass has been implemented
+    pytest.xfail("Temporary pass not implemented.")
+
     unstructured_case = Case(
         run_gtfn_with_temporaries_and_symbolic_sizes,
         offset_provider=mesh_descriptor.offset_provider,
@@ -99,6 +103,9 @@ def test_verification(testee, run_gtfn_with_temporaries_and_symbolic_sizes, mesh
 
 
 def test_temporary_symbols(testee, mesh_descriptor):
+    # FIXME[#1582](tehrengruber): enable when temporary pass has been implemented
+    pytest.xfail("Temporary pass not implemented.")
+
     itir_with_tmp = apply_common_transforms(
         testee.itir,
         lift_mode=LiftMode.USE_TEMPORARIES,

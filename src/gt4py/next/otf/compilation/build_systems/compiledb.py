@@ -64,6 +64,7 @@ class CompiledbFactory(
             cmake_flags=self.cmake_extra_flags or [],
             language=source.program_source.language,
             language_settings=source.program_source.language_settings,
+            implicit_domain=source.program_source.implicit_domain,
         )
 
         if self.renew_compiledb or not (
@@ -213,6 +214,7 @@ def _cc_prototype_program_source(
     cmake_flags: list[str],
     language: type[SrcL],
     language_settings: languages.LanguageWithHeaderFilesSettings,
+    implicit_domain: bool,
 ) -> stages.ProgramSource:
     name = _cc_prototype_program_name(deps, build_type.value, cmake_flags)
     return stages.ProgramSource(
@@ -221,6 +223,7 @@ def _cc_prototype_program_source(
         library_deps=deps,
         language=language,
         language_settings=language_settings,
+        implicit_domain=implicit_domain,
     )
 
 
@@ -252,8 +255,8 @@ def _cc_create_compiledb(
     prog_src_name = f"{name}.{header_ext}"
     binding_src_name = f"{name}.{src_ext}"
     cmake_languages = [cmake_lists.Language(name="CXX")]
-    if prototype_program_source.language is languages.Cuda:
-        cmake_languages = [*cmake_languages, cmake_lists.Language(name="CUDA")]
+    if (src_lang := prototype_program_source.language) in [languages.CUDA, languages.HIP]:
+        cmake_languages = [*cmake_languages, cmake_lists.Language(name=src_lang.__name__)]
 
     prototype_project = cmake.CMakeProject(
         generator_name="Ninja",

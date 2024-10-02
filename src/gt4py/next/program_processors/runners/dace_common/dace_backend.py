@@ -14,7 +14,7 @@ import numpy as np
 
 from gt4py.next import common as gtx_common
 
-from . import utility as dace_util
+from . import utility as dace_utils
 
 
 try:
@@ -40,7 +40,7 @@ def _convert_arg(arg: Any, sdfg_param: str, use_field_canonical_representation: 
     if not use_field_canonical_representation:
         return arg.ndarray
     # the canonical representation requires alphabetical ordering of the dimensions in field domain definition
-    sorted_dims = dace_util.get_sorted_dims(arg.domain.dims)
+    sorted_dims = dace_utils.get_sorted_dims(arg.domain.dims)
     ndim = len(sorted_dims)
     dim_indices = [dim_index for dim_index, _ in sorted_dims]
     if isinstance(arg.ndarray, np.ndarray):
@@ -73,20 +73,9 @@ def _ensure_is_on_device(
     return connectivity_arg
 
 
-def _get_connectivity_args(
-    neighbor_tables: Mapping[str, gtx_common.NeighborTable], device: dace.dtypes.DeviceType
-) -> dict[str, Any]:
-    return {
-        dace_util.connectivity_identifier(offset): _ensure_is_on_device(
-            offset_provider.table, device
-        )
-        for offset, offset_provider in neighbor_tables.items()
-    }
-
-
 def _get_shape_args(
-    arrays: Mapping[str, dace.data.Array], args: Mapping[str, Any]
-) -> Mapping[str, int]:
+    arrays: Mapping[str, dace.data.Array], args: Mapping[str, np.typing.NDArray]
+) -> dict[str, int]:
     shape_args: dict[str, int] = {}
     for name, value in args.items():
         for sym, size in zip(arrays[name].shape, value.shape, strict=True):
@@ -101,8 +90,8 @@ def _get_shape_args(
 
 
 def _get_stride_args(
-    arrays: Mapping[str, dace.data.Array], args: Mapping[str, Any]
-) -> Mapping[str, int]:
+    arrays: Mapping[str, dace.data.Array], args: Mapping[str, np.typing.NDArray]
+) -> dict[str, int]:
     stride_args = {}
     for name, value in args.items():
         for sym, stride_size in zip(arrays[name].strides, value.strides, strict=True):
@@ -119,6 +108,27 @@ def _get_stride_args(
                     f"Expected stride {arrays[name].strides} for arg {name}, got {value.strides}."
                 )
     return stride_args
+
+
+def get_sdfg_conn_args(
+    sdfg: dace.SDFG,
+    offset_provider: dict[str, Any],
+    on_gpu: bool,
+) -> dict[str, np.typing.NDArray]:
+    """
+    Extracts the connectivity tables that are used in the sdfg and ensures
+    that the memory buffers are allocated for the target device.
+    """
+    device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
+
+    connectivity_args = {}
+    for offset, connectivity in dace_utils.filter_connectivities(offset_provider).items():
+        assert isinstance(connectivity, gtx_common.NeighborTable)
+        param = dace_utils.connectivity_identifier(offset)
+        if param in sdfg.arrays:
+            connectivity_args[param] = _ensure_is_on_device(connectivity.table, device)
+
+    return connectivity_args
 
 
 def get_sdfg_args(
@@ -138,17 +148,9 @@ def get_sdfg_args(
     """
     offset_provider = kwargs["offset_provider"]
 
-    neighbor_tables: dict[str, gtx_common.NeighborTable] = {}
-    for offset, connectivity in dace_util.filter_connectivities(offset_provider).items():
-        assert isinstance(connectivity, gtx_common.NeighborTable)
-        neighbor_tables[offset] = connectivity
-    device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
-
     dace_args = _get_args(sdfg, args, use_field_canonical_representation)
     dace_field_args = {n: v for n, v in dace_args.items() if not np.isscalar(v)}
-    dace_conn_args = _get_connectivity_args(neighbor_tables, device)
-    # keep only connectivity tables that are used in the sdfg
-    dace_conn_args = {n: v for n, v in dace_conn_args.items() if n in sdfg.arrays}
+    dace_conn_args = get_sdfg_conn_args(sdfg, offset_provider, on_gpu)
     dace_shapes = _get_shape_args(sdfg.arrays, dace_field_args)
     dace_conn_shapes = _get_shape_args(sdfg.arrays, dace_conn_args)
     dace_strides = _get_stride_args(sdfg.arrays, dace_field_args)

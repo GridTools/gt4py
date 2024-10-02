@@ -59,10 +59,14 @@ class SDFG(LanguageTag):
 class NanobindSrcL(LanguageTag): ...
 
 
-class Cpp(NanobindSrcL):
+class CPP(NanobindSrcL):
     settings_class = LanguageWithHeaderFilesSettings
     ...
 
 
-class Cuda(NanobindSrcL):
+class CUDA(NanobindSrcL):
+    settings_class = LanguageWithHeaderFilesSettings
+
+
+class HIP(NanobindSrcL):
     settings_class = LanguageWithHeaderFilesSettings

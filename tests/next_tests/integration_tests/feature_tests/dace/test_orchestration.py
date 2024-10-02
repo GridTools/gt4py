@@ -13,6 +13,7 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.next import backend as next_backend
+from gt4py.next.otf import arguments
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import cartesian_case, unstructured_case
@@ -56,7 +57,7 @@ def test_sdfgConvertible_laplap(cartesian_case):
     connectivities = {}  # Dict of NeighborOffsetProviders, where self.table = None
     for k, v in cartesian_case.offset_provider.items():
         if hasattr(v, "table"):
-            connectivities[k] = gtx.CompileTimeConnectivity(
+            connectivities[k] = arguments.CompileTimeConnectivity(
                 v.max_neighbors, v.has_skip_values, v.origin_axis, v.neighbor_axis, v.table.dtype
             )
         else:
@@ -130,7 +131,7 @@ def test_sdfgConvertible_connectivities(unstructured_case):
         xp.asarray([[0, 1], [1, 2], [2, 0]]), Edge, Vertex, 2, False
     )
     connectivities = {}
-    connectivities["E2V"] = gtx.CompileTimeConnectivity(
+    connectivities["E2V"] = arguments.CompileTimeConnectivity(
         e2v.max_neighbors, e2v.has_skip_values, e2v.origin_axis, e2v.neighbor_axis, e2v.table.dtype
     )
     offset_provider = OffsetProvider_t.dtype._typeclass.as_ctypes()(E2V=e2v.data_ptr())

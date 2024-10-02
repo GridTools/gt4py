@@ -30,6 +30,7 @@ class FencilToProgram(eve.NodeTranslator):
             params=node.params,
             declarations=[],
             body=self.visit(node.closures),
+            implicit_domain=node.implicit_domain,
         )
 
     def visit_FencilWithTemporaries(self, node: global_tmps.FencilWithTemporaries) -> itir.Program:
@@ -39,4 +40,5 @@ class FencilToProgram(eve.NodeTranslator):
             params=node.params,
             declarations=node.tmps,
             body=self.visit(node.fencil.closures),
+            implicit_domain=node.fencil.implicit_domain,
         )

@@ -1,6 +1,7 @@
 ```python
 import dataclasses
 import inspect
+import pprint
 
 import gt4py.next as gtx
 from gt4py.next import backend
@@ -22,28 +23,14 @@ OFFSET_PROVIDER = {"Ioff": I}
 ```mermaid
 graph LR
 
-fdef(FieldOperatorDefinition) -->|func_to_foast| foast(FoastOperatorDefinition)
+fdef("CompilableProgram[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("CompilableProgram[FoastOperatorDefinition, AOT]")
 foast -->|foast_to_itir| itir_expr(itir.Expr)
-foasta -->|foast_to_foast_closure| fclos(FoastClosure)
-fclos -->|foast_to_past_closure| pclos(PastClosure)
-pclos -->|past_process_args| pclos
-pclos -->|past_to_itir| pcall(ProgramCall)
-
-pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
+foast -->|field_view_op_to_prog| past("CompilableProgram[PastProgramDefinition, AOT]")
 past -->|past_lint| past
-pasta -->|past_to_past_closure| pclos(ProgramClosure)
+past -->|field_view_prog_args_transform| tapast("CompilableProgram[PastProgramDefinition, AOT]")
+tapast -->|past_to_itir| pcall(AOTProgram)
 
-fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
-fuwr --> fargs(args, kwargs)
-
-foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
-fargs --> foasta
-
-pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
-puwr --> pargs(args, kwargs)
-
-past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
-pargs --> pasta
+pdef("CompilableProgram[ProgramDefinition, AOT]") -->|func_to_past| past("CompilableProgram[PastProgramDefinition, AOT]")
 ```
 
 # Walkthrough from Field Operator
@@ -64,45 +51,19 @@ start = example_fo.definition_stage
 gtx.ffront.stages.FieldOperatorDefinition?
 ```
 
-    [0;31mInit signature:[0m
-    [0mgtx[0m[0;34m.[0m[0mffront[0m[0;34m.[0m[0mstages[0m[0;34m.[0m[0mFieldOperatorDefinition[0m[0;34m([0m[0;34m[0m
-    [0;34m[0m    [0mdefinition[0m[0;34m:[0m [0;34m'types.FunctionType'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0mgrid_type[0m[0;34m:[0m [0;34m'Optional[common.GridType]'[0m [0;34m=[0m [0;32mNone[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0mnode_class[0m[0;34m:[0m [0;34m'type[OperatorNodeT]'[0m [0;34m=[0m [0;34m<[0m[0;32mclass[0m [0;34m'gt4py.next.ffront.field_operator_ast.FieldOperator'[0m[0;34m>[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0mattributes[0m[0;34m:[0m [0;34m'dict[str, Any]'[0m [0;34m=[0m [0;34m<[0m[0mfactory[0m[0;34m>[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m[0;34m)[0m [0;34m->[0m [0;32mNone[0m[0;34m[0m[0;34m[0m[0m
-    [0;31mDocstring:[0m      FieldOperatorDefinition(definition: 'types.FunctionType', grid_type: 'Optional[common.GridType]' = None, node_class: 'type[OperatorNodeT]' = <class 'gt4py.next.ffront.field_operator_ast.FieldOperator'>, attributes: 'dict[str, Any]' = <factory>)
-    [0;31mFile:[0m           ~/Code/gt4py/src/gt4py/next/ffront/stages.py
-    [0;31mType:[0m           type
-    [0;31mSubclasses:[0m
-
 ## DSL -> FOAST
 
 ```mermaid
 graph LR
 
-fdef(FieldOperatorDefinition) -->|func_to_foast| foast(FoastOperatorDefinition)
+fdef("CompilableProgram[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("CompilableProgram[FoastOperatorDefinition, AOT]")
 foast -->|foast_to_itir| itir_expr(itir.Expr)
-foasta -->|foast_to_foast_closure| fclos(FoastClosure)
-fclos -->|foast_to_past_closure| pclos(PastClosure)
-pclos -->|past_process_args| pclos
-pclos -->|past_to_itir| pcall(ProgramCall)
-
-pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
+foast -->|field_view_op_to_prog| past("CompilableProgram[PastProgramDefinition, AOT]")
 past -->|past_lint| past
-pasta -->|past_to_past_closure| pclos(ProgramClosure)
+past -->|field_view_prog_args_transform| tapast("CompilableProgram[PastProgramDefinition, AOT]")
+tapast -->|past_to_itir| pcall(AOTProgram)
 
-fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
-fuwr --> fargs(args, kwargs)
-
-foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
-fargs --> foasta
-
-pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
-puwr --> pargs(args, kwargs)
-
-past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
-pargs --> pasta
+pdef("CompilableProgram[ProgramDefinition, AOT]") -->|func_to_past| past("CompilableProgram[PastProgramDefinition, AOT]")
 
 style fdef fill:red
 style foast fill:red
@@ -110,24 +71,15 @@ linkStyle 0 stroke:red,stroke-width:4px,color:pink
 ```
 
 ```python
-foast = backend.DEFAULT_FIELDOP_TRANSFORMS.func_to_foast(start)
+
+foast = backend.DEFAULT_TRANSFORMS.func_to_foast(
+    gtx.otf.toolchain.CompilableProgram(start, gtx.otf.arguments.CompileTimeArgs.empty())
+)
 ```
 
 ```python
-gtx.ffront.stages.FoastOperatorDefinition?
+foast.data.__class__?
 ```
-
-    [0;31mInit signature:[0m
-    [0mgtx[0m[0;34m.[0m[0mffront[0m[0;34m.[0m[0mstages[0m[0;34m.[0m[0mFoastOperatorDefinition[0m[0;34m([0m[0;34m[0m
-    [0;34m[0m    [0mfoast_node[0m[0;34m:[0m [0;34m'OperatorNodeT'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0mclosure_vars[0m[0;34m:[0m [0;34m'dict[str, Any]'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0mgrid_type[0m[0;34m:[0m [0;34m'Optional[common.GridType]'[0m [0;34m=[0m [0;32mNone[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0mattributes[0m[0;34m:[0m [0;34m'dict[str, Any]'[0m [0;34m=[0m [0;34m<[0m[0mfactory[0m[0;34m>[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m[0;34m)[0m [0;34m->[0m [0;32mNone[0m[0;34m[0m[0;34m[0m[0m
-    [0;31mDocstring:[0m      FoastOperatorDefinition(foast_node: 'OperatorNodeT', closure_vars: 'dict[str, Any]', grid_type: 'Optional[common.GridType]' = None, attributes: 'dict[str, Any]' = <factory>)
-    [0;31mFile:[0m           ~/Code/gt4py/src/gt4py/next/ffront/stages.py
-    [0;31mType:[0m           type
-    [0;31mSubclasses:[0m
 
 ## FOAST -> ITIR
 
@@ -136,28 +88,14 @@ This also happens inside the `decorator.FieldOperator.__gt_itir__` method during
 ```mermaid
 graph LR
 
-fdef(FieldOperatorDefinition) -->|func_to_foast| foast(FoastOperatorDefinition)
+fdef("CompilableProgram[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("CompilableProgram[FoastOperatorDefinition, AOT]")
 foast -->|foast_to_itir| itir_expr(itir.Expr)
-foasta -->|foast_to_foast_closure| fclos(FoastClosure)
-fclos -->|foast_to_past_closure| pclos(PastClosure)
-pclos -->|past_process_args| pclos
-pclos -->|past_to_itir| pcall(ProgramCall)
-
-pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
+foast -->|field_view_op_to_prog| past("CompilableProgram[PastProgramDefinition, AOT]")
 past -->|past_lint| past
-pasta -->|past_to_past_closure| pclos(ProgramClosure)
+past -->|field_view_prog_args_transform| tapast("CompilableProgram[PastProgramDefinition, AOT]")
+tapast -->|past_to_itir| pcall(AOTProgram)
 
-fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
-fuwr --> fargs(args, kwargs)
-
-foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
-fargs --> foasta
-
-pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
-puwr --> pargs(args, kwargs)
-
-past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
-pargs --> pasta
+pdef("CompilableProgram[ProgramDefinition, AOT]") -->|func_to_past| past("CompilableProgram[PastProgramDefinition, AOT]")
 
 style foast fill:red
 style itir_expr fill:red
@@ -165,192 +103,113 @@ linkStyle 1 stroke:red,stroke-width:4px,color:pink
 ```
 
 ```python
-fitir = backend.DEFAULT_FIELDOP_TRANSFORMS.foast_to_itir(foast)
+fitir = backend.DEFAULT_TRANSFORMS.foast_to_itir(foast)
 ```
 
 ```python
 fitir.__class__
 ```
 
-    gt4py.next.iterator.ir.FunctionDefinition
-
-## FOAST -> FOAST closure
-
-This is preparation for "directly calling" a field operator.
-
-```mermaid
-graph LR
-
-fdef(FieldOperatorDefinition) -->|func_to_foast| foast(FoastOperatorDefinition)
-foast -->|foast_to_itir| itir_expr(itir.Expr)
-foasta -->|foast_to_foast_closure| fclos(FoastClosure)
-fclos -->|foast_to_past_closure| pclos(PastClosure)
-pclos -->|past_process_args| pclos
-pclos -->|past_to_itir| pcall(ProgramCall)
-
-pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
-past -->|past_lint| past
-pasta -->|past_to_past_closure| pclos(ProgramClosure)
-
-fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
-fuwr --> fargs(args, kwargs)
-
-foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
-fargs --> foasta
-
-pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
-puwr --> pargs(args, kwargs)
-
-past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
-pargs --> pasta
-
-style foasta fill:red
-style fclos fill:red
-linkStyle 2 stroke:red,stroke-width:4px,color:pink
-```
-
-Here we have to manually combine the previous result with the call arguments. When we call the toolchain as a whole later we will only have to do this once at the beginning.
-
-```python
-fclos = backend.DEFAULT_FIELDOP_TRANSFORMS.foast_to_foast_closure(
-    gtx.otf.workflow.InputWithArgs(
-        data=foast,
-        args=(gtx.ones(domain={I: 10}, dtype=gtx.float64),),
-        kwargs={
-            "out": gtx.zeros(domain={I: 10}, dtype=gtx.float64),
-            "from_fieldop": example_fo
-        },
-    )
-)
-```
-
-```python
-fclos.closure_vars["example_fo"].backend
-```
-
-```python
-gtx.ffront.stages.FoastClosure??
-```
-
-    [0;31mInit signature:[0m
-    [0mgtx[0m[0;34m.[0m[0mffront[0m[0;34m.[0m[0mstages[0m[0;34m.[0m[0mFoastClosure[0m[0;34m([0m[0;34m[0m
-    [0;34m[0m    [0mfoast_op_def[0m[0;34m:[0m [0;34m'FoastOperatorDefinition[OperatorNodeT]'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0margs[0m[0;34m:[0m [0;34m'tuple[Any, ...]'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0mkwargs[0m[0;34m:[0m [0;34m'dict[str, Any]'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0mclosure_vars[0m[0;34m:[0m [0;34m'dict[str, Any]'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m[0;34m)[0m [0;34m->[0m [0;32mNone[0m[0;34m[0m[0;34m[0m[0m
-    [0;31mDocstring:[0m      FoastClosure(foast_op_def: 'FoastOperatorDefinition[OperatorNodeT]', args: 'tuple[Any, ...]', kwargs: 'dict[str, Any]', closure_vars: 'dict[str, Any]')
-    [0;31mSource:[0m
-    [0;34m@[0m[0mdataclasses[0m[0;34m.[0m[0mdataclass[0m[0;34m([0m[0mfrozen[0m[0;34m=[0m[0;32mTrue[0m[0;34m)[0m[0;34m[0m
-    [0;34m[0m[0;32mclass[0m [0mFoastClosure[0m[0;34m([0m[0mGeneric[0m[0;34m[[0m[0mOperatorNodeT[0m[0;34m][0m[0;34m)[0m[0;34m:[0m[0;34m[0m
-    [0;34m[0m    [0mfoast_op_def[0m[0;34m:[0m [0mFoastOperatorDefinition[0m[0;34m[[0m[0mOperatorNodeT[0m[0;34m][0m[0;34m[0m
-    [0;34m[0m    [0margs[0m[0;34m:[0m [0mtuple[0m[0;34m[[0m[0mAny[0m[0;34m,[0m [0;34m...[0m[0;34m][0m[0;34m[0m
-    [0;34m[0m    [0mkwargs[0m[0;34m:[0m [0mdict[0m[0;34m[[0m[0mstr[0m[0;34m,[0m [0mAny[0m[0;34m][0m[0;34m[0m
-    [0;34m[0m    [0mclosure_vars[0m[0;34m:[0m [0mdict[0m[0;34m[[0m[0mstr[0m[0;34m,[0m [0mAny[0m[0;34m][0m[0;34m[0m[0;34m[0m[0m
-    [0;31mFile:[0m           ~/Code/gt4py/src/gt4py/next/ffront/stages.py
-    [0;31mType:[0m           type
-    [0;31mSubclasses:[0m
-
-## FOAST with args -> PAST closure
+## FOAST with args -> PAST with args
 
 This auto-generates a program for us, directly in PAST representation and forwards the call arguments to it
 
 ```mermaid
 graph LR
 
-fdef(FieldOperatorDefinition) -->|func_to_foast| foast(FoastOperatorDefinition)
+fdef("CompilableProgram[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("CompilableProgram[FoastOperatorDefinition, AOT]")
 foast -->|foast_to_itir| itir_expr(itir.Expr)
-foasta -->|foast_to_foast_closure| fclos(FoastClosure)
-fclos -->|foast_to_past_closure| pclos(PastClosure)
-pclos -->|past_process_args| pclos
-pclos -->|past_to_itir| pcall(ProgramCall)
-
-pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
+foast -->|field_view_op_to_prog| past("CompilableProgram[PastProgramDefinition, AOT]")
 past -->|past_lint| past
-pasta -->|past_to_past_closure| pclos(ProgramClosure)
+past -->|field_view_prog_args_transform| tapast("CompilableProgram[PastProgramDefinition, AOT]")
+tapast -->|past_to_itir| pcall(AOTProgram)
 
-fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
-fuwr --> fargs(args, kwargs)
+pdef("CompilableProgram[ProgramDefinition, AOT]") -->|func_to_past| past("CompilableProgram[PastProgramDefinition, AOT]")
 
-foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
-fargs --> foasta
+style foast fill:red
+style past fill:red
+linkStyle 2 stroke:red,stroke-width:4px,color:pink
+```
 
-pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
-puwr --> pargs(args, kwargs)
+So far we have gotten away with empty compile time arguments, now we need to supply actual types. The easiest way to do that is from concrete arguments.
 
-past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
-pargs --> pasta
+```python
+jit_args = gtx.otf.arguments.JITArgs.from_signature(
+    gtx.ones(domain={I: 10}, dtype=gtx.float64),
+    out=gtx.zeros(domain={I: 10}, dtype=gtx.float64),
+    offset_provider=OFFSET_PROVIDER
+)
 
-style fclos fill:red
-style pclos fill:red
-linkStyle 3 stroke:red,stroke-width:4px,color:pink
+aot_args = gtx.otf.arguments.CompileTimeArgs.from_concrete_no_size(
+    *jit_args.args, **jit_args.kwargs
+)
 ```
 
 ```python
-pclos = backend.DEFAULT_FIELDOP_TRANSFORMS.foast_to_past_closure(fclos)
+pclos = backend.DEFAULT_TRANSFORMS.field_view_op_to_prog(gtx.otf.toolchain.CompilableProgram(data=foast.data, args=aot_args))
 ```
 
 ```python
-gtx.ffront.stages.PastClosure?
+pclos.data.__class__?
 ```
 
-    [0;31mInit signature:[0m
-    [0mgtx[0m[0;34m.[0m[0mffront[0m[0;34m.[0m[0mstages[0m[0;34m.[0m[0mPastClosure[0m[0;34m([0m[0;34m[0m
-    [0;34m[0m    [0mclosure_vars[0m[0;34m:[0m [0;34m'dict[str, Any]'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0mpast_node[0m[0;34m:[0m [0;34m'past.Program'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0mgrid_type[0m[0;34m:[0m [0;34m'Optional[common.GridType]'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0margs[0m[0;34m:[0m [0;34m'tuple[Any, ...]'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0mkwargs[0m[0;34m:[0m [0;34m'dict[str, Any]'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m[0;34m)[0m [0;34m->[0m [0;32mNone[0m[0;34m[0m[0;34m[0m[0m
-    [0;31mDocstring:[0m      PastClosure(closure_vars: 'dict[str, Any]', past_node: 'past.Program', grid_type: 'Optional[common.GridType]', args: 'tuple[Any, ...]', kwargs: 'dict[str, Any]')
-    [0;31mFile:[0m           ~/Code/gt4py/src/gt4py/next/ffront/stages.py
-    [0;31mType:[0m           type
-    [0;31mSubclasses:[0m
+## Lint ProgramAST
 
-## Transform PAST closure arguments
-
-Don't ask me, seems to be necessary though
+This checks the generated (or manually passed) PAST node.
 
 ```mermaid
 graph LR
 
-fdef(FieldOperatorDefinition) -->|func_to_foast| foast(FoastOperatorDefinition)
+fdef("CompilableProgram[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("CompilableProgram[FoastOperatorDefinition, AOT]")
 foast -->|foast_to_itir| itir_expr(itir.Expr)
-foasta -->|foast_to_foast_closure| fclos(FoastClosure)
-fclos -->|foast_to_past_closure| pclos(PastClosure)
-pclos -->|past_process_args| pclos
-pclos -->|past_to_itir| pcall(ProgramCall)
-
-pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
+foast -->|field_view_op_to_prog| past("CompilableProgram[PastProgramDefinition, AOT]")
 past -->|past_lint| past
-pasta -->|past_to_past_closure| pclos(ProgramClosure)
+past -->|field_view_prog_args_transform| tapast("CompilableProgram[PastProgramDefinition, AOT]")
+tapast -->|past_to_itir| pcall(AOTProgram)
 
-fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
-fuwr --> fargs(args, kwargs)
+pdef("CompilableProgram[ProgramDefinition, AOT]") -->|func_to_past| past("CompilableProgram[PastProgramDefinition, AOT]")
 
-foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
-fargs --> foasta
+style past fill:red
+%%style tapast fill:red
+linkStyle 3 stroke:red,stroke-width:4px,color:pink
+```
 
-pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
-puwr --> pargs(args, kwargs)
+```python
+linted = backend.DEFAULT_TRANSFORMS.past_lint(pclos)
+```
 
-past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
-pargs --> pasta
+## Transform PAST closure arguments
 
-style pclos fill:red
-%%style pclos fill:red
+This turns data arguments (or rather, their compile-time standins) passed as keyword args (allowed in DSL programs) into positional args (the only way supported by all compiled programs). Included in this is the 'out' argument which is automatically added when generating a fieldview program from a fieldview operator.
+
+```mermaid
+graph LR
+
+fdef("CompilableProgram[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("CompilableProgram[FoastOperatorDefinition, AOT]")
+foast -->|foast_to_itir| itir_expr(itir.Expr)
+foast -->|field_view_op_to_prog| past("CompilableProgram[PastProgramDefinition, AOT]")
+past -->|past_lint| past
+past -->|field_view_prog_args_transform| tapast("CompilableProgram[PastProgramDefinition, AOT]")
+tapast -->|past_to_itir| pcall(AOTProgram)
+
+pdef("CompilableProgram[ProgramDefinition, AOT]") -->|func_to_past| past("CompilableProgram[PastProgramDefinition, AOT]")
+
+style past fill:red
+style tapast fill:red
 linkStyle 4 stroke:red,stroke-width:4px,color:pink
 ```
 
 ```python
-pclost = backend.DEFAULT_PROG_TRANSFORMS.past_transform_args(pclos)
+pclost = backend.DEFAULT_TRANSFORMS.field_view_prog_args_transform(pclos)
 ```
 
 ```python
-pclost.kwargs
+pprint.pprint(pclos.args)
 ```
 
-    {}
+```python
+pprint.pprint(pclost.args)
+```
 
 ## Lower PAST -> ITIR
 
@@ -359,67 +218,41 @@ still forwarding the call arguments
 ```mermaid
 graph LR
 
-fdef(FieldOperatorDefinition) -->|func_to_foast| foast(FoastOperatorDefinition)
+fdef("CompilableProgram[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("CompilableProgram[FoastOperatorDefinition, AOT]")
 foast -->|foast_to_itir| itir_expr(itir.Expr)
-foasta -->|foast_to_foast_closure| fclos(FoastClosure)
-fclos -->|foast_to_past_closure| pclos(PastClosure)
-pclos -->|past_process_args| pclos
-pclos -->|past_to_itir| pcall(ProgramCall)
-
-pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
+foast -->|field_view_op_to_prog| past("CompilableProgram[PastProgramDefinition, AOT]")
 past -->|past_lint| past
-pasta -->|past_to_past_closure| pclos(ProgramClosure)
+past -->|field_view_prog_args_transform| tapast("CompilableProgram[PastProgramDefinition, AOT]")
+tapast -->|past_to_itir| pcall(AOTProgram)
 
-fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
-fuwr --> fargs(args, kwargs)
+pdef("CompilableProgram[ProgramDefinition, AOT]") -->|func_to_past| past("CompilableProgram[PastProgramDefinition, AOT]")
 
-foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
-fargs --> foasta
-
-pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
-puwr --> pargs(args, kwargs)
-
-past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
-pargs --> pasta
-
-style pclos fill:red
+style tapast fill:red
 style pcall fill:red
 linkStyle 5 stroke:red,stroke-width:4px,color:pink
 ```
 
 ```python
-pitir = backend.DEFAULT_PROG_TRANSFORMS.past_to_itir(pclost)
+pitir = backend.DEFAULT_TRANSFORMS.past_to_itir(pclost)
 ```
 
 ```python
-gtx.otf.stages.ProgramCall?
+pitir.__class__?
 ```
-
-    [0;31mInit signature:[0m
-    [0mgtx[0m[0;34m.[0m[0motf[0m[0;34m.[0m[0mstages[0m[0;34m.[0m[0mProgramCall[0m[0;34m([0m[0;34m[0m
-    [0;34m[0m    [0mprogram[0m[0;34m:[0m [0;34m'itir.FencilDefinition'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0margs[0m[0;34m:[0m [0;34m'tuple[Any, ...]'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0mkwargs[0m[0;34m:[0m [0;34m'dict[str, Any]'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m[0;34m)[0m [0;34m->[0m [0;32mNone[0m[0;34m[0m[0;34m[0m[0m
-    [0;31mDocstring:[0m      Iterator IR representaion of a program together with arguments to be passed to it.
-    [0;31mFile:[0m           ~/Code/gt4py/src/gt4py/next/otf/stages.py
-    [0;31mType:[0m           type
-    [0;31mSubclasses:[0m
 
 ## Executing The Result
 
 ```python
-gtx.program_processors.runners.roundtrip.executor(pitir.program, *pitir.args, offset_provider=OFFSET_PROVIDER, **pitir.kwargs)
+pprint.pprint(jit_args)
 ```
 
 ```python
-pitir.args
+gtx.program_processors.runners.roundtrip.executor.otf_workflow(pitir)(*jit_args.args, **jit_args.kwargs)
 ```
 
-    (NumPyArrayField(_domain=Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>),), ranges=(UnitRange(0, 10),)), _ndarray=array([1., 1., 1., 1., 1., 1., 1., 1., 1., 1.])),
-     NumPyArrayField(_domain=Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>),), ranges=(UnitRange(0, 10),)), _ndarray=array([2., 2., 2., 2., 2., 2., 2., 2., 2., 2.])),
-     10,
-     10)
+```python
+pprint.pprint(jit_args)
+```
 
 ## Full Field Operator Toolchain
 
@@ -428,47 +261,28 @@ using the default step order
 ```mermaid
 graph LR
 
-fdef(FieldOperatorDefinition) -->|func_to_foast| foast(FoastOperatorDefinition)
+fdef("CompilableProgram[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("CompilableProgram[FoastOperatorDefinition, AOT]")
 foast -->|foast_to_itir| itir_expr(itir.Expr)
-foasta -->|foast_to_foast_closure| fclos(FoastClosure)
-fclos -->|foast_to_past_closure| pclos(PastClosure)
-pclos -->|past_process_args| pclos
-pclos -->|past_to_itir| pcall(ProgramCall)
-
-pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
+foast -->|field_view_op_to_prog| past("CompilableProgram[PastProgramDefinition, AOT]")
 past -->|past_lint| past
-pasta -->|past_to_past_closure| pclos(ProgramClosure)
+past -->|field_view_prog_args_transform| tapast("CompilableProgram[PastProgramDefinition, AOT]")
+tapast -->|past_to_itir| pcall(AOTProgram)
 
-fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
-fuwr --> fargs(args, kwargs)
+pdef("CompilableProgram[ProgramDefinition, AOT]") -->|func_to_past| past("CompilableProgram[PastProgramDefinition, AOT]")
 
-foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
-fargs --> foasta
-
-pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
-puwr --> pargs(args, kwargs)
-
-past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
-pargs --> pasta
-
-style fdefa fill:red
-style fuwr fill:red
 style fdef fill:red
-style fargs fill:red
 style foast fill:red
-style fiwr fill:red
-style foasta fill:red
-style fclos fill:red
-style pclos fill:red
+style past fill:red
+style tapast fill:red
 style pcall fill:red
-linkStyle 0,2,3,4,5,9,10,11,12,13,14 stroke:red,stroke-width:4px,color:pink
+linkStyle 0,2,3,4,5 stroke:red,stroke-width:4px,color:pink
 ```
 
 ### Starting from DSL
 
 ```python
-pitir2 = backend.DEFAULT_FIELDOP_TRANSFORMS(
-    gtx.otf.workflow.InputWithArgs(data=start, args=fclos.args, kwargs=fclos.kwargs | {"from_fieldop": example_fo})
+pitir2 = backend.DEFAULT_TRANSFORMS(
+    gtx.otf.toolchain.CompilableProgram(data=start, args=aot_args)
 )
 assert pitir2 == pitir
 ```
@@ -476,46 +290,32 @@ assert pitir2 == pitir
 #### Pass The result to the compile workflow and execute
 
 ```python
-example_compiled = gtx.program_processors.runners.roundtrip.executor.otf_workflow(
-    dataclasses.replace(pitir2, kwargs=pitir2.kwargs | {"offset_provider": OFFSET_PROVIDER})
-)
+example_compiled = gtx.program_processors.runners.roundtrip.executor.otf_workflow(pitir2)
 ```
 
 ```python
-example_compiled(*pitir2.args, offset_provider=OFFSET_PROVIDER)
+example_compiled(*jit_args.args, **jit_args.kwargs)
 ```
 
 We can re-run with the output from the previous run as in- and output.
 
 ```python
-example_compiled(pitir2.args[1], *pitir2.args[1:], offset_provider=OFFSET_PROVIDER)
+example_compiled(jit_args.kwargs["out"], *jit_args.args[1:], **jit_args.kwargs)
 ```
 
 ```python
-pitir2.args[2]
+pprint.pprint(jit_args)
 ```
-
-    10
-
-```python
-pitir.args
-```
-
-    (NumPyArrayField(_domain=Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>),), ranges=(UnitRange(0, 10),)), _ndarray=array([1., 1., 1., 1., 1., 1., 1., 1., 1., 1.])),
-     NumPyArrayField(_domain=Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>),), ranges=(UnitRange(0, 10),)), _ndarray=array([3., 3., 3., 3., 3., 3., 3., 3., 3., 3.])),
-     10,
-     10)
 
 ### Starting from FOAST
 
 Note that it is the exact same call but with a different input stage
 
 ```python
-pitir3 = backend.DEFAULT_FIELDOP_TRANSFORMS(
-    gtx.otf.workflow.InputWithArgs(
-        data=foast,
-        args=fclos.args,
-        kwargs=fclos.kwargs | {"from_fieldop": example_fo}
+pitir3 = backend.DEFAULT_TRANSFORMS(
+    gtx.otf.toolchain.CompilableProgram(
+        data=foast.data,
+        args=aot_args
     )
 )
 assert pitir3 == pitir
@@ -536,46 +336,22 @@ p_start = example_prog.definition_stage
 ```
 
 ```python
-gtx.ffront.stages.ProgramDefinition?
+p_start.__class__?
 ```
-
-    [0;31mInit signature:[0m
-    [0mgtx[0m[0;34m.[0m[0mffront[0m[0;34m.[0m[0mstages[0m[0;34m.[0m[0mProgramDefinition[0m[0;34m([0m[0;34m[0m
-    [0;34m[0m    [0mdefinition[0m[0;34m:[0m [0;34m'types.FunctionType'[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m    [0mgrid_type[0m[0;34m:[0m [0;34m'Optional[common.GridType]'[0m [0;34m=[0m [0;32mNone[0m[0;34m,[0m[0;34m[0m
-    [0;34m[0m[0;34m)[0m [0;34m->[0m [0;32mNone[0m[0;34m[0m[0;34m[0m[0m
-    [0;31mDocstring:[0m      ProgramDefinition(definition: 'types.FunctionType', grid_type: 'Optional[common.GridType]' = None)
-    [0;31mFile:[0m           ~/Code/gt4py/src/gt4py/next/ffront/stages.py
-    [0;31mType:[0m           type
-    [0;31mSubclasses:[0m
 
 ## DSL -> PAST
 
 ```mermaid
 graph LR
 
-fdef(FieldOperatorDefinition) -->|func_to_foast| foast(FoastOperatorDefinition)
+fdef("CompilableProgram[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("CompilableProgram[FoastOperatorDefinition, AOT]")
 foast -->|foast_to_itir| itir_expr(itir.Expr)
-foasta -->|foast_to_foast_closure| fclos(FoastClosure)
-fclos -->|foast_to_past_closure| pclos(PastClosure)
-pclos -->|past_process_args| pclos
-pclos -->|past_to_itir| pcall(ProgramCall)
-
-pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
+foast -->|field_view_op_to_prog| past("CompilableProgram[PastProgramDefinition, AOT]")
 past -->|past_lint| past
-pasta -->|past_to_past_closure| pclos(ProgramClosure)
+past -->|field_view_prog_args_transform| tapast("CompilableProgram[PastProgramDefinition, AOT]")
+tapast -->|past_to_itir| pcall(AOTProgram)
 
-fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
-fuwr --> fargs(args, kwargs)
-
-foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
-fargs --> foasta
-
-pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
-puwr --> pargs(args, kwargs)
-
-past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
-pargs --> pasta
+pdef("CompilableProgram[ProgramDefinition, AOT]") -->|func_to_past| past("CompilableProgram[PastProgramDefinition, AOT]")
 
 style pdef fill:red
 style past fill:red
@@ -583,50 +359,8 @@ linkStyle 6 stroke:red,stroke-width:4px,color:pink
 ```
 
 ```python
-p_past = backend.DEFAULT_PROG_TRANSFORMS.func_to_past(p_start)
-```
-
-## PAST -> Closure
-
-```mermaid
-graph LR
-
-fdef(FieldOperatorDefinition) -->|func_to_foast| foast(FoastOperatorDefinition)
-foast -->|foast_to_itir| itir_expr(itir.Expr)
-foasta -->|foast_to_foast_closure| fclos(FoastClosure)
-fclos -->|foast_to_past_closure| pclos(PastClosure)
-pclos -->|past_process_args| pclos
-pclos -->|past_to_itir| pcall(ProgramCall)
-
-pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
-past -->|past_lint| past
-pasta -->|past_to_past_closure| pclos(ProgramClosure)
-
-fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
-fuwr --> fargs(args, kwargs)
-
-foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
-fargs --> foasta
-
-pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
-puwr --> pargs(args, kwargs)
-
-past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
-pargs --> pasta
-
-style pasta fill:red
-style pclos fill:red
-linkStyle 8 stroke:red,stroke-width:4px,color:pink
-```
-
-```python
-pclos = backend.DEFAULT_PROG_TRANSFORMS(
-    gtx.otf.workflow.InputWithArgs(
-        data=p_past,
-        args=fclos.args,
-        kwargs=fclos.kwargs
-    )
-)
+p_past = backend.DEFAULT_TRANSFORMS.func_to_past(
+    gtx.otf.toolchain.CompilableProgram(data=p_start, args=gtx.otf.arguments.CompileTimeArgs.empty()))
 ```
 
 ## Full Program Toolchain
@@ -634,59 +368,38 @@ pclos = backend.DEFAULT_PROG_TRANSFORMS(
 ```mermaid
 graph LR
 
-fdef(FieldOperatorDefinition) -->|func_to_foast| foast(FoastOperatorDefinition)
+fdef("CompilableProgram[FieldOperatorDefinition, AOT]") -->|func_to_foast| foast("CompilableProgram[FoastOperatorDefinition, AOT]")
 foast -->|foast_to_itir| itir_expr(itir.Expr)
-foasta -->|foast_to_foast_closure| fclos(FoastClosure)
-fclos -->|foast_to_past_closure| pclos(PastClosure)
-pclos -->|past_process_args| pclos
-pclos -->|past_to_itir| pcall(ProgramCall)
-
-pdef(ProgramDefinition) -->|func_to_past| past(PastProgramDefinition)
+foast -->|field_view_op_to_prog| past("CompilableProgram[PastProgramDefinition, AOT]")
 past -->|past_lint| past
-pasta -->|past_to_past_closure| pclos(ProgramClosure)
+past -->|field_view_prog_args_transform| tapast("CompilableProgram[PastProgramDefinition, AOT]")
+tapast -->|past_to_itir| pcall(AOTProgram)
 
-fdefa(InputWithArgs) --> fuwr{{"internal unwrapping"}} --> fdef
-fuwr --> fargs(args, kwargs)
+pdef("CompilableProgram[ProgramDefinition, AOT]") -->|func_to_past| past("CompilableProgram[PastProgramDefinition, AOT]")
 
-foast --> fiwr{{"internal wrapping"}} --> foasta(InputWithArgs)
-fargs --> foasta
-
-pdefa(InputWithArgs) --> puwr{{"internal unwrapping"}} --> pdef
-puwr --> pargs(args, kwargs)
-
-past --> piwr{{"internal wrapping"}} --> pasta(InputWithArgs)
-pargs --> pasta
-
-style pdefa fill:red
-style puwr fill:red
 style pdef fill:red
-style pargs fill:red
 style past fill:red
-style piwr fill:red
-style pasta fill:red
-style pclos fill:red
+style tapast fill:red
 style pcall fill:red
-linkStyle 4,5,6,7,8,15,16,17,18,19,20 stroke:red,stroke-width:4px,color:pink
+linkStyle 3,4,5,6 stroke:red,stroke-width:4px,color:pink
 ```
 
 ### Starting from DSL
 
 ```python
-p_itir1 = backend.DEFAULT_PROG_TRANSFORMS(
-    gtx.otf.workflow.InputWithArgs(
+p_itir1 = backend.DEFAULT_TRANSFORMS(
+    gtx.otf.toolchain.CompilableProgram(
         data=p_start,
-        args=fclos.args,
-        kwargs=fclos.kwargs
+        args=jit_args
     )
 )
 ```
 
 ```python
-p_itir2 = backend.DEFAULT_PROG_TRANSFORMS(
-    gtx.otf.workflow.InputWithArgs(
-        data=p_past,
-        args=fclos.args,
-        kwargs=fclos.kwargs
+p_itir2 = backend.DEFAULT_TRANSFORMS(
+    gtx.otf.toolchain.CompilableProgram(
+        data=p_past.data,
+        args=aot_args
     )
 )
 ```

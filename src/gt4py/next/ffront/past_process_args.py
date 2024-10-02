@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Iterator, Optional
+from typing import Any, Iterator, TypeAlias
 
 from gt4py.next import common, errors
 from gt4py.next.ffront import (
@@ -14,25 +14,35 @@ from gt4py.next.ffront import (
     stages as ffront_stages,
     type_specifications as ts_ffront,
 )
-from gt4py.next.otf import workflow
+from gt4py.next.otf import arguments, toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
-@workflow.make_step
-def past_process_args(inp: ffront_stages.PastClosure) -> ffront_stages.PastClosure:
-    extra_kwarg_names = ["offset_provider", "column_axis"]
-    extra_kwargs = {k: v for k, v in inp.kwargs.items() if k in extra_kwarg_names}
-    kwargs = {k: v for k, v in inp.kwargs.items() if k not in extra_kwarg_names}
+AOT_PRG: TypeAlias = toolchain.CompilableProgram[
+    ffront_stages.PastProgramDefinition, arguments.CompileTimeArgs
+]
+
+
+def transform_program_args(inp: AOT_PRG) -> AOT_PRG:
     rewritten_args, size_args, kwargs = _process_args(
-        past_node=inp.past_node, args=list(inp.args), kwargs=kwargs
+        past_node=inp.data.past_node, args=list(inp.args.args), kwargs=inp.args.kwargs
     )
-    return ffront_stages.PastClosure(
-        past_node=inp.past_node,
-        closure_vars=inp.closure_vars,
-        grid_type=inp.grid_type,
-        args=tuple([*rewritten_args, *size_args]),
-        kwargs=kwargs | extra_kwargs,
+    return toolchain.CompilableProgram(
+        data=inp.data,
+        args=arguments.CompileTimeArgs(
+            args=tuple((*rewritten_args, *(size_args))),
+            kwargs=kwargs,
+            offset_provider=inp.args.offset_provider,
+            column_axis=inp.args.column_axis,
+        ),
     )
+
+
+def transform_program_args_factory(cached: bool = True) -> workflow.Workflow[AOT_PRG, AOT_PRG]:
+    wf = transform_program_args
+    if cached:
+        wf = workflow.CachedStep(wf, hash_function=ffront_stages.fingerprint_stage)
+    return wf
 
 
 def _validate_args(past_node: past.Program, args: list, kwargs: dict[str, Any]) -> None:
@@ -67,7 +77,7 @@ def _process_args(
     )
 
     # extract size of all field arguments
-    size_args: list[Optional[int]] = []
+    size_args: list[int | type_translation.SizeArg] = []
     rewritten_args = list(args)
     for param_idx, param in enumerate(past_node.params):
         if implicit_domain and isinstance(param.type, (ts.FieldType, ts.TupleType)):
@@ -84,7 +94,7 @@ def _process_args(
                         "Constituents of composite arguments (e.g. the elements of a"
                         " tuple) need to have the same shape and dimensions."
                     )
-                size_args.extend(shape if shape else [None] * len(dims))
+                size_args.extend(shape if shape else [type_translation.SizeArg()] * len(dims))  # type: ignore[arg-type] ##(ricoh) mypy is unable to correctly defer the type of the ternary expression
     return tuple(rewritten_args), tuple(size_args), kwargs
 
 
@@ -98,7 +108,9 @@ def _field_constituents_shape_and_dims(
                 yield from _field_constituents_shape_and_dims(el, el_type)
         case ts.FieldType():
             dims = type_info.extract_dims(arg_type)
-            if dims:
+            if isinstance(arg, arguments.CompileTimeArg):
+                yield (tuple(), dims)
+            elif dims:
                 assert hasattr(arg, "shape") and len(arg.shape) == len(dims)
                 yield (arg.shape, dims)
             else:

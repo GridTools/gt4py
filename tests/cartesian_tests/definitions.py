@@ -15,6 +15,7 @@ except (ImportError, RuntimeError):
 
 import datetime
 
+import numpy as np
 import pytest
 
 from gt4py import cartesian as gt4pyc
@@ -54,3 +55,14 @@ PERFORMANCE_BACKENDS = [_backend_name_as_param(name) for name in _PERFORMANCE_BA
 @pytest.fixture()
 def id_version():
     return gt_utils.shashed_id(str(datetime.datetime.now()))
+
+
+def get_array_library(backend: str):
+    """Return device ready array maker library"""
+    backend_cls = gt4pyc.backend.from_name(backend)
+    assert backend_cls is not None
+    if backend_cls.storage_info["device"] == "gpu":
+        assert cp is not None
+        return cp
+    else:
+        return np

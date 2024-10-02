@@ -13,7 +13,7 @@ from gt4py.cartesian.frontend.nodes import BinaryOperator, BinOpExpr
 
 
 def test_AugAssign():
-    ir_maker = IRMaker(None, None, None, domain=None)
+    ir_maker = IRMaker(None, None, None, None, domain=None)
     aug_assign = ast.parse("a += 1", feature_version=PYTHON_AST_VERSION).body[0]
 
     _, result = ir_maker.visit_AugAssign(aug_assign)

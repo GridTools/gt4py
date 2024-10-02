@@ -32,7 +32,7 @@ class NoBackend(next_backend.Backend):
         raise ValueError("No backend selected! Backend selection is mandatory in tests.")
 
 
-no_backend = NoBackend(executor=no_exec, transforms_prog=None, allocator=None)
+no_backend = NoBackend(executor=no_exec, transforms=None, allocator=None)
 
 
 @pytest.fixture(

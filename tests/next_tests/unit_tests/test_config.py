@@ -21,6 +21,8 @@ def env_var():
     yield env_var_name
     if saved is not None:
         os.environ[env_var_name] = saved
+    else:
+        _ = os.environ.pop(env_var_name, None)
 
 
 @pytest.mark.parametrize("value", ["False", "false", "0", "off"])
@@ -42,5 +44,5 @@ def test_env_flag_to_bool_invalid(env_var):
 
 
 def test_env_flag_to_bool_unset(env_var):
-    del os.environ[env_var]
+    _ = os.environ.pop(env_var, None)
     assert config.env_flag_to_bool(env_var, default=False) is False

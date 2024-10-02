@@ -64,7 +64,7 @@ class Compiler(
     def __call__(
         self,
         inp: stages.CompilableSource[SourceLanguageType, LanguageSettingsType, languages.Python],
-    ) -> stages.CompiledProgram:
+    ) -> stages.ExtendedCompiledProgram:
         src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
 
         data = build_data.read_data(src_dir)
@@ -79,9 +79,16 @@ class Compiler(
                 f"On-the-fly compilation unsuccessful for '{inp.program_source.entry_point.name}'."
             )
 
-        return getattr(
+        compiled_prog = getattr(
             importer.import_from_path(src_dir / new_data.module), new_data.entry_point_name
         )
+
+        @dataclasses.dataclass(frozen=True)
+        class Wrapper(stages.ExtendedCompiledProgram):
+            implicit_domain: bool = inp.program_source.implicit_domain
+            __call__: stages.CompiledProgram = compiled_prog
+
+        return Wrapper()
 
 
 class CompilerFactory(factory.Factory):

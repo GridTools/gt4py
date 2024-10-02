@@ -6,10 +6,11 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import factory
+from typing import Any
 
 from gt4py.next.ffront import gtcallable, stages as ffront_stages, transform_utils
-from gt4py.next.otf import workflow
+from gt4py.next.ffront.stages import AOT_PRG, PRG
+from gt4py.next.otf import toolchain, workflow
 
 
 @workflow.make_step
@@ -45,9 +46,12 @@ def lint_undefined_symbols(
     return inp
 
 
-class LinterFactory(factory.Factory):
-    class Meta:
-        model = workflow.CachedStep
+def linter_factory(cached: bool = True, adapter: bool = True) -> workflow.Workflow[PRG, PRG]:
+    wf = lint_misnamed_functions.chain(lint_undefined_symbols)
+    if cached:
+        wf = workflow.CachedStep(step=wf, hash_function=ffront_stages.fingerprint_stage)
+    return wf
 
-    step = lint_misnamed_functions.chain(lint_undefined_symbols)
-    hash_function = ffront_stages.fingerprint_stage
+
+def adapted_linter_factory(**kwargs: Any) -> workflow.Workflow[AOT_PRG, AOT_PRG]:
+    return toolchain.DataOnlyAdapter(linter_factory(**kwargs))

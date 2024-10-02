@@ -81,7 +81,12 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
             # if this node is not a target, it will still use the symbol of the write memlet if the
             # field was previously written in the same memlet.
             memlets = kwargs["read_memlets"] + kwargs["write_memlets"]
-        memlet = next(mem for mem in memlets if mem.connector == node.name)
+        try:
+            memlet = next(mem for mem in memlets if mem.connector == node.name)
+        except StopIteration:
+            raise ValueError(
+                "Memlet connector and tasklet variable mismatch, DaCe IR error."
+            ) from None
 
         index_strs = []
         if node.offset is not None:

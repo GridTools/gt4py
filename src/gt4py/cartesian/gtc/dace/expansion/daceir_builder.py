@@ -321,17 +321,29 @@ class DaCeIRBuilder(eve.NodeTranslator):
         is_target: bool,
         targets: Set[eve.SymbolRef],
         var_offset_fields: Set[eve.SymbolRef],
+        K_write_with_offset: Set[eve.SymbolRef],
         **kwargs: Any,
     ) -> Union[dcir.IndexAccess, dcir.ScalarAccess]:
+        """Generate the relevant accessor to match the memlet that was previously setup.
+
+        When a Field is written in K, we force the usage of the OUT memlet throughout the stencil
+        to make sure all side effects are being properly resolved. Frontend checks ensure that no
+        parallel code issues sips here.
+        """
+
         res: Union[dcir.IndexAccess, dcir.ScalarAccess]
-        if node.name in var_offset_fields:
+        if node.name in var_offset_fields.union(K_write_with_offset):
+            # If write in K, we consider the variable to always be a target
+            is_target = is_target or node.name in targets or node.name in K_write_with_offset
+            name = get_tasklet_symbol(node.name, node.offset, is_target=is_target)
             res = dcir.IndexAccess(
-                name=node.name + "__",
+                name=name,
                 offset=self.visit(
                     node.offset,
-                    is_target=False,
+                    is_target=is_target,
                     targets=targets,
                     var_offset_fields=var_offset_fields,
+                    K_write_with_offset=K_write_with_offset,
                     **kwargs,
                 ),
                 data_index=node.data_index,
@@ -799,11 +811,23 @@ class DaCeIRBuilder(eve.NodeTranslator):
             )
         )
 
+        # Variable offsets
         var_offset_fields = {
             acc.name
             for acc in node.walk_values().if_isinstance(oir.FieldAccess)
             if isinstance(acc.offset, oir.VariableKOffset)
         }
+
+        # We book keep - all write offset to K
+        K_write_with_offset = set()
+        for assign_node in node.walk_values().if_isinstance(oir.AssignStmt):
+            if isinstance(assign_node.left, oir.FieldAccess):
+                if (
+                    isinstance(assign_node.left.offset, common.CartesianOffset)
+                    and assign_node.left.offset.k != 0
+                ):
+                    K_write_with_offset.add(assign_node.left.name)
+
         sections_idx = next(
             idx
             for idx, item in enumerate(global_ctx.library_node.expansion_specification)
@@ -821,6 +845,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
                 iteration_ctx=iteration_ctx,
                 symbol_collector=symbol_collector,
                 var_offset_fields=var_offset_fields,
+                K_write_with_offset=K_write_with_offset,
                 **kwargs,
             )
         )

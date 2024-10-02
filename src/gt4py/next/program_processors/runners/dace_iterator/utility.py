@@ -14,28 +14,13 @@ import dace
 import gt4py.next.iterator.ir as itir
 from gt4py import eve
 from gt4py.next.common import Connectivity
-from gt4py.next.program_processors.runners.dace_common import utility as dace_common_util
-from gt4py.next.type_system import type_specifications as ts
-
-
-def as_dace_type(type_: ts.ScalarType) -> dace.dtypes.typeclass:
-    if type_.kind == ts.ScalarKind.BOOL:
-        return dace.bool_
-    elif type_.kind == ts.ScalarKind.INT32:
-        return dace.int32
-    elif type_.kind == ts.ScalarKind.INT64:
-        return dace.int64
-    elif type_.kind == ts.ScalarKind.FLOAT32:
-        return dace.float32
-    elif type_.kind == ts.ScalarKind.FLOAT64:
-        return dace.float64
-    raise ValueError(f"Scalar type '{type_}' not supported.")
+from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
 
 
 def get_used_connectivities(
     node: itir.Node, offset_provider: Mapping[str, Any]
 ) -> dict[str, Connectivity]:
-    connectivities = dace_common_util.filter_connectivities(offset_provider)
+    connectivities = dace_utils.filter_connectivities(offset_provider)
     offset_dims = set(eve.walk_values(node).if_isinstance(itir.OffsetLiteral).getattr("value"))
     return {offset: connectivities[offset] for offset in offset_dims if offset in connectivities}
 

@@ -132,16 +132,12 @@ def constant_fold_accessed_domains(
 
 def translate_domain(
     domain: itir.FunCall,
-    shifts: dict[Union[common.Dimension, str], tuple[itir.Expr, itir.Expr]],
+    shifts: dict[str, tuple[itir.Expr, itir.Expr]],
     offset_provider: common.OffsetProvider,
 ) -> SymbolicDomain:
     shift_tuples = [
         (
-            im.ensure_offset(
-                itir.AxisLiteral(value=d.value, kind=d.kind)
-                if isinstance(d, common.Dimension)
-                else itir.AxisLiteral(value=d)
-            ),
+            im.ensure_offset(d),
             im.ensure_offset(r),
         )
         for d, r in shifts.items()
@@ -149,9 +145,7 @@ def translate_domain(
 
     shift_list = [item for sublist in shift_tuples for item in sublist]
 
-    translated_domain_expr = SymbolicDomain.translate(
-        SymbolicDomain.from_expr(domain), shift_list, offset_provider
-    )
+    translated_domain_expr = SymbolicDomain.from_expr(domain).translate(shift_list, offset_provider)
 
     return constant_fold_domain_exprs(translated_domain_expr.as_expr())
 
@@ -504,7 +498,7 @@ def test_cond(offset_provider):
 
     cond = im.deref("cond_")
 
-    testee = im.cond(cond, field_1, field_2)
+    testee = im.if_(cond, field_1, field_2)
 
     domain = im.domain(common.GridType.CARTESIAN, {"IDim": (0, 11)})
     domain_tmp = translate_domain(domain, {"Ioff": -1}, offset_provider)
@@ -515,7 +509,7 @@ def test_cond(offset_provider):
     expected_field_1 = im.as_fieldop(stencil1, domain)(im.ref("in_field1"))
     expected_field_2 = im.as_fieldop(stencil2, domain)(im.ref("in_field2"), expected_tmp2)
 
-    expected = im.cond(cond, expected_field_1, expected_field_2)
+    expected = im.if_(cond, expected_field_1, expected_field_2)
 
     actual_call, actual_domains = infer_domain.infer_expr(
         testee, SymbolicDomain.from_expr(domain), offset_provider
