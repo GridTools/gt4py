@@ -299,6 +299,19 @@ class PrettyPrinter(NodeTranslator):
         )
         return self._optimum(h, v)
 
+    def visit_IfStmt(self, node: ir.IfStmt, *, prec: int) -> list[str]:
+        cond = self.visit(node.cond, prec=0)
+        true_branch = self._vmerge(*self.visit(node.true_branch, prec=0))
+        false_branch = self._vmerge(*self.visit(node.false_branch, prec=0))
+
+        hhead = self._hmerge(["if ("], cond, [") {"])
+        vhead = self._vmerge(["if ("], cond, [") {"])
+        head = self._optimum(hhead, vhead)
+
+        return self._vmerge(
+            head, self._indent(true_branch), ["} else {"], self._indent(false_branch), ["}"]
+        )
+
     def visit_FencilDefinition(self, node: ir.FencilDefinition, *, prec: int) -> list[str]:
         assert prec == 0
         function_definitions = self.visit(node.function_definitions, prec=0)

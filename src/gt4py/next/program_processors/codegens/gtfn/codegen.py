@@ -166,6 +166,16 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         "{backend}.vertical_executor({axis})().{'.'.join('arg(' + a + ')' for a in args)}.{'.'.join(scans)}.execute();"
     )
 
+    IfStmt = as_mako(
+        """
+          if (${cond}) {
+            ${'\\n'.join(true_branch)}
+          } else {
+            ${'\\n'.join(false_branch)}
+          }
+        """
+    )
+
     ScanPassDefinition = as_mako(
         """
         struct ${id} : ${'gtfn::fwd' if _this_node.forward else 'gtfn::bwd'} {

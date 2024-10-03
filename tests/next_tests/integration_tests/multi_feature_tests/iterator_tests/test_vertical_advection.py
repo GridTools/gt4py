@@ -107,12 +107,12 @@ def fen_solve_tridiag2(i_size, j_size, k_size, a, b, c, d, x):
 def test_tridiag(fencil, tridiag_reference, program_processor):
     program_processor, validate = program_processor
     if program_processor in [
-        gtfn.run_gtfn.executor,
-        gtfn.run_gtfn_imperative.executor,
+        gtfn.run_gtfn,
+        gtfn.run_gtfn_imperative,
         gtfn_formatters.format_cpp,
     ]:
         pytest.skip("gtfn does only support lifted scans when using temporaries")
-    if program_processor == gtfn.run_gtfn_with_temporaries.executor:
+    if program_processor == gtfn.run_gtfn_with_temporaries:
         pytest.xfail("tuple_get on columns not supported.")
     a, b, c, d, x = tridiag_reference
     shape = a.shape

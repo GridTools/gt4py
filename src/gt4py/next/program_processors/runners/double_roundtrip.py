@@ -13,7 +13,8 @@ from gt4py.next.program_processors.runners import roundtrip
 
 
 backend = next_backend.Backend(
+    name="double_roundtrip",
     transforms=next_backend.DEFAULT_TRANSFORMS,
-    executor=roundtrip.RoundtripExecutorFactory(dispatch_backend=roundtrip.default.executor),
+    executor=roundtrip.Roundtrip(dispatch_backend=roundtrip.default, use_embedded=False),
     allocator=roundtrip.default.allocator,
 )

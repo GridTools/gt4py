@@ -9,15 +9,20 @@
 from __future__ import annotations
 
 import dataclasses
+from typing import TypeAlias
 
 import pytest
 
 import gt4py.next as gtx
+from gt4py.next import backend
 from gt4py.next.iterator import runtime
-from gt4py.next.program_processors import processor_interface as ppi
+from gt4py.next.program_processors import program_formatter
 
 
 import next_tests
+
+
+ProgramProcessor: TypeAlias = backend.Backend | program_formatter.ProgramFormatter
 
 
 @pytest.fixture(
@@ -45,7 +50,7 @@ import next_tests
     ],
     ids=lambda p: p[0].short_id() if p[0] is not None else "None",
 )
-def program_processor(request) -> tuple[ppi.ProgramProcessor, bool]:
+def program_processor(request) -> tuple[ProgramProcessor, bool]:
     """
     Fixture creating program processors on-demand for tests.
 
@@ -57,9 +62,6 @@ def program_processor(request) -> tuple[ppi.ProgramProcessor, bool]:
         return None, is_backend
 
     processor = processor_id.load()
-    assert is_backend == ppi.is_program_backend(processor)
-    if is_backend:
-        processor = processor.executor
 
     for marker, skip_mark, msg in next_tests.definitions.BACKEND_SKIP_TEST_MATRIX.get(
         processor_id, []
@@ -72,14 +74,12 @@ def program_processor(request) -> tuple[ppi.ProgramProcessor, bool]:
 
 def run_processor(
     program: runtime.FendefDispatcher,
-    processor: ppi.ProgramExecutor | ppi.ProgramFormatter,
+    processor: ProgramProcessor,
     *args,
     **kwargs,
 ) -> None:
-    if processor is None or ppi.is_processor_kind(processor, ppi.ProgramExecutor):
+    if processor is None or isinstance(processor, ProgramProcessor):
         program(*args, backend=processor, **kwargs)
-    elif ppi.is_processor_kind(processor, ppi.ProgramFormatter):
-        print(program.format_itir(*args, formatter=processor, **kwargs))
     else:
         raise TypeError(f"program processor kind not recognized: '{processor}'.")
 

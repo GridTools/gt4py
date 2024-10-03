@@ -11,7 +11,7 @@ from typing import Any
 from gt4py.eve.codegen import FormatTemplate as as_fmt, TemplatedGenerator
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import apply_common_transforms
-from gt4py.next.program_processors.processor_interface import program_formatter
+from gt4py.next.program_processors import program_formatter
 
 
 class ToLispLike(TemplatedGenerator):
@@ -64,6 +64,6 @@ class ToLispLike(TemplatedGenerator):
             return generated_code
 
 
-@program_formatter
+@program_formatter.program_formatter
 def format_lisp(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> str:
     return ToLispLike.apply(program, **kwargs)

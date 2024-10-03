@@ -34,7 +34,7 @@ from next_tests.past_common_fixtures import (
 
 
 def test_identity_fo_execution(cartesian_case, identity_def):
-    identity = gtx.field_operator(identity_def, backend=cartesian_case.executor)
+    identity = gtx.field_operator(identity_def, backend=cartesian_case.backend)
 
     in_field = cases.allocate(cartesian_case, identity, "in_field").strategy(
         cases.ConstInitializer(1)
@@ -82,13 +82,13 @@ def test_shift_by_one_execution(cartesian_case):
 
 
 def test_copy_execution(cartesian_case, copy_program_def):
-    copy_program = gtx.program(copy_program_def, backend=cartesian_case.executor)
+    copy_program = gtx.program(copy_program_def, backend=cartesian_case.backend)
 
     cases.verify_with_default_data(cartesian_case, copy_program, ref=lambda in_field: in_field)
 
 
 def test_double_copy_execution(cartesian_case, double_copy_program_def):
-    double_copy_program = gtx.program(double_copy_program_def, backend=cartesian_case.executor)
+    double_copy_program = gtx.program(double_copy_program_def, backend=cartesian_case.backend)
 
     cases.verify_with_default_data(
         cartesian_case, double_copy_program, ref=lambda in_field, intermediate_field: in_field
@@ -96,7 +96,7 @@ def test_double_copy_execution(cartesian_case, double_copy_program_def):
 
 
 def test_copy_restricted_execution(cartesian_case, copy_restrict_program_def):
-    copy_restrict_program = gtx.program(copy_restrict_program_def, backend=cartesian_case.executor)
+    copy_restrict_program = gtx.program(copy_restrict_program_def, backend=cartesian_case.backend)
 
     cases.verify_with_default_data(
         cartesian_case,
@@ -216,7 +216,7 @@ def test_tuple_program_return_constructed_inside_nested(cartesian_case):
 
 
 def test_wrong_argument_type(cartesian_case, copy_program_def):
-    copy_program = gtx.program(copy_program_def, backend=cartesian_case.executor)
+    copy_program = gtx.program(copy_program_def, backend=cartesian_case.backend)
 
     inp = cartesian_case.as_field([JDim], np.ones((cartesian_case.default_sizes[JDim],)))
     out = cases.allocate(cartesian_case, copy_program, "out").strategy(cases.ConstInitializer(1))()

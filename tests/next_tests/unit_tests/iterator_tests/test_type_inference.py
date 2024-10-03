@@ -456,3 +456,25 @@ def test_program_tuple_setat_short_target():
         isinstance(result.body[0].target.type, ts.TupleType)
         and len(result.body[0].target.type.types) == 1
     )
+
+
+def test_if_stmt():
+    cartesian_domain = im.call("cartesian_domain")(
+        im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
+    )
+
+    testee = itir.IfStmt(
+        cond=im.literal_from_value(True),
+        true_branch=[
+            itir.SetAt(
+                expr=im.as_fieldop("deref", cartesian_domain)(im.ref("inp", float_i_field)),
+                domain=cartesian_domain,
+                target=im.ref("out", float_i_field),
+            )
+        ],
+        false_branch=[],
+    )
+
+    result = itir_type_inference.infer(testee, offset_provider={}, allow_undeclared_symbols=True)
+    assert result.cond.type == bool_type
+    assert result.true_branch[0].expr.type == float_i_field

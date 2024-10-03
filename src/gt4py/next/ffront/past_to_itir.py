@@ -33,7 +33,9 @@ from gt4py.next.type_system import type_info, type_specifications as ts
 
 
 # FIXME[#1582](havogt): remove `to_gtir` arg after refactoring to GTIR
-def past_to_itir(inp: AOT_PRG, to_gtir: bool = False) -> stages.AOTProgram:
+# FIXME[#1582](tehrengruber): This should only depend on the program not the arguments. Remove
+#  dependency as soon as column axis can be deduced from ITIR in consumers of the CompilableProgram.
+def past_to_itir(inp: AOT_PRG, to_gtir: bool = False) -> stages.CompilableProgram:
     """
     Lower a PAST program definition to Iterator IR.
 
@@ -50,13 +52,12 @@ def past_to_itir(inp: AOT_PRG, to_gtir: bool = False) -> stages.AOTProgram:
         ... def copy_program(a: gtx.Field[[IDim], gtx.float32], out: gtx.Field[[IDim], gtx.float32]):
         ...     copy(a, out=out)
 
-        >>> compile_time_args = arguments.CompileTimeArgs.from_concrete(
-        ...     *(
-        ...         arguments.CompileTimeArg(param.type)
-        ...         for param in copy_program.past_stage.past_node.params
-        ...     ),
-        ...     offset_provider={"I", IDim},
-        ... )  # this will include field dim size arguments automatically.
+        >>> compile_time_args = arguments.CompileTimeArgs(
+        ...     args=tuple(param.type for param in copy_program.past_stage.past_node.params),
+        ...     kwargs={},
+        ...     offset_provider={"I": IDim},
+        ...     column_axis=None,
+        ... )
 
         >>> itir_copy = past_to_itir(
         ...     toolchain.CompilableProgram(copy_program.past_stage, compile_time_args)
@@ -92,7 +93,7 @@ def past_to_itir(inp: AOT_PRG, to_gtir: bool = False) -> stages.AOTProgram:
     if config.DEBUG or inp.data.debug:
         devtools.debug(itir_program)
 
-    return stages.AOTProgram(
+    return stages.CompilableProgram(
         data=itir_program,
         args=dataclasses.replace(inp.args, column_axis=_column_axis(all_closure_vars)),
     )
@@ -101,7 +102,7 @@ def past_to_itir(inp: AOT_PRG, to_gtir: bool = False) -> stages.AOTProgram:
 # FIXME[#1582](havogt): remove `to_gtir` arg after refactoring to GTIR
 def past_to_itir_factory(
     cached: bool = True, to_gtir: bool = False
-) -> workflow.Workflow[AOT_PRG, stages.AOTProgram]:
+) -> workflow.Workflow[AOT_PRG, stages.CompilableProgram]:
     wf = workflow.make_step(functools.partial(past_to_itir, to_gtir=to_gtir))
     if cached:
         wf = workflow.CachedStep(wf, hash_function=ffront_stages.fingerprint_stage)

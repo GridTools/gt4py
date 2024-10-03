@@ -26,7 +26,7 @@ TgtL_co = TypeVar("TgtL_co", bound=languages.LanguageTag, covariant=True)
 SettingT_co = TypeVar("SettingT_co", bound=languages.LanguageSettings, covariant=True)
 
 
-AOTProgram: TypeAlias = toolchain.CompilableProgram[
+CompilableProgram: TypeAlias = toolchain.CompilableProgram[
     itir.FencilDefinition | itir.Program, arguments.CompileTimeArgs
 ]
 

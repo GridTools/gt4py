@@ -36,12 +36,11 @@ from gt4py.next.ffront.stages import (
 )
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import arguments, stages, toolchain, workflow
-from gt4py.next.program_processors import modular_executor
 
 
 ARGS: typing.TypeAlias = arguments.JITArgs
 CARG: typing.TypeAlias = arguments.CompileTimeArgs
-IT_PRG: typing.TypeAlias = itir.FencilDefinition
+IT_PRG: typing.TypeAlias = itir.FencilDefinition | itir.Program
 
 
 INPUT_DATA: typing.TypeAlias = DSL_FOP | FOP | DSL_PRG | PRG | IT_PRG
@@ -49,7 +48,7 @@ INPUT_PAIR: typing.TypeAlias = toolchain.CompilableProgram[INPUT_DATA, ARGS | CA
 
 
 @dataclasses.dataclass(frozen=True)
-class Transforms(workflow.MultiWorkflow[INPUT_PAIR, stages.AOTProgram]):
+class Transforms(workflow.MultiWorkflow[INPUT_PAIR, stages.CompilableProgram]):
     """
     Modular workflow for transformations with access to intermediates.
 
@@ -92,7 +91,7 @@ class Transforms(workflow.MultiWorkflow[INPUT_PAIR, stages.AOTProgram]):
         default_factory=past_process_args.transform_program_args_factory
     )
 
-    past_to_itir: workflow.Workflow[AOT_PRG, stages.AOTProgram] = dataclasses.field(
+    past_to_itir: workflow.Workflow[AOT_PRG, stages.CompilableProgram] = dataclasses.field(
         default_factory=past_to_itir.past_to_itir_factory
     )
 
@@ -108,30 +107,44 @@ class Transforms(workflow.MultiWorkflow[INPUT_PAIR, stages.AOTProgram]):
                         "field_view_op_to_prog",
                         "past_lint",
                         "field_view_prog_args_transform",
+                        "past_to_itir",
                     ]
                 )
             case FOP():
                 steps.extend(
-                    ["field_view_op_to_prog", "past_lint", "field_view_prog_args_transform"]
+                    [
+                        "field_view_op_to_prog",
+                        "past_lint",
+                        "field_view_prog_args_transform",
+                        "past_to_itir",
+                    ]
                 )
             case DSL_PRG():
-                steps.extend(["func_to_past", "past_lint", "field_view_prog_args_transform"])
+                steps.extend(
+                    ["func_to_past", "past_lint", "field_view_prog_args_transform", "past_to_itir"]
+                )
             case PRG():
-                steps.extend(["past_lint", "field_view_prog_args_transform"])
-            case _:
+                steps.extend(["past_lint", "field_view_prog_args_transform", "past_to_itir"])
+            case itir.FencilDefinition() | itir.Program():
                 pass
-        steps.append("past_to_itir")
+            case _:
+                raise ValueError("Unexpected input.")
         return steps
 
 
 DEFAULT_TRANSFORMS: Transforms = Transforms()
 
 
+# TODO(tehrengruber): Rename class and `executor` & `transforms` attribute. Maybe:
+#  `Backend` -> `Toolchain`
+#  `transforms` -> `frontend_transforms`
+#  `executor` -> `backend_transforms`
 @dataclasses.dataclass(frozen=True)
 class Backend(Generic[core_defs.DeviceTypeT]):
-    executor: modular_executor.ModularExecutor
+    name: str
+    executor: workflow.Workflow[stages.CompilableProgram, stages.CompiledProgram]
     allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
-    transforms: workflow.Workflow[INPUT_PAIR, stages.AOTProgram]
+    transforms: workflow.Workflow[INPUT_PAIR, stages.CompilableProgram]
 
     def __call__(
         self,
@@ -150,13 +163,9 @@ class Backend(Generic[core_defs.DeviceTypeT]):
         return self.compile(program, aot_args)
 
     def compile(self, program: INPUT_DATA, compile_time_args: CARG) -> stages.CompiledProgram:
-        return self.executor.otf_workflow(
+        return self.executor(
             self.transforms(toolchain.CompilableProgram(data=program, args=compile_time_args))
         )
-
-    @property
-    def __name__(self) -> str:
-        return getattr(self.executor, "__name__", None) or repr(self)
 
     @property
     def __gt_allocator__(

@@ -31,18 +31,18 @@ def test_program_itir_regression(cartesian_case):
         testee_op(a, out=out)
 
     assert isinstance(testee.itir, itir.FencilDefinition)
-    assert isinstance(testee.with_backend(cartesian_case.executor).itir, itir.FencilDefinition)
+    assert isinstance(testee.with_backend(cartesian_case.backend).itir, itir.FencilDefinition)
 
 
 def test_frozen(cartesian_case):
-    if cartesian_case.executor is None:
+    if cartesian_case.backend is None:
         pytest.xfail("Frozen Program with embedded execution is not possible.")
 
     @gtx.field_operator
     def testee_op(a: cases.IField) -> cases.IField:
         return a
 
-    @gtx.program(backend=cartesian_case.executor, frozen=True)
+    @gtx.program(backend=cartesian_case.backend, frozen=True)
     def testee(a: cases.IField, out: cases.IField):
         testee_op(a, out=out)
 
@@ -60,7 +60,7 @@ def test_frozen(cartesian_case):
     assert np.allclose(kwargs_2["out"].ndarray, args_2[0].ndarray)
 
     # with_backend returns a new instance, which is frozen but not compiled yet
-    assert testee.with_backend(cartesian_case.executor)._compiled_program is None
+    assert testee.with_backend(cartesian_case.backend)._compiled_program is None
 
     # with_grid_type returns a new instance, which is frozen but not compiled yet
     assert testee.with_grid_type(cartesian_case.grid_type)._compiled_program is None

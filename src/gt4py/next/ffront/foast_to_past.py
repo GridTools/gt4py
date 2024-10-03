@@ -21,7 +21,7 @@ from gt4py.next.ffront.past_passes import closure_var_type_deduction, type_deduc
 from gt4py.next.ffront.stages import AOT_FOP, AOT_PRG
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import toolchain, workflow
-from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
+from gt4py.next.type_system import type_info, type_specifications as ts
 
 
 @dataclasses.dataclass(frozen=True)
@@ -65,12 +65,11 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
 
         >>> op_to_prog = OperatorToProgram(foast_to_itir.adapted_foast_to_itir_factory())
 
-        >>> compile_time_args = arguments.CompileTimeArgs.from_concrete_no_size(
-        ...     *(
-        ...         arguments.CompileTimeArg(param.type)
-        ...         for param in copy.foast_stage.foast_node.definition.params
-        ...     ),
+        >>> compile_time_args = arguments.CompileTimeArgs(
+        ...     args=tuple(param.type for param in copy.foast_stage.foast_node.definition.params),
+        ...     kwargs={},
         ...     offset_provider={"I", IDim},
+        ...     column_axis=None,
         ... )
 
         >>> copy_program = op_to_prog(toolchain.CompilableProgram(copy.foast_stage, compile_time_args))
@@ -89,8 +88,8 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
         # TODO(tehrengruber): check foast operator has no out argument that clashes
         #  with the out argument of the program we generate here.
 
-        arg_types = [type_translation.from_value(arg) for arg in inp.args.args]
-        kwarg_types = {k: type_translation.from_value(v) for k, v in inp.args.kwargs.items()}
+        arg_types = inp.args.args
+        kwarg_types = inp.args.kwargs
 
         loc = inp.data.foast_node.location
         # use a new UID generator to allow caching

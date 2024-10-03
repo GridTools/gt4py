@@ -27,6 +27,6 @@ def test_constant():
     inp = gtx.as_field([IDim], np.asarray([0, 42], dtype=np.int32))
     res = gtx.as_field([IDim], np.zeros_like(inp.asnumpy()))
 
-    add_constant[{IDim: range(2)}](inp, out=res, offset_provider={}, backend=roundtrip.executor)
+    add_constant[{IDim: range(2)}](inp, out=res, offset_provider={}, backend=roundtrip.default)
 
     assert np.allclose(res.asnumpy(), np.asarray([1, 43]))

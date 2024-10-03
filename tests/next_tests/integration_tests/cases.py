@@ -372,7 +372,7 @@ def run(
     """Run fieldview code in the context of a given test case."""
     if kwargs.get("offset_provider", None) is None:
         kwargs["offset_provider"] = case.offset_provider
-    fieldview_prog.with_grid_type(case.grid_type).with_backend(case.executor)(*args, **kwargs)
+    fieldview_prog.with_grid_type(case.grid_type).with_backend(case.backend)(*args, **kwargs)
 
 
 def verify(
@@ -466,9 +466,13 @@ def verify_with_default_data(
 
 
 @pytest.fixture
-def cartesian_case(exec_alloc_descriptor: test_definitions.ExecutionAndAllocatorDescriptor):
+def cartesian_case(
+    exec_alloc_descriptor: test_definitions.EmbeddedDummyBackend | next_backend.Backend,
+):
     yield Case(
-        exec_alloc_descriptor if exec_alloc_descriptor.executor else None,
+        None
+        if isinstance(exec_alloc_descriptor, test_definitions.EmbeddedDummyBackend)
+        else exec_alloc_descriptor,
         offset_provider={
             "Ioff": IDim,
             "Joff": JDim,
@@ -482,10 +486,13 @@ def cartesian_case(exec_alloc_descriptor: test_definitions.ExecutionAndAllocator
 
 @pytest.fixture
 def unstructured_case(
-    mesh_descriptor, exec_alloc_descriptor: test_definitions.ExecutionAndAllocatorDescriptor
+    mesh_descriptor,
+    exec_alloc_descriptor: test_definitions.EmbeddedDummyBackend | next_backend.Backend,
 ):
     yield Case(
-        exec_alloc_descriptor if exec_alloc_descriptor.executor else None,
+        None
+        if isinstance(exec_alloc_descriptor, test_definitions.EmbeddedDummyBackend)
+        else exec_alloc_descriptor,
         offset_provider=mesh_descriptor.offset_provider,
         default_sizes={
             Vertex: mesh_descriptor.num_vertices,
@@ -593,7 +600,7 @@ def get_default_data(
 class Case:
     """Parametrizable components for single feature integration tests."""
 
-    executor: Optional[next_backend.Backend]
+    backend: Optional[next_backend.Backend]
     offset_provider: dict[str, common.Connectivity | gtx.Dimension]
     default_sizes: dict[gtx.Dimension, int]
     grid_type: common.GridType

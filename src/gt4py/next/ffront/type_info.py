@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from functools import reduce
-from typing import Iterator, cast
+from typing import Iterator, Sequence, cast
 
 import gt4py.next.ffront.type_specifications as ts_ffront
 import gt4py.next.type_system.type_specifications as ts
@@ -135,7 +135,7 @@ def canonicalize_scanop_arguments(
 @type_info.function_signature_incompatibilities.register
 def function_signature_incompatibilities_fieldop(
     fieldop_type: ts_ffront.FieldOperatorType,
-    args: list[ts.TypeSpec],
+    args: Sequence[ts.TypeSpec],
     kwargs: dict[str, ts.TypeSpec],
 ) -> Iterator[str]:
     args, kwargs = type_info.canonicalize_arguments(
