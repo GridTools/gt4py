@@ -79,6 +79,21 @@ class DataflowBuilder(Protocol):
         unique_name = self.unique_tasklet_name(name)
         return state.add_tasklet(unique_name, inputs, outputs, code, **kwargs)
 
+    def add_mapped_tasklet(
+        self,
+        name: str,
+        state: dace.SDFGState,
+        map_ranges: Dict[str, str | dace.subsets.Subset]
+        | List[Tuple[str, str | dace.subsets.Subset]],
+        inputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
+        code: str,
+        outputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
+        **kwargs: Any,
+    ) -> tuple[dace.nodes.Tasklet, dace.nodes.MapEntry, dace.nodes.MapExit]:
+        """Wrapper of `dace.SDFGState.add_tasklet` that assigns unique name."""
+        unique_name = self.unique_tasklet_name(name)
+        return state.add_mapped_tasklet(unique_name, map_ranges, inputs, code, outputs, **kwargs)
+
 
 class SDFGBuilder(DataflowBuilder, Protocol):
     """Visitor interface available to GTIR-primitive translators."""

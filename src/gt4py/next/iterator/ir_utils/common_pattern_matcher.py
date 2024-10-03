@@ -22,6 +22,16 @@ def is_applied_lift(arg: itir.Node) -> TypeGuard[itir.FunCall]:
     )
 
 
+def is_applied_map(arg: itir.Node) -> TypeGuard[itir.FunCall]:
+    """Match expressions of the form `map(λ(...) → ...)(...)`."""
+    return (
+        isinstance(arg, itir.FunCall)
+        and isinstance(arg.fun, itir.FunCall)
+        and isinstance(arg.fun.fun, itir.SymRef)
+        and arg.fun.fun.id == "map_"
+    )
+
+
 def is_applied_reduce(arg: itir.Node) -> TypeGuard[itir.FunCall]:
     """Match expressions of the form `reduce(λ(...) → ...)(...)`."""
     return (

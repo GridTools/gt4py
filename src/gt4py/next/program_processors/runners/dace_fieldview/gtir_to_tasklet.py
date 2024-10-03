@@ -17,8 +17,8 @@ import dace.subsets as sbs
 from gt4py import eve
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
-from gt4py.next.iterator.type_system import type_specifications as gtir_ts
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
+from gt4py.next.iterator.type_system import type_specifications as itir_ts
 from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_python_codegen,
@@ -49,7 +49,7 @@ class ValueExpr:
     """Result of the computation implemented by a tasklet node."""
 
     node: dace.nodes.AccessNode
-    dtype: gtir_ts.ListType | ts.ScalarType
+    dtype: itir_ts.ListType | ts.ScalarType
 
 
 # Define alias for the elements needed to setup input connections to a map scope
@@ -188,6 +188,21 @@ class LambdaToTasklet(eve.NodeVisitor):
         """Helper method to add a tasklet with unique name in current state."""
         return self.subgraph_builder.add_tasklet(name, self.state, inputs, outputs, code, **kwargs)
 
+    def _add_mapped_tasklet(
+        self,
+        name: str,
+        map_ranges: Dict[str, str | dace.subsets.Subset]
+        | List[Tuple[str, str | dace.subsets.Subset]],
+        inputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
+        code: str,
+        outputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
+        **kwargs: Any,
+    ) -> tuple[dace.nodes.Tasklet, dace.nodes.MapEntry, dace.nodes.MapExit]:
+        """Helper method to add a mapped tasklet with unique name in current state."""
+        return self.subgraph_builder.add_mapped_tasklet(
+            name, self.state, map_ranges, inputs, code, outputs, **kwargs
+        )
+
     def _get_tasklet_result(
         self,
         dtype: dace.typeclass,
@@ -305,6 +320,7 @@ class LambdaToTasklet(eve.NodeVisitor):
 
     def _visit_neighbors(self, node: gtir.FunCall) -> ValueExpr:
         assert len(node.args) == 2
+        assert self.reduce_identity is not None
 
         assert isinstance(node.args[0], gtir.OffsetLiteral)
         offset = node.args[0].value
@@ -316,14 +332,13 @@ class LambdaToTasklet(eve.NodeVisitor):
         assert isinstance(it, IteratorExpr)
         assert offset_provider.neighbor_axis in it.dimensions
         neighbor_dim_index = it.dimensions.index(offset_provider.neighbor_axis)
-        assert offset_provider.neighbor_axis not in it.indices
-        assert offset_provider.origin_axis not in it.dimensions
         assert offset_provider.origin_axis in it.indices
         origin_index = it.indices[offset_provider.origin_axis]
         assert isinstance(origin_index, SymbolExpr)
         assert all(isinstance(index, SymbolExpr) for index in it.indices.values())
 
         field_desc = it.field.desc(self.sdfg)
+        assert self.reduce_identity.dtype == field_desc.dtype
         connectivity = dace_utils.connectivity_identifier(offset)
         # initially, the storage for the connectivty tables is created as transient;
         # when the tables are used, the storage is changed to non-transient,
@@ -388,8 +403,6 @@ class LambdaToTasklet(eve.NodeVisitor):
         )
         index_connector = "__index"
         if offset_provider.has_skip_values:
-            assert self.reduce_identity is not None
-            assert self.reduce_identity.dtype == field_desc.dtype
             # TODO: Investigate if a NestedSDFG brings benefits
             tasklet_node = self._add_tasklet(
                 "gather_neighbors_with_skip_values",
@@ -428,8 +441,73 @@ class LambdaToTasklet(eve.NodeVisitor):
             memlet=dace.Memlet(data=neighbors_temp, subset=neighbor_idx),
         )
 
-        assert isinstance(node.type, gtir_ts.ListType)
+        assert isinstance(node.type, itir_ts.ListType)
         return ValueExpr(neighbors_node, node.type)
+
+    def _visit_map(self, node: gtir.FunCall) -> ValueExpr:
+        assert isinstance(node.type, itir_ts.ListType)
+        assert isinstance(node.type.element_type, ts.ScalarType)
+        dtype = dace_utils.as_dace_type(node.type.element_type)
+
+        input_args = []
+        for arg in node.args:
+            input_args.append(self.visit(arg))
+
+        map_index = "__map_idx"
+        connectors = [f"__arg{i}" for i in range(len(input_args))]
+
+        input_memlets = {}
+        input_nodes = {}
+        local_size: Optional[int] = None
+        for conn, input_expr in zip(connectors, input_args, strict=True):
+            assert isinstance(input_expr, MemletExpr)
+            if not all(size == 1 for size in input_expr.subset.size()[:-1]):
+                raise ValueError(f"Invalid node {node}")
+            rstart, rstop, rstep = input_expr.subset[-1]
+            assert rstart == 0 and rstep == 1
+            if local_size:
+                assert (rstop + 1) == local_size
+            else:
+                local_size = rstop + 1
+
+            desc = self.sdfg.arrays[input_expr.node.data]
+            view, _ = self.sdfg.add_view(
+                f"{input_expr.node.data}_view",
+                (local_size,),
+                desc.dtype,
+                strides=desc.strides[-1:],
+                find_new_name=True,
+            )
+            view_node = self.state.add_access(view)
+
+            self._add_entry_memlet_path(input_expr.node, input_expr.subset, view_node)
+
+            input_memlets[conn] = dace.Memlet(data=view, subset=map_index)
+            input_nodes[view] = view_node
+
+        assert local_size is not None
+        temp, _ = self.sdfg.add_temp_transient((local_size,), dtype)
+        temp_node = self.state.add_access(temp)
+
+        assert isinstance(node.fun, gtir.FunCall)
+        assert len(node.fun.args) == 1
+        fun_node = im.call(node.fun.args[0])(*connectors)
+        op_code = gtir_python_codegen.get_source(fun_node)
+
+        self._add_mapped_tasklet(
+            name="map",
+            map_ranges={map_index: f"0:{local_size}"},
+            code=f"__out = {op_code}",
+            inputs=input_memlets,
+            input_nodes=input_nodes,
+            outputs={
+                "__out": dace.Memlet(data=temp, subset=map_index),
+            },
+            output_nodes={temp: temp_node},
+            external_edges=True,
+        )
+
+        return ValueExpr(temp_node, dtype)
 
     def _visit_reduce(self, node: gtir.FunCall) -> ValueExpr:
         op_name, reduce_init, reduce_identity = get_reduce_params(node)
@@ -709,14 +787,17 @@ class LambdaToTasklet(eve.NodeVisitor):
         elif cpm.is_call_to(node, "neighbors"):
             return self._visit_neighbors(node)
 
+        elif cpm.is_applied_map(node):
+            return self._visit_map(node)
+
         elif cpm.is_applied_reduce(node):
             return self._visit_reduce(node)
 
         elif cpm.is_applied_shift(node):
             return self._visit_shift(node)
 
-        else:
-            assert isinstance(node.fun, gtir.SymRef)
+        elif not isinstance(node.fun, gtir.SymRef):
+            raise NotImplementedError
 
         node_internals = []
         node_connections: dict[str, MemletExpr | ValueExpr] = {}

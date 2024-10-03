@@ -18,7 +18,7 @@ import dace.subsets as sbs
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
-from gt4py.next.iterator.type_system import type_specifications as gtir_ts
+from gt4py.next.iterator.type_system import type_specifications as itir_ts
 from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_python_codegen,
@@ -110,7 +110,7 @@ def _parse_fieldop_arg(
         dims = arg.data_type.dims + (
             # we add an extra anonymous dimension in the iterator definition to enable
             # dereferencing elements in `ListType`
-            [gtx_common.Dimension("")] if isinstance(arg.data_type.dtype, gtir_ts.ListType) else []
+            [gtx_common.Dimension("")] if isinstance(arg.data_type.dtype, itir_ts.ListType) else []
         )
         return gtir_to_tasklet.IteratorExpr(arg.data_node, dims, indices)
     else:
@@ -139,7 +139,7 @@ def _create_temporary_field(
     field_shape = list(domain_ubs)
 
     if isinstance(output_desc, dace.data.Array):
-        assert isinstance(node_type.dtype, gtir_ts.ListType)
+        assert isinstance(node_type.dtype, itir_ts.ListType)
         assert isinstance(node_type.dtype.element_type, ts.ScalarType)
         field_dtype = node_type.dtype.element_type
         # extend the array with the local dimensions added by the field operator (e.g. `neighbors`)
@@ -182,15 +182,21 @@ def translate_as_field_op(
     assert isinstance(node.type, ts.FieldType)
 
     if cpm.is_applied_reduce(stencil_expr.expr):
+        # the reduce identity value is used to fill the skip values in neighbors list
         if reduce_identity is not None:
             raise NotImplementedError("nested reductions not supported.")
-
-        # the reduce identity value is used to fill the skip values in neighbors list
         _, _, reduce_identity = gtir_to_tasklet.get_reduce_params(stencil_expr.expr)
+        reduce_identity_for_args = reduce_identity
+    elif cpm.is_call_to(stencil_expr.expr, "neighbors"):
+        # we do not support nested reduction, so the reduction identity value
+        # is used by the current neighbors expression to fill the skip values
+        reduce_identity_for_args = None
+    else:
+        reduce_identity_for_args = reduce_identity
 
     # first visit the list of arguments and build a symbol map
     stencil_args = [
-        _parse_fieldop_arg(arg, sdfg, state, sdfg_builder, domain, reduce_identity)
+        _parse_fieldop_arg(arg, sdfg, state, sdfg_builder, domain, reduce_identity_for_args)
         for arg in node.args
     ]
 
