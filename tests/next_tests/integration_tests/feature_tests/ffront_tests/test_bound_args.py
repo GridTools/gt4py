@@ -45,7 +45,7 @@ def test_with_bound_args_order_args(cartesian_case):
         scalar = 0 if not condition else scalar
         return a + scalar
 
-    @gtx.program(backend=cartesian_case.executor)
+    @gtx.program(backend=cartesian_case.backend)
     def program_args(a: cases.IField, condition: bool, scalar: int32, out: cases.IField):
         fieldop_args(a, condition, scalar, out=out)
 
