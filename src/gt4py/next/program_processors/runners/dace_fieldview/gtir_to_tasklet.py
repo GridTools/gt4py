@@ -393,7 +393,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         )
         neighbors_node = self.state.add_access(neighbors_temp)
 
-        offset_dim = gtx_common.Dimension(offset)
+        offset_dim = gtx_common.Dimension(offset, kind=gtx_common.DimensionKind.LOCAL)
         neighbor_idx = dace_gtir_utils.get_map_variable(offset_dim)
         me, mx = self._add_map(
             f"{offset}_neighbors",
@@ -453,7 +453,9 @@ class LambdaToTasklet(eve.NodeVisitor):
         for arg in node.args:
             input_args.append(self.visit(arg))
 
-        map_index = "__map_idx"
+        # TODO(edopao): extract offset_dim from the input arguments
+        offset_dim = gtx_common.Dimension("", gtx_common.DimensionKind.LOCAL)
+        map_index = dace_gtir_utils.get_map_variable(offset_dim)
         connectors = [f"__arg{i}" for i in range(len(input_args))]
 
         input_memlets = {}
