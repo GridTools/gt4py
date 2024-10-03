@@ -13,34 +13,7 @@ import dace
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
-from gt4py.next.iterator.type_system import type_specifications as gtir_ts
 from gt4py.next.program_processors.runners.dace_fieldview import gtir_python_codegen
-from gt4py.next.type_system import type_specifications as ts
-
-
-def as_dace_type(type_: ts.TypeSpec) -> dace.typeclass:
-    """Converts GT4Py scalar type to corresponding DaCe type."""
-    if isinstance(type_, ts.ScalarType):
-        scalar_type = type_
-    elif isinstance(type_, gtir_ts.ListType):
-        assert isinstance(type_.element_type, ts.ScalarType)
-        scalar_type = type_.element_type
-    else:
-        raise NotImplementedError
-
-    match scalar_type.kind:
-        case ts.ScalarKind.BOOL:
-            return dace.bool_
-        case ts.ScalarKind.INT32:
-            return dace.int32
-        case ts.ScalarKind.INT64:
-            return dace.int64
-        case ts.ScalarKind.FLOAT32:
-            return dace.float32
-        case ts.ScalarKind.FLOAT64:
-            return dace.float64
-        case _:
-            raise ValueError(f"Scalar type '{scalar_type}' not supported.")
 
 
 def get_domain(

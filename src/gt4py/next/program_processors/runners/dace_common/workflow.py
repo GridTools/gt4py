@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import ctypes
 import dataclasses
-from typing import Any, Optional
+from typing import Any
 
 import dace
 import factory
@@ -20,26 +20,23 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common, config
 from gt4py.next.otf import arguments, languages, stages, step_types, workflow
 from gt4py.next.otf.compilation import cache
-from gt4py.next.program_processors.runners.dace_common import dace_backend
+from gt4py.next.program_processors.runners.dace_common import dace_backend, utility as dace_utils
 
 
 class CompiledDaceProgram(stages.CompiledProgram):
     sdfg_program: dace.CompiledSDFG
-    # Map SDFG argument to its position in program ABI; scalar arguments that are not used in the SDFG will not be present.
-    sdfg_arg_position: list[Optional[int]]
+
+    # Sorted list of SDFG arguments as they appear in program ABI and corresponding data type;
+    # scalar arguments that are not used in the SDFG will not be present.
+    sdfg_arglist: list[tuple[str, dace.dtypes.Data]]
 
     def __init__(self, program: dace.CompiledSDFG):
-        # extract position of arguments in program ABI
-        sdfg_arglist = program.sdfg.signature_arglist(with_types=False)
-        sdfg_arg_pos_mapping = {param: pos for pos, param in enumerate(sdfg_arglist)}
-        sdfg_used_symbols = program.sdfg.used_symbols(all_symbols=False)
-
         self.sdfg_program = program
-        self.sdfg_arg_position = [
-            sdfg_arg_pos_mapping[param]
-            if param in program.sdfg.arrays or param in sdfg_used_symbols
-            else None
-            for param in program.sdfg.arg_names
+        # `dace.CompiledSDFG.arglist()` returns an ordered dictionary that maps the argument
+        # name to its data type, in the same order as arguments appear in the program ABI.
+        # This is also the same order of arguments in `dace.CompiledSDFG._lastargs[0]`.
+        self.sdfg_arglist = [
+            (arg_name, arg_type) for arg_name, arg_type in program.sdfg.arglist().items()
         ]
 
     def __call__(self, *args: Any, **kwargs: Any) -> None:
@@ -94,13 +91,6 @@ class DaCeCompilationStepFactory(factory.Factory):
         model = DaCeCompiler
 
 
-def _get_ctype_value(arg: Any, dtype: dace.dtypes.dataclass) -> Any:
-    if not isinstance(arg, (ctypes._SimpleCData, ctypes._Pointer)):
-        actype = dtype.as_ctypes()
-        return actype(arg)
-    return arg
-
-
 def convert_args(
     inp: CompiledDaceProgram,
     device: core_defs.DeviceType = core_defs.DeviceType.CPU,
@@ -108,7 +98,7 @@ def convert_args(
 ) -> stages.CompiledProgram:
     sdfg_program = inp.sdfg_program
     sdfg = sdfg_program.sdfg
-    on_gpu = True if device == core_defs.DeviceType.CUDA else False
+    on_gpu = True if device in [core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM] else False
 
     def decorated_program(
         *args: Any,
@@ -119,28 +109,36 @@ def convert_args(
             args = (*args, out)
         if len(sdfg.arg_names) > len(args):
             args = (*args, *arguments.iter_size_args(args))
+
         if sdfg_program._lastargs:
-            # The scalar arguments should be replaced with the actual value; for field arguments,
-            # the data pointer should remain the same otherwise fast-call cannot be used and
-            # the args list needs to be reconstructed.
+            kwargs = dict(zip(sdfg.arg_names, args, strict=True))
+            kwargs.update(dace_backend.get_sdfg_conn_args(sdfg, offset_provider, on_gpu))
+
             use_fast_call = True
-            for arg, param, pos in zip(args, sdfg.arg_names, inp.sdfg_arg_position, strict=True):
-                if isinstance(arg, common.Field):
-                    desc = sdfg.arrays[param]
-                    assert isinstance(desc, dace.data.Array)
-                    assert isinstance(sdfg_program._lastargs[0][pos], ctypes.c_void_p)
-                    if sdfg_program._lastargs[0][pos].value != get_array_interface_ptr(
-                        arg.ndarray, desc.storage
-                    ):
+            last_call_args = sdfg_program._lastargs[0]
+            # The scalar arguments should be overridden with the new value; for field arguments,
+            # the data pointer should remain the same otherwise fast_call cannot be used and
+            # the arguments list has to be reconstructed.
+            for i, (arg_name, arg_type) in enumerate(inp.sdfg_arglist):
+                if isinstance(arg_type, dace.data.Array):
+                    assert arg_name in kwargs, f"argument '{arg_name}' not found."
+                    data_ptr = get_array_interface_ptr(kwargs[arg_name], arg_type.storage)
+                    assert isinstance(last_call_args[i], ctypes.c_void_p)
+                    if last_call_args[i].value != data_ptr:
                         use_fast_call = False
                         break
-                elif param in sdfg.arrays:
-                    desc = sdfg.arrays[param]
-                    assert isinstance(desc, dace.data.Scalar)
-                    sdfg_program._lastargs[0][pos] = _get_ctype_value(arg, desc.dtype)
-                elif pos:
-                    sym_dtype = sdfg.symbols[param]
-                    sdfg_program._lastargs[0][pos] = _get_ctype_value(arg, sym_dtype)
+                else:
+                    assert isinstance(arg_type, dace.data.Scalar)
+                    assert isinstance(last_call_args[i], ctypes._SimpleCData)
+                    if arg_name in kwargs:
+                        # override the scalar value used in previous program call
+                        actype = arg_type.dtype.as_ctypes()
+                        last_call_args[i] = actype(kwargs[arg_name])
+                    else:
+                        # shape and strides of arrays are supposed not to change, and can therefore be omitted
+                        assert dace_utils.is_field_symbol(
+                            arg_name
+                        ), f"argument '{arg_name}' not found."
 
             if use_fast_call:
                 return sdfg_program.fast_call(*sdfg_program._lastargs)

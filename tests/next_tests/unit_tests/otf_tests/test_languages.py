@@ -18,7 +18,7 @@ def test_basic_settings_with_cpp_rejected():
             entry_point=interface.Function(name="basic_settings_with_cpp", parameters=[]),
             source_code="",
             library_deps=(),
-            language=languages.Cpp,
+            language=languages.CPP,
             language_settings=languages.LanguageSettings(
                 formatter_key="cpp", formatter_style="llvm", file_extension="cpp"
             ),
@@ -31,7 +31,7 @@ def test_header_files_settings_with_cpp_accepted():
         entry_point=interface.Function(name="basic_settings_with_cpp", parameters=[]),
         source_code="",
         library_deps=(),
-        language=languages.Cpp,
+        language=languages.CPP,
         language_settings=languages.LanguageWithHeaderFilesSettings(
             formatter_key="cpp",
             formatter_style="llvm",

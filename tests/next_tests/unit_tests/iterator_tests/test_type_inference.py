@@ -171,9 +171,9 @@ def expression_test_cases():
             )(im.ref("inp1", float_i_field), im.ref("inp2", float_i_field)),
             ts.TupleType(types=[float_i_field, float_i_field]),
         ),
-        # cond
+        # if in field-view scope
         (
-            im.cond(
+            im.if_(
                 False,
                 im.call(
                     im.call("as_fieldop")(
@@ -195,7 +195,7 @@ def expression_test_cases():
             float_i_field,
         ),
         (
-            im.cond(
+            im.if_(
                 False,
                 im.make_tuple(im.ref("inp", float_i_field), im.ref("inp", float_i_field)),
                 im.make_tuple(im.ref("inp", float_i_field), im.ref("inp", float_i_field)),
