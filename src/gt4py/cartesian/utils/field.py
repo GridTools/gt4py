@@ -1,3 +1,17 @@
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2023, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 import numbers
 from typing import Tuple
 
@@ -43,7 +57,7 @@ class Field:
             new_args = self.broadcast_and_clip_variable_k(new_args)
         return tuple(new_args)
 
-    def broadcast_and_clip_variable_k(self, new_args: tuple):
+    def broadcast_and_clip_variable_k(self, new_args: list):
         assert isinstance(new_args[0], slice) and isinstance(new_args[1], slice)
         if np.max(new_args[2]) >= self.field_view.shape[2] or np.min(new_args[2]) < 0:
             new_args[2] = np.clip(new_args[2].copy(), 0, self.field_view.shape[2] - 1)
