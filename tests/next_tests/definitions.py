@@ -15,8 +15,7 @@ from typing import Final, Optional, Protocol
 
 import pytest
 
-from gt4py.next import allocators as next_allocators
-from gt4py.next.program_processors import processor_interface as ppi
+from gt4py.next import allocators as next_allocators, backend as next_backend
 
 
 # Skip definitions
@@ -54,23 +53,13 @@ class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
     DOUBLE_ROUNDTRIP = "gt4py.next.program_processors.runners.double_roundtrip.backend"
 
 
-class ExecutionAndAllocatorDescriptor(Protocol):
-    # Used for test infrastructure, consider implementing this in gt4py when refactoring otf
-    @property
-    def executor(self) -> Optional[ppi.ProgramExecutor]: ...
-
-    @property
-    def allocator(self) -> next_allocators.FieldBufferAllocatorProtocol: ...
-
-
 @dataclasses.dataclass(frozen=True)
-class EmbeddedExecutionDescriptor:
+class EmbeddedDummyBackend:
     allocator: next_allocators.FieldBufferAllocatorProtocol
-    executor: Final = None
 
 
-numpy_execution = EmbeddedExecutionDescriptor(next_allocators.StandardCPUFieldBufferAllocator())
-cupy_execution = EmbeddedExecutionDescriptor(next_allocators.StandardGPUFieldBufferAllocator())
+numpy_execution = EmbeddedDummyBackend(next_allocators.StandardCPUFieldBufferAllocator())
+cupy_execution = EmbeddedDummyBackend(next_allocators.StandardGPUFieldBufferAllocator())
 
 
 class EmbeddedIds(_PythonObjectIdMixin, str, enum.Enum):

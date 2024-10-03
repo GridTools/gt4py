@@ -17,7 +17,6 @@ pytest.importorskip("atlas4py")
 from gt4py import next as gtx
 from gt4py.next import allocators, neighbor_sum
 from gt4py.next.iterator import atlas_utils
-from gt4py.next.program_processors import processor_interface as ppi
 
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     exec_alloc_descriptor,

@@ -17,15 +17,12 @@ import typing
 from collections.abc import Callable, Iterable
 from typing import Any, Optional
 
-import factory
-
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from gt4py.next import allocators as next_allocators, backend as next_backend, common, config
 from gt4py.next.ffront import foast_to_gtir, past_to_itir
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
-from gt4py.next.otf import arguments, stages, workflow
-from gt4py.next.program_processors import modular_executor, processor_interface as ppi
+from gt4py.next.otf import stages, workflow
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -184,13 +181,13 @@ def fencil_generator(
 
 
 @dataclasses.dataclass(frozen=True)
-class Roundtrip(workflow.Workflow[stages.AOTProgram, stages.CompiledProgram]):
+class Roundtrip(workflow.Workflow[stages.CompilableProgram, stages.CompiledProgram]):
     debug: Optional[bool] = None
     lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE
     use_embedded: bool = True
-    dispatch_backend: Optional[ppi.ProgramExecutor] = None
+    dispatch_backend: Optional[next_backend.Backend] = None
 
-    def __call__(self, inp: stages.AOTProgram) -> stages.CompiledProgram:
+    def __call__(self, inp: stages.CompilableProgram) -> stages.CompiledProgram:
         debug = config.DEBUG if self.debug is None else self.debug
 
         fencil = fencil_generator(
@@ -223,60 +220,24 @@ class Roundtrip(workflow.Workflow[stages.AOTProgram, stages.CompiledProgram]):
         return decorated_fencil
 
 
-class RoundtripFactory(factory.Factory):
-    class Meta:
-        model = Roundtrip
-
-
-@dataclasses.dataclass(frozen=True)
-class RoundtripExecutor(modular_executor.ModularExecutor):
-    dispatch_backend: Optional[ppi.ProgramExecutor] = None
-
-    def __call__(self, program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
-        argspec = arguments.CompileTimeArgs.from_concrete_no_size(*args, **kwargs)
-        self.otf_workflow(
-            stages.AOTProgram(
-                data=program,
-                args=dataclasses.replace(
-                    argspec,
-                    kwargs=argspec.kwargs,
-                ),
-            )
-        )(*args, **kwargs)
-
-
-class RoundtripExecutorFactory(factory.Factory):
-    class Meta:
-        model = RoundtripExecutor
-
-    class Params:
-        use_embedded = factory.LazyAttribute(lambda o: o.dispatch_backend is None)
-        roundtrip_workflow = factory.SubFactory(
-            RoundtripFactory, use_embedded=factory.SelfAttribute("..use_embedded")
-        )
-
-    dispatch_backend = None
-    otf_workflow = factory.LazyAttribute(lambda o: o.roundtrip_workflow)
-
-
-executor = RoundtripExecutorFactory(name="roundtrip")
-executor_with_temporaries = RoundtripExecutorFactory(
-    name="roundtrip_with_temporaries",
-    roundtrip_workflow=RoundtripFactory(lift_mode=itir_transforms.LiftMode.USE_TEMPORARIES),
-)
+executor = Roundtrip()
+executor_with_temporaries = Roundtrip(lift_mode=itir_transforms.LiftMode.USE_TEMPORARIES)
 
 default = next_backend.Backend(
+    name="roundtrip",
     executor=executor,
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
     transforms=next_backend.DEFAULT_TRANSFORMS,
 )
 with_temporaries = next_backend.Backend(
+    name="roundtrip_with_temporaries",
     executor=executor_with_temporaries,
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
     transforms=next_backend.DEFAULT_TRANSFORMS,
 )
 
 gtir = next_backend.Backend(
+    name="roundtrip_gtir",
     executor=executor,
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
     transforms=next_backend.Transforms(
