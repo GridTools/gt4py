@@ -24,6 +24,7 @@ from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import (
     CastExpr,
     FunCall,
     FunctionDefinition,
+    IfStmt,
     IntegralConstant,
     Lambda,
     Literal,
@@ -66,8 +67,11 @@ _vertical_dimension = "gtfn::unstructured::dim::vertical"
 _horizontal_dimension = "gtfn::unstructured::dim::horizontal"
 
 
-def _get_domains(node: Iterable[itir.Stmt]) -> Iterable[itir.FunCall]:
-    return eve_utils.xiter(node).if_isinstance(itir.SetAt).getattr("domain").to_set()
+def _get_domains(nodes: Iterable[itir.Stmt]) -> Iterable[itir.FunCall]:
+    result = set()
+    for node in nodes:
+        result |= node.walk_values().if_isinstance(itir.SetAt).getattr("domain").to_set()
+    return result
 
 
 def _extract_grid_type(domain: itir.FunCall) -> common.GridType:
@@ -572,6 +576,13 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     def visit_Stmt(self, node: itir.Stmt, **kwargs: Any) -> None:
         raise AssertionError("All Stmts need to be handled explicitly.")
+
+    def visit_IfStmt(self, node: itir.IfStmt, **kwargs: Any) -> IfStmt:
+        return IfStmt(
+            cond=self.visit(node.cond, **kwargs),
+            true_branch=self.visit(node.true_branch, **kwargs),
+            false_branch=self.visit(node.false_branch, **kwargs),
+        )
 
     def visit_SetAt(
         self, node: itir.SetAt, *, extracted_functions: list, **kwargs: Any
