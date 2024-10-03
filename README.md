@@ -5,7 +5,7 @@ Here be :dragon:
 Features/fixex in development present in the branch:
 
 - [Feature] cast to `int` in stencils (e.g. `a = int(b)`): <https://github.com/FlorianDeconinck/gt4py/tree/cartesian/cast_to_int>
-- [Feature] `debug` backend - iteartive pure python backend
+- [Feature] `debug` backend - iteartive pure python backend <https://github.com/twicki/gt4py/tree/better_name>
 
 We now resume your regurlarly schedule  gt4py README.
 
