@@ -83,6 +83,7 @@ builtins = {
     "__externals__",
     "__INLINED",
     "compile_assert",
+    "range",
     *MATH_BUILTINS,
 }
 

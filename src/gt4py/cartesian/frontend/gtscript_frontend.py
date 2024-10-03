@@ -613,6 +613,70 @@ class CompiledIfInliner(ast.NodeTransformer):
         return node if node else None
 
 
+class DataDimLoopIndexReplacer(ast.NodeTransformer):
+    def __init__(self, name: str, value: int) -> None:
+        self.name = name
+        self.value = value
+
+    def visit_Name(self, node: ast.Name) -> Union[ast.Constant, ast.Name]:
+        if node.id == self.name:
+            return ast.Constant(self.value, ctx=node.ctx)
+        else:
+            return node
+
+
+class DataDimLoopUnroller(ast.NodeTransformer):
+    @classmethod
+    def apply(cls, func_node: ast.FunctionDef, context: dict):
+        unroller = cls(context)
+        unroller(func_node)
+
+    def __init__(self, context):
+        self.context = context
+        self.prefix = ""
+
+    def __call__(self, func_node: ast.FunctionDef):
+        self.visit(func_node)
+
+    def visit_For(self, node: ast.For) -> Union[ast.For, list[ast.AST]]:
+        super().generic_visit(node)
+
+        if (
+            isinstance(node.iter, ast.Call)
+            and isinstance(node.iter.func, ast.Name)
+            and node.iter.func.id == "range"
+        ):
+            range_args = node.iter.args
+            assert all(isinstance(arg, ast.Constant) for arg in range_args)
+            assert 1 <= len(range_args) <= 3
+            if len(range_args) == 1:
+                start = 0
+                stop = range_args[0].value
+                step = 1
+            elif len(range_args) == 2:
+                start = range_args[0].value
+                stop = range_args[1].value
+                step = 1
+            else:
+                start = range_args[0].value
+                stop = range_args[1].value
+                step = range_args[2].value
+
+            assert isinstance(node.target, ast.Name)
+            index_name = node.target.id
+
+            new_body = []
+            for i in range(start, stop, step):
+                body = copy.deepcopy(node.body)
+                transformer = DataDimLoopIndexReplacer(index_name, i)
+                new_body_item = [transformer.visit(stmt) for stmt in body]
+                new_body += new_body_item
+
+            return new_body
+        else:
+            return node
+
+
 def _make_temp_decls(
     descriptors: Dict[str, gtscript._FieldDescriptor],
 ) -> Dict[str, nodes.FieldDecl]:
@@ -2054,6 +2118,9 @@ class GTScriptParser(ast.NodeVisitor):
         )
 
         ValueInliner.apply(main_func_node, context=local_context)
+
+        # unroll loops over data dimensions
+        DataDimLoopUnroller.apply(main_func_node, context=local_context)
 
         # Inline function calls
         CallInliner.apply(main_func_node, context=local_context)
