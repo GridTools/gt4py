@@ -5,7 +5,7 @@ Here be :dragon:
 Features/fixex in development present in the branch:
 
 - [Feature] cast to `int` in stencils (e.g. `a = int(b)`): <https://github.com/FlorianDeconinck/gt4py/tree/cartesian/cast_to_int>
-- [Fix] `while` with `gtscript.function` now behaves as expected: <https://github.com/FlorianDeconinck/gt4py/tree/fix/function_in_while>
+- [Feature] `debug` backend - iteartive pure python backend
 
 We now resume your regurlarly schedule  gt4py README.
 
