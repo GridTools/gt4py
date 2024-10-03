@@ -7,12 +7,12 @@
 # SPDX-License-Identifier: BSD-3-Clause
 import warnings
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Any, Iterable
 
 import dace
 import numpy as np
 
-from gt4py.next import common as gtx_common
+from gt4py.next import common as gtx_common, utils as gtx_utils
 
 from . import utility as dace_utils
 
@@ -54,9 +54,10 @@ def _get_args(
     sdfg: dace.SDFG, args: Sequence[Any], use_field_canonical_representation: bool
 ) -> dict[str, Any]:
     sdfg_params: Sequence[str] = sdfg.arg_names
+    flat_args: Iterable[Any] = gtx_utils.flatten_nested_tuple(tuple(args))
     return {
         sdfg_param: _convert_arg(arg, sdfg_param, use_field_canonical_representation)
-        for sdfg_param, arg in zip(sdfg_params, args, strict=True)
+        for sdfg_param, arg in zip(sdfg_params, flat_args, strict=True)
     }
 
 
@@ -112,7 +113,7 @@ def _get_stride_args(
 
 def get_sdfg_conn_args(
     sdfg: dace.SDFG,
-    offset_provider: dict[str, Any],
+    offset_provider: gtx_common.OffsetProvider,
     on_gpu: bool,
 ) -> dict[str, np.typing.NDArray]:
     """

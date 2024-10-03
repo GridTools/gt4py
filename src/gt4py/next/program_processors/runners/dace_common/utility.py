@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Final, Mapping, Optional, Sequence
+from typing import Final, Optional, Sequence
 
 import dace
 
@@ -78,7 +78,9 @@ def debug_info(
     return default
 
 
-def filter_connectivities(offset_provider: Mapping[str, Any]) -> dict[str, gtx_common.Connectivity]:
+def filter_connectivities(
+    offset_provider: gtx_common.OffsetProvider,
+) -> dict[str, gtx_common.Connectivity]:
     """
     Filter offset providers of type `Connectivity`.
 

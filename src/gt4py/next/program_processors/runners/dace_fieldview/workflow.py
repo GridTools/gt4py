@@ -43,7 +43,7 @@ class DaCeTranslator(
     def generate_sdfg(
         self,
         ir: itir.Program,
-        offset_provider: dict[str, common.Dimension | common.Connectivity],
+        offset_provider: common.OffsetProvider,
         column_axis: Optional[common.Dimension],
     ) -> dace.SDFG:
         # TODO(edopao): Call IR transformations and domain inference, finally lower IR to SDFG
