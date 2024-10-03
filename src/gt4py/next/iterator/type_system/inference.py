@@ -500,7 +500,8 @@ class ITIRTypeInference(eve.NodeTranslator):
         )
 
     def visit_IfStmt(self, node: itir.IfStmt, *, ctx) -> None:
-        self.visit(node.cond, ctx=ctx)  # TODO: check is boolean
+        assert node.cond == ts.ScalarType(kind=ts.ScalarKind.BOOL)
+        self.visit(node.cond, ctx=ctx)
         self.visit(node.true_branch, ctx=ctx)
         self.visit(node.false_branch, ctx=ctx)
 

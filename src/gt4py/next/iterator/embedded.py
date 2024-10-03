@@ -1605,6 +1605,18 @@ def set_at(expr: common.Field, domain: common.DomainLike, target: common.Mutable
 
 @runtime.if_stmt.register(EMBEDDED)
 def if_stmt(cond: bool, true_branch: Callable[[], None], false_branch: Callable[[], None]) -> None:
+    """
+    (Stateful) if statement.
+
+    The two branches are represented as lambda functions, such that they are not executed eagerly.
+    This is required to avoid out-of-bounds accesses. Note that a dedicated built-in is required,
+    contrary to using a plain python if-stmt, such that tracing / double roundtrip works.
+
+    Arguments:
+        cond: The condition to decide which branch to execute.
+        true_branch: A lambda function to be executed when `cond` is `True`.
+        false_branch: A lambda function to be executed when `cond` is `False`.
+    """
     if cond:
         true_branch()
     else:

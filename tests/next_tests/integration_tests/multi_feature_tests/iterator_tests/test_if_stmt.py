@@ -65,12 +65,11 @@ def test_if_stmt(program_processor, cond):
         )
 
     rng = np.random.default_rng()
-    cond = False
     inp = gtx.as_field([IDim], rng.normal(size=size))
     out = gtx.as_field([IDim], np.zeros(size))
     ref = inp if cond else 2.0 * inp
 
-    run_processor(fencil, program_processor, False, inp, out)
+    run_processor(fencil, program_processor, cond, inp, out)
 
     if validate:
         assert np.allclose(out.asnumpy(), ref.asnumpy())
