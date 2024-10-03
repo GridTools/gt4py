@@ -143,7 +143,7 @@ def test_dace_fastcall(cartesian_case, monkeypatch):
 def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
     """Test reuse of SDFG arguments between program calls by means of SDFG fastcall API."""
 
-    if not unstructured_case.executor or "dace" not in unstructured_case.executor.__name__:
+    if not unstructured_case.backend or "dace" not in unstructured_case.backend.name:
         pytest.skip("requires dace backend")
 
     connectivity_E2V = unstructured_case.offset_provider["E2V"]
@@ -177,7 +177,7 @@ def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
         mock_fast_call.assert_called_once()
 
     if gtx.allocators.is_field_allocator_for(
-        unstructured_case.executor.allocator, core_defs.DeviceType.CPU
+        unstructured_case.backend.allocator, core_defs.DeviceType.CPU
     ):
         offset_provider = unstructured_case.offset_provider
     else:
