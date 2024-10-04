@@ -25,7 +25,6 @@ from gt4py.cartesian.gtscript import (
     horizontal,
     interval,
     region,
-    K_at,
     IJ,
 )
 from gt4py.storage.cartesian import utils as storage_utils
