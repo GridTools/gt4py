@@ -340,7 +340,6 @@ class AbsoluteKIndex(Expr):
     """See gtc.common.AbsoluteKIndex"""
 
     k = attribute(of=Any)
-    func_name = "K_at"
 
 
 @attribclass
