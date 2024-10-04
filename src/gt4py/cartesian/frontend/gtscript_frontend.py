@@ -641,6 +641,7 @@ class DataDimLoopUnroller(ast.NodeTransformer):
     def visit_For(self, node: ast.For) -> Union[ast.For, list[ast.AST]]:
         super().generic_visit(node)
 
+        index_values: Optional[Union[list, range]] = None
         if (
             isinstance(node.iter, ast.Call)
             and isinstance(node.iter.func, ast.Name)
@@ -661,14 +662,20 @@ class DataDimLoopUnroller(ast.NodeTransformer):
                 start = range_args[0].value
                 stop = range_args[1].value
                 step = range_args[2].value
+            index_values = range(start, stop, step)
+        elif isinstance(node.iter, (ast.List, ast.Tuple)):
+            index_value_nodes = node.iter.elts
+            assert all(isinstance(node, ast.Constant) for node in index_value_nodes)
+            index_values = [node.value for node in index_value_nodes]
 
+        if index_values is not None:
             assert isinstance(node.target, ast.Name)
             index_name = node.target.id
 
             new_body = []
-            for i in range(start, stop, step):
+            for index_value in index_values:
                 body = copy.deepcopy(node.body)
-                transformer = DataDimLoopIndexReplacer(index_name, i)
+                transformer = DataDimLoopIndexReplacer(index_name, index_value)
                 new_body_item = [transformer.visit(stmt) for stmt in body]
                 new_body += new_body_item
 
