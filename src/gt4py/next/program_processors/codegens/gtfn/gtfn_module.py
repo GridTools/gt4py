@@ -33,18 +33,18 @@ from gt4py.next.type_system import type_specifications as ts, type_translation
 GENERATED_CONNECTIVITY_PARAM_PREFIX = "gt_conn_"
 
 
-def get_param_description(name: str, obj: Any) -> interface.Parameter:
-    return interface.Parameter(name, type_translation.from_value(obj))
+def get_param_description(name: str, type_: Any) -> interface.Parameter:
+    return interface.Parameter(name, type_)
 
 
 @dataclasses.dataclass(frozen=True)
 class GTFNTranslationStep(
     workflow.ReplaceEnabledWorkflowMixin[
-        stages.AOTProgram,
+        stages.CompilableProgram,
         stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
     ],
     workflow.ChainableWorkflowMixin[
-        stages.AOTProgram,
+        stages.CompilableProgram,
         stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
     ],
 ):
@@ -83,15 +83,15 @@ class GTFNTranslationStep(
     def _process_regular_arguments(
         self,
         program: itir.FencilDefinition,
-        args: tuple[Any, ...],
+        arg_types: tuple[ts.TypeSpec, ...],
         offset_provider: dict[str, Connectivity | Dimension],
     ) -> tuple[list[interface.Parameter], list[str]]:
         parameters: list[interface.Parameter] = []
         arg_exprs: list[str] = []
 
-        for obj, program_param in zip(args, program.params):
+        for arg_type, program_param in zip(arg_types, program.params, strict=True):
             # parameter
-            parameter = get_param_description(program_param.id, obj)
+            parameter = get_param_description(program_param.id, arg_type)
             parameters.append(parameter)
 
             arg = f"std::forward<decltype({parameter.name})>({parameter.name})"
@@ -212,7 +212,7 @@ class GTFNTranslationStep(
         return codegen.format_source("cpp", generated_code, style="LLVM")
 
     def __call__(
-        self, inp: stages.AOTProgram
+        self, inp: stages.CompilableProgram
     ) -> stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings]:
         """Generate GTFN C++ code from the ITIR definition."""
         program: itir.FencilDefinition | itir.Program = inp.data

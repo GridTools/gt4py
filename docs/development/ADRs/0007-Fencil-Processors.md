@@ -4,7 +4,7 @@ tags: []
 
 # Fencil Processors
 
-- **Status**: valid
+- **Status** deprecated
 - **Authors**: Rico Häuselmann (@DropD)
 - **Created**: 2022-06-22
 - **Updated**: 2022-10-05

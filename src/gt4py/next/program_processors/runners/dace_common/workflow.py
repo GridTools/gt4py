@@ -102,7 +102,7 @@ def convert_args(
 
     def decorated_program(
         *args: Any,
-        offset_provider: dict[str, common.Connectivity | common.Dimension],
+        offset_provider: common.OffsetProvider,
         out: Any = None,
     ) -> Any:
         if out is not None:
@@ -121,7 +121,7 @@ def convert_args(
             # the arguments list has to be reconstructed.
             for i, (arg_name, arg_type) in enumerate(inp.sdfg_arglist):
                 if isinstance(arg_type, dace.data.Array):
-                    assert arg_name in kwargs, f"Argument '{arg_name}' not found."
+                    assert arg_name in kwargs, f"argument '{arg_name}' not found."
                     data_ptr = get_array_interface_ptr(kwargs[arg_name], arg_type.storage)
                     assert isinstance(last_call_args[i], ctypes.c_void_p)
                     if last_call_args[i].value != data_ptr:
@@ -138,7 +138,7 @@ def convert_args(
                         # shape and strides of arrays are supposed not to change, and can therefore be omitted
                         assert dace_utils.is_field_symbol(
                             arg_name
-                        ), f"Argument '{arg_name}' not found."
+                        ), f"argument '{arg_name}' not found."
 
             if use_fast_call:
                 return sdfg_program.fast_call(*sdfg_program._lastargs)
