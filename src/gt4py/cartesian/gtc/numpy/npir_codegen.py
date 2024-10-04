@@ -147,7 +147,7 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         elif isinstance(offset[2], str):
             axes.append(offset[2])
         elif isinstance(offset[2], npir.AbsoluteKIndex):
-            axes.append(str(self.visit(offset[2].k)))
+            axes.append(str(self.visit(offset[2].k, is_serial=is_serial, horizontal_mask=interval)))
 
         return axes
 
@@ -171,18 +171,21 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         return self.visit(node.call)
 
     def visit_FieldSlice(self, node: npir.FieldSlice, **kwargs: Any) -> Union[str, Collection[str]]:
-        need_tile_in_K = False
+        need_extra_axis = False
         if isinstance(node.k_offset, npir.VarKOffset):
             k_offset = self.visit(node.k_offset, **kwargs)
         elif isinstance(node.k_offset, npir.AbsoluteKIndex):
             k_offset = node.k_offset
             # The code as been modified to generate B[i:I,j:J,index]
-            # which is correct but will beark because you can't brodcast this
-            # e.g. you can't write:
-            #   > A[1:3, 1:3, 1:3] = B[1:3,1:3,2]
-            # we need to use tile
-            #   > A[1:3, 1:3, 1:3] = np.tile(B[1:3,1:3,2], (1,1,2))
-            need_tile_in_K = True
+            # which is correct but will break because you can't brodcast 2D in 3D
+            # e.g. you can't write (for I, J, K the dimensions)
+            #   > (I,J,K) = (I,J)
+            # we need to use push the 2D into 3D realm by re-establishing a 3rd axis, e.g:
+            #   > A[i:I, j:J, k:K] = B[i:I, j:J, index][..., np.newaxis]
+            # This isn't true for FieldSlice which would lead to
+            # a (I, J, K) = (I, J, 1), which is structurally equal to the above extra axis add.
+            if not isinstance(k_offset.k, npir.FieldSlice):
+                need_extra_axis = True
         else:
             k_offset = node.k_offset
 
@@ -203,15 +206,15 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
         args = self._make_slice_access(offsets, kwargs["is_serial"], kwargs.get("horizontal_mask"))
         data_index = self.visit(node.data_index, inside_slice=True, **kwargs)
-        if list(data_index) and need_tile_in_K:
+        if list(data_index) and need_extra_axis:
             raise NotImplementedError(
                 "Numpy backend: can't combine tile in K and data dimensions access"
             )
 
         access_slice = ", ".join(args + list(data_index))
 
-        if need_tile_in_K:
-            field_str = f"np.tile({node.name}[{access_slice}][...,None], (1, 1, K-k))"
+        if need_extra_axis:
+            field_str = f"{node.name}[{access_slice}][...,np.newaxis]"
         else:
             field_str = f"{node.name}[{access_slice}]"
 

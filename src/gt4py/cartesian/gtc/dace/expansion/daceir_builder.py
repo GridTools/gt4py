@@ -366,7 +366,14 @@ class DaCeIRBuilder(eve.NodeTranslator):
             elif isinstance(node.offset, common.AbsoluteKIndex):
                 res = dcir.IndexAccess(
                     name=name,
-                    offset=node.offset,
+                    offset=self.visit(
+                        node.offset.k,
+                        is_target=is_target,
+                        targets=targets,
+                        var_offset_fields=var_offset_fields,
+                        K_write_with_offset=K_write_with_offset,
+                        **kwargs,
+                    ),
                     data_index=[],
                     dtype=node.dtype,
                 )

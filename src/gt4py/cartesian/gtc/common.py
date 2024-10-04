@@ -119,7 +119,7 @@ class DataType(eve.IntEnum):
         return self == self.BOOL
 
     def isinteger(self):
-        return self in (self.INT8, self.INT32, self.INT64)
+        return self in (self.INT8, self.INT16, self.INT32, self.INT64)
 
     def isfloat(self):
         return self in (self.FLOAT32, self.FLOAT64)
