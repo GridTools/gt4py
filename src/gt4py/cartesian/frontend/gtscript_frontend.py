@@ -1112,7 +1112,7 @@ class IRMaker(ast.NodeVisitor):
 
     def _eval_index(
         self, node: ast.Subscript, field_axes: Optional[Set[Literal["I", "J", "K"]]] = None
-    ) -> Optional[List[int]]:
+    ) -> Optional[Union[List[int], nodes.AbsoluteKIndex]]:
         tuple_or_expr = node.slice.value if isinstance(node.slice, ast.Index) else node.slice
         index_nodes = gtc_utils.listify(
             tuple_or_expr.elts if isinstance(tuple_or_expr, ast.Tuple) else tuple_or_expr
@@ -1122,6 +1122,26 @@ class IRMaker(ast.NodeVisitor):
             raise GTScriptSyntaxError(message="Invalid target in assignment.", loc=node)
         if any(isinstance(cn, ast.Ellipsis) for cn in index_nodes):
             return None
+
+        # Absolute K indexation (of the form `Field[K_at(value)]`)
+        if any(
+            isinstance(cn, ast.Call) and cn.func.id == nodes.AbsoluteKIndex.func_name
+            for cn in index_nodes
+        ):
+            if len(index_nodes) != 1:
+                raise GTScriptSyntaxError(
+                    message="Absolute K Index wrong syntax."
+                    " `K_at` can only be used with I and J on center, e.g. Field[K_at(absolute_index)]",
+                    loc=node,
+                )
+
+            if len(index_nodes[0].args) != 1:
+                raise GTScriptSyntaxError(
+                    message="Absolute K Index wrong syntax. Needs exactly one argument to K_at (`K_at(absolute_index)`)"
+                    f", given {index_nodes[0].args}",
+                    loc=node,
+                )
+            return nodes.AbsoluteKIndex(k=self.visit(index_nodes[0].args[0]))
 
         # Determine if we are using the new-style axis syntax, or the old style.
         # If this is parsing a data index, this should be fine and will return False.
@@ -1161,16 +1181,18 @@ class IRMaker(ast.NodeVisitor):
             assert index is not None
             result.index = index[0]
         else:
-            if isinstance(node.value, ast.Name):
+            if isinstance(index, nodes.AbsoluteKIndex):
+                result.offset = index
+            elif isinstance(node.value, ast.Name):
                 field_axes = self.fields[result.name].axes
                 if index is not None:
                     if len(field_axes) != len(index):
                         ro_field_message = ""
                         if len(field_axes) == 0:
-                            ro_field_message = f"Did you mean .A{index}?"
+                            ro_field_message = f"Did you mean absolute indexing via .A{index}?"
                         raise GTScriptSyntaxError(
-                            f"Incorrect offset specification detected. Found {index}, "
-                            f"but the field has dimensions ({', '.join(field_axes)}). "
+                            f"Incorrect offset specification detected for {result.name}. "
+                            f"Found index={index}, but {result.name} field has dimensions ({', '.join(field_axes)}). "
                             f"{ro_field_message}"
                         )
                     result.offset = {axis: value for axis, value in zip(field_axes, index)}

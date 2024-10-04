@@ -45,6 +45,12 @@ class VariableKOffset(common.VariableKOffset[Expr]):
     pass
 
 
+class AbsoluteKIndex(common.AbsoluteKIndex[Expr]):
+    """See gtc.common.AbsoluteKIndex"""
+
+    pass
+
+
 class FieldAccess(common.FieldAccess[Expr, VariableKOffset], Expr):  # type: ignore
     pass
 

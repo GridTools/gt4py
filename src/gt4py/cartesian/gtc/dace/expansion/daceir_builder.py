@@ -355,8 +355,27 @@ class DaCeIRBuilder(eve.NodeTranslator):
             )
             name = get_tasklet_symbol(node.name, node.offset, is_target=is_target)
             if node.data_index:
+                if isinstance(node.offset, common.AbsoluteKIndex):
+                    raise RuntimeError("Absolute K indexing cannot work with data index")
                 res = dcir.IndexAccess(
-                    name=name, offset=None, data_index=node.data_index, dtype=node.dtype
+                    name=name,
+                    offset=None,
+                    data_index=node.data_index,
+                    dtype=node.dtype,
+                )
+            elif isinstance(node.offset, common.AbsoluteKIndex):
+                res = dcir.IndexAccess(
+                    name=name,
+                    offset=self.visit(
+                        node.offset.k,
+                        is_target=is_target,
+                        targets=targets,
+                        var_offset_fields=var_offset_fields,
+                        K_write_with_offset=K_write_with_offset,
+                        **kwargs,
+                    ),
+                    data_index=[],
+                    dtype=node.dtype,
                 )
             else:
                 res = dcir.ScalarAccess(name=name, dtype=node.dtype)

@@ -738,7 +738,22 @@ class VariableKOffset(common.VariableKOffset[Expr]):
 
 
 class IndexAccess(common.FieldAccess, Expr):
-    offset: Optional[Union[common.CartesianOffset, VariableKOffset]]
+    offset: Optional[
+        Union[
+            common.CartesianOffset,
+            VariableKOffset,
+            common.AbsoluteKIndex,
+            Literal,
+            ScalarAccess,  # For field index
+        ]
+    ]
+
+    @datamodels.validator("offset")
+    def offset_is_integer(self, attribute: datamodels.Attribute, v: Expr) -> None:
+        if (isinstance(v, ScalarAccess) or isinstance(v, Literal)) and not v.dtype.isinteger():
+            raise ValueError(
+                f"Index access, when ScalarAcces/Literal, must be an integer, got {v.dtype}."
+            )
 
 
 class AssignStmt(common.AssignStmt[Union[ScalarAccess, IndexAccess], Expr], Stmt):

@@ -27,6 +27,7 @@ from gt4py.cartesian.gtscript import (
     I,
     J,
     K,
+    K_at,
     abs,
     asin,
     compile_assert,
@@ -1822,3 +1823,42 @@ class TestAnnotations:
         assert "wb" in annotations
         assert annotations["wb"] == int
         assert len(annotations) == 6
+
+
+class TestAbsoluteIndex:
+    def test_good_syntax(self):
+        def definition_func(in_field: gtscript.Field[float], out_field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                out_field = in_field[K_at(0)] + in_field[K_at(1)]
+
+        parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+
+    def test_bad_syntax_specifying_I_J_legacy(self):
+        def definition_func(in_field: gtscript.Field[float], out_field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                out_field = in_field[0, 0, K_at(0)]
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError, match=r".*Absolute K Index wrong syntax.*"
+        ):
+            parse_definition(
+                definition_func,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
+            )
+
+    def test_bad_syntax_specifying_I_J_axis(self):
+        def definition_func(in_field: gtscript.Field[float], out_field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                out_field = in_field[I + 1, K_at(0)]
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError, match=r".*Absolute K Index wrong syntax.*"
+        ):
+            parse_definition(
+                definition_func,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
+            )

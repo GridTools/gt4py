@@ -24,6 +24,7 @@ from gt4py.cartesian.frontend.nodes import (
     Assign,
     AxisBound,
     AxisInterval,
+    AbsoluteKIndex,
     BinaryOperator,
     BinOpExpr,
     BlockStmt,
@@ -558,12 +559,15 @@ class DefIRToGTIR(IRNodeVisitor):
         )
 
     def transform_offset(
-        self, offset: Dict[str, Union[int, Expr]], **kwargs: Any
+        self, offset: Dict[str, Union[int, Expr, AbsoluteKIndex]], **kwargs: Any
     ) -> Union[common.CartesianOffset, gtir.VariableKOffset]:
+        if isinstance(offset, AbsoluteKIndex):
+            k_to_gtir = self.visit(offset.k)
+            return gtir.AbsoluteKIndex(k=k_to_gtir)
         k_val = offset.get("K", 0)
         if isinstance(k_val, numbers.Integral):
             return common.CartesianOffset(i=offset.get("I", 0), j=offset.get("J", 0), k=k_val)
         elif isinstance(k_val, Expr):
             return gtir.VariableKOffset(k=self.visit(k_val, **kwargs))
         else:
-            raise TypeError("Unrecognized vertical offset type")
+            raise TypeError("Unrecognized vertical indexing type")
