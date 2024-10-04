@@ -1140,8 +1140,7 @@ class IRMaker(ast.NodeVisitor):
                     f", given {index_nodes[0].args}",
                     loc=node,
                 )
-
-            return nodes.AbsoluteKIndex(k=ast.literal_eval(index_nodes[0].args[0]))
+            return nodes.AbsoluteKIndex(k=self.visit(index_nodes[0].args[0]))
 
         # Determine if we are using the new-style axis syntax, or the old style.
         # If this is parsing a data index, this should be fine and will return False.
@@ -1189,10 +1188,10 @@ class IRMaker(ast.NodeVisitor):
                     if len(field_axes) != len(index):
                         ro_field_message = ""
                         if len(field_axes) == 0:
-                            ro_field_message = f"Did you mean .A{index}?"
+                            ro_field_message = f"Did you mean absolute indexing via .A{index}?"
                         raise GTScriptSyntaxError(
-                            f"Incorrect offset specification detected. Found {index}, "
-                            f"but the field has dimensions ({', '.join(field_axes)}). "
+                            f"Incorrect offset specification detected for {result.name}. "
+                            f"Found index={index}, but {result.name} field has dimensions ({', '.join(field_axes)}). "
                             f"{ro_field_message}"
                         )
                     result.offset = {axis: value for axis, value in zip(field_axes, index)}

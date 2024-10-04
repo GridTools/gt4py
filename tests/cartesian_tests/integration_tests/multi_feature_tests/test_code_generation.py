@@ -20,11 +20,13 @@ from gt4py.cartesian.gtscript import (
     GlobalTable,
     I,
     J,
+    K,
     computation,
     horizontal,
     interval,
     region,
     K_at,
+    IJ,
 )
 from gt4py.storage.cartesian import utils as storage_utils
 
@@ -749,12 +751,13 @@ def test_absolute_K_index(backend):
     domain = (5, 5, 5)
 
     in_arr = gt_storage.ones(backend=backend, shape=domain, dtype=np.float64)
+    k_arr = gt_storage.zeros(backend=backend, shape=(domain[0], domain[1]), dtype=np.int64)
     out_arr = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
 
     @gtscript.stencil(backend=backend)
     def test_literal_access(in_field: Field[np.float64], out_field: Field[np.float64]) -> None:
         with computation(PARALLEL), interval(...):
-            out_field = in_field[K_at(2)]  # in_field[0, 0, idx]  # 42.42
+            out_field = in_field[K_at(2)]
 
     in_arr[:, :, :] = 1
     in_arr[:, :, 2] = 42.42
@@ -763,14 +766,43 @@ def test_absolute_K_index(backend):
     assert (out_arr[:, :, :] == 42.42).all()
 
     @gtscript.stencil(backend=backend)
-    def test_variable_access(
+    def test_parameter_access(
         in_field: Field[np.float64], out_field: Field[np.float64], idx: int
     ) -> None:
         with computation(PARALLEL), interval(...):
-            out_field = in_field[K_at(idx)]  # in_field[0, 0, idx]  # 42.42
+            out_field = in_field[K_at(idx)]
 
     in_arr[:, :, :] = 1
-    in_arr[:, :, 2] = 42.42
+    in_arr[:, :, 3] = 42.42
     out_arr[:, :, :] = 0
-    test_variable_access(in_arr, out_arr, 1)
+    test_parameter_access(in_arr, out_arr, 3)
+    assert (out_arr[:, :, :] == 42.42).all()
+
+    @gtscript.stencil(backend=backend, externals={"K4": 4})
+    def test_external_access(in_field: Field[np.float64], out_field: Field[np.float64]) -> None:
+        with computation(PARALLEL), interval(...):
+            from __externals__ import K4
+
+            out_field = in_field[K_at(K4)]
+
+    in_arr[:, :, :] = 1
+    in_arr[:, :, 4] = 42.42
+    out_arr[:, :, :] = 0
+    test_external_access(in_arr, out_arr)
+    assert (out_arr[:, :, :] == 42.42).all()
+
+    @gtscript.stencil(backend=backend)
+    def test_field_access(
+        in_field: Field[np.float64],
+        k_field: Field[IJ, np.int64],
+        out_field: Field[np.float64],
+    ) -> None:
+        with computation(PARALLEL), interval(...):
+            out_field = in_field[K_at(k_field)]
+
+    in_arr[:, :, :] = 1
+    k_arr[:, :] = 1
+    in_arr[:, :, 1] = 42.42
+    out_arr[:, :, :] = 0
+    test_field_access(in_arr, k_arr, out_arr)
     assert (out_arr[:, :, :] == 42.42).all()
