@@ -63,7 +63,6 @@ MATH_BUILTINS = {
 
 builtins_and_inline_ignore = {
     "compile_assert",
-    "K_at",
 }
 
 builtins = {
@@ -602,12 +601,6 @@ IJK = (I, J, K)
 """Tuple of axes I, J, K."""
 
 
-def K_at(value: int):
-    """Stub function used to implement absolute
-    K indexing"""
-    raise RuntimeError("`K_at` stub function only, do not call.")
-
-
 def mask_from_axes(axes):
     if isinstance(axes, Axis):
         axes = (axes,)
@@ -662,6 +655,13 @@ class _FieldDescriptor:
     def __str__(self) -> str:
         return (
             f"Field<[{', '.join(str(ax) for ax in self.axes)}], ({self.dtype}, {self.data_dims})>"
+        )
+
+    def at(self, *, K):
+        """Stub function used to implement absolute
+        K indexing"""
+        raise RuntimeError(
+            "`at(K=...)` stub function only, do not call outside of stencil field indexation."
         )
 
 

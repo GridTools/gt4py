@@ -757,7 +757,7 @@ def test_absolute_K_index(backend):
     @gtscript.stencil(backend=backend)
     def test_literal_access(in_field: Field[np.float64], out_field: Field[np.float64]) -> None:
         with computation(PARALLEL), interval(...):
-            out_field = in_field[K_at(2)]
+            out_field = in_field.at(K=2)
 
     in_arr[:, :, :] = 1
     in_arr[:, :, 2] = 42.42
@@ -770,7 +770,7 @@ def test_absolute_K_index(backend):
         in_field: Field[np.float64], out_field: Field[np.float64], idx: int
     ) -> None:
         with computation(PARALLEL), interval(...):
-            out_field = in_field[K_at(idx)]
+            out_field = in_field.at(K=idx)
 
     in_arr[:, :, :] = 1
     in_arr[:, :, 3] = 42.42
@@ -783,7 +783,7 @@ def test_absolute_K_index(backend):
         with computation(PARALLEL), interval(...):
             from __externals__ import K4
 
-            out_field = in_field[K_at(K4)]
+            out_field = in_field.at(K=K4)
 
     in_arr[:, :, :] = 1
     in_arr[:, :, 4] = 42.42
@@ -798,7 +798,7 @@ def test_absolute_K_index(backend):
         out_field: Field[np.float64],
     ) -> None:
         with computation(PARALLEL), interval(...):
-            out_field = in_field[K_at(k_field)]
+            out_field = in_field.at(K=k_field)
 
     in_arr[:, :, :] = 1
     k_arr[:, :] = 1
