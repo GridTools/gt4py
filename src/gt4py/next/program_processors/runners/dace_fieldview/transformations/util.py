@@ -125,9 +125,7 @@ def gt_inline_nested_sdfg(
         validate_all: Performs extensive validation.
     """
     first_iteration = True
-    i = 0
     while True:
-        print(f"ITERATION: {i}")
         nb_preproccess = sdfg.apply_transformations_repeated(
             [dace_dataflow.PruneSymbols, dace_dataflow.PruneConnectors],
             validate=False,

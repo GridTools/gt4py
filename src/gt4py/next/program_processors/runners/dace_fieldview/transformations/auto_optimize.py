@@ -278,7 +278,9 @@ def gt_auto_fuse_top_level_maps(
                 ),
                 gtx_transformations.MapFusionParallel(
                     only_toplevel_maps=True,
-                    only_if_common_ancestor=True,  # TODO(phimuell): Is this good?
+                    # This will lead to the creation of big probably unrelated maps.
+                    #  However, it might be good.
+                    only_if_common_ancestor=False,
                 ),
             ],
             validate=validate,
