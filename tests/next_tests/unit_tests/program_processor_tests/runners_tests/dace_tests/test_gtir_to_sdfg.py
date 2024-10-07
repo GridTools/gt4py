@@ -1345,7 +1345,9 @@ def test_gtir_reduce_dot_product():
     e = np.random.rand(SIMPLE_MESH.num_edges)
     v = np.empty(SIMPLE_MESH.num_vertices, dtype=e.dtype)
     v_ref = [
-        functools.reduce(lambda x, y: x + y, e[v2e_neighbors] * e[v2e_neighbors], init_value)
+        functools.reduce(
+            lambda x, y: x + y, (e[v2e_neighbors] * e[v2e_neighbors]) + 1.0, init_value
+        )
         for v2e_neighbors in connectivity_V2E.table
     ]
 
@@ -1353,9 +1355,12 @@ def test_gtir_reduce_dot_product():
         im.call("as_fieldop")(
             im.lambda_("it")(
                 im.call(im.call("reduce")("plus", im.literal_from_value(init_value)))(
-                    im.map_("multiplies")(
-                        im.neighbors("V2E", "it"),
-                        im.neighbors("V2E", "it"),
+                    im.map_("plus")(
+                        im.map_("multiplies")(
+                            im.neighbors("V2E", "it"),
+                            im.neighbors("V2E", "it"),
+                        ),
+                        im.call("make_const_list")(1.0),
                     )
                 )
             ),
@@ -1373,10 +1378,13 @@ def test_gtir_reduce_dot_product():
             vertex_domain,
         )
     )(
-        im.op_as_fieldop(im.map_("multiplies"), vertex_domain)(
-            im.as_fieldop_neighbors("V2E", "edges", vertex_domain),
-            im.as_fieldop_neighbors("V2E", "edges", vertex_domain),
-        ),
+        im.op_as_fieldop(im.map_("plus"), vertex_domain)(
+            im.op_as_fieldop(im.map_("multiplies"), vertex_domain)(
+                im.as_fieldop_neighbors("V2E", "edges", vertex_domain),
+                im.as_fieldop_neighbors("V2E", "edges", vertex_domain),
+            ),
+            im.op_as_fieldop("make_const_list", vertex_domain)(1.0),
+        )
     )
 
     for i, stencil in enumerate([stencil_inlined, stencil_fieldview]):

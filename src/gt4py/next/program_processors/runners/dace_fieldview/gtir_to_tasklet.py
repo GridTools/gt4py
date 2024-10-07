@@ -59,6 +59,8 @@ InputConnection: TypeAlias = tuple[
     dace.nodes.Node,
     Optional[str],
 ]
+# special connection from map entry node to a tasklet node without arguments
+TaskletConnection: TypeAlias = dace.nodes.Tasklet
 
 IteratorIndexExpr: TypeAlias = MemletExpr | SymbolExpr | ValueExpr
 
@@ -128,7 +130,7 @@ class LambdaToTasklet(eve.NodeVisitor):
     state: dace.SDFGState
     subgraph_builder: gtir_to_sdfg.DataflowBuilder
     reduce_identity: Optional[SymbolExpr]
-    input_connections: list[InputConnection]
+    input_connections: list[InputConnection | TaskletConnection]
     symbol_map: dict[str, IteratorExpr | MemletExpr | SymbolExpr]
 
     def __init__(
@@ -186,7 +188,13 @@ class LambdaToTasklet(eve.NodeVisitor):
         **kwargs: Any,
     ) -> dace.nodes.Tasklet:
         """Helper method to add a tasklet with unique name in current state."""
-        return self.subgraph_builder.add_tasklet(name, self.state, inputs, outputs, code, **kwargs)
+        tasklet_node = self.subgraph_builder.add_tasklet(
+            name, self.state, inputs, outputs, code, **kwargs
+        )
+        if len(inputs) == 0:
+            # tasklet nodes without arguments need an empty edge from map entry node
+            self.input_connections.append(tasklet_node)
+        return tasklet_node
 
     def _add_mapped_tasklet(
         self,
@@ -208,9 +216,14 @@ class LambdaToTasklet(eve.NodeVisitor):
         dtype: dace.typeclass,
         src_node: dace.nodes.Tasklet,
         src_connector: str,
+        use_array: bool = False,
     ) -> ValueExpr:
         temp_name = self.sdfg.temp_data_name()
-        self.sdfg.add_scalar(temp_name, dtype, transient=True)
+        if use_array:
+            # for make_const_list we use a single element array to ease lowering to SDFG
+            self.sdfg.add_array(temp_name, (1,), dtype, transient=True)
+        else:
+            self.sdfg.add_scalar(temp_name, dtype, transient=True)
         data_type = dace_utils.as_scalar_type(str(dtype.as_numpy_dtype()))
         temp_node = self.state.add_access(temp_name)
         self._add_edge(
@@ -485,15 +498,22 @@ class LambdaToTasklet(eve.NodeVisitor):
 
             assert len(input_node.desc(self.sdfg).shape) == 1
             input_size = input_node.desc(self.sdfg).shape[0]
-            if local_size:
-                assert input_size == local_size
+            if input_size == 1:
+                # the result of make_const_list is represented as a size-1 dace array
+                input_memlets[conn] = dace.Memlet(data=input_node.data, subset="0")
             else:
-                local_size = input_size
+                input_memlets[conn] = dace.Memlet(data=input_node.data, subset=map_index)
+                if local_size and input_size != local_size:
+                    raise ValueError(f"Invalid node {node}")
+                else:
+                    local_size = input_size
 
-            input_memlets[conn] = dace.Memlet(data=input_node.data, subset=map_index)
             input_nodes[input_node.data] = input_node
 
-        assert local_size is not None
+        if local_size is None:
+            assert len(input_nodes) >= 1
+            local_size = 1
+
         temp, _ = self.sdfg.add_temp_transient((local_size,), dtype)
         temp_node = self.state.add_access(temp)
 
@@ -850,10 +870,15 @@ class LambdaToTasklet(eve.NodeVisitor):
                     connector,
                 )
 
-        assert isinstance(node.type, ts.ScalarType)
-        dtype = dace_utils.as_dace_type(node.type)
-
-        return self._get_tasklet_result(dtype, tasklet_node, "result")
+        if isinstance(node.type, itir_ts.ListType):
+            # make_const_list returns `ListType` but we represent it as a scalar value
+            assert isinstance(node.type.element_type, ts.ScalarType)
+            dtype = dace_utils.as_dace_type(node.type.element_type)
+            return self._get_tasklet_result(dtype, tasklet_node, "result", use_array=True)
+        else:
+            assert isinstance(node.type, ts.ScalarType)
+            dtype = dace_utils.as_dace_type(node.type)
+            return self._get_tasklet_result(dtype, tasklet_node, "result")
 
     def visit_Lambda(
         self, node: gtir.Lambda, args: list[IteratorExpr | MemletExpr | SymbolExpr]

@@ -83,9 +83,14 @@ def builtin_if(*args: Any) -> str:
     return f"{true_val} if {cond} else {false_val}"
 
 
+def make_const_list(arg: str) -> str:
+    return arg
+
+
 GENERAL_BUILTIN_MAPPING: dict[str, Callable[[Any], str]] = {
     "cast_": builtin_cast,
     "if_": builtin_if,
+    "make_const_list": make_const_list,
 }
 
 

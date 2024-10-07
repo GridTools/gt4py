@@ -230,11 +230,12 @@ def translate_as_field_op(
     map_ranges = {dace_gtir_utils.get_map_variable(dim): f"{lb}:{ub}" for dim, lb, ub in domain}
     me, mx = sdfg_builder.add_map("field_op", state, map_ranges)
 
-    if len(input_connections) == 0:
-        # dace requires an empty edge from map entry node to tasklet node, in case there no input memlets
-        state.add_nedge(me, last_node, dace.Memlet())
-    else:
-        for data_node, data_subset, lambda_node, lambda_connector in input_connections:
+    for x in input_connections:
+        if isinstance(x, dace.nodes.Tasklet):
+            # tasklet without arguments: simply add an edge from map entry node to the tasklet node
+            state.add_nedge(me, x, dace.Memlet())
+        else:
+            data_node, data_subset, lambda_node, lambda_connector = x
             memlet = dace.Memlet(data=data_node.data, subset=data_subset)
             state.add_memlet_path(
                 data_node,
@@ -243,6 +244,7 @@ def translate_as_field_op(
                 dst_conn=lambda_connector,
                 memlet=memlet,
             )
+
     state.add_memlet_path(
         last_node,
         mx,
