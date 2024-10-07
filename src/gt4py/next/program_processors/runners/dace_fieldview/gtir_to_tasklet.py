@@ -462,30 +462,36 @@ class LambdaToTasklet(eve.NodeVisitor):
         input_nodes = {}
         local_size: Optional[int] = None
         for conn, input_expr in zip(connectors, input_args, strict=True):
-            assert isinstance(input_expr, MemletExpr)
-            if not all(size == 1 for size in input_expr.subset.size()[:-1]):
-                raise ValueError(f"Invalid node {node}")
-            rstart, rstop, rstep = input_expr.subset[-1]
-            assert rstart == 0 and rstep == 1
-            if local_size:
-                assert (rstop + 1) == local_size
+            if isinstance(input_expr, MemletExpr):
+                if set(input_expr.subset.size()[:-1]) != {1}:
+                    raise ValueError(f"Invalid node {node}")
+                rstart, rstop, rstep = input_expr.subset[-1]
+                assert rstart == 0 and rstep == 1
+                input_size = rstop + 1
+
+                desc = self.sdfg.arrays[input_expr.node.data]
+                view, _ = self.sdfg.add_view(
+                    f"{input_expr.node.data}_view",
+                    (input_size,),
+                    desc.dtype,
+                    strides=desc.strides[-1:],
+                    find_new_name=True,
+                )
+                input_node = self.state.add_access(view)
+                self._add_entry_memlet_path(input_expr.node, input_expr.subset, input_node)
+
             else:
-                local_size = rstop + 1
+                input_node = input_expr.node
 
-            desc = self.sdfg.arrays[input_expr.node.data]
-            view, _ = self.sdfg.add_view(
-                f"{input_expr.node.data}_view",
-                (local_size,),
-                desc.dtype,
-                strides=desc.strides[-1:],
-                find_new_name=True,
-            )
-            view_node = self.state.add_access(view)
+            assert len(input_node.desc(self.sdfg).shape) == 1
+            input_size = input_node.desc(self.sdfg).shape[0]
+            if local_size:
+                assert input_size == local_size
+            else:
+                local_size = input_size
 
-            self._add_entry_memlet_path(input_expr.node, input_expr.subset, view_node)
-
-            input_memlets[conn] = dace.Memlet(data=view, subset=map_index)
-            input_nodes[view] = view_node
+            input_memlets[conn] = dace.Memlet(data=input_node.data, subset=map_index)
+            input_nodes[input_node.data] = input_node
 
         assert local_size is not None
         temp, _ = self.sdfg.add_temp_transient((local_size,), dtype)
