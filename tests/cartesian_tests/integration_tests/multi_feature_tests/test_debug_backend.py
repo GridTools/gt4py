@@ -72,3 +72,102 @@ def test_tmp_stencil():
     np.testing.assert_allclose(field_out.view(np.ndarray)[-1:, :, :], 0)
     np.testing.assert_allclose(field_out.view(np.ndarray)[:, 0:1, :], 0)
     np.testing.assert_allclose(field_out.view(np.ndarray)[:, -1:, :], 0)
+
+
+def test_backward_stencil():
+    field_in = gt_storage.ones(
+        dtype=np.float64, backend="debug", shape=(4, 4, 4), aligned_index=(0, 0, 0)
+    )
+    field_out = gt_storage.zeros(
+        dtype=np.float64, backend="debug", shape=(4, 4, 4), aligned_index=(0, 0, 0)
+    )
+
+    @gtscript.stencil(backend="debug")
+    def stencil(field_in: gtscript.Field[np.float64], field_out: gtscript.Field[np.float64]):
+        with computation(BACKWARD):
+            with interval(-1, None):
+                field_in = 2
+                field_out = field_in
+            with interval(0, -1):
+                field_in = field_in[0, 0, 1] + 1
+                field_out = field_in
+
+    stencil(field_in, field_out)
+
+    np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, 0], 5)
+    np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, 1], 4)
+    np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, 2], 3)
+    np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, 3], 2)
+
+
+def test_while_stencil():
+    field_in = gt_storage.ones(
+        dtype=np.float64, backend="debug", shape=(6, 6, 6), aligned_index=(0, 0, 0)
+    )
+    field_out = gt_storage.zeros(
+        dtype=np.float64, backend="debug", shape=(6, 6, 6), aligned_index=(0, 0, 0)
+    )
+
+    @gtscript.stencil(backend="debug")
+    def stencil(field_in: gtscript.Field[np.float64], field_out: gtscript.Field[np.float64]):
+        with computation(PARALLEL):
+            with interval(...):
+                while field_in < 10:
+                    field_in += 1
+                field_out = field_in
+
+    stencil(field_in, field_out)
+
+    # the inside of the domain is 10
+    np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, :], 10)
+
+
+def test_higher_dim_literal_stencil():
+    FLOAT64_NDDIM = (np.float64, (4,))
+
+    field_in = gt_storage.ones(
+        dtype=FLOAT64_NDDIM, backend="debug", shape=(6, 6, 6), aligned_index=(0, 0, 0)
+    )
+    field_out = gt_storage.zeros(
+        dtype=np.float64, backend="debug", shape=(6, 6, 6), aligned_index=(0, 0, 0)
+    )
+    field_in[:, :, :, 2] = 5
+
+    @gtscript.stencil(backend="debug")
+    def stencil(
+        vec_field: gtscript.Field[FLOAT64_NDDIM],
+        out_field: gtscript.Field[np.float64],
+    ):
+        with computation(PARALLEL), interval(...):
+            out_field[0, 0, 0] = vec_field[0, 0, 0][2]
+
+    stencil(field_in, field_out)
+
+    # the inside of the domain is 5
+    np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, :], 5)
+
+
+def test_higher_dim_scalar_stencil():
+    FLOAT64_NDDIM = (np.float64, (4,))
+
+    field_in = gt_storage.ones(
+        dtype=FLOAT64_NDDIM, backend="debug", shape=(6, 6, 6), aligned_index=(0, 0, 0)
+    )
+    field_out = gt_storage.zeros(
+        dtype=np.float64, backend="debug", shape=(6, 6, 6), aligned_index=(0, 0, 0)
+    )
+    field_in[:, :, :, 2] = 5
+
+    @gtscript.stencil(backend="debug")
+    def stencil(
+        vec_field: gtscript.Field[FLOAT64_NDDIM],
+        out_field: gtscript.Field[np.float64],
+        scalar_argument: int,
+    ):
+        with computation(PARALLEL), interval(...):
+            out_field[0, 0, 0] = vec_field[0, 0, 0][scalar_argument]
+
+    stencil(field_in, field_out, 2)
+
+    # the inside of the domain is 5
+    np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, :], 5)

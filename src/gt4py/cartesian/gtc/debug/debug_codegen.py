@@ -25,6 +25,7 @@ from gt4py.cartesian.gtc.common import (
     HorizontalMask,
     LevelMarker,
     LoopOrder,
+    While,
 )
 from gt4py.cartesian.gtc.definitions import Extent
 from gt4py.cartesian.gtc.oir import (
@@ -37,6 +38,9 @@ from gt4py.cartesian.gtc.oir import (
     HorizontalRestriction,
     Interval,
     Literal,
+    NativeFuncCall,
+    ScalarAccess,
+    ScalarDecl,
     Stencil,
     Temporary,
     VerticalLoop,
@@ -62,8 +66,9 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         return self.body.text
 
     def generate_imports(self):
-        self.body.append("from gt4py.cartesian.utils import Field")
         self.body.append("import numpy as np")
+        self.body.append("from gt4py.cartesian.gtc import ufuncs")
+        self.body.append("from gt4py.cartesian.utils import Field")
 
     @staticmethod
     def compute_extents(node: Stencil, **_) -> tuple[dict[str, Extent], dict[int, Extent]]:
@@ -139,6 +144,15 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         self.body.dedent()
         self.body.dedent()
 
+    def visit_While(self, while_node: While, **_) -> None:
+        while_condition = self.visit(while_node.cond)
+        while_code = f"while {while_condition}:"
+        self.body.append(while_code)
+        self.body.indent()
+        for statement in while_node.body:
+            self.visit(statement)
+        self.body.dedent()
+
     def visit_FieldDecl(self, field_decl: FieldDecl, **_) -> str:
         return str(field_decl.name)
 
@@ -184,7 +198,20 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
             return data_type.name.lower()
 
     def visit_FieldAccess(self, field_access: FieldAccess, **_) -> str:
-        full_string = field_access.name + "[" + field_access.offset.to_str() + "]"
+        if field_access.data_index:
+            data_index_access = ",".join(
+                [self.visit(data_index) for data_index in field_access.data_index]
+            )
+            full_string = (
+                field_access.name
+                + "["
+                + field_access.offset.to_str()
+                + ","
+                + data_index_access
+                + "]"
+            )
+        else:
+            full_string = field_access.name + "[" + field_access.offset.to_str() + "]"
         return full_string
 
     def visit_AssignStmt(self, assignment_statement: AssignStmt, **_) -> None:
@@ -240,3 +267,14 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     def visit_VerticalLoop(self):
         pass
+
+    def visit_ScalarAccess(self, scalar_access: ScalarAccess, **_):
+        return scalar_access.name
+
+    def visit_ScalarDecl(self, scalar_declaration: ScalarDecl, **_) -> str:
+        return scalar_declaration.name
+
+    def visit_NativeFuncCall(self, native_function_call: NativeFuncCall, **_) -> str:
+        arglist = [self.visit(arg) for arg in native_function_call.args]
+        arguments = ",".join(arglist)
+        return f"ufuncs.{native_function_call.func.value}({arguments})"
