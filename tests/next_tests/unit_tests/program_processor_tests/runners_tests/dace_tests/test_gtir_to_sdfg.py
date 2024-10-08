@@ -100,10 +100,36 @@ def make_mesh_symbols(mesh: MeshDescriptor):
     )
 
 
-def test_gtir_cast():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
+def test_gtir_broadcast():
+    val = np.random.rand()
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
+    testee = gtir.Program(
+        id="gtir_broadcast",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="x", type=IFTYPE),
+            gtir.Sym(id="size", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.as_fieldop("deref", domain)(val),
+                domain=domain,
+                target=gtir.SymRef(id="x"),
+            )
+        ],
     )
+
+    a = np.empty(N, dtype=np.float64)
+
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
+
+    sdfg(a, **FSYMBOLS)
+    np.testing.assert_array_equal(a, val)
+
+
+def test_gtir_cast():
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     IFTYPE_FLOAT32 = ts.FieldType(IFTYPE.dims, dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
     IFTYPE_BOOL = ts.FieldType(IFTYPE.dims, dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL))
     testee = gtir.Program(
@@ -141,9 +167,7 @@ def test_gtir_cast():
 
 
 def test_gtir_copy_self():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 1, 2)
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (1, 2)})
     testee = gtir.Program(
         id="gtir_copy_self",
         function_definitions=[],
@@ -171,9 +195,7 @@ def test_gtir_copy_self():
 
 
 def test_gtir_tuple_swap():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
         id="gtir_tuple_swap",
         function_definitions=[],
@@ -205,9 +227,7 @@ def test_gtir_tuple_swap():
 
 
 def test_gtir_tuple_args():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
         id="gtir_tuple_args",
         function_definitions=[],
@@ -255,9 +275,7 @@ def test_gtir_tuple_args():
 
 
 def test_gtir_tuple_expr():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
         id="gtir_tuple_expr",
         function_definitions=[],
@@ -298,9 +316,7 @@ def test_gtir_tuple_expr():
 
 
 def test_gtir_tuple_return():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
         id="gtir_tuple_return",
         function_definitions=[],
@@ -346,9 +362,7 @@ def test_gtir_tuple_return():
 
 
 def test_gtir_tuple_target():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
         id="gtir_tuple_target",
         function_definitions=[],
@@ -379,9 +393,7 @@ def test_gtir_tuple_target():
 
 
 def test_gtir_update():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     stencil1 = im.as_fieldop(
         im.lambda_("a")(im.plus(im.deref("a"), 0 - 1.0)),
         domain,
@@ -415,9 +427,7 @@ def test_gtir_update():
 
 
 def test_gtir_sum2():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
         id="sum_2fields",
         function_definitions=[],
@@ -448,9 +458,7 @@ def test_gtir_sum2():
 
 
 def test_gtir_sum2_sym():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
         id="sum_2fields_sym",
         function_definitions=[],
@@ -479,9 +487,7 @@ def test_gtir_sum2_sym():
 
 
 def test_gtir_sum3():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     stencil1 = im.op_as_fieldop("plus", domain)(
         "x",
         im.op_as_fieldop("plus", domain)("y", "w"),
@@ -525,9 +531,7 @@ def test_gtir_sum3():
 
 
 def test_gtir_cond():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
         id="cond_2sums",
         function_definitions=[],
@@ -571,9 +575,7 @@ def test_gtir_cond():
 
 
 def test_gtir_cond_with_tuple_return():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
         id="cond_with_tuple_return",
         function_definitions=[],
@@ -623,9 +625,7 @@ def test_gtir_cond_with_tuple_return():
 
 
 def test_gtir_cond_nested():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
         id="cond_nested",
         function_definitions=[],
@@ -668,12 +668,14 @@ def test_gtir_cond_nested():
 def test_gtir_cartesian_shift_left():
     DELTA = 3.0
     OFFSET = 1
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(
-            gtir.AxisLiteral(value=IDim.value),
-            0,
-            im.minus(gtir.SymRef(id="size"), gtir.Literal(value=str(OFFSET), type=SIZE_TYPE)),
-        )
+    domain = im.domain(
+        gtx_common.GridType.CARTESIAN,
+        ranges={
+            IDim: (
+                0,
+                im.minus(gtir.SymRef(id="size"), gtir.Literal(value=str(OFFSET), type=SIZE_TYPE)),
+            ),
+        },
     )
 
     # cartesian shift with literal integer offset
@@ -769,9 +771,7 @@ def test_gtir_cartesian_shift_left():
 def test_gtir_cartesian_shift_right():
     DELTA = 3.0
     OFFSET = 1
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), OFFSET, "size")
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (OFFSET, "size")})
 
     # cartesian shift with literal integer offset
     stencil1_inlined = im.as_fieldop(
@@ -864,13 +864,25 @@ def test_gtir_cartesian_shift_right():
 def test_gtir_connectivity_shift():
     C2E_neighbor_idx = 2
     E2V_neighbor_idx = 1
-    cv_domain = im.call("unstructured_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=Cell.value), 0, "ncells"),
-        im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
+    edge_domain = im.domain(
+        gtx_common.GridType.UNSTRUCTURED,
+        ranges={
+            Edge: (0, "nedges"),
+        },
     )
-    ce_domain = im.call("unstructured_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=Cell.value), 0, "ncells"),
-        im.call("named_range")(gtir.AxisLiteral(value=Edge.value), 0, "nedges"),
+    ce_domain = im.domain(
+        gtx_common.GridType.UNSTRUCTURED,
+        ranges={
+            Cell: (0, "ncells"),
+            Edge: (0, "nedges"),
+        },
+    )
+    cv_domain = im.domain(
+        gtx_common.GridType.UNSTRUCTURED,
+        ranges={
+            Cell: (0, "ncells"),
+            Vertex: (0, "nvertices"),
+        },
     )
 
     # apply shift 2 times along different dimensions
@@ -944,12 +956,7 @@ def test_gtir_connectivity_shift():
     )(
         "ev_field",
         "c2e_offset",
-        im.op_as_fieldop(
-            "plus",
-            im.call("unstructured_domain")(
-                im.call("named_range")(gtir.AxisLiteral(value=Edge.value), 0, "nedges"),
-            ),
-        )("e2v_offset", 0),
+        im.op_as_fieldop("plus", edge_domain)("e2v_offset", 0),
     )
 
     CE_FTYPE = ts.FieldType(dims=[Cell, Edge], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
@@ -1022,11 +1029,17 @@ def test_gtir_connectivity_shift():
 def test_gtir_connectivity_shift_chain():
     E2V_neighbor_idx = 1
     V2E_neighbor_idx = 2
-    edge_domain = im.call("unstructured_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=Edge.value), 0, "nedges")
+    edge_domain = im.domain(
+        gtx_common.GridType.UNSTRUCTURED,
+        ranges={
+            Edge: (0, "nedges"),
+        },
     )
-    vertex_domain = im.call("unstructured_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices")
+    vertex_domain = im.domain(
+        gtx_common.GridType.UNSTRUCTURED,
+        ranges={
+            Vertex: (0, "nvertices"),
+        },
     )
     testee = gtir.Program(
         id="connectivity_shift_chain",
@@ -1085,8 +1098,11 @@ def test_gtir_neighbors_as_input():
     # FIXME[#1582](edopao): Enable testcase when type inference is working
     pytest.skip("Field of lists not fully supported by GTIR type inference")
     init_value = np.random.rand()
-    vertex_domain = im.call("unstructured_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
+    vertex_domain = im.domain(
+        gtx_common.GridType.UNSTRUCTURED,
+        ranges={
+            Vertex: (0, "nvertices"),
+        },
     )
     testee = gtir.Program(
         id="neighbors_as_input",
@@ -1144,16 +1160,18 @@ def test_gtir_neighbors_as_input():
 def test_gtir_neighbors_as_output():
     # FIXME[#1582](edopao): Enable testcase when type inference is working
     pytest.skip("Field of lists not fully supported by GTIR type inference")
-    vertex_domain = im.call("unstructured_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
+    v2e_domain = im.domain(
+        gtx_common.GridType.UNSTRUCTURED,
+        ranges={
+            Vertex: (0, "nvertices"),
+            V2EDim: (0, SIMPLE_MESH_OFFSET_PROVIDER["V2E"].max_neighbors),
+        },
     )
-    v2e_domain = im.call("unstructured_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
-        im.call("named_range")(
-            gtir.AxisLiteral(value=V2EDim.value),
-            0,
-            SIMPLE_MESH_OFFSET_PROVIDER["V2E"].max_neighbors,
-        ),
+    vertex_domain = im.domain(
+        gtx_common.GridType.UNSTRUCTURED,
+        ranges={
+            Vertex: (0, "nvertices"),
+        },
     )
     testee = gtir.Program(
         id="neighbors_as_output",
@@ -1197,8 +1215,11 @@ def test_gtir_neighbors_as_output():
 
 def test_gtir_reduce():
     init_value = np.random.rand()
-    vertex_domain = im.call("unstructured_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
+    vertex_domain = im.domain(
+        gtx_common.GridType.UNSTRUCTURED,
+        ranges={
+            Vertex: (0, "nvertices"),
+        },
     )
     stencil_inlined = im.call(
         im.call("as_fieldop")(
@@ -1265,8 +1286,11 @@ def test_gtir_reduce():
 
 def test_gtir_reduce_with_skip_values():
     init_value = np.random.rand()
-    vertex_domain = im.call("unstructured_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
+    vertex_domain = im.domain(
+        gtx_common.GridType.UNSTRUCTURED,
+        ranges={
+            Vertex: (0, "nvertices"),
+        },
     )
     stencil_inlined = im.call(
         im.call("as_fieldop")(
@@ -1337,16 +1361,11 @@ def test_gtir_reduce_dot_product():
     # FIXME[#1582](edopao): Enable testcase when type inference is working
     pytest.skip("Field of lists not fully supported as a type in GTIR yet")
     init_value = np.random.rand()
-    vertex_domain = im.call("unstructured_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
-    )
-    v2e_domain = im.call("unstructured_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
-        im.call("named_range")(
-            gtir.AxisLiteral(value=V2EDim.value),
-            0,
-            SIMPLE_MESH_OFFSET_PROVIDER["V2E"].max_neighbors,
-        ),
+    vertex_domain = im.domain(
+        gtx_common.GridType.UNSTRUCTURED,
+        ranges={
+            Vertex: (0, "nvertices"),
+        },
     )
 
     testee = gtir.Program(
@@ -1405,8 +1424,11 @@ def test_gtir_reduce_dot_product():
 
 def test_gtir_reduce_with_cond_neighbors():
     init_value = np.random.rand()
-    vertex_domain = im.call("unstructured_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
+    vertex_domain = im.domain(
+        gtx_common.GridType.UNSTRUCTURED,
+        ranges={
+            Vertex: (0, "nvertices"),
+        },
     )
     testee = gtir.Program(
         id="reduce_with_cond_neighbors",
@@ -1488,12 +1510,8 @@ def test_gtir_reduce_with_cond_neighbors():
 
 
 def test_gtir_let_lambda():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
-    subdomain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 1, im.minus("size", 1))
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
+    subdomain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (1, im.minus("size", 1))})
     testee = gtir.Program(
         id="let_lambda",
         function_definitions=[],
@@ -1542,8 +1560,11 @@ def test_gtir_let_lambda():
 def test_gtir_let_lambda_with_connectivity():
     C2E_neighbor_idx = 1
     C2V_neighbor_idx = 2
-    cell_domain = im.call("unstructured_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=Cell.value), 0, "ncells"),
+    cell_domain = im.domain(
+        gtx_common.GridType.UNSTRUCTURED,
+        ranges={
+            Cell: (0, "ncells"),
+        },
     )
 
     connectivity_C2E = SIMPLE_MESH_OFFSET_PROVIDER["C2E"]
@@ -1607,9 +1628,7 @@ def test_gtir_let_lambda_with_connectivity():
 
 
 def test_gtir_let_lambda_with_cond():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
         id="let_lambda_with_cond",
         function_definitions=[],
@@ -1647,9 +1666,7 @@ def test_gtir_let_lambda_with_cond():
 
 
 def test_gtir_let_lambda_with_tuple():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
         id="let_lambda_with_tuple",
         function_definitions=[],
@@ -1693,9 +1710,7 @@ def test_gtir_let_lambda_with_tuple():
 
 
 def test_gtir_if_scalars():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
         id="if_scalars",
         function_definitions=[],
@@ -1750,9 +1765,7 @@ def test_gtir_if_scalars():
 
 
 def test_gtir_if_values():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
         id="if_values",
         function_definitions=[],
