@@ -1429,6 +1429,21 @@ class TestAssignmentSyntax:
                 module=self.__class__.__name__,
             )
 
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match=r"Assignment to non-zero offsets in K can only be done with literals, got(.*)",
+        ):
+
+            def func(
+                in_field: gtscript.Field[np.float_],
+                out_field: gtscript.Field[np.float_],
+                index: int,
+            ):
+                with computation(FORWARD), interval(...):
+                    out_field[0, 0, index] = in_field
+
+            parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
+
     def test_return_to_subscript(self):
         @gtscript.function
         def func(a):
