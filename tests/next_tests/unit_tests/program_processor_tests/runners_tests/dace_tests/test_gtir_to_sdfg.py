@@ -864,12 +864,7 @@ def test_gtir_cartesian_shift_right():
 def test_gtir_connectivity_shift():
     C2E_neighbor_idx = 2
     E2V_neighbor_idx = 1
-    edge_domain = im.domain(
-        gtx_common.GridType.UNSTRUCTURED,
-        ranges={
-            Edge: (0, "nedges"),
-        },
-    )
+    edge_domain = im.domain(gtx_common.GridType.UNSTRUCTURED, ranges={Edge: (0, "nedges")})
     ce_domain = im.domain(
         gtx_common.GridType.UNSTRUCTURED,
         ranges={
@@ -1029,18 +1024,8 @@ def test_gtir_connectivity_shift():
 def test_gtir_connectivity_shift_chain():
     E2V_neighbor_idx = 1
     V2E_neighbor_idx = 2
-    edge_domain = im.domain(
-        gtx_common.GridType.UNSTRUCTURED,
-        ranges={
-            Edge: (0, "nedges"),
-        },
-    )
-    vertex_domain = im.domain(
-        gtx_common.GridType.UNSTRUCTURED,
-        ranges={
-            Vertex: (0, "nvertices"),
-        },
-    )
+    edge_domain = im.domain(gtx_common.GridType.UNSTRUCTURED, ranges={Edge: (0, "nedges")})
+    vertex_domain = im.domain(gtx_common.GridType.UNSTRUCTURED, ranges={Vertex: (0, "nvertices")})
     testee = gtir.Program(
         id="connectivity_shift_chain",
         function_definitions=[],
@@ -1098,12 +1083,7 @@ def test_gtir_neighbors_as_input():
     # FIXME[#1582](edopao): Enable testcase when type inference is working
     pytest.skip("Field of lists not fully supported by GTIR type inference")
     init_value = np.random.rand()
-    vertex_domain = im.domain(
-        gtx_common.GridType.UNSTRUCTURED,
-        ranges={
-            Vertex: (0, "nvertices"),
-        },
-    )
+    vertex_domain = im.domain(gtx_common.GridType.UNSTRUCTURED, ranges={Vertex: (0, "nvertices")})
     testee = gtir.Program(
         id="neighbors_as_input",
         function_definitions=[],
@@ -1167,12 +1147,7 @@ def test_gtir_neighbors_as_output():
             V2EDim: (0, SIMPLE_MESH_OFFSET_PROVIDER["V2E"].max_neighbors),
         },
     )
-    vertex_domain = im.domain(
-        gtx_common.GridType.UNSTRUCTURED,
-        ranges={
-            Vertex: (0, "nvertices"),
-        },
-    )
+    vertex_domain = im.domain(gtx_common.GridType.UNSTRUCTURED, ranges={Vertex: (0, "nvertices")})
     testee = gtir.Program(
         id="neighbors_as_output",
         function_definitions=[],
@@ -1215,12 +1190,7 @@ def test_gtir_neighbors_as_output():
 
 def test_gtir_reduce():
     init_value = np.random.rand()
-    vertex_domain = im.domain(
-        gtx_common.GridType.UNSTRUCTURED,
-        ranges={
-            Vertex: (0, "nvertices"),
-        },
-    )
+    vertex_domain = im.domain(gtx_common.GridType.UNSTRUCTURED, ranges={Vertex: (0, "nvertices")})
     stencil_inlined = im.call(
         im.call("as_fieldop")(
             im.lambda_("it")(
@@ -1286,12 +1256,7 @@ def test_gtir_reduce():
 
 def test_gtir_reduce_with_skip_values():
     init_value = np.random.rand()
-    vertex_domain = im.domain(
-        gtx_common.GridType.UNSTRUCTURED,
-        ranges={
-            Vertex: (0, "nvertices"),
-        },
-    )
+    vertex_domain = im.domain(gtx_common.GridType.UNSTRUCTURED, ranges={Vertex: (0, "nvertices")})
     stencil_inlined = im.call(
         im.call("as_fieldop")(
             im.lambda_("it")(
@@ -1361,12 +1326,7 @@ def test_gtir_reduce_dot_product():
     # FIXME[#1582](edopao): Enable testcase when type inference is working
     pytest.skip("Field of lists not fully supported as a type in GTIR yet")
     init_value = np.random.rand()
-    vertex_domain = im.domain(
-        gtx_common.GridType.UNSTRUCTURED,
-        ranges={
-            Vertex: (0, "nvertices"),
-        },
-    )
+    vertex_domain = im.domain(gtx_common.GridType.UNSTRUCTURED, ranges={Vertex: (0, "nvertices")})
 
     testee = gtir.Program(
         id="reduce_dot_product",
@@ -1424,12 +1384,7 @@ def test_gtir_reduce_dot_product():
 
 def test_gtir_reduce_with_cond_neighbors():
     init_value = np.random.rand()
-    vertex_domain = im.domain(
-        gtx_common.GridType.UNSTRUCTURED,
-        ranges={
-            Vertex: (0, "nvertices"),
-        },
-    )
+    vertex_domain = im.domain(gtx_common.GridType.UNSTRUCTURED, ranges={Vertex: (0, "nvertices")})
     testee = gtir.Program(
         id="reduce_with_cond_neighbors",
         function_definitions=[],
@@ -1560,12 +1515,7 @@ def test_gtir_let_lambda():
 def test_gtir_let_lambda_with_connectivity():
     C2E_neighbor_idx = 1
     C2V_neighbor_idx = 2
-    cell_domain = im.domain(
-        gtx_common.GridType.UNSTRUCTURED,
-        ranges={
-            Cell: (0, "ncells"),
-        },
-    )
+    cell_domain = im.domain(gtx_common.GridType.UNSTRUCTURED, ranges={Cell: (0, "ncells")})
 
     connectivity_C2E = SIMPLE_MESH_OFFSET_PROVIDER["C2E"]
     assert isinstance(connectivity_C2E, gtx_common.NeighborTable)
