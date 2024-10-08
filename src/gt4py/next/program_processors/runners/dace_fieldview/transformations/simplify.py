@@ -43,7 +43,7 @@ def gt_simplify(
     validate: bool = True,
     validate_all: bool = False,
     skip: Optional[Iterable[str]] = None,
-) -> Any:
+) -> Optional[dict[str, Any]]:
     """Performs simplifications on the SDFG in place.
 
     Instead of calling `sdfg.simplify()` directly, you should use this function,
@@ -76,14 +76,18 @@ def gt_simplify(
     # Ensure that `skip` is a `set`
     skip = GT_SIMPLIFY_DEFAULT_SKIP_SET if skip is None else set(skip)
 
+    result: Optional[dict[str, Any]] = None
+
     if "InlineSDFGs" not in skip:
-        gt_inline_nested_sdfg(
+        inline_res = gt_inline_nested_sdfg(
             sdfg=sdfg,
             multistate=True,
             permissive=False,
             validate=validate,
             validate_all=validate_all,
         )
+        if inline_res is not None:
+            result = inline_res
 
     simplify_res = dace_passes.SimplifyPass(
         validate=validate,
@@ -92,14 +96,21 @@ def gt_simplify(
         skip=(skip | {"InlineSDFGs"}),
     ).apply_pass(sdfg, {})
 
+    if simplify_res is not None:
+        result = result or {}
+        result.update(simplify_res)
+
     if "GT4PyRednundantArrayElimination" not in skip:
-        simplify_res["GT4PyRednundantArrayElimination"] = sdfg.apply_transformations_repeated(
+        array_elimination_result = sdfg.apply_transformations_repeated(
             GT4PyRednundantArrayElimination(),
             validate=validate,
             validate_all=validate_all,
         )
+        if array_elimination_result is not None:
+            result = result or {}
+            result["GT4PyRednundantArrayElimination"] = array_elimination_result
 
-    return simplify_res
+    return result
 
 
 def gt_set_iteration_order(
@@ -136,7 +147,7 @@ def gt_inline_nested_sdfg(
     permissive: bool = False,
     validate: bool = True,
     validate_all: bool = False,
-) -> dace.SDFG:
+) -> Optional[dict[str, int]]:
     """Perform inlining of nested SDFG into their parent SDFG.
 
     The function uses DaCe's `InlineSDFG` transformation, the same used in simplify.
@@ -152,12 +163,15 @@ def gt_inline_nested_sdfg(
         validate_all: Performs extensive validation.
     """
     first_iteration = True
+    nb_preproccess_total = 0
+    nb_inlines_total = 0
     while True:
         nb_preproccess = sdfg.apply_transformations_repeated(
             [dace_dataflow.PruneSymbols, dace_dataflow.PruneConnectors],
             validate=False,
             validate_all=validate_all,
         )
+        nb_preproccess_total += nb_preproccess
         if (nb_preproccess == 0) and (not first_iteration):
             break
 
@@ -168,7 +182,9 @@ def gt_inline_nested_sdfg(
         inline_sdfg.multistate = multistate
 
         # Apply the inline pass
-        nb_inlines = inline_sdfg.apply_pass(sdfg, {})
+        #  The pass returns `None` no indicate "nothing was done"
+        nb_inlines = inline_sdfg.apply_pass(sdfg, {}) or 0
+        nb_inlines_total += nb_inlines
 
         # Check result, if needed and test if we can stop
         if validate_all or validate:
@@ -177,7 +193,12 @@ def gt_inline_nested_sdfg(
             break
         first_iteration = False
 
-    return sdfg
+    result: dict[str, int] = {}
+    if nb_inlines_total != 0:
+        result["InlineSDFGs"] = nb_inlines_total
+    if nb_preproccess_total != 0:
+        result["PruneSymbols|PruneConnectors"] = nb_preproccess_total
+    return result if result else None
 
 
 @dace_properties.make_properties
