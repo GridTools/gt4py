@@ -1458,6 +1458,11 @@ class IRMaker(ast.NodeVisitor):
                                 message=f"Assignment to non-zero offsets in K is not available in {self.backend_name} for CUDA<12. Please update CUDA.",
                                 loc=nodes.Location.from_ast_node(t),
                             )
+                    if isinstance(spatial_offset[2], nodes.Expr):
+                        raise GTScriptSyntaxError(
+                            message=f"Assignment to non-zero offsets in K can only be done with literals, got {spatial_offset[2]}",
+                            loc=nodes.Location.from_ast_node(t),
+                        )
 
             if not self._is_known(name):
                 if name in self.temp_decls:
