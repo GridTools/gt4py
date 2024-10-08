@@ -657,7 +657,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
 
 def build_sdfg_from_gtir(
-    program: gtir.Program,
+    ir: gtir.Program,
     offset_provider: gtx_common.OffsetProvider,
 ) -> dace.SDFG:
     """
@@ -668,15 +668,16 @@ def build_sdfg_from_gtir(
     As a final step, it runs the `simplify` pass to ensure that the SDFG is in the DaCe canonical form.
 
     Arguments:
-        program: The GTIR program node to be lowered to SDFG
+        ir: The GTIR program node to be lowered to SDFG
         offset_provider: The definitions of offset providers used by the program node
 
     Returns:
         An SDFG in the DaCe canonical form (simplified)
     """
-    program = gtir_type_inference.infer(program, offset_provider=offset_provider)
+    ir = gtir_type_inference.infer(ir, offset_provider=offset_provider)
+    ir = dace_gtir_utils.patch_gtir(ir)
     sdfg_genenerator = GTIRToSDFG(offset_provider)
-    sdfg = sdfg_genenerator.visit(program)
+    sdfg = sdfg_genenerator.visit(ir)
     assert isinstance(sdfg, dace.SDFG)
 
     gtx_transformations.gt_simplify(sdfg)
