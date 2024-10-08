@@ -53,7 +53,11 @@ def gt_simplify(
     replaced:
     - `InlineSDFGs`: Instead `gt_inline_nested_sdfg()` will be called.
 
-    Furthermore, by default, or if `None` is passed fro `skip` the passes listed in
+    Further, the function will run the following passes in addition to DaCe simplify:
+    - `GT4PyRednundantArrayElimination`: Special version of the array removal, see
+        documentation of `GT4PyRednundantArrayElimination`.
+
+    Furthermore, by default, or if `None` is passed for `skip` the passes listed in
     `GT_SIMPLIFY_DEFAULT_SKIP_SET` will be skipped.
 
     Args:
@@ -62,6 +66,12 @@ def gt_simplify(
         validate_all: Perform extensive validation.
         skip: List of simplify passes that should not be applied, defaults
             to `GT_SIMPLIFY_DEFAULT_SKIP_SET`.
+
+    Note:
+        Currently DaCe does not provide a way to inject or exchange sub passes in
+        simplify. The custom inline pass is run at the beginning and the array
+        elimination at the begin. Thus, `gt_simplify()` might not result in a fix
+        point. This is an implementation detail that will change in the future.
     """
     # Ensure that `skip` is a `set`
     skip = GT_SIMPLIFY_DEFAULT_SKIP_SET if skip is None else set(skip)
@@ -75,12 +85,21 @@ def gt_simplify(
             validate_all=validate_all,
         )
 
-    return dace_passes.SimplifyPass(
+    simplify_res = dace_passes.SimplifyPass(
         validate=validate,
         validate_all=validate_all,
         verbose=False,
         skip=(skip | {"InlineSDFGs"}),
     ).apply_pass(sdfg, {})
+
+    if "GT4PyRednundantArrayElimination" not in skip:
+        simplify_res["GT4PyRednundantArrayElimination"] = sdfg.apply_transformations_repeated(
+            GT4PyRednundantArrayElimination(),
+            validate=validate,
+            validate_all=validate_all,
+        )
+
+    return simplify_res
 
 
 def gt_set_iteration_order(
@@ -176,6 +195,9 @@ class GT4PyRednundantArrayElimination(dace_transformation.SingleStateTransformat
     - They have the same size (might be lifted).
 
     Then array `read` is removed from the SDFG.
+
+    This passes takes advantages of the structure of the SDFG outlined in:
+    https://github.com/GridTools/gt4py/tree/main/docs/development/ADRs/0018-Canonical_SDFG_in_GT4Py_Transformations.md
     """
 
     read = dace_transformation.transformation.PatternNode(dace_nodes.AccessNode)
