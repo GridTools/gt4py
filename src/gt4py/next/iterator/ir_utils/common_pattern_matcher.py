@@ -70,3 +70,7 @@ def is_call_to(node: itir.Node, fun: str | Iterable[str]) -> TypeGuard[itir.FunC
     return (
         isinstance(node, itir.FunCall) and isinstance(node.fun, itir.SymRef) and node.fun.id == fun
     )
+
+
+def is_ref_to(node, ref: str):
+    return isinstance(node, itir.SymRef) and node.id == ref
