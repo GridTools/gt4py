@@ -8,9 +8,17 @@
 
 """The GT4Py specific simplification pass."""
 
+import copy
 from typing import Any, Final, Iterable, Optional
 
 import dace
+from dace import (
+    data as dace_data,
+    properties as dace_properties,
+    subsets as dace_subsets,
+    transformation as dace_transformation,
+)
+from dace.sdfg import nodes as dace_nodes
 from dace.transformation import dataflow as dace_dataflow, passes as dace_passes
 
 from gt4py.next import common as gtx_common
@@ -151,3 +159,119 @@ def gt_inline_nested_sdfg(
         first_iteration = False
 
     return sdfg
+
+
+@dace_properties.make_properties
+class GT4PyRednundantArrayElimination(dace_transformation.SingleStateTransformation):
+    """Special version of the redundant array removal transformation.
+
+    DaCe is not able to remove redundant arrays. This transformation is specially
+    designed to remove these transient arrays. It matches two array `read` that is
+    read and written into `write`. The transformation applies if:
+    - `read` is a transient non view array.
+    - `write` has input degree 1 and output degree zero.
+    - `read` has input degree larger than zero and output degree 1.
+    - `read` does not appear in any other state; by construction in other states
+        it can only be read.
+    - They have the same size (might be lifted).
+
+    Then array `read` is removed from the SDFG.
+    """
+
+    read = dace_transformation.transformation.PatternNode(dace_nodes.AccessNode)
+    write = dace_transformation.transformation.PatternNode(dace_nodes.AccessNode)
+
+    def __init__(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+
+    @classmethod
+    def expressions(cls) -> Any:
+        return [dace.sdfg.utils.node_path_graph(cls.read, cls.write)]
+
+    def can_be_applied(
+        self,
+        graph: dace.SDFGState | dace.SDFG,
+        expr_index: int,
+        sdfg: dace.SDFG,
+        permissive: bool = False,
+    ) -> bool:
+        """Tests if the requirements listed above are met."""
+        read_an: dace_nodes.AccessNode = self.read
+        write_an: dace_nodes.AccessNode = self.write
+        read_desc: dace_data.Data = read_an.desc(sdfg)
+        write_desc: dace_data.Data = write_an.desc(sdfg)
+
+        if not (write_desc.transient and read_desc.transient):
+            return False
+        if any(isinstance(desc, dace_data.View) for desc in [read_desc, write_desc]):
+            return False
+        if write_desc.shape != read_desc.shape:  # TODO(phimuell): Add simplify
+            return False
+        if graph.in_degree(read_an) == 0:
+            return False
+        if graph.out_degree(read_an) != 1:
+            return False
+        if graph.out_degree(write_an) != 0:
+            return False
+        if graph.in_degree(write_an) != 1:
+            return False
+
+        # Check if used anywhere else.
+        # TODO(phimuell): Find a way to cache this information.
+        read_name: str = read_an.data
+        for state in sdfg.states():
+            if any(
+                (node is not read_an) and (read_name == node.data) for node in state.data_nodes()
+            ):
+                return False
+
+        return True
+
+    def apply(
+        self,
+        graph: dace.SDFGState | dace.SDFG,
+        sdfg: dace.SDFG,
+    ) -> None:
+        """Removes the array that is read from."""
+        read_an: dace_nodes.AccessNode = self.read
+        write_an: dace_nodes.AccessNode = self.write
+        write_name: str = write_an.data
+        read_name: str = read_an.data
+
+        for iedge in graph.in_edges(read_an):
+            org_memlet: dace.Memlet = iedge.data
+            src_subset: dace_subsets.Subset = copy.deepcopy(org_memlet.get_src_subset(iedge, graph))
+            dst_subset: dace_subsets.Subset = copy.deepcopy(org_memlet.get_dst_subset(iedge, graph))
+            new_edge = graph.add_edge(
+                iedge.src,
+                iedge.src_conn,
+                write_an,
+                iedge.dst_conn,
+                copy.deepcopy(org_memlet),
+            )
+            # Modify the memlet, mostly adjust the subset and direction.
+            new_edge.data.data = write_name
+            new_edge.data.subset = dst_subset
+            new_edge.data.other_subset = src_subset
+            new_edge.data.try_initialize(graph.parent, graph, new_edge)
+            assert src_subset is new_edge.data.src_subset
+            assert dst_subset is new_edge.data.dst_subset
+            graph.remove_edge(iedge)
+
+        for oedge in graph.out_edges(read_an):
+            graph.remove_edge(oedge)
+
+        # Now we have to adjust all memlets in scopes.
+        for iedge in graph.in_edges(write_an):
+            mtree = sdfg.memlet_tree(iedge)
+            for tree_edge in mtree.traverse_children(False):
+                if tree_edge.edge.data.data == read_name:
+                    tree_edge.edge.data.data = write_name
+
+        assert graph.degree(read_an) == 0
+        graph.remove_node(read_an)
+        sdfg.remove_data(read_name)
