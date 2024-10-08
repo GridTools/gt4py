@@ -100,7 +100,7 @@ def _parse_fieldop_arg(
     if isinstance(arg.data_type, ts.ScalarType):
         return gtir_to_tasklet.MemletExpr(arg.data_node, sbs.Indices([0]))
     elif isinstance(arg.data_type, ts.FieldType):
-        indices: dict[gtx_common.Dimension, gtir_to_tasklet.IteratorIndexExpr] = {
+        indices: dict[gtx_common.Dimension, gtir_to_tasklet.ValueExpr] = {
             dim: gtir_to_tasklet.SymbolExpr(
                 dace_gtir_utils.get_map_variable(dim),
                 IteratorIndexDType,
@@ -179,7 +179,6 @@ def translate_as_field_op(
 
     # add local storage to compute the field operator over the given domain
     domain = dace_gtir_utils.get_domain(domain_expr)
-    assert isinstance(node.type, ts.FieldType)
 
     if cpm.is_applied_reduce(stencil_expr.expr):
         if reduce_identity is not None:
@@ -188,7 +187,7 @@ def translate_as_field_op(
         # the reduce identity value is used to fill the skip values in neighbors list
         _, _, reduce_identity = gtir_to_tasklet.get_reduce_params(stencil_expr.expr)
 
-    # first visit the list of arguments and build a symbol map
+    # visit the list of arguments to be passed to the lambda expression
     stencil_args = [
         _parse_fieldop_arg(arg, sdfg, state, sdfg_builder, domain, reduce_identity)
         for arg in node.args
@@ -197,7 +196,7 @@ def translate_as_field_op(
     # represent the field operator as a mapped tasklet graph, which will range over the field domain
     taskgen = gtir_to_tasklet.LambdaToTasklet(sdfg, state, sdfg_builder, reduce_identity)
     input_connections, output_expr = taskgen.visit(stencil_expr, args=stencil_args)
-    assert isinstance(output_expr, gtir_to_tasklet.ValueExpr)
+    assert isinstance(output_expr, gtir_to_tasklet.TempExpr)
     output_desc = output_expr.node.desc(sdfg)
 
     # retrieve the tasklet node which writes the result
@@ -409,7 +408,7 @@ def translate_literal(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
+    reduce_identity: Optional[gtir_to_tasklet.SymbolExpr] = None,
 ) -> FieldopResult:
     """Generates the dataflow subgraph for a `ir.Literal` node."""
     assert isinstance(node, gtir.Literal)
