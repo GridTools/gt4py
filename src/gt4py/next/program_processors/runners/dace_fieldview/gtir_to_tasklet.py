@@ -494,6 +494,7 @@ class LambdaToTasklet(eve.NodeVisitor):
                 self._add_entry_memlet_path(input_expr.node, input_expr.subset, input_node)
 
             else:
+                assert isinstance(input_expr, DataExpr)
                 input_node = input_expr.node
 
             assert len(input_node.desc(self.sdfg).shape) == 1
