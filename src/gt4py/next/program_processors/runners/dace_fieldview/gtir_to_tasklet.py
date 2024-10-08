@@ -29,8 +29,16 @@ from gt4py.next.type_system import type_specifications as ts
 
 
 @dataclasses.dataclass(frozen=True)
+class DataExpr:
+    """Local storage for the computation result returned by a tasklet node."""
+
+    node: dace.nodes.AccessNode
+    dtype: gtir_ts.ListType | ts.ScalarType
+
+
+@dataclasses.dataclass(frozen=True)
 class MemletExpr:
-    """Scalar or array data access thorugh a memlet."""
+    """Scalar or array data access through a memlet."""
 
     node: dace.nodes.AccessNode
     subset: sbs.Indices | sbs.Range
@@ -44,14 +52,6 @@ class SymbolExpr:
     dtype: dace.typeclass
 
 
-@dataclasses.dataclass(frozen=True)
-class TempExpr:
-    """Result of the computation implemented by a tasklet node."""
-
-    node: dace.nodes.AccessNode
-    dtype: gtir_ts.ListType | ts.ScalarType
-
-
 # Define alias for the elements needed to setup input connections to a map scope
 InputConnection: TypeAlias = tuple[
     dace.nodes.AccessNode,
@@ -60,7 +60,7 @@ InputConnection: TypeAlias = tuple[
     Optional[str],
 ]
 
-ValueExpr: TypeAlias = MemletExpr | SymbolExpr | TempExpr
+ValueExpr: TypeAlias = DataExpr | MemletExpr | SymbolExpr
 
 
 @dataclasses.dataclass(frozen=True)
@@ -193,7 +193,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         dtype: dace.typeclass,
         src_node: dace.nodes.Tasklet,
         src_connector: str,
-    ) -> TempExpr:
+    ) -> DataExpr:
         temp_name = self.sdfg.temp_data_name()
         self.sdfg.add_scalar(temp_name, dtype, transient=True)
         data_type = dace_utils.as_scalar_type(str(dtype.as_numpy_dtype()))
@@ -205,7 +205,7 @@ class LambdaToTasklet(eve.NodeVisitor):
             None,
             dace.Memlet(data=temp_name, subset="0"),
         )
-        return TempExpr(temp_node, data_type)
+        return DataExpr(temp_node, data_type)
 
     def _visit_deref(self, node: gtir.FunCall) -> ValueExpr:
         """
@@ -285,7 +285,7 @@ class LambdaToTasklet(eve.NodeVisitor):
                             deref_connector,
                         )
 
-                    elif isinstance(index_expr, TempExpr):
+                    elif isinstance(index_expr, DataExpr):
                         self._add_edge(
                             index_expr.node,
                             None,
@@ -300,9 +300,10 @@ class LambdaToTasklet(eve.NodeVisitor):
                 return self._get_tasklet_result(dtype, deref_node, "val")
 
         else:
+            # dereferencing a scalar or a literal node results in the node itself
             return arg_expr
 
-    def _visit_neighbors(self, node: gtir.FunCall) -> TempExpr:
+    def _visit_neighbors(self, node: gtir.FunCall) -> DataExpr:
         assert len(node.args) == 2
 
         assert isinstance(node.args[0], gtir.OffsetLiteral)
@@ -428,9 +429,9 @@ class LambdaToTasklet(eve.NodeVisitor):
         )
 
         assert isinstance(node.type, gtir_ts.ListType)
-        return TempExpr(neighbors_node, node.type)
+        return DataExpr(neighbors_node, node.type)
 
-    def _visit_reduce(self, node: gtir.FunCall) -> TempExpr:
+    def _visit_reduce(self, node: gtir.FunCall) -> DataExpr:
         op_name, reduce_init, reduce_identity = get_reduce_params(node)
         dtype = reduce_identity.dtype
 
@@ -446,7 +447,7 @@ class LambdaToTasklet(eve.NodeVisitor):
             # ensure that we leave the visitor in the same state as we entered
             self.reduce_identity = prev_reduce_identity
 
-        assert isinstance(input_expr, MemletExpr | TempExpr)
+        assert isinstance(input_expr, MemletExpr | DataExpr)
         input_desc = input_expr.node.desc(self.sdfg)
         assert isinstance(input_desc, dace.data.Array)
 
@@ -486,7 +487,7 @@ class LambdaToTasklet(eve.NodeVisitor):
             dace.Memlet(data=temp_name, subset="0"),
         )
         assert isinstance(node.type, ts.ScalarType)
-        return TempExpr(temp_node, node.type)
+        return DataExpr(temp_node, node.type)
 
     def _split_shift_args(
         self, args: list[gtir.Expr]
@@ -521,7 +522,7 @@ class LambdaToTasklet(eve.NodeVisitor):
     ) -> IteratorExpr:
         """Implements cartesian shift along one dimension."""
         assert offset_dim in it.dimensions
-        new_index: SymbolExpr | TempExpr
+        new_index: SymbolExpr | DataExpr
         assert offset_dim in it.indices
         index_expr = it.indices[offset_dim]
         if isinstance(index_expr, SymbolExpr) and isinstance(offset_expr, SymbolExpr):
@@ -562,7 +563,7 @@ class LambdaToTasklet(eve.NodeVisitor):
                         dynamic_offset_tasklet,
                         input_connector,
                     )
-                elif isinstance(input_expr, TempExpr):
+                elif isinstance(input_expr, DataExpr):
                     self._add_edge(
                         input_expr.node,
                         None,
@@ -587,15 +588,15 @@ class LambdaToTasklet(eve.NodeVisitor):
 
     def _make_dynamic_neighbor_offset(
         self,
-        offset_expr: MemletExpr | TempExpr,
+        offset_expr: MemletExpr | DataExpr,
         offset_table_node: dace.nodes.AccessNode,
         origin_index: SymbolExpr,
-    ) -> TempExpr:
+    ) -> DataExpr:
         """
         Implements access to neighbor connectivity table by means of a tasklet node.
 
         It requires a dynamic offset value, either obtained from a field/scalar argument (`MemletExpr`)
-        or computed by another tasklet (`ValueExpr`).
+        or computed by another tasklet (`DataExpr`).
         """
         new_index_connector = "neighbor_index"
         tasklet_node = self._add_tasklet(
@@ -718,10 +719,10 @@ class LambdaToTasklet(eve.NodeVisitor):
             assert isinstance(node.fun, gtir.SymRef)
 
         node_internals = []
-        node_connections: dict[str, MemletExpr | TempExpr] = {}
+        node_connections: dict[str, MemletExpr | DataExpr] = {}
         for i, arg in enumerate(node.args):
             arg_expr = self.visit(arg)
-            if isinstance(arg_expr, MemletExpr | TempExpr):
+            if isinstance(arg_expr, MemletExpr | DataExpr):
                 # the argument value is the result of a tasklet node or direct field access
                 connector = f"__inp_{i}"
                 node_connections[connector] = arg_expr
@@ -744,7 +745,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         )
 
         for connector, arg_expr in node_connections.items():
-            if isinstance(arg_expr, TempExpr):
+            if isinstance(arg_expr, DataExpr):
                 self._add_edge(
                     arg_expr.node,
                     None,
@@ -767,11 +768,11 @@ class LambdaToTasklet(eve.NodeVisitor):
 
     def visit_Lambda(
         self, node: gtir.Lambda, args: list[IteratorExpr | MemletExpr | SymbolExpr]
-    ) -> tuple[list[InputConnection], TempExpr]:
+    ) -> tuple[list[InputConnection], DataExpr]:
         for p, arg in zip(node.params, args, strict=True):
             self.symbol_map[str(p.id)] = arg
-        output_expr: MemletExpr | SymbolExpr | TempExpr = self.visit(node.expr)
-        if isinstance(output_expr, TempExpr):
+        output_expr: MemletExpr | SymbolExpr | DataExpr = self.visit(node.expr)
+        if isinstance(output_expr, DataExpr):
             return self.input_connections, output_expr
 
         if isinstance(output_expr, MemletExpr):

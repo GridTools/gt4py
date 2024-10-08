@@ -196,7 +196,7 @@ def translate_as_field_op(
     # represent the field operator as a mapped tasklet graph, which will range over the field domain
     taskgen = gtir_to_tasklet.LambdaToTasklet(sdfg, state, sdfg_builder, reduce_identity)
     input_connections, output_expr = taskgen.visit(stencil_expr, args=stencil_args)
-    assert isinstance(output_expr, gtir_to_tasklet.TempExpr)
+    assert isinstance(output_expr, gtir_to_tasklet.DataExpr)
     output_desc = output_expr.node.desc(sdfg)
 
     # retrieve the tasklet node which writes the result

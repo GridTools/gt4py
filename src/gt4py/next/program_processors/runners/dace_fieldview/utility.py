@@ -111,9 +111,10 @@ def get_tuple_type(data: tuple[Any, ...]) -> ts.TupleType:
 
 def patch_gtir(ir: gtir.Program) -> gtir.Program:
     """
-    Make the IR comply with the requirements of lowering to SDFG.
+    Make the IR compliant with the requirements of lowering to SDFG.
 
     Applies canonicalization of as_fieldop expressions as well as some temporary workarounds.
+    This allows to lower the IR to SDFG for some special cases.
     """
 
     class PatchGTIR(eve.PreserveLocationVisitor, eve.NodeTranslator):
@@ -132,7 +133,7 @@ def patch_gtir(ir: gtir.Program) -> gtir.Program:
                 stencil = node.fun.args[0]
 
                 # Canonicalize as_fieldop: always expect a lambda expression.
-                # Here we replace the call to deref with a lambda expression without arguments.
+                # Here we replace the call to deref with a lambda expression and empty arguments list.
                 if cpm.is_ref_to(stencil, "deref"):
                     node.fun.args[0] = gtir.Lambda(
                         expr=gtir.FunCall(fun=stencil, args=node.args), params=[]
