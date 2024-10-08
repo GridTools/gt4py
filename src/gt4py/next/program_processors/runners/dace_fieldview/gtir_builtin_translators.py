@@ -408,7 +408,7 @@ def translate_literal(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    reduce_identity: Optional[gtir_to_tasklet.SymbolExpr] = None,
+    reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
 ) -> FieldopResult:
     """Generates the dataflow subgraph for a `ir.Literal` node."""
     assert isinstance(node, gtir.Literal)
