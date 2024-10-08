@@ -866,11 +866,11 @@ class DaCeIRBuilder(eve.NodeTranslator):
 
         # Book keep - field that will have absolute access in K, which therefore
         # need an IndexAccess down the line rather than scalar
-        absolute_K_access_fields: Set[eve.SymbolRef] = set()
-        for assign_node in node.walk_values().if_isinstance(oir.AssignStmt):
-            if isinstance(assign_node.right, oir.FieldAccess):
-                if isinstance(assign_node.right.offset, common.AbsoluteKIndex):
-                    absolute_K_access_fields.add(assign_node.right.name)
+        absolute_K_access_fields: Set[eve.SymbolRef] = {
+            acc.name
+            for acc in node.walk_values().if_isinstance(oir.FieldAccess)
+            if isinstance(acc.offset, common.AbsoluteKIndex)
+        }
 
         sections_idx = next(
             idx

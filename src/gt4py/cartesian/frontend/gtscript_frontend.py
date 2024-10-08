@@ -424,6 +424,8 @@ class CallInliner(ast.NodeTransformer):
             return self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call, *, target_node=None):  # Cyclomatic complexity too high
+        if _filter_absolute_K_index_method(node):
+            return node
         call_name = gt_meta.get_qualified_name_from_node(node.func)
 
         if call_name in self.call_stack:
