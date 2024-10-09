@@ -202,7 +202,7 @@ def translate_as_field_op(
 
     # represent the field operator as a mapped tasklet graph, which will range over the field domain
     taskgen = gtir_to_tasklet.LambdaToTasklet(sdfg, state, sdfg_builder, reduce_identity)
-    input_connections, output_expr = taskgen.visit(stencil_expr, args=stencil_args)
+    input_edges, output_expr = taskgen.visit(stencil_expr, args=stencil_args)
     assert isinstance(output_expr, gtir_to_tasklet.DataExpr)
     output_desc = output_expr.node.desc(sdfg)
 
@@ -231,20 +231,9 @@ def translate_as_field_op(
     me, mx = sdfg_builder.add_map("field_op", state, map_ranges)
 
     # here we setup the edges from the map entry node
-    for x in input_connections:
-        if isinstance(x, dace.nodes.Tasklet):
-            # tasklet without arguments: simply add an edge from map entry node to the tasklet node
-            state.add_nedge(me, x, dace.Memlet())
-        else:
-            data_node, data_subset, lambda_node, lambda_connector = x
-            memlet = dace.Memlet(data=data_node.data, subset=data_subset)
-            state.add_memlet_path(
-                data_node,
-                me,
-                lambda_node,
-                dst_conn=lambda_connector,
-                memlet=memlet,
-            )
+    for edge in input_edges:
+        edge.connect(state, me)
+
     # and here the edge writing the result data through the map exit node
     state.add_memlet_path(
         last_node,
