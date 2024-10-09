@@ -181,9 +181,9 @@ def translate_as_field_op(
     domain = dace_gtir_utils.get_domain(domain_expr)
 
     if cpm.is_applied_reduce(stencil_expr.expr):
-        # the reduce identity value is used to fill the skip values in neighbors list
         if reduce_identity is not None:
             raise NotImplementedError("nested reductions not supported.")
+        # the reduce identity value is used to fill the skip values in neighbors list
         _, _, reduce_identity = gtir_to_tasklet.get_reduce_params(stencil_expr.expr)
         reduce_identity_for_args = reduce_identity
     elif cpm.is_call_to(stencil_expr.expr, "neighbors"):

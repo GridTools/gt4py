@@ -281,7 +281,7 @@ class LambdaToTasklet(eve.NodeVisitor):
             name, self.state, map_ranges, inputs, code, outputs, **kwargs
         )
 
-    def _get_tasklet_result(
+    def _construct_tasklet_result(
         self,
         dtype: dace.typeclass,
         src_node: dace.nodes.Tasklet,
@@ -395,7 +395,7 @@ class LambdaToTasklet(eve.NodeVisitor):
                         assert isinstance(index_expr, SymbolExpr)
 
                 dtype = arg_expr.field.desc(self.sdfg).dtype
-                return self._get_tasklet_result(dtype, deref_node, "val")
+                return self._construct_tasklet_result(dtype, deref_node, "val")
 
         else:
             # dereferencing a scalar or a literal node results in the node itself
@@ -532,9 +532,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         assert isinstance(node.type.element_type, ts.ScalarType)
         dtype = dace_utils.as_dace_type(node.type.element_type)
 
-        input_args = []
-        for arg in node.args:
-            input_args.append(self.visit(arg))
+        input_args = [self.visit(arg) for arg in node.args]
 
         # TODO(edopao): extract offset_dim from the input arguments
         offset_dim = gtx_common.Dimension("", gtx_common.DimensionKind.LOCAL)
@@ -585,8 +583,8 @@ class LambdaToTasklet(eve.NodeVisitor):
             assert len(input_nodes) >= 1
             local_size = 1
 
-        temp, _ = self.sdfg.add_temp_transient((local_size,), dtype)
-        temp_node = self.state.add_access(temp)
+        out, _ = self.sdfg.add_temp_transient((local_size,), dtype)
+        out_node = self.state.add_access(out)
 
         assert isinstance(node.fun, gtir.FunCall)
         assert len(node.fun.args) == 1
@@ -600,13 +598,13 @@ class LambdaToTasklet(eve.NodeVisitor):
             inputs=input_memlets,
             input_nodes=input_nodes,
             outputs={
-                "__out": dace.Memlet(data=temp, subset=map_index),
+                "__out": dace.Memlet(data=out, subset=map_index),
             },
-            output_nodes={temp: temp_node},
+            output_nodes={out: out_node},
             external_edges=True,
         )
 
-        return DataExpr(temp_node, dtype)
+        return DataExpr(out_node, dtype)
 
     def _visit_reduce(self, node: gtir.FunCall) -> DataExpr:
         op_name, reduce_init, reduce_identity = get_reduce_params(node)
@@ -754,7 +752,9 @@ class LambdaToTasklet(eve.NodeVisitor):
             else:
                 dtype = index_expr.node.desc(self.sdfg).dtype
 
-            new_index = self._get_tasklet_result(dtype, dynamic_offset_tasklet, new_index_connector)
+            new_index = self._construct_tasklet_result(
+                dtype, dynamic_offset_tasklet, new_index_connector
+            )
 
         # a new iterator with a shifted index along one dimension
         return IteratorExpr(
@@ -805,7 +805,7 @@ class LambdaToTasklet(eve.NodeVisitor):
             )
 
         dtype = offset_table_node.desc(self.sdfg).dtype
-        return self._get_tasklet_result(dtype, tasklet_node, new_index_connector)
+        return self._construct_tasklet_result(dtype, tasklet_node, new_index_connector)
 
     def _make_unstructured_shift(
         self,
@@ -879,24 +879,8 @@ class LambdaToTasklet(eve.NodeVisitor):
                 it, offset_provider, offset_table_node, offset_expr
             )
 
-    def visit_FunCall(self, node: gtir.FunCall) -> IteratorExpr | ValueExpr:
-        if cpm.is_call_to(node, "deref"):
-            return self._visit_deref(node)
-
-        elif cpm.is_call_to(node, "neighbors"):
-            return self._visit_neighbors(node)
-
-        elif cpm.is_applied_map(node):
-            return self._visit_map(node)
-
-        elif cpm.is_applied_reduce(node):
-            return self._visit_reduce(node)
-
-        elif cpm.is_applied_shift(node):
-            return self._visit_shift(node)
-
-        elif not isinstance(node.fun, gtir.SymRef):
-            raise NotImplementedError
+    def _visit_builtin(self, node: gtir.FunCall) -> DataExpr:
+        assert isinstance(node.fun, gtir.SymRef)
 
         node_internals = []
         node_connections: dict[str, MemletExpr | DataExpr] = {}
@@ -945,11 +929,34 @@ class LambdaToTasklet(eve.NodeVisitor):
             # make_const_list returns `ListType` but we represent it as a scalar value
             assert isinstance(node.type.element_type, ts.ScalarType)
             dtype = dace_utils.as_dace_type(node.type.element_type)
-            return self._get_tasklet_result(dtype, tasklet_node, "result", use_array=True)
+            use_array = True
         else:
             assert isinstance(node.type, ts.ScalarType)
             dtype = dace_utils.as_dace_type(node.type)
-            return self._get_tasklet_result(dtype, tasklet_node, "result")
+            use_array = False
+
+        return self._construct_tasklet_result(dtype, tasklet_node, "result", use_array)
+
+    def visit_FunCall(self, node: gtir.FunCall) -> IteratorExpr | ValueExpr:
+        if cpm.is_call_to(node, "deref"):
+            return self._visit_deref(node)
+
+        elif cpm.is_call_to(node, "neighbors"):
+            return self._visit_neighbors(node)
+
+        elif cpm.is_applied_map(node):
+            return self._visit_map(node)
+
+        elif cpm.is_applied_reduce(node):
+            return self._visit_reduce(node)
+
+        elif cpm.is_applied_shift(node):
+            return self._visit_shift(node)
+
+        elif isinstance(node.fun, gtir.SymRef):
+            return self._visit_builtin(node)
+        else:
+            raise NotImplementedError
 
     def visit_Lambda(
         self, node: gtir.Lambda, args: list[IteratorExpr | MemletExpr | SymbolExpr]
@@ -976,7 +983,7 @@ class LambdaToTasklet(eve.NodeVisitor):
             output_dtype = output_expr.dtype
             tasklet_node = self._add_tasklet("write", {}, {"__out"}, f"__out = {output_expr.value}")
 
-        output_expr = self._get_tasklet_result(output_dtype, tasklet_node, "__out")
+        output_expr = self._construct_tasklet_result(output_dtype, tasklet_node, "__out")
         return self.input_edges, TaskletResult(self.state, output_expr)
 
     def visit_Literal(self, node: gtir.Literal) -> SymbolExpr:
