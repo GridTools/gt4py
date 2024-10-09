@@ -30,19 +30,17 @@ def op_asfieldop2(op: str | itir.SymRef | Callable, domain: Optional[itir.FunCal
 
 
 def test_trivial():
-    d = im.domain("cartesian_domain", {})
+    d = im.domain("cartesian_domain", {IDim: (0, 1)})
     testee = im.op_as_fieldop("plus", d)(
         im.op_as_fieldop("multiplies", d)(im.ref("inp1", field_type), im.ref("inp2", field_type)),
         im.ref("inp3", field_type),
     )
     expected = im.as_fieldop(
-        im.lambda_("inp1", "inp2", "inp3", "__iasfop_4")(
-            im.plus(
-                im.multiplies_(im.deref("__iasfop_1"), im.deref("__iasfop_2")),
-            )
+        im.lambda_("inp1", "inp2", "inp3")(
+            im.plus(im.multiplies_(im.deref("inp1"), im.deref("inp2")), im.deref("inp3"))
         ),
         d,
-    )(1, 2, 3, 4)
+    )(im.ref("inp1", field_type), im.ref("inp2", field_type), im.ref("inp3", field_type))
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
         testee, offset_provider={}, allow_undeclared_symbols=True
     )
@@ -98,8 +96,8 @@ def test_partial_inline():
     d1 = im.domain("cartesian_domain", {IDim: (1, 2)})
     d2 = im.domain("cartesian_domain", {IDim: (0, 3)})
     testee = im.as_fieldop(
-        # first argument used at multiple locations -> not inlined
-        # second argument only used at a single location -> inlined
+        # first argument read at multiple locations -> not inlined
+        # second argument only reat at a single location -> inlined
         im.lambda_("a", "b")(
             im.plus(
                 im.plus(im.deref(im.shift("IOff", 1)("a")), im.deref(im.shift("IOff", -1)("a"))),
