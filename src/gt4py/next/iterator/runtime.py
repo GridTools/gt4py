@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     # TODO(tehrengruber): remove cirular dependency and import unconditionally
     from gt4py.next import backend as next_backend
 
-__all__ = ["offset", "fundef", "fendef", "closure", "set_at"]
+__all__ = ["offset", "fundef", "fendef", "closure", "set_at", "if_stmt"]
 
 
 @dataclass(frozen=True)
@@ -213,4 +213,9 @@ def closure(*args):  # TODO remove
 
 @builtin_dispatch
 def set_at(*args):
+    return BackendNotSelectedError()
+
+
+@builtin_dispatch
+def if_stmt(*args):
     return BackendNotSelectedError()
