@@ -886,7 +886,7 @@ class LambdaToTasklet(eve.NodeVisitor):
     ) -> tuple[list[InputConnection], DataExpr]:
         for p, arg in zip(node.params, args, strict=True):
             self.symbol_map[str(p.id)] = arg
-        output_expr: MemletExpr | SymbolExpr | DataExpr = self.visit(node.expr)
+        output_expr: ValueExpr = self.visit(node.expr)
         if isinstance(output_expr, DataExpr):
             return self.input_connections, output_expr
 
@@ -901,6 +901,7 @@ class LambdaToTasklet(eve.NodeVisitor):
                 "__inp",
             )
         else:
+            assert isinstance(output_expr, SymbolExpr)
             # even simpler case, where a constant value is written to destination node
             output_dtype = output_expr.dtype
             tasklet_node = self._add_tasklet("write", {}, {"__out"}, f"__out = {output_expr.value}")
