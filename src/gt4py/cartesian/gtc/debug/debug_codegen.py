@@ -226,7 +226,7 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         return str(literal.value)
 
     def visit_Cast(self, cast: Cast, **_) -> str:
-        return self.visit(cast.expr)
+        return f"{self.visit(cast.dtype)}({self.visit(cast.expr)})"
 
     def visit_HorizontalExecution(self, horizontal_execution: HorizontalExecution, **_) -> None:
         for stmt in horizontal_execution.body:
