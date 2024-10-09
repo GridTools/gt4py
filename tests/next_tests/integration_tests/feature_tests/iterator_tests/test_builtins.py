@@ -15,8 +15,6 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-import gt4py.next.program_processors.processor_interface as ppi
-from gt4py.next import common
 from gt4py.next.iterator import builtins as it_builtins
 from gt4py.next.iterator.builtins import (
     and_,
@@ -180,13 +178,13 @@ def test_arithmetic_and_logical_functors_gtfn(builtin, inputs, expected):
     inps = field_maker(*array_maker(*inputs))
     out = field_maker((np.zeros_like(*array_maker(expected))))[0]
 
-    gtfn_executor = run_gtfn.executor
     gtfn_without_transforms = dataclasses.replace(
-        gtfn_executor,
-        otf_workflow=gtfn_executor.otf_workflow.replace(
-            translation=gtfn_executor.otf_workflow.translation.replace(enable_itir_transforms=False)
-        ),
-    )  # avoid inlining the function
+        run_gtfn,
+        executor=run_gtfn.executor.replace(
+            translation=run_gtfn.executor.translation.replace(enable_itir_transforms=False),
+        ),  # avoid inlining the function
+    )
+
     fencil(builtin, out, *inps, processor=gtfn_without_transforms)
 
     assert np.allclose(out.asnumpy(), expected)
@@ -196,7 +194,6 @@ def test_arithmetic_and_logical_functors_gtfn(builtin, inputs, expected):
 @pytest.mark.parametrize("builtin_name, inputs", math_builtin_test_data())
 def test_math_function_builtins(program_processor, builtin_name, inputs, as_column):
     program_processor, validate = program_processor
-    # validate = ppi.is_program_backend(program_processor)
 
     if builtin_name == "gamma":
         # numpy has no gamma function
@@ -335,7 +332,6 @@ def test_cast(program_processor, as_column, input_value, dtype, np_dtype):
         out=out,
         offset_provider={},
         column_axis=column_axis,
-        debug=True,
     )
 
     if validate:

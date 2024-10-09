@@ -29,7 +29,7 @@ from gt4py.next.type_system import type_translation as tt
 @dataclasses.dataclass(frozen=True)
 class DaCeTranslator(
     workflow.ChainableWorkflowMixin[
-        stages.AOTProgram, stages.ProgramSource[languages.SDFG, languages.LanguageSettings]
+        stages.CompilableProgram, stages.ProgramSource[languages.SDFG, languages.LanguageSettings]
     ],
     step_types.TranslationStep[languages.SDFG, languages.LanguageSettings],
 ):
@@ -43,7 +43,7 @@ class DaCeTranslator(
     def generate_sdfg(
         self,
         ir: itir.Program,
-        offset_provider: dict[str, common.Dimension | common.Connectivity],
+        offset_provider: common.OffsetProvider,
         column_axis: Optional[common.Dimension],
     ) -> dace.SDFG:
         # TODO(edopao): Call IR transformations and domain inference, finally lower IR to SDFG
@@ -52,7 +52,7 @@ class DaCeTranslator(
         return gtir_to_sdfg.build_sdfg_from_gtir(program=ir, offset_provider=offset_provider)
 
     def __call__(
-        self, inp: stages.AOTProgram
+        self, inp: stages.CompilableProgram
     ) -> stages.ProgramSource[languages.SDFG, LanguageSettings]:
         """Generate DaCe SDFG file from the GTIR definition."""
         program: itir.FencilDefinition | itir.Program = inp.data

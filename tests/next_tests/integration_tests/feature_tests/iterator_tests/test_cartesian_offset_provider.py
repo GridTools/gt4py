@@ -49,8 +49,8 @@ def test_cartesian_offset_provider():
     fencil_swapped(out, inp)
     assert out[0][0] == 1
 
-    fencil(out, inp, backend=roundtrip.executor)
+    fencil(out, inp, backend=roundtrip.default)
     assert out[0][0] == 42
 
-    fencil(out, inp, backend=double_roundtrip.backend.executor)
+    fencil(out, inp, backend=double_roundtrip.backend)
     assert out[0][0] == 42

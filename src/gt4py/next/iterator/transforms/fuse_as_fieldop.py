@@ -14,17 +14,20 @@ from gt4py.eve import utils as eve_utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms import inline_lambdas, inline_lifts, trace_shifts
-from gt4py.next.iterator.type_system import inference as type_inference, type_specifications as ts
-from gt4py.next.type_system import type_info
+from gt4py.next.iterator.type_system import (
+    inference as type_inference,
+    type_specifications as it_ts,
+)
+from gt4py.next.type_system import type_info, type_specifications as ts
 
 
-def inline_as_fieldop_arg(arg, uids):
+def _inline_as_fieldop_arg(arg: itir.Expr, uids: eve_utils.UIDGenerator):
     assert cpm.is_applied_as_fieldop(arg)
-    arg = canonicalize_as_fieldop(arg)
+    arg = _canonicalize_as_fieldop(arg)
 
-    stencil, *_ = arg.fun.args
+    stencil, *_ = arg.fun.args  # type: ignore[attr-defined]  # ensured by `is_applied_as_fieldop`
     inner_args = arg.args
-    extracted_args = {}  # mapping from stencil param to arg
+    extracted_args: dict[str, itir.Expr] = {}  # mapping from stencil param to arg
 
     stencil_params = []
     stencil_body = stencil.expr
@@ -33,7 +36,9 @@ def inline_as_fieldop_arg(arg, uids):
         if isinstance(inner_arg, itir.SymRef):
             stencil_params.append(inner_param)
             extracted_args[inner_arg.id] = inner_arg
-        elif isinstance(inner_arg, itir.Literal):  # TODO: all non capturing scalars
+        # note: only literals, not all scalar expressions are required as it doesn't make sense
+        # for them to be computed per grid point.
+        elif isinstance(inner_arg, itir.Literal):
             stencil_body = im.let(inner_param, im.promote_to_const_iterator(inner_arg))(
                 stencil_body
             )
@@ -47,7 +52,7 @@ def inline_as_fieldop_arg(arg, uids):
     ), extracted_args
 
 
-def merge_arguments(args1: dict, arg2: dict):
+def _merge_arguments(args1: dict, arg2: dict):
     new_args = {**args1}
     for stencil_param, stencil_arg in arg2.items():
         if stencil_param not in new_args:
@@ -57,11 +62,11 @@ def merge_arguments(args1: dict, arg2: dict):
     return new_args
 
 
-def canonicalize_as_fieldop(expr: itir.Expr) -> itir.Expr:
+def _canonicalize_as_fieldop(expr: itir.FunCall) -> itir.FunCall:
     assert cpm.is_applied_as_fieldop(expr)
 
-    stencil = expr.fun.args[0]
-    domain = expr.fun.args[1] if len(expr.fun.args) > 1 else None
+    stencil = expr.fun.args[0]  # type: ignore[attr-defined]
+    domain = expr.fun.args[1] if len(expr.fun.args) > 1 else None  # type: ignore[attr-defined]
     if cpm.is_ref_to(stencil, "deref"):
         stencil = im.lambda_("arg")(im.deref("arg"))
         new_expr = im.as_fieldop(stencil, domain)(*expr.args)
@@ -98,25 +103,27 @@ class FuseAsFieldOp(eve.NodeTranslator):
         node = self.generic_visit(node)
 
         if cpm.is_call_to(node.fun, "as_fieldop"):
-            node = canonicalize_as_fieldop(node)
+            node = _canonicalize_as_fieldop(node)
 
         if cpm.is_call_to(node.fun, "as_fieldop") and isinstance(node.fun.args[0], itir.Lambda):
-            stencil = node.fun.args[0]
+            stencil: itir.Lambda = node.fun.args[0]
             domain = node.fun.args[1] if len(node.fun.args) > 1 else None
 
             shifts = trace_shifts.trace_stencil(stencil)
 
-            args = node.args
+            args: list[itir.Expr] = node.args
 
-            new_args = {}
-            new_stencil_body = stencil.expr
+            new_args: dict[str, itir.Expr] = {}
+            new_stencil_body: itir.Expr = stencil.expr
 
             for stencil_param, arg, arg_shifts in zip(stencil.params, args, shifts, strict=True):
+                assert isinstance(arg.type, ts.TypeSpec)
                 dtype = type_info.extract_dtype(arg.type)
+                # TODO(tehrengruber): make this configurable
                 should_inline = isinstance(arg, itir.Literal) or (
                     isinstance(arg, itir.FunCall)
-                    and (cpm.is_call_to(arg.fun, "as_fieldop") or cpm.is_call_to(arg, "cond"))
-                    and (isinstance(dtype, ts.ListType) or len(arg_shifts) <= 1)
+                    and (cpm.is_call_to(arg.fun, "as_fieldop") or cpm.is_call_to(arg, "if_"))
+                    and (isinstance(dtype, it_ts.ListType) or len(arg_shifts) <= 1)
                 )
                 if should_inline:
                     if cpm.is_applied_as_fieldop(arg):
@@ -130,14 +137,13 @@ class FuseAsFieldOp(eve.NodeTranslator):
                     else:
                         raise NotImplementedError()
 
-                    inline_expr, extracted_args = inline_as_fieldop_arg(arg, self.uids)
+                    inline_expr, extracted_args = _inline_as_fieldop_arg(arg, self.uids)
 
                     new_stencil_body = im.let(stencil_param, inline_expr)(new_stencil_body)
 
-                    new_args = merge_arguments(new_args, extracted_args)
+                    new_args = _merge_arguments(new_args, extracted_args)
                 else:
-                    # see test_tuple_with_local_field_in_reduction_shifted for ex where assert fails
-                    # assert not isinstance(dtype, ts.ListType)
+                    new_param: str
                     if isinstance(
                         arg, itir.SymRef
                     ):  # use name from outer scope (optional, just to get a nice IR)
@@ -145,21 +151,21 @@ class FuseAsFieldOp(eve.NodeTranslator):
                         new_stencil_body = im.let(stencil_param.id, arg.id)(new_stencil_body)
                     else:
                         new_param = stencil_param.id
-                    new_args = merge_arguments(new_args, {new_param: arg})
+                    new_args = _merge_arguments(new_args, {new_param: arg})
 
+            # simplify stencil directly to keep the tree small
             new_stencil_body = inline_lambdas.InlineLambdas.apply(
                 new_stencil_body,
                 opcount_preserving=True,
+                # TODO(tehrengruber): Revisit. Set to False for now to expose cases where we end
+                #  up with lifts remaining in the IR.
                 force_inline_lift_args=False,
-                # If trivial lifts are not inlined we might create temporaries for constants. In all
-                #  other cases we want it anyway.
-                force_inline_trivial_lift_args=True,
             )
             new_stencil_body = inline_lifts.InlineLifts().visit(new_stencil_body)
 
             new_node = im.as_fieldop(im.lambda_(*new_args.keys())(new_stencil_body), domain)(
                 *new_args.values()
             )
-            new_node.type = node.type
+            type_inference.copy_type(from_=node, to=new_node)
             return new_node
         return node
