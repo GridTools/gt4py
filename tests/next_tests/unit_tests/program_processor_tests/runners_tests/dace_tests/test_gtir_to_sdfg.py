@@ -1329,13 +1329,45 @@ def test_gtir_reduce_dot_product():
     connectivity_V2E = SIMPLE_MESH_OFFSET_PROVIDER["V2E"]
     assert isinstance(connectivity_V2E, gtx_common.NeighborTable)
 
+    # create mesh with skip values
+    connectivity_V2E_skip = copy.deepcopy(connectivity_V2E)
+    connectivity_V2E_skip.table = np.asarray(
+        [
+            [x if i != skip_idx else gtx_common._DEFAULT_SKIP_VALUE for i, x in enumerate(row)]
+            for skip_idx, row in zip(
+                np.random.randint(0, connectivity_V2E.max_neighbors, size=SIMPLE_MESH.num_vertices),
+                connectivity_V2E.table,
+                strict=True,
+            )
+        ],
+        dtype=connectivity_V2E.table.dtype,
+    )
+
+    offset_provider = SIMPLE_MESH_OFFSET_PROVIDER | {
+        "V2E_skip": connectivity_V2E_skip,
+    }
+
+    V2E_SKIP_SYMBOLS = dict(
+        __connectivity_V2E_skip_size_0=SIMPLE_MESH.num_vertices,
+        __connectivity_V2E_skip_size_1=connectivity_V2E_skip.max_neighbors,
+        __connectivity_V2E_skip_stride_0=connectivity_V2E_skip.max_neighbors,
+        __connectivity_V2E_skip_stride_1=1,
+    )
+
     e = np.random.rand(SIMPLE_MESH.num_edges)
     v = np.empty(SIMPLE_MESH.num_vertices, dtype=e.dtype)
     v_ref = [
         functools.reduce(
-            lambda x, y: x + y, (e[v2e_neighbors] * e[v2e_neighbors]) + 1.0, init_value
+            lambda x, y: x + y,
+            map(
+                lambda x: 0.0 if x[1] == gtx_common._DEFAULT_SKIP_VALUE else x[0],
+                zip((e[v2e_neighbors] * e[v2e_skip_neighbors]) + 1.0, v2e_skip_neighbors),
+            ),
+            init_value,
         )
-        for v2e_neighbors in connectivity_V2E.table
+        for v2e_neighbors, v2e_skip_neighbors in zip(
+            connectivity_V2E.table, connectivity_V2E_skip.table
+        )
     ]
 
     stencil_inlined = im.call(
@@ -1368,7 +1400,7 @@ def test_gtir_reduce_dot_product():
         im.op_as_fieldop(im.map_("plus"), vertex_domain)(
             im.op_as_fieldop(im.map_("multiplies"), vertex_domain)(
                 im.as_fieldop_neighbors("V2E", "edges", vertex_domain),
-                im.as_fieldop_neighbors("V2E", "edges", vertex_domain),
+                im.as_fieldop_neighbors("V2E_skip", "edges", vertex_domain),
             ),
             im.op_as_fieldop("make_const_list", vertex_domain)(1.0),
         )
@@ -1393,14 +1425,16 @@ def test_gtir_reduce_dot_product():
             ],
         )
 
-        sdfg = dace_backend.build_sdfg_from_gtir(testee, SIMPLE_MESH_OFFSET_PROVIDER)
+        sdfg = dace_backend.build_sdfg_from_gtir(testee, offset_provider)
 
         sdfg(
             e,
             v,
             connectivity_V2E=connectivity_V2E.table,
+            connectivity_V2E_skip=connectivity_V2E_skip.table,
             **FSYMBOLS,
             **make_mesh_symbols(SIMPLE_MESH),
+            **V2E_SKIP_SYMBOLS,
         )
         assert np.allclose(v, v_ref)
 
