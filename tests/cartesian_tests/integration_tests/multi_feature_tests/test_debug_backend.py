@@ -16,7 +16,7 @@ import numpy as np
 
 from gt4py import storage as gt_storage
 from gt4py.cartesian import gtscript
-from gt4py.cartesian.gtscript import BACKWARD, PARALLEL, computation, interval
+from gt4py.cartesian.gtscript import BACKWARD, PARALLEL, computation, interval, sin
 
 
 def test_simple_stencil():
@@ -171,3 +171,24 @@ def test_higher_dim_scalar_stencil():
 
     # the inside of the domain is 5
     np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, :], 5)
+
+
+def test_native_function_call_stencil():
+    field_in = gt_storage.ones(
+        dtype=np.float64, backend="debug", shape=(4, 4, 4), aligned_index=(0, 0, 0)
+    )
+    field_out = gt_storage.zeros(
+        dtype=np.float64, backend="debug", shape=(4, 4, 4), aligned_index=(0, 0, 0)
+    )
+
+    @gtscript.stencil(backend="debug")
+    def test_stencil(
+        in_field: gtscript.Field[np.float64],
+        out_field: gtscript.Field[np.float64],
+    ):
+        with computation(PARALLEL), interval(...):
+            out_field[0, 0, 0] = in_field[0, 0, 0] + sin(0.848062)
+
+    test_stencil(field_in, field_out)
+
+    np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, :], 1.75)
