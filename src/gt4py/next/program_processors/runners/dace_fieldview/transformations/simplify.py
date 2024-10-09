@@ -214,6 +214,8 @@ class GT4PyRednundantArrayElimination(dace_transformation.SingleStateTransformat
     - `read` does not appear in any other state; by construction in other states
         it can only be read.
     - They have the same size (might be lifted).
+    - The content of the full array must be transferred (there might be a way to work
+        around that).
 
     Then array `read` is removed from the SDFG.
 
@@ -261,6 +263,16 @@ class GT4PyRednundantArrayElimination(dace_transformation.SingleStateTransformat
         if graph.out_degree(write_an) != 0:
             return False
         if graph.in_degree(write_an) != 1:
+            return False
+
+        # Ensure that the whole array `read` is transferred to the second array.
+        edge = next(iter(graph.in_edges(write_an)))
+        subset = edge.data.get_src_subset(edge, graph)
+        if subset is None:
+            subset = edge.data.get_dst_subset(edge, graph)
+        assert subset is not None
+
+        if write_desc.shape != tuple(subset.size()):
             return False
 
         # Check if used anywhere else.
