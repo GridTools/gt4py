@@ -82,6 +82,8 @@ class FuseAsFieldOp(eve.NodeTranslator):
     """
     Merge multiple `as_fieldop` calls into one.
 
+    # ruff: noqa: RUF002
+
     >>> from gt4py import next as gtx
     >>> from gt4py.next.iterator.ir_utils import ir_makers as im
     >>> IDim = gtx.Dimension("IDim")
@@ -103,7 +105,7 @@ class FuseAsFieldOp(eve.NodeTranslator):
     ...     )
     ... )
     as_fieldop(λ(inp1, inp2, inp3) → ·inp1 × ·inp2 + ·inp3, c⟨ IDimₕ: [0, 1) ⟩)(inp1, inp2, inp3)
-    """
+    """  # noqa: RUF002  # ignore × character ambiguity
 
     uids: eve_utils.UIDGenerator
 
