@@ -80,7 +80,7 @@ class TaskletInputEdge(Protocol):
     """Allows to setup an input edge in a map scope."""
 
     @abc.abstractmethod
-    def connect(self, st: dace.SDFGState, me: dace.nodes.MapEntry) -> None:
+    def connect(self, me: dace.nodes.MapEntry) -> None:
         pass
 
 
@@ -93,14 +93,15 @@ class TaskletDataEdge(TaskletInputEdge):
     be a tasklet, in which case the connector name is also required, or an access node.
     """
 
+    state: dace.SDFGState
     source: dace.nodes.AccessNode
     subset: sbs.Range
     dest: dace.nodes.AccessNode | dace.nodes.Tasklet
     dest_conn: Optional[str]
 
-    def connect(self, st: dace.SDFGState, me: dace.nodes.MapEntry) -> None:
+    def connect(self, me: dace.nodes.MapEntry) -> None:
         memlet = dace.Memlet(data=self.source.data, subset=self.subset)
-        st.add_memlet_path(
+        self.state.add_memlet_path(
             self.source,
             me,
             self.dest,
@@ -113,10 +114,43 @@ class TaskletDataEdge(TaskletInputEdge):
 class TaskletEmptyEdge(TaskletInputEdge):
     """Allows to setup an input edge from a map entry node to a tasklet withough arguements."""
 
+    state: dace.SDFGState
     node: dace.nodes.Tasklet
 
-    def connect(self, st: dace.SDFGState, me: dace.nodes.MapEntry) -> None:
-        st.add_nedge(me, self.node, dace.Memlet())
+    def connect(self, me: dace.nodes.MapEntry) -> None:
+        self.state.add_nedge(me, self.node, dace.Memlet())
+
+
+@dataclasses.dataclass(frozen=True)
+class TaskletResult:
+    """Allows to setup a data edge to write the result through a map exit node."""
+
+    state: dace.SDFGState
+    expr: DataExpr
+
+    def connect(
+        self,
+        mx: dace.nodes.MapExit,
+        result_node: dace.nodes.AccessNode,
+        subset: sbs.Range,
+    ) -> None:
+        # retrieve the node which writes the result
+        last_node = self.state.in_edges(self.expr.node)[0].src
+        if isinstance(last_node, dace.nodes.Tasklet):
+            # the last transient node can be deleted
+            last_node_connector = self.state.in_edges(self.expr.node)[0].src_conn
+            self.state.remove_node(self.expr.node)
+        else:
+            last_node = self.expr.node
+            last_node_connector = None
+
+        self.state.add_memlet_path(
+            last_node,
+            mx,
+            result_node,
+            src_conn=last_node_connector,
+            memlet=dace.Memlet(data=result_node.data, subset=subset),
+        )
 
 
 DACE_REDUCTION_MAPPING: dict[str, dace.dtypes.ReductionType] = {
@@ -188,7 +222,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         dst_node: dace.nodes.Node,
         dst_conn: Optional[str] = None,
     ) -> None:
-        edge = TaskletDataEdge(src, src_subset, dst_node, dst_conn)
+        edge = TaskletDataEdge(self.state, src, src_subset, dst_node, dst_conn)
         self.input_edges.append(edge)
 
     def _add_edge(
@@ -228,7 +262,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         )
         if len(inputs) == 0:
             # tasklet nodes without arguments need an empty edge from map entry node
-            edge = TaskletEmptyEdge(tasklet_node)
+            edge = TaskletEmptyEdge(self.state, tasklet_node)
             self.input_edges.append(edge)
         return tasklet_node
 
@@ -919,12 +953,12 @@ class LambdaToTasklet(eve.NodeVisitor):
 
     def visit_Lambda(
         self, node: gtir.Lambda, args: list[IteratorExpr | MemletExpr | SymbolExpr]
-    ) -> tuple[list[TaskletInputEdge], DataExpr]:
+    ) -> tuple[list[TaskletInputEdge], TaskletResult]:
         for p, arg in zip(node.params, args, strict=True):
             self.symbol_map[str(p.id)] = arg
         output_expr: ValueExpr = self.visit(node.expr)
         if isinstance(output_expr, DataExpr):
-            return self.input_edges, output_expr
+            return self.input_edges, TaskletResult(self.state, output_expr)
 
         if isinstance(output_expr, MemletExpr):
             # special case where the field operator is simply copying data from source to destination node
@@ -941,7 +975,9 @@ class LambdaToTasklet(eve.NodeVisitor):
             # even simpler case, where a constant value is written to destination node
             output_dtype = output_expr.dtype
             tasklet_node = self._add_tasklet("write", {}, {"__out"}, f"__out = {output_expr.value}")
-        return self.input_edges, self._get_tasklet_result(output_dtype, tasklet_node, "__out")
+
+        output_expr = self._get_tasklet_result(output_dtype, tasklet_node, "__out")
+        return self.input_edges, TaskletResult(self.state, output_expr)
 
     def visit_Literal(self, node: gtir.Literal) -> SymbolExpr:
         dtype = dace_utils.as_dace_type(node.type)

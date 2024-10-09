@@ -202,46 +202,32 @@ def translate_as_field_op(
 
     # represent the field operator as a mapped tasklet graph, which will range over the field domain
     taskgen = gtir_to_tasklet.LambdaToTasklet(sdfg, state, sdfg_builder, reduce_identity)
-    input_edges, output_expr = taskgen.visit(stencil_expr, args=stencil_args)
-    assert isinstance(output_expr, gtir_to_tasklet.DataExpr)
-    output_desc = output_expr.node.desc(sdfg)
+    input_edges, output = taskgen.visit(stencil_expr, args=stencil_args)
+    output_desc = output.expr.node.desc(sdfg)
 
-    # retrieve the tasklet node which writes the result
-    last_node = state.in_edges(output_expr.node)[0].src
-    if isinstance(last_node, dace.nodes.Tasklet):
-        # the last transient node can be deleted
-        last_node_connector = state.in_edges(output_expr.node)[0].src_conn
-        state.remove_node(output_expr.node)
-    else:
-        last_node = output_expr.node
-        last_node_connector = None
-
-    # allocate local temporary storage for the result field
-    result_field = _create_temporary_field(sdfg, state, domain, node.type, output_desc)
-
-    # assume tasklet with single output
-    output_subset = [dace_gtir_utils.get_map_variable(dim) for dim, _, _ in domain]
-    if isinstance(output_desc, dace.data.Array):
-        # additional local dimension for neighbors
+    domain_index = sbs.Indices([dace_gtir_utils.get_map_variable(dim) for dim, _, _ in domain])
+    if isinstance(node.type.dtype, itir_ts.ListType):
+        assert isinstance(output_desc, dace.data.Array)
         assert set(output_desc.offset) == {0}
-        output_subset.extend(f"0:{size}" for size in output_desc.shape)
+        # additional local dimension for neighbors
+        output_subset = sbs.Range.from_indices(domain_index) + sbs.Range.from_array(output_desc)
+    else:
+        assert isinstance(output_desc, dace.data.Scalar)
+        output_subset = sbs.Range.from_indices(domain_index)
 
     # create map range corresponding to the field operator domain
     map_ranges = {dace_gtir_utils.get_map_variable(dim): f"{lb}:{ub}" for dim, lb, ub in domain}
     me, mx = sdfg_builder.add_map("field_op", state, map_ranges)
 
+    # allocate local temporary storage for the result field
+    result_field = _create_temporary_field(sdfg, state, domain, node.type, output_desc)
+
     # here we setup the edges from the map entry node
     for edge in input_edges:
-        edge.connect(state, me)
+        edge.connect(me)
 
     # and here the edge writing the result data through the map exit node
-    state.add_memlet_path(
-        last_node,
-        mx,
-        result_field.data_node,
-        src_conn=last_node_connector,
-        memlet=dace.Memlet(data=result_field.data_node.data, subset=",".join(output_subset)),
-    )
+    output.connect(mx, result_field.data_node, output_subset)
 
     return result_field
 
