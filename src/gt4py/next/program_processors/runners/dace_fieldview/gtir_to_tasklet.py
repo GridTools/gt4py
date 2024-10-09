@@ -220,7 +220,7 @@ class LambdaToTasklet(eve.NodeVisitor):
     ) -> DataExpr:
         temp_name = self.sdfg.temp_data_name()
         if use_array:
-            # for make_const_list we use a single element array to ease lowering to SDFG
+            # for make_const_list we use a 1-element array to ease the lowering to SDFG
             self.sdfg.add_array(temp_name, (1,), dtype, transient=True)
         else:
             self.sdfg.add_scalar(temp_name, dtype, transient=True)
@@ -333,6 +333,7 @@ class LambdaToTasklet(eve.NodeVisitor):
 
     def _visit_neighbors(self, node: gtir.FunCall) -> DataExpr:
         assert len(node.args) == 2
+        assert isinstance(node.type, itir_ts.ListType)
         assert self.reduce_identity is not None
 
         assert isinstance(node.args[0], gtir.OffsetLiteral)
@@ -454,7 +455,6 @@ class LambdaToTasklet(eve.NodeVisitor):
             memlet=dace.Memlet(data=neighbors_temp, subset=neighbor_idx),
         )
 
-        assert isinstance(node.type, itir_ts.ListType)
         return DataExpr(neighbors_node, node.type)
 
     def _visit_map(self, node: gtir.FunCall) -> DataExpr:
@@ -480,12 +480,11 @@ class LambdaToTasklet(eve.NodeVisitor):
                     raise ValueError(f"Invalid node {node}")
                 rstart, rstop, rstep = input_expr.subset[-1]
                 assert rstart == 0 and rstep == 1
-                input_size = rstop + 1
 
                 desc = self.sdfg.arrays[input_expr.node.data]
                 view, _ = self.sdfg.add_view(
                     f"{input_expr.node.data}_view",
-                    (input_size,),
+                    (rstop + 1,),
                     desc.dtype,
                     strides=desc.strides[-1:],
                     find_new_name=True,
@@ -494,13 +493,13 @@ class LambdaToTasklet(eve.NodeVisitor):
                 self._add_entry_memlet_path(input_expr.node, input_expr.subset, input_node)
 
             else:
+                # this is the case of scalar value broadcasted on a list by make_const_list
                 assert isinstance(input_expr, DataExpr)
                 input_node = input_expr.node
 
             assert len(input_node.desc(self.sdfg).shape) == 1
             input_size = input_node.desc(self.sdfg).shape[0]
             if input_size == 1:
-                # the result of make_const_list is represented as a size-1 dace array
                 input_memlets[conn] = dace.Memlet(data=input_node.data, subset="0")
             else:
                 input_memlets[conn] = dace.Memlet(data=input_node.data, subset=map_index)
@@ -512,6 +511,7 @@ class LambdaToTasklet(eve.NodeVisitor):
             input_nodes[input_node.data] = input_node
 
         if local_size is None:
+            # corner case where map is applied to 1-element lists
             assert len(input_nodes) >= 1
             local_size = 1
 

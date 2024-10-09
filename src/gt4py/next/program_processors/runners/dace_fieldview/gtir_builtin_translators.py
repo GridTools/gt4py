@@ -191,6 +191,7 @@ def translate_as_field_op(
         # is used by the current neighbors expression to fill the skip values
         reduce_identity_for_args = None
     else:
+        # we use the reduce identity value (if any) from the current context
         reduce_identity_for_args = reduce_identity
 
     # visit the list of arguments to be passed to the lambda expression
@@ -229,6 +230,7 @@ def translate_as_field_op(
     map_ranges = {dace_gtir_utils.get_map_variable(dim): f"{lb}:{ub}" for dim, lb, ub in domain}
     me, mx = sdfg_builder.add_map("field_op", state, map_ranges)
 
+    # here we setup the edges from the map entry node
     for x in input_connections:
         if isinstance(x, dace.nodes.Tasklet):
             # tasklet without arguments: simply add an edge from map entry node to the tasklet node
@@ -243,7 +245,7 @@ def translate_as_field_op(
                 dst_conn=lambda_connector,
                 memlet=memlet,
             )
-
+    # and here the edge writing the result data through the map exit node
     state.add_memlet_path(
         last_node,
         mx,
