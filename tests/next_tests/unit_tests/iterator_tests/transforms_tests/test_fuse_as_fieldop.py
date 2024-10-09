@@ -59,7 +59,7 @@ def test_trivial_literal():
 
 def test_symref_used_twice():
     d = im.domain("cartesian_domain", {IDim: (0, 1)})
-    testee = op_asfieldop2(im.lambda_("a", "b")(im.plus("a", "b")), d)(
+    testee = im.as_fieldop(im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))), d)(
         im.as_fieldop(im.lambda_("c", "d")(im.multiplies_(im.deref("c"), im.deref("d"))), d)(
             im.ref("inp1", field_type), im.ref("inp2", field_type)
         ),
