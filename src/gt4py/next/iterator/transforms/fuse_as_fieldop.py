@@ -23,26 +23,28 @@ from gt4py.next.type_system import type_info, type_specifications as ts
 
 def _inline_as_fieldop_arg(arg: itir.Expr, uids: eve_utils.UIDGenerator):
     assert cpm.is_applied_as_fieldop(arg)
-    arg = _canonicalize_as_fieldop(arg)
+    arg: itir.FunCall = _canonicalize_as_fieldop(arg)
 
     stencil, *_ = arg.fun.args  # type: ignore[attr-defined]  # ensured by `is_applied_as_fieldop`
-    inner_args = arg.args
+    inner_args: list[itir.Expr] = arg.args
     extracted_args: dict[str, itir.Expr] = {}  # mapping from stencil param to arg
 
-    stencil_params = []
-    stencil_body = stencil.expr
+    stencil_params: list[itir.Sym] = []
+    stencil_body: itir.Expr = stencil.expr
 
     for inner_param, inner_arg in zip(stencil.params, inner_args, strict=True):
         if isinstance(inner_arg, itir.SymRef):
             stencil_params.append(inner_param)
             extracted_args[inner_arg.id] = inner_arg
-        # note: only literals, not all scalar expressions are required as it doesn't make sense
-        # for them to be computed per grid point.
         elif isinstance(inner_arg, itir.Literal):
+            # note: only literals, not all scalar expressions are required as it doesn't make sense
+            # for them to be computed per grid point.
             stencil_body = im.let(inner_param, im.promote_to_const_iterator(inner_arg))(
                 stencil_body
             )
-        else:  # either a literal or a previous not inlined arg
+        else:
+            # a scalar expression, a previously not inlined `as_fieldop` call or an opaque
+            # expression e.g. containing a tuple
             stencil_params.append(inner_param)
             new_outer_stencil_param = uids.sequential_id(prefix="__iasfop")
             extracted_args[new_outer_stencil_param] = inner_arg
