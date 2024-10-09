@@ -40,7 +40,8 @@ class CompiledDaceProgram(stages.CompiledProgram):
         ]
 
     def __call__(self, *args: Any, **kwargs: Any) -> None:
-        self.sdfg_program(*args, **kwargs)
+        result = self.sdfg_program(*args, **kwargs)
+        assert result is None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -104,7 +105,7 @@ def convert_args(
         *args: Any,
         offset_provider: common.OffsetProvider,
         out: Any = None,
-    ) -> Any:
+    ) -> None:
         if out is not None:
             args = (*args, out)
         if len(sdfg.arg_names) > len(args):
