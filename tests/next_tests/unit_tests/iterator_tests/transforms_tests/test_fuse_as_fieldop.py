@@ -17,18 +17,6 @@ IDim = gtx.Dimension("IDim")
 field_type = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
 
 
-def op_asfieldop2(op: str | itir.SymRef | Callable, domain: Optional[itir.FunCall] = None):
-    assert isinstance(op, itir.Lambda)
-    op = im.call(op)
-
-    args = [param.id for param in op.fun.params]
-
-    def _impl(*its: itir.Expr) -> itir.FunCall:
-        return im.as_fieldop(im.lambda_(*args)(op(*[im.deref(arg) for arg in args])), domain)(*its)
-
-    return _impl
-
-
 def test_trivial():
     d = im.domain("cartesian_domain", {IDim: (0, 1)})
     testee = im.op_as_fieldop("plus", d)(

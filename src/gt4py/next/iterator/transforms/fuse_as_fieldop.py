@@ -88,18 +88,23 @@ class FuseAsFieldOp(eve.NodeTranslator):
     >>> field_type = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
     >>> d = im.domain("cartesian_domain", {IDim: (0, 1)})
     >>> nested_as_fieldop = im.op_as_fieldop("plus", d)(
-    ...     im.op_as_fieldop("multiplies", d)(im.ref("inp1", field_type), im.ref("inp2", field_type)),
+    ...     im.op_as_fieldop("multiplies", d)(
+    ...         im.ref("inp1", field_type), im.ref("inp2", field_type)
+    ...     ),
     ...     im.ref("inp3", field_type),
     ... )
     >>> print(nested_as_fieldop)
     as_fieldop(λ(__arg0, __arg1) → ·__arg0 + ·__arg1, c⟨ IDimₕ: [0, 1) ⟩)(
       as_fieldop(λ(__arg0, __arg1) → ·__arg0 × ·__arg1, c⟨ IDimₕ: [0, 1) ⟩)(inp1, inp2), inp3
     )
-    >>> print(FuseAsFieldOp.apply(
-    ...     nested_as_fieldop, offset_provider={}, allow_undeclared_symbols=True
-    ... ))
+    >>> print(
+    ...     FuseAsFieldOp.apply(
+    ...         nested_as_fieldop, offset_provider={}, allow_undeclared_symbols=True
+    ...     )
+    ... )
     as_fieldop(λ(inp1, inp2, inp3) → ·inp1 × ·inp2 + ·inp3, c⟨ IDimₕ: [0, 1) ⟩)(inp1, inp2, inp3)
     """
+
     uids: eve_utils.UIDGenerator
 
     @classmethod
@@ -176,8 +181,7 @@ class FuseAsFieldOp(eve.NodeTranslator):
 
             # simplify stencil directly to keep the tree small
             new_stencil_body = inline_lambdas.InlineLambdas.apply(
-                new_stencil_body,
-                opcount_preserving=True
+                new_stencil_body, opcount_preserving=True
             )
             new_stencil_body = inline_lifts.InlineLifts().visit(new_stencil_body)
 
