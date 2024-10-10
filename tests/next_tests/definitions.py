@@ -15,8 +15,7 @@ from typing import Final, Optional, Protocol
 
 import pytest
 
-from gt4py.next import allocators as next_allocators
-from gt4py.next.program_processors import processor_interface as ppi
+from gt4py.next import allocators as next_allocators, backend as next_backend
 
 
 # Skip definitions
@@ -54,23 +53,13 @@ class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
     DOUBLE_ROUNDTRIP = "gt4py.next.program_processors.runners.double_roundtrip.backend"
 
 
-class ExecutionAndAllocatorDescriptor(Protocol):
-    # Used for test infrastructure, consider implementing this in gt4py when refactoring otf
-    @property
-    def executor(self) -> Optional[ppi.ProgramExecutor]: ...
-
-    @property
-    def allocator(self) -> next_allocators.FieldBufferAllocatorProtocol: ...
-
-
 @dataclasses.dataclass(frozen=True)
-class EmbeddedExecutionDescriptor:
+class EmbeddedDummyBackend:
     allocator: next_allocators.FieldBufferAllocatorProtocol
-    executor: Final = None
 
 
-numpy_execution = EmbeddedExecutionDescriptor(next_allocators.StandardCPUFieldBufferAllocator())
-cupy_execution = EmbeddedExecutionDescriptor(next_allocators.StandardGPUFieldBufferAllocator())
+numpy_execution = EmbeddedDummyBackend(next_allocators.StandardCPUFieldBufferAllocator())
+cupy_execution = EmbeddedDummyBackend(next_allocators.StandardGPUFieldBufferAllocator())
 
 
 class EmbeddedIds(_PythonObjectIdMixin, str, enum.Enum):
@@ -104,6 +93,7 @@ USES_CONSTANT_FIELDS = "uses_constant_fields"
 USES_DYNAMIC_OFFSETS = "uses_dynamic_offsets"
 USES_FLOORDIV = "uses_floordiv"
 USES_IF_STMTS = "uses_if_stmts"
+USES_IR_IF_STMTS = "uses_ir_if_stmts"
 USES_INDEX_FIELDS = "uses_index_fields"
 USES_LIFT_EXPRESSIONS = "uses_lift_expressions"
 USES_NEGATIVE_MODULO = "uses_negative_modulo"
@@ -146,6 +136,7 @@ COMMON_SKIP_TEST_LIST = [
     (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),
 ]
 DACE_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
+    (USES_IR_IF_STMTS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_SCALAR_IN_DOMAIN_AND_FO, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_INDEX_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_LIFT_EXPRESSIONS, XFAIL, UNSUPPORTED_MESSAGE),

@@ -67,7 +67,7 @@ def preprocess_program(
 
 def build_sdfg_from_itir(
     program: itir.FencilDefinition,
-    arg_types: list[ts.TypeSpec],
+    arg_types: Sequence[ts.TypeSpec],
     offset_provider: dict[str, Any],
     auto_optimize: bool = False,
     on_gpu: bool = False,
@@ -108,7 +108,7 @@ def build_sdfg_from_itir(
         program, offset_provider, lift_mode, symbolic_domain_sizes, temporary_extraction_heuristics
     )
     sdfg_genenerator = ItirToSDFG(
-        arg_types, offset_provider, tmps, use_field_canonical_representation, column_axis
+        list(arg_types), offset_provider, tmps, use_field_canonical_representation, column_axis
     )
     sdfg = sdfg_genenerator.visit(program)
     if sdfg is None:
@@ -167,7 +167,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
     ] = {}  # symbolically defined
 
     def __sdfg__(self, *args, **kwargs) -> dace.sdfg.sdfg.SDFG:
-        if "dace" not in self.backend.executor.name.lower():  # type: ignore[union-attr]
+        if "dace" not in self.backend.name.lower():  # type: ignore[union-attr]
             raise ValueError("The SDFG can be generated only for the DaCe backend.")
 
         params = {str(p.id): p.type for p in self.itir.params}
@@ -186,7 +186,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             self.connectivities | self._implicit_offset_provider
         )  # tables are None at this point
 
-        sdfg = self.backend.executor.otf_workflow.step.translation.generate_sdfg(  # type: ignore[union-attr]
+        sdfg = self.backend.executor.step.translation.generate_sdfg(  # type: ignore[union-attr]
             self.itir,
             arg_types,
             offset_provider=offset_provider,
