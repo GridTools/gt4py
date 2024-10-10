@@ -76,7 +76,7 @@ class IteratorExpr:
     indices: dict[gtx_common.Dimension, ValueExpr]
 
 
-class TaskletInputEdge(Protocol):
+class DataflowInputEdge(Protocol):
     """Allows to setup an input edge in a map scope."""
 
     @abc.abstractmethod
@@ -85,7 +85,7 @@ class TaskletInputEdge(Protocol):
 
 
 @dataclasses.dataclass(frozen=True)
-class TaskletDataEdge(TaskletInputEdge):
+class DataflowMemletEdge(DataflowInputEdge):
     """
     Allows to setup an input memlet through a map entry node.
 
@@ -111,7 +111,7 @@ class TaskletDataEdge(TaskletInputEdge):
 
 
 @dataclasses.dataclass(frozen=True)
-class TaskletEmptyEdge(TaskletInputEdge):
+class DataflowEmptyEdge(DataflowInputEdge):
     """Allows to setup an input edge from a map entry node to a tasklet withough arguements."""
 
     state: dace.SDFGState
@@ -122,7 +122,7 @@ class TaskletEmptyEdge(TaskletInputEdge):
 
 
 @dataclasses.dataclass(frozen=True)
-class TaskletResult:
+class DataflowOutput:
     """Allows to setup a data edge to write the result through a map exit node."""
 
     state: dace.SDFGState
@@ -186,7 +186,7 @@ def get_reduce_params(node: gtir.FunCall) -> tuple[str, SymbolExpr, SymbolExpr]:
     return op_name, reduce_init, reduce_identity
 
 
-class LambdaToTasklet(eve.NodeVisitor):
+class LambdaToDataflow(eve.NodeVisitor):
     """Translates an `ir.Lambda` expression to a dataflow graph.
 
     Lambda functions should only be encountered as argument to the `as_fieldop`
@@ -198,7 +198,7 @@ class LambdaToTasklet(eve.NodeVisitor):
     state: dace.SDFGState
     subgraph_builder: gtir_to_sdfg.DataflowBuilder
     reduce_identity: Optional[SymbolExpr]
-    input_edges: list[TaskletInputEdge]
+    input_edges: list[DataflowInputEdge]
     symbol_map: dict[str, IteratorExpr | MemletExpr | SymbolExpr]
 
     def __init__(
@@ -222,7 +222,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         dst_node: dace.nodes.Node,
         dst_conn: Optional[str] = None,
     ) -> None:
-        edge = TaskletDataEdge(self.state, src, src_subset, dst_node, dst_conn)
+        edge = DataflowMemletEdge(self.state, src, src_subset, dst_node, dst_conn)
         self.input_edges.append(edge)
 
     def _add_edge(
@@ -262,7 +262,7 @@ class LambdaToTasklet(eve.NodeVisitor):
         )
         if len(inputs) == 0:
             # tasklet nodes without arguments need an empty edge from map entry node
-            edge = TaskletEmptyEdge(self.state, tasklet_node)
+            edge = DataflowEmptyEdge(self.state, tasklet_node)
             self.input_edges.append(edge)
         return tasklet_node
 
@@ -960,12 +960,12 @@ class LambdaToTasklet(eve.NodeVisitor):
 
     def visit_Lambda(
         self, node: gtir.Lambda, args: list[IteratorExpr | MemletExpr | SymbolExpr]
-    ) -> tuple[list[TaskletInputEdge], TaskletResult]:
+    ) -> tuple[list[DataflowInputEdge], DataflowOutput]:
         for p, arg in zip(node.params, args, strict=True):
             self.symbol_map[str(p.id)] = arg
         output_expr: ValueExpr = self.visit(node.expr)
         if isinstance(output_expr, DataExpr):
-            return self.input_edges, TaskletResult(self.state, output_expr)
+            return self.input_edges, DataflowOutput(self.state, output_expr)
 
         if isinstance(output_expr, MemletExpr):
             # special case where the field operator is simply copying data from source to destination node
@@ -984,7 +984,7 @@ class LambdaToTasklet(eve.NodeVisitor):
             tasklet_node = self._add_tasklet("write", {}, {"__out"}, f"__out = {output_expr.value}")
 
         output_expr = self._construct_tasklet_result(output_dtype, tasklet_node, "__out")
-        return self.input_edges, TaskletResult(self.state, output_expr)
+        return self.input_edges, DataflowOutput(self.state, output_expr)
 
     def visit_Literal(self, node: gtir.Literal) -> SymbolExpr:
         dtype = dace_utils.as_dace_type(node.type)
