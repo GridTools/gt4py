@@ -74,16 +74,10 @@ def test_lambda_nested_capture_scoped():
         return im.plus("x", "x")
 
     # λ(x) → (λ(y) → y + (x + x + (x + x)))(z)
-    testee = im.lambda_("x")(
-        im.call(im.lambda_("y")(im.plus("y", im.plus(common_expr(), common_expr()))))("z")
-    )
-    # λ(x) → (λ(_cs_1) → (λ(y) → y + (_cs_1 + _cs_1))(z))(x + x)
+    testee = im.lambda_("x")(im.let("y", "z")(im.plus("y", im.plus(common_expr(), common_expr()))))
+    # λ(x) → (λ(_cs_1) → z + (_cs_1 + _cs_1))(x + x)
     expected = im.lambda_("x")(
-        im.call(
-            im.lambda_("_cs_1")(
-                im.call(im.lambda_("y")(im.plus("y", im.plus("_cs_1", "_cs_1"))))("z")
-            )
-        )(common_expr())
+        im.let("_cs_1", common_expr())(im.plus("z", im.plus("_cs_1", "_cs_1")))
     )
     actual = CSE.apply(testee, is_local_view=True)
     assert actual == expected
