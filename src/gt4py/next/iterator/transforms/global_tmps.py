@@ -170,6 +170,12 @@ def transform(
 def create_global_tmps(
     program: itir.Program, offset_provider: common.OffsetProvider
 ) -> itir.Program:
+    """
+    Given an `itir.Program` create temporaries for intermediate values.
+
+    This pass looks at all `as_fieldop` calls and transforms field-typed subexpressions of its
+    arguments into temporaries.
+    """
     program = infer_domain.infer_program(program, offset_provider)
     program = type_inference.infer(program, offset_provider=offset_provider)
 

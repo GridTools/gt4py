@@ -281,7 +281,6 @@ def _type_synthesizer_from_function_type(fun_type: ts.FunctionType):
 
 
 class SanitizeTypes(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
-    # TODO: all
     PRESERVED_ANNEX_ATTRS = ("domain",)
 
     def visit_Node(self, node: itir.Node, *, symtable: dict[str, itir.Node]) -> itir.Node:
