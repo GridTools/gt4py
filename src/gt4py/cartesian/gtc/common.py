@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import enum
 import functools
-import typing
 import numbers
+import typing
 from typing import (
     Any,
     ClassVar,

@@ -18,7 +18,7 @@ import numpy as np
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common, oir
-from gt4py.cartesian.gtc.common import CartesianOffset, VariableKOffset
+from gt4py.cartesian.gtc.common import AbsoluteKIndex, CartesianOffset, VariableKOffset
 from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
 
@@ -58,7 +58,9 @@ def replace_strides(arrays, get_layout_map):
 
 
 def get_tasklet_symbol(
-    name: eve.SymbolRef, offset: Union[CartesianOffset, VariableKOffset], is_target: bool
+    name: eve.SymbolRef,
+    offset: Union[CartesianOffset, VariableKOffset, AbsoluteKIndex],
+    is_target: bool,
 ):
     if is_target:
         return f"gtOUT__{name}"
@@ -224,7 +226,7 @@ class AccessInfoCollector(eve.NodeVisitor):
 
     def _make_access_info(
         self,
-        offset_node: Union[CartesianOffset, oir.VariableKOffset],
+        offset_node: Union[CartesianOffset, oir.VariableKOffset, AbsoluteKIndex],
         axes,
         is_conditional,
         region,

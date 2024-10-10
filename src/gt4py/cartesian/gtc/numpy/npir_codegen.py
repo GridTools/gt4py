@@ -119,7 +119,7 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     def _make_slice_access(
         self,
-        offset: Tuple[Optional[int], Optional[int], Union[str, Optional[int]]],
+        offset: Tuple[Optional[int], Optional[int], Union[str, npir.AbsoluteKIndex, Optional[int]]],
         is_serial: bool,
         interval: Optional[npir.HorizontalMask] = None,
     ) -> List[str]:
@@ -166,9 +166,6 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     )
 
     VarKOffset = as_fmt("lk + {k}")
-
-    def visit_CallbackCall(self, node: npir.CallbackCall) -> Union[str, Collection[str]]:
-        return self.visit(node.call)
 
     def visit_FieldSlice(self, node: npir.FieldSlice, **kwargs: Any) -> Union[str, Collection[str]]:
         need_extra_axis = False
