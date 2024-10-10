@@ -14,7 +14,11 @@ from typing import Callable, Optional
 from gt4py.eve import utils as eve_utils
 from gt4py.next import common, utils as next_utils
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
+from gt4py.next.iterator.ir_utils import (
+    common_pattern_matcher as cpm,
+    domain_utils,
+    ir_makers as im,
+)
 from gt4py.next.iterator.transforms import cse, infer_domain, inline_lambdas
 from gt4py.next.iterator.type_system import inference as type_inference
 from gt4py.next.type_system import type_info, type_specifications as ts
@@ -78,12 +82,16 @@ def _transform_stmt_by_pattern(
             #  able to eliminate all tuples, e.g., by propagating the scalar ifs to the top-level
             #  of a SetAt, the CollapseTuple pass will eliminate most of this cases.
             if isinstance(domain, tuple):
-                flattened_domains: tuple[itir.Expr] = next_utils.flatten_nested_tuple(domain)  # type: ignore[assignment]  # mypy not smart enough
+                flattened_domains: tuple[domain_utils.SymbolicDomain] = (
+                    next_utils.flatten_nested_tuple(domain)  # type: ignore[assignment]  # mypy not smart enough
+                )
                 if not all(d == flattened_domains[0] for d in flattened_domains):
                     raise NotImplementedError(
                         "Tuple expressions with different domains is not " "supported yet."
                     )
                 domain = flattened_domains[0]
+            assert isinstance(domain, domain_utils.SymbolicDomain)
+            domain_expr = domain.as_expr()
 
             assert isinstance(tmp_expr.type, ts.TypeSpec)
             tmp_names: str | tuple[str | tuple, ...] = type_info.apply_to_primitive_constituents(
@@ -103,7 +111,7 @@ def _transform_stmt_by_pattern(
             def allocate_temporary(tmp_name: str, dtype: ts.ScalarType, domain: itir.Expr):
                 declarations.append(itir.Temporary(id=tmp_name, domain=domain, dtype=dtype))
 
-            next_utils.tree_map(functools.partial(allocate_temporary, domain=domain))(
+            next_utils.tree_map(functools.partial(allocate_temporary, domain=domain_expr))(
                 tmp_names, tmp_dtypes
             )
 
@@ -119,10 +127,12 @@ def _transform_stmt_by_pattern(
                 im.let(tmp_sym, target_expr)(new_expr), opcount_preserving=False
             )
 
-            # TODO: _transform_stmt not needed if deepest_expr_first=True
+            # TODO(tehrengruber): _transform_stmt not needed if deepest_expr_first=True
             tmp_stmts.extend(
                 _transform_stmt(
-                    itir.SetAt(target=target_expr, domain=domain, expr=tmp_expr), declarations, uids
+                    itir.SetAt(target=target_expr, domain=domain_expr, expr=tmp_expr),
+                    declarations,
+                    uids,
                 )
             )
 
@@ -154,7 +164,9 @@ def _transform_stmt(
 
         did_transform_stmt = False
         for _transform_stmt in _transform_stmts:
-            _transform_stmted_stmts = _transform_stmt(stmt=stmt, declarations=declarations, uids=uids)
+            _transform_stmted_stmts = _transform_stmt(
+                stmt=stmt, declarations=declarations, uids=uids
+            )
             if _transform_stmted_stmts:
                 unprocessed_stmts = [*_transform_stmted_stmts, *unprocessed_stmts]
                 did_transform_stmt = True

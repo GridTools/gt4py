@@ -327,7 +327,7 @@ def infer_expr(
 ) -> tuple[itir.Expr, ACCESSED_DOMAINS]:
     # this is just a small wrapper that populates the `domain` annex
     expr, accessed_domains = _infer_expr(expr, domain, offset_provider)
-    expr.annex.domain = domain.as_expr()
+    expr.annex.domain = domain
     return expr, accessed_domains
 
 
