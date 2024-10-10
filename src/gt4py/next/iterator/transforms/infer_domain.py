@@ -125,10 +125,6 @@ def _extract_accessed_domains(
     return typing.cast(ACCESSED_DOMAINS, accessed_domains)
 
 
-def copy_domain_annex(from_: itir.Expr, to: itir.Expr):
-    to.annex.domain = from_.annex.domain
-
-
 def infer_as_fieldop(
     applied_fieldop: itir.FunCall,
     target_domain: DOMAIN,
@@ -185,7 +181,6 @@ def infer_as_fieldop(
 
     target_domain_expr = domain_utils.SymbolicDomain.as_expr(target_domain)
     transformed_call = im.as_fieldop(stencil, target_domain_expr)(*transformed_inputs)
-    transformed_call.annex.domain = target_domain_expr
 
     accessed_domains_without_tmp = {
         k: v
@@ -231,7 +226,6 @@ def infer_let(
             for param, call in zip(let_expr.fun.params, transformed_calls_args, strict=True)
         )
     )(transformed_calls_expr)
-    transformed_call.annex.domain = tree_map(lambda x: x.as_expr() if x else None)(input_domain)
 
     return transformed_call, accessed_domains_outer
 
@@ -259,7 +253,6 @@ def infer_make_tuple(
         infered_args_expr.append(infered_arg_expr)
         actual_domains = _merge_domains(actual_domains, actual_domains_arg)
     result_expr = im.call(expr.fun)(*infered_args_expr)
-    result_expr.annex.domain = tree_map(lambda x: x.as_expr() if x else None)(domain)
     return result_expr, actual_domains
 
 
@@ -278,7 +271,6 @@ def infer_tuple_get(
 
     infered_args_expr = im.tuple_get(idx, infered_arg_expr)
     actual_domains = _merge_domains(actual_domains, actual_domains_arg)
-    infered_args_expr.annex.domain = tree_map(lambda x: x.as_expr() if x else None)(domain)
     return infered_args_expr, actual_domains
 
 
@@ -296,11 +288,10 @@ def infer_if(
         infered_args_expr.append(infered_arg_expr)
         actual_domains = _merge_domains(actual_domains, actual_domains_arg)
     result_expr = im.call(expr.fun)(cond, *infered_args_expr)
-    result_expr.annex.domain = tree_map(lambda x: x.as_expr() if x else None)(domain)
     return result_expr, actual_domains
 
 
-def infer_expr(
+def _infer_expr(
     expr: itir.Expr,
     domain: DOMAIN,
     offset_provider: common.OffsetProvider,
@@ -327,6 +318,17 @@ def infer_expr(
         return expr, {}
     else:
         raise ValueError(f"Unsupported expression: {expr}")
+
+
+def infer_expr(
+    expr: itir.Expr,
+    domain: DOMAIN,
+    offset_provider: common.OffsetProvider,
+) -> tuple[itir.Expr, ACCESSED_DOMAINS]:
+    # this is just a small wrapper that populates the `domain` annex
+    expr, accessed_domains = _infer_expr(expr, domain, offset_provider)
+    expr.annex.domain = domain.as_expr()
+    return expr, accessed_domains
 
 
 def infer_program(
