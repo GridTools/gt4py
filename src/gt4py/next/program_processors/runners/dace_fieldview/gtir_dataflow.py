@@ -319,7 +319,10 @@ class LambdaToDataflow(eve.NodeVisitor):
     ) -> DataExpr:
         temp_name = self.sdfg.temp_data_name()
         if use_array:
-            # for make_const_list we use a 1-element array to ease the lowering to SDFG
+            # Special case for local exprresions with list type annotation, that
+            # are lowered to a tasklet with output scalar value: we still want to
+            # represent the output data as an array (single-element 1D array) in
+            # order to allow composition of array shape in external memlets.
             self.sdfg.add_array(temp_name, (1,), dtype, transient=True)
         else:
             self.sdfg.add_scalar(temp_name, dtype, transient=True)
@@ -568,6 +571,12 @@ class LambdaToDataflow(eve.NodeVisitor):
         map_index = dace_gtir_utils.get_map_variable(offset_dim)
         connectors = [f"__arg{i}" for i in range(len(input_args))]
 
+        # The dataflow we build in this class has some loose connections on input edges.
+        # These edges are described as set of nodes, that will have to be connected to
+        # external data source nodes passing through the map entry node of the field map.
+        # For `map_` and `neighbors` expressions, these edges will terminate on the view
+        # nodes (see the for-loop below), because it is simpler than representing
+        # map-to-map edges (which require memlets with 2 pass-nodes).
         input_memlets = {}
         input_nodes = {}
         local_size: Optional[int] = None
@@ -640,7 +649,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         dtype = reduce_identity.dtype
 
         # We store the value of reduce identity in the visitor context while visiting
-        # the input to reduction; this value will be use by the `neighbors` visitor
+        # the input to reduction; this value will be used by the `neighbors` visitor
         # to fill the skip values in the neighbors list.
         prev_reduce_identity = self.reduce_identity
         self.reduce_identity = reduce_identity
@@ -958,9 +967,19 @@ class LambdaToDataflow(eve.NodeVisitor):
                 )
 
         if isinstance(node.type, itir_ts.ListType):
-            # make_const_list returns `ListType` but we represent it as a scalar value
+            # The only builtin function (so far) handled here that returns a list
+            # is 'make_const_list'. There are other builtin functions (map_, neighbors)
+            # that return a list but they are handled in specialized visit methods.
+            # This method (the generic visitor for builtin functions) always returns
+            # scalars. This is also the case of 'make_const_list' expression: it simply
+            # broadcasts a scalar value on the local domain of another expression,
+            # for example 'map_(plus)(neighbors(V2Eₒ, it), make_const_list(1.0))'.
+            # Therefore we handle `ListType` as a scalar value, that will be accessed
+            # in a map scope that computes the parallel expression on a local domain.
             assert isinstance(node.type.element_type, ts.ScalarType)
             dtype = dace_utils.as_dace_type(node.type.element_type)
+            # In order to ease the lowring of the parent expression on local dimension,
+            # we represent the scalar value as a single-element 1D array.
             use_array = True
         else:
             assert isinstance(node.type, ts.ScalarType)

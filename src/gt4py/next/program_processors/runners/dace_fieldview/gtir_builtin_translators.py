@@ -190,18 +190,37 @@ def translate_as_field_op(
     # parse the domain of the field operator
     domain = dace_gtir_utils.get_domain(domain_expr)
 
+    # The reduce identity value is used to fill the skip values in neighbors list
+    #
+    # A reduction expression can be either expressed in local view (itir):
+    # vertices @ u⟨ Vertexₕ: [0, nvertices) ⟩
+    #      ← as_fieldop(
+    #          λ(it) → reduce(plus, 0)(neighbors(V2Eₒ, it)), u⟨ Vertexₕ: [0, nvertices) ⟩
+    #        )(edges);
+    #
+    # or in field view (gtir):
+    # vertices @ u⟨ Vertexₕ: [0, nvertices) ⟩
+    #      ← as_fieldop(λ(it) → reduce(plus, 0)(·it), u⟨ Vertexₕ: [0, nvertices) ⟩)(
+    #          as_fieldop(λ(it) → neighbors(V2Eₒ, it), u⟨ Vertexₕ: [0, nvertices) ⟩)(edges)
+    #        );
+    #
+    # In local view, the list of neighbors is (recursively) built while visiting
+    # the current expression.
+    # In field view, the list of neighbors is built as argument to the current
+    # expression. Therefore, the reduction identity value needs to be passed to
+    # the argument visitor (`reduce_identity_for_args = reduce_identity`).
+    # However, when the argument visitor hits the `neighbors` expression (see the
+    # second if-branch), we should stop carrying the reduce identity further
+    # (`reduce_identity_for_args = None`).
+    #
     if cpm.is_applied_reduce(stencil_expr.expr):
         if reduce_identity is not None:
             raise NotImplementedError("nested reductions not supported.")
-        # the reduce identity value is used to fill the skip values in neighbors list
         _, _, reduce_identity = gtir_dataflow.get_reduce_params(stencil_expr.expr)
         reduce_identity_for_args = reduce_identity
     elif cpm.is_call_to(stencil_expr.expr, "neighbors"):
-        # we do not support nested reduction, so the reduction identity value
-        # is used by the current neighbors expression to fill the skip values
         reduce_identity_for_args = None
     else:
-        # we use the reduce identity value (if any) from the current context
         reduce_identity_for_args = reduce_identity
 
     # visit the list of arguments to be passed to the lambda expression
