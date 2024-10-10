@@ -40,7 +40,8 @@ class Node(eve.Node):
         return hash(type(self)) ^ hash(
             tuple(
                 hash(tuple(v)) if isinstance(v, list) else hash(v)
-                for v in self.iter_children_values()
+                for (k, v) in self.iter_children_items()
+                if k not in ["location", "type"]
             )
         )
 
