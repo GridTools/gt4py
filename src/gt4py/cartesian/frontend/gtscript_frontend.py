@@ -1028,11 +1028,11 @@ class IRMaker(ast.NodeVisitor):
                 if build_settings["literal_floating_point_precision"] is not None:
                     if isinstance(value, int):
                         value_type = np.dtype(
-                            f"i{int(build_settings['literal_floating_point_precision'])/8}"
+                            f"i{int(int(build_settings['literal_floating_point_precision'])/8)}"
                         )
                     else:
                         value_type = np.dtype(
-                            f"f{int(build_settings['literal_floating_point_precision'])/8}"
+                            f"f{int(int(build_settings['literal_floating_point_precision'])/8)}"
                         )
                 else:
                     value_type = np.dtype(type(value))
