@@ -157,6 +157,7 @@ class FuseAsFieldOp(eve.NodeTranslator):
                     if cpm.is_applied_as_fieldop(arg):
                         pass
                     elif cpm.is_call_to(arg, "if_"):
+                        # TODO(tehrengruber): revisit if we want to inline if_
                         type_ = arg.type
                         arg = im.op_as_fieldop("if_")(*arg.args)
                         arg.type = type_
