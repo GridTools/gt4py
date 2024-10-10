@@ -18,7 +18,6 @@ from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 from gt4py.next.iterator.transforms.cse import CommonSubexpressionElimination
 from gt4py.next.iterator.transforms.eta_reduction import EtaReduction
 from gt4py.next.iterator.transforms.fuse_maps import FuseMaps
-from gt4py.next.iterator.transforms.global_tmps import CreateGlobalTmps
 from gt4py.next.iterator.transforms.inline_center_deref_lift_vars import InlineCenterDerefLiftVars
 from gt4py.next.iterator.transforms.inline_into_scan import InlineIntoScan
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
@@ -74,12 +73,14 @@ def apply_common_transforms(
     common_subexpression_elimination=True,
     force_inline_lambda_args=False,
     unconditionally_collapse_tuples=False,
+    # FIXME[#1582](tehrengruber): Revisit and cleanup after new GTIR temporary pass is in place
     temporary_extraction_heuristics: Optional[
         Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
     ] = None,
+    # FIXME[#1582](tehrengruber): Revisit and cleanup after new GTIR temporary pass is in place
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
 ) -> itir.Program:
-    if isinstance(ir, (itir.FencilDefinition, FencilWithTemporaries)):
+    if isinstance(ir, itir.FencilDefinition):
         ir = fencil_to_program.FencilToProgram().apply(
             ir
         )  # FIXME[#1582](havogt): should be removed after refactoring to combined IR
@@ -137,29 +138,30 @@ def apply_common_transforms(
     if lift_mode != LiftMode.FORCE_INLINE:
         # FIXME[#1582](tehrengruber): implement new temporary pass here
         raise NotImplementedError()
-        assert offset_provider is not None
-        ir = CreateGlobalTmps().visit(
-            ir,
-            offset_provider=offset_provider,
-            extraction_heuristics=temporary_extraction_heuristics,
-            symbolic_sizes=symbolic_domain_sizes,
-        )
-
-        for _ in range(10):
-            inlined = InlineLifts().visit(ir)
-            inlined = InlineLambdas.apply(
-                inlined, opcount_preserving=True, force_inline_lift_args=True
-            )
-            if inlined == ir:
-                break
-            ir = inlined
-        else:
-            raise RuntimeError("Inlining 'lift' and 'lambdas' did not converge.")
-
-        # If after creating temporaries, the scan is not at the top, we inline.
-        # The following example doesn't have a lift around the shift, i.e. temporary pass will not extract it.
-        # λ(inp) → scan(λ(state, k, kp) → state + ·k + ·kp, True, 0.0)(inp, ⟪Koffₒ, 1ₒ⟫(inp))`
-        ir = _inline_into_scan(ir)
+        # ruff: noqa: ERA001
+        # assert offset_provider is not None
+        # ir = CreateGlobalTmps().visit(
+        #     ir,
+        #     offset_provider=offset_provider,
+        #     extraction_heuristics=temporary_extraction_heuristics,
+        #     symbolic_sizes=symbolic_domain_sizes,
+        # )
+        #
+        # for _ in range(10):
+        #     inlined = InlineLifts().visit(ir)
+        #     inlined = InlineLambdas.apply(
+        #         inlined, opcount_preserving=True, force_inline_lift_args=True
+        #     )
+        #     if inlined == ir:
+        #         break
+        #     ir = inlined
+        # else:
+        #     raise RuntimeError("Inlining 'lift' and 'lambdas' did not converge.")
+        #
+        # # If after creating temporaries, the scan is not at the top, we inline.
+        # # The following example doesn't have a lift around the shift, i.e. temporary pass will not extract it.
+        # # λ(inp) → scan(λ(state, k, kp) → state + ·k + ·kp, True, 0.0)(inp, ⟪Koffₒ, 1ₒ⟫(inp))`
+        # ir = _inline_into_scan(ir)
 
     # Since `CollapseTuple` relies on the type inference which does not support returning tuples
     # larger than the number of closure outputs as given by the unconditional collapse, we can

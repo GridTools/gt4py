@@ -32,7 +32,7 @@ from gt4py.next.type_system import type_info, type_specifications as ts
 
 @dataclasses.dataclass
 class _NodeReplacer(PreserveLocationVisitor, NodeTranslator):
-    PRESERVED_ANNEX_ATTRS = ("type",)
+    PRESERVED_ANNEX_ATTRS = ("type", "domain")
 
     expr_map: dict[int, itir.SymRef]
 
@@ -51,7 +51,9 @@ class _NodeReplacer(PreserveLocationVisitor, NodeTranslator):
         if isinstance(node, itir.FunCall) and isinstance(node.fun, itir.Lambda):
             eligible_params = []
             for arg in node.args:
-                eligible_params.append(isinstance(arg, itir.SymRef)) # and arg.id.startswith("_cs"))  # TODO: document? this is for lets in the global tmp pass, e.g. test_trivial_let
+                eligible_params.append(
+                    isinstance(arg, itir.SymRef)
+                )  # and arg.id.startswith("_cs"))  # TODO: document? this is for lets in the global tmp pass, e.g. test_trivial_let
             if any(eligible_params):
                 # note: the inline is opcount preserving anyway so avoid the additional
                 # effort in the inliner by disabling opcount preservation.

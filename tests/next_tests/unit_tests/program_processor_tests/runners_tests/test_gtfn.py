@@ -54,23 +54,6 @@ def test_backend_factory_trait_cached():
     assert cached_version.executor.__name__ == "run_gtfn_cpu_cached"
 
 
-def test_backend_factory_trait_temporaries():
-    inline_version = gtfn.GTFNBackendFactory(cached=False)
-    temps_version = gtfn.GTFNBackendFactory(cached=False, use_temporaries=True)
-
-    assert inline_version.executor.otf_workflow.translation.lift_mode is None
-    assert (
-        temps_version.executor.otf_workflow.translation.lift_mode
-        is transforms.LiftMode.USE_TEMPORARIES
-    )
-
-    assert inline_version.executor.otf_workflow.translation.temporary_extraction_heuristics is None
-    assert (
-        temps_version.executor.otf_workflow.translation.temporary_extraction_heuristics
-        is global_tmps.SimpleTemporaryExtractionHeuristics
-    )
-
-
 def test_backend_factory_build_cache_config(monkeypatch):
     monkeypatch.setattr(config, "BUILD_CACHE_LIFETIME", config.BuildCacheLifetime.SESSION)
     session_version = gtfn.GTFNBackendFactory()

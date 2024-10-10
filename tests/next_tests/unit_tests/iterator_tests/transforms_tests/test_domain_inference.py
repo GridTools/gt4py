@@ -145,7 +145,9 @@ def translate_domain(
 
     shift_list = [item for sublist in shift_tuples for item in sublist]
 
-    translated_domain_expr = domain_utils.SymbolicDomain.from_expr(domain).translate(shift_list, offset_provider)
+    translated_domain_expr = domain_utils.SymbolicDomain.from_expr(domain).translate(
+        shift_list, offset_provider
+    )
 
     return constant_fold_domain_exprs(translated_domain_expr.as_expr())
 
@@ -789,7 +791,10 @@ def test_make_tuple(offset_provider):
 
     actual, actual_domains = infer_domain.infer_expr(
         testee,
-        (domain_utils.SymbolicDomain.from_expr(domain1), domain_utils.SymbolicDomain.from_expr(domain2)),
+        (
+            domain_utils.SymbolicDomain.from_expr(domain1),
+            domain_utils.SymbolicDomain.from_expr(domain2),
+        ),
         offset_provider,
     )
 
@@ -824,7 +829,10 @@ def test_tuple_get_1_nested_make_tuple(offset_provider):
 
     actual, actual_domains = infer_domain.infer_expr(
         testee,
-        (domain_utils.SymbolicDomain.from_expr(domain1), domain_utils.SymbolicDomain.from_expr(domain2)),
+        (
+            domain_utils.SymbolicDomain.from_expr(domain1),
+            domain_utils.SymbolicDomain.from_expr(domain2),
+        ),
         offset_provider,
     )
 
@@ -840,7 +848,9 @@ def test_tuple_get_let_arg_make_tuple(offset_provider):
 
     actual, actual_domains = infer_domain.infer_expr(
         testee,
-        domain_utils.SymbolicDomain.from_expr(im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})),
+        domain_utils.SymbolicDomain.from_expr(
+            im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
+        ),
         offset_provider,
     )
 
@@ -878,7 +888,10 @@ def test_nested_make_tuple(offset_provider):
         (
             (
                 domain_utils.SymbolicDomain.from_expr(domain1),
-                (domain_utils.SymbolicDomain.from_expr(domain2_1), domain_utils.SymbolicDomain.from_expr(domain2_2)),
+                (
+                    domain_utils.SymbolicDomain.from_expr(domain2_1),
+                    domain_utils.SymbolicDomain.from_expr(domain2_2),
+                ),
             ),
             domain_utils.SymbolicDomain.from_expr(domain3),
         ),
@@ -912,7 +925,10 @@ def test_domain_tuple(offset_provider):
 
     actual, actual_domains = infer_domain.infer_expr(
         testee,
-        (domain_utils.SymbolicDomain.from_expr(domain1), domain_utils.SymbolicDomain.from_expr(domain2)),
+        (
+            domain_utils.SymbolicDomain.from_expr(domain1),
+            domain_utils.SymbolicDomain.from_expr(domain2),
+        ),
         offset_provider,
     )
 
@@ -945,7 +961,10 @@ def test_make_tuple_2tuple_get(offset_provider):
 
     actual, actual_domains = infer_domain.infer_expr(
         testee,
-        (domain_utils.SymbolicDomain.from_expr(domain1), domain_utils.SymbolicDomain.from_expr(domain2)),
+        (
+            domain_utils.SymbolicDomain.from_expr(domain1),
+            domain_utils.SymbolicDomain.from_expr(domain2),
+        ),
         offset_provider,
     )
 
