@@ -30,7 +30,7 @@ from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_builtin_translators,
-    gtir_to_tasklet,
+    gtir_dataflow,
     transformations as gtx_transformations,
     utility as dace_gtir_utils,
 )
@@ -41,16 +41,13 @@ class DataflowBuilder(Protocol):
     """Visitor interface to build a dataflow subgraph."""
 
     @abc.abstractmethod
-    def get_offset_provider(self, offset: str) -> gtx_common.OffsetProviderElem:
-        pass
+    def get_offset_provider(self, offset: str) -> gtx_common.OffsetProviderElem: ...
 
     @abc.abstractmethod
-    def unique_map_name(self, name: str) -> str:
-        pass
+    def unique_map_name(self, name: str) -> str: ...
 
     @abc.abstractmethod
-    def unique_tasklet_name(self, name: str) -> str:
-        pass
+    def unique_tasklet_name(self, name: str) -> str: ...
 
     def add_map(
         self,
@@ -86,12 +83,12 @@ class SDFGBuilder(DataflowBuilder, Protocol):
     @abc.abstractmethod
     def get_symbol_type(self, symbol_name: str) -> ts.DataType:
         """Retrieve the GT4Py type of a symbol used in the program."""
-        pass
+        ...
 
     @abc.abstractmethod
     def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
         """Visit a node of the GT4Py IR."""
-        pass
+        ...
 
 
 @dataclasses.dataclass(frozen=True)
@@ -408,7 +405,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         node: gtir.FunCall,
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
-        reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
+        reduce_identity: Optional[gtir_dataflow.SymbolExpr],
     ) -> gtir_builtin_translators.FieldopResult:
         # use specialized dataflow builder classes for each builtin function
         if cpm.is_call_to(node, "if_"):
@@ -457,7 +454,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         node: gtir.Lambda,
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
-        reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
+        reduce_identity: Optional[gtir_dataflow.SymbolExpr],
         args: list[gtir_builtin_translators.FieldopResult],
     ) -> gtir_builtin_translators.FieldopResult:
         """
@@ -623,7 +620,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         node: gtir.Literal,
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
-        reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
+        reduce_identity: Optional[gtir_dataflow.SymbolExpr],
     ) -> gtir_builtin_translators.FieldopResult:
         return gtir_builtin_translators.translate_literal(
             node, sdfg, head_state, self, reduce_identity=None
@@ -634,7 +631,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         node: gtir.SymRef,
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
-        reduce_identity: Optional[gtir_to_tasklet.SymbolExpr],
+        reduce_identity: Optional[gtir_dataflow.SymbolExpr],
     ) -> gtir_builtin_translators.FieldopResult:
         return gtir_builtin_translators.translate_symbol_ref(
             node, sdfg, head_state, self, reduce_identity=None
