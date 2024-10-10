@@ -420,6 +420,8 @@ class NativeFunction(enum.Enum):
     
     INT = enum.auto()
 
+    INT = enum.auto()
+
     @property
     def arity(self):
         return type(self).IR_OP_TO_NUM_ARGS[self]

@@ -181,7 +181,7 @@ class NativeFunction(eve.StrEnum):
 
     INT = "int"
 
-    IR_OP_TO_NUM_ARGS: ClassVar[Dict["NativeFunction", int]]
+    IR_OP_TO_NUM_ARGS: ClassVar[Dict[NativeFunction, int]]
 
     @property
     def arity(self) -> int:
@@ -584,7 +584,7 @@ def native_func_call_dtype_propagation(*, strict: bool = True) -> datamodels.Roo
         if instance.func in (NativeFunction.ISFINITE, NativeFunction.ISINF, NativeFunction.ISNAN):
             instance.dtype = DataType.BOOL  # type: ignore[attr-defined]
         elif instance.func in (NativeFunction.INT):
-            instance.dtype = DataType.INT32
+            instance.dtype = DataType.INT32  # type: ignore[attr-defined]
         else:
             # assumes all NativeFunction args have a common dtype
             common_dtype = verify_and_get_common_dtype(cls, instance.args, strict=strict)
