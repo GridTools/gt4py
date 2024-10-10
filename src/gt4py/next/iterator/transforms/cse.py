@@ -43,7 +43,7 @@ class _NodeReplacer(PreserveLocationVisitor, NodeTranslator):
 
     def visit_FunCall(self, node: itir.FunCall) -> itir.Node:
         node = cast(itir.FunCall, self.visit_Expr(node))
-        # TODO(tehrengruber): This symbol name from the inner expr, to increase readability of IR
+        # TODO(tehrengruber): Use symbol name from the inner let, to increase readability of IR
         # If we encounter an expression like:
         #  (λ(_cs_1) → (λ(a) → a+a)(_cs_1))(outer_expr)
         # (non-recursively) inline the lambda to obtain:
