@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from typing import Type
+
 import numpy as np
 
 
@@ -63,4 +65,4 @@ isnan: np.ufunc = np.isnan
 floor: np.ufunc = np.floor
 ceil: np.ufunc = np.ceil
 trunc: np.ufunc = np.trunc
-int: np.ufunc = np.int32  # noqa: A001 [builtin-variable-shadowing]
+int: Type[np.signedinteger] = np.int32  # noqa: A001 [builtin-variable-shadowing]
