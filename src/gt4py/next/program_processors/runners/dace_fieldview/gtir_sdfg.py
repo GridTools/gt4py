@@ -41,16 +41,13 @@ class DataflowBuilder(Protocol):
     """Visitor interface to build a dataflow subgraph."""
 
     @abc.abstractmethod
-    def get_offset_provider(self, offset: str) -> gtx_common.OffsetProviderElem:
-        pass
+    def get_offset_provider(self, offset: str) -> gtx_common.OffsetProviderElem: ...
 
     @abc.abstractmethod
-    def unique_map_name(self, name: str) -> str:
-        pass
+    def unique_map_name(self, name: str) -> str: ...
 
     @abc.abstractmethod
-    def unique_tasklet_name(self, name: str) -> str:
-        pass
+    def unique_tasklet_name(self, name: str) -> str: ...
 
     def add_map(
         self,

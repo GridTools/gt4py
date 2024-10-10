@@ -87,8 +87,7 @@ class DataflowInputEdge(Protocol):
     """
 
     @abc.abstractmethod
-    def connect(self, me: dace.nodes.MapEntry) -> None:
-        pass
+    def connect(self, me: dace.nodes.MapEntry) -> None: ...
 
 
 @dataclasses.dataclass(frozen=True)
