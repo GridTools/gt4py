@@ -247,6 +247,27 @@ def set_at(expr: itir.Expr, domain: itir.Expr, target: itir.Expr) -> None:
     TracerContext.add_stmt(itir.SetAt(expr=expr, domain=domain, target=target))
 
 
+@iterator.runtime.if_stmt.register(TRACING)
+def if_stmt(
+    cond: itir.Expr, true_branch_f: typing.Callable, false_branch_f: typing.Callable
+) -> None:
+    true_branch: List[itir.Stmt] = []
+    false_branch: List[itir.Stmt] = []
+
+    old_body = TracerContext.body
+    TracerContext.body = true_branch
+    true_branch_f()
+
+    TracerContext.body = false_branch
+    false_branch_f()
+
+    TracerContext.body = old_body
+
+    TracerContext.add_stmt(
+        itir.IfStmt(cond=cond, true_branch=true_branch, false_branch=false_branch)
+    )
+
+
 def _contains_tuple_dtype_field(arg):
     if isinstance(arg, tuple):
         return any(_contains_tuple_dtype_field(el) for el in arg)

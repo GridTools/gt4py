@@ -8,7 +8,7 @@
 
 
 from gt4py.next.program_processors.runners.dace_common.dace_backend import get_sdfg_args
-from gt4py.next.program_processors.runners.dace_fieldview.gtir_to_sdfg import build_sdfg_from_gtir
+from gt4py.next.program_processors.runners.dace_fieldview.gtir_sdfg import build_sdfg_from_gtir
 
 
 __all__ = [
