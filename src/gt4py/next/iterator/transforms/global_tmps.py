@@ -20,7 +20,7 @@ from gt4py.next.iterator.type_system import inference as type_inference
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
-def transform_if(
+def _transform_stmt_if(
     stmt: itir.Stmt, declarations: list[itir.Temporary], uids: eve_utils.UIDGenerator
 ) -> Optional[list[itir.Stmt]]:
     if not isinstance(stmt, itir.SetAt):
@@ -31,13 +31,13 @@ def transform_if(
         return [
             itir.IfStmt(
                 cond=cond,
-                # recursively transform
-                true_branch=transform(
+                # recursively _transform_stmt
+                true_branch=_transform_stmt(
                     itir.SetAt(target=stmt.target, expr=true_val, domain=stmt.domain),
                     declarations,
                     uids,
                 ),
-                false_branch=transform(
+                false_branch=_transform_stmt(
                     itir.SetAt(target=stmt.target, expr=false_val, domain=stmt.domain),
                     declarations,
                     uids,
@@ -47,7 +47,7 @@ def transform_if(
     return None
 
 
-def transform_by_pattern(
+def _transform_stmt_by_pattern(
     stmt: itir.Stmt, predicate, declarations: list[itir.Temporary], uids: eve_utils.UIDGenerator
 ) -> Optional[list[itir.Stmt]]:
     if not isinstance(stmt, itir.SetAt):
@@ -119,9 +119,9 @@ def transform_by_pattern(
                 im.let(tmp_sym, target_expr)(new_expr), opcount_preserving=False
             )
 
-            # TODO: transform not needed if deepest_expr_first=True
+            # TODO: _transform_stmt not needed if deepest_expr_first=True
             tmp_stmts.extend(
-                transform(
+                _transform_stmt(
                     itir.SetAt(target=target_expr, domain=domain, expr=tmp_expr), declarations, uids
                 )
             )
@@ -130,38 +130,38 @@ def transform_by_pattern(
     return None
 
 
-def transform(
+def _transform_stmt(
     stmt: itir.Stmt, declarations: list[itir.Temporary], uids: eve_utils.UIDGenerator
 ) -> list[itir.Stmt]:
     unprocessed_stmts: list[itir.Stmt] = [stmt]
     stmts: list[itir.Stmt] = []
 
-    transforms: list[Callable] = [
-        # transform functional if_ into if-stmt
-        transform_if,
+    _transform_stmts: list[Callable] = [
+        # _transform_stmt functional if_ into if-stmt
+        _transform_stmt_if,
         # extract applied `as_fieldop` to top-level
         functools.partial(
-            transform_by_pattern, predicate=lambda expr, _: cpm.is_applied_as_fieldop(expr)
+            _transform_stmt_by_pattern, predicate=lambda expr, _: cpm.is_applied_as_fieldop(expr)
         ),
         # extract functional if_ to the top-level
         functools.partial(
-            transform_by_pattern, predicate=lambda expr, _: cpm.is_call_to(expr, "if_")
+            _transform_stmt_by_pattern, predicate=lambda expr, _: cpm.is_call_to(expr, "if_")
         ),
     ]
 
     while unprocessed_stmts:
         stmt = unprocessed_stmts.pop(0)
 
-        did_transform = False
-        for transform in transforms:
-            transformed_stmts = transform(stmt=stmt, declarations=declarations, uids=uids)
-            if transformed_stmts:
-                unprocessed_stmts = [*transformed_stmts, *unprocessed_stmts]
-                did_transform = True
+        did_transform_stmt = False
+        for _transform_stmt in _transform_stmts:
+            _transform_stmted_stmts = _transform_stmt(stmt=stmt, declarations=declarations, uids=uids)
+            if _transform_stmted_stmts:
+                unprocessed_stmts = [*_transform_stmted_stmts, *unprocessed_stmts]
+                did_transform_stmt = True
                 break
 
-        # no transformation occurred
-        if not did_transform:
+        # no _transform_stmtation occurred
+        if not did_transform_stmt:
             stmts.append(stmt)
 
     return stmts
@@ -173,7 +173,7 @@ def create_global_tmps(
     """
     Given an `itir.Program` create temporaries for intermediate values.
 
-    This pass looks at all `as_fieldop` calls and transforms field-typed subexpressions of its
+    This pass looks at all `as_fieldop` calls and _transform_stmts field-typed subexpressions of its
     arguments into temporaries.
     """
     program = infer_domain.infer_program(program, offset_provider)
@@ -185,7 +185,7 @@ def create_global_tmps(
 
     for stmt in program.body:
         assert isinstance(stmt, itir.SetAt)
-        new_body.extend(transform(stmt, uids=uids, declarations=declarations))
+        new_body.extend(_transform_stmt(stmt, uids=uids, declarations=declarations))
 
     return itir.Program(
         id=program.id,
