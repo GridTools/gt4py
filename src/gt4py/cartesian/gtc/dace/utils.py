@@ -232,10 +232,17 @@ class AccessInfoCollector(eve.NodeVisitor):
         grid_subset,
         is_write,
     ) -> dcir.FieldAccessInfo:
+        """Compute how the field get accessed on the grid"""
+
         # Check we have expression offsets in K
         # OR write offsets in K
+        # OR absolute indexing in K
         offset = [offset_node.to_dict()[k] for k in "ijk"]
-        if isinstance(offset_node, oir.VariableKOffset) or (offset[2] != 0 and is_write):
+        if (
+            isinstance(offset_node, oir.VariableKOffset)
+            or (offset[2] != 0 and is_write)
+            or isinstance(offset_node, oir.AbsoluteKIndex)
+        ):
             variable_offset_axes = [dcir.Axis.K]
         else:
             variable_offset_axes = []

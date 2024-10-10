@@ -336,9 +336,16 @@ class VarRef(Ref):
 
 
 @attribclass
+class AbsoluteKIndex(Expr):
+    """See gtc.common.AbsoluteKIndex"""
+
+    k = attribute(of=Any)
+
+
+@attribclass
 class FieldRef(Ref):
     name = attribute(of=str)
-    offset = attribute(of=DictOf[str, UnionOf[int, Expr]])
+    offset = attribute(of=DictOf[str, UnionOf[int, Expr, AbsoluteKIndex]])
     data_index = attribute(of=ListOf[Expr], factory=list)
     loc = attribute(of=Location, optional=True)
 
@@ -410,6 +417,8 @@ class NativeFunction(enum.Enum):
     FLOOR = enum.auto()
     CEIL = enum.auto()
     TRUNC = enum.auto()
+    
+    INT = enum.auto()
 
     INT = enum.auto()
 

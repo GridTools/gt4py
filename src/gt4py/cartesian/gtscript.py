@@ -62,6 +62,10 @@ MATH_BUILTINS = {
     "int",
 }
 
+builtins_and_inline_ignore = {
+    "compile_assert",
+}
+
 builtins = {
     "I",
     "J",
@@ -83,11 +87,11 @@ builtins = {
     "__gtscript__",
     "__externals__",
     "__INLINED",
-    "compile_assert",
     *MATH_BUILTINS,
+    *builtins_and_inline_ignore,
 }
 
-IGNORE_WHEN_INLINING = {*MATH_BUILTINS, "compile_assert"}
+IGNORE_WHEN_INLINING = {*MATH_BUILTINS, *builtins_and_inline_ignore}
 
 __all__ = [*list(builtins), "function", "stencil", "lazy_stencil"]
 
@@ -652,6 +656,13 @@ class _FieldDescriptor:
     def __str__(self) -> str:
         return (
             f"Field<[{', '.join(str(ax) for ax in self.axes)}], ({self.dtype}, {self.data_dims})>"
+        )
+
+    def at(self, *, K):
+        """Stub function used to implement absolute
+        K indexing"""
+        raise RuntimeError(
+            "`at(K=...)` stub function only, do not call outside of stencil field indexation."
         )
 
 

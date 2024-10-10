@@ -24,6 +24,7 @@ except ImportError:
     pass
 
 from .cuda_backend import CudaBackend
+from .debug_backend import DebugBackend
 from .gtcpp_backend import GTCpuIfirstBackend, GTCpuKfirstBackend, GTGpuBackend
 from .module_generator import BaseModuleGenerator
 from .numpy_backend import NumpyBackend
@@ -37,6 +38,7 @@ __all__ = [
     "BasePyExtBackend",
     "CLIBackendMixin",
     "CudaBackend",
+    "DebugBackend",
     "GTGpuBackend",
     "GTCpuIfirstBackend",
     "GTCpuKfirstBackend",

@@ -1822,3 +1822,42 @@ class TestAnnotations:
         assert "wb" in annotations
         assert annotations["wb"] == int
         assert len(annotations) == 6
+
+
+class TestAbsoluteIndex:
+    def test_good_syntax(self):
+        def definition_func(in_field: gtscript.Field[float], out_field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                out_field = in_field.at(K=0) + in_field.at(K=1)
+
+        parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+
+    def test_bad_syntax_not_specifying_K(self):
+        def definition_func(in_field: gtscript.Field[float], out_field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                out_field = in_field.at(2)
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError, match=r".*Absolute K index bad syntax.*"
+        ):
+            parse_definition(
+                definition_func,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
+            )
+
+    def test_bad_syntax_specifying_I_J_axis(self):
+        def definition_func(in_field: gtscript.Field[float], out_field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                out_field = in_field.at(I=1, K=0)
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError, match=r".*Absolute K index bad syntax.*"
+        ):
+            parse_definition(
+                definition_func,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
+            )

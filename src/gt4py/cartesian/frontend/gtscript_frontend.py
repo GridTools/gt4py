@@ -337,6 +337,10 @@ class ReturnReplacer(gt_utils.meta.ASTTransformPass):
             )
 
 
+def _filter_absolute_K_index_method(node: ast.Call) -> bool:
+    return isinstance(node.func, ast.Attribute) and node.func.attr == "at"
+
+
 class CallInliner(ast.NodeTransformer):
     """Inlines calls to gtscript.function calls.
 
@@ -403,15 +407,19 @@ class CallInliner(ast.NodeTransformer):
         return node
 
     def visit_Assign(self, node: ast.Assign):
-        if (
-            isinstance(node.value, ast.Call)
-            and gt_meta.get_qualified_name_from_node(node.value.func) not in gtscript.MATH_BUILTINS
-        ):
-            assert len(node.targets) == 1
-            self.visit(node.value, target_node=node.targets[0])
-            # This node can be now removed since the trivial assignment has been already done
-            # in the Call visitor
-            return None
+        if isinstance(node.value, ast.Call):
+            if _filter_absolute_K_index_method(node.value):
+                return node
+            elif (
+                gt_meta.get_qualified_name_from_node(node.value.func) not in gtscript.MATH_BUILTINS
+            ):
+                assert len(node.targets) == 1
+                self.visit(node.value, target_node=node.targets[0])
+                # This node can be now removed since the trivial assignment has been already done
+                # in the Call visitor
+                return None
+            else:
+                return self.generic_visit(node)
         else:
             return self.generic_visit(node)
 
@@ -1112,7 +1120,7 @@ class IRMaker(ast.NodeVisitor):
 
     def _eval_index(
         self, node: ast.Subscript, field_axes: Optional[Set[Literal["I", "J", "K"]]] = None
-    ) -> Optional[List[int]]:
+    ) -> Optional[Union[List[int], nodes.AbsoluteKIndex]]:
         tuple_or_expr = node.slice.value if isinstance(node.slice, ast.Index) else node.slice
         index_nodes = gtc_utils.listify(
             tuple_or_expr.elts if isinstance(tuple_or_expr, ast.Tuple) else tuple_or_expr
@@ -1161,16 +1169,18 @@ class IRMaker(ast.NodeVisitor):
             assert index is not None
             result.index = index[0]
         else:
-            if isinstance(node.value, ast.Name):
+            if isinstance(index, nodes.AbsoluteKIndex):
+                result.offset = index
+            elif isinstance(node.value, ast.Name):
                 field_axes = self.fields[result.name].axes
                 if index is not None:
                     if len(field_axes) != len(index):
                         ro_field_message = ""
                         if len(field_axes) == 0:
-                            ro_field_message = f"Did you mean .A{index}?"
+                            ro_field_message = f"Did you mean absolute indexing via .A{index}?"
                         raise GTScriptSyntaxError(
-                            f"Incorrect offset specification detected. Found {index}, "
-                            f"but the field has dimensions ({', '.join(field_axes)}). "
+                            f"Incorrect offset specification detected for {result.name}. "
+                            f"Found index={index}, but {result.name} field has dimensions ({', '.join(field_axes)}). "
                             f"{ro_field_message}"
                         )
                     result.offset = {axis: value for axis, value in zip(field_axes, index)}
@@ -1378,7 +1388,30 @@ class IRMaker(ast.NodeVisitor):
 
         return result
 
+    def _absolute_K_index_method(self, node: ast.Call):
+        assert _filter_absolute_K_index_method(node)
+        if len(node.keywords) != 1:
+            raise GTScriptSyntaxError(
+                message="Absolute K index bad syntax. Must be of the form`.at(K=...)`",
+                loc=nodes.Location.from_ast_node(node),
+            )
+        if node.keywords[0].arg != "K":
+            raise GTScriptSyntaxError(
+                message="Absolute K index: bad syntax, only `K` is a valid parameter to `at`. "
+                "Must be of the form`.at(K=...)`",
+                loc=nodes.Location.from_ast_node(node),
+            )
+        field: nodes.FieldRef = self.visit(node.func.value)
+        assert isinstance(field, nodes.FieldRef)
+        field.offset = nodes.AbsoluteKIndex(k=self.visit(node.keywords[0].value))
+        return field
+
     def visit_Call(self, node: ast.Call):
+        # We check for am absolute Field index in K
+        if _filter_absolute_K_index_method(node):
+            return self._absolute_K_index_method(node)
+
+        # We expect the Call is a native function to carry forward
         native_fcn = nodes.NativeFunction.PYTHON_SYMBOL_TO_IR_OP[node.func.id]
 
         args = [self.visit(arg) for arg in node.args]
