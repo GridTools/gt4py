@@ -86,12 +86,12 @@ class SDFGBuilder(DataflowBuilder, Protocol):
     @abc.abstractmethod
     def get_symbol_type(self, symbol_name: str) -> ts.DataType:
         """Retrieve the GT4Py type of a symbol used in the program."""
-        pass
+        ...
 
     @abc.abstractmethod
     def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
         """Visit a node of the GT4Py IR."""
-        pass
+        ...
 
 
 @dataclasses.dataclass(frozen=True)

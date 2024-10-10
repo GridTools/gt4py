@@ -77,7 +77,14 @@ class IteratorExpr:
 
 
 class DataflowInputEdge(Protocol):
-    """Allows to setup an input edge in a map scope."""
+    """
+    This protocol represents an open connection into the dataflow.
+
+    It provides the `connect` method to setup an input edge from an external data source.
+    Since the dataflow represents a stencil, we instantiate the dataflow inside a map scope
+    and connect its inputs and outputs to external data nodes by means of memlets that
+    traverse the map entry and exit nodes.
+    """
 
     @abc.abstractmethod
     def connect(self, me: dace.nodes.MapEntry) -> None:
@@ -85,7 +92,7 @@ class DataflowInputEdge(Protocol):
 
 
 @dataclasses.dataclass(frozen=True)
-class DataflowMemletEdge(DataflowInputEdge):
+class MemletInputEdge(DataflowInputEdge):
     """
     Allows to setup an input memlet through a map entry node.
 
@@ -111,8 +118,13 @@ class DataflowMemletEdge(DataflowInputEdge):
 
 
 @dataclasses.dataclass(frozen=True)
-class DataflowEmptyEdge(DataflowInputEdge):
-    """Allows to setup an input edge from a map entry node to a tasklet withough arguements."""
+class EmptyInputEdge(DataflowInputEdge):
+    """
+    Allows to setup an edge from a map entry node to a tasklet with no arguements.
+
+    The reason behind this kind of connection is that all nodes inside a map scope
+    must have an in/out path that traverses the entry and exit nodes.
+    """
 
     state: dace.SDFGState
     node: dace.nodes.Tasklet
@@ -123,7 +135,15 @@ class DataflowEmptyEdge(DataflowInputEdge):
 
 @dataclasses.dataclass(frozen=True)
 class DataflowOutputEdge:
-    """Allows to setup a data edge to write the result through a map exit node."""
+    """
+    Allows to setup an output memlet through a map exit node.
+
+    The result of a dataflow subgraph needs to be written to an external data node.
+    Since the dataflow represents a stencil and the dataflow is computed over
+    a field domain, the dataflow is instatiated inside a map scope. The `connect`
+    method creates a memlet that writes the dataflow result to the external array
+    passing through the map exit node.
+    """
 
     state: dace.SDFGState
     expr: DataExpr
@@ -187,11 +207,19 @@ def get_reduce_params(node: gtir.FunCall) -> tuple[str, SymbolExpr, SymbolExpr]:
 
 
 class LambdaToDataflow(eve.NodeVisitor):
-    """Translates an `ir.Lambda` expression to a dataflow graph.
+    """
+    Translates an `ir.Lambda` expression to a dataflow graph.
 
-    Lambda functions should only be encountered as argument to the `as_fieldop`
-    builtin function, therefore the dataflow graph generated here typically
-    represents the stencil function of a field operator.
+    The dataflow graph generated here typically represents the stencil function
+    of a field operator. It only computes single elements or pure local fields,
+    in case of neighbor values. In case of local fields, the dataflow contains
+    inner maps with fixed literal size (max number of neighbors).
+    Once the lambda expression has been lowered to a dataflow, the dataflow graph
+    needs to be instantiated, that is we have to connect all in/out edges to
+    external source/destination data nodes. Since the lambda expression is used
+    in GTIR as argument to a field operator, the dataflow is instatiated inside
+    a map scope and applied on the field domain. Therefore, all in/out edges
+    must traverse the entry/exit map nodes.
     """
 
     sdfg: dace.SDFG
@@ -222,7 +250,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         dst_node: dace.nodes.Node,
         dst_conn: Optional[str] = None,
     ) -> None:
-        edge = DataflowMemletEdge(self.state, src, src_subset, dst_node, dst_conn)
+        edge = MemletInputEdge(self.state, src, src_subset, dst_node, dst_conn)
         self.input_edges.append(edge)
 
     def _add_edge(
@@ -261,8 +289,10 @@ class LambdaToDataflow(eve.NodeVisitor):
             name, self.state, inputs, outputs, code, **kwargs
         )
         if len(inputs) == 0:
-            # tasklet nodes without arguments need an empty edge from map entry node
-            edge = DataflowEmptyEdge(self.state, tasklet_node)
+            # All nodes inside a map scope must have an in/out path that traverses
+            # the entry and exit nodes. Therefore, a tasklet node with no arguments
+            # still needs an (empty) input edge from map entry node.
+            edge = EmptyInputEdge(self.state, tasklet_node)
             self.input_edges.append(edge)
         return tasklet_node
 
@@ -782,8 +812,13 @@ class LambdaToDataflow(eve.NodeVisitor):
                 it, offset_provider, offset_table_node, offset_expr
             )
 
-    def _visit_builtin(self, node: gtir.FunCall) -> DataExpr:
-        assert isinstance(node.fun, gtir.SymRef)
+    def _visit_generic_builtin(self, node: gtir.FunCall) -> DataExpr:
+        """
+        Generic handler called by `visit_FunCall()` when it encounters
+        a builtin function that does not match any other specific handler.
+        """
+        assert isinstance(node.type, ts.ScalarType)
+        dtype = dace_utils.as_dace_type(node.type)
 
         node_internals = []
         node_connections: dict[str, MemletExpr | DataExpr] = {}
@@ -799,8 +834,9 @@ class LambdaToDataflow(eve.NodeVisitor):
                 # use the argument value without adding any connector
                 node_internals.append(arg_expr.value)
 
-        # use tasklet connectors as expression arguments
+        assert isinstance(node.fun, gtir.SymRef)
         builtin_name = str(node.fun.id)
+        # use tasklet connectors as expression arguments
         code = gtir_python_codegen.format_builtin(builtin_name, *node_internals)
 
         out_connector = "result"
@@ -828,9 +864,6 @@ class LambdaToDataflow(eve.NodeVisitor):
                     connector,
                 )
 
-        assert isinstance(node.type, ts.ScalarType)
-        dtype = dace_utils.as_dace_type(node.type)
-
         return self._construct_tasklet_result(dtype, tasklet_node, "result")
 
     def visit_FunCall(self, node: gtir.FunCall) -> IteratorExpr | ValueExpr:
@@ -847,9 +880,10 @@ class LambdaToDataflow(eve.NodeVisitor):
             return self._visit_shift(node)
 
         elif isinstance(node.fun, gtir.SymRef):
-            return self._visit_builtin(node)
+            return self._visit_generic_builtin(node)
+
         else:
-            raise NotImplementedError
+            raise NotImplementedError(f"Invalid 'FunCall' node: {node}.")
 
     def visit_Lambda(
         self, node: gtir.Lambda, args: list[IteratorExpr | MemletExpr | SymbolExpr]

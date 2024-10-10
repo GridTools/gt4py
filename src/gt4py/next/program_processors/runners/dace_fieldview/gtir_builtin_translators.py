@@ -164,7 +164,19 @@ def translate_as_field_op(
     sdfg_builder: gtir_sdfg.SDFGBuilder,
     reduce_identity: Optional[gtir_dataflow.SymbolExpr],
 ) -> FieldopResult:
-    """Generates the dataflow subgraph for the `as_fieldop` builtin function."""
+    """
+    Generates the dataflow subgraph for the `as_fieldop` builtin function.
+
+    Expects a `FunCall` node with two arguments:
+    1. a lambda function representing the stencil, which is lowered to a dataflow subgraph
+    2. the domain of the field operator, which is used as map range
+
+    The dataflow can be as simple as a single tasklet, or implement a local computation
+    as a composition of tasklets and even include a map to range on local dimensions (e.g.
+    neighbors and map builtins).
+    The stencil dataflow is instantiated inside a map scope, which apply the stencil over
+    the field domain.
+    """
     assert isinstance(node, gtir.FunCall)
     assert cpm.is_call_to(node.fun, "as_fieldop")
     assert isinstance(node.type, ts.FieldType)
@@ -172,12 +184,10 @@ def translate_as_field_op(
     fun_node = node.fun
     assert len(fun_node.args) == 2
     stencil_expr, domain_expr = fun_node.args
-    # expect stencil (represented as a lambda function) as first argument
     assert isinstance(stencil_expr, gtir.Lambda)
-    # the domain of the field operator is passed as second argument
     assert isinstance(domain_expr, gtir.FunCall)
 
-    # add local storage to compute the field operator over the given domain
+    # parse the domain of the field operator
     domain = dace_gtir_utils.get_domain(domain_expr)
 
     if cpm.is_applied_reduce(stencil_expr.expr):
@@ -203,6 +213,7 @@ def translate_as_field_op(
         assert isinstance(output_desc, dace.data.Array)
         assert set(output_desc.offset) == {0}
         # additional local dimension for neighbors
+        # TODO(phimuell): Investigate if we should swap the two.
         output_subset = sbs.Range.from_indices(domain_index) + sbs.Range.from_array(output_desc)
     else:
         assert isinstance(output_desc, dace.data.Scalar)

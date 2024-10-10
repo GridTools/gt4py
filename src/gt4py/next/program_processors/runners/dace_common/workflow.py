@@ -43,6 +43,10 @@ class CompiledDaceProgram(stages.CompiledProgram):
         result = self.sdfg_program(*args, **kwargs)
         assert result is None
 
+    def fast_call(self) -> None:
+        result = self.sdfg_program.fast_call(*self.sdfg_program._lastargs)
+        assert result is None
+
 
 @dataclasses.dataclass(frozen=True)
 class DaCeCompiler(
@@ -142,7 +146,7 @@ def convert_args(
                         ), f"argument '{arg_name}' not found."
 
             if use_fast_call:
-                return sdfg_program.fast_call(*sdfg_program._lastargs)
+                return inp.fast_call()
 
         sdfg_args = dace_backend.get_sdfg_args(
             sdfg,
