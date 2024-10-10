@@ -1,16 +1,11 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 # TODO: test failure when something is not typed after inference is run
 # TODO: test lift with no args
 # TODO: lambda function that is not called
@@ -174,6 +169,37 @@ def expression_test_cases():
                     ),
                 )
             )(im.ref("inp1", float_i_field), im.ref("inp2", float_i_field)),
+            ts.TupleType(types=[float_i_field, float_i_field]),
+        ),
+        # if in field-view scope
+        (
+            im.if_(
+                False,
+                im.call(
+                    im.call("as_fieldop")(
+                        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+                        im.call("cartesian_domain")(
+                            im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
+                        ),
+                    )
+                )(im.ref("inp", float_i_field), 1.0),
+                im.call(
+                    im.call("as_fieldop")(
+                        "deref",
+                        im.call("cartesian_domain")(
+                            im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
+                        ),
+                    )
+                )(im.ref("inp", float_i_field)),
+            ),
+            float_i_field,
+        ),
+        (
+            im.if_(
+                False,
+                im.make_tuple(im.ref("inp", float_i_field), im.ref("inp", float_i_field)),
+                im.make_tuple(im.ref("inp", float_i_field), im.ref("inp", float_i_field)),
+            ),
             ts.TupleType(types=[float_i_field, float_i_field]),
         ),
     )
@@ -430,3 +456,25 @@ def test_program_tuple_setat_short_target():
         isinstance(result.body[0].target.type, ts.TupleType)
         and len(result.body[0].target.type.types) == 1
     )
+
+
+def test_if_stmt():
+    cartesian_domain = im.call("cartesian_domain")(
+        im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
+    )
+
+    testee = itir.IfStmt(
+        cond=im.literal_from_value(True),
+        true_branch=[
+            itir.SetAt(
+                expr=im.as_fieldop("deref", cartesian_domain)(im.ref("inp", float_i_field)),
+                domain=cartesian_domain,
+                target=im.ref("out", float_i_field),
+            )
+        ],
+        false_branch=[],
+    )
+
+    result = itir_type_inference.infer(testee, offset_provider={}, allow_undeclared_symbols=True)
+    assert result.cond.type == bool_type
+    assert result.true_branch[0].expr.type == float_i_field

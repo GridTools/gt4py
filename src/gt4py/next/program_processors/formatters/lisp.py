@@ -1,23 +1,17 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from typing import Any
 
 from gt4py.eve.codegen import FormatTemplate as as_fmt, TemplatedGenerator
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import apply_common_transforms
-from gt4py.next.program_processors.processor_interface import program_formatter
+from gt4py.next.program_processors import program_formatter
 
 
 class ToLispLike(TemplatedGenerator):
@@ -70,6 +64,6 @@ class ToLispLike(TemplatedGenerator):
             return generated_code
 
 
-@program_formatter
+@program_formatter.program_formatter
 def format_lisp(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> str:
     return ToLispLike.apply(program, **kwargs)

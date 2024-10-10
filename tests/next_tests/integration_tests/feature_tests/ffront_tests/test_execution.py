@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from functools import reduce
 
@@ -35,6 +29,7 @@ from gt4py.next import (
 from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.program_processors.runners import gtfn
 from gt4py.next.type_system import type_specifications as ts
+from gt4py.next import utils as gt_utils
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
@@ -208,6 +203,84 @@ def test_nested_scalar_arg(unstructured_case):
     )
 
 
+@pytest.mark.uses_tuple_args
+def test_scalar_tuple_arg(unstructured_case):
+    @gtx.field_operator
+    def testee(a: tuple[int32, tuple[int32, int32]]) -> cases.VField:
+        return broadcast(a[0] + 2 * a[1][0] + 3 * a[1][1], (Vertex,))
+
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a: np.full(
+            [unstructured_case.default_sizes[Vertex]], a[0] + 2 * a[1][0] + 3 * a[1][1], dtype=int32
+        ),
+    )
+
+
+@pytest.mark.uses_tuple_args
+def test_zero_dim_tuple_arg(unstructured_case):
+    @gtx.field_operator
+    def testee(
+        a: tuple[gtx.Field[[], int32], tuple[gtx.Field[[], int32], gtx.Field[[], int32]]],
+    ) -> cases.VField:
+        return broadcast(a[0] + 2 * a[1][0] + 3 * a[1][1], (Vertex,))
+
+    def ref(a):
+        a = gt_utils.tree_map(lambda x: x[()])(a)  # unwrap 0d field
+        return np.full(
+            [unstructured_case.default_sizes[Vertex]], a[0] + 2 * a[1][0] + 3 * a[1][1], dtype=int32
+        )
+
+    cases.verify_with_default_data(unstructured_case, testee, ref=ref)
+
+
+@pytest.mark.uses_tuple_args
+def test_mixed_field_scalar_tuple_arg(cartesian_case):
+    @gtx.field_operator
+    def testee(a: tuple[int32, tuple[int32, cases.IField, int32]]) -> cases.IField:
+        return a[0] + 2 * a[1][0] + 3 * a[1][1] + 5 * a[1][2]
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda a: np.full(
+            [cartesian_case.default_sizes[IDim]], a[0] + 2 * a[1][0] + 5 * a[1][2], dtype=int32
+        )
+        + 3 * a[1][1],
+    )
+
+
+@pytest.mark.uses_tuple_args
+@pytest.mark.xfail(
+    reason="Not implemented in frontend (implicit size arg handling needs to be adopted) and GTIR embedded backend."
+)
+def test_tuple_arg_with_different_but_promotable_dims(cartesian_case):
+    @gtx.field_operator
+    def testee(a: tuple[cases.IField, cases.IJField]) -> cases.IJField:
+        return a[0] + 2 * a[1]
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda a: a[0][:, np.newaxis] + 2 * a[1],
+    )
+
+
+@pytest.mark.uses_tuple_args
+@pytest.mark.xfail(reason="Iterator of tuple approach in lowering does not allow this.")
+def test_tuple_arg_with_unpromotable_dims(unstructured_case):
+    @gtx.field_operator
+    def testee(a: tuple[cases.VField, cases.EField]) -> cases.VField:
+        return a[0] + 2 * a[1](V2E[0])
+
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a: a[0][:, np.newaxis] + 2 * a[1],
+    )
+
+
 @pytest.mark.uses_index_fields
 @pytest.mark.uses_cartesian_shift
 def test_scalar_arg_with_field(cartesian_case):
@@ -224,12 +297,8 @@ def test_scalar_arg_with_field(cartesian_case):
     cases.verify(cartesian_case, testee, a, b, out=out, ref=ref)
 
 
+@pytest.mark.uses_scalar_in_domain_and_fo
 def test_scalar_in_domain_spec_and_fo_call(cartesian_case):
-    pytest.xfail(
-        "Scalar arguments not supported to be used in both domain specification "
-        "and as an argument to a field operator."
-    )
-
     @gtx.field_operator
     def testee_op(size: gtx.IndexType) -> gtx.Field[[IDim], gtx.IndexType]:
         return broadcast(size, (IDim,))
@@ -449,6 +518,8 @@ def test_offset_field(cartesian_case):
     @gtx.field_operator
     def testee(a: cases.IKField, offset_field: cases.IKField) -> gtx.Field[[IDim, KDim], bool]:
         a_i = a(as_offset(Ioff, offset_field))
+        # note: this leads to an access to offset_field in
+        # IDim: (0, out.size[I]), KDim: (0, out.size[K]+1)
         a_i_k = a_i(as_offset(Koff, offset_field))
         b_i = a(Ioff[1])
         b_i_k = b_i(Koff[1])
@@ -456,9 +527,11 @@ def test_offset_field(cartesian_case):
 
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
     a = cases.allocate(cartesian_case, testee, "a").extend({IDim: (0, 1), KDim: (0, 1)})()
-    offset_field = cases.allocate(cartesian_case, testee, "offset_field").strategy(
-        cases.ConstInitializer(1)
-    )()
+    offset_field = (
+        cases.allocate(cartesian_case, testee, "offset_field")
+        .strategy(cases.ConstInitializer(1))
+        .extend({KDim: (0, 1)})()
+    )  # see comment at a_i_k for domain bounds
 
     cases.verify(
         cartesian_case,
@@ -467,11 +540,9 @@ def test_offset_field(cartesian_case):
         offset_field,
         out=out,
         offset_provider={"Ioff": IDim, "Koff": KDim},
-        ref=np.full_like(offset_field.asnumpy(), True, dtype=bool),
+        ref=ref,
         comparison=lambda out, ref: np.all(out == ref),
     )
-
-    assert np.allclose(out.asnumpy(), ref)
 
 
 def test_nested_tuple_return(cartesian_case):
@@ -613,7 +684,7 @@ def test_fieldop_from_scan(cartesian_case, forward):
 @pytest.mark.uses_lift_expressions
 @pytest.mark.uses_scan_nested
 def test_solve_triag(cartesian_case):
-    if cartesian_case.executor == gtfn.run_gtfn_with_temporaries:
+    if cartesian_case.backend == gtfn.run_gtfn_with_temporaries:
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
 
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))
@@ -714,7 +785,7 @@ def test_ternary_builtin_neighbor_sum(unstructured_case):
 
 @pytest.mark.uses_scan
 def test_ternary_scan(cartesian_case):
-    if cartesian_case.executor in [gtfn.run_gtfn_with_temporaries]:
+    if cartesian_case.backend in [gtfn.run_gtfn_with_temporaries]:
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
 
     @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
@@ -739,7 +810,7 @@ def test_ternary_scan(cartesian_case):
 @pytest.mark.uses_scan_without_field_args
 @pytest.mark.uses_tuple_returns
 def test_scan_nested_tuple_output(forward, cartesian_case):
-    if cartesian_case.executor in [gtfn.run_gtfn_with_temporaries]:
+    if cartesian_case.backend in [gtfn.run_gtfn_with_temporaries]:
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
 
     init = (1, (2, 3))
@@ -935,7 +1006,7 @@ def test_domain_input_bounds_1(cartesian_case):
     def fieldop_domain(a: cases.IJField) -> cases.IJField:
         return a + a
 
-    @gtx.program(backend=cartesian_case.executor)
+    @gtx.program(backend=cartesian_case.backend)
     def program_domain(
         a: cases.IJField,
         out: cases.IJField,
@@ -1008,7 +1079,7 @@ def test_domain_tuple(cartesian_case):
 def test_undefined_symbols(cartesian_case):
     with pytest.raises(errors.DSLError, match="Undeclared symbol"):
 
-        @gtx.field_operator(backend=cartesian_case.executor)
+        @gtx.field_operator(backend=cartesian_case.backend)
         def return_undefined():
             return undefined_symbol
 
@@ -1101,7 +1172,7 @@ def test_tuple_unpacking_star_multi(cartesian_case):
 def test_tuple_unpacking_too_many_values(cartesian_case):
     with pytest.raises(errors.DSLError, match=(r"Too many values to unpack \(expected 3\).")):
 
-        @gtx.field_operator(backend=cartesian_case.executor)
+        @gtx.field_operator(backend=cartesian_case.backend)
         def _star_unpack() -> tuple[int32, float64, int32]:
             a, b, c = (1, 2.0, 3, 4, 5, 6, 7.0)
             return a, b, c
@@ -1112,7 +1183,7 @@ def test_tuple_unpacking_too_few_values(cartesian_case):
         errors.DSLError, match=(r"Assignment value must be of type tuple, got 'int32'.")
     ):
 
-        @gtx.field_operator(backend=cartesian_case.executor)
+        @gtx.field_operator(backend=cartesian_case.backend)
         def _invalid_unpack() -> tuple[int32, float64, int32]:
             a, b, c = 1
             return a

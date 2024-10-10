@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from typing import ClassVar, List, Optional, Union
 
@@ -202,6 +196,7 @@ class FencilDefinition(Node, ValidatedSymbolTableTrait):
     function_definitions: List[FunctionDefinition]
     params: List[Sym]
     closures: List[StencilClosure]
+    implicit_domain: bool = False
 
     _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in BUILTINS]
 
@@ -213,6 +208,12 @@ class SetAt(Stmt):  # from JAX array.at[...].set()
     expr: Expr  # only `as_fieldop(stencil)(inp0, ...)` in first refactoring
     domain: Expr
     target: Expr  # `make_tuple` or SymRef
+
+
+class IfStmt(Stmt):
+    cond: Expr
+    true_branch: list[Stmt]
+    false_branch: list[Stmt]
 
 
 class Temporary(Node):
@@ -227,6 +228,7 @@ class Program(Node, ValidatedSymbolTableTrait):
     params: List[Sym]
     declarations: List[Temporary]
     body: List[Stmt]
+    implicit_domain: bool = False
 
     _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in GTIR_BUILTINS]
 
@@ -246,3 +248,4 @@ StencilClosure.__hash__ = Node.__hash__  # type: ignore[method-assign]
 FencilDefinition.__hash__ = Node.__hash__  # type: ignore[method-assign]
 Program.__hash__ = Node.__hash__  # type: ignore[method-assign]
 SetAt.__hash__ = Node.__hash__  # type: ignore[method-assign]
+IfStmt.__hash__ = Node.__hash__  # type: ignore[method-assign]

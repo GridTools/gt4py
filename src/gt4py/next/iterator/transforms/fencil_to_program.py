@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from gt4py import eve
 from gt4py.next.iterator import ir as itir
@@ -36,6 +30,7 @@ class FencilToProgram(eve.NodeTranslator):
             params=node.params,
             declarations=[],
             body=self.visit(node.closures),
+            implicit_domain=node.implicit_domain,
         )
 
     def visit_FencilWithTemporaries(self, node: global_tmps.FencilWithTemporaries) -> itir.Program:
@@ -45,4 +40,5 @@ class FencilToProgram(eve.NodeTranslator):
             params=node.params,
             declarations=node.tmps,
             body=self.visit(node.fencil.closures),
+            implicit_domain=node.fencil.implicit_domain,
         )

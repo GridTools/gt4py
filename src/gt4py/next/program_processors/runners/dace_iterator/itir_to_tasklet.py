@@ -1,16 +1,13 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+from __future__ import annotations
+
 import copy
 import dataclasses
 import itertools
@@ -27,13 +24,11 @@ from gt4py.next.common import _DEFAULT_SKIP_VALUE as neighbor_skip_value, Connec
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir import FunCall, Lambda
 from gt4py.next.iterator.type_system import type_specifications as it_ts
+from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
 from gt4py.next.type_system import type_specifications as ts
 
 from .utility import (
     add_mapped_nested_sdfg,
-    as_dace_type,
-    connectivity_identifier,
-    dace_debuginfo,
     flatten_list,
     get_used_connectivities,
     map_nested_sdfg_symbols,
@@ -189,7 +184,7 @@ class Context:
 
 
 def _visit_lift_in_neighbors_reduction(
-    transformer: "PythonTaskletCodegen",
+    transformer: PythonTaskletCodegen,
     node: itir.FunCall,
     node_args: Sequence[IteratorExpr | list[ValueExpr]],
     offset_provider: Connectivity,
@@ -238,7 +233,9 @@ def _visit_lift_in_neighbors_reduction(
             input_nodes[x] = y.value
 
     neighbor_tables = get_used_connectivities(node.args[0], transformer.offset_provider)
-    connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
+    connectivity_names = [
+        dace_utils.connectivity_identifier(offset) for offset in neighbor_tables.keys()
+    ]
 
     parent_sdfg = transformer.context.body
     parent_state = transformer.context.state
@@ -299,7 +296,13 @@ def _visit_lift_in_neighbors_reduction(
 
     if offset_provider.has_skip_values:
         # check neighbor validity on if/else inter-state edge
-        start_state = lift_context.body.add_state("start", is_start_block=True)
+        # use one branch for connectivity case
+        start_state = lift_context.body.add_state_before(
+            lift_context.body.start_state,
+            "start",
+            condition=f"{lifted_index_connectors[0]} != {neighbor_skip_value}",
+        )
+        # use the other branch for skip value case
         skip_neighbor_state = lift_context.body.add_state("skip_neighbor")
         skip_neighbor_state.add_edge(
             skip_neighbor_state.add_tasklet(
@@ -315,22 +318,17 @@ def _visit_lift_in_neighbors_reduction(
             skip_neighbor_state,
             dace.InterstateEdge(condition=f"{lifted_index_connectors[0]} == {neighbor_skip_value}"),
         )
-        lift_context.body.add_edge(
-            start_state,
-            lift_context.state,
-            dace.InterstateEdge(condition=f"{lifted_index_connectors[0]} != {neighbor_skip_value}"),
-        )
 
     return [ValueExpr(neighbor_value_node, inner_outputs[0].dtype)]
 
 
 def builtin_neighbors(
-    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
+    transformer: PythonTaskletCodegen, node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
     sdfg: dace.SDFG = transformer.context.body
     state: dace.SDFGState = transformer.context.state
 
-    di = dace_debuginfo(node, sdfg.debuginfo)
+    di = dace_utils.debug_info(node, default=sdfg.debuginfo)
     offset_literal, data = node_args
     assert isinstance(offset_literal, itir.OffsetLiteral)
     offset_dim = offset_literal.value
@@ -381,7 +379,7 @@ def builtin_neighbors(
         debuginfo=di,
     )
 
-    table_name = connectivity_identifier(offset_dim)
+    table_name = dace_utils.connectivity_identifier(offset_dim)
     shift_tasklet = state.add_tasklet(
         "shift",
         code=f"__result = __table[__idx, {neighbor_map_index}]",
@@ -518,9 +516,9 @@ def builtin_neighbors(
 
 
 def builtin_can_deref(
-    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
+    transformer: PythonTaskletCodegen, node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
-    di = dace_debuginfo(node, transformer.context.body.debuginfo)
+    di = dace_utils.debug_info(node, default=transformer.context.body.debuginfo)
     # first visit shift, to get set of indices for deref
     can_deref_callable = node_args[0]
     assert isinstance(can_deref_callable, itir.FunCall)
@@ -560,7 +558,7 @@ def builtin_can_deref(
 
 
 def builtin_if(
-    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
+    transformer: PythonTaskletCodegen, node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
     assert len(node_args) == 3
     sdfg = transformer.context.body
@@ -681,9 +679,9 @@ def builtin_if(
 
 
 def builtin_list_get(
-    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
+    transformer: PythonTaskletCodegen, node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
-    di = dace_debuginfo(node, transformer.context.body.debuginfo)
+    di = dace_utils.debug_info(node, default=transformer.context.body.debuginfo)
     args = list(itertools.chain(*transformer.visit(node_args)))
     assert len(args) == 2
     # index node
@@ -707,9 +705,9 @@ def builtin_list_get(
 
 
 def builtin_cast(
-    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
+    transformer: PythonTaskletCodegen, node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
-    di = dace_debuginfo(node, transformer.context.body.debuginfo)
+    di = dace_utils.debug_info(node, default=transformer.context.body.debuginfo)
     args = transformer.visit(node_args[0])
     internals = [f"{arg.value.data}_v" for arg in args]
     target_type = node_args[1]
@@ -722,9 +720,9 @@ def builtin_cast(
 
 
 def builtin_make_const_list(
-    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
+    transformer: PythonTaskletCodegen, node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
-    di = dace_debuginfo(node, transformer.context.body.debuginfo)
+    di = dace_utils.debug_info(node, default=transformer.context.body.debuginfo)
     args = [transformer.visit(arg)[0] for arg in node_args]
     assert all(isinstance(x, (SymbolExpr, ValueExpr)) for x in args)
     args_dtype = [x.dtype for x in args]
@@ -758,14 +756,14 @@ def builtin_make_const_list(
 
 
 def builtin_make_tuple(
-    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
+    transformer: PythonTaskletCodegen, node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
     args = [transformer.visit(arg) for arg in node_args]
     return args
 
 
 def builtin_tuple_get(
-    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
+    transformer: PythonTaskletCodegen, node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
     elements = transformer.visit(node_args[1])
     index = node_args[0]
@@ -775,7 +773,7 @@ def builtin_tuple_get(
 
 
 _GENERAL_BUILTIN_MAPPING: dict[
-    str, Callable[["PythonTaskletCodegen", itir.Expr, list[itir.Expr]], list[ValueExpr]]
+    str, Callable[[PythonTaskletCodegen, itir.Expr, list[itir.Expr]], list[ValueExpr]]
 ] = {
     "can_deref": builtin_can_deref,
     "cast_": builtin_cast,
@@ -918,11 +916,13 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         neighbor_tables = (
             get_used_connectivities(node, self.offset_provider) if use_neighbor_tables else {}
         )
-        connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
+        connectivity_names = [
+            dace_utils.connectivity_identifier(offset) for offset in neighbor_tables.keys()
+        ]
 
         # Create the SDFG for the lambda's body
         lambda_sdfg = dace.SDFG(func_name)
-        lambda_sdfg.debuginfo = dace_debuginfo(node, self.context.body.debuginfo)
+        lambda_sdfg.debuginfo = dace_utils.debug_info(node, default=self.context.body.debuginfo)
         lambda_state = lambda_sdfg.add_state(f"{func_name}_body", is_start_block=True)
 
         lambda_symbols_pass = GatherLambdaSymbolsPass(
@@ -1068,7 +1068,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
 
         neighbor_tables = get_used_connectivities(node.fun, self.offset_provider)
         for offset in neighbor_tables.keys():
-            var = connectivity_identifier(offset)
+            var = dace_utils.connectivity_identifier(offset)
             nsdfg_inputs[var] = dace.Memlet.from_array(var, self.context.body.arrays[var])
 
         symbol_mapping = map_nested_sdfg_symbols(self.context.body, func_context.body, nsdfg_inputs)
@@ -1079,7 +1079,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             inputs=set(nsdfg_inputs.keys()),
             outputs=set(r.value.data for r in results),
             symbol_mapping=symbol_mapping,
-            debuginfo=dace_debuginfo(node, func_context.body.debuginfo),
+            debuginfo=dace_utils.debug_info(node, default=func_context.body.debuginfo),
         )
 
         for name, value in func_inputs:
@@ -1097,7 +1097,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                     idx_memlet = nsdfg_inputs[var]
                     self.context.state.add_edge(store, None, nsdfg_node, var, idx_memlet)
         for offset in neighbor_tables.keys():
-            var = connectivity_identifier(offset)
+            var = dace_utils.connectivity_identifier(offset)
             memlet = nsdfg_inputs[var]
             access = self.context.state.add_access(var, debuginfo=nsdfg_node.debuginfo)
             self.context.state.add_edge(access, None, nsdfg_node, var, memlet)
@@ -1114,7 +1114,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         return result_exprs
 
     def _visit_deref(self, node: itir.FunCall) -> list[ValueExpr]:
-        di = dace_debuginfo(node, self.context.body.debuginfo)
+        di = dace_utils.debug_info(node, default=self.context.body.debuginfo)
         iterator = self.visit(node.args[0])
         if not isinstance(iterator, IteratorExpr):
             # already a list of ValueExpr
@@ -1191,7 +1191,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         )
 
     def _visit_shift(self, node: itir.FunCall) -> IteratorExpr | list[ValueExpr]:
-        di = dace_debuginfo(node, self.context.body.debuginfo)
+        di = dace_utils.debug_info(node, default=self.context.body.debuginfo)
         shift = node.fun
         assert isinstance(shift, itir.FunCall)
         tail, rest = self._split_shift_args(shift.args)
@@ -1215,7 +1215,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         if isinstance(self.offset_provider[offset_dim], Connectivity):
             offset_provider = self.offset_provider[offset_dim]
             connectivity = self.context.state.add_access(
-                connectivity_identifier(offset_dim), debuginfo=di
+                dace_utils.connectivity_identifier(offset_dim), debuginfo=di
             )
 
             shifted_dim = offset_provider.origin_axis.value
@@ -1247,7 +1247,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         return IteratorExpr(iterator.field, shifted_index, iterator.dtype, iterator.dimensions)
 
     def visit_OffsetLiteral(self, node: itir.OffsetLiteral) -> list[ValueExpr]:
-        di = dace_debuginfo(node, self.context.body.debuginfo)
+        di = dace_utils.debug_info(node, default=self.context.body.debuginfo)
         offset = node.value
         assert isinstance(offset, int)
         offset_var = unique_var_name()
@@ -1262,7 +1262,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         return [ValueExpr(offset_node, self.context.body.arrays[offset_var].dtype)]
 
     def _visit_reduce(self, node: itir.FunCall):
-        di = dace_debuginfo(node, self.context.body.debuginfo)
+        di = dace_utils.debug_info(node, default=self.context.body.debuginfo)
         reduce_dtype = itir_type_as_dace_type(node.type)  # type: ignore[arg-type]  # ensure by type inference
 
         if len(node.args) == 1:
@@ -1450,7 +1450,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             expr,
             type_,
             "numeric",
-            dace_debuginfo=dace_debuginfo(node, self.context.body.debuginfo),
+            dace_debuginfo=dace_utils.debug_info(node, default=self.context.body.debuginfo),
         )
 
     def _visit_general_builtin(self, node: itir.FunCall) -> list[ValueExpr]:
@@ -1513,7 +1513,7 @@ def closure_to_tasklet_sdfg(
     use_field_canonical_representation: bool,
 ) -> tuple[Context, Sequence[ValueExpr]]:
     body = dace.SDFG("tasklet_toplevel")
-    body.debuginfo = dace_debuginfo(node)
+    body.debuginfo = dace_utils.debug_info(node)
     state = body.add_state("tasklet_toplevel_entry", True)
     symbol_map: dict[str, TaskletExpr] = {}
 
@@ -1532,14 +1532,14 @@ def closure_to_tasklet_sdfg(
             ndim = len(ty.dims)
             shape, strides = new_array_symbols(name, ndim)
             dims = [dim.value for dim in ty.dims]
-            dtype = as_dace_type(ty.dtype)
+            dtype = dace_utils.as_dace_type(ty.dtype)
             body.add_array(name, shape=shape, strides=strides, dtype=dtype)
             field = state.add_access(name, debuginfo=body.debuginfo)
             indices = {dim: idx_accesses[dim] for dim in domain.keys()}
             symbol_map[name] = IteratorExpr(field, indices, dtype, dims)
         else:
             assert isinstance(ty, ts.ScalarType)
-            dtype = as_dace_type(ty)
+            dtype = dace_utils.as_dace_type(ty)
             body.add_scalar(name, dtype=dtype)
             symbol_map[name] = ValueExpr(state.add_access(name, debuginfo=body.debuginfo), dtype)
     for arr, name in connectivities:

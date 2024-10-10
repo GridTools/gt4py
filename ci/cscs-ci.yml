@@ -31,7 +31,8 @@ stages:
   # Since the base image name is runtime dependent, we need to carry the value of it to
   # the following jobs via a dotenv file.
   before_script:
-  - DOCKER_TAG=`sha256sum $DOCKERFILE | head -c 16`
+  # include build arguments in hash since we use a parameterized Docker file
+  - DOCKER_TAG=`echo "$(cat $DOCKERFILE) $DOCKER_BUILD_ARGS" | sha256sum | head -c 16`
   - export PERSIST_IMAGE_NAME=$CSCS_REGISTRY_PATH/public/$ARCH/base/gt4py-ci:$DOCKER_TAG-$PYVERSION
   - echo "BASE_IMAGE_${PYVERSION_PREFIX}=$PERSIST_IMAGE_NAME" >> build.env
   artifacts:
@@ -52,6 +53,8 @@ stages:
   variables:
     CUDA_VERSION: 12.4.1
     CUPY_PACKAGE: cupy-cuda12x
+  # TODO: enable CI job when Todi is back in operational state
+  when: manual
 
 build_py311_baseimage_x86_64:
   extends: .build_baseimage_x86_64
@@ -149,7 +152,7 @@ build_py38_image_x86_64:
   variables:
     CRAY_CUDA_MPS: 1
     SLURM_JOB_NUM_NODES: 1
-    SLURM_TIMELIMIT: 120
+    SLURM_TIMELIMIT: 15
     NUM_PROCESSES: auto
     VIRTUALENV_SYSTEM_SITE_PACKAGES: 1
 .test_helper_x86_64:
@@ -174,14 +177,13 @@ build_py38_image_x86_64:
     - SUBPACKAGE: next
       VARIANT: [-nomesh, -atlas]
       SUBVARIANT: [-cuda12x, -cpu]
-  before_script:
-  # TODO: remove start of CUDA MPS daemon once CI-CD can handle CRAY_CUDA_MPS
-  - CUDA_MPS_PIPE_DIRECTORY="/tmp/nvidia-mps" nvidia-cuda-mps-control -d
   variables:
     # Grace-Hopper gpu architecture is not enabled by default in CUDA build
     CUDAARCHS: "90"
-    # limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage
-    NUM_PROCESSES: 32
+    # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
+    # Another problem, observed in test stage, is that gpu tests hang in combination with CUDA MPS,
+    # when high test parallelism is used.
+    NUM_PROCESSES: 16
 
 test_py311_x86_64:
   extends: [.test_helper_x86_64]

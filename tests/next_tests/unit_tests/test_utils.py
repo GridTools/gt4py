@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import pytest
 
@@ -45,7 +39,7 @@ def test_tree_map_custom_input_type():
 
 
 def test_tree_map_custom_output_type():
-    @utils.tree_map(result_collection_type=list)
+    @utils.tree_map(result_collection_constructor=list)
     def testee(x):
         return x + 1
 
@@ -53,7 +47,7 @@ def test_tree_map_custom_output_type():
 
 
 def test_tree_map_multiple_input_types():
-    @utils.tree_map(collection_type=(list, tuple), result_collection_type=tuple)
+    @utils.tree_map(collection_type=(list, tuple), result_collection_constructor=tuple)
     def testee(x):
         return x + 1
 

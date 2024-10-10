@@ -1,21 +1,26 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import functools
 import types
 from collections.abc import Callable, Iterator
-from typing import Any, Generic, Literal, Protocol, Type, TypeGuard, TypeVar, cast, overload
+from typing import (
+    Any,
+    Generic,
+    Literal,
+    Protocol,
+    Sequence,
+    Type,
+    TypeGuard,
+    TypeVar,
+    cast,
+    overload,
+)
 
 import numpy as np
 
@@ -142,7 +147,6 @@ class TupleConstructorType(Protocol, Generic[_R]):
     def __call__(self, *args: Any) -> _R: ...
 
 
-# TODO(havogt): the complicated typing is a hint that this function needs refactoring
 def apply_to_primitive_constituents(
     fun: Callable[..., _T],
     *symbol_types: ts.TypeSpec,
@@ -506,7 +510,7 @@ def promote(
 def return_type(
     callable_type: ts.CallableType,
     *,
-    with_args: list[ts.TypeSpec],
+    with_args: Sequence[ts.TypeSpec],
     with_kwargs: dict[str, ts.TypeSpec],
 ) -> ts.TypeSpec:
     raise NotImplementedError(
@@ -518,7 +522,7 @@ def return_type(
 def return_type_func(
     func_type: ts.FunctionType,
     *,
-    with_args: list[ts.TypeSpec],
+    with_args: Sequence[ts.TypeSpec],
     with_kwargs: dict[str, ts.TypeSpec],
 ) -> ts.TypeSpec:
     return func_type.returns
@@ -528,7 +532,7 @@ def return_type_func(
 def return_type_field(
     field_type: ts.FieldType,
     *,
-    with_args: list[ts.TypeSpec],
+    with_args: Sequence[ts.TypeSpec],
     with_kwargs: dict[str, ts.TypeSpec],
 ) -> ts.FieldType:
     try:
@@ -563,7 +567,7 @@ UNDEFINED_ARG = types.new_class("UNDEFINED_ARG")
 @functools.singledispatch
 def canonicalize_arguments(
     func_type: ts.CallableType,
-    args: tuple | list,
+    args: Sequence,
     kwargs: dict,
     *,
     ignore_errors: bool = False,
@@ -575,7 +579,7 @@ def canonicalize_arguments(
 @canonicalize_arguments.register
 def canonicalize_function_arguments(
     func_type: ts.FunctionType,
-    args: tuple | list,
+    args: Sequence,
     kwargs: dict,
     *,
     ignore_errors: bool = False,
@@ -612,7 +616,7 @@ def canonicalize_function_arguments(
 
 
 def structural_function_signature_incompatibilities(
-    func_type: ts.FunctionType, args: list, kwargs: dict[str, Any]
+    func_type: ts.FunctionType, args: Sequence, kwargs: dict[str, Any]
 ) -> Iterator[str]:
     """
     Return structural incompatibilities for a call to ``func_type`` with given arguments.
@@ -667,7 +671,7 @@ def structural_function_signature_incompatibilities(
 
 @functools.singledispatch
 def function_signature_incompatibilities(
-    func_type: ts.CallableType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
+    func_type: ts.CallableType, args: Sequence[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
 ) -> Iterator[str]:
     """
     Return incompatibilities for a call to ``func_type`` with given arguments.
@@ -680,7 +684,7 @@ def function_signature_incompatibilities(
 @function_signature_incompatibilities.register
 def function_signature_incompatibilities_func(
     func_type: ts.FunctionType,
-    args: list[ts.TypeSpec],
+    args: Sequence[ts.TypeSpec],
     kwargs: dict[str, ts.TypeSpec],
     *,
     skip_canonicalization: bool = False,
@@ -725,20 +729,23 @@ def function_signature_incompatibilities_field(
     args: list[ts.TypeSpec],
     kwargs: dict[str, ts.TypeSpec],
 ) -> Iterator[str]:
-    if len(args) != 1:
-        yield f"Function takes 1 argument, but {len(args)} were given."
+    if len(args) < 1:
+        yield f"Function takes at least 1 argument, but {len(args)} were given."
         return
-
-    if not isinstance(args[0], ts.OffsetType):
-        yield f"Expected first argument to be of type '{ts.OffsetType}', got '{args[0]}'."
-        return
+    for arg in args:
+        if not isinstance(arg, ts.OffsetType):
+            yield f"Expected arguments to be of type '{ts.OffsetType}', got '{arg}'."
+            return
+        if len(args) > 1 and len(arg.target) > 1:
+            yield f"Function takes only 1 argument in unstructured case, but {len(args)} were given."
+            return
 
     if kwargs:
         yield f"Got unexpected keyword argument(s) '{', '.join(kwargs.keys())}'."
         return
 
-    source_dim = args[0].source
-    target_dims = args[0].target
+    source_dim = args[0].source  # type: ignore[attr-defined] # ensured by loop above
+    target_dims = args[0].target  # type: ignore[attr-defined] # ensured by loop above
     # TODO: This code does not handle ellipses for dimensions. Fix it.
     assert field_type.dims is not ...
     if field_type.dims and source_dim not in field_type.dims:
@@ -753,7 +760,7 @@ def function_signature_incompatibilities_field(
 def accepts_args(
     callable_type: ts.CallableType,
     *,
-    with_args: list[ts.TypeSpec],
+    with_args: Sequence[ts.TypeSpec],
     with_kwargs: dict[str, ts.TypeSpec],
     raise_exception: bool = False,
 ) -> bool:

@@ -1,16 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+# FIXME[#1582](havogt): remove after refactoring to GTIR
 
 import dataclasses
 from typing import Any, Callable, Optional
@@ -18,6 +14,7 @@ from typing import Any, Callable, Optional
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.eve.extended_typing import Never
 from gt4py.eve.utils import UIDGenerator
+from gt4py.next import common
 from gt4py.next.ffront import (
     dialect_ast_enums,
     fbuiltins,
@@ -29,13 +26,33 @@ from gt4py.next.ffront import (
 from gt4py.next.ffront.experimental import EXPERIMENTAL_FUN_BUILTIN_NAMES
 from gt4py.next.ffront.fbuiltins import FUN_BUILTIN_NAMES, MATH_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
 from gt4py.next.ffront.foast_introspection import StmtReturnKind, deduce_stmt_return_kind
+from gt4py.next.ffront.stages import AOT_FOP, FOP
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
-def foast_to_itir(inp: ffront_stages.FoastOperatorDefinition) -> itir.Expr:
+def foast_to_itir(inp: FOP) -> itir.Expr:
+    """
+    Lower a FOAST field operator node to Iterator IR.
+
+    See the docstring of `FieldOperatorLowering` for details.
+    """
     return FieldOperatorLowering.apply(inp.foast_node)
+
+
+def foast_to_itir_factory(cached: bool = True) -> workflow.Workflow[FOP, itir.Expr]:
+    """Wrap `foast_to_itir` into a chainable and, optionally, cached workflow step."""
+    wf = foast_to_itir
+    if cached:
+        wf = workflow.CachedStep(step=wf, hash_function=ffront_stages.fingerprint_stage)
+    return wf
+
+
+def adapted_foast_to_itir_factory(**kwargs: Any) -> workflow.Workflow[AOT_FOP, itir.Expr]:
+    """Wrap the `foast_to_itir` workflow step into an adapter to fit into backend transform workflows."""
+    return toolchain.StripArgsAdapter(foast_to_itir_factory(**kwargs))
 
 
 def promote_to_list(node: foast.Symbol | foast.Expr) -> Callable[[itir.Expr], itir.Expr]:
@@ -280,23 +297,60 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         return self._map(node.op.value, node.left, node.right)
 
     def _visit_shift(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
-        match node.args[0]:
-            case foast.Subscript(value=foast.Name(id=offset_name), index=int(offset_index)):
-                shift_offset = im.shift(offset_name, offset_index)
-            case foast.Name(id=offset_name):
-                return im.lifted_neighbors(str(offset_name), self.visit(node.func, **kwargs))
-            case foast.Call(func=foast.Name(id="as_offset")):
-                func_args = node.args[0]
-                offset_dim = func_args.args[0]
-                assert isinstance(offset_dim, foast.Name)
-                shift_offset = im.shift(
-                    offset_dim.id, im.deref(self.visit(func_args.args[1], **kwargs))
-                )
-            case _:
-                raise FieldOperatorLoweringError("Unexpected shift arguments!")
-        return im.lift(im.lambda_("it")(im.deref(shift_offset("it"))))(
-            self.visit(node.func, **kwargs)
-        )
+        current_expr = self.visit(node.func, **kwargs)
+
+        for arg in node.args:
+            match arg:
+                # `field(Off[idx])`
+                case foast.Subscript(value=foast.Name(id=offset_name), index=int(offset_index)):
+                    current_expr = im.lift(
+                        im.lambda_("it")(im.deref(im.shift(offset_name, offset_index)("it")))
+                    )(current_expr)
+                # `field(Dim + idx)`
+                case foast.BinOp(
+                    op=dialect_ast_enums.BinaryOperator.ADD
+                    | dialect_ast_enums.BinaryOperator.SUB,
+                    left=foast.Name(id=dimension),
+                    right=foast.Constant(value=offset_index),
+                ):
+                    if arg.op == dialect_ast_enums.BinaryOperator.SUB:
+                        offset_index *= -1
+                    current_expr = im.lift(
+                        # TODO(SF-N): we rely on the naming-convention that the cartesian dimensions
+                        #  are passed suffixed with `off`, e.g. the `K` is passed as `Koff` in the
+                        #  offset provider. This is a rather unclean solution and should be
+                        #  improved.
+                        im.lambda_("it")(
+                            im.deref(
+                                im.shift(
+                                    common.dimension_to_implicit_offset(dimension), offset_index
+                                )("it")
+                            )
+                        )
+                    )(current_expr)
+                # `field(Off)`
+                case foast.Name(id=offset_name):
+                    # only a single unstructured shift is supported so returning here is fine even though we
+                    # are in a loop.
+                    assert len(node.args) == 1 and len(arg.type.target) > 1  # type: ignore[attr-defined] # ensured by pattern
+                    return im.lifted_neighbors(str(offset_name), self.visit(node.func, **kwargs))
+                # `field(as_offset(Off, offset_field))`
+                case foast.Call(func=foast.Name(id="as_offset")):
+                    func_args = arg
+                    # TODO(tehrengruber): Use type system to deduce the offset dimension instead of
+                    #  (e.g. to allow aliasing)
+                    offset_dim = func_args.args[0]
+                    assert isinstance(offset_dim, foast.Name)
+                    offset_it = self.visit(func_args.args[1], **kwargs)
+                    current_expr = im.lift(
+                        im.lambda_("it", "offset")(
+                            im.deref(im.shift(offset_dim.id, im.deref("offset"))("it"))
+                        )
+                    )(current_expr, offset_it)
+                case _:
+                    raise FieldOperatorLoweringError("Unexpected shift arguments!")
+
+        return current_expr
 
     def visit_Call(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         if type_info.type_class(node.func.type) is ts.FieldType:
@@ -338,7 +392,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             f"Call to object of type '{type(node.func.type).__name__}' not understood."
         )
 
-    def _visit_astype(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
+    def _visit_astype(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         assert len(node.args) == 2 and isinstance(node.args[1], foast.Name)
         obj, new_type = node.args[0], node.args[1].id
         return lowering_utils.process_elements(
@@ -349,7 +403,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             obj.type,
         )
 
-    def _visit_where(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
+    def _visit_where(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         condition, true_value, false_value = node.args
 
         lowered_condition = self.visit(condition, **kwargs)
@@ -393,18 +447,23 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         return self._make_reduction_expr(node, "minimum", init_expr, **kwargs)
 
     def _visit_type_constr(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
-        if isinstance(node.args[0], foast.Constant):
-            node_kind = self.visit(node.type).kind.name.lower()
-            target_type = fbuiltins.BUILTINS[node_kind]
-            source_type = {**fbuiltins.BUILTINS, "string": str}[node.args[0].type.__str__().lower()]
-            if target_type is bool and source_type is not bool:
-                return im.promote_to_const_iterator(
-                    im.literal(str(bool(source_type(node.args[0].value))), "bool")
-                )
-            return im.promote_to_const_iterator(im.literal(str(node.args[0].value), node_kind))
-        raise FieldOperatorLoweringError(
-            f"Encountered a type cast, which is not supported: {node}."
-        )
+        el = node.args[0]
+        node_kind = self.visit(node.type).kind.name.lower()
+        source_type = {**fbuiltins.BUILTINS, "string": str}[el.type.__str__().lower()]
+        target_type = fbuiltins.BUILTINS[node_kind]
+
+        if isinstance(el, foast.Constant):
+            val = source_type(el.value)
+        elif isinstance(el, foast.UnaryOp) and isinstance(el.operand, foast.Constant):
+            operand = source_type(el.operand.value)
+            val = eval(f"lambda arg: {el.op}arg")(operand)
+        else:
+            raise FieldOperatorLoweringError(
+                f"Type cast only supports literal arguments, {node.type} not supported."
+            )
+        val = target_type(val)
+
+        return im.promote_to_const_iterator(im.literal(str(val), node_kind))
 
     def _make_literal(self, val: Any, type_: ts.TypeSpec) -> itir.Expr:
         # TODO(havogt): lifted nullary lambdas are not supported in iterator.embedded due to an implementation detail;

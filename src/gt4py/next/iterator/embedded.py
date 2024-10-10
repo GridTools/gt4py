@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 # TODO(havogt) move public definitions and make this module private
 
@@ -60,7 +54,16 @@ from gt4py.next.embedded import (
 )
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import builtins, runtime
+from gt4py.next.otf import arguments
 from gt4py.next.type_system import type_specifications as ts, type_translation
+
+
+try:
+    import dace
+except ImportError:
+    from types import ModuleType
+
+    dace: Optional[ModuleType] = None  # type: ignore[no-redef]
 
 
 EMBEDDED = "embedded"
@@ -112,6 +115,34 @@ class NeighborTableOffsetProvider:
         res = self.table[(primary, neighbor_idx)]
         assert common.is_int_index(res)
         return res
+
+    if dace:
+        # Extension of NeighborTableOffsetProvider adding SDFGConvertible support in GT4Py Programs
+        def _dace_data_ptr(self) -> int:
+            obj = self.table
+            if dace.dtypes.is_array(obj):
+                if hasattr(obj, "__array_interface__"):
+                    return obj.__array_interface__["data"][0]
+                if hasattr(obj, "__cuda_array_interface__"):
+                    return obj.__cuda_array_interface__["data"][0]
+            raise ValueError("Unsupported data container.")
+
+        def _dace_descriptor(self) -> dace.data.Data:
+            return dace.data.create_datadescriptor(self.table)
+    else:
+
+        def _dace_data_ptr(self) -> NoReturn:  # type: ignore[misc]
+            raise NotImplementedError(
+                "data_ptr is only supported when the 'dace' module is available."
+            )
+
+        def _dace_descriptor(self) -> NoReturn:  # type: ignore[misc]
+            raise NotImplementedError(
+                "__descriptor__ is only supported when the 'dace' module is available."
+            )
+
+    data_ptr = _dace_data_ptr
+    __descriptor__ = _dace_descriptor
 
 
 class StridedNeighborOffsetProvider:
@@ -205,7 +236,7 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
 
     def __init__(self, kstart: int, data: np.ndarray | Scalar) -> None:
         self.kstart = kstart
-        assert isinstance(data, (np.ndarray, Scalar))  # type: ignore # mypy bug #11673
+        assert isinstance(data, (np.ndarray, Scalar))
         column_range: common.NamedRange = embedded_context.closure_column_range.get()
         self.data = (
             data if isinstance(data, np.ndarray) else np.full(len(column_range.unit_range), data)
@@ -494,7 +525,7 @@ def promote_scalars(val: CompositeOfScalarOrField):
     elif isinstance(val, common.Field):
         return val
     val_type = infer_dtype_like_type(val)
-    if isinstance(val, Scalar):  # type: ignore # mypy bug
+    if isinstance(val, Scalar):
         return constant_field(val)
     else:
         raise ValueError(
@@ -696,11 +727,51 @@ def _is_concrete_position(pos: Position) -> TypeGuard[ConcretePosition]:
 
 def _get_axes(
     field_or_tuple: LocatedField | tuple,
+    *,
+    ignore_zero_dims=False,
 ) -> Sequence[common.Dimension]:  # arbitrary nesting of tuples of LocatedField
+    """
+    Get axes of a field or tuple of fields and check them to be equal.
+
+    Set `ignore_zero_dims` to ignore zero-dimensional fields both in the check and the return value.
+    In case all arguments are zero-dimensional return an empty sequence.
+
+    >>> from gt4py import next as gtx
+    >>> IDim = gtx.Dimension("I")
+    >>> i_field: LocatedField = _wrap_field(
+    ...     gtx.empty({IDim: range(3, 10)}, allocator=gtx.itir_python)
+    ... )
+
+    >>> _get_axes((i_field, i_field))
+    (Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>),)
+
+    >>> JDim = gtx.Dimension("J")
+    >>> j_field: LocatedField = _wrap_field(
+    ...     gtx.empty({JDim: range(3, 10)}, allocator=gtx.itir_python)
+    ... )
+    >>> _get_axes((i_field, j_field))
+    Traceback (most recent call last):
+      ...
+    ValueError: Fields are defined on different axes.
+
+    >>> zero_dim_field: LocatedField = _wrap_field(gtx.empty({}, allocator=gtx.itir_python))
+    >>> _get_axes((i_field, zero_dim_field))
+    Traceback (most recent call last):
+      ...
+    ValueError: Fields are defined on different axes.
+
+    >>> _get_axes((i_field, zero_dim_field), ignore_zero_dims=True)
+    (Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>),)
+    """
     if isinstance(field_or_tuple, tuple):
-        first = _get_axes(field_or_tuple[0])
-        assert all(first == _get_axes(f) for f in field_or_tuple)
-        return first
+        els_axes = []
+        for f in field_or_tuple:
+            el_axes = _get_axes(f, ignore_zero_dims=ignore_zero_dims)
+            if not ignore_zero_dims or len(el_axes) > 0:
+                els_axes.append(el_axes)
+        if not all(els_axes[0] == axes for axes in els_axes):
+            raise ValueError("Fields are defined on different axes.")
+        return els_axes[0] if els_axes else []
     else:
         return field_or_tuple.dims
 
@@ -829,7 +900,7 @@ class MDIterator:
 
         assert self.pos is not None
         shifted_pos = self.pos.copy()
-        axes = _get_axes(self.field)
+        axes = _get_axes(self.field, ignore_zero_dims=True)
 
         if __debug__:
             if not all(axis.value in shifted_pos.keys() for axis in axes if axis is not None):
@@ -869,7 +940,7 @@ def make_in_iterator(
     inp_: common.Field, pos: Position, *, column_dimension: Optional[common.Dimension]
 ) -> ItIterator:
     inp = _wrap_field(inp_)
-    axes = _get_axes(inp)
+    axes = _get_axes(inp, ignore_zero_dims=True)
     sparse_dimensions = _get_sparse_dimensions(axes)
     new_pos: Position = pos.copy()
     for sparse_dim in set(sparse_dimensions):
@@ -1093,7 +1164,11 @@ class IndexField(common.Field):
         assert self._cur_index is not None
         return self._cur_index
 
-    def premap(self, index_field: common.ConnectivityField | fbuiltins.FieldOffset) -> common.Field:
+    def premap(
+        self,
+        index_field: common.ConnectivityField | fbuiltins.FieldOffset,
+        *args: common.ConnectivityField | fbuiltins.FieldOffset,
+    ) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
@@ -1213,7 +1288,11 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
     def asnumpy(self) -> np.ndarray:
         raise NotImplementedError()
 
-    def premap(self, index_field: common.ConnectivityField | fbuiltins.FieldOffset) -> common.Field:
+    def premap(
+        self,
+        index_field: common.ConnectivityField | fbuiltins.FieldOffset,
+        *args: common.ConnectivityField | fbuiltins.FieldOffset,
+    ) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
@@ -1524,6 +1603,26 @@ def set_at(expr: common.Field, domain: common.DomainLike, target: common.Mutable
     operators._tuple_assign_field(target, expr, common.domain(domain))
 
 
+@runtime.if_stmt.register(EMBEDDED)
+def if_stmt(cond: bool, true_branch: Callable[[], None], false_branch: Callable[[], None]) -> None:
+    """
+    (Stateful) if statement.
+
+    The two branches are represented as lambda functions, such that they are not executed eagerly.
+    This is required to avoid out-of-bounds accesses. Note that a dedicated built-in is required,
+    contrary to using a plain python if-stmt, such that tracing / double roundtrip works.
+
+    Arguments:
+        cond: The condition to decide which branch to execute.
+        true_branch: A lambda function to be executed when `cond` is `True`.
+        false_branch: A lambda function to be executed when `cond` is `False`.
+    """
+    if cond:
+        true_branch()
+    else:
+        false_branch()
+
+
 def _compute_at_position(
     sten: Callable,
     ins: Sequence[common.Field],
@@ -1655,6 +1754,11 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
             kwargs["column_axis"],
             common.UnitRange(0, 0),  # empty: indicates column operation, will update later
         )
+
+    import inspect
+
+    if len(args) < len(inspect.getfullargspec(fun).args):
+        args = (*args, *arguments.iter_size_args(args))
 
     with embedded_context.new_context(**context_vars) as ctx:
         ctx.run(fun, *args)

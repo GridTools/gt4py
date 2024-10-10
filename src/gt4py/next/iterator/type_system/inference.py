@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -246,7 +240,9 @@ class ObservableTypeSynthesizer(type_synthesizer.TypeSynthesizer):
         return return_type_or_synthesizer
 
 
-def _get_dimensions_from_offset_provider(offset_provider) -> dict[str, common.Dimension]:
+def _get_dimensions_from_offset_provider(
+    offset_provider: common.OffsetProvider,
+) -> dict[str, common.Dimension]:
     dimensions: dict[str, common.Dimension] = {}
     for offset_name, provider in offset_provider.items():
         dimensions[offset_name] = common.Dimension(
@@ -285,10 +281,15 @@ def _type_synthesizer_from_function_type(fun_type: ts.FunctionType):
     return type_synthesizer
 
 
-class RemoveTypes(eve.NodeTranslator):
-    def visit_Node(self, node: itir.Node):
+class SanitizeTypes(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
+    def visit_Node(self, node: itir.Node, *, symtable: dict[str, itir.Node]) -> itir.Node:
         node = self.generic_visit(node)
-        if not isinstance(node, (itir.Literal, itir.Sym)):
+        # We only want to sanitize types that have been inferred previously such that we don't run
+        # into errors because a node has been reused in a pass, but has changed type. Undeclared
+        # symbols however only occur when visiting a subtree (e.g. in testing). Their types
+        # can be injected by populating their type attribute, which we want to preserve here.
+        is_undeclared_symbol = isinstance(node, itir.SymRef) and node.id not in symtable
+        if not is_undeclared_symbol and not isinstance(node, (itir.Literal, itir.Sym)):
             node.type = None
         return node
 
@@ -380,8 +381,7 @@ class ITIRTypeInference(eve.NodeTranslator):
         #  becomes invalid (e.g. the shift part of ``shift(...)(it)`` has a different type when used
         #  on a different iterator). For now we just delete all types in case we are working an
         #   parts of a program.
-        if not allow_undeclared_symbols:
-            node = RemoveTypes().visit(node)
+        node = SanitizeTypes().visit(node)
 
         if isinstance(node, (itir.FencilDefinition, itir.Program)):
             assert all(isinstance(param.type, ts.DataType) for param in node.params), (
@@ -498,6 +498,12 @@ class ITIRTypeInference(eve.NodeTranslator):
         return type_info.apply_to_primitive_constituents(
             lambda dtype: ts.FieldType(dims=domain.dims, dtype=dtype), node.dtype
         )
+
+    def visit_IfStmt(self, node: itir.IfStmt, *, ctx) -> None:
+        cond = self.visit(node.cond, ctx=ctx)
+        assert cond == ts.ScalarType(kind=ts.ScalarKind.BOOL)
+        self.visit(node.true_branch, ctx=ctx)
+        self.visit(node.false_branch, ctx=ctx)
 
     def visit_SetAt(self, node: itir.SetAt, *, ctx) -> None:
         self.visit(node.expr, ctx=ctx)

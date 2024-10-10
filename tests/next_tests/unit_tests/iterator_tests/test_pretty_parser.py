@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.pretty_parser import pparse
@@ -232,6 +226,37 @@ def test_set_at():
         expr=ir.SymRef(id="x"),
         domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
         target=ir.SymRef(id="y"),
+    )
+    actual = pparse(testee)
+    assert actual == expected
+
+
+def test_if_stmt():
+    testee = """if (cond) { 
+      y @ cartesian_domain() ← x;
+      if (cond) {
+        y @ cartesian_domain() ← x;
+      } else {
+      }
+    } else {
+      y @ cartesian_domain() ← x;
+    }"""
+    stmt = ir.SetAt(
+        expr=im.ref("x"),
+        domain=im.domain("cartesian_domain", {}),
+        target=im.ref("y"),
+    )
+    expected = ir.IfStmt(
+        cond=im.ref("cond"),
+        true_branch=[
+            stmt,
+            ir.IfStmt(
+                cond=im.ref("cond"),
+                true_branch=[stmt],
+                false_branch=[],
+            ),
+        ],
+        false_branch=[stmt],
     )
     actual = pparse(testee)
     assert actual == expected

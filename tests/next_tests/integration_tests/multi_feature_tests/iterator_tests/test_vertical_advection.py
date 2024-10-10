@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import numpy as np
 import pytest
@@ -113,12 +107,12 @@ def fen_solve_tridiag2(i_size, j_size, k_size, a, b, c, d, x):
 def test_tridiag(fencil, tridiag_reference, program_processor):
     program_processor, validate = program_processor
     if program_processor in [
-        gtfn.run_gtfn.executor,
-        gtfn.run_gtfn_imperative.executor,
+        gtfn.run_gtfn,
+        gtfn.run_gtfn_imperative,
         gtfn_formatters.format_cpp,
     ]:
         pytest.skip("gtfn does only support lifted scans when using temporaries")
-    if program_processor == gtfn.run_gtfn_with_temporaries.executor:
+    if program_processor == gtfn.run_gtfn_with_temporaries:
         pytest.xfail("tuple_get on columns not supported.")
     a, b, c, d, x = tridiag_reference
     shape = a.shape

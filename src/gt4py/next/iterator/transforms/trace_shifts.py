@@ -1,25 +1,20 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 import dataclasses
-import enum
 import sys
 from collections.abc import Callable
-from typing import Any, Final, Iterable, Literal
+from typing import Any, Final, Iterable, Literal, Optional
 
 from gt4py import eve
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next.iterator import ir
+from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
 
 
@@ -50,11 +45,11 @@ def copy_recorded_shifts(from_: ir.Node, to: ir.Node) -> None:
     to.annex.recorded_shifts = from_.annex.recorded_shifts
 
 
-class Sentinel(enum.Enum):
-    VALUE = enum.auto()
-    TYPE = enum.auto()
+class Sentinel(eve.StrEnum):
+    VALUE = "VALUE"
+    TYPE = "TYPE"
 
-    ALL_NEIGHBORS = enum.auto()
+    ALL_NEIGHBORS = "ALL_NEIGHBORS"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -82,7 +77,7 @@ class ForwardingShiftRecorder:
 
 
 # for performance reasons (`isinstance` is slow otherwise) we don't use abc here
-class IteratorTracer:
+class Tracer:
     def deref(self):
         raise NotImplementedError()
 
@@ -91,13 +86,13 @@ class IteratorTracer:
 
 
 @dataclasses.dataclass(frozen=True)
-class IteratorArgTracer(IteratorTracer):
+class ArgTracer(Tracer):
     arg: ir.Expr | ir.Sym
     shift_recorder: ShiftRecorder | ForwardingShiftRecorder
     offsets: tuple[ir.OffsetLiteral, ...] = ()
 
     def shift(self, offsets: tuple[ir.OffsetLiteral, ...]):
-        return IteratorArgTracer(
+        return ArgTracer(
             arg=self.arg, shift_recorder=self.shift_recorder, offsets=self.offsets + tuple(offsets)
         )
 
@@ -109,8 +104,8 @@ class IteratorArgTracer(IteratorTracer):
 # This class is only needed because we currently allow conditionals on iterators. Since this is
 # not supported in the C++ backend it can likely be removed again in the future.
 @dataclasses.dataclass(frozen=True)
-class CombinedTracer(IteratorTracer):
-    its: tuple[IteratorTracer, ...]
+class CombinedTracer(Tracer):
+    its: tuple[Tracer, ...]
 
     def shift(self, offsets: tuple[ir.OffsetLiteral, ...]):
         return CombinedTracer(tuple(_shift(*offsets)(it) for it in self.its))
@@ -142,17 +137,22 @@ def _can_deref(x):
 
 
 def _shift(*offsets):
+    assert all(
+        isinstance(offset, ir.OffsetLiteral) or offset in [Sentinel.ALL_NEIGHBORS, Sentinel.VALUE]
+        for offset in offsets
+    )
+
     def apply(arg):
-        assert isinstance(arg, IteratorTracer)
+        assert isinstance(arg, Tracer)
         return arg.shift(offsets)
 
     return apply
 
 
 @dataclasses.dataclass(frozen=True)
-class AppliedLift(IteratorTracer):
+class AppliedLift(Tracer):
     stencil: Callable
-    its: tuple[IteratorTracer, ...]
+    its: tuple[Tracer, ...]
 
     def shift(self, offsets):
         return AppliedLift(self.stencil, tuple(_shift(*offsets)(it) for it in self.its))
@@ -163,7 +163,7 @@ class AppliedLift(IteratorTracer):
 
 def _lift(f):
     def apply(*its):
-        if not all(isinstance(it, IteratorTracer) for it in its):
+        if not all(isinstance(it, Tracer) for it in its):
             raise AssertionError("All arguments must be iterators.")
         return AppliedLift(f, its)
 
@@ -190,20 +190,18 @@ def _scan(f, forward, init):
 
 
 def _primitive_constituents(
-    val: Literal[Sentinel.VALUE] | IteratorTracer | tuple,
-) -> Iterable[Literal[Sentinel.VALUE] | IteratorTracer]:
-    if val is Sentinel.VALUE or isinstance(val, IteratorTracer):
+    val: Literal[Sentinel.VALUE] | Tracer | tuple,
+) -> Iterable[Literal[Sentinel.VALUE] | Tracer]:
+    if val is Sentinel.VALUE or isinstance(val, Tracer):
         yield val
     elif isinstance(val, tuple):
         for el in val:
             if isinstance(el, tuple):
                 yield from _primitive_constituents(el)
-            elif el is Sentinel.VALUE or isinstance(el, IteratorTracer):
+            elif el is Sentinel.VALUE or isinstance(el, Tracer):
                 yield el
             else:
-                raise AssertionError(
-                    "Expected a `Sentinel.VALUE`, `IteratorTracer` or tuple thereof."
-                )
+                raise AssertionError("Expected a `Sentinel.VALUE`, `Tracer` or tuple thereof.")
     else:
         raise ValueError()
 
@@ -226,9 +224,7 @@ def _if(cond: Literal[Sentinel.VALUE], true_branch, false_branch):
             result.append(_if(Sentinel.VALUE, el_true_branch, el_false_branch))
         return tuple(result)
 
-    is_iterator_arg = tuple(
-        isinstance(arg, IteratorTracer) for arg in (cond, true_branch, false_branch)
-    )
+    is_iterator_arg = tuple(isinstance(arg, Tracer) for arg in (cond, true_branch, false_branch))
     if is_iterator_arg == (False, True, True):
         return CombinedTracer((true_branch, false_branch))
     assert is_iterator_arg == (False, False, False) and all(
@@ -248,7 +244,15 @@ def _tuple_get(index, tuple_val):
     return Sentinel.VALUE
 
 
+def _as_fieldop(stencil, domain=None):
+    def applied_as_fieldop(*args):
+        return stencil(*args)
+
+    return applied_as_fieldop
+
+
 _START_CTX: Final = {
+    "as_fieldop": _as_fieldop,
     "deref": _deref,
     "can_deref": _can_deref,
     "shift": _shift,
@@ -292,11 +296,11 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
 
     def visit(self, node, **kwargs):
         result = super().visit(node, **kwargs)
-        if isinstance(result, IteratorTracer):
+        if isinstance(result, Tracer):
             assert isinstance(node, (ir.Sym, ir.Expr))
 
             self.shift_recorder.register_node(node)
-            result = IteratorArgTracer(
+            result = ArgTracer(
                 arg=node, shift_recorder=ForwardingShiftRecorder(result, self.shift_recorder)
             )
         return result
@@ -305,10 +309,10 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
         def fun(*args):
             new_args = []
             for param, arg in zip(node.params, args, strict=True):
-                if isinstance(arg, IteratorTracer):
+                if isinstance(arg, Tracer):
                     self.shift_recorder.register_node(param)
                     new_args.append(
-                        IteratorArgTracer(
+                        ArgTracer(
                             arg=param,
                             shift_recorder=ForwardingShiftRecorder(arg, self.shift_recorder),
                         )
@@ -322,46 +326,49 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
 
         return fun
 
-    def visit_StencilClosure(self, node: ir.StencilClosure):
-        tracers = []
-        for inp in node.inputs:
-            self.shift_recorder.register_node(inp)
-            tracers.append(IteratorArgTracer(arg=inp, shift_recorder=self.shift_recorder))
-
-        result = self.visit(node.stencil, ctx=_START_CTX)(*tracers)
-        assert all(el is Sentinel.VALUE for el in _primitive_constituents(result))
-        return node
-
     @classmethod
-    def apply(
-        cls, node: ir.StencilClosure | ir.FencilDefinition, *, inputs_only=True, save_to_annex=False
-    ) -> (
-        dict[int, set[tuple[ir.OffsetLiteral, ...]]] | dict[str, set[tuple[ir.OffsetLiteral, ...]]]
+    def trace_stencil(
+        cls, stencil: ir.Expr, *, num_args: Optional[int] = None, save_to_annex: bool = False
     ):
+        # If we get a lambda we can deduce the number of arguments.
+        if isinstance(stencil, ir.Lambda):
+            assert num_args is None or num_args == len(stencil.params)
+            num_args = len(stencil.params)
+        if not isinstance(num_args, int):
+            raise ValueError("Stencil must be an 'itir.Lambda' or `num_args` is given.")
+        assert isinstance(num_args, int)
+
+        args = [im.ref(f"__arg{i}") for i in range(num_args)]
+
         old_recursionlimit = sys.getrecursionlimit()
         sys.setrecursionlimit(100000000)
 
         instance = cls()
-        instance.visit(node)
+
+        # initialize shift recorder & context with all built-ins and the iterator argument tracers
+        ctx: dict[str, Any] = {**_START_CTX}
+        for arg in args:
+            instance.shift_recorder.register_node(arg)
+            ctx[arg.id] = ArgTracer(arg=arg, shift_recorder=instance.shift_recorder)
+
+        # actually trace stencil
+        instance.visit(im.call(stencil)(*args), ctx=ctx)
 
         sys.setrecursionlimit(old_recursionlimit)
 
         recorded_shifts = instance.shift_recorder.recorded_shifts
 
+        param_shifts = []
+        for arg in args:
+            param_shifts.append(recorded_shifts[id(arg)])
+
         if save_to_annex:
-            _save_to_annex(node, recorded_shifts)
+            _save_to_annex(stencil, recorded_shifts)
 
-            if __debug__:
-                ValidateRecordedShiftsAnnex().visit(node)
+        return param_shifts
 
-        if inputs_only:
-            assert isinstance(node, ir.StencilClosure)
-            inputs_shifts = {}
-            for inp in node.inputs:
-                inputs_shifts[str(inp.id)] = recorded_shifts[id(inp)]
-            return inputs_shifts
 
-        return recorded_shifts
+trace_stencil = TraceShifts.trace_stencil
 
 
 def _save_to_annex(
@@ -370,3 +377,6 @@ def _save_to_annex(
     for child_node in node.pre_walk_values():
         if id(child_node) in recorded_shifts:
             child_node.annex.recorded_shifts = recorded_shifts[id(child_node)]
+
+    if __debug__:
+        ValidateRecordedShiftsAnnex().visit(node)

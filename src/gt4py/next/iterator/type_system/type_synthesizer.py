@@ -1,20 +1,15 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
 import dataclasses
+import functools
 import inspect
 
 from gt4py.eve.extended_typing import Callable, Iterable, Optional, Union
@@ -22,6 +17,7 @@ from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_info, type_specifications as ts
+from gt4py.next.utils import tree_map
 
 
 @dataclasses.dataclass
@@ -74,13 +70,14 @@ def _register_builtin_type_synthesizer(
     *,
     fun_names: Optional[Iterable[str]] = None,
 ):
-    def wrapper(synthesizer: Callable[..., TypeOrTypeSynthesizer]) -> None:
-        # store names in function object for better debuggability
-        synthesizer.fun_names = fun_names or [synthesizer.__name__]  # type: ignore[attr-defined]
-        for f in synthesizer.fun_names:  # type: ignore[attr-defined]
-            builtin_type_synthesizers[f] = TypeSynthesizer(type_synthesizer=synthesizer)
+    if synthesizer is None:
+        return functools.partial(_register_builtin_type_synthesizer, fun_names=fun_names)
 
-    return wrapper(synthesizer) if synthesizer else wrapper
+    # store names in function object for better debuggability
+    synthesizer.fun_names = fun_names or [synthesizer.__name__]  # type: ignore[attr-defined]
+    for f in synthesizer.fun_names:  # type: ignore[attr-defined]
+        builtin_type_synthesizers[f] = TypeSynthesizer(type_synthesizer=synthesizer)
+    return synthesizer
 
 
 @_register_builtin_type_synthesizer(
@@ -116,15 +113,17 @@ def _(lhs: ts.ScalarType, rhs: ts.ScalarType) -> ts.ScalarType | ts.TupleType:
 
 
 @_register_builtin_type_synthesizer
-def deref(it: it_ts.IteratorType) -> ts.DataType:
+def deref(it: it_ts.IteratorType | ts.DeferredType) -> ts.DataType | ts.DeferredType:
+    if isinstance(it, ts.DeferredType):
+        return ts.DeferredType(constraint=None)
     assert isinstance(it, it_ts.IteratorType)
     assert _is_derefable_iterator_type(it)
     return it.element_type
 
 
 @_register_builtin_type_synthesizer
-def can_deref(it: it_ts.IteratorType) -> ts.ScalarType:
-    assert isinstance(it, it_ts.IteratorType)
+def can_deref(it: it_ts.IteratorType | ts.DeferredType) -> ts.ScalarType:
+    assert isinstance(it, ts.DeferredType) or isinstance(it, it_ts.IteratorType)
     # note: We don't check if the iterator is derefable here as the iterator only needs to
     # to have a valid position. Consider a nested reduction, e.g.
     #  `reduce(plus, 0)(neighbors(V2Eₒ, (↑(λ(a) → reduce(plus, 0)(neighbors(E2Vₒ, a))))(it))`
@@ -138,12 +137,20 @@ def can_deref(it: it_ts.IteratorType) -> ts.ScalarType:
 
 
 @_register_builtin_type_synthesizer
-def if_(cond: ts.ScalarType, true_branch: ts.DataType, false_branch: ts.DataType) -> ts.DataType:
-    assert isinstance(cond, ts.ScalarType) and cond.kind == ts.ScalarKind.BOOL
+def if_(pred: ts.ScalarType, true_branch: ts.DataType, false_branch: ts.DataType) -> ts.DataType:
+    if isinstance(true_branch, ts.TupleType) and isinstance(false_branch, ts.TupleType):
+        return tree_map(
+            collection_type=ts.TupleType,
+            result_collection_constructor=lambda elts: ts.TupleType(types=[*elts]),
+        )(functools.partial(if_, pred))(true_branch, false_branch)
+
+    assert not isinstance(true_branch, ts.TupleType) and not isinstance(false_branch, ts.TupleType)
+    assert isinstance(pred, ts.ScalarType) and pred.kind == ts.ScalarKind.BOOL
     # TODO(tehrengruber): Enable this or a similar check. In case the true- and false-branch are
     #  iterators defined on different positions this fails. For the GTFN backend we also don't
     #  want this, but for roundtrip it is totally fine.
     # assert true_branch == false_branch  # noqa: ERA001
+
     return true_branch
 
 
@@ -324,7 +331,11 @@ def reduce(op: TypeSynthesizer, init: ts.TypeSpec) -> TypeSynthesizer:
 @_register_builtin_type_synthesizer
 def shift(*offset_literals, offset_provider) -> TypeSynthesizer:
     @TypeSynthesizer
-    def apply_shift(it: it_ts.IteratorType) -> it_ts.IteratorType:
+    def apply_shift(
+        it: it_ts.IteratorType | ts.DeferredType,
+    ) -> it_ts.IteratorType | ts.DeferredType:
+        if isinstance(it, ts.DeferredType):
+            return ts.DeferredType(constraint=None)
         assert isinstance(it, it_ts.IteratorType)
         if it.position_dims == "unknown":  # nothing to do here
             return it

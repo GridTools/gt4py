@@ -1,21 +1,15 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 from __future__ import annotations
 
 import copy
 import dataclasses
-import functools
 from collections.abc import Mapping
 from typing import Any, Callable, Final, Iterable, Literal, Optional, Sequence
 
@@ -26,6 +20,12 @@ from gt4py.eve.utils import UIDGenerator
 from gt4py.next import common
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
+from gt4py.next.iterator.ir_utils.domain_utils import (
+    SymbolicDomain,
+    SymbolicRange,
+    _max_domain_sizes_by_location_type,
+    domain_union,
+)
 from gt4py.next.iterator.pretty_printer import PrettyPrinter
 from gt4py.next.iterator.transforms import trace_shifts
 from gt4py.next.iterator.transforms.cse import extract_subexpression
@@ -177,14 +177,13 @@ class SimpleTemporaryExtractionHeuristics:
 
     closure: ir.StencilClosure
 
-    @functools.cached_property
-    def closure_shifts(
-        self,
-    ) -> dict[int, set[tuple[ir.OffsetLiteral, ...]]]:
-        return trace_shifts.TraceShifts.apply(self.closure, inputs_only=False)  # type: ignore[return-value] # TODO fix weird `apply` overloads
+    def __post_init__(self) -> None:
+        trace_shifts.trace_stencil(
+            self.closure.stencil, num_args=len(self.closure.inputs), save_to_annex=True
+        )
 
     def __call__(self, expr: ir.Expr) -> bool:
-        shifts = self.closure_shifts[id(expr)]
+        shifts = expr.annex.recorded_shifts
         if len(shifts) > 1:
             return True
         return False
@@ -358,6 +357,7 @@ def split_closures(
             params=node.params + [im.sym(name) for name, _ in tmps] + [im.sym(AUTO_DOMAIN.fun.id)],  # type: ignore[attr-defined]  # value is a global constant
             closures=list(reversed(closures)),
             location=node.location,
+            implicit_domain=node.implicit_domain,
         ),
         params=node.params,
         tmps=[ir.Temporary(id=name, dtype=type_) for name, type_ in tmps],
@@ -389,92 +389,6 @@ def prune_unused_temporaries(node: FencilWithTemporaries) -> FencilWithTemporari
         params=node.params,
         tmps=[tmp for tmp in node.tmps if tmp.id not in unused_tmps],
     )
-
-
-def _max_domain_sizes_by_location_type(offset_provider: Mapping[str, Any]) -> dict[str, int]:
-    """Extract horizontal domain sizes from an `offset_provider`.
-
-    Considers the shape of the neighbor table to get the size of each `origin_axis` and the maximum
-    value inside the neighbor table to get the size of each `neighbor_axis`.
-    """
-    sizes = dict[str, int]()
-    for provider in offset_provider.values():
-        if isinstance(provider, gtx.NeighborTableOffsetProvider):
-            assert provider.origin_axis.kind == gtx.DimensionKind.HORIZONTAL
-            assert provider.neighbor_axis.kind == gtx.DimensionKind.HORIZONTAL
-            sizes[provider.origin_axis.value] = max(
-                sizes.get(provider.origin_axis.value, 0), provider.table.shape[0]
-            )
-            sizes[provider.neighbor_axis.value] = max(
-                sizes.get(provider.neighbor_axis.value, 0),
-                provider.table.max(),  # type: ignore[attr-defined] # TODO(havogt): improve typing for NDArrayObject
-            )
-    return sizes
-
-
-@dataclasses.dataclass
-class SymbolicRange:
-    start: ir.Expr
-    stop: ir.Expr
-
-    def translate(self, distance: int) -> "SymbolicRange":
-        return SymbolicRange(im.plus(self.start, distance), im.plus(self.stop, distance))
-
-
-@dataclasses.dataclass
-class SymbolicDomain:
-    grid_type: Literal["unstructured_domain", "cartesian_domain"]
-    ranges: dict[
-        common.Dimension, SymbolicRange
-    ]  # TODO(havogt): remove `AxisLiteral` by `Dimension` everywhere
-
-    @classmethod
-    def from_expr(cls, node: ir.Node) -> SymbolicDomain:
-        assert isinstance(node, ir.FunCall) and node.fun in [
-            im.ref("unstructured_domain"),
-            im.ref("cartesian_domain"),
-        ]
-
-        ranges: dict[common.Dimension, SymbolicRange] = {}
-        for named_range in node.args:
-            assert (
-                isinstance(named_range, ir.FunCall)
-                and isinstance(named_range.fun, ir.SymRef)
-                and named_range.fun.id == "named_range"
-            )
-            axis_literal, lower_bound, upper_bound = named_range.args
-            assert isinstance(axis_literal, ir.AxisLiteral)
-
-            ranges[common.Dimension(value=axis_literal.value, kind=axis_literal.kind)] = (
-                SymbolicRange(lower_bound, upper_bound)
-            )
-        return cls(node.fun.id, ranges)  # type: ignore[attr-defined]  # ensure by assert above
-
-    def as_expr(self) -> ir.FunCall:
-        return im.call(self.grid_type)(
-            *[
-                im.call("named_range")(ir.AxisLiteral(value=d.value, kind=d.kind), r.start, r.stop)
-                for d, r in self.ranges.items()
-            ]
-        )
-
-
-def domain_union(domains: list[SymbolicDomain]) -> SymbolicDomain:
-    """Return the (set) union of a list of domains."""
-    new_domain_ranges = {}
-    assert all(domain.grid_type == domains[0].grid_type for domain in domains)
-    assert all(domain.ranges.keys() == domains[0].ranges.keys() for domain in domains)
-    for dim in domains[0].ranges.keys():
-        start = functools.reduce(
-            lambda current_expr, el_expr: im.call("minimum")(current_expr, el_expr),
-            [domain.ranges[dim].start for domain in domains],
-        )
-        stop = functools.reduce(
-            lambda current_expr, el_expr: im.call("maximum")(current_expr, el_expr),
-            [domain.ranges[dim].stop for domain in domains],
-        )
-        new_domain_ranges[dim] = SymbolicRange(start, stop)
-    return SymbolicDomain(domains[0].grid_type, new_domain_ranges)
 
 
 def _group_offsets(
@@ -523,8 +437,9 @@ def update_domains(
 
         closures.append(closure)
 
-        local_shifts = trace_shifts.TraceShifts.apply(closure)
-        for param, shift_chains in local_shifts.items():
+        local_shifts = trace_shifts.trace_stencil(closure.stencil, num_args=len(closure.inputs))
+        for param_sym, shift_chains in zip(closure.inputs, local_shifts):
+            param = param_sym.id
             assert isinstance(param, str)
             consumed_domains: list[SymbolicDomain] = (
                 [SymbolicDomain.from_expr(domains[param])] if param in domains else []
@@ -576,7 +491,7 @@ def update_domains(
                     consumed_domain.ranges.keys() == consumed_domains[0].ranges.keys()
                     for consumed_domain in consumed_domains
                 ):  # scalar otherwise
-                    domains[param] = domain_union(consumed_domains).as_expr()
+                    domains[param] = domain_union(*consumed_domains).as_expr()
 
     return FencilWithTemporaries(
         fencil=ir.FencilDefinition(
@@ -585,6 +500,7 @@ def update_domains(
             params=node.fencil.params[:-1],  # remove `_gtmp_auto_domain` param again
             closures=list(reversed(closures)),
             location=node.fencil.location,
+            implicit_domain=node.fencil.implicit_domain,
         ),
         params=node.params,
         tmps=node.tmps,
