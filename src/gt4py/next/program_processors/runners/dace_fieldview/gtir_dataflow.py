@@ -122,7 +122,7 @@ class DataflowEmptyEdge(DataflowInputEdge):
 
 
 @dataclasses.dataclass(frozen=True)
-class DataflowOutput:
+class DataflowOutputEdge:
     """Allows to setup a data edge to write the result through a map exit node."""
 
     state: dace.SDFGState
@@ -853,12 +853,12 @@ class LambdaToDataflow(eve.NodeVisitor):
 
     def visit_Lambda(
         self, node: gtir.Lambda, args: list[IteratorExpr | MemletExpr | SymbolExpr]
-    ) -> tuple[list[DataflowInputEdge], DataflowOutput]:
+    ) -> tuple[list[DataflowInputEdge], DataflowOutputEdge]:
         for p, arg in zip(node.params, args, strict=True):
             self.symbol_map[str(p.id)] = arg
         output_expr: ValueExpr = self.visit(node.expr)
         if isinstance(output_expr, DataExpr):
-            return self.input_edges, DataflowOutput(self.state, output_expr)
+            return self.input_edges, DataflowOutputEdge(self.state, output_expr)
 
         if isinstance(output_expr, MemletExpr):
             # special case where the field operator is simply copying data from source to destination node
@@ -877,7 +877,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             tasklet_node = self._add_tasklet("write", {}, {"__out"}, f"__out = {output_expr.value}")
 
         output_expr = self._construct_tasklet_result(output_dtype, tasklet_node, "__out")
-        return self.input_edges, DataflowOutput(self.state, output_expr)
+        return self.input_edges, DataflowOutputEdge(self.state, output_expr)
 
     def visit_Literal(self, node: gtir.Literal) -> SymbolExpr:
         dtype = dace_utils.as_dace_type(node.type)
