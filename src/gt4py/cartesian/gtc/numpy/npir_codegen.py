@@ -167,6 +167,9 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     VarKOffset = as_fmt("lk + {k}")
 
+    def visit_CallbackCall(self, node: npir.CallbackCall) -> Union[str, Collection[str]]:
+        return self.visit(node.call)
+
     def visit_FieldSlice(self, node: npir.FieldSlice, **kwargs: Any) -> Union[str, Collection[str]]:
         need_extra_axis = False
         if isinstance(node.k_offset, npir.VarKOffset):

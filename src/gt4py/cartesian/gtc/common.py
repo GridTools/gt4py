@@ -12,6 +12,7 @@ import enum
 import functools
 import numbers
 import typing
+import numbers
 from typing import (
     Any,
     ClassVar,
@@ -179,6 +180,8 @@ class NativeFunction(eve.StrEnum):
     CEIL = "ceil"
     TRUNC = "trunc"
 
+    INT = "int"
+
     IR_OP_TO_NUM_ARGS: ClassVar[Dict[NativeFunction, int]]
 
     @property
@@ -218,6 +221,7 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
         NativeFunction.FLOOR: 1,
         NativeFunction.CEIL: 1,
         NativeFunction.TRUNC: 1,
+        NativeFunction.INT: 1,
     }.items()
 }
 
@@ -317,6 +321,9 @@ class CartesianOffset(eve.Node):
 
     def to_dict(self) -> Dict[str, int]:
         return {"i": self.i, "j": self.j, "k": self.k}
+
+    def to_str(self) -> str:
+        return f"i + {self.i}, j + {self.j}, k + {self.k}"
 
 
 class VariableKOffset(eve.GenericNode, Generic[ExprT]):
@@ -577,6 +584,8 @@ def native_func_call_dtype_propagation(*, strict: bool = True) -> datamodels.Roo
     def _impl(cls: Type[NativeFuncCall], instance: NativeFuncCall) -> None:
         if instance.func in (NativeFunction.ISFINITE, NativeFunction.ISINF, NativeFunction.ISNAN):
             instance.dtype = DataType.BOOL  # type: ignore[attr-defined]
+        elif instance.func in (NativeFunction.INT):
+            instance.dtype = DataType.INT32  # type: ignore[attr-defined]
         else:
             # assumes all NativeFunction args have a common dtype
             common_dtype = verify_and_get_common_dtype(cls, instance.args, strict=strict)
@@ -913,6 +922,7 @@ OP_TO_UFUNC_NAME: Final[
         NativeFunction.FLOOR: "floor",
         NativeFunction.CEIL: "ceil",
         NativeFunction.TRUNC: "trunc",
+        NativeFunction.INT: "int",
     },
 }
 

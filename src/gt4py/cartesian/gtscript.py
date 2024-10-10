@@ -59,6 +59,11 @@ MATH_BUILTINS = {
     "floor",
     "ceil",
     "trunc",
+    "int",
+}
+
+builtins_and_inline_ignore = {
+    "compile_assert",
 }
 
 builtins_and_inline_ignore = {
