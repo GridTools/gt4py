@@ -19,7 +19,6 @@ from gt4py.eve.extended_typing import Any, Callable, Optional, TypeVar, Union
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_call_to
-from gt4py.next.iterator.transforms import global_tmps
 from gt4py.next.iterator.type_system import type_specifications as it_ts, type_synthesizer
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.type_system.type_info import primitive_constituents
@@ -293,6 +292,8 @@ def _type_synthesizer_from_function_type(fun_type: ts.FunctionType):
 
 
 class SanitizeTypes(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
+    PRESERVED_ANNEX_ATTRS = ("domain",)
+
     def visit_Node(self, node: itir.Node, *, symtable: dict[str, itir.Node]) -> itir.Node:
         node = self.generic_visit(node)
         # We only want to sanitize types that have been inferred previously such that we don't run
@@ -315,6 +316,8 @@ class ITIRTypeInference(eve.NodeTranslator):
 
     See :method:ITIRTypeInference.apply for more details.
     """
+
+    PRESERVED_ANNEX_ATTRS = ("domain",)
 
     offset_provider: common.OffsetProvider
     #: Mapping from a dimension name to the actual dimension instance.
@@ -467,28 +470,6 @@ class ITIRTypeInference(eve.NodeTranslator):
         closures = self.visit(node.closures, ctx=ctx | params | function_definitions)
         return it_ts.FencilType(params=params, closures=closures)
 
-    # TODO(tehrengruber): Remove after new ITIR format with apply_stencil is used everywhere
-    def visit_FencilWithTemporaries(
-        self, node: global_tmps.FencilWithTemporaries, *, ctx
-    ) -> it_ts.FencilType:
-        # TODO(tehrengruber): This implementation is not very appealing. Since we are about to
-        #  refactor the IR anyway this is fine for now.
-        params: dict[str, ts.DataType] = {}
-        for param in node.params:
-            assert isinstance(param.type, ts.DataType)
-            params[param.id] = param.type
-        # infer types of temporary declarations
-        tmps: dict[str, ts.FieldType] = {}
-        for tmp_node in node.tmps:
-            tmps[tmp_node.id] = self.visit(tmp_node, ctx=ctx | params)
-        # and store them in the inner fencil
-        for fencil_param in node.fencil.params:
-            if fencil_param.id in tmps:
-                fencil_param.type = tmps[fencil_param.id]
-        self.visit(node.fencil, ctx=ctx)
-        assert isinstance(node.fencil.type, it_ts.FencilType)
-        return node.fencil.type
-
     def visit_Program(self, node: itir.Program, *, ctx) -> it_ts.ProgramType:
         params: dict[str, ts.DataType] = {}
         for param in node.params:
@@ -511,7 +492,8 @@ class ITIRTypeInference(eve.NodeTranslator):
         )
 
     def visit_IfStmt(self, node: itir.IfStmt, *, ctx) -> None:
-        self.visit(node.cond, ctx=ctx)  # TODO: check is boolean
+        cond = self.visit(node.cond, ctx=ctx)
+        assert cond == ts.ScalarType(kind=ts.ScalarKind.BOOL)
         self.visit(node.true_branch, ctx=ctx)
         self.visit(node.false_branch, ctx=ctx)
 

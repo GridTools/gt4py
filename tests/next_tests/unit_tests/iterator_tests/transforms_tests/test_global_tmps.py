@@ -6,14 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-# TODO(tehrengruber): add integration tests for temporaries starting from manually written
-#  itir. Currently we only test temporaries from frontend code which makes testing changes
-#  to anything related to temporaries tedious.
-import copy
 from typing import Optional
 
-import gt4py.next as gtx
-from gt4py.eve.utils import UIDs
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
@@ -30,18 +24,20 @@ float_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
 i_field_type = ts.FieldType(dims=[IDim], dtype=float_type)
 index_field_type_factory = lambda dim: ts.FieldType(dims=[dim], dtype=index_type)
 
+
 def program_factory(
     params: list[itir.Sym],
     body: list[itir.SetAt],
-    declarations: Optional[list[itir.Temporary]] = None
+    declarations: Optional[list[itir.Temporary]] = None,
 ) -> itir.Program:
     return itir.Program(
         id="testee",
         function_definitions=[],
         params=params,
         declarations=declarations or [],
-        body=body
+        body=body,
     )
+
 
 def test_trivial():
     domain = im.domain("cartesian_domain", {IDim: (0, 1)})
@@ -51,37 +47,28 @@ def test_trivial():
         body=[
             itir.SetAt(
                 target=im.ref("out"),
-                expr=im.as_fieldop("deref", domain)(
-                    im.as_fieldop("deref", domain)("inp")
-                ),
-                domain=domain
+                expr=im.as_fieldop("deref", domain)(im.as_fieldop("deref", domain)("inp")),
+                domain=domain,
             )
-        ]
+        ],
     )
     testee = type_inference.infer(testee, offset_provider=offset_provider)
+    testee = infer_domain.infer_program(testee, offset_provider=offset_provider)
 
     expected = program_factory(
         params=[im.sym("inp", i_field_type), im.sym("out", i_field_type)],
-        declarations=[itir.Temporary(
-            id="__tmp_1",
-            domain=domain,
-            dtype=float_type
-        )],
+        declarations=[itir.Temporary(id="__tmp_1", domain=domain, dtype=float_type)],
         body=[
             itir.SetAt(
-                target=im.ref("__tmp_1"),
-                expr=im.as_fieldop("deref", domain)("inp"),
-                domain=domain
+                target=im.ref("__tmp_1"), expr=im.as_fieldop("deref", domain)("inp"), domain=domain
             ),
             itir.SetAt(
-                target=im.ref("out"),
-                expr=im.as_fieldop("deref", domain)("__tmp_1"),
-                domain=domain
-            )
-        ]
+                target=im.ref("out"), expr=im.as_fieldop("deref", domain)("__tmp_1"), domain=domain
+            ),
+        ],
     )
 
-    actual = global_tmps.create_global_tmps(testee)
+    actual = global_tmps.create_global_tmps(testee, offset_provider)
     assert actual == expected
 
 
@@ -94,35 +81,29 @@ def test_trivial_let():
             itir.SetAt(
                 target=im.ref("out"),
                 expr=im.let("tmp", im.as_fieldop("deref", domain)("inp"))(
-                    im.as_fieldop("deref", domain)("tmp")),
-                domain=domain
+                    im.as_fieldop("deref", domain)("tmp")
+                ),
+                domain=domain,
             )
-        ]
+        ],
     )
     testee = type_inference.infer(testee, offset_provider=offset_provider)
+    testee = infer_domain.infer_program(testee, offset_provider=offset_provider)
 
     expected = program_factory(
         params=[im.sym("inp", i_field_type), im.sym("out", i_field_type)],
-        declarations=[itir.Temporary(
-            id="__tmp_1",
-            domain=domain,
-            dtype=float_type
-        )],
+        declarations=[itir.Temporary(id="__tmp_1", domain=domain, dtype=float_type)],
         body=[
             itir.SetAt(
-                target=im.ref("__tmp_1"),
-                expr=im.as_fieldop("deref", domain)("inp"),
-                domain=domain
+                target=im.ref("__tmp_1"), expr=im.as_fieldop("deref", domain)("inp"), domain=domain
             ),
             itir.SetAt(
-                target=im.ref("out"),
-                expr=im.as_fieldop("deref", domain)("__tmp_1"),
-                domain=domain
-            )
-        ]
+                target=im.ref("out"), expr=im.as_fieldop("deref", domain)("__tmp_1"), domain=domain
+            ),
+        ],
     )
 
-    actual = global_tmps.create_global_tmps(testee)
+    actual = global_tmps.create_global_tmps(testee, offset_provider)
     assert actual == expected
 
 
@@ -130,19 +111,32 @@ def test_top_level_if():
     domain = im.domain("cartesian_domain", {IDim: (0, 1)})
     offset_provider = {}
     testee = program_factory(
-        params=[im.sym("inp1", i_field_type), im.sym("inp2", i_field_type), im.sym("out", i_field_type)],
+        params=[
+            im.sym("inp1", i_field_type),
+            im.sym("inp2", i_field_type),
+            im.sym("out", i_field_type),
+        ],
         body=[
             itir.SetAt(
                 target=im.ref("out"),
-                expr=im.if_(True, im.as_fieldop("deref", domain)("inp1"), im.as_fieldop("deref", domain)("inp2")),
-                domain=domain
+                expr=im.if_(
+                    True,
+                    im.as_fieldop("deref", domain)("inp1"),
+                    im.as_fieldop("deref", domain)("inp2"),
+                ),
+                domain=domain,
             )
-        ]
+        ],
     )
     testee = type_inference.infer(testee, offset_provider=offset_provider)
+    testee = infer_domain.infer_program(testee, offset_provider=offset_provider)
 
     expected = program_factory(
-        params=[im.sym("inp1", i_field_type), im.sym("inp2", i_field_type), im.sym("out", i_field_type)],
+        params=[
+            im.sym("inp1", i_field_type),
+            im.sym("inp2", i_field_type),
+            im.sym("out", i_field_type),
+        ],
         declarations=[],
         body=[
             itir.IfStmt(
@@ -151,21 +145,21 @@ def test_top_level_if():
                     itir.SetAt(
                         target=im.ref("out"),
                         expr=im.as_fieldop("deref", domain)("inp1"),
-                        domain=domain
+                        domain=domain,
                     )
                 ],
                 false_branch=[
                     itir.SetAt(
                         target=im.ref("out"),
                         expr=im.as_fieldop("deref", domain)("inp2"),
-                        domain=domain
+                        domain=domain,
                     )
-                ]
+                ],
             )
-        ]
+        ],
     )
 
-    actual = global_tmps.create_global_tmps(testee)
+    actual = global_tmps.create_global_tmps(testee, offset_provider)
     assert actual == expected
 
 
@@ -173,25 +167,35 @@ def test_nested_if():
     domain = im.domain("cartesian_domain", {IDim: (0, 1)})
     offset_provider = {}
     testee = program_factory(
-        params=[im.sym("inp1", i_field_type), im.sym("inp2", i_field_type), im.sym("out", i_field_type)],
+        params=[
+            im.sym("inp1", i_field_type),
+            im.sym("inp2", i_field_type),
+            im.sym("out", i_field_type),
+        ],
         body=[
             itir.SetAt(
                 target=im.ref("out"),
                 expr=im.as_fieldop("deref", domain)(
-                    im.if_(True, im.as_fieldop("deref", domain)("inp1"), im.as_fieldop("deref", domain)("inp2"))),
-                domain=domain
+                    im.if_(
+                        True,
+                        im.as_fieldop("deref", domain)("inp1"),
+                        im.as_fieldop("deref", domain)("inp2"),
+                    )
+                ),
+                domain=domain,
             )
-        ]
+        ],
     )
     testee = type_inference.infer(testee, offset_provider=offset_provider)
+    testee = infer_domain.infer_program(testee, offset_provider=offset_provider)
 
     expected = program_factory(
-        params=[im.sym("inp1", i_field_type), im.sym("inp2", i_field_type), im.sym("out", i_field_type)],
-        declarations=[itir.Temporary(
-            id="__tmp_1",
-            domain=domain,
-            dtype=float_type
-        )],
+        params=[
+            im.sym("inp1", i_field_type),
+            im.sym("inp2", i_field_type),
+            im.sym("out", i_field_type),
+        ],
+        declarations=[itir.Temporary(id="__tmp_1", domain=domain, dtype=float_type)],
         body=[
             itir.IfStmt(
                 cond=im.literal_from_value(True),
@@ -199,25 +203,22 @@ def test_nested_if():
                     itir.SetAt(
                         target=im.ref("__tmp_1"),
                         expr=im.as_fieldop("deref", domain)("inp1"),
-                        domain=domain
+                        domain=domain,
                     )
                 ],
                 false_branch=[
                     itir.SetAt(
                         target=im.ref("__tmp_1"),
                         expr=im.as_fieldop("deref", domain)("inp2"),
-                        domain=domain
+                        domain=domain,
                     )
-                ]
+                ],
             ),
             itir.SetAt(
-                target=im.ref("out"),
-                expr=im.as_fieldop("deref", domain)("__tmp_1"),
-                domain=domain
-            )
-        ]
+                target=im.ref("out"), expr=im.as_fieldop("deref", domain)("__tmp_1"), domain=domain
+            ),
+        ],
     )
 
-    actual = global_tmps.create_global_tmps(testee)
+    actual = global_tmps.create_global_tmps(testee, offset_provider)
     assert actual == expected
-

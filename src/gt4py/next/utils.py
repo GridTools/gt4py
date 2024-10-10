@@ -68,7 +68,12 @@ def flatten_nested_tuple(
 
 
 @overload
-def tree_map(fun: Callable[_P, _R], /) -> Callable[..., _R | tuple[_R | tuple, ...]]: ...
+def tree_map(
+    fun: Callable[_P, _R],
+    *,
+    collection_type: type | tuple[type, ...] = tuple,
+    result_collection_constructor: Optional[type | Callable] = None,
+) -> Callable[..., _R | tuple[_R | tuple, ...]]: ...
 
 
 @overload
@@ -82,7 +87,8 @@ def tree_map(
 
 
 def tree_map(
-    *args: Callable[_P, _R],
+    fun: Optional[Callable[_P, _R]] = None,
+    *,
     collection_type: type | tuple[type, ...] = tuple,
     result_collection_constructor: Optional[type | Callable] = None,
 ) -> Callable[..., _R | tuple[_R | tuple, ...]] | Callable[[Callable[_P, _R]], Callable[..., Any]]:
@@ -108,6 +114,12 @@ def tree_map(
         ...     [[1, 2], 3]
         ... )
         ((2, 3), 4)
+
+        >>> @tree_map
+        ... def impl(x):
+        ...     return x + 1
+        >>> impl(((1, 2), 3))
+        ((2, 3), 4)
     """
 
     if result_collection_constructor is None:
@@ -117,8 +129,7 @@ def tree_map(
             )
         result_collection_constructor = collection_type
 
-    if len(args) == 1:
-        fun = args[0]
+    if fun:
 
         @functools.wraps(fun)
         def impl(*args: Any | tuple[Any | tuple, ...]) -> _R | tuple[_R | tuple, ...]:
@@ -129,17 +140,14 @@ def tree_map(
                 assert result_collection_constructor is not None
                 return result_collection_constructor(impl(*arg) for arg in zip(*args))
 
-            return fun(
+            return fun(  # type: ignore[misc] # mypy not smart enough
                 *cast(_P.args, args)
             )  # mypy doesn't understand that `args` at this point is of type `_P.args`
 
         return impl
-    if len(args) == 0:
+    else:
         return functools.partial(
             tree_map,
             collection_type=collection_type,
             result_collection_constructor=result_collection_constructor,
         )
-    raise TypeError(
-        "tree_map() can be used as decorator with optional kwarg `collection_type` and `result_collection_constructor`."
-    )
