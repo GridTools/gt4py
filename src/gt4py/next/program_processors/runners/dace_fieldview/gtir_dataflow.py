@@ -18,7 +18,7 @@ import dace.subsets as sbs
 from gt4py import eve
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.type_system import type_specifications as itir_ts
 from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
 from gt4py.next.program_processors.runners.dace_fieldview import (
@@ -295,14 +295,34 @@ class LambdaToDataflow(eve.NodeVisitor):
             self.input_edges.append(edge)
         return tasklet_node
 
+    def _add_mapped_tasklet(
+        self,
+        name: str,
+        map_ranges: Dict[str, str | dace.subsets.Subset]
+        | List[Tuple[str, str | dace.subsets.Subset]],
+        inputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
+        code: str,
+        outputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
+        **kwargs: Any,
+    ) -> tuple[dace.nodes.Tasklet, dace.nodes.MapEntry, dace.nodes.MapExit]:
+        """Helper method to add a mapped tasklet with unique name in current state."""
+        return self.subgraph_builder.add_mapped_tasklet(
+            name, self.state, map_ranges, inputs, code, outputs, **kwargs
+        )
+
     def _construct_tasklet_result(
         self,
         dtype: dace.typeclass,
         src_node: dace.nodes.Tasklet,
         src_connector: str,
+        use_array: bool = False,
     ) -> DataExpr:
         temp_name = self.sdfg.temp_data_name()
-        self.sdfg.add_scalar(temp_name, dtype, transient=True)
+        if use_array:
+            # for make_const_list we use a 1-element array to ease the lowering to SDFG
+            self.sdfg.add_array(temp_name, (1,), dtype, transient=True)
+        else:
+            self.sdfg.add_scalar(temp_name, dtype, transient=True)
         data_type = dace_utils.as_scalar_type(str(dtype.as_numpy_dtype()))
         temp_node = self.state.add_access(temp_name)
         self._add_edge(
@@ -412,6 +432,8 @@ class LambdaToDataflow(eve.NodeVisitor):
 
     def _visit_neighbors(self, node: gtir.FunCall) -> DataExpr:
         assert len(node.args) == 2
+        assert isinstance(node.type, itir_ts.ListType)
+        assert self.reduce_identity is not None
 
         assert isinstance(node.args[0], gtir.OffsetLiteral)
         offset = node.args[0].value
@@ -423,14 +445,13 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert isinstance(it, IteratorExpr)
         assert offset_provider.neighbor_axis in it.dimensions
         neighbor_dim_index = it.dimensions.index(offset_provider.neighbor_axis)
-        assert offset_provider.neighbor_axis not in it.indices
-        assert offset_provider.origin_axis not in it.dimensions
         assert offset_provider.origin_axis in it.indices
         origin_index = it.indices[offset_provider.origin_axis]
         assert isinstance(origin_index, SymbolExpr)
         assert all(isinstance(index, SymbolExpr) for index in it.indices.values())
 
         field_desc = it.field.desc(self.sdfg)
+        assert self.reduce_identity.dtype == field_desc.dtype
         connectivity = dace_utils.connectivity_identifier(offset)
         # initially, the storage for the connectivty tables is created as transient;
         # when the tables are used, the storage is changed to non-transient,
@@ -495,8 +516,6 @@ class LambdaToDataflow(eve.NodeVisitor):
         )
         index_connector = "__index"
         if offset_provider.has_skip_values:
-            assert self.reduce_identity is not None
-            assert self.reduce_identity.dtype == field_desc.dtype
             # TODO: Investigate if a NestedSDFG brings benefits
             tasklet_node = self._add_tasklet(
                 "gather_neighbors_with_skip_values",
@@ -535,8 +554,86 @@ class LambdaToDataflow(eve.NodeVisitor):
             memlet=dace.Memlet(data=neighbors_temp, subset=neighbor_idx),
         )
 
-        assert isinstance(node.type, itir_ts.ListType)
         return DataExpr(neighbors_node, node.type)
+
+    def _visit_map(self, node: gtir.FunCall) -> DataExpr:
+        assert isinstance(node.type, itir_ts.ListType)
+        assert isinstance(node.type.element_type, ts.ScalarType)
+        dtype = dace_utils.as_dace_type(node.type.element_type)
+
+        input_args = [self.visit(arg) for arg in node.args]
+
+        # TODO(edopao): extract offset_dim from the input arguments
+        offset_dim = gtx_common.Dimension("", gtx_common.DimensionKind.LOCAL)
+        map_index = dace_gtir_utils.get_map_variable(offset_dim)
+        connectors = [f"__arg{i}" for i in range(len(input_args))]
+
+        input_memlets = {}
+        input_nodes = {}
+        local_size: Optional[int] = None
+        for conn, input_expr in zip(connectors, input_args, strict=True):
+            if isinstance(input_expr, MemletExpr):
+                if set(input_expr.subset.size()[:-1]) != {1}:
+                    raise ValueError(f"Invalid node {node}")
+                rstart, rstop, rstep = input_expr.subset[-1]
+                assert rstart == 0 and rstep == 1
+
+                desc = self.sdfg.arrays[input_expr.node.data]
+                view, _ = self.sdfg.add_view(
+                    f"{input_expr.node.data}_view",
+                    (rstop + 1,),
+                    desc.dtype,
+                    strides=desc.strides[-1:],
+                    find_new_name=True,
+                )
+                input_node = self.state.add_access(view)
+                self._add_input_data_edge(input_expr.node, input_expr.subset, input_node)
+
+            else:
+                # this is the case of scalar value broadcasted on a list by make_const_list
+                assert isinstance(input_expr, DataExpr)
+                input_node = input_expr.node
+
+            assert len(input_node.desc(self.sdfg).shape) == 1
+            input_size = input_node.desc(self.sdfg).shape[0]
+            if input_size == 1:
+                input_memlets[conn] = dace.Memlet(data=input_node.data, subset="0")
+            else:
+                input_memlets[conn] = dace.Memlet(data=input_node.data, subset=map_index)
+                if local_size and input_size != local_size:
+                    raise ValueError(f"Invalid node {node}")
+                else:
+                    local_size = input_size
+
+            input_nodes[input_node.data] = input_node
+
+        if local_size is None:
+            # corner case where map is applied to 1-element lists
+            assert len(input_nodes) >= 1
+            local_size = 1
+
+        out, _ = self.sdfg.add_temp_transient((local_size,), dtype)
+        out_node = self.state.add_access(out)
+
+        assert isinstance(node.fun, gtir.FunCall)
+        assert len(node.fun.args) == 1
+        fun_node = im.call(node.fun.args[0])(*connectors)
+        op_code = gtir_python_codegen.get_source(fun_node)
+
+        self._add_mapped_tasklet(
+            name="map",
+            map_ranges={map_index: f"0:{local_size}"},
+            code=f"__out = {op_code}",
+            inputs=input_memlets,
+            input_nodes=input_nodes,
+            outputs={
+                "__out": dace.Memlet(data=out, subset=map_index),
+            },
+            output_nodes={out: out_node},
+            external_edges=True,
+        )
+
+        return DataExpr(out_node, dtype)
 
     def _visit_reduce(self, node: gtir.FunCall) -> DataExpr:
         op_name, reduce_init, reduce_identity = get_reduce_params(node)
@@ -816,9 +913,6 @@ class LambdaToDataflow(eve.NodeVisitor):
         Generic handler called by `visit_FunCall()` when it encounters
         a builtin function that does not match any other specific handler.
         """
-        assert isinstance(node.type, ts.ScalarType)
-        dtype = dace_utils.as_dace_type(node.type)
-
         node_internals = []
         node_connections: dict[str, MemletExpr | DataExpr] = {}
         for i, arg in enumerate(node.args):
@@ -863,7 +957,17 @@ class LambdaToDataflow(eve.NodeVisitor):
                     connector,
                 )
 
-        return self._construct_tasklet_result(dtype, tasklet_node, "result")
+        if isinstance(node.type, itir_ts.ListType):
+            # make_const_list returns `ListType` but we represent it as a scalar value
+            assert isinstance(node.type.element_type, ts.ScalarType)
+            dtype = dace_utils.as_dace_type(node.type.element_type)
+            use_array = True
+        else:
+            assert isinstance(node.type, ts.ScalarType)
+            dtype = dace_utils.as_dace_type(node.type)
+            use_array = False
+
+        return self._construct_tasklet_result(dtype, tasklet_node, "result", use_array)
 
     def visit_FunCall(self, node: gtir.FunCall) -> IteratorExpr | ValueExpr:
         if cpm.is_call_to(node, "deref"):
@@ -871,6 +975,9 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         elif cpm.is_call_to(node, "neighbors"):
             return self._visit_neighbors(node)
+
+        elif cpm.is_applied_map(node):
+            return self._visit_map(node)
 
         elif cpm.is_applied_reduce(node):
             return self._visit_reduce(node)

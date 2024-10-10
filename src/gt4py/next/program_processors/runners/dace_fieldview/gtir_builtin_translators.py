@@ -193,13 +193,20 @@ def translate_as_field_op(
     if cpm.is_applied_reduce(stencil_expr.expr):
         if reduce_identity is not None:
             raise NotImplementedError("nested reductions not supported.")
-
         # the reduce identity value is used to fill the skip values in neighbors list
         _, _, reduce_identity = gtir_dataflow.get_reduce_params(stencil_expr.expr)
+        reduce_identity_for_args = reduce_identity
+    elif cpm.is_call_to(stencil_expr.expr, "neighbors"):
+        # we do not support nested reduction, so the reduction identity value
+        # is used by the current neighbors expression to fill the skip values
+        reduce_identity_for_args = None
+    else:
+        # we use the reduce identity value (if any) from the current context
+        reduce_identity_for_args = reduce_identity
 
     # visit the list of arguments to be passed to the lambda expression
     stencil_args = [
-        _parse_fieldop_arg(arg, sdfg, state, sdfg_builder, domain, reduce_identity)
+        _parse_fieldop_arg(arg, sdfg, state, sdfg_builder, domain, reduce_identity_for_args)
         for arg in node.args
     ]
 
