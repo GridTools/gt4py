@@ -24,7 +24,7 @@ from gt4py.next.iterator.type_system import inference as type_inference
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
-def _transform_stmt_if(
+def _transform_if(
     stmt: itir.Stmt, declarations: list[itir.Temporary], uids: eve_utils.UIDGenerator
 ) -> Optional[list[itir.Stmt]]:
     if not isinstance(stmt, itir.SetAt):
@@ -51,7 +51,7 @@ def _transform_stmt_if(
     return None
 
 
-def _transform_stmt_by_pattern(
+def _transform_by_pattern(
     stmt: itir.Stmt, predicate, declarations: list[itir.Temporary], uids: eve_utils.UIDGenerator
 ) -> Optional[list[itir.Stmt]]:
     if not isinstance(stmt, itir.SetAt):
@@ -148,14 +148,14 @@ def _transform_stmt(
 
     _transform_stmts: list[Callable] = [
         # _transform_stmt functional if_ into if-stmt
-        _transform_stmt_if,
+        _transform_if,
         # extract applied `as_fieldop` to top-level
         functools.partial(
-            _transform_stmt_by_pattern, predicate=lambda expr, _: cpm.is_applied_as_fieldop(expr)
+            _transform_by_pattern, predicate=lambda expr, _: cpm.is_applied_as_fieldop(expr)
         ),
         # extract functional if_ to the top-level
         functools.partial(
-            _transform_stmt_by_pattern, predicate=lambda expr, _: cpm.is_call_to(expr, "if_")
+            _transform_by_pattern, predicate=lambda expr, _: cpm.is_call_to(expr, "if_")
         ),
     ]
 
