@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import numpy as np
 import pytest
@@ -23,6 +17,7 @@ from gt4py.next.program_processors.runners import gtfn
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
+# cross-reference why new type inference does not support this
 @fundef
 def ldif(d):
     return lambda inp: deref(shift(d, -1)(inp)) - deref(inp)
@@ -47,19 +42,19 @@ def lap(inp):
     return dif2(i)(inp) + dif2(j)(inp)
 
 
+@fundef
+def lap_flat(inp):
+    return -4.0 * deref(inp) + (
+        deref(shift(i, 1)(inp))
+        + deref(shift(i, -1)(inp))
+        + deref(shift(j, 1)(inp))
+        + deref(shift(j, -1)(inp))
+    )
+
+
 IDim = gtx.Dimension("IDim")
 JDim = gtx.Dimension("JDim")
 KDim = gtx.Dimension("KDim")
-
-
-@fendef(offset_provider={"i": IDim, "j": JDim})
-def fencil(x, y, z, out, inp):
-    closure(
-        cartesian_domain(named_range(IDim, 0, x), named_range(JDim, 0, y), named_range(KDim, 0, z)),
-        lap,
-        out,
-        [inp],
-    )
 
 
 def naive_lap(inp):
@@ -79,13 +74,30 @@ def naive_lap(inp):
 
 
 @pytest.mark.uses_origin
-def test_anton_toy(program_processor):
+@pytest.mark.parametrize("stencil", [lap, lap_flat])
+def test_anton_toy(stencil, program_processor):
     program_processor, validate = program_processor
 
     if program_processor in [
         gtfn.run_gtfn_with_temporaries.executor,
     ]:
         pytest.xfail("TODO: issue with temporaries that crashes the application")
+
+    if stencil is lap:
+        pytest.xfail(
+            "Type inference does not support calling lambdas with offset arguments of changing type."
+        )
+
+    @fendef(offset_provider={"i": IDim, "j": JDim})
+    def fencil(x, y, z, out, inp):
+        closure(
+            cartesian_domain(
+                named_range(IDim, 0, x), named_range(JDim, 0, y), named_range(KDim, 0, z)
+            ),
+            stencil,
+            out,
+            [inp],
+        )
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()

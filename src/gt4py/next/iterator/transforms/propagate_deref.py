@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next.iterator import ir
@@ -46,7 +40,7 @@ class PropagateDeref(PreserveLocationVisitor, NodeTranslator):
         if cpm.is_call_to(node, "deref") and cpm.is_let(node.args[0]):
             fun: ir.Lambda = node.args[0].fun  # type: ignore[assignment]  # ensured by is_let
             args: list[ir.Expr] = node.args[0].args
-            node = im.let(*zip(fun.params, args))(im.deref(fun.expr))  # type: ignore[arg-type] # mypy not smart enough
+            node = im.let(*zip(fun.params, args, strict=True))(im.deref(fun.expr))
         elif cpm.is_call_to(node, "deref") and cpm.is_call_to(node.args[0], "if_"):
             cond, true_branch, false_branch = node.args[0].args
             return im.if_(cond, im.deref(true_branch), im.deref(false_branch))

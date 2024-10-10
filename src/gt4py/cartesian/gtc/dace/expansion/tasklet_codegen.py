@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import copy
 from typing import Any, ChainMap, List, Optional, Union
@@ -22,7 +16,7 @@ import dace.subsets
 
 import gt4py.cartesian.gtc.common as common
 from gt4py import eve
-from gt4py.cartesian.gtc import daceir as dcir
+from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.dace.symbol_utils import get_axis_bound_str
 from gt4py.cartesian.gtc.dace.utils import make_dace_subset
 from gt4py.eve.codegen import FormatTemplate as as_fmt
@@ -87,7 +81,12 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
             # if this node is not a target, it will still use the symbol of the write memlet if the
             # field was previously written in the same memlet.
             memlets = kwargs["read_memlets"] + kwargs["write_memlets"]
-        memlet = next(mem for mem in memlets if mem.connector == node.name)
+        try:
+            memlet = next(mem for mem in memlets if mem.connector == node.name)
+        except StopIteration:
+            raise ValueError(
+                "Memlet connector and tasklet variable mismatch, DaCe IR error."
+            ) from None
 
         index_strs = []
         if node.offset is not None:

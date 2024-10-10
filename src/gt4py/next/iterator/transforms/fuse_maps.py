@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
 from typing import TypeGuard
@@ -18,6 +12,7 @@ from typing import TypeGuard
 from gt4py.eve import NodeTranslator, traits
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next.iterator import ir
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.iterator.transforms import inline_lambdas
 
 
@@ -26,14 +21,6 @@ def _is_map(node: ir.Node) -> TypeGuard[ir.FunCall]:
         isinstance(node, ir.FunCall)
         and isinstance(node.fun, ir.FunCall)
         and node.fun.fun == ir.SymRef(id="map_")
-    )
-
-
-def _is_reduce(node: ir.Node) -> TypeGuard[ir.FunCall]:
-    return (
-        isinstance(node, ir.FunCall)
-        and isinstance(node.fun, ir.FunCall)
-        and node.fun.fun == ir.SymRef(id="reduce")
     )
 
 
@@ -71,7 +58,7 @@ class FuseMaps(traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrai
 
     def visit_FunCall(self, node: ir.FunCall, **kwargs):
         node = self.generic_visit(node)
-        if _is_map(node) or _is_reduce(node):
+        if _is_map(node) or cpm.is_applied_reduce(node):
             if any(_is_map(arg) for arg in node.args):
                 first_param = (
                     0 if _is_map(node) else 1
@@ -83,7 +70,7 @@ class FuseMaps(traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrai
                 inlined_args = []
                 new_params = []
                 new_args = []
-                if _is_reduce(node):
+                if cpm.is_applied_reduce(node):
                     # param corresponding to reduce acc
                     inlined_args.append(ir.SymRef(id=outer_op.params[0].id))
                     new_params.append(outer_op.params[0])
@@ -119,7 +106,7 @@ class FuseMaps(traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrai
                     return ir.FunCall(
                         fun=ir.FunCall(fun=ir.SymRef(id="map_"), args=[new_op]), args=new_args
                     )
-                else:  # _is_reduce(node)
+                else:  # is_applied_reduce(node)
                     return ir.FunCall(
                         fun=ir.FunCall(fun=ir.SymRef(id="reduce"), args=[new_op, node.fun.args[1]]),
                         args=new_args,

@@ -3,6 +3,7 @@
 <!-- List format (alphabetical order):  Surname, Name. Employer/Affiliation -->
 
 - Benedicic, Lucas. ETH Zurich - CSCS
+- Cattaneo, Roman. SSAI/NASA-GSFC
 - Cruz, Felipe. ETH Zurich - CSCS
 - Dahm, Johann. Allen Institute for AI
 - Davis, Eddie. Allen Institute for AI
@@ -10,7 +11,7 @@
 - Ehrengruber, Till. ETH Zurich - CSCS
 - Elbert, Oliver D. NOAA-GFDL
 - Faghih-Naini, Sara. ECMWF
-- Farabullini, Nicoletta. ETH Zurich - C2SM
+- Farabullini, Nicoletta. ETH Zurich - EXCLAIM
 - George, Rhea. Allen Institute for AI
 - González Paredes, Enrique. ETH Zurich - CSCS
 - Gopal, Abishek. ETH Zurich - EXCLAIM
@@ -18,10 +19,12 @@
 - Häuselmann, Rico. ETH Zurich - CSCS
 - Kardos, Péter. ETH Zurich - EXCLAIM
 - Kellerhals, Samuel. ETH Zurich - EXCLAIM
+- Kotsalos, Christos. ETH Zurich - CSCS
 - Luz, Magdalena. ETH Zurich - EXCLAIM
 - Madonna, Alberto. ETH Zurich - CSCS
 - Mariotti, Kean. ETH Zurich - CSCS
 - Müller, Christoph. MeteoSwiss
+- Müller, Philip. ETH Zurich - CSCS
 - Osuna, Carlos. MeteoSwiss
 - Paone, Edoardo. ETH Zurich - CSCS
 - Röthlin, Matthias. MeteoSwiss

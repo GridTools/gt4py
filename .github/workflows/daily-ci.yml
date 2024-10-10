@@ -3,6 +3,7 @@ name: Daily CI
 on:
   schedule:
   - cron: '0 4 * * *'
+  workflow_dispatch:
 
   ## COMMENTED OUT: only for testing CI action changes
   # pull_request:

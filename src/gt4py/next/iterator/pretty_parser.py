@@ -1,23 +1,18 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from typing import Union
 
-from lark import lark, lexer as lark_lexer, visitors as lark_visitors
+from lark import lark, lexer as lark_lexer, tree as lark_tree, visitors as lark_visitors
 
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.type_system import type_specifications as ts
 
 
 GRAMMAR = """
@@ -26,17 +21,19 @@ GRAMMAR = """
         | declaration
         | stencil_closure
         | set_at
+        | if_stmt
         | program
         | prec0
 
     SYM: CNAME
     SYM_REF: CNAME
+    TYPE_LITERAL: CNAME
     INT_LITERAL: SIGNED_INT
     FLOAT_LITERAL: SIGNED_FLOAT
     OFFSET_LITERAL: ( INT_LITERAL | CNAME ) "ₒ"
     _literal: INT_LITERAL | FLOAT_LITERAL | OFFSET_LITERAL
     ID_NAME: CNAME
-    AXIS_NAME: CNAME
+    AXIS_NAME: CNAME ("ᵥ" | "ₕ")
 
     ?prec0: prec1
         | "λ(" ( SYM "," )* SYM? ")" "→" prec0 -> lam
@@ -82,13 +79,17 @@ GRAMMAR = """
         | named_range
         | "(" prec0 ")"
 
+    ?stmt: set_at | if_stmt
+    set_at: prec0 "@" prec0 "←" prec1 ";"
+    else_branch_seperator: "else"
+    if_stmt: "if" "(" prec0 ")" "{" ( stmt )* "}" else_branch_seperator "{" ( stmt )* "}"
+
     named_range: AXIS_NAME ":" "[" prec0 "," prec0 ")"
     function_definition: ID_NAME "=" "λ(" ( SYM "," )* SYM? ")" "→" prec0 ";"
-    declaration: ID_NAME "=" "temporary(" "domain=" prec0 "," "dtype=" prec0 ")" ";"
+    declaration: ID_NAME "=" "temporary(" "domain=" prec0 "," "dtype=" TYPE_LITERAL ")" ";"
     stencil_closure: prec0 "←" "(" prec0 ")" "(" ( SYM_REF ", " )* SYM_REF ")" "@" prec0 ";"
-    set_at: prec0 "@" prec0 "←" prec1 ";"
     fencil_definition: ID_NAME "(" ( SYM "," )* SYM ")" "{" ( function_definition )* ( stencil_closure )+ "}"
-    program: ID_NAME "(" ( SYM "," )* SYM ")" "{" ( function_definition )* ( declaration )* ( set_at )+ "}"
+    program: ID_NAME "(" ( SYM "," )* SYM ")" "{" ( function_definition )* ( declaration )* ( stmt )+ "}"
 
     %import common (CNAME, SIGNED_FLOAT, SIGNED_INT, WS)
     %ignore WS
@@ -111,6 +112,11 @@ class ToIrTransformer(lark_visitors.Transformer):
     def FLOAT_LITERAL(self, value: lark_lexer.Token) -> ir.Literal:
         return im.literal(value.value, "float64")
 
+    def TYPE_LITERAL(self, value: lark_lexer.Token) -> ts.TypeSpec:
+        if hasattr(ts.ScalarKind, value.upper()):
+            return ts.ScalarType(kind=getattr(ts.ScalarKind, value.upper()))
+        raise NotImplementedError(f"Type {value} not supported.")
+
     def OFFSET_LITERAL(self, value: lark_lexer.Token) -> ir.OffsetLiteral:
         v: Union[int, str] = value.value[:-1]
         try:
@@ -123,7 +129,9 @@ class ToIrTransformer(lark_visitors.Transformer):
         return value.value
 
     def AXIS_NAME(self, value: lark_lexer.Token) -> ir.AxisLiteral:
-        return ir.AxisLiteral(value=value.value)
+        name = value.value[:-1]
+        kind = ir.DimensionKind.HORIZONTAL if value.value[-1] == "ₕ" else ir.DimensionKind.VERTICAL
+        return ir.AxisLiteral(value=name, kind=kind)
 
     def lam(self, *args: ir.Node) -> ir.Lambda:
         *params, expr = args
@@ -212,6 +220,27 @@ class ToIrTransformer(lark_visitors.Transformer):
         output, stencil, *inputs, domain = args
         return ir.StencilClosure(domain=domain, stencil=stencil, output=output, inputs=inputs)
 
+    def if_stmt(self, cond: ir.Expr, *args):
+        found_else_seperator = False
+        true_branch = []
+        false_branch = []
+        for arg in args:
+            if isinstance(arg, lark_tree.Tree):
+                assert arg.data == "else_branch_seperator"
+                found_else_seperator = True
+                continue
+
+            if not found_else_seperator:
+                true_branch.append(arg)
+            else:
+                false_branch.append(arg)
+
+        return ir.IfStmt(
+            cond=cond,
+            true_branch=true_branch,
+            false_branch=false_branch,
+        )
+
     def declaration(self, *args: ir.Expr) -> ir.Temporary:
         tid, domain, dtype = args
         return ir.Temporary(id=tid, domain=domain, dtype=dtype)
@@ -250,7 +279,7 @@ class ToIrTransformer(lark_visitors.Transformer):
             elif isinstance(arg, ir.Temporary):
                 declarations.append(arg)
             else:
-                assert isinstance(arg, ir.SetAt)
+                assert isinstance(arg, ir.Stmt)
                 body.append(arg)
         return ir.Program(
             id=fid,

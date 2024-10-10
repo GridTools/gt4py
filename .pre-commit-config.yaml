@@ -15,8 +15,10 @@ repos:
   hooks:
   - id: pretty-format-ini
     args: [--autofix]
+    exclude: tox.ini
   - id: pretty-format-toml
     args: [--autofix]
+    exclude: tach.toml
   - id: pretty-format-yaml
     args: [--autofix, --preserve-quotes, --indent, "2"]
 
@@ -27,12 +29,12 @@ repos:
     types_or: [markdown, json]
 
 - repo: https://github.com/Lucas-C/pre-commit-hooks
-  rev: v1.1.9
+  rev: v1.5.5
   hooks:
   - id: insert-license
     exclude: ^\..*$
     types: [python]
-    args: [--comment-style, "|#|", --license-filepath, ./LICENSE_HEADER.txt, --fuzzy-match-generates-todo]
+    args: [--comment-style, "|#|", --license-filepath, ./HEADER.txt, --fuzzy-match-generates-todo]
 
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v4.4.0
@@ -49,7 +51,7 @@ repos:
   ## version = re.search('ruff==([0-9\.]*)', open("constraints.txt").read())[1]
   ## print(f"rev: v{version}")
   ##]]]
-  rev: v0.4.4
+  rev: v0.6.4
   ##[[[end]]]
   hooks:
     # Run the linter.
@@ -60,15 +62,20 @@ repos:
     # Run the formatter.
   - id: ruff-format
 
+- repo: https://github.com/gauge-sh/tach-pre-commit
+  rev: v0.10.7
+  hooks:
+  - id: tach
+
 - repo: https://github.com/pre-commit/mirrors-mypy
   ##[[[cog
   ## import re
   ## version = re.search('mypy==([0-9\.]*)', open("constraints.txt").read())[1]
   ## print(f"#========= FROM constraints.txt: v{version} =========")
   ##]]]
-  #========= FROM constraints.txt: v1.10.0 =========
+  #========= FROM constraints.txt: v1.11.2 =========
   ##[[[end]]]
-  rev: v1.10.0  # MUST match version ^^^^ in constraints.txt (if the mirror is up-to-date)
+  rev: v1.11.2  # MUST match version ^^^^ in constraints.txt (if the mirror is up-to-date)
   hooks:
   - id: mypy
     additional_dependencies:  # versions from constraints.txt
@@ -85,34 +92,34 @@ repos:
     ##     print(f"- {pkg}==" + str(re.search(f'\n{pkg}==([0-9\.]*)', constraints)[1]))
     ##]]]
     - astunparse==1.6.3
-    - attrs==23.2.0
-    - black==24.4.2
+    - attrs==24.2.0
+    - black==24.8.0
     - boltons==24.0.0
     - cached-property==1.5.2
     - click==8.1.7
-    - cmake==3.29.3
+    - cmake==3.30.3
     - cytoolz==0.12.3
-    - deepdiff==7.0.1
+    - deepdiff==8.0.1
     - devtools==0.12.2
-    - factory-boy==3.3.0
+    - factory-boy==3.3.1
     - frozendict==2.4.4
-    - gridtools-cpp==2.3.2
-    - importlib-resources==6.4.0
+    - gridtools-cpp==2.3.4
+    - importlib-resources==6.4.5
     - jinja2==3.1.4
-    - lark==1.1.9
+    - lark==1.2.2
     - mako==1.3.5
-    - nanobind==1.9.2
+    - nanobind==2.1.0
     - ninja==1.11.1.1
     - numpy==1.24.4
-    - packaging==24.0
-    - pybind11==2.12.0
-    - setuptools==69.5.1
+    - packaging==24.1
+    - pybind11==2.13.5
+    - setuptools==74.1.2
     - tabulate==0.9.0
-    - typing-extensions==4.11.0
+    - typing-extensions==4.12.2
     - xxhash==3.0.0
     ##[[[end]]]
-    # Add all type stubs from typeshed
-    - types-all
+    - types-tabulate
+    - types-typed-ast
     args: [--no-install-types]
     exclude: |
       (?x)^(

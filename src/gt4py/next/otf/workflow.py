@@ -1,19 +1,14 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
+import abc
 import dataclasses
 import functools
 import typing
@@ -29,6 +24,8 @@ EndT_co = TypeVar("EndT_co", covariant=True)
 NewEndT = TypeVar("NewEndT")
 IntermediateT = TypeVar("IntermediateT")
 HashT = TypeVar("HashT")
+DataT = TypeVar("DataT")
+ArgT = TypeVar("ArgT")
 
 
 def make_step(function: Workflow[StartT, EndT]) -> ChainableWorkflowMixin[StartT, EndT]:
@@ -159,6 +156,23 @@ class NamedStepSequence(
 
 
 @dataclasses.dataclass(frozen=True)
+class MultiWorkflow(
+    ChainableWorkflowMixin[StartT, EndT], ReplaceEnabledWorkflowMixin[StartT, EndT]
+):
+    """A flexible workflow, where the sequence of steps depends on the input type."""
+
+    def __call__(self, inp: StartT) -> EndT:
+        step_result: Any = inp
+        for step_name in self.step_order(inp):
+            step_result = getattr(self, step_name)(step_result)
+        return step_result
+
+    @abc.abstractmethod
+    def step_order(self, inp: StartT) -> list[str]:
+        pass
+
+
+@dataclasses.dataclass(frozen=True)
 class StepSequence(ChainableWorkflowMixin[StartT, EndT]):
     """
     Composable workflow of single input callables.
@@ -265,26 +279,3 @@ class SkippableStep(
 
     def skip_condition(self, inp: StartT) -> bool:
         raise NotImplementedError()
-
-
-@dataclasses.dataclass
-class InputWithArgs(Generic[StartT]):
-    data: StartT
-    args: tuple[Any]
-    kwargs: dict[str, Any]
-
-
-@dataclasses.dataclass(frozen=True)
-class NamedStepSequenceWithArgs(NamedStepSequence[InputWithArgs[StartT], EndT]):
-    def __call__(self, inp: InputWithArgs[StartT]) -> EndT:
-        args = inp.args
-        kwargs = inp.kwargs
-        step_result: Any = inp.data
-        fields = {f.name: f for f in dataclasses.fields(self)}
-        for step_name in self.step_order:
-            step = getattr(self, step_name)
-            if fields[step_name].metadata.get("takes_args", False):
-                step_result = step(InputWithArgs(step_result, args, kwargs))
-            else:
-                step_result = step(step_result)
-        return step_result
