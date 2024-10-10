@@ -80,7 +80,6 @@ class MapIterationOrder(dace_transformation.SingleStateTransformation):
         Essentially the function checks if the selected dimension is inside the map,
         and if so, if it is on the right place.
         """
-
         if self.leading_dim is None:
             return False
         map_entry: dace_nodes.MapEntry = self.map_entry
