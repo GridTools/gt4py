@@ -52,11 +52,7 @@ class _NodeReplacer(PreserveLocationVisitor, NodeTranslator):
         # of `extract_subexpression` (e.g. temporary extraction) can also rely on this to avoid
         # the need to handle this artificial let-statements.
         if isinstance(node, itir.FunCall) and isinstance(node.fun, itir.Lambda):
-            eligible_params = []
-            for arg in node.args:
-                eligible_params.append(
-                    isinstance(arg, itir.SymRef)
-                )  # and arg.id.startswith("_cs"))  # TODO: document? this is for lets in the global tmp pass, e.g. test_trivial_let
+            eligible_params = [isinstance(arg, itir.SymRef) for arg in node.args]
             if any(eligible_params):
                 # note: the inline is opcount preserving anyway so avoid the additional
                 # effort in the inliner by disabling opcount preservation.
