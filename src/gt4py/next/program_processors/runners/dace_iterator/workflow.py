@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import functools
-from typing import Callable, Optional
+from typing import Callable, Optional, Sequence
 
 import dace
 import factory
@@ -23,7 +23,7 @@ from gt4py.next.otf import languages, recipes, stages, step_types, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.languages import LanguageSettings
 from gt4py.next.program_processors.runners.dace_common import workflow as dace_workflow
-from gt4py.next.type_system import type_specifications as ts, type_translation as tt
+from gt4py.next.type_system import type_specifications as ts
 
 from . import build_sdfg_from_itir
 
@@ -31,7 +31,7 @@ from . import build_sdfg_from_itir
 @dataclasses.dataclass(frozen=True)
 class DaCeTranslator(
     workflow.ChainableWorkflowMixin[
-        stages.AOTProgram, stages.ProgramSource[languages.SDFG, languages.LanguageSettings]
+        stages.CompilableProgram, stages.ProgramSource[languages.SDFG, languages.LanguageSettings]
     ],
     step_types.TranslationStep[languages.SDFG, languages.LanguageSettings],
 ):
@@ -52,7 +52,7 @@ class DaCeTranslator(
     def generate_sdfg(
         self,
         program: itir.FencilDefinition,
-        arg_types: list[ts.TypeSpec],
+        arg_types: Sequence[ts.TypeSpec],
         offset_provider: dict[str, common.Dimension | common.Connectivity],
         column_axis: Optional[common.Dimension],
     ) -> dace.SDFG:
@@ -78,23 +78,21 @@ class DaCeTranslator(
         )
 
     def __call__(
-        self, inp: stages.AOTProgram
+        self, inp: stages.CompilableProgram
     ) -> stages.ProgramSource[languages.SDFG, LanguageSettings]:
         """Generate DaCe SDFG file from the ITIR definition."""
         program: itir.FencilDefinition | itir.Program = inp.data
         assert isinstance(program, itir.FencilDefinition)
-        arg_types = [tt.from_value(arg) for arg in inp.args.args]
 
         sdfg = self.generate_sdfg(
             program,
-            arg_types,
+            inp.args.args,
             inp.args.offset_provider,
             inp.args.column_axis,
         )
 
         param_types = tuple(
-            interface.Parameter(param, tt.from_value(arg))
-            for param, arg in zip(sdfg.arg_names, inp.args.args)
+            interface.Parameter(param, arg) for param, arg in zip(sdfg.arg_names, inp.args.args)
         )
 
         module: stages.ProgramSource[languages.SDFG, languages.LanguageSettings] = (

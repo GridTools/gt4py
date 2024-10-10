@@ -43,10 +43,10 @@ pytestmark = pytest.mark.requires_dace
 
 def test_sdfgConvertible_laplap(cartesian_case):
     # TODO(kotsaloscv): Temporary solution until the `requires_dace` marker is fully functional
-    if cartesian_case.executor not in [run_dace_cpu, run_dace_gpu]:
+    if cartesian_case.backend not in [run_dace_cpu, run_dace_gpu]:
         pytest.skip("DaCe-related test: Test SDFGConvertible interface for GT4Py programs")
 
-    if cartesian_case.executor == run_dace_gpu:
+    if cartesian_case.backend == run_dace_gpu:
         import cupy as xp
     else:
         import numpy as xp
@@ -68,10 +68,10 @@ def test_sdfgConvertible_laplap(cartesian_case):
     def sdfg():
         tmp_field = xp.empty_like(out_field)
         lap_program.with_grid_type(cartesian_case.grid_type).with_backend(
-            cartesian_case.executor
+            cartesian_case.backend
         ).with_connectivities(connectivities)(in_field, tmp_field)
         lap_program.with_grid_type(cartesian_case.grid_type).with_backend(
-            cartesian_case.executor
+            cartesian_case.backend
         ).with_connectivities(connectivities)(tmp_field, out_field)
 
     sdfg()
@@ -95,10 +95,10 @@ def testee(a: gtx.Field[gtx.Dims[Vertex], gtx.float64], b: gtx.Field[gtx.Dims[Ed
 @pytest.mark.uses_unstructured_shift
 def test_sdfgConvertible_connectivities(unstructured_case):
     # TODO(kotsaloscv): Temporary solution until the `requires_dace` marker is fully functional
-    if unstructured_case.executor not in [run_dace_cpu, run_dace_gpu]:
+    if unstructured_case.backend not in [run_dace_cpu, run_dace_gpu]:
         pytest.skip("DaCe-related test: Test SDFGConvertible interface for GT4Py programs")
 
-    allocator, backend = unstructured_case.allocator, unstructured_case.executor
+    allocator, backend = unstructured_case.allocator, unstructured_case.backend
 
     if backend == run_dace_gpu:
         import cupy as xp

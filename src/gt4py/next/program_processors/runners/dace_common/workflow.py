@@ -102,7 +102,7 @@ def convert_args(
 
     def decorated_program(
         *args: Any,
-        offset_provider: dict[str, common.Connectivity | common.Dimension],
+        offset_provider: common.OffsetProvider,
         out: Any = None,
     ) -> Any:
         if out is not None:
