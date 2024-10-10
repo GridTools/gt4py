@@ -43,11 +43,14 @@ class _NodeReplacer(PreserveLocationVisitor, NodeTranslator):
 
     def visit_FunCall(self, node: itir.FunCall) -> itir.Node:
         node = cast(itir.FunCall, self.visit_Expr(node))
+        # TODO(tehrengruber): This symbol name from the inner expr, to increase readability of IR
         # If we encounter an expression like:
         #  (λ(_cs_1) → (λ(a) → a+a)(_cs_1))(outer_expr)
         # (non-recursively) inline the lambda to obtain:
         #  (λ(_cs_1) → _cs_1+_cs_1)(outer_expr)
-        # This allows identifying more common subexpressions later on
+        # In the CSE this allows identifying more common subexpressions later on. Other users
+        # of `extract_subexpression` (e.g. temporary extraction) can also rely on this to avoid
+        # the need to handle this artificial let-statements.
         if isinstance(node, itir.FunCall) and isinstance(node.fun, itir.Lambda):
             eligible_params = []
             for arg in node.args:
