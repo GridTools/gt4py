@@ -22,7 +22,7 @@ from gt4py.next.otf import languages, recipes, stages, step_types, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.languages import LanguageSettings
 from gt4py.next.program_processors.runners.dace_common import workflow as dace_workflow
-from gt4py.next.program_processors.runners.dace_fieldview import gtir_to_sdfg
+from gt4py.next.program_processors.runners.dace_fieldview import gtir_sdfg
 from gt4py.next.type_system import type_translation as tt
 
 
@@ -49,7 +49,7 @@ class DaCeTranslator(
         # TODO(edopao): Call IR transformations and domain inference, finally lower IR to SDFG
         raise NotImplementedError
 
-        return gtir_to_sdfg.build_sdfg_from_gtir(program=ir, offset_provider=offset_provider)
+        return gtir_sdfg.build_sdfg_from_gtir(program=ir, offset_provider=offset_provider)
 
     def __call__(
         self, inp: stages.CompilableProgram
