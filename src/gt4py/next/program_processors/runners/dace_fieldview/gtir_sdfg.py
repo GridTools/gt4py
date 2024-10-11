@@ -657,7 +657,7 @@ def build_sdfg_from_gtir(
         An SDFG in the DaCe canonical form (simplified)
     """
     from gt4py.next.iterator.transforms import prune_casts as ir_prune_casts
-    
+
     ir = gtir_type_inference.infer(ir, offset_provider=offset_provider)
     ir = ir_prune_casts.PruneCasts().visit(ir)
     ir = dace_gtir_utils.patch_gtir(ir)
