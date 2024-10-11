@@ -23,6 +23,10 @@ class PruneCasts(PreserveLocationVisitor, NodeTranslator):
         value, type_constructor = node.args
         self.visit(value)
 
+        # cannot prune cast if type annotation is missing on input argument
+        if value.type is None:
+            return node
+
         assert isinstance(type_constructor, ir.SymRef) and (type_constructor.id in ir.TYPEBUILTINS)
         dtype = ts.ScalarType(kind=getattr(ts.ScalarKind, type_constructor.id.upper()))
 
