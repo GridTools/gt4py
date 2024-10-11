@@ -367,7 +367,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         target_fields = self._visit_expression(stmt.target, sdfg, state, use_temp=False)
 
         # convert domain expression to dictionary to ease access to dimension boundaries
-        domain = dace_gtir_utils.get_domain_ranges(stmt.domain)
+        domain = {
+            dim: (lb, ub) for dim, lb, ub in gtir_builtin_translators.translate_domain(stmt.domain)
+        }
 
         expr_input_args = {
             sym_id

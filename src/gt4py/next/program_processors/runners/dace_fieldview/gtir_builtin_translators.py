@@ -16,6 +16,7 @@ import dace
 import dace.subsets as sbs
 
 from gt4py.next import common as gtx_common, utils as gtx_utils
+from gt4py.next.ffront import fbuiltins as gtx_fbuiltins
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.iterator.type_system import type_specifications as itir_ts
@@ -32,16 +33,25 @@ if TYPE_CHECKING:
     from gt4py.next.program_processors.runners.dace_fieldview import gtir_sdfg
 
 
-IteratorIndexDType: TypeAlias = dace.int32  # type of iterator indexes
-
-
 @dataclasses.dataclass(frozen=True)
 class Field:
     data_node: dace.nodes.AccessNode
     data_type: ts.FieldType | ts.ScalarType
 
 
+FieldopDomain: TypeAlias = list[
+    tuple[gtx_common.Dimension, dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]
+]
+"""
+Domain of a field operator represented as a list of tuples with 3 elements:
+ - dimension
+ - symbolic expression for lower bound
+ - symbolic expression for upper bound
+"""
+
+
 FieldopResult: TypeAlias = Field | tuple[Field | tuple, ...]
+"""Result of a field operator, can be either a field or a tuple fields."""
 
 
 class PrimitiveTranslator(Protocol):
@@ -76,16 +86,29 @@ class PrimitiveTranslator(Protocol):
         """
 
 
+def _get_fieldop_ndrange(domain: FieldopDomain) -> list[tuple[gtx_common.Dimension, str, str]]:
+    """
+    Helper method to generate unique index variables for the map ndrange with corresponding range.
+
+    In case of multiple occurrances of the same dimension, it ensures that the variable name
+    is unique by using a prefix computed from enumerate.
+    """
+    return [
+        (dim, dace_gtir_utils.get_map_variable(dim, i), f"{lb}:{ub}")
+        for i, (dim, lb, ub) in enumerate(domain)
+    ]
+
+
 def _parse_fieldop_arg(
     node: gtir.Expr,
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-    domain: list[
-        tuple[gtx_common.Dimension, dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]
-    ],
+    domain: FieldopDomain,
     reduce_identity: Optional[gtir_dataflow.SymbolExpr],
 ) -> gtir_dataflow.IteratorExpr | gtir_dataflow.MemletExpr:
+    """Helper method to visit an expression passed as argument to a field operator."""
+
     arg = sdfg_builder.visit(
         node,
         sdfg=sdfg,
@@ -97,15 +120,16 @@ def _parse_fieldop_arg(
     if not isinstance(arg, Field):
         raise ValueError(f"Received {node} as argument to field operator, expected a field.")
 
+    def make_iterator_index(var: str) -> gtir_dataflow.SymbolExpr:
+        dtype = dace.dtype_to_typeclass(gtx_fbuiltins.IndexType)
+        return gtir_dataflow.SymbolExpr(var, dtype)
+
     if isinstance(arg.data_type, ts.ScalarType):
         return gtir_dataflow.MemletExpr(arg.data_node, sbs.Indices([0]))
     elif isinstance(arg.data_type, ts.FieldType):
         indices: dict[gtx_common.Dimension, gtir_dataflow.ValueExpr] = {
-            dim: gtir_dataflow.SymbolExpr(
-                dace_gtir_utils.get_map_variable(dim),
-                IteratorIndexDType,
-            )
-            for dim, _, _ in domain
+            dim: make_iterator_index(map_variable)
+            for dim, map_variable, _ in _get_fieldop_ndrange(domain)
         }
         dims = arg.data_type.dims + (
             # we add an extra anonymous dimension in the iterator definition to enable
@@ -120,12 +144,11 @@ def _parse_fieldop_arg(
 def _create_temporary_field(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
-    domain: list[
-        tuple[gtx_common.Dimension, dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]
-    ],
+    domain: FieldopDomain,
     node_type: ts.FieldType,
     output_desc: dace.data.Data,
 ) -> Field:
+    """Helper method to allocate a temporary field where to write the output of a field operator."""
     domain_dims, _, domain_ubs = zip(*domain)
     field_dims = list(domain_dims)
     # It should be enough to allocate an array with shape (upper_bound - lower_bound)
@@ -155,6 +178,29 @@ def _create_temporary_field(
     field_type = ts.FieldType(field_dims, node_type.dtype)
 
     return Field(field_node, field_type)
+
+
+def translate_domain(node: gtir.Node) -> FieldopDomain:
+    """
+    Visits the domain of a field operator and returns a list of dimensions and
+    the corresponding lower and upper bounds.
+    """
+    assert cpm.is_call_to(node, ("cartesian_domain", "unstructured_domain"))
+
+    domain = []
+    for named_range in node.args:
+        assert cpm.is_call_to(named_range, "named_range")
+        assert len(named_range.args) == 3
+        axis = named_range.args[0]
+        assert isinstance(axis, gtir.AxisLiteral)
+        bounds = [
+            dace.symbolic.pystr_to_symbolic(gtir_python_codegen.get_source(arg))
+            for arg in named_range.args[1:3]
+        ]
+        dim = gtx_common.Dimension(axis.value, axis.kind)
+        domain.append((dim, bounds[0], bounds[1]))
+
+    return domain
 
 
 def translate_as_field_op(
@@ -188,7 +234,7 @@ def translate_as_field_op(
     assert isinstance(domain_expr, gtir.FunCall)
 
     # parse the domain of the field operator
-    domain = dace_gtir_utils.get_domain(domain_expr)
+    domain = translate_domain(domain_expr)
 
     # The reduce identity value is used to fill the skip values in neighbors list
     #
@@ -234,7 +280,8 @@ def translate_as_field_op(
     input_edges, output = taskgen.visit(stencil_expr, args=stencil_args)
     output_desc = output.expr.node.desc(sdfg)
 
-    domain_index = sbs.Indices([dace_gtir_utils.get_map_variable(dim) for dim, _, _ in domain])
+    fieldop_ndrange = _get_fieldop_ndrange(domain)
+    domain_index = sbs.Indices([var for _, var, _ in fieldop_ndrange])
     if isinstance(node.type.dtype, itir_ts.ListType):
         assert isinstance(output_desc, dace.data.Array)
         assert set(output_desc.offset) == {0}
@@ -246,8 +293,9 @@ def translate_as_field_op(
         output_subset = sbs.Range.from_indices(domain_index)
 
     # create map range corresponding to the field operator domain
-    map_ranges = {dace_gtir_utils.get_map_variable(dim): f"{lb}:{ub}" for dim, lb, ub in domain}
-    me, mx = sdfg_builder.add_map("field_op", state, map_ranges)
+    me, mx = sdfg_builder.add_map(
+        "fieldop", state, ndrange={dim_var: dim_range for _, dim_var, dim_range in fieldop_ndrange}
+    )
 
     # allocate local temporary storage for the result field
     result_field = _create_temporary_field(sdfg, state, domain, node.type, output_desc)
