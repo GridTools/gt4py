@@ -510,7 +510,7 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
         self._promote_map(graph)
 
         # Perform the fusing if requested.
-        if self.do_not_fuse:
+        if not self.do_not_fuse:
             gtx_transformations.MapFusionSerial.apply_to(
                 sdfg=sdfg,
                 map_exit_1=trivial_map_exit,
