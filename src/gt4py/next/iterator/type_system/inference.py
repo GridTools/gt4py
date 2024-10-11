@@ -96,6 +96,16 @@ def _set_node_type(node: itir.Node, type_: ts.TypeSpec) -> None:
     node.type = type_
 
 
+def copy_type(from_: itir.Node, to: itir.Node) -> None:
+    """
+    Copy type from one node to another.
+
+    This function mainly exists for readability reasons.
+    """
+    assert isinstance(from_.type, ts.TypeSpec)
+    _set_node_type(to, from_.type)
+
+
 def on_inferred(callback: Callable, *args: Union[ts.TypeSpec, ObservableTypeSynthesizer]) -> None:
     """
     Execute `callback` as soon as all `args` have a type.

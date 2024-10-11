@@ -446,7 +446,7 @@ def domain(
     )
 
 
-def as_fieldop(expr: itir.Expr, domain: Optional[itir.FunCall] = None) -> call:
+def as_fieldop(expr: itir.Expr, domain: Optional[itir.Expr] = None) -> call:
     """
     Create an `as_fieldop` call.
 
