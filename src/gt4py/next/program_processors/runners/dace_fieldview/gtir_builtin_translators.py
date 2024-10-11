@@ -203,7 +203,7 @@ def translate_domain(node: gtir.Node) -> FieldopDomain:
     return domain
 
 
-def translate_as_field_op(
+def translate_as_fieldop(
     node: gtir.Node,
     sdfg: dace.SDFG,
     state: dace.SDFGState,
@@ -640,7 +640,7 @@ def translate_symbol_ref(
 if TYPE_CHECKING:
     # Use type-checking to assert that all translator functions implement the `PrimitiveTranslator` protocol
     __primitive_translators: list[PrimitiveTranslator] = [
-        translate_as_field_op,
+        translate_as_fieldop,
         translate_if,
         translate_literal,
         translate_make_tuple,

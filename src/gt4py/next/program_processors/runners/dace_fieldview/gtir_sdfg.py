@@ -438,7 +438,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 node, sdfg, head_state, self, reduce_identity
             )
         elif cpm.is_applied_as_fieldop(node):
-            return gtir_builtin_translators.translate_as_field_op(
+            return gtir_builtin_translators.translate_as_fieldop(
                 node, sdfg, head_state, self, reduce_identity
             )
         elif isinstance(node.fun, gtir.Lambda):
