@@ -75,6 +75,7 @@ MATH_BUILTINS_MAPPING = {
 
 def builtin_cast(*args: Any) -> str:
     val, target_type = args
+    assert target_type in gtir.TYPEBUILTINS
     return MATH_BUILTINS_MAPPING[target_type].format(val)
 
 
