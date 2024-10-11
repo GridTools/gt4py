@@ -395,10 +395,10 @@ def test_gtir_tuple_target():
 def test_gtir_update():
     domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     stencil1 = im.as_fieldop(
-        im.lambda_("a")(im.plus(im.deref("a"), 0 - 1.0)),
+        im.lambda_("a")(im.plus(im.deref("a"), im.plus(im.minus(0.0, 2.0), 1.0))),
         domain,
     )("x")
-    stencil2 = im.op_as_fieldop("plus", domain)("x", 0 - 1.0)
+    stencil2 = im.op_as_fieldop("plus", domain)("x", im.plus(im.minus(0.0, 2.0), 1.0))
 
     for i, stencil in enumerate([stencil1, stencil2]):
         testee = gtir.Program(

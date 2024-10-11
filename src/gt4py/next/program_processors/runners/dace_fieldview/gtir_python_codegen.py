@@ -84,6 +84,11 @@ def builtin_if(*args: Any) -> str:
 
 
 def make_const_list(arg: str) -> str:
+    """
+    Takes a single scalar argument and broadcasts this value on the local dimension
+    of map expression. In a dataflow, we represent it as a tasklet that writes
+    a value to a scalar node.
+    """
     return arg
 
 
