@@ -19,6 +19,7 @@ from gt4py import eve
 from gt4py.cartesian import utils
 from gt4py.cartesian.gtc.common import (
     AxisBound,
+    CartesianOffset,
     DataType,
     FieldAccess,
     HorizontalInterval,
@@ -31,12 +32,15 @@ from gt4py.cartesian.gtc.definitions import Extent
 from gt4py.cartesian.gtc.oir import (
     AssignStmt,
     BinaryOp,
+    CacheDesc,
     Cast,
     Decl,
     FieldDecl,
     HorizontalExecution,
     HorizontalRestriction,
+    IJCache,
     Interval,
+    KCache,
     Literal,
     LocalScalar,
     MaskStmt,
@@ -47,11 +51,14 @@ from gt4py.cartesian.gtc.oir import (
     Temporary,
     TernaryOp,
     UnaryOp,
+    UnboundedInterval,
+    VariableKOffset,
     VerticalLoop,
     VerticalLoopSection,
 )
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import StencilExtentComputer
 from gt4py.eve import codegen
+from gt4py.eve.concepts import SymbolRef
 
 
 class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
@@ -201,21 +208,25 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         else:
             return data_type.name.lower()
 
+    def visit_VariableKOffset(self, variable_k_offset: VariableKOffset, **_) -> str:
+        return f"i,j,k+{self.visit(variable_k_offset.k)}"
+
+    def visit_CartesianOffset(self, cartesian_offset: CartesianOffset, **_) -> str:
+        return cartesian_offset.to_str()
+
+    def visit_SymbolRef(self, symbol_ref: SymbolRef) -> str:
+        return symbol_ref
+
     def visit_FieldAccess(self, field_access: FieldAccess, **_) -> str:
+        offset_str = self.visit(field_access.offset)
+
         if field_access.data_index:
             data_index_access = ",".join(
                 [self.visit(data_index) for data_index in field_access.data_index]
             )
-            full_string = (
-                field_access.name
-                + "["
-                + field_access.offset.to_str()
-                + ","
-                + data_index_access
-                + "]"
-            )
+            full_string = field_access.name + "[" + offset_str + "," + data_index_access + "]"
         else:
-            full_string = field_access.name + "[" + field_access.offset.to_str() + "]"
+            full_string = field_access.name + "[" + offset_str + "]"
         return full_string
 
     def visit_AssignStmt(self, assignment_statement: AssignStmt, **_) -> None:
@@ -290,16 +301,31 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     def visit_UnaryOp(self, unary_operator: UnaryOp, **_) -> str:
         return unary_operator.op.value + " " + self.visit(unary_operator.expr)
 
-    def visit_TernaryOp(self, ternary_operator: TernaryOp, **_) -> None:
+    def visit_TernaryOp(self, ternary_operator: TernaryOp, **_) -> str:
         return f"{self.visit(ternary_operator.true_expr)} if {self.visit(ternary_operator.cond)} else {self.visit(ternary_operator.false_expr)}"
-
-    def visit_LocalScalar(self, local_scalar: LocalScalar, **__) -> None:
-        raise NotImplementedError(
-            "This state should not be reached because LocalTemporariesToScalars should not have been called."
-        )
 
     def visit_MaskStmt(self, mask_statement: MaskStmt, **_):
         self.body.append(f"if {self.visit(mask_statement.mask)}:")
         with self.body.indented():
             for statement in mask_statement.body:
                 self.visit(statement)
+
+    def visit_LocalScalar(self, local_scalar: LocalScalar, **__) -> None:
+        raise NotImplementedError(
+            "This state should not be reached because LocalTemporariesToScalars should not have been called."
+        )
+
+    def visit_CacheDesc(self, cache_descriptor: CacheDesc, **_):
+        raise NotImplementedError("Caches should never be visited in the debug backend")
+
+    def visit_IJCache(self, ij_cache: IJCache, **_):
+        raise NotImplementedError("Caches should never be visited in the debug backend")
+
+    def visit_KCache(self, k_cache: KCache, **_):
+        raise NotImplementedError("Caches should never be visited in the debug backend")
+
+    def visit_VerticalLoopSection(self, vertical_loop_section: VerticalLoopSection, **_):
+        raise NotImplementedError("Vertical Loop section is not in the right place.")
+
+    def visit_UnboundedInterval(self, unbounded_interval: UnboundedInterval, **_) -> None:
+        raise NotImplementedError("Unbounded Intervals are not supported in the debug backend.")

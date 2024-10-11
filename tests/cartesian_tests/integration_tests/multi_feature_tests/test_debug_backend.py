@@ -261,3 +261,27 @@ def test_mask_stencil():
     test_stencil(field_in, field_out)
 
     assert np.all(field_out.view(np.ndarray) > 0)
+
+
+def test_k_offset_stencil():
+    field_in = gt_storage.ones(
+        dtype=np.float64, backend="debug", shape=(4, 4, 4), aligned_index=(0, 0, 0)
+    )
+    field_out = gt_storage.zeros(
+        dtype=np.float64, backend="debug", shape=(4, 4, 4), aligned_index=(0, 0, 0)
+    )
+    field_in[:, :, 0] *= 10
+    offset = -1
+
+    @gtscript.stencil(backend="debug")
+    def test_stencil(
+        in_field: gtscript.Field[np.float64],
+        out_field: gtscript.Field[np.float64],
+        scalar_value: int,
+    ):
+        with computation(PARALLEL), interval(1, None):
+            out_field[0, 0, 0] = in_field[0, 0, scalar_value]
+
+    test_stencil(field_in, field_out, offset)
+
+    np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, 1], 10)
