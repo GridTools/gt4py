@@ -21,38 +21,9 @@ from gt4py.next.iterator.type_system import (
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
-def _inline_as_fieldop_arg(arg: itir.Expr, uids: eve_utils.UIDGenerator):
-    assert cpm.is_applied_as_fieldop(arg)
-    arg = _canonicalize_as_fieldop(arg)
-
-    stencil, *_ = arg.fun.args  # type: ignore[attr-defined]  # ensured by `is_applied_as_fieldop`
-    inner_args = arg.args
-    extracted_args: dict[str, itir.Expr] = {}  # mapping from stencil param to arg
-
-    stencil_params = []
-    stencil_body = stencil.expr
-
-    for inner_param, inner_arg in zip(stencil.params, inner_args, strict=True):
-        if isinstance(inner_arg, itir.SymRef):
-            stencil_params.append(inner_param)
-            extracted_args[inner_arg.id] = inner_arg
-        # note: only literals, not all scalar expressions are required as it doesn't make sense
-        # for them to be computed per grid point.
-        elif isinstance(inner_arg, itir.Literal):
-            stencil_body = im.let(inner_param, im.promote_to_const_iterator(inner_arg))(
-                stencil_body
-            )
-        else:  # either a literal or a previous not inlined arg
-            stencil_params.append(inner_param)
-            new_outer_stencil_param = uids.sequential_id(prefix="__iasfop")
-            extracted_args[new_outer_stencil_param] = inner_arg
-
-    return im.lift(im.lambda_(*stencil_params)(stencil_body))(
-        *extracted_args.keys()
-    ), extracted_args
-
-
-def _merge_arguments(args1: dict, arg2: dict):
+def _merge_arguments(
+    args1: dict[str, itir.Expr], arg2: dict[str, itir.Expr]
+) -> dict[str, itir.Expr]:
     new_args = {**args1}
     for stencil_param, stencil_arg in arg2.items():
         if stencil_param not in new_args:
@@ -63,6 +34,12 @@ def _merge_arguments(args1: dict, arg2: dict):
 
 
 def _canonicalize_as_fieldop(expr: itir.FunCall) -> itir.FunCall:
+    """
+    Canonicalize applied `as_fieldop`s.
+
+    In case the stencil argument is a `deref` wrap it into a lambda such that we have a unified
+    format to work with (e.g. each parameter has a name without the need to special case).
+    """
     assert cpm.is_applied_as_fieldop(expr)
 
     stencil = expr.fun.args[0]  # type: ignore[attr-defined]
@@ -79,7 +56,65 @@ def _canonicalize_as_fieldop(expr: itir.FunCall) -> itir.FunCall:
 
 @dataclasses.dataclass
 class FuseAsFieldOp(eve.NodeTranslator):
+    """
+    Merge multiple `as_fieldop` calls into one.
+
+    >>> from gt4py import next as gtx
+    >>> from gt4py.next.iterator.ir_utils import ir_makers as im
+    >>> IDim = gtx.Dimension("IDim")
+    >>> field_type = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
+    >>> d = im.domain("cartesian_domain", {IDim: (0, 1)})
+    >>> nested_as_fieldop = im.op_as_fieldop("plus", d)(
+    ...     im.op_as_fieldop("multiplies", d)(
+    ...         im.ref("inp1", field_type), im.ref("inp2", field_type)
+    ...     ),
+    ...     im.ref("inp3", field_type),
+    ... )
+    >>> print(nested_as_fieldop)
+    as_fieldop(λ(__arg0, __arg1) → ·__arg0 + ·__arg1, c⟨ IDimₕ: [0, 1) ⟩)(
+      as_fieldop(λ(__arg0, __arg1) → ·__arg0 × ·__arg1, c⟨ IDimₕ: [0, 1) ⟩)(inp1, inp2), inp3
+    )
+    >>> print(
+    ...     FuseAsFieldOp.apply(
+    ...         nested_as_fieldop, offset_provider={}, allow_undeclared_symbols=True
+    ...     )
+    ... )
+    as_fieldop(λ(inp1, inp2, inp3) → ·inp1 × ·inp2 + ·inp3, c⟨ IDimₕ: [0, 1) ⟩)(inp1, inp2, inp3)
+    """  # noqa: RUF002  # ignore ambiguous multiplication character
+
     uids: eve_utils.UIDGenerator
+
+    def _inline_as_fieldop_arg(self, arg: itir.Expr) -> tuple[itir.Expr, dict[str, itir.Expr]]:
+        assert cpm.is_applied_as_fieldop(arg)
+        arg = _canonicalize_as_fieldop(arg)
+
+        stencil, *_ = arg.fun.args  # type: ignore[attr-defined]  # ensured by `is_applied_as_fieldop`
+        inner_args: list[itir.Expr] = arg.args
+        extracted_args: dict[str, itir.Expr] = {}  # mapping from outer-stencil param to arg
+
+        stencil_params: list[itir.Sym] = []
+        stencil_body: itir.Expr = stencil.expr
+
+        for inner_param, inner_arg in zip(stencil.params, inner_args, strict=True):
+            if isinstance(inner_arg, itir.SymRef):
+                stencil_params.append(inner_param)
+                extracted_args[inner_arg.id] = inner_arg
+            elif isinstance(inner_arg, itir.Literal):
+                # note: only literals, not all scalar expressions are required as it doesn't make sense
+                # for them to be computed per grid point.
+                stencil_body = im.let(inner_param, im.promote_to_const_iterator(inner_arg))(
+                    stencil_body
+                )
+            else:
+                # a scalar expression, a previously not inlined `as_fieldop` call or an opaque
+                # expression e.g. containing a tuple
+                stencil_params.append(inner_param)
+                new_outer_stencil_param = self.uids.sequential_id(prefix="__iasfop")
+                extracted_args[new_outer_stencil_param] = inner_arg
+
+        return im.lift(im.lambda_(*stencil_params)(stencil_body))(
+            *extracted_args.keys()
+        ), extracted_args
 
     @classmethod
     def apply(
@@ -129,6 +164,7 @@ class FuseAsFieldOp(eve.NodeTranslator):
                     if cpm.is_applied_as_fieldop(arg):
                         pass
                     elif cpm.is_call_to(arg, "if_"):
+                        # TODO(tehrengruber): revisit if we want to inline if_
                         type_ = arg.type
                         arg = im.op_as_fieldop("if_")(*arg.args)
                         arg.type = type_
@@ -137,7 +173,7 @@ class FuseAsFieldOp(eve.NodeTranslator):
                     else:
                         raise NotImplementedError()
 
-                    inline_expr, extracted_args = _inline_as_fieldop_arg(arg, self.uids)
+                    inline_expr, extracted_args = self._inline_as_fieldop_arg(arg)
 
                     new_stencil_body = im.let(stencil_param, inline_expr)(new_stencil_body)
 
@@ -155,11 +191,7 @@ class FuseAsFieldOp(eve.NodeTranslator):
 
             # simplify stencil directly to keep the tree small
             new_stencil_body = inline_lambdas.InlineLambdas.apply(
-                new_stencil_body,
-                opcount_preserving=True,
-                # TODO(tehrengruber): Revisit. Set to False for now to expose cases where we end
-                #  up with lifts remaining in the IR.
-                force_inline_lift_args=False,
+                new_stencil_body, opcount_preserving=True
             )
             new_stencil_body = inline_lifts.InlineLifts().visit(new_stencil_body)
 
@@ -167,5 +199,6 @@ class FuseAsFieldOp(eve.NodeTranslator):
                 *new_args.values()
             )
             type_inference.copy_type(from_=node, to=new_node)
+
             return new_node
         return node
