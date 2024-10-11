@@ -192,3 +192,72 @@ def test_native_function_call_stencil():
     test_stencil(field_in, field_out)
 
     np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, :], 1.75)
+
+
+def test_unary_operator_stencil():
+    field_in = gt_storage.ones(
+        dtype=np.float64, backend="debug", shape=(4, 4, 4), aligned_index=(0, 0, 0)
+    )
+    field_out = gt_storage.zeros(
+        dtype=np.float64, backend="debug", shape=(4, 4, 4), aligned_index=(0, 0, 0)
+    )
+
+    @gtscript.stencil(backend="debug")
+    def test_stencil(
+        in_field: gtscript.Field[np.float64],
+        out_field: gtscript.Field[np.float64],
+    ):
+        with computation(PARALLEL), interval(...):
+            out_field[0, 0, 0] = -in_field[0, 0, 0]
+
+    test_stencil(field_in, field_out)
+
+    np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, :], -1)
+
+
+def test_ternary_operator_stencil():
+    field_in = gt_storage.ones(
+        dtype=np.float64, backend="debug", shape=(4, 4, 4), aligned_index=(0, 0, 0)
+    )
+    field_out = gt_storage.zeros(
+        dtype=np.float64, backend="debug", shape=(4, 4, 4), aligned_index=(0, 0, 0)
+    )
+    field_in[0, 0, 1] = 20
+
+    @gtscript.stencil(backend="debug")
+    def test_stencil(
+        in_field: gtscript.Field[np.float64],
+        out_field: gtscript.Field[np.float64],
+    ):
+        with computation(PARALLEL), interval(...):
+            out_field[0, 0, 0] = in_field[0, 0, 0] if in_field > 10 else in_field[0, 0, 0] + 1
+
+    test_stencil(field_in, field_out)
+
+    np.testing.assert_allclose(field_out.view(np.ndarray)[0, 0, 1], 20)
+    np.testing.assert_allclose(field_out.view(np.ndarray)[1:, 1:, 1], 2)
+
+
+def test_mask_stencil():
+    field_in = gt_storage.ones(
+        dtype=np.float64, backend="debug", shape=(4, 4, 4), aligned_index=(0, 0, 0)
+    )
+    field_out = gt_storage.zeros(
+        dtype=np.float64, backend="debug", shape=(4, 4, 4), aligned_index=(0, 0, 0)
+    )
+    field_in[0, 0, 1] = -20
+
+    @gtscript.stencil(backend="debug")
+    def test_stencil(
+        in_field: gtscript.Field[np.float64],
+        out_field: gtscript.Field[np.float64],
+    ):
+        with computation(PARALLEL), interval(...):
+            if in_field[0, 0, 0] > 0:
+                out_field[0, 0, 0] = in_field
+            else:
+                out_field[0, 0, 0] = 1
+
+    test_stencil(field_in, field_out)
+
+    assert np.all(field_out.view(np.ndarray) > 0)

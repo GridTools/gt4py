@@ -38,11 +38,15 @@ from gt4py.cartesian.gtc.oir import (
     HorizontalRestriction,
     Interval,
     Literal,
+    LocalScalar,
+    MaskStmt,
     NativeFuncCall,
     ScalarAccess,
     ScalarDecl,
     Stencil,
     Temporary,
+    TernaryOp,
+    UnaryOp,
     VerticalLoop,
     VerticalLoopSection,
 )
@@ -282,3 +286,20 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         arglist = [self.visit(arg) for arg in native_function_call.args]
         arguments = ",".join(arglist)
         return f"ufuncs.{native_function_call.func.value}({arguments})"
+
+    def visit_UnaryOp(self, unary_operator: UnaryOp, **_) -> str:
+        return unary_operator.op.value + " " + self.visit(unary_operator.expr)
+
+    def visit_TernaryOp(self, ternary_operator: TernaryOp, **_) -> None:
+        return f"{self.visit(ternary_operator.true_expr)} if {self.visit(ternary_operator.cond)} else {self.visit(ternary_operator.false_expr)}"
+
+    def visit_LocalScalar(self, local_scalar: LocalScalar, **__) -> None:
+        raise NotImplementedError(
+            "This state should not be reached because LocalTemporariesToScalars should not have been called."
+        )
+
+    def visit_MaskStmt(self, mask_statement: MaskStmt, **_):
+        self.body.append(f"if {self.visit(mask_statement.mask)}:")
+        with self.body.indented():
+            for statement in mask_statement.body:
+                self.visit(statement)
