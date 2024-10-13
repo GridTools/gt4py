@@ -1331,6 +1331,7 @@ def test_gtir_reduce_dot_product():
 
     # create mesh with skip values
     connectivity_V2E_skip = copy.deepcopy(connectivity_V2E)
+    connectivity_V2E_skip.has_skip_values = True
     connectivity_V2E_skip.table = np.asarray(
         [
             [x if i != skip_idx else gtx_common._DEFAULT_SKIP_VALUE for i, x in enumerate(row)]
@@ -1377,7 +1378,7 @@ def test_gtir_reduce_dot_product():
                     im.map_("plus")(
                         im.map_("multiplies")(
                             im.neighbors("V2E", "it"),
-                            im.neighbors("V2E", "it"),
+                            im.neighbors("V2E_skip", "it"),
                         ),
                         im.call("make_const_list")(1.0),
                     )

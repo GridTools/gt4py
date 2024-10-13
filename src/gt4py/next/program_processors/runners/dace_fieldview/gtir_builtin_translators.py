@@ -37,6 +37,7 @@ if TYPE_CHECKING:
 class Field:
     data_node: dace.nodes.AccessNode
     data_type: ts.FieldType | ts.ScalarType
+    mask_offset: Optional[str] = None
 
 
 FieldopDomain: TypeAlias = list[
@@ -94,7 +95,7 @@ def _get_fieldop_ndrange(domain: FieldopDomain) -> list[tuple[gtx_common.Dimensi
     is unique by using a prefix computed from enumerate.
     """
     return [
-        (dim, dace_gtir_utils.get_map_variable(dim, i), f"{lb}:{ub}")
+        (dim, dace_gtir_utils.get_map_variable(dim), f"{lb}:{ub}")
         for i, (dim, lb, ub) in enumerate(domain)
     ]
 
@@ -136,7 +137,7 @@ def _parse_fieldop_arg(
             # dereferencing elements in `ListType`
             [gtx_common.Dimension("")] if isinstance(arg.data_type.dtype, itir_ts.ListType) else []
         )
-        return gtir_dataflow.IteratorExpr(arg.data_node, dims, indices)
+        return gtir_dataflow.IteratorExpr(arg.data_node, dims, indices, arg.mask_offset)
     else:
         raise NotImplementedError(f"Node type {type(arg.data_type)} not supported.")
 
@@ -146,7 +147,7 @@ def _create_temporary_field(
     state: dace.SDFGState,
     domain: FieldopDomain,
     node_type: ts.FieldType,
-    output_desc: dace.data.Data,
+    stencil_output: gtir_dataflow.DataflowOutputEdge,
 ) -> Field:
     """Helper method to allocate a temporary field where to write the output of a field operator."""
     domain_dims, _, domain_ubs = zip(*domain)
@@ -161,6 +162,7 @@ def _create_temporary_field(
     # eliminate most of transient arrays.
     field_shape = list(domain_ubs)
 
+    output_desc = stencil_output.result.node.desc(sdfg)
     if isinstance(output_desc, dace.data.Array):
         assert isinstance(node_type.dtype, itir_ts.ListType)
         assert isinstance(node_type.dtype.element_type, ts.ScalarType)
@@ -177,7 +179,7 @@ def _create_temporary_field(
     field_node = state.add_access(temp_name)
     field_type = ts.FieldType(field_dims, node_type.dtype)
 
-    return Field(field_node, field_type)
+    return Field(field_node, field_type, mask_offset=stencil_output.result.mask_offset)
 
 
 def translate_domain(node: gtir.Node) -> FieldopDomain:
@@ -278,7 +280,7 @@ def translate_as_fieldop(
     # represent the field operator as a mapped tasklet graph, which will range over the field domain
     taskgen = gtir_dataflow.LambdaToDataflow(sdfg, state, sdfg_builder, reduce_identity)
     input_edges, output = taskgen.visit(stencil_expr, args=stencil_args)
-    output_desc = output.expr.node.desc(sdfg)
+    output_desc = output.result.node.desc(sdfg)
 
     fieldop_ndrange = _get_fieldop_ndrange(domain)
     domain_index = sbs.Indices([var for _, var, _ in fieldop_ndrange])
@@ -298,7 +300,7 @@ def translate_as_fieldop(
     )
 
     # allocate local temporary storage for the result field
-    result_field = _create_temporary_field(sdfg, state, domain, node.type, output_desc)
+    result_field = _create_temporary_field(sdfg, state, domain, node.type, output)
 
     # here we setup the edges from the map entry node
     for edge in input_edges:
