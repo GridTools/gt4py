@@ -333,10 +333,9 @@ def compute_dcir_access_infos(
                     global_grid_subset=access_info.global_grid_subset,
                 )
             )
-    else:
-        res = ctx.access_infos
+        return res
 
-    return res
+    return ctx.access_infos
 
 
 def make_dace_subset(
