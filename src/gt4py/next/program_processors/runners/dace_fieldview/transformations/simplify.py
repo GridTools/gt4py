@@ -9,7 +9,7 @@
 """The GT4Py specific simplification pass."""
 
 import copy
-from typing import Any, Final, Iterable, Optional
+from typing import Any, Final, Iterable, Optional, Union
 
 import dace
 from dace import (
@@ -115,7 +115,9 @@ def gt_simplify(
 
 def gt_set_iteration_order(
     sdfg: dace.SDFG,
-    leading_dim: gtx_common.Dimension,
+    leading_dim: Optional[
+        Union[str, gtx_common.Dimension, list[Union[str, gtx_common.Dimension]]]
+    ] = None,
     validate: bool = True,
     validate_all: bool = False,
 ) -> Any:
@@ -134,7 +136,7 @@ def gt_set_iteration_order(
     """
     return sdfg.apply_transformations_once_everywhere(
         gtx_transformations.MapIterationOrder(
-            leading_dim=leading_dim,
+            leading_dims=leading_dim,
         ),
         validate=validate,
         validate_all=validate_all,

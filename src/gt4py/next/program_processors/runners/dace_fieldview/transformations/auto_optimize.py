@@ -8,7 +8,7 @@
 
 """Fast access to the auto optimization on DaCe."""
 
-from typing import Any, Optional, Sequence
+from typing import Any, Optional, Sequence, Union
 
 import dace
 from dace.transformation import dataflow as dace_dataflow
@@ -23,7 +23,9 @@ from gt4py.next.program_processors.runners.dace_fieldview import (
 def gt_auto_optimize(
     sdfg: dace.SDFG,
     gpu: bool,
-    leading_dim: Optional[gtx_common.Dimension] = None,
+    leading_dim: Optional[
+        Union[str, gtx_common.Dimension, list[Union[str, gtx_common.Dimension]]]
+    ] = None,
     aggressive_fusion: bool = True,
     max_optimization_rounds_p2: int = 100,
     make_persistent: bool = True,
