@@ -145,7 +145,7 @@ def _create_temporary_field(
     state: dace.SDFGState,
     domain: FieldopDomain,
     node_type: ts.FieldType,
-    output_desc: dace.data.Data,
+    dataflow_output: gtir_dataflow.DataflowOutputEdge,
 ) -> Field:
     """Helper method to allocate a temporary field where to write the output of a field operator."""
     domain_dims, _, domain_ubs = zip(*domain)
@@ -160,6 +160,7 @@ def _create_temporary_field(
     # eliminate most of transient arrays.
     field_shape = list(domain_ubs)
 
+    output_desc = dataflow_output.result.node.desc(sdfg)
     if isinstance(output_desc, dace.data.Array):
         assert isinstance(node_type.dtype, itir_ts.ListType)
         assert isinstance(node_type.dtype.element_type, ts.ScalarType)
@@ -279,7 +280,7 @@ def translate_as_fieldop(
     # represent the field operator as a mapped tasklet graph, which will range over the field domain
     taskgen = gtir_dataflow.LambdaToDataflow(sdfg, state, sdfg_builder, reduce_identity)
     input_edges, output = taskgen.visit(stencil_expr, args=stencil_args)
-    output_desc = output.expr.node.desc(sdfg)
+    output_desc = output.result.node.desc(sdfg)
 
     fieldop_ndrange = _get_fieldop_ndrange(domain)
     domain_index = sbs.Indices([var for _, var, _ in fieldop_ndrange])
@@ -299,7 +300,7 @@ def translate_as_fieldop(
     )
 
     # allocate local temporary storage for the result field
-    result_field = _create_temporary_field(sdfg, state, domain, node.type, output_desc)
+    result_field = _create_temporary_field(sdfg, state, domain, node.type, output)
 
     # here we setup the edges from the map entry node
     for edge in input_edges:
