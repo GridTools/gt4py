@@ -277,15 +277,15 @@ def as_fieldop(
     offset_provider: common.OffsetProvider,
 ) -> TypeSynthesizer:
     # In case we don't have a domain argument to `as_fieldop` we can not infer the exact result
-    # type. In order to still allow some passes to run before the domain inference which don't
-    # need this information we continue with a dummy domain. One example is the CollapseTuple
-    # pass which only needs information about the structure, e.g. how many tuple elements does
-    # this node have, but not the dimensions of a field.
-    # Note that it might appear as if using the TraceShift pass would allow us to deduce the
-    # return type of `as_fieldop` without a domain, but this is not the case, since we don't
-    # have information on the ordering of dimensions. In this example
-    #  `as_fieldop(it1, it2 -> deref(it1) + deref(it2))(i_field, j_field)`
-    # it is unclear if the result has dimenion I, J or J, I.
+    # type. In order to still allow some passes which don't need this information to run before the
+    # domain inference, we continue with a dummy domain. One example is the CollapseTuple pass
+    # which only needs information about the structure, e.g. how many tuple elements does this node
+    # have, but not the dimensions of a field.
+    # Note that it might appear as if using the TraceShift pass would allow us to deduce the return
+    # type of `as_fieldop` without a domain, but this is not the case, since we don't have
+    # information on the ordering of dimensions. In this example
+    #   `as_fieldop(it1, it2 -> deref(it1) + deref(it2))(i_field, j_field)`
+    # it is unclear if the result has dimension I, J or J, I.
     if domain is None:
         domain = it_ts.DomainType(dims="unknown")
 
