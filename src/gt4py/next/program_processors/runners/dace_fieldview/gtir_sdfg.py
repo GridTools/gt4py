@@ -125,7 +125,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     map_uids: eve.utils.UIDGenerator = dataclasses.field(
         init=False, repr=False, default_factory=lambda: eve.utils.UIDGenerator(prefix="map")
     )
-    tesklet_uids: eve.utils.UIDGenerator = dataclasses.field(
+    tasklet_uids: eve.utils.UIDGenerator = dataclasses.field(
         init=False, repr=False, default_factory=lambda: eve.utils.UIDGenerator(prefix="tlet")
     )
 
@@ -139,7 +139,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         return f"{self.map_uids.sequential_id()}_{name}"
 
     def unique_tasklet_name(self, name: str) -> str:
-        return f"{self.tesklet_uids.sequential_id()}_{name}"
+        return f"{self.tasklet_uids.sequential_id()}_{name}"
 
     def _make_array_shape_and_strides(
         self, name: str, dims: Sequence[gtx_common.Dimension]
@@ -368,7 +368,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         # convert domain expression to dictionary to ease access to dimension boundaries
         domain = {
-            dim: (lb, ub) for dim, lb, ub in gtir_builtin_translators.translate_domain(stmt.domain)
+            dim: (lb, ub) for dim, lb, ub in gtir_builtin_translators.extract_domain(stmt.domain)
         }
 
         expr_input_args = {

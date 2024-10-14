@@ -9,8 +9,9 @@
 from __future__ import annotations
 
 import abc
+import collections
 import dataclasses
-from typing import TYPE_CHECKING, Iterable, Optional, Protocol, TypeAlias
+from typing import TYPE_CHECKING, Final, Iterable, Optional, Protocol, TypeAlias
 
 import dace
 import dace.subsets as sbs
@@ -54,6 +55,10 @@ FieldopResult: TypeAlias = Field | tuple[Field | tuple, ...]
 """Result of a field operator, can be either a field or a tuple fields."""
 
 
+INDEX_DTYPE: Final[dace.typeclass] = dace.dtype_to_typeclass(gtx_fbuiltins.IndexType)
+"""Data type used for field indexing."""
+
+
 class PrimitiveTranslator(Protocol):
     @abc.abstractmethod
     def __call__(
@@ -88,15 +93,13 @@ class PrimitiveTranslator(Protocol):
 
 def _get_fieldop_ndrange(domain: FieldopDomain) -> list[tuple[gtx_common.Dimension, str, str]]:
     """
-    Helper method to generate unique index variables for the map ndrange with corresponding range.
-
-    In case of multiple occurrances of the same dimension, it ensures that the variable name
-    is unique by using a prefix computed from enumerate.
+    Helper method to generate index variables for the map ndrange with corresponding range.
     """
-    return [
-        (dim, dace_gtir_utils.get_map_variable(dim, i), f"{lb}:{ub}")
-        for i, (dim, lb, ub) in enumerate(domain)
-    ]
+    dim_counter = collections.Counter(dim for dim, _, _ in domain)
+    if any(count != 1 for count in dim_counter.values()):
+        raise NotImplementedError(f"Multiple occurrences of one dimension in domain {domain}.")
+
+    return [(dim, dace_gtir_utils.get_map_variable(dim), f"{lb}:{ub}") for dim, lb, ub in domain]
 
 
 def _parse_fieldop_arg(
@@ -120,15 +123,11 @@ def _parse_fieldop_arg(
     if not isinstance(arg, Field):
         raise ValueError(f"Received {node} as argument to field operator, expected a field.")
 
-    def make_iterator_index(var: str) -> gtir_dataflow.SymbolExpr:
-        dtype = dace.dtype_to_typeclass(gtx_fbuiltins.IndexType)
-        return gtir_dataflow.SymbolExpr(var, dtype)
-
     if isinstance(arg.data_type, ts.ScalarType):
         return gtir_dataflow.MemletExpr(arg.data_node, sbs.Indices([0]))
     elif isinstance(arg.data_type, ts.FieldType):
         indices: dict[gtx_common.Dimension, gtir_dataflow.ValueExpr] = {
-            dim: make_iterator_index(map_variable)
+            dim: gtir_dataflow.SymbolExpr(map_variable, INDEX_DTYPE)
             for dim, map_variable, _ in _get_fieldop_ndrange(domain)
         }
         dims = arg.data_type.dims + (
@@ -180,7 +179,7 @@ def _create_temporary_field(
     return Field(field_node, field_type)
 
 
-def translate_domain(node: gtir.Node) -> FieldopDomain:
+def extract_domain(node: gtir.Node) -> FieldopDomain:
     """
     Visits the domain of a field operator and returns a list of dimensions and
     the corresponding lower and upper bounds.
@@ -234,11 +233,12 @@ def translate_as_fieldop(
     assert isinstance(domain_expr, gtir.FunCall)
 
     # parse the domain of the field operator
-    domain = translate_domain(domain_expr)
+    domain = extract_domain(domain_expr)
 
-    # The reduce identity value is used to fill the skip values in neighbors list
+    # The reduction identity value is used in place of skip values when building
+    # a list of neighbor values in the unstructured domain.
     #
-    # A reduction expression can be either expressed in local view (itir):
+    # A reduction on neighbor values can be either expressed in local view (itir):
     # vertices @ u⟨ Vertexₕ: [0, nvertices) ⟩
     #      ← as_fieldop(
     #          λ(it) → reduce(plus, 0)(neighbors(V2Eₒ, it)), u⟨ Vertexₕ: [0, nvertices) ⟩
@@ -255,10 +255,11 @@ def translate_as_fieldop(
     # In field view, the list of neighbors is built as argument to the current
     # expression. Therefore, the reduction identity value needs to be passed to
     # the argument visitor (`reduce_identity_for_args = reduce_identity`).
-    # However, when the argument visitor hits the `neighbors` expression (see the
-    # second if-branch), we should stop carrying the reduce identity further
-    # (`reduce_identity_for_args = None`).
-    #
+    # However, when the argument visitor hits an expression returning a neighbors
+    # list (see the second if-branch), we stop carrying the reduce identity further
+    # (`reduce_identity_for_args = None`) because it is not needed aymore;
+    # the reason being that reduce operates along a single axis, which in this case
+    # corresponds to the local dimension of the list of neighbor values.
     if cpm.is_applied_reduce(stencil_expr.expr):
         if reduce_identity is not None:
             raise NotImplementedError("nested reductions not supported.")
@@ -513,7 +514,7 @@ def translate_tuple_get(
 
     if not isinstance(node.args[0], gtir.Literal):
         raise ValueError("Tuple can only be subscripted with compile-time constants.")
-    assert node.args[0].type == dace_utils.as_scalar_type(gtir.INTEGER_INDEX_BUILTIN)
+    assert node.args[0].type == dace_utils.as_itir_type(INDEX_DTYPE)
     index = int(node.args[0].value)
 
     data_nodes = sdfg_builder.visit(
