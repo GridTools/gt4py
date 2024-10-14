@@ -277,7 +277,12 @@ class LambdaToDataflow(eve.NodeVisitor):
         ],
         **kwargs: Any,
     ) -> Tuple[dace.nodes.MapEntry, dace.nodes.MapExit]:
-        """Helper method to add a map with unique name in current state."""
+        """
+        Helper method to add a map in current state.
+
+        The subgraph builder ensures that the map receives a unique name,
+        by adding a unique suffix to the provided name.
+        """
         return self.subgraph_builder.add_map(name, self.state, ndrange, **kwargs)
 
     def _add_tasklet(
@@ -288,7 +293,12 @@ class LambdaToDataflow(eve.NodeVisitor):
         code: str,
         **kwargs: Any,
     ) -> dace.nodes.Tasklet:
-        """Helper method to add a tasklet with unique name in current state."""
+        """
+        Helper method to add a tasklet in current state.
+
+        The subgraph builder ensures that the tasklet receives a unique name,
+        by adding a unique suffix to the provided name.
+        """
         tasklet_node = self.subgraph_builder.add_tasklet(
             name, self.state, inputs, outputs, code, **kwargs
         )
@@ -310,7 +320,12 @@ class LambdaToDataflow(eve.NodeVisitor):
         outputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
         **kwargs: Any,
     ) -> tuple[dace.nodes.Tasklet, dace.nodes.MapEntry, dace.nodes.MapExit]:
-        """Helper method to add a mapped tasklet with unique name in current state."""
+        """
+        Helper method to add a mapped tasklet in current state.
+
+        The subgraph builder ensures that the tasklet receives a unique name,
+        by adding a unique suffix to the provided name.
+        """
         return self.subgraph_builder.add_mapped_tasklet(
             name, self.state, map_ranges, inputs, code, outputs, **kwargs
         )
@@ -325,14 +340,13 @@ class LambdaToDataflow(eve.NodeVisitor):
     ) -> DataExpr:
         temp_name = self.sdfg.temp_data_name()
         if use_array:
-            # Special case for local exprresions with list type annotation, that
-            # are lowered to a tasklet with output scalar value: we still want to
-            # represent the output data as an array (single-element 1D array) in
-            # order to allow composition of array shape in external memlets.
+            # In some cases, such as result data with list-type annotation, we want
+            # that output data is represented as an array (single-element 1D array)
+            # in order to allow for composition of array shape in external memlets.
             self.sdfg.add_array(temp_name, (1,), dtype, transient=True)
         else:
             self.sdfg.add_scalar(temp_name, dtype, transient=True)
-        data_type = dace_utils.as_scalar_type(str(dtype.as_numpy_dtype()))
+        data_type = dace_utils.as_itir_type(dtype)
         temp_node = self.state.add_access(temp_name)
         self._add_edge(
             src_node,
@@ -553,16 +567,35 @@ class LambdaToDataflow(eve.NodeVisitor):
         return DataExpr(neighbors_node, node.type, mask_offset=mask_offset)
 
     def _visit_map(self, node: gtir.FunCall) -> DataExpr:
+        """
+        A map node defines an operation to be mapped on all elements of input arguments.
+
+        The map operation is applied on the local dimension of input fields.
+        In the example below, the local dimension consists of a list of neighbor
+        values as the first argument, and a list of constant values `1.0`:
+        `map_(plus)(neighbors(V2Eₒ, it), make_const_list(1.0))`
+
+        The `plus` operation is lowered to a tasklet inside a map that computes
+        the domain of the local dimension (in this example, the number of neighbors).
+        """
         assert isinstance(node.type, itir_ts.ListType)
+        assert isinstance(node.fun, gtir.FunCall)
+        assert len(node.fun.args) == 1  # the operation to be mapped on the arguments
+
         assert isinstance(node.type.element_type, ts.ScalarType)
         dtype = dace_utils.as_dace_type(node.type.element_type)
 
         input_args = [self.visit(arg) for arg in node.args]
+        connectors = [f"__arg{i}" for i in range(len(input_args))]
+
+        # Convert the operation to be mapped into a function call on a list of
+        # internal parameters with the same names as the tasklet connectors.
+        fun_node = im.call(node.fun.args[0])(*connectors)
+        op_code = gtir_python_codegen.get_source(fun_node)
 
         # TODO(edopao): extract offset_dim from the input arguments
         offset_dim = gtx_common.Dimension("", gtx_common.DimensionKind.LOCAL)
         local_map_index = dace_gtir_utils.get_map_variable(offset_dim)
-        connectors = [f"__arg{i}" for i in range(len(input_args))]
 
         # The dataflow we build in this class has some loose connections on input edges.
         # These edges are described as set of nodes, that will have to be connected to
@@ -682,9 +715,13 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert isinstance(node.type, ts.ScalarType)
         op_name, reduce_init, reduce_identity = get_reduce_params(node)
 
-        # We store the value of reduce identity in the visitor context while visiting
-        # the input to reduction; this value will be used by the `neighbors` visitor
-        # to fill the skip values in the neighbors list.
+        # The input to reduction is a list of elements on a local dimension.
+        # This list is provided by an argument that typically calls the neighbors
+        # builtin function, to built a list of neighbor values for each element
+        # in the field target dimension.
+        # We store the value of reduce identity in the visitor context to have it
+        # available while visiting the input to reduction; this value might be used
+        # by the `neighbors` visitor to fill the skip values in the neighbors list.
         prev_reduce_identity = self.reduce_identity
         self.reduce_identity = reduce_identity
 

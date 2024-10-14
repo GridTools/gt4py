@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import itertools
-from typing import Any, Optional
+from typing import Any
 
 from gt4py import eve
 from gt4py.next import common as gtx_common
@@ -18,13 +18,12 @@ from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.type_system import type_specifications as ts
 
 
-def get_map_variable(dim: gtx_common.Dimension, index: Optional[int] = None) -> str:
+def get_map_variable(dim: gtx_common.Dimension) -> str:
     """
     Format map variable name based on the naming convention for application-specific SDFG transformations.
     """
-    prefix = "i" if index is None else f"i{index}"
     suffix = "dim" if dim.kind == gtx_common.DimensionKind.LOCAL else ""
-    return f"{prefix}_{dim.value}_gtx_{dim.kind}{suffix}"
+    return f"i_{dim.value}_gtx_{dim.kind}{suffix}"
 
 
 def get_tuple_fields(
