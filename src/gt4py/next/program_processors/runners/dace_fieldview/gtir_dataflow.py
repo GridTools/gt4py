@@ -31,7 +31,16 @@ from gt4py.next.type_system import type_specifications as ts
 
 @dataclasses.dataclass(frozen=True)
 class DataExpr:
-    """Local storage for the computation result returned by a tasklet node."""
+    """
+    Local storage for the computation result returned by a tasklet node.
+
+    Arguments:
+        node: Access node to the data storage, can be either a scalar or a local list.
+        dtype: GT4Py type definition, which includes domain information.
+        local_offset: Must be set for `ListType` data generated from neighbors
+            access in unstructured domain, in which case it indicates the name of
+            the offset provider used to generate the list of neighbor values.
+    """
 
     node: dace.nodes.AccessNode
     dtype: itir_ts.ListType | ts.ScalarType
@@ -40,7 +49,16 @@ class DataExpr:
 
 @dataclasses.dataclass(frozen=True)
 class MemletExpr:
-    """Scalar or array data access through a memlet."""
+    """
+    Scalar or array data access through a memlet.
+
+    Arguments:
+        node: Access node to the source storage, can be either a scalar or a local list.
+        subset: Represents the subset to use in memlet to access the above data.
+        local_offset: Must be set for `ListType` data generated from neighbors
+            access in unstructured domain, in which case it indicates the name of
+            the offset provider used to generate the list of neighbor values.
+    """
 
     node: dace.nodes.AccessNode
     subset: sbs.Indices | sbs.Range
@@ -66,10 +84,13 @@ class IteratorExpr:
     Args:
         field: The field this iterator operates on.
         dimensions: Field domain represented as a sorted list of dimensions.
-                    In order to dereference an element in the field, we need index values
-                    for all the dimensions in the right order.
+            In order to dereference an element in the field, we need index values
+            for all the dimensions in the right order.
         indices: Maps each dimension to an index value, which could be either a symbolic value
-                 or the result of a tasklet computation like neighbors connectivity or dynamic offset.
+            or the result of a tasklet computation like neighbors connectivity or dynamic offset.
+        local_offset: Must be set for fields containing `ListType` data generated
+            from neighbors access in unstructured domain, in which case it indicates
+            the name of the offset provider used to generate the list of neighbor values.
 
     """
 
