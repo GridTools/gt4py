@@ -485,9 +485,11 @@ class ITIRTypeInference(eve.NodeTranslator):
     def visit_Temporary(self, node: itir.Temporary, *, ctx) -> ts.FieldType | ts.TupleType:
         domain = self.visit(node.domain, ctx=ctx)
         assert isinstance(domain, it_ts.DomainType)
+        assert domain.dims != "unknown"
         assert node.dtype
         return type_info.apply_to_primitive_constituents(
-            lambda dtype: ts.FieldType(dims=domain.dims, dtype=dtype), node.dtype
+            lambda dtype: ts.FieldType(dims=domain.dims, dtype=dtype),  # type: ignore[arg-type]  # ensured by domain.dims != "unknown" above
+            node.dtype,
         )
 
     def visit_IfStmt(self, node: itir.IfStmt, *, ctx) -> None:
