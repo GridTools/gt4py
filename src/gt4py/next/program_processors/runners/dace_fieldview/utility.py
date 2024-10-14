@@ -97,7 +97,7 @@ def patch_gtir(ir: gtir.Program) -> gtir.Program:
                     )
                     node.args = []
 
-            node.args = [self.visit(arg) for arg in node.args]
+            node.args = self.visit(node.args)
             node.fun = self.visit(node.fun)
             return node
 
