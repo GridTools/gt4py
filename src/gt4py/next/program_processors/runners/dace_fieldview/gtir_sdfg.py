@@ -26,6 +26,7 @@ from gt4py.eve import concepts
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.iterator.transforms import prune_casts as ir_prune_casts
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
 from gt4py.next.program_processors.runners.dace_fieldview import (
@@ -656,7 +657,6 @@ def build_sdfg_from_gtir(
     Returns:
         An SDFG in the DaCe canonical form (simplified)
     """
-    from gt4py.next.iterator.transforms import prune_casts as ir_prune_casts
 
     ir = gtir_type_inference.infer(ir, offset_provider=offset_provider)
     ir = ir_prune_casts.PruneCasts().visit(ir)
