@@ -37,11 +37,14 @@ class Node(eve.Node):
         return pformat(self)
 
     def __hash__(self) -> int:
-        return hash(type(self)) ^ hash(
-            tuple(
-                hash(tuple(v)) if isinstance(v, list) else hash(v)
-                for (k, v) in self.iter_children_items()
-                if k not in ["location", "type"]
+        return hash(
+            (
+                type(self),
+                *(
+                    tuple(v) if isinstance(v, list) else v
+                    for (k, v) in self.iter_children_items()
+                    if k not in ["location", "type"]
+                ),
             )
         )
 
