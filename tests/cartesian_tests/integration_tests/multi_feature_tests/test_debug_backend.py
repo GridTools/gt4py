@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import numpy as np
 
@@ -285,3 +279,26 @@ def test_k_offset_stencil():
     test_stencil(field_in, field_out, offset)
 
     np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, 1], 10)
+
+
+def test_absolute_k_stencil():
+    field_in = gt_storage.ones(
+        dtype=np.float64, backend="debug", shape=(4, 4, 4), aligned_index=(0, 0, 0)
+    )
+    field_out = gt_storage.zeros(
+        dtype=np.float64, backend="debug", shape=(4, 4, 4), aligned_index=(0, 0, 0)
+    )
+    field_in[:, :, 0] *= 10
+    field_in[:, :, 1] *= 5
+
+    @gtscript.stencil(backend="debug")
+    def test_stencil(
+        in_field: gtscript.Field[np.float64],
+        out_field: gtscript.Field[np.float64],
+    ):
+        with computation(PARALLEL), interval(...):
+            out_field[0, 0, 0] = in_field.at(K=0) + in_field.at(K=1)
+
+    test_stencil(field_in, field_out)
+
+    np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, :], 15)
