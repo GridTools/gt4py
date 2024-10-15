@@ -323,6 +323,9 @@ class CartesianOffset(eve.Node):
     def to_dict(self) -> Dict[str, int]:
         return {"i": self.i, "j": self.j, "k": self.k}
 
+    def to_str(self) -> str:
+        return f"i + {self.i}, j + {self.j}, k + {self.k}"
+
 
 class VariableKOffset(eve.GenericNode, Generic[ExprT]):
     k: ExprT
