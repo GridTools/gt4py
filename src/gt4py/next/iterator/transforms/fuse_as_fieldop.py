@@ -179,6 +179,7 @@ class FuseAsFieldOp(eve.NodeTranslator):
 
                     new_args = _merge_arguments(new_args, extracted_args)
                 else:
+                    assert not isinstance(dtype, it_ts.ListType)
                     new_param: str
                     if isinstance(
                         arg, itir.SymRef

@@ -20,7 +20,7 @@ from typing import Any, Optional
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from gt4py.next import allocators as next_allocators, backend as next_backend, common, config
-from gt4py.next.ffront import foast_to_gtir, past_to_itir
+from gt4py.next.ffront import foast_to_gtir, foast_to_past, past_to_itir
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.otf import stages, workflow
 from gt4py.next.type_system import type_specifications as ts
@@ -92,7 +92,7 @@ _FENCIL_CACHE: dict[int, Callable] = {}
 def fencil_generator(
     ir: itir.Node,
     debug: bool,
-    lift_mode: itir_transforms.LiftMode,
+    extract_temporaries: bool,
     use_embedded: bool,
     offset_provider: dict[str, common.Connectivity | common.Dimension],
 ) -> stages.CompiledProgram:
@@ -102,7 +102,7 @@ def fencil_generator(
     Arguments:
         ir: The iterator IR (ITIR) node.
         debug: Keep module source containing fencil implementation.
-        lift_mode: Change the way lifted function calls are evaluated.
+        extract_temporaries: Extract intermediate field values into temporaries.
         use_embedded: Directly use builtins from embedded backend instead of
                       generic dispatcher. Gives faster performance and is easier
                       to debug.
@@ -110,14 +110,14 @@ def fencil_generator(
     """
     # TODO(tehrengruber): just a temporary solution until we have a proper generic
     #  caching mechanism
-    cache_key = hash((ir, lift_mode, debug, use_embedded, tuple(offset_provider.items())))
+    cache_key = hash((ir, extract_temporaries, debug, use_embedded, tuple(offset_provider.items())))
     if cache_key in _FENCIL_CACHE:
         if debug:
             print(f"Using cached fencil for key {cache_key}")
         return typing.cast(stages.CompiledProgram, _FENCIL_CACHE[cache_key])
 
     ir = itir_transforms.apply_common_transforms(
-        ir, lift_mode=lift_mode, offset_provider=offset_provider
+        ir, extract_temporaries=extract_temporaries, offset_provider=offset_provider
     )
 
     program = EmbeddedDSL.apply(ir)
@@ -187,18 +187,19 @@ def fencil_generator(
 @dataclasses.dataclass(frozen=True)
 class Roundtrip(workflow.Workflow[stages.CompilableProgram, stages.CompiledProgram]):
     debug: Optional[bool] = None
-    lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE
+    extract_temporaries: bool = False
     use_embedded: bool = True
     dispatch_backend: Optional[next_backend.Backend] = None
 
     def __call__(self, inp: stages.CompilableProgram) -> stages.CompiledProgram:
         debug = config.DEBUG if self.debug is None else self.debug
 
+        assert isinstance(inp.data, itir.Program)
         fencil = fencil_generator(
             inp.data,
             offset_provider=inp.args.offset_provider,
             debug=debug,
-            lift_mode=self.lift_mode,
+            extract_temporaries=self.extract_temporaries,
             use_embedded=self.use_embedded,
         )
 
@@ -211,7 +212,7 @@ class Roundtrip(workflow.Workflow[stages.CompilableProgram, stages.CompiledProgr
         ) -> None:
             if out is not None:
                 args = (*args, out)
-            if not column_axis:
+            if not column_axis:  # TODO(tehrengruber): This variable is never used. Bug?
                 column_axis = inp.args.column_axis
             fencil(
                 *args,
@@ -225,7 +226,7 @@ class Roundtrip(workflow.Workflow[stages.CompilableProgram, stages.CompiledProgr
 
 
 executor = Roundtrip()
-executor_with_temporaries = Roundtrip(lift_mode=itir_transforms.LiftMode.USE_TEMPORARIES)
+executor_with_temporaries = Roundtrip(extract_temporaries=True)
 
 default = next_backend.Backend(
     name="roundtrip",
@@ -240,12 +241,17 @@ with_temporaries = next_backend.Backend(
     transforms=next_backend.DEFAULT_TRANSFORMS,
 )
 
+foast_to_gtir_step = foast_to_gtir.adapted_foast_to_gtir_factory(cached=True)
+
 gtir = next_backend.Backend(
     name="roundtrip_gtir",
     executor=executor,
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
     transforms=next_backend.Transforms(
         past_to_itir=past_to_itir.past_to_itir_factory(to_gtir=True),
-        foast_to_itir=foast_to_gtir.adapted_foast_to_gtir_factory(cached=True),
+        foast_to_itir=foast_to_gtir_step,
+        field_view_op_to_prog=foast_to_past.operator_to_program_factory(
+            foast_to_itir_step=foast_to_gtir_step
+        ),
     ),
 )

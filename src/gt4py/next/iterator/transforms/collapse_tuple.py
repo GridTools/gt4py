@@ -87,6 +87,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
             return functools.reduce(operator.or_, self.__members__.values())
 
     ignore_tuple_size: bool
+    field_view_only: bool
     flags: Flag = Flag.all()  # noqa: RUF009 [function-call-in-dataclass-default-argument]
 
     PRESERVED_ANNEX_ATTRS = ("type",)
@@ -105,6 +106,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         ignore_tuple_size: bool = False,
         remove_letified_make_tuple_elements: bool = True,
         offset_provider=None,
+        field_view_only=True,
         # manually passing flags is mostly for allowing separate testing of the modes
         flags=None,
         # allow sym references without a symbol declaration, mostly for testing
@@ -135,6 +137,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
         new_node = cls(
             ignore_tuple_size=ignore_tuple_size,
+            field_view_only=field_view_only,
             flags=flags,
         ).visit(node)
 
@@ -151,6 +154,10 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return new_node
 
     def visit_FunCall(self, node: ir.FunCall) -> ir.Node:
+        # don't visit stencil argument of `as_fieldop`
+        if self.field_view_only and cpm.is_call_to(node, "as_fieldop"):
+            return node
+
         node = self.generic_visit(node)
         return self.fp_transform(node)
 

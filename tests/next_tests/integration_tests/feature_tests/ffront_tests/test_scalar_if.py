@@ -56,6 +56,7 @@ def test_simple_if(condition, cartesian_case):
     cases.verify(cartesian_case, simple_if, a, b, condition, out=out, ref=a if condition else b)
 
 
+# TODO: test with fields on different domains
 @pytest.mark.parametrize("condition1, condition2", [[True, False], [True, False]])
 @pytest.mark.uses_if_stmts
 def test_simple_if_conditional(condition1, condition2, cartesian_case):
