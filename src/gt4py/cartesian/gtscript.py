@@ -66,6 +66,10 @@ builtins_and_inline_ignore = {
     "compile_assert",
 }
 
+builtins_and_inline_ignore = {
+    "compile_assert",
+}
+
 builtins = {
     "I",
     "J",

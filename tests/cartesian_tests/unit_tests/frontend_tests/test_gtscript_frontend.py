@@ -27,6 +27,7 @@ from gt4py.cartesian.gtscript import (
     I,
     J,
     K,
+    K_at,
     abs,
     asin,
     compile_assert,

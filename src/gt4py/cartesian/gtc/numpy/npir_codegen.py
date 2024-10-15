@@ -119,7 +119,7 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     def _make_slice_access(
         self,
-        offset: Tuple[Optional[int], Optional[int], Union[str, Optional[int]]],
+        offset: Tuple[Optional[int], Optional[int], Union[str, npir.AbsoluteKIndex, Optional[int]]],
         is_serial: bool,
         interval: Optional[npir.HorizontalMask] = None,
     ) -> List[str]:

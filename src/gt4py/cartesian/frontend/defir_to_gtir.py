@@ -20,6 +20,7 @@ from gt4py.cartesian.frontend.node_util import (
     location_to_source_location,
 )
 from gt4py.cartesian.frontend.nodes import (
+    AbsoluteKIndex,
     ArgumentInfo,
     Assign,
     AxisBound,
