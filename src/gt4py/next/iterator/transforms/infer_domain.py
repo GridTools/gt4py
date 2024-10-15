@@ -160,10 +160,6 @@ def infer_as_fieldop(
             raise ValueError(f"Unsupported expression of type '{type(in_field)}'.")
         input_ids.append(id_)
 
-    # TODO: note for pr: this dict contains as keys not only the symref inputs, but also
-    #  temporary ids. The symrefs are already added to the result dict by the loop below, while
-    #  the temporary ids should not be in the result anyway. as such do not use this dict
-    #  as the starting point for the domain union in the loop below.
     inputs_accessed_domains: ACCESSED_DOMAINS = _extract_accessed_domains(
         stencil, input_ids, target_domain, offset_provider
     )
