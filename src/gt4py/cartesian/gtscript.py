@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """Implementation of GTScript: an embedded DSL in Python for stencil computations.
 
@@ -65,6 +59,11 @@ MATH_BUILTINS = {
     "floor",
     "ceil",
     "trunc",
+    "int",
+}
+
+builtins_and_inline_ignore = {
+    "compile_assert",
 }
 
 builtins = {
@@ -88,11 +87,11 @@ builtins = {
     "__gtscript__",
     "__externals__",
     "__INLINED",
-    "compile_assert",
     *MATH_BUILTINS,
+    *builtins_and_inline_ignore,
 }
 
-IGNORE_WHEN_INLINING = {*MATH_BUILTINS, "compile_assert"}
+IGNORE_WHEN_INLINING = {*MATH_BUILTINS, *builtins_and_inline_ignore}
 
 __all__ = [*list(builtins), "function", "stencil", "lazy_stencil"]
 
@@ -657,6 +656,13 @@ class _FieldDescriptor:
     def __str__(self) -> str:
         return (
             f"Field<[{', '.join(str(ax) for ax in self.axes)}], ({self.dtype}, {self.data_dims})>"
+        )
+
+    def at(self, *, K):
+        """Stub function used to implement absolute
+        K indexing"""
+        raise RuntimeError(
+            "`at(K=...)` stub function only, do not call outside of stencil field indexation."
         )
 
 

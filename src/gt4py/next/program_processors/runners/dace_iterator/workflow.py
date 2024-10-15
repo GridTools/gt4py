@@ -1,43 +1,37 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
 import dataclasses
-from typing import Callable, Optional, cast
+import functools
+from typing import Callable, Optional, Sequence
 
 import dace
 import factory
-from dace.codegen.compiled_sdfg import CompiledSDFG
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, config
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import LiftMode
-from gt4py.next.otf import languages, stages, step_types, workflow
+from gt4py.next.otf import languages, recipes, stages, step_types, workflow
 from gt4py.next.otf.binding import interface
-from gt4py.next.otf.compilation import cache
 from gt4py.next.otf.languages import LanguageSettings
-from gt4py.next.type_system import type_specifications as ts, type_translation as tt
+from gt4py.next.program_processors.runners.dace_common import workflow as dace_workflow
+from gt4py.next.type_system import type_specifications as ts
 
-from . import build_sdfg_from_itir, get_sdfg_args
+from . import build_sdfg_from_itir
 
 
 @dataclasses.dataclass(frozen=True)
 class DaCeTranslator(
     workflow.ChainableWorkflowMixin[
-        stages.ProgramCall, stages.ProgramSource[languages.SDFG, languages.LanguageSettings]
+        stages.CompilableProgram, stages.ProgramSource[languages.SDFG, languages.LanguageSettings]
     ],
     step_types.TranslationStep[languages.SDFG, languages.LanguageSettings],
 ):
@@ -58,11 +52,15 @@ class DaCeTranslator(
     def generate_sdfg(
         self,
         program: itir.FencilDefinition,
-        arg_types: list[ts.TypeSpec],
+        arg_types: Sequence[ts.TypeSpec],
         offset_provider: dict[str, common.Dimension | common.Connectivity],
         column_axis: Optional[common.Dimension],
     ) -> dace.SDFG:
-        on_gpu = True if self.device_type == core_defs.DeviceType.CUDA else False
+        on_gpu = (
+            True
+            if self.device_type in [core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM]
+            else False
+        )
 
         return build_sdfg_from_itir(
             program,
@@ -80,22 +78,21 @@ class DaCeTranslator(
         )
 
     def __call__(
-        self, inp: stages.ProgramCall
+        self, inp: stages.CompilableProgram
     ) -> stages.ProgramSource[languages.SDFG, LanguageSettings]:
         """Generate DaCe SDFG file from the ITIR definition."""
-        program: itir.FencilDefinition = inp.program
-        arg_types = [tt.from_value(arg) for arg in inp.args]
+        program: itir.FencilDefinition | itir.Program = inp.data
+        assert isinstance(program, itir.FencilDefinition)
 
         sdfg = self.generate_sdfg(
             program,
-            arg_types,
-            inp.kwargs["offset_provider"],
-            inp.kwargs.get("column_axis", None),
+            inp.args.args,
+            inp.args.offset_provider,
+            inp.args.column_axis,
         )
 
         param_types = tuple(
-            interface.Parameter(param, tt.from_value(arg))
-            for param, arg in zip(sdfg.arg_names, inp.args)
+            interface.Parameter(param, arg) for param, arg in zip(sdfg.arg_names, inp.args.args)
         )
 
         module: stages.ProgramSource[languages.SDFG, languages.LanguageSettings] = (
@@ -105,6 +102,7 @@ class DaCeTranslator(
                 library_deps=tuple(),
                 language=languages.SDFG,
                 language_settings=self._language_settings(),
+                implicit_domain=inp.data.implicit_domain,
             )
         )
         return module
@@ -115,77 +113,38 @@ class DaCeTranslationStepFactory(factory.Factory):
         model = DaCeTranslator
 
 
-@dataclasses.dataclass(frozen=True)
-class DaCeCompiler(
-    workflow.ChainableWorkflowMixin[
-        stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python],
-        stages.CompiledProgram,
-    ],
-    workflow.ReplaceEnabledWorkflowMixin[
-        stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python],
-        stages.CompiledProgram,
-    ],
-    step_types.CompilationStep[languages.SDFG, languages.LanguageSettings, languages.Python],
-):
-    """Use the dace build system to compile a GT4Py program to a ``gt4py.next.otf.stages.CompiledProgram``."""
-
-    cache_lifetime: config.BuildCacheLifetime
-    device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
-    cmake_build_type: config.CMakeBuildType = config.CMakeBuildType.DEBUG
-
-    def __call__(
-        self,
-        inp: stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python],
-    ) -> stages.CompiledProgram:
-        sdfg = dace.SDFG.from_json(inp.program_source.source_code)
-
-        src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
-        sdfg.build_folder = src_dir / ".dacecache"
-
-        with dace.config.temporary_config():
-            dace.config.Config.set("compiler", "build_type", value=self.cmake_build_type.value)
-            if self.device_type == core_defs.DeviceType.CPU:
-                compiler_args = dace.config.Config.get("compiler", "cpu", "args")
-                # disable finite-math-only in order to support isfinite/isinf/isnan builtins
-                if "-ffast-math" in compiler_args:
-                    compiler_args += " -fno-finite-math-only"
-                if "-ffinite-math-only" in compiler_args:
-                    compiler_args.replace("-ffinite-math-only", "")
-
-                dace.config.Config.set("compiler", "cpu", "args", value=compiler_args)
-            sdfg_program = sdfg.compile(validate=False)
-
-        return sdfg_program
+def _no_bindings(inp: stages.ProgramSource) -> stages.CompilableSource:
+    return stages.CompilableSource(program_source=inp, binding_source=None)
 
 
-class DaCeCompilationStepFactory(factory.Factory):
+class DaCeWorkflowFactory(factory.Factory):
     class Meta:
-        model = DaCeCompiler
+        model = recipes.OTFCompileWorkflow
 
-
-def convert_args(
-    inp: stages.CompiledProgram,
-    device: core_defs.DeviceType = core_defs.DeviceType.CPU,
-    use_field_canonical_representation: bool = False,
-) -> stages.CompiledProgram:
-    sdfg_program = cast(CompiledSDFG, inp)
-    on_gpu = True if device == core_defs.DeviceType.CUDA else False
-    sdfg = sdfg_program.sdfg
-
-    def decorated_program(
-        *args, offset_provider: dict[str, common.Connectivity | common.Dimension]
-    ):
-        sdfg_args = get_sdfg_args(
-            sdfg,
-            *args,
-            check_args=False,
-            offset_provider=offset_provider,
-            on_gpu=on_gpu,
-            use_field_canonical_representation=use_field_canonical_representation,
+    class Params:
+        device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
+        cmake_build_type: config.CMakeBuildType = factory.LazyFunction(
+            lambda: config.CMAKE_BUILD_TYPE
         )
+        use_field_canonical_representation: bool = False
 
-        with dace.config.temporary_config():
-            dace.config.Config.set("compiler", "allow_view_arguments", value=True)
-            return inp(**sdfg_args)
-
-    return decorated_program
+    translation = factory.SubFactory(
+        DaCeTranslationStepFactory,
+        device_type=factory.SelfAttribute("..device_type"),
+        use_field_canonical_representation=factory.SelfAttribute(
+            "..use_field_canonical_representation"
+        ),
+    )
+    bindings = _no_bindings
+    compilation = factory.SubFactory(
+        dace_workflow.DaCeCompilationStepFactory,
+        cache_lifetime=factory.LazyFunction(lambda: config.BUILD_CACHE_LIFETIME),
+        cmake_build_type=factory.SelfAttribute("..cmake_build_type"),
+    )
+    decoration = factory.LazyAttribute(
+        lambda o: functools.partial(
+            dace_workflow.convert_args,
+            device=o.device_type,
+            use_field_canonical_representation=o.use_field_canonical_representation,
+        )
+    )

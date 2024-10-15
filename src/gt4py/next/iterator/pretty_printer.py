@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """A pretty printer for the functional IR.
 
@@ -143,7 +137,12 @@ class PrettyPrinter(NodeTranslator):
         return [str(node.value) + "ₒ"]
 
     def visit_AxisLiteral(self, node: ir.AxisLiteral, *, prec: int) -> list[str]:
-        return [str(node.value)]
+        kind = ""
+        if node.kind == ir.DimensionKind.HORIZONTAL:
+            kind = "ₕ"
+        elif node.kind == ir.DimensionKind.VERTICAL:
+            kind = "ᵥ"
+        return [str(node.value) + kind]
 
     def visit_SymRef(self, node: ir.SymRef, *, prec: int) -> list[str]:
         return [node.id]
@@ -299,6 +298,19 @@ class PrettyPrinter(NodeTranslator):
             self._indent(self._indent(foot)),
         )
         return self._optimum(h, v)
+
+    def visit_IfStmt(self, node: ir.IfStmt, *, prec: int) -> list[str]:
+        cond = self.visit(node.cond, prec=0)
+        true_branch = self._vmerge(*self.visit(node.true_branch, prec=0))
+        false_branch = self._vmerge(*self.visit(node.false_branch, prec=0))
+
+        hhead = self._hmerge(["if ("], cond, [") {"])
+        vhead = self._vmerge(["if ("], cond, [") {"])
+        head = self._optimum(hhead, vhead)
+
+        return self._vmerge(
+            head, self._indent(true_branch), ["} else {"], self._indent(false_branch), ["}"]
+        )
 
     def visit_FencilDefinition(self, node: ir.FencilDefinition, *, prec: int) -> list[str]:
         assert prec == 0

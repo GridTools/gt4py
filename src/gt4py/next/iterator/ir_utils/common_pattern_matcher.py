@@ -1,16 +1,11 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 from collections.abc import Iterable
 from typing import TypeGuard
 
@@ -25,6 +20,31 @@ def is_applied_lift(arg: itir.Node) -> TypeGuard[itir.FunCall]:
         and isinstance(arg.fun.fun, itir.SymRef)
         and arg.fun.fun.id == "lift"
     )
+
+
+def is_applied_reduce(arg: itir.Node) -> TypeGuard[itir.FunCall]:
+    """Match expressions of the form `reduce(λ(...) → ...)(...)`."""
+    return (
+        isinstance(arg, itir.FunCall)
+        and isinstance(arg.fun, itir.FunCall)
+        and isinstance(arg.fun.fun, itir.SymRef)
+        and arg.fun.fun.id == "reduce"
+    )
+
+
+def is_applied_shift(arg: itir.Node) -> TypeGuard[itir.FunCall]:
+    """Match expressions of the form `shift(λ(...) → ...)(...)`."""
+    return (
+        isinstance(arg, itir.FunCall)
+        and isinstance(arg.fun, itir.FunCall)
+        and isinstance(arg.fun.fun, itir.SymRef)
+        and arg.fun.fun.id == "shift"
+    )
+
+
+def is_applied_as_fieldop(arg: itir.Node) -> TypeGuard[itir.FunCall]:
+    """Match expressions of the form `as_fieldop(stencil)(*args)`."""
+    return isinstance(arg, itir.FunCall) and is_call_to(arg.fun, "as_fieldop")
 
 
 def is_let(node: itir.Node) -> TypeGuard[itir.FunCall]:
@@ -50,3 +70,7 @@ def is_call_to(node: itir.Node, fun: str | Iterable[str]) -> TypeGuard[itir.FunC
     return (
         isinstance(node, itir.FunCall) and isinstance(node.fun, itir.SymRef) and node.fun.id == fun
     )
+
+
+def is_ref_to(node, ref: str):
+    return isinstance(node, itir.SymRef) and node.id == ref

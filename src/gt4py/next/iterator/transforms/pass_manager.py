@@ -1,22 +1,17 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import enum
 from typing import Callable, Optional
 
 from gt4py.eve import utils as eve_utils
 from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator.transforms import fencil_to_program, inline_fundefs
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
@@ -25,7 +20,6 @@ from gt4py.next.iterator.transforms.eta_reduction import EtaReduction
 from gt4py.next.iterator.transforms.fuse_maps import FuseMaps
 from gt4py.next.iterator.transforms.global_tmps import CreateGlobalTmps, FencilWithTemporaries
 from gt4py.next.iterator.transforms.inline_center_deref_lift_vars import InlineCenterDerefLiftVars
-from gt4py.next.iterator.transforms.inline_fundefs import InlineFundefs, PruneUnreferencedFundefs
 from gt4py.next.iterator.transforms.inline_into_scan import InlineIntoScan
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
 from gt4py.next.iterator.transforms.inline_lifts import InlineLifts
@@ -84,15 +78,25 @@ def apply_common_transforms(
         Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
     ] = None,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
-) -> itir.FencilDefinition | FencilWithTemporaries:
+) -> itir.Program:
+    if isinstance(ir, (itir.FencilDefinition, FencilWithTemporaries)):
+        ir = fencil_to_program.FencilToProgram().apply(
+            ir
+        )  # FIXME[#1582](havogt): should be removed after refactoring to combined IR
+    else:
+        assert isinstance(ir, itir.Program)
+        # FIXME[#1582](havogt): note: currently the case when using the roundtrip backend
+        pass
+
     icdlv_uids = eve_utils.UIDGenerator()
 
     if lift_mode is None:
         lift_mode = LiftMode.FORCE_INLINE
     assert isinstance(lift_mode, LiftMode)
     ir = MergeLet().visit(ir)
-    ir = InlineFundefs().visit(ir)
-    ir = PruneUnreferencedFundefs().visit(ir)
+    ir = inline_fundefs.InlineFundefs().visit(ir)
+
+    ir = inline_fundefs.prune_unreferenced_fundefs(ir)  # type: ignore[arg-type] # all previous passes return itir.Program
     ir = PropagateDeref.apply(ir)
     ir = NormalizeShifts().visit(ir)
 
@@ -115,8 +119,7 @@ def apply_common_transforms(
         # is constant-folded the surrounding tuple_get calls can be removed.
         inlined = CollapseTuple.apply(
             inlined,
-            # to limit number of times global type inference is executed, only in the last iterations.
-            use_global_type_inference=inlined == ir,
+            offset_provider=offset_provider,
             # TODO(tehrengruber): disabled since it increases compile-time too much right now
             flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
         )
@@ -132,6 +135,8 @@ def apply_common_transforms(
         raise RuntimeError("Inlining 'lift' and 'lambdas' did not converge.")
 
     if lift_mode != LiftMode.FORCE_INLINE:
+        # FIXME[#1582](tehrengruber): implement new temporary pass here
+        raise NotImplementedError()
         assert offset_provider is not None
         ir = CreateGlobalTmps().visit(
             ir,
@@ -162,7 +167,8 @@ def apply_common_transforms(
     if unconditionally_collapse_tuples:
         ir = CollapseTuple.apply(
             ir,
-            ignore_tuple_size=unconditionally_collapse_tuples,
+            ignore_tuple_size=True,
+            offset_provider=offset_provider,
             # TODO(tehrengruber): disabled since it increases compile-time too much right now
             flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
         )
@@ -192,12 +198,12 @@ def apply_common_transforms(
     ir = ScanEtaReduction().visit(ir)
 
     if common_subexpression_elimination:
-        ir = CommonSubexpressionElimination().visit(ir)
+        ir = CommonSubexpressionElimination.apply(ir, offset_provider=offset_provider)  # type: ignore[type-var]  # always an itir.Program
         ir = MergeLet().visit(ir)
 
     ir = InlineLambdas.apply(
         ir, opcount_preserving=True, force_inline_lambda_args=force_inline_lambda_args
     )
 
-    assert isinstance(ir, (itir.FencilDefinition, FencilWithTemporaries))
+    assert isinstance(ir, itir.Program)
     return ir

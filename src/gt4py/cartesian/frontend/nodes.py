@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """
 Implementation of the intermediate representations used in GT4Py.
@@ -138,6 +132,8 @@ storing a reference to the piece of source code which originated the node.
                       [externals: Dict[str, Any], sources: Dict[str, str]])
 
 """
+
+from __future__ import annotations
 
 import enum
 import operator
@@ -340,9 +336,16 @@ class VarRef(Ref):
 
 
 @attribclass
+class AbsoluteKIndex(Expr):
+    """See gtc.common.AbsoluteKIndex"""
+
+    k = attribute(of=Any)
+
+
+@attribclass
 class FieldRef(Ref):
     name = attribute(of=str)
-    offset = attribute(of=DictOf[str, UnionOf[int, Expr]])
+    offset = attribute(of=DictOf[str, UnionOf[int, Expr, AbsoluteKIndex]])
     data_index = attribute(of=ListOf[Expr], factory=list)
     loc = attribute(of=Location, optional=True)
 
@@ -414,6 +417,10 @@ class NativeFunction(enum.Enum):
     FLOOR = enum.auto()
     CEIL = enum.auto()
     TRUNC = enum.auto()
+    
+    INT = enum.auto()
+
+    INT = enum.auto()
 
     @property
     def arity(self):
@@ -449,6 +456,7 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
     NativeFunction.FLOOR: 1,
     NativeFunction.CEIL: 1,
     NativeFunction.TRUNC: 1,
+    NativeFunction.INT: 1,
 }
 
 
@@ -710,7 +718,7 @@ class AxisInterval(Node):
 
         return self.start.level == self.end.level and self.start.offset == self.end.offset - 1
 
-    def disjoint_from(self, other: "AxisInterval") -> bool:
+    def disjoint_from(self, other: AxisInterval) -> bool:
         def get_offset(bound: AxisBound) -> int:
             return (
                 0 + bound.offset if bound.level == LevelMarker.START else sys.maxsize + bound.offset

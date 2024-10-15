@@ -4,9 +4,11 @@ on:
   push:
     branches:
     - main
+    - gtir  # TODO(tehrengruber): remove after GTIR refactoring #1582
   pull_request:
     branches:
     - main
+    - gtir  # TODO(tehrengruber): remove after GTIR refactoring #1582
     paths-ignore:  # Skip if only gt4py.cartesian and irrelevant doc files have been updated
     - "src/gt4py/cartesian/**"
     - "tests/cartesian_tests/**"
@@ -19,7 +21,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.10", "3.11"]
-        tox-env-factor: ["nomesh", "atlas"]
+        tox-factor: ["nomesh", "atlas"]
         os: ["ubuntu-latest"]
       fail-fast: false
 
@@ -57,7 +59,7 @@ jobs:
       run: |
         pyversion=${{ matrix.python-version }}
         pyversion_no_dot=${pyversion//./}
-        tox run -e next-py${pyversion_no_dot}-${{ matrix.tox-env-factor }}-cpu
+        tox run -e next-py${pyversion_no_dot}-${{ matrix.tox-factor }}-cpu
     #     mv coverage.json coverage-py${{ matrix.python-version }}-${{ matrix.os }}-${{ matrix.tox-env-factor }}-cpu.json
     # - name: Upload coverage.json artifact
     #   uses: actions/upload-artifact@v3

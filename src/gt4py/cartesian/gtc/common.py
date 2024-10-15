@@ -1,22 +1,17 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
 import enum
 import functools
 import typing
+import numbers
 from typing import (
     Any,
     ClassVar,
@@ -124,7 +119,7 @@ class DataType(eve.IntEnum):
         return self == self.BOOL
 
     def isinteger(self):
-        return self in (self.INT8, self.INT32, self.INT64)
+        return self in (self.INT8, self.INT16, self.INT32, self.INT64)
 
     def isfloat(self):
         return self in (self.FLOAT32, self.FLOAT64)
@@ -184,7 +179,9 @@ class NativeFunction(eve.StrEnum):
     CEIL = "ceil"
     TRUNC = "trunc"
 
-    IR_OP_TO_NUM_ARGS: ClassVar[Dict["NativeFunction", int]]
+    INT = "int"
+
+    IR_OP_TO_NUM_ARGS: ClassVar[Dict[NativeFunction, int]]
 
     @property
     def arity(self) -> int:
@@ -223,6 +220,7 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
         NativeFunction.FLOOR: 1,
         NativeFunction.CEIL: 1,
         NativeFunction.TRUNC: 1,
+        NativeFunction.INT: 1,
     }.items()
 }
 
@@ -235,8 +233,8 @@ class LevelMarker(eve.StrEnum):
 
 @enum.unique
 class ExprKind(eve.IntEnum):
-    SCALAR: "ExprKind" = typing.cast("ExprKind", enum.auto())
-    FIELD: "ExprKind" = typing.cast("ExprKind", enum.auto())
+    SCALAR: ExprKind = typing.cast("ExprKind", enum.auto())
+    FIELD: ExprKind = typing.cast("ExprKind", enum.auto())
 
 
 class LocNode(eve.Node):
@@ -340,6 +338,31 @@ class VariableKOffset(eve.GenericNode, Generic[ExprT]):
             raise ValueError("Variable vertical index must be an integer expression")
 
 
+class AbsoluteKIndex(eve.GenericNode, Generic[ExprT]):
+    """Access a field with absolute K
+
+    Restrictions:
+    - Centered I/J
+    - No data dimensions
+    - Read-only
+    """
+
+    k: Union[int, ExprT]
+
+    def to_dict(self) -> Dict[str, Optional[int]]:
+        return {"i": 0, "j": 0, "k": None}
+
+    @datamodels.validator("k")
+    def offset_expr_is_int(self, attribute: datamodels.Attribute, value: Any) -> None:
+        if isinstance(value, numbers.Real):
+            if not isinstance(value, int):
+                raise ValueError("Absolute vertical index literal must be an integer")
+        else:
+            value = typing.cast(Expr, value)
+            if value.dtype is not DataType.AUTO and not value.dtype.isinteger():
+                raise ValueError("Absolute vertical index must be an integer expression")
+
+
 class ScalarAccess(LocNode):
     name: eve.Coerced[eve.SymbolRef]
     kind: ExprKind = ExprKind.SCALAR
@@ -347,12 +370,12 @@ class ScalarAccess(LocNode):
 
 class FieldAccess(eve.GenericNode, Generic[ExprT, VariableKOffsetT]):
     name: eve.Coerced[eve.SymbolRef]
-    offset: Union[CartesianOffset, VariableKOffsetT]
+    offset: Union[CartesianOffset, VariableKOffsetT, AbsoluteKIndex]
     data_index: List[ExprT] = eve.field(default_factory=list)
     kind: ExprKind = ExprKind.FIELD
 
     @classmethod
-    def centered(cls, *, name: str, loc: Optional[eve.SourceLocation] = None) -> "FieldAccess":
+    def centered(cls, *, name: str, loc: Optional[eve.SourceLocation] = None) -> FieldAccess:
         return cls(name=name, loc=loc, offset=CartesianOffset.zero())
 
     @datamodels.validator("data_index")
@@ -560,6 +583,8 @@ def native_func_call_dtype_propagation(*, strict: bool = True) -> datamodels.Roo
     def _impl(cls: Type[NativeFuncCall], instance: NativeFuncCall) -> None:
         if instance.func in (NativeFunction.ISFINITE, NativeFunction.ISINF, NativeFunction.ISNAN):
             instance.dtype = DataType.BOOL  # type: ignore[attr-defined]
+        elif instance.func in (NativeFunction.INT):
+            instance.dtype = DataType.INT32  # type: ignore[attr-defined]
         else:
             # assumes all NativeFunction args have a common dtype
             common_dtype = verify_and_get_common_dtype(cls, instance.args, strict=strict)
@@ -730,7 +755,7 @@ class HorizontalInterval(eve.Node):
     end: Optional[AxisBound]
 
     @classmethod
-    def compute_domain(cls, start_offset: int = 0, end_offset: int = 0) -> "HorizontalInterval":
+    def compute_domain(cls, start_offset: int = 0, end_offset: int = 0) -> HorizontalInterval:
         return cls(start=AxisBound.start(start_offset), end=AxisBound.end(end_offset))
 
     @classmethod
@@ -740,7 +765,7 @@ class HorizontalInterval(eve.Node):
     @classmethod
     def at_endpt(
         cls, level: LevelMarker, start_offset: int, end_offset: Optional[int] = None
-    ) -> "HorizontalInterval":
+    ) -> HorizontalInterval:
         if end_offset is None:
             end_offset = start_offset + 1
         return cls(
@@ -896,6 +921,7 @@ OP_TO_UFUNC_NAME: Final[
         NativeFunction.FLOOR: "floor",
         NativeFunction.CEIL: "ceil",
         NativeFunction.TRUNC: "trunc",
+        NativeFunction.INT: "int",
     },
 }
 

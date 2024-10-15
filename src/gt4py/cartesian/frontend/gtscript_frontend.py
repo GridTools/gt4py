@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import ast
 import copy
@@ -343,6 +337,10 @@ class ReturnReplacer(gt_utils.meta.ASTTransformPass):
             )
 
 
+def _filter_absolute_K_index_method(node: ast.Call) -> bool:
+    return isinstance(node.func, ast.Attribute) and node.func.attr == "at"
+
+
 class CallInliner(ast.NodeTransformer):
     """Inlines calls to gtscript.function calls.
 
@@ -404,16 +402,24 @@ class CallInliner(ast.NodeTransformer):
         # Assertions are removed in the AssertionChecker later.
         return node
 
+    def visit_While(self, node: ast.While):
+        node.body = self._process_stmts(node.body)
+        return node
+
     def visit_Assign(self, node: ast.Assign):
-        if (
-            isinstance(node.value, ast.Call)
-            and gt_meta.get_qualified_name_from_node(node.value.func) not in gtscript.MATH_BUILTINS
-        ):
-            assert len(node.targets) == 1
-            self.visit(node.value, target_node=node.targets[0])
-            # This node can be now removed since the trivial assignment has been already done
-            # in the Call visitor
-            return None
+        if isinstance(node.value, ast.Call):
+            if _filter_absolute_K_index_method(node.value):
+                return node
+            elif (
+                gt_meta.get_qualified_name_from_node(node.value.func) not in gtscript.MATH_BUILTINS
+            ):
+                assert len(node.targets) == 1
+                self.visit(node.value, target_node=node.targets[0])
+                # This node can be now removed since the trivial assignment has been already done
+                # in the Call visitor
+                return None
+            else:
+                return self.generic_visit(node)
         else:
             return self.generic_visit(node)
 
@@ -714,6 +720,7 @@ class IRMaker(ast.NodeVisitor):
         fields: dict,
         parameters: dict,
         local_symbols: dict,
+        backend_name: str,
         *,
         domain: nodes.Domain,
         temp_decls: Optional[Dict[str, nodes.FieldDecl]] = None,
@@ -727,6 +734,7 @@ class IRMaker(ast.NodeVisitor):
             isinstance(value, (type, np.dtype)) for value in local_symbols.values()
         )
 
+        self.backend_name = backend_name
         self.fields = fields
         self.parameters = parameters
         self.local_symbols = local_symbols
@@ -767,6 +775,7 @@ class IRMaker(ast.NodeVisitor):
             "floor": nodes.NativeFunction.FLOOR,
             "ceil": nodes.NativeFunction.CEIL,
             "trunc": nodes.NativeFunction.TRUNC,
+            "int": nodes.NativeFunction.INT,
         }
 
     def __call__(self, ast_root: ast.AST):
@@ -1111,7 +1120,7 @@ class IRMaker(ast.NodeVisitor):
 
     def _eval_index(
         self, node: ast.Subscript, field_axes: Optional[Set[Literal["I", "J", "K"]]] = None
-    ) -> Optional[List[int]]:
+    ) -> Optional[Union[List[int], nodes.AbsoluteKIndex]]:
         tuple_or_expr = node.slice.value if isinstance(node.slice, ast.Index) else node.slice
         index_nodes = gtc_utils.listify(
             tuple_or_expr.elts if isinstance(tuple_or_expr, ast.Tuple) else tuple_or_expr
@@ -1160,16 +1169,18 @@ class IRMaker(ast.NodeVisitor):
             assert index is not None
             result.index = index[0]
         else:
-            if isinstance(node.value, ast.Name):
+            if isinstance(index, nodes.AbsoluteKIndex):
+                result.offset = index
+            elif isinstance(node.value, ast.Name):
                 field_axes = self.fields[result.name].axes
                 if index is not None:
                     if len(field_axes) != len(index):
                         ro_field_message = ""
                         if len(field_axes) == 0:
-                            ro_field_message = f"Did you mean .A{index}?"
+                            ro_field_message = f"Did you mean absolute indexing via .A{index}?"
                         raise GTScriptSyntaxError(
-                            f"Incorrect offset specification detected. Found {index}, "
-                            f"but the field has dimensions ({', '.join(field_axes)}). "
+                            f"Incorrect offset specification detected for {result.name}. "
+                            f"Found index={index}, but {result.name} field has dimensions ({', '.join(field_axes)}). "
                             f"{ro_field_message}"
                         )
                     result.offset = {axis: value for axis, value in zip(field_axes, index)}
@@ -1377,7 +1388,30 @@ class IRMaker(ast.NodeVisitor):
 
         return result
 
+    def _absolute_K_index_method(self, node: ast.Call):
+        assert _filter_absolute_K_index_method(node)
+        if len(node.keywords) != 1:
+            raise GTScriptSyntaxError(
+                message="Absolute K index bad syntax. Must be of the form`.at(K=...)`",
+                loc=nodes.Location.from_ast_node(node),
+            )
+        if node.keywords[0].arg != "K":
+            raise GTScriptSyntaxError(
+                message="Absolute K index: bad syntax, only `K` is a valid parameter to `at`. "
+                "Must be of the form`.at(K=...)`",
+                loc=nodes.Location.from_ast_node(node),
+            )
+        field: nodes.FieldRef = self.visit(node.func.value)
+        assert isinstance(field, nodes.FieldRef)
+        field.offset = nodes.AbsoluteKIndex(k=self.visit(node.keywords[0].value))
+        return field
+
     def visit_Call(self, node: ast.Call):
+        # We check for am absolute Field index in K
+        if _filter_absolute_K_index_method(node):
+            return self._absolute_K_index_method(node)
+
+        # We expect the Call is a native function to carry forward
         native_fcn = nodes.NativeFunction.PYTHON_SYMBOL_TO_IR_OP[node.func.id]
 
         args = [self.visit(arg) for arg in node.args]
@@ -1438,11 +1472,26 @@ class IRMaker(ast.NodeVisitor):
         for t in node.targets[0].elts if isinstance(node.targets[0], ast.Tuple) else node.targets:
             name, spatial_offset, data_index = self._parse_assign_target(t)
             if spatial_offset:
-                if any(offset != 0 for offset in spatial_offset):
+                if spatial_offset[0] != 0 or spatial_offset[1] != 0:
                     raise GTScriptSyntaxError(
-                        message="Assignment to non-zero offsets is not supported.",
+                        message="Assignment to non-zero offsets is not supported in IJ.",
                         loc=nodes.Location.from_ast_node(t),
                     )
+                # Case of K-offset
+                if len(spatial_offset) == 3 and spatial_offset[2] != 0:
+                    if self.iteration_order == nodes.IterationOrder.PARALLEL:
+                        raise GTScriptSyntaxError(
+                            message="Assignment to non-zero offsets in K is not available in PARALLEL. Choose FORWARD or BACKWARD.",
+                            loc=nodes.Location.from_ast_node(t),
+                        )
+                    if self.backend_name in ["gt:gpu", "dace:gpu"]:
+                        import cupy as cp
+
+                        if cp.cuda.runtime.runtimeGetVersion() < 12000:
+                            raise GTScriptSyntaxError(
+                                message=f"Assignment to non-zero offsets in K is not available in {self.backend_name} for CUDA<12. Please update CUDA.",
+                                loc=nodes.Location.from_ast_node(t),
+                            )
 
             if not self._is_known(name):
                 if name in self.temp_decls:
@@ -2003,7 +2052,7 @@ class GTScriptParser(ast.NodeVisitor):
 
         return api_signature, fields_decls, parameter_decls
 
-    def run(self):
+    def run(self, backend_name: str):
         assert (
             isinstance(self.ast_root, ast.Module)
             and "body" in self.ast_root._fields
@@ -2061,6 +2110,7 @@ class GTScriptParser(ast.NodeVisitor):
             fields=fields_decls,
             parameters=parameter_decls,
             local_symbols={},  # Not used
+            backend_name=backend_name,
             domain=domain,
             temp_decls=temp_decls,
             dtypes=self.dtypes,
@@ -2116,14 +2166,14 @@ class GTScriptFrontend(Frontend):
         return GTScriptParser.annotate_definition(definition, externals)
 
     @classmethod
-    def generate(cls, definition, externals, dtypes, options):
+    def generate(cls, definition, externals, dtypes, options, backend_name):
         if options.build_info is not None:
             start_time = time.perf_counter()
 
         if not hasattr(definition, "_gtscript_"):
             cls.prepare_stencil_definition(definition, externals)
         translator = GTScriptParser(definition, externals=externals, dtypes=dtypes, options=options)
-        definition_ir = translator.run()
+        definition_ir = translator.run(backend_name)
 
         # GTIR only supports LatLonGrids
         if definition_ir.domain != nodes.Domain.LatLonGrid():

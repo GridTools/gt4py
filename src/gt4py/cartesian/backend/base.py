@@ -1,16 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+from __future__ import annotations
 
 import abc
 import copy
@@ -49,7 +45,7 @@ if TYPE_CHECKING:
 REGISTRY = gt_utils.Registry()
 
 
-def from_name(name: str) -> Optional[Type["Backend"]]:
+def from_name(name: str) -> Optional[Type[Backend]]:
     backend = REGISTRY.get(name, None)
     if not backend:
         raise NotImplementedError(
@@ -58,7 +54,7 @@ def from_name(name: str) -> Optional[Type["Backend"]]:
     return backend
 
 
-def register(backend_cls: Type["Backend"]) -> Type["Backend"]:
+def register(backend_cls: Type[Backend]) -> Type[Backend]:
     assert issubclass(backend_cls, Backend) and backend_cls.name is not None
 
     if isinstance(backend_cls.name, str):
@@ -107,9 +103,9 @@ class Backend(abc.ABC):
     #   "disable-code-generation": bool
     #   "disable-cache-validation": bool
 
-    builder: "StencilBuilder"
+    builder: StencilBuilder
 
-    def __init__(self, builder: "StencilBuilder"):
+    def __init__(self, builder: StencilBuilder):
         self.builder = builder
 
     @classmethod
@@ -126,7 +122,7 @@ class Backend(abc.ABC):
         return filtered_options
 
     @abc.abstractmethod
-    def load(self) -> Optional[Type["StencilObject"]]:
+    def load(self) -> Optional[Type[StencilObject]]:
         """
         Load the stencil class from the generated python module.
 
@@ -141,7 +137,7 @@ class Backend(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def generate(self) -> Type["StencilObject"]:
+    def generate(self) -> Type[StencilObject]:
         """
         Generate the stencil class from GTScript's internal representation.
 
@@ -158,7 +154,7 @@ class Backend(abc.ABC):
 
     @property
     def extra_cache_info(self) -> Dict[str, Any]:
-        """Provide additional data to be stored in cache info file (sublass hook)."""
+        """Provide additional data to be stored in cache info file (subclass hook)."""
         return {}
 
     @property
@@ -246,9 +242,9 @@ class CLIBackendMixin(Backend):
 
 
 class BaseBackend(Backend):
-    MODULE_GENERATOR_CLASS: ClassVar[Type["BaseModuleGenerator"]]
+    MODULE_GENERATOR_CLASS: ClassVar[Type[BaseModuleGenerator]]
 
-    def load(self) -> Optional[Type["StencilObject"]]:
+    def load(self) -> Optional[Type[StencilObject]]:
         build_info = self.builder.options.build_info
         if build_info is not None:
             start_time = time.perf_counter()
@@ -269,11 +265,11 @@ class BaseBackend(Backend):
 
         return stencil_class
 
-    def generate(self) -> Type["StencilObject"]:
+    def generate(self) -> Type[StencilObject]:
         self.check_options(self.builder.options)
         return self.make_module()
 
-    def _load(self) -> Type["StencilObject"]:
+    def _load(self) -> Type[StencilObject]:
         stencil_class_name = self.builder.class_name
         file_name = str(self.builder.module_path)
         stencil_module = gt_utils.make_module_from_file(stencil_class_name, file_name)
@@ -295,7 +291,7 @@ class BaseBackend(Backend):
                 stacklevel=2,
             )
 
-    def make_module(self, **kwargs: Any) -> Type["StencilObject"]:
+    def make_module(self, **kwargs: Any) -> Type[StencilObject]:
         build_info = self.builder.options.build_info
         if build_info is not None:
             start_time = time.perf_counter()
@@ -329,7 +325,7 @@ class MakeModuleSourceCallable(Protocol):
 class PurePythonBackendCLIMixin(CLIBackendMixin):
     """Mixin for CLI support for backends deriving from BaseBackend."""
 
-    builder: "StencilBuilder"
+    builder: StencilBuilder
 
     #: stencil python source generator method:
     #:  In order to use this mixin, the backend class must implement
@@ -380,7 +376,7 @@ class BasePyExtBackend(BaseBackend):
         return keys
 
     @abc.abstractmethod
-    def generate(self) -> Type["StencilObject"]:
+    def generate(self) -> Type[StencilObject]:
         pass
 
     def build_extension_module(
@@ -438,7 +434,7 @@ def disabled(message: str, *, enabled_env_var: str) -> Callable[[Type[Backend]],
     else:
 
         def _decorator(cls: Type[Backend]) -> Type[Backend]:
-            def _no_generate(obj) -> Type["StencilObject"]:
+            def _no_generate(obj) -> Type[StencilObject]:
                 raise NotImplementedError(
                     f"Disabled '{cls.name}' backend: 'f{message}'\n",
                     f"You can still enable the backend by hand using the environment variable '{enabled_env_var}=1'",

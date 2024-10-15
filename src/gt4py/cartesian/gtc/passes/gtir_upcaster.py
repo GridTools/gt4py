@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import functools
 from typing import Any, Callable, Dict, Iterator, List, TypeVar
@@ -19,7 +13,7 @@ import numpy as np
 
 from gt4py import eve
 from gt4py.cartesian.gtc import gtir
-from gt4py.cartesian.gtc.common import DataType, op_to_ufunc, typestr_to_data_type
+from gt4py.cartesian.gtc.common import DataType, NativeFunction, op_to_ufunc, typestr_to_data_type
 from gt4py.cartesian.gtc.gtir import Expr
 from gt4py.eve import datamodels
 
@@ -110,6 +104,9 @@ class _GTIRUpcasting(eve.NodeTranslator):
         )
 
     def visit_NativeFuncCall(self, node: gtir.NativeFuncCall, **kwargs: Any) -> gtir.NativeFuncCall:
+        # Skip upcasting for cast to int
+        if node.func == NativeFunction.INT:
+            return node
         upcasting_rule = functools.partial(
             _numpy_ufunc_upcasting_rule, ufunc=op_to_ufunc(node.func)
         )

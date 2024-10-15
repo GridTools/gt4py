@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import copy
 import functools
@@ -30,6 +24,7 @@ from gt4py.cartesian.frontend.nodes import (
     Assign,
     AxisBound,
     AxisInterval,
+    AbsoluteKIndex,
     BinaryOperator,
     BinOpExpr,
     BlockStmt,
@@ -337,6 +332,7 @@ class DefIRToGTIR(IRNodeVisitor):
         NativeFunction.FLOOR: common.NativeFunction.FLOOR,
         NativeFunction.CEIL: common.NativeFunction.CEIL,
         NativeFunction.TRUNC: common.NativeFunction.TRUNC,
+        NativeFunction.INT: common.NativeFunction.INT,
     }
 
     GT4PY_BUILTIN_TO_GTIR = {
@@ -563,12 +559,15 @@ class DefIRToGTIR(IRNodeVisitor):
         )
 
     def transform_offset(
-        self, offset: Dict[str, Union[int, Expr]], **kwargs: Any
+        self, offset: Dict[str, Union[int, Expr, AbsoluteKIndex]], **kwargs: Any
     ) -> Union[common.CartesianOffset, gtir.VariableKOffset]:
+        if isinstance(offset, AbsoluteKIndex):
+            k_to_gtir = self.visit(offset.k)
+            return gtir.AbsoluteKIndex(k=k_to_gtir)
         k_val = offset.get("K", 0)
         if isinstance(k_val, numbers.Integral):
             return common.CartesianOffset(i=offset.get("I", 0), j=offset.get("J", 0), k=k_val)
         elif isinstance(k_val, Expr):
             return gtir.VariableKOffset(k=self.visit(k_val, **kwargs))
         else:
-            raise TypeError("Unrecognized vertical offset type")
+            raise TypeError("Unrecognized vertical indexing type")
