@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import abc
-import collections
 import dataclasses
 from typing import TYPE_CHECKING, Final, Iterable, Optional, Protocol, TypeAlias
 
@@ -91,17 +90,6 @@ class PrimitiveTranslator(Protocol):
         """
 
 
-def _get_fieldop_ndrange(domain: FieldopDomain) -> list[tuple[gtx_common.Dimension, str, str]]:
-    """
-    Helper method to generate index variables for the map ndrange with corresponding range.
-    """
-    dim_counter = collections.Counter(dim for dim, _, _ in domain)
-    if any(count != 1 for count in dim_counter.values()):
-        raise NotImplementedError(f"Multiple occurrences of one dimension in domain {domain}.")
-
-    return [(dim, dace_gtir_utils.get_map_variable(dim), f"{lb}:{ub}") for dim, lb, ub in domain]
-
-
 def _parse_fieldop_arg(
     node: gtir.Expr,
     sdfg: dace.SDFG,
@@ -127,8 +115,8 @@ def _parse_fieldop_arg(
         return gtir_dataflow.MemletExpr(arg.data_node, sbs.Indices([0]))
     elif isinstance(arg.data_type, ts.FieldType):
         indices: dict[gtx_common.Dimension, gtir_dataflow.ValueExpr] = {
-            dim: gtir_dataflow.SymbolExpr(map_variable, INDEX_DTYPE)
-            for dim, map_variable, _ in _get_fieldop_ndrange(domain)
+            dim: gtir_dataflow.SymbolExpr(dace_gtir_utils.get_map_variable(dim), INDEX_DTYPE)
+            for dim, _, _ in domain
         }
         dims = arg.data_type.dims + (
             # we add an extra anonymous dimension in the iterator definition to enable
@@ -193,12 +181,12 @@ def extract_domain(node: gtir.Node) -> FieldopDomain:
         assert len(named_range.args) == 3
         axis = named_range.args[0]
         assert isinstance(axis, gtir.AxisLiteral)
-        bounds = [
+        lower_bound, upper_bound = (
             dace.symbolic.pystr_to_symbolic(gtir_python_codegen.get_source(arg))
             for arg in named_range.args[1:3]
-        ]
+        )
         dim = gtx_common.Dimension(axis.value, axis.kind)
-        domain.append((dim, bounds[0], bounds[1]))
+        domain.append((dim, lower_bound, upper_bound))
 
     return domain
 
@@ -263,9 +251,8 @@ def translate_as_fieldop(
     # corresponds to the local dimension of the list of neighbor values.
     if cpm.is_applied_reduce(stencil_expr.expr):
         if reduce_identity is not None:
-            raise NotImplementedError("nested reductions not supported.")
-        _, _, reduce_identity = gtir_dataflow.get_reduce_params(stencil_expr.expr)
-        reduce_identity_for_args = reduce_identity
+            raise NotImplementedError("Nested reductions are not supported.")
+        _, _, reduce_identity_for_args = gtir_dataflow.get_reduce_params(stencil_expr.expr)
     elif cpm.is_call_to(stencil_expr.expr, "neighbors"):
         reduce_identity_for_args = None
     else:
@@ -282,8 +269,7 @@ def translate_as_fieldop(
     input_edges, output = taskgen.visit(stencil_expr, args=stencil_args)
     output_desc = output.result.node.desc(sdfg)
 
-    fieldop_ndrange = _get_fieldop_ndrange(domain)
-    domain_index = sbs.Indices([var for _, var, _ in fieldop_ndrange])
+    domain_index = sbs.Indices([dace_gtir_utils.get_map_variable(dim) for dim, _, _ in domain])
     if isinstance(node.type.dtype, itir_ts.ListType):
         assert isinstance(output_desc, dace.data.Array)
         assert set(output_desc.offset) == {0}
@@ -296,7 +282,12 @@ def translate_as_fieldop(
 
     # create map range corresponding to the field operator domain
     me, mx = sdfg_builder.add_map(
-        "fieldop", state, ndrange={dim_var: dim_range for _, dim_var, dim_range in fieldop_ndrange}
+        "fieldop",
+        state,
+        ndrange={
+            dace_gtir_utils.get_map_variable(dim): f"{lower_bound}:{upper_bound}"
+            for dim, lower_bound, upper_bound in domain
+        },
     )
 
     # allocate local temporary storage for the result field
