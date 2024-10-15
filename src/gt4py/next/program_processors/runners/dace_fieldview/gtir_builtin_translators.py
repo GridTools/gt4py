@@ -419,7 +419,16 @@ def _get_data_nodes(
 ) -> FieldopResult:
     if isinstance(sym_type, ts.FieldType):
         sym_node = state.add_access(sym_name)
-        return Field(sym_node, sym_type)
+        local_dims = set(dim for dim in sym_type.dims if dim.kind == gtx_common.DimensionKind.LOCAL)
+        if len(local_dims) > 1:
+            raise ValueError(f"Field {sym_name} has more than one local dimension.")
+        elif len(local_dims) == 1:
+            local_offset = next(iter(local_dims)).value
+            offset_provider = sdfg_builder.get_offset_provider(local_offset)
+            assert isinstance(offset_provider, gtx_common.Connectivity)
+        else:
+            local_offset = None
+        return Field(sym_node, sym_type, local_offset)
     elif isinstance(sym_type, ts.ScalarType):
         if sym_name in sdfg.arrays:
             # access the existing scalar container
