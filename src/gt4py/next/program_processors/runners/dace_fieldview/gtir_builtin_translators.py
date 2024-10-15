@@ -218,11 +218,49 @@ def translate_as_fieldop(
     fun_node = node.fun
     assert len(fun_node.args) == 2
     stencil_expr, domain_expr = fun_node.args
-    assert isinstance(stencil_expr, gtir.Lambda)
-    assert isinstance(domain_expr, gtir.FunCall)
 
     # parse the domain of the field operator
     domain = extract_domain(domain_expr)
+    domain_index = sbs.Indices([dace_gtir_utils.get_map_variable(dim) for dim, _, _ in domain])
+
+    if cpm.is_ref_to(stencil_expr, "deref"):
+        # special usage of deref in fieldop expression to broadcast a scalar value
+        # TODO(edopao): remove once PR #1677 is merged
+
+        assert len(node.args) == 1
+        assert isinstance(node.args[0].type, ts.ScalarType)
+        scalar_expr = _parse_fieldop_arg(
+            node.args[0], sdfg, state, sdfg_builder, domain, reduce_identity=None
+        )
+        assert isinstance(scalar_expr, gtir_dataflow.MemletExpr)
+        assert scalar_expr.subset == sbs.Indices.from_string("0")
+        result = gtir_dataflow.DataflowOutputEdge(
+            state, gtir_dataflow.DataExpr(scalar_expr.node, node.args[0].type)
+        )
+        result_field = _create_temporary_field(
+            sdfg, state, domain, node.type, dataflow_output=result
+        )
+
+        sdfg_builder.add_mapped_tasklet(
+            "broadcast",
+            state,
+            map_ranges={
+                dace_gtir_utils.get_map_variable(dim): f"{lower_bound}:{upper_bound}"
+                for dim, lower_bound, upper_bound in domain
+            },
+            code="__val = __inp",
+            inputs={"__inp": dace.Memlet(data=scalar_expr.node.data, subset=scalar_expr.subset)},
+            input_nodes={scalar_expr.node.data: scalar_expr.node},
+            outputs={"__val": dace.Memlet(data=result_field.data_node.data, subset=domain_index)},
+            output_nodes={result_field.data_node.data: result_field.data_node},
+            external_edges=True,
+        )
+
+        return result_field
+
+    # Handle default case: the argument expression is a lambda function representing
+    # the stencil operation to be computed on the field domain.
+    assert isinstance(stencil_expr, gtir.Lambda)
 
     # The reduction identity value is used in place of skip values when building
     # a list of neighbor values in the unstructured domain.
@@ -269,7 +307,6 @@ def translate_as_fieldop(
     input_edges, output = taskgen.visit(stencil_expr, args=stencil_args)
     output_desc = output.result.node.desc(sdfg)
 
-    domain_index = sbs.Indices([dace_gtir_utils.get_map_variable(dim) for dim, _, _ in domain])
     if isinstance(node.type.dtype, itir_ts.ListType):
         assert isinstance(output_desc, dace.data.Array)
         assert set(output_desc.offset) == {0}

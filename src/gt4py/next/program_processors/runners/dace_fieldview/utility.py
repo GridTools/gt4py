@@ -87,17 +87,6 @@ def patch_gtir(ir: gtir.Program) -> gtir.Program:
                 if len(node.fun.args) == 1:
                     return gtir.Literal(value="0", type=node.type.dtype)
 
-                assert len(node.fun.args) == 2
-                stencil = node.fun.args[0]
-
-                # Canonicalize as_fieldop: always expect a lambda expression.
-                # Here we replace the call to deref with a lambda expression and empty arguments list.
-                if cpm.is_ref_to(stencil, "deref"):
-                    node.fun.args[0] = gtir.Lambda(
-                        expr=gtir.FunCall(fun=stencil, args=node.args), params=[]
-                    )
-                    node.args = []
-
             node.args = self.visit(node.args)
             node.fun = self.visit(node.fun)
             return node
