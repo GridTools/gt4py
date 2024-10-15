@@ -512,7 +512,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         # inside the field map and the memlets will traverse the external map and write
         # to the view nodes. The simplify pass will remove the redundant access nodes.
         field_slice_view, field_slice_desc = self.sdfg.add_view(
-            "neighbors_view",
+            f"{offset_provider.neighbor_axis.value}_view",
             (field_desc.shape[neighbor_dim_index],),
             field_desc.dtype,
             strides=(field_desc.strides[neighbor_dim_index],),
@@ -595,6 +595,8 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         The `plus` operation is lowered to a tasklet inside a map that computes
         the domain of the local dimension (in this example, the number of neighbors).
+
+        The result is a 1D local field, with same size as the input local dimension.
         """
         assert isinstance(node.type, itir_ts.ListType)
         assert isinstance(node.fun, gtir.FunCall)
@@ -606,8 +608,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         input_args = [self.visit(arg) for arg in node.args]
         connectors = [f"__arg{i}" for i in range(len(input_args))]
 
-        # Convert the operation to be mapped into a function call on a list of
-        # internal parameters with the same names as the tasklet connectors.
+        # Here we build the body of the tasklet
         fun_node = im.call(node.fun.args[0])(*connectors)
         op_code = gtir_python_codegen.get_source(fun_node)
 
@@ -622,30 +623,35 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert isinstance(offset_provider, gtx_common.Connectivity)
         local_size = offset_provider.max_neighbors
         offset_dim = gtx_common.Dimension(local_offset, gtx_common.DimensionKind.LOCAL)
-        local_map_index = dace_gtir_utils.get_map_variable(offset_dim)
+        map_index = dace_gtir_utils.get_map_variable(offset_dim)
 
         # The dataflow we build in this class has some loose connections on input edges.
         # These edges are described as set of nodes, that will have to be connected to
         # external data source nodes passing through the map entry node of the field map.
-        # For `map_` and `neighbors` expressions, these edges will terminate on the view
+        # Similarly to `neighbors` expressions, the `map_` input edges terminate on view
         # nodes (see the for-loop below), because it is simpler than representing
         # map-to-map edges (which require memlets with 2 pass-nodes).
         input_memlets = {}
         input_nodes = {}
         skip_value_connectivities = []
-        for conn, input_expr in zip(connectors, input_args, strict=True):
+        for conn, input_expr in zip(connectors, input_args):
             if isinstance(input_expr, MemletExpr):
-                if set(input_expr.subset.size()[:-1]) != {1}:
-                    raise ValueError(f"Invalid node {node}")
-                rstart, rstop, rstep = input_expr.subset[-1]
-                assert rstart == 0 and rstep == 1
-
-                desc = self.sdfg.arrays[input_expr.node.data]
+                desc = input_expr.node.desc(self.sdfg)
+                local_dim_indices = [
+                    i for i, size in enumerate(input_expr.subset.size()) if size != 1
+                ]
+                if len(local_dim_indices) == 0:
+                    # we are accessing a single-element array with shape (1,)
+                    view_shape = (1,)
+                    view_strides = (1,)
+                else:
+                    view_shape = tuple(desc.shape[i] for i in local_dim_indices)
+                    view_strides = tuple(desc.strides[i] for i in local_dim_indices)
                 view, _ = self.sdfg.add_view(
                     f"{input_expr.node.data}_view",
-                    (rstop + 1,),
+                    view_shape,
                     desc.dtype,
-                    strides=desc.strides[-1:],
+                    strides=view_strides,
                     find_new_name=True,
                 )
                 input_node = self.state.add_access(view)
@@ -656,17 +662,20 @@ class LambdaToDataflow(eve.NodeVisitor):
                 assert isinstance(input_expr, DataExpr)
                 input_node = input_expr.node
 
-            assert len(input_node.desc(self.sdfg).shape) == 1
-            input_size = input_node.desc(self.sdfg).shape[0]
+            input_desc = input_node.desc(self.sdfg)
+            # we assume that there is a single local dimension
+            if len(input_desc.shape) != 1:
+                raise ValueError(f"More than one local dimension in map expression {node}.")
+            input_size = input_desc.shape[0]
             if input_size == 1:
                 input_memlets[conn] = dace.Memlet(data=input_node.data, subset="0")
+            elif input_size != local_size:
+                raise ValueError(
+                    f"Argument to map node with local size {input_size}, expected {local_size}."
+                )
             else:
-                if input_size != local_size:
-                    raise ValueError(
-                        f"Argument to map node with local size {input_size}, expected {local_size}."
-                    )
-                input_memlets[conn] = dace.Memlet(data=input_node.data, subset=local_map_index)
-                # filter input expressions with skip values
+                input_memlets[conn] = dace.Memlet(data=input_node.data, subset=map_index)
+                # filter input expressions with skip values and store their connectivity
                 input_local_offset_provider = self.subgraph_builder.get_offset_provider(
                     input_expr.local_offset
                 )
@@ -682,6 +691,8 @@ class LambdaToDataflow(eve.NodeVisitor):
         out_node = self.state.add_access(out)
 
         if len(skip_value_connectivities) != 0:
+            # In case one or more of input expressions contain skip values, we use
+            # the connectivity with skip values as mask for map computation.
             local_offset, offset_provider = skip_value_connectivities[0]
 
             connectivity = dace_utils.connectivity_identifier(local_offset)
@@ -707,19 +718,19 @@ class LambdaToDataflow(eve.NodeVisitor):
             assert self.reduce_identity is not None
             assert self.reduce_identity.dtype == dtype
             input_memlets["__neighbor_idx"] = dace.Memlet(
-                data=connectivity_slice_view, subset=local_map_index
+                data=connectivity_slice_view, subset=map_index
             )
             input_nodes[connectivity_slice_view] = connectivity_slice_node
             op_code += f" if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {dtype}({self.reduce_identity.value})"
 
         self._add_mapped_tasklet(
             name="map",
-            map_ranges={local_map_index: f"0:{local_size}"},
+            map_ranges={map_index: f"0:{local_size}"},
             code=f"__out = {op_code}",
             inputs=input_memlets,
             input_nodes=input_nodes,
             outputs={
-                "__out": dace.Memlet(data=out, subset=local_map_index),
+                "__out": dace.Memlet(data=out, subset=map_index),
             },
             output_nodes={out: out_node},
             external_edges=True,
@@ -1057,11 +1068,11 @@ class LambdaToDataflow(eve.NodeVisitor):
             # is 'make_const_list'. There are other builtin functions (map_, neighbors)
             # that return a list but they are handled in specialized visit methods.
             # This method (the generic visitor for builtin functions) always returns
-            # scalars. This is also the case of 'make_const_list' expression: it simply
-            # broadcasts a scalar value on the local domain of another expression,
+            # a single value. This is also the case of 'make_const_list' expression:
+            # it simply broadcasts a scalar on the local domain of another expression,
             # for example 'map_(plus)(neighbors(V2Eₒ, it), make_const_list(1.0))'.
-            # Therefore we handle `ListType` as a scalar value, that will be accessed
-            # in a map scope that computes the parallel expression on a local domain.
+            # Therefore we handle `ListType` as a single-element array with shape (1,)
+            # that will be accessed in a map expression on a local domain.
             assert isinstance(node.type.element_type, ts.ScalarType)
             dtype = dace_utils.as_dace_type(node.type.element_type)
             # In order to ease the lowring of the parent expression on local dimension,
