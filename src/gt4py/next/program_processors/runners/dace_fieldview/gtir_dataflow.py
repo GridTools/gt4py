@@ -259,12 +259,11 @@ class LambdaToDataflow(eve.NodeVisitor):
         sdfg: dace.SDFG,
         state: dace.SDFGState,
         subgraph_builder: gtir_sdfg.DataflowBuilder,
-        reduce_identity: Optional[SymbolExpr],
     ):
         self.sdfg = sdfg
         self.state = state
         self.subgraph_builder = subgraph_builder
-        self.reduce_identity = reduce_identity
+        self.reduce_identity = None
         self.input_edges = []
         self.symbol_map = {}
 
@@ -566,9 +565,12 @@ class LambdaToDataflow(eve.NodeVisitor):
         }
 
         if offset_provider.has_skip_values:
-            assert self.reduce_identity is not None
-            assert self.reduce_identity.dtype == field_desc.dtype
-            tasklet_expression += f" if {index_connector} != {gtx_common._DEFAULT_SKIP_VALUE} else {field_desc.dtype}({self.reduce_identity.value})"
+            if self.reduce_identity is None:
+                skip_value = "0"  # just a dummy value
+            else:
+                assert self.reduce_identity.dtype == field_desc.dtype
+                skip_value = self.reduce_identity.value
+            tasklet_expression += f" if {index_connector} != {gtx_common._DEFAULT_SKIP_VALUE} else {field_desc.dtype}({skip_value})"
 
         self._add_mapped_tasklet(
             name=f"{offset}_neighbors",
@@ -640,33 +642,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         input_nodes = {}
         skip_value_connectivities = []
         for conn, input_expr in zip(input_connectors, input_args):
-            if isinstance(input_expr, MemletExpr):
-                desc = input_expr.node.desc(self.sdfg)
-                local_dim_indices = [
-                    i for i, size in enumerate(input_expr.subset.size()) if size != 1
-                ]
-                if len(local_dim_indices) == 0:
-                    # we are accessing a single-element array with shape (1,)
-                    view_shape = (1,)
-                    view_strides = (1,)
-                else:
-                    view_shape = tuple(desc.shape[i] for i in local_dim_indices)
-                    view_strides = tuple(desc.strides[i] for i in local_dim_indices)
-                view, _ = self.sdfg.add_view(
-                    f"{input_expr.node.data}_view",
-                    view_shape,
-                    desc.dtype,
-                    strides=view_strides,
-                    find_new_name=True,
-                )
-                input_node = self.state.add_access(view)
-                self._add_input_data_edge(input_expr.node, input_expr.subset, input_node)
-
-            else:
-                # this is the case of scalar value broadcasted on a list by make_const_list
-                assert isinstance(input_expr, DataExpr)
-                input_node = input_expr.node
-
+            input_node = self.construct_local_view_node(input_expr)
             input_desc = input_node.desc(self.sdfg)
             # we assume that there is a single local dimension
             if len(input_desc.shape) != 1:
@@ -705,28 +681,26 @@ class LambdaToDataflow(eve.NodeVisitor):
             connectivity_desc.transient = False
 
             origin_map_index = dace_gtir_utils.get_map_variable(offset_provider.origin_axis)
-
-            connectivity_slice_view, _ = self.sdfg.add_view(
-                f"{connectivity}_view",
-                (offset_provider.max_neighbors,),
-                connectivity_desc.dtype,
-                strides=(connectivity_desc.strides[1],),
-                find_new_name=True,
-            )
-            connectivity_slice_node = self.state.add_access(connectivity_slice_view)
-            self._add_input_data_edge(
-                self.state.add_access(connectivity),
-                sbs.Range.from_string(f"{origin_map_index}, 0:{offset_provider.max_neighbors}"),
-                connectivity_slice_node,
+            connectivity_node = self.construct_local_view_node(
+                MemletExpr(
+                    self.state.add_access(connectivity),
+                    sbs.Range.from_string(f"{origin_map_index}, 0:{offset_provider.max_neighbors}"),
+                )
             )
 
-            assert self.reduce_identity is not None
-            assert self.reduce_identity.dtype == dtype
             input_memlets["__neighbor_idx"] = dace.Memlet(
-                data=connectivity_slice_view, subset=map_index
+                data=connectivity_node.data, subset=map_index
             )
-            input_nodes[connectivity_slice_view] = connectivity_slice_node
-            tasklet_expression += f" if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {dtype}({self.reduce_identity.value})"
+            input_nodes[connectivity_node.data] = connectivity_node
+
+            if self.reduce_identity is None:
+                skip_value = input_connectors[0]  # any dummy value, we take one of input values
+            else:
+                assert self.reduce_identity.dtype == dtype
+                skip_value = self.reduce_identity.value
+            tasklet_expression += (
+                f" if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {dtype}({skip_value})"
+            )
 
         self._add_mapped_tasklet(
             name="map",
@@ -742,6 +716,33 @@ class LambdaToDataflow(eve.NodeVisitor):
         )
 
         return DataExpr(out_node, dtype, local_offset=local_offset)
+
+    def construct_local_view_node(self, input_expr: MemletExpr | DataExpr) -> dace.nodes.AccessNode:
+        if isinstance(input_expr, MemletExpr):
+            desc = input_expr.node.desc(self.sdfg)
+            local_dim_indices = [i for i, size in enumerate(input_expr.subset.size()) if size != 1]
+            if len(local_dim_indices) == 0:
+                # we are accessing a single-element array with shape (1,)
+                view_shape = (1,)
+                view_strides = (1,)
+            else:
+                view_shape = tuple(desc.shape[i] for i in local_dim_indices)
+                view_strides = tuple(desc.strides[i] for i in local_dim_indices)
+            view, _ = self.sdfg.add_view(
+                f"{input_expr.node.data}_view",
+                view_shape,
+                desc.dtype,
+                strides=view_strides,
+                find_new_name=True,
+            )
+            input_node = self.state.add_access(view)
+            self._add_input_data_edge(input_expr.node, input_expr.subset, input_node)
+
+            return input_node
+
+        else:
+            # this is the case of scalar value broadcasted on a list by make_const_list
+            return input_expr.node
 
     def _visit_reduce(self, node: gtir.FunCall) -> DataExpr:
         assert isinstance(node.type, ts.ScalarType)
@@ -763,35 +764,66 @@ class LambdaToDataflow(eve.NodeVisitor):
             # ensure that we leave the visitor in the same state as we entered
             self.reduce_identity = prev_reduce_identity
 
-        assert isinstance(input_expr, MemletExpr | DataExpr)
-        input_desc = input_expr.node.desc(self.sdfg)
-        assert isinstance(input_desc, dace.data.Array)
+        input_node = self.construct_local_view_node(input_expr)
+        input_desc = input_node.desc(self.sdfg)
+        # we assume that there is a single local dimension
+        if len(input_desc.shape) != 1:
+            raise ValueError(f"More than one local dimension in reduce expression {node}.")
 
-        if len(input_desc.shape) > 1:
-            assert isinstance(input_expr, MemletExpr)
-            ndims = len(input_desc.shape) - 1
-            # the axis to be reduced is always the last one, because `reduce` is supposed
-            # to operate on `ListType`
-            assert set(input_expr.subset.size()[0:ndims]) == {1}
-            reduce_axes = [ndims]
-        else:
-            reduce_axes = None
+        if isinstance(input_expr, MemletExpr) and input_expr.local_offset:
+            offset_dim = gtx_common.Dimension(
+                input_expr.local_offset, gtx_common.DimensionKind.LOCAL
+            )
+            offset_provider = self.subgraph_builder.get_offset_provider(input_expr.local_offset)
+            assert isinstance(offset_provider, gtx_common.Connectivity)
+
+            # we setup a mapped tasklet to fill the skip values with the reduce identity value
+            map_index = dace_gtir_utils.get_map_variable(offset_dim)
+            origin_map_index = dace_gtir_utils.get_map_variable(offset_provider.origin_axis)
+
+            connectivity = dace_utils.connectivity_identifier(input_expr.local_offset)
+            connectivity_desc = self.sdfg.arrays[connectivity]
+            connectivity_desc.transient = False
+            connectivity_node = self.construct_local_view_node(
+                MemletExpr(
+                    self.state.add_access(connectivity),
+                    sbs.Range.from_string(f"{origin_map_index}, 0:{offset_provider.max_neighbors}"),
+                )
+            )
+
+            filled_input, _ = self.sdfg.add_temp_transient(input_desc.shape, input_desc.dtype)
+            filled_input_node = self.state.add_access(filled_input)
+
+            self._add_mapped_tasklet(
+                name="fill_skip_values",
+                map_ranges={map_index: f"0:{input_desc.shape[0]}"},
+                code=f"__out = __inp if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {reduce_identity.dtype}({reduce_identity.value})",
+                inputs={
+                    "__inp": dace.Memlet(data=input_node.data, subset=map_index),
+                    "__neighbor_idx": dace.Memlet(data=connectivity_node.data, subset=map_index),
+                },
+                input_nodes={
+                    input_node.data: input_node,
+                    connectivity_node.data: connectivity_node,
+                },
+                outputs={
+                    "__out": dace.Memlet(data=filled_input, subset=map_index),
+                },
+                output_nodes={filled_input: filled_input_node},
+                external_edges=True,
+            )
+
+            # use the newly create data as input to reduction
+            input_node = filled_input_node
 
         reduce_wcr = "lambda x, y: " + gtir_python_codegen.format_builtin(op_name, "x", "y")
-        reduce_node = self.state.add_reduce(reduce_wcr, reduce_axes, reduce_init.value)
+        reduce_node = self.state.add_reduce(reduce_wcr, axes=None, identity=reduce_init.value)
 
-        if isinstance(input_expr, MemletExpr):
-            self._add_input_data_edge(
-                input_expr.node,
-                input_expr.subset,
-                reduce_node,
-            )
-        else:
-            self.state.add_nedge(
-                input_expr.node,
-                reduce_node,
-                dace.Memlet.from_array(input_expr.node.data, input_desc),
-            )
+        self.state.add_nedge(
+            input_node,
+            reduce_node,
+            self.sdfg.make_array_memlet(input_node.data),
+        )
 
         temp_name = self.sdfg.temp_data_name()
         self.sdfg.add_scalar(temp_name, reduce_identity.dtype, transient=True)
