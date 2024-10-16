@@ -84,7 +84,7 @@ def _is_compatible_type(type_a: ts.TypeSpec, type_b: ts.TypeSpec):
             is_compatible &= _is_compatible_type(arg_a, arg_b)
         is_compatible &= _is_compatible_type(type_a.returns, type_b.returns)
     else:
-        is_compatible &= type_a == type_b
+        is_compatible &= type_info.is_concretizable(type_a, type_b)
 
     return is_compatible
 
