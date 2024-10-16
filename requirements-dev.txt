@@ -117,6 +117,7 @@ pydantic==2.9.1           # via -c constraints.txt, bump-my-version, pydantic-se
 pydantic-core==2.23.3     # via -c constraints.txt, pydantic
 pydantic-settings==2.5.2  # via -c constraints.txt, bump-my-version
 pydot==2.0.0              # via -c constraints.txt, tach
+pygal==3.0.5
 pygments==2.18.0          # via -c constraints.txt, -r requirements-dev.in, devtools, ipython, nbmake, rich, sphinx
 pyparsing==3.1.4          # via -c constraints.txt, matplotlib, pydot
 pyproject-api==1.7.1      # via -c constraints.txt, tox
