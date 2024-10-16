@@ -157,7 +157,11 @@ class FuseAsFieldOp(eve.NodeTranslator):
                 # TODO(tehrengruber): make this configurable
                 should_inline = isinstance(arg, itir.Literal) or (
                     isinstance(arg, itir.FunCall)
-                    and (cpm.is_call_to(arg.fun, "as_fieldop") or cpm.is_call_to(arg, "if_"))
+                    and (
+                        cpm.is_call_to(arg.fun, "as_fieldop")
+                        and isinstance(arg.fun.args[0], itir.Lambda)
+                        or cpm.is_call_to(arg, "if_")
+                    )
                     and (isinstance(dtype, it_ts.ListType) or len(arg_shifts) <= 1)
                 )
                 if should_inline:

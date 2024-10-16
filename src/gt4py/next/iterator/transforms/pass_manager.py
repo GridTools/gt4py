@@ -15,6 +15,7 @@ from gt4py.next.iterator.transforms import (
     global_tmps,
     infer_domain,
     inline_fundefs,
+    inline_lifts,
 )
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
@@ -116,6 +117,10 @@ def apply_common_transforms(
                 break
             ir = unrolled
             ir = CollapseListGet().visit(ir)
+            ir = NormalizeShifts().visit(ir)
+            # this is required as nested neighbor reductions can contain lifts, e.g.,
+            # `neighbors(V2Eₒ, ↑f(...))`
+            ir = inline_lifts.InlineLifts().visit(ir)
             ir = NormalizeShifts().visit(ir)
         else:
             raise RuntimeError("Reduction unrolling failed.")
