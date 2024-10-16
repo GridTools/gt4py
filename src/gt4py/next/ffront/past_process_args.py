@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Iterator, TypeAlias
+from typing import Any, Iterator, Sequence, TypeAlias
 
 from gt4py.next import common, errors
 from gt4py.next.ffront import (
@@ -15,7 +15,7 @@ from gt4py.next.ffront import (
     type_specifications as ts_ffront,
 )
 from gt4py.next.otf import arguments, toolchain, workflow
-from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
+from gt4py.next.type_system import type_info, type_specifications as ts
 
 
 AOT_PRG: TypeAlias = toolchain.CompilableProgram[
@@ -25,7 +25,7 @@ AOT_PRG: TypeAlias = toolchain.CompilableProgram[
 
 def transform_program_args(inp: AOT_PRG) -> AOT_PRG:
     rewritten_args, size_args, kwargs = _process_args(
-        past_node=inp.data.past_node, args=list(inp.args.args), kwargs=inp.args.kwargs
+        past_node=inp.data.past_node, args=inp.args.args, kwargs=inp.args.kwargs
     )
     return toolchain.CompilableProgram(
         data=inp.data,
@@ -45,10 +45,9 @@ def transform_program_args_factory(cached: bool = True) -> workflow.Workflow[AOT
     return wf
 
 
-def _validate_args(past_node: past.Program, args: list, kwargs: dict[str, Any]) -> None:
-    arg_types = [type_translation.from_value(arg) for arg in args]
-    kwarg_types = {k: type_translation.from_value(v) for k, v in kwargs.items()}
-
+def _validate_args(
+    past_node: past.Program, arg_types: Sequence[ts.TypeSpec], kwarg_types: dict[str, ts.TypeSpec]
+) -> None:
     if not isinstance(past_node.type, ts_ffront.ProgramType):
         raise TypeError("Can not validate arguments for PAST programs prior to type inference.")
 
@@ -63,12 +62,12 @@ def _validate_args(past_node: past.Program, args: list, kwargs: dict[str, Any]) 
 
 
 def _process_args(
-    past_node: past.Program, args: list, kwargs: dict[str, Any]
+    past_node: past.Program, args: Sequence[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
 ) -> tuple[tuple, tuple, dict[str, Any]]:
     if not isinstance(past_node.type, ts_ffront.ProgramType):
         raise TypeError("Can not process arguments for PAST programs prior to type inference.")
 
-    _validate_args(past_node=past_node, args=args, kwargs=kwargs)
+    _validate_args(past_node=past_node, arg_types=args, kwarg_types=kwargs)
 
     args, kwargs = type_info.canonicalize_arguments(past_node.type, args, kwargs)
 
@@ -77,10 +76,13 @@ def _process_args(
     )
 
     # extract size of all field arguments
-    size_args: list[int | type_translation.SizeArg] = []
+    size_args: list[ts.TypeSpec] = []
     rewritten_args = list(args)
     for param_idx, param in enumerate(past_node.params):
         if implicit_domain and isinstance(param.type, (ts.FieldType, ts.TupleType)):
+            # TODO(tehrengruber): Previously this function was called with the actual arguments
+            #  not their type. The check using the shape here is not functional anymore and
+            #  should instead be placed in a proper location.
             shapes_and_dims = [*_field_constituents_shape_and_dims(args[param_idx], param.type)]
             # check that all non-scalar like constituents have the same shape and dimension, e.g.
             # for `(scalar, (field1, field2))` the two fields need to have the same shape and
@@ -94,7 +96,9 @@ def _process_args(
                         "Constituents of composite arguments (e.g. the elements of a"
                         " tuple) need to have the same shape and dimensions."
                     )
-                size_args.extend(shape if shape else [type_translation.SizeArg()] * len(dims))  # type: ignore[arg-type] ##(ricoh) mypy is unable to correctly defer the type of the ternary expression
+                size_args.extend(
+                    shape if shape else [ts.ScalarType(kind=ts.ScalarKind.INT32)] * len(dims)  # type: ignore[arg-type]  # shape is always empty
+                )
     return tuple(rewritten_args), tuple(size_args), kwargs
 
 
@@ -108,7 +112,7 @@ def _field_constituents_shape_and_dims(
                 yield from _field_constituents_shape_and_dims(el, el_type)
         case ts.FieldType():
             dims = type_info.extract_dims(arg_type)
-            if isinstance(arg, arguments.CompileTimeArg):
+            if isinstance(arg, ts.TypeSpec):  # TODO
                 yield (tuple(), dims)
             elif dims:
                 assert hasattr(arg, "shape") and len(arg.shape) == len(dims)
