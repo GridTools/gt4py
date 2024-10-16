@@ -100,6 +100,7 @@ for t in (str, int):
 
 @add_content_to_fingerprint.register(FieldOperatorDefinition)
 @add_content_to_fingerprint.register(FoastOperatorDefinition)
+@add_content_to_fingerprint.register(ProgramDefinition)
 @add_content_to_fingerprint.register(PastProgramDefinition)
 @add_content_to_fingerprint.register(toolchain.CompilableProgram)
 @add_content_to_fingerprint.register(arguments.CompileTimeArgs)
@@ -119,6 +120,10 @@ def add_jit_args_id_to_fingerprint(
 def add_func_to_fingerprint(obj: types.FunctionType, hasher: xtyping.HashlibAlgorithm) -> None:
     sourcedef = source_utils.SourceDefinition.from_function(obj)
     for item in sourcedef:
+        add_content_to_fingerprint(item, hasher)
+
+    closure_vars = source_utils.get_closure_vars_from_function(obj)
+    for item in sorted(closure_vars.items(), key=lambda x: x[0]):
         add_content_to_fingerprint(item, hasher)
 
 
