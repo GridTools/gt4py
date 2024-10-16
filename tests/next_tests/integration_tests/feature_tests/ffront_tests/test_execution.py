@@ -825,9 +825,15 @@ def test_scan_nested_tuple_output(forward, cartesian_case):
     ) -> tuple[int32, tuple[int32, int32]]:
         return (carry[0] + 1, (carry[1][0] + 1, carry[1][1] + 1))
 
-    @gtx.program
+    # @gtx.program
     def testee(out: tuple[cases.KField, tuple[cases.KField, cases.KField]]):
         simple_scan_operator(out=out)
+
+    print(type(testee))
+    dsl_definition = gtx.ffront.stages.ProgramDefinition(definition=testee)
+    print(type(dsl_definition))
+    print(f"{dsl_definition=}")
+    past_definition = gtx.ffront.func_to_past.func_to_past(dsl_definition)
 
     cases.verify_with_default_data(
         cartesian_case,
