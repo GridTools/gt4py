@@ -577,11 +577,12 @@ class LambdaToDataflow(eve.NodeVisitor):
         dtype = dace_utils.as_dace_type(node.type.element_type)
 
         input_args = [self.visit(arg) for arg in node.args]
-        connectors = [f"__arg{i}" for i in range(len(input_args))]
+        input_connectors = [f"__arg{i}" for i in range(len(input_args))]
+        output_connector = "__out"
 
         # Here we build the body of the tasklet
-        fun_node = im.call(node.fun.args[0])(*connectors)
-        op_code = gtir_python_codegen.get_source(fun_node)
+        fun_node = im.call(node.fun.args[0])(*input_connectors)
+        tasklet_code = "{} = {}".format(output_connector, gtir_python_codegen.get_source(fun_node))
 
         # TODO(edopao): extract offset_dim from the input arguments
         offset_dim = gtx_common.Dimension("", gtx_common.DimensionKind.LOCAL)
@@ -596,7 +597,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         input_memlets = {}
         input_nodes = {}
         local_size: Optional[int] = None
-        for conn, input_expr in zip(connectors, input_args):
+        for conn, input_expr in zip(input_connectors, input_args):
             if isinstance(input_expr, MemletExpr):
                 desc = input_expr.node.desc(self.sdfg)
                 local_dim_indices = [
@@ -650,11 +651,11 @@ class LambdaToDataflow(eve.NodeVisitor):
         self._add_mapped_tasklet(
             name="map",
             map_ranges={map_index: f"0:{local_size}"},
-            code=f"__out = {op_code}",
+            code=tasklet_code,
             inputs=input_memlets,
             input_nodes=input_nodes,
             outputs={
-                "__out": dace.Memlet(data=out, subset=map_index),
+                output_connector: dace.Memlet(data=out, subset=map_index),
             },
             output_nodes={out: out_node},
             external_edges=True,
