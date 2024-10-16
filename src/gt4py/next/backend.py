@@ -156,7 +156,7 @@ class Backend(Generic[core_defs.DeviceTypeT]):
             args, kwargs = signature.convert_to_positional(program, *args, **kwargs)
         try:
             compiled = program._compiled
-        except:
+        except Exception:
             compiled = self.jit(program, *args, **kwargs)
             object.__setattr__(program, "_compiled", compiled)
         compiled(*args, **kwargs)
