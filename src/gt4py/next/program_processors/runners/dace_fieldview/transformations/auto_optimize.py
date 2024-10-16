@@ -120,6 +120,7 @@ def gt_auto_optimize(
             validate=validate,
             validate_all=validate_all,
         )
+
         sdfg.apply_transformations_repeated(
             [
                 dace_dataflow.TrivialMapElimination,
@@ -211,6 +212,7 @@ def gt_auto_optimize(
         dace_aoptimize.set_fast_implementations(sdfg, device)
         # TODO(phimuell): Fix the bug, it uses the tile value and not the stack array value.
         dace_aoptimize.move_small_arrays_to_stack(sdfg)
+
         if make_persistent:
             gtx_transformations.gt_make_transients_persistent(sdfg=sdfg, device=device)
 
