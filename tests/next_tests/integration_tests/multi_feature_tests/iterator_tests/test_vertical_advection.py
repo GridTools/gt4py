@@ -11,7 +11,7 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.runtime import closure, fendef, fundef
+from gt4py.next.iterator.runtime import set_at, fendef, fundef
 from gt4py.next.program_processors.formatters import gtfn as gtfn_formatters
 from gt4py.next.program_processors.runners import gtfn
 
@@ -79,26 +79,18 @@ def tridiag_reference():
 
 @fendef
 def fen_solve_tridiag(i_size, j_size, k_size, a, b, c, d, x):
-    closure(
-        cartesian_domain(
-            named_range(IDim, 0, i_size), named_range(JDim, 0, j_size), named_range(KDim, 0, k_size)
-        ),
-        solve_tridiag,
-        x,
-        [a, b, c, d],
+    domain = cartesian_domain(
+        named_range(IDim, 0, i_size), named_range(JDim, 0, j_size), named_range(KDim, 0, k_size)
     )
+    set_at(as_fieldop(solve_tridiag, domain)(a, b, c, d), domain, x)
 
 
 @fendef
 def fen_solve_tridiag2(i_size, j_size, k_size, a, b, c, d, x):
-    closure(
-        cartesian_domain(
-            named_range(IDim, 0, i_size), named_range(JDim, 0, j_size), named_range(KDim, 0, k_size)
-        ),
-        solve_tridiag2,
-        x,
-        [a, b, c, d],
+    domain = cartesian_domain(
+        named_range(IDim, 0, i_size), named_range(JDim, 0, j_size), named_range(KDim, 0, k_size)
     )
+    set_at(as_fieldop(solve_tridiag2, domain)(a, b, c, d), domain, x)
 
 
 @pytest.mark.parametrize("fencil", [fen_solve_tridiag, fen_solve_tridiag2])
