@@ -108,7 +108,7 @@ def test_ffront_lap(cartesian_case):
 
 
 def test_ffront_lap_benchmark(exec_alloc_descriptor, benchmark):
-    case =cases.Case(
+    case = cases.Case(
         None
         if isinstance(exec_alloc_descriptor, test_definitions.EmbeddedDummyBackend)
         else exec_alloc_descriptor,
@@ -125,12 +125,9 @@ def test_ffront_lap_benchmark(exec_alloc_descriptor, benchmark):
     in_field = square(in_field)
     out_field = cases.allocate(case, lap_program, "out_field")()
 
-
     if pytest_benchmark:
         benchmark(
-            lap_program.with_grid_type(case.grid_type).with_backend(
-                case.backend
-            ),
+            lap_program.with_grid_type(case.grid_type).with_backend(case.backend),
             in_field,
             out_field,
             offset_provider=case.offset_provider,
