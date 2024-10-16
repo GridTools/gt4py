@@ -171,7 +171,8 @@ def _create_temporary_field(
 def extract_domain(node: gtir.Node) -> FieldopDomain:
     """
     Visits the domain of a field operator and returns a list of dimensions and
-    the corresponding lower and upper bounds.
+    the corresponding lower and upper bounds. The returned lower bound is inclusive,
+    the upper bound is exclusive: [lower_bound, upper_bound[
     """
     assert cpm.is_call_to(node, ("cartesian_domain", "unstructured_domain"))
 
