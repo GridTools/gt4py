@@ -110,7 +110,14 @@ def test_ffront_lap_benchmark(cartesian_case, benchmark):
     out_field = cases.allocate(cartesian_case, lap_program, "out_field")()
 
     if pytest_benchmark:
-        benchmark(lap_program.with_grid_type(cartesian_case.grid_type).with_backend(cartesian_case.backend),in_field, out_field, offset_provider=cartesian_case.offset_provider)
+        benchmark(
+            lap_program.with_grid_type(cartesian_case.grid_type).with_backend(
+                cartesian_case.backend
+            ),
+            in_field,
+            out_field,
+            offset_provider=cartesian_case.offset_provider,
+        )
     else:
         pytest.skip("Test skipped as `pytest-benchmark` is not installed.")
 
