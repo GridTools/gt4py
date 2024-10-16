@@ -1080,8 +1080,6 @@ def test_gtir_connectivity_shift_chain():
 
 
 def test_gtir_neighbors_as_input():
-    # FIXME[#1582](edopao): Enable testcase when type inference is working
-    pytest.skip("Field of lists not fully supported by GTIR type inference")
     init_value = np.random.rand()
     vertex_domain = im.domain(gtx_common.GridType.UNSTRUCTURED, ranges={Vertex: (0, "nvertices")})
     testee = gtir.Program(
@@ -1089,24 +1087,28 @@ def test_gtir_neighbors_as_input():
         function_definitions=[],
         params=[
             gtir.Sym(id="v2e_field", type=V2E_FTYPE),
-            gtir.Sym(id="vertex", type=EFTYPE),
+            gtir.Sym(id="edges", type=EFTYPE),
+            gtir.Sym(id="vertices", type=VFTYPE),
             gtir.Sym(id="nvertices", type=SIZE_TYPE),
         ],
         declarations=[],
         body=[
             gtir.SetAt(
-                expr=im.call(
-                    im.call("as_fieldop")(
-                        im.lambda_("it")(
-                            im.call(im.call("reduce")("plus", im.literal_from_value(init_value)))(
-                                "it"
-                            )
-                        ),
-                        vertex_domain,
+                expr=im.as_fieldop(
+                    im.lambda_("it")(
+                        im.call(im.call("reduce")("plus", im.literal_from_value(init_value)))(
+                            im.deref("it")
+                        )
+                    ),
+                    vertex_domain,
+                )(
+                    im.op_as_fieldop(im.map_("plus"), vertex_domain)(
+                        "v2e_field",
+                        im.as_fieldop_neighbors("V2E", "edges", vertex_domain),
                     )
-                )("v2e_field"),
+                ),
                 domain=vertex_domain,
-                target=gtir.SymRef(id="vertex"),
+                target=gtir.SymRef(id="vertices"),
             )
         ],
     )
@@ -1117,16 +1119,19 @@ def test_gtir_neighbors_as_input():
     assert isinstance(connectivity_V2E, gtx_common.NeighborTable)
 
     v2e_field = np.random.rand(SIMPLE_MESH.num_vertices, connectivity_V2E.max_neighbors)
+    e = np.random.rand(SIMPLE_MESH.num_edges)
     v = np.empty(SIMPLE_MESH.num_vertices, dtype=v2e_field.dtype)
 
     v_ref = [
-        functools.reduce(lambda x, y: x + y, v2e_neighbors, init_value)
-        for v2e_neighbors in v2e_field
+        functools.reduce(lambda x, y: x + y, v2e_values + e[v2e_neighbors], init_value)
+        for v2e_neighbors, v2e_values in zip(connectivity_V2E.table, v2e_field, strict=True)
     ]
 
     sdfg(
         v2e_field,
+        e,
         v,
+        connectivity_V2E=connectivity_V2E.table,
         **FSYMBOLS,
         **make_mesh_symbols(SIMPLE_MESH),
         __v2e_field_size_0=SIMPLE_MESH.num_vertices,
