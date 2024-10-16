@@ -86,6 +86,7 @@ def gt_gpu_transformation(
         validate_all=validate_all,
         simplify=False,
     )
+
     # The documentation recommends to run simplify afterwards
     gtx_transformations.gt_simplify(sdfg)
 
@@ -100,6 +101,8 @@ def gt_gpu_transformation(
             validate=False,
             validate_all=False,
         )
+        # Because of the fusion we are doing we could have created dead data flow.
+        gtx_transformations.gt_simplify(sdfg, validate=validate, validate_all=validate_all)
 
     # Set the GPU block size if it is known.
     if gpu_block_size is not None:
@@ -109,6 +112,9 @@ def gt_gpu_transformation(
             launch_bounds=gpu_launch_bounds,
             launch_factor=gpu_launch_factor,
         )
+
+    if validate_all or validate:
+        sdfg.validate()
 
     return sdfg
 
