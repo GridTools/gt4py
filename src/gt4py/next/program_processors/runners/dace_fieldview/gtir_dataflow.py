@@ -554,7 +554,8 @@ class LambdaToDataflow(eve.NodeVisitor):
         neighbor_idx = dace_gtir_utils.get_map_variable(offset_dim)
 
         index_connector = "__index"
-        op_code = f"__field[{index_connector}]"
+        output_connector = "__val"
+        tasklet_expression = f"{output_connector} = __field[{index_connector}]"
         input_memlets = {
             "__field": dace.Memlet.from_array(field_slice_view, field_slice_desc),
             index_connector: dace.Memlet(data=connectivity_slice_view, subset=neighbor_idx),
@@ -567,16 +568,16 @@ class LambdaToDataflow(eve.NodeVisitor):
         if offset_provider.has_skip_values:
             assert self.reduce_identity is not None
             assert self.reduce_identity.dtype == field_desc.dtype
-            op_code += f" if {index_connector} != {gtx_common._DEFAULT_SKIP_VALUE} else {field_desc.dtype}({self.reduce_identity.value})"
+            tasklet_expression += f" if {index_connector} != {gtx_common._DEFAULT_SKIP_VALUE} else {field_desc.dtype}({self.reduce_identity.value})"
 
         self._add_mapped_tasklet(
             name=f"{offset}_neighbors",
             map_ranges={neighbor_idx: f"0:{offset_provider.max_neighbors}"},
-            code=f"__val = {op_code}",
+            code=tasklet_expression,
             inputs=input_memlets,
             input_nodes=input_nodes,
             outputs={
-                "__val": dace.Memlet(data=neighbors_temp, subset=neighbor_idx),
+                output_connector: dace.Memlet(data=neighbors_temp, subset=neighbor_idx),
             },
             output_nodes={neighbors_temp: neighbors_node},
             external_edges=True,
@@ -591,12 +592,14 @@ class LambdaToDataflow(eve.NodeVisitor):
         The map operation is applied on the local dimension of input fields.
         In the example below, the local dimension consists of a list of neighbor
         values as the first argument, and a list of constant values `1.0`:
-        `map_(plus)(neighbors(V2Eₒ, it), make_const_list(1.0))`
+        `map_(plus)(neighbors(V2E, it), make_const_list(1.0))`
 
         The `plus` operation is lowered to a tasklet inside a map that computes
-        the domain of the local dimension (in this example, the number of neighbors).
+        the domain of the local dimension (in this example, max neighbors in V2E).
 
         The result is a 1D local field, with same size as the input local dimension.
+        In above example, the result would be an array with size V2E.max_neighbors,
+        containing the V2E neighbor values incremented by 1.0.
         """
         assert isinstance(node.type, itir_ts.ListType)
         assert isinstance(node.fun, gtir.FunCall)
@@ -606,11 +609,13 @@ class LambdaToDataflow(eve.NodeVisitor):
         dtype = dace_utils.as_dace_type(node.type.element_type)
 
         input_args = [self.visit(arg) for arg in node.args]
-        connectors = [f"__arg{i}" for i in range(len(input_args))]
+        input_connectors = [f"__arg{i}" for i in range(len(input_args))]
+        output_connector = "__out"
 
         # Here we build the body of the tasklet
-        fun_node = im.call(node.fun.args[0])(*connectors)
-        op_code = gtir_python_codegen.get_source(fun_node)
+        fun_node = im.call(node.fun.args[0])(*input_connectors)
+        fun_python_code = gtir_python_codegen.get_source(fun_node)
+        tasklet_expression = f"{output_connector} = {fun_python_code}"
 
         input_local_offsets = [
             input_arg.local_offset for input_arg in input_args if input_arg.local_offset is not None
@@ -634,7 +639,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         input_memlets = {}
         input_nodes = {}
         skip_value_connectivities = []
-        for conn, input_expr in zip(connectors, input_args):
+        for conn, input_expr in zip(input_connectors, input_args):
             if isinstance(input_expr, MemletExpr):
                 desc = input_expr.node.desc(self.sdfg)
                 local_dim_indices = [
@@ -721,16 +726,16 @@ class LambdaToDataflow(eve.NodeVisitor):
                 data=connectivity_slice_view, subset=map_index
             )
             input_nodes[connectivity_slice_view] = connectivity_slice_node
-            op_code += f" if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {dtype}({self.reduce_identity.value})"
+            tasklet_expression += f" if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {dtype}({self.reduce_identity.value})"
 
         self._add_mapped_tasklet(
             name="map",
             map_ranges={map_index: f"0:{local_size}"},
-            code=f"__out = {op_code}",
+            code=tasklet_expression,
             inputs=input_memlets,
             input_nodes=input_nodes,
             outputs={
-                "__out": dace.Memlet(data=out, subset=map_index),
+                output_connector: dace.Memlet(data=out, subset=map_index),
             },
             output_nodes={out: out_node},
             external_edges=True,
