@@ -171,9 +171,7 @@ class StencilExecution(Stmt):
     backend: Backend
     stencil: SymRef
     output: Union[SymRef, SidComposite]
-    inputs: list[
-        Union[SymRef, SidComposite, SidFromScalar, FunCall]
-    ]
+    inputs: list[Union[SymRef, SidComposite, SidFromScalar, FunCall]]
 
     @datamodels.validator("inputs")
     def _arg_validator(
