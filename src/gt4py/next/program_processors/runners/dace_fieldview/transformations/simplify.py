@@ -211,13 +211,15 @@ class GT4PyRednundantArrayElimination(dace_transformation.SingleStateTransformat
     designed to remove these transient arrays. It matches two array `read` that is
     read and written into `write`. The transformation applies if:
     - `read` is a transient non view array.
-    - `write` has input degree 1 and output degree zero.
+    - `write` has input degree 1 and output degree zero (sink node might be lifted).
     - `read` has input degree larger than zero and output degree 1.
     - `read` does not appear in any other state; by construction in other states
         it can only be read.
-    - They have the same size (might be lifted).
-    - The content of the full array must be transferred (there might be a way to work
-        around that).
+    - `read` and `write` have the same dimensionality.
+    - In case they have different sizes the following must hold:
+        - `read` has input degree 1.
+        - All subsets have the same size, i.e. everything that is written into `read`
+            is also read from it.
 
     Then array `read` is removed from the SDFG.
 
@@ -252,11 +254,9 @@ class GT4PyRednundantArrayElimination(dace_transformation.SingleStateTransformat
         read_desc: dace_data.Data = read_an.desc(sdfg)
         write_desc: dace_data.Data = write_an.desc(sdfg)
 
-        if not (write_desc.transient and read_desc.transient):
+        if not read_desc.transient:
             return False
         if any(isinstance(desc, dace_data.View) for desc in [read_desc, write_desc]):
-            return False
-        if write_desc.shape != read_desc.shape:  # TODO(phimuell): Add simplify
             return False
         if graph.in_degree(read_an) == 0:
             return False
@@ -266,16 +266,42 @@ class GT4PyRednundantArrayElimination(dace_transformation.SingleStateTransformat
             return False
         if graph.in_degree(write_an) != 1:
             return False
-
-        # Ensure that the whole array `read` is transferred to the second array.
-        edge = next(iter(graph.in_edges(write_an)))
-        subset = edge.data.get_src_subset(edge, graph)
-        if subset is None:
-            subset = edge.data.get_dst_subset(edge, graph)
-        assert subset is not None
-
-        if write_desc.shape != tuple(subset.size()):
+        if len(read_desc.shape) != len(write_desc.shape):
             return False
+
+        # NOTE:
+        #   We do _not_ require that the whole `read` array is read, nor this array
+        #   is fully written. If it is not fully written (at this access node) then
+        #   these parts will remain undefined (as the array can not be written to).
+        #   If we would require that `read` is fully read, but `read` is not fully
+        #   written to in the first place, we would override undefined data with
+        #   undefined data.
+
+        # By requiring the same shape, we do not have to do subset translation.
+        if write_desc.shape != read_desc.shape:
+            # In certain cases we allow that the two data have different shapes.
+            if graph.in_degree(read_an) != 1:
+                return False
+
+            # Check if everything that is read from `read` is also defined.
+            #  This is not a real requirement, it just simplify the offset computation
+            #  later on. If we would remove this restriction it means that we would
+            #  allow to copy around undefined data. Which might be helpful in some
+            #  cases, especially in chains, but we currently do not handle it.
+            read_in_edge = next(iter(graph.in_edges(read_an)))
+            read_out_edge = next(iter(graph.out_edges(read_an)))
+            read_isubset = read_in_edge.data.get_dst_subset(read_in_edge, graph)
+            read_osubset = read_out_edge.data.get_src_subset(read_out_edge, graph)
+            if read_osubset is None:
+                read_osubset = dace_subsets.Range.from_array(read_desc)
+            if read_isubset is None:
+                read_isubset = dace_subsets.Range.from_array(read_desc)
+            if not isinstance(read_isubset, dace_subsets.Range):
+                return False
+            if not isinstance(read_osubset, dace_subsets.Range):
+                return False
+            if read_isubset.size() != read_osubset.size():
+                return False
 
         # Check if used anywhere else.
         # TODO(phimuell): Find a way to cache this information.
@@ -299,25 +325,97 @@ class GT4PyRednundantArrayElimination(dace_transformation.SingleStateTransformat
         write_name: str = write_an.data
         read_name: str = read_an.data
 
-        for iedge in graph.in_edges(read_an):
-            org_memlet: dace.Memlet = iedge.data
-            src_subset: dace_subsets.Subset = copy.deepcopy(org_memlet.get_src_subset(iedge, graph))
-            dst_subset: dace_subsets.Subset = copy.deepcopy(org_memlet.get_dst_subset(iedge, graph))
+        read_desc: dace_data.Data = read_an.desc(sdfg)
+        write_desc: dace_data.Data = write_an.desc(sdfg)
+
+        # The destination of the new edge, is fully given by the subset of the
+        #  incoming edge at `write`.
+        write_in_edge = next(iter(graph.in_edges(write_an)))
+        curr_dst_subset = copy.deepcopy(write_in_edge.data.get_dst_subset(write_in_edge, graph))
+        if curr_dst_subset is None:
+            curr_dst_subset = dace_subsets.Range.from_array(write_desc)
+
+        if write_desc.shape == read_desc.shape:
+            # The shapes are the same, so no subset translation is needed.
+            for iedge in graph.in_edges(read_an):
+                org_memlet: dace.Memlet = iedge.data
+                src_subset: dace_subsets.Subset = copy.deepcopy(
+                    org_memlet.get_src_subset(iedge, graph)
+                )
+                dst_subset: dace_subsets.Subset = copy.deepcopy(
+                    org_memlet.get_dst_subset(iedge, graph)
+                )
+                new_edge = graph.add_edge(
+                    iedge.src,
+                    iedge.src_conn,
+                    write_an,
+                    write_in_edge.dst_conn,
+                    copy.deepcopy(org_memlet),
+                )
+                # Modify the memlet, mostly adjust the subset and direction.
+                new_edge.data.data = write_name
+                new_edge.data.subset = dst_subset
+                new_edge.data.other_subset = src_subset
+                new_edge.data.try_initialize(graph.parent, graph, new_edge)
+                assert src_subset is new_edge.data.src_subset
+                assert dst_subset is new_edge.data.dst_subset
+                graph.remove_edge(iedge)
+
+        else:
+            # The shapes different, so we have to do translation of the subset.
+            #  This is a special case so we know that there is only one edge involved.
+            # TODO(phimuell): extend to multiple incoming edges, however, the
+            #   subset they write into must be distinct.
+            assert graph.out_degree(read_an) == 1
+
+            read_in_edge = next(iter(graph.in_edges(read_an)))
+            read_out_edge = next(iter(graph.out_edges(read_an)))
+
+            # The source subset of the new connection comes from the connection that
+            #  goes into `read`. If it is `None` we might need to correct it.
+            old_origin_subset = read_in_edge.data.get_src_subset(read_in_edge, graph)
+            if old_origin_subset is None and isinstance(read_in_edge.src, dace_nodes.AccessNode):
+                old_origin_subset = dace_subsets.Range.from_array(read_in_edge.src.desc(sdfg))
+
+            if old_origin_subset is not None:
+                read_isubset = read_in_edge.data.get_dst_subset(read_in_edge, graph)
+                read_osubset = read_out_edge.data.get_src_subset(read_out_edge, graph)
+                if read_osubset is None:
+                    read_osubset = dace_subsets.Range.from_array(read_desc)
+                if read_isubset is None:
+                    read_isubset = dace_subsets.Range.from_array(read_desc)
+                transfered_size = read_osubset.size()
+                read_isubset_min = read_isubset.min_element()
+                read_osubset_min = read_osubset.min_element()
+                old_origin_subset_min = old_origin_subset.min_element()
+
+                new_origin_subset_parts: list[tuple[Any, Any, int]] = []
+                for isbs, osbs, size, origin_sbs in zip(
+                    read_isubset_min, read_osubset_min, transfered_size, old_origin_subset_min
+                ):
+                    new_origin_start = f"(({osbs!s} - {isbs!s}) + {origin_sbs!s})"
+                    # The `-1` is because in this mode of construction end is inclusive.
+                    new_origin_end = f"((({new_origin_start}) + ({size!s})) - 1)"
+                    new_origin_subset_parts.append((new_origin_start, new_origin_end, 1))
+                new_origin_subset = dace_subsets.Range(new_origin_subset_parts)
+
+            else:
+                new_origin_subset = None
+
+            # Now we create the new edge, we will adjust the memlet afterwards.
             new_edge = graph.add_edge(
-                iedge.src,
-                iedge.src_conn,
+                read_in_edge.src,
+                read_in_edge.src_conn,
                 write_an,
-                iedge.dst_conn,
-                copy.deepcopy(org_memlet),
+                write_in_edge.dst_conn,
+                copy.deepcopy(read_in_edge.data),
             )
             # Modify the memlet, mostly adjust the subset and direction.
             new_edge.data.data = write_name
-            new_edge.data.subset = dst_subset
-            new_edge.data.other_subset = src_subset
             new_edge.data.try_initialize(graph.parent, graph, new_edge)
-            assert src_subset is new_edge.data.src_subset
-            assert dst_subset is new_edge.data.dst_subset
-            graph.remove_edge(iedge)
+            new_edge.data.subset = write_in_edge.data.get_dst_subset(write_in_edge, graph)
+            new_edge.data.other_subset = new_origin_subset
+            graph.remove_edge(read_in_edge)
 
         for oedge in graph.out_edges(read_an):
             graph.remove_edge(oedge)

@@ -78,7 +78,8 @@ def test_gt4py_redundant_array_elimination():
     sdfg.validate()
 
     count = sdfg.apply_transformations(
-        gtx_transformations.GT4PyRednundantArrayElimination(), validate=True
+        gtx_transformations.GT4PyRednundantArrayElimination(),
+        validate_all=True,
     )
     assert count == 1
 
@@ -95,3 +96,46 @@ def test_gt4py_redundant_array_elimination():
 
     sdfg(a=a, b=b, c=c, d=d)
     assert np.allclose(b, b_ref)
+
+
+def test_gt4py_redundant_array_elimination_unequal_shape():
+    """Tests the array elimination when the arrays have different shapes."""
+    sdfg: dace.SDFG = dace.SDFG(util.unique_name("test_gt4py_redundant_array_elimination"))
+    state: dace.SDFGState = sdfg.add_state(is_start_block=True)
+
+    sdfg.add_array("origin", (30,), dace.float64, transient=False)
+    sdfg.add_array("t", (20,), dace.float64, transient=True)
+    sdfg.add_array("v", (10,), dace.float64, transient=False)
+
+    origin, t, v = (state.add_access(name) for name in ["origin", "t", "v"])
+
+    state.add_nedge(
+        origin,
+        t,
+        dace.Memlet(data="origin", subset="5:20", other_subset="2:17"),
+    )
+    state.add_nedge(
+        t,
+        v,
+        dace.Memlet(data="t", subset="3:11", other_subset="1:9"),
+    )
+    sdfg.validate()
+
+    origin = np.array(np.random.rand(30), dtype=np.float64, copy=True)
+    v_ref = np.array(np.random.rand(10), dtype=np.float64, copy=True)
+    v_ref[1:9] = 0.0
+    v_res = v_ref.copy()
+
+    csdfg_org = sdfg.compile()
+    csdfg_org(origin=origin, v=v_ref)
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.GT4PyRednundantArrayElimination(),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 1, f"Transformation was applied {count}, but expected once."
+
+    csdfg_opt = sdfg.compile()
+    csdfg_opt(origin=origin, v=v_res)
+    assert np.allclose(v_ref, v_res), f"Expected {v_ref}, but got {v_res}."
