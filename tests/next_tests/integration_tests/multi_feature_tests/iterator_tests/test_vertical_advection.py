@@ -12,7 +12,6 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import closure, fendef, fundef
-from gt4py.next.iterator.transforms import LiftMode
 from gt4py.next.program_processors.formatters import gtfn as gtfn_formatters
 from gt4py.next.program_processors.runners import gtfn
 
