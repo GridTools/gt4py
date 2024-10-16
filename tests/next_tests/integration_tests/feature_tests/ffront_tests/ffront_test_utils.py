@@ -46,7 +46,6 @@ no_backend = NoBackend(
 @pytest.fixture(
     params=[
         next_tests.definitions.ProgramBackendId.ROUNDTRIP,
-        next_tests.definitions.ProgramBackendId.GTIR_EMBEDDED,  # FIXME[#1582](havogt): enable once all ingredients for GTIR are available  # noqa: ERA001
         next_tests.definitions.ProgramBackendId.GTFN_CPU,
         next_tests.definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE,
         pytest.param(

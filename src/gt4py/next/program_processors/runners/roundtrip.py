@@ -20,7 +20,7 @@ from typing import Any, Optional
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from gt4py.next import allocators as next_allocators, backend as next_backend, common, config
-from gt4py.next.ffront import foast_to_gtir, foast_to_past, past_to_itir
+from gt4py.next.ffront import foast_to_gtir
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.otf import stages, workflow
 from gt4py.next.type_system import type_specifications as ts
@@ -241,16 +241,3 @@ with_temporaries = next_backend.Backend(
 )
 
 foast_to_gtir_step = foast_to_gtir.adapted_foast_to_gtir_factory(cached=True)
-
-gtir = next_backend.Backend(
-    name="roundtrip_gtir",
-    executor=executor,
-    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
-    transforms=next_backend.Transforms(
-        past_to_itir=past_to_itir.past_to_itir_factory(to_gtir=True),
-        foast_to_itir=foast_to_gtir_step,
-        field_view_op_to_prog=foast_to_past.operator_to_program_factory(
-            foast_to_itir_step=foast_to_gtir_step
-        ),
-    ),
-)
