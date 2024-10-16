@@ -56,7 +56,7 @@ _PREFIX: Final[str] = "GT4PY"
 #: Master debug flag
 #: Changes defaults for all the other options to be as helpful for debugging as possible.
 #: Does not override values set in environment variables.
-DEBUG: Final[bool] = env_flag_to_bool(f"{_PREFIX}_DEBUG", default=True)
+DEBUG: Final[bool] = env_flag_to_bool(f"{_PREFIX}_DEBUG", default=False)
 
 
 #: Verbose flag for DSL compilation errors
