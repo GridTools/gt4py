@@ -173,7 +173,7 @@ class StencilExecution(Stmt):
     output: Union[SymRef, SidComposite]
     inputs: list[
         Union[SymRef, SidComposite, SidFromScalar, FunCall]
-    ]  # TODO: StencilExecution only for tuple_get
+    ]
 
     @datamodels.validator("inputs")
     def _arg_validator(
