@@ -64,7 +64,7 @@ def func_to_past(inp: DSL_PRG) -> PRG:
     )
 
 
-def func_to_past_factory(cached: bool = True) -> workflow.Workflow[DSL_PRG, PRG]:
+def func_to_past_factory(cached: bool = False) -> workflow.Workflow[DSL_PRG, PRG]:
     """
     Wrap `func_to_past` in a chainable and optionally cached workflow step.
 
