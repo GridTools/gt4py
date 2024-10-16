@@ -10,7 +10,7 @@ import numpy as np
 
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
+from gt4py.next.iterator.runtime import set_at, fendef, fundef, offset
 from gt4py.next.program_processors.runners import double_roundtrip, roundtrip
 
 
@@ -27,16 +27,14 @@ def foo(inp):
 
 @fendef(offset_provider={"I": I_loc, "J": J_loc})
 def fencil(output, input):
-    closure(
-        cartesian_domain(named_range(I_loc, 0, 1), named_range(J_loc, 0, 1)), foo, output, [input]
-    )
+    domain = cartesian_domain(named_range(I_loc, 0, 1), named_range(J_loc, 0, 1))
+    set_at(as_fieldop(foo, domain)(input), domain, output)
 
 
 @fendef(offset_provider={"I": J_loc, "J": I_loc})
 def fencil_swapped(output, input):
-    closure(
-        cartesian_domain(named_range(I_loc, 0, 1), named_range(J_loc, 0, 1)), foo, output, [input]
-    )
+    domain = cartesian_domain(named_range(I_loc, 0, 1), named_range(J_loc, 0, 1))
+    set_at(as_fieldop(foo, domain)(input), domain, output)
 
 
 def test_cartesian_offset_provider():

@@ -18,7 +18,6 @@ import factory
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, config
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.transforms import LiftMode
 from gt4py.next.otf import languages, recipes, stages, step_types, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.languages import LanguageSettings
@@ -36,7 +35,6 @@ class DaCeTranslator(
     step_types.TranslationStep[languages.SDFG, languages.LanguageSettings],
 ):
     auto_optimize: bool = False
-    lift_mode: LiftMode = LiftMode.FORCE_INLINE
     device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
     symbolic_domain_sizes: Optional[dict[str, str]] = None
     temporary_extraction_heuristics: Optional[
@@ -69,7 +67,6 @@ class DaCeTranslator(
             auto_optimize=self.auto_optimize,
             on_gpu=on_gpu,
             column_axis=column_axis,
-            lift_mode=self.lift_mode,
             symbolic_domain_sizes=self.symbolic_domain_sizes,
             temporary_extraction_heuristics=self.temporary_extraction_heuristics,
             load_sdfg_from_file=False,

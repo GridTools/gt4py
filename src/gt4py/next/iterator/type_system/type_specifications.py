@@ -20,7 +20,7 @@ class NamedRangeType(ts.TypeSpec):
 
 @dataclasses.dataclass(frozen=True)
 class DomainType(ts.DataType):
-    dims: list[common.Dimension]
+    dims: list[common.Dimension] | Literal["unknown"]
 
 
 @dataclasses.dataclass(frozen=True)

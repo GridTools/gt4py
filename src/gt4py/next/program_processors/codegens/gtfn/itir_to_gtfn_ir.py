@@ -587,6 +587,32 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_SetAt(
         self, node: itir.SetAt, *, extracted_functions: list, **kwargs: Any
     ) -> Union[StencilExecution, ScanExecution]:
+        # TODO: symref, literal, tuple thereof is also fine, similar to broadcast fix in gtir lowering
+        def _is_ref_or_tuple_expr_of_ref(expr: itir.Expr) -> bool:
+            if (
+                isinstance(expr, itir.FunCall)
+                and isinstance(expr.fun, itir.SymRef)
+                and expr.fun.id == "tuple_get"
+                and len(expr.args) == 2
+                and _is_ref_or_tuple_expr_of_ref(expr.args[1])
+            ):
+                return True
+            if (
+                isinstance(expr, itir.FunCall)
+                and isinstance(expr.fun, itir.SymRef)
+                and expr.fun.id == "make_tuple"
+                and all(_is_ref_or_tuple_expr_of_ref(arg) for arg in expr.args)
+            ):
+                return True
+            if isinstance(expr, (itir.SymRef, itir.Literal)):
+                return True
+            return False
+
+        from gt4py.next.iterator.ir_utils import ir_makers as im
+
+        if _is_ref_or_tuple_expr_of_ref(node.expr):
+            node.expr = im.as_fieldop("deref", node.domain)(node.expr)
+
         assert cpm.is_applied_as_fieldop(node.expr)
         stencil = node.expr.fun.args[0]  # type: ignore[attr-defined] # checked in assert
         domain = node.domain
@@ -611,7 +637,6 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 tuple_constructor=lambda *elements: SidComposite(values=list(elements)),
             )
 
-            assert isinstance(lowered_input_as_sid, (SidComposite, SidFromScalar, SymRef))
             lowered_inputs.append(lowered_input_as_sid)
 
         backend = Backend(domain=self.visit(domain, stencil=stencil, **kwargs))

@@ -11,7 +11,7 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.runtime import closure, fendef, fundef
+from gt4py.next.iterator.runtime import set_at, fendef, fundef
 
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
@@ -114,16 +114,10 @@ def test_tuple_of_field_output_constructed_inside(program_processor, stencil):
 
     @fendef
     def fencil(size0, size1, size2, inp1, inp2, out1, out2):
-        closure(
-            cartesian_domain(
-                named_range(IDim, 0, size0),
-                named_range(JDim, 0, size1),
-                named_range(KDim, 0, size2),
-            ),
-            stencil,
-            make_tuple(out1, out2),
-            [inp1, inp2],
+        domain = cartesian_domain(
+            named_range(IDim, 0, size0), named_range(JDim, 0, size1), named_range(KDim, 0, size2)
         )
+        set_at(as_fieldop(stencil, domain)(inp1, inp2), domain, make_tuple(out1, out2))
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
@@ -159,15 +153,13 @@ def test_asymetric_nested_tuple_of_field_output_constructed_inside(program_proce
 
     @fendef
     def fencil(size0, size1, size2, inp1, inp2, inp3, out1, out2, out3):
-        closure(
-            cartesian_domain(
-                named_range(IDim, 0, size0),
-                named_range(JDim, 0, size1),
-                named_range(KDim, 0, size2),
-            ),
-            stencil,
+        domain = cartesian_domain(
+            named_range(IDim, 0, size0), named_range(JDim, 0, size1), named_range(KDim, 0, size2)
+        )
+        set_at(
+            as_fieldop(stencil, domain)(inp1, inp2, inp3),
+            domain,
             make_tuple(make_tuple(out1, out2), out3),
-            [inp1, inp2, inp3],
         )
 
     shape = [5, 7, 9]

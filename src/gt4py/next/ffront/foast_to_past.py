@@ -12,7 +12,7 @@ from typing import Any, Optional
 from gt4py.eve import utils as eve_utils
 from gt4py.next.ffront import (
     dialect_ast_enums,
-    foast_to_itir,
+    foast_to_gtir,
     program_ast as past,
     stages as ffront_stages,
     type_specifications as ts_ffront,
@@ -43,6 +43,11 @@ class ItirShim:
         return self.definition.data.foast_node.type
 
     def __gt_itir__(self) -> itir.Expr:
+        return self.foast_to_itir(self.definition)
+
+    # FIXME[#1582](tehrengruber): remove after refactoring to GTIR
+    def __gt_gtir__(self) -> itir.Expr:
+        # backend should have self.foast_to_itir set to foast_to_gtir
         return self.foast_to_itir(self.definition)
 
 
@@ -164,7 +169,7 @@ def operator_to_program_factory(
 ) -> workflow.Workflow[AOT_FOP, AOT_PRG]:
     """Optionally wrap `OperatorToProgram` in a `CachedStep`."""
     wf: workflow.Workflow[AOT_FOP, AOT_PRG] = OperatorToProgram(
-        foast_to_itir_step or foast_to_itir.adapted_foast_to_itir_factory()
+        foast_to_itir_step or foast_to_gtir.adapted_foast_to_gtir_factory()
     )
     if cached:
         wf = workflow.CachedStep(wf, hash_function=ffront_stages.fingerprint_stage)
