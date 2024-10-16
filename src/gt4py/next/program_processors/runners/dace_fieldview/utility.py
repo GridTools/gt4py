@@ -11,10 +11,7 @@ from __future__ import annotations
 import itertools
 from typing import Any
 
-from gt4py import eve
 from gt4py.next import common as gtx_common
-from gt4py.next.iterator import ir as gtir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -65,30 +62,3 @@ def get_tuple_type(data: tuple[Any, ...]) -> ts.TupleType:
     return ts.TupleType(
         types=[get_tuple_type(d) if isinstance(d, tuple) else d.data_type for d in data]
     )
-
-
-def patch_gtir(ir: gtir.Program) -> gtir.Program:
-    """
-    Make the IR compliant with the requirements of lowering to SDFG.
-
-    Applies canonicalization of as_fieldop expressions as well as some temporary workarounds.
-    This allows to lower the IR to SDFG for some special cases.
-    """
-
-    class PatchGTIR(eve.PreserveLocationVisitor, eve.NodeTranslator):
-        def visit_FunCall(self, node: gtir.FunCall) -> gtir.Node:
-            if cpm.is_applied_as_fieldop(node):
-                assert isinstance(node.fun, gtir.FunCall)
-                assert isinstance(node.type, ts.FieldType)
-
-                # Handle the case of fieldop without domain. This case should never happen, but domain
-                # inference currently produces this kind of nodes for unreferenced tuple fields.
-                # TODO(tehrengruber): remove this workaround once domain ineference supports this case
-                if len(node.fun.args) == 1:
-                    return gtir.Literal(value="0", type=node.type.dtype)
-
-            node.args = self.visit(node.args)
-            node.fun = self.visit(node.fun)
-            return node
-
-    return PatchGTIR().visit(ir)

@@ -226,8 +226,6 @@ def translate_as_fieldop(
 
     if cpm.is_ref_to(stencil_expr, "deref"):
         # special usage of deref in fieldop expression to broadcast a scalar value
-        # TODO(edopao): remove once PR #1677 is merged
-
         assert len(node.args) == 1
         assert isinstance(node.args[0].type, ts.ScalarType)
         scalar_expr = _parse_fieldop_arg(

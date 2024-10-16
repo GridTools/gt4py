@@ -677,7 +677,6 @@ def build_sdfg_from_gtir(
 
     ir = gtir_type_inference.infer(ir, offset_provider=offset_provider)
     ir = ir_prune_casts.PruneCasts().visit(ir)
-    ir = dace_gtir_utils.patch_gtir(ir)
     sdfg_genenerator = GTIRToSDFG(offset_provider)
     sdfg = sdfg_genenerator.visit(ir)
     assert isinstance(sdfg, dace.SDFG)
