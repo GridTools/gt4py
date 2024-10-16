@@ -171,7 +171,8 @@ def _create_temporary_field(
 def extract_domain(node: gtir.Node) -> FieldopDomain:
     """
     Visits the domain of a field operator and returns a list of dimensions and
-    the corresponding lower and upper bounds.
+    the corresponding lower and upper bounds. The returned lower bound is inclusive,
+    the upper bound is exclusive: [lower_bound, upper_bound[
     """
     assert cpm.is_call_to(node, ("cartesian_domain", "unstructured_domain"))
 
@@ -282,16 +283,19 @@ def translate_as_fieldop(
     # In field view, the list of neighbors is built as argument to the current
     # expression. Therefore, the reduction identity value needs to be passed to
     # the argument visitor (`reduce_identity_for_args = reduce_identity`).
-    # However, when the argument visitor hits an expression returning a neighbors
-    # list (see the second if-branch), we stop carrying the reduce identity further
-    # (`reduce_identity_for_args = None`) because it is not needed aymore;
-    # the reason being that reduce operates along a single axis, which in this case
-    # corresponds to the local dimension of the list of neighbor values.
     if cpm.is_applied_reduce(stencil_expr.expr):
         if reduce_identity is not None:
             raise NotImplementedError("Nested reductions are not supported.")
         _, _, reduce_identity_for_args = gtir_dataflow.get_reduce_params(stencil_expr.expr)
     elif cpm.is_call_to(stencil_expr.expr, "neighbors"):
+        # When the visitor hits a neighbors expression, we stop carrying the reduce
+        # identity further (`reduce_identity_for_args = None`) because the reduce
+        # identity value is filled in place of skip values in the context of neighbors
+        # itself, not in the arguments context.
+        # Besides, setting `reduce_identity_for_args = None` enables a sanity check
+        # that the sequence 'reduce(V2E) -> neighbors(V2E) -> reduce(C2E) -> neighbors(C2E)'
+        # is accepted, while 'reduce(V2E) -> reduce(C2E) -> neighbors(V2E) -> neighbors(C2E)'
+        # is not. The latter sequence would raise the 'NotImplementedError' exception above.
         reduce_identity_for_args = None
     else:
         reduce_identity_for_args = reduce_identity
