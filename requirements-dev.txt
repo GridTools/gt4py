@@ -128,7 +128,7 @@ pytest-cov==5.0.0         # via -c constraints.txt, -r requirements-dev.in
 pytest-custom-exit-code==0.3.0  # via -c constraints.txt, -r requirements-dev.in
 pytest-factoryboy==2.7.0  # via -c constraints.txt, -r requirements-dev.in
 pytest-instafail==0.5.0   # via -c constraints.txt, -r requirements-dev.in
-# pytest-xdist[psutil]==3.6.1  # via -c constraints.txt, -r requirements-dev.in
+pytest-xdist[psutil]==3.6.1  # via -c constraints.txt, -r requirements-dev.in
 python-dateutil==2.9.0.post0  # via -c constraints.txt, faker, jupyter-client, matplotlib
 python-dotenv==1.0.1      # via -c constraints.txt, pydantic-settings
 pytz==2024.2              # via -c constraints.txt, babel
