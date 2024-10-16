@@ -112,7 +112,6 @@ def apply_common_transforms(
             offset_provider=offset_provider,
             # TODO(tehrengruber): disabled since it increases compile-time too much right now
             flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
-            field_view_only=False,
         )
         # This pass is required such that a deref outside of a
         # `tuple_get(make_tuple(let(...), ...))` call is propagated into the let after the

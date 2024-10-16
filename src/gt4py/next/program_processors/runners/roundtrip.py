@@ -194,7 +194,6 @@ class Roundtrip(workflow.Workflow[stages.CompilableProgram, stages.CompiledProgr
     def __call__(self, inp: stages.CompilableProgram) -> stages.CompiledProgram:
         debug = config.DEBUG if self.debug is None else self.debug
 
-        assert isinstance(inp.data, itir.Program)
         fencil = fencil_generator(
             inp.data,
             offset_provider=inp.args.offset_provider,

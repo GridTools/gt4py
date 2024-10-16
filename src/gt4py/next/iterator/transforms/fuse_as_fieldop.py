@@ -54,6 +54,14 @@ def _canonicalize_as_fieldop(expr: itir.FunCall) -> itir.FunCall:
     return expr
 
 
+def _is_tuple_expr_of_literals(expr: itir.Expr):
+    if cpm.is_call_to(expr, "make_tuple"):
+        return all(_is_tuple_expr_of_literals(arg) for arg in expr.args)
+    if cpm.is_call_to(expr, "tuple_get"):
+        return _is_tuple_expr_of_literals(expr.args[1])
+    return isinstance(expr, itir.Literal)
+
+
 @dataclasses.dataclass
 class FuseAsFieldOp(eve.NodeTranslator):
     """
@@ -153,9 +161,9 @@ class FuseAsFieldOp(eve.NodeTranslator):
 
             for stencil_param, arg, arg_shifts in zip(stencil.params, args, shifts, strict=True):
                 assert isinstance(arg.type, ts.TypeSpec)
-                dtype = type_info.extract_dtype(arg.type)
+                dtype = type_info.apply_to_primitive_constituents(type_info.extract_dtype, arg.type)
                 # TODO(tehrengruber): make this configurable
-                should_inline = isinstance(arg, itir.Literal) or (
+                should_inline = _is_tuple_expr_of_literals(arg) or (
                     isinstance(arg, itir.FunCall)
                     and (
                         cpm.is_call_to(arg.fun, "as_fieldop")
@@ -172,7 +180,7 @@ class FuseAsFieldOp(eve.NodeTranslator):
                         type_ = arg.type
                         arg = im.op_as_fieldop("if_")(*arg.args)
                         arg.type = type_
-                    elif isinstance(arg, itir.Literal):
+                    elif _is_tuple_expr_of_literals(arg):
                         arg = im.op_as_fieldop(im.lambda_()(arg))()
                     else:
                         raise NotImplementedError()

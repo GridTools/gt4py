@@ -11,6 +11,7 @@ from typing import Callable, Optional
 from gt4py.eve import utils as eve_utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import (
+    fencil_to_program,
     fuse_as_fieldop,
     global_tmps,
     infer_domain,
@@ -46,6 +47,9 @@ def apply_common_transforms(
     ] = None,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
 ) -> itir.Program:
+    # FIXME[#1582](tehrengruber): Rewrite iterator tests with itir.Program and remove this
+    if isinstance(ir, itir.FencilDefinition):
+        ir = fencil_to_program.FencilToProgram.apply(ir)
     assert isinstance(ir, itir.Program)
 
     tmp_uids = eve_utils.UIDGenerator(prefix="__tmp")
@@ -60,6 +64,7 @@ def apply_common_transforms(
     # note: this increases the size of the tree
     # Inline. The domain inference can not handle "user" functions, e.g. `let f = λ(...) → ... in f(...)`
     ir = InlineLambdas.apply(ir, opcount_preserving=True, force_inline_lambda_args=True)
+    # todo: run collapse tuple
     ir = infer_domain.infer_program(
         ir,  # type: ignore[arg-type]  # always an itir.Program
         offset_provider=offset_provider,

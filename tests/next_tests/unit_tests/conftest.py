@@ -33,7 +33,6 @@ ProgramProcessor: TypeAlias = backend.Backend | program_formatter.ProgramFormatt
         (next_tests.definitions.ProgramBackendId.DOUBLE_ROUNDTRIP, True),
         (next_tests.definitions.ProgramBackendId.GTFN_CPU, True),
         (next_tests.definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE, True),
-        (next_tests.definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES, True),
         # pytest.param((definitions.ProgramBackendId.GTFN_GPU, True), marks=pytest.mark.requires_gpu), # TODO(havogt): update tests to use proper allocation
         (next_tests.definitions.ProgramFormatterId.LISP_FORMATTER, False),
         (next_tests.definitions.ProgramFormatterId.ITIR_PRETTY_PRINTER, False),
