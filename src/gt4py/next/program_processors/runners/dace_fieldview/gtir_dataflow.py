@@ -569,6 +569,8 @@ class LambdaToDataflow(eve.NodeVisitor):
         the domain of the local dimension (in this example, max neighbors in V2E).
 
         The result is a 1D local field, with same size as the input local dimension.
+        In above example, the result would be an array with size V2E.max_neighbors,
+        containing the V2E neighbor values incremented by 1.0.
         """
         assert isinstance(node.type, itir_ts.ListType)
         assert isinstance(node.fun, gtir.FunCall)
