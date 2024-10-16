@@ -64,7 +64,8 @@ def apply_common_transforms(
     # note: this increases the size of the tree
     # Inline. The domain inference can not handle "user" functions, e.g. `let f = λ(...) → ... in f(...)`
     ir = InlineLambdas.apply(ir, opcount_preserving=True, force_inline_lambda_args=True)
-    # todo: run collapse tuple
+    # required in order to get rid of expressions without a domain (e.g. when a tuple element is never accessed)
+    ir = CollapseTuple.apply(ir, offset_provider=offset_provider)
     ir = infer_domain.infer_program(
         ir,  # type: ignore[arg-type]  # always an itir.Program
         offset_provider=offset_provider,

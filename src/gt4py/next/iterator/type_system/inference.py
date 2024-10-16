@@ -435,7 +435,7 @@ class ITIRTypeInference(eve.NodeTranslator):
         result = super().visit(node, **kwargs)
         if isinstance(node, itir.Node):
             if isinstance(result, ts.TypeSpec):
-                if node.type:
+                if node.type and not isinstance(node.type, ts.DeferredType):
                     assert _is_compatible_type(node.type, result)
                 node.type = result
             elif isinstance(result, ObservableTypeSynthesizer) or result is None:
@@ -511,17 +511,18 @@ class ITIRTypeInference(eve.NodeTranslator):
                 path,
                 node.expr.type,
             )
-            assert isinstance(target_type, ts.FieldType)
-            assert isinstance(expr_type, ts.FieldType)
+            assert isinstance(target_type, (ts.FieldType, ts.DeferredType))
+            assert isinstance(expr_type, (ts.FieldType, ts.DeferredType))
             # TODO(tehrengruber): The lowering emits domains that always have the horizontal domain
             #  first. Since the expr inherits the ordering from the domain this can lead to a mismatch
             #  between the target and expr (e.g. when the target has dimension K, Vertex). We should
             #  probably just change the behaviour of the lowering. Until then we do this more
             #  complicated comparison.
-            assert (
-                set(expr_type.dims) == set(target_type.dims)
-                and target_type.dtype == expr_type.dtype
-            )
+            if isinstance(target_type, ts.FieldType) and isinstance(expr_type, ts.FieldType):
+                assert (
+                    set(expr_type.dims) == set(target_type.dims)
+                    and target_type.dtype == expr_type.dtype
+                )
 
     # TODO(tehrengruber): Remove after new ITIR format with apply_stencil is used everywhere
     def visit_StencilClosure(self, node: itir.StencilClosure, *, ctx) -> it_ts.StencilClosureType:

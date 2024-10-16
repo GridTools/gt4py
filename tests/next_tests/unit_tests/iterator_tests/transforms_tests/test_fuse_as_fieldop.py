@@ -53,7 +53,17 @@ def test_tuple_arg():
         ),
         3,
     )
-    expected = im.as_fieldop(im.lambda_()(im.plus(im.multiplies_(1, 2), 3)), d)()
+    expected = im.as_fieldop(
+        im.lambda_()(
+            im.plus(
+                im.let("t", im.make_tuple(1, 2))(
+                    im.plus(im.tuple_get(0, "t"), im.tuple_get(1, "t"))
+                ),
+                3,
+            )
+        ),
+        d,
+    )()
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
         testee, offset_provider={}, allow_undeclared_symbols=True
     )
