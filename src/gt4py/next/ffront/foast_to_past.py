@@ -68,7 +68,7 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
         ... def copy(a: gtx.Field[[IDim], gtx.float32]) -> gtx.Field[[IDim], gtx.float32]:
         ...     return a
 
-        >>> op_to_prog = OperatorToProgram(foast_to_itir.adapted_foast_to_itir_factory())
+        >>> op_to_prog = OperatorToProgram(foast_to_gtir.adapted_foast_to_gtir_factory())
 
         >>> compile_time_args = arguments.CompileTimeArgs(
         ...     args=tuple(param.type for param in copy.foast_stage.foast_node.definition.params),
