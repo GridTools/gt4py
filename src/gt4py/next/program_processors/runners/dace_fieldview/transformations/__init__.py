@@ -12,26 +12,32 @@ Please also see [ADR0018](https://github.com/GridTools/gt4py/tree/main/docs/deve
 that explains the general structure and requirements on the SDFGs.
 """
 
-from .auto_opt import (
+from .auto_optimize import gt_auto_optimize
+from .gpu_utils import GPUSetBlockSize, gt_gpu_transformation, gt_set_gpu_blocksize
+from .loop_blocking import LoopBlocking
+from .map_fusion_parallel import MapFusionParallel
+from .map_fusion_serial import MapFusionSerial
+from .map_orderer import MapIterationOrder
+from .map_promoter import SerialMapPromoter
+from .simplify import (
     GT_SIMPLIFY_DEFAULT_SKIP_SET,
-    gt_auto_optimize,
+    GT4PyRednundantArrayElimination,
     gt_inline_nested_sdfg,
+    gt_reduce_distributed_buffering,
     gt_set_iteration_order,
     gt_simplify,
 )
-from .gpu_utils import GPUSetBlockSize, gt_gpu_transformation, gt_set_gpu_blocksize
-from .loop_blocking import LoopBlocking
-from .map_orderer import MapIterationOrder
-from .map_promoter import SerialMapPromoter
-from .map_serial_fusion import SerialMapFusion
+from .util import gt_make_transients_persistent
 
 
 __all__ = [
     "GT_SIMPLIFY_DEFAULT_SKIP_SET",
     "GPUSetBlockSize",
+    "GT4PyRednundantArrayElimination",
     "LoopBlocking",
     "MapIterationOrder",
-    "SerialMapFusion",
+    "MapFusionParallel",
+    "MapFusionSerial",
     "SerialMapPromoter",
     "SerialMapPromoterGPU",
     "gt_auto_optimize",
@@ -40,4 +46,6 @@ __all__ = [
     "gt_set_iteration_order",
     "gt_set_gpu_blocksize",
     "gt_simplify",
+    "gt_make_transients_persistent",
+    "gt_reduce_distributed_buffering",
 ]
