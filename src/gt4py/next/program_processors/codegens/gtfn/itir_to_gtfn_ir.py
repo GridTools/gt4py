@@ -15,7 +15,7 @@ from gt4py.eve import utils as eve_utils
 from gt4py.eve.concepts import SymbolName
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import (
     Backend,
@@ -45,7 +45,6 @@ from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import (
 )
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_common import Expr, Node, Sym, SymRef
 from gt4py.next.type_system import type_info, type_specifications as ts
-from gt4py.next.iterator.ir_utils import ir_makers as im
 
 
 def pytype_to_cpptype(t: ts.ScalarType | str) -> Optional[str]:

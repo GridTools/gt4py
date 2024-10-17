@@ -27,10 +27,7 @@ from gt4py.next.type_system import type_info, type_specifications as ts
 def _transform_if(
     stmt: itir.Stmt, declarations: list[itir.Temporary], uids: eve_utils.UIDGenerator
 ) -> Optional[list[itir.Stmt]]:
-    if not isinstance(stmt, itir.SetAt):
-        return None
-
-    if cpm.is_call_to(stmt.expr, "if_"):
+    if isinstance(stmt, itir.SetAt) and cpm.is_call_to(stmt.expr, "if_"):
         cond, true_val, false_val = stmt.expr.args
         return [
             itir.IfStmt(
@@ -51,7 +48,10 @@ def _transform_if(
 
 
 def _transform_by_pattern(
-    stmt: itir.Stmt, predicate, declarations: list[itir.Temporary], uids: eve_utils.UIDGenerator
+    stmt: itir.Stmt,
+    predicate: Callable[[itir.Expr, int], bool],
+    declarations: list[itir.Temporary],
+    uids: eve_utils.UIDGenerator,
 ) -> Optional[list[itir.Stmt]]:
     if not isinstance(stmt, itir.SetAt):
         return None
@@ -76,7 +76,7 @@ def _transform_by_pattern(
         for tmp_sym, tmp_expr in extracted_fields.items():
             domain = tmp_expr.annex.domain
 
-            # TODO(tehrengruber): Implement. This happens when the expression for a combination
+            # TODO(tehrengruber): Implement. This happens when the expression is a combination
             #  of an `if_` call with a tuple, e.g., `if_(cond, {a, b}, {c, d})`. As long as we are
             #  able to eliminate all tuples, e.g., by propagating the scalar ifs to the top-level
             #  of a SetAt, the CollapseTuple pass will eliminate most of this cases.
@@ -86,7 +86,7 @@ def _transform_by_pattern(
                 )
                 if not all(d == flattened_domains[0] for d in flattened_domains):
                     raise NotImplementedError(
-                        "Tuple expressions with different domains is not " "supported yet."
+                        "Tuple expressions with different domains is not supported yet."
                     )
                 domain = flattened_domains[0]
             assert isinstance(domain, domain_utils.SymbolicDomain)
@@ -107,12 +107,10 @@ def _transform_by_pattern(
             )
 
             # allocate temporary for all tuple elements
-            def allocate_temporary(tmp_name: str, dtype: ts.ScalarType, domain: itir.Expr):
-                declarations.append(itir.Temporary(id=tmp_name, domain=domain, dtype=dtype))
+            def allocate_temporary(tmp_name: str, dtype: ts.ScalarType):
+                declarations.append(itir.Temporary(id=tmp_name, domain=domain_expr, dtype=dtype))  # noqa: B023 # function only used inside loop
 
-            next_utils.tree_map(functools.partial(allocate_temporary, domain=domain_expr))(
-                tmp_names, tmp_dtypes
-            )
+            next_utils.tree_map(allocate_temporary)(tmp_names, tmp_dtypes)
 
             # if the expr is a field this just gives a simple `itir.SymRef`, otherwise we generate a
             #  `make_tuple` expression.
