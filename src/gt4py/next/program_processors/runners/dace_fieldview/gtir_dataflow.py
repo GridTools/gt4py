@@ -691,26 +691,19 @@ class LambdaToDataflow(eve.NodeVisitor):
 
             origin_map_index = dace_gtir_utils.get_map_variable(offset_provider.origin_axis)
 
-            connectivity_slice_view, _ = self.sdfg.add_view(
-                f"{connectivity}_view",
-                (offset_provider.max_neighbors,),
-                connectivity_desc.dtype,
-                strides=(connectivity_desc.strides[1],),
-                find_new_name=True,
-            )
-            connectivity_slice_node = self.state.add_access(connectivity_slice_view)
-            self._add_input_data_edge(
-                self.state.add_access(connectivity),
-                sbs.Range.from_string(f"{origin_map_index}, 0:{offset_provider.max_neighbors}"),
-                connectivity_slice_node,
+            connectivity_slice = self._construct_local_view(
+                MemletExpr(
+                    self.state.add_access(connectivity),
+                    sbs.Range.from_string(f"{origin_map_index}, 0:{offset_provider.max_neighbors}"),
+                )
             )
 
             assert self.reduce_identity is not None
             assert self.reduce_identity.dtype == dtype
             input_memlets["__neighbor_idx"] = dace.Memlet(
-                data=connectivity_slice_view, subset=map_index
+                data=connectivity_slice.node.data, subset=map_index
             )
-            input_nodes[connectivity_slice_view] = connectivity_slice_node
+            input_nodes[connectivity_slice.node.data] = connectivity_slice.node
             tasklet_expression += f" if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {dtype}({self.reduce_identity.value})"
 
         self._add_mapped_tasklet(
