@@ -88,7 +88,7 @@ class DataflowBuilder(Protocol):
         outputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
         **kwargs: Any,
     ) -> tuple[dace.nodes.Tasklet, dace.nodes.MapEntry, dace.nodes.MapExit]:
-        """Wrapper of `dace.SDFGState.add_tasklet` that assigns unique name."""
+        """Wrapper of `dace.SDFGState.add_mapped_tasklet` that assigns unique name."""
         unique_name = self.unique_tasklet_name(name)
         return state.add_mapped_tasklet(unique_name, map_ranges, inputs, code, outputs, **kwargs)
 

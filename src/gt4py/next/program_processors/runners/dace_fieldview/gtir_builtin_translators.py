@@ -44,9 +44,9 @@ FieldopDomain: TypeAlias = list[
 ]
 """
 Domain of a field operator represented as a list of tuples with 3 elements:
- - dimension
- - symbolic expression for lower bound
- - symbolic expression for upper bound
+ - dimension definition
+ - symbolic expression for lower bound (inclusive)
+ - symbolic expression for upper bound (exclusive)
 """
 
 
