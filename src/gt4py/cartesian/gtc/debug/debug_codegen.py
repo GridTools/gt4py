@@ -235,7 +235,7 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         )
 
     def visit_BinaryOp(self, binary: BinaryOp, **_) -> str:
-        return self.visit(binary.left) + str(binary.op) + self.visit(binary.right)
+        return f"( {self.visit(binary.left)} {binary.op} {self.visit(binary.right)} )"
 
     def visit_Literal(self, literal: Literal, **_) -> str:
         if literal.dtype.bit_count() != 4:
