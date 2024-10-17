@@ -622,6 +622,7 @@ class DistributedBufferRelocater(dace_transformation.Pass):
             }
 
         # Now we have to find the places where the temporary sources are defined.
+        #  I.e. This is also the location where the original value is defined.
         result: list[tuple[AccessLocation, list[AccessLocation]]] = []
         for src_cont in candidate_src_cont:
             def_locations: list[AccessLocation] = []
@@ -634,5 +635,15 @@ class DistributedBufferRelocater(dace_transformation.Pass):
                     )
             if len(def_locations) != 0:
                 result.append((src_cont, def_locations))
+
+        # We know that the temporary value is not modified between when it is written
+        #  and where it is used, i.e. written back to global memory. But this can
+        #  not be said for non global memory, i.e. what we have. So we heve to ensure
+        #  that it is not read/written between the location were the temporary is
+        #  defined, i.e. the new location will be, and where it is currently written
+        #  to.
+        # TODO(phimuell): Implement this.
+        def state_inbetween(state1: dace.SDFGState, state2: dace.SDFGState) -> set[dace.SDFGState]:
+            return reachable[state1].difference(reachable[state2])
 
         return result
