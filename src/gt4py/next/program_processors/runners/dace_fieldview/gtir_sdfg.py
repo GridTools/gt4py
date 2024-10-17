@@ -32,7 +32,6 @@ from gt4py.next.program_processors.runners.dace_common import utility as dace_ut
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_builtin_translators,
     gtir_dataflow,
-    transformations as gtx_transformations,
     utility as dace_gtir_utils,
 )
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
@@ -665,7 +664,6 @@ def build_sdfg_from_gtir(
 
     The lowering to SDFG requires that the program node is type-annotated, therefore this function
     runs type ineference as first step.
-    As a final step, it runs the `simplify` pass to ensure that the SDFG is in the DaCe canonical form.
 
     Arguments:
         ir: The GTIR program node to be lowered to SDFG
@@ -681,5 +679,4 @@ def build_sdfg_from_gtir(
     sdfg = sdfg_genenerator.visit(ir)
     assert isinstance(sdfg, dace.SDFG)
 
-    gtx_transformations.gt_simplify(sdfg)
     return sdfg
