@@ -96,6 +96,16 @@ def _set_node_type(node: itir.Node, type_: ts.TypeSpec) -> None:
     node.type = type_
 
 
+def copy_type(from_: itir.Node, to: itir.Node) -> None:
+    """
+    Copy type from one node to another.
+
+    This function mainly exists for readability reasons.
+    """
+    assert isinstance(from_.type, ts.TypeSpec)
+    _set_node_type(to, from_.type)
+
+
 def on_inferred(callback: Callable, *args: Union[ts.TypeSpec, ObservableTypeSynthesizer]) -> None:
     """
     Execute `callback` as soon as all `args` have a type.
@@ -494,9 +504,11 @@ class ITIRTypeInference(eve.NodeTranslator):
     def visit_Temporary(self, node: itir.Temporary, *, ctx) -> ts.FieldType | ts.TupleType:
         domain = self.visit(node.domain, ctx=ctx)
         assert isinstance(domain, it_ts.DomainType)
+        assert domain.dims != "unknown"
         assert node.dtype
         return type_info.apply_to_primitive_constituents(
-            lambda dtype: ts.FieldType(dims=domain.dims, dtype=dtype), node.dtype
+            lambda dtype: ts.FieldType(dims=domain.dims, dtype=dtype),  # type: ignore[arg-type]  # ensured by domain.dims != "unknown" above
+            node.dtype,
         )
 
     def visit_IfStmt(self, node: itir.IfStmt, *, ctx) -> None:
