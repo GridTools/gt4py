@@ -36,14 +36,16 @@ if TYPE_CHECKING:
 @dataclasses.dataclass(frozen=True)
 class Field:
     """
-    Represents a field in the SDFG.
+    Represents some data used in the SDFG.
 
     Arguments:
         data_node: Access node to the data storage.
-        data_type: GT4Py type definition, which includes domain information.
+        data_type: GT4Py type definition, which includes the field domain information.
         local_offset: Must be set for `FieldType` with a local dimension generated
             from neighbors access in unstructured domain, and indicates the name
             of the offset provider used to generate the list of neighbor values.
+            It is always 'None' for scalar data. `FieldType` with 'local_offset=None'
+            contain only global (horizontal or vertical) dimensions.
     """
 
     data_node: dace.nodes.AccessNode
@@ -427,6 +429,8 @@ def _get_data_nodes(
         if len(local_dims) > 1:
             raise ValueError(f"Field {sym_name} has more than one local dimension.")
         elif len(local_dims) == 1:
+            # we ensure that the name of the local dimension corresponds to a valid
+            # connectivity-based offset provider
             local_offset = next(iter(local_dims)).value
             offset_provider = sdfg_builder.get_offset_provider(local_offset)
             assert isinstance(offset_provider, gtx_common.Connectivity)

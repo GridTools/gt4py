@@ -36,10 +36,12 @@ class DataExpr:
 
     Arguments:
         node: Access node to the data storage, can be either a scalar or a local list.
-        dtype: GT4Py type definition, which includes domain information.
-        local_offset: Must be set for `ListType` data generated from neighbors
-            access in unstructured domain, in which case it indicates the name of
-            the offset provider used to generate the list of neighbor values.
+        dtype: GT4Py type definition, which includes the field domain information.
+        local_offset: Must be set for `FieldType` with a local dimension generated
+            from neighbors access in unstructured domain, and indicates the name
+            of the offset provider used to generate the list of neighbor values.
+            It is always 'None' for scalar data. `FieldType` with 'local_offset=None'
+            contain only global (horizontal or vertical) dimensions.
     """
 
     node: dace.nodes.AccessNode
@@ -53,11 +55,13 @@ class MemletExpr:
     Scalar or array data access through a memlet.
 
     Arguments:
-        node: Access node to the source storage, can be either a scalar or a local list.
+        node: Access node to the data storage, can be either a scalar or a local list.
         subset: Represents the subset to use in memlet to access the above data.
-        local_offset: Must be set for `ListType` data generated from neighbors
-            access in unstructured domain, in which case it indicates the name of
-            the offset provider used to generate the list of neighbor values.
+        local_offset: Must be set for `FieldType` with a local dimension generated
+            from neighbors access in unstructured domain, and indicates the name
+            of the offset provider used to generate the list of neighbor values.
+            It is always 'None' for scalar data. `FieldType` with 'local_offset=None'
+            contain only global (horizontal or vertical) dimensions.
     """
 
     node: dace.nodes.AccessNode
@@ -682,7 +686,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         if len(skip_value_connectivities) != 0:
             # In case one or more of input expressions contain skip values, we use
-            # the connectivity with skip values as mask for map computation.
+            # the connectivity-based offset provider as mask for map computation.
             local_offset, offset_provider = skip_value_connectivities[0]
 
             connectivity = dace_utils.connectivity_identifier(local_offset)
