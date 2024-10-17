@@ -577,11 +577,13 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         if offset_provider.has_skip_values:
             if self.reduce_identity is None:
-                skip_value = "0"  # just a dummy value
+                skip_value = "__field[0]"  # just a dummy value
             else:
                 assert self.reduce_identity.dtype == field_desc.dtype
-                skip_value = self.reduce_identity.value
-            tasklet_expression += f" if {index_connector} != {gtx_common._DEFAULT_SKIP_VALUE} else {field_desc.dtype}({skip_value})"
+                skip_value = f"{field_desc.dtype}({self.reduce_identity.value})"
+            tasklet_expression += (
+                f" if {index_connector} != {gtx_common._DEFAULT_SKIP_VALUE} else {skip_value}"
+            )
 
         self._add_mapped_tasklet(
             name=f"{offset}_neighbors",
@@ -755,12 +757,17 @@ class LambdaToDataflow(eve.NodeVisitor):
         if len(input_desc.shape) != 1:
             raise ValueError(f"More than one local dimension in reduce expression {node}.")
 
-        if isinstance(input_expr, MemletExpr) and input_expr.local_offset:
+        reduce_wcr = "lambda x, y: " + gtir_python_codegen.format_builtin(op_name, "x", "y")
+        reduce_node = self.state.add_reduce(reduce_wcr, axes=None, identity=reduce_init.value)
+
+        assert input_expr.local_offset is not None
+        offset_provider = self.subgraph_builder.get_offset_provider(input_expr.local_offset)
+        assert isinstance(offset_provider, gtx_common.Connectivity)
+
+        if isinstance(input_expr, MemletExpr) and offset_provider.has_skip_values:
             offset_dim = gtx_common.Dimension(
                 input_expr.local_offset, gtx_common.DimensionKind.LOCAL
             )
-            offset_provider = self.subgraph_builder.get_offset_provider(input_expr.local_offset)
-            assert isinstance(offset_provider, gtx_common.Connectivity)
 
             # we setup a mapped tasklet to fill the skip values with the reduce identity value
             map_index = dace_gtir_utils.get_map_variable(offset_dim)
@@ -781,7 +788,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
             self._add_mapped_tasklet(
                 name="fill_skip_values",
-                map_ranges={map_index: f"0:{input_desc.shape[0]}"},
+                map_ranges={map_index: f"0:{offset_provider.max_neighbors}"},
                 code=f"__out = __inp if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {reduce_identity.dtype}({reduce_identity.value})",
                 inputs={
                     "__inp": dace.Memlet(data=input_node.data, subset=map_index),
@@ -800,17 +807,20 @@ class LambdaToDataflow(eve.NodeVisitor):
                 external_edges=True,
             )
 
-            # use the newly create data as input to reduction
-            input_node = filled_input_node
+            # use the newly created data as input to reduction
+            self.state.add_nedge(
+                filled_input_node,
+                reduce_node,
+                self.sdfg.make_array_memlet(filled_input_node.data),
+            )
 
-        reduce_wcr = "lambda x, y: " + gtir_python_codegen.format_builtin(op_name, "x", "y")
-        reduce_node = self.state.add_reduce(reduce_wcr, axes=None, identity=reduce_init.value)
-
-        self.state.add_nedge(
-            input_node,
-            reduce_node,
-            self.sdfg.make_array_memlet(input_node.data),
-        )
+        else:
+            # full connectivity, no skip values
+            self.state.add_nedge(
+                input_node,
+                reduce_node,
+                self.sdfg.make_array_memlet(input_node.data),
+            )
 
         temp_name = self.sdfg.temp_data_name()
         self.sdfg.add_scalar(temp_name, reduce_identity.dtype, transient=True)
