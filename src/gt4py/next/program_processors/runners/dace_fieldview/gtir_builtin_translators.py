@@ -48,7 +48,7 @@ class Field:
 
     data_node: dace.nodes.AccessNode
     data_type: ts.FieldType | ts.ScalarType
-    local_offset: Optional[str] = None
+    local_offset: Optional[str]
 
 
 FieldopDomain: TypeAlias = list[
@@ -380,7 +380,7 @@ def translate_if(
         data_name, _ = sdfg.add_temp_transient_like(desc)
         data_node = state.add_access(data_name)
 
-        return Field(data_node, x.data_type)
+        return Field(data_node, x.data_type, x.local_offset)
 
     result_temps = gtx_utils.tree_map(make_temps)(true_br_args)
 
@@ -441,7 +441,7 @@ def _get_data_nodes(
             sym_node = _get_symbolic_value(
                 sdfg, state, sdfg_builder, sym_name, sym_type, temp_name=f"__{sym_name}"
             )
-        return Field(sym_node, sym_type)
+        return Field(sym_node, sym_type, local_offset=None)
     elif isinstance(sym_type, ts.TupleType):
         tuple_fields = dace_gtir_utils.get_tuple_fields(sym_name, sym_type)
         return tuple(
@@ -497,7 +497,7 @@ def translate_literal(
     data_type = node.type
     data_node = _get_symbolic_value(sdfg, state, sdfg_builder, node.value, data_type)
 
-    return Field(data_node, data_type)
+    return Field(data_node, data_type, local_offset=None)
 
 
 def translate_make_tuple(
@@ -632,7 +632,7 @@ def translate_scalar_expr(
         dace.Memlet(data=temp_name, subset="0"),
     )
 
-    return Field(temp_node, node.type)
+    return Field(temp_node, node.type, local_offset=None)
 
 
 def translate_symbol_ref(
