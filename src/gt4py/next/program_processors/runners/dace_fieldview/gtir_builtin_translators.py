@@ -225,7 +225,9 @@ def translate_as_fieldop(
     domain_index = sbs.Indices([dace_gtir_utils.get_map_variable(dim) for dim, _, _ in domain])
 
     if cpm.is_ref_to(stencil_expr, "deref"):
-        # special usage of deref in fieldop expression to broadcast a scalar value
+        # Special usage of 'deref' as argument to fieldop expression, to pass a scalar
+        # value to 'as_fieldop' function. It results in broadcasting the scalar value
+        # over the field domain.
         assert len(node.args) == 1
         assert isinstance(node.args[0].type, ts.ScalarType)
         scalar_expr = _parse_fieldop_arg(
@@ -258,7 +260,7 @@ def translate_as_fieldop(
         return result_field
 
     # Handle default case: the argument expression is a lambda function representing
-    # the stencil operation to be computed on the field domain.
+    # the stencil operation to be computed over the field domain.
     assert isinstance(stencil_expr, gtir.Lambda)
 
     # The reduction identity value is used in place of skip values when building
