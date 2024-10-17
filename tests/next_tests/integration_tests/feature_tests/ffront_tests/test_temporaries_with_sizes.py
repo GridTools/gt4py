@@ -11,8 +11,8 @@ from numpy import int32, int64
 
 from gt4py import next as gtx
 from gt4py.next import backend, common
-from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms
-from gt4py.next.program_processors.runners.gtfn import run_gtfn_with_temporaries
+from gt4py.next.iterator.transforms import apply_common_transforms
+from gt4py.next.program_processors.runners.gtfn import run_gtfn
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
@@ -34,8 +34,8 @@ def run_gtfn_with_temporaries_and_symbolic_sizes():
     return backend.Backend(
         name="run_gtfn_with_temporaries_and_sizes",
         transforms=backend.DEFAULT_TRANSFORMS,
-        executor=run_gtfn_with_temporaries.executor.replace(
-            translation=run_gtfn_with_temporaries.executor.translation.replace(
+        executor=run_gtfn.executor.replace(
+            translation=run_gtfn.executor.translation.replace(
                 symbolic_domain_sizes={
                     "Cell": "num_cells",
                     "Edge": "num_edges",
@@ -43,7 +43,7 @@ def run_gtfn_with_temporaries_and_symbolic_sizes():
                 }
             )
         ),
-        allocator=run_gtfn_with_temporaries.allocator,
+        allocator=run_gtfn.allocator,
     )
 
 
@@ -64,9 +64,6 @@ def testee():
 
 
 def test_verification(testee, run_gtfn_with_temporaries_and_symbolic_sizes, mesh_descriptor):
-    # FIXME[#1582](tehrengruber): enable when temporary pass has been implemented
-    pytest.xfail("Temporary pass not implemented.")
-
     unstructured_case = Case(
         run_gtfn_with_temporaries_and_symbolic_sizes,
         offset_provider=mesh_descriptor.offset_provider,
@@ -100,12 +97,9 @@ def test_verification(testee, run_gtfn_with_temporaries_and_symbolic_sizes, mesh
 
 
 def test_temporary_symbols(testee, mesh_descriptor):
-    # FIXME[#1582](tehrengruber): enable when temporary pass has been implemented
-    pytest.xfail("Temporary pass not implemented.")
-
     itir_with_tmp = apply_common_transforms(
         testee.itir,
-        lift_mode=LiftMode.USE_TEMPORARIES,
+        extract_temporaries=True,
         offset_provider=mesh_descriptor.offset_provider,
     )
 
