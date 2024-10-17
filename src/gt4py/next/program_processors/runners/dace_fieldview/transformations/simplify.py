@@ -8,8 +8,9 @@
 
 """The GT4Py specific simplification pass."""
 
+import collections
 import copy
-from typing import Any, Final, Iterable, Optional, Union
+from typing import Any, Final, Iterable, Optional, TypeAlias, Union
 
 import dace
 from dace import (
@@ -19,7 +20,11 @@ from dace import (
     transformation as dace_transformation,
 )
 from dace.sdfg import nodes as dace_nodes
-from dace.transformation import dataflow as dace_dataflow, passes as dace_passes
+from dace.transformation import (
+    dataflow as dace_dataflow,
+    pass_pipeline as dace_ppl,
+    passes as dace_passes,
+)
 
 from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace_fieldview import (
@@ -201,6 +206,21 @@ def gt_inline_nested_sdfg(
     if nb_preproccess_total != 0:
         result["PruneSymbols|PruneConnectors"] = nb_preproccess_total
     return result if result else None
+
+
+def gt_reduce_distributed_buffering(
+    sdfg: dace.SDFG,
+) -> Optional[dict[dace.SDFG, dict[dace.SDFGState, set[str]]]]:
+    """Removes distributed write back buffers."""
+    pipeline = dace_ppl.Pipeline([DistributedBufferRelocater()])
+    all_result = {}
+
+    for rsdfg in sdfg.all_sdfgs_recursive():
+        ret = pipeline.apply_pass(sdfg, {})
+        if ret is not None:
+            all_result[rsdfg] = ret
+
+    return all_result
 
 
 @dace_properties.make_properties
@@ -430,3 +450,189 @@ class GT4PyRednundantArrayElimination(dace_transformation.SingleStateTransformat
         assert graph.degree(read_an) == 0
         graph.remove_node(read_an)
         sdfg.remove_data(read_name)
+
+
+AccessLocation: TypeAlias = tuple[dace.SDFGState, dace_nodes.AccessNode]
+"""Describes an access node and the state in which it is located.
+"""
+
+
+@dace_properties.make_properties
+class DistributedBufferRelocater(dace_transformation.Pass):
+    """Moves the final write back of the results to where it is needed.
+
+    In certain cases, especially in case where we have `if` the result is computed
+    in each branch and then in the join state written back. Thus there is some
+    additional storage needed.
+    The transformation will look for the following situation:
+    - A transient data container, called `src_cont`, is written into another
+        container, called `dst_cont`, which is not transient.
+    - The access node of `src_cont` has an in degree of zero and an out degree of one.
+    - The access node of `dst_cont` has an in degree of of one and an
+        out degree of zero (this might be lifted).
+    - `src_cont` is not used afterwards.
+    - `dst_cont` is only used to implement the buffering.
+
+    The function will relocate the writing of `dst_cont` to where `src_cont` is
+    written, which might be multiple locations.
+    It will also remove the writing back.
+    It is advised that after this transformation simplify is run again.
+
+    Note:
+        Essentially this transformation removes the double buffering of `dst_cont`.
+        Because we ensure that that `dst_cont` is non transient this is okay, as our
+        rule guarantees this.
+
+    Todo: Also check if the stuff we write back to is used in between.
+    """
+
+    CATEGORY: str = "Simplification"
+
+    def modifies(self) -> dace_ppl.Modifies:
+        return dace_ppl.Modifies.Memlets | dace_ppl.Modifies.AccessNodes
+
+    def should_reapply(self, modified: dace_ppl.Modifies) -> bool:
+        return modified & (dace_ppl.Modifies.Memlets | dace_ppl.Modifies.AccessNodes)
+
+    def depends_on(self) -> set[type[dace_transformation.Pass]]:
+        return {
+            dace_transformation.passes.analysis.StateReachability,
+            dace_transformation.passes.analysis.AccessSets,
+        }
+
+    def apply_pass(
+        self, sdfg: dace.SDFG, pipeline_results: dict[str, Any]
+    ) -> Optional[dict[dace.SDFGState, set[str]]]:
+        """
+        Removes double buffering that is distrbuted among multiple states.
+
+        Returns:
+            TBA
+
+        Args:
+            sdfg: The SDFG to process.
+            pipeline_results: Result of previous analysis passes.
+        """
+        reachable: dict[dace.SDFGState, set[dace.SDFGState]] = pipeline_results[
+            "StateReachability"
+        ][sdfg.cfg_id]
+        access_sets: dict[dace.SDFGState, tuple[set[str], set[str]]] = pipeline_results[
+            "AccessSets"
+        ][sdfg.cfg_id]
+        result: dict[dace.SDFGState, set[str]] = collections.defaultdict(set)
+
+        to_relocate = self._find_candidates(sdfg, reachable, access_sets)
+        if len(to_relocate) == 0:
+            return None
+        self._relocate_write_backs(sdfg, to_relocate)
+
+        for (wb_an, wb_state), _ in to_relocate:
+            result[wb_state].add(wb_an.data)
+
+        return result
+
+    def _relocate_write_backs(
+        self,
+        sdfg: dace.SDFG,
+        to_relocate: list[tuple[AccessLocation, list[AccessLocation]]],
+    ) -> None:
+        """Perform the actual relocation."""
+        for (wb_an, wb_state), def_locations in to_relocate:
+            # Get the memlet that we have to replicate.
+            wb_edge = next(iter(wb_state.out_edges(wb_an)))
+            wb_memlet: dace.Memlet = wb_edge.data
+            final_dest_name: str = wb_edge.dst.data
+
+            for def_an, def_state in def_locations:
+                def_state.add_edge(
+                    def_an,
+                    wb_edge.src_conn,
+                    def_state.add_access(final_dest_name),
+                    wb_edge.dst_conn,
+                    copy.deepcopy(wb_memlet),
+                )
+
+            # Now remove the old node and if the old target become isolated
+            #  remove that as well.
+            old_dst = wb_edge.dst
+            wb_state.remove_node(wb_an)
+            if wb_state.degree(old_dst) == 0:
+                wb_state.remove_node(old_dst)
+
+    def _find_candidates(
+        self,
+        sdfg: dace.SDFG,
+        reachable: dict[dace.SDFGState, set[dace.SDFGState]],
+        access_sets: dict[dace.SDFGState, tuple[set[str], set[str]]],
+    ) -> list[tuple[AccessLocation, list[AccessLocation]]]:
+        """Determines all candidates that needs to be processed.
+
+        Returns:
+            A list of tuples. The first element of a tuple is an `AccessLocation`,
+            describing where the write back occurs. The second element is a list,
+            containing the locations where the node is originally written.
+        """
+        # First lets find us all nodes that might be `src_cont` candidate.
+        candidate_src_cont: list[AccessLocation] = []
+        for state in sdfg.states():
+            candidate_dst_nodes: set[dace_nodes.AccessNode] = {
+                node
+                for node in state.sink_nodes()
+                if isinstance(node, dace_nodes.AccessNode) and (not node.desc(sdfg).transient)
+            }
+            if len(candidate_dst_nodes) == 0:
+                continue
+
+            for src_cont in state.source_nodes():
+                if not isinstance(src_cont, dace_nodes.AccessNode):
+                    continue
+                if state.out_degree(src_cont) != 1:
+                    continue
+                if not src_cont.desc(sdfg).transient:
+                    continue
+                if not all(edge.dst in candidate_dst_nodes for edge in state.out_edges(src_cont)):
+                    continue
+                candidate_src_cont.append((src_cont, state))
+
+        if len(candidate_src_cont) == 0:
+            return []
+
+        # Now we have to ensure that after `src_cont` has been read is no longer in use.
+        def is_not_used_after(data: str, wb_state: dace.SDFGState) -> bool:
+            for down_state in reachable[wb_state]:
+                if any(data in read_set for read_set, _ in access_sets[down_state]):
+                    return False
+            return True
+
+        candidate_src_cont = [
+            wb_location
+            for wb_location in candidate_src_cont
+            if is_not_used_after(wb_location[0].data, wb_location[1])
+        ]
+
+        if len(candidate_src_cont) == 0:
+            return []
+
+        # Now we have to find the place where the temporary is written.
+        def find_upstream_states(state: dace.SDFGState) -> set[dace.SDFGState]:
+            return {
+                astate
+                for astate in sdfg.states()
+                if astate not in reachable[state] and astate is not state
+            }
+
+        # Now we have to find the places where the temporary sources are defined.
+        result: list[tuple[AccessLocation, list[AccessLocation]]] = []
+        for src_cont in candidate_src_cont:
+            def_locations: list[AccessLocation] = []
+            for upstream_state in find_upstream_states(src_cont[1]):
+                if src_cont[0].data in access_sets[upstream_state][1]:
+                    def_locations.extend(
+                        (data_node, upstream_state)
+                        for data_node in upstream_state.data_nodes()
+                        if data_node.data == src_cont[0].data
+                    )
+            if len(def_locations) != 0:
+                result.append((src_cont, def_locations))
+
+        return result

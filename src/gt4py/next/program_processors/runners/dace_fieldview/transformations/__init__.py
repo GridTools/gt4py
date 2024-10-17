@@ -23,6 +23,7 @@ from .simplify import (
     GT_SIMPLIFY_DEFAULT_SKIP_SET,
     GT4PyRednundantArrayElimination,
     gt_inline_nested_sdfg,
+    gt_reduce_distributed_buffering,
     gt_set_iteration_order,
     gt_simplify,
 )
@@ -46,4 +47,5 @@ __all__ = [
     "gt_set_gpu_blocksize",
     "gt_simplify",
     "gt_make_transients_persistent",
+    "gt_reduce_distributed_buffering",
 ]
