@@ -478,3 +478,16 @@ def test_if_stmt():
     result = itir_type_inference.infer(testee, offset_provider={}, allow_undeclared_symbols=True)
     assert result.cond.type == bool_type
     assert result.true_branch[0].expr.type == float_i_field
+
+
+def test_as_fieldop_without_domain():
+    testee = im.as_fieldop(im.lambda_("it")(im.deref(im.shift("IOff", 1)("it"))))(
+        im.ref("inp", float_i_field)
+    )
+    result = itir_type_inference.infer(
+        testee, offset_provider={"IOff": IDim}, allow_undeclared_symbols=True
+    )
+    assert result.type == ts.DeferredType(constraint=ts.FieldType)
+    assert result.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
+        position_dims="unknown", defined_dims=float_i_field.dims, element_type=float_i_field.dtype
+    )
