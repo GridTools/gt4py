@@ -8,6 +8,7 @@
 
 import pytest
 
+from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
 
@@ -38,6 +39,21 @@ test_data = [
             im.plus("x", "x")
         ),
         im.multiplies_(im.plus(2, 1), im.plus("x", "x")),
+    ),
+    (
+        # ensure opcount preserving option works whether `itir.SymRef` has a type or not
+        "typed_ref",
+        im.let("a", im.call("opaque")())(
+            im.plus(im.ref("a", ts.ScalarType(kind=ts.ScalarKind.FLOAT32)), im.ref("a", None))
+        ),
+        {
+            True: im.let("a", im.call("opaque")())(
+                im.plus(  # stays as is
+                    im.ref("a", ts.ScalarType(kind=ts.ScalarKind.FLOAT32)), im.ref("a", None)
+                )
+            ),
+            False: im.plus(im.call("opaque")(), im.call("opaque")()),
+        },
     ),
 ]
 
