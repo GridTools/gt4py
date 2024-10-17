@@ -233,8 +233,7 @@ class GT4PyRednundantArrayElimination(dace_transformation.SingleStateTransformat
     - `read` is a transient non view array.
     - `write` has input degree 1 and output degree zero (sink node might be lifted).
     - `read` has input degree larger than zero and output degree 1.
-    - `read` does not appear in any other state; by construction in other states
-        it can only be read.
+    - `read` does not appear in any other state that is reachable from this state.
     - `read` and `write` have the same dimensionality.
     - In case they have different sizes the following must hold:
         - `read` has input degree 1.
@@ -286,8 +285,6 @@ class GT4PyRednundantArrayElimination(dace_transformation.SingleStateTransformat
             return False
         if graph.in_degree(write_an) != 1:
             return False
-        if len(read_desc.shape) != len(write_desc.shape):
-            return False
 
         # NOTE:
         #   We do _not_ require that the whole `read` array is read, nor this array
@@ -325,14 +322,30 @@ class GT4PyRednundantArrayElimination(dace_transformation.SingleStateTransformat
 
         # Check if used anywhere else.
         # TODO(phimuell): Find a way to cache this information.
-        read_name: str = read_an.data
-        for state in sdfg.states():
-            if any(
-                (node is not read_an) and (read_name == node.data) for node in state.data_nodes()
-            ):
-                return False
+        if self._check_if_read_is_used_downstream(graph, sdfg):
+            return False
 
         return True
+
+    def _check_if_read_is_used_downstream(
+        self,
+        state: dace.SDFGState,
+        sdfg: dace.SDFG,
+    ) -> bool:
+        read_an: dace_nodes.AccessNode = self.read
+        read_name: str = read_an.data
+
+        to_visit: list[dace.SDFGState] = [edge.dst for edge in sdfg.out_edges(state)]
+        seen: set[dace.SDFGState] = {state}
+
+        while len(to_visit) != 0:
+            state_to_inspect = to_visit.pop()
+            if any(dnode.data == read_name for dnode in state_to_inspect.data_nodes()):
+                return True
+            to_visit.extend(
+                edge.dst for edge in sdfg.out_edges(state_to_inspect) if edge.dst not in seen
+            )
+        return False
 
     def apply(
         self,
@@ -449,7 +462,12 @@ class GT4PyRednundantArrayElimination(dace_transformation.SingleStateTransformat
 
         assert graph.degree(read_an) == 0
         graph.remove_node(read_an)
-        sdfg.remove_data(read_name)
+        try:
+            sdfg.remove_data(read_name)
+        except ValueError:
+            # This might happen if the data is still used somewhere else, but the
+            #  transformation has decided that it is safe to remove it.
+            pass
 
 
 AccessLocation: TypeAlias = tuple[dace.SDFGState, dace_nodes.AccessNode]
