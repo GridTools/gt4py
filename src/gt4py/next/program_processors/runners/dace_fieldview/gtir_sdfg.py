@@ -77,6 +77,21 @@ class DataflowBuilder(Protocol):
         unique_name = self.unique_tasklet_name(name)
         return state.add_tasklet(unique_name, inputs, outputs, code, **kwargs)
 
+    def add_mapped_tasklet(
+        self,
+        name: str,
+        state: dace.SDFGState,
+        map_ranges: Dict[str, str | dace.subsets.Subset]
+        | List[Tuple[str, str | dace.subsets.Subset]],
+        inputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
+        code: str,
+        outputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
+        **kwargs: Any,
+    ) -> tuple[dace.nodes.Tasklet, dace.nodes.MapEntry, dace.nodes.MapExit]:
+        """Wrapper of `dace.SDFGState.add_mapped_tasklet` that assigns unique name."""
+        unique_name = self.unique_tasklet_name(name)
+        return state.add_mapped_tasklet(unique_name, map_ranges, inputs, code, outputs, **kwargs)
+
 
 class SDFGBuilder(DataflowBuilder, Protocol):
     """Visitor interface available to GTIR-primitive translators."""
@@ -111,7 +126,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     map_uids: eve.utils.UIDGenerator = dataclasses.field(
         init=False, repr=False, default_factory=lambda: eve.utils.UIDGenerator(prefix="map")
     )
-    tesklet_uids: eve.utils.UIDGenerator = dataclasses.field(
+    tasklet_uids: eve.utils.UIDGenerator = dataclasses.field(
         init=False, repr=False, default_factory=lambda: eve.utils.UIDGenerator(prefix="tlet")
     )
 
@@ -125,7 +140,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         return f"{self.map_uids.sequential_id()}_{name}"
 
     def unique_tasklet_name(self, name: str) -> str:
-        return f"{self.tesklet_uids.sequential_id()}_{name}"
+        return f"{self.tasklet_uids.sequential_id()}_{name}"
 
     def _make_array_shape_and_strides(
         self, name: str, dims: Sequence[gtx_common.Dimension]
@@ -353,7 +368,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         target_fields = self._visit_expression(stmt.target, sdfg, state, use_temp=False)
 
         # convert domain expression to dictionary to ease access to dimension boundaries
-        domain = dace_gtir_utils.get_domain_ranges(stmt.domain)
+        domain = {
+            dim: (lb, ub) for dim, lb, ub in gtir_builtin_translators.extract_domain(stmt.domain)
+        }
 
         expr_input_args = {
             sym_id
@@ -422,7 +439,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 node, sdfg, head_state, self, reduce_identity
             )
         elif cpm.is_applied_as_fieldop(node):
-            return gtir_builtin_translators.translate_as_field_op(
+            return gtir_builtin_translators.translate_as_fieldop(
                 node, sdfg, head_state, self, reduce_identity
             )
         elif isinstance(node.fun, gtir.Lambda):
