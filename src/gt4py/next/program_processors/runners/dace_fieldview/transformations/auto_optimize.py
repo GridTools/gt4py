@@ -120,6 +120,8 @@ def gt_auto_optimize(
             validate=validate,
             validate_all=validate_all,
         )
+        gtx_transformations.gt_reduce_distributed_buffering(sdfg)
+        gtx_transformations.gt_simplify(sdfg)
 
         sdfg.apply_transformations_repeated(
             [
