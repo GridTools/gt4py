@@ -20,7 +20,6 @@ from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.type_system import type_specifications as itir_ts
-from gt4py.next.ffront import fbuiltins as gtx_fbuiltins
 from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_python_codegen,
@@ -580,7 +579,8 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         if offset_provider.has_skip_values:
             tasklet_expression += (
-                f" if {index_connector} != {gtx_common._DEFAULT_SKIP_VALUE} else __field[0]"
+                # in case of skip value we could write any dummy value
+                f" if {index_connector} != {gtx_common._DEFAULT_SKIP_VALUE} else {field_desc.dtype}(0)"
             )
 
         self._add_mapped_tasklet(
@@ -706,7 +706,8 @@ class LambdaToDataflow(eve.NodeVisitor):
             input_nodes[connectivity_slice.node.data] = connectivity_slice.node
 
             tasklet_expression += (
-                f" if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {input_connectors[0]}"
+                # in case of skip value we could write any dummy value
+                f" if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {dtype}(0)"
             )
 
         self._add_mapped_tasklet(
