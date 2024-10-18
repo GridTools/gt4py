@@ -45,6 +45,7 @@ def apply_common_transforms(
     temporary_extraction_heuristics: Optional[
         Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
     ] = None,
+    # FIXME[#1582](tehrengruber): Revisit and cleanup after new GTIR temporary pass is in place
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
 ) -> itir.Program:
     # FIXME[#1582](tehrengruber): Rewrite iterator tests with itir.Program and remove this
