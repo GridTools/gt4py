@@ -40,10 +40,11 @@ dace_backend = pytest.importorskip("gt4py.next.program_processors.runners.dace_f
 
 
 N = 10
-IFTYPE = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
-CFTYPE = ts.FieldType(dims=[Cell], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
-EFTYPE = ts.FieldType(dims=[Edge], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
-VFTYPE = ts.FieldType(dims=[Vertex], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+FLOAT_TYPE = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+IFTYPE = ts.FieldType(dims=[IDim], dtype=FLOAT_TYPE)
+CFTYPE = ts.FieldType(dims=[Cell], dtype=FLOAT_TYPE)
+EFTYPE = ts.FieldType(dims=[Edge], dtype=FLOAT_TYPE)
+VFTYPE = ts.FieldType(dims=[Vertex], dtype=FLOAT_TYPE)
 V2E_FTYPE = ts.FieldType(dims=[Vertex, V2EDim], dtype=EFTYPE.dtype)
 CARTESIAN_OFFSETS = {
     "IDim": IDim,
@@ -313,6 +314,62 @@ def test_gtir_tuple_expr():
 
     sdfg(a, b, c, **FSYMBOLS)
     assert np.allclose(c, a * 2 + b)
+
+
+def test_gtir_tuple_broadcast_scalar():
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
+    testee = gtir.Program(
+        id="gtir_tuple_broadcast_scalar",
+        function_definitions=[],
+        params=[
+            gtir.Sym(
+                id="x",
+                type=ts.TupleType(types=[FLOAT_TYPE, ts.TupleType(types=[FLOAT_TYPE, FLOAT_TYPE])]),
+            ),
+            gtir.Sym(id="y", type=IFTYPE),
+            gtir.Sym(id="size", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.as_fieldop("deref", domain)(
+                    im.plus(
+                        im.tuple_get(0, "x"),
+                        im.plus(
+                            im.multiplies_(
+                                im.tuple_get(
+                                    0,
+                                    im.tuple_get(1, "x"),
+                                ),
+                                2.0,
+                            ),
+                            im.multiplies_(
+                                im.tuple_get(
+                                    1,
+                                    im.tuple_get(1, "x"),
+                                ),
+                                3.0,
+                            ),
+                        ),
+                    )
+                ),
+                domain=domain,
+                target=gtir.SymRef(id="y"),
+            )
+        ],
+    )
+
+    a = np.random.rand()
+    b = np.random.rand()
+    c = np.random.rand()
+    d = np.empty(N, dtype=type(a))
+
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
+
+    x_fields = (a, b, c)
+
+    sdfg(*x_fields, d, **FSYMBOLS)
+    assert np.allclose(d, a + 2 * b + 3 * c)
 
 
 def test_gtir_tuple_return():
@@ -954,8 +1011,8 @@ def test_gtir_connectivity_shift():
         im.op_as_fieldop("plus", edge_domain)("e2v_offset", 0),
     )
 
-    CE_FTYPE = ts.FieldType(dims=[Cell, Edge], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
-    EV_FTYPE = ts.FieldType(dims=[Edge, Vertex], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+    CE_FTYPE = ts.FieldType(dims=[Cell, Edge], dtype=FLOAT_TYPE)
+    EV_FTYPE = ts.FieldType(dims=[Edge, Vertex], dtype=FLOAT_TYPE)
     CELL_OFFSET_FTYPE = ts.FieldType(dims=[Cell], dtype=SIZE_TYPE)
     EDGE_OFFSET_FTYPE = ts.FieldType(dims=[Edge], dtype=SIZE_TYPE)
 
