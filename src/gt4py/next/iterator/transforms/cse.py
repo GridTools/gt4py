@@ -32,7 +32,7 @@ from gt4py.next.type_system import type_info, type_specifications as ts
 
 @dataclasses.dataclass
 class _NodeReplacer(PreserveLocationVisitor, NodeTranslator):
-    PRESERVED_ANNEX_ATTRS = ("type",)
+    PRESERVED_ANNEX_ATTRS = ("type", "domain")
 
     expr_map: dict[int, itir.SymRef]
 
@@ -43,15 +43,16 @@ class _NodeReplacer(PreserveLocationVisitor, NodeTranslator):
 
     def visit_FunCall(self, node: itir.FunCall) -> itir.Node:
         node = cast(itir.FunCall, self.visit_Expr(node))
+        # TODO(tehrengruber): Use symbol name from the inner let, to increase readability of IR
         # If we encounter an expression like:
         #  (λ(_cs_1) → (λ(a) → a+a)(_cs_1))(outer_expr)
         # (non-recursively) inline the lambda to obtain:
         #  (λ(_cs_1) → _cs_1+_cs_1)(outer_expr)
-        # This allows identifying more common subexpressions later on
+        # In the CSE this allows identifying more common subexpressions later on. Other users
+        # of `extract_subexpression` (e.g. temporary extraction) can also rely on this to avoid
+        # the need to handle this artificial let-statements.
         if isinstance(node, itir.FunCall) and isinstance(node.fun, itir.Lambda):
-            eligible_params = []
-            for arg in node.args:
-                eligible_params.append(isinstance(arg, itir.SymRef) and arg.id.startswith("_cs"))
+            eligible_params = [isinstance(arg, itir.SymRef) for arg in node.args]
             if any(eligible_params):
                 # note: the inline is opcount preserving anyway so avoid the additional
                 # effort in the inliner by disabling opcount preservation.
@@ -319,7 +320,7 @@ def extract_subexpression(
     subexprs = CollectSubexpressions.apply(node)
 
     # collect multiple occurrences and map them to fresh symbols
-    expr_map = dict[int, itir.SymRef]()
+    expr_map: dict[int, itir.SymRef] = {}
     ignored_ids = set()
     for expr, subexpr_entry in (
         subexprs.items() if not deepest_expr_first else reversed(subexprs.items())
