@@ -728,91 +728,130 @@ class LambdaToDataflow(eve.NodeVisitor):
     def _visit_reduce(self, node: gtir.FunCall) -> DataExpr:
         assert isinstance(node.type, ts.ScalarType)
         op_name, reduce_init, reduce_identity = get_reduce_params(node)
-
         reduce_wcr = "lambda x, y: " + gtir_python_codegen.format_builtin(op_name, "x", "y")
-        reduce_node = self.state.add_reduce(reduce_wcr, axes=None, identity=reduce_init.value)
+
+        result = self.sdfg.temp_data_name()
+        self.sdfg.add_scalar(result, reduce_identity.dtype, transient=True)
+        result_node = self.state.add_access(result)
 
         input_expr = self.visit(node.args[0])
+        assert isinstance(input_expr, (MemletExpr, DataExpr))
         assert input_expr.local_offset is not None
         offset_provider = self.subgraph_builder.get_offset_provider(input_expr.local_offset)
         assert isinstance(offset_provider, gtx_common.Connectivity)
 
         if offset_provider.has_skip_values:
             # we setup a mapped tasklet to fill the skip values with the reduce identity value
-            offset_dim = gtx_common.Dimension(
-                input_expr.local_offset, gtx_common.DimensionKind.LOCAL
-            )
-            map_index = dace_gtir_utils.get_map_variable(offset_dim)
             origin_map_index = dace_gtir_utils.get_map_variable(offset_provider.origin_axis)
 
             connectivity = dace_utils.connectivity_identifier(input_expr.local_offset)
-            connectivity_desc = self.sdfg.arrays[connectivity]
+            connectivity_node = self.state.add_access(connectivity)
+            connectivity_desc = connectivity_node.desc(self.sdfg)
             connectivity_desc.transient = False
-            connectivity_slice = self._construct_local_view(
-                MemletExpr(
-                    self.state.add_access(connectivity),
-                    sbs.Range.from_string(f"{origin_map_index}, 0:{offset_provider.max_neighbors}"),
-                )
+
+            desc = input_expr.node.desc(self.sdfg)
+            if isinstance(input_expr, MemletExpr):
+                local_dim_indices = [
+                    i for i, size in enumerate(input_expr.subset.size()) if size != 1
+                ]
+            else:
+                local_dim_indices = list(range(len(desc.shape)))
+
+            assert len(local_dim_indices) == 1
+            local_dim_index = local_dim_indices[0]
+            assert desc.shape[local_dim_index] == offset_provider.max_neighbors
+
+            # we lower the reduction map with WCR out memlet in a nested SDFG
+            nsdfg = dace.SDFG("reduce_with_skip_values")
+            nsdfg.add_array(
+                "values",
+                (desc.shape[local_dim_index],),
+                desc.dtype,
+                strides=(desc.strides[local_dim_index],),
             )
-
-            local_values = self._construct_local_view(input_expr)
-            local_values_desc = local_values.node.desc(self.sdfg)
-
-            full_local_values, _ = self.sdfg.add_temp_transient(
-                local_values_desc.shape, local_values_desc.dtype
+            nsdfg.add_array(
+                "neighbor_indices",
+                (connectivity_desc.shape[1],),
+                connectivity_desc.dtype,
+                strides=(connectivity_desc.strides[1],),
             )
-            full_local_values_node = self.state.add_access(full_local_values)
-
-            self._add_mapped_tasklet(
-                name="fill_skip_values",
-                map_ranges={map_index: f"0:{offset_provider.max_neighbors}"},
-                code=f"__out = __inp if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {reduce_identity.dtype}({reduce_identity.value})",
+            nsdfg.add_scalar("acc", desc.dtype)
+            st_init = nsdfg.add_state("init")
+            st_init.add_edge(
+                st_init.add_tasklet(
+                    "init_acc",
+                    {},
+                    {"__val"},
+                    f"__val = {reduce_init.dtype}({reduce_init.value})",
+                ),
+                "__val",
+                st_init.add_access("acc"),
+                None,
+                dace.Memlet(data="acc", subset="0"),
+            )
+            st_reduce = nsdfg.add_state_after(st_init, "reduce")
+            st_reduce.add_mapped_tasklet(
+                name="reduce_with_skip_values",
+                map_ranges=dict(i=f"0:{offset_provider.max_neighbors}"),
                 inputs={
-                    "__inp": dace.Memlet(data=local_values.node.data, subset=map_index),
-                    "__neighbor_idx": dace.Memlet(
-                        data=connectivity_slice.node.data, subset=map_index
-                    ),
+                    "__val": dace.Memlet(data="values", subset="i"),
+                    "__neighbor_idx": dace.Memlet(data="neighbor_indices", subset="i"),
                 },
-                input_nodes={
-                    local_values.node.data: local_values.node,
-                    connectivity_slice.node.data: connectivity_slice.node,
-                },
+                code=f"__out = __val if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {reduce_identity.dtype}({reduce_identity.value})",
                 outputs={
-                    "__out": dace.Memlet(data=full_local_values, subset=map_index),
+                    "__out": dace.Memlet(data="acc", subset="0", wcr=reduce_wcr),
                 },
-                output_nodes={full_local_values: full_local_values_node},
                 external_edges=True,
             )
 
-            # use the newly created data as input to reduction
-            self.state.add_nedge(
-                full_local_values_node,
-                reduce_node,
-                self.sdfg.make_array_memlet(full_local_values_node.data),
+            nsdfg_node = self.state.add_nested_sdfg(
+                nsdfg, self.sdfg, inputs={"values", "neighbor_indices"}, outputs={"acc"}
             )
-
-        elif isinstance(input_expr, MemletExpr):
+            if isinstance(input_expr, MemletExpr):
+                self._add_input_data_edge(input_expr.node, input_expr.subset, nsdfg_node, "values")
+            else:
+                self.state.add_edge(
+                    input_expr.node,
+                    None,
+                    nsdfg_node,
+                    "values",
+                    self.sdfg.make_array_memlet(input_expr.node.data),
+                )
             self._add_input_data_edge(
-                input_expr.node,
-                input_expr.subset,
-                reduce_node,
+                connectivity_node,
+                sbs.Range.from_string(f"{origin_map_index}, 0:{offset_provider.max_neighbors}"),
+                nsdfg_node,
+                "neighbor_indices",
             )
+            self.state.add_edge(
+                nsdfg_node,
+                "acc",
+                result_node,
+                None,
+                dace.Memlet(data=result, subset="0"),
+            )
+
         else:
+            reduce_node = self.state.add_reduce(reduce_wcr, axes=None, identity=reduce_init.value)
+
+            if isinstance(input_expr, MemletExpr):
+                self._add_input_data_edge(
+                    input_expr.node,
+                    input_expr.subset,
+                    reduce_node,
+                )
+            else:
+                self.state.add_nedge(
+                    input_expr.node,
+                    reduce_node,
+                    self.sdfg.make_array_memlet(input_expr.node.data),
+                )
+
             self.state.add_nedge(
-                input_expr.node,
                 reduce_node,
-                self.sdfg.make_array_memlet(input_expr.node.data),
+                result_node,
+                dace.Memlet(data=result, subset="0"),
             )
-
-        result = self.sdfg.temp_data_name()
-        self.sdfg.add_scalar(result, reduce_identity.dtype, transient=True)
-        result_node = self.state.add_access(result)
-
-        self.state.add_nedge(
-            reduce_node,
-            result_node,
-            dace.Memlet(data=result, subset="0"),
-        )
 
         return DataExpr(result_node, node.type)
 
