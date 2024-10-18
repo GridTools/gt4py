@@ -209,8 +209,8 @@ def translate_as_fieldop(
     The dataflow can be as simple as a single tasklet, or implement a local computation
     as a composition of tasklets and even include a map to range on local dimensions (e.g.
     neighbors and map builtins).
-    The stencil dataflow is instantiated inside a map scope, which apply the stencil over
-    the field domain.
+    The stencil dataflow is instantiated inside a map scope, which applies the stencil
+    over the field domain.
     """
     assert isinstance(node, gtir.FunCall)
     assert cpm.is_call_to(node.fun, "as_fieldop")
@@ -219,11 +219,24 @@ def translate_as_fieldop(
     fun_node = node.fun
     assert len(fun_node.args) == 2
     stencil_expr, domain_expr = fun_node.args
-    assert isinstance(stencil_expr, gtir.Lambda)
-    assert isinstance(domain_expr, gtir.FunCall)
+
+    if isinstance(stencil_expr, gtir.Lambda):
+        # Default case, handled below: the argument expression is a lambda function
+        # representing the stencil operation to be computed over the field domain.
+        pass
+    elif cpm.is_ref_to(stencil_expr, "deref"):
+        # Special usage of 'deref' as argument to fieldop expression, to pass a scalar
+        # value to 'as_fieldop' function. It results in broadcasting the scalar value
+        # over the field domain.
+        return translate_broadcast_scalar(node, sdfg, state, sdfg_builder, reduce_identity)
+    else:
+        raise NotImplementedError(
+            f"Expression type '{type(stencil_expr)}' not supported as argument to 'as_fieldop' node."
+        )
 
     # parse the domain of the field operator
     domain = extract_domain(domain_expr)
+    domain_indices = sbs.Indices([dace_gtir_utils.get_map_variable(dim) for dim, _, _ in domain])
 
     # The reduction identity value is used in place of skip values when building
     # a list of neighbor values in the unstructured domain.
@@ -273,16 +286,15 @@ def translate_as_fieldop(
     input_edges, output = taskgen.visit(stencil_expr, args=stencil_args)
     output_desc = output.result.node.desc(sdfg)
 
-    domain_index = sbs.Indices([dace_gtir_utils.get_map_variable(dim) for dim, _, _ in domain])
     if isinstance(node.type.dtype, itir_ts.ListType):
         assert isinstance(output_desc, dace.data.Array)
         assert set(output_desc.offset) == {0}
         # additional local dimension for neighbors
         # TODO(phimuell): Investigate if we should swap the two.
-        output_subset = sbs.Range.from_indices(domain_index) + sbs.Range.from_array(output_desc)
+        output_subset = sbs.Range.from_indices(domain_indices) + sbs.Range.from_array(output_desc)
     else:
         assert isinstance(output_desc, dace.data.Scalar)
-        output_subset = sbs.Range.from_indices(domain_index)
+        output_subset = sbs.Range.from_indices(domain_indices)
 
     # create map range corresponding to the field operator domain
     me, mx = sdfg_builder.add_map(
@@ -303,6 +315,62 @@ def translate_as_fieldop(
 
     # and here the edge writing the result data through the map exit node
     output.connect(mx, result_field.data_node, output_subset)
+
+    return result_field
+
+
+def translate_broadcast_scalar(
+    node: gtir.Node,
+    sdfg: dace.SDFG,
+    state: dace.SDFGState,
+    sdfg_builder: gtir_sdfg.SDFGBuilder,
+    reduce_identity: Optional[gtir_dataflow.SymbolExpr],
+) -> FieldopResult:
+    """
+    Generates the dataflow subgraph for the 'as_fieldop' builtin function for the
+    special case where the argument to 'as_fieldop' is a 'deref' scalar expression,
+    rather than a lambda function. This case corresponds to broadcasting the scalar
+    value over the field domain. Therefore, it is lowered to a mapped tasklet that
+    just writes the scalar value out to all elements of the result field.
+    """
+    assert isinstance(node, gtir.FunCall)
+    assert cpm.is_call_to(node.fun, "as_fieldop")
+    assert isinstance(node.type, ts.FieldType)
+
+    fun_node = node.fun
+    assert len(fun_node.args) == 2
+    stencil_expr, domain_expr = fun_node.args
+    assert cpm.is_ref_to(stencil_expr, "deref")
+
+    domain = extract_domain(domain_expr)
+    domain_indices = sbs.Indices([dace_gtir_utils.get_map_variable(dim) for dim, _, _ in domain])
+
+    assert len(node.args) == 1
+    assert isinstance(node.args[0].type, ts.ScalarType)
+    scalar_expr = _parse_fieldop_arg(
+        node.args[0], sdfg, state, sdfg_builder, domain, reduce_identity=None
+    )
+    assert isinstance(scalar_expr, gtir_dataflow.MemletExpr)
+    assert scalar_expr.subset == sbs.Indices.from_string("0")
+    result = gtir_dataflow.DataflowOutputEdge(
+        state, gtir_dataflow.DataExpr(scalar_expr.node, node.args[0].type)
+    )
+    result_field = _create_temporary_field(sdfg, state, domain, node.type, dataflow_output=result)
+
+    sdfg_builder.add_mapped_tasklet(
+        "broadcast",
+        state,
+        map_ranges={
+            dace_gtir_utils.get_map_variable(dim): f"{lower_bound}:{upper_bound}"
+            for dim, lower_bound, upper_bound in domain
+        },
+        inputs={"__inp": dace.Memlet(data=scalar_expr.node.data, subset="0")},
+        code="__val = __inp",
+        outputs={"__val": dace.Memlet(data=result_field.data_node.data, subset=domain_indices)},
+        input_nodes={scalar_expr.node.data: scalar_expr.node},
+        output_nodes={result_field.data_node.data: result_field.data_node},
+        external_edges=True,
+    )
 
     return result_field
 
@@ -638,6 +706,7 @@ if TYPE_CHECKING:
     # Use type-checking to assert that all translator functions implement the `PrimitiveTranslator` protocol
     __primitive_translators: list[PrimitiveTranslator] = [
         translate_as_fieldop,
+        translate_broadcast_scalar,
         translate_if,
         translate_literal,
         translate_make_tuple,
