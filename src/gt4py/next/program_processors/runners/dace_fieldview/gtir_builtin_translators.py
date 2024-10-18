@@ -220,15 +220,19 @@ def translate_as_fieldop(
     assert len(fun_node.args) == 2
     stencil_expr, domain_expr = fun_node.args
 
-    if cpm.is_ref_to(stencil_expr, "deref"):
+    if isinstance(stencil_expr, gtir.Lambda):
+        # Default case, handled below: the argument expression is a lambda function
+        # representing the stencil operation to be computed over the field domain.
+        pass
+    elif cpm.is_ref_to(stencil_expr, "deref"):
         # Special usage of 'deref' as argument to fieldop expression, to pass a scalar
         # value to 'as_fieldop' function. It results in broadcasting the scalar value
         # over the field domain.
         return translate_broadcast_scalar(node, sdfg, state, sdfg_builder, reduce_identity)
-
-    # Handle default case: the argument expression is a lambda function representing
-    # the stencil operation to be computed over the field domain.
-    assert isinstance(stencil_expr, gtir.Lambda)
+    else:
+        raise NotImplementedError(
+            f"Expression type '{type(stencil_expr)}' not supported as argument to 'as_fieldop' node."
+        )
 
     # parse the domain of the field operator
     domain = extract_domain(domain_expr)
