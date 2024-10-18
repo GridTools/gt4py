@@ -17,7 +17,6 @@ import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
 from gt4py.eve.utils import content_hash
 from gt4py.next import backend, common, config
-from gt4py.next.iterator import transforms
 from gt4py.next.otf import arguments, recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import compiler
@@ -166,12 +165,6 @@ class GTFNBackendFactory(factory.Factory):
             ),
             name_cached="_cached",
         )
-        use_temporaries = factory.Trait(
-            # FIXME[#1582](tehrengruber): Revisit and cleanup after new GTIR temporary pass is in place
-            otf_workflow__translation__lift_mode=transforms.LiftMode.USE_TEMPORARIES,
-            # otf_workflow__translation__temporary_extraction_heuristics=global_tmps.SimpleTemporaryExtractionHeuristics,  # noqa: ERA001
-            name_temps="_with_temporaries",
-        )
         device_type = core_defs.DeviceType.CPU
         hash_function = compilation_hash
         otf_workflow = factory.SubFactory(
@@ -194,8 +187,6 @@ run_gtfn_imperative = GTFNBackendFactory(
 )
 
 run_gtfn_cached = GTFNBackendFactory(cached=True)
-
-run_gtfn_with_temporaries = GTFNBackendFactory(use_temporaries=True)
 
 run_gtfn_gpu = GTFNBackendFactory(gpu=True)
 

@@ -30,6 +30,21 @@ from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
+def _is_trivial_tuple_expr(node: itir.Expr):
+    """Return if node is a `make_tuple` call with all elements `SymRef`s, `Literal`s or tuples thereof."""
+    if cpm.is_call_to(node, "make_tuple") and all(
+        isinstance(arg, (itir.SymRef, itir.Literal)) or _is_trivial_tuple_expr(arg)
+        for arg in node.args
+    ):
+        return True
+    if cpm.is_call_to(node, "tuple_get") and (
+        isinstance(node.args[1], (itir.SymRef, itir.Literal))
+        or _is_trivial_tuple_expr(node.args[1])
+    ):
+        return True
+    return True
+
+
 @dataclasses.dataclass
 class _NodeReplacer(PreserveLocationVisitor, NodeTranslator):
     PRESERVED_ANNEX_ATTRS = ("type", "domain")
@@ -437,11 +452,13 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
                     # only extract fields outside of `as_fieldop`
                     # `as_fieldop(...)(field_expr, field_expr)`
                     # -> `(λ(_cs_1) → as_fieldop(...)(_cs_1, _cs_1))(field_expr)`
+                    # only extract if subexpression is not a trivial tuple expressions, e.g.,
+                    # `make_tuple(a, b)`, as this would result in a more costly temporary.
                     assert isinstance(subexpr.type, ts.TypeSpec)
                     if all(
                         isinstance(stype, ts.FieldType)
                         for stype in type_info.primitive_constituents(subexpr.type)
-                    ):
+                    ) and not _is_trivial_tuple_expr(subexpr):
                         return True
             return False
 

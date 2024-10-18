@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from gt4py.next.iterator.transforms.pass_manager import LiftMode, apply_common_transforms
+from gt4py.next.iterator.transforms.pass_manager import apply_common_transforms
 
 
-__all__ = ["apply_common_transforms", "LiftMode"]
+__all__ = ["apply_common_transforms"]

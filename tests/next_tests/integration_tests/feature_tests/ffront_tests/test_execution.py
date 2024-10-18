@@ -684,9 +684,6 @@ def test_fieldop_from_scan(cartesian_case, forward):
 @pytest.mark.uses_lift_expressions
 @pytest.mark.uses_scan_nested
 def test_solve_triag(cartesian_case):
-    if cartesian_case.backend == gtfn.run_gtfn_with_temporaries:
-        pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
-
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))
     def tridiag_forward(
         state: tuple[float, float], a: float, b: float, c: float, d: float
@@ -785,9 +782,6 @@ def test_ternary_builtin_neighbor_sum(unstructured_case):
 
 @pytest.mark.uses_scan
 def test_ternary_scan(cartesian_case):
-    if cartesian_case.backend in [gtfn.run_gtfn_with_temporaries]:
-        pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
-
     @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
     def simple_scan_operator(carry: float, a: float) -> float:
         return carry if carry > a else carry + 1.0
@@ -810,9 +804,6 @@ def test_ternary_scan(cartesian_case):
 @pytest.mark.uses_scan_without_field_args
 @pytest.mark.uses_tuple_returns
 def test_scan_nested_tuple_output(forward, cartesian_case):
-    if cartesian_case.backend in [gtfn.run_gtfn_with_temporaries]:
-        pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
-
     init = (1, (2, 3))
     k_size = cartesian_case.default_sizes[KDim]
     expected = np.arange(1, 1 + k_size, 1, dtype=int32)
