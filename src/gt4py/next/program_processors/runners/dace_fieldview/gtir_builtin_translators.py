@@ -35,8 +35,22 @@ if TYPE_CHECKING:
 
 @dataclasses.dataclass(frozen=True)
 class Field:
+    """
+    Represents some data used in the SDFG.
+
+    Arguments:
+        data_node: Access node to the data storage.
+        data_type: GT4Py type definition, which includes the field domain information.
+        local_offset: Must be set for `FieldType` with a local dimension generated
+            from neighbors access in unstructured domain, and indicates the name
+            of the offset provider used to generate the list of neighbor values.
+            It is always 'None' for scalar data. `FieldType` with 'local_offset=None'
+            contain only global (horizontal or vertical) dimensions.
+    """
+
     data_node: dace.nodes.AccessNode
     data_type: ts.FieldType | ts.ScalarType
+    local_offset: Optional[str]
 
 
 FieldopDomain: TypeAlias = list[
@@ -123,7 +137,7 @@ def _parse_fieldop_arg(
             # dereferencing elements in `ListType`
             [gtx_common.Dimension("")] if isinstance(arg.data_type.dtype, itir_ts.ListType) else []
         )
-        return gtir_dataflow.IteratorExpr(arg.data_node, dims, indices)
+        return gtir_dataflow.IteratorExpr(arg.data_node, dims, indices, arg.local_offset)
     else:
         raise NotImplementedError(f"Node type {type(arg.data_type)} not supported.")
 
@@ -165,7 +179,7 @@ def _create_temporary_field(
     field_node = state.add_access(temp_name)
     field_type = ts.FieldType(field_dims, node_type.dtype)
 
-    return Field(field_node, field_type)
+    return Field(field_node, field_type, local_offset=dataflow_output.result.local_offset)
 
 
 def extract_domain(node: gtir.Node) -> FieldopDomain:
@@ -436,7 +450,7 @@ def translate_if(
         data_name, _ = sdfg.add_temp_transient_like(desc)
         data_node = state.add_access(data_name)
 
-        return Field(data_node, x.data_type)
+        return Field(data_node, x.data_type, x.local_offset)
 
     result_temps = gtx_utils.tree_map(make_temps)(true_br_args)
 
@@ -479,7 +493,18 @@ def _get_data_nodes(
 ) -> FieldopResult:
     if isinstance(sym_type, ts.FieldType):
         sym_node = state.add_access(sym_name)
-        return Field(sym_node, sym_type)
+        local_dims = set(dim for dim in sym_type.dims if dim.kind == gtx_common.DimensionKind.LOCAL)
+        if len(local_dims) > 1:
+            raise ValueError(f"Field {sym_name} has more than one local dimension.")
+        elif len(local_dims) == 1:
+            # we ensure that the name of the local dimension corresponds to a valid
+            # connectivity-based offset provider
+            local_offset = next(iter(local_dims)).value
+            offset_provider = sdfg_builder.get_offset_provider(local_offset)
+            assert isinstance(offset_provider, gtx_common.Connectivity)
+        else:
+            local_offset = None
+        return Field(sym_node, sym_type, local_offset)
     elif isinstance(sym_type, ts.ScalarType):
         if sym_name in sdfg.arrays:
             # access the existing scalar container
@@ -488,7 +513,7 @@ def _get_data_nodes(
             sym_node = _get_symbolic_value(
                 sdfg, state, sdfg_builder, sym_name, sym_type, temp_name=f"__{sym_name}"
             )
-        return Field(sym_node, sym_type)
+        return Field(sym_node, sym_type, local_offset=None)
     elif isinstance(sym_type, ts.TupleType):
         tuple_fields = dace_gtir_utils.get_tuple_fields(sym_name, sym_type)
         return tuple(
@@ -544,7 +569,7 @@ def translate_literal(
     data_type = node.type
     data_node = _get_symbolic_value(sdfg, state, sdfg_builder, node.value, data_type)
 
-    return Field(data_node, data_type)
+    return Field(data_node, data_type, local_offset=None)
 
 
 def translate_make_tuple(
@@ -679,7 +704,7 @@ def translate_scalar_expr(
         dace.Memlet(data=temp_name, subset="0"),
     )
 
-    return Field(temp_node, node.type)
+    return Field(temp_node, node.type, local_offset=None)
 
 
 def translate_symbol_ref(
