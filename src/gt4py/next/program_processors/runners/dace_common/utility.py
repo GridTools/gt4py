@@ -37,12 +37,13 @@ def as_dace_type(type_: ts.ScalarType) -> dace.typeclass:
     raise ValueError(f"Scalar type '{type_}' not supported.")
 
 
-def as_scalar_type(typestr: str) -> ts.ScalarType:
-    """Obtain GT4Py scalar type from generic numpy string representation."""
+def as_itir_type(dtype: dace.typeclass) -> ts.ScalarType:
+    """Get GT4Py scalar representation of a DaCe type."""
+    type_name = str(dtype.as_numpy_dtype())
     try:
-        kind = getattr(ts.ScalarKind, typestr.upper())
+        kind = getattr(ts.ScalarKind, type_name.upper())
     except AttributeError as ex:
-        raise ValueError(f"Data type {typestr} not supported.") from ex
+        raise ValueError(f"Data type {type_name} not supported.") from ex
     return ts.ScalarType(kind)
 
 
