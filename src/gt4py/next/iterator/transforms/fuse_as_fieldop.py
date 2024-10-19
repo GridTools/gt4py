@@ -13,7 +13,12 @@ from gt4py import eve
 from gt4py.eve import utils as eve_utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
-from gt4py.next.iterator.transforms import inline_lambdas, inline_lifts, trace_shifts
+from gt4py.next.iterator.transforms import (
+    inline_center_deref_lift_vars,
+    inline_lambdas,
+    inline_lifts,
+    trace_shifts,
+)
 from gt4py.next.iterator.type_system import (
     inference as type_inference,
     type_specifications as it_ts,
@@ -202,15 +207,19 @@ class FuseAsFieldOp(eve.NodeTranslator):
                         new_param = stencil_param.id
                     new_args = _merge_arguments(new_args, {new_param: arg})
 
-            # simplify stencil directly to keep the tree small
-            new_stencil_body = inline_lambdas.InlineLambdas.apply(
-                new_stencil_body, opcount_preserving=True
-            )
-            new_stencil_body = inline_lifts.InlineLifts().visit(new_stencil_body)
-
             new_node = im.as_fieldop(im.lambda_(*new_args.keys())(new_stencil_body), domain)(
                 *new_args.values()
             )
+
+            # simplify stencil directly to keep the tree small
+            new_node = inline_center_deref_lift_vars.InlineCenterDerefLiftVars.apply(
+                new_node
+            )  # to keep the tree small
+            new_node = inline_lambdas.InlineLambdas.apply(
+                new_node, opcount_preserving=True, force_inline_lift_args=True
+            )
+            new_node = inline_lifts.InlineLifts().visit(new_node)
+
             type_inference.copy_type(from_=node, to=new_node)
 
             return new_node

@@ -24,6 +24,7 @@ from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 from gt4py.next.iterator.transforms.cse import CommonSubexpressionElimination
 from gt4py.next.iterator.transforms.fuse_maps import FuseMaps
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
+from gt4py.next.iterator.transforms.inline_scalar import InlineScalar
 from gt4py.next.iterator.transforms.merge_let import MergeLet
 from gt4py.next.iterator.transforms.normalize_shifts import NormalizeShifts
 from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce
@@ -81,6 +82,7 @@ def apply_common_transforms(
         # This pass is required to be in the loop such that when an `if_` call with tuple arguments
         # is constant-folded the surrounding tuple_get calls can be removed.
         inlined = CollapseTuple.apply(inlined, offset_provider=offset_provider)  # type: ignore[assignment]  # always an itir.Program
+        inlined = InlineScalar.apply(inlined, offset_provider=offset_provider)
 
         # This pass is required to run after CollapseTuple as otherwise we can not inline
         # expressions like `tuple_get(make_tuple(as_fieldop(stencil)(...)))` where stencil returns

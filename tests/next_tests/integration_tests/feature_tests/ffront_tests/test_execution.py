@@ -297,6 +297,21 @@ def test_scalar_arg_with_field(cartesian_case):
     cases.verify(cartesian_case, testee, a, b, out=out, ref=ref)
 
 
+@pytest.mark.uses_tuple_args
+def test_double_use_scalar(cartesian_case):
+    # TODO(tehrengruber): This should be a regression test on ITIR level, but tracing doesn't
+    #  work for this case.
+    @gtx.field_operator
+    def testee(a: np.int32, b: np.int32, c: cases.IField) -> cases.IField:
+        tmp = a * b
+        tmp2 = tmp * tmp
+        # important part here is that we use the intermediate twice so that it is
+        # not inlined
+        return tmp2 * tmp2 * c
+
+    cases.verify_with_default_data(cartesian_case, testee, ref=lambda a, b, c: a * b * a * b * c)
+
+
 @pytest.mark.uses_scalar_in_domain_and_fo
 def test_scalar_in_domain_spec_and_fo_call(cartesian_case):
     @gtx.field_operator

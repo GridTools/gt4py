@@ -624,6 +624,8 @@ class ITIRTypeInference(eve.NodeTranslator):
             self.visit(tuple_, ctx=ctx)  # ensure tuple is typed
             assert isinstance(index_literal, itir.Literal)
             index = int(index_literal.value)
+            if isinstance(tuple_.type, ts.DeferredType):
+                return ts.DeferredType(constraint=None)
             assert isinstance(tuple_.type, ts.TupleType)
             return tuple_.type.types[index]
 
