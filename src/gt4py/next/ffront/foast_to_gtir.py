@@ -394,7 +394,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
     def _visit_broadcast(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         expr = self.visit(node.args[0], **kwargs)
-        if type_info.is_type_or_tuple_of_type(node.args[0].type, ts.ScalarType):
+        if isinstance(node.args[0].type, ts.ScalarType):
             return im.as_fieldop(im.ref("deref"))(expr)
         return expr
 

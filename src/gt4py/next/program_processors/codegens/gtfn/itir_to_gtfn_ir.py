@@ -15,7 +15,7 @@ from gt4py.eve import utils as eve_utils
 from gt4py.eve.concepts import SymbolName
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import (
     Backend,
@@ -65,6 +65,27 @@ def pytype_to_cpptype(t: ts.ScalarType | str) -> Optional[str]:
 
 _vertical_dimension = "gtfn::unstructured::dim::vertical"
 _horizontal_dimension = "gtfn::unstructured::dim::horizontal"
+
+
+def _is_tuple_of_ref_or_literal(expr: itir.Expr) -> bool:
+    if (
+        isinstance(expr, itir.FunCall)
+        and isinstance(expr.fun, itir.SymRef)
+        and expr.fun.id == "tuple_get"
+        and len(expr.args) == 2
+        and _is_tuple_of_ref_or_literal(expr.args[1])
+    ):
+        return True
+    if (
+        isinstance(expr, itir.FunCall)
+        and isinstance(expr.fun, itir.SymRef)
+        and expr.fun.id == "make_tuple"
+        and all(_is_tuple_of_ref_or_literal(arg) for arg in expr.args)
+    ):
+        return True
+    if isinstance(expr, (itir.SymRef, itir.Literal)):
+        return True
+    return False
 
 
 def _get_domains(nodes: Iterable[itir.Stmt]) -> Iterable[itir.FunCall]:
@@ -587,30 +608,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_SetAt(
         self, node: itir.SetAt, *, extracted_functions: list, **kwargs: Any
     ) -> Union[StencilExecution, ScanExecution]:
-        # TODO: symref, literal, tuple thereof is also fine, similar to broadcast fix in gtir lowering
-        def _is_ref_or_tuple_expr_of_ref(expr: itir.Expr) -> bool:
-            if (
-                isinstance(expr, itir.FunCall)
-                and isinstance(expr.fun, itir.SymRef)
-                and expr.fun.id == "tuple_get"
-                and len(expr.args) == 2
-                and _is_ref_or_tuple_expr_of_ref(expr.args[1])
-            ):
-                return True
-            if (
-                isinstance(expr, itir.FunCall)
-                and isinstance(expr.fun, itir.SymRef)
-                and expr.fun.id == "make_tuple"
-                and all(_is_ref_or_tuple_expr_of_ref(arg) for arg in expr.args)
-            ):
-                return True
-            if isinstance(expr, (itir.SymRef, itir.Literal)):
-                return True
-            return False
-
-        from gt4py.next.iterator.ir_utils import ir_makers as im
-
-        if _is_ref_or_tuple_expr_of_ref(node.expr):
+        if _is_tuple_of_ref_or_literal(node.expr):
             node.expr = im.as_fieldop("deref", node.domain)(node.expr)
 
         assert cpm.is_applied_as_fieldop(node.expr)

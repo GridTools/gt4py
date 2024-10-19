@@ -84,7 +84,7 @@ def _is_compatible_type(type_a: ts.TypeSpec, type_b: ts.TypeSpec):
             is_compatible &= _is_compatible_type(arg_a, arg_b)
         is_compatible &= _is_compatible_type(type_a.returns, type_b.returns)
     else:
-        is_compatible &= type_a == type_b
+        is_compatible &= type_info.is_concretizable(type_a, type_b)
 
     return is_compatible
 
@@ -435,7 +435,7 @@ class ITIRTypeInference(eve.NodeTranslator):
         result = super().visit(node, **kwargs)
         if isinstance(node, itir.Node):
             if isinstance(result, ts.TypeSpec):
-                if node.type:
+                if node.type and not isinstance(node.type, ts.DeferredType):
                     assert _is_compatible_type(node.type, result)
                 node.type = result
             elif isinstance(result, ObservableTypeSynthesizer) or result is None:
@@ -511,17 +511,18 @@ class ITIRTypeInference(eve.NodeTranslator):
                 path,
                 node.expr.type,
             )
-            assert isinstance(target_type, ts.FieldType)
-            assert isinstance(expr_type, ts.FieldType)
+            assert isinstance(target_type, (ts.FieldType, ts.DeferredType))
+            assert isinstance(expr_type, (ts.FieldType, ts.DeferredType))
             # TODO(tehrengruber): The lowering emits domains that always have the horizontal domain
             #  first. Since the expr inherits the ordering from the domain this can lead to a mismatch
             #  between the target and expr (e.g. when the target has dimension K, Vertex). We should
             #  probably just change the behaviour of the lowering. Until then we do this more
             #  complicated comparison.
-            assert (
-                set(expr_type.dims) == set(target_type.dims)
-                and target_type.dtype == expr_type.dtype
-            )
+            if isinstance(target_type, ts.FieldType) and isinstance(expr_type, ts.FieldType):
+                assert (
+                    set(expr_type.dims) == set(target_type.dims)
+                    and target_type.dtype == expr_type.dtype
+                )
 
     # TODO(tehrengruber): Remove after new ITIR format with apply_stencil is used everywhere
     def visit_StencilClosure(self, node: itir.StencilClosure, *, ctx) -> it_ts.StencilClosureType:
@@ -623,6 +624,8 @@ class ITIRTypeInference(eve.NodeTranslator):
             self.visit(tuple_, ctx=ctx)  # ensure tuple is typed
             assert isinstance(index_literal, itir.Literal)
             index = int(index_literal.value)
+            if isinstance(tuple_.type, ts.DeferredType):
+                return ts.DeferredType(constraint=None)
             assert isinstance(tuple_.type, ts.TupleType)
             return tuple_.type.types[index]
 

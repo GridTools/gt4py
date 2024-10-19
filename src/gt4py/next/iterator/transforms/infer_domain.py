@@ -12,6 +12,7 @@ import itertools
 import typing
 from typing import Callable, Optional, TypeAlias
 
+from gt4py import eve
 from gt4py.eve import utils as eve_utils
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
@@ -26,6 +27,18 @@ from gt4py.next.utils import flatten_nested_tuple, tree_map
 
 DOMAIN: TypeAlias = domain_utils.SymbolicDomain | None | tuple["DOMAIN", ...]
 ACCESSED_DOMAINS: TypeAlias = dict[str, DOMAIN]
+
+
+class DomainAnnexDebugger(eve.NodeVisitor):
+    """
+    Small utility class to debug missing domain attribute in annex.
+    """
+
+    def visit_Node(self, node: itir.Node):
+        if cpm.is_applied_as_fieldop(node):
+            if not hasattr(node.annex, "domain"):
+                breakpoint()  # noqa: T100
+        return self.generic_visit(node)
 
 
 def _split_dict_by_key(pred: Callable, d: dict):

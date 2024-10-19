@@ -24,6 +24,7 @@ from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 from gt4py.next.iterator.transforms.cse import CommonSubexpressionElimination
 from gt4py.next.iterator.transforms.fuse_maps import FuseMaps
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
+from gt4py.next.iterator.transforms.inline_scalar import InlineScalar
 from gt4py.next.iterator.transforms.merge_let import MergeLet
 from gt4py.next.iterator.transforms.normalize_shifts import NormalizeShifts
 from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce
@@ -45,6 +46,7 @@ def apply_common_transforms(
     temporary_extraction_heuristics: Optional[
         Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
     ] = None,
+    # FIXME[#1582](tehrengruber): Revisit and cleanup after new GTIR temporary pass is in place
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
 ) -> itir.Program:
     # FIXME[#1582](tehrengruber): Rewrite iterator tests with itir.Program and remove this
@@ -64,7 +66,8 @@ def apply_common_transforms(
     # note: this increases the size of the tree
     # Inline. The domain inference can not handle "user" functions, e.g. `let f = λ(...) → ... in f(...)`
     ir = InlineLambdas.apply(ir, opcount_preserving=True, force_inline_lambda_args=True)
-    # todo: run collapse tuple
+    # required in order to get rid of expressions without a domain (e.g. when a tuple element is never accessed)
+    ir = CollapseTuple.apply(ir, offset_provider=offset_provider)
     ir = infer_domain.infer_program(
         ir,  # type: ignore[arg-type]  # always an itir.Program
         offset_provider=offset_provider,
@@ -79,6 +82,7 @@ def apply_common_transforms(
         # This pass is required to be in the loop such that when an `if_` call with tuple arguments
         # is constant-folded the surrounding tuple_get calls can be removed.
         inlined = CollapseTuple.apply(inlined, offset_provider=offset_provider)  # type: ignore[assignment]  # always an itir.Program
+        inlined = InlineScalar.apply(inlined, offset_provider=offset_provider)
 
         # This pass is required to run after CollapseTuple as otherwise we can not inline
         # expressions like `tuple_get(make_tuple(as_fieldop(stencil)(...)))` where stencil returns
