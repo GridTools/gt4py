@@ -17,7 +17,7 @@ from __future__ import annotations
 import abc
 import dataclasses
 import itertools
-from typing import Any, Dict, Iterable, List, Optional, Protocol, Sequence, Set, Tuple, Union
+from typing import Any, Dict, Final, Iterable, List, Optional, Protocol, Sequence, Set, Tuple, Union
 
 import dace
 
@@ -26,7 +26,7 @@ from gt4py.eve import concepts
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
-from gt4py.next.iterator.transforms import prune_casts as ir_prune_casts
+from gt4py.next.iterator.transforms import prune_casts as ir_prune_casts, symbol_ref_utils
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
 from gt4py.next.program_processors.runners.dace_fieldview import (
@@ -35,6 +35,18 @@ from gt4py.next.program_processors.runners.dace_fieldview import (
     utility as dace_gtir_utils,
 )
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
+
+
+GTIR_DOMAIN_DEFAULT_SYMBOLS: Final[set[str]] = {
+    "horizontal_start",
+    "horizontal_end",
+    "vertical_start",
+    "vertical_end",
+}
+"""
+Set of IR symbols that are passed as gt4py scalar arguments but we have to represent
+in the SDFG as dace symbols, because they are used in domain symbolic expressions.
+"""
 
 
 class DataflowBuilder(Protocol):
@@ -175,7 +187,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         name: str,
         symbol_type: ts.DataType,
         transient: bool = True,
-        is_tuple_member: bool = False,
     ) -> list[tuple[str, ts.DataType]]:
         """
         Add storage for data containers used in the SDFG. For fields, it allocates dace arrays,
@@ -195,9 +206,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             for tname, tsymbol_type in dace_gtir_utils.get_tuple_fields(
                 name, symbol_type, flatten=True
             ):
-                tuple_fields.extend(
-                    self._add_storage(sdfg, tname, tsymbol_type, transient, is_tuple_member=True)
-                )
+                tuple_fields.extend(self._add_storage(sdfg, tname, tsymbol_type, transient))
             return tuple_fields
 
         elif isinstance(symbol_type, ts.FieldType):
@@ -211,17 +220,23 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         elif isinstance(symbol_type, ts.ScalarType):
             dtype = dace_utils.as_dace_type(symbol_type)
-            # Scalar arguments passed to the program are represented as symbols in DaCe SDFG;
-            # the exception are members of tuple arguments, that are represented as scalar containers.
-            # The field size is sometimes passed as scalar argument to the program, so we have to
-            # check if the shape symbol was already allocated by `_make_array_shape_and_strides`.
-            # We assume that the scalar argument for field size always follows the field argument.
-            if is_tuple_member:
-                sdfg.add_scalar(name, dtype, transient=transient)
-            elif name in sdfg.symbols:
-                assert sdfg.symbols[name].dtype == dtype
-            else:
+            # Scalar program arguments are represented as scalar data in the SDFG;
+            # the exception are program arguments used for symbolic domain expressions,
+            # listed in `GTIR_DOMAIN_DEFAULT_SYMBOLS`, and those used for symbolic
+            # array shape and strides.
+            # The field size is sometimes passed as a scalar argument to the program,
+            # so we have to check if the shape symbol was already allocated by
+            # `_make_array_shape_and_strides`. We assume that the scalar argument
+            # for field size always follows the field argument.
+            if name in GTIR_DOMAIN_DEFAULT_SYMBOLS:
                 sdfg.add_symbol(name, dtype)
+            elif dace_utils.is_field_symbol(name):
+                if name in sdfg.symbols:
+                    assert sdfg.symbols[name].dtype == dtype
+                else:
+                    sdfg.add_symbol(name, dtype)
+            else:
+                sdfg.add_scalar(name, dtype, transient=transient)
 
             return [(name, symbol_type)]
 
@@ -490,7 +505,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         ]
 
         # inherit symbols from parent scope but eventually override with local symbols
-        lambda_symbols = self.global_symbols | {
+        lambda_symbols = {
+            sym: self.global_symbols[sym]
+            for sym in symbol_ref_utils.collect_symbol_refs(node.expr, self.global_symbols.keys())
+        } | {
             pname: dace_gtir_utils.get_tuple_type(arg) if isinstance(arg, tuple) else arg.data_type
             for pname, arg in lambda_args_mapping
         }

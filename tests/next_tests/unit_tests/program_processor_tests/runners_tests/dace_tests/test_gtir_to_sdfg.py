@@ -1757,9 +1757,9 @@ def test_gtir_if_scalars():
         body=[
             gtir.SetAt(
                 expr=im.let("f", im.tuple_get(0, "x"))(
-                    im.let("y", im.tuple_get(1, "x"))(
-                        im.let("y_0", im.tuple_get(0, "y"))(
-                            im.let("y_1", im.tuple_get(1, "y"))(
+                    im.let("g", im.tuple_get(1, "x"))(
+                        im.let("y_0", im.tuple_get(0, "g"))(
+                            im.let("y_1", im.tuple_get(1, "g"))(
                                 im.op_as_fieldop("plus", domain)(
                                     "f",
                                     im.if_(

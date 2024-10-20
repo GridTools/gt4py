@@ -481,13 +481,12 @@ def _get_data_nodes(
         sym_node = state.add_access(sym_name)
         return Field(sym_node, sym_type)
     elif isinstance(sym_type, ts.ScalarType):
-        if sym_name in sdfg.arrays:
-            # access the existing scalar container
-            sym_node = state.add_access(sym_name)
-        else:
+        if sym_name in sdfg.symbols:
             sym_node = _get_symbolic_value(
                 sdfg, state, sdfg_builder, sym_name, sym_type, temp_name=f"__{sym_name}"
             )
+        else:
+            sym_node = state.add_access(sym_name)
         return Field(sym_node, sym_type)
     elif isinstance(sym_type, ts.TupleType):
         tuple_fields = dace_gtir_utils.get_tuple_fields(sym_name, sym_type)
