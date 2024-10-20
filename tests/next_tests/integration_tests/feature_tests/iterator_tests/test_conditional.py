@@ -11,7 +11,7 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.runtime import closure, fendef, fundef
+from gt4py.next.iterator.runtime import set_at, fendef, fundef
 
 from next_tests.unit_tests.conftest import program_processor, run_processor
 

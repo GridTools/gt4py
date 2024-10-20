@@ -13,8 +13,8 @@ from gt4py.next.iterator import ir
 
 
 class RemapSymbolRefs(PreserveLocationVisitor, NodeTranslator):
-    # This pass preserves, but doesn't use the `type` and `recorded_shifts` annex.
-    PRESERVED_ANNEX_ATTRS = ("type", "recorded_shifts")
+    # This pass preserves, but doesn't use the `type`, `recorded_shifts`, `domain` annex.
+    PRESERVED_ANNEX_ATTRS = ("type", "recorded_shifts", "domain")
 
     def visit_SymRef(self, node: ir.SymRef, *, symbol_map: Dict[str, ir.Node]):
         return symbol_map.get(str(node.id), node)
@@ -32,8 +32,8 @@ class RemapSymbolRefs(PreserveLocationVisitor, NodeTranslator):
 
 
 class RenameSymbols(PreserveLocationVisitor, NodeTranslator):
-    # This pass preserves, but doesn't use the `type` and `recorded_shifts` annex.
-    PRESERVED_ANNEX_ATTRS = ("type", "recorded_shifts")
+    # This pass preserves, but doesn't use the `type`, `recorded_shifts`, `domain` annex.
+    PRESERVED_ANNEX_ATTRS = ("type", "recorded_shifts", "domain")
 
     def visit_Sym(
         self, node: ir.Sym, *, name_map: Dict[str, str], active: Optional[Set[str]] = None
