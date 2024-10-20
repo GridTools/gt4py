@@ -357,37 +357,49 @@ def infer_expr(
     return expr, accessed_domains
 
 
+def _infer_stmt(
+    stmt: itir.Stmt,
+    offset_provider: common.OffsetProvider,
+    symbolic_domain_sizes: Optional[dict[str, str]],
+):
+    if isinstance(stmt, itir.SetAt):
+        transformed_call, _unused_domain = infer_expr(
+            stmt.expr,
+            domain_utils.SymbolicDomain.from_expr(stmt.domain),
+            offset_provider,
+            symbolic_domain_sizes,
+        )
+        return itir.SetAt(
+            expr=transformed_call,
+            domain=stmt.domain,
+            target=stmt.target,
+        )
+    elif isinstance(stmt, itir.IfStmt):
+        return itir.IfStmt(
+            cond=stmt.cond,
+            true_branch=[
+                _infer_stmt(c, offset_provider, symbolic_domain_sizes) for c in stmt.true_branch
+            ],
+            false_branch=[
+                _infer_stmt(c, offset_provider, symbolic_domain_sizes) for c in stmt.false_branch
+            ],
+        )
+    raise ValueError(f"Unsupported stmt: {stmt}")
+
+
 def infer_program(
     program: itir.Program,
     offset_provider: common.OffsetProvider,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
 ) -> itir.Program:
-    transformed_set_ats: list[itir.SetAt] = []
     assert (
         not program.function_definitions
     ), "Domain propagation does not support function definitions."
-
-    for set_at in program.body:
-        assert isinstance(set_at, itir.SetAt)
-
-        transformed_call, _unused_domain = infer_expr(
-            set_at.expr,
-            domain_utils.SymbolicDomain.from_expr(set_at.domain),
-            offset_provider,
-            symbolic_domain_sizes,
-        )
-        transformed_set_ats.append(
-            itir.SetAt(
-                expr=transformed_call,
-                domain=set_at.domain,
-                target=set_at.target,
-            ),
-        )
 
     return itir.Program(
         id=program.id,
         function_definitions=program.function_definitions,
         params=program.params,
         declarations=program.declarations,
-        body=transformed_set_ats,
+        body=[_infer_stmt(stmt, offset_provider, symbolic_domain_sizes) for stmt in program.body],
     )

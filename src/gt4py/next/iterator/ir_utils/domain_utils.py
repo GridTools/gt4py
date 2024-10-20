@@ -93,7 +93,7 @@ class SymbolicDomain:
             ...,
         ],
         offset_provider: common.OffsetProvider,
-        symbolic_domain_sizes: Optional[dict[str, str]],
+        symbolic_domain_sizes: Optional[dict[str, str]] = None,
     ) -> SymbolicDomain:
         dims = list(self.ranges.keys())
         new_ranges = {dim: self.ranges[dim] for dim in dims}

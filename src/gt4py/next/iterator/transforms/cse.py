@@ -42,7 +42,7 @@ def _is_trivial_tuple_expr(node: itir.Expr):
         or _is_trivial_tuple_expr(node.args[1])
     ):
         return True
-    return True
+    return False
 
 
 @dataclasses.dataclass
