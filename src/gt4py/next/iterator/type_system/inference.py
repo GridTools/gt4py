@@ -520,8 +520,8 @@ class ITIRTypeInference(eve.NodeTranslator):
             #  complicated comparison.
             if isinstance(target_type, ts.FieldType) and isinstance(expr_type, ts.FieldType):
                 assert (
-                    set(expr_type.dims) == set(target_type.dims)
-                    and target_type.dtype == expr_type.dtype
+                        set(expr_type.dims).issubset(set(target_type.dims))
+                        and target_type.dtype == expr_type.dtype
                 )
 
     # TODO(tehrengruber): Remove after new ITIR format with apply_stencil is used everywhere

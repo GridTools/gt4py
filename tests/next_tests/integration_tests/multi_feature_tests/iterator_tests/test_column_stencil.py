@@ -170,19 +170,14 @@ def test_k_level_condition(program_processor, fun, k_level, inp_function, ref_fu
 
 
 @fundef
-def sum_scanpass(state, inp):
+def ksum(state, inp):
     return state + deref(inp)
-
-
-@fundef
-def ksum(inp):
-    return scan(sum_scanpass, True, 0.0)(inp)
 
 
 @fendef(column_axis=KDim)
 def ksum_fencil(i_size, k_start, k_end, inp, out):
     domain = cartesian_domain(named_range(IDim, 0, i_size), named_range(KDim, k_start, k_end))
-    set_at(as_fieldop(ksum, domain)(inp), domain, out)
+    set_at(as_fieldop(scan(ksum, True, 0.0), domain)(inp), domain, out)
 
 
 @pytest.mark.parametrize(
@@ -210,15 +205,10 @@ def test_ksum_scan(program_processor, kstart, reference):
         assert np.allclose(reference, out.asnumpy())
 
 
-@fundef
-def ksum_back(inp):
-    return scan(sum_scanpass, False, 0.0)(inp)
-
-
 @fendef(column_axis=KDim)
 def ksum_back_fencil(i_size, k_size, inp, out):
     domain = cartesian_domain(named_range(IDim, 0, i_size), named_range(KDim, 0, k_size))
-    set_at(as_fieldop(ksum_back, domain)(inp), domain, out)
+    set_at(as_fieldop(scan(ksum, False, 0.0), domain)(inp), domain, out)
 
 
 def test_ksum_back_scan(program_processor):
@@ -244,19 +234,14 @@ def test_ksum_back_scan(program_processor):
 
 
 @fundef
-def doublesum_scanpass(state, inp0, inp1):
+def kdoublesum(state, inp0, inp1):
     return make_tuple(tuple_get(0, state) + deref(inp0), tuple_get(1, state) + deref(inp1))
-
-
-@fundef
-def kdoublesum(inp0, inp1):
-    return scan(doublesum_scanpass, True, make_tuple(0.0, 0))(inp0, inp1)
 
 
 @fendef(column_axis=KDim)
 def kdoublesum_fencil(i_size, k_start, k_end, inp0, inp1, out):
     domain = cartesian_domain(named_range(IDim, 0, i_size), named_range(KDim, k_start, k_end))
-    set_at(as_fieldop(kdoublesum, domain)(inp0, inp1), domain, out)
+    set_at(as_fieldop(scan(kdoublesum, True, make_tuple(0.0, 0)), domain)(inp0, inp1), domain, out)
 
 
 @pytest.mark.parametrize(
