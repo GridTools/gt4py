@@ -229,7 +229,7 @@ def test_solve_nonhydro_stencil_52_like_z_q(test_setup):
 def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup):
     if (
         test_setup.case.backend
-            == test_definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES.load()
+        == test_definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES.load()
     ):
         pytest.xfail(
             "Needs implementation of scan projector. Breaks in type inference as executed"

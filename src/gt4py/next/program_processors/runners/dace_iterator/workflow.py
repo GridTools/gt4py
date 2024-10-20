@@ -18,7 +18,7 @@ import factory
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, config
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.transforms.fencil_to_program import FencilToProgram
+from gt4py.next.iterator.transforms import program_to_fencil
 from gt4py.next.otf import languages, recipes, stages, step_types, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.languages import LanguageSettings
@@ -82,8 +82,8 @@ class DaCeTranslator(
         program: itir.FencilDefinition | itir.Program = inp.data
 
         # FIXME[#1582](tehrengruber): Remove. This code-path is only used by the dace_itir backend.
-        if isinstance(program, itir.FencilDefinition):
-            program = FencilToProgram.apply(program)
+        if isinstance(program, itir.Program):
+            program = program_to_fencil.program_to_fencil(program)
 
         sdfg = self.generate_sdfg(
             program,
