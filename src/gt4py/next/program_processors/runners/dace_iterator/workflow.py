@@ -18,6 +18,7 @@ import factory
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, config
 from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator.transforms.fencil_to_program import FencilToProgram
 from gt4py.next.otf import languages, recipes, stages, step_types, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.languages import LanguageSettings
@@ -79,7 +80,10 @@ class DaCeTranslator(
     ) -> stages.ProgramSource[languages.SDFG, LanguageSettings]:
         """Generate DaCe SDFG file from the ITIR definition."""
         program: itir.FencilDefinition | itir.Program = inp.data
-        assert isinstance(program, itir.FencilDefinition)
+
+        # FIXME[#1582](tehrengruber): Remove. This code-path is only used by the dace_itir backend.
+        if isinstance(program, itir.FencilDefinition):
+            program = FencilToProgram.apply(program)
 
         sdfg = self.generate_sdfg(
             program,

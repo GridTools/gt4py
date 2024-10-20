@@ -19,6 +19,8 @@ from next_tests.unit_tests.conftest import program_processor, run_processor
 
 @pytest.mark.uses_index_fields
 def test_scan_in_stencil(program_processor):
+    # FIXME[#1582](tehrengruber): Remove test after scan is reworked.
+    pytest.skip("Scan inside of stencil is not supported in GTIR.")
     program_processor, validate = program_processor
 
     isize = 1
