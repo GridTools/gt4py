@@ -37,7 +37,7 @@ from gt4py.next.program_processors.runners.dace_fieldview import (
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
 
 
-GTIR_DOMAIN_DEFAULT_SYMBOLS: Final[set[str]] = {
+GTIR_DOMAIN_SYMBOLS: Final[set[str]] = {
     "horizontal_start",
     "horizontal_end",
     "vertical_start",
@@ -222,13 +222,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             dtype = dace_utils.as_dace_type(symbol_type)
             # Scalar program arguments are represented as scalar data in the SDFG;
             # the exception are program arguments used for symbolic domain expressions,
-            # listed in `GTIR_DOMAIN_DEFAULT_SYMBOLS`, and those used for symbolic
-            # array shape and strides.
+            # listed in `GTIR_DOMAIN_SYMBOLS`, and those used for symbolic array
+            # shape and strides.
             # The field size is sometimes passed as a scalar argument to the program,
             # so we have to check if the shape symbol was already allocated by
             # `_make_array_shape_and_strides`. We assume that the scalar argument
             # for field size always follows the field argument.
-            if name in GTIR_DOMAIN_DEFAULT_SYMBOLS:
+            if name in GTIR_DOMAIN_SYMBOLS:
                 sdfg.add_symbol(name, dtype)
             elif dace_utils.is_field_symbol(name):
                 if name in sdfg.symbols:
