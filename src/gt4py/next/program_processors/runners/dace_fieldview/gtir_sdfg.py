@@ -317,6 +317,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         sdfg = dace.SDFG(node.id)
         sdfg.debuginfo = dace_utils.debug_info(node, default=sdfg.debuginfo)
+
+        # DaCe requires C-compatible strings for the names of data containers,
+        # such as arrays and scalars. GT4Py uses a unicode symbols ('ᐞ') as name
+        # separator in the SSA pass, which generates invalid symbols for DaCe.
+        # Here we find new names for invalid symbols present in the IR.
+        node = dace_gtir_utils.replace_invalid_symbols(sdfg, node)
+
+        # start block of the stateful graph
         entry_state = sdfg.add_state("program_entry", is_start_block=True)
 
         # declarations of temporaries result in transient array definitions in the SDFG
