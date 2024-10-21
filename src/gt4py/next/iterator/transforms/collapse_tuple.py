@@ -16,6 +16,7 @@ from typing import Optional
 
 from gt4py import eve
 from gt4py.eve import utils as eve_utils
+from gt4py.next import common
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils import (
     common_pattern_matcher as cpm,
@@ -104,10 +105,10 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         *,
         ignore_tuple_size: bool = False,
         remove_letified_make_tuple_elements: bool = True,
-        offset_provider=None,
-        is_local_view=None,
+        offset_provider: Optional[common.OffsetProvider] = None,
+        is_local_view: Optional[bool] = None,
         # manually passing flags is mostly for allowing separate testing of the modes
-        flags=None,
+        flags: Optional[Flag] = None,
         # allow sym references without a symbol declaration, mostly for testing
         allow_undeclared_symbols: bool = False,
     ) -> ir.Node:
