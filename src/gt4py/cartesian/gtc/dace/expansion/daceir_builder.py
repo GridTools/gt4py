@@ -726,7 +726,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
         nodes = flatten_list(nodes)
         if all(isinstance(n, (dcir.NestedSDFG, dcir.DomainMap, dcir.Tasklet)) for n in nodes):
             return nodes
-        if not all(isinstance(n, (dcir.ComputationState, dcir.DomainLoop)) for n in nodes):
+        if not all(isinstance(n, (dcir.ComputationState, dcir.Condition, dcir.DomainLoop, dcir.WhileLoop)) for n in nodes):
             raise ValueError("Can't mix dataflow and state nodes on same level.")
 
         read_memlets, write_memlets, field_memlets = union_inout_memlets(nodes)
@@ -864,7 +864,6 @@ class DaCeIRBuilder(eve.NodeTranslator):
                 read_memlets=read_memlets,
                 write_memlets=write_memlets,
                 grid_subset=grid_subset,
-                label=f"map_{id(item)}",
             )
         ]
 

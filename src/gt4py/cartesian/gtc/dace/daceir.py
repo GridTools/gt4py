@@ -886,7 +886,7 @@ class NestedSDFG(ComputationNode, eve.SymbolTableTrait):
     label: eve.Coerced[eve.SymbolRef]
     field_decls: List[FieldDecl]
     symbol_decls: List[SymbolDecl]
-    states: List[Union[ComputationState, DomainLoop]]
+    states: List[Union[ComputationState, Condition, DomainLoop, WhileLoop]]
 
 
 # There are circular type references with string placeholders. These statements let datamodels resolve those.
