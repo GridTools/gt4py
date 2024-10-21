@@ -576,59 +576,50 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         lambda_output_nodes: Iterable[gtir_builtin_translators.Field] = (
             gtx_utils.flatten_nested_tuple(lambda_result)
         )
-        # sanity check on isolated nodes
-        assert all(
-            nstate.degree(x.data_node) == 0
-            for x in lambda_output_nodes
-            if x.data_node.data in input_memlets
-        )
-        # keep only non-isolated output nodes
         lambda_outputs = {
-            x.data_node.data for x in lambda_output_nodes if x.data_node.data not in input_memlets
+            x.data_node.data for x in lambda_output_nodes if x.data_node.desc(nsdfg).transient
         }
 
-        if lambda_outputs:
-            nsdfg_node = head_state.add_nested_sdfg(
-                nsdfg,
-                parent=sdfg,
-                inputs=set(input_memlets.keys()),
-                outputs=lambda_outputs,
-                symbol_mapping=nsdfg_symbols_mapping,
-                debuginfo=dace_utils.debug_info(node, default=sdfg.debuginfo),
-            )
+        nsdfg_node = head_state.add_nested_sdfg(
+            nsdfg,
+            parent=sdfg,
+            inputs=set(input_memlets.keys()),
+            outputs=lambda_outputs,
+            symbol_mapping=nsdfg_symbols_mapping,
+            debuginfo=dace_utils.debug_info(node, default=sdfg.debuginfo),
+        )
 
-            for connector, memlet in input_memlets.items():
-                if connector in lambda_arg_nodes:
-                    src_node = lambda_arg_nodes[connector].data_node
-                else:
-                    src_node = head_state.add_access(memlet.data)
+        for connector, memlet in input_memlets.items():
+            if connector in lambda_arg_nodes:
+                src_node = lambda_arg_nodes[connector].data_node
+            else:
+                src_node = head_state.add_access(memlet.data)
 
-                head_state.add_edge(src_node, None, nsdfg_node, connector, memlet)
+            head_state.add_edge(src_node, None, nsdfg_node, connector, memlet)
 
         def make_temps(
             x: gtir_builtin_translators.Field,
         ) -> gtir_builtin_translators.Field:
-            if x.data_node.data in lambda_outputs:
-                connector = x.data_node.data
-                desc = x.data_node.desc(nsdfg)
+            desc = x.data_node.desc(nsdfg)
+            if desc.transient:
                 # make lambda result non-transient and map it to external temporary
                 desc.transient = False
-                # isolated access node will make validation fail
-                if nstate.degree(x.data_node) == 0:
-                    nstate.remove_node(x.data_node)
                 temp, _ = sdfg.add_temp_transient_like(desc)
+                connector = x.data_node.data
                 dst_node = head_state.add_access(temp)
                 head_state.add_edge(
                     nsdfg_node, connector, dst_node, None, sdfg.make_array_memlet(temp)
                 )
-                return gtir_builtin_translators.Field(dst_node, x.data_type)
+                temp_field = gtir_builtin_translators.Field(dst_node, x.data_type)
             elif x.data_node.data in lambda_arg_nodes:
-                nstate.remove_node(x.data_node)
-                return lambda_arg_nodes[x.data_node.data]
+                temp_field = lambda_arg_nodes[x.data_node.data]
             else:
-                nstate.remove_node(x.data_node)
                 data_node = head_state.add_access(x.data_node.data)
-                return gtir_builtin_translators.Field(data_node, x.data_type)
+                temp_field = gtir_builtin_translators.Field(data_node, x.data_type)
+            # isolated access node will make validation fail
+            if nstate.degree(x.data_node) == 0:
+                nstate.remove_node(x.data_node)
+            return temp_field
 
         return gtx_utils.tree_map(make_temps)(lambda_result)
 
