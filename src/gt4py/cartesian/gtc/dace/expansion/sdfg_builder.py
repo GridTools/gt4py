@@ -548,6 +548,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
             node_ctx = StencilComputationSDFGBuilder.NodeContext(
                 input_node_and_conns=read_acc_and_conn, output_node_and_conns=write_acc_and_conn
             )
+            kwargs.pop('node_ctx', None) # remove node_ctx from **kwargs in case it is passed down
             self.visit(computation, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx, **kwargs)
 
     def visit_FieldDecl(
@@ -602,7 +603,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         symbol_mapping = {decl.name: decl.to_dace_symbol() for decl in node.symbol_decls}
 
         for computation_state in node.states:
-            self.visit(computation_state, sdfg_ctx=inner_sdfg_ctx, symtable=symtable, **kwargs)
+            self.visit(computation_state, sdfg_ctx=inner_sdfg_ctx, node_ctx=node_ctx, symtable=symtable, **kwargs)
 
         if sdfg_ctx is not None and node_ctx is not None:
             nsdfg = sdfg_ctx.state.add_nested_sdfg(
