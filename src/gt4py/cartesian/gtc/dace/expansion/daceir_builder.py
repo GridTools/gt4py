@@ -499,7 +499,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
 
             last_statement = index == len(statements) - 1
             if (is_control_flow or last_statement) and len(current_block) > 0:
-                local_declarations = []
+                # local_declarations = []
                 read_memlets: List[dcir.Memlet] = []
                 write_memlets: List[dcir.Memlet] = []
 
@@ -534,40 +534,40 @@ class DaCeIRBuilder(eve.NodeTranslator):
                         ):
                             read_memlets.append(matches[0].copy(update={}))
 
-                    # Match the left side of assignment statements with local scalar declarations given
-                    # to the full horizontal execution.
-                    # NOTE We should clean this up in the future
-                    for assignment_statement in block_statement.walk_values().if_isinstance(
-                        dcir.AssignStmt
-                    ):
-                        target_name = assignment_statement.left.name
-                        decl_matches: List[dcir.LocalScalarDecl] = [
-                            declaration
-                            for declaration in declarations
-                            if declaration.name == target_name
-                        ]
-
-                        if len(decl_matches) > 1:
-                            # yell if there's more than one match (there shouldn't be)
-                            raise RuntimeError(
-                                "Found more than one matching local scalar declaration for target '%s'"
-                                % target_name
-                            )
-
-                        if len(decl_matches) > 0:
-                            # remove from declarations and put into local_declarations
-                            local_declarations.append(decl_matches[0])
-                            declarations.remove(decl_matches[0])
-
-                            # Context:
-                            # We use this information in sdfg_builder: Whatever is on the left side of an
-                            # assignment statement is either a local scalar declarations (and thus
-                            # "exported" through a write access node) or something we need to read from
-                            # a read access node and pass into the tasklet.
+                    # # Match the left side of assignment statements with local scalar declarations given
+                    # # to the full horizontal execution.
+                    # # NOTE We should clean this up in the future
+                    # for assignment_statement in block_statement.walk_values().if_isinstance(
+                    #     dcir.AssignStmt
+                    # ):
+                    #     target_name = assignment_statement.left.name
+                    #     decl_matches: List[dcir.LocalScalarDecl] = [
+                    #         declaration
+                    #         for declaration in declarations
+                    #         if declaration.name == target_name
+                    #     ]
+                    #
+                    #     if len(decl_matches) > 1:
+                    #         # yell if there's more than one match (there shouldn't be)
+                    #         raise RuntimeError(
+                    #             "Found more than one matching local scalar declaration for target '%s'"
+                    #             % target_name
+                    #         )
+                    #
+                    #     if len(decl_matches) > 0:
+                    #         # remove from declarations and put into local_declarations
+                    #         local_declarations.append(decl_matches[0])
+                    #         declarations.remove(decl_matches[0])
+                    #
+                    #         # Context:
+                    #         # We use this information in sdfg_builder: Whatever is on the left side of an
+                    #         # assignment statement is either a local scalar declarations (and thus
+                    #         # "exported" through a write access node) or something we need to read from
+                    #         # a read access node and pass into the tasklet.
 
                 # create a new tasklet
                 tasklet = dcir.Tasklet(
-                    decls=local_declarations,
+                    decls=[], # local_declarations,
                     stmts=current_block,
                     read_memlets=read_memlets,
                     write_memlets=write_memlets,
