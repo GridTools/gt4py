@@ -346,15 +346,26 @@ def translate_broadcast_scalar(
     domain_indices = sbs.Indices([dace_gtir_utils.get_map_variable(dim) for dim, _, _ in domain])
 
     assert len(node.args) == 1
-    assert isinstance(node.args[0].type, ts.ScalarType)
     scalar_expr = _parse_fieldop_arg(
         node.args[0], sdfg, state, sdfg_builder, domain, reduce_identity=None
     )
-    assert isinstance(scalar_expr, gtir_dataflow.MemletExpr)
-    assert scalar_expr.subset == sbs.Indices.from_string("0")
-    result = gtir_dataflow.DataflowOutputEdge(
-        state, gtir_dataflow.DataExpr(scalar_expr.node, node.args[0].type)
-    )
+
+    if isinstance(node.args[0].type, ts.ScalarType):
+        assert isinstance(scalar_expr, gtir_dataflow.MemletExpr)
+        assert scalar_expr.subset == sbs.Indices.from_string("0")
+        arg_node = scalar_expr.node
+        arg_type = node.args[0].type
+    elif isinstance(node.args[0].type, ts.FieldType):
+        # zero-dimensional field
+        assert len(node.args[0].type.dims) == 0
+        assert isinstance(scalar_expr, gtir_dataflow.IteratorExpr)
+        arg_node = scalar_expr.field
+        arg_type = node.args[0].type.dtype
+    else:
+        raise ValueError(f"Unexpected argument {node.args[0]} in broadcast expression.")
+
+    assert isinstance(arg_node.desc(sdfg), dace.data.Scalar)
+    result = gtir_dataflow.DataflowOutputEdge(state, gtir_dataflow.DataExpr(arg_node, arg_type))
     result_field = _create_temporary_field(sdfg, state, domain, node.type, dataflow_output=result)
 
     sdfg_builder.add_mapped_tasklet(
@@ -364,10 +375,10 @@ def translate_broadcast_scalar(
             dace_gtir_utils.get_map_variable(dim): f"{lower_bound}:{upper_bound}"
             for dim, lower_bound, upper_bound in domain
         },
-        inputs={"__inp": dace.Memlet(data=scalar_expr.node.data, subset="0")},
+        inputs={"__inp": dace.Memlet(data=arg_node.data, subset="0")},
         code="__val = __inp",
         outputs={"__val": dace.Memlet(data=result_field.data_node.data, subset=domain_indices)},
-        input_nodes={scalar_expr.node.data: scalar_expr.node},
+        input_nodes={arg_node.data: arg_node},
         output_nodes={result_field.data_node.data: result_field.data_node},
         external_edges=True,
     )
