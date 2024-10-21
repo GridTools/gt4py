@@ -79,6 +79,9 @@ def _get_shape_args(
 ) -> dict[str, int]:
     shape_args: dict[str, int] = {}
     for name, value in args.items():
+        if len(value.shape) == 0:  # zero-dimensional field
+            assert isinstance(arrays[name], dace.data.Scalar)
+            continue
         for sym, size in zip(arrays[name].shape, value.shape, strict=True):
             if isinstance(sym, dace.symbol):
                 assert sym.name not in shape_args
@@ -95,6 +98,9 @@ def _get_stride_args(
 ) -> dict[str, int]:
     stride_args = {}
     for name, value in args.items():
+        if len(value.shape) == 0:  # zero-dimensional field
+            assert isinstance(arrays[name], dace.data.Scalar)
+            continue
         for sym, stride_size in zip(arrays[name].strides, value.strides, strict=True):
             stride, remainder = divmod(stride_size, value.itemsize)
             if remainder != 0:

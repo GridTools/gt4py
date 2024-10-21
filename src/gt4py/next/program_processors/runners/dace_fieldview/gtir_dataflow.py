@@ -400,6 +400,12 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         if isinstance(arg_expr, IteratorExpr):
             field_desc = arg_expr.field.desc(self.sdfg)
+            if isinstance(field_desc, dace.data.Scalar):
+                # deref a zero-dimensional field
+                assert len(arg_expr.dimensions) == 0
+                assert isinstance(node.type, ts.ScalarType)
+                return MemletExpr(arg_expr.field, subset="0")
+            # default case: deref a field with one or more dimensions
             assert len(field_desc.shape) == len(arg_expr.dimensions)
             if all(isinstance(index, SymbolExpr) for index in arg_expr.indices.values()):
                 # when all indices are symblic expressions, we can perform direct field access through a memlet
@@ -466,8 +472,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                     else:
                         assert isinstance(index_expr, SymbolExpr)
 
-                dtype = arg_expr.field.desc(self.sdfg).dtype
-                return self._construct_tasklet_result(dtype, deref_node, "val")
+                return self._construct_tasklet_result(field_desc.dtype, deref_node, "val")
 
         else:
             # dereferencing a scalar or a literal node results in the node itself

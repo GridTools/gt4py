@@ -201,6 +201,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             return tuple_fields
 
         elif isinstance(symbol_type, ts.FieldType):
+            if len(symbol_type.dims) == 0:
+                # represent zero-dimensional fields as scalar arguments
+                return self._add_storage(sdfg, name, symbol_type.dtype, transient)
+            # handle default case: field with one or more dimensions
             dtype = dace_utils.as_dace_type(symbol_type.dtype)
             # use symbolic shape, which allows to invoke the program with fields of different size;
             # and symbolic strides, which enables decoupling the memory layout from generated code.

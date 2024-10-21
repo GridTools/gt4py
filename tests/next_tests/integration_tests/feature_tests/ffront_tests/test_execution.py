@@ -219,6 +219,7 @@ def test_scalar_tuple_arg(unstructured_case):
 
 
 @pytest.mark.uses_tuple_args
+@pytest.mark.uses_zero_dimensional_fields
 def test_zero_dim_tuple_arg(unstructured_case):
     @gtx.field_operator
     def testee(
