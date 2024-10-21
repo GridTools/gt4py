@@ -611,7 +611,7 @@ def translate_scalar_expr(
     connectors = []
     scalar_expr_args = []
 
-    for arg_expr in node.args:
+    for i, arg_expr in enumerate(node.args):
         visit_expr = True
         if isinstance(arg_expr, gtir.SymRef):
             try:
@@ -635,7 +635,7 @@ def translate_scalar_expr(
             )
             if not (isinstance(arg, Field) and isinstance(arg.data_type, ts.ScalarType)):
                 raise ValueError(f"Invalid argument to scalar expression {arg_expr}.")
-            param = f"__in_{arg.data_node.data}"
+            param = f"__arg{i}"
             args.append(arg.data_node)
             connectors.append(param)
             scalar_expr_args.append(gtir.SymRef(id=param))

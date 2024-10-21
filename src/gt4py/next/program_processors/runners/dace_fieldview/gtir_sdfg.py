@@ -261,10 +261,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         Returns:
             A list of array nodes containing the result fields.
-
-        TODO: Do we need to return the GT4Py `FieldType`/`ScalarType`? It is needed
-        in case the transient arrays containing the expression result are not guaranteed
-        to have the same memory layout as the target array.
         """
         result = self.visit(node, sdfg=sdfg, head_state=head_state, reduce_identity=None)
 
