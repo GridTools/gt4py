@@ -671,13 +671,10 @@ class LambdaToDataflow(eve.NodeVisitor):
                 )
             else:
                 input_memlets[conn] = dace.Memlet(data=input_node.data, subset=map_index)
+                offset_provider = local_offset_providers[input_expr.local_offset]
                 # filter input expressions with skip values and store their connectivity
-                input_local_offset_provider = self.subgraph_builder.get_offset_provider(
-                    input_expr.local_offset
-                )
-                assert isinstance(input_local_offset_provider, gtx_common.Connectivity)
-                if input_local_offset_provider.has_skip_values:
-                    skip_value_connectivities[input_expr.local_offset] = input_local_offset_provider
+                if offset_provider.has_skip_values:
+                    skip_value_connectivities[input_expr.local_offset] = offset_provider
 
             input_nodes[input_node.data] = input_node
 
