@@ -130,7 +130,7 @@ def _parse_fieldop_arg(
     if isinstance(arg.gt_dtype, ts.ScalarType):
         return gtir_dataflow.MemletExpr(arg.dc_node, sbs.Indices([0]))
     elif isinstance(arg.gt_dtype, ts.FieldType):
-        indices: dict[gtx_common.Dimension, gtir_dataflow.ValueExpr] = {
+        indices: dict[gtx_common.Dimension, gtir_dataflow.DataExpr] = {
             dim: gtir_dataflow.SymbolExpr(dace_gtir_utils.get_map_variable(dim), INDEX_DTYPE)
             for dim, _, _ in domain
         }
@@ -369,7 +369,7 @@ def translate_broadcast_scalar(
     assert isinstance(scalar_expr, gtir_dataflow.MemletExpr)
     assert scalar_expr.subset == sbs.Indices.from_string("0")
     result = gtir_dataflow.DataflowOutputEdge(
-        state, gtir_dataflow.DataExpr(scalar_expr.dc_node, node.args[0].type)
+        state, gtir_dataflow.ValueExpr(scalar_expr.dc_node, node.args[0].type)
     )
     result_field = _create_temporary_field(sdfg, state, domain, node.type, dataflow_output=result)
 

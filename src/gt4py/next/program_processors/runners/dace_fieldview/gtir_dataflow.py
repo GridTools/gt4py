@@ -30,9 +30,9 @@ from gt4py.next.type_system import type_specifications as ts
 
 
 @dataclasses.dataclass(frozen=True)
-class DataExpr:
+class ValueExpr:
     """
-    Local storage for the computation result returned by a tasklet node.
+    Local storage for the values returned by dataflow computation.
 
     This type is used in the context in a dataflow, that is a stencil expression.
     Therefore, it contains either a scalar value (single elements in the fields) or
@@ -77,7 +77,7 @@ class SymbolExpr:
     dc_dtype: dace.typeclass
 
 
-ValueExpr: TypeAlias = DataExpr | MemletExpr | SymbolExpr
+DataExpr: TypeAlias = ValueExpr | MemletExpr | SymbolExpr
 
 
 @dataclasses.dataclass(frozen=True)
@@ -98,7 +98,7 @@ class IteratorExpr:
 
     field: dace.nodes.AccessNode
     dimensions: list[gtx_common.Dimension]
-    indices: dict[gtx_common.Dimension, ValueExpr]
+    indices: dict[gtx_common.Dimension, DataExpr]
     local_offset: Optional[str] = None
 
 
@@ -171,7 +171,7 @@ class DataflowOutputEdge:
     """
 
     state: dace.SDFGState
-    result: DataExpr
+    result: ValueExpr
 
     def connect(
         self,
@@ -351,7 +351,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             name, self.state, map_ranges, inputs, code, outputs, **kwargs
         )
 
-    def _construct_local_view(self, field: MemletExpr | DataExpr) -> DataExpr:
+    def _construct_local_view(self, field: MemletExpr | ValueExpr) -> ValueExpr:
         if isinstance(field, MemletExpr):
             desc = field.dc_node.desc(self.sdfg)
             local_dim_indices = [i for i, size in enumerate(field.subset.size()) if size != 1]
@@ -372,7 +372,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             local_view_node = self.state.add_access(view)
             self._add_input_data_edge(field.dc_node, field.subset, local_view_node)
 
-            return DataExpr(local_view_node, desc.dtype)
+            return ValueExpr(local_view_node, desc.dtype)
 
         else:
             return field
@@ -384,7 +384,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         src_connector: str,
         local_offset: Optional[str] = None,
         use_array: bool = False,
-    ) -> DataExpr:
+    ) -> ValueExpr:
         temp_name = self.sdfg.temp_data_name()
         if use_array:
             # In some cases, such as result data with list-type annotation, we want
@@ -402,9 +402,9 @@ class LambdaToDataflow(eve.NodeVisitor):
             None,
             dace.Memlet(data=temp_name, subset="0"),
         )
-        return DataExpr(temp_node, data_type, local_offset)
+        return ValueExpr(temp_node, data_type, local_offset)
 
-    def _visit_deref(self, node: gtir.FunCall) -> ValueExpr:
+    def _visit_deref(self, node: gtir.FunCall) -> DataExpr:
         """
         Visit a `deref` node, which represents dereferencing of an iterator.
         The iterator is the argument of this node.
@@ -482,7 +482,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                             deref_connector,
                         )
 
-                    elif isinstance(index_expr, DataExpr):
+                    elif isinstance(index_expr, ValueExpr):
                         self._add_edge(
                             index_expr.dc_node,
                             None,
@@ -502,7 +502,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             # dereferencing a scalar or a literal node results in the node itself
             return arg_expr
 
-    def _visit_neighbors(self, node: gtir.FunCall) -> DataExpr:
+    def _visit_neighbors(self, node: gtir.FunCall) -> ValueExpr:
         assert len(node.args) == 2
         assert isinstance(node.type, itir_ts.ListType)
 
@@ -597,9 +597,9 @@ class LambdaToDataflow(eve.NodeVisitor):
             external_edges=True,
         )
 
-        return DataExpr(neighbors_node, node.type, offset)
+        return ValueExpr(neighbors_node, node.type, offset)
 
-    def _visit_map(self, node: gtir.FunCall) -> DataExpr:
+    def _visit_map(self, node: gtir.FunCall) -> ValueExpr:
         """
         A map node defines an operation to be mapped on all elements of input arguments.
 
@@ -732,9 +732,9 @@ class LambdaToDataflow(eve.NodeVisitor):
             external_edges=True,
         )
 
-        return DataExpr(out_node, dc_dtype, local_offset)
+        return ValueExpr(out_node, dc_dtype, local_offset)
 
-    def _visit_reduce(self, node: gtir.FunCall) -> DataExpr:
+    def _visit_reduce(self, node: gtir.FunCall) -> ValueExpr:
         assert isinstance(node.type, ts.ScalarType)
         op_name, reduce_init, reduce_identity = get_reduce_params(node)
 
@@ -754,7 +754,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             # ensure that we leave the visitor in the same state as we entered
             self.reduce_identity = prev_reduce_identity
 
-        assert isinstance(input_expr, MemletExpr | DataExpr)
+        assert isinstance(input_expr, MemletExpr | ValueExpr)
         input_desc = input_expr.dc_node.desc(self.sdfg)
         assert isinstance(input_desc, dace.data.Array)
 
@@ -793,7 +793,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             temp_node,
             dace.Memlet(data=temp_name, subset="0"),
         )
-        return DataExpr(temp_node, node.type)
+        return ValueExpr(temp_node, node.type)
 
     def _split_shift_args(
         self, args: list[gtir.Expr]
@@ -824,11 +824,11 @@ class LambdaToDataflow(eve.NodeVisitor):
         return offset_provider_arg, offset_value_arg, it
 
     def _make_cartesian_shift(
-        self, it: IteratorExpr, offset_dim: gtx_common.Dimension, offset_expr: ValueExpr
+        self, it: IteratorExpr, offset_dim: gtx_common.Dimension, offset_expr: DataExpr
     ) -> IteratorExpr:
         """Implements cartesian shift along one dimension."""
         assert offset_dim in it.dimensions
-        new_index: SymbolExpr | DataExpr
+        new_index: SymbolExpr | ValueExpr
         assert offset_dim in it.indices
         index_expr = it.indices[offset_dim]
         if isinstance(index_expr, SymbolExpr) and isinstance(offset_expr, SymbolExpr):
@@ -869,7 +869,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                         dynamic_offset_tasklet,
                         input_connector,
                     )
-                elif isinstance(input_expr, DataExpr):
+                elif isinstance(input_expr, ValueExpr):
                     self._add_edge(
                         input_expr.dc_node,
                         None,
@@ -896,10 +896,10 @@ class LambdaToDataflow(eve.NodeVisitor):
 
     def _make_dynamic_neighbor_offset(
         self,
-        offset_expr: MemletExpr | DataExpr,
+        offset_expr: MemletExpr | ValueExpr,
         offset_table_node: dace.nodes.AccessNode,
         origin_index: SymbolExpr,
-    ) -> DataExpr:
+    ) -> ValueExpr:
         """
         Implements access to neighbor connectivity table by means of a tasklet node.
 
@@ -943,7 +943,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         it: IteratorExpr,
         connectivity: gtx_common.Connectivity,
         offset_table_node: dace.nodes.AccessNode,
-        offset_expr: ValueExpr,
+        offset_expr: DataExpr,
     ) -> IteratorExpr:
         """Implements shift in unstructured domain by means of a neighbor table."""
         assert connectivity.neighbor_axis in it.dimensions
@@ -1010,16 +1010,16 @@ class LambdaToDataflow(eve.NodeVisitor):
                 it, offset_provider, offset_table_node, offset_expr
             )
 
-    def _visit_generic_builtin(self, node: gtir.FunCall) -> DataExpr:
+    def _visit_generic_builtin(self, node: gtir.FunCall) -> ValueExpr:
         """
         Generic handler called by `visit_FunCall()` when it encounters
         a builtin function that does not match any other specific handler.
         """
         node_internals = []
-        node_connections: dict[str, MemletExpr | DataExpr] = {}
+        node_connections: dict[str, MemletExpr | ValueExpr] = {}
         for i, arg in enumerate(node.args):
             arg_expr = self.visit(arg)
-            if isinstance(arg_expr, MemletExpr | DataExpr):
+            if isinstance(arg_expr, MemletExpr | ValueExpr):
                 # the argument value is the result of a tasklet node or direct field access
                 connector = f"__inp_{i}"
                 node_connections[connector] = arg_expr
@@ -1043,7 +1043,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         )
 
         for connector, arg_expr in node_connections.items():
-            if isinstance(arg_expr, DataExpr):
+            if isinstance(arg_expr, ValueExpr):
                 self._add_edge(
                     arg_expr.dc_node,
                     None,
@@ -1081,7 +1081,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         return self._construct_tasklet_result(dc_dtype, tasklet_node, "result", use_array=use_array)
 
-    def visit_FunCall(self, node: gtir.FunCall) -> IteratorExpr | ValueExpr:
+    def visit_FunCall(self, node: gtir.FunCall) -> IteratorExpr | DataExpr:
         if cpm.is_call_to(node, "deref"):
             return self._visit_deref(node)
 
@@ -1108,8 +1108,8 @@ class LambdaToDataflow(eve.NodeVisitor):
     ) -> tuple[list[DataflowInputEdge], DataflowOutputEdge]:
         for p, arg in zip(node.params, args, strict=True):
             self.symbol_map[str(p.id)] = arg
-        output_expr: ValueExpr = self.visit(node.expr)
-        if isinstance(output_expr, DataExpr):
+        output_expr: DataExpr = self.visit(node.expr)
+        if isinstance(output_expr, ValueExpr):
             return self.input_edges, DataflowOutputEdge(self.state, output_expr)
 
         if isinstance(output_expr, MemletExpr):
