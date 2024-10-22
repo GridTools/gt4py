@@ -829,7 +829,7 @@ class IterationNode(eve.Node):
 
 
 class Condition(eve.Node):
-    condition: Expr
+    condition: Tasklet
     true_state: List[Union[ComputationState, Condition, WhileLoop]]
 
     # false_state is unused for now due to how conditions are
@@ -840,8 +840,13 @@ class Condition(eve.Node):
     )
 
     @datamodels.validator("condition")
-    def condition_is_boolean_expression(self, attribute: datamodels.Attribute, v: Expr) -> None:
-        if v.dtype != common.DataType.BOOL:
+    def condition_has_boolean_expression(self, attribute: datamodels.Attribute, v: Tasklet) -> None:
+        assert isinstance(v, Tasklet)
+        assert len(v.stmts) == 1
+        assert isinstance(v.stmts[0], AssignStmt)
+        assert isinstance(v.stmts[0].left, ScalarAccess)
+        assert isinstance(v.stmts[0].right, Expr)
+        if v.stmts[0].right.dtype != common.DataType.BOOL:
             raise ValueError("Condition must be a boolean expression.")
 
 
@@ -873,12 +878,17 @@ class DomainLoop(ComputationNode, IterationNode):
 
 
 class WhileLoop(eve.Node):
-    condition: Expr
+    condition: Tasklet
     body: List[Union[ComputationState, Condition, WhileLoop]]
 
     @datamodels.validator("condition")
-    def condition_is_boolean_expression(self, attribute: datamodels.Attribute, v: Expr) -> None:
-        if v.dtype != common.DataType.BOOL:
+    def condition_has_boolean_expression(self, attribute: datamodels.Attribute, v: Tasklet) -> None:
+        assert isinstance(v, Tasklet)
+        assert len(v.stmts) == 1
+        assert isinstance(v.stmts[0], AssignStmt)
+        assert isinstance(v.stmts[0].left, ScalarAccess)
+        assert isinstance(v.stmts[0].right, Expr)
+        if v.stmts[0].right.dtype != common.DataType.BOOL:
             raise ValueError("Condition must be a boolean expression.")
 
 

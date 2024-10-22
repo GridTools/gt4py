@@ -249,19 +249,19 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         symtable: ChainMap[eve.SymbolRef, dcir.Decl],
         **kwargs: Any,
     ) -> None:
-        local_condition = eve.SymbolName(f"while_expression_{id(node)}")
-        exported_condition = exported_scalar_name(local_name=local_condition)
+        # get condition_name out of node.condition
+        # yell we find something unexpected
+        assert isinstance(node.condition, dcir.Tasklet)
+        assert len(node.condition.stmts) == 1
+        assert isinstance(node.condition.stmts[0], dcir.AssignStmt)
+        assert isinstance(node.condition.stmts[0].left, dcir.ScalarAccess)
+        exported_name = exported_scalar_name(local_name=node.condition.stmts[0].left.name)
 
-        sdfg_ctx.add_while(condition_name=exported_condition)
+        sdfg_ctx.add_while(condition_name=exported_name)
         assert sdfg_ctx.state.label.startswith("while_init")
 
-        self._add_condition_evaluation_tasklet(
-            node,
-            sdfg_ctx=sdfg_ctx,
-            node_ctx=node_ctx,
-            symtable=symtable,
-            local_name=local_condition,
-            **kwargs,
+        self.visit(
+            node.condition, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx, symtable=symtable, **kwargs
         )
 
         # TODO: Do we need `while_guard` as state on the stack?
@@ -282,19 +282,19 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         symtable: ChainMap[eve.SymbolRef, dcir.Decl],
         **kwargs: Any,
     ) -> None:
-        local_condition = eve.SymbolName(f"if_expression_{id(node)}")
-        exported_condition = exported_scalar_name(local_name=local_condition)
+        # get condition_name out of node.condition
+        # yell we find something unexpected
+        assert isinstance(node.condition, dcir.Tasklet)
+        assert len(node.condition.stmts) == 1
+        assert isinstance(node.condition.stmts[0], dcir.AssignStmt)
+        assert isinstance(node.condition.stmts[0].left, dcir.ScalarAccess)
+        exported_name = exported_scalar_name(local_name=node.condition.stmts[0].left.name)
 
-        sdfg_ctx.add_condition(condition_name=exported_condition)
+        sdfg_ctx.add_condition(condition_name=exported_name)
         assert sdfg_ctx.state.label.startswith("condition_init")
 
-        self._add_condition_evaluation_tasklet(
-            node,
-            sdfg_ctx=sdfg_ctx,
-            node_ctx=node_ctx,
-            symtable=symtable,
-            local_name=local_condition,
-            **kwargs,
+        self.visit(
+            node.condition, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx, symtable=symtable, **kwargs
         )
 
         # TODO: Do we need `condition_guard` on the stack?
@@ -627,27 +627,4 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
             inputs={memlet.connector for memlet in node.read_memlets},
             outputs={memlet.connector for memlet in node.write_memlets},
             symbol_mapping=symbol_mapping,
-        )
-
-    def _add_condition_evaluation_tasklet(
-        self,
-        node: Union[dcir.Condition, dcir.WhileLoop],
-        *,
-        sdfg_ctx: SDFGContext,
-        node_ctx: StencilComputationSDFGBuilder.NodeContext,
-        symtable: ChainMap[eve.SymbolRef, Any],
-        local_name: eve.SymbolName,
-        **kwargs: Any,
-    ) -> None:
-        tmp_access = dcir.ScalarAccess(name=local_name, dtype=common.DataType.BOOL)
-        condition_tasklet = dcir.Tasklet(
-            decls=[
-                # dcir.LocalScalarDecl(name=local_name, dtype=tmp_access.dtype, loc=tmp_access.loc)
-            ],
-            stmts=[dcir.AssignStmt(left=tmp_access, right=node.condition, loc=tmp_access.loc)],
-            read_memlets=[],
-            write_memlets=[],
-        )
-        self.visit(
-            condition_tasklet, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx, symtable=symtable, **kwargs
         )
