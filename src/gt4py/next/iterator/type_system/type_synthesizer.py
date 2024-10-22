@@ -190,6 +190,14 @@ def make_tuple(*args: ts.DataType) -> ts.TupleType:
 
 
 @_register_builtin_type_synthesizer
+def index(arg: ts.DimensionType) -> ts.FieldType:
+    return ts.FieldType(
+        dims=[common.Dimension(value=arg.dim.value, kind=arg.dim.kind)],
+        dtype=ts.ScalarType(kind=getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())),
+    )
+
+
+@_register_builtin_type_synthesizer
 def neighbors(offset_literal: it_ts.OffsetLiteralType, it: it_ts.IteratorType) -> it_ts.ListType:
     assert (
         isinstance(offset_literal, it_ts.OffsetLiteralType)

@@ -198,10 +198,10 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         # Add them as dynamic properties to the SDFG
 
         input_fields = [
-            str(in_field.id)
+            str(in_field.id)  # type: ignore[union-attr]  # backend only supports SymRef inputs, not `index` calls
             for closure in self.itir.closures
             for in_field in closure.inputs
-            if str(in_field.id) in fields
+            if str(in_field.id) in fields  # type: ignore[union-attr]  # backend only supports SymRef inputs, not `index` calls
         ]
         sdfg.gt4py_program_input_fields = {
             in_field: dim
@@ -237,11 +237,11 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
                 closure.stencil, num_args=len(closure.inputs)
             )
             for param, shifts in zip(closure.inputs, params_shifts):
-                if not isinstance(param.id, str):
+                if not isinstance(param.id, str):  # type: ignore[union-attr]  # backend only supports SymRef inputs, not `index` calls
                     continue
-                if param.id not in sdfg.gt4py_program_input_fields:
+                if param.id not in sdfg.gt4py_program_input_fields:  # type: ignore[union-attr]  # backend only supports SymRef inputs, not `index` calls
                     continue
-                sdfg.offset_providers_per_input_field.setdefault(param.id, []).extend(list(shifts))
+                sdfg.offset_providers_per_input_field.setdefault(param.id, []).extend(list(shifts))  # type: ignore[union-attr]  # backend only supports SymRef inputs, not `index` calls
 
         return sdfg
 
