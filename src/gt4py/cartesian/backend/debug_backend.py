@@ -14,6 +14,10 @@ from gt4py.cartesian.backend.base import BaseBackend, CLIBackendMixin, register
 from gt4py.cartesian.backend.numpy_backend import ModuleGenerator
 from gt4py.cartesian.gtc.debug.debug_codegen import DebugCodeGen
 from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
+from gt4py.cartesian.gtc.passes.oir_optimizations.horizontal_execution_merging import (
+    HorizontalExecutionMerging,
+)
+from gt4py.cartesian.gtc.passes.oir_optimizations.temporaries import LocalTemporariesToScalars
 from gt4py.cartesian.gtc.passes.oir_pipeline import OirPipeline
 from gt4py.eve.codegen import format_source
 
@@ -54,6 +58,8 @@ class DebugBackend(BaseBackend, CLIBackendMixin):
             + ".py"
         )
         oir = GTIRToOIR().visit(self.builder.gtir)
+        oir = HorizontalExecutionMerging().visit(oir)
+        oir = LocalTemporariesToScalars().visit(oir)
         source_code = DebugCodeGen().visit(oir)
 
         if self.builder.options.format_source:

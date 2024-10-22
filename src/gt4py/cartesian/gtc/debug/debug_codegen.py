@@ -13,6 +13,7 @@ from gt4py import eve
 from gt4py.cartesian import utils
 from gt4py.cartesian.gtc.common import (
     AxisBound,
+    BuiltInLiteral,
     CartesianOffset,
     DataType,
     FieldAccess,
@@ -236,10 +237,18 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         return f"( {self.visit(binary.left)} {binary.op} {self.visit(binary.right)} )"
 
     def visit_Literal(self, literal: Literal, **_) -> str:
-        if literal.dtype.bit_count() != 4:
-            literal_code = f"{self.visit(literal.dtype)}({literal.value})"
+        if literal.dtype == DataType.BOOL:
+            if literal.value == BuiltInLiteral.TRUE:
+                literal_value = "True"
+            else:
+                literal_value = "False"
         else:
-            literal_code = str(literal.value)
+            literal_value = str(literal.value)
+
+        if literal.dtype.bit_count() != 4:
+            literal_code = f"{self.visit(literal.dtype)}({literal_value})"
+        else:
+            literal_code = literal_value
         return literal_code
 
     def visit_Cast(self, cast: Cast, **_) -> str:
