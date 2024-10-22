@@ -19,6 +19,7 @@ def test_simple_make_tuple_tuple_get():
         remove_letified_make_tuple_elements=False,
         flags=CollapseTuple.Flag.COLLAPSE_MAKE_TUPLE_TUPLE_GET,
         allow_undeclared_symbols=True,
+        is_local_view=False,
     )
 
     expected = tuple_of_size_2
@@ -36,6 +37,7 @@ def test_nested_make_tuple_tuple_get():
         remove_letified_make_tuple_elements=False,
         flags=CollapseTuple.Flag.COLLAPSE_MAKE_TUPLE_TUPLE_GET,
         allow_undeclared_symbols=True,
+        is_local_view=False,
     )
 
     assert actual == tup_of_size2_from_lambda
@@ -51,6 +53,7 @@ def test_different_tuples_make_tuple_tuple_get():
         remove_letified_make_tuple_elements=False,
         flags=CollapseTuple.Flag.COLLAPSE_MAKE_TUPLE_TUPLE_GET,
         allow_undeclared_symbols=True,
+        is_local_view=False,
     )
 
     assert actual == testee  # did nothing
@@ -64,6 +67,7 @@ def test_incompatible_order_make_tuple_tuple_get():
         remove_letified_make_tuple_elements=False,
         flags=CollapseTuple.Flag.COLLAPSE_MAKE_TUPLE_TUPLE_GET,
         allow_undeclared_symbols=True,
+        is_local_view=False,
     )
     assert actual == testee  # did nothing
 
@@ -75,6 +79,7 @@ def test_incompatible_size_make_tuple_tuple_get():
         remove_letified_make_tuple_elements=False,
         flags=CollapseTuple.Flag.COLLAPSE_MAKE_TUPLE_TUPLE_GET,
         allow_undeclared_symbols=True,
+        is_local_view=False,
     )
     assert actual == testee  # did nothing
 
@@ -86,6 +91,7 @@ def test_merged_with_smaller_outer_size_make_tuple_tuple_get():
         ignore_tuple_size=True,
         flags=CollapseTuple.Flag.COLLAPSE_MAKE_TUPLE_TUPLE_GET,
         allow_undeclared_symbols=True,
+        is_local_view=False,
     )
     assert actual == im.make_tuple("first", "second")
 
@@ -98,6 +104,7 @@ def test_simple_tuple_get_make_tuple():
         remove_letified_make_tuple_elements=False,
         flags=CollapseTuple.Flag.COLLAPSE_TUPLE_GET_MAKE_TUPLE,
         allow_undeclared_symbols=True,
+        is_local_view=False,
     )
     assert expected == actual
 
@@ -110,6 +117,7 @@ def test_propagate_tuple_get():
         remove_letified_make_tuple_elements=False,
         flags=CollapseTuple.Flag.PROPAGATE_TUPLE_GET,
         allow_undeclared_symbols=True,
+        is_local_view=False,
     )
     assert expected == actual
 
@@ -127,6 +135,7 @@ def test_letify_make_tuple_elements():
         remove_letified_make_tuple_elements=False,
         flags=CollapseTuple.Flag.LETIFY_MAKE_TUPLE_ELEMENTS,
         allow_undeclared_symbols=True,
+        is_local_view=False,
     )
     assert actual == expected
 
@@ -140,6 +149,7 @@ def test_letify_make_tuple_with_trivial_elements():
         remove_letified_make_tuple_elements=False,
         flags=CollapseTuple.Flag.LETIFY_MAKE_TUPLE_ELEMENTS,
         allow_undeclared_symbols=True,
+        is_local_view=False,
     )
     assert actual == expected
 
@@ -153,6 +163,7 @@ def test_inline_trivial_make_tuple():
         remove_letified_make_tuple_elements=False,
         flags=CollapseTuple.Flag.INLINE_TRIVIAL_MAKE_TUPLE,
         allow_undeclared_symbols=True,
+        is_local_view=False,
     )
     assert actual == expected
 
@@ -171,6 +182,7 @@ def test_propagate_to_if_on_tuples():
         remove_letified_make_tuple_elements=False,
         flags=CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
         allow_undeclared_symbols=True,
+        is_local_view=False,
     )
     assert actual == expected
 
@@ -188,6 +200,7 @@ def test_propagate_to_if_on_tuples_with_let():
         flags=CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES
         | CollapseTuple.Flag.LETIFY_MAKE_TUPLE_ELEMENTS,
         allow_undeclared_symbols=True,
+        is_local_view=False,
     )
     assert actual == expected
 
@@ -200,6 +213,7 @@ def test_propagate_nested_lift():
         remove_letified_make_tuple_elements=False,
         flags=CollapseTuple.Flag.PROPAGATE_NESTED_LET,
         allow_undeclared_symbols=True,
+        is_local_view=False,
     )
     assert actual == expected
 
@@ -210,6 +224,9 @@ def test_if_on_tuples_with_let():
     )(im.tuple_get(0, "val"))
     expected = im.if_("pred", 1, 3)
     actual = CollapseTuple.apply(
-        testee, remove_letified_make_tuple_elements=False, allow_undeclared_symbols=True
+        testee,
+        remove_letified_make_tuple_elements=False,
+        allow_undeclared_symbols=True,
+        is_local_view=False,
     )
     assert actual == expected
