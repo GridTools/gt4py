@@ -23,12 +23,6 @@ from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from gt4py.next import allocators as next_allocators, backend as next_backend, common, config
 from gt4py.next.ffront import foast_to_gtir, foast_to_past, past_to_itir
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
-from gt4py.next.iterator.transforms import (
-    collapse_tuple,
-    infer_domain,
-    inline_fundefs,
-    inline_lambdas,
-)
 from gt4py.next.otf import stages, workflow
 from gt4py.next.type_system import type_specifications as ts
 
@@ -97,7 +91,7 @@ _FENCIL_CACHE: dict[int, Callable] = {}
 
 
 def fencil_generator(
-    ir: itir.Program,
+    ir: itir.Program | itir.FencilDefinition,
     debug: bool,
     use_embedded: bool,
     offset_provider: dict[str, common.Connectivity | common.Dimension],
@@ -198,7 +192,6 @@ class Roundtrip(workflow.Workflow[stages.CompilableProgram, stages.CompiledProgr
     def __call__(self, inp: stages.CompilableProgram) -> stages.CompiledProgram:
         debug = config.DEBUG if self.debug is None else self.debug
 
-        assert isinstance(inp.data, itir.Program)  # for mypy
         fencil = fencil_generator(
             inp.data,
             offset_provider=inp.args.offset_provider,
@@ -252,23 +245,9 @@ with_temporaries = next_backend.Backend(
 )
 
 
-def _fieldview_transforms(
-    ir: itir.Program, *, offset_provider: common.OffsetProvider
-) -> itir.Program:
-    ir = inline_fundefs.InlineFundefs().visit(ir)
-    ir = inline_fundefs.prune_unreferenced_fundefs(ir)
-    ir = inline_lambdas.InlineLambdas.apply(ir, opcount_preserving=True)
-    ir = infer_domain.infer_program(
-        ir,
-        offset_provider=offset_provider,
-    )
-    ir = collapse_tuple.CollapseTuple.apply(ir, offset_provider=offset_provider)  # type: ignore[assignment] # type is still `itir.Program`
-    return ir
-
-
 gtir = next_backend.Backend(
     name="roundtrip_gtir",
-    executor=Roundtrip(transforms=_fieldview_transforms),  # type: ignore[arg-type] # on purpose doesn't support `FencilDefintion` will resolve itself later...
+    executor=Roundtrip(transforms=itir_transforms.apply_fieldview_transforms),  # type: ignore[arg-type] # on purpose doesn't support `FencilDefintion` will resolve itself later...
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
     transforms=next_backend.Transforms(
         past_to_itir=past_to_itir.past_to_itir_factory(to_gtir=True),

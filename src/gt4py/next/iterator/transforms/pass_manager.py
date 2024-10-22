@@ -12,7 +12,7 @@ from typing import Callable, Optional, Protocol
 from gt4py.eve import utils as eve_utils
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.transforms import fencil_to_program, inline_fundefs
+from gt4py.next.iterator.transforms import fencil_to_program, infer_domain, inline_fundefs
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
@@ -215,4 +215,18 @@ def apply_common_transforms(
     )
 
     assert isinstance(ir, itir.Program)
+    return ir
+
+
+def apply_fieldview_transforms(
+    ir: itir.Program, *, offset_provider: common.OffsetProvider
+) -> itir.Program:
+    ir = inline_fundefs.InlineFundefs().visit(ir)
+    ir = inline_fundefs.prune_unreferenced_fundefs(ir)
+    ir = InlineLambdas.apply(ir, opcount_preserving=True)
+    ir = infer_domain.infer_program(
+        ir,
+        offset_provider=offset_provider,
+    )
+    ir = CollapseTuple.apply(ir, offset_provider=offset_provider)  # type: ignore[assignment] # type is still `itir.Program`
     return ir
