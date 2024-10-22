@@ -7,9 +7,10 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import enum
-from typing import Callable, Optional
+from typing import Callable, Optional, Protocol
 
 from gt4py.eve import utils as eve_utils
+from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import fencil_to_program, inline_fundefs
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
@@ -27,6 +28,12 @@ from gt4py.next.iterator.transforms.normalize_shifts import NormalizeShifts
 from gt4py.next.iterator.transforms.propagate_deref import PropagateDeref
 from gt4py.next.iterator.transforms.scan_eta_reduction import ScanEtaReduction
 from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce
+
+
+class GTIRTransform(Protocol):
+    def __call__(
+        self, _: itir.Program | itir.FencilDefinition, *, offset_provider: common.OffsetProvider
+    ) -> itir.Program: ...
 
 
 @enum.unique
@@ -65,7 +72,7 @@ def _inline_into_scan(ir, *, max_iter=10):
 # TODO(tehrengruber): Revisit interface to configure temporary extraction. We currently forward
 #  `lift_mode` and `temporary_extraction_heuristics` which is inconvenient.
 def apply_common_transforms(
-    ir: itir.Node,
+    ir: itir.Program | itir.FencilDefinition,
     *,
     lift_mode=None,
     offset_provider=None,
@@ -115,10 +122,10 @@ def apply_common_transforms(
             #  other cases we want it anyway.
             force_inline_trivial_lift_args=True,
         )
-        inlined = ConstantFolding.apply(inlined)
+        inlined = ConstantFolding.apply(inlined)  # type: ignore[assignment] # still a `itir.Program`
         # This pass is required to be in the loop such that when an `if_` call with tuple arguments
         # is constant-folded the surrounding tuple_get calls can be removed.
-        inlined = CollapseTuple.apply(
+        inlined = CollapseTuple.apply(  # type: ignore[assignment] # still a `itir.Program`
             inlined,
             offset_provider=offset_provider,
             # TODO(tehrengruber): disabled since it increases compile-time too much right now
@@ -167,7 +174,7 @@ def apply_common_transforms(
     # larger than the number of closure outputs as given by the unconditional collapse, we can
     # only run the unconditional version here instead of in the loop above.
     if unconditionally_collapse_tuples:
-        ir = CollapseTuple.apply(
+        ir = CollapseTuple.apply(  # type: ignore[assignment] # still a `itir.Program`
             ir,
             ignore_tuple_size=True,
             offset_provider=offset_provider,
@@ -188,7 +195,7 @@ def apply_common_transforms(
             unrolled = UnrollReduce.apply(ir, offset_provider=offset_provider)
             if unrolled == ir:
                 break
-            ir = unrolled
+            ir = unrolled  # type: ignore[assignment] # still a `itir.Program`
             ir = CollapseListGet().visit(ir)
             ir = NormalizeShifts().visit(ir)
             ir = _inline_lifts(ir, LiftMode.FORCE_INLINE)
@@ -200,7 +207,7 @@ def apply_common_transforms(
     ir = ScanEtaReduction().visit(ir)
 
     if common_subexpression_elimination:
-        ir = CommonSubexpressionElimination.apply(ir, offset_provider=offset_provider)  # type: ignore[type-var]  # always an itir.Program
+        ir = CommonSubexpressionElimination.apply(ir, offset_provider=offset_provider)
         ir = MergeLet().visit(ir)
 
     ir = InlineLambdas.apply(
