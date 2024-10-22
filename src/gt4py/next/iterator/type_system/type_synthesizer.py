@@ -192,7 +192,7 @@ def make_tuple(*args: ts.DataType) -> ts.TupleType:
 @_register_builtin_type_synthesizer
 def index(arg: ts.DimensionType) -> ts.FieldType:
     return ts.FieldType(
-        dims=[common.Dimension(value=arg.dim.value, kind=arg.dim.kind)],
+        dims=[arg.dim],
         dtype=ts.ScalarType(kind=getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())),
     )
 
