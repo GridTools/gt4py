@@ -561,8 +561,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         )
         neighbors_node = self.state.add_access(neighbors_temp)
 
-        offset_dim = gtx_common.Dimension(offset, kind=gtx_common.DimensionKind.LOCAL)
-        neighbor_idx = dace_gtir_utils.get_map_variable(offset_dim)
+        neighbor_idx = dace_gtir_utils.get_map_variable(offset)
 
         index_connector = "__index"
         output_connector = "__val"
@@ -649,8 +648,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         offset_provider = self.subgraph_builder.get_offset_provider(local_offset)
         assert isinstance(offset_provider, gtx_common.Connectivity)
         local_size = offset_provider.max_neighbors
-        offset_dim = gtx_common.Dimension(local_offset, gtx_common.DimensionKind.LOCAL)
-        map_index = dace_gtir_utils.get_map_variable(offset_dim)
+        map_index = dace_gtir_utils.get_map_variable(local_offset)
 
         # The dataflow we build in this class has some loose connections on input edges.
         # These edges are described as set of nodes, that will have to be connected to
