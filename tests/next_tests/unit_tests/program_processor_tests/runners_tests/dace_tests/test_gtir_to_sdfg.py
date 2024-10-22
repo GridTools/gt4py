@@ -1405,6 +1405,8 @@ def test_gtir_reduce_dot_product():
         ],
         dtype=connectivity_V2E.table.dtype,
     )
+    # safety check that the connectivity table actually contains skip values
+    assert len(np.where(connectivity_V2E.table == gtx_common._DEFAULT_SKIP_VALUE)) != 0
 
     offset_provider = SIMPLE_MESH_OFFSET_PROVIDER | {
         "V2E_skip": connectivity_V2E_skip,
