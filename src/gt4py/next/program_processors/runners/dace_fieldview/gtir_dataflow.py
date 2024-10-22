@@ -638,15 +638,17 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         # GT4Py guarantees that all connectivities used to generate lists of neighbors
         # have the same length, that is the same value of 'max_neighbors'.
-        assert 1 == len(
+        local_offset_providers = dace_utils.filter_connectivities(
             {
-                self.subgraph_builder.get_offset_provider(offset).max_neighbors  # type: ignore[union-attr]
+                offset: self.subgraph_builder.get_offset_provider(offset)
                 for offset in input_local_offsets
             }
         )
-        local_offset = input_local_offsets[0]
-        offset_provider = self.subgraph_builder.get_offset_provider(local_offset)
-        assert isinstance(offset_provider, gtx_common.Connectivity)
+        if len(set(table.max_neighbors for table in local_offset_providers.values())) != 1:
+            raise ValueError(
+                "Unexpected arguments to map expression with different local dimensions."
+            )
+        local_offset, offset_provider = next(iter(local_offset_providers.items()))
         local_size = offset_provider.max_neighbors
         map_index = dace_gtir_utils.get_map_variable(local_offset)
 
