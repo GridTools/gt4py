@@ -462,12 +462,12 @@ class DaCeIRBuilder(eve.NodeTranslator):
         iteration_ctx: DaCeIRBuilder.IterationContext,
         symbol_collector: DaCeIRBuilder.SymbolCollector,
         memlets: Optional[List[dcir.Memlet]] = None,
-        declarations: Optional[List[dcir.LocalScalarDecl]] = None,
+        # declarations: Optional[List[dcir.LocalScalarDecl]] = None,
         k_interval,
         **kwargs: Any,
     ):
         memlets = [] if memlets is None else memlets
-        declarations = [] if declarations is None else declarations
+        # declarations = [] if declarations is None else declarations
         targets: Set[str] = set()
         kwargs.pop("targets", "dummy")
         statements = [
@@ -633,9 +633,9 @@ class DaCeIRBuilder(eve.NodeTranslator):
             k_interval=k_interval,
         )
 
-        local_scalar_declarations: List[dcir.LocalScalarDecl] = [
-            self.visit(declaration, **kwargs) for declaration in node.declarations
-        ]
+        # local_scalar_declarations: List[dcir.LocalScalarDecl] = [
+        #     self.visit(declaration, **kwargs) for declaration in node.declarations
+        # ]
 
         code_block = oir.CodeBlock(body=node.body, loc=node.loc, label=f"he_{id(node)}")
 
@@ -646,7 +646,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
             symbol_collector=symbol_collector,
             k_interval=k_interval,
             memlets=[*read_memlets, *write_memlets],
-            declarations=local_scalar_declarations,
+            # declarations=local_scalar_declarations,
             **kwargs,
         )
 
