@@ -186,7 +186,8 @@ MaybePosition: TypeAlias = Optional[Position]
 
 NamedFieldIndices: TypeAlias = Mapping[Tag, FieldIndex | SparsePositionEntry]
 
-_UnknownSparseDim = common.Dimension("_UnknownSparseDim", kind=common.DimensionKind.LOCAL)
+
+_CONST_DIM = common.Dimension(value="_CONST_DIM", kind=common.DimensionKind.LOCAL)
 
 
 @runtime_checkable
@@ -1621,9 +1622,6 @@ def as_tuple_field(field: tuple | TupleField) -> TupleField:
     return TupleOfFields(tuple(_wrap_field(f) for f in field))
 
 
-_CONST_DIM = common.Dimension(value="_CONST_DIM", kind=common.DimensionKind.LOCAL)
-
-
 def _elem_dtype(elem: Any) -> np.dtype:
     if hasattr(elem, "dtype"):
         return elem.dtype
@@ -1740,23 +1738,36 @@ def _get_output_type(
     return type_translation.from_value(single_pos_result)
 
 
+def _fieldspec_list_to_value(
+    domain: common.Domain, type_: ts.TypeSpec
+) -> tuple[common.Domain, ts.TypeSpec]:
+    """Translate the list element type into the domain."""
+    if isinstance(type_, itir_ts.ListType):
+        if type_.offset_type == _CONST_DIM:
+            return domain.insert(
+                len(domain), common.named_range((_CONST_DIM, 1))
+            ), type_.element_type
+        else:
+            offset_provider = embedded_context.offset_provider.get()
+            offset_type = type_.offset_type
+            assert isinstance(offset_type, common.Dimension)
+            connectivity = offset_provider[offset_type.value]
+            assert isinstance(connectivity, common.Connectivity)
+            return domain.insert(
+                len(domain),
+                common.named_range((offset_type, connectivity.max_neighbors)),
+            ), type_.element_type
+    return domain, type_
+
+
 @builtins.as_fieldop.register(EMBEDDED)
 def as_fieldop(fun: Callable, domain: runtime.CartesianDomain | runtime.UnstructuredDomain):
     def impl(*args):
-        dom = {**domain}
         xp = field_utils.get_array_ns(*args)
-        type_ = _get_output_type(fun, dom, [promote_scalars(arg) for arg in args])
-        if isinstance(type_, itir_ts.ListType):
-            if type_.offset_type == _CONST_DIM:
-                dom[type_.offset_type] = range(0, 1)
-                type_ = type_.element_type
-            else:
-                offset_provider = embedded_context.offset_provider.get()
-                dom[type_.offset_type] = range(
-                    0, offset_provider[type_.offset_type.value].max_neighbors
-                )
-                type_ = type_.element_type
-        out = field_utils.field_from_typespec(type_, common.domain(dom), xp)
+        type_ = _get_output_type(fun, domain, [promote_scalars(arg) for arg in args])
+
+        new_domain, type_ = _fieldspec_list_to_value(common.domain(domain), type_)
+        out = field_utils.field_from_typespec(type_, new_domain, xp)
 
         # TODO(havogt): after updating all tests to use the new program,
         # we should get rid of closure and move the implementation to this function
