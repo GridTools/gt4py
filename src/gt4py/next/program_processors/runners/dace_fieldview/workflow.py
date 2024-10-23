@@ -17,7 +17,7 @@ import factory
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, config
-from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.otf import languages, recipes, stages, step_types, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.languages import LanguageSettings
@@ -46,10 +46,8 @@ class DaCeTranslator(
         offset_provider: common.OffsetProvider,
         column_axis: Optional[common.Dimension],
     ) -> dace.SDFG:
-        # TODO(edopao): Call IR transformations and domain inference, finally lower IR to SDFG
-        raise NotImplementedError
-
-        return gtir_sdfg.build_sdfg_from_gtir(program=ir, offset_provider=offset_provider)
+        ir = itir_transforms.apply_fieldview_transforms(ir, offset_provider=offset_provider)
+        return gtir_sdfg.build_sdfg_from_gtir(ir=ir, offset_provider=offset_provider)
 
     def __call__(
         self, inp: stages.CompilableProgram

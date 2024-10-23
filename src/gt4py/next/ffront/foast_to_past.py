@@ -45,6 +45,11 @@ class ItirShim:
     def __gt_itir__(self) -> itir.Expr:
         return self.foast_to_itir(self.definition)
 
+    # FIXME[#1582](tehrengruber): remove after refactoring to GTIR
+    def __gt_gtir__(self) -> itir.Expr:
+        # backend should have self.foast_to_itir set to foast_to_gtir
+        return self.foast_to_itir(self.definition)
+
 
 @dataclasses.dataclass(frozen=True)
 class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
