@@ -456,13 +456,12 @@ def _get_data_nodes(
             local_offset = None
         return FieldopData(sym_node, sym_type, local_offset)
     elif isinstance(sym_type, ts.ScalarType):
-        if sym_name in sdfg.arrays:
-            # access the existing scalar container
-            sym_node = state.add_access(sym_name)
-        else:
+        if sym_name in sdfg.symbols:
             sym_node = _get_symbolic_value(
                 sdfg, state, sdfg_builder, sym_name, sym_type, temp_name=f"__{sym_name}"
             )
+        else:
+            sym_node = state.add_access(sym_name)
         return FieldopData(sym_node, sym_type, local_offset=None)
     elif isinstance(sym_type, ts.TupleType):
         tuple_fields = dace_gtir_utils.get_tuple_fields(sym_name, sym_type)
@@ -581,7 +580,7 @@ def translate_scalar_expr(
     connectors = []
     scalar_expr_args = []
 
-    for arg_expr in node.args:
+    for i, arg_expr in enumerate(node.args):
         visit_expr = True
         if isinstance(arg_expr, gtir.SymRef):
             try:
@@ -604,7 +603,7 @@ def translate_scalar_expr(
             )
             if not (isinstance(arg, FieldopData) and isinstance(arg.gt_dtype, ts.ScalarType)):
                 raise ValueError(f"Invalid argument to scalar expression {arg_expr}.")
-            param = f"__in_{arg.dc_node.data}"
+            param = f"__arg{i}"
             args.append(arg.dc_node)
             connectors.append(param)
             scalar_expr_args.append(gtir.SymRef(id=param))
