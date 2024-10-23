@@ -71,6 +71,7 @@ class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
     DACE_CPU = "gt4py.next.program_processors.runners.dace.itir_cpu"
     DACE_GPU = "gt4py.next.program_processors.runners.dace.itir_gpu"
     GTIR_DACE_CPU = "gt4py.next.program_processors.runners.dace.gtir_cpu"
+    GTIR_DACE_GPU = "gt4py.next.program_processors.runners.dace.gtir_gpu"
 
 
 class ProgramFormatterId(_PythonObjectIdMixin, str, enum.Enum):
@@ -175,6 +176,7 @@ BACKEND_SKIP_TEST_MATRIX = {
     OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.GTIR_DACE_CPU: GTIR_DACE_SKIP_TEST_LIST,
+    OptionalProgramBackendId.GTIR_DACE_GPU: GTIR_DACE_SKIP_TEST_LIST,
     ProgramBackendId.GTFN_CPU: GTFN_SKIP_TEST_LIST
     + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
     ProgramBackendId.GTFN_CPU_IMPERATIVE: GTFN_SKIP_TEST_LIST

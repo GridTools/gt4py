@@ -14,16 +14,21 @@ from typing import Optional
 
 import dace
 import factory
+from dace.transformation.auto import auto_optimize as dace_autoopt
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, config
+from gt4py.next import allocators as gtx_allocators, common, config
 from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator import ir as itir, transforms as itir_transforms
+from gt4py.next.iterator.transforms import infer_domain
 from gt4py.next.otf import languages, recipes, stages, step_types, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.languages import LanguageSettings
 from gt4py.next.program_processors.runners.dace_common import workflow as dace_workflow
-from gt4py.next.program_processors.runners.dace_fieldview import gtir_sdfg
-from gt4py.next.type_system import type_translation as tt
+from gt4py.next.program_processors.runners.dace_fieldview import (
+    gtir_sdfg,
+    transformations as gtx_transformations,
+)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -33,7 +38,8 @@ class DaCeTranslator(
     ],
     step_types.TranslationStep[languages.SDFG, languages.LanguageSettings],
 ):
-    device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
+    device_type: core_defs.DeviceType
+    auto_optimize: bool
 
     def _language_settings(self) -> languages.LanguageSettings:
         return languages.LanguageSettings(
@@ -45,11 +51,20 @@ class DaCeTranslator(
         ir: itir.Program,
         offset_provider: common.OffsetProvider,
         column_axis: Optional[common.Dimension],
+        auto_opt: bool,
+        on_gpu: bool,
     ) -> dace.SDFG:
-        # TODO(edopao): Call IR transformations and domain inference, finally lower IR to SDFG
-        raise NotImplementedError
+        ir = itir_transforms.apply_fieldview_transforms(ir, offset_provider=offset_provider)
+        ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
 
-        return gtir_sdfg.build_sdfg_from_gtir(program=ir, offset_provider=offset_provider)
+        sdfg = gtir_sdfg.build_sdfg_from_gtir(ir, offset_provider=offset_provider)
+
+        if auto_opt:
+            return gtx_transformations.gt_auto_optimize(sdfg, gpu=on_gpu)
+        elif on_gpu:
+            dace_autoopt.apply_gpu_storage(sdfg)
+
+        return sdfg
 
     def __call__(
         self, inp: stages.CompilableProgram
@@ -62,11 +77,13 @@ class DaCeTranslator(
             program,
             inp.args.offset_provider,
             inp.args.column_axis,
+            auto_opt=self.auto_optimize,
+            on_gpu=(self.device_type == gtx_allocators.CUPY_DEVICE),
         )
 
         param_types = tuple(
-            interface.Parameter(param, tt.from_value(arg))
-            for param, arg in zip(sdfg.arg_names, inp.args.args)
+            interface.Parameter(param, arg_type)
+            for param, arg_type in zip(sdfg.arg_names, inp.args.args)
         )
 
         module: stages.ProgramSource[languages.SDFG, languages.LanguageSettings] = (
@@ -100,10 +117,12 @@ class DaCeWorkflowFactory(factory.Factory):
         cmake_build_type: config.CMakeBuildType = factory.LazyFunction(
             lambda: config.CMAKE_BUILD_TYPE
         )
+        auto_optimize: bool = False
 
     translation = factory.SubFactory(
         DaCeTranslationStepFactory,
         device_type=factory.SelfAttribute("..device_type"),
+        auto_optimize=factory.SelfAttribute("..auto_optimize"),
     )
     bindings = _no_bindings
     compilation = factory.SubFactory(
