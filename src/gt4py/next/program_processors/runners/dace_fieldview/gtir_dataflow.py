@@ -746,10 +746,10 @@ class LambdaToDataflow(eve.NodeVisitor):
         Helper method to lower reduction on a local field containing skip values.
 
         The reduction is implemented as a nested SDFG containing 2 states. In first
-        state., the result (a scalar data node passed as argumet) is initialized.
+        state, the result (a scalar data node passed as argumet) is initialized.
         In second state, a mapped tasklet uses a write-conflict resolution (wcr)
         memlet to update the result.
-        We use the offset provider as a mask to identify skiup values: the value
+        We use the offset provider as a mask to identify skip values: the value
         that is written to the result node is either the input value, when the
         corresponding neighbor index in the connectivity table is valid, or the
         identity value if the neighbor index is missing.
