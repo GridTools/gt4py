@@ -230,6 +230,12 @@ class MutableLocatedField(LocatedField, Protocol):
     def field_setitem(self, indices: NamedFieldIndices, value: Any) -> None: ...
 
 
+def _numpy_structured_value_to_tuples(value: Any) -> Any:
+    if _elem_dtype(value).names is not None:
+        return tuple(_numpy_structured_value_to_tuples(v) for v in value)
+    return value
+
+
 class Column(np.lib.mixins.NDArrayOperatorsMixin):
     """Represents a column when executed in column mode (`column_axis != None`).
 
@@ -249,6 +255,10 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
     def dtype(self) -> np.dtype:
         # not directly dtype of `self.data` as that might be a structured type containing `None`
         return _elem_dtype(self.data[self.kstart])
+
+    def __gt_type__(self) -> ts.TypeSpec:
+        elem = self.data[self.kstart]
+        return type_translation.from_value(_numpy_structured_value_to_tuples(elem))
 
     def __getitem__(self, i: int) -> Any:
         result = self.data[i - self.kstart]
@@ -1407,6 +1417,16 @@ class _List(Generic[DT]):
     def __getitem__(self, i: int):
         return self.values[i]
 
+    def __gt_type__(self) -> itir_ts.ListType:
+        offset_tag = self.offset.value
+        assert isinstance(offset_tag, str)
+        element_type = type_translation.from_value(self.values[0])
+        assert isinstance(element_type, ts.DataType)
+        return itir_ts.ListType(
+            element_type=element_type,
+            offset_type=common.Dimension(value=offset_tag, kind=common.DimensionKind.LOCAL),
+        )
+
 
 @dataclasses.dataclass(frozen=True)
 class _ConstList(Generic[DT]):
@@ -1414,6 +1434,14 @@ class _ConstList(Generic[DT]):
 
     def __getitem__(self, _):
         return self.value
+
+    def __gt_type__(self) -> itir_ts.ListType:
+        element_type = type_translation.from_value(self.value)
+        assert isinstance(element_type, ts.DataType)
+        return itir_ts.ListType(
+            element_type=element_type,
+            offset_type=_CONST_DIM,
+        )
 
 
 @builtins.neighbors.register(EMBEDDED)
@@ -1599,16 +1627,6 @@ _CONST_DIM = common.Dimension(value="_CONST_DIM", kind=common.DimensionKind.LOCA
 def _elem_dtype(elem: Any) -> np.dtype:
     if hasattr(elem, "dtype"):
         return elem.dtype
-    if isinstance(elem, _ConstList):
-        metadata = {"is_list": _CONST_DIM}
-        return np.dtype(_elem_dtype(elem.value), metadata=metadata)
-    if isinstance(elem, _List):
-        offset_tag = elem.offset.value
-        assert isinstance(offset_tag, str)
-        metadata = {"is_list": common.Dimension(value=offset_tag, kind=common.DimensionKind.LOCAL)}
-        return np.dtype(
-            [(f"f{i}", _elem_dtype(e)) for i, e in enumerate(elem.values)], metadata=metadata
-        )
     if isinstance(elem, tuple):
         return np.dtype([(f"f{i}", _elem_dtype(e)) for i, e in enumerate(elem)])
     return np.dtype(type(elem))
@@ -1701,38 +1719,6 @@ def _extract_column_range(domain) -> common.NamedRange | eve.NothingType:
     return eve.NOTHING
 
 
-def _structured_dtype_to_typespec(
-    structured_dtype: np.dtype,
-) -> ts.ScalarType | ts.TupleType | itir_ts.ListType:
-    if structured_dtype.names is None:
-        if structured_dtype.metadata is not None and (
-            is_list := structured_dtype.metadata.get("is_list")
-        ):
-            return itir_ts.ListType(
-                element_type=type_translation.from_dtype(core_defs.dtype(structured_dtype)),
-                offset_type=is_list,
-            )
-        else:
-            return type_translation.from_dtype(core_defs.dtype(structured_dtype))
-    else:
-        if structured_dtype.metadata is not None and (
-            is_list := structured_dtype.metadata.get("is_list")
-        ):
-            return itir_ts.ListType(
-                element_type=_structured_dtype_to_typespec(
-                    structured_dtype[structured_dtype.names[0]]
-                ),
-                offset_type=is_list,
-            )
-        else:
-            return ts.TupleType(
-                types=[
-                    _structured_dtype_to_typespec(structured_dtype[name])
-                    for name in structured_dtype.names
-                ]
-            )
-
-
 def _get_output_type(
     fun: Callable,
     domain_: runtime.CartesianDomain | runtime.UnstructuredDomain,
@@ -1751,8 +1737,7 @@ def _get_output_type(
     with embedded_context.new_context(closure_column_range=col_range) as ctx:
         single_pos_result = ctx.run(_compute_at_position, fun, args, pos_in_domain, col_dim)
     assert single_pos_result is not _UNDEFINED, "Stencil contains an Out-Of-Bound access."
-    dtype = _elem_dtype(single_pos_result)
-    return _structured_dtype_to_typespec(dtype)
+    return type_translation.from_value(single_pos_result)
 
 
 @builtins.as_fieldop.register(EMBEDDED)
