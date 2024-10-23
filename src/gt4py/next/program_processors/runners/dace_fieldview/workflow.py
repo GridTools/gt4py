@@ -18,7 +18,6 @@ from dace.transformation.auto import auto_optimize as dace_autoopt
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import allocators as gtx_allocators, common, config
-from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.iterator.transforms import infer_domain
 from gt4py.next.otf import languages, recipes, stages, step_types, workflow
