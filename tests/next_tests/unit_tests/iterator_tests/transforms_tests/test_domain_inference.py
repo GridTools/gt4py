@@ -84,9 +84,13 @@ def run_test_expr(
     domain: itir.FunCall,
     expected_domains: dict[str, itir.Expr | dict[str | Dimension, tuple[itir.Expr, itir.Expr]]],
     offset_provider: common.OffsetProvider,
+    symbolic_domain_sizes: Optional[dict[str, str]] = None,
 ):
     actual_call, actual_domains = infer_domain.infer_expr(
-        testee, domain_utils.SymbolicDomain.from_expr(domain), offset_provider
+        testee,
+        domain_utils.SymbolicDomain.from_expr(domain),
+        offset_provider,
+        symbolic_domain_sizes,
     )
     folded_call = constant_fold_domain_exprs(actual_call)
     folded_domains = constant_fold_accessed_domains(actual_domains) if actual_domains else None
@@ -1020,4 +1024,23 @@ def test_scan(offset_provider):
         domain,
         {"a": im.domain(common.GridType.CARTESIAN, {IDim: (1, 12)})},
         offset_provider,
+    )
+
+
+def test_symbolic_domain_sizes(unstructured_offset_provider):
+    stencil = im.lambda_("arg0")(im.deref(im.shift("E2V", 1)("arg0")))
+    domain = im.domain(common.GridType.UNSTRUCTURED, {Edge: (0, 1)})
+    symbolic_domain_sizes = {"Vertex": "num_vertices"}
+
+    testee, expected = setup_test_as_fieldop(
+        stencil,
+        domain,
+    )
+    run_test_expr(
+        testee,
+        expected,
+        domain,
+        {"in_field1": {Vertex: (0, im.ref("num_vertices"))}},
+        unstructured_offset_provider,
+        symbolic_domain_sizes,
     )
