@@ -1026,7 +1026,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             arg_expr = self.visit(arg)
             if isinstance(arg_expr, MemletExpr | ValueExpr):
                 # the argument value is the result of a tasklet node or direct field access
-                connector = f"__inp_{i}"
+                connector = f"__arg{i}"
                 node_connections[connector] = arg_expr
                 node_internals.append(connector)
             else:
