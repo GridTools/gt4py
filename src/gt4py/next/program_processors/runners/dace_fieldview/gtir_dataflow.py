@@ -574,7 +574,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         if offset_provider.has_skip_values:
             tasklet_expression += (
-                # in case of skip value we could write any dummy value
+                # in case of skip value we can write any dummy value
                 f" if {index_connector} != {gtx_common._DEFAULT_SKIP_VALUE} else {field_desc.dtype}(0)"
             )
 
@@ -714,7 +714,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             input_nodes[connectivity_slice.dc_node.data] = connectivity_slice.dc_node
 
             tasklet_expression += (
-                # in case of skip value we could write any dummy value
+                # in case of skip value we can write any dummy value
                 f" if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {dc_dtype}(0)"
             )
 
@@ -843,7 +843,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             dace.Memlet(data=result_node.data, subset="0"),
         )
 
-    def _visit_reduce(self, node: gtir.FunCall) -> DataExpr:
+    def _visit_reduce(self, node: gtir.FunCall) -> ValueExpr:
         assert isinstance(node.type, ts.ScalarType)
         op_name, reduce_init, reduce_identity = get_reduce_params(node)
         reduce_wcr = "lambda x, y: " + gtir_python_codegen.format_builtin(op_name, "x", "y")
@@ -873,11 +873,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                     reduce_node,
                     self.sdfg.make_array_memlet(input_expr.dc_node.data),
                 )
-            self.state.add_nedge(
-                reduce_node,
-                result_node,
-                dace.Memlet(data=result, subset="0"),
-            )
+            self.state.add_nedge(reduce_node, result_node, dace.Memlet(data=result, subset="0"))
 
         return ValueExpr(result_node, node.type)
 
