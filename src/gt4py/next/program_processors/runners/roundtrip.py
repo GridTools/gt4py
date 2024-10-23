@@ -95,7 +95,7 @@ def fencil_generator(
     debug: bool,
     use_embedded: bool,
     offset_provider: dict[str, common.Connectivity | common.Dimension],
-    transforms: itir_transforms.GTIRTransform,
+    transforms: itir_transforms.ITIRTransform,
 ) -> stages.CompiledProgram:
     """
     Generate a directly executable fencil from an ITIR node.
@@ -187,7 +187,7 @@ class Roundtrip(workflow.Workflow[stages.CompilableProgram, stages.CompiledProgr
     debug: Optional[bool] = None
     use_embedded: bool = True
     dispatch_backend: Optional[next_backend.Backend] = None
-    transforms: itir_transforms.GTIRTransform = itir_transforms.apply_common_transforms  # type: ignore[assignment] # TODO(havogt): cleanup interface of `apply_common_transforms`
+    transforms: itir_transforms.ITIRTransform = itir_transforms.apply_common_transforms  # type: ignore[assignment] # TODO(havogt): cleanup interface of `apply_common_transforms`
 
     def __call__(self, inp: stages.CompilableProgram) -> stages.CompiledProgram:
         debug = config.DEBUG if self.debug is None else self.debug

@@ -30,7 +30,7 @@ from gt4py.next.iterator.transforms.scan_eta_reduction import ScanEtaReduction
 from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce
 
 
-class GTIRTransform(Protocol):
+class ITIRTransform(Protocol):
     def __call__(
         self, _: itir.Program | itir.FencilDefinition, *, offset_provider: common.OffsetProvider
     ) -> itir.Program: ...
