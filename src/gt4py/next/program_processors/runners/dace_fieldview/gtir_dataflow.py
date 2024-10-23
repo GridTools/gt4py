@@ -638,17 +638,17 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         # GT4Py guarantees that all connectivities used to generate lists of neighbors
         # have the same length, that is the same value of 'max_neighbors'.
-        local_offset_providers = dace_utils.filter_connectivities(
+        local_connectivities = dace_utils.filter_connectivities(
             {
                 offset: self.subgraph_builder.get_offset_provider(offset)
                 for offset in input_local_offsets
             }
         )
-        if len(set(table.max_neighbors for table in local_offset_providers.values())) != 1:
+        if len(set(table.max_neighbors for table in local_connectivities.values())) != 1:
             raise ValueError(
                 "Unexpected arguments to map expression with different local dimensions."
             )
-        local_offset, offset_provider = next(iter(local_offset_providers.items()))
+        local_offset, offset_provider = next(iter(local_connectivities.items()))
         local_size = offset_provider.max_neighbors
         map_index = dace_gtir_utils.get_map_variable(local_offset)
 
@@ -675,24 +675,32 @@ class LambdaToDataflow(eve.NodeVisitor):
                     f"Argument to map node with local size {input_size}, expected {local_size}."
                 )
             else:
+                assert input_expr.local_offset
                 input_memlets[conn] = dace.Memlet(data=input_node.data, subset=map_index)
-                offset_provider = local_offset_providers[input_expr.local_offset]
-                # filter input expressions with skip values and store their connectivity
-                if offset_provider.has_skip_values:
-                    skip_value_connectivities[input_expr.local_offset] = offset_provider
 
             input_nodes[input_node.data] = input_node
 
-        out, _ = self.sdfg.add_temp_transient((local_size,), dc_dtype)
-        out_node = self.state.add_access(out)
+        result, _ = self.sdfg.add_temp_transient((local_size,), dc_dtype)
+        result_node = self.state.add_access(result)
 
-        if len(skip_value_connectivities) != 0:
+        skip_value_connectivities = {
+            offset: offset_provider
+            for offset, offset_provider in local_connectivities.items()
+            if offset_provider.has_skip_values
+        }
+
+        if len(skip_value_connectivities) == 0:
+            result_offset = local_offset
+        else:
             # In case one or more of input expressions contain skip values, we use
             # the connectivity-based offset provider as mask for map computation.
-            # GT4Py guarantees that all input expressions have the same skip values.
-            local_offset, offset_provider = next(iter(skip_value_connectivities.items()))
+            # Therefore, the result of map computation will also contain skip values.
+            # GT4Py guarantees that the skip values are placed in the same positions
+            # for all input expressions.
 
-            connectivity = dace_utils.connectivity_identifier(local_offset)
+            result_offset, offset_provider = next(iter(skip_value_connectivities.items()))
+
+            connectivity = dace_utils.connectivity_identifier(result_offset)
             connectivity_desc = self.sdfg.arrays[connectivity]
             connectivity_desc.transient = False
 
@@ -707,7 +715,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
             if self.reduce_identity is None:
                 raise ValueError(
-                    f"Found local offset '{local_offset}' with skip values, but 'reduce_identity' is not set."
+                    f"Found local offset '{result_offset}' with skip values, but 'reduce_identity' is not set."
                 )
             assert self.reduce_identity.dc_dtype == dc_dtype
             input_memlets["__neighbor_idx"] = dace.Memlet(
@@ -723,13 +731,13 @@ class LambdaToDataflow(eve.NodeVisitor):
             inputs=input_memlets,
             input_nodes=input_nodes,
             outputs={
-                output_connector: dace.Memlet(data=out, subset=map_index),
+                output_connector: dace.Memlet(data=result, subset=map_index),
             },
-            output_nodes={out: out_node},
+            output_nodes={result: result_node},
             external_edges=True,
         )
 
-        return ValueExpr(out_node, dc_dtype, local_offset)
+        return ValueExpr(result_node, dc_dtype, result_offset)
 
     def _visit_reduce(self, node: gtir.FunCall) -> ValueExpr:
         assert isinstance(node.type, ts.ScalarType)
