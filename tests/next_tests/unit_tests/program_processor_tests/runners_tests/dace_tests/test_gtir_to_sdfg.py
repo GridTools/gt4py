@@ -819,9 +819,7 @@ def test_gtir_cartesian_shift_left():
 
         sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
 
-        FSYMBOLS_tmp = FSYMBOLS.copy()
-        FSYMBOLS_tmp["__x_offset_stride_0"] = 1
-        sdfg(a, a_offset, b, **FSYMBOLS_tmp)
+        sdfg(a, a_offset, b, **FSYMBOLS, __x_offset_size_0=N, __x_offset_stride_0=1)
         assert np.allclose(a[OFFSET:] + DELTA, b[:-OFFSET])
 
 
@@ -914,7 +912,7 @@ def test_gtir_cartesian_shift_right():
 
         sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
 
-        sdfg(a, a_offset, b, **FSYMBOLS, __x_offset_stride_0=1)
+        sdfg(a, a_offset, b, **FSYMBOLS, __x_offset_size_0=N, __x_offset_stride_0=1)
         assert np.allclose(a[:-OFFSET] + DELTA, b[OFFSET:])
 
 
@@ -1072,7 +1070,9 @@ def test_gtir_connectivity_shift():
             __ev_field_size_1=SIMPLE_MESH.num_vertices,
             __ev_field_stride_0=SIMPLE_MESH.num_vertices,
             __ev_field_stride_1=1,
+            __c2e_offset_size_0=SIMPLE_MESH.num_cells,
             __c2e_offset_stride_0=1,
+            __e2v_offset_size_0=SIMPLE_MESH.num_edges,
             __e2v_offset_stride_0=1,
         )
         assert np.allclose(ce, ref)
@@ -1592,6 +1592,41 @@ def test_gtir_let_lambda():
     assert np.allclose(b, ref)
 
 
+def test_gtir_let_lambda_scalar_expression():
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
+    testee = gtir.Program(
+        id="let_lambda_scalar_expression",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="a", type=IFTYPE.dtype),
+            gtir.Sym(id="b", type=IFTYPE.dtype),
+            gtir.Sym(id="x", type=IFTYPE),
+            gtir.Sym(id="y", type=IFTYPE),
+            gtir.Sym(id="size", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.let("tmp", im.multiplies_("a", "b"))(
+                    im.op_as_fieldop("multiplies", domain)("x", im.multiplies_("tmp", "tmp"))
+                ),
+                domain=domain,
+                target=gtir.SymRef(id="y"),
+            )
+        ],
+    )
+
+    a = np.random.rand()
+    b = np.random.rand()
+    c = np.random.rand(N)
+    d = np.empty_like(c)
+
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, {})
+
+    sdfg(a, b, c, d, **FSYMBOLS)
+    assert np.allclose(d, (a * a * b * b * c))
+
+
 def test_gtir_let_lambda_with_connectivity():
     C2E_neighbor_idx = 1
     C2V_neighbor_idx = 2
@@ -1757,9 +1792,9 @@ def test_gtir_if_scalars():
         body=[
             gtir.SetAt(
                 expr=im.let("f", im.tuple_get(0, "x"))(
-                    im.let("y", im.tuple_get(1, "x"))(
-                        im.let("y_0", im.tuple_get(0, "y"))(
-                            im.let("y_1", im.tuple_get(1, "y"))(
+                    im.let("g", im.tuple_get(1, "x"))(
+                        im.let("y_0", im.tuple_get(0, "g"))(
+                            im.let("y_1", im.tuple_get(1, "g"))(
                                 im.op_as_fieldop("plus", domain)(
                                     "f",
                                     im.if_(
