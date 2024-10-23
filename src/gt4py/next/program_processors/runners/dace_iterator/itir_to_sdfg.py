@@ -360,7 +360,7 @@ class ItirToSDFG(eve.NodeVisitor):
         assert all(
             isinstance(inp, SymRef) for inp in node.inputs
         )  # backend only supports SymRef inputs, not `index` calls
-        input_names = [str(inp.id) for inp in node.inputs]  # type: ignore[union-attr]  # backend only supports SymRef inputs, not `index` calls
+        input_names = [str(inp.id) for inp in node.inputs]  # type: ignore[union-attr]  # ensured by assert
         neighbor_tables = get_used_connectivities(node, self.offset_provider)
         connectivity_names = [
             dace_utils.connectivity_identifier(offset) for offset in neighbor_tables.keys()
@@ -568,7 +568,10 @@ class ItirToSDFG(eve.NodeVisitor):
 
         assert isinstance(node.output, SymRef)
         neighbor_tables = get_used_connectivities(node, self.offset_provider)
-        input_names = [str(inp.id) for inp in node.inputs]  # type: ignore[union-attr]  # backend only supports SymRef inputs, not `index` calls
+        assert all(
+            isinstance(inp, SymRef) for inp in node.inputs
+        )  # backend only supports SymRef inputs, not `index` calls
+        input_names = [str(inp.id) for inp in node.inputs]  # type: ignore[union-attr]  # ensured by assert
         connectivity_names = [
             dace_utils.connectivity_identifier(offset) for offset in neighbor_tables.keys()
         ]
@@ -735,7 +738,10 @@ class ItirToSDFG(eve.NodeVisitor):
         ],
     ) -> tuple[dace.SDFG, dict[str, str | dace.subsets.Subset], list[str]]:
         neighbor_tables = get_used_connectivities(node, self.offset_provider)
-        input_names = [str(inp.id) for inp in node.inputs]  # type: ignore[union-attr]  # backend only supports SymRef inputs, not `index` calls
+        assert all(
+            isinstance(inp, SymRef) for inp in node.inputs
+        )  # backend only supports SymRef inputs, not `index` calls
+        input_names = [str(inp.id) for inp in node.inputs]  # type: ignore[union-attr]  # ensured by assert
         connectivity_names = [
             dace_utils.connectivity_identifier(offset) for offset in neighbor_tables.keys()
         ]

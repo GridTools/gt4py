@@ -1156,7 +1156,6 @@ class IndexField(common.Field):
     def asnumpy(self) -> np.ndarray:
         raise NotImplementedError()
 
-    # TODO(tehrengruber): Use a regular zero dimensional field instead.
     def as_scalar(self) -> core_defs.IntegralScalar:
         if self.domain.ndim != 0:
             raise ValueError(
@@ -1180,6 +1179,7 @@ class IndexField(common.Field):
             d, r = item[0]
             assert d == self._dimension
             assert isinstance(r, core_defs.INTEGRAL_TYPES)
+            # TODO(tehrengruber): Use a regular zero dimensional field instead.
             return self.__class__(self._dimension, r)
         # TODO: set a domain...
         raise NotImplementedError()
