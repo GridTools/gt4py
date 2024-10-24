@@ -427,9 +427,9 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
             symtable=symtable,
             **kwargs,
         )
-        StencilComputationSDFGBuilder._add_empty_edges(
-            tasklet, tasklet, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx
-        )
+        # StencilComputationSDFGBuilder._add_empty_edges(
+        #     tasklet, tasklet, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx
+        # )
 
     def visit_Range(self, node: dcir.Range, **kwargs: Any) -> Dict[str, str]:
         start, end = node.interval.to_dace_symbolic()
