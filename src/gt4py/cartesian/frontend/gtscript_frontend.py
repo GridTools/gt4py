@@ -647,26 +647,17 @@ class DataDimLoopUnroller(ast.NodeTransformer):
             and isinstance(node.iter.func, ast.Name)
             and node.iter.func.id == "range"
         ):
-            range_args = node.iter.args
-            assert all(isinstance(arg, ast.Constant) for arg in range_args)
+            range_args = [eval(ast.unparse(arg), self.context) for arg in node.iter.args]
             assert 1 <= len(range_args) <= 3
             if len(range_args) == 1:
-                start = 0
-                stop = range_args[0].value
-                step = 1
+                start, stop, step = 0, *range_args, 1
             elif len(range_args) == 2:
-                start = range_args[0].value
-                stop = range_args[1].value
-                step = 1
+                start, stop, step = *range_args, 1
             else:
-                start = range_args[0].value
-                stop = range_args[1].value
-                step = range_args[2].value
+                start, stop, step = range_args
             index_values = range(start, stop, step)
         elif isinstance(node.iter, (ast.List, ast.Tuple)):
-            index_value_nodes = node.iter.elts
-            assert all(isinstance(node, ast.Constant) for node in index_value_nodes)
-            index_values = [node.value for node in index_value_nodes]
+            index_values = [eval(ast.unparse(elt), self.context) for elt in node.iter.elts]
 
         if index_values is not None:
             assert isinstance(node.target, ast.Name)
