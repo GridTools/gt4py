@@ -364,7 +364,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         def create_if(
             true_: itir.Expr, false_: itir.Expr, arg_types: tuple[ts.TypeSpec, ts.TypeSpec]
         ) -> itir.FunCall:
-            return self._map(
+            return _map(
                 "if_",
                 (itir.SymRef(id=cond_symref_name, type=node.args[0].type), true_, false_),
                 (node.args[0].type, *arg_types),
@@ -446,33 +446,33 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return self._make_literal(node.value, node.type)
 
     def _lower_and_map(self, op: itir.Expr | str, *args: Any, **kwargs: Any) -> itir.FunCall:
-        return self._map(
+        return _map(
             op, tuple(self.visit(arg, **kwargs) for arg in args), tuple(arg.type for arg in args)
         )
 
-    def _map(
-        self,
-        op: itir.Expr | str,
-        lowered_args: tuple[Any, ...],
-        original_arg_types: tuple[ts.TypeSpec, ...],
-    ) -> itir.FunCall:
-        """
-        Mapping includes making the operation an `as_fieldop` (first kind of mapping), but also `itir.map_`ing lists.
-        """
-        if all(
-            isinstance(t, ts.ScalarType)
-            for arg_type in original_arg_types
-            for t in type_info.primitive_constituents(arg_type)
-        ):
-            return im.call(op)(*lowered_args)  # scalar operation
-        if any(type_info.contains_local_field(arg_type) for arg_type in original_arg_types):
-            lowered_args = tuple(
-                promote_to_list(arg_type)(larg)
-                for arg_type, larg in zip(original_arg_types, lowered_args)
-            )
-            op = im.call("map_")(op)
 
-        return im.op_as_fieldop(im.call(op))(*lowered_args)
+def _map(
+    op: itir.Expr | str,
+    lowered_args: tuple,
+    original_arg_types: tuple[ts.TypeSpec, ...],
+) -> itir.FunCall:
+    """
+    Mapping includes making the operation an `as_fieldop` (first kind of mapping), but also `itir.map_`ing lists.
+    """
+    if all(
+        isinstance(t, ts.ScalarType)
+        for arg_type in original_arg_types
+        for t in type_info.primitive_constituents(arg_type)
+    ):
+        return im.call(op)(*lowered_args)  # scalar operation
+    if any(type_info.contains_local_field(arg_type) for arg_type in original_arg_types):
+        lowered_args = tuple(
+            promote_to_list(arg_type)(larg)
+            for arg_type, larg in zip(original_arg_types, lowered_args)
+        )
+        op = im.call("map_")(op)
+
+    return im.op_as_fieldop(im.call(op))(*lowered_args)
 
 
 class FieldOperatorLoweringError(Exception): ...
