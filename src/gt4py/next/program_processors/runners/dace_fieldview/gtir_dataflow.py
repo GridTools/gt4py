@@ -578,10 +578,11 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         if offset_provider.has_skip_values:
             # in case of skip value we can write any dummy value
-            if ti.is_floating_point(node.type.element_type):
-                skip_value = "math.nan"
-            else:
-                skip_value = str(dace.dtypes.max_value(field_desc.dtype))
+            skip_value = (
+                "math.nan"
+                if ti.is_floating_point(node.type.element_type)
+                else str(dace.dtypes.max_value(field_desc.dtype))
+            )
             tasklet_expression += (
                 f" if {index_connector} != {gtx_common._DEFAULT_SKIP_VALUE} else {skip_value}"
             )
@@ -722,10 +723,11 @@ class LambdaToDataflow(eve.NodeVisitor):
             input_nodes[connectivity_slice.dc_node.data] = connectivity_slice.dc_node
 
             # in case of skip value we can write any dummy value
-            if ti.is_floating_point(node.type.element_type):
-                skip_value = "math.nan"
-            else:
-                skip_value = str(dace.dtypes.max_value(dc_dtype))
+            skip_value = (
+                "math.nan"
+                if ti.is_floating_point(node.type.element_type)
+                else str(dace.dtypes.max_value(dc_dtype))
+            )
             tasklet_expression += (
                 f" if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {skip_value}"
             )
@@ -816,7 +818,10 @@ class LambdaToDataflow(eve.NodeVisitor):
             dace.Memlet(data="acc", subset="0"),
         )
         st_reduce = nsdfg.add_state_after(st_init, f"{nsdfg.label}_reduce")
+        # fill skip values in local dimension with the reduce identity value
         skip_value = f"{reduce_identity.dc_dtype}({reduce_identity.value})"
+        # since this map operates on a pure local dimension, we explicitly set sequential
+        # schedule and we set the flag 'wcr_nonatomic=True' on the write memlet
         st_reduce.add_mapped_tasklet(
             name="reduce_with_skip_values",
             map_ranges={"i": f"0:{offset_provider.max_neighbors}"},
@@ -826,9 +831,10 @@ class LambdaToDataflow(eve.NodeVisitor):
             },
             code=f"__out = __val if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {skip_value}",
             outputs={
-                "__out": dace.Memlet(data="acc", subset="0", wcr=reduce_wcr),
+                "__out": dace.Memlet(data="acc", subset="0", wcr=reduce_wcr, wcr_nonatomic=True),
             },
             external_edges=True,
+            schedule=dace.dtypes.ScheduleType.Sequential,
         )
 
         nsdfg_node = self.state.add_nested_sdfg(
