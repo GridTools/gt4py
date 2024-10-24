@@ -187,7 +187,8 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
             )
 
         args = _make_slice_access(offsets, kwargs["is_serial"], kwargs.get("horizontal_mask"))
-        data_index = self.visit(node.data_index, inside_slice=True, **kwargs)
+        kwargs["inside_slice"] = True
+        data_index = self.visit(node.data_index, **kwargs)
 
         access_slice = ", ".join(args + list(data_index))
 
