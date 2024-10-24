@@ -1201,3 +1201,16 @@ def test_constant_closure_vars(cartesian_case):
     cases.verify_with_default_data(
         cartesian_case, consume_constants, ref=lambda input: constants.PI * constants.E * input
     )
+
+
+@pytest.mark.uses_half_precision
+def test_half_precision(cartesian_case):
+    dtype = np.float16
+
+    @gtx.field_operator
+    def multiply_by_two(input: cases.IHalfField, input2: cases.IFloatField) -> cases.IHalfField:
+        return dtype(2) * input * astype(input2, dtype)
+
+    cases.verify_with_default_data(
+        cartesian_case, multiply_by_two, ref=lambda input, input2: dtype(2) * input * input2
+    )

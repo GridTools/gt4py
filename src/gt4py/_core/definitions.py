@@ -62,6 +62,7 @@ uint16 = np.uint16
 uint32 = np.uint32
 uint64 = np.uint64
 
+float16 = np.float16
 float32 = np.float32
 float64 = np.float64
 
@@ -94,7 +95,7 @@ IntegralT = TypeVar("IntegralT", bound=IntegralScalar)
 INTEGRAL_TYPES: Final[Tuple[type, ...]] = (*INT_TYPES, *UINT_TYPES)
 
 
-FloatingScalar: TypeAlias = Union[float32, float64, float]
+FloatingScalar: TypeAlias = Union[float16, float32, float64, float]
 FloatingT = TypeVar("FloatingT", bound=FloatingScalar)
 FLOAT_TYPES: Final[Tuple[type, ...]] = cast(
     Tuple[type, ...],

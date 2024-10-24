@@ -234,7 +234,11 @@ def is_floating_point(symbol_type: ts.TypeSpec) -> bool:
     >>> is_floating_point(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)))
     True
     """
-    return extract_dtype(symbol_type).kind in [ts.ScalarKind.FLOAT32, ts.ScalarKind.FLOAT64]
+    return extract_dtype(symbol_type).kind in [
+        ts.ScalarKind.FLOAT16,
+        ts.ScalarKind.FLOAT32,
+        ts.ScalarKind.FLOAT64,
+    ]
 
 
 def is_integer(symbol_type: ts.TypeSpec) -> bool:
@@ -251,7 +255,12 @@ def is_integer(symbol_type: ts.TypeSpec) -> bool:
     False
     """
     return isinstance(symbol_type, ts.ScalarType) and symbol_type.kind in {
+        ts.ScalarKind.INT8,
+        ts.ScalarKind.UINT8,
+        ts.ScalarKind.INT16,
+        ts.ScalarKind.UINT16,
         ts.ScalarKind.INT32,
+        ts.ScalarKind.UINT32,
         ts.ScalarKind.INT64,
     }
 

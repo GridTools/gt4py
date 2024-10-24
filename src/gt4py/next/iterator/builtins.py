@@ -333,7 +333,32 @@ def int(*args):  # noqa: A001 [builtin-variable-shadowing]
 
 
 @builtin_dispatch
+def int8(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def uint8(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def int16(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def uint16(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def int32(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def uint32(*args):
     raise BackendNotSelectedError()
 
 
@@ -343,7 +368,17 @@ def int64(*args):
 
 
 @builtin_dispatch
+def uint64(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def float(*args):  # noqa: A001 [builtin-variable-shadowing]
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def float16(*args):
     raise BackendNotSelectedError()
 
 
@@ -387,7 +422,20 @@ UNARY_MATH_FP_BUILTINS = {
 }
 UNARY_MATH_FP_PREDICATE_BUILTINS = {"isfinite", "isinf", "isnan"}
 BINARY_MATH_NUMBER_BUILTINS = {"minimum", "maximum", "fmod", "power"}
-TYPEBUILTINS = {"int32", "int64", "float32", "float64", "bool"}
+TYPEBUILTINS = {
+    "int8",
+    "uint8",
+    "int16",
+    "uint16",
+    "int32",
+    "uint32",
+    "int64",
+    "uint64",
+    "float16",
+    "float32",
+    "float64",
+    "bool",
+}  # TODO(tehrengruber): This list already exists in ir.py; unify.
 MATH_BUILTINS = (
     UNARY_MATH_NUMBER_BUILTINS
     | UNARY_MATH_FP_BUILTINS

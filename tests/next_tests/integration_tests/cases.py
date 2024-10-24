@@ -61,6 +61,7 @@ from gt4py.next import utils as gt_utils
 
 IField: TypeAlias = gtx.Field[[IDim], np.int32]  # type: ignore [valid-type]
 IFloatField: TypeAlias = gtx.Field[[IDim], np.float64]  # type: ignore [valid-type]
+IHalfField: TypeAlias = gtx.Field[[IDim], np.float16]  # type: ignore [valid-type]
 IBoolField: TypeAlias = gtx.Field[[IDim], bool]  # type: ignore [valid-type]
 KField: TypeAlias = gtx.Field[[KDim], np.int32]  # type: ignore [valid-type]
 IJField: TypeAlias = gtx.Field[[IDim, JDim], np.int32]  # type: ignore [valid-type]
