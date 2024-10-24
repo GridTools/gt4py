@@ -215,16 +215,16 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         if node.op in [dialect_ast_enums.UnaryOperator.NOT, dialect_ast_enums.UnaryOperator.INVERT]:
             if dtype.kind != ts.ScalarKind.BOOL:
                 raise NotImplementedError(f"'{node.op}' is only supported on 'bool' arguments.")
-            return self._map("not_", node.operand)
+            return self._lower_and_map("not_", node.operand)
 
-        return self._map(
+        return self._lower_and_map(
             node.op.value,
             foast.Constant(value="0", type=dtype, location=node.location),
             node.operand,
         )
 
     def visit_BinOp(self, node: foast.BinOp, **kwargs: Any) -> itir.FunCall:
-        return self._map(node.op.value, node.left, node.right)
+        return self._lower_and_map(node.op.value, node.left, node.right)
 
     def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs: Any) -> itir.FunCall:
         assert (
@@ -236,7 +236,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         )
 
     def visit_Compare(self, node: foast.Compare, **kwargs: Any) -> itir.FunCall:
-        return self._map(node.op.value, node.left, node.right)
+        return self._lower_and_map(node.op.value, node.left, node.right)
 
     def _visit_shift(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         current_expr = self.visit(node.func, **kwargs)
@@ -338,17 +338,17 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         assert len(node.args) == 2 and isinstance(node.args[1], foast.Name)
         obj, new_type = self.visit(node.args[0], **kwargs), node.args[1].id
 
-        def create_cast(expr: itir.Expr, t: ts.TypeSpec) -> itir.FunCall:
-            if isinstance(t, ts.FieldType):
+        def create_cast(expr: itir.Expr, t: tuple[ts.TypeSpec]) -> itir.FunCall:
+            if isinstance(t[0], ts.FieldType):
                 return im.as_fieldop(
                     im.lambda_("__val")(im.call("cast_")(im.deref("__val"), str(new_type)))
                 )(expr)
             else:
-                assert isinstance(t, ts.ScalarType)
+                assert isinstance(t[0], ts.ScalarType)
                 return im.call("cast_")(expr, str(new_type))
 
         if not isinstance(node.type, ts.TupleType):  # to keep the IR simpler
-            return create_cast(obj, node.type)
+            return create_cast(obj, (node.args[0].type,))
 
         return lowering_utils.process_elements(
             create_cast, obj, node.type, arg_types=(node.args[0].type,)
@@ -356,7 +356,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
     def _visit_where(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         if not isinstance(node.type, ts.TupleType):  # to keep the IR simpler
-            return self._map("if_", *node.args)
+            return self._lower_and_map("if_", *node.args)
 
         cond_ = self.visit(node.args[0])
         cond_symref_name = f"__cond_{eve_utils.content_hash(cond_)}"
@@ -364,7 +364,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         def create_if(
             true_: itir.Expr, false_: itir.Expr, arg_types: tuple[ts.TypeSpec, ts.TypeSpec]
         ) -> itir.FunCall:
-            return self._map2(
+            return self._map(
                 "if_",
                 (itir.SymRef(id=cond_symref_name, type=node.args[0].type), true_, false_),
                 (node.args[0].type, *arg_types),
@@ -386,7 +386,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return im.as_fieldop(im.ref("deref"))(expr)
 
     def _visit_math_built_in(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
-        return self._map(self.visit(node.func, **kwargs), *node.args)
+        return self._lower_and_map(self.visit(node.func, **kwargs), *node.args)
 
     def _make_reduction_expr(
         self, node: foast.Call, op: str | itir.SymRef, init_expr: itir.Expr, **kwargs: Any
@@ -445,25 +445,20 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     def visit_Constant(self, node: foast.Constant, **kwargs: Any) -> itir.Expr:
         return self._make_literal(node.value, node.type)
 
-    def _map(self, op: itir.Expr | str, *args: Any, **kwargs: Any) -> itir.FunCall:
-        lowered_args = [self.visit(arg, **kwargs) for arg in args]
-        if all(
-            isinstance(t, ts.ScalarType)
-            for arg in args
-            for t in type_info.primitive_constituents(arg.type)
-        ):
-            return im.call(op)(*lowered_args)  # scalar operation
-        if any(type_info.contains_local_field(arg.type) for arg in args):
-            lowered_args = [
-                promote_to_list(arg.type)(larg) for arg, larg in zip(args, lowered_args)
-            ]
-            op = im.call("map_")(op)
+    def _lower_and_map(self, op: itir.Expr | str, *args: Any, **kwargs: Any) -> itir.FunCall:
+        return self._map(
+            op, tuple(self.visit(arg, **kwargs) for arg in args), tuple(arg.type for arg in args)
+        )
 
-        return im.op_as_fieldop(im.call(op))(*lowered_args)
-
-    def _map2(
-        self, op: itir.Expr | str, lowered_args: Any, original_arg_types: tuple[ts.TypeSpec, ...]
+    def _map(
+        self,
+        op: itir.Expr | str,
+        lowered_args: tuple[Any, ...],
+        original_arg_types: tuple[ts.TypeSpec, ...],
     ) -> itir.FunCall:
+        """
+        Mapping includes making the operation an `as_fieldop` (first kind of mapping), but also `itir.map_`ing lists.
+        """
         if all(
             isinstance(t, ts.ScalarType)
             for arg_type in original_arg_types
@@ -471,10 +466,10 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         ):
             return im.call(op)(*lowered_args)  # scalar operation
         if any(type_info.contains_local_field(arg_type) for arg_type in original_arg_types):
-            lowered_args = [
+            lowered_args = tuple(
                 promote_to_list(arg_type)(larg)
                 for arg_type, larg in zip(original_arg_types, lowered_args)
-            ]
+            )
             op = im.call("map_")(op)
 
         return im.op_as_fieldop(im.call(op))(*lowered_args)

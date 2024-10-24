@@ -102,7 +102,7 @@ def process_elements(
     process_func: Callable[..., itir.Expr],
     objs: itir.Expr | Iterable[itir.Expr],
     current_el_type: ts.TypeSpec,
-    arg_types: Optional[ts.TypeSpec | Iterable[ts.TypeSpec]] = None,
+    arg_types: Optional[Iterable[ts.TypeSpec]] = None,
 ) -> itir.FunCall:
     """
     Recursively applies a processing function to all primitive constituents of a tuple.
@@ -138,7 +138,7 @@ def _process_elements_impl(
     process_func: Callable[..., itir.Expr],
     _current_el_exprs: Iterable[T],
     current_el_type: ts.TypeSpec,
-    arg_types: Optional[ts.TypeSpec | Iterable[ts.TypeSpec]],
+    arg_types: Optional[Iterable[ts.TypeSpec]],
 ) -> itir.Expr:
     if isinstance(current_el_type, ts.TupleType):
         result = im.make_tuple(
@@ -149,7 +149,7 @@ def _process_elements_impl(
                         im.tuple_get(i, current_el_expr) for current_el_expr in _current_el_exprs
                     ),
                     current_el_type.types[i],
-                    arg_types=tuple(arg_t.types[i] for arg_t in arg_types)  # type: ignore[union-attr] # guaranteed by the requirement that `current_el_type` and each element of `arg_types` have the same tuple structure
+                    arg_types=tuple(arg_t.types[i] for arg_t in arg_types)  # type: ignore[attr-defined] # guaranteed by the requirement that `current_el_type` and each element of `arg_types` have the same tuple structure
                     if arg_types is not None
                     else None,
                 )
