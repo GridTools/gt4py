@@ -818,10 +818,11 @@ class LambdaToDataflow(eve.NodeVisitor):
             dace.Memlet(data="acc", subset="0"),
         )
         st_reduce = nsdfg.add_state_after(st_init, f"{nsdfg.label}_reduce")
-        # fill skip values in local dimension with the reduce identity value
+        # Fill skip values in local dimension with the reduce identity value
         skip_value = f"{reduce_identity.dc_dtype}({reduce_identity.value})"
-        # since this map operates on a pure local dimension, we explicitly set sequential
-        # schedule and we set the flag 'wcr_nonatomic=True' on the write memlet
+        # Since this map operates on a pure local dimension, we explicitly set sequential
+        # schedule and we set the flag 'wcr_nonatomic=True' on the write memlet.
+        # TODO(phimuell): decide if auto-optimizer should reset `wcr_nonatomic` properties, as DaCe does.
         st_reduce.add_mapped_tasklet(
             name="reduce_with_skip_values",
             map_ranges={"i": f"0:{offset_provider.max_neighbors}"},
