@@ -264,7 +264,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     # argument to the program IR. Suppose a field '__sym', then gt4py
                     # will add '__sym_size_0'.
                     # Therefore, here we check whether the shape symbol was already
-                    # created by `_make_array_shape_and_strides`, when allocating
+                    # created by `_make_array_shape_and_strides()`, when allocating
                     # storage for field arguments. We assume that the scalar argument
                     # for field size, if present, always follows the field argument.
                     assert dace_utils.is_field_symbol(name)
@@ -608,6 +608,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         # Process lambda inputs
         #
+        # All input arguments are passed as parameters to the nested SDFG, therefore
+        # we they are stored as non-transient array and scalar objects.
+        #
         lambda_arg_nodes = dict(
             itertools.chain(*[_flatten_tuples(pname, arg) for pname, arg in lambda_args_mapping])
         )
@@ -648,9 +651,21 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         # Process lambda outputs
         #
+        # The output arguments do not really exist, so they are not allocated before
+        # visiting the lambda expression. Therefore, the result appears inside the
+        # nested SDFG as transient array/scalar storage. The exception is given by
+        # input arguments that are just passed through and returned by the lambda,
+        # e.g. when the lambda is constructing a tuple: in this case, the result
+        # data is non-transient, because it corresponds to an input node.
+        #
         lambda_output_data: Iterable[gtir_builtin_translators.FieldopData] = (
             gtx_utils.flatten_nested_tuple(lambda_result)
         )
+        # The output connectors only need to be setup for the actual result of the
+        # internal dataflow that writes to transient nodes.
+        # We filter out the non-transient nodes because they are already available
+        # in the current context. Later these nodes will eventually be removed
+        # from the nested SDFG because they are isolated (see `make_temps()`).
         lambda_outputs = {
             output_data.dc_node.data
             for output_data in lambda_output_data
@@ -677,6 +692,21 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         def make_temps(
             output_data: gtir_builtin_translators.FieldopData,
         ) -> gtir_builtin_translators.FieldopData:
+            """
+            This function will be called while traversing the result of the dataflow
+            of the nested SDFG to setup the intermediate data nodes in the parent SDFG.
+
+            1st if-branch:
+            Transient nodes actually contain some result produced by the dataflow
+            itself, therefore these nodes are changed to non-transient and an output
+            edge will write the result from the nested SDFG to a new intermediate
+            data node in the parent context.
+
+            2nd and 3rd if-branch:
+            Non-transient nodes are just input nodes that are immediately returned
+            by the lambda expression. Therefore, these nodes are already available
+            in the parent context and can be directly accessed there.
+            """
             desc = output_data.dc_node.desc(nsdfg)
             if desc.transient:
                 # make lambda result non-transient and map it to external temporary
@@ -697,7 +727,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 temp_field = gtir_builtin_translators.FieldopData(
                     dc_node, output_data.gt_dtype, output_data.local_offset
                 )
-            # isolated access node will make validation fail
+            # Isolated access node will make validation fail.
+            # Isolated access nodes can be found in the join-state of an if-expression
+            # or in lambda expressions that just construct tuples from input arguments.
             if nstate.degree(output_data.dc_node) == 0:
                 nstate.remove_node(output_data.dc_node)
             return temp_field
