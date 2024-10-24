@@ -6,165 +6,144 @@
 #
 aenum==3.1.15             # via -c constraints.txt, dace
 alabaster==0.7.13         # via -c constraints.txt, sphinx
-annotated-types==0.6.0    # via -c constraints.txt, pydantic
+annotated-types==0.7.0    # via -c constraints.txt, pydantic
 asttokens==2.4.1          # via -c constraints.txt, devtools, stack-data
 astunparse==1.6.3 ; python_version < "3.9"  # via -c constraints.txt, dace, gt4py (pyproject.toml)
-attrs==23.2.0             # via -c constraints.txt, flake8-bugbear, flake8-eradicate, gt4py (pyproject.toml), hypothesis, jsonschema, referencing
-babel==2.15.0             # via -c constraints.txt, sphinx
+attrs==24.2.0             # via -c constraints.txt, gt4py (pyproject.toml), hypothesis, jsonschema, referencing
+babel==2.16.0             # via -c constraints.txt, sphinx
 backcall==0.2.0           # via -c constraints.txt, ipython
-black==24.4.2             # via -c constraints.txt, gt4py (pyproject.toml)
-blinker==1.8.2            # via -c constraints.txt, flask
+black==24.8.0             # via -c constraints.txt, gt4py (pyproject.toml)
 boltons==24.0.0           # via -c constraints.txt, gt4py (pyproject.toml)
-bracex==2.4               # via -c constraints.txt, wcmatch
-build==1.2.1              # via -c constraints.txt, pip-tools
-bump-my-version==0.21.0   # via -c constraints.txt, -r requirements-dev.in
+bracex==2.5               # via -c constraints.txt, wcmatch
+build==1.2.2              # via -c constraints.txt, pip-tools
+bump-my-version==0.26.0   # via -c constraints.txt, -r requirements-dev.in
 cached-property==1.5.2    # via -c constraints.txt, gt4py (pyproject.toml)
-cachetools==5.3.3         # via -c constraints.txt, tox
-certifi==2024.2.2         # via -c constraints.txt, requests
-cffi==1.16.0              # via -c constraints.txt, cryptography
+cachetools==5.5.0         # via -c constraints.txt, tox
+certifi==2024.8.30        # via -c constraints.txt, requests
 cfgv==3.4.0               # via -c constraints.txt, pre-commit
 chardet==5.2.0            # via -c constraints.txt, tox
 charset-normalizer==3.3.2  # via -c constraints.txt, requests
-clang-format==18.1.5      # via -c constraints.txt, -r requirements-dev.in, gt4py (pyproject.toml)
-click==8.1.7              # via -c constraints.txt, black, bump-my-version, flask, gt4py (pyproject.toml), pip-tools, rich-click
-cmake==3.29.3             # via -c constraints.txt, gt4py (pyproject.toml)
+clang-format==18.1.8      # via -c constraints.txt, -r requirements-dev.in, gt4py (pyproject.toml)
+click==8.1.7              # via -c constraints.txt, black, bump-my-version, gt4py (pyproject.toml), pip-tools, rich-click
+cmake==3.30.3             # via -c constraints.txt, gt4py (pyproject.toml)
 cogapp==3.4.1             # via -c constraints.txt, -r requirements-dev.in
 colorama==0.4.6           # via -c constraints.txt, tox
 comm==0.2.2               # via -c constraints.txt, ipykernel
 contourpy==1.1.1          # via -c constraints.txt, matplotlib
-coverage[toml]==7.5.1     # via -c constraints.txt, -r requirements-dev.in, pytest-cov
-cryptography==42.0.7      # via -c constraints.txt, types-paramiko, types-pyopenssl, types-redis
+coverage[toml]==7.6.1     # via -c constraints.txt, -r requirements-dev.in, pytest-cov
 cycler==0.12.1            # via -c constraints.txt, matplotlib
 cytoolz==0.12.3           # via -c constraints.txt, gt4py (pyproject.toml)
-dace==0.15.1              # via -c constraints.txt, gt4py (pyproject.toml)
+dace==0.16.1              # via -c constraints.txt, gt4py (pyproject.toml)
 darglint==1.8.1           # via -c constraints.txt, -r requirements-dev.in
-debugpy==1.8.1            # via -c constraints.txt, ipykernel
+debugpy==1.8.5            # via -c constraints.txt, ipykernel
 decorator==5.1.1          # via -c constraints.txt, ipython
-deepdiff==7.0.1           # via -c constraints.txt, gt4py (pyproject.toml)
+deepdiff==8.0.1           # via -c constraints.txt, gt4py (pyproject.toml)
 devtools==0.12.2          # via -c constraints.txt, gt4py (pyproject.toml)
 dill==0.3.8               # via -c constraints.txt, dace
 distlib==0.3.8            # via -c constraints.txt, virtualenv
-docutils==0.20.1          # via -c constraints.txt, restructuredtext-lint, sphinx, sphinx-rtd-theme
-eradicate==2.3.0          # via -c constraints.txt, flake8-eradicate
-exceptiongroup==1.2.1     # via -c constraints.txt, hypothesis, pytest
+docutils==0.20.1          # via -c constraints.txt, sphinx, sphinx-rtd-theme
+eval-type-backport==0.2.0  # via -c constraints.txt, tach
+exceptiongroup==1.2.2     # via -c constraints.txt, hypothesis, pytest
 execnet==2.1.1            # via -c constraints.txt, pytest-cache, pytest-xdist
-executing==2.0.1          # via -c constraints.txt, devtools, stack-data
-factory-boy==3.3.0        # via -c constraints.txt, gt4py (pyproject.toml), pytest-factoryboy
-faker==25.2.0             # via -c constraints.txt, factory-boy
-fastjsonschema==2.19.1    # via -c constraints.txt, nbformat
-filelock==3.14.0          # via -c constraints.txt, tox, virtualenv
-flake8==7.0.0             # via -c constraints.txt, -r requirements-dev.in, flake8-bugbear, flake8-builtins, flake8-debugger, flake8-docstrings, flake8-eradicate, flake8-mutable, flake8-pyproject, flake8-rst-docstrings
-flake8-bugbear==24.4.26   # via -c constraints.txt, -r requirements-dev.in
-flake8-builtins==2.5.0    # via -c constraints.txt, -r requirements-dev.in
-flake8-debugger==4.1.2    # via -c constraints.txt, -r requirements-dev.in
-flake8-docstrings==1.7.0  # via -c constraints.txt, -r requirements-dev.in
-flake8-eradicate==1.5.0   # via -c constraints.txt, -r requirements-dev.in
-flake8-mutable==1.2.0     # via -c constraints.txt, -r requirements-dev.in
-flake8-pyproject==1.2.3   # via -c constraints.txt, -r requirements-dev.in
-flake8-rst-docstrings==0.3.0  # via -c constraints.txt, -r requirements-dev.in
-flask==3.0.3              # via -c constraints.txt, dace
-fonttools==4.51.0         # via -c constraints.txt, matplotlib
+executing==2.1.0          # via -c constraints.txt, devtools, stack-data
+factory-boy==3.3.1        # via -c constraints.txt, gt4py (pyproject.toml), pytest-factoryboy
+faker==28.4.1             # via -c constraints.txt, factory-boy
+fastjsonschema==2.20.0    # via -c constraints.txt, nbformat
+filelock==3.16.0          # via -c constraints.txt, tox, virtualenv
+fonttools==4.53.1         # via -c constraints.txt, matplotlib
 fparser==0.1.4            # via -c constraints.txt, dace
 frozendict==2.4.4         # via -c constraints.txt, gt4py (pyproject.toml)
-gridtools-cpp==2.3.2      # via -c constraints.txt, gt4py (pyproject.toml)
-hypothesis==6.102.1       # via -c constraints.txt, -r requirements-dev.in, gt4py (pyproject.toml)
-identify==2.5.36          # via -c constraints.txt, pre-commit
-idna==3.7                 # via -c constraints.txt, requests
+gitdb==4.0.11             # via -c constraints.txt, gitpython
+gitpython==3.1.43         # via -c constraints.txt, tach
+gridtools-cpp==2.3.4      # via -c constraints.txt, gt4py (pyproject.toml)
+hypothesis==6.112.0       # via -c constraints.txt, -r requirements-dev.in, gt4py (pyproject.toml)
+identify==2.6.0           # via -c constraints.txt, pre-commit
+idna==3.8                 # via -c constraints.txt, requests
 imagesize==1.4.1          # via -c constraints.txt, sphinx
-importlib-metadata==7.1.0  # via -c constraints.txt, build, flask, jax, jupyter-client, sphinx
-importlib-resources==6.4.0 ; python_version < "3.9"  # via -c constraints.txt, gt4py (pyproject.toml), jsonschema, jsonschema-specifications, matplotlib
+importlib-metadata==8.5.0  # via -c constraints.txt, build, jupyter-client, sphinx
+importlib-resources==6.4.5 ; python_version < "3.9"  # via -c constraints.txt, gt4py (pyproject.toml), jsonschema, jsonschema-specifications, matplotlib
 inflection==0.5.1         # via -c constraints.txt, pytest-factoryboy
 iniconfig==2.0.0          # via -c constraints.txt, pytest
-ipykernel==6.29.4         # via -c constraints.txt, nbmake
+ipykernel==6.29.5         # via -c constraints.txt, nbmake
 ipython==8.12.3           # via -c constraints.txt, ipykernel
-isort==5.13.2             # via -c constraints.txt, -r requirements-dev.in
-itsdangerous==2.2.0       # via -c constraints.txt, flask
-jax[cpu]==0.4.13          # via -c constraints.txt, gt4py (pyproject.toml)
-jaxlib==0.4.13            # via -c constraints.txt, jax
 jedi==0.19.1              # via -c constraints.txt, ipython
-jinja2==3.1.4             # via -c constraints.txt, flask, gt4py (pyproject.toml), sphinx
-jsonschema==4.22.0        # via -c constraints.txt, nbformat
+jinja2==3.1.4             # via -c constraints.txt, dace, gt4py (pyproject.toml), sphinx
+jsonschema==4.23.0        # via -c constraints.txt, nbformat
 jsonschema-specifications==2023.12.1  # via -c constraints.txt, jsonschema
-jupyter-client==8.6.1     # via -c constraints.txt, ipykernel, nbclient
+jupyter-client==8.6.2     # via -c constraints.txt, ipykernel, nbclient
 jupyter-core==5.7.2       # via -c constraints.txt, ipykernel, jupyter-client, nbformat
-jupytext==1.16.2          # via -c constraints.txt, -r requirements-dev.in
-kiwisolver==1.4.5         # via -c constraints.txt, matplotlib
-lark==1.1.9               # via -c constraints.txt, gt4py (pyproject.toml)
+jupytext==1.16.4          # via -c constraints.txt, -r requirements-dev.in
+kiwisolver==1.4.7         # via -c constraints.txt, matplotlib
+lark==1.2.2               # via -c constraints.txt, gt4py (pyproject.toml)
 mako==1.3.5               # via -c constraints.txt, gt4py (pyproject.toml)
 markdown-it-py==3.0.0     # via -c constraints.txt, jupytext, mdit-py-plugins, rich
-markupsafe==2.1.5         # via -c constraints.txt, jinja2, mako, werkzeug
+markupsafe==2.1.5         # via -c constraints.txt, jinja2, mako
 matplotlib==3.7.5         # via -c constraints.txt, -r requirements-dev.in
 matplotlib-inline==0.1.7  # via -c constraints.txt, ipykernel, ipython
-mccabe==0.7.0             # via -c constraints.txt, flake8
-mdit-py-plugins==0.4.1    # via -c constraints.txt, jupytext
+mdit-py-plugins==0.4.2    # via -c constraints.txt, jupytext
 mdurl==0.1.2              # via -c constraints.txt, markdown-it-py
-ml-dtypes==0.2.0          # via -c constraints.txt, jax, jaxlib
 mpmath==1.3.0             # via -c constraints.txt, sympy
-mypy==1.10.0              # via -c constraints.txt, -r requirements-dev.in
+mypy==1.11.2              # via -c constraints.txt, -r requirements-dev.in
 mypy-extensions==1.0.0    # via -c constraints.txt, black, mypy
-nanobind==1.9.2           # via -c constraints.txt, gt4py (pyproject.toml)
+nanobind==2.1.0           # via -c constraints.txt, gt4py (pyproject.toml)
 nbclient==0.6.8           # via -c constraints.txt, nbmake
 nbformat==5.10.4          # via -c constraints.txt, jupytext, nbclient, nbmake
-nbmake==1.5.3             # via -c constraints.txt, -r requirements-dev.in
+nbmake==1.5.4             # via -c constraints.txt, -r requirements-dev.in
 nest-asyncio==1.6.0       # via -c constraints.txt, ipykernel, nbclient
-networkx==3.1             # via -c constraints.txt, dace
+networkx==3.1             # via -c constraints.txt, dace, tach
 ninja==1.11.1.1           # via -c constraints.txt, gt4py (pyproject.toml)
-nodeenv==1.8.0            # via -c constraints.txt, pre-commit
-numpy==1.24.4             # via -c constraints.txt, contourpy, dace, gt4py (pyproject.toml), jax, jaxlib, matplotlib, ml-dtypes, opt-einsum, scipy, types-jack-client
-opt-einsum==3.3.0         # via -c constraints.txt, jax
-ordered-set==4.1.0        # via -c constraints.txt, deepdiff
-packaging==24.0           # via -c constraints.txt, black, build, gt4py (pyproject.toml), ipykernel, jupytext, matplotlib, pipdeptree, pyproject-api, pytest, pytest-factoryboy, setuptools-scm, sphinx, tox
+nodeenv==1.9.1            # via -c constraints.txt, pre-commit
+numpy==1.24.4             # via -c constraints.txt, contourpy, dace, gt4py (pyproject.toml), matplotlib
+orderly-set==5.2.2        # via -c constraints.txt, deepdiff
+packaging==24.1           # via -c constraints.txt, black, build, gt4py (pyproject.toml), ipykernel, jupytext, matplotlib, pipdeptree, pyproject-api, pytest, pytest-factoryboy, setuptools-scm, sphinx, tox
 parso==0.8.4              # via -c constraints.txt, jedi
 pathspec==0.12.1          # via -c constraints.txt, black
 pexpect==4.9.0            # via -c constraints.txt, ipython
 pickleshare==0.7.5        # via -c constraints.txt, ipython
-pillow==10.3.0            # via -c constraints.txt, matplotlib
+pillow==10.4.0            # via -c constraints.txt, matplotlib
 pip-tools==7.4.1          # via -c constraints.txt, -r requirements-dev.in
-pipdeptree==2.20.0        # via -c constraints.txt, -r requirements-dev.in
+pipdeptree==2.23.3        # via -c constraints.txt, -r requirements-dev.in
 pkgutil-resolve-name==1.3.10  # via -c constraints.txt, jsonschema
-platformdirs==4.2.1       # via -c constraints.txt, black, jupyter-core, tox, virtualenv
+platformdirs==4.3.2       # via -c constraints.txt, black, jupyter-core, tox, virtualenv
 pluggy==1.5.0             # via -c constraints.txt, pytest, tox
 ply==3.11                 # via -c constraints.txt, dace
 pre-commit==3.5.0         # via -c constraints.txt, -r requirements-dev.in
-prompt-toolkit==3.0.36    # via -c constraints.txt, ipython, questionary
-psutil==5.9.8             # via -c constraints.txt, -r requirements-dev.in, ipykernel, pytest-xdist
+prompt-toolkit==3.0.36    # via -c constraints.txt, ipython, questionary, tach
+psutil==6.0.0             # via -c constraints.txt, -r requirements-dev.in, ipykernel, pytest-xdist
 ptyprocess==0.7.0         # via -c constraints.txt, pexpect
-pure-eval==0.2.2          # via -c constraints.txt, stack-data
-pybind11==2.12.0          # via -c constraints.txt, gt4py (pyproject.toml)
-pycodestyle==2.11.1       # via -c constraints.txt, flake8, flake8-debugger
-pycparser==2.22           # via -c constraints.txt, cffi
-pydantic==2.7.1           # via -c constraints.txt, bump-my-version, pydantic-settings
-pydantic-core==2.18.2     # via -c constraints.txt, pydantic
-pydantic-settings==2.2.1  # via -c constraints.txt, bump-my-version
-pydocstyle==6.3.0         # via -c constraints.txt, flake8-docstrings
-pyflakes==3.2.0           # via -c constraints.txt, flake8
-pygments==2.18.0          # via -c constraints.txt, -r requirements-dev.in, devtools, flake8-rst-docstrings, ipython, nbmake, rich, sphinx
-pyparsing==3.1.2          # via -c constraints.txt, matplotlib
-pyproject-api==1.6.1      # via -c constraints.txt, tox
+pure-eval==0.2.3          # via -c constraints.txt, stack-data
+pybind11==2.13.5          # via -c constraints.txt, gt4py (pyproject.toml)
+pydantic==2.9.1           # via -c constraints.txt, bump-my-version, pydantic-settings, tach
+pydantic-core==2.23.3     # via -c constraints.txt, pydantic
+pydantic-settings==2.5.2  # via -c constraints.txt, bump-my-version
+pydot==2.0.0              # via -c constraints.txt, tach
+pygments==2.18.0          # via -c constraints.txt, -r requirements-dev.in, devtools, ipython, nbmake, rich, sphinx
+pyparsing==3.1.4          # via -c constraints.txt, matplotlib, pydot
+pyproject-api==1.7.1      # via -c constraints.txt, tox
 pyproject-hooks==1.1.0    # via -c constraints.txt, build, pip-tools
-pytest==8.2.0             # via -c constraints.txt, -r requirements-dev.in, gt4py (pyproject.toml), nbmake, pytest-cache, pytest-cov, pytest-factoryboy, pytest-instafail, pytest-xdist
+pytest==8.3.3             # via -c constraints.txt, -r requirements-dev.in, gt4py (pyproject.toml), nbmake, pytest-cache, pytest-cov, pytest-custom-exit-code, pytest-factoryboy, pytest-instafail, pytest-xdist
 pytest-cache==1.0         # via -c constraints.txt, -r requirements-dev.in
 pytest-cov==5.0.0         # via -c constraints.txt, -r requirements-dev.in
+pytest-custom-exit-code==0.3.0  # via -c constraints.txt, -r requirements-dev.in
 pytest-factoryboy==2.7.0  # via -c constraints.txt, -r requirements-dev.in
 pytest-instafail==0.5.0   # via -c constraints.txt, -r requirements-dev.in
 pytest-xdist[psutil]==3.6.1  # via -c constraints.txt, -r requirements-dev.in
 python-dateutil==2.9.0.post0  # via -c constraints.txt, faker, jupyter-client, matplotlib
 python-dotenv==1.0.1      # via -c constraints.txt, pydantic-settings
-pytz==2024.1              # via -c constraints.txt, babel
-pyyaml==6.0.1             # via -c constraints.txt, dace, jupytext, pre-commit
-pyzmq==26.0.3             # via -c constraints.txt, ipykernel, jupyter-client
+pytz==2024.2              # via -c constraints.txt, babel
+pyyaml==6.0.2             # via -c constraints.txt, dace, jupytext, pre-commit, tach
+pyzmq==26.2.0             # via -c constraints.txt, ipykernel, jupyter-client
 questionary==2.0.1        # via -c constraints.txt, bump-my-version
 referencing==0.35.1       # via -c constraints.txt, jsonschema, jsonschema-specifications
-requests==2.31.0          # via -c constraints.txt, dace, sphinx
-restructuredtext-lint==1.4.0  # via -c constraints.txt, flake8-rst-docstrings
-rich==13.7.1              # via -c constraints.txt, bump-my-version, rich-click
-rich-click==1.8.2         # via -c constraints.txt, bump-my-version
-rpds-py==0.18.1           # via -c constraints.txt, jsonschema, referencing
-ruff==0.4.4               # via -c constraints.txt, -r requirements-dev.in
-scipy==1.10.1             # via -c constraints.txt, jax, jaxlib
+requests==2.32.3          # via -c constraints.txt, sphinx
+rich==13.8.1              # via -c constraints.txt, bump-my-version, rich-click, tach
+rich-click==1.8.3         # via -c constraints.txt, bump-my-version
+rpds-py==0.20.0           # via -c constraints.txt, jsonschema, referencing
+ruff==0.6.4               # via -c constraints.txt, -r requirements-dev.in
 setuptools-scm==8.1.0     # via -c constraints.txt, fparser
 six==1.16.0               # via -c constraints.txt, asttokens, astunparse, python-dateutil
-snowballstemmer==2.2.0    # via -c constraints.txt, pydocstyle, sphinx
+smmap==5.0.1              # via -c constraints.txt, gitdb
+snowballstemmer==2.2.0    # via -c constraints.txt, sphinx
 sortedcontainers==2.4.0   # via -c constraints.txt, hypothesis
 sphinx==7.1.2             # via -c constraints.txt, -r requirements-dev.in, sphinx-rtd-theme, sphinxcontrib-jquery
 sphinx-rtd-theme==2.0.0   # via -c constraints.txt, -r requirements-dev.in
@@ -176,115 +155,28 @@ sphinxcontrib-jsmath==1.0.1  # via -c constraints.txt, sphinx
 sphinxcontrib-qthelp==1.0.3  # via -c constraints.txt, sphinx
 sphinxcontrib-serializinghtml==1.1.5  # via -c constraints.txt, sphinx
 stack-data==0.6.3         # via -c constraints.txt, ipython
-sympy==1.9                # via -c constraints.txt, dace, gt4py (pyproject.toml)
+stdlib-list==0.10.0       # via -c constraints.txt, tach
+sympy==1.12.1             # via -c constraints.txt, dace, gt4py (pyproject.toml)
 tabulate==0.9.0           # via -c constraints.txt, gt4py (pyproject.toml)
-tomli==2.0.1 ; python_version < "3.11"  # via -c constraints.txt, -r requirements-dev.in, black, build, coverage, flake8-pyproject, jupytext, mypy, pip-tools, pyproject-api, pytest, setuptools-scm, tox
-tomlkit==0.12.5           # via -c constraints.txt, bump-my-version
+tach==0.10.7              # via -c constraints.txt, -r requirements-dev.in
+tomli==2.0.1 ; python_version < "3.11"  # via -c constraints.txt, -r requirements-dev.in, black, build, coverage, jupytext, mypy, pip-tools, pyproject-api, pytest, setuptools-scm, tox
+tomli-w==1.0.0            # via -c constraints.txt, tach
+tomlkit==0.13.2           # via -c constraints.txt, bump-my-version
 toolz==0.12.1             # via -c constraints.txt, cytoolz
-tornado==6.4              # via -c constraints.txt, ipykernel, jupyter-client
-tox==4.15.0               # via -c constraints.txt, -r requirements-dev.in
+tornado==6.4.1            # via -c constraints.txt, ipykernel, jupyter-client
+tox==4.18.1               # via -c constraints.txt, -r requirements-dev.in
 traitlets==5.14.3         # via -c constraints.txt, comm, ipykernel, ipython, jupyter-client, jupyter-core, matplotlib-inline, nbclient, nbformat
-types-aiofiles==23.2.0.20240403  # via -c constraints.txt, types-all
-types-all==1.0.0          # via -c constraints.txt, -r requirements-dev.in
-types-annoy==1.17.8.4     # via -c constraints.txt, types-all
-types-atomicwrites==1.4.5.1  # via -c constraints.txt, types-all
-types-backports==0.1.3    # via -c constraints.txt, types-all
-types-backports-abc==0.5.2  # via -c constraints.txt, types-all
-types-bleach==6.1.0.20240331  # via -c constraints.txt, types-all
-types-boto==2.49.18.20240205  # via -c constraints.txt, types-all
-types-cachetools==5.3.0.7  # via -c constraints.txt, types-all
-types-certifi==2021.10.8.3  # via -c constraints.txt, types-all
-types-cffi==1.16.0.20240331  # via -c constraints.txt, types-jack-client, types-pyopenssl
-types-characteristic==14.3.7  # via -c constraints.txt, types-all
-types-chardet==5.0.4.6    # via -c constraints.txt, types-all
-types-click==7.1.8        # via -c constraints.txt, types-all, types-flask
-types-click-spinner==0.1.13.20240311  # via -c constraints.txt, types-all
-types-colorama==0.4.15.20240311  # via -c constraints.txt, types-all
-types-contextvars==2.4.7.3  # via -c constraints.txt, types-all
-types-croniter==2.0.0.20240423  # via -c constraints.txt, types-all
-types-cryptography==3.3.23.2  # via -c constraints.txt, types-all, types-openssl-python, types-pyjwt
-types-dataclasses==0.6.6  # via -c constraints.txt, types-all
-types-dateparser==1.2.0.20240420  # via -c constraints.txt, types-all
-types-datetimerange==2.0.0.6  # via -c constraints.txt, types-all
-types-decorator==5.1.8.20240310  # via -c constraints.txt, types-all
-types-deprecated==1.2.9.20240311  # via -c constraints.txt, types-all
-types-docopt==0.6.11.4    # via -c constraints.txt, types-all
-types-docutils==0.21.0.20240423  # via -c constraints.txt, types-all
-types-emoji==2.1.0.3      # via -c constraints.txt, types-all
-types-enum34==1.1.8       # via -c constraints.txt, types-all
-types-fb303==1.0.0        # via -c constraints.txt, types-all, types-scribe
-types-filelock==3.2.7     # via -c constraints.txt, types-all
-types-first==2.0.5.2      # via -c constraints.txt, types-all
-types-flask==1.1.6        # via -c constraints.txt, types-all
-types-freezegun==1.1.10   # via -c constraints.txt, types-all
-types-frozendict==2.0.9   # via -c constraints.txt, types-all
-types-futures==3.3.8      # via -c constraints.txt, types-all
-types-geoip2==3.0.0       # via -c constraints.txt, types-all
-types-html5lib==1.1.11.20240228  # via -c constraints.txt, types-bleach
-types-ipaddress==1.0.8    # via -c constraints.txt, types-all, types-maxminddb
-types-itsdangerous==1.1.6  # via -c constraints.txt, types-all
-types-jack-client==0.5.10.20240425  # via -c constraints.txt, types-all
-types-jinja2==2.11.9      # via -c constraints.txt, types-all, types-flask
-types-kazoo==0.1.3        # via -c constraints.txt, types-all
-types-markdown==3.6.0.20240316  # via -c constraints.txt, types-all
-types-markupsafe==1.1.10  # via -c constraints.txt, types-all, types-jinja2
-types-maxminddb==1.5.0    # via -c constraints.txt, types-all, types-geoip2
-types-mock==5.1.0.20240425  # via -c constraints.txt, types-all
-types-mypy-extensions==1.0.0.20240311  # via -c constraints.txt, types-all
-types-nmap==0.1.6         # via -c constraints.txt, types-all
-types-openssl-python==0.1.3  # via -c constraints.txt, types-all
-types-orjson==3.6.2       # via -c constraints.txt, types-all
-types-paramiko==3.4.0.20240423  # via -c constraints.txt, types-all, types-pysftp
-types-pathlib2==2.3.0     # via -c constraints.txt, types-all
-types-pillow==10.2.0.20240511  # via -c constraints.txt, types-all
-types-pkg-resources==0.1.3  # via -c constraints.txt, types-all
-types-polib==1.2.0.20240327  # via -c constraints.txt, types-all
-types-protobuf==5.26.0.20240422  # via -c constraints.txt, types-all
-types-pyaudio==0.2.16.20240425  # via -c constraints.txt, types-all
-types-pycurl==7.45.3.20240421  # via -c constraints.txt, types-all
-types-pyfarmhash==0.3.1.20240311  # via -c constraints.txt, types-all
-types-pyjwt==1.7.1        # via -c constraints.txt, types-all
-types-pymssql==2.1.0      # via -c constraints.txt, types-all
-types-pymysql==1.1.0.20240425  # via -c constraints.txt, types-all
-types-pyopenssl==24.1.0.20240425  # via -c constraints.txt, types-redis
-types-pyrfc3339==1.1.1.5  # via -c constraints.txt, types-all
-types-pysftp==0.2.17.20240106  # via -c constraints.txt, types-all
-types-python-dateutil==2.9.0.20240316  # via -c constraints.txt, types-all, types-datetimerange
-types-python-gflags==3.1.7.3  # via -c constraints.txt, types-all
-types-python-slugify==8.0.2.20240310  # via -c constraints.txt, types-all
-types-pytz==2024.1.0.20240417  # via -c constraints.txt, types-all, types-tzlocal
-types-pyvmomi==8.0.0.6    # via -c constraints.txt, types-all
-types-pyyaml==6.0.12.20240311  # via -c constraints.txt, types-all
-types-redis==4.6.0.20240425  # via -c constraints.txt, types-all
-types-requests==2.31.0.20240406  # via -c constraints.txt, types-all
-types-retry==0.9.9.4      # via -c constraints.txt, types-all
-types-routes==2.5.0       # via -c constraints.txt, types-all
-types-scribe==2.0.0       # via -c constraints.txt, types-all
-types-setuptools==69.5.0.20240513  # via -c constraints.txt, types-cffi
-types-simplejson==3.19.0.20240310  # via -c constraints.txt, types-all
-types-singledispatch==4.1.0.0  # via -c constraints.txt, types-all
-types-six==1.16.21.20240513  # via -c constraints.txt, types-all
-types-tabulate==0.9.0.20240106  # via -c constraints.txt, types-all
-types-termcolor==1.1.6.2  # via -c constraints.txt, types-all
-types-toml==0.10.8.20240310  # via -c constraints.txt, types-all
-types-tornado==5.1.1      # via -c constraints.txt, types-all
-types-typed-ast==1.5.8.7  # via -c constraints.txt, types-all
-types-tzlocal==5.1.0.1    # via -c constraints.txt, types-all
-types-ujson==5.9.0.0      # via -c constraints.txt, types-all
-types-waitress==3.0.0.20240423  # via -c constraints.txt, types-all
-types-werkzeug==1.0.9     # via -c constraints.txt, types-all, types-flask
-types-xxhash==3.0.5.2     # via -c constraints.txt, types-all
-typing-extensions==4.11.0  # via -c constraints.txt, annotated-types, black, gt4py (pyproject.toml), ipython, mypy, pydantic, pydantic-core, pytest-factoryboy, rich, rich-click, setuptools-scm
-urllib3==2.2.1            # via -c constraints.txt, requests, types-requests
-virtualenv==20.26.2       # via -c constraints.txt, pre-commit, tox
-wcmatch==8.5.1            # via -c constraints.txt, bump-my-version
+types-tabulate==0.9.0.20240106  # via -c constraints.txt, -r requirements-dev.in
+typing-extensions==4.12.2  # via -c constraints.txt, annotated-types, black, gt4py (pyproject.toml), ipython, mypy, pydantic, pydantic-core, pytest-factoryboy, rich, rich-click, setuptools-scm
+urllib3==2.2.3            # via -c constraints.txt, requests
+virtualenv==20.26.4       # via -c constraints.txt, pre-commit, tox
+wcmatch==9.0              # via -c constraints.txt, bump-my-version
 wcwidth==0.2.13           # via -c constraints.txt, prompt-toolkit
-websockets==12.0          # via -c constraints.txt, dace
-werkzeug==3.0.3           # via -c constraints.txt, flask
-wheel==0.43.0             # via -c constraints.txt, astunparse, pip-tools
+websockets==13.0.1        # via -c constraints.txt, dace
+wheel==0.44.0             # via -c constraints.txt, astunparse, pip-tools
 xxhash==3.0.0             # via -c constraints.txt, gt4py (pyproject.toml)
-zipp==3.18.1              # via -c constraints.txt, importlib-metadata, importlib-resources
+zipp==3.20.1              # via -c constraints.txt, importlib-metadata, importlib-resources
 
 # The following packages are considered to be unsafe in a requirements file:
-pip==24.0                 # via -c constraints.txt, pip-tools, pipdeptree
-setuptools==69.5.1        # via -c constraints.txt, gt4py (pyproject.toml), nodeenv, pip-tools, setuptools-scm
+pip==24.2                 # via -c constraints.txt, pip-tools, pipdeptree
+setuptools==74.1.2        # via -c constraints.txt, gt4py (pyproject.toml), pip-tools, setuptools-scm

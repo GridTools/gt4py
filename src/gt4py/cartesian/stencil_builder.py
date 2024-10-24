@@ -1,16 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+from __future__ import annotations
 
 import pathlib
 from typing import TYPE_CHECKING, Any, Dict, Optional, Type, Union
@@ -57,9 +53,9 @@ class StencilBuilder:
         self,
         definition_func: Union[StencilFunc, AnnotatedStencilFunc],
         *,
-        backend: Optional[Union[str, Type["BackendType"]]] = None,
+        backend: Optional[Union[str, Type[BackendType]]] = None,
         options: Optional[BuildOptions] = None,
-        frontend: Optional[Type["FrontendType"]] = None,
+        frontend: Optional[Type[FrontendType]] = None,
     ):
         self._definition = definition_func
         # type ignore explanation: Attribclass generated init not recognized by mypy
@@ -75,13 +71,13 @@ class StencilBuilder:
         if frontend is None:
             raise RuntimeError(f"Unknown frontend: {frontend}")
 
-        self.backend: "BackendType" = backend(self)
-        self.frontend: Type["FrontendType"] = frontend
+        self.backend: BackendType = backend(self)
+        self.frontend: Type[FrontendType] = frontend
         self.with_caching("jit")
         self._externals: Dict[str, Any] = {}
         self._dtypes: Dict[Type, Type] = {}
 
-    def build(self) -> Type["StencilObject"]:
+    def build(self) -> Type[StencilObject]:
         """Generate, compile and/or load everything necessary to provide a usable stencil class."""
         # load or generate
         stencil_class = None if self.options.rebuild else self.backend.load()
@@ -102,8 +98,8 @@ class StencilBuilder:
         return self.cli_backend.generate_bindings(targe_language)
 
     def with_caching(
-        self: "StencilBuilder", caching_strategy_name: str, *args: Any, **kwargs: Any
-    ) -> "StencilBuilder":
+        self: StencilBuilder, caching_strategy_name: str, *args: Any, **kwargs: Any
+    ) -> StencilBuilder:
         """
         Fluidly set the caching strategy from the name.
 
@@ -128,8 +124,8 @@ class StencilBuilder:
         return self
 
     def with_options(
-        self: "StencilBuilder", *, name: str, module: str, **kwargs: Any
-    ) -> "StencilBuilder":
+        self: StencilBuilder, *, name: str, module: str, **kwargs: Any
+    ) -> StencilBuilder:
         """
         Fluidly set the build options.
 
@@ -150,14 +146,14 @@ class StencilBuilder:
         self.options = BuildOptions(name=name, module=module, **kwargs)  # type: ignore
         return self
 
-    def with_changed_options(self: "StencilBuilder", **kwargs: Dict[str, Any]) -> "StencilBuilder":
+    def with_changed_options(self: StencilBuilder, **kwargs: Dict[str, Any]) -> StencilBuilder:
         old_options = self.options.as_dict()
         # BuildOptions constructor expects ``impl_opts`` keyword
         # but BuildOptions.as_dict outputs ``_impl_opts`` key
         old_options["impl_opts"] = old_options.pop("_impl_opts")
         return self.with_options(**{**old_options, **kwargs})
 
-    def with_backend(self: "StencilBuilder", backend_name: str) -> "StencilBuilder":
+    def with_backend(self: StencilBuilder, backend_name: str) -> StencilBuilder:
         """
         Fluidly set the backend type from backend name.
 
@@ -225,7 +221,7 @@ class StencilBuilder:
             "dtypes", self._dtypes.copy()
         )
 
-    def with_externals(self: "StencilBuilder", externals: Dict[str, Any]) -> "StencilBuilder":
+    def with_externals(self: StencilBuilder, externals: Dict[str, Any]) -> StencilBuilder:
         """
         Fluidly set externals for this build.
 
@@ -236,7 +232,7 @@ class StencilBuilder:
         self.with_caching(self.caching.name)
         return self
 
-    def with_dtypes(self: "StencilBuilder", dtypes: Dict[Type, Type]) -> "StencilBuilder":
+    def with_dtypes(self: StencilBuilder, dtypes: Dict[Type, Type]) -> StencilBuilder:
         self._build_data = {}
         self._dtypes = dtypes
         self.with_caching(self.caching.name)
@@ -246,7 +242,7 @@ class StencilBuilder:
     def backend_data(self) -> Dict[str, Any]:
         return self._build_data.get("backend_data", {}).copy()
 
-    def with_backend_data(self: "StencilBuilder", data: Dict[str, Any]) -> "StencilBuilder":
+    def with_backend_data(self: StencilBuilder, data: Dict[str, Any]) -> StencilBuilder:
         self._build_data["backend_data"] = {**self.backend_data, **data}
         return self
 
@@ -260,7 +256,7 @@ class StencilBuilder:
             "root_pkg_name", gt4pyc.config.code_settings["root_package_name"]
         )
 
-    def with_root_pkg_name(self: "StencilBuilder", name: str) -> "StencilBuilder":
+    def with_root_pkg_name(self: StencilBuilder, name: str) -> StencilBuilder:
         self._build_data["root_pkg_name"] = name
         return self
 
@@ -281,7 +277,9 @@ class StencilBuilder:
         return self._build_data.get("gtir_pipeline") or self._build_data.setdefault(
             "gtir_pipeline",
             GtirPipeline(
-                self.frontend.generate(self.definition, self.externals, self.dtypes, self.options),
+                self.frontend.generate(
+                    self.definition, self.externals, self.dtypes, self.options, self.backend.name
+                ),
                 self.stencil_id,
             ),
         )
@@ -326,7 +324,7 @@ class StencilBuilder:
         return not bool(self._build_data)
 
     @property
-    def cli_backend(self) -> "CLIBackendMixin":
+    def cli_backend(self) -> CLIBackendMixin:
         from gt4py.cartesian.backend.base import CLIBackendMixin
 
         if not isinstance(self.backend, CLIBackendMixin):
