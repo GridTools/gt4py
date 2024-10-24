@@ -397,7 +397,7 @@ def test_gtir_zero_dim_fields():
 
     sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
 
-    sdfg(a, b, **FSYMBOLS)
+    sdfg(a.item(), b, **FSYMBOLS)
     assert np.allclose(a, b)
 
 
