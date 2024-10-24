@@ -778,7 +778,10 @@ class IRMaker(ast.NodeVisitor):
             "floor": nodes.NativeFunction.FLOOR,
             "ceil": nodes.NativeFunction.CEIL,
             "trunc": nodes.NativeFunction.TRUNC,
+            "round": nodes.NativeFunction.ROUND,
             "int": nodes.NativeFunction.INT,
+            "f32": nodes.NativeFunction.F32,
+            "f64": nodes.NativeFunction.F64,
         }
 
     def __call__(self, ast_root: ast.AST):

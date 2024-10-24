@@ -59,7 +59,10 @@ MATH_BUILTINS = {
     "floor",
     "ceil",
     "trunc",
+    "round",
     "int",
+    "f32",
+    "f64",
 }
 
 builtins_and_inline_ignore = {
@@ -283,7 +286,13 @@ def stencil(
 
     # Setup build_info timings
     if build_info is not None:
-        time_keys = ("parse_time", "module_time", "codegen_time", "build_time", "load_time")
+        time_keys = (
+            "parse_time",
+            "module_time",
+            "codegen_time",
+            "build_time",
+            "load_time",
+        )
         build_info.update({time_key: 0.0 for time_key in time_keys})
 
     build_options = gt_definitions.BuildOptions(

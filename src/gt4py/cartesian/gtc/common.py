@@ -179,8 +179,11 @@ class NativeFunction(eve.StrEnum):
     FLOOR = "floor"
     CEIL = "ceil"
     TRUNC = "trunc"
+    ROUND = "round"
 
     INT = "int"
+    F32 = "f32"
+    F64 = "f64"
 
     IR_OP_TO_NUM_ARGS: ClassVar[Dict[NativeFunction, int]]
 
@@ -221,7 +224,10 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
         NativeFunction.FLOOR: 1,
         NativeFunction.CEIL: 1,
         NativeFunction.TRUNC: 1,
+        NativeFunction.ROUND: 1,
         NativeFunction.INT: 1,
+        NativeFunction.F32: 1,
+        NativeFunction.F64: 1,
     }.items()
 }
 
@@ -635,7 +641,12 @@ class _LvalueDimsValidator(eve.VisitorWithSymbolTableTrait):
         self.generic_visit(node, loop_order=loop_order, **kwargs)
 
     def visit_AssignStmt(
-        self, node: AssignStmt, *, loop_order: LoopOrder, symtable: Dict[str, Any], **kwargs: Any
+        self,
+        node: AssignStmt,
+        *,
+        loop_order: LoopOrder,
+        symtable: Dict[str, Any],
+        **kwargs: Any,
     ) -> None:
         decl = symtable.get(node.left.name, None)
         if decl is None:
@@ -922,7 +933,10 @@ OP_TO_UFUNC_NAME: Final[
         NativeFunction.FLOOR: "floor",
         NativeFunction.CEIL: "ceil",
         NativeFunction.TRUNC: "trunc",
+        NativeFunction.TRUNC: "round",
         NativeFunction.INT: "int",
+        NativeFunction.F32: "f32",
+        NativeFunction.F64: "f64",
     },
 }
 
