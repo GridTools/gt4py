@@ -26,8 +26,9 @@ from .simplify import (
     gt_reduce_distributed_buffering,
     gt_set_iteration_order,
     gt_simplify,
+    gt_substitute_compiletime_symbols,
 )
-from .util import gt_make_transients_persistent
+from .util import gt_find_constant_arguments, gt_make_transients_persistent
 
 
 __all__ = [
@@ -48,4 +49,6 @@ __all__ = [
     "gt_simplify",
     "gt_make_transients_persistent",
     "gt_reduce_distributed_buffering",
+    "gt_find_constant_arguments",
+    "gt_substitute_compiletime_symbols",
 ]

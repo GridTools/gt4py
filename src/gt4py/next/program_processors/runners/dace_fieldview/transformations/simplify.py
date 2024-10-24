@@ -136,8 +136,8 @@ def gt_set_iteration_order(
     Args:
         sdfg: The SDFG to process.
         leading_dim: The leading dimensions.
-        validate: Perform validation during the steps.
-        validate_all: Perform extensive validation.
+        validate: Perform validation at the end of the function.
+        validate_all: Perform validation also on intermediate steps.
     """
     return sdfg.apply_transformations_once_everywhere(
         gtx_transformations.MapIterationOrder(
@@ -206,6 +206,56 @@ def gt_inline_nested_sdfg(
     if nb_preproccess_total != 0:
         result["PruneSymbols|PruneConnectors"] = nb_preproccess_total
     return result if result else None
+
+
+def gt_substitute_compiletime_symbols(
+    sdfg: dace.SDFG,
+    repl: dict[str, Any],
+    validate: bool = False,
+    validate_all: bool = False,
+) -> None:
+    """Substitutes symbols that are known to have a constant value with this value.
+
+    Some symbols are known to have a constant value. This function will remove this
+    symbols from the SDFG and replace them with this constant value.
+    An example where this makes sense are strides that are known to be one.
+
+    Args:
+        sdfg: The SDFG to process.
+        repl: Maps the name of the symbol to the value it should be replaced with.
+        validate: Perform validation at the end of the function.
+        validate_all: Perform validation also on intermediate steps.
+
+    Note:
+        This function expects that the symbol is replaced with a value. Thus it is
+        allowed to use this function to rename symbols. Furthermore, the function
+        will remove the substituted symbols from the SDFG, by calling
+        `SDFG.remove_symbol()`, which removes the symbol from `.symbols` `dict` as
+        well as from the symbol map in case of a nested SDFG.
+    """
+    # For consistency reasons we have to traverse them twice, however, we should
+    #  actually implement a custom replace path.
+    nested_sdfgs = list(sdfg.all_sdfgs_recursive())
+
+    # Now replace the symbolic value with its actual value.
+    for nsdfg in nested_sdfgs:
+        nsdfg.replace_dict(repl)
+
+    if validate_all:
+        sdfg.validate()
+
+    # Now we have to clean up. The call above, actually targets that case that we want
+    #  to replace `symbol1` with `symbol2` not necessarily with a value. So the symbols
+    #  are still registered, and the symbol tables now contains
+    #  `{symbol_we_replaced: value_we_used}`, which we will now remove.
+    for nsdfg in nested_sdfgs:
+        nsymbols = nsdfg.symbols
+        for sname in repl.keys():
+            if sname in nsymbols:
+                nsdfg.remove_symbol(sname)
+
+    if validate:
+        sdfg.validate()
 
 
 def gt_reduce_distributed_buffering(

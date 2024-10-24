@@ -8,6 +8,9 @@
 
 """Common functionality for the transformations/optimization pipeline."""
 
+import re
+from typing import Any, Container, Optional
+
 import dace
 
 
@@ -85,3 +88,34 @@ def gt_make_transients_persistent(
             nsdfg.arrays[aname].lifetime = dace.AllocationLifetime.Persistent
 
     return result
+
+
+def gt_find_constant_arguments(
+    call_args: dict[str, Any],
+    include: Optional[Container[str]] = None,
+) -> dict[str, Any]:
+    """Scanns the calling arguments for candidates that could be constant.
+
+    The output of this function can be used as input to
+    `gt_substitute_compiletime_symbols()`, which then removes these symbols.
+    By default the function will inspect the name using the following regex:
+    `.*_(size|shape|stride)_.*`. Furthermore, the value must be one.
+
+    By specifying `include` it is possible to force the function to include
+    additional arguments, that would not be matched otherwise. Importantly,
+    their value is not checked.
+
+    Args:
+        call_args: The full list of arguments that will be passed to the SDFG.
+        include: List of arguments that should be included.
+    """
+    if include is None:
+        include = set()
+    name_to_include: re.Pattern = re.compile(".*_(size|shape|stride)_.*")
+    ret_value: dict[str, Any] = {}
+
+    for name, value in call_args.items():
+        if name in include or (name_to_include.fullmatch(name) and value == 1):
+            ret_value[name] = value
+
+    return ret_value
