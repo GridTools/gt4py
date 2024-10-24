@@ -8,8 +8,9 @@
 
 import factory
 
+from gt4py._core import definitions as core_defs
 from gt4py.next import allocators as next_allocators, backend
-from gt4py.next.ffront import foast_to_gtir, past_to_itir
+from gt4py.next.ffront import foast_to_gtir, foast_to_past, past_to_itir
 from gt4py.next.program_processors.runners.dace_fieldview import workflow as dace_fieldview_workflow
 from gt4py.next.program_processors.runners.dace_iterator import workflow as dace_iterator_workflow
 from gt4py.next.program_processors.runners.gtfn import GTFNBackendFactory
@@ -47,10 +48,26 @@ itir_gpu = run_dace_gpu
 
 gtir_cpu = backend.Backend(
     name="dace.gtir.cpu",
-    executor=dace_fieldview_workflow.DaCeWorkflowFactory(),
+    executor=dace_fieldview_workflow.DaCeWorkflowFactory(device_type=core_defs.DeviceType.CPU),
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
     transforms=backend.Transforms(
         past_to_itir=past_to_itir.past_to_itir_factory(to_gtir=True),
         foast_to_itir=foast_to_gtir.adapted_foast_to_gtir_factory(cached=True),
+        field_view_op_to_prog=foast_to_past.operator_to_program_factory(
+            foast_to_itir_step=foast_to_gtir.adapted_foast_to_gtir_factory(cached=True)
+        ),
+    ),
+)
+
+gtir_gpu = backend.Backend(
+    name="dace.gtir.gpu",
+    executor=dace_fieldview_workflow.DaCeWorkflowFactory(device_type=core_defs.DeviceType.CUDA),
+    allocator=next_allocators.StandardGPUFieldBufferAllocator(),
+    transforms=backend.Transforms(
+        past_to_itir=past_to_itir.past_to_itir_factory(to_gtir=True),
+        foast_to_itir=foast_to_gtir.adapted_foast_to_gtir_factory(cached=True),
+        field_view_op_to_prog=foast_to_past.operator_to_program_factory(
+            foast_to_itir_step=foast_to_gtir.adapted_foast_to_gtir_factory(cached=True)
+        ),
     ),
 )
