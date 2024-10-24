@@ -23,6 +23,11 @@ def as_fieldop(*args):
 
 
 @builtin_dispatch
+def index(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def deref(*args):
     raise BackendNotSelectedError()
 
@@ -430,6 +435,7 @@ BUILTINS = {
     "unstructured_domain",
     "named_range",
     "as_fieldop",
+    "index",
     *MATH_BUILTINS,
 }
 
