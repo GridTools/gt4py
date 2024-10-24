@@ -31,6 +31,8 @@ class OffsetLiteralType(ts.TypeSpec):
 @dataclasses.dataclass(frozen=True)
 class ListType(ts.DataType):
     element_type: ts.DataType
+    # TODO(havogt): the `offset_type` is not yet used in type_inference,
+    # it is meant to describe the neighborhood (via the local dimension)
     offset_type: Optional[common.Dimension] = None
 
 
