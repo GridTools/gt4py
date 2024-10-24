@@ -26,9 +26,6 @@ except ImportError:
 def _convert_arg(arg: Any, sdfg_param: str, use_field_canonical_representation: bool) -> Any:
     if not isinstance(arg, gtx_common.Field):
         return arg
-    if len(arg.domain.dims) == 0:
-        # pass zero-dimensional fields as scalars
-        return arg.asnumpy().item()
     # field domain offsets are not supported
     non_zero_offsets = [
         (dim, dim_range)
@@ -82,6 +79,9 @@ def _get_shape_args(
 ) -> dict[str, int]:
     shape_args: dict[str, int] = {}
     for name, value in args.items():
+        if len(value.shape) == 0:  # zero-dimensional field
+            assert isinstance(arrays[name], dace.data.Scalar)
+            continue
         for sym, size in zip(arrays[name].shape, value.shape, strict=True):
             if isinstance(sym, dace.symbol):
                 assert sym.name not in shape_args
@@ -98,6 +98,9 @@ def _get_stride_args(
 ) -> dict[str, int]:
     stride_args = {}
     for name, value in args.items():
+        if len(value.shape) == 0:  # zero-dimensional field
+            assert isinstance(arrays[name], dace.data.Scalar)
+            continue
         for sym, stride_size in zip(arrays[name].strides, value.strides, strict=True):
             stride, remainder = divmod(stride_size, value.itemsize)
             if remainder != 0:
