@@ -915,4 +915,15 @@ def test_broadcast():
     lowered = FieldOperatorLowering.apply(parsed)
 
     assert lowered.id == "foo"
-    assert lowered.expr == im.ref("inp")
+    assert lowered.expr == im.as_fieldop("deref")(im.ref("inp"))
+
+
+def test_scalar_broadcast():
+    def foo():
+        return broadcast(1, (UDim, TDim))
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    assert lowered.id == "foo"
+    assert lowered.expr == im.as_fieldop("deref")(1)
