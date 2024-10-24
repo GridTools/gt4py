@@ -144,6 +144,31 @@ def _parse_fieldop_arg(
         raise NotImplementedError(f"Node type {type(arg.gt_dtype)} not supported.")
 
 
+def _get_field_shape(
+    domain: FieldopDomain,
+) -> tuple[list[gtx_common.Dimension], list[dace.symbolic.SymExpr]]:
+    """
+    Parse the field operator domain and generates the shape of the result field.
+
+    It should be enough to allocate an array with shape (upper_bound - lower_bound)
+    but this would require to use array offset for compensate for the start index.
+    Suppose that a field operator executes on domain [2,N-2], the dace array to store
+    the result only needs size (N-4), but this would require to compensate all array
+    accesses with offset -2 (which corresponds to -lower_bound). Instead, we choose
+    to allocate (N-2), leaving positions [0:2] unused. The reason is that array offset
+    is known to cause issues to SDFG inlining. Besides, map fusion will in any case
+    eliminate most of transient arrays.
+
+    Args:
+        domain: The field operator domain.
+
+    Returns:
+        A list of dimensions and a list of array sizes in each dimension.
+    """
+    domain_dims, _, domain_ubs = zip(*domain)
+    return list(domain_dims), list(domain_ubs)
+
+
 def _create_temporary_field(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
@@ -172,23 +197,6 @@ def _create_temporary_field(
     field_type = ts.FieldType(field_dims, node_type.dtype)
 
     return FieldopData(field_node, field_type, local_offset=dataflow_output.result.local_offset)
-
-
-def _get_field_shape(
-    domain: FieldopDomain,
-) -> tuple[list[gtx_common.Dimension], list[dace.symbolic.SymExpr]]:
-    domain_dims, _, domain_ubs = zip(*domain)
-    field_dims = list(domain_dims)
-    # It should be enough to allocate an array with shape (upper_bound - lower_bound)
-    # but this would require to use array offset for compensate for the start index.
-    # Suppose that a field operator executes on domain [2,N-2], the dace array to store
-    # the result only needs size (N-4), but this would require to compensate all array
-    # accesses with offset -2 (which corresponds to -lower_bound). Instead, we choose
-    # to allocate (N-2), leaving positions [0:2] unused. The reason is that array offset
-    # is known to cause issues to SDFG inlining. Besides, map fusion will in any case
-    # eliminate most of transient arrays.
-    field_shape = list(domain_ubs)
-    return field_dims, field_shape
 
 
 def extract_domain(node: gtir.Node) -> FieldopDomain:
@@ -382,11 +390,7 @@ def translate_broadcast_scalar(
             str(scalar_expr.subset) if isinstance(scalar_expr, gtir_dataflow.MemletExpr) else "0"
         )
         input_node = scalar_expr.dc_node
-        gt_dtype = (
-            node.args[0].type.dtype
-            if isinstance(node.args[0].type, ts.FieldType)  # zero-dimensional field
-            else node.args[0].type
-        )
+        gt_dtype = node.args[0].type
     elif isinstance(node.args[0].type, ts.FieldType):
         assert isinstance(scalar_expr, gtir_dataflow.IteratorExpr)
         if len(node.args[0].type.dims) == 0:  # zero-dimensional field
@@ -428,7 +432,6 @@ def translate_broadcast_scalar(
         external_edges=True,
     )
 
-    assert isinstance(gt_dtype, ts.ScalarType)
     return FieldopData(output_node, ts.FieldType(field_dims, gt_dtype), local_offset=None)
 
 
