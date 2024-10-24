@@ -258,16 +258,20 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         elif isinstance(gt_type, ts.ScalarType):
             dc_dtype = dace_utils.as_dace_type(gt_type)
             if name in symbolic_arguments:
-                # Sometimes, when the field domain is implicitly derived from the
-                # field domain, the gt4py lowering adds the field size as a scalar
-                # argument to the program IR. Suppose a field '__sym', then gt4py
-                # will add '__sym_size_0'.
-                # Therefore, here we check whether the shape symbol was already
-                # created by `_make_array_shape_and_strides`, when allocating
-                # storage for field arguments. We assume that the scalar argument
-                # for field size, if present, always follows the field argument.
                 if name in sdfg.symbols:
-                    assert sdfg.symbols[name].dtype == dc_dtype
+                    # Sometimes, when the field domain is implicitly derived from the
+                    # field domain, the gt4py lowering adds the field size as a scalar
+                    # argument to the program IR. Suppose a field '__sym', then gt4py
+                    # will add '__sym_size_0'.
+                    # Therefore, here we check whether the shape symbol was already
+                    # created by `_make_array_shape_and_strides`, when allocating
+                    # storage for field arguments. We assume that the scalar argument
+                    # for field size, if present, always follows the field argument.
+                    assert dace_utils.is_field_symbol(name)
+                    if sdfg.symbols[name].dtype != dc_dtype:
+                        raise ValueError(
+                            f"Type mismatch on argument {name}: got {dc_dtype}, expected {sdfg.symbols[name].dtype}."
+                        )
                 else:
                     sdfg.add_symbol(name, dc_dtype)
             else:
