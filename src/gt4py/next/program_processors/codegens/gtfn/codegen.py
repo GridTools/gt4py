@@ -50,10 +50,17 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         "maximum": "std::max",
         "fmod": "std::fmod",
         "power": "std::pow",
+        "float16": "std::float16_t",
         "float32": "float",
         "float64": "double",
+        "int8": "std::int8_t",
+        "uint8": "std::uint8_t",
+        "int16": "std::int16_t",
+        "uint16": "std::uint16_t",
         "int32": "std::int32_t",
+        "uint32": "std::uint32_t",
         "int64": "std::int64_t",
+        "uint64": "std::uint64_t",
         "bool": "bool",
         "plus": "std::plus{}",
         "minus": "std::minus{}",
@@ -256,6 +263,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         """
     #include <cmath>
     #include <cstdint>
+    #include <stdfloat>
     #include <functional>
     #include <gridtools/fn/${grid_type_str}.hpp>
     #include <gridtools/fn/sid_neighbor_table.hpp>
