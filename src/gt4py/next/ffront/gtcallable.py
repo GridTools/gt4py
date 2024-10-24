@@ -52,6 +52,16 @@ class GTCallable(typing.Protocol):
         """
         ...
 
+    # FIXME[#1582](tehrengruber): remove after refactoring to GTIR
+    @abc.abstractmethod
+    def __gt_gtir__(self) -> itir.FunctionDefinition:
+        """
+        Return iterator IR function definition representing the callable.
+        Used internally by the Program decorator to populate the function
+        definitions of the iterator IR.
+        """
+        ...
+
     # TODO(tehrengruber): For embedded execution a `__call__` method and for
     #  "truly" embedded execution arguably also a `from_function` method is
     #  required. Since field operators currently have a `__gt_type__` with a
