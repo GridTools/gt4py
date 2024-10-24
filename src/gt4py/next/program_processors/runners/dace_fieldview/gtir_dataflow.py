@@ -30,19 +30,43 @@ from gt4py.next.type_system import type_specifications as ts
 
 
 @dataclasses.dataclass(frozen=True)
-class DataExpr:
-    """Local storage for the computation result returned by a tasklet node."""
+class ValueExpr:
+    """
+    Local storage for the values returned by dataflow computation.
 
-    node: dace.nodes.AccessNode
-    dtype: itir_ts.ListType | ts.ScalarType
+    This type is used in the context in a dataflow, that is a stencil expression.
+    Therefore, it contains either a scalar value (single elements in the fields) or
+    a list of values in a local dimension.
+    This is different from `gtir_builtin_translators.FieldopData` which represents
+    the result of a field operator, basically the data storage outside a global map.
+
+    Args:
+        dc_node: Access node to the data storage, can be either a scalar or a local list.
+        gt_dtype: GT4Py type definition, which includes the field domain information.
+        local_offset: Provides information about the local dimension in`FieldType` data.
+            For a more detailed explanation see `gtir_builtin_translators.FieldopData`.
+    """
+
+    dc_node: dace.nodes.AccessNode
+    gt_dtype: itir_ts.ListType | ts.ScalarType
+    local_offset: Optional[str] = None
 
 
 @dataclasses.dataclass(frozen=True)
 class MemletExpr:
-    """Scalar or array data access through a memlet."""
+    """
+    Scalar or array data access through a memlet.
 
-    node: dace.nodes.AccessNode
+    Args:
+        dc_node: Access node to the data storage, can be either a scalar or a local list.
+        subset: Represents the subset to use in memlet to access the above data.
+        local_offset: Provides information about the local dimension in`FieldType` data.
+            For a more detailed explanation see `gtir_builtin_translators.FieldopData`.
+    """
+
+    dc_node: dace.nodes.AccessNode
     subset: sbs.Indices | sbs.Range
+    local_offset: Optional[str] = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -50,10 +74,10 @@ class SymbolExpr:
     """Any symbolic expression that is constant in the context of current SDFG."""
 
     value: dace.symbolic.SymExpr
-    dtype: dace.typeclass
+    dc_dtype: dace.typeclass
 
 
-ValueExpr: TypeAlias = DataExpr | MemletExpr | SymbolExpr
+DataExpr: TypeAlias = ValueExpr | MemletExpr | SymbolExpr
 
 
 @dataclasses.dataclass(frozen=True)
@@ -62,18 +86,20 @@ class IteratorExpr:
     Iterator for field access to be consumed by `deref` or `shift` builtin functions.
 
     Args:
-        field: The field this iterator operates on.
-        dimensions: Field domain represented as a sorted list of dimensions.
-                    In order to dereference an element in the field, we need index values
-                    for all the dimensions in the right order.
+        field: Access node to the field this iterator operates on.
+        dimensions: Field domain represented as a sorted list of dimensions, needed
+            to order the map index variables and dereference an element in the field.
         indices: Maps each dimension to an index value, which could be either a symbolic value
-                 or the result of a tasklet computation like neighbors connectivity or dynamic offset.
+            or the result of a tasklet computation like neighbors connectivity or dynamic offset.
+        local_offset: Provides information about the local dimension in`FieldType` data.
+            For a more detailed explanation see `gtir_builtin_translators.FieldopData`.
 
     """
 
     field: dace.nodes.AccessNode
     dimensions: list[gtx_common.Dimension]
-    indices: dict[gtx_common.Dimension, ValueExpr]
+    indices: dict[gtx_common.Dimension, DataExpr]
+    local_offset: Optional[str] = None
 
 
 class DataflowInputEdge(Protocol):
@@ -119,7 +145,7 @@ class MemletInputEdge(DataflowInputEdge):
 @dataclasses.dataclass(frozen=True)
 class EmptyInputEdge(DataflowInputEdge):
     """
-    Allows to setup an edge from a map entry node to a tasklet with no arguements.
+    Allows to setup an edge from a map entry node to a tasklet with no arguments.
 
     The reason behind this kind of connection is that all nodes inside a map scope
     must have an in/out path that traverses the entry and exit nodes.
@@ -145,30 +171,30 @@ class DataflowOutputEdge:
     """
 
     state: dace.SDFGState
-    result: DataExpr
+    result: ValueExpr
 
     def connect(
         self,
         mx: dace.nodes.MapExit,
-        result_node: dace.nodes.AccessNode,
+        dest: dace.nodes.AccessNode,
         subset: sbs.Range,
     ) -> None:
         # retrieve the node which writes the result
-        last_node = self.state.in_edges(self.result.node)[0].src
+        last_node = self.state.in_edges(self.result.dc_node)[0].src
         if isinstance(last_node, dace.nodes.Tasklet):
             # the last transient node can be deleted
-            last_node_connector = self.state.in_edges(self.result.node)[0].src_conn
-            self.state.remove_node(self.result.node)
+            last_node_connector = self.state.in_edges(self.result.dc_node)[0].src_conn
+            self.state.remove_node(self.result.dc_node)
         else:
-            last_node = self.result.node
+            last_node = self.result.dc_node
             last_node_connector = None
 
         self.state.add_memlet_path(
             last_node,
             mx,
-            result_node,
+            dest,
             src_conn=last_node_connector,
-            memlet=dace.Memlet(data=result_node.data, subset=subset),
+            memlet=dace.Memlet(data=dest.data, subset=subset),
         )
 
 
@@ -187,7 +213,7 @@ DACE_REDUCTION_MAPPING: dict[str, dace.dtypes.ReductionType] = {
 
 def get_reduce_params(node: gtir.FunCall) -> tuple[str, SymbolExpr, SymbolExpr]:
     assert isinstance(node.type, ts.ScalarType)
-    dtype = dace_utils.as_dace_type(node.type)
+    dc_dtype = dace_utils.as_dace_type(node.type)
 
     assert isinstance(node.fun, gtir.FunCall)
     assert len(node.fun.args) == 2
@@ -195,12 +221,12 @@ def get_reduce_params(node: gtir.FunCall) -> tuple[str, SymbolExpr, SymbolExpr]:
     op_name = str(node.fun.args[0])
     assert isinstance(node.fun.args[1], gtir.Literal)
     assert node.fun.args[1].type == node.type
-    reduce_init = SymbolExpr(node.fun.args[1].value, dtype)
+    reduce_init = SymbolExpr(node.fun.args[1].value, dc_dtype)
 
     if op_name not in DACE_REDUCTION_MAPPING:
         raise RuntimeError(f"Reduction operation '{op_name}' not supported.")
-    identity_value = dace.dtypes.reduction_identity(dtype, DACE_REDUCTION_MAPPING[op_name])
-    reduce_identity = SymbolExpr(identity_value, dtype)
+    identity_value = dace.dtypes.reduction_identity(dc_dtype, DACE_REDUCTION_MAPPING[op_name])
+    reduce_identity = SymbolExpr(identity_value, dc_dtype)
 
     return op_name, reduce_init, reduce_identity
 
@@ -325,9 +351,9 @@ class LambdaToDataflow(eve.NodeVisitor):
             name, self.state, map_ranges, inputs, code, outputs, **kwargs
         )
 
-    def _construct_local_view(self, field: MemletExpr | DataExpr) -> DataExpr:
+    def _construct_local_view(self, field: MemletExpr | ValueExpr) -> ValueExpr:
         if isinstance(field, MemletExpr):
-            desc = field.node.desc(self.sdfg)
+            desc = field.dc_node.desc(self.sdfg)
             local_dim_indices = [i for i, size in enumerate(field.subset.size()) if size != 1]
             if len(local_dim_indices) == 0:
                 # we are accessing a single-element array with shape (1,)
@@ -337,36 +363,37 @@ class LambdaToDataflow(eve.NodeVisitor):
                 view_shape = tuple(desc.shape[i] for i in local_dim_indices)
                 view_strides = tuple(desc.strides[i] for i in local_dim_indices)
             view, _ = self.sdfg.add_view(
-                f"{field.node.data}_view",
+                f"{field.dc_node.data}_view",
                 view_shape,
                 desc.dtype,
                 strides=view_strides,
                 find_new_name=True,
             )
             local_view_node = self.state.add_access(view)
-            self._add_input_data_edge(field.node, field.subset, local_view_node)
+            self._add_input_data_edge(field.dc_node, field.subset, local_view_node)
 
-            return DataExpr(local_view_node, desc.dtype)
+            return ValueExpr(local_view_node, desc.dtype)
 
         else:
             return field
 
     def _construct_tasklet_result(
         self,
-        dtype: dace.typeclass,
+        dc_dtype: dace.typeclass,
         src_node: dace.nodes.Tasklet,
         src_connector: str,
+        local_offset: Optional[str] = None,
         use_array: bool = False,
-    ) -> DataExpr:
+    ) -> ValueExpr:
         temp_name = self.sdfg.temp_data_name()
         if use_array:
             # In some cases, such as result data with list-type annotation, we want
             # that output data is represented as an array (single-element 1D array)
             # in order to allow for composition of array shape in external memlets.
-            self.sdfg.add_array(temp_name, (1,), dtype, transient=True)
+            self.sdfg.add_array(temp_name, (1,), dc_dtype, transient=True)
         else:
-            self.sdfg.add_scalar(temp_name, dtype, transient=True)
-        data_type = dace_utils.as_itir_type(dtype)
+            self.sdfg.add_scalar(temp_name, dc_dtype, transient=True)
+        data_type = dace_utils.as_itir_type(dc_dtype)
         temp_node = self.state.add_access(temp_name)
         self._add_edge(
             src_node,
@@ -375,9 +402,9 @@ class LambdaToDataflow(eve.NodeVisitor):
             None,
             dace.Memlet(data=temp_name, subset="0"),
         )
-        return DataExpr(temp_node, data_type)
+        return ValueExpr(temp_node, data_type, local_offset)
 
-    def _visit_deref(self, node: gtir.FunCall) -> ValueExpr:
+    def _visit_deref(self, node: gtir.FunCall) -> DataExpr:
         """
         Visit a `deref` node, which represents dereferencing of an iterator.
         The iterator is the argument of this node.
@@ -409,7 +436,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                     else (0, size - 1, 1)
                     for dim, size in zip(arg_expr.dimensions, field_desc.shape)
                 )
-                return MemletExpr(arg_expr.field, field_subset)
+                return MemletExpr(arg_expr.field, field_subset, arg_expr.local_offset)
 
             else:
                 # we use a tasklet to dereference an iterator when one or more indices are the result of some computation,
@@ -449,31 +476,33 @@ class LambdaToDataflow(eve.NodeVisitor):
                     deref_connector = IndexConnectorFmt.format(dim=dim.value)
                     if isinstance(index_expr, MemletExpr):
                         self._add_input_data_edge(
-                            index_expr.node,
+                            index_expr.dc_node,
                             index_expr.subset,
                             deref_node,
                             deref_connector,
                         )
 
-                    elif isinstance(index_expr, DataExpr):
+                    elif isinstance(index_expr, ValueExpr):
                         self._add_edge(
-                            index_expr.node,
+                            index_expr.dc_node,
                             None,
                             deref_node,
                             deref_connector,
-                            dace.Memlet(data=index_expr.node.data, subset="0"),
+                            dace.Memlet(data=index_expr.dc_node.data, subset="0"),
                         )
                     else:
                         assert isinstance(index_expr, SymbolExpr)
 
-                dtype = arg_expr.field.desc(self.sdfg).dtype
-                return self._construct_tasklet_result(dtype, deref_node, "val")
+                dc_dtype = arg_expr.field.desc(self.sdfg).dtype
+                return self._construct_tasklet_result(
+                    dc_dtype, deref_node, "val", arg_expr.local_offset
+                )
 
         else:
             # dereferencing a scalar or a literal node results in the node itself
             return arg_expr
 
-    def _visit_neighbors(self, node: gtir.FunCall) -> DataExpr:
+    def _visit_neighbors(self, node: gtir.FunCall) -> ValueExpr:
         assert len(node.args) == 2
         assert isinstance(node.type, itir_ts.ListType)
 
@@ -532,24 +561,26 @@ class LambdaToDataflow(eve.NodeVisitor):
         )
         neighbors_node = self.state.add_access(neighbors_temp)
 
-        offset_dim = gtx_common.Dimension(offset, kind=gtx_common.DimensionKind.LOCAL)
-        neighbor_idx = dace_gtir_utils.get_map_variable(offset_dim)
+        neighbor_idx = dace_gtir_utils.get_map_variable(offset)
 
         index_connector = "__index"
         output_connector = "__val"
         tasklet_expression = f"{output_connector} = __field[{index_connector}]"
         input_memlets = {
-            "__field": self.sdfg.make_array_memlet(field_slice.node.data),
-            index_connector: dace.Memlet(data=connectivity_slice.node.data, subset=neighbor_idx),
+            "__field": self.sdfg.make_array_memlet(field_slice.dc_node.data),
+            index_connector: dace.Memlet(data=connectivity_slice.dc_node.data, subset=neighbor_idx),
         }
         input_nodes = {
-            field_slice.node.data: field_slice.node,
-            connectivity_slice.node.data: connectivity_slice.node,
+            field_slice.dc_node.data: field_slice.dc_node,
+            connectivity_slice.dc_node.data: connectivity_slice.dc_node,
         }
 
         if offset_provider.has_skip_values:
-            assert self.reduce_identity is not None
-            assert self.reduce_identity.dtype == field_desc.dtype
+            if self.reduce_identity is None:
+                raise ValueError(
+                    f"Found local offset '{offset}' with skip values, but 'reduce_identity' is not set."
+                )
+            assert self.reduce_identity.dc_dtype == field_desc.dtype
             tasklet_expression += f" if {index_connector} != {gtx_common._DEFAULT_SKIP_VALUE} else {field_desc.dtype}({self.reduce_identity.value})"
 
         self._add_mapped_tasklet(
@@ -565,9 +596,9 @@ class LambdaToDataflow(eve.NodeVisitor):
             external_edges=True,
         )
 
-        return DataExpr(neighbors_node, node.type)
+        return ValueExpr(neighbors_node, node.type, offset)
 
-    def _visit_map(self, node: gtir.FunCall) -> DataExpr:
+    def _visit_map(self, node: gtir.FunCall) -> ValueExpr:
         """
         A map node defines an operation to be mapped on all elements of input arguments.
 
@@ -588,7 +619,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert len(node.fun.args) == 1  # the operation to be mapped on the arguments
 
         assert isinstance(node.type.element_type, ts.ScalarType)
-        dtype = dace_utils.as_dace_type(node.type.element_type)
+        dc_dtype = dace_utils.as_dace_type(node.type.element_type)
 
         input_args = [self.visit(arg) for arg in node.args]
         input_connectors = [f"__arg{i}" for i in range(len(input_args))]
@@ -599,9 +630,27 @@ class LambdaToDataflow(eve.NodeVisitor):
         fun_python_code = gtir_python_codegen.get_source(fun_node)
         tasklet_expression = f"{output_connector} = {fun_python_code}"
 
-        # TODO(edopao): extract offset_dim from the input arguments
-        offset_dim = gtx_common.Dimension("", gtx_common.DimensionKind.LOCAL)
-        map_index = dace_gtir_utils.get_map_variable(offset_dim)
+        input_local_offsets = [
+            input_arg.local_offset for input_arg in input_args if input_arg.local_offset is not None
+        ]
+        if len(input_local_offsets) == 0:
+            raise ValueError(f"Missing information on local dimension for map node {node}.")
+
+        # GT4Py guarantees that all connectivities used to generate lists of neighbors
+        # have the same length, that is the same value of 'max_neighbors'.
+        local_connectivities = dace_utils.filter_connectivities(
+            {
+                offset: self.subgraph_builder.get_offset_provider(offset)
+                for offset in input_local_offsets
+            }
+        )
+        if len(set(table.max_neighbors for table in local_connectivities.values())) != 1:
+            raise ValueError(
+                "Unexpected arguments to map expression with different local dimensions."
+            )
+        local_offset, offset_provider = next(iter(local_connectivities.items()))
+        local_size = offset_provider.max_neighbors
+        map_index = dace_gtir_utils.get_map_variable(local_offset)
 
         # The dataflow we build in this class has some loose connections on input edges.
         # These edges are described as set of nodes, that will have to be connected to
@@ -611,9 +660,9 @@ class LambdaToDataflow(eve.NodeVisitor):
         # than representing map-to-map edges (which require memlets with 2 pass-nodes).
         input_memlets = {}
         input_nodes = {}
-        local_size: Optional[int] = None
+        skip_value_connectivities: dict[str, gtx_common.Connectivity] = {}
         for conn, input_expr in zip(input_connectors, input_args):
-            input_node = self._construct_local_view(input_expr).node
+            input_node = self._construct_local_view(input_expr).dc_node
             input_desc = input_node.desc(self.sdfg)
             # we assume that there is a single local dimension
             if len(input_desc.shape) != 1:
@@ -621,21 +670,59 @@ class LambdaToDataflow(eve.NodeVisitor):
             input_size = input_desc.shape[0]
             if input_size == 1:
                 input_memlets[conn] = dace.Memlet(data=input_node.data, subset="0")
-            elif local_size is not None and input_size != local_size:
-                raise ValueError(f"Invalid node {node}")
+            elif input_size != local_size:
+                raise ValueError(
+                    f"Argument to map node with local size {input_size}, expected {local_size}."
+                )
             else:
+                assert input_expr.local_offset
                 input_memlets[conn] = dace.Memlet(data=input_node.data, subset=map_index)
-                local_size = input_size
 
             input_nodes[input_node.data] = input_node
 
-        if local_size is None:
-            # corner case where map is applied to 1-element lists
-            assert len(input_nodes) >= 1
-            local_size = 1
+        result, _ = self.sdfg.add_temp_transient((local_size,), dc_dtype)
+        result_node = self.state.add_access(result)
 
-        out, _ = self.sdfg.add_temp_transient((local_size,), dtype)
-        out_node = self.state.add_access(out)
+        skip_value_connectivities = {
+            offset: offset_provider
+            for offset, offset_provider in local_connectivities.items()
+            if offset_provider.has_skip_values
+        }
+
+        if len(skip_value_connectivities) == 0:
+            result_offset = local_offset
+        else:
+            # In case one or more of input expressions contain skip values, we use
+            # the connectivity-based offset provider as mask for map computation.
+            # Therefore, the result of map computation will also contain skip values.
+            # GT4Py guarantees that the skip values are placed in the same positions
+            # for all input expressions.
+
+            result_offset, offset_provider = next(iter(skip_value_connectivities.items()))
+
+            connectivity = dace_utils.connectivity_identifier(result_offset)
+            connectivity_desc = self.sdfg.arrays[connectivity]
+            connectivity_desc.transient = False
+
+            origin_map_index = dace_gtir_utils.get_map_variable(offset_provider.origin_axis)
+
+            connectivity_slice = self._construct_local_view(
+                MemletExpr(
+                    self.state.add_access(connectivity),
+                    sbs.Range.from_string(f"{origin_map_index}, 0:{offset_provider.max_neighbors}"),
+                )
+            )
+
+            if self.reduce_identity is None:
+                raise ValueError(
+                    f"Found local offset '{result_offset}' with skip values, but 'reduce_identity' is not set."
+                )
+            assert self.reduce_identity.dc_dtype == dc_dtype
+            input_memlets["__neighbor_idx"] = dace.Memlet(
+                data=connectivity_slice.dc_node.data, subset=map_index
+            )
+            input_nodes[connectivity_slice.dc_node.data] = connectivity_slice.dc_node
+            tasklet_expression += f" if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {dc_dtype}({self.reduce_identity.value})"
 
         self._add_mapped_tasklet(
             name="map",
@@ -644,15 +731,15 @@ class LambdaToDataflow(eve.NodeVisitor):
             inputs=input_memlets,
             input_nodes=input_nodes,
             outputs={
-                output_connector: dace.Memlet(data=out, subset=map_index),
+                output_connector: dace.Memlet(data=result, subset=map_index),
             },
-            output_nodes={out: out_node},
+            output_nodes={result: result_node},
             external_edges=True,
         )
 
-        return DataExpr(out_node, dtype)
+        return ValueExpr(result_node, dc_dtype, result_offset)
 
-    def _visit_reduce(self, node: gtir.FunCall) -> DataExpr:
+    def _visit_reduce(self, node: gtir.FunCall) -> ValueExpr:
         assert isinstance(node.type, ts.ScalarType)
         op_name, reduce_init, reduce_identity = get_reduce_params(node)
 
@@ -672,8 +759,8 @@ class LambdaToDataflow(eve.NodeVisitor):
             # ensure that we leave the visitor in the same state as we entered
             self.reduce_identity = prev_reduce_identity
 
-        assert isinstance(input_expr, MemletExpr | DataExpr)
-        input_desc = input_expr.node.desc(self.sdfg)
+        assert isinstance(input_expr, MemletExpr | ValueExpr)
+        input_desc = input_expr.dc_node.desc(self.sdfg)
         assert isinstance(input_desc, dace.data.Array)
 
         if len(input_desc.shape) > 1:
@@ -691,19 +778,19 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         if isinstance(input_expr, MemletExpr):
             self._add_input_data_edge(
-                input_expr.node,
+                input_expr.dc_node,
                 input_expr.subset,
                 reduce_node,
             )
         else:
             self.state.add_nedge(
-                input_expr.node,
+                input_expr.dc_node,
                 reduce_node,
-                dace.Memlet.from_array(input_expr.node.data, input_desc),
+                dace.Memlet.from_array(input_expr.dc_node.data, input_desc),
             )
 
         temp_name = self.sdfg.temp_data_name()
-        self.sdfg.add_scalar(temp_name, reduce_identity.dtype, transient=True)
+        self.sdfg.add_scalar(temp_name, reduce_identity.dc_dtype, transient=True)
         temp_node = self.state.add_access(temp_name)
 
         self.state.add_nedge(
@@ -711,7 +798,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             temp_node,
             dace.Memlet(data=temp_name, subset="0"),
         )
-        return DataExpr(temp_node, node.type)
+        return ValueExpr(temp_node, node.type)
 
     def _split_shift_args(
         self, args: list[gtir.Expr]
@@ -742,18 +829,18 @@ class LambdaToDataflow(eve.NodeVisitor):
         return offset_provider_arg, offset_value_arg, it
 
     def _make_cartesian_shift(
-        self, it: IteratorExpr, offset_dim: gtx_common.Dimension, offset_expr: ValueExpr
+        self, it: IteratorExpr, offset_dim: gtx_common.Dimension, offset_expr: DataExpr
     ) -> IteratorExpr:
         """Implements cartesian shift along one dimension."""
         assert offset_dim in it.dimensions
-        new_index: SymbolExpr | DataExpr
+        new_index: SymbolExpr | ValueExpr
         assert offset_dim in it.indices
         index_expr = it.indices[offset_dim]
         if isinstance(index_expr, SymbolExpr) and isinstance(offset_expr, SymbolExpr):
             # purely symbolic expression which can be interpreted at compile time
             new_index = SymbolExpr(
                 dace.symbolic.pystr_to_symbolic(index_expr.value) + offset_expr.value,
-                index_expr.dtype,
+                index_expr.dc_dtype,
             )
         else:
             # the offset needs to be calculated by means of a tasklet (i.e. dynamic offset)
@@ -782,27 +869,27 @@ class LambdaToDataflow(eve.NodeVisitor):
             for input_expr, input_connector in [(index_expr, "index"), (offset_expr, "offset")]:
                 if isinstance(input_expr, MemletExpr):
                     self._add_input_data_edge(
-                        input_expr.node,
+                        input_expr.dc_node,
                         input_expr.subset,
                         dynamic_offset_tasklet,
                         input_connector,
                     )
-                elif isinstance(input_expr, DataExpr):
+                elif isinstance(input_expr, ValueExpr):
                     self._add_edge(
-                        input_expr.node,
+                        input_expr.dc_node,
                         None,
                         dynamic_offset_tasklet,
                         input_connector,
-                        dace.Memlet(data=input_expr.node.data, subset="0"),
+                        dace.Memlet(data=input_expr.dc_node.data, subset="0"),
                     )
 
             if isinstance(index_expr, SymbolExpr):
-                dtype = index_expr.dtype
+                dc_dtype = index_expr.dc_dtype
             else:
-                dtype = index_expr.node.desc(self.sdfg).dtype
+                dc_dtype = index_expr.dc_node.desc(self.sdfg).dtype
 
             new_index = self._construct_tasklet_result(
-                dtype, dynamic_offset_tasklet, new_index_connector
+                dc_dtype, dynamic_offset_tasklet, new_index_connector
             )
 
         # a new iterator with a shifted index along one dimension
@@ -814,10 +901,10 @@ class LambdaToDataflow(eve.NodeVisitor):
 
     def _make_dynamic_neighbor_offset(
         self,
-        offset_expr: MemletExpr | DataExpr,
+        offset_expr: MemletExpr | ValueExpr,
         offset_table_node: dace.nodes.AccessNode,
         origin_index: SymbolExpr,
-    ) -> DataExpr:
+    ) -> ValueExpr:
         """
         Implements access to neighbor connectivity table by means of a tasklet node.
 
@@ -839,29 +926,29 @@ class LambdaToDataflow(eve.NodeVisitor):
         )
         if isinstance(offset_expr, MemletExpr):
             self._add_input_data_edge(
-                offset_expr.node,
+                offset_expr.dc_node,
                 offset_expr.subset,
                 tasklet_node,
                 "offset",
             )
         else:
             self._add_edge(
-                offset_expr.node,
+                offset_expr.dc_node,
                 None,
                 tasklet_node,
                 "offset",
-                dace.Memlet(data=offset_expr.node.data, subset="0"),
+                dace.Memlet(data=offset_expr.dc_node.data, subset="0"),
             )
 
-        dtype = offset_table_node.desc(self.sdfg).dtype
-        return self._construct_tasklet_result(dtype, tasklet_node, new_index_connector)
+        dc_dtype = offset_table_node.desc(self.sdfg).dtype
+        return self._construct_tasklet_result(dc_dtype, tasklet_node, new_index_connector)
 
     def _make_unstructured_shift(
         self,
         it: IteratorExpr,
         connectivity: gtx_common.Connectivity,
         offset_table_node: dace.nodes.AccessNode,
-        offset_expr: ValueExpr,
+        offset_expr: DataExpr,
     ) -> IteratorExpr:
         """Implements shift in unstructured domain by means of a neighbor table."""
         assert connectivity.neighbor_axis in it.dimensions
@@ -928,18 +1015,18 @@ class LambdaToDataflow(eve.NodeVisitor):
                 it, offset_provider, offset_table_node, offset_expr
             )
 
-    def _visit_generic_builtin(self, node: gtir.FunCall) -> DataExpr:
+    def _visit_generic_builtin(self, node: gtir.FunCall) -> ValueExpr:
         """
         Generic handler called by `visit_FunCall()` when it encounters
         a builtin function that does not match any other specific handler.
         """
         node_internals = []
-        node_connections: dict[str, MemletExpr | DataExpr] = {}
+        node_connections: dict[str, MemletExpr | ValueExpr] = {}
         for i, arg in enumerate(node.args):
             arg_expr = self.visit(arg)
-            if isinstance(arg_expr, MemletExpr | DataExpr):
+            if isinstance(arg_expr, MemletExpr | ValueExpr):
                 # the argument value is the result of a tasklet node or direct field access
-                connector = f"__inp_{i}"
+                connector = f"__arg{i}"
                 node_connections[connector] = arg_expr
                 node_internals.append(connector)
             else:
@@ -961,17 +1048,17 @@ class LambdaToDataflow(eve.NodeVisitor):
         )
 
         for connector, arg_expr in node_connections.items():
-            if isinstance(arg_expr, DataExpr):
+            if isinstance(arg_expr, ValueExpr):
                 self._add_edge(
-                    arg_expr.node,
+                    arg_expr.dc_node,
                     None,
                     tasklet_node,
                     connector,
-                    dace.Memlet(data=arg_expr.node.data, subset="0"),
+                    dace.Memlet(data=arg_expr.dc_node.data, subset="0"),
                 )
             else:
                 self._add_input_data_edge(
-                    arg_expr.node,
+                    arg_expr.dc_node,
                     arg_expr.subset,
                     tasklet_node,
                     connector,
@@ -988,18 +1075,18 @@ class LambdaToDataflow(eve.NodeVisitor):
             # Therefore we handle `ListType` as a single-element array with shape (1,)
             # that will be accessed in a map expression on a local domain.
             assert isinstance(node.type.element_type, ts.ScalarType)
-            dtype = dace_utils.as_dace_type(node.type.element_type)
+            dc_dtype = dace_utils.as_dace_type(node.type.element_type)
             # In order to ease the lowring of the parent expression on local dimension,
             # we represent the scalar value as a single-element 1D array.
             use_array = True
         else:
             assert isinstance(node.type, ts.ScalarType)
-            dtype = dace_utils.as_dace_type(node.type)
+            dc_dtype = dace_utils.as_dace_type(node.type)
             use_array = False
 
-        return self._construct_tasklet_result(dtype, tasklet_node, "result", use_array=use_array)
+        return self._construct_tasklet_result(dc_dtype, tasklet_node, "result", use_array=use_array)
 
-    def visit_FunCall(self, node: gtir.FunCall) -> IteratorExpr | ValueExpr:
+    def visit_FunCall(self, node: gtir.FunCall) -> IteratorExpr | DataExpr:
         if cpm.is_call_to(node, "deref"):
             return self._visit_deref(node)
 
@@ -1026,16 +1113,16 @@ class LambdaToDataflow(eve.NodeVisitor):
     ) -> tuple[list[DataflowInputEdge], DataflowOutputEdge]:
         for p, arg in zip(node.params, args, strict=True):
             self.symbol_map[str(p.id)] = arg
-        output_expr: ValueExpr = self.visit(node.expr)
-        if isinstance(output_expr, DataExpr):
+        output_expr: DataExpr = self.visit(node.expr)
+        if isinstance(output_expr, ValueExpr):
             return self.input_edges, DataflowOutputEdge(self.state, output_expr)
 
         if isinstance(output_expr, MemletExpr):
             # special case where the field operator is simply copying data from source to destination node
-            output_dtype = output_expr.node.desc(self.sdfg).dtype
+            output_dtype = output_expr.dc_node.desc(self.sdfg).dtype
             tasklet_node = self._add_tasklet("copy", {"__inp"}, {"__out"}, "__out = __inp")
             self._add_input_data_edge(
-                output_expr.node,
+                output_expr.dc_node,
                 output_expr.subset,
                 tasklet_node,
                 "__inp",
@@ -1043,15 +1130,15 @@ class LambdaToDataflow(eve.NodeVisitor):
         else:
             assert isinstance(output_expr, SymbolExpr)
             # even simpler case, where a constant value is written to destination node
-            output_dtype = output_expr.dtype
+            output_dtype = output_expr.dc_dtype
             tasklet_node = self._add_tasklet("write", {}, {"__out"}, f"__out = {output_expr.value}")
 
         output_expr = self._construct_tasklet_result(output_dtype, tasklet_node, "__out")
         return self.input_edges, DataflowOutputEdge(self.state, output_expr)
 
     def visit_Literal(self, node: gtir.Literal) -> SymbolExpr:
-        dtype = dace_utils.as_dace_type(node.type)
-        return SymbolExpr(node.value, dtype)
+        dc_dtype = dace_utils.as_dace_type(node.type)
+        return SymbolExpr(node.value, dc_dtype)
 
     def visit_SymRef(self, node: gtir.SymRef) -> IteratorExpr | MemletExpr | SymbolExpr:
         param = str(node.id)
