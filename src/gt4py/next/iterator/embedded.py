@@ -1468,10 +1468,23 @@ def list_get(i, lst: _List[Optional[DT]]) -> Optional[DT]:
     return lst[i]
 
 
+def _get_offset(*lists: _List | _ConstList) -> Optional[runtime.Offset]:
+    offsets = set((lst.offset for lst in lists if hasattr(lst, "offset")))
+    if len(offsets) == 0:
+        return None
+    if len(offsets) == 1:
+        return offsets.pop()
+    raise AssertionError("All lists must have the same offset.")
+
+
 @builtins.map_.register(EMBEDDED)
 def map_(op):
     def impl_(*lists):
-        return _List(values=tuple(map(lambda x: op(*x), zip(*lists))), offset=lists[0].offset)
+        offset = _get_offset(*lists)
+        if offset is None:
+            return _ConstList(value=op(*[lst.value for lst in lists]))
+        else:
+            return _List(values=tuple(map(lambda x: op(*x), zip(*lists))), offset=offset)
 
     return impl_
 
