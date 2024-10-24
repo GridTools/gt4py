@@ -291,6 +291,9 @@ def as_fieldop(
 
     @TypeSynthesizer
     def applied_as_fieldop(*fields) -> ts.FieldType | ts.DeferredType:
+        if any(isinstance(f, ts.DeferredType) for f in fields):
+            return ts.DeferredType(constraint=None)
+
         stencil_return = stencil(
             *(_convert_as_fieldop_input_to_iterator(domain, field) for field in fields),
             offset_provider=offset_provider,
