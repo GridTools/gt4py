@@ -35,6 +35,7 @@ def gt_auto_optimize(
     reuse_transients: bool = False,
     gpu_launch_bounds: Optional[int | str] = None,
     gpu_launch_factor: Optional[int] = None,
+    constant_symbols: Optional[dict[str, Any]] = None,
     validate: bool = True,
     validate_all: bool = False,
     **kwargs: Any,
@@ -89,6 +90,7 @@ def gt_auto_optimize(
         gpu_launch_bounds: Use this value as `__launch_bounds__` for _all_ GPU Maps.
         gpu_launch_factor: Use the number of threads times this value as `__launch_bounds__`
             for _all_ GPU Maps.
+        constant_symbols: Replace these symbols with constant values.
         validate: Perform validation during the steps.
         validate_all: Perform extensive validation.
 
@@ -121,6 +123,14 @@ def gt_auto_optimize(
             validate_all=validate_all,
         )
         gtx_transformations.gt_reduce_distributed_buffering(sdfg)
+
+        if constant_symbols:
+            gtx_transformations.gt_substitute_compiletime_symbols(
+                sdfg=sdfg,
+                repl=constant_symbols,
+                validate=validate,
+                validate_all=validate_all,
+            )
         gtx_transformations.gt_simplify(sdfg)
 
         sdfg.apply_transformations_repeated(
