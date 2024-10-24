@@ -202,7 +202,9 @@ class FencilDefinition(Node, ValidatedSymbolTableTrait):
     closures: List[StencilClosure]
     implicit_domain: bool = False
 
-    _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in BUILTINS]
+    _NODE_SYMBOLS_: ClassVar[List[Sym]] = [
+        Sym(id=name) for name in sorted(BUILTINS)
+    ]  # sorted for serialization stability
 
 
 class Stmt(Node): ...
