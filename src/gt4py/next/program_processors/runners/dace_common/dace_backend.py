@@ -26,6 +26,9 @@ except ImportError:
 def _convert_arg(arg: Any, sdfg_param: str, use_field_canonical_representation: bool) -> Any:
     if not isinstance(arg, gtx_common.Field):
         return arg
+    if len(arg.domain.dims) == 0:
+        # pass zero-dimensional fields as scalars
+        return arg.asnumpy().item()
     # field domain offsets are not supported
     non_zero_offsets = [
         (dim, dim_range)
