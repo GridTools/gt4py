@@ -377,32 +377,41 @@ def translate_broadcast_scalar(
     )
 
     if isinstance(node.args[0].type, ts.ScalarType):
-        assert isinstance(scalar_expr, gtir_dataflow.MemletExpr)
-        assert scalar_expr.subset == sbs.Indices.from_string("0")
+        assert isinstance(scalar_expr, (gtir_dataflow.MemletExpr, gtir_dataflow.ValueExpr))
+        input_subset = (
+            str(scalar_expr.subset) if isinstance(scalar_expr, gtir_dataflow.MemletExpr) else "0"
+        )
         input_node = scalar_expr.dc_node
-        input_subset = "0"
-        gt_dtype = node.args[0].type
+        gt_dtype = (
+            node.args[0].type.dtype
+            if isinstance(node.args[0].type, ts.FieldType)  # zero-dimensional field
+            else node.args[0].type
+        )
     elif isinstance(node.args[0].type, ts.FieldType):
         assert isinstance(scalar_expr, gtir_dataflow.IteratorExpr)
-        if not all(
+        if len(node.args[0].type.dims) == 0:  # zero-dimensional field
+            input_subset = "0"
+        elif not all(
             isinstance(scalar_expr.indices[dim], gtir_dataflow.SymbolExpr)
             for dim in scalar_expr.dimensions
             if dim not in field_dims
         ):
             raise ValueError(f"Cannot deref field {scalar_expr.field} in broadcast expression.")
+        else:
+            input_subset = ",".join(
+                dace_gtir_utils.get_map_variable(dim)
+                if dim in field_dims
+                else scalar_expr.indices[dim].value  # type: ignore[union-attr] # catched by exception above
+                for dim in scalar_expr.dimensions
+            )
+
         input_node = scalar_expr.field
-        input_subset = ",".join(
-            dace_gtir_utils.get_map_variable(dim)
-            if dim in field_dims
-            else scalar_expr.indices[dim].value  # type: ignore[union-attr] # catched by exception above
-            for dim in scalar_expr.dimensions
-        )
         gt_dtype = node.args[0].type.dtype
     else:
         raise ValueError(f"Unexpected argument {node.args[0]} in broadcast expression.")
 
-    out, _ = sdfg.add_temp_transient(field_shape, input_node.desc(sdfg).dtype)
-    out_node = state.add_access(out)
+    output, _ = sdfg.add_temp_transient(field_shape, input_node.desc(sdfg).dtype)
+    output_node = state.add_access(output)
 
     sdfg_builder.add_mapped_tasklet(
         "broadcast",
@@ -413,13 +422,14 @@ def translate_broadcast_scalar(
         },
         inputs={"__inp": dace.Memlet(data=input_node.data, subset=input_subset)},
         code="__val = __inp",
-        outputs={"__val": dace.Memlet(data=out_node.data, subset=field_subset)},
+        outputs={"__val": dace.Memlet(data=output_node.data, subset=field_subset)},
         input_nodes={input_node.data: input_node},
-        output_nodes={out_node.data: out_node},
+        output_nodes={output_node.data: output_node},
         external_edges=True,
     )
 
-    return FieldopData(out_node, ts.FieldType(field_dims, gt_dtype), local_offset=None)
+    assert isinstance(gt_dtype, ts.ScalarType)
+    return FieldopData(output_node, ts.FieldType(field_dims, gt_dtype), local_offset=None)
 
 
 def translate_if(
