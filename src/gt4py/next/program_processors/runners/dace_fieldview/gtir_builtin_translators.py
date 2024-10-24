@@ -426,12 +426,12 @@ def translate_if(
 
     # expect true branch as second argument
     true_state = sdfg.add_state(state.label + "_true_branch")
-    sdfg.add_edge(cond_state, true_state, dace.InterstateEdge(condition=f"bool({if_stmt})"))
+    sdfg.add_edge(cond_state, true_state, dace.InterstateEdge(condition=f"{if_stmt}"))
     sdfg.add_edge(true_state, state, dace.InterstateEdge())
 
     # and false branch as third argument
     false_state = sdfg.add_state(state.label + "_false_branch")
-    sdfg.add_edge(cond_state, false_state, dace.InterstateEdge(condition=(f"not bool({if_stmt})")))
+    sdfg.add_edge(cond_state, false_state, dace.InterstateEdge(condition=(f"not ({if_stmt})")))
     sdfg.add_edge(false_state, state, dace.InterstateEdge())
 
     true_br_args = sdfg_builder.visit(
