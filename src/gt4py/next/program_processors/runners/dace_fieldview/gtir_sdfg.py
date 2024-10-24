@@ -44,6 +44,9 @@ class DataflowBuilder(Protocol):
     def get_offset_provider(self, offset: str) -> gtx_common.OffsetProviderElem: ...
 
     @abc.abstractmethod
+    def unique_nsdfg_name(self, sdfg: dace.SDFG, prefix: str) -> str: ...
+
+    @abc.abstractmethod
     def unique_map_name(self, name: str) -> str: ...
 
     @abc.abstractmethod
@@ -166,6 +169,12 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
     def get_symbol_type(self, symbol_name: str) -> ts.DataType:
         return self.global_symbols[symbol_name]
+
+    def unique_nsdfg_name(self, sdfg: dace.SDFG, prefix: str) -> str:
+        nsdfg_list = [
+            nsdfg.label for nsdfg in sdfg.all_sdfgs_recursive() if nsdfg.label.startswith(prefix)
+        ]
+        return f"{prefix}_{len(nsdfg_list)}"
 
     def unique_map_name(self, name: str) -> str:
         return f"{self.map_uids.sequential_id()}_{name}"
@@ -554,7 +563,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         # lower let-statement lambda node as a nested SDFG
         lambda_translator = GTIRToSDFG(self.offset_provider, lambda_symbols)
-        nsdfg = dace.SDFG(f"{sdfg.label}_lambda")
+        nsdfg = dace.SDFG(name=self.unique_nsdfg_name(sdfg, "lambda"))
         nstate = nsdfg.add_state("lambda")
 
         # add sdfg storage for the symbols that need to be passed as input parameters

@@ -26,7 +26,7 @@ from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_sdfg,
     utility as dace_gtir_utils,
 )
-from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.type_system import type_info as ti, type_specifications as ts
 
 
 @dataclasses.dataclass(frozen=True)
@@ -348,6 +348,10 @@ class LambdaToDataflow(eve.NodeVisitor):
             name, self.state, map_ranges, inputs, code, outputs, **kwargs
         )
 
+    def unique_nsdfg_name(self, prefix: str) -> str:
+        """Utility function to generate a unique name for a nested SDFG, starting with the given prefix."""
+        return self.subgraph_builder.unique_nsdfg_name(self.sdfg, prefix)
+
     def _construct_local_view(self, field: MemletExpr | ValueExpr) -> ValueExpr:
         if isinstance(field, MemletExpr):
             desc = field.dc_node.desc(self.sdfg)
@@ -573,9 +577,13 @@ class LambdaToDataflow(eve.NodeVisitor):
         }
 
         if offset_provider.has_skip_values:
+            # in case of skip value we can write any dummy value
+            if ti.is_floating_point(node.type.element_type):
+                skip_value = "math.nan"
+            else:
+                skip_value = str(dace.dtypes.max_value(field_desc.dtype))
             tasklet_expression += (
-                # in case of skip value we can write any dummy value
-                f" if {index_connector} != {gtx_common._DEFAULT_SKIP_VALUE} else {field_desc.dtype}(0)"
+                f" if {index_connector} != {gtx_common._DEFAULT_SKIP_VALUE} else {skip_value}"
             )
 
         self._add_mapped_tasklet(
@@ -713,9 +721,13 @@ class LambdaToDataflow(eve.NodeVisitor):
             )
             input_nodes[connectivity_slice.dc_node.data] = connectivity_slice.dc_node
 
+            # in case of skip value we can write any dummy value
+            if ti.is_floating_point(node.type.element_type):
+                skip_value = "math.nan"
+            else:
+                skip_value = str(dace.dtypes.max_value(dc_dtype))
             tasklet_expression += (
-                # in case of skip value we can write any dummy value
-                f" if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {dc_dtype}(0)"
+                f" if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {skip_value}"
             )
 
         self._add_mapped_tasklet(
@@ -768,12 +780,15 @@ class LambdaToDataflow(eve.NodeVisitor):
         else:
             local_dim_indices = list(range(len(desc.shape)))
 
-        assert len(local_dim_indices) == 1
+        if len(local_dim_indices) != 1:
+            raise NotImplementedError(
+                f"Found {len(local_dim_indices)} local dimensions in reduce expression, expected one."
+            )
         local_dim_index = local_dim_indices[0]
         assert desc.shape[local_dim_index] == offset_provider.max_neighbors
 
         # we lower the reduction map with WCR out memlet in a nested SDFG
-        nsdfg = dace.SDFG("reduce_with_skip_values")
+        nsdfg = dace.SDFG(name=self.unique_nsdfg_name("reduce_with_skip_values"))
         nsdfg.add_array(
             "values",
             (desc.shape[local_dim_index],),
@@ -787,7 +802,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             strides=(connectivity_desc.strides[1],),
         )
         nsdfg.add_scalar("acc", desc.dtype)
-        st_init = nsdfg.add_state("init")
+        st_init = nsdfg.add_state(f"{nsdfg.label}_init")
         st_init.add_edge(
             st_init.add_tasklet(
                 "init_acc",
@@ -800,15 +815,16 @@ class LambdaToDataflow(eve.NodeVisitor):
             None,
             dace.Memlet(data="acc", subset="0"),
         )
-        st_reduce = nsdfg.add_state_after(st_init, "reduce")
+        st_reduce = nsdfg.add_state_after(st_init, f"{nsdfg.label}_reduce")
+        skip_value = f"{reduce_identity.dc_dtype}({reduce_identity.value})"
         st_reduce.add_mapped_tasklet(
             name="reduce_with_skip_values",
-            map_ranges=dict(i=f"0:{offset_provider.max_neighbors}"),
+            map_ranges={"i": f"0:{offset_provider.max_neighbors}"},
             inputs={
                 "__val": dace.Memlet(data="values", subset="i"),
                 "__neighbor_idx": dace.Memlet(data="neighbor_indices", subset="i"),
             },
-            code=f"__out = __val if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {reduce_identity.dc_dtype}({reduce_identity.value})",
+            code=f"__out = __val if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {skip_value}",
             outputs={
                 "__out": dace.Memlet(data="acc", subset="0", wcr=reduce_wcr),
             },
