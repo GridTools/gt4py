@@ -245,6 +245,7 @@ def if_(cond, true_val, false_val):
     """Create a if_ FunCall, shorthand for ``call("if_")(expr)``."""
     return call("if_")(cond, true_val, false_val)
 
+
 def concat_where(cond, true_field, false_field):
     """Create a concat_where FunCall, shorthand for ``call("concat_where")(expr)``."""
     return call("concat_where")(cond, true_field, false_field)

@@ -11,12 +11,15 @@ from typing import Callable, Optional
 from gt4py.eve import utils as eve_utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import (
+    expand_library_functions,
     fencil_to_program,
     fuse_as_fieldop,
     global_tmps,
     infer_domain,
+    infer_domain_ops,
     inline_fundefs,
     inline_lifts,
+    transform_concat_where,
 )
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
@@ -29,7 +32,6 @@ from gt4py.next.iterator.transforms.merge_let import MergeLet
 from gt4py.next.iterator.transforms.normalize_shifts import NormalizeShifts
 from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce
 from gt4py.next.iterator.type_system.inference import infer
-from gt4py.next.iterator.transforms import infer_domain_ops
 
 
 # TODO(tehrengruber): Revisit interface to configure temporary extraction. We currently forward
@@ -75,6 +77,9 @@ def apply_common_transforms(
         offset_provider=offset_provider,
         symbolic_domain_sizes=symbolic_domain_sizes,
     )
+    ir = transform_concat_where.TransformConcatWhere.apply(ir)
+    ir = expand_library_functions.ExpandLibraryFunctions.apply(ir)
+    # ir = ConstantFolding.apply(ir)  # todo: remove
 
     for _ in range(10):
         inlined = ir

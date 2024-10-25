@@ -172,6 +172,7 @@ def domain_union(*domains: SymbolicDomain) -> SymbolicDomain:
 
     return SymbolicDomain(domains[0].grid_type, new_domain_ranges)
 
+
 def domain_intersection(*domains: SymbolicDomain) -> SymbolicDomain:
     """Return the (set) intersection of a list of domains."""
     new_domain_ranges = {}
@@ -195,16 +196,18 @@ def domain_complement(domain: SymbolicDomain) -> SymbolicDomain:
     dims_dict = {}
     for dim in domain.ranges.keys():
         lb, ub = domain.ranges[dim].start, domain.ranges[dim].stop
-        if lb == im.ref('neg_inf'):
-            dims_dict[dim] = SymbolicRange(int(ub.value), "inf")
-        elif ub == im.ref('inf'):
-            dims_dict[dim] = SymbolicRange("neg_inf", int(lb.value))
+        if lb == im.ref("neg_inf"):
+            dims_dict[dim] = SymbolicRange(start=ub, stop=im.ref("inf"))
+        elif ub == im.ref("inf"):
+            dims_dict[dim] = SymbolicRange(start=im.ref("neg_inf"), stop=lb)
         else:
             raise ValueError("Invalid domain ranges")
-        return SymbolicDomain(domain.grid_type, dims_dict)
+    return SymbolicDomain(domain.grid_type, dims_dict)
 
 
-def promote_to_same_dimensions(domain_small: SymbolicDomain, domain_large: SymbolicDomain) -> SymbolicDomain:
+def promote_to_same_dimensions(
+    domain_small: SymbolicDomain, domain_large: SymbolicDomain
+) -> SymbolicDomain:
     """Return an extended domain based on a smaller input domain and a larger domain containing the target dimensions."""
     dims_dict = {}
     for dim in domain_large.ranges.keys():
@@ -212,5 +215,5 @@ def promote_to_same_dimensions(domain_small: SymbolicDomain, domain_large: Symbo
             lb, ub = domain_small.ranges[dim].start, domain_small.ranges[dim].stop
             dims_dict[dim] = SymbolicRange(lb, ub)
         else:
-            dims_dict[dim] = SymbolicRange("neg_inf", "inf")
-    return SymbolicDomain(domain_small.grid_type, dims_dict) # TODO: fix for unstructured
+            dims_dict[dim] = SymbolicRange(im.ref("neg_inf"), im.ref("inf"))
+    return SymbolicDomain(domain_small.grid_type, dims_dict)  # TODO: fix for unstructured

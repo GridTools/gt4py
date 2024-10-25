@@ -484,7 +484,7 @@ class ITIRTypeInference(eve.NodeTranslator):
 
     def visit_Temporary(self, node: itir.Temporary, *, ctx) -> ts.FieldType | ts.TupleType:
         domain = self.visit(node.domain, ctx=ctx)
-        assert isinstance(domain, it_ts.DomainType)
+        assert isinstance(domain, ts.DomainType)
         assert domain.dims != "unknown"
         assert node.dtype
         return type_info.apply_to_primitive_constituents(
@@ -526,11 +526,11 @@ class ITIRTypeInference(eve.NodeTranslator):
 
     # TODO(tehrengruber): Remove after new ITIR format with apply_stencil is used everywhere
     def visit_StencilClosure(self, node: itir.StencilClosure, *, ctx) -> it_ts.StencilClosureType:
-        domain: it_ts.DomainType = self.visit(node.domain, ctx=ctx)
+        domain: ts.DomainType = self.visit(node.domain, ctx=ctx)
         inputs: list[ts.FieldType] = self.visit(node.inputs, ctx=ctx)
         output: ts.FieldType = self.visit(node.output, ctx=ctx)
 
-        assert isinstance(domain, it_ts.DomainType)
+        assert isinstance(domain, ts.DomainType)
         for output_el in type_info.primitive_constituents(output):
             assert isinstance(output_el, ts.FieldType)
 

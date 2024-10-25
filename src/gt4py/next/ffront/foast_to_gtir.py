@@ -263,7 +263,15 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
     def visit_Compare(self, node: foast.Compare, **kwargs: Any) -> itir.FunCall:
         left, right = node.left, node.right
-        if (isinstance(left.type, ts.DimensionType) and isinstance(right.type, ts.ScalarType) and node.right.type.kind == getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())) or (isinstance(right.type, ts.DimensionType) and isinstance(left.type, ts.ScalarType) and left.type.kind == getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())):
+        if (
+            isinstance(left.type, ts.DimensionType)
+            and isinstance(right.type, ts.ScalarType)
+            and right.type.kind == getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())
+        ) or (
+            isinstance(right.type, ts.DimensionType)
+            and isinstance(left.type, ts.ScalarType)
+            and left.type.kind == getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())
+        ):
             lowered_args = [self.visit(arg, **kwargs) for arg in (node.left, node.right)]
             return im.call(node.op.value)(*lowered_args)
         return self._map(node.op.value, node.left, node.right)
@@ -404,7 +412,6 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
     # TODO: tuple case
 
-
     def _visit_broadcast(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         expr = self.visit(node.args[0], **kwargs)
         if isinstance(node.args[0].type, ts.ScalarType):
@@ -483,8 +490,11 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 op = im.call("map_")(op)
             return im.op_as_fieldop(im.call(op))(*lowered_args)
 
-        assert all(isinstance(t, (ts.ScalarType, ts.DimensionType)) for arg in args
-            for t in type_info.primitive_constituents(arg.type))
+        assert all(
+            isinstance(t, (ts.ScalarType, ts.DimensionType))
+            for arg in args
+            for t in type_info.primitive_constituents(arg.type)
+        )
         return im.call(op)(*lowered_args)
 
 

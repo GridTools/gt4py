@@ -190,8 +190,9 @@ BUILTINS = {
     "if_",
     "index",  # `index(dim)` creates a dim-field that has the current index at each point
     "concat_where",
-    "inf", # TODO: discuss
-    "neg_inf", #TODO: discuss
+    "in",
+    "inf",  # TODO: discuss
+    "neg_inf",  # TODO: discuss
     *ARITHMETIC_BUILTINS,
     *TYPEBUILTINS,
 }

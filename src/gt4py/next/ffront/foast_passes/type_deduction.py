@@ -19,8 +19,8 @@ from gt4py.next.ffront import (  # noqa
     type_info as ti_ffront,
     type_specifications as ts_ffront,
 )
-from gt4py.next.iterator import ir as itir
 from gt4py.next.ffront.foast_passes.utils import compute_assign_indices
+from gt4py.next.iterator import ir as itir
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
@@ -565,9 +565,17 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         self, node: foast.Compare, *, left: foast.Expr, right: foast.Expr, **kwargs: Any
     ) -> Optional[ts.TypeSpec]:
         # check both types compatible
-        if (isinstance(left.type, ts.DimensionType) and isinstance(right.type, ts.ScalarType) and right.type.kind == getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())):
+        if (
+            isinstance(left.type, ts.DimensionType)
+            and isinstance(right.type, ts.ScalarType)
+            and right.type.kind == getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())
+        ):
             return ts.DomainType(dims=[left.type.dim])
-        if (isinstance(right.type, ts.DimensionType) and isinstance(left.type, ts.ScalarType) and left.type.kind == getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())):
+        if (
+            isinstance(right.type, ts.DimensionType)
+            and isinstance(left.type, ts.ScalarType)
+            and left.type.kind == getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())
+        ):
             return ts.DomainType(dims=[right.type.dim])
         # TODO
         for arg in (left, right):
@@ -948,9 +956,11 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         true_branch_type = node.args[1].type
         false_branch_type = node.args[2].type
         if true_branch_type != false_branch_type:
-            raise errors.DSLError(node.location,
-                                  f"Incompatible argument in call to '{node.func!s}': expected "
-                                  f"'{true_branch_type}' and '{false_branch_type}' to be equal.")
+            raise errors.DSLError(
+                node.location,
+                f"Incompatible argument in call to '{node.func!s}': expected "
+                f"'{true_branch_type}' and '{false_branch_type}' to be equal.",
+            )
         return_type = true_branch_type
 
         return foast.Call(
@@ -960,8 +970,6 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             type=return_type,
             location=node.location,
         )
-
-
 
     def _visit_broadcast(self, node: foast.Call, **kwargs: Any) -> foast.Call:
         arg_type = cast(ts.FieldType | ts.ScalarType, node.args[0].type)

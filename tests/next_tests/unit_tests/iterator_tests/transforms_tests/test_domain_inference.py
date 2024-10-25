@@ -1052,11 +1052,14 @@ def test_concat_where(offset_provider):
     domain_cond = im.domain(common.GridType.CARTESIAN, {IDim: ("neg_inf", 4)})
     domain1 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 4)})
     domain2 = im.domain(common.GridType.CARTESIAN, {IDim: (5, 11)})
-    testee = im.concat_where(domain_cond , im.as_fieldop("deref")("in_field1"), im.as_fieldop("deref")("in_field2"))
+    testee = im.concat_where(
+        domain_cond, im.as_fieldop("deref")("in_field1"), im.as_fieldop("deref")("in_field2")
+    )
 
-
-    expected = im.concat_where(domain_cond,
-        im.as_fieldop("deref", domain1)("in_field1"), im.as_fieldop("deref", domain2)("in_field2")
+    expected = im.concat_where(
+        domain_cond,
+        im.as_fieldop("deref", domain1)("in_field1"),
+        im.as_fieldop("deref", domain2)("in_field2"),
     )
     expected_domains = {"in_field1": domain1, "in_field2": domain2}
 
@@ -1068,19 +1071,24 @@ def test_concat_where(offset_provider):
     assert expected == folded_call
     assert expected_domains == constant_fold_accessed_domains(actual_domains)
 
+
 # Todo: 2 dimensional test with cond  im.domain(common.GridType.CARTESIAN, {IDim: ("neg_inf", 4)})
 # Todo: nested concat wheres
+
 
 def test_concat_where_two_dimensions(offset_provider):
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 20), JDim: (10, 30)})
     domain_cond = im.domain(common.GridType.CARTESIAN, {IDim: ("neg_inf", 10)})
-    domain1 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 10), JDim:  (10, 30)})
-    domain2 = im.domain(common.GridType.CARTESIAN, {IDim: (10, 20), JDim:  (10, 30)})
-    testee = im.concat_where(domain_cond , im.as_fieldop("deref")("in_field1"), im.as_fieldop("deref")("in_field2"))
+    domain1 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 10), JDim: (10, 30)})
+    domain2 = im.domain(common.GridType.CARTESIAN, {IDim: (10, 20), JDim: (10, 30)})
+    testee = im.concat_where(
+        domain_cond, im.as_fieldop("deref")("in_field1"), im.as_fieldop("deref")("in_field2")
+    )
 
-
-    expected = im.concat_where(domain_cond,
-        im.as_fieldop("deref", domain1)("in_field1"), im.as_fieldop("deref", domain2)("in_field2")
+    expected = im.concat_where(
+        domain_cond,
+        im.as_fieldop("deref", domain1)("in_field1"),
+        im.as_fieldop("deref", domain2)("in_field2"),
     )
     expected_domains = {"in_field1": domain1, "in_field2": domain2}
 
@@ -1096,14 +1104,17 @@ def test_concat_where_two_dimensions(offset_provider):
 def test_concat_where_two_dimensions_J(offset_provider):
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 20), JDim: (10, 30)})
     domain_cond = im.domain(common.GridType.CARTESIAN, {JDim: (20, "inf")})
-    domain1 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 20), JDim:  (20, 30)})
-    domain2 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 20), JDim:  (10, 20)})
-    testee = im.concat_where(domain_cond, im.as_fieldop("deref")("in_field1"), im.as_fieldop("deref")("in_field2"))
+    domain1 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 20), JDim: (20, 30)})
+    domain2 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 20), JDim: (10, 20)})
+    testee = im.concat_where(
+        domain_cond, im.as_fieldop("deref")("in_field1"), im.as_fieldop("deref")("in_field2")
+    )
 
-    expected = im.concat_where(domain_cond,
-                               im.as_fieldop("deref", domain1)("in_field1"),
-                               im.as_fieldop("deref", domain2)("in_field2")
-                               )
+    expected = im.concat_where(
+        domain_cond,
+        im.as_fieldop("deref", domain1)("in_field1"),
+        im.as_fieldop("deref", domain2)("in_field2"),
+    )
     expected_domains = {"in_field1": domain1, "in_field2": domain2}
 
     actual_call, actual_domains = infer_domain.infer_expr(
@@ -1114,6 +1125,7 @@ def test_concat_where_two_dimensions_J(offset_provider):
     assert expected == folded_call
     assert expected_domains == constant_fold_accessed_domains(actual_domains)
 
+
 def test_nested_concat_where_two_dimensions(offset_provider):
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 30), JDim: (0, 20)})
     domain_cond1 = im.domain(common.GridType.CARTESIAN, {JDim: (10, "inf")})
@@ -1121,16 +1133,22 @@ def test_nested_concat_where_two_dimensions(offset_provider):
     domain1 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 20), JDim: (10, 20)})
     domain2 = im.domain(common.GridType.CARTESIAN, {IDim: (20, 30), JDim: (10, 20)})
     domain3 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 30), JDim: (0, 10)})
-    testee = im.concat_where(domain_cond1 , im.concat_where(domain_cond2 , im.as_fieldop("deref")("in_field1"),
-                                                            im.as_fieldop("deref")("in_field2")),
-                             im.as_fieldop("deref")("in_field3"))
+    testee = im.concat_where(
+        domain_cond1,
+        im.concat_where(
+            domain_cond2, im.as_fieldop("deref")("in_field1"), im.as_fieldop("deref")("in_field2")
+        ),
+        im.as_fieldop("deref")("in_field3"),
+    )
 
-
-    expected = im.concat_where(domain_cond1, #0, 30; 10,20
-                               im.concat_where(domain_cond2,
-                                               im.as_fieldop("deref", domain1)("in_field1"),
-                                               im.as_fieldop("deref", domain2)("in_field2")
-                                               ), im.as_fieldop("deref", domain3)("in_field3")
+    expected = im.concat_where(
+        domain_cond1,  # 0, 30; 10,20
+        im.concat_where(
+            domain_cond2,
+            im.as_fieldop("deref", domain1)("in_field1"),
+            im.as_fieldop("deref", domain2)("in_field2"),
+        ),
+        im.as_fieldop("deref", domain3)("in_field3"),
     )
     expected_domains = {"in_field1": domain1, "in_field2": domain2, "in_field3": domain3}
 

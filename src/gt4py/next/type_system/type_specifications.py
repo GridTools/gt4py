@@ -7,13 +7,12 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
-from typing import Iterator, Optional, Sequence, Union
+from typing import Iterator, Literal, Optional, Sequence, Union
 
 from gt4py.eve.type_definitions import IntEnum
 from gt4py.eve.utils import content_hash
-from typing import Literal
-
 from gt4py.next import common
+
 
 @dataclasses.dataclass(frozen=True)
 class TypeSpec:
@@ -128,6 +127,7 @@ class FunctionType(TypeSpec, CallableType):
         kwarg_strs = [f"{key}: {value}" for key, value in self.pos_or_kw_args.items()]
         args_str = ", ".join((*arg_strs, *kwarg_strs))
         return f"({args_str}) -> {self.returns}"
+
 
 @dataclasses.dataclass(frozen=True)
 class DomainType(DataType):

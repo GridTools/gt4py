@@ -322,6 +322,7 @@ def infer_concat_where(
     symbolic_domain_sizes: Optional[dict[str, str]],
 ) -> tuple[itir.Expr, ACCESSED_DOMAINS]:
     assert cpm.is_call_to(expr, "concat_where")
+    assert isinstance(domain, domain_utils.SymbolicDomain)
     infered_args_expr = []
     actual_domains: ACCESSED_DOMAINS = {}
     cond, true_field, false_field = expr.args
@@ -332,7 +333,9 @@ def infer_concat_where(
             domain_ = domain_utils.domain_intersection(domain, extended_cond)
         elif arg == false_field:
             cond_complement = domain_utils.domain_complement(symbolic_cond)
-            extended_cond_complement = domain_utils.promote_to_same_dimensions(cond_complement, domain)
+            extended_cond_complement = domain_utils.promote_to_same_dimensions(
+                cond_complement, domain
+            )
             domain_ = domain_utils.domain_intersection(domain, extended_cond_complement)
 
         infered_arg_expr, actual_domains_arg = infer_expr(
@@ -343,7 +346,6 @@ def infer_concat_where(
 
     result_expr = im.call(expr.fun)(cond, *infered_args_expr)
     return result_expr, actual_domains
-
 
 
 def _infer_expr(
