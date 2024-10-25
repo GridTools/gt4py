@@ -2117,11 +2117,11 @@ class GTScriptParser(ast.NodeVisitor):
 
         ValueInliner.apply(main_func_node, context=local_context)
 
-        # unroll loops over data dimensions
-        DataDimLoopUnroller.apply(main_func_node, context=local_context)
-
         # Inline function calls
         CallInliner.apply(main_func_node, context=local_context)
+
+        # unroll loops over data dimensions
+        DataDimLoopUnroller.apply(main_func_node, context=local_context)
 
         # Evaluate and inline compile-time conditionals
         CompiledIfInliner.apply(main_func_node, context=local_context, stencil_name=self.main_name)
