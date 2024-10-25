@@ -23,7 +23,7 @@ def test_boundary_same_size_fields(cartesian_case):
     def testee(
         k: cases.KField, interior: cases.IJKField, boundary: cases.IJKField
     ) -> cases.IJKField:
-        return concat_where(k == 0, boundary, interior)
+        return concat_where(KDim <= 2, boundary, interior)
 
     k = cases.allocate(cartesian_case, testee, "k", strategy=cases.IndexInitializer())()
     interior = cases.allocate(cartesian_case, testee, "interior")()

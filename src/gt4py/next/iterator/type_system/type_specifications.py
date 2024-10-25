@@ -19,11 +19,6 @@ class NamedRangeType(ts.TypeSpec):
 
 
 @dataclasses.dataclass(frozen=True)
-class DomainType(ts.DataType):
-    dims: list[common.Dimension] | Literal["unknown"]
-
-
-@dataclasses.dataclass(frozen=True)
 class OffsetLiteralType(ts.TypeSpec):
     value: ts.ScalarType | common.Dimension
 
@@ -42,7 +37,7 @@ class IteratorType(ts.DataType, ts.CallableType):
 
 @dataclasses.dataclass(frozen=True)
 class StencilClosureType(ts.TypeSpec):
-    domain: DomainType
+    domain: ts.DomainType
     stencil: ts.FunctionType
     output: ts.FieldType | ts.TupleType
     inputs: list[ts.FieldType]

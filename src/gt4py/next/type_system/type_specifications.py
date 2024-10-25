@@ -6,15 +6,16 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from dataclasses import dataclass
+import dataclasses
 from typing import Iterator, Optional, Sequence, Union
 
 from gt4py.eve.type_definitions import IntEnum
 from gt4py.eve.utils import content_hash
-from gt4py.next import common as func_common
+from typing import Literal
 
+from gt4py.next import common
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class TypeSpec:
     def __hash__(self) -> int:
         return hash(content_hash(self))
@@ -40,14 +41,14 @@ class CallableType:
     """
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class DeferredType(TypeSpec):
     """Dummy used to represent a type not yet inferred."""
 
     constraint: Optional[type[TypeSpec] | tuple[type[TypeSpec], ...]]
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class VoidType(TypeSpec):
     """
     Return type of a function without return values.
@@ -56,15 +57,15 @@ class VoidType(TypeSpec):
     """
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class DimensionType(TypeSpec):
-    dim: func_common.Dimension
+    dim: common.Dimension
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class OffsetType(TypeSpec):
-    source: func_common.Dimension
-    target: tuple[func_common.Dimension] | tuple[func_common.Dimension, func_common.Dimension]
+    source: common.Dimension
+    target: tuple[common.Dimension] | tuple[common.Dimension, common.Dimension]
 
     def __str__(self) -> str:
         return f"Offset[{self.source}, {self.target}]"
@@ -79,7 +80,7 @@ class ScalarKind(IntEnum):
     STRING = 3001
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class ScalarType(DataType):
     kind: ScalarKind
     shape: Optional[list[int]] = None
@@ -91,7 +92,7 @@ class ScalarType(DataType):
         return f"{kind_str}{self.shape}"
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class TupleType(DataType):
     types: list[DataType]
 
@@ -105,9 +106,9 @@ class TupleType(DataType):
         return len(self.types)
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class FieldType(DataType, CallableType):
-    dims: list[func_common.Dimension]
+    dims: list[common.Dimension]
     dtype: ScalarType
 
     def __str__(self) -> str:
@@ -115,7 +116,7 @@ class FieldType(DataType, CallableType):
         return f"Field[{dims}, {self.dtype}]"
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class FunctionType(TypeSpec, CallableType):
     pos_only_args: Sequence[TypeSpec]
     pos_or_kw_args: dict[str, TypeSpec]
@@ -127,3 +128,7 @@ class FunctionType(TypeSpec, CallableType):
         kwarg_strs = [f"{key}: {value}" for key, value in self.pos_or_kw_args.items()]
         args_str = ", ".join((*arg_strs, *kwarg_strs))
         return f"({args_str}) -> {self.returns}"
+
+@dataclasses.dataclass(frozen=True)
+class DomainType(DataType):
+    dims: list[common.Dimension] | Literal["unknown"]

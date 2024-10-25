@@ -60,3 +60,10 @@ def test_constant_folding_literal_maximum():
     expected = im.literal_from_value(2)
     actual = ConstantFolding.apply(testee)
     assert actual == expected
+
+
+def test_constant_folding_inf_maximum():
+    testee = im.call("maximum")(im.literal_from_value(1), im.ref("inf"))
+    expected = im.ref("inf")
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected

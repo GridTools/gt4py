@@ -29,6 +29,7 @@ from gt4py.next.iterator.transforms.merge_let import MergeLet
 from gt4py.next.iterator.transforms.normalize_shifts import NormalizeShifts
 from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce
 from gt4py.next.iterator.type_system.inference import infer
+from gt4py.next.iterator.transforms import infer_domain_ops
 
 
 # TODO(tehrengruber): Revisit interface to configure temporary extraction. We currently forward
@@ -68,6 +69,7 @@ def apply_common_transforms(
     ir = InlineLambdas.apply(ir, opcount_preserving=True, force_inline_lambda_args=True)
     # required in order to get rid of expressions without a domain (e.g. when a tuple element is never accessed)
     ir = CollapseTuple.apply(ir, offset_provider=offset_provider)
+    ir = infer_domain_ops.InferDomainOps.apply(ir)
     ir = infer_domain.infer_program(
         ir,  # type: ignore[arg-type]  # always an itir.Program
         offset_provider=offset_provider,

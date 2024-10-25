@@ -225,6 +225,8 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return im.sym(node.id)
 
     def visit_Name(self, node: foast.Name, **kwargs: Any) -> itir.SymRef:
+        if isinstance(node.type, ts.DimensionType):
+            return itir.AxisLiteral(value=node.type.dim.value, kind=node.type.dim.kind)
         return im.ref(node.id)
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs: Any) -> itir.Expr:
@@ -260,6 +262,10 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         )
 
     def visit_Compare(self, node: foast.Compare, **kwargs: Any) -> itir.FunCall:
+        left, right = node.left, node.right
+        if (isinstance(left.type, ts.DimensionType) and isinstance(right.type, ts.ScalarType) and node.right.type.kind == getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())) or (isinstance(right.type, ts.DimensionType) and isinstance(left.type, ts.ScalarType) and left.type.kind == getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())):
+            lowered_args = [self.visit(arg, **kwargs) for arg in (node.left, node.right)]
+            return im.call(node.op.value)(*lowered_args)
         return self._map(node.op.value, node.left, node.right)
 
     def _visit_shift(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
@@ -390,7 +396,14 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
         return im.let(cond_symref_name, cond_)(result)
 
-    _visit_concat_where = _visit_where  # TODO(havogt): upgrade concat_where
+    def _visit_concat_where(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
+        if not isinstance(node.type, ts.TupleType):  # to keep the IR simpler
+            return im.call("concat_where")(*self.visit(node.args))
+        else:
+            raise NotImplementedError()
+
+    # TODO: tuple case
+
 
     def _visit_broadcast(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         expr = self.visit(node.args[0], **kwargs)
@@ -460,17 +473,19 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
     def _map(self, op: itir.Expr | str, *args: Any, **kwargs: Any) -> itir.FunCall:
         lowered_args = [self.visit(arg, **kwargs) for arg in args]
-        if all(
-            isinstance(t, ts.ScalarType)
+        if any(
+            isinstance(t, ts.FieldType)
             for arg in args
             for t in type_info.primitive_constituents(arg.type)
         ):
-            return im.call(op)(*lowered_args)  # scalar operation
-        if any(type_info.contains_local_field(arg.type) for arg in args):
-            lowered_args = [promote_to_list(arg)(larg) for arg, larg in zip(args, lowered_args)]
-            op = im.call("map_")(op)
+            if any(type_info.contains_local_field(arg.type) for arg in args):
+                lowered_args = [promote_to_list(arg)(larg) for arg, larg in zip(args, lowered_args)]
+                op = im.call("map_")(op)
+            return im.op_as_fieldop(im.call(op))(*lowered_args)
 
-        return im.op_as_fieldop(im.call(op))(*lowered_args)
+        assert all(isinstance(t, (ts.ScalarType, ts.DimensionType)) for arg in args
+            for t in type_info.primitive_constituents(arg.type))
+        return im.call(op)(*lowered_args)
 
 
 class FieldOperatorLoweringError(Exception): ...

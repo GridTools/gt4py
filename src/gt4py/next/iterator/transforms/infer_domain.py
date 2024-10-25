@@ -315,6 +315,37 @@ def infer_if(
     return result_expr, actual_domains
 
 
+def infer_concat_where(
+    expr: itir.Expr,
+    domain: DOMAIN,
+    offset_provider: common.OffsetProvider,
+    symbolic_domain_sizes: Optional[dict[str, str]],
+) -> tuple[itir.Expr, ACCESSED_DOMAINS]:
+    assert cpm.is_call_to(expr, "concat_where")
+    infered_args_expr = []
+    actual_domains: ACCESSED_DOMAINS = {}
+    cond, true_field, false_field = expr.args
+    symbolic_cond = domain_utils.SymbolicDomain.from_expr(cond)
+    for arg in [true_field, false_field]:
+        if arg == true_field:
+            extended_cond = domain_utils.promote_to_same_dimensions(symbolic_cond, domain)
+            domain_ = domain_utils.domain_intersection(domain, extended_cond)
+        elif arg == false_field:
+            cond_complement = domain_utils.domain_complement(symbolic_cond)
+            extended_cond_complement = domain_utils.promote_to_same_dimensions(cond_complement, domain)
+            domain_ = domain_utils.domain_intersection(domain, extended_cond_complement)
+
+        infered_arg_expr, actual_domains_arg = infer_expr(
+            arg, domain_, offset_provider, symbolic_domain_sizes
+        )
+        infered_args_expr.append(infered_arg_expr)
+        actual_domains = _merge_domains(actual_domains, actual_domains_arg)
+
+    result_expr = im.call(expr.fun)(cond, *infered_args_expr)
+    return result_expr, actual_domains
+
+
+
 def _infer_expr(
     expr: itir.Expr,
     domain: DOMAIN,
@@ -335,6 +366,8 @@ def _infer_expr(
         return infer_tuple_get(expr, domain, offset_provider, symbolic_domain_sizes)
     elif cpm.is_call_to(expr, "if_"):
         return infer_if(expr, domain, offset_provider, symbolic_domain_sizes)
+    elif cpm.is_call_to(expr, "concat_where"):
+        return infer_concat_where(expr, domain, offset_provider, symbolic_domain_sizes)
     elif (
         cpm.is_call_to(expr, itir.ARITHMETIC_BUILTINS)
         or cpm.is_call_to(expr, itir.TYPEBUILTINS)
