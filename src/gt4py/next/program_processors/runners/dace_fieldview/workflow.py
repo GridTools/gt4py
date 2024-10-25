@@ -54,8 +54,6 @@ class DaCeTranslator(
         on_gpu: bool,
     ) -> dace.SDFG:
         ir = itir_transforms.apply_fieldview_transforms(ir, offset_provider=offset_provider)
-        ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
-
         sdfg = gtir_sdfg.build_sdfg_from_gtir(ir, offset_provider=offset_provider)
 
         if auto_opt:
