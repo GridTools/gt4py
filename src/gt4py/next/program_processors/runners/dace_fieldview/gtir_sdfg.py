@@ -32,7 +32,6 @@ from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_builtin_translators,
-    gtir_dataflow,
     utility as dace_gtir_utils,
 )
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
@@ -43,6 +42,9 @@ class DataflowBuilder(Protocol):
 
     @abc.abstractmethod
     def get_offset_provider(self, offset: str) -> gtx_common.OffsetProviderElem: ...
+
+    @abc.abstractmethod
+    def unique_nsdfg_name(self, sdfg: dace.SDFG, prefix: str) -> str: ...
 
     @abc.abstractmethod
     def unique_map_name(self, name: str) -> str: ...
@@ -167,6 +169,12 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
     def get_symbol_type(self, symbol_name: str) -> ts.DataType:
         return self.global_symbols[symbol_name]
+
+    def unique_nsdfg_name(self, sdfg: dace.SDFG, prefix: str) -> str:
+        nsdfg_list = [
+            nsdfg.label for nsdfg in sdfg.all_sdfgs_recursive() if nsdfg.label.startswith(prefix)
+        ]
+        return f"{prefix}_{len(nsdfg_list)}"
 
     def unique_map_name(self, name: str) -> str:
         return f"{self.map_uids.sequential_id()}_{name}"
@@ -301,7 +309,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         Returns:
             A list of array nodes containing the result fields.
         """
-        result = self.visit(node, sdfg=sdfg, head_state=head_state, reduce_identity=None)
+        result = self.visit(node, sdfg=sdfg, head_state=head_state)
 
         # sanity check: each statement should preserve the property of single exit state (aka head state),
         # i.e. eventually only introduce internal branches, and keep the same head state
@@ -493,32 +501,22 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         node: gtir.FunCall,
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
-        reduce_identity: Optional[gtir_dataflow.SymbolExpr],
     ) -> gtir_builtin_translators.FieldopResult:
         # use specialized dataflow builder classes for each builtin function
         if cpm.is_call_to(node, "if_"):
-            return gtir_builtin_translators.translate_if(
-                node, sdfg, head_state, self, reduce_identity
-            )
+            return gtir_builtin_translators.translate_if(node, sdfg, head_state, self)
         elif cpm.is_call_to(node, "make_tuple"):
-            return gtir_builtin_translators.translate_make_tuple(
-                node, sdfg, head_state, self, reduce_identity
-            )
+            return gtir_builtin_translators.translate_make_tuple(node, sdfg, head_state, self)
         elif cpm.is_call_to(node, "tuple_get"):
-            return gtir_builtin_translators.translate_tuple_get(
-                node, sdfg, head_state, self, reduce_identity
-            )
+            return gtir_builtin_translators.translate_tuple_get(node, sdfg, head_state, self)
         elif cpm.is_applied_as_fieldop(node):
-            return gtir_builtin_translators.translate_as_fieldop(
-                node, sdfg, head_state, self, reduce_identity
-            )
+            return gtir_builtin_translators.translate_as_fieldop(node, sdfg, head_state, self)
         elif isinstance(node.fun, gtir.Lambda):
             lambda_args = [
                 self.visit(
                     arg,
                     sdfg=sdfg,
                     head_state=head_state,
-                    reduce_identity=reduce_identity,
                 )
                 for arg in node.args
             ]
@@ -527,13 +525,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 node.fun,
                 sdfg=sdfg,
                 head_state=head_state,
-                reduce_identity=reduce_identity,
                 args=lambda_args,
             )
         elif isinstance(node.type, ts.ScalarType):
-            return gtir_builtin_translators.translate_scalar_expr(
-                node, sdfg, head_state, self, reduce_identity
-            )
+            return gtir_builtin_translators.translate_scalar_expr(node, sdfg, head_state, self)
         else:
             raise NotImplementedError(f"Unexpected 'FunCall' expression ({node}).")
 
@@ -542,7 +537,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         node: gtir.Lambda,
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
-        reduce_identity: Optional[gtir_dataflow.SymbolExpr],
         args: list[gtir_builtin_translators.FieldopResult],
     ) -> gtir_builtin_translators.FieldopResult:
         """
@@ -571,7 +565,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         # lower let-statement lambda node as a nested SDFG
         lambda_translator = GTIRToSDFG(self.offset_provider, lambda_symbols)
-        nsdfg = dace.SDFG(f"{sdfg.label}_lambda")
+        nsdfg = dace.SDFG(name=self.unique_nsdfg_name(sdfg, "lambda"))
         nstate = nsdfg.add_state("lambda")
 
         # add sdfg storage for the symbols that need to be passed as input parameters
@@ -587,7 +581,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             node.expr,
             sdfg=nsdfg,
             head_state=nstate,
-            reduce_identity=reduce_identity,
         )
 
         def _flatten_tuples(
@@ -741,22 +734,16 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         node: gtir.Literal,
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
-        reduce_identity: Optional[gtir_dataflow.SymbolExpr],
     ) -> gtir_builtin_translators.FieldopResult:
-        return gtir_builtin_translators.translate_literal(
-            node, sdfg, head_state, self, reduce_identity=None
-        )
+        return gtir_builtin_translators.translate_literal(node, sdfg, head_state, self)
 
     def visit_SymRef(
         self,
         node: gtir.SymRef,
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
-        reduce_identity: Optional[gtir_dataflow.SymbolExpr],
     ) -> gtir_builtin_translators.FieldopResult:
-        return gtir_builtin_translators.translate_symbol_ref(
-            node, sdfg, head_state, self, reduce_identity=None
-        )
+        return gtir_builtin_translators.translate_symbol_ref(node, sdfg, head_state, self)
 
 
 def build_sdfg_from_gtir(
