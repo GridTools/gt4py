@@ -419,6 +419,12 @@ class CallInliner(ast.NodeTransformer):
         else:
             return self.generic_visit(node)
 
+    def _get_sliced_symbol(self, node):
+        if isinstance(node, ast.Name):
+            return node.id
+        elif isinstance(node, ast.Subscript):
+            return self._get_sliced_symbol(node.value)
+
     def visit_Call(self, node: ast.Call, *, target_node=None):  # Cyclomatic complexity too high
         call_name = gt_meta.get_qualified_name_from_node(node.func)
 
@@ -476,10 +482,15 @@ class CallInliner(ast.NodeTransformer):
 
         assigned_symbols = set()
         for target in assign_targets:
-            if not isinstance(target, ast.Name):
-                raise GTScriptSyntaxError(message="Unsupported assignment target.", loc=target)
+            if isinstance(target, ast.Subscript):
+                sliced_symbol = self._get_sliced_symbol(target)
+                if sliced_symbol not in call_args:
+                    raise GTScriptSyntaxError(message="Unsupported assignment target.", loc=target)
+            else:
+                if not isinstance(target, ast.Name):
+                    raise GTScriptSyntaxError(message="Unsupported assignment target.", loc=target)
 
-            assigned_symbols.add(target.id)
+                assigned_symbols.add(target.id)
 
         name_mapping = {
             name: value.id
