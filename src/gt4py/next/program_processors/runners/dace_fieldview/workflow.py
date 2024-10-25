@@ -14,7 +14,6 @@ from typing import Optional
 
 import dace
 import factory
-from dace.transformation.auto import auto_optimize as dace_autoopt
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import allocators as gtx_allocators, common, config
@@ -56,9 +55,9 @@ class DaCeTranslator(
         sdfg = gtir_sdfg.build_sdfg_from_gtir(ir, offset_provider=offset_provider)
 
         if auto_opt:
-            return gtx_transformations.gt_auto_optimize(sdfg, gpu=on_gpu)
+            gtx_transformations.gt_auto_optimize(sdfg, gpu=on_gpu)
         elif on_gpu:
-            dace_autoopt.apply_gpu_storage(sdfg)
+            gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=False)
 
         return sdfg
 
