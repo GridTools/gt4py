@@ -23,7 +23,7 @@ def test_boundary_same_size_fields(cartesian_case):
     def testee(
         k: cases.KField, interior: cases.IJKField, boundary: cases.IJKField
     ) -> cases.IJKField:
-        return concat_where(KDim <= 2, boundary, interior)
+        return concat_where(k == 0, boundary, interior)
 
     k = cases.allocate(cartesian_case, testee, "k", strategy=cases.IndexInitializer())()
     interior = cases.allocate(cartesian_case, testee, "interior")()
@@ -35,6 +35,25 @@ def test_boundary_same_size_fields(cartesian_case):
     )
 
     cases.verify(cartesian_case, testee, k, interior, boundary, out=out, ref=ref)
+
+
+def test_dimension(cartesian_case):
+    @gtx.field_operator
+    def testee(
+        k: cases.KField, interior: cases.IJKField, boundary: cases.IJKField
+    ) -> cases.IJKField:
+        return concat_where(KDim <= 2, boundary, interior)
+
+    k = cases.allocate(cartesian_case, testee, "k", strategy=cases.IndexInitializer())()
+    interior = cases.allocate(cartesian_case, testee, "interior")()
+    boundary = cases.allocate(cartesian_case, testee, "boundary")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+
+    ref = np.where(
+        k.asnumpy()[np.newaxis, np.newaxis, :] <= 0, boundary.asnumpy(), interior.asnumpy()
+    )
+
+    cases.verify(cartesian_case, testee, k, interior, boundary, out=out, ref=ref)  # TODO
 
 
 def test_boundary_horizontal_slice(cartesian_case):

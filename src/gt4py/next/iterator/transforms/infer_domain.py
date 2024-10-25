@@ -369,6 +369,7 @@ def _infer_concat_where(
     **kwargs: Unpack[InferenceOptions],
 ) -> tuple[itir.Expr, AccessedDomains]:
     assert cpm.is_call_to(expr, "concat_where")
+    assert isinstance(domain, domain_utils.SymbolicDomain)
     infered_args_expr = []
     actual_domains: AccessedDomains = {}
     cond, true_field, false_field = expr.args

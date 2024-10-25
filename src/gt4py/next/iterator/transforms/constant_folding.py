@@ -26,7 +26,7 @@ class ConstantFolding(PreserveLocationVisitor, NodeTranslator):
         ):  # `minimum(a, a)` -> `a`
             return new_node.args[0]
 
-        if cpm.is_call_to(new_node, "minimum"):
+        if cpm.is_call_to(new_node, "minimum"):  # TODO: add tests
             # `minimum(neg_inf, neg_inf)` -> `neg_inf`
             if cpm.is_ref_to(new_node.args[0], "neg_inf") or cpm.is_ref_to(
                 new_node.args[1], "neg_inf"
@@ -39,7 +39,7 @@ class ConstantFolding(PreserveLocationVisitor, NodeTranslator):
             elif cpm.is_ref_to(new_node.args[1], "inf"):
                 return new_node.args[0]
 
-        if cpm.is_call_to(new_node, "maximum"):
+        if cpm.is_call_to(new_node, "maximum"):  # TODO: add tests
             # `minimum(inf, inf)` -> `inf`
             if cpm.is_ref_to(new_node.args[0], "inf") or cpm.is_ref_to(new_node.args[1], "inf"):
                 return im.ref("inf")
@@ -49,7 +49,14 @@ class ConstantFolding(PreserveLocationVisitor, NodeTranslator):
             # `minimum(a, neg_inf)` -> `a`
             elif cpm.is_ref_to(new_node.args[1], "neg_inf"):
                 return new_node.args[0]
-
+        if cpm.is_call_to(new_node, ("less", "less_equal")) and cpm.is_ref_to(
+            new_node.args[0], "neg_inf"
+        ):
+            return im.literal_from_value(True)  # TODO: add tests
+        if cpm.is_call_to(new_node, ("greater", "greater_equal")) and cpm.is_ref_to(
+            new_node.args[0], "inf"
+        ):
+            return im.literal_from_value(True)  # TODO: add tests
         if (
             isinstance(new_node.fun, ir.SymRef)
             and new_node.fun.id == "if_"

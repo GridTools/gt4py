@@ -213,7 +213,7 @@ def concat_where(
     false_field: ts.FieldType | ts.TupleType,
 ) -> ts.FieldType:
     assert true_field == false_field
-    return true_field
+    return true_field  # TODO: tuples?
 
 
 @_register_builtin_type_synthesizer
@@ -259,7 +259,7 @@ def lift(stencil: TypeSynthesizer) -> TypeSynthesizer:
 
 
 def _convert_as_fieldop_input_to_iterator(
-    domain: it_ts.DomainType, input_: ts.TypeSpec
+    domain: ts.DomainType, input_: ts.TypeSpec
 ) -> it_ts.IteratorType:
     # get the dimensions of all non-zero-dimensional field inputs and check they agree
     all_input_dims = (
@@ -299,7 +299,7 @@ def _convert_as_fieldop_input_to_iterator(
 @_register_builtin_type_synthesizer
 def as_fieldop(
     stencil: TypeSynthesizer,
-    domain: Optional[it_ts.DomainType] = None,
+    domain: Optional[ts.DomainType] = None,
     *,
     offset_provider_type: common.OffsetProviderType,
 ) -> TypeSynthesizer:
@@ -314,7 +314,7 @@ def as_fieldop(
     #   `as_fieldop(it1, it2 -> deref(it1) + deref(it2))(i_field, j_field)`
     # it is unclear if the result has dimension I, J or J, I.
     if domain is None:
-        domain = it_ts.DomainType(dims="unknown")
+        domain = ts.DomainType(dims="unknown")
 
     @TypeSynthesizer
     def applied_as_fieldop(*fields) -> ts.FieldType | ts.DeferredType:

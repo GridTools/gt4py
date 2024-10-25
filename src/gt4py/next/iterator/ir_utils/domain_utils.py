@@ -200,12 +200,12 @@ def domain_complement(domain: SymbolicDomain) -> SymbolicDomain:
     for dim in domain.ranges.keys():
         lb, ub = domain.ranges[dim].start, domain.ranges[dim].stop
         if lb == im.ref("neg_inf"):
-            dims_dict[dim] = SymbolicRange(int(ub.value), "inf")
+            dims_dict[dim] = SymbolicRange(start=ub, stop=im.ref("inf"))
         elif ub == im.ref("inf"):
-            dims_dict[dim] = SymbolicRange("neg_inf", int(lb.value))
+            dims_dict[dim] = SymbolicRange(start=im.ref("neg_inf"), stop=lb)
         else:
             raise ValueError("Invalid domain ranges")
-        return SymbolicDomain(domain.grid_type, dims_dict)
+    return SymbolicDomain(domain.grid_type, dims_dict)
 
 
 def promote_to_same_dimensions(
@@ -218,5 +218,5 @@ def promote_to_same_dimensions(
             lb, ub = domain_small.ranges[dim].start, domain_small.ranges[dim].stop
             dims_dict[dim] = SymbolicRange(lb, ub)
         else:
-            dims_dict[dim] = SymbolicRange("neg_inf", "inf")
+            dims_dict[dim] = SymbolicRange(im.ref("neg_inf"), im.ref("inf"))
     return SymbolicDomain(domain_small.grid_type, dims_dict)  # TODO: fix for unstructured

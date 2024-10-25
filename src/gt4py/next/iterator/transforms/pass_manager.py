@@ -12,6 +12,7 @@ from gt4py.eve import utils as eve_utils
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import (
+    expand_library_functions,
     fuse_as_fieldop,
     global_tmps,
     infer_domain,
@@ -19,6 +20,7 @@ from gt4py.next.iterator.transforms import (
     inline_dynamic_shifts,
     inline_fundefs,
     inline_lifts,
+    transform_concat_where,
 )
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
@@ -90,6 +92,9 @@ def apply_common_transforms(
         offset_provider=offset_provider,
         symbolic_domain_sizes=symbolic_domain_sizes,
     )
+    ir = transform_concat_where.TransformConcatWhere.apply(ir)
+    ir = expand_library_functions.ExpandLibraryFunctions.apply(ir)
+    # ir = ConstantFolding.apply(ir)  # todo: remove
 
     for _ in range(10):
         inlined = ir

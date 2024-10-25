@@ -170,6 +170,7 @@ BUILTINS = {
     "index",  # `index(dim)` creates a dim-field that has the current index at each point
     "as_fieldop",  # `as_fieldop(stencil, domain)` creates field_operator from stencil (domain is optional, but for now required for embedded execution)
     "concat_where",
+    "in",
     "inf",  # TODO: discuss
     "neg_inf",  # TODO: discuss
     *ARITHMETIC_BUILTINS,
