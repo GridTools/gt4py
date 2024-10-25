@@ -650,10 +650,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         # input arguments that are just passed through and returned by the lambda,
         # e.g. when the lambda is constructing a tuple: in this case, the result
         # data is non-transient, because it corresponds to an input node.
-        # Below we call `make_temps()` to parse the result of the lambda nested SDFG:
-        # this function ensures that the result transient nodes are changed to
-        # non-transient and the corresponding output connecters on the nested SDFG
-        # are connected to intermediate data nodes in the parent SDFG.
+        # The transient storage of the lambda result in nested-SDFG is corrected
+        # below by the call to `make_temps()`: this function ensures that the result
+        # transient nodes are changed to non-transient and the corresponding output
+        # connecters on the nested SDFG are connected to new data nodes in parent SDFG.
         #
         lambda_output_data: Iterable[gtir_builtin_translators.FieldopData] = (
             gtx_utils.flatten_nested_tuple(lambda_result)
