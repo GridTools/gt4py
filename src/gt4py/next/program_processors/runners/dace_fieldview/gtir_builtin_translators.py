@@ -157,7 +157,8 @@ def _get_field_shape(
         domain: The field operator domain.
 
     Returns:
-        A list of dimensions and a list of array sizes in each dimension.
+        A tuple of two lists: the list of field dimensions and the list of dace
+        array sizes in each dimension.
     """
     domain_dims, _, domain_ubs = zip(*domain)
     return list(domain_dims), list(domain_ubs)
@@ -345,19 +346,19 @@ def translate_broadcast_scalar(
         assert isinstance(scalar_expr, gtir_dataflow.IteratorExpr)
         if len(node.args[0].type.dims) == 0:  # zero-dimensional field
             input_subset = "0"
-        elif not all(
+        elif all(
             isinstance(scalar_expr.indices[dim], gtir_dataflow.SymbolExpr)
             for dim in scalar_expr.dimensions
             if dim not in field_dims
         ):
-            raise ValueError(f"Cannot deref field {scalar_expr.field} in broadcast expression.")
-        else:
             input_subset = ",".join(
                 dace_gtir_utils.get_map_variable(dim)
                 if dim in field_dims
                 else scalar_expr.indices[dim].value  # type: ignore[union-attr] # catched by exception above
                 for dim in scalar_expr.dimensions
             )
+        else:
+            raise ValueError(f"Cannot deref field {scalar_expr.field} in broadcast expression.")
 
         input_node = scalar_expr.field
         gt_dtype = node.args[0].type.dtype
