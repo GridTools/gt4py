@@ -91,7 +91,7 @@ builtins = {
     *MATH_BUILTINS,
 }
 
-IGNORE_WHEN_INLINING = {*MATH_BUILTINS, "compile_assert"}
+IGNORE_WHEN_INLINING = {*MATH_BUILTINS, "compile_assert", "range"}
 
 __all__ = [*list(builtins), "function", "stencil", "lazy_stencil"]
 
