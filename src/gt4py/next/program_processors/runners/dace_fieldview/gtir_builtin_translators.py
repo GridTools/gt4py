@@ -82,7 +82,6 @@ class PrimitiveTranslator(Protocol):
         sdfg: dace.SDFG,
         state: dace.SDFGState,
         sdfg_builder: gtir_sdfg.SDFGBuilder,
-        reduce_identity: Optional[gtir_dataflow.SymbolExpr],
     ) -> FieldopResult:
         """Creates the dataflow subgraph representing a GTIR primitive function.
 
@@ -94,9 +93,6 @@ class PrimitiveTranslator(Protocol):
             sdfg: The SDFG where the primitive subgraph should be instantiated
             state: The SDFG state where the result of the primitive function should be made available
             sdfg_builder: The object responsible for visiting child nodes of the primitive node.
-            reduce_identity: The value of the reduction identity, in case the primitive node
-                is visited in the context of a reduction expression. This value is used
-                by the `neighbors` primitive to provide the default value of skip neighbors.
 
         Returns:
             A list of data access nodes and the associated GT4Py data type, which provide
@@ -112,7 +108,6 @@ def _parse_fieldop_arg(
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
     domain: FieldopDomain,
-    reduce_identity: Optional[gtir_dataflow.SymbolExpr],
 ) -> gtir_dataflow.IteratorExpr | gtir_dataflow.MemletExpr:
     """Helper method to visit an expression passed as argument to a field operator."""
 
@@ -120,7 +115,6 @@ def _parse_fieldop_arg(
         node,
         sdfg=sdfg,
         head_state=state,
-        reduce_identity=reduce_identity,
     )
 
     # arguments passed to field operator should be plain fields, not tuples of fields
@@ -228,7 +222,6 @@ def translate_as_fieldop(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-    reduce_identity: Optional[gtir_dataflow.SymbolExpr],
 ) -> FieldopResult:
     """
     Generates the dataflow subgraph for the `as_fieldop` builtin function.
@@ -259,7 +252,7 @@ def translate_as_fieldop(
         # Special usage of 'deref' as argument to fieldop expression, to pass a scalar
         # value to 'as_fieldop' function. It results in broadcasting the scalar value
         # over the field domain.
-        return translate_broadcast_scalar(node, sdfg, state, sdfg_builder, reduce_identity)
+        return translate_broadcast_scalar(node, sdfg, state, sdfg_builder)
     else:
         raise NotImplementedError(
             f"Expression type '{type(stencil_expr)}' not supported as argument to 'as_fieldop' node."
@@ -269,51 +262,11 @@ def translate_as_fieldop(
     domain = extract_domain(domain_expr)
     domain_indices = sbs.Indices([dace_gtir_utils.get_map_variable(dim) for dim, _, _ in domain])
 
-    # The reduction identity value is used in place of skip values when building
-    # a list of neighbor values in the unstructured domain.
-    #
-    # A reduction on neighbor values can be either expressed in local view (itir):
-    # vertices @ u⟨ Vertexₕ: [0, nvertices) ⟩
-    #      ← as_fieldop(
-    #          λ(it) → reduce(plus, 0)(neighbors(V2Eₒ, it)), u⟨ Vertexₕ: [0, nvertices) ⟩
-    #        )(edges);
-    #
-    # or in field view (gtir):
-    # vertices @ u⟨ Vertexₕ: [0, nvertices) ⟩
-    #      ← as_fieldop(λ(it) → reduce(plus, 0)(·it), u⟨ Vertexₕ: [0, nvertices) ⟩)(
-    #          as_fieldop(λ(it) → neighbors(V2Eₒ, it), u⟨ Vertexₕ: [0, nvertices) ⟩)(edges)
-    #        );
-    #
-    # In local view, the list of neighbors is (recursively) built while visiting
-    # the current expression.
-    # In field view, the list of neighbors is built as argument to the current
-    # expression. Therefore, the reduction identity value needs to be passed to
-    # the argument visitor (`reduce_identity_for_args = reduce_identity`).
-    if cpm.is_applied_reduce(stencil_expr.expr):
-        if reduce_identity is not None:
-            raise NotImplementedError("Nested reductions are not supported.")
-        _, _, reduce_identity_for_args = gtir_dataflow.get_reduce_params(stencil_expr.expr)
-    elif cpm.is_call_to(stencil_expr.expr, "neighbors"):
-        # When the visitor hits a neighbors expression, we stop carrying the reduce
-        # identity further (`reduce_identity_for_args = None`) because the reduce
-        # identity value is filled in place of skip values in the context of neighbors
-        # itself, not in the arguments context.
-        # Besides, setting `reduce_identity_for_args = None` enables a sanity check
-        # that the sequence 'reduce(V2E) -> neighbors(V2E) -> reduce(C2E) -> neighbors(C2E)'
-        # is accepted, while 'reduce(V2E) -> reduce(C2E) -> neighbors(V2E) -> neighbors(C2E)'
-        # is not. The latter sequence would raise the 'NotImplementedError' exception above.
-        reduce_identity_for_args = None
-    else:
-        reduce_identity_for_args = reduce_identity
-
     # visit the list of arguments to be passed to the lambda expression
-    stencil_args = [
-        _parse_fieldop_arg(arg, sdfg, state, sdfg_builder, domain, reduce_identity_for_args)
-        for arg in node.args
-    ]
+    stencil_args = [_parse_fieldop_arg(arg, sdfg, state, sdfg_builder, domain) for arg in node.args]
 
     # represent the field operator as a mapped tasklet graph, which will range over the field domain
-    taskgen = gtir_dataflow.LambdaToDataflow(sdfg, state, sdfg_builder, reduce_identity)
+    taskgen = gtir_dataflow.LambdaToDataflow(sdfg, state, sdfg_builder)
     input_edges, output = taskgen.visit(stencil_expr, args=stencil_args)
     output_desc = output.result.dc_node.desc(sdfg)
 
@@ -355,7 +308,6 @@ def translate_broadcast_scalar(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-    reduce_identity: Optional[gtir_dataflow.SymbolExpr],
 ) -> FieldopResult:
     """
     Generates the dataflow subgraph for the 'as_fieldop' builtin function for the
@@ -380,9 +332,7 @@ def translate_broadcast_scalar(
     )
 
     assert len(node.args) == 1
-    scalar_expr = _parse_fieldop_arg(
-        node.args[0], sdfg, state, sdfg_builder, domain, reduce_identity=None
-    )
+    scalar_expr = _parse_fieldop_arg(node.args[0], sdfg, state, sdfg_builder, domain)
 
     if isinstance(node.args[0].type, ts.ScalarType):
         assert isinstance(scalar_expr, (gtir_dataflow.MemletExpr, gtir_dataflow.ValueExpr))
@@ -440,7 +390,6 @@ def translate_if(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-    reduce_identity: Optional[gtir_dataflow.SymbolExpr],
 ) -> FieldopResult:
     """Generates the dataflow subgraph for the `if_` builtin function."""
     assert cpm.is_call_to(node, "if_")
@@ -482,13 +431,11 @@ def translate_if(
         true_expr,
         sdfg=sdfg,
         head_state=true_state,
-        reduce_identity=reduce_identity,
     )
     false_br_args = sdfg_builder.visit(
         false_expr,
         sdfg=sdfg,
         head_state=false_state,
-        reduce_identity=reduce_identity,
     )
 
     def make_temps(output_data: FieldopData) -> FieldopData:
@@ -607,7 +554,6 @@ def translate_literal(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-    reduce_identity: Optional[gtir_dataflow.SymbolExpr],
 ) -> FieldopResult:
     """Generates the dataflow subgraph for a `ir.Literal` node."""
     assert isinstance(node, gtir.Literal)
@@ -623,7 +569,6 @@ def translate_make_tuple(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-    reduce_identity: Optional[gtir_dataflow.SymbolExpr],
 ) -> FieldopResult:
     assert cpm.is_call_to(node, "make_tuple")
     return tuple(
@@ -631,7 +576,6 @@ def translate_make_tuple(
             arg,
             sdfg=sdfg,
             head_state=state,
-            reduce_identity=reduce_identity,
         )
         for arg in node.args
     )
@@ -642,7 +586,6 @@ def translate_tuple_get(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-    reduce_identity: Optional[gtir_dataflow.SymbolExpr],
 ) -> FieldopResult:
     assert cpm.is_call_to(node, "tuple_get")
     assert len(node.args) == 2
@@ -656,7 +599,6 @@ def translate_tuple_get(
         node.args[1],
         sdfg=sdfg,
         head_state=state,
-        reduce_identity=reduce_identity,
     )
     if isinstance(data_nodes, FieldopData):
         raise ValueError(f"Invalid tuple expression {node}")
@@ -674,7 +616,6 @@ def translate_scalar_expr(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-    reduce_identity: Optional[gtir_dataflow.SymbolExpr],
 ) -> FieldopResult:
     assert isinstance(node, gtir.FunCall)
     assert isinstance(node.type, ts.ScalarType)
@@ -703,7 +644,6 @@ def translate_scalar_expr(
                 arg_expr,
                 sdfg=sdfg,
                 head_state=state,
-                reduce_identity=reduce_identity,
             )
             if not (isinstance(arg, FieldopData) and isinstance(arg.gt_dtype, ts.ScalarType)):
                 raise ValueError(f"Invalid argument to scalar expression {arg_expr}.")
@@ -758,7 +698,6 @@ def translate_symbol_ref(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-    reduce_identity: Optional[gtir_dataflow.SymbolExpr],
 ) -> FieldopResult:
     """Generates the dataflow subgraph for a `ir.SymRef` node."""
     assert isinstance(node, gtir.SymRef)
