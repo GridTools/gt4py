@@ -174,3 +174,49 @@ def domain_union(*domains: SymbolicDomain) -> SymbolicDomain:
         new_domain_ranges[dim] = SymbolicRange(start, stop)
 
     return SymbolicDomain(domains[0].grid_type, new_domain_ranges)
+
+
+def domain_intersection(*domains: SymbolicDomain) -> SymbolicDomain:
+    """Return the (set) intersection of a list of domains."""
+    new_domain_ranges = {}
+    assert all(domain.grid_type == domains[0].grid_type for domain in domains)
+    for dim in domains[0].ranges.keys():
+        start = functools.reduce(
+            lambda current_expr, el_expr: im.call("maximum")(current_expr, el_expr),
+            [domain.ranges[dim].start for domain in domains],
+        )
+        stop = functools.reduce(
+            lambda current_expr, el_expr: im.call("minimum")(current_expr, el_expr),
+            [domain.ranges[dim].stop for domain in domains],
+        )
+        new_domain_ranges[dim] = SymbolicRange(start, stop)
+
+    return SymbolicDomain(domains[0].grid_type, new_domain_ranges)
+
+
+def domain_complement(domain: SymbolicDomain) -> SymbolicDomain:
+    """Return the (set) complement of a domain."""
+    dims_dict = {}
+    for dim in domain.ranges.keys():
+        lb, ub = domain.ranges[dim].start, domain.ranges[dim].stop
+        if lb == im.ref("neg_inf"):
+            dims_dict[dim] = SymbolicRange(int(ub.value), "inf")
+        elif ub == im.ref("inf"):
+            dims_dict[dim] = SymbolicRange("neg_inf", int(lb.value))
+        else:
+            raise ValueError("Invalid domain ranges")
+        return SymbolicDomain(domain.grid_type, dims_dict)
+
+
+def promote_to_same_dimensions(
+    domain_small: SymbolicDomain, domain_large: SymbolicDomain
+) -> SymbolicDomain:
+    """Return an extended domain based on a smaller input domain and a larger domain containing the target dimensions."""
+    dims_dict = {}
+    for dim in domain_large.ranges.keys():
+        if dim in domain_small.ranges.keys():
+            lb, ub = domain_small.ranges[dim].start, domain_small.ranges[dim].stop
+            dims_dict[dim] = SymbolicRange(lb, ub)
+        else:
+            dims_dict[dim] = SymbolicRange("neg_inf", "inf")
+    return SymbolicDomain(domain_small.grid_type, dims_dict)  # TODO: fix for unstructured

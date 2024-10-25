@@ -112,7 +112,12 @@ def _(arg: ts.ScalarType) -> ts.ScalarType:
 @_register_builtin_type_synthesizer(
     fun_names=itir.BINARY_MATH_COMPARISON_BUILTINS | itir.BINARY_LOGICAL_BUILTINS
 )
-def _(lhs: ts.ScalarType, rhs: ts.ScalarType) -> ts.ScalarType | ts.TupleType:
+def _(lhs, rhs) -> ts.ScalarType | ts.TupleType | ts.DomainType:
+    if isinstance(lhs, ts.ScalarType) and isinstance(rhs, ts.DimensionType):
+        return ts.DomainType(dims=[rhs.dim])
+    if isinstance(lhs, ts.DimensionType) and isinstance(rhs, ts.ScalarType):
+        return ts.DomainType(dims=[lhs.dim])
+    assert isinstance(lhs, ts.ScalarType) and isinstance(rhs, ts.ScalarType)
     return ts.ScalarType(kind=ts.ScalarKind.BOOL)
 
 
@@ -183,9 +188,9 @@ def named_range(
 
 
 @_register_builtin_type_synthesizer(fun_names=["cartesian_domain", "unstructured_domain"])
-def _(*args: it_ts.NamedRangeType) -> it_ts.DomainType:
+def _(*args: it_ts.NamedRangeType) -> ts.DomainType:
     assert all(isinstance(arg, it_ts.NamedRangeType) for arg in args)
-    return it_ts.DomainType(dims=[arg.dim for arg in args])
+    return ts.DomainType(dims=[arg.dim for arg in args])
 
 
 @_register_builtin_type_synthesizer
@@ -202,7 +207,17 @@ def index(arg: ts.DimensionType) -> ts.FieldType:
 
 
 @_register_builtin_type_synthesizer
-def neighbors(offset_literal: it_ts.OffsetLiteralType, it: it_ts.IteratorType) -> ts.ListType:
+def concat_where(
+    domain: ts.DomainType,
+    true_field: ts.FieldType | ts.TupleType,
+    false_field: ts.FieldType | ts.TupleType,
+) -> ts.FieldType:
+    assert true_field == false_field
+    return true_field
+
+
+@_register_builtin_type_synthesizer
+def neighbors(offset_literal: it_ts.OffsetLiteralType, it: it_ts.IteratorType) -> it_ts.ListType:
     assert (
         isinstance(offset_literal, it_ts.OffsetLiteralType)
         and isinstance(offset_literal.value, common.Dimension)

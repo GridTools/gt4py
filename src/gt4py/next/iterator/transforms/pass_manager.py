@@ -15,6 +15,7 @@ from gt4py.next.iterator.transforms import (
     fuse_as_fieldop,
     global_tmps,
     infer_domain,
+    infer_domain_ops,
     inline_dynamic_shifts,
     inline_fundefs,
     inline_lifts,
@@ -83,6 +84,7 @@ def apply_common_transforms(
     ir = inline_dynamic_shifts.InlineDynamicShifts.apply(
         ir
     )  # domain inference does not support dynamic offsets yet
+    ir = infer_domain_ops.InferDomainOps.apply(ir)
     ir = infer_domain.infer_program(
         ir,
         offset_provider=offset_provider,

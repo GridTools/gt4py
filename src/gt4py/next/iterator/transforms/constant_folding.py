@@ -8,7 +8,7 @@
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next.iterator import embedded, ir
-from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 
 
 class ConstantFolding(PreserveLocationVisitor, NodeTranslator):
@@ -21,11 +21,34 @@ class ConstantFolding(PreserveLocationVisitor, NodeTranslator):
         new_node = self.generic_visit(node)
 
         if (
-            isinstance(new_node.fun, ir.SymRef)
-            and new_node.fun.id in ["minimum", "maximum"]
+            cpm.is_call_to(new_node, ("minimum", "maximum"))
             and new_node.args[0] == new_node.args[1]
         ):  # `minimum(a, a)` -> `a`
             return new_node.args[0]
+
+        if cpm.is_call_to(new_node, "minimum"):
+            # `minimum(neg_inf, neg_inf)` -> `neg_inf`
+            if cpm.is_ref_to(new_node.args[0], "neg_inf") or cpm.is_ref_to(
+                new_node.args[1], "neg_inf"
+            ):
+                return im.ref("neg_inf")
+            # `minimum(inf, a)` -> `a`
+            elif cpm.is_ref_to(new_node.args[0], "inf"):
+                return new_node.args[1]
+            # `minimum(a, inf)` -> `a`
+            elif cpm.is_ref_to(new_node.args[1], "inf"):
+                return new_node.args[0]
+
+        if cpm.is_call_to(new_node, "maximum"):
+            # `minimum(inf, inf)` -> `inf`
+            if cpm.is_ref_to(new_node.args[0], "inf") or cpm.is_ref_to(new_node.args[1], "inf"):
+                return im.ref("inf")
+            # `minimum(neg_inf, a)` -> `a`
+            elif cpm.is_ref_to(new_node.args[0], "neg_inf"):
+                return new_node.args[1]
+            # `minimum(a, neg_inf)` -> `a`
+            elif cpm.is_ref_to(new_node.args[1], "neg_inf"):
+                return new_node.args[0]
 
         if (
             isinstance(new_node.fun, ir.SymRef)
@@ -52,6 +75,6 @@ class ConstantFolding(PreserveLocationVisitor, NodeTranslator):
                     ]
                     new_node = im.literal_from_value(fun(*arg_values))
             except ValueError:
-                pass  # happens for inf and neginf
+                pass  # happens for SymRefs which are not inf or neg_inf
 
         return new_node
