@@ -309,11 +309,15 @@ class ValueInliner(ast.NodeTransformer):
 
 class ReturnReplacer(gt_utils.meta.ASTTransformPass):
     @classmethod
-    def apply(cls, ast_object: ast.AST, target_node: ast.AST) -> None:
+    def apply(cls, ast_object: ast.AST, target_node: Optional[ast.AST]) -> None:
         """Ensure that there is only a single return statement (can still return a tuple)."""
         ret_count = sum(isinstance(node, ast.Return) for node in ast.walk(ast_object))
-        if ret_count != 1:
-            raise GTScriptSyntaxError("GTScript Functions should have a single return statement")
+        if ret_count > 1:
+            raise GTScriptSyntaxError("GTScript Functions cannot have multiple return statements")
+        elif ret_count == 0 and target_node is not None:
+            raise GTScriptSyntaxError(
+                "Attempting to assign the return value of a GTScript function that does not return anything."
+            )
         cls().visit(ast_object, target_node=target_node)
 
     @staticmethod
@@ -493,26 +497,25 @@ class CallInliner(ast.NodeTransformer):
 
         # Replace returns by assignments in subroutine
         if target_node is None:
-            if any(
-                isinstance(nd.value, ast.Tuple)
-                for nd in ast.walk(call_ast)
-                if isinstance(nd, ast.Return)
-            ):
+            return_nodes = [nd for nd in ast.walk(call_ast) if isinstance(nd, ast.Return)]
+            if any(isinstance(nd.value, ast.Tuple) for nd in return_nodes):
                 raise GTScriptSyntaxError(
                     "Only functions with a single return value can be used in expressions, including as call arguments. "
                     "Please assign the function results to symbols first."
                 )
-            target_node = ast.Name(
-                ctx=ast.Store(),
-                lineno=node.lineno,
-                col_offset=node.col_offset,
-                id=template_fmt.format(name="RETURN_VALUE"),
-            )
 
-        assert isinstance(target_node, (ast.Name, ast.Tuple, ast.Subscript)) and isinstance(
-            target_node.ctx, ast.Store
+            if len(return_nodes) > 0:
+                target_node = ast.Name(
+                    ctx=ast.Store(),
+                    lineno=node.lineno,
+                    col_offset=node.col_offset,
+                    id=template_fmt.format(name="RETURN_VALUE"),
+                )
+
+        assert target_node is None or (
+            isinstance(target_node, (ast.Name, ast.Tuple, ast.Subscript))
+            and isinstance(target_node.ctx, ast.Store)
         )
-
         ReturnReplacer.apply(call_ast, target_node)
 
         # Add subroutine sources prepending the required arg assignments
@@ -552,7 +555,7 @@ class CallInliner(ast.NodeTransformer):
                 col_offset=target_node.col_offset,
                 elts=target_node.elts,
             )
-        else:
+        elif isinstance(target_node, ast.Subscript):
             result_node = ast.Subscript(
                 ctx=ast.Load(),
                 lineno=target_node.lineno,
@@ -560,6 +563,8 @@ class CallInliner(ast.NodeTransformer):
                 value=target_node.value,
                 slice=target_node.slice,
             )
+        else:  # target_node is None
+            result_node = call_ast.body[0]
 
         # Add the temp_annotations and temp_init_values to the parent
         current_info = self.context[self.current_name]._gtscript_
@@ -574,8 +579,15 @@ class CallInliner(ast.NodeTransformer):
         return result_node
 
     def visit_Expr(self, node: ast.Expr):
-        """Ignore pure string statements in callee."""
-        if not isinstance(node.value, (ast.Constant, ast.Str)):
+        if (
+            isinstance(node.value, ast.Call)
+            and gt_meta.get_qualified_name_from_node(node.value.func) not in gtscript.MATH_BUILTINS
+        ):
+            # Inline a function with no return value and then remove the current node
+            self.visit(node.value, target_node=None)
+            return None
+        elif not isinstance(node.value, (ast.Constant, ast.Str)):
+            # Ignore ure string statements in callee
             return super().visit(node.value)
 
 
