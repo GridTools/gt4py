@@ -650,6 +650,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         # input arguments that are just passed through and returned by the lambda,
         # e.g. when the lambda is constructing a tuple: in this case, the result
         # data is non-transient, because it corresponds to an input node.
+        # Below we call `make_temps()` to parse the result of the lambda nested SDFG:
+        # this function ensures that the result transient nodes are changed to
+        # non-transient and the corresponding output connecters on the nested SDFG
+        # are connected to intermediate data nodes in the parent SDFG.
         #
         lambda_output_data: Iterable[gtir_builtin_translators.FieldopData] = (
             gtx_utils.flatten_nested_tuple(lambda_result)
@@ -686,23 +690,16 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             output_data: gtir_builtin_translators.FieldopData,
         ) -> gtir_builtin_translators.FieldopData:
             """
-            This function will be called while traversing the result of the dataflow
-            of the nested SDFG to setup the intermediate data nodes in the parent SDFG.
-
-            1st if-branch:
-            Transient nodes actually contain some result produced by the dataflow
-            itself, therefore these nodes are changed to non-transient and an output
-            edge will write the result from the nested SDFG to a new intermediate
-            data node in the parent context.
-
-            2nd and 3rd if-branch:
-            Non-transient nodes are just input nodes that are immediately returned
-            by the lambda expression. Therefore, these nodes are already available
-            in the parent context and can be directly accessed there.
+            This function will be called while traversing the result of the lambda
+            dataflow to setup the intermediate data nodes in the parent SDFG and
+            the data edges from the nested-SDFG output connectors.
             """
             desc = output_data.dc_node.desc(nsdfg)
             if desc.transient:
-                # make lambda result non-transient and map it to external temporary
+                # Transient nodes actually contain some result produced by the dataflow
+                # itself, therefore these nodes are changed to non-transient and an output
+                # edge will write the result from the nested-SDFG to a new intermediate
+                # data node in the parent context.
                 desc.transient = False
                 temp, _ = sdfg.add_temp_transient_like(desc)
                 connector = output_data.dc_node.data
@@ -714,6 +711,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     dst_node, output_data.gt_dtype, output_data.local_offset
                 )
             elif output_data.dc_node.data in lambda_arg_nodes:
+                # This if branch and the next one handle the non-transient result nodes.
+                # Non-transient nodes are just input nodes that are immediately returned
+                # by the lambda expression. Therefore, these nodes are already available
+                # in the parent context and can be directly accessed there.
                 temp_field = lambda_arg_nodes[output_data.dc_node.data]
             else:
                 dc_node = head_state.add_access(output_data.dc_node.data)
