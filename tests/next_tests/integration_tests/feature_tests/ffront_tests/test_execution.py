@@ -1208,9 +1208,9 @@ def test_half_precision(cartesian_case):
     dtype = np.float16
 
     @gtx.field_operator
-    def multiply_by_two(input: cases.IHalfField, input2: cases.IFloatField) -> cases.IHalfField:
-        return dtype(2) * input * astype(input2, dtype)
+    def multiply_by_two(input: cases.IHalfField, input2: cases.IFloatField, scalar: np.float16) -> cases.IHalfField:
+        return dtype(2) * input * astype(input2, dtype) * scalar ** 2.0
 
     cases.verify_with_default_data(
-        cartesian_case, multiply_by_two, ref=lambda input, input2: dtype(2) * input * input2
+        cartesian_case, multiply_by_two, ref=lambda input, input2, scalar: dtype(2) * input * input2 * scalar ** 2.0
     )

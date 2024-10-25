@@ -105,9 +105,12 @@ class GTFNCodegen(codegen.TemplatedGenerator):
                 return self.asfloat(node.value) + "f"
             case "double":
                 return self.asfloat(node.value)
+            case "std::float16_t":
+                return "std::float16_t("+self.asfloat(node.value)+")"  # TODO: this is not a proper solution
             case "bool":
                 return node.value.lower()
             case _:
+                # TODO: we should probably shouldn't just allow anything here. revisit.
                 return node.value
 
     IntegralConstant = as_fmt("{value}_c")

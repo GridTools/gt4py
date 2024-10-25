@@ -315,6 +315,9 @@ class Int64DType(SignedIntDType[int64]):
 class FloatingDType(DType[FloatingT]):
     pass
 
+@dataclasses.dataclass(frozen=True) # TODO
+class Float16DType(FloatingDType[float16]):
+    scalar_type: Final[Type[float16]] = dataclasses.field(default=float16, init=False)
 
 @dataclasses.dataclass(frozen=True)
 class Float32DType(FloatingDType[float32]):

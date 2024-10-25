@@ -239,6 +239,8 @@ def as_dtype(type_: ts.ScalarType) -> core_defs.DType:
         return core_defs.Int32DType()
     elif type_.kind == ts.ScalarKind.INT64:
         return core_defs.Int64DType()
+    elif type_.kind == ts.ScalarKind.FLOAT16: # TODO
+        return core_defs.Float16DType()
     elif type_.kind == ts.ScalarKind.FLOAT32:
         return core_defs.Float32DType()
     elif type_.kind == ts.ScalarKind.FLOAT64:
@@ -259,6 +261,8 @@ def from_dtype(dtype: core_defs.DType) -> ts.ScalarType:
         return ts.ScalarType(kind=ts.ScalarKind.INT32)
     elif dtype == core_defs.Int64DType():
         return ts.ScalarType(kind=ts.ScalarKind.INT64)
+    elif dtype == core_defs.Float16DType(): #TODO
+        return ts.ScalarType(kind=ts.ScalarKind.FLOAT16)
     elif dtype == core_defs.Float32DType():
         return ts.ScalarType(kind=ts.ScalarKind.FLOAT32)
     elif dtype == core_defs.Float64DType():
