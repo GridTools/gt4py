@@ -426,82 +426,86 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert len(node.args) == 1
         arg_expr = self.visit(node.args[0])
 
-        if isinstance(arg_expr, IteratorExpr):
-            field_desc = arg_expr.field.desc(self.sdfg)
-            assert len(field_desc.shape) == len(arg_expr.dimensions)
-            if all(isinstance(index, SymbolExpr) for index in arg_expr.indices.values()):
-                # when all indices are symblic expressions, we can perform direct field access through a memlet
-                field_subset = sbs.Range(
-                    (arg_expr.indices[dim].value, arg_expr.indices[dim].value, 1)  # type: ignore[union-attr]
-                    if dim in arg_expr.indices
-                    else (0, size - 1, 1)
-                    for dim, size in zip(arg_expr.dimensions, field_desc.shape)
-                )
-                return MemletExpr(arg_expr.field, field_subset, arg_expr.local_offset)
-
-            else:
-                # we use a tasklet to dereference an iterator when one or more indices are the result of some computation,
-                # either indirection through connectivity table or dynamic cartesian offset.
-                assert all(dim in arg_expr.indices for dim in arg_expr.dimensions)
-                field_indices = [(dim, arg_expr.indices[dim]) for dim in arg_expr.dimensions]
-                index_connectors = [
-                    IndexConnectorFmt.format(dim=dim.value)
-                    for dim, index in field_indices
-                    if not isinstance(index, SymbolExpr)
-                ]
-                # here `internals` refer to the names used as index in the tasklet code string:
-                # an index can be either a connector name (for dynamic/indirect indices)
-                # or a symbol value (for literal values and scalar arguments).
-                index_internals = ",".join(
-                    str(index.value)
-                    if isinstance(index, SymbolExpr)
-                    else IndexConnectorFmt.format(dim=dim.value)
-                    for dim, index in field_indices
-                )
-                deref_node = self._add_tasklet(
-                    "runtime_deref",
-                    {"field"} | set(index_connectors),
-                    {"val"},
-                    code=f"val = field[{index_internals}]",
-                )
-                # add new termination point for the field parameter
-                self._add_input_data_edge(
-                    arg_expr.field,
-                    sbs.Range.from_array(field_desc),
-                    deref_node,
-                    "field",
-                )
-
-                for dim, index_expr in field_indices:
-                    # add termination points for the dynamic iterator indices
-                    deref_connector = IndexConnectorFmt.format(dim=dim.value)
-                    if isinstance(index_expr, MemletExpr):
-                        self._add_input_data_edge(
-                            index_expr.dc_node,
-                            index_expr.subset,
-                            deref_node,
-                            deref_connector,
-                        )
-
-                    elif isinstance(index_expr, ValueExpr):
-                        self._add_edge(
-                            index_expr.dc_node,
-                            None,
-                            deref_node,
-                            deref_connector,
-                            dace.Memlet(data=index_expr.dc_node.data, subset="0"),
-                        )
-                    else:
-                        assert isinstance(index_expr, SymbolExpr)
-
-                dc_dtype = arg_expr.field.desc(self.sdfg).dtype
-                return self._construct_tasklet_result(
-                    dc_dtype, deref_node, "val", arg_expr.local_offset
-                )
-
-        else:
+        if not isinstance(arg_expr, IteratorExpr):
             # dereferencing a scalar or a literal node results in the node itself
             return arg_expr
+
+        field_desc = arg_expr.field.desc(self.sdfg)
+        if isinstance(field_desc, dace.data.Scalar):
+            # deref a zero-dimensional field
+            assert len(arg_expr.dimensions) == 0
+            assert isinstance(node.type, ts.ScalarType)
+            return MemletExpr(arg_expr.field, subset="0")
+        # default case: deref a field with one or more dimensions
+        assert len(field_desc.shape) == len(arg_expr.dimensions)
+        if all(isinstance(index, SymbolExpr) for index in arg_expr.indices.values()):
+            # when all indices are symblic expressions, we can perform direct field access through a memlet
+            field_subset = sbs.Range(
+                (arg_expr.indices[dim].value, arg_expr.indices[dim].value, 1)  # type: ignore[union-attr]
+                if dim in arg_expr.indices
+                else (0, size - 1, 1)
+                for dim, size in zip(arg_expr.dimensions, field_desc.shape)
+            )
+            return MemletExpr(arg_expr.field, field_subset, arg_expr.local_offset)
+
+        else:
+            # we use a tasklet to dereference an iterator when one or more indices are the result of some computation,
+            # either indirection through connectivity table or dynamic cartesian offset.
+            assert all(dim in arg_expr.indices for dim in arg_expr.dimensions)
+            field_indices = [(dim, arg_expr.indices[dim]) for dim in arg_expr.dimensions]
+            index_connectors = [
+                IndexConnectorFmt.format(dim=dim.value)
+                for dim, index in field_indices
+                if not isinstance(index, SymbolExpr)
+            ]
+            # here `internals` refer to the names used as index in the tasklet code string:
+            # an index can be either a connector name (for dynamic/indirect indices)
+            # or a symbol value (for literal values and scalar arguments).
+            index_internals = ",".join(
+                str(index.value)
+                if isinstance(index, SymbolExpr)
+                else IndexConnectorFmt.format(dim=dim.value)
+                for dim, index in field_indices
+            )
+            deref_node = self._add_tasklet(
+                "runtime_deref",
+                {"field"} | set(index_connectors),
+                {"val"},
+                code=f"val = field[{index_internals}]",
+            )
+            # add new termination point for the field parameter
+            self._add_input_data_edge(
+                arg_expr.field,
+                sbs.Range.from_array(field_desc),
+                deref_node,
+                "field",
+            )
+
+            for dim, index_expr in field_indices:
+                # add termination points for the dynamic iterator indices
+                deref_connector = IndexConnectorFmt.format(dim=dim.value)
+                if isinstance(index_expr, MemletExpr):
+                    self._add_input_data_edge(
+                        index_expr.dc_node,
+                        index_expr.subset,
+                        deref_node,
+                        deref_connector,
+                    )
+
+                elif isinstance(index_expr, ValueExpr):
+                    self._add_edge(
+                        index_expr.dc_node,
+                        None,
+                        deref_node,
+                        deref_connector,
+                        dace.Memlet(data=index_expr.dc_node.data, subset="0"),
+                    )
+                else:
+                    assert isinstance(index_expr, SymbolExpr)
+
+            return self._construct_tasklet_result(
+                field_desc.dtype, deref_node, "val", arg_expr.local_offset
+            )
 
     def _visit_neighbors(self, node: gtir.FunCall) -> ValueExpr:
         assert len(node.args) == 2

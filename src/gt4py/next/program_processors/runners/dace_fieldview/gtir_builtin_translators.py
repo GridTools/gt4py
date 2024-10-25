@@ -138,6 +138,32 @@ def _parse_fieldop_arg(
         raise NotImplementedError(f"Node type {type(arg.gt_dtype)} not supported.")
 
 
+def _get_field_shape(
+    domain: FieldopDomain,
+) -> tuple[list[gtx_common.Dimension], list[dace.symbolic.SymExpr]]:
+    """
+    Parse the field operator domain and generates the shape of the result field.
+
+    It should be enough to allocate an array with shape (upper_bound - lower_bound)
+    but this would require to use array offset for compensate for the start index.
+    Suppose that a field operator executes on domain [2,N-2], the dace array to store
+    the result only needs size (N-4), but this would require to compensate all array
+    accesses with offset -2 (which corresponds to -lower_bound). Instead, we choose
+    to allocate (N-2), leaving positions [0:2] unused. The reason is that array offset
+    is known to cause issues to SDFG inlining. Besides, map fusion will in any case
+    eliminate most of transient arrays.
+
+    Args:
+        domain: The field operator domain.
+
+    Returns:
+        A tuple of two lists: the list of field dimensions and the list of dace
+        array sizes in each dimension.
+    """
+    domain_dims, _, domain_ubs = zip(*domain)
+    return list(domain_dims), list(domain_ubs)
+
+
 def _create_temporary_field(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
@@ -146,17 +172,7 @@ def _create_temporary_field(
     dataflow_output: gtir_dataflow.DataflowOutputEdge,
 ) -> FieldopData:
     """Helper method to allocate a temporary field where to write the output of a field operator."""
-    domain_dims, _, domain_ubs = zip(*domain)
-    field_dims = list(domain_dims)
-    # It should be enough to allocate an array with shape (upper_bound - lower_bound)
-    # but this would require to use array offset for compensate for the start index.
-    # Suppose that a field operator executes on domain [2,N-2], the dace array to store
-    # the result only needs size (N-4), but this would require to compensate all array
-    # accesses with offset -2 (which corresponds to -lower_bound). Instead, we choose
-    # to allocate (N-2), leaving positions [0:2] unused. The reason is that array offset
-    # is known to cause issues to SDFG inlining. Besides, map fusion will in any case
-    # eliminate most of transient arrays.
-    field_shape = list(domain_ubs)
+    field_dims, field_shape = _get_field_shape(domain)
 
     output_desc = dataflow_output.result.dc_node.desc(sdfg)
     if isinstance(output_desc, dace.data.Array):
@@ -311,17 +327,46 @@ def translate_broadcast_scalar(
     assert cpm.is_ref_to(stencil_expr, "deref")
 
     domain = extract_domain(domain_expr)
-    domain_indices = sbs.Indices([dace_gtir_utils.get_map_variable(dim) for dim, _, _ in domain])
+    field_dims, field_shape = _get_field_shape(domain)
+    field_subset = sbs.Range.from_string(
+        ",".join(dace_gtir_utils.get_map_variable(dim) for dim in field_dims)
+    )
 
     assert len(node.args) == 1
-    assert isinstance(node.args[0].type, ts.ScalarType)
     scalar_expr = _parse_fieldop_arg(node.args[0], sdfg, state, sdfg_builder, domain)
-    assert isinstance(scalar_expr, gtir_dataflow.MemletExpr)
-    assert scalar_expr.subset == sbs.Indices.from_string("0")
-    result = gtir_dataflow.DataflowOutputEdge(
-        state, gtir_dataflow.ValueExpr(scalar_expr.dc_node, node.args[0].type)
-    )
-    result_field = _create_temporary_field(sdfg, state, domain, node.type, dataflow_output=result)
+
+    if isinstance(node.args[0].type, ts.ScalarType):
+        assert isinstance(scalar_expr, (gtir_dataflow.MemletExpr, gtir_dataflow.ValueExpr))
+        input_subset = (
+            str(scalar_expr.subset) if isinstance(scalar_expr, gtir_dataflow.MemletExpr) else "0"
+        )
+        input_node = scalar_expr.dc_node
+        gt_dtype = node.args[0].type
+    elif isinstance(node.args[0].type, ts.FieldType):
+        assert isinstance(scalar_expr, gtir_dataflow.IteratorExpr)
+        if len(node.args[0].type.dims) == 0:  # zero-dimensional field
+            input_subset = "0"
+        elif all(
+            isinstance(scalar_expr.indices[dim], gtir_dataflow.SymbolExpr)
+            for dim in scalar_expr.dimensions
+            if dim not in field_dims
+        ):
+            input_subset = ",".join(
+                dace_gtir_utils.get_map_variable(dim)
+                if dim in field_dims
+                else scalar_expr.indices[dim].value  # type: ignore[union-attr] # catched by exception above
+                for dim in scalar_expr.dimensions
+            )
+        else:
+            raise ValueError(f"Cannot deref field {scalar_expr.field} in broadcast expression.")
+
+        input_node = scalar_expr.field
+        gt_dtype = node.args[0].type.dtype
+    else:
+        raise ValueError(f"Unexpected argument {node.args[0]} in broadcast expression.")
+
+    output, _ = sdfg.add_temp_transient(field_shape, input_node.desc(sdfg).dtype)
+    output_node = state.add_access(output)
 
     sdfg_builder.add_mapped_tasklet(
         "broadcast",
@@ -330,15 +375,15 @@ def translate_broadcast_scalar(
             dace_gtir_utils.get_map_variable(dim): f"{lower_bound}:{upper_bound}"
             for dim, lower_bound, upper_bound in domain
         },
-        inputs={"__inp": dace.Memlet(data=scalar_expr.dc_node.data, subset="0")},
+        inputs={"__inp": dace.Memlet(data=input_node.data, subset=input_subset)},
         code="__val = __inp",
-        outputs={"__val": dace.Memlet(data=result_field.dc_node.data, subset=domain_indices)},
-        input_nodes={scalar_expr.dc_node.data: scalar_expr.dc_node},
-        output_nodes={result_field.dc_node.data: result_field.dc_node},
+        outputs={"__val": dace.Memlet(data=output_node.data, subset=field_subset)},
+        input_nodes={input_node.data: input_node},
+        output_nodes={output_node.data: output_node},
         external_edges=True,
     )
 
-    return result_field
+    return FieldopData(output_node, ts.FieldType(field_dims, gt_dtype), local_offset=None)
 
 
 def translate_if(
