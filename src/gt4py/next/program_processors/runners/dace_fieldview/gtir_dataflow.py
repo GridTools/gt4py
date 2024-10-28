@@ -26,7 +26,7 @@ from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_sdfg,
     utility as dace_gtir_utils,
 )
-from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.type_system import type_info as ti, type_specifications as ts
 
 
 @dataclasses.dataclass(frozen=True)
@@ -250,7 +250,6 @@ class LambdaToDataflow(eve.NodeVisitor):
     sdfg: dace.SDFG
     state: dace.SDFGState
     subgraph_builder: gtir_sdfg.DataflowBuilder
-    reduce_identity: Optional[SymbolExpr]
     input_edges: list[DataflowInputEdge]
     symbol_map: dict[str, IteratorExpr | MemletExpr | SymbolExpr]
 
@@ -259,12 +258,10 @@ class LambdaToDataflow(eve.NodeVisitor):
         sdfg: dace.SDFG,
         state: dace.SDFGState,
         subgraph_builder: gtir_sdfg.DataflowBuilder,
-        reduce_identity: Optional[SymbolExpr],
     ):
         self.sdfg = sdfg
         self.state = state
         self.subgraph_builder = subgraph_builder
-        self.reduce_identity = reduce_identity
         self.input_edges = []
         self.symbol_map = {}
 
@@ -351,6 +348,10 @@ class LambdaToDataflow(eve.NodeVisitor):
             name, self.state, map_ranges, inputs, code, outputs, **kwargs
         )
 
+    def unique_nsdfg_name(self, prefix: str) -> str:
+        """Utility function to generate a unique name for a nested SDFG, starting with the given prefix."""
+        return self.subgraph_builder.unique_nsdfg_name(self.sdfg, prefix)
+
     def _construct_local_view(self, field: MemletExpr | ValueExpr) -> ValueExpr:
         if isinstance(field, MemletExpr):
             desc = field.dc_node.desc(self.sdfg)
@@ -425,82 +426,86 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert len(node.args) == 1
         arg_expr = self.visit(node.args[0])
 
-        if isinstance(arg_expr, IteratorExpr):
-            field_desc = arg_expr.field.desc(self.sdfg)
-            assert len(field_desc.shape) == len(arg_expr.dimensions)
-            if all(isinstance(index, SymbolExpr) for index in arg_expr.indices.values()):
-                # when all indices are symblic expressions, we can perform direct field access through a memlet
-                field_subset = sbs.Range(
-                    (arg_expr.indices[dim].value, arg_expr.indices[dim].value, 1)  # type: ignore[union-attr]
-                    if dim in arg_expr.indices
-                    else (0, size - 1, 1)
-                    for dim, size in zip(arg_expr.dimensions, field_desc.shape)
-                )
-                return MemletExpr(arg_expr.field, field_subset, arg_expr.local_offset)
-
-            else:
-                # we use a tasklet to dereference an iterator when one or more indices are the result of some computation,
-                # either indirection through connectivity table or dynamic cartesian offset.
-                assert all(dim in arg_expr.indices for dim in arg_expr.dimensions)
-                field_indices = [(dim, arg_expr.indices[dim]) for dim in arg_expr.dimensions]
-                index_connectors = [
-                    IndexConnectorFmt.format(dim=dim.value)
-                    for dim, index in field_indices
-                    if not isinstance(index, SymbolExpr)
-                ]
-                # here `internals` refer to the names used as index in the tasklet code string:
-                # an index can be either a connector name (for dynamic/indirect indices)
-                # or a symbol value (for literal values and scalar arguments).
-                index_internals = ",".join(
-                    str(index.value)
-                    if isinstance(index, SymbolExpr)
-                    else IndexConnectorFmt.format(dim=dim.value)
-                    for dim, index in field_indices
-                )
-                deref_node = self._add_tasklet(
-                    "runtime_deref",
-                    {"field"} | set(index_connectors),
-                    {"val"},
-                    code=f"val = field[{index_internals}]",
-                )
-                # add new termination point for the field parameter
-                self._add_input_data_edge(
-                    arg_expr.field,
-                    sbs.Range.from_array(field_desc),
-                    deref_node,
-                    "field",
-                )
-
-                for dim, index_expr in field_indices:
-                    # add termination points for the dynamic iterator indices
-                    deref_connector = IndexConnectorFmt.format(dim=dim.value)
-                    if isinstance(index_expr, MemletExpr):
-                        self._add_input_data_edge(
-                            index_expr.dc_node,
-                            index_expr.subset,
-                            deref_node,
-                            deref_connector,
-                        )
-
-                    elif isinstance(index_expr, ValueExpr):
-                        self._add_edge(
-                            index_expr.dc_node,
-                            None,
-                            deref_node,
-                            deref_connector,
-                            dace.Memlet(data=index_expr.dc_node.data, subset="0"),
-                        )
-                    else:
-                        assert isinstance(index_expr, SymbolExpr)
-
-                dc_dtype = arg_expr.field.desc(self.sdfg).dtype
-                return self._construct_tasklet_result(
-                    dc_dtype, deref_node, "val", arg_expr.local_offset
-                )
-
-        else:
+        if not isinstance(arg_expr, IteratorExpr):
             # dereferencing a scalar or a literal node results in the node itself
             return arg_expr
+
+        field_desc = arg_expr.field.desc(self.sdfg)
+        if isinstance(field_desc, dace.data.Scalar):
+            # deref a zero-dimensional field
+            assert len(arg_expr.dimensions) == 0
+            assert isinstance(node.type, ts.ScalarType)
+            return MemletExpr(arg_expr.field, subset="0")
+        # default case: deref a field with one or more dimensions
+        assert len(field_desc.shape) == len(arg_expr.dimensions)
+        if all(isinstance(index, SymbolExpr) for index in arg_expr.indices.values()):
+            # when all indices are symblic expressions, we can perform direct field access through a memlet
+            field_subset = sbs.Range(
+                (arg_expr.indices[dim].value, arg_expr.indices[dim].value, 1)  # type: ignore[union-attr]
+                if dim in arg_expr.indices
+                else (0, size - 1, 1)
+                for dim, size in zip(arg_expr.dimensions, field_desc.shape)
+            )
+            return MemletExpr(arg_expr.field, field_subset, arg_expr.local_offset)
+
+        else:
+            # we use a tasklet to dereference an iterator when one or more indices are the result of some computation,
+            # either indirection through connectivity table or dynamic cartesian offset.
+            assert all(dim in arg_expr.indices for dim in arg_expr.dimensions)
+            field_indices = [(dim, arg_expr.indices[dim]) for dim in arg_expr.dimensions]
+            index_connectors = [
+                IndexConnectorFmt.format(dim=dim.value)
+                for dim, index in field_indices
+                if not isinstance(index, SymbolExpr)
+            ]
+            # here `internals` refer to the names used as index in the tasklet code string:
+            # an index can be either a connector name (for dynamic/indirect indices)
+            # or a symbol value (for literal values and scalar arguments).
+            index_internals = ",".join(
+                str(index.value)
+                if isinstance(index, SymbolExpr)
+                else IndexConnectorFmt.format(dim=dim.value)
+                for dim, index in field_indices
+            )
+            deref_node = self._add_tasklet(
+                "runtime_deref",
+                {"field"} | set(index_connectors),
+                {"val"},
+                code=f"val = field[{index_internals}]",
+            )
+            # add new termination point for the field parameter
+            self._add_input_data_edge(
+                arg_expr.field,
+                sbs.Range.from_array(field_desc),
+                deref_node,
+                "field",
+            )
+
+            for dim, index_expr in field_indices:
+                # add termination points for the dynamic iterator indices
+                deref_connector = IndexConnectorFmt.format(dim=dim.value)
+                if isinstance(index_expr, MemletExpr):
+                    self._add_input_data_edge(
+                        index_expr.dc_node,
+                        index_expr.subset,
+                        deref_node,
+                        deref_connector,
+                    )
+
+                elif isinstance(index_expr, ValueExpr):
+                    self._add_edge(
+                        index_expr.dc_node,
+                        None,
+                        deref_node,
+                        deref_connector,
+                        dace.Memlet(data=index_expr.dc_node.data, subset="0"),
+                    )
+                else:
+                    assert isinstance(index_expr, SymbolExpr)
+
+            return self._construct_tasklet_result(
+                field_desc.dtype, deref_node, "val", arg_expr.local_offset
+            )
 
     def _visit_neighbors(self, node: gtir.FunCall) -> ValueExpr:
         assert len(node.args) == 2
@@ -576,12 +581,15 @@ class LambdaToDataflow(eve.NodeVisitor):
         }
 
         if offset_provider.has_skip_values:
-            if self.reduce_identity is None:
-                raise ValueError(
-                    f"Found local offset '{offset}' with skip values, but 'reduce_identity' is not set."
-                )
-            assert self.reduce_identity.dc_dtype == field_desc.dtype
-            tasklet_expression += f" if {index_connector} != {gtx_common._DEFAULT_SKIP_VALUE} else {field_desc.dtype}({self.reduce_identity.value})"
+            # in case of skip value we can write any dummy value
+            skip_value = (
+                "math.nan"
+                if ti.is_floating_point(node.type.element_type)
+                else str(dace.dtypes.max_value(field_desc.dtype))
+            )
+            tasklet_expression += (
+                f" if {index_connector} != {gtx_common._DEFAULT_SKIP_VALUE} else {skip_value}"
+            )
 
         self._add_mapped_tasklet(
             name=f"{offset}_neighbors",
@@ -713,16 +721,20 @@ class LambdaToDataflow(eve.NodeVisitor):
                 )
             )
 
-            if self.reduce_identity is None:
-                raise ValueError(
-                    f"Found local offset '{result_offset}' with skip values, but 'reduce_identity' is not set."
-                )
-            assert self.reduce_identity.dc_dtype == dc_dtype
             input_memlets["__neighbor_idx"] = dace.Memlet(
                 data=connectivity_slice.dc_node.data, subset=map_index
             )
             input_nodes[connectivity_slice.dc_node.data] = connectivity_slice.dc_node
-            tasklet_expression += f" if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {dc_dtype}({self.reduce_identity.value})"
+
+            # in case of skip value we can write any dummy value
+            skip_value = (
+                "math.nan"
+                if ti.is_floating_point(node.type.element_type)
+                else str(dace.dtypes.max_value(dc_dtype))
+            )
+            tasklet_expression += (
+                f" if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {skip_value}"
+            )
 
         self._add_mapped_tasklet(
             name="map",
@@ -739,66 +751,158 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         return ValueExpr(result_node, dc_dtype, result_offset)
 
+    def _make_reduce_with_skip_values(
+        self,
+        input_expr: ValueExpr | MemletExpr,
+        offset_provider: gtx_common.Connectivity,
+        reduce_init: SymbolExpr,
+        reduce_identity: SymbolExpr,
+        reduce_wcr: str,
+        result_node: dace.nodes.AccessNode,
+    ) -> None:
+        """
+        Helper method to lower reduction on a local field containing skip values.
+
+        The reduction is implemented as a nested SDFG containing 2 states. In first
+        state, the result (a scalar data node passed as argumet) is initialized.
+        In second state, a mapped tasklet uses a write-conflict resolution (wcr)
+        memlet to update the result.
+        We use the offset provider as a mask to identify skip values: the value
+        that is written to the result node is either the input value, when the
+        corresponding neighbor index in the connectivity table is valid, or the
+        identity value if the neighbor index is missing.
+        """
+        origin_map_index = dace_gtir_utils.get_map_variable(offset_provider.origin_axis)
+
+        assert input_expr.local_offset is not None
+        connectivity = dace_utils.connectivity_identifier(input_expr.local_offset)
+        connectivity_node = self.state.add_access(connectivity)
+        connectivity_desc = connectivity_node.desc(self.sdfg)
+        connectivity_desc.transient = False
+
+        desc = input_expr.dc_node.desc(self.sdfg)
+        if isinstance(input_expr, MemletExpr):
+            local_dim_indices = [i for i, size in enumerate(input_expr.subset.size()) if size != 1]
+        else:
+            local_dim_indices = list(range(len(desc.shape)))
+
+        if len(local_dim_indices) != 1:
+            raise NotImplementedError(
+                f"Found {len(local_dim_indices)} local dimensions in reduce expression, expected one."
+            )
+        local_dim_index = local_dim_indices[0]
+        assert desc.shape[local_dim_index] == offset_provider.max_neighbors
+
+        # we lower the reduction map with WCR out memlet in a nested SDFG
+        nsdfg = dace.SDFG(name=self.unique_nsdfg_name("reduce_with_skip_values"))
+        nsdfg.add_array(
+            "values",
+            (desc.shape[local_dim_index],),
+            desc.dtype,
+            strides=(desc.strides[local_dim_index],),
+        )
+        nsdfg.add_array(
+            "neighbor_indices",
+            (connectivity_desc.shape[1],),
+            connectivity_desc.dtype,
+            strides=(connectivity_desc.strides[1],),
+        )
+        nsdfg.add_scalar("acc", desc.dtype)
+        st_init = nsdfg.add_state(f"{nsdfg.label}_init")
+        st_init.add_edge(
+            st_init.add_tasklet(
+                "init_acc",
+                {},
+                {"__val"},
+                f"__val = {reduce_init.dc_dtype}({reduce_init.value})",
+            ),
+            "__val",
+            st_init.add_access("acc"),
+            None,
+            dace.Memlet(data="acc", subset="0"),
+        )
+        st_reduce = nsdfg.add_state_after(st_init, f"{nsdfg.label}_reduce")
+        # Fill skip values in local dimension with the reduce identity value
+        skip_value = f"{reduce_identity.dc_dtype}({reduce_identity.value})"
+        # Since this map operates on a pure local dimension, we explicitly set sequential
+        # schedule and we set the flag 'wcr_nonatomic=True' on the write memlet.
+        # TODO(phimuell): decide if auto-optimizer should reset `wcr_nonatomic` properties, as DaCe does.
+        st_reduce.add_mapped_tasklet(
+            name="reduce_with_skip_values",
+            map_ranges={"i": f"0:{offset_provider.max_neighbors}"},
+            inputs={
+                "__val": dace.Memlet(data="values", subset="i"),
+                "__neighbor_idx": dace.Memlet(data="neighbor_indices", subset="i"),
+            },
+            code=f"__out = __val if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {skip_value}",
+            outputs={
+                "__out": dace.Memlet(data="acc", subset="0", wcr=reduce_wcr, wcr_nonatomic=True),
+            },
+            external_edges=True,
+            schedule=dace.dtypes.ScheduleType.Sequential,
+        )
+
+        nsdfg_node = self.state.add_nested_sdfg(
+            nsdfg, self.sdfg, inputs={"values", "neighbor_indices"}, outputs={"acc"}
+        )
+
+        if isinstance(input_expr, MemletExpr):
+            self._add_input_data_edge(input_expr.dc_node, input_expr.subset, nsdfg_node, "values")
+        else:
+            self.state.add_edge(
+                input_expr.dc_node,
+                None,
+                nsdfg_node,
+                "values",
+                self.sdfg.make_array_memlet(input_expr.dc_node.data),
+            )
+        self._add_input_data_edge(
+            connectivity_node,
+            sbs.Range.from_string(f"{origin_map_index}, 0:{offset_provider.max_neighbors}"),
+            nsdfg_node,
+            "neighbor_indices",
+        )
+        self.state.add_edge(
+            nsdfg_node,
+            "acc",
+            result_node,
+            None,
+            dace.Memlet(data=result_node.data, subset="0"),
+        )
+
     def _visit_reduce(self, node: gtir.FunCall) -> ValueExpr:
         assert isinstance(node.type, ts.ScalarType)
         op_name, reduce_init, reduce_identity = get_reduce_params(node)
-
-        # The input to reduction is a list of elements on a local dimension.
-        # This list is provided by an argument that typically calls the neighbors
-        # builtin function, to built a list of neighbor values for each element
-        # in the field target dimension.
-        # We store the value of reduce identity in the visitor context to have it
-        # available while visiting the input to reduction; this value might be used
-        # by the `neighbors` visitor to fill the skip values in the neighbors list.
-        prev_reduce_identity = self.reduce_identity
-        self.reduce_identity = reduce_identity
-
-        try:
-            input_expr = self.visit(node.args[0])
-        finally:
-            # ensure that we leave the visitor in the same state as we entered
-            self.reduce_identity = prev_reduce_identity
-
-        assert isinstance(input_expr, MemletExpr | ValueExpr)
-        input_desc = input_expr.dc_node.desc(self.sdfg)
-        assert isinstance(input_desc, dace.data.Array)
-
-        if len(input_desc.shape) > 1:
-            assert isinstance(input_expr, MemletExpr)
-            ndims = len(input_desc.shape) - 1
-            # the axis to be reduced is always the last one, because `reduce` is supposed
-            # to operate on `ListType`
-            assert set(input_expr.subset.size()[0:ndims]) == {1}
-            reduce_axes = [ndims]
-        else:
-            reduce_axes = None
-
         reduce_wcr = "lambda x, y: " + gtir_python_codegen.format_builtin(op_name, "x", "y")
-        reduce_node = self.state.add_reduce(reduce_wcr, reduce_axes, reduce_init.value)
 
-        if isinstance(input_expr, MemletExpr):
-            self._add_input_data_edge(
-                input_expr.dc_node,
-                input_expr.subset,
-                reduce_node,
+        result = self.sdfg.temp_data_name()
+        self.sdfg.add_scalar(result, reduce_identity.dc_dtype, transient=True)
+        result_node = self.state.add_access(result)
+
+        input_expr = self.visit(node.args[0])
+        assert isinstance(input_expr, (MemletExpr, ValueExpr))
+        assert input_expr.local_offset is not None
+        offset_provider = self.subgraph_builder.get_offset_provider(input_expr.local_offset)
+        assert isinstance(offset_provider, gtx_common.Connectivity)
+
+        if offset_provider.has_skip_values:
+            self._make_reduce_with_skip_values(
+                input_expr, offset_provider, reduce_init, reduce_identity, reduce_wcr, result_node
             )
+
         else:
-            self.state.add_nedge(
-                input_expr.dc_node,
-                reduce_node,
-                dace.Memlet.from_array(input_expr.dc_node.data, input_desc),
-            )
+            reduce_node = self.state.add_reduce(reduce_wcr, axes=None, identity=reduce_init.value)
+            if isinstance(input_expr, MemletExpr):
+                self._add_input_data_edge(input_expr.dc_node, input_expr.subset, reduce_node)
+            else:
+                self.state.add_nedge(
+                    input_expr.dc_node,
+                    reduce_node,
+                    self.sdfg.make_array_memlet(input_expr.dc_node.data),
+                )
+            self.state.add_nedge(reduce_node, result_node, dace.Memlet(data=result, subset="0"))
 
-        temp_name = self.sdfg.temp_data_name()
-        self.sdfg.add_scalar(temp_name, reduce_identity.dc_dtype, transient=True)
-        temp_node = self.state.add_access(temp_name)
-
-        self.state.add_nedge(
-            reduce_node,
-            temp_node,
-            dace.Memlet(data=temp_name, subset="0"),
-        )
-        return ValueExpr(temp_node, node.type)
+        return ValueExpr(result_node, node.type)
 
     def _split_shift_args(
         self, args: list[gtir.Expr]
