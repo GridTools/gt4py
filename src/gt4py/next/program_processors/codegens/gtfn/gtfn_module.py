@@ -10,13 +10,17 @@ from __future__ import annotations
 
 import dataclasses
 import functools
+import os
+import pathlib
+import pickle
 from typing import Any, Callable, Final, Optional
 
 import factory
 import numpy as np
 
+import gt4py.next.config
 from gt4py._core import definitions as core_defs
-from gt4py.eve import codegen
+from gt4py.eve import codegen, utils
 from gt4py.next import common
 from gt4py.next.common import Connectivity, Dimension
 from gt4py.next.ffront import fbuiltins
@@ -35,6 +39,27 @@ GENERATED_CONNECTIVITY_PARAM_PREFIX = "gt_conn_"
 
 def get_param_description(name: str, type_: Any) -> interface.Parameter:
     return interface.Parameter(name, type_)
+
+
+def _generate_stencil_source_cache_file_path(
+    program: itir.FencilDefinition,
+    offset_provider: dict[str, Connectivity | Dimension],
+    column_axis: Optional[common.Dimension],
+) -> pathlib.Path:
+    program_hash = utils.content_hash(
+        (
+            program,
+            sorted(offset_provider.items(), key=lambda el: el[0]),
+            column_axis,
+        )
+    )
+
+    if not os.path.exists(gt4py.next.config.BUILD_CACHE_DIR):
+        os.mkdir(gt4py.next.config.BUILD_CACHE_DIR)
+
+    cache_path = gt4py.next.config.BUILD_CACHE_DIR / ("gtfn_" + program.id + "_" + program_hash)
+
+    return cache_path
 
 
 @dataclasses.dataclass(frozen=True)
@@ -199,6 +224,13 @@ class GTFNTranslationStep(
         offset_provider: dict[str, Connectivity | Dimension],
         column_axis: Optional[common.Dimension],
     ) -> str:
+        # TODO(tehrengruber): write a proper caching mechanism
+        cache_path = _generate_stencil_source_cache_file_path(program, offset_provider, column_axis)
+
+        if os.path.exists(cache_path):
+            with open(cache_path, "rb") as f:
+                return pickle.load(f)
+
         new_program = self._preprocess_program(program, offset_provider)
         gtfn_ir = GTFN_lowering.apply(
             new_program, offset_provider=offset_provider, column_axis=column_axis
@@ -209,7 +241,11 @@ class GTFNTranslationStep(
             generated_code = GTFNIMCodegen.apply(gtfn_im_ir)
         else:
             generated_code = GTFNCodegen.apply(gtfn_ir)
-        return codegen.format_source("cpp", generated_code, style="LLVM")
+        result = codegen.format_source("cpp", generated_code, style="LLVM")
+
+        with open(cache_path, "wb") as f:
+            pickle.dump(result, f)
+        return result
 
     def __call__(
         self, inp: stages.CompilableProgram

@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
+import gt4py.next.config
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.otf import arguments, languages, stages
@@ -71,3 +72,44 @@ def test_codegen(fencil_example):
     assert module.entry_point.name == fencil.id
     assert any(d.name == "gridtools_cpu" for d in module.library_deps)
     assert module.language is languages.CPP
+
+
+def test_transformation_caching(fencil_example):
+    program, _ = fencil_example
+    args = dict(
+        program=program,
+        offset_provider={},
+        column_axis=gtx.Dimension("K", kind=gtx.DimensionKind.VERTICAL),
+    )
+
+    # test cache file written is what the function returns
+    with tempfile.TemporaryDirectory() as cache_dir:
+        try:
+            prev_cache_dir = gt4py.next.config.BUILD_CACHE_DIR
+            gt4py.next.config.BUILD_CACHE_DIR = pathlib.Path(cache_dir)
+
+            cache_file_path = gtfn_module._generate_stencil_source_cache_file_path(**args)
+            assert not os.path.exists(cache_file_path)
+            stencil_source = gtfn_module.translate_program_cpu.generate_stencil_source(**args)
+            assert os.path.exists(cache_file_path)
+            with open(cache_file_path, "rb") as f:
+                stencil_source_from_cache = pickle.load(f)
+            assert stencil_source == stencil_source_from_cache
+        except Exception as e:
+            raise e
+        finally:
+            gt4py.next.config.BUILD_CACHE_DIR = prev_cache_dir
+
+    # test cache file is deterministic
+    assert gtfn_module._generate_stencil_source_cache_file_path(
+        **args
+    ) == gtfn_module._generate_stencil_source_cache_file_path(**args)
+
+    # test cache file changes for a different program
+    altered_program = copy.deepcopy(program)
+    altered_program.id = "example2"
+    assert gtfn_module._generate_stencil_source_cache_file_path(
+        **args
+    ) != gtfn_module._generate_stencil_source_cache_file_path(
+        **(args | {"program": altered_program})
+    )
