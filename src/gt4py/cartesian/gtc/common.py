@@ -933,7 +933,7 @@ OP_TO_UFUNC_NAME: Final[
         NativeFunction.FLOOR: "floor",
         NativeFunction.CEIL: "ceil",
         NativeFunction.TRUNC: "trunc",
-        NativeFunction.TRUNC: "round",
+        NativeFunction.ROUND: "round",
         NativeFunction.INT: "int",
         NativeFunction.F32: "f32",
         NativeFunction.F64: "f64",

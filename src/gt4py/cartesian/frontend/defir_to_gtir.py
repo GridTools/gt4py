@@ -25,7 +25,6 @@ from gt4py.cartesian.frontend.nodes import (
     Assign,
     AxisBound,
     AxisInterval,
-    AbsoluteKIndex,
     BinaryOperator,
     BinOpExpr,
     BlockStmt,
