@@ -8,6 +8,7 @@
 
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
+from gt4py.next.type_system import type_specifications as ts
 
 
 def test_simple_make_tuple_tuple_get():
@@ -230,3 +231,11 @@ def test_if_on_tuples_with_let():
         is_local_view=False,
     )
     assert actual == expected
+
+
+def test_tuple_get_on_untyped_ref():
+    # test pass gracefully handles untyped nodes.
+    testee = im.tuple_get(0, im.ref("val", ts.DeferredType(constraint=None)))
+
+    actual = CollapseTuple.apply(testee, allow_undeclared_symbols=True)
+    assert actual == testee

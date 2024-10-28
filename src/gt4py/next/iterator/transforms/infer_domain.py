@@ -338,7 +338,7 @@ def _infer_expr(
     elif (
         cpm.is_call_to(expr, itir.ARITHMETIC_BUILTINS)
         or cpm.is_call_to(expr, itir.TYPEBUILTINS)
-        or cpm.is_call_to(expr, "cast_")
+        or cpm.is_call_to(expr, ("cast_", "unstructured_domain", "cartesian_domain"))
     ):
         return expr, {}
     else:
