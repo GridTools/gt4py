@@ -351,6 +351,23 @@ def infer_expr(
     offset_provider: common.OffsetProvider,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
 ) -> tuple[itir.Expr, ACCESSED_DOMAINS]:
+    """
+    Infer the domain of all field subexpressions of `expr`.
+
+    Given an expression `expr` and the domain it is accessed at, back-propagate the domain of all
+    (field-typed) subexpression.
+
+    Arguments:
+    - expr: The expression to be inferred.
+    - domain: The domain `expr` is read at.
+    - symbolic_domain_sizes: A dictionary mapping axes names, e.g., `I`, `Vertex`, to a symbol
+      name that evaluates to the length of that axis.
+
+    Returns:
+      A tuple containing the inferred expression with all applied `as_fieldop` (that are accessed)
+      having a domain argument now, and a dictionary mapping symbol names referenced in `expr` to
+      domain they are accessed at.
+    """
     # this is just a small wrapper that populates the `domain` annex
     expr, accessed_domains = _infer_expr(expr, domain, offset_provider, symbolic_domain_sizes)
     expr.annex.domain = domain

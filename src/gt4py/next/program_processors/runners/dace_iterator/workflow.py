@@ -81,7 +81,6 @@ class DaCeTranslator(
         """Generate DaCe SDFG file from the ITIR definition."""
         program: itir.FencilDefinition | itir.Program = inp.data
 
-        # FIXME[#1582](tehrengruber): Remove. This code-path is only used by the dace_itir backend.
         if isinstance(program, itir.Program):
             program = program_to_fencil.program_to_fencil(program)
 

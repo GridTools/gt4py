@@ -160,7 +160,6 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return new_node
 
     def visit_FunCall(self, node: ir.FunCall, **kwargs) -> ir.Node:
-        # don't visit stencil argument of `as_fieldop`
         if cpm.is_call_to(node, "as_fieldop"):
             kwargs = {**kwargs, "is_local_view": True}
 
