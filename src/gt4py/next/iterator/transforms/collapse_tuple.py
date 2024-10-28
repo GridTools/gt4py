@@ -198,7 +198,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
             if self.ignore_tuple_size or (
                 isinstance(first_expr.type, ts.TupleType)
                 and len(first_expr.type.types) == len(node.args)
-            ):  # type: ignore[union-attr] # ensured by assert above
+            ):
                 return first_expr
         return None
 
