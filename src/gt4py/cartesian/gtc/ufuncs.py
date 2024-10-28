@@ -69,6 +69,6 @@ floor: np.ufunc = np.floor
 ceil: np.ufunc = np.ceil
 trunc: np.ufunc = np.trunc
 round: np.ufunc = np.rint
-i32: Type[np.signedinteger] = np.int32  # noqa: A001 [builtin-variable-shadowing]
+int: Type[np.signedinteger] = np.int32  # noqa: A001 [builtin-variable-shadowing]
 f32: Type[np.floating] = np.float32  # type : ignore
 f64: Type[np.floating] = np.float64
