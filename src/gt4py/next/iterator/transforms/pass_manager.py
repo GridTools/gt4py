@@ -6,9 +6,10 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Callable, Optional
+from typing import Callable, Optional, Protocol
 
 from gt4py.eve import utils as eve_utils
+from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import (
     fencil_to_program,
@@ -31,10 +32,16 @@ from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce
 from gt4py.next.iterator.type_system.inference import infer
 
 
+class ITIRTransform(Protocol):
+    def __call__(
+        self, _: itir.Program | itir.FencilDefinition, *, offset_provider: common.OffsetProvider
+    ) -> itir.Program: ...
+
+
 # TODO(tehrengruber): Revisit interface to configure temporary extraction. We currently forward
 #  `extract_temporaries` and `temporary_extraction_heuristics` which is inconvenient.
 def apply_common_transforms(
-    ir: itir.Node,
+    ir: itir.Program | itir.FencilDefinition,
     *,
     extract_temporaries=False,
     offset_provider=None,
@@ -67,7 +74,7 @@ def apply_common_transforms(
     # Inline. The domain inference can not handle "user" functions, e.g. `let f = λ(...) → ... in f(...)`
     ir = InlineLambdas.apply(ir, opcount_preserving=True, force_inline_lambda_args=True)
     # required in order to get rid of expressions without a domain (e.g. when a tuple element is never accessed)
-    ir = CollapseTuple.apply(ir, offset_provider=offset_provider)
+    ir = CollapseTuple.apply(ir, offset_provider=offset_provider)  # type: ignore[assignment]  # always an itir.Program
     ir = infer_domain.infer_program(
         ir,  # type: ignore[arg-type]  # always an itir.Program
         offset_provider=offset_provider,
@@ -112,7 +119,7 @@ def apply_common_transforms(
     # larger than the number of closure outputs as given by the unconditional collapse, we can
     # only run the unconditional version here instead of in the loop above.
     if unconditionally_collapse_tuples:
-        ir = CollapseTuple.apply(ir, ignore_tuple_size=True, offset_provider=offset_provider)
+        ir = CollapseTuple.apply(ir, ignore_tuple_size=True, offset_provider=offset_provider)  # type: ignore[assignment]  # always an itir.Program
 
     ir = NormalizeShifts().visit(ir)
 
@@ -124,7 +131,7 @@ def apply_common_transforms(
             unrolled = UnrollReduce.apply(ir, offset_provider=offset_provider)
             if unrolled == ir:
                 break
-            ir = unrolled
+            ir = unrolled  # type: ignore[assignment] # still a `itir.Program`
             ir = CollapseListGet().visit(ir)
             ir = NormalizeShifts().visit(ir)
             # this is required as nested neighbor reductions can contain lifts, e.g.,
@@ -139,4 +146,18 @@ def apply_common_transforms(
     )
 
     assert isinstance(ir, itir.Program)
+    return ir
+
+
+def apply_fieldview_transforms(
+    ir: itir.Program, *, offset_provider: common.OffsetProvider
+) -> itir.Program:
+    ir = inline_fundefs.InlineFundefs().visit(ir)
+    ir = inline_fundefs.prune_unreferenced_fundefs(ir)
+    ir = InlineLambdas.apply(ir, opcount_preserving=True)
+    ir = infer_domain.infer_program(
+        ir,
+        offset_provider=offset_provider,
+    )
+    ir = CollapseTuple.apply(ir, offset_provider=offset_provider)  # type: ignore[assignment] # type is still `itir.Program`
     return ir

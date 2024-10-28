@@ -57,7 +57,6 @@ class GTCallable(typing.Protocol):
     def __gt_gtir__(self) -> itir.FunctionDefinition:
         """
         Return iterator IR function definition representing the callable.
-
         Used internally by the Program decorator to populate the function
         definitions of the iterator IR.
         """
