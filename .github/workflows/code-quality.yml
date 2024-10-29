@@ -16,7 +16,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: "3.10"
         cache: 'pip'
@@ -24,4 +24,4 @@ jobs:
           **/pyproject.toml
           **/constraints.txt
           **/requirements-dev.txt
-    - uses: pre-commit/action@v3.0.0
+    - uses: pre-commit/action@v3.0.1
