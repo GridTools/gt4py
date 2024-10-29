@@ -18,14 +18,13 @@ import dace.library
 import dace.subsets
 
 from gt4py import eve
-from gt4py.cartesian.gtc import common
 from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.dace.expansion.tasklet_codegen import TaskletCodegen
 from gt4py.cartesian.gtc.dace.symbol_utils import data_type_to_dace_typeclass
 from gt4py.cartesian.gtc.dace.utils import get_dace_debuginfo, make_dace_subset
 
 
-def exported_scalar_name(*, local_name: eve.SymbolName) -> eve.SymbolName:
+def exported_scalar_name(*, local_name: Union[eve.SymbolName, eve.SymbolRef]) -> eve.SymbolName:
     return eve.SymbolName(f"gtEXP__{local_name}")
 
 
@@ -260,8 +259,25 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         sdfg_ctx.add_while(condition_name=exported_name)
         assert sdfg_ctx.state.label.startswith("while_init")
 
+        read_acc_and_conn: Dict[Optional[str], Tuple[dace.nodes.Node, Optional[str]]] = {}
+        write_acc_and_conn: Dict[Optional[str], Tuple[dace.nodes.Node, Optional[str]]] = {}
+        for memlet in node.condition.read_memlets:
+            if memlet.field not in read_acc_and_conn:
+                read_acc_and_conn[memlet.field] = (
+                    sdfg_ctx.state.add_access(memlet.field, debuginfo=dace.DebugInfo(0)),
+                    None,
+                )
+        for memlet in node.condition.write_memlets:
+            if memlet.field not in write_acc_and_conn:
+                write_acc_and_conn[memlet.field] = (
+                    sdfg_ctx.state.add_access(memlet.field, debuginfo=dace.DebugInfo(0)),
+                    None,
+                )
+        eval_node_ctx = StencilComputationSDFGBuilder.NodeContext(
+            input_node_and_conns=read_acc_and_conn, output_node_and_conns=write_acc_and_conn
+        )
         self.visit(
-            node.condition, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx, symtable=symtable, **kwargs
+            node.condition, sdfg_ctx=sdfg_ctx, node_ctx=eval_node_ctx, symtable=symtable, **kwargs
         )
 
         # TODO: Do we need `while_guard` as state on the stack?
@@ -293,8 +309,25 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         sdfg_ctx.add_condition(condition_name=exported_name)
         assert sdfg_ctx.state.label.startswith("condition_init")
 
+        read_acc_and_conn: Dict[Optional[str], Tuple[dace.nodes.Node, Optional[str]]] = {}
+        write_acc_and_conn: Dict[Optional[str], Tuple[dace.nodes.Node, Optional[str]]] = {}
+        for memlet in node.condition.read_memlets:
+            if memlet.field not in read_acc_and_conn:
+                read_acc_and_conn[memlet.field] = (
+                    sdfg_ctx.state.add_access(memlet.field, debuginfo=dace.DebugInfo(0)),
+                    None,
+                )
+        for memlet in node.condition.write_memlets:
+            if memlet.field not in write_acc_and_conn:
+                write_acc_and_conn[memlet.field] = (
+                    sdfg_ctx.state.add_access(memlet.field, debuginfo=dace.DebugInfo(0)),
+                    None,
+                )
+        eval_node_ctx = StencilComputationSDFGBuilder.NodeContext(
+            input_node_and_conns=read_acc_and_conn, output_node_and_conns=write_acc_and_conn
+        )
         self.visit(
-            node.condition, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx, symtable=symtable, **kwargs
+            node.condition, sdfg_ctx=sdfg_ctx, node_ctx=eval_node_ctx, symtable=symtable, **kwargs
         )
 
         # TODO: Do we need `condition_guard` on the stack?
@@ -351,7 +384,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
                 > 0
             )
             if field_access or target_name in tasklet_outputs:
-                continue 
+                continue
 
             exported_name = exported_scalar_name(local_name=target_name)
             tasklet_outputs.add(target_name)
@@ -383,7 +416,12 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
                     if symbol == read_name:
                         defined_symbol = True
 
-            if not field_access and not defined_symbol and read_name not in tasklet_outputs and read_name not in tasklet_inputs:
+            if (
+                not field_access
+                and not defined_symbol
+                and read_name not in tasklet_outputs
+                and read_name not in tasklet_inputs
+            ):
                 tasklet_inputs.add(read_name)
 
         inputs = set(memlet.connector for memlet in node.read_memlets).union(tasklet_inputs)
@@ -427,9 +465,6 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
             symtable=symtable,
             **kwargs,
         )
-        # StencilComputationSDFGBuilder._add_empty_edges(
-        #     tasklet, tasklet, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx
-        # )
 
     def visit_Range(self, node: dcir.Range, **kwargs: Any) -> Dict[str, str]:
         start, end = node.interval.to_dace_symbolic()
@@ -516,6 +551,9 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         **kwargs: Any,
     ) -> None:
         sdfg_ctx.add_state()
+
+        # Remove node_ctx from **kwargs in case it exists. We are building a new one.
+        kwargs.pop("node_ctx", None)
         read_acc_and_conn: Dict[Optional[str], Tuple[dace.nodes.Node, Optional[str]]] = {}
         write_acc_and_conn: Dict[Optional[str], Tuple[dace.nodes.Node, Optional[str]]] = {}
         for computation in node.computations:
@@ -535,7 +573,6 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
             node_ctx = StencilComputationSDFGBuilder.NodeContext(
                 input_node_and_conns=read_acc_and_conn, output_node_and_conns=write_acc_and_conn
             )
-            kwargs.pop('node_ctx', None) # remove node_ctx from **kwargs in case it is passed down
             self.visit(computation, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx, **kwargs)
 
     def visit_FieldDecl(
@@ -590,7 +627,13 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         symbol_mapping = {decl.name: decl.to_dace_symbol() for decl in node.symbol_decls}
 
         for computation_state in node.states:
-            self.visit(computation_state, sdfg_ctx=inner_sdfg_ctx, node_ctx=node_ctx, symtable=symtable, **kwargs)
+            self.visit(
+                computation_state,
+                sdfg_ctx=inner_sdfg_ctx,
+                node_ctx=node_ctx,
+                symtable=symtable,
+                **kwargs,
+            )
 
         if sdfg_ctx is not None and node_ctx is not None:
             nsdfg = sdfg_ctx.state.add_nested_sdfg(
