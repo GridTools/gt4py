@@ -8,13 +8,21 @@
 
 import numpy as np
 import pytest
+import tempfile
+import pathlib
+import os
+import pickle
+import copy
+import shelve
+
 
 import gt4py.next as gtx
 import gt4py.next.config
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.otf import arguments, languages, stages
+from gt4py.next.otf import arguments, languages, stages, workflow, toolchain
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
+from gt4py.next.program_processors.runners import gtfn
 from gt4py.next.type_system import type_translation
 
 
@@ -113,3 +121,37 @@ def test_transformation_caching(fencil_example):
     ) != gtfn_module._generate_stencil_source_cache_file_path(
         **(args | {"program": altered_program})
     )
+
+
+def test_shelve(fencil_example):
+    fencil, parameters = fencil_example
+    compilable_program = stages.CompilableProgram(
+        data=fencil,
+        args=arguments.CompileTimeArgs.from_concrete_no_size(
+            *parameters, **{"offset_provider": {}}
+        ),
+    )
+
+    hash = gtfn.generate_stencil_source_hash_function(compilable_program)
+    path = str(gt4py.next.config.BUILD_CACHE_DIR / "gtfn_cache")
+    cache = shelve.open(path)
+    cache[hash] = compilable_program
+    cache.close()
+
+    # check content of cash file
+    reopened_cache = shelve.open(path)
+    assert hash in reopened_cache
+    compilable_program_from_cache = reopened_cache[hash]
+    assert compilable_program == compilable_program_from_cache
+    del reopened_cache[hash]  # delete data
+    reopened_cache.close()
+
+    # hash creation is deterministic
+    assert hash == gtfn.generate_stencil_source_hash_function(compilable_program)
+
+    # hash is different if program changes
+    altered_program = copy.deepcopy(compilable_program)
+    altered_program.data.id = "example2"
+    assert gtfn.generate_stencil_source_hash_function(
+        compilable_program
+    ) != gtfn.generate_stencil_source_hash_function(altered_program)

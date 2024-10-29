@@ -7,17 +7,20 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import functools
+import shelve
 import warnings
-from typing import Any
+from typing import Any, Optional
 
 import factory
 import numpy.typing as npt
 
 import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
+from gt4py.eve import utils
 from gt4py.eve.utils import content_hash
 from gt4py.next import backend, common, config
-from gt4py.next.iterator import transforms
+from gt4py.next.common import Connectivity, Dimension
+from gt4py.next.iterator import ir as itir, transforms
 from gt4py.next.otf import arguments, recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import compiler
@@ -116,6 +119,21 @@ def compilation_hash(otf_closure: stages.CompilableProgram) -> int:
     )
 
 
+def generate_stencil_source_hash_function(inp: stages.CompilableProgram) -> str:
+    program: itir.FencilDefinition = inp.data
+    offset_provider: dict[str, Connectivity | Dimension] = inp.args.offset_provider
+    column_axis: Optional[common.Dimension] = inp.args.column_axis
+    program_hash = utils.content_hash(
+        (
+            program,
+            sorted(offset_provider.items(), key=lambda el: el[0]),
+            column_axis,
+        )
+    )
+
+    return program_hash
+
+
 class GTFNCompileWorkflowFactory(factory.Factory):
     class Meta:
         model = recipes.OTFCompileWorkflow
@@ -129,10 +147,22 @@ class GTFNCompileWorkflowFactory(factory.Factory):
             lambda o: compiledb.CompiledbFactory(cmake_build_type=o.cmake_build_type)
         )
 
-    translation = factory.SubFactory(
+        cached_translation = factory.Trait(
+            translation=factory.LazyAttribute(
+                lambda o: workflow.CachedStep(
+                    o.translation,
+                    hash_function=generate_stencil_source_hash_function,
+                    cache=shelve.open(str(config.BUILD_CACHE_DIR / "gtfn_cache")),
+                )  # TODO: close
+            ),
+            name_cached="_cached",
+        )
+
+    translation = factory.SubFactory(  # TODO: indent?
         gtfn_module.GTFNTranslationStepFactory,
         device_type=factory.SelfAttribute("..device_type"),
     )
+
     bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableSource] = (
         nanobind.bind_source
     )
@@ -193,6 +223,7 @@ run_gtfn_imperative = GTFNBackendFactory(
     name_postfix="_imperative", otf_workflow__translation__use_imperative_backend=True
 )
 
+# run_gtfn_cached = GTFNBackendFactory(cached=True, otf_workflow__cached_translation=True)
 run_gtfn_cached = GTFNBackendFactory(cached=True)
 
 run_gtfn_with_temporaries = GTFNBackendFactory(use_temporaries=True)
