@@ -323,7 +323,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
     ) -> dace.nodes.NestedSDFG:
         sdfg = dace.SDFG(node.label)
         inner_sdfg_ctx = StencilComputationSDFGBuilder.SDFGContext(
-            sdfg=sdfg, state=sdfg.add_state(is_start_state=True)
+            sdfg=sdfg, state=sdfg.add_state(is_start_block=True)
         )
         self.visit(
             node.field_decls,
