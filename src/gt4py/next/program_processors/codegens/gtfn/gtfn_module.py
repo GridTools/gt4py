@@ -132,7 +132,8 @@ class GTFNTranslationStep(
                         type_=ts.FieldType(
                             dims=[
                                 connectivity.origin_axis,
-                                common.Dimension(name, kind=common.DimensionKind.LOCAL), connectivity.origin_axis, # TODO(havogt): we should not use the name of the offset as the name of the local dimension
+                                common.Dimension(name, kind=common.DimensionKind.LOCAL),
+                                connectivity.origin_axis,  # TODO(havogt): we should not use the name of the offset as the name of the local dimension
                             ],
                             dtype=ts.ScalarType(
                                 type_translation.get_scalar_kind(connectivity.index_type)
