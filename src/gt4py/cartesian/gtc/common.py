@@ -181,7 +181,8 @@ class NativeFunction(eve.StrEnum):
     TRUNC = "trunc"
     ROUND = "round"
 
-    INT = "int"
+    I32 = "i32"
+    I64 = "i64"
     F32 = "f32"
     F64 = "f64"
 
@@ -225,7 +226,8 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
         NativeFunction.CEIL: 1,
         NativeFunction.TRUNC: 1,
         NativeFunction.ROUND: 1,
-        NativeFunction.INT: 1,
+        NativeFunction.I32: 1,
+        NativeFunction.I64: 1,
         NativeFunction.F32: 1,
         NativeFunction.F64: 1,
     }.items()
@@ -590,8 +592,14 @@ def native_func_call_dtype_propagation(*, strict: bool = True) -> datamodels.Roo
     def _impl(cls: Type[NativeFuncCall], instance: NativeFuncCall) -> None:
         if instance.func in (NativeFunction.ISFINITE, NativeFunction.ISINF, NativeFunction.ISNAN):
             instance.dtype = DataType.BOOL  # type: ignore[attr-defined]
-        elif instance.func in (NativeFunction.INT):
+        elif instance.func in (NativeFunction.I32):
             instance.dtype = DataType.INT32  # type: ignore[attr-defined]
+        elif instance.func in (NativeFunction.I64):
+            instance.dtype = DataType.INT64  # type: ignore[attr-defined]
+        elif instance.func in (NativeFunction.F32):
+            instance.dtype = DataType.FLOAT32  # type: ignore[attr-defined]
+        elif instance.func in (NativeFunction.F64):
+            instance.dtype = DataType.FLOAT64  # type: ignore[attr-defined]
         else:
             # assumes all NativeFunction args have a common dtype
             common_dtype = verify_and_get_common_dtype(cls, instance.args, strict=strict)
@@ -934,7 +942,8 @@ OP_TO_UFUNC_NAME: Final[
         NativeFunction.CEIL: "ceil",
         NativeFunction.TRUNC: "trunc",
         NativeFunction.ROUND: "round",
-        NativeFunction.INT: "int",
+        NativeFunction.I32: "i32",
+        NativeFunction.I64: "i64",
         NativeFunction.F32: "f32",
         NativeFunction.F64: "f64",
     },

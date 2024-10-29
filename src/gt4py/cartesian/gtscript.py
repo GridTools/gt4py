@@ -60,7 +60,11 @@ MATH_BUILTINS = {
     "ceil",
     "trunc",
     "round",
-    "int",
+}
+
+TYPE_HINT_AND_CAST_BUILTINS = {
+    "i32",
+    "i64",
     "f32",
     "f64",
 }
@@ -95,10 +99,11 @@ builtins = {
     "__externals__",
     "__INLINED",
     *MATH_BUILTINS,
+    *TYPE_HINT_AND_CAST_BUILTINS,
     *builtins_and_inline_ignore,
 }
 
-IGNORE_WHEN_INLINING = {*MATH_BUILTINS, *builtins_and_inline_ignore}
+IGNORE_WHEN_INLINING = {*MATH_BUILTINS, *TYPE_HINT_AND_CAST_BUILTINS, *builtins_and_inline_ignore}
 
 __all__ = [*list(builtins), "function", "stencil", "lazy_stencil"]
 

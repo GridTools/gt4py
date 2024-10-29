@@ -285,6 +285,13 @@ class DataType(enum.Enum):
         return result
 
 
+DataType.FRONTEND_TO_NATIVE = {
+    "i32": DataType.INT32,
+    "i64": DataType.INT64,
+    "f32": DataType.FLOAT32,
+    "f64": DataType.FLOAT64,
+}
+
 DataType.NATIVE_TYPE_TO_NUMPY = {
     DataType.DEFAULT: "float_",
     DataType.BOOL: "bool",
@@ -420,7 +427,9 @@ class NativeFunction(enum.Enum):
     TRUNC = enum.auto()
     ROUND = enum.auto()
 
-    INT = enum.auto()
+    # Cast operations - share a keyword with type hints
+    I32 = enum.auto()
+    I64 = enum.auto()
     F32 = enum.auto()
     F64 = enum.auto()
 
@@ -459,7 +468,8 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
     NativeFunction.CEIL: 1,
     NativeFunction.TRUNC: 1,
     NativeFunction.ROUND: 1,
-    NativeFunction.INT: 1,
+    NativeFunction.I32: 1,
+    NativeFunction.I64: 1,
     NativeFunction.F32: 1,
     NativeFunction.F64: 1,
 }
