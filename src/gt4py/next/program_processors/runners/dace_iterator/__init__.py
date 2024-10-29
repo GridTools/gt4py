@@ -332,10 +332,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         return closure_dict
 
     def __sdfg_signature__(self) -> tuple[Sequence[str], Sequence[str]]:
-        args = []
-        for arg in self.past_stage.past_node.params:
-            args.append(arg.id)
-        return (args, [])
+        return [p.id for p in self.past_stage.past_node.params], []
 
 
 def _crosscheck_dace_parsing(dace_parsed_args: list[Any], gt4py_program_args: list[Any]) -> bool:
