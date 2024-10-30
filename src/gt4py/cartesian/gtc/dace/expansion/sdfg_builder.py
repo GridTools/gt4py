@@ -254,9 +254,10 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         assert len(node.condition.stmts) == 1
         assert isinstance(node.condition.stmts[0], dcir.AssignStmt)
         assert isinstance(node.condition.stmts[0].left, dcir.ScalarAccess)
-        exported_name = exported_scalar_name(local_name=node.condition.stmts[0].left.name)
+        if node.condition.stmts[0].left.original_name is None:
+            raise ValueError(f"Original node name not found for {node.name}. DaCe IR error.")
 
-        sdfg_ctx.add_while(condition_name=exported_name)
+        sdfg_ctx.add_while(condition_name=node.condition.stmts[0].left.original_name)
         assert sdfg_ctx.state.label.startswith("while_init")
 
         read_acc_and_conn: Dict[Optional[str], Tuple[dace.nodes.Node, Optional[str]]] = {}
@@ -304,9 +305,10 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         assert len(node.condition.stmts) == 1
         assert isinstance(node.condition.stmts[0], dcir.AssignStmt)
         assert isinstance(node.condition.stmts[0].left, dcir.ScalarAccess)
-        exported_name = exported_scalar_name(local_name=node.condition.stmts[0].left.name)
+        if node.condition.stmts[0].left.original_name is None:
+            raise ValueError(f"Original node name not found for {node.name}. DaCe IR error.")
 
-        sdfg_ctx.add_condition(condition_name=exported_name)
+        sdfg_ctx.add_condition(condition_name=node.condition.stmts[0].left.original_name)
         assert sdfg_ctx.state.label.startswith("condition_init")
 
         read_acc_and_conn: Dict[Optional[str], Tuple[dace.nodes.Node, Optional[str]]] = {}
@@ -385,7 +387,10 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
             if field_access or target_name in tasklet_outputs:
                 continue
 
-            exported_name = exported_scalar_name(local_name=target_name)
+            assert isinstance(access_node.left, dcir.ScalarAccess)
+            if access_node.left.original_name is None:
+                raise ValueError("...")
+            exported_name = access_node.left.original_name
             tasklet_outputs.add(target_name)
             if exported_name not in sdfg_ctx.sdfg.arrays:
                 sdfg_ctx.sdfg.add_scalar(
@@ -437,12 +442,14 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
 
         # add memlets for local scalars into / out of tasklet
         for connector in tasklet_outputs:
+            # TODO: fix this. Do we have enough info?
             exported_name = exported_scalar_name(local_name=connector)
             access_node = sdfg_ctx.state.add_write(exported_name)
             sdfg_ctx.state.add_memlet_path(
                 tasklet, access_node, src_conn=connector, memlet=dace.Memlet(data=exported_name)
             )
         for connector in tasklet_inputs:
+            # TODO: fix this. Do we have enough info?
             exported_name = exported_scalar_name(local_name=connector)
             access_node = sdfg_ctx.state.add_read(exported_name)
             sdfg_ctx.state.add_memlet_path(

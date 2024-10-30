@@ -67,22 +67,20 @@ def replace_strides(arrays: List[dace.data.Array], get_layout_map) -> Dict[str, 
 
 
 def get_tasklet_symbol(
-    name: eve.SymbolRef, offset: Union[CartesianOffset, VariableKOffset], is_target: bool
+    name: eve.SymbolRef, *, offset: Optional[Union[CartesianOffset, VariableKOffset]] = None, is_target: bool
 ):
-    if is_target:
-        return f"gtOUT__{name}"
+    access_name = f"gtOUT__{name}" if is_target else f"gtIN__{name}"
+    if offset is None:
+        return access_name
 
-    acc_name = f"gtIN__{name}"
-    if offset is not None:
-        offset_strs = []
-        for axis in dcir.Axis.dims_3d():
-            off = offset.to_dict()[axis.lower()]
-            if off is not None and off != 0:
-                offset_strs.append(axis.lower() + ("m" if off < 0 else "p") + f"{abs(off):d}")
-        suffix = "_".join(offset_strs)
-        if suffix != "":
-            acc_name += suffix
-    return acc_name
+    # add (per axis) offset markers, e.g. gtIN__A_km1 for A[0, 0, -1]
+    offset_strings = []
+    for axis in dcir.Axis.dims_3d():
+        axis_offset = offset.to_dict()[axis.lower()]
+        if axis_offset is not None and axis_offset != 0:
+            offset_strings.append(axis.lower() + ("m" if axis_offset < 0 else "p") + f"{abs(axis_offset):d}")
+
+    return access_name + "_".join(offset_strings)
 
 
 def axes_list_from_flags(flags):

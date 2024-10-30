@@ -63,7 +63,7 @@ def _access_iter(node: oir.HorizontalExecution, get_outputs: bool):
             lambda acc: (
                 acc.name,
                 acc.offset,
-                get_tasklet_symbol(acc.name, acc.offset, is_target=get_outputs),
+                get_tasklet_symbol(acc.name, offset=acc.offset, is_target=get_outputs),
             )
         )
     ).unique(key=lambda x: x[2])
@@ -335,13 +335,13 @@ class DaCeIRBuilder(eve.NodeTranslator):
         if node.name in var_offset_fields.union(K_write_with_offset):
             # If write in K, we consider the variable to always be a target
             # is_target = is_target or node.name in targets # or node.name in K_write_with_offset
-            name = get_tasklet_symbol(node.name, node.offset, is_target=is_target)
+            name = get_tasklet_symbol(node.name, offset=node.offset, is_target=is_target)
             res = dcir.IndexAccess(
                 name=name,
                 is_target=is_target,
                 offset=self.visit(
                     node.offset,
-                    is_target=is_target,
+                    is_target=False,
                     targets=targets,
                     var_offset_fields=var_offset_fields,
                     K_write_with_offset=K_write_with_offset,
@@ -354,7 +354,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
             is_target = is_target or (
                 node.name in targets and node.offset == common.CartesianOffset.zero()
             )
-            name = get_tasklet_symbol(node.name, node.offset, is_target=is_target)
+            name = get_tasklet_symbol(node.name, offset=node.offset, is_target=is_target)
             if node.data_index:
                 res = dcir.IndexAccess(
                     name=name, offset=None, is_target=is_target, data_index=node.data_index, dtype=node.dtype
@@ -375,8 +375,14 @@ class DaCeIRBuilder(eve.NodeTranslator):
         **kwargs: Any,
     ) -> dcir.ScalarAccess:
         if node.name in global_ctx.library_node.declarations:
+            # Handle function parameters differently because they are always available
             symbol_collector.add_symbol(node.name, dtype=node.dtype)
-        return dcir.ScalarAccess(name=node.name, dtype=node.dtype, is_target=is_target)
+            return dcir.ScalarAccess(name=node.name, dtype=node.dtype, is_target=is_target)
+        
+        # Rename local scalars inside tasklets such that we can pass them from one state
+        # to another (same as we do for index access).
+        tasklet_name = get_tasklet_symbol(node.name, is_target=is_target)
+        return dcir.ScalarAccess(name=tasklet_name, original_name=node.name, dtype=node.dtype, is_target=is_target)
 
     def visit_AssignStmt(self, node: oir.AssignStmt, *, targets, **kwargs: Any) -> dcir.AssignStmt:
         # the visiting order matters here, since targets must not contain the target symbols from the left visit

@@ -731,6 +731,7 @@ class Literal(common.Literal, Expr):
 
 class ScalarAccess(common.ScalarAccess, Expr):
     is_target: bool
+    original_name: Optional[str] = None
 
 
 class VariableKOffset(common.VariableKOffset[Expr]):
