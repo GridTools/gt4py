@@ -403,7 +403,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
         tmp_name = f"if_expression_{id(node)}" if isinstance(node, oir.MaskStmt) else f"while_expression_{id(node)}"
 
         statement = dcir.AssignStmt(
-            left=dcir.ScalarAccess(name=tmp_name, dtype=common.DataType.BOOL, loc=node.loc, is_target=True),
+            left=dcir.ScalarAccess(name=get_tasklet_symbol(tmp_name, is_target=True), original_name=tmp_name, dtype=common.DataType.BOOL, loc=node.loc, is_target=True),
             right=self.visit(condition_expression, is_target=False, global_ctx=global_ctx, symbol_collector=symbol_collector, **kwargs),
             loc=node.loc
         )
