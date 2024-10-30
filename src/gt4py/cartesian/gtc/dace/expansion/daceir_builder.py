@@ -334,7 +334,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
         res: Union[dcir.IndexAccess, dcir.ScalarAccess]
         if node.name in var_offset_fields.union(K_write_with_offset):
             # If write in K, we consider the variable to always be a target
-            is_target = is_target or node.name in targets # or node.name in K_write_with_offset
+            # is_target = is_target or node.name in targets # or node.name in K_write_with_offset
             name = get_tasklet_symbol(node.name, node.offset, is_target=is_target)
             res = dcir.IndexAccess(
                 name=name,
