@@ -41,7 +41,7 @@ NativeFunction enumeration (:class:`NativeFunction`)
     Native function identifier
     [`ABS`, `MAX`, `MIN, `MOD`, `SIN`, `COS`, `TAN`, `ARCSIN`, `ARCCOS`, `ARCTAN`,
     `SQRT`, `EXP`, `LOG`, `LOG10`, `ISFINITE`, `ISINF`, `ISNAN`, `FLOOR`, `CEIL`, `TRUNC`
-    `ROUND`, `INT`, `F32`, `F64`]
+    `ROUND`, `ERF`, `ERFC`, `I32`, `I64`, `F32`, `F64`]
 
 LevelMarker enumeration (:class:`LevelMarker`)
     Special axis levels
@@ -426,6 +426,8 @@ class NativeFunction(enum.Enum):
     CEIL = enum.auto()
     TRUNC = enum.auto()
     ROUND = enum.auto()
+    ERF = enum.auto()
+    ERFC = enum.auto()
 
     # Cast operations - share a keyword with type hints
     I32 = enum.auto()
@@ -468,6 +470,8 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
     NativeFunction.CEIL: 1,
     NativeFunction.TRUNC: 1,
     NativeFunction.ROUND: 1,
+    NativeFunction.ERF: 1,
+    NativeFunction.ERFC: 1,
     NativeFunction.I32: 1,
     NativeFunction.I64: 1,
     NativeFunction.F32: 1,

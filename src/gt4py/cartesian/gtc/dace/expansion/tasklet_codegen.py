@@ -172,6 +172,8 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
                 common.NativeFunction.CEIL: "ceil",
                 common.NativeFunction.TRUNC: "trunc",
                 common.NativeFunction.ROUND: "round",
+                common.NativeFunction.ERF: "erf",
+                common.NativeFunction.ERFC: "erfc",
                 common.NativeFunction.I32: "dace.int32",
                 common.NativeFunction.I64: "dace.int64",
                 common.NativeFunction.F32: "dace.float32",

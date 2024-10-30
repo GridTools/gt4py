@@ -333,6 +333,8 @@ class DefIRToGTIR(IRNodeVisitor):
         NativeFunction.CEIL: common.NativeFunction.CEIL,
         NativeFunction.TRUNC: common.NativeFunction.TRUNC,
         NativeFunction.ROUND: common.NativeFunction.ROUND,
+        NativeFunction.ERF: common.NativeFunction.ERF,
+        NativeFunction.ERFC: common.NativeFunction.ERFC,
         NativeFunction.I32: common.NativeFunction.I32,
         NativeFunction.I64: common.NativeFunction.I64,
         NativeFunction.F64: common.NativeFunction.F64,

@@ -779,6 +779,8 @@ class IRMaker(ast.NodeVisitor):
             "ceil": nodes.NativeFunction.CEIL,
             "trunc": nodes.NativeFunction.TRUNC,
             "round": nodes.NativeFunction.ROUND,
+            "erf": nodes.NativeFunction.ERF,
+            "erfc": nodes.NativeFunction.ERFC,
             "i32": nodes.NativeFunction.I32,
             "i64": nodes.NativeFunction.I64,
             "f32": nodes.NativeFunction.F32,
