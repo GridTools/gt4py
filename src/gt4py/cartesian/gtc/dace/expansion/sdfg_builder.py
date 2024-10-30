@@ -360,7 +360,6 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         )
 
         # general idea:
-        # either
         #  - use `tasklet_outputs` below and write into node_ctx
         #  - keep names from LocalScalarDecl inside tasklet (we can't control these in general)
         #  - when feeding back into another tasklet, use the same connector name and keep the internal name again (as in code)
@@ -419,7 +418,8 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
             if (
                 not field_access
                 and not defined_symbol
-                and read_name not in tasklet_outputs
+                and not access_node.is_target
+                # and read_name not in tasklet_outputs
                 and read_name not in tasklet_inputs
             ):
                 tasklet_inputs.add(read_name)

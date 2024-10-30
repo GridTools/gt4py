@@ -730,7 +730,7 @@ class Literal(common.Literal, Expr):
 
 
 class ScalarAccess(common.ScalarAccess, Expr):
-    pass
+    is_target: bool
 
 
 class VariableKOffset(common.VariableKOffset[Expr]):
@@ -745,6 +745,7 @@ class VariableKOffset(common.VariableKOffset[Expr]):
 
 class IndexAccess(common.FieldAccess, Expr):
     offset: Optional[Union[common.CartesianOffset, VariableKOffset]]
+    is_target: bool
 
 
 class AssignStmt(common.AssignStmt[Union[IndexAccess, ScalarAccess], Expr], Stmt):

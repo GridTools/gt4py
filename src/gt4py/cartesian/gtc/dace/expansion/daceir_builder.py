@@ -338,6 +338,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
             name = get_tasklet_symbol(node.name, node.offset, is_target=is_target)
             res = dcir.IndexAccess(
                 name=name,
+                is_target=is_target,
                 offset=self.visit(
                     node.offset,
                     is_target=is_target,
@@ -356,10 +357,10 @@ class DaCeIRBuilder(eve.NodeTranslator):
             name = get_tasklet_symbol(node.name, node.offset, is_target=is_target)
             if node.data_index:
                 res = dcir.IndexAccess(
-                    name=name, offset=None, data_index=node.data_index, dtype=node.dtype
+                    name=name, offset=None, is_target=is_target, data_index=node.data_index, dtype=node.dtype
                 )
             else:
-                res = dcir.ScalarAccess(name=name, dtype=node.dtype)
+                res = dcir.ScalarAccess(name=name, dtype=node.dtype, is_target=is_target)
         if is_target:
             targets.add(node.name)
         return res
@@ -368,13 +369,14 @@ class DaCeIRBuilder(eve.NodeTranslator):
         self,
         node: oir.ScalarAccess,
         *,
+        is_target: bool,
         global_ctx: DaCeIRBuilder.GlobalContext,
         symbol_collector: DaCeIRBuilder.SymbolCollector,
         **kwargs: Any,
     ) -> dcir.ScalarAccess:
         if node.name in global_ctx.library_node.declarations:
             symbol_collector.add_symbol(node.name, dtype=node.dtype)
-        return dcir.ScalarAccess(name=node.name, dtype=node.dtype)
+        return dcir.ScalarAccess(name=node.name, dtype=node.dtype, is_target=is_target)
 
     def visit_AssignStmt(self, node: oir.AssignStmt, *, targets, **kwargs: Any) -> dcir.AssignStmt:
         # the visiting order matters here, since targets must not contain the target symbols from the left visit
@@ -395,7 +397,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
         tmp_name = f"if_expression_{id(node)}" if isinstance(node, oir.MaskStmt) else f"while_expression_{id(node)}"
 
         statement = dcir.AssignStmt(
-            left=dcir.ScalarAccess(name=tmp_name, dtype=common.DataType.BOOL, loc=node.loc),
+            left=dcir.ScalarAccess(name=tmp_name, dtype=common.DataType.BOOL, loc=node.loc, is_target=True),
             right=self.visit(condition_expression, is_target=False, global_ctx=global_ctx, symbol_collector=symbol_collector, **kwargs),
             loc=node.loc
         )
