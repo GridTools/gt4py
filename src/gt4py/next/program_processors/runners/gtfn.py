@@ -10,6 +10,7 @@ import functools
 import warnings
 from typing import Any, Optional
 
+import diskcache
 import factory
 import numpy.typing as npt
 
@@ -133,6 +134,11 @@ def generate_stencil_source_hash_function(inp: stages.CompilableProgram) -> str:
     return program_hash
 
 
+class FileCache(diskcache.Cache):
+    def __del__(self):
+        self.close()
+
+
 class GTFNCompileWorkflowFactory(factory.Factory):
     class Meta:
         model = recipes.OTFCompileWorkflow
@@ -151,7 +157,7 @@ class GTFNCompileWorkflowFactory(factory.Factory):
                 lambda o: workflow.CachedStep(
                     o.translation_,
                     hash_function=generate_stencil_source_hash_function,
-                    cache=str(config.BUILD_CACHE_DIR / "gtfn_cache"),
+                    cache=FileCache(str(config.BUILD_CACHE_DIR / "gtfn_cache")),
                 )
             ),
         )
@@ -223,7 +229,6 @@ run_gtfn_imperative = GTFNBackendFactory(
     name_postfix="_imperative", otf_workflow__translation__use_imperative_backend=True
 )
 
-#run_gtfn_cached = GTFNBackendFactory(cached=True)
 run_gtfn_cached = GTFNBackendFactory(cached=True, otf_workflow__cached_translation=True)
 
 run_gtfn_with_temporaries = GTFNBackendFactory(use_temporaries=True)

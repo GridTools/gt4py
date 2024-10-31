@@ -136,3 +136,31 @@ def test_hash_and_diskcache(fencil_example):
     assert gtfn.generate_stencil_source_hash_function(
         compilable_program
     ) != gtfn.generate_stencil_source_hash_function(altered_program)
+
+
+def test_gtfn_file_cache(fencil_example):
+    fencil, parameters = fencil_example
+    compilable_program = stages.CompilableProgram(
+        data=fencil,
+        args=arguments.CompileTimeArgs.from_concrete_no_size(
+            *parameters, **{"offset_provider": {}}
+        ),
+    )
+    cached_gtfn_translation_step = gtfn.GTFNBackendFactory(
+        gpu=False, cached=True, otf_workflow__cached_translation=True
+    ).executor.step.translation
+
+    bare_gtfn_translation_step = gtfn.GTFNBackendFactory(
+        gpu=False, cached=True, otf_workflow__cached_translation=False
+    ).executor.step.translation
+
+    assert bare_gtfn_translation_step(compilable_program) == cached_gtfn_translation_step(
+        compilable_program
+    )
+
+    cache_key = gtfn.generate_stencil_source_hash_function(compilable_program)
+    assert cache_key in cached_gtfn_translation_step.cache
+    assert (
+        bare_gtfn_translation_step(compilable_program)
+        == cached_gtfn_translation_step.cache[cache_key]
+    )

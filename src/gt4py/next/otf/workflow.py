@@ -12,8 +12,9 @@ import abc
 import dataclasses
 import functools
 import typing
+from collections.abc import MutableMapping
 from typing import Any, Callable, Generic, Protocol, TypeVar
-import diskcache
+
 from typing_extensions import Self
 
 
@@ -253,30 +254,16 @@ class CachedStep(
 
     step: Workflow[StartT, EndT]
     hash_function: Callable[[StartT], HashT] = dataclasses.field(default=hash)  # type: ignore[assignment]
-    cache: dict[HashT, EndT] | str = dataclasses.field(repr=False, default_factory=dict)
+    cache: MutableMapping[HashT, EndT] = dataclasses.field(repr=False, default_factory=dict)
 
     def __call__(self, inp: StartT) -> EndT:
+        """Run the step only if the input is not cached, else return from cache."""
         hash_ = self.hash_function(inp)
         try:
-            result = self._get_cache_value(hash_)
+            result = self.cache[hash_]
         except KeyError:
-            result = self.step(inp)
-            self._set_cache_value(hash_, result)
+            result = self.cache[hash_] = self.step(inp)
         return result
-
-    def _get_cache_value(self, hash_: HashT) -> EndT:
-        if isinstance(self.cache, str):
-            with diskcache.Cache(self.cache) as cache:
-                return cache[hash_]
-        else:
-            return self.cache[hash_]
-
-    def _set_cache_value(self, hash_: HashT, value: EndT):
-        if isinstance(self.cache, str):
-            with diskcache.Cache(self.cache) as cache:
-                cache[hash_] = value
-        else:
-            self.cache[hash_] = value
 
 
 @dataclasses.dataclass(frozen=True)

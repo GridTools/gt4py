@@ -12,7 +12,6 @@ import dataclasses
 import functools
 import os
 import pathlib
-import pickle
 from typing import Any, Callable, Final, Optional
 
 import factory
@@ -224,7 +223,6 @@ class GTFNTranslationStep(
         offset_provider: dict[str, Connectivity | Dimension],
         column_axis: Optional[common.Dimension],
     ) -> str:
-
         new_program = self._preprocess_program(program, offset_provider)
         gtfn_ir = GTFN_lowering.apply(
             new_program, offset_provider=offset_provider, column_axis=column_axis
