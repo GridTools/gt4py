@@ -425,7 +425,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
                 not field_access
                 and not defined_symbol
                 and not access_node.is_target
-                # and read_name not in tasklet_outputs
+                and read_name.startswith("gtIN__")
                 and read_name not in tasklet_inputs
             ):
                 tasklet_inputs.add(read_name)

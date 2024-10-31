@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import copy
-from typing import Any, ChainMap, List, Optional, Union
+from typing import Any, ChainMap, List, Optional, Set, Union
 
 import dace
 import dace.data
@@ -18,12 +18,26 @@ import gt4py.cartesian.gtc.common as common
 from gt4py import eve
 from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.dace.symbol_utils import get_axis_bound_str
-from gt4py.cartesian.gtc.dace.utils import make_dace_subset
+from gt4py.cartesian.gtc.dace.utils import get_tasklet_symbol, make_dace_subset
 from gt4py.eve.codegen import FormatTemplate as as_fmt
 
 
 class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     ScalarAccess = as_fmt("{name}")
+
+    # NOTE
+    # This looks nice here, but implies that we do the same tracking again for when we add the connectors.
+    # We should really fix this at the DaCe IR level before coming here (or into the SDFG builder for what its worth)
+    #def visit_ScalarAccess(self, node: dcir.ScalarAccess, is_target: bool, targets: Set[eve.SymbolRef], **kwargs: Any) -> str:
+    #    if is_target:
+    #        targets.add(node.original_name)
+    #        return node.name
+    #    
+    #    if node.original_name in targets:
+    #        # Handle case of read after write
+    #        return get_tasklet_symbol(node.original_name, is_target=True)
+    #
+    #    return node.name
 
     def _visit_offset(
         self,
@@ -210,7 +224,12 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
     LocalScalarDecl = as_fmt("{name}: {dtype}")
 
     def visit_Tasklet(self, node: dcir.Tasklet, **kwargs: Any) -> str:
-        return "\n".join(self.visit(node.decls, **kwargs) + self.visit(node.stmts, **kwargs))
+        # We keep a list of all scalar variables that we access inside this
+        # Tasklet. That information is used to derive read after write situations
+        # where we need to make sure to read the updated version of that scalar
+        # variable.
+        targets: Set[eve.SymbolRef] = set()
+        return "\n".join(self.visit(node.decls, **kwargs) + self.visit(node.stmts, targets=targets, **kwargs))
 
     def visit_HorizontalRestriction(self, node: dcir.HorizontalRestriction, **kwargs: Any) -> str:
         condition = node.mask
