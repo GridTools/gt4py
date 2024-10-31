@@ -233,8 +233,8 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
             #            but with an extra argument we squeeze out
             access_slice = ", ".join(args)
             field_access_str = "np.take_along_axis("
-            field_access_str += f"{node.name}.field_view[{access_slice}], "
-            field_access_str += f", {data_index[0][:-1]}, None], "
+            field_access_str += f"{node.name}.field_view[{access_slice}]"
+            field_access_str += f", {data_index[0][:-1]}, None]"
             field_access_str += ", axis=-1)"
             field_access_str += ".squeeze(-1)"
         elif need_extra_axis:
