@@ -13,7 +13,7 @@ import pathlib
 import os
 import pickle
 import copy
-import shelve
+import diskcache
 
 
 import gt4py.next as gtx
@@ -90,24 +90,6 @@ def test_transformation_caching(fencil_example):
         column_axis=gtx.Dimension("K", kind=gtx.DimensionKind.VERTICAL),
     )
 
-    # test cache file written is what the function returns
-    with tempfile.TemporaryDirectory() as cache_dir:
-        try:
-            prev_cache_dir = gt4py.next.config.BUILD_CACHE_DIR
-            gt4py.next.config.BUILD_CACHE_DIR = pathlib.Path(cache_dir)
-
-            cache_file_path = gtfn_module._generate_stencil_source_cache_file_path(**args)
-            assert not os.path.exists(cache_file_path)
-            stencil_source = gtfn_module.translate_program_cpu.generate_stencil_source(**args)
-            assert os.path.exists(cache_file_path)
-            with open(cache_file_path, "rb") as f:
-                stencil_source_from_cache = pickle.load(f)
-            assert stencil_source == stencil_source_from_cache
-        except Exception as e:
-            raise e
-        finally:
-            gt4py.next.config.BUILD_CACHE_DIR = prev_cache_dir
-
     # test cache file is deterministic
     assert gtfn_module._generate_stencil_source_cache_file_path(
         **args
@@ -123,7 +105,7 @@ def test_transformation_caching(fencil_example):
     )
 
 
-def test_shelve(fencil_example):
+def test_hash_and_diskcache(fencil_example):
     fencil, parameters = fencil_example
     compilable_program = stages.CompilableProgram(
         data=fencil,
@@ -134,20 +116,19 @@ def test_shelve(fencil_example):
 
     hash = gtfn.generate_stencil_source_hash_function(compilable_program)
     path = str(gt4py.next.config.BUILD_CACHE_DIR / "gtfn_cache")
-    cache = shelve.open(path)
-    cache[hash] = compilable_program
-    cache.close()
+    with diskcache.Cache(path) as cache:
+        cache[hash] = compilable_program
 
     # check content of cash file
-    reopened_cache = shelve.open(path)
-    assert hash in reopened_cache
-    compilable_program_from_cache = reopened_cache[hash]
-    assert compilable_program == compilable_program_from_cache
-    del reopened_cache[hash]  # delete data
-    reopened_cache.close()
+    with diskcache.Cache(path) as reopened_cache:
+        assert hash in reopened_cache
+        compilable_program_from_cache = reopened_cache[hash]
+        assert compilable_program == compilable_program_from_cache
+        del reopened_cache[hash]  # delete data
 
     # hash creation is deterministic
     assert hash == gtfn.generate_stencil_source_hash_function(compilable_program)
+    assert hash == gtfn.generate_stencil_source_hash_function(compilable_program_from_cache)
 
     # hash is different if program changes
     altered_program = copy.deepcopy(compilable_program)

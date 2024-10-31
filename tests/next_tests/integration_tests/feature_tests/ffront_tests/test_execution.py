@@ -7,9 +7,12 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from functools import reduce
-
+from gt4py.next.otf import languages, stages, workflow
+from gt4py.next.otf.binding import interface
 import numpy as np
 import pytest
+import diskcache
+from gt4py.eve import SymbolName
 
 import gt4py.next as gtx
 from gt4py.next import (
@@ -30,7 +33,7 @@ from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.program_processors.runners import gtfn
 from gt4py.next.type_system import type_specifications as ts
 from gt4py.next import utils as gt_utils
-
+from gt4py.next import config
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
     C2E,
@@ -62,7 +65,135 @@ def test_copy(cartesian_case):
         field_1 = field_tuple[1]
         return field_0
 
+    cartesian_case.backend = gtfn.GTFNBackendFactory(gpu=False, cached=True, otf_workflow__cached_translation=True)
     cases.verify_with_default_data(cartesian_case, testee, ref=lambda a: a)
+
+def test_gtfn_file_cache(cartesian_case):
+    if cartesian_case.backend == gtfn.run_gtfn:
+        cartesian_case.backend = gtfn.GTFNBackendFactory(gpu=False, cached=True, otf_workflow__cached_translation=True)
+    else:
+        pytest.skip("Skipping backend.")
+
+    @gtx.field_operator
+    def testee(a: cases.IJKField) -> cases.IJKField:
+        field_tuple = (a, a)
+        field_0 = field_tuple[0]
+        field_1 = field_tuple[1]
+        return field_0
+
+    src_code = """#include <gridtools/fn/backend/naive.hpp>
+                    #include <gridtools/sid/dimension_to_tuple_like.hpp>
+
+    #include <cmath>
+    #include <cstdint>
+    #include <functional>
+    #include <gridtools/fn/cartesian.hpp>
+    #include <gridtools/fn/sid_neighbor_table.hpp>
+    #include <gridtools/stencil/global_parameter.hpp>
+
+    namespace generated{
+
+    namespace gtfn = ::gridtools::fn;
+
+    namespace{
+    using namespace ::gridtools::literals;
+
+
+            struct IDim_t{};
+        constexpr inline IDim_t IDim{};
+
+
+            struct JDim_t{};
+        constexpr inline JDim_t JDim{};
+
+
+            struct KDim_t{};
+        constexpr inline KDim_t KDim{};
+
+
+                using Ioff_t = IDim_t;
+        constexpr inline Ioff_t Ioff{};
+
+
+                using Joff_t = JDim_t;
+        constexpr inline Joff_t Joff{};
+
+
+                using Koff_t = KDim_t;
+        constexpr inline Koff_t Koff{};
+
+
+        struct _fun_1 {
+            constexpr auto operator()() const {
+                return [](auto const& x){
+                    return gtfn::deref(x);
+                };
+            }
+        };
+
+
+    using block_sizes_t = gridtools::meta::list<gridtools::meta::list<IDim_t, gridtools::integral_constant<int, 32>>,
+gridtools::meta::list<JDim_t, gridtools::integral_constant<int, 8>>,
+gridtools::meta::list<KDim_t, gridtools::integral_constant<int, 1>>>;
+
+    inline auto __field_operator_testee = [](auto... connectivities__){
+        return [connectivities__...](auto backend, auto&& __sym_1,auto&& out,auto&& ____sym_1_size_0,auto&& ____sym_1_size_1,auto&& ____sym_1_size_2,auto&& __out_size_0,auto&& __out_size_1,auto&& __out_size_2){
+            auto tmp_alloc__ = gtfn::backend::tmp_allocator(backend);
+
+
+        make_backend(backend, gtfn::cartesian_domain(::gridtools::hymap::keys<IDim_t,JDim_t,KDim_t>::make_values((__out_size_0 - 0),(__out_size_1 - 0),(__out_size_2 - 0)), ::gridtools::hymap::keys<IDim_t,JDim_t,KDim_t>::make_values(0,0,0))).stencil_executor()().arg(out).arg(__sym_1).assign(0_c, _fun_1() , 1_c).execute();
+
+        };
+    };
+    }
+    }
+
+                    template <class ArgT0, class ArgT1>
+        decltype(auto) __field_operator_testee(ArgT0&& __sym_1, ArgT1&& out, std::int32_t ____sym_1_size_0, std::int32_t ____sym_1_size_1, std::int32_t ____sym_1_size_2, std::int32_t __out_size_0, std::int32_t __out_size_1, std::int32_t __out_size_2) {
+        return generated::__field_operator_testee()(gridtools::fn::backend::naive{}, std::forward<decltype(__sym_1)>(__sym_1), std::forward<decltype(out)>(out), std::forward<decltype(____sym_1_size_0)>(____sym_1_size_0), std::forward<decltype(____sym_1_size_1)>(____sym_1_size_1), std::forward<decltype(____sym_1_size_2)>(____sym_1_size_2), std::forward<decltype(__out_size_0)>(__out_size_0), std::forward<decltype(__out_size_1)>(__out_size_1), std::forward<decltype(__out_size_2)>(__out_size_2));
+    }"""
+    parameters = (interface.Parameter(name=SymbolName("__sym_1"), type_=ts.FieldType(dims=[IDim, JDim, KDim],
+                                                                                     dtype=ts.ScalarType(
+                                                                                         ts.ScalarKind.INT32))),
+                  interface.Parameter(name=SymbolName("out"), type_=ts.FieldType(dims=[IDim, JDim, KDim],
+                                                                                 dtype=ts.ScalarType(
+                                                                                     ts.ScalarKind.INT32))),
+                  interface.Parameter(name=SymbolName("____sym_1_size_0"),
+                                      type_=ts.ScalarType(ts.ScalarKind.INT32)),
+                  interface.Parameter(name=SymbolName("____sym_1_size_1"),
+                                      type_=ts.ScalarType(ts.ScalarKind.INT32)),
+                  interface.Parameter(name=SymbolName("____sym_1_size_2"),
+                                      type_=ts.ScalarType(ts.ScalarKind.INT32)),
+                  interface.Parameter(name=SymbolName("__out_size_0"), type_=ts.ScalarType(ts.ScalarKind.INT32)),
+                  interface.Parameter(name=SymbolName("__out_size_1"), type_=ts.ScalarType(ts.ScalarKind.INT32)),
+                  interface.Parameter(name=SymbolName("__out_size_2"), type_=ts.ScalarType(ts.ScalarKind.INT32)))
+    programm_source = stages.ProgramSource(
+        entry_point=interface.Function(name="__field_operator_testee", parameters=parameters),
+        source_code=src_code,
+        library_deps=(interface.LibraryDependency("gridtools_cpu", "master"),),
+        language=languages.CPP,
+        language_settings=languages.LanguageWithHeaderFilesSettings(
+            formatter_key="cpp",
+            formatter_style="LLVM",
+            file_extension="cpp",
+            header_extension="cpp.inc",
+        ),
+        implicit_domain=True,
+    )
+    hash = '61bde1e968c889c9'
+    with diskcache.Cache(str(config.BUILD_CACHE_DIR / "gtfn_cache")) as cache:
+        if hash in cache:
+            del cache[hash]
+        assert not hash in cache
+    cases.verify_with_default_data(cartesian_case, testee, ref=lambda a: a)
+    with diskcache.Cache(str(config.BUILD_CACHE_DIR / "gtfn_cache")) as cache:
+        assert hash in cache
+        # del cache[hash]
+    cases.verify_with_default_data(cartesian_case, testee, ref=lambda a: a)
+    with diskcache.Cache(str(config.BUILD_CACHE_DIR / "gtfn_cache")) as cache:
+        assert hash in cache
+        del cache[hash]
+
 
 
 @pytest.mark.uses_tuple_returns

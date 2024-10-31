@@ -224,12 +224,6 @@ class GTFNTranslationStep(
         offset_provider: dict[str, Connectivity | Dimension],
         column_axis: Optional[common.Dimension],
     ) -> str:
-        # TODO(tehrengruber): write a proper caching mechanism
-        cache_path = _generate_stencil_source_cache_file_path(program, offset_provider, column_axis)
-
-        if os.path.exists(cache_path):
-            with open(cache_path, "rb") as f:
-                return pickle.load(f)
 
         new_program = self._preprocess_program(program, offset_provider)
         gtfn_ir = GTFN_lowering.apply(
@@ -241,11 +235,8 @@ class GTFNTranslationStep(
             generated_code = GTFNIMCodegen.apply(gtfn_im_ir)
         else:
             generated_code = GTFNCodegen.apply(gtfn_ir)
-        result = codegen.format_source("cpp", generated_code, style="LLVM")
 
-        with open(cache_path, "wb") as f:
-            pickle.dump(result, f)
-        return result
+        return codegen.format_source("cpp", generated_code, style="LLVM")
 
     def __call__(
         self, inp: stages.CompilableProgram

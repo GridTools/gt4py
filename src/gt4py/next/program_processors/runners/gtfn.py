@@ -7,7 +7,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import functools
-import shelve
 import warnings
 from typing import Any, Optional
 
@@ -150,18 +149,19 @@ class GTFNCompileWorkflowFactory(factory.Factory):
         cached_translation = factory.Trait(
             translation=factory.LazyAttribute(
                 lambda o: workflow.CachedStep(
-                    o.translation,
+                    o.translation_,
                     hash_function=generate_stencil_source_hash_function,
-                    cache=shelve.open(str(config.BUILD_CACHE_DIR / "gtfn_cache")),
-                )  # TODO: close
+                    cache=str(config.BUILD_CACHE_DIR / "gtfn_cache"),
+                )
             ),
-            name_cached="_cached",
         )
 
-    translation = factory.SubFactory(  # TODO: indent?
-        gtfn_module.GTFNTranslationStepFactory,
-        device_type=factory.SelfAttribute("..device_type"),
-    )
+        translation_ = factory.SubFactory(
+            gtfn_module.GTFNTranslationStepFactory,
+            device_type=factory.SelfAttribute("..device_type"),
+        )
+
+    translation = factory.LazyAttribute(lambda o: o.translation_)
 
     bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableSource] = (
         nanobind.bind_source
@@ -223,8 +223,8 @@ run_gtfn_imperative = GTFNBackendFactory(
     name_postfix="_imperative", otf_workflow__translation__use_imperative_backend=True
 )
 
-# run_gtfn_cached = GTFNBackendFactory(cached=True, otf_workflow__cached_translation=True)
-run_gtfn_cached = GTFNBackendFactory(cached=True)
+#run_gtfn_cached = GTFNBackendFactory(cached=True)
+run_gtfn_cached = GTFNBackendFactory(cached=True, otf_workflow__cached_translation=True)
 
 run_gtfn_with_temporaries = GTFNBackendFactory(use_temporaries=True)
 
