@@ -366,7 +366,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         ) -> itir.FunCall:
             return _map(
                 "if_",
-                (itir.SymRef(id=cond_symref_name, type=node.args[0].type), true_, false_),
+                (im.ref(cond_symref_name), true_, false_),
                 (node.args[0].type, *arg_types),
             )
 
