@@ -223,13 +223,6 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     def visit_CartesianOffset(self, cartesian_offset: CartesianOffset, **kwargs) -> str:
         dimensions = kwargs["dimensions"]
-        # if node.name in kwargs.get("symtable", {}):
-        #     decl = kwargs["symtable"][node.name]
-        #     dimensions = decl.dimensions if isinstance(decl, npir.FieldDecl) else [True] * 3
-        #     offsets = cast(
-        #         Tuple[Optional[int], Optional[int], Union[str, int, npir.AbsoluteKIndex, None]],
-        #         tuple(off if has_dim else None for has_dim, off in zip(dimensions, offsets)),
-        #     )
         return cartesian_offset.to_str(dimensions)
 
     def visit_SymbolRef(self, symbol_ref: SymbolRef) -> str:
