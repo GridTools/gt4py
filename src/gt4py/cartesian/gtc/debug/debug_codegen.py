@@ -104,7 +104,7 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         symbol_table: dict[str, FieldDecl] = {}
         for declaration in temporary_declarations:
             self.body.append(self.visit(declaration, field_extents=field_extents))
-            symbol_table[declaration.name] = declaration
+            symbol_table[str(declaration.name)] = declaration
         return symbol_table
 
     def generate_field_decls(self, declarations: list[Decl]) -> dict[str, FieldDecl]:
@@ -115,7 +115,7 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
                     f"{declaration.name} = Field({declaration.name}, _origin_['{declaration.name}'], "
                     f"({', '.join([str(x) for x in declaration.dimensions])}))"
                 )
-                symbol_table[declaration.name] = declaration
+                symbol_table[str(declaration.name)] = declaration
         return symbol_table
 
     def generate_run_function(self, stencil: Stencil):
@@ -232,8 +232,8 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         return f"i, j, {self.visit(absolute_k_index.k)}"
 
     def visit_FieldAccess(self, field_access: FieldAccess, **_) -> str:
-        if field_access.name in self.symbol_table:
-            dimensions = self.symbol_table[field_access.name].dimensions
+        if str(field_access.name) in self.symbol_table:
+            dimensions = self.symbol_table[str(field_access.name)].dimensions
         else:
             dimensions = (True, True, True)
 
