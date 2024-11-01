@@ -421,7 +421,7 @@ def test_nested_while_loop(backend):
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_mask_with_offset_written_in_conditional(backend):
-    @gtscript.stencil(backend, externals={"mord": 5})
+    @gtscript.stencil(backend)
     def stencil(outp: gtscript.Field[np.float_]):
         with computation(PARALLEL), interval(...):
             cond = True
