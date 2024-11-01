@@ -181,5 +181,5 @@ zipp==3.20.1              # via -c constraints.txt, importlib-metadata, importli
 pip==24.2                 # via -c constraints.txt, pip-tools, pipdeptree
 setuptools==74.1.2        # via -c constraints.txt, gt4py (pyproject.toml), pip-tools, setuptools-scm
 
---index https://test.pypi.org/simple/
+--extra-index-url https://test.pypi.org/simple/
 gridtools-cpp==2.3.6      # via -c constraints.txt, gt4py (pyproject.toml)
