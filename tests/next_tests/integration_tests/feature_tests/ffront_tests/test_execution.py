@@ -69,12 +69,11 @@ def test_copy(cartesian_case):
 
 
 def test_gtfn_file_cache(cartesian_case):
-    if cartesian_case.backend == gtfn.run_gtfn_cached:
-        cartesian_case.backend = gtfn.GTFNBackendFactory(
-            gpu=False, cached=True, otf_workflow__cached_translation=True
-        )
-    else:
+    if cartesian_case.backend != gtfn.run_gtfn:
         pytest.skip("Skipping backend.")
+    cartesian_case.backend = gtfn.GTFNBackendFactory(
+        gpu=False, cached=True, otf_workflow__cached_translation=True
+    )
 
     @gtx.field_operator
     def testee(a: cases.IJKField) -> cases.IJKField:
