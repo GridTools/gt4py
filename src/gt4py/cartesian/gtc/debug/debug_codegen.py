@@ -60,6 +60,7 @@ from gt4py.eve.concepts import SymbolRef
 class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     def __init__(self) -> None:
         self.body = utils.text.TextBlock()
+        self.symbol_table: dict[str, FieldDecl] = {}
 
     def visit_Stencil(self, stencil: Stencil, **_):
         self.generate_imports()
@@ -67,7 +68,7 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         self.generate_run_function(stencil)
 
         field_extents, block_extents = self.compute_extents(stencil)
-        self.initial_declarations(stencil, field_extents)
+        self.symbol_table = self.initial_declarations(stencil, field_extents)
         self.generate_stencil_code(stencil, block_extents)
 
         return self.body.text
@@ -82,31 +83,40 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         ctx: StencilExtentComputer.Context = StencilExtentComputer().visit(node)
         return ctx.fields, ctx.blocks
 
-    def initial_declarations(self, stencil: Stencil, field_extents: dict[str, Extent]):
+    def initial_declarations(
+        self, stencil: Stencil, field_extents: dict[str, Extent]
+    ) -> dict[str, FieldDecl]:
         self.body.append("# ===== Domain Description ===== #")
         self.body.append("i_0, j_0, k_0 = 0,0,0")
         self.body.append("i_size, j_size, k_size = _domain_")
         self.body.empty_line()
         self.body.append("# ===== Temporary Declaration ===== #")
-        self.generate_temp_decls(stencil.declarations, field_extents)
+        symbol_table = self.generate_temp_decls(stencil.declarations, field_extents)
         self.body.empty_line()
         self.body.append("# ===== Field Declaration ===== #")
-        self.generate_field_decls(stencil.params)
+        symbol_table |= self.generate_field_decls(stencil.params)
         self.body.empty_line()
+        return symbol_table
 
     def generate_temp_decls(
         self, temporary_declarations: list[Temporary], field_extents: dict[str, Extent]
-    ) -> None:
+    ) -> dict[str, FieldDecl]:
+        symbol_table: dict[str, FieldDecl] = {}
         for declaration in temporary_declarations:
             self.body.append(self.visit(declaration, field_extents=field_extents))
+            symbol_table[declaration.name] = declaration
+        return symbol_table
 
-    def generate_field_decls(self, declarations: list[Decl]) -> None:
+    def generate_field_decls(self, declarations: list[Decl]) -> dict[str, FieldDecl]:
+        symbol_table = {}
         for declaration in declarations:
             if isinstance(declaration, FieldDecl):
                 self.body.append(
                     f"{declaration.name} = Field({declaration.name}, _origin_['{declaration.name}'], "
                     f"({', '.join([str(x) for x in declaration.dimensions])}))"
                 )
+                symbol_table[declaration.name] = declaration
+        return symbol_table
 
     def generate_run_function(self, stencil: Stencil):
         function_signature = "def run(*"
@@ -118,7 +128,11 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         self.body.append(function_signature)
         self.body.indent()
 
-    def generate_stencil_code(self, stencil: Stencil, block_extents: dict[int, Extent]):
+    def generate_stencil_code(
+        self,
+        stencil: Stencil,
+        block_extents: dict[int, Extent],
+    ):
         for loop in stencil.vertical_loops:
             for section in loop.sections:
                 with self.create_k_loop_code(section, loop):
@@ -207,8 +221,16 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     def visit_VariableKOffset(self, variable_k_offset: VariableKOffset, **_) -> str:
         return f"i,j,k+{self.visit(variable_k_offset.k)}"
 
-    def visit_CartesianOffset(self, cartesian_offset: CartesianOffset, **_) -> str:
-        return cartesian_offset.to_str()
+    def visit_CartesianOffset(self, cartesian_offset: CartesianOffset, **kwargs) -> str:
+        dimensions = kwargs["dimensions"]
+        # if node.name in kwargs.get("symtable", {}):
+        #     decl = kwargs["symtable"][node.name]
+        #     dimensions = decl.dimensions if isinstance(decl, npir.FieldDecl) else [True] * 3
+        #     offsets = cast(
+        #         Tuple[Optional[int], Optional[int], Union[str, int, npir.AbsoluteKIndex, None]],
+        #         tuple(off if has_dim else None for has_dim, off in zip(dimensions, offsets)),
+        #     )
+        return cartesian_offset.to_str(dimensions)
 
     def visit_SymbolRef(self, symbol_ref: SymbolRef) -> str:
         return symbol_ref
@@ -217,7 +239,12 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         return f"i, j, {self.visit(absolute_k_index.k)}"
 
     def visit_FieldAccess(self, field_access: FieldAccess, **_) -> str:
-        offset_str = self.visit(field_access.offset)
+        if field_access.name in self.symbol_table:
+            dimensions = self.symbol_table[field_access.name].dimensions
+        else:
+            dimensions = (True, True, True)
+
+        offset_str = self.visit(field_access.offset, dimensions=dimensions)
 
         if field_access.data_index:
             data_index_access = ",".join(
