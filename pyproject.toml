@@ -62,7 +62,7 @@ keywords = [
   'portable',
   'hpc'
 ]
-license = {file = 'LICENSE'}
+license = {file = 'LICENSE.txt'}
 name = 'gt4py'
 readme = 'README.md'
 requires-python = '>=3.8'
