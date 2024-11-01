@@ -47,6 +47,7 @@ dependencies = [
   'numpy>=1.23.3',
   'packaging>=20.0',
   'pybind11>=2.10.1',
+  "pytest-benchmark >= 4.0.0",
   'setuptools>=65.5.0',
   'tabulate>=0.8.10',
   'typing-extensions>=4.10.0',

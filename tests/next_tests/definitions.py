@@ -41,7 +41,7 @@ class _PythonObjectIdMixin:
 
 
 class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
-    GTFN_CPU = "gt4py.next.program_processors.runners.gtfn.run_gtfn_cached"
+    GTFN_CPU = "gt4py.next.program_processors.runners.gtfn.run_gtfn"
     GTFN_CPU_IMPERATIVE = "gt4py.next.program_processors.runners.gtfn.run_gtfn_imperative"
     GTFN_CPU_WITH_TEMPORARIES = (
         "gt4py.next.program_processors.runners.gtfn.run_gtfn_with_temporaries"

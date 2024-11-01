@@ -120,7 +120,7 @@ def compilation_hash(otf_closure: stages.CompilableProgram) -> int:
 
 
 def generate_stencil_source_hash_function(inp: stages.CompilableProgram) -> str:
-    program: itir.FencilDefinition = inp.data
+    program: itir.FencilDefinition | itir.Program = inp.data
     offset_provider: dict[str, Connectivity | Dimension] = inp.args.offset_provider
     column_axis: Optional[common.Dimension] = inp.args.column_axis
     program_hash = utils.content_hash(
@@ -135,7 +135,7 @@ def generate_stencil_source_hash_function(inp: stages.CompilableProgram) -> str:
 
 
 class FileCache(diskcache.Cache):
-    def __del__(self):
+    def __del__(self) -> None:
         self.close()
 
 
