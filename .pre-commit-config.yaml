@@ -51,7 +51,7 @@ repos:
   ## version = re.search('ruff==([0-9\.]*)', open("constraints.txt").read())[1]
   ## print(f"rev: v{version}")
   ##]]]
-  rev: v0.7.1
+  rev: v0.7.2
   ##[[[end]]]
   hooks:
     # Run the linter.
@@ -103,7 +103,7 @@ repos:
     - devtools==0.12.2
     - factory-boy==3.3.1
     - frozendict==2.4.6
-    - gridtools-cpp==2.3.5
+    - gridtools-cpp==2.3.6
     - importlib-resources==6.4.5
     - jinja2==3.1.4
     - lark==1.2.2
