@@ -348,7 +348,14 @@ class DaCeIRBuilder(eve.NodeTranslator):
                     K_write_with_offset=K_write_with_offset,
                     **kwargs,
                 ),
-                data_index=node.data_index,
+                data_index=self.visit(
+                    node.data_index,
+                    is_target=False,
+                    targets=targets,
+                    var_offset_fields=var_offset_fields,
+                    K_write_with_offset=K_write_with_offset,
+                    **kwargs,
+                ),
                 dtype=node.dtype,
             )
         else:
@@ -358,7 +365,18 @@ class DaCeIRBuilder(eve.NodeTranslator):
             name = get_tasklet_symbol(node.name, offset=node.offset, is_target=is_target)
             if node.data_index:
                 res = dcir.IndexAccess(
-                    name=name, offset=None, is_target=is_target, data_index=node.data_index, dtype=node.dtype
+                    name=name,
+                    offset=None,
+                    is_target=is_target,
+                    data_index=self.visit(
+                        node.data_index,
+                        is_target=False,
+                        targets=targets,
+                        var_offset_fields=var_offset_fields,
+                        K_write_with_offset=K_write_with_offset,
+                        **kwargs
+                    ),
+                    dtype=node.dtype,
                 )
             else:
                 res = dcir.ScalarAccess(name=name, dtype=node.dtype, is_target=is_target)
