@@ -192,8 +192,13 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
                     # tuple argument differs, just continue with the rest of the tree
                     return None
 
-            assert self.ignore_tuple_size or isinstance(first_expr.type, ts.TupleType)
-            if self.ignore_tuple_size or len(first_expr.type.types) == len(node.args):  # type: ignore[union-attr] # ensured by assert above
+            assert self.ignore_tuple_size or isinstance(
+                first_expr.type, (ts.TupleType, ts.DeferredType)
+            )
+            if self.ignore_tuple_size or (
+                isinstance(first_expr.type, ts.TupleType)
+                and len(first_expr.type.types) == len(node.args)
+            ):
                 return first_expr
         return None
 
