@@ -1,0 +1,8 @@
+{
+  "python.formatting.provider": "ruff",
+  "python.testing.pytestEnabled": true,
+  "python.defaultInterpreterPath": "/workspaces/gt4py/.venv/bin/python",
+  "files.insertFinalNewline": true,
+  "python.terminal.activateEnvironment": true,
+  "cmake.ignoreCMakeListsMissing": true
+}
