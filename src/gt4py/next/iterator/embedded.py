@@ -1204,12 +1204,14 @@ class IndexField(common.Field):
 
     def restrict(self, item: common.AnyIndexSpec) -> Self:
         if isinstance(item, Sequence) and all(isinstance(e, common.NamedIndex) for e in item):
+            assert len(item) == 1
             assert isinstance(item[0], common.NamedIndex)  # for mypy errors on multiple lines below
             d, r = item[0]
             assert d == self._dimension
             assert isinstance(r, core_defs.INTEGRAL_TYPES)
+            # TODO(tehrengruber): Use a regular zero dimensional field instead.
             return self.__class__(self._dimension, r)
-        # TODO set a domain...
+        # TODO: set a domain...
         raise NotImplementedError()
 
     __call__ = premap
@@ -1791,6 +1793,11 @@ def as_fieldop(fun: Callable, domain: runtime.CartesianDomain | runtime.Unstruct
         return out
 
     return impl
+
+
+@builtins.index.register(EMBEDDED)
+def index(axis: common.Dimension) -> common.Field:
+    return IndexField(axis)
 
 
 @runtime.closure.register(EMBEDDED)
