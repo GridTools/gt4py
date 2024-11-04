@@ -12,9 +12,7 @@ import numpy as np
 
 
 try:
-    from scipy.special import erf as erf_
-    from scipy.special import erfc as erfc_
-    from scipy.special import gamma as gamma_
+    from scipy.special import erf as erf_, erfc as erfc_, gamma as gamma_
 except ImportError:
     import math
 
@@ -45,8 +43,8 @@ logical_or: np.ufunc = np.logical_or
 abs: np.ufunc = np.abs  # noqa: A001 [builtin-variable-shadowing]
 minimum: np.ufunc = np.minimum
 maximum: np.ufunc = np.maximum
-max: np.ufunc = np.maximum
-min: np.ufunc = np.minimum
+max: np.ufunc = np.maximum  # noqa: A001
+min: np.ufunc = np.minimum  # noqa: A001
 remainder: np.ufunc = np.remainder
 sin: np.ufunc = np.sin
 cos: np.ufunc = np.cos
@@ -62,7 +60,7 @@ arccosh: np.ufunc = np.arccosh
 arctanh: np.ufunc = np.arctanh
 sqrt: np.ufunc = np.sqrt
 power: np.ufunc = np.power
-pow: np.ufunc = np.power
+pow: np.ufunc = np.power  # noqa: A001
 exp: np.ufunc = np.exp
 log: np.ufunc = np.log
 log10: np.ufunc = np.log10
