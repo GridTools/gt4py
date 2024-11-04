@@ -260,18 +260,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     #include <gridtools/fn/${grid_type_str}.hpp>
     #include <gridtools/fn/sid_neighbor_table.hpp>
     #include <gridtools/stencil/global_parameter.hpp>
-    #include <gridtools/stencil/positional.hpp>
     
-    // TODO(havogt): move to gtfn?
-    namespace gridtools{
-    namespace fn{
-    template <class T>
-    auto index(T){
-    return stencil::positional<std::decay_t<T>>();}
-    }
-    }
-    
-
     namespace generated{
 
     namespace gtfn = ::gridtools::fn;
