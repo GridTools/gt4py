@@ -86,9 +86,6 @@ def _get_shape_args(
 ) -> dict[str, int]:
     shape_args: dict[str, int] = {}
     for name, value in args.items():
-        if len(value.shape) == 0:
-            # zero-dimensional array
-            continue
         for sym, size in zip(arrays[name].shape, value.shape, strict=True):
             if isinstance(sym, dace.symbol):
                 if sym.name not in shape_args:
@@ -110,9 +107,6 @@ def _get_stride_args(
 ) -> dict[str, int]:
     stride_args = {}
     for name, value in args.items():
-        if len(value.shape) == 0:
-            # zero-dimensional array
-            continue
         for sym, stride_size in zip(arrays[name].strides, value.strides, strict=True):
             stride, remainder = divmod(stride_size, value.itemsize)
             if remainder != 0:
@@ -171,9 +165,12 @@ def get_sdfg_args(
         sdfg:               The SDFG for which we want to get the arguments.
     """
     offset_provider = kwargs["offset_provider"]
+    xp = cp if on_gpu else np
 
     dace_args = _get_args(sdfg, args, use_field_canonical_representation)
-    dace_field_args = {n: v for n, v in dace_args.items() if not np.isscalar(v)}
+    dace_field_args = {
+        n: v for n, v in dace_args.items() if (not xp.isscalar(v)) and (len(v.shape) != 0)
+    }
     dace_conn_args = get_sdfg_conn_args(sdfg, offset_provider, on_gpu)
     dace_shapes = _get_shape_args(sdfg.arrays, dace_field_args)
     dace_conn_shapes = _get_shape_args(sdfg.arrays, dace_conn_args)
