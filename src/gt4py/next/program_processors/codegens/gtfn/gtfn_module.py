@@ -83,7 +83,7 @@ class GTFNTranslationStep(
         self,
         program: itir.FencilDefinition | itir.Program,
         arg_types: tuple[ts.TypeSpec, ...],
-        offset_provider: dict[str, common.Connectivity | common.Dimension],
+        offset_provider: common.OffsetProvider,
     ) -> tuple[list[interface.Parameter], list[str]]:
         parameters: list[interface.Parameter] = []
         arg_exprs: list[str] = []
