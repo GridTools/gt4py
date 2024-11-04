@@ -1629,20 +1629,20 @@ def test_gtir_let_lambda():
         declarations=[],
         body=[
             gtir.SetAt(
-                # `x1` is a let-lambda expression representing `x * 3`
-                # `x2` is a let-lambda expression representing `x * 4`
-                #  - note that the let-symbol `x2` is used twice, in a nested let-expression, to test aliasing of the symbol
-                # `x3` is a let-lambda expression simply accessing `x` field symref
-                expr=im.let("x1", im.op_as_fieldop("multiplies", subdomain)(3.0, "x"))(
+                # `xᐞ1` is a let-lambda expression representing `x * 3`
+                # `xᐞ2` is a let-lambda expression representing `x * 4`
+                #  - note that the let-symbol `xᐞ2` is used twice, in a nested let-expression, to test aliasing of the symbol
+                # `xᐞ3` is a let-lambda expression simply accessing `x` field symref
+                expr=im.let("xᐞ1", im.op_as_fieldop("multiplies", subdomain)(3.0, "x"))(
                     im.let(
-                        "x2",
-                        im.let("x2", im.op_as_fieldop("multiplies", domain)(2.0, "x"))(
-                            im.op_as_fieldop("plus", subdomain)("x2", "x2")
+                        "xᐞ2",
+                        im.let("xᐞ2", im.op_as_fieldop("multiplies", domain)(2.0, "x"))(
+                            im.op_as_fieldop("plus", subdomain)("xᐞ2", "xᐞ2")
                         ),
                     )(
-                        im.let("x3", "x")(
+                        im.let("xᐞ3", "x")(
                             im.op_as_fieldop("plus", subdomain)(
-                                "x1", im.op_as_fieldop("plus", subdomain)("x2", "x3")
+                                "xᐞ1", im.op_as_fieldop("plus", subdomain)("xᐞ2", "xᐞ3")
                             )
                         )
                     )
