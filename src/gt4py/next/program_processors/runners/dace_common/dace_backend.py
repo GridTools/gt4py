@@ -86,6 +86,9 @@ def _get_shape_args(
 ) -> dict[str, int]:
     shape_args: dict[str, int] = {}
     for name, value in args.items():
+        if len(value.shape) == 0:
+            # zero-dimensional array
+            continue
         for sym, size in zip(arrays[name].shape, value.shape, strict=True):
             if isinstance(sym, dace.symbol):
                 if sym.name not in shape_args:
@@ -94,7 +97,7 @@ def _get_shape_args(
                     # TODO(edopao): This case is only hit if all fields in a tuple have the same dims and sizes.
                     raise ValueError(
                         f"Expected array size {sym.name} for arg {name} to be {shape_args[sym.name]}, got {size}."
-                    )
+                    )                    
             elif sym != size:
                 raise ValueError(
                     f"Expected shape {arrays[name].shape} for arg {name}, got {value.shape}."
@@ -107,6 +110,9 @@ def _get_stride_args(
 ) -> dict[str, int]:
     stride_args = {}
     for name, value in args.items():
+        if len(value.shape) == 0:
+            # zero-dimensional array
+            continue
         for sym, stride_size in zip(arrays[name].strides, value.strides, strict=True):
             stride, remainder = divmod(stride_size, value.itemsize)
             if remainder != 0:
