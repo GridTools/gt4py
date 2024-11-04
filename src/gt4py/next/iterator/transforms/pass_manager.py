@@ -223,10 +223,7 @@ def apply_fieldview_transforms(
 ) -> itir.Program:
     ir = inline_fundefs.InlineFundefs().visit(ir)
     ir = inline_fundefs.prune_unreferenced_fundefs(ir)
-    ir = InlineLambdas.apply(ir, opcount_preserving=True)
-    ir = infer_domain.infer_program(
-        ir,
-        offset_provider=offset_provider,
-    )
+    ir = InlineLambdas.apply(ir, opcount_preserving=True, force_inline_lambda_args=True)
     ir = CollapseTuple.apply(ir, offset_provider=offset_provider)  # type: ignore[assignment] # type is still `itir.Program`
+    ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
     return ir
