@@ -82,8 +82,11 @@ def test_gtfn_file_cache(cartesian_case):
         field_1 = field_tuple[1]
         return field_0
 
+    # first call: this generates the cache file
     cases.verify_with_default_data(cartesian_case, testee, ref=lambda a: a)
+    # clearing the OTFCompileWorkflow cache such that the OTFCompileWorkflow step is executed again
     object.__setattr__(cartesian_case.backend.executor, "cache", {})
+    # second call: the cache file is used
     cases.verify_with_default_data(cartesian_case, testee, ref=lambda a: a)
 
 

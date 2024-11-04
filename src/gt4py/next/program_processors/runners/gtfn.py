@@ -157,7 +157,7 @@ class GTFNCompileWorkflowFactory(factory.Factory):
                 lambda o: workflow.CachedStep(
                     o.translation_,
                     hash_function=generate_stencil_source_hash_function,
-                    cache=FileCache(str(config.BUILD_CACHE_DIR / "gtfn_cache")),
+                    cache=FileCache(str(config.BUILD_CACHE_DIR / config.GTFN_SOURCE_CACHE_DIR)),
                 )
             ),
         )

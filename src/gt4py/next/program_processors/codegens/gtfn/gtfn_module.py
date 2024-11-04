@@ -40,27 +40,6 @@ def get_param_description(name: str, type_: Any) -> interface.Parameter:
     return interface.Parameter(name, type_)
 
 
-def _generate_stencil_source_cache_file_path(
-    program: itir.FencilDefinition,
-    offset_provider: dict[str, Connectivity | Dimension],
-    column_axis: Optional[common.Dimension],
-) -> pathlib.Path:
-    program_hash = utils.content_hash(
-        (
-            program,
-            sorted(offset_provider.items(), key=lambda el: el[0]),
-            column_axis,
-        )
-    )
-
-    if not os.path.exists(gt4py.next.config.BUILD_CACHE_DIR):
-        os.mkdir(gt4py.next.config.BUILD_CACHE_DIR)
-
-    cache_path = gt4py.next.config.BUILD_CACHE_DIR / ("gtfn_" + program.id + "_" + program_hash)
-
-    return cache_path
-
-
 @dataclasses.dataclass(frozen=True)
 class GTFNTranslationStep(
     workflow.ReplaceEnabledWorkflowMixin[

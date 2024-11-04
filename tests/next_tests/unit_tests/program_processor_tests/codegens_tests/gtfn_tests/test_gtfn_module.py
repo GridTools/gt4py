@@ -82,29 +82,6 @@ def test_codegen(fencil_example):
     assert module.language is languages.CPP
 
 
-def test_transformation_caching(fencil_example):
-    program, _ = fencil_example
-    args = dict(
-        program=program,
-        offset_provider={},
-        column_axis=gtx.Dimension("K", kind=gtx.DimensionKind.VERTICAL),
-    )
-
-    # test cache file is deterministic
-    assert gtfn_module._generate_stencil_source_cache_file_path(
-        **args
-    ) == gtfn_module._generate_stencil_source_cache_file_path(**args)
-
-    # test cache file changes for a different program
-    altered_program = copy.deepcopy(program)
-    altered_program.id = "example2"
-    assert gtfn_module._generate_stencil_source_cache_file_path(
-        **args
-    ) != gtfn_module._generate_stencil_source_cache_file_path(
-        **(args | {"program": altered_program})
-    )
-
-
 def test_hash_and_diskcache(fencil_example):
     fencil, parameters = fencil_example
     compilable_program = stages.CompilableProgram(
@@ -115,7 +92,7 @@ def test_hash_and_diskcache(fencil_example):
     )
 
     hash = gtfn.generate_stencil_source_hash_function(compilable_program)
-    path = str(gt4py.next.config.BUILD_CACHE_DIR / "gtfn_cache")
+    path = str(gt4py.next.config.BUILD_CACHE_DIR / gt4py.next.config.GTFN_SOURCE_CACHE_DIR)
     with diskcache.Cache(path) as cache:
         cache[hash] = compilable_program
 
@@ -154,6 +131,7 @@ def test_gtfn_file_cache(fencil_example):
         gpu=False, cached=True, otf_workflow__cached_translation=False
     ).executor.step.translation
 
+    cached_gtfn_translation_step # run cached translation step once to populate cache
     assert bare_gtfn_translation_step(compilable_program) == cached_gtfn_translation_step(
         compilable_program
     )

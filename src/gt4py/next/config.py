@@ -73,6 +73,9 @@ BUILD_CACHE_DIR: pathlib.Path = (
 )
 
 
+GTFN_SOURCE_CACHE_DIR: str = os.environ.get(f"{_PREFIX}_GTFN_SOURCE_CACHE_DIR", "gtfn_cache")
+
+
 #: Whether generated code projects should be kept around between runs.
 #: - SESSION: generated code projects get destroyed when the interpreter shuts down
 #: - PERSISTENT: generated code projects are written to BUILD_CACHE_DIR and persist between runs
