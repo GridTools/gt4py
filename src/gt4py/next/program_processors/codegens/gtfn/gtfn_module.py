@@ -10,16 +10,13 @@ from __future__ import annotations
 
 import dataclasses
 import functools
-import os
-import pathlib
 from typing import Any, Callable, Final, Optional
 
 import factory
 import numpy as np
 
-import gt4py.next.config
 from gt4py._core import definitions as core_defs
-from gt4py.eve import codegen, utils
+from gt4py.eve import codegen
 from gt4py.next import common
 from gt4py.next.common import Connectivity, Dimension
 from gt4py.next.ffront import fbuiltins
