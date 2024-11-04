@@ -997,7 +997,6 @@ def test_domain_input_bounds(cartesian_case):
     cases.verify(cartesian_case, program_domain, inp, out, lower_i, upper_i, inout=out, ref=ref)
 
 
-@pytest.mark.requires_gtir_dace_gpu_fix
 def test_domain_input_bounds_1(cartesian_case):
     lower_i = 1
     upper_i = 9
@@ -1043,7 +1042,6 @@ def test_domain_input_bounds_1(cartesian_case):
     )
 
 
-@pytest.mark.requires_gtir_dace_gpu_fix
 def test_domain_tuple(cartesian_case):
     @gtx.field_operator
     def fieldop_domain_tuple(

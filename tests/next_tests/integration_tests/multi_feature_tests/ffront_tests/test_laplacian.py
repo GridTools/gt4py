@@ -84,7 +84,6 @@ def skewedlap_ref(inp):
     return -4.0 * inp[1:-1, 1:-1] + inp[2:, 2:] + inp[2:, :-2] + inp[:-2, 2:] + inp[:-2, :-2]
 
 
-@pytest.mark.requires_gtir_dace_gpu_fix
 def test_ffront_lap(cartesian_case):
     in_field = cases.allocate(cartesian_case, lap_program, "in_field")()
     in_field = square(in_field)
@@ -100,7 +99,6 @@ def test_ffront_lap(cartesian_case):
     )
 
 
-@pytest.mark.requires_gtir_dace_gpu_fix
 def test_ffront_skewedlap(cartesian_case):
     in_field = cases.allocate(cartesian_case, skewedlap_program, "in_field")()
     in_field = square(in_field)
@@ -116,7 +114,6 @@ def test_ffront_skewedlap(cartesian_case):
     )
 
 
-@pytest.mark.requires_gtir_dace_gpu_fix
 def test_ffront_laplap(cartesian_case):
     in_field = cases.allocate(cartesian_case, laplap_program, "in_field")()
     in_field = square(in_field)
