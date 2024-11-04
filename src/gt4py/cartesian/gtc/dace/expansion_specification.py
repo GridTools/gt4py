@@ -1,16 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+from __future__ import annotations
 
 import copy
 from dataclasses import dataclass
@@ -18,7 +14,8 @@ from typing import TYPE_CHECKING, Callable, List, Optional, Set, Union
 
 import dace
 
-from gt4py.cartesian.gtc import common, daceir as dcir, oir
+from gt4py.cartesian.gtc import common, oir
+from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.definitions import Extent
 
 
@@ -147,35 +144,21 @@ def _order_as_spec(computation_node, expansion_order):
             expansion_specification.append(item)
         elif axis := _is_tiling(item):
             expansion_specification.append(
-                Map(
-                    iterations=[
-                        Iteration(
-                            axis=axis,
-                            kind="tiling",
-                            stride=None,
-                        )
-                    ]
-                )
+                Map(iterations=[Iteration(axis=axis, kind="tiling", stride=None)])
             )
         elif axis := _is_domain_map(item):
             expansion_specification.append(
-                Map(
-                    iterations=[
-                        Iteration(
-                            axis=axis,
-                            kind="contiguous",
-                            stride=1,
-                        )
-                    ]
-                )
+                Map(iterations=[Iteration(axis=axis, kind="contiguous", stride=1)])
             )
         elif axis := _is_domain_loop(item):
             expansion_specification.append(
                 Loop(
                     axis=axis,
-                    stride=-1
-                    if computation_node.oir_node.loop_order == common.LoopOrder.BACKWARD
-                    else 1,
+                    stride=(
+                        -1
+                        if computation_node.oir_node.loop_order == common.LoopOrder.BACKWARD
+                        else 1
+                    ),
                 )
             )
         elif item == "Sections":
@@ -388,7 +371,7 @@ def _collapse_maps(self, expansion_specification):
 
 
 def make_expansion_order(
-    node: "StencilComputation", expansion_order: Union[List[str], List[ExpansionItem]]
+    node: StencilComputation, expansion_order: Union[List[str], List[ExpansionItem]]
 ) -> List[ExpansionItem]:
     if expansion_order is None:
         return None
@@ -408,7 +391,7 @@ def make_expansion_order(
     return expansion_specification
 
 
-def _k_inside_dims(node: "StencilComputation"):
+def _k_inside_dims(node: StencilComputation):
     # Putting K inside of i or j is valid if
     # * K parallel or
     # * All reads with k-offset to values modified in same HorizontalExecution are not
@@ -458,7 +441,7 @@ def _k_inside_dims(node: "StencilComputation"):
     return res
 
 
-def _k_inside_stages(node: "StencilComputation"):
+def _k_inside_stages(node: StencilComputation):
     # Putting K inside of stages is valid if
     # * K parallel
     # * not "ahead" in order of iteration to fields that are modified in previous
@@ -502,7 +485,7 @@ def _k_inside_stages(node: "StencilComputation"):
 
 @_register_validity_check
 def _sequential_as_loops(
-    node: "StencilComputation", expansion_specification: List[ExpansionItem]
+    node: StencilComputation, expansion_specification: List[ExpansionItem]
 ) -> bool:
     # K can't be Map if not parallel
     if node.oir_node.loop_order != common.LoopOrder.PARALLEL and any(
@@ -530,7 +513,7 @@ def _stages_inside_sections(expansion_specification: List[ExpansionItem], **kwar
 
 @_register_validity_check
 def _k_inside_ij_valid(
-    node: "StencilComputation", expansion_specification: List[ExpansionItem]
+    node: StencilComputation, expansion_specification: List[ExpansionItem]
 ) -> bool:
     # OIR defines that horizontal maps go inside vertical K loop (i.e. all grid points are updated in a
     # HorizontalExecution before the computation of the next one is executed.).  Under certain conditions the semantics
@@ -547,7 +530,7 @@ def _k_inside_ij_valid(
 
 @_register_validity_check
 def _k_inside_stages_valid(
-    node: "StencilComputation", expansion_specification: List[ExpansionItem]
+    node: StencilComputation, expansion_specification: List[ExpansionItem]
 ) -> bool:
     # OIR defines that all horizontal executions of a VerticalLoopSection are run per level. Under certain conditions
     # the semantics remain unchanged even if the k loop is run per horizontal execution. See `_k_inside_stages` for
@@ -564,7 +547,7 @@ def _k_inside_stages_valid(
 
 @_register_validity_check
 def _ij_outside_sections_valid(
-    node: "StencilComputation", expansion_specification: List[ExpansionItem]
+    node: StencilComputation, expansion_specification: List[ExpansionItem]
 ) -> bool:
     # If there are multiple horizontal executions in any section, IJ iteration must go inside sections.
     # TODO: do mergeability checks on a per-axis basis.
@@ -618,7 +601,7 @@ def _iterates_domain(expansion_specification: List[ExpansionItem], **kwargs) -> 
     return True
 
 
-def is_expansion_order_valid(node: "StencilComputation", expansion_order) -> bool:
+def is_expansion_order_valid(node: StencilComputation, expansion_order) -> bool:
     """Check if a given expansion specification valid.
 
     That is, it is semantically valid for the StencilComputation node that is to be configured and currently

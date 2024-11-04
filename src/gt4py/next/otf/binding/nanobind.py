@@ -1,19 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """Python bindings generator for C++ functions."""
-
 
 from __future__ import annotations
 
@@ -23,7 +16,7 @@ import gt4py.eve as eve
 from gt4py.eve.codegen import JinjaTemplate as as_jinja, TemplatedGenerator
 from gt4py.next.otf import languages, stages, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
-from gt4py.next.type_system import type_info as ti, type_specifications as ts
+from gt4py.next.type_system import type_specifications as ts
 
 
 SrcL = TypeVar("SrcL", bound=languages.NanobindSrcL, covariant=True)
@@ -41,12 +34,12 @@ class BufferSID(Expr):
     source_buffer: str
     dimensions: Sequence[DimensionType]
     scalar_type: ts.ScalarType
-    # strides_kind: int # TODO(havogt): implement strides_kind once we have the "frozen stencil" mechanism
-    # unit_stride_dim: int # TODO(havogt): we can fix the dimension with unity stride once we have the "frozen stencil" mechanism
+    # TODO(havogt): implement `strides_kind: int` once we have the "frozen stencil" mechanism
+    # TODO(havogt): we can fix the dimension with `unit_stride_dim: int` once we have the "frozen stencil" mechanism
 
 
-class CompositeSID(Expr):
-    elems: Sequence[Union[BufferSID, CompositeSID]]
+class Tuple(Expr):
+    elems: list[Union[Expr, str]]
 
 
 class FunctionCall(Expr):
@@ -94,7 +87,7 @@ def _type_string(type_: ts.TypeSpec) -> str:
     elif isinstance(type_, ts.FieldType):
         ndims = len(type_.dims)
         dtype = cpp_interface.render_scalar_type(type_.dtype)
-        shape = f"nanobind::shape<{', '.join(['nanobind::any'] * ndims)}>"
+        shape = f"nanobind::shape<{', '.join(['gridtools::nanobind::dynamic_size'] * ndims)}>"
         buffer_t = f"nanobind::ndarray<{dtype}, {shape}>"
         origin_t = f"std::tuple<{', '.join(['ptrdiff_t'] * ndims)}>"
         return f"std::pair<{buffer_t}, {origin_t}>"
@@ -145,11 +138,11 @@ class BindingCodeGenerator(TemplatedGenerator):
 
     BindingFunction = as_jinja("""module.def("{{exported_name}}", &{{wrapper_name}}, "{{doc}}");""")
 
-    def visit_FunctionCall(self, call: FunctionCall):
+    def visit_FunctionCall(self, call: FunctionCall) -> str:
         args = [self.visit(arg) for arg in call.args]
         return cpp_interface.render_function_call(call.target, args)
 
-    def visit_BufferSID(self, sid: BufferSID, **kwargs):
+    def visit_BufferSID(self, sid: BufferSID, **kwargs: Any) -> str:
         pybuffer = f"{sid.source_buffer}.first"
         dims = [self.visit(dim) for dim in sid.dimensions]
         origin = f"{sid.source_buffer}.second"
@@ -159,15 +152,7 @@ class BindingCodeGenerator(TemplatedGenerator):
         renamed = f"gridtools::sid::rename_numbered_dimensions<{', '.join(dims)}>({shifted})"
         return renamed
 
-    def visit_CompositeSID(self, node: CompositeSID, **kwargs):
-        kwargs["composite_ids"] = (
-            f"gridtools::integral_constant<int,{i}>" for i in range(len(node.elems))
-        )
-        return self.generic_visit(node, **kwargs)
-
-    CompositeSID = as_jinja(
-        "gridtools::sid::composite::keys<{{','.join(composite_ids)}}>::make_values({{','.join(elems)}})"
-    )
+    Tuple = as_jinja("""gridtools::tuple({{','.join(elems)}})""")
 
     DimensionType = as_jinja("""generated::{{name}}_t""")
 
@@ -176,17 +161,16 @@ def _tuple_get(index: int, var: str) -> str:
     return f"gridtools::tuple_util::get<{index}>({var})"
 
 
-def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | CompositeSID:
+def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | Tuple:
     if isinstance(type_, ts.FieldType):
         return BufferSID(
             source_buffer=name,
             dimensions=[DimensionType(name=dim.value) for dim in type_.dims],
             scalar_type=type_.dtype,
         )
-    elif ti.is_tuple_of_type(type_, ts.FieldType):
-        return CompositeSID(
-            elems=[make_argument(_tuple_get(i, name), t) for i, t in enumerate(type_.types)]
-        )
+    elif isinstance(type_, ts.TupleType):
+        elements = [make_argument(_tuple_get(i, name), t) for i, t in enumerate(type_.types)]
+        return Tuple(elems=elements)
     elif isinstance(type_, ts.ScalarType):
         return name
     else:
@@ -204,7 +188,7 @@ def create_bindings(
     program_source
         The program source for which the bindings are created
     """
-    if program_source.language not in [languages.Cpp, languages.Cuda]:
+    if program_source.language not in [languages.CPP, languages.CUDA, languages.HIP]:
         raise ValueError(
             f"Can only create bindings for C++ program sources, received '{program_source.language}'."
         )
@@ -247,23 +231,17 @@ def create_bindings(
             doc="",
             functions=[
                 BindingFunction(
-                    exported_name=program_source.entry_point.name,
-                    wrapper_name=wrapper_name,
-                    doc="",
+                    exported_name=program_source.entry_point.name, wrapper_name=wrapper_name, doc=""
                 )
             ],
         ),
     )
 
     src = interface.format_source(
-        program_source.language_settings,
-        BindingCodeGenerator.apply(file_binding),
+        program_source.language_settings, BindingCodeGenerator.apply(file_binding)
     )
 
-    return stages.BindingSource(
-        src,
-        (interface.LibraryDependency("nanobind", "1.4.0"),),
-    )
+    return stages.BindingSource(src, (interface.LibraryDependency("nanobind", "2.0.0"),))
 
 
 @workflow.make_step

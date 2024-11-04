@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import inspect
 import traceback
@@ -36,10 +30,7 @@ def test_invalid_syntax_error_empty_return():
     def wrong_syntax(inp: gtx.Field[[TDim], float]):
         return  # <-- this line triggers the syntax error
 
-    with pytest.raises(
-        f2f.errors.DSLError,
-        match=(r".*return.*"),
-    ) as exc_info:
+    with pytest.raises(f2f.errors.DSLError, match=(r".*return.*")) as exc_info:
         _ = f2f.FieldOperatorParser.apply_to_function(wrong_syntax)
 
     assert exc_info.value.location
@@ -80,7 +71,7 @@ def test_fo_type_deduction_error():
     line = inspect.getframeinfo(inspect.currentframe()).lineno
 
     def field_operator_with_undeclared_symbol():
-        return undeclared_symbol  # noqa: F821  # undefined on purpose
+        return undeclared_symbol  # noqa: F821 [undefined-name]
 
     with pytest.raises(errors.DSLError) as exc_info:
         _ = f2f.FieldOperatorParser.apply_to_function(field_operator_with_undeclared_symbol)

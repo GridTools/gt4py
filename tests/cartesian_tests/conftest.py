@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """Global configuration of cartesian test generation and execution (with Hypothesis and pytest)."""
 
@@ -26,9 +20,13 @@ from gt4py.cartesian import config as gt_config
 def pytest_configure(config):
     # HealthCheck.too_slow causes more trouble than good -- especially in CIs.
     hyp.settings.register_profile(
-        "slow", hyp.settings(suppress_health_check=[hyp.HealthCheck.too_slow], deadline=None)
+        "lenient",
+        hyp.settings(
+            suppress_health_check=[hyp.HealthCheck.too_slow, hyp.HealthCheck.data_too_large],
+            deadline=None,
+        ),
     )
-    hyp.settings.load_profile("slow")
+    hyp.settings.load_profile("lenient")
 
 
 # Setup cache folder

@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import numpy as np
 import pytest
@@ -24,7 +18,7 @@ from next_tests.integration_tests.cases import IDim, JDim
 from next_tests.integration_tests.multi_feature_tests.iterator_tests.hdiff_reference import (
     hdiff_reference,
 )
-from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
+from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
 I = offset("I")
@@ -72,18 +66,8 @@ def hdiff(inp, coeff, out, x, y):
 
 
 @pytest.mark.uses_origin
-def test_hdiff(hdiff_reference, program_processor, lift_mode):
+def test_hdiff(hdiff_reference, program_processor):
     program_processor, validate = program_processor
-    if program_processor in [
-        gtfn.run_gtfn,
-        gtfn.run_gtfn_imperative,
-        gtfn.run_gtfn_with_temporaries,
-    ]:
-        # TODO(tehrengruber): check if still true
-        from gt4py.next.iterator import transforms
-
-        if lift_mode != transforms.LiftMode.FORCE_INLINE:
-            pytest.xfail("Temporaries are not compatible with origins.")
 
     inp, coeff, out = hdiff_reference
     shape = (out.shape[0], out.shape[1])
@@ -92,9 +76,7 @@ def test_hdiff(hdiff_reference, program_processor, lift_mode):
     coeff_s = gtx.as_field([IDim, JDim], coeff[:, :, 0])
     out_s = gtx.as_field([IDim, JDim], np.zeros_like(coeff[:, :, 0]))
 
-    run_processor(
-        hdiff, program_processor, inp_s, coeff_s, out_s, shape[0], shape[1], lift_mode=lift_mode
-    )
+    run_processor(hdiff, program_processor, inp_s, coeff_s, out_s, shape[0], shape[1])
 
     if validate:
         assert np.allclose(out[:, :, 0], out_s.asnumpy())

@@ -1,20 +1,14 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import multiprocessing
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import gridtools_cpp
 
@@ -48,7 +42,17 @@ GT_INCLUDE_PATH: str = os.path.abspath(gridtools_cpp.get_include_dir())
 
 GT_CPP_TEMPLATE_DEPTH: int = 1024
 
+GT4PY_COMPILE_OPT_LEVEL: str = os.environ.get("GT4PY_COMPILE_OPT_LEVEL", "3")
+GT4PY_EXTRA_COMPILE_OPT_FLAGS: str = os.environ.get("GT4PY_EXTRA_COMPILE_OPT_FLAGS", "")
+
 # Settings dict
+GT4PY_EXTRA_COMPILE_ARGS: str = os.environ.get("GT4PY_EXTRA_COMPILE_ARGS", "")
+extra_compile_args: List[str] = (
+    list(GT4PY_EXTRA_COMPILE_ARGS.split(" ")) if GT4PY_EXTRA_COMPILE_ARGS else []
+)
+GT4PY_EXTRA_LINK_ARGS: str = os.environ.get("GT4PY_EXTRA_LINK_ARGS", "")
+extra_link_args: List[str] = list(GT4PY_EXTRA_LINK_ARGS.split(" ")) if GT4PY_EXTRA_LINK_ARGS else []
+
 build_settings: Dict[str, Any] = {
     "boost_include_path": os.path.join(BOOST_ROOT, "include"),
     "cuda_bin_path": os.path.join(CUDA_ROOT, "bin"),
@@ -57,11 +61,8 @@ build_settings: Dict[str, Any] = {
     "gt_include_path": os.environ.get("GT_INCLUDE_PATH", GT_INCLUDE_PATH),
     "openmp_cppflags": os.environ.get("OPENMP_CPPFLAGS", "-fopenmp").split(),
     "openmp_ldflags": os.environ.get("OPENMP_LDFLAGS", "-fopenmp").split(),
-    "extra_compile_args": {
-        "cxx": [],
-        "cuda": [],
-    },
-    "extra_link_args": [],
+    "extra_compile_args": {"cxx": extra_compile_args, "cuda": extra_compile_args},
+    "extra_link_args": extra_link_args,
     "parallel_jobs": multiprocessing.cpu_count(),
     "cpp_template_depth": os.environ.get("GT_CPP_TEMPLATE_DEPTH", GT_CPP_TEMPLATE_DEPTH),
 }
@@ -83,3 +84,5 @@ cache_settings: Dict[str, Any] = {
 code_settings: Dict[str, Any] = {"root_package_name": "_GT_"}
 
 os.environ.setdefault("DACE_CONFIG", os.path.join(os.path.abspath("."), ".dace.conf"))
+
+DACE_DEFAULT_BLOCK_SIZE: str = os.environ.get("DACE_DEFAULT_BLOCK_SIZE", "64,8,1")

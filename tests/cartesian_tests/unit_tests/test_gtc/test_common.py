@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from typing import List, Optional, Tuple, Union
 
@@ -140,10 +134,7 @@ class AssignStmt(Stmt, common.AssignStmt[DummyExpr, Expr]):
             DataType.BOOL,
         ),
         (
-            UnaryOp(
-                expr=DummyExpr(dtype=ARITHMETIC_TYPE),
-                op=A_ARITHMETIC_UNARY_OPERATOR,
-            ),
+            UnaryOp(expr=DummyExpr(dtype=ARITHMETIC_TYPE), op=A_ARITHMETIC_UNARY_OPERATOR),
             ARITHMETIC_TYPE,
         ),
     ],
@@ -157,9 +148,7 @@ def test_dtype_propagation(node, expected):
     [
         (
             lambda: TernaryOp(
-                cond=DummyExpr(dtype=ARITHMETIC_TYPE),
-                true_expr=DummyExpr(),
-                false_expr=DummyExpr(),
+                cond=DummyExpr(dtype=ARITHMETIC_TYPE), true_expr=DummyExpr(), false_expr=DummyExpr()
             ),
             r"Condition.*must be bool.*",
             ValueError,
@@ -293,7 +282,7 @@ class SymbolTableRootNode(eve.Node, eve.ValidatedSymbolTableTrait):
                 SymbolChildNode(name="foo"),
                 SymbolRefChildNode(name="foo"),
                 SymbolRefChildNode(name="foo2"),
-            ],
+            ]
         ),
         lambda: SymbolTableRootNode(
             nodes=[
@@ -309,16 +298,16 @@ def test_symbolref_validation_for_invalid_tree(tree_with_missing_symbol):
 
 
 def test_symbolref_validation_for_valid_tree():
-    SymbolTableRootNode(
-        nodes=[SymbolChildNode(name="foo"), SymbolRefChildNode(name="foo")],
+    SymbolTableRootNode(nodes=[SymbolChildNode(name="foo"), SymbolRefChildNode(name="foo")])
+    (
+        SymbolTableRootNode(  # noqa: B018
+            nodes=[
+                SymbolChildNode(name="foo"),
+                SymbolRefChildNode(name="foo"),
+                SymbolRefChildNode(name="foo"),
+            ]
+        ),
     )
-    SymbolTableRootNode(  # noqa: B018
-        nodes=[
-            SymbolChildNode(name="foo"),
-            SymbolRefChildNode(name="foo"),
-            SymbolRefChildNode(name="foo"),
-        ],
-    ),
     SymbolTableRootNode(
         nodes=[
             SymbolChildNode(name="outer_scope"),
@@ -366,9 +355,9 @@ def construct_dims_assignment(dimensions: Tuple[bool, bool, bool], direction: co
             MultiDimLoop(
                 loop_order=direction,
                 assigns=[
-                    AssignStmt(left=MultiDimRef(name=out_name), right=MultiDimRef(name=in_name)),
+                    AssignStmt(left=MultiDimRef(name=out_name), right=MultiDimRef(name=in_name))
                 ],
-            ),
+            )
         ],
     )
 

@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from typing import Final, Sequence
 
@@ -20,10 +14,7 @@ from gt4py.next.type_system import type_info as ti, type_specifications as ts
 
 
 CPP_DEFAULT: Final = languages.LanguageWithHeaderFilesSettings(
-    formatter_key="cpp",
-    formatter_style="LLVM",
-    file_extension="cpp",
-    header_extension="cpp.inc",
+    formatter_key="cpp", formatter_style="LLVM", file_extension="cpp", header_extension="cpp.inc"
 )
 
 
@@ -47,31 +38,22 @@ def render_scalar_type(scalar_type: ts.ScalarType) -> str:
             )
 
 
-def _render_function_param(param: interface.Parameter, index: int) -> str:
-    if isinstance(param.type_, ts.ScalarType):
-        return f"{render_scalar_type(param.type_)} {param.name}"
-    elif ti.is_type_or_tuple_of_type(
-        param.type_, ts.FieldType
-    ):  # TODO(havogt): add support for scalar tuples
-        return f"BufferT{index}&& {param.name}"
-    else:
-        raise ValueError(f"Type '{param.type_}' is not supported in C++ interfaces.")
-
-
 def render_function_declaration(function: interface.Function, body: str) -> str:
-    rendered_params = [
-        _render_function_param(param, index) for index, param in enumerate(function.parameters)
-    ]
+    template_params: list[str] = []
+    rendered_params: list[str] = []
+    for index, param in enumerate(function.parameters):
+        if isinstance(param.type_, ts.ScalarType):
+            rendered_params.append(f"{render_scalar_type(param.type_)} {param.name}")
+        elif ti.is_type_or_tuple_of_type(param.type_, (ts.FieldType, ts.ScalarType)):
+            template_param = f"ArgT{index}"
+            template_params.append(f"class {template_param}")
+            rendered_params.append(f"{template_param}&& {param.name}")
+        else:
+            raise ValueError(f"Type '{param.type_}' is not supported in C++ interfaces.")
+
     rendered_decl = f"""decltype(auto) {function.name}({", ".join(rendered_params)}) {{
         {body}
     }}"""
-    template_params = [
-        f"class BufferT{index}"
-        for index, param in enumerate(function.parameters)
-        if ti.is_type_or_tuple_of_type(
-            param.type_, ts.FieldType
-        )  # TODO(havogt): add support for scalar tuples
-    ]
     if template_params:
         return f"""
         template <{', '.join(template_params)}>

@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from typing import Sequence
 
@@ -54,6 +48,9 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
         if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
             set(CMAKE_CUDA_ARCHITECTURES 60)
         endif()
+        if(NOT DEFINED CMAKE_HIP_ARCHITECTURES)
+            set(CMAKE_HIP_ARCHITECTURES gfx90a)
+        endif()
         {{"\\n".join(languages)}}
 
         # Paths
@@ -85,7 +82,7 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
         """
     )
 
-    def visit_FindDependency(self, dep: FindDependency):
+    def visit_FindDependency(self, dep: FindDependency) -> str:
         # TODO(ricoh): do not add more libraries here
         #   and do not use this design in a new build system.
         #   Instead, design this to be extensible (refer to ADR-0016).
@@ -103,7 +100,7 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
             case _:
                 raise ValueError(f"Library '{dep.name}' is not supported")
 
-    def visit_LinkDependency(self, dep: LinkDependency):
+    def visit_LinkDependency(self, dep: LinkDependency) -> str:
         # TODO(ricoh): do not add more libraries here
         #   and do not use this design in a new build system.
         #   Instead, design this to be extensible (refer to ADR-0016).

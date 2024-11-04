@@ -1,21 +1,24 @@
+# -----------------------------------------------------------------------
 # This file contains 'cog' snippets (https://nedbatchelder.com/code/cog/) 
 # to keep version numbers in sync with 'constraints.txt'
+# -----------------------------------------------------------------------
 
 default_language_version:
   python: python3.10
 repos:
-  # - repo: meta
-  #   hooks:
-  #   - id: check-hooks-apply
-  #   - id: check-useless-excludes
-
+# - repo: meta
+#   hooks:
+#   - id: check-hooks-apply
+#   - id: check-useless-excludes
 - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
   rev: v2.6.0
   hooks:
   - id: pretty-format-ini
     args: [--autofix]
+    exclude: tox.ini
   - id: pretty-format-toml
     args: [--autofix]
+    exclude: tach.toml
   - id: pretty-format-yaml
     args: [--autofix, --preserve-quotes, --indent, "2"]
 
@@ -26,26 +29,12 @@ repos:
     types_or: [markdown, json]
 
 - repo: https://github.com/Lucas-C/pre-commit-hooks
-  rev: v1.1.9
+  rev: v1.5.5
   hooks:
   - id: insert-license
     exclude: ^\..*$
     types: [python]
-    args: [--comment-style, "|#|", --license-filepath, ./LICENSE_HEADER.txt, --fuzzy-match-generates-todo]
-
-# - repo: https://github.com/asottile/yesqa
-#   rev: v1.4.0
-#   hooks:
-#   - id: yesqa
-#     additional_dependencies:
-#     - flake8==5.0.4  # version from constraints.txt
-#     - darglint
-#     - flake8-bugbear
-#     - flake8-builtins
-#     - flake8-debugger
-#     - flake8-docstrings
-#     - flake8-eradicate
-#     - flake8-mutable
+    args: [--comment-style, "|#|", --license-filepath, ./HEADER.txt, --fuzzy-match-generates-todo]
 
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v4.4.0
@@ -56,138 +45,81 @@ repos:
   - id: check-yaml
   - id: debug-statements
 
-- repo: https://github.com/psf/black
+- repo: https://github.com/astral-sh/ruff-pre-commit
   ##[[[cog
   ## import re
-  ## version = re.search('black==([0-9\.]*)', open("constraints.txt").read())[1] 
-  ## print(f"rev: '{version}'  # version from constraints.txt")
+  ## version = re.search('ruff==([0-9\.]*)', open("constraints.txt").read())[1]
+  ## print(f"rev: v{version}")
   ##]]]
-  rev: '23.12.1'  # version from constraints.txt
+  rev: v0.7.2
   ##[[[end]]]
   hooks:
-  - id: black
+    # Run the linter.
+    # TODO: include tests here
+  - id: ruff
+    files: ^src/
+    args: [--fix]
+    # Run the formatter.
+  - id: ruff-format
 
-- repo: https://github.com/PyCQA/isort
-  ##[[[cog
-  ## import re
-  ## version = re.search('isort==([0-9\.]*)', open("constraints.txt").read())[1] 
-  ## print(f"rev: '{version}'  # version from constraints.txt")
-  ##]]]
-  rev: '5.13.2'  # version from constraints.txt
-  ##[[[end]]]
+- repo: https://github.com/gauge-sh/tach-pre-commit
+  rev: v0.10.7
   hooks:
-  - id: isort
-
-- repo: https://github.com/PyCQA/flake8
-  ##[[[cog
-  ## import re
-  ## version = re.search('flake8==([0-9\.]*)', open("constraints.txt").read())[1] 
-  ## print(f"rev: '{version}'  # version from constraints.txt")
-  ##]]]
-  rev: '7.0.0'  # version from constraints.txt
-  ##[[[end]]]
-  hooks:
-  - id: flake8
-    additional_dependencies:
-    ##[[[cog
-    ## import re
-    ## constraints = open("constraints.txt").read()
-    ## for pkg in ["darglint", "flake8-bugbear", "flake8-builtins", "flake8-debugger", "flake8-docstrings",
-    ##             "flake8-eradicate", "flake8-mutable", "flake8-pyproject", "pygments"]:
-    ##     print(f"- {pkg}==" + str(re.search(f'\n{pkg}==([0-9\.]*)', constraints)[1]))
-    ##]]]
-    - darglint==1.8.1
-    - flake8-bugbear==24.1.17
-    - flake8-builtins==2.2.0
-    - flake8-debugger==4.1.2
-    - flake8-docstrings==1.7.0
-    - flake8-eradicate==1.5.0
-    - flake8-mutable==1.2.0
-    - flake8-pyproject==1.2.3
-    - pygments==2.17.2
-    ##[[[end]]]
-    # - flake8-rst-docstrings  # Disabled for now due to random false positives
-    exclude: |
-      (?x)^(
-      setup.py |
-      docs/user/cartesian/conf.py |
-      src/gt4py/cartesian/__gtscript__.py |
-      src/gt4py/cartesian/__init__.py |
-      src/gt4py/cartesian/gtscript.py |
-      src/gt4py/cartesian/backend/__init__.py |
-      src/gt4py/cartesian/backend/pyext_builder.py |
-      src/gt4py/cartesian/frontend/__init__.py |
-      src/gt4py/cartesian/frontend/nodes.py |
-      src/gt4py/cartesian/frontend/node_util.py |
-      src/gt4py/cartesian/utils/__init__.py |
-      src/gt4py/cartesian/utils/base.py |
-      src/gt4py/cartesian/utils/attrib.py |
-      src/gt4py/cartesian/utils/meta.py |
-      src/gt4py/eve/extended_typing.py |
-      tests/conftest.py |
-      tests/cartesian_tests/integration_tests/multi_feature_tests/stencil_definitions.py |
-      tests/cartesian_tests/integration_tests/multi_feature_tests/test_code_generation.py |
-      tests/cartesian_tests/integration_tests/multi_feature_tests/utils.py |
-      tests/cartesian_tests/integration_tests/feature_tests/test_call_interface.py |
-      tests/cartesian_tests/unit_tests/frontend_tests/test_gtscript_frontend.py |
-      tests/next_tests/unit_tests/.* |
-      tests/next_tests/integration_tests/multi_feature_tests/.* |
-      tests/next_tests/integration_tests/feature_tests/ffront_tests/.* |
-      tests/next_tests/integration_tests/feature_tests/iterator_tests/.* |
-      tests/next_tests/integration_tests/feature_tests/otf_tests/.* |
-      tests/next_tests/integration_tests/feature_tests/math_builtin_test_data.py |
-      tests/next_tests/past_common_fixtures.py |
-      tests/next_tests/toy_connectivity.py |
-      )$
+  - id: tach
 
 - repo: https://github.com/pre-commit/mirrors-mypy
   ##[[[cog
   ## import re
-  ## version = re.search('mypy==([0-9\.]*)', open("constraints.txt").read())[1] 
+  ## version = re.search('mypy==([0-9\.]*)', open("constraints.txt").read())[1]
   ## print(f"#========= FROM constraints.txt: v{version} =========")
   ##]]]
-  #========= FROM constraints.txt: v1.8.0 =========
+  #========= FROM constraints.txt: v1.13.0 =========
   ##[[[end]]]
-  rev: v1.8.0  # MUST match version ^^^^ in constraints.txt (if the mirror is up-to-date)
+  rev: v1.13.0  # MUST match version ^^^^ in constraints.txt (if the mirror is up-to-date)
   hooks:
   - id: mypy
     additional_dependencies:  # versions from constraints.txt
     ##[[[cog
-    ## import re, tomli
+    ## import re, sys
+    ## if sys.version_info >= (3, 11):
+    ##    import tomllib
+    ## else:
+    ##    import tomli as tomllib
     ## constraints = open("constraints.txt").read()
-    ## project = tomli.loads(open("pyproject.toml").read())
+    ## project = tomllib.loads(open("pyproject.toml").read())
     ## packages = [re.match('^([\w-][\w\d-]*)', r)[1] for r in project["project"]["dependencies"] if r.strip()]
     ## for pkg in packages:
     ##     print(f"- {pkg}==" + str(re.search(f'\n{pkg}==([0-9\.]*)', constraints)[1]))
     ##]]]
     - astunparse==1.6.3
-    - attrs==23.2.0
-    - black==23.12.1
-    - boltons==23.1.1
-    - cached-property==1.5.2
+    - attrs==24.2.0
+    - black==24.8.0
+    - boltons==24.0.0
+    - cached-property==2.0.1
     - click==8.1.7
-    - cmake==3.28.1
-    - cytoolz==0.12.3
-    - deepdiff==6.7.1
+    - cmake==3.30.5
+    - cytoolz==1.0.0
+    - deepdiff==8.0.1
     - devtools==0.12.2
-    - frozendict==2.4.0
-    - gridtools-cpp==2.3.1
-    - importlib-resources==6.1.1
-    - jinja2==3.1.3
-    - lark==1.1.9
-    - mako==1.3.1
-    - nanobind==1.8.0
+    - factory-boy==3.3.1
+    - frozendict==2.4.6
+    - gridtools-cpp==2.3.6
+    - importlib-resources==6.4.5
+    - jinja2==3.1.4
+    - lark==1.2.2
+    - mako==1.3.6
+    - nanobind==2.2.0
     - ninja==1.11.1.1
     - numpy==1.24.4
-    - packaging==23.2
-    - pybind11==2.11.1
-    - setuptools==69.0.3
+    - packaging==24.1
+    - pybind11==2.13.6
+    - setuptools==75.3.0
     - tabulate==0.9.0
-    - typing-extensions==4.5.0
+    - typing-extensions==4.12.2
     - xxhash==3.0.0
     ##[[[end]]]
-    # Add all type stubs from typeshed
-    - types-all
+    - types-tabulate
+    - types-typed-ast
     args: [--no-install-types]
     exclude: |
       (?x)^(
@@ -195,15 +127,5 @@ repos:
       build/.* |
       ci/.* |
       docs/.* |
-      tests/conftest.py |
-      tests/cartesian_tests/.* |
-      tests/next_tests/unit_tests/.* |
-      tests/next_tests/integration_tests/multi_feature_tests/.* |
-      tests/next_tests/integration_tests/feature_tests/ffront_tests/.* |
-      tests/next_tests/integration_tests/feature_tests/iterator_tests/.* |
-      tests/next_tests/integration_tests/feature_tests/otf_tests/.* |
-      tests/next_tests/integration_tests/feature_tests/math_builtin_test_data.py |
-      tests/next_tests/past_common_fixtures.py |
-      tests/next_tests/toy_connectivity.py |
       tests/.*
       )$

@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import itertools
 import re
@@ -59,7 +53,7 @@ def test_call_field_operator_from_python(cartesian_case, arg_spec: tuple[tuple[s
     pos_args = [args[name] for name in arg_names]
     kw_args = {name: args[name] for name in kwarg_names}
 
-    testee.with_backend(cartesian_case.executor)(
+    testee.with_backend(cartesian_case.backend)(
         *pos_args, **kw_args, out=out, offset_provider=cartesian_case.offset_provider
     )
 
@@ -85,7 +79,7 @@ def test_call_program_from_python(cartesian_case, arg_spec):
     pos_args = [args[name] for name in arg_names]
     kw_args = {name: args[name] for name in kwarg_names}
 
-    testee.with_backend(cartesian_case.executor)(
+    testee.with_backend(cartesian_case.backend)(
         *pos_args, **kw_args, offset_provider=cartesian_case.offset_provider
     )
 
@@ -124,13 +118,7 @@ def test_call_field_operator_from_program(cartesian_case):
 
     @program
     def testee(
-        a: IField,
-        b: IField,
-        c: IField,
-        out1: IField,
-        out2: IField,
-        out3: IField,
-        out4: IField,
+        a: IField, b: IField, c: IField, out1: IField, out2: IField, out3: IField, out4: IField
     ):
         foo(a, b, c, out=out1)
         foo(a, y=b, z=c, out=out2)
@@ -143,7 +131,7 @@ def test_call_field_operator_from_program(cartesian_case):
         for name in ("out1", "out2", "out3", "out4")
     )
 
-    ref = np.asarray(a) + 2 * np.asarray(b) + 3 * np.asarray(c)
+    ref = a + 2 * b + 3 * c
 
     cases.verify(
         cartesian_case,
@@ -230,9 +218,7 @@ def test_scan_wrong_return_type(cartesian_case):
     ):
 
         @scan_operator(axis=KDim, forward=True, init=0)
-        def testee_scan(
-            state: int32,
-        ) -> float:
+        def testee_scan(state: int32) -> float:
             return 1.0
 
         @program
@@ -250,9 +236,7 @@ def test_scan_wrong_state_type(cartesian_case):
     ):
 
         @scan_operator(axis=KDim, forward=True, init=0)
-        def testee_scan(
-            state: float,
-        ) -> int32:
+        def testee_scan(state: float) -> int32:
             return 1
 
         @program
@@ -286,7 +270,7 @@ def test_call_bound_program_with_wrong_args(cartesian_case, bound_args_testee):
     out = cases.allocate(cartesian_case, bound_args_testee, "out")()
 
     with pytest.raises(TypeError) as exc_info:
-        program_with_bound_arg(out, offset_provider={})
+        program_with_bound_arg.with_backend(cartesian_case.backend)(out, offset_provider={})
 
     assert (
         re.search(
@@ -302,7 +286,9 @@ def test_call_bound_program_with_already_bound_arg(cartesian_case, bound_args_te
     out = cases.allocate(cartesian_case, bound_args_testee, "out")()
 
     with pytest.raises(TypeError) as exc_info:
-        program_with_bound_arg(True, out, arg2=True, offset_provider={})
+        program_with_bound_arg.with_backend(cartesian_case.backend)(
+            True, out, arg2=True, offset_provider={}
+        )
 
     assert (
         re.search(

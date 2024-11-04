@@ -1,16 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+from __future__ import annotations
 
 import copy
 import os
@@ -22,7 +18,6 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type
 import dace
 import dace.data
 from dace.sdfg.utils import inline_sdfgs
-from dace.serialize import dumps
 
 from gt4py import storage as gt_storage
 from gt4py.cartesian import config as gt_config
@@ -48,7 +43,6 @@ from gt4py.cartesian.gtc.dace.utils import array_dimensions, replace_strides
 from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
 from gt4py.cartesian.gtc.passes.gtir_k_boundary import compute_k_boundary
 from gt4py.cartesian.gtc.passes.gtir_pipeline import GtirPipeline
-from gt4py.cartesian.gtc.passes.oir_optimizations.inlining import MaskInlining
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_fields_extents
 from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline
 from gt4py.cartesian.utils import shash
@@ -61,14 +55,9 @@ if TYPE_CHECKING:
     from gt4py.cartesian.stencil_object import StencilObject
 
 
-def _serialize_sdfg(sdfg: dace.SDFG):
-    return dumps(sdfg)
-
-
 def _specialize_transient_strides(sdfg: dace.SDFG, layout_map):
     repldict = replace_strides(
-        [array for array in sdfg.arrays.values() if array.transient],
-        layout_map,
+        [array for array in sdfg.arrays.values() if array.transient], layout_map
     )
     sdfg.replace_dict(repldict)
     for state in sdfg.nodes():
@@ -131,7 +120,7 @@ def _set_expansion_orders(sdfg: dace.SDFG):
 
 
 def _set_tile_sizes(sdfg: dace.SDFG):
-    import gt4py.cartesian.gtc.daceir as dcir  # avoid circular import
+    import gt4py.cartesian.gtc.dace.daceir as dcir  # avoid circular import
 
     for node, _ in filter(
         lambda n: isinstance(n[0], StencilComputation), sdfg.all_nodes_recursive()
@@ -221,9 +210,7 @@ def _sdfg_add_arrays_and_edges(
             ranges = [
                 (o - max(0, e), o - max(0, e) + s - 1, 1)
                 for o, e, s in zip(
-                    origin,
-                    field_info[name].boundary.lower_indices,
-                    inner_sdfg.arrays[name].shape,
+                    origin, field_info[name].boundary.lower_indices, inner_sdfg.arrays[name].shape
                 )
             ]
             ranges += [(0, d, 1) for d in field_info[name].data_dims]
@@ -312,7 +299,7 @@ def freeze_origin_domain_sdfg(inner_sdfg, arg_names, field_info, *, origin, doma
         for node in states[0].nodes():
             state.remove_node(node)
 
-    # make sure that symbols are passed throught o inner sdfg
+    # make sure that symbols are passed through to inner sdfg
     for symbol in nsdfg.sdfg.free_symbols:
         if symbol not in wrapper_sdfg.symbols:
             wrapper_sdfg.add_symbol(symbol, nsdfg.sdfg.symbols[symbol])
@@ -362,7 +349,7 @@ class SDFGManager:
             except FileNotFoundError:
                 base_oir = GTIRToOIR().visit(self.builder.gtir)
                 oir_pipeline = self.builder.options.backend_opts.get(
-                    "oir_pipeline", DefaultPipeline(skip=[MaskInlining])
+                    "oir_pipeline", DefaultPipeline()
                 )
                 oir_node = oir_pipeline.run(base_oir)
                 sdfg = OirSDFGBuilder().visit(oir_node)
@@ -520,7 +507,7 @@ class DaCeComputationCodegen:
                     break
             for i, line in enumerate(lines):
                 if "#include <dace/dace.h>" in line:
-                    cuda_code = [co.clean_code for co in code_objects if co.title == "CUDA"][0]
+                    cuda_code = next(co.clean_code for co in code_objects if co.title == "CUDA")
                     lines = lines[0:i] + cuda_code.split("\n") + lines[i + 1 :]
                     break
 
@@ -541,12 +528,17 @@ class DaCeComputationCodegen:
         return generated_code
 
     @classmethod
-    def apply(cls, stencil_ir: gtir.Stencil, builder: "StencilBuilder", sdfg: dace.SDFG):
+    def apply(cls, stencil_ir: gtir.Stencil, builder: StencilBuilder, sdfg: dace.SDFG):
         self = cls()
         with dace.config.temporary_config():
+            # To prevent conflict with 3rd party usage of DaCe config always make sure that any
+            #  changes be under the temporary_config manager
             if gt_config.GT4PY_USE_HIP:
                 dace.config.Config.set("compiler", "cuda", "backend", value="hip")
             dace.config.Config.set("compiler", "cuda", "max_concurrent_streams", value=-1)
+            dace.config.Config.set(
+                "compiler", "cuda", "default_block_size", value=gt_config.DACE_DEFAULT_BLOCK_SIZE
+            )
             dace.config.Config.set("compiler", "cpu", "openmp_sections", value=False)
             code_objects = sdfg.generate_code()
         is_gpu = "CUDA" in {co.title for co in code_objects}
@@ -684,14 +676,14 @@ class DaCeBindingsCodegen:
             if name in sdfg.arrays:
                 data = sdfg.arrays[name]
                 assert isinstance(data, dace.data.Array)
-                res[
-                    name
-                ] = "py::{pybind_type} {name}, std::array<gt::int_t,{ndim}> {name}_origin".format(
-                    pybind_type="object"
-                    if self.backend.storage_info["device"] == "gpu"
-                    else "buffer",
-                    name=name,
-                    ndim=len(data.shape),
+                res[name] = (
+                    "py::{pybind_type} {name}, std::array<gt::int_t,{ndim}> {name}_origin".format(
+                        pybind_type=(
+                            "object" if self.backend.storage_info["device"] == "gpu" else "buffer"
+                        ),
+                        name=name,
+                        ndim=len(data.shape),
+                    )
                 )
             elif name in sdfg.symbols and not name.startswith("__"):
                 assert name in sdfg.symbols
@@ -770,7 +762,7 @@ class BaseDaceBackend(BaseGTBackend, CLIBackendMixin):
     GT_BACKEND_T = "dace"
     PYEXT_GENERATOR_CLASS = DaCeExtGenerator  # type: ignore
 
-    def generate(self) -> Type["StencilObject"]:
+    def generate(self) -> Type[StencilObject]:
         self.check_options(self.builder.options)
 
         pyext_module_name: Optional[str]
@@ -781,8 +773,7 @@ class BaseDaceBackend(BaseGTBackend, CLIBackendMixin):
 
         # Generate and return the Python wrapper class
         return self.make_module(
-            pyext_module_name=pyext_module_name,
-            pyext_file_path=pyext_file_path,
+            pyext_module_name=pyext_module_name, pyext_file_path=pyext_file_path
         )
 
 
@@ -821,10 +812,7 @@ class DaceGPUBackend(BaseDaceBackend):
         ),
     }
     MODULE_GENERATOR_CLASS = DaCeCUDAPyExtModuleGenerator
-    options = {
-        **BaseGTBackend.GT_BACKEND_OPTS,
-        "device_sync": {"versioning": True, "type": bool},
-    }
+    options = {**BaseGTBackend.GT_BACKEND_OPTS, "device_sync": {"versioning": True, "type": bool}}
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
         return self.make_extension(stencil_ir=self.builder.gtir, uses_cuda=True)

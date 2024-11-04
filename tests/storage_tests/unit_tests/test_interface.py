@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import hypothesis as hyp
 import hypothesis.strategies as hyp_st
@@ -108,12 +102,7 @@ def dimensions_strategy(draw):
     if dimension < 3:
         mask_values += [False] * (3 - dimension)
 
-    mask = draw(
-        hyp_st.one_of(
-            hyp_st.just(None),
-            hyp_st.permutations(mask_values),
-        )
-    )
+    mask = draw(hyp_st.one_of(hyp_st.just(None), hyp_st.permutations(mask_values)))
     if mask is not None:
         select_dimensions = ["I", "J", "K"] + [str(d) for d in range(max(0, dimension - 3))]
         assert len(select_dimensions) == len(mask)
@@ -135,9 +124,12 @@ def test_allocate_cpu(param_dict):
     raw_buffer, field = allocate_cpu(shape, layout_map, dtype, alignment_bytes, aligned_index)
 
     # check that memory of field is contained in raw_buffer
+    np_byte_bounds = (
+        np.byte_bounds if hasattr(np, "byte_bounds") else np.lib.array_utils.byte_bounds
+    )
     assert (
-        np.byte_bounds(field)[0] >= np.byte_bounds(raw_buffer)[0]
-        and np.byte_bounds(field)[1] <= np.byte_bounds(raw_buffer)[1]
+        np_byte_bounds(field)[0] >= np_byte_bounds(raw_buffer)[0]
+        and np_byte_bounds(field)[1] <= np_byte_bounds(raw_buffer)[1]
     )
 
     # check if the first compute-domain point in the last dimension is aligned for 100 random "columns"
@@ -389,10 +381,7 @@ def test_cpu_constructor_0d(alloc_fun, backend):
     assert isinstance(stor, np.ndarray)
 
 
-@pytest.mark.parametrize(
-    "backend",
-    GPU_LAYOUTS,
-)
+@pytest.mark.parametrize("backend", GPU_LAYOUTS)
 def test_gpu_constructor(alloc_fun, backend):
     stor = alloc_fun(dtype=np.float64, aligned_index=(1, 2, 3), shape=(2, 4, 6), backend=backend)
     assert stor.shape == (2, 4, 6)

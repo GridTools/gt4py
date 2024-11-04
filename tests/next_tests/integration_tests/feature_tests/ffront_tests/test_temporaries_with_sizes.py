@@ -1,24 +1,17 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import pytest
 from numpy import int32, int64
 
 from gt4py import next as gtx
-from gt4py.next import common
+from gt4py.next import backend, common
 from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms
-from gt4py.next.program_processors import otf_compile_executor
 from gt4py.next.program_processors.runners.gtfn import run_gtfn_with_temporaries
 
 from next_tests.integration_tests import cases
@@ -31,25 +24,24 @@ from next_tests.integration_tests.cases import (
     unstructured_case,
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    reduction_setup,
+    mesh_descriptor,
 )
 from next_tests.toy_connectivity import Cell, Edge
 
 
 @pytest.fixture
 def run_gtfn_with_temporaries_and_symbolic_sizes():
-    return otf_compile_executor.OTFBackend(
-        executor=otf_compile_executor.OTFCompileExecutor(
-            name="run_gtfn_with_temporaries_and_sizes",
-            otf_workflow=run_gtfn_with_temporaries.executor.otf_workflow.replace(
-                translation=run_gtfn_with_temporaries.executor.otf_workflow.translation.replace(
-                    symbolic_domain_sizes={
-                        "Cell": "num_cells",
-                        "Edge": "num_edges",
-                        "Vertex": "num_vertices",
-                    },
-                ),
-            ),
+    return backend.Backend(
+        name="run_gtfn_with_temporaries_and_sizes",
+        transforms=backend.DEFAULT_TRANSFORMS,
+        executor=run_gtfn_with_temporaries.executor.replace(
+            translation=run_gtfn_with_temporaries.executor.translation.replace(
+                symbolic_domain_sizes={
+                    "Cell": "num_cells",
+                    "Edge": "num_edges",
+                    "Vertex": "num_vertices",
+                }
+            )
         ),
         allocator=run_gtfn_with_temporaries.allocator,
     )
@@ -64,26 +56,25 @@ def testee():
 
     @gtx.program
     def prog(
-        a: cases.VField,
-        out: cases.EField,
-        num_vertices: int32,
-        num_edges: int64,
-        num_cells: int32,
+        a: cases.VField, out: cases.EField, num_vertices: int32, num_edges: int32, num_cells: int32
     ):
         testee_op(a, out=out)
 
     return prog
 
 
-def test_verification(testee, run_gtfn_with_temporaries_and_symbolic_sizes, reduction_setup):
+def test_verification(testee, run_gtfn_with_temporaries_and_symbolic_sizes, mesh_descriptor):
+    # FIXME[#1582](tehrengruber): enable when temporary pass has been implemented
+    pytest.xfail("Temporary pass not implemented.")
+
     unstructured_case = Case(
-        run_gtfn_with_temporaries_and_symbolic_sizes.executor,
-        offset_provider=reduction_setup.offset_provider,
+        run_gtfn_with_temporaries_and_symbolic_sizes,
+        offset_provider=mesh_descriptor.offset_provider,
         default_sizes={
-            Vertex: reduction_setup.num_vertices,
-            Edge: reduction_setup.num_edges,
-            Cell: reduction_setup.num_cells,
-            KDim: reduction_setup.k_levels,
+            Vertex: mesh_descriptor.num_vertices,
+            Edge: mesh_descriptor.num_edges,
+            Cell: mesh_descriptor.num_cells,
+            KDim: 10,
         },
         grid_type=common.GridType.UNSTRUCTURED,
         allocator=run_gtfn_with_temporaries_and_symbolic_sizes.allocator,
@@ -92,7 +83,7 @@ def test_verification(testee, run_gtfn_with_temporaries_and_symbolic_sizes, redu
     a = cases.allocate(unstructured_case, testee, "a")()
     out = cases.allocate(unstructured_case, testee, "out")()
 
-    first_nbs, second_nbs = (reduction_setup.offset_provider["E2V"].table[:, i] for i in [0, 1])
+    first_nbs, second_nbs = (mesh_descriptor.offset_provider["E2V"].table[:, i] for i in [0, 1])
     ref = (a.ndarray * 2)[first_nbs] + (a.ndarray * 2)[second_nbs]
 
     cases.verify(
@@ -100,21 +91,24 @@ def test_verification(testee, run_gtfn_with_temporaries_and_symbolic_sizes, redu
         testee,
         a,
         out,
-        reduction_setup.num_vertices,
-        reduction_setup.num_edges,
-        reduction_setup.num_cells,
+        mesh_descriptor.num_vertices,
+        mesh_descriptor.num_edges,
+        mesh_descriptor.num_cells,
         inout=out,
         ref=ref,
     )
 
 
-def test_temporary_symbols(testee, reduction_setup):
+def test_temporary_symbols(testee, mesh_descriptor):
+    # FIXME[#1582](tehrengruber): enable when temporary pass has been implemented
+    pytest.xfail("Temporary pass not implemented.")
+
     itir_with_tmp = apply_common_transforms(
         testee.itir,
-        lift_mode=LiftMode.FORCE_TEMPORARIES,
-        offset_provider=reduction_setup.offset_provider,
+        lift_mode=LiftMode.USE_TEMPORARIES,
+        offset_provider=mesh_descriptor.offset_provider,
     )
 
     params = ["num_vertices", "num_edges", "num_cells"]
     for param in params:
-        assert any([param == str(p) for p in itir_with_tmp.fencil.params])
+        assert any([param == str(p) for p in itir_with_tmp.params])

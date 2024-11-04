@@ -1,6 +1,6 @@
 [build-system]
 build-backend = 'setuptools.build_meta'
-requires = ['setuptools>=60.6', 'wheel', 'cython']
+requires = ['setuptools>=65.5.0', 'wheel>=0.33.6', 'cython>=0.29.13']
 
 # ---- Project description ----
 # -- Standard options (PEP 621) --
@@ -11,12 +11,13 @@ classifiers = [
   'Environment :: Console',
   'Environment :: GPU :: NVIDIA CUDA',
   'Intended Audience :: Science/Research',
-  'License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)',
+  'License :: OSI Approved :: BSD License',
   'Operating System :: POSIX',
   'Programming Language :: Python',
   'Programming Language :: Python :: 3.8',
   'Programming Language :: Python :: 3.9',
   'Programming Language :: Python :: 3.10',
+  'Programming Language :: Python :: 3.11',
   'Programming Language :: Python :: Implementation :: CPython',
   'Topic :: Scientific/Engineering :: Atmospheric Science',
   'Topic :: Scientific/Engineering :: Mathematics',
@@ -30,23 +31,24 @@ dependencies = [
   'cached-property>=1.5.1',
   'click>=8.0.0',
   'cmake>=3.22',
-  'cytoolz>=0.12.0',
+  'cytoolz>=0.12.1',
   'deepdiff>=5.6.0',
   'devtools>=0.6',
+  'factory-boy>=3.3.0',
   'frozendict>=2.3',
-  'gridtools-cpp>=2.3.1,==2.*',
+  'gridtools-cpp>=2.3.6,==2.*',
   "importlib-resources>=5.0;python_version<'3.9'",
   'jinja2>=3.0.0',
   'lark>=1.1.2',
   'mako>=1.1',
   'nanobind>=1.4.0 ',
   'ninja>=1.10',
-  'numpy>=1.21.2',
+  'numpy>=1.23.3',
   'packaging>=20.0',
-  'pybind11>=2.5',
+  'pybind11>=2.10.1',
   'setuptools>=65.5.0',
   'tabulate>=0.8.10',
-  'typing-extensions>=4.2,<4.6.0',
+  'typing-extensions>=4.10.0',
   'xxhash>=1.4.4,<3.1.0'
 ]
 description = 'Python library for generating high-performance implementations of stencil kernels for weather and climate modeling from a domain-specific language (DSL)'
@@ -60,29 +62,27 @@ keywords = [
   'portable',
   'hpc'
 ]
-license = {text = 'GPL-3.0-or-later'}
+license = {file = 'LICENSE.txt'}
 name = 'gt4py'
 readme = 'README.md'
 requires-python = '>=3.8'
 
 [project.optional-dependencies]
-cuda = ['cupy>=12.0']
-cuda11x = ['cupy-cuda11x>=12.0']
-cuda12x = ['cupy-cuda12x>=12.0']
-dace = ['dace>=0.15.1,<0.16', 'sympy>=1.9']
+# Bundles
+all-cpu = ['gt4py[dace,formatting,jax-cpu,performance,testing]']
+all-cuda11 = ['gt4py[cuda11,dace,formatting,jax-cuda11,performance,testing]']
+all-cuda12 = ['gt4py[cuda12,dace,formatting,jax-cuda12,performance,testing]']
+# Other extras
+cuda11 = ['cupy-cuda11x>=12.0']
+cuda12 = ['cupy-cuda12x>=12.0']
+dace = ['dace>=0.16.1', 'sympy>=1.9,<1.13']  # see https://github.com/spcl/dace/pull/1620
 formatting = ['clang-format>=9.0']
-# Always add all extra packages to 'full' for a simple full gt4py installation
-full = [
-  'clang-format>=9.0',
-  'dace>=0.15.1,<0.16',
-  'hypothesis>=6.0.0',
-  'pytest>=7.0',
-  'sympy>=1.9',
-  'scipy>=1.7.2',
-  'jax[cpu]>=0.4.13'
-]
-jax = ['jax[cpu]>=0.4.13']
-performance = ['scipy>=1.7.2']
+gpu = ['cupy>=12.0']
+jax-cpu = ['jax[cpu]>=0.4.18; python_version>="3.10"']
+jax-cuda11 = ['jax[cuda11_pip]>=0.4.18; python_version>="3.10"']
+jax-cuda12 = ['jax[cuda12_pip]>=0.4.18; python_version>="3.10"']
+performance = ['scipy>=1.9.2']
+rocm-43 = ['cupy-rocm-4-3']
 testing = ['hypothesis>=6.0.0', 'pytest>=7.0']
 
 [project.scripts]
@@ -94,25 +94,26 @@ Homepage = 'https://gridtools.github.io/'
 Source = 'https://github.com/GridTools/gt4py'
 
 # ---- Other tools ----
-# -- black --
-[tool.black]
-exclude = '''
-/(
-    \.git
-  | \.gt_cache
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | _build
-  | buck-out
-  | build
-  | dist
-)/
-'''
-include = '\.pyi?$'
-line-length = 100
-target-version = ['py310']
+# -- bump-my-version --
+[tool.bumpversion]
+allow_dirty = false
+commit = false
+commit_args = ''
+current_version = "1.0.4"
+ignore_missing_version = false
+message = 'Bump version: {current_version} → {new_version}'
+parse = '(?P<major>\d+)\.(?P<minor>\d+)(\.(?P<patch>\d+))?'
+regex = false
+replace = '{new_version}'
+search = '{current_version}'
+serialize = ['{major}.{minor}.{patch}']
+sign_tags = false
+tag = false
+tag_message = 'Bump version: {current_version} → {new_version}'
+tag_name = 'v{new_version}'
+
+[[tool.bumpversion.files]]
+filename = "src/gt4py/__about__.py"
 
 # -- coverage --
 [tool.coverage]
@@ -137,113 +138,21 @@ ignore_errors = true
 branch = true
 source_pkgs = ['gt4py']
 
-# -- flake8  --
-# flake8-pyproject plugin is used to load configuration settings
-# from this file, since flake8 doesn't support it natively.
-[tool.flake8]
-count = true
-doctests = true
-exclude = [
-  '.eggs',
-  '.gt_cache',
-  '.ipynb_checkpoints',
-  '.tox',
-  '_local/',
-  'build',
-  'dist',
-  'docs',
-  'tests/_disabled',
-  'setup.py'
-]
-ignore = [
-  'B008',  # Do not perform function calls in argument defaults
-  'B028',  # Consider replacing f"'{foo}'" with f"{foo!r}"  # TODO: review this ignore
-  'D1',  # Public code object needs docstring
-  'DAR',  # Disable dargling errors by default
-  'E203',  # Whitespace before ':' (black formatter breaks this sometimes)
-  'E501',  # Line too long (using Bugbear's B950 warning)
-  'W503'  # Line break occurred before a binary operator
-]
-max-complexity = 15
-max-line-length = 100  # It should be the same as in `tool.black.line-length` above
-per-file-ignores = [
-  'src/gt4py/eve/extended_typing.py:F401,F405',
-  'src/gt4py/next/__init__.py:F401'  # We import stuff there in order to reexport.
-]
-rst-roles = [
-  'py:mod, mod',
-  'py:func, func',
-  'py:data, data',
-  'py:const, const',
-  'py:class, class',
-  'py:meth, meth',
-  'py:attr, attr',
-  'py:exc, exc',
-  'py:obj, obj'
-]
-
-# -- isort --
-[tool.isort]
-combine_as_imports = true
-group_by_package = true
-known_first_party = ['gt4py', '__externals__', '__gtscript__']
-known_tests = ['cartesian_tests', 'eve_tests', 'next_tests', 'storage_tests']
-known_third_party = [
-  'attr',
-  'black',
-  'boltons',
-  'cached_property',
-  'click',
-  'dace',
-  'devtools',
-  'factory',
-  'hypothesis',
-  'importlib_resources',
-  'jinja2',
-  'mako',
-  'networkx',
-  'numpy',
-  'packaging',
-  'pybind11',
-  'pytest',
-  'pytest_factoryboy',
-  'setuptools',
-  'tabulate',
-  'typing_extensions',
-  'xxhash'
-]
-lexicographical = true
-line_length = 100  # It should be the same as in `tool.black.line-length` above
-lines_after_imports = 2
-profile = 'black'
-sections = ['FUTURE', 'STDLIB', 'THIRDPARTY', 'FIRSTPARTY', 'TESTS', 'LOCALFOLDER']
-skip_gitignore = true
-skip_glob = ['*.venv/**', '_local/**']
-
 # -- mypy  --
 [tool.mypy]
 disallow_incomplete_defs = true
 exclude = [
   '^setup\.py$',
-  '^build/.*py$',
-  '^ci/*.py$',
-  '^tests/cartesian_tests/*.py$',
-  '^tests/storage_tests/*.py$',
-  '^tests/eve_tests/*.py$',
-  '^tests/next_tests/unit_tests/*.py$',
-  '^tests/next_tests/integration_tests/multi_feature_tests/*.py$',
-  '^tests/next_tests/integration_tests/feature_tests/ffront_tests/*.py$',
-  '^tests/next_tests/integration_tests/feature_tests/iterator_tests/*.py$',
-  '^tests/next_tests/integration_tests/feature_tests/otf_tests/*.py$',
-  '^tests/next_tests/integration_tests/feature_tests/math_builtin_test_data.py$',
-  '^tests/next_tests/past_common_fixtures.py$',
-  '^tests/next_tests/toy_connectivity.py$'
+  'build/.*$',
+  'ci/*.$',
+  'docs/.*$',
+  'tests/.*$'
 ]
 ignore_missing_imports = true
+implicit_optional = false
+implicit_reexport = false
 install_types = true
 namespace_packages = false
-no_implicit_optional = true
-no_implicit_reexport = true
 # pretty = true
 show_column_numbers = true
 show_error_codes = true
@@ -253,14 +162,16 @@ warn_unused_ignores = true
 
 # GT4Py configs
 [[tool.mypy.overrides]]
+allow_incomplete_defs = false
+allow_untyped_defs = false
 ignore_missing_imports = false
 module = 'gt4py.*'
 
 [[tool.mypy.overrides]]
 # The following ignore_errors are only temporary.
 # TODO: Fix errors and enable these settings.
-disallow_incomplete_defs = false
-disallow_untyped_defs = false
+allow_incomplete_defs = true
+allow_untyped_defs = true
 follow_imports = 'silent'
 module = 'gt4py.cartesian.*'
 warn_unused_ignores = false
@@ -290,10 +201,6 @@ ignore_errors = true
 module = 'gt4py.cartesian.frontend.meta'
 
 [[tool.mypy.overrides]]
-disallow_untyped_defs = true
-module = 'gt4py.eve.*'
-
-[[tool.mypy.overrides]]
 module = 'gt4py.eve.extended_typing'
 warn_unused_ignores = false
 
@@ -305,17 +212,18 @@ module = 'gt4py.storage.*'
 warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
-# # TODO: this should be changed to true after a transition period
-disallow_incomplete_defs = false
-module = 'gt4py.next.*'
+allow_incomplete_defs = true
+allow_untyped_defs = true
+module = 'gt4py.next.iterator.*'
+
+[[tool.mypy.overrides]]
+allow_incomplete_defs = true
+allow_untyped_defs = true
+module = 'gt4py.next.program_processors.runners.dace_iterator.*'
 
 [[tool.mypy.overrides]]
 ignore_errors = true
 module = 'gt4py.next.ffront.decorator'
-
-[[tool.mypy.overrides]]
-ignore_errors = true
-module = 'gt4py.next.type_system.type_translation'
 
 [[tool.mypy.overrides]]
 ignore_errors = true
@@ -326,10 +234,12 @@ module = 'gt4py.next.iterator.runtime'
 
 [tool.pytest.ini_options]
 markers = [
+  'all: special marker that skips all tests',
   'requires_atlas: tests that require `atlas4py` bindings package',
   'requires_dace: tests that require `dace` package',
   'requires_gpu: tests that require a NVidia GPU (`cupy` and `cudatoolkit` are required)',
   'requires_jax: tests that require the `jax` package',
+  'starts_from_gtir_program: tests that require backend to start lowering from GTIR program',
   'uses_applied_shifts: tests that require backend support for applied-shifts',
   'uses_constant_fields: tests that require backend support for constant fields',
   'uses_dynamic_offsets: tests that require backend support for dynamic offsets',
@@ -356,6 +266,7 @@ markers = [
   'uses_unstructured_shift: tests that use a unstructured connectivity',
   'uses_max_over: tests that use the max_over builtin',
   'uses_bool_field: tests that use a bool field',
+  'uses_mesh_with_skip_values: tests that use a mesh with skip values',
   'checks_specific_error: tests that rely on the backend to produce a specific error message'
 ]
 norecursedirs = ['dist', 'build', 'cpp_backend_tests/build*', '_local/*', '.*']
@@ -363,33 +274,34 @@ testpaths = 'tests'
 
 # -- ruff --
 [tool.ruff]
-ignore = [
-  'E501',
-  'B008',  # Do not perform function calls in argument defaults
-  'B028',  # Consider replacing f"'{foo}'" with f"{foo!r}"  # TODO: review
-  'B905'  # B905 `zip()` without an explicit `strict=` parameter  # TODO: review
-]
-ignore-init-module-imports = true
 line-length = 100  # It should be the same as in `tool.black.line-length` above
 respect-gitignore = true
-# Rules:
+show-fixes = true
+# show-source = true
+target-version = 'py38'
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.ruff.lint]
+# # Rules sets:
 # E: pycodestyle
 # F: Pyflakes
 # I: isort
 # B: flake8-bugbear
 # A: flake8-builtins
-# T100: flake8-debugger
+# T10: flake8-debugger
 # ERA: eradicate
 # NPY: NumPy-specific rules
 # RUF: Ruff-specific rules
-select = ['E', 'F', 'I', 'B', 'A', 'T100', 'ERA', 'NPY', 'RUF']
-show-fixes = true
-# show-source = true
-target-version = 'py310'
+ignore = [
+  'E501'  # [line-too-long]
+]
+select = ['E', 'F', 'I', 'B', 'A', 'T10', 'ERA', 'NPY', 'RUF']
 typing-modules = ['gt4py.eve.extended_typing']
 unfixable = []
 
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 combine-as-imports = true
 # force-wrap-aliases = true
 known-first-party = ['gt4py', '__externals__', '__gtscript__']
@@ -399,6 +311,7 @@ known-third-party = [
   'boltons',
   'cached_property',
   'click',
+  'cupy',
   'dace',
   'devtools',
   'factory',
@@ -419,17 +332,26 @@ known-third-party = [
 ]
 lines-after-imports = 2
 order-by-type = true
-section-order = ['future', 'standard-library', 'third-party', 'first-party', 'tests', 'local-folder']
+section-order = [
+  'future',
+  'standard-library',
+  'third-party',
+  'first-party',
+  'tests',
+  'local-folder'
+]
 split-on-trailing-comma = false
 
-[tool.ruff.isort.sections]
+[tool.ruff.lint.isort.sections]
 'tests' = ['cartesian_tests', 'eve_tests', 'next_tests', 'storage_tests']
 
-[tool.ruff.mccabe]
+[tool.ruff.lint.mccabe]
 max-complexity = 15
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
+'src/gt4py/cartesian/*' = ['RUF012']
 'src/gt4py/eve/extended_typing.py' = ['F401', 'F405']
+'src/gt4py/next/__init__.py' = ['F401']
 
 # -- setuptools build backend --
 [tool.setuptools]

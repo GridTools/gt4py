@@ -1,45 +1,44 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 import operator
 from typing import Optional, Pattern
 
-import numpy as np
 import pytest
 
+import gt4py.next.common as common
 from gt4py.next.common import (
     Dimension,
     DimensionKind,
     Domain,
     Infinity,
-    NamedRange,
     UnitRange,
     domain,
     named_range,
+    NamedRange,
     promote_dims,
     unit_range,
 )
 
 
-IDim = Dimension("IDim")
 ECDim = Dimension("ECDim")
+IDim = Dimension("IDim")
 JDim = Dimension("JDim")
 KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
 
 
 @pytest.fixture
 def a_domain():
-    return Domain((IDim, UnitRange(0, 10)), (JDim, UnitRange(5, 15)), (KDim, UnitRange(20, 30)))
+    return Domain(
+        NamedRange(IDim, UnitRange(0, 10)),
+        NamedRange(JDim, UnitRange(5, 15)),
+        NamedRange(KDim, UnitRange(20, 30)),
+    )
 
 
 @pytest.fixture(params=[Infinity.POSITIVE, Infinity.NEGATIVE])
@@ -92,10 +91,12 @@ def test_unbounded_max_min(value):
     assert min(Infinity.NEGATIVE, value) == Infinity.NEGATIVE
 
 
-def test_empty_range():
+@pytest.mark.parametrize("empty_range", [UnitRange(1, 0), UnitRange(1, -1)])
+def test_empty_range(empty_range):
     expected = UnitRange(0, 0)
-    assert UnitRange(1, 1) == expected
-    assert UnitRange(1, -1) == expected
+
+    assert empty_range == expected
+    assert empty_range.is_empty()
 
 
 @pytest.fixture
@@ -242,12 +243,7 @@ def test_range_comparison(op, rng1, rng2, expected):
 
 
 @pytest.mark.parametrize(
-    "named_rng_like",
-    [
-        (IDim, (2, 4)),
-        (IDim, range(2, 4)),
-        (IDim, UnitRange(2, 4)),
-    ],
+    "named_rng_like", [(IDim, (2, 4)), (IDim, range(2, 4)), (IDim, UnitRange(2, 4))]
 )
 def test_named_range_like(named_rng_like):
     assert named_range(named_rng_like) == (IDim, UnitRange(2, 4))
@@ -255,6 +251,20 @@ def test_named_range_like(named_rng_like):
 
 def test_domain_length(a_domain):
     assert len(a_domain) == 3
+
+
+@pytest.mark.parametrize(
+    "empty_domain, expected",
+    [
+        (Domain(), False),
+        (Domain(NamedRange(IDim, UnitRange(0, 10))), False),
+        (Domain(NamedRange(IDim, UnitRange(0, 0))), True),
+        (Domain(NamedRange(IDim, UnitRange(0, 0)), NamedRange(JDim, UnitRange(0, 1))), True),
+        (Domain(NamedRange(IDim, UnitRange(0, 1)), NamedRange(JDim, UnitRange(0, 0))), True),
+    ],
+)
+def test_empty_domain(empty_domain, expected):
+    assert empty_domain.is_empty() == expected
 
 
 @pytest.mark.parametrize(
@@ -354,11 +364,7 @@ def test_domain_slice_indexing(a_domain, slice_obj, expected):
 
 
 @pytest.mark.parametrize(
-    "index, expected_result",
-    [
-        (JDim, (JDim, UnitRange(5, 15))),
-        (KDim, (KDim, UnitRange(20, 30))),
-    ],
+    "index, expected_result", [(JDim, (JDim, UnitRange(5, 15))), (KDim, (KDim, UnitRange(20, 30)))]
 )
 def test_domain_dimension_indexing(a_domain, index, expected_result):
     result = a_domain[index]
@@ -394,6 +400,41 @@ def test_domain_dims_ranges_length_mismatch():
         Domain(dims=dims, ranges=ranges)
 
 
+def test_domain_slice_at():
+    # Create a sample domain
+    domain = Domain(
+        NamedRange(IDim, UnitRange(0, 10)),
+        NamedRange(JDim, UnitRange(5, 15)),
+        NamedRange(KDim, UnitRange(20, 30)),
+    )
+
+    # Test indexing with slices
+    result = domain.slice_at[slice(2, 5), slice(5, 7), slice(7, 10)]
+    expected_result = Domain(
+        NamedRange(IDim, UnitRange(2, 5)),
+        NamedRange(JDim, UnitRange(10, 12)),
+        NamedRange(KDim, UnitRange(27, 30)),
+    )
+    assert result == expected_result
+
+    # Test indexing with out-of-range slices
+    result = domain.slice_at[slice(2, 15), slice(5, 7), slice(7, 10)]
+    expected_result = Domain(
+        NamedRange(IDim, UnitRange(2, 10)),
+        NamedRange(JDim, UnitRange(10, 12)),
+        NamedRange(KDim, UnitRange(27, 30)),
+    )
+    assert result == expected_result
+
+    # Test indexing with incorrect types
+    with pytest.raises(TypeError):
+        domain.slice_at["a", 7, 25]
+
+    # Test indexing with incorrect number of indices
+    with pytest.raises(ValueError, match="not match the number of dimensions"):
+        domain.slice_at[slice(2, 5), slice(7, 10)]
+
+
 def test_domain_dim_index():
     dims = [Dimension("X"), Dimension("Y"), Dimension("Z")]
     ranges = [UnitRange(0, 1), UnitRange(0, 1), UnitRange(0, 1)]
@@ -422,89 +463,92 @@ def test_domain_pop():
         # Valid index and named ranges
         (
             0,
-            [(Dimension("X"), UnitRange(100, 110))],
+            [NamedRange(Dimension("X"), UnitRange(100, 110))],
             Domain(
-                (Dimension("I"), UnitRange(0, 10)),
-                (Dimension("J"), UnitRange(0, 10)),
-                (Dimension("K"), UnitRange(0, 10)),
+                NamedRange(Dimension("I"), UnitRange(0, 10)),
+                NamedRange(Dimension("J"), UnitRange(0, 10)),
+                NamedRange(Dimension("K"), UnitRange(0, 10)),
             ),
             Domain(
-                (Dimension("X"), UnitRange(100, 110)),
-                (Dimension("J"), UnitRange(0, 10)),
-                (Dimension("K"), UnitRange(0, 10)),
+                NamedRange(Dimension("X"), UnitRange(100, 110)),
+                NamedRange(Dimension("J"), UnitRange(0, 10)),
+                NamedRange(Dimension("K"), UnitRange(0, 10)),
             ),
         ),
         (
             1,
-            [(Dimension("X"), UnitRange(100, 110))],
+            [NamedRange(Dimension("X"), UnitRange(100, 110))],
             Domain(
-                (Dimension("I"), UnitRange(0, 10)),
-                (Dimension("J"), UnitRange(0, 10)),
-                (Dimension("K"), UnitRange(0, 10)),
+                NamedRange(Dimension("I"), UnitRange(0, 10)),
+                NamedRange(Dimension("J"), UnitRange(0, 10)),
+                NamedRange(Dimension("K"), UnitRange(0, 10)),
             ),
             Domain(
-                (Dimension("I"), UnitRange(0, 10)),
-                (Dimension("X"), UnitRange(100, 110)),
-                (Dimension("K"), UnitRange(0, 10)),
+                NamedRange(Dimension("I"), UnitRange(0, 10)),
+                NamedRange(Dimension("X"), UnitRange(100, 110)),
+                NamedRange(Dimension("K"), UnitRange(0, 10)),
             ),
         ),
         (
             -1,
-            [(Dimension("X"), UnitRange(100, 110))],
+            [NamedRange(Dimension("X"), UnitRange(100, 110))],
             Domain(
-                (Dimension("I"), UnitRange(0, 10)),
-                (Dimension("J"), UnitRange(0, 10)),
-                (Dimension("K"), UnitRange(0, 10)),
+                NamedRange(Dimension("I"), UnitRange(0, 10)),
+                NamedRange(Dimension("J"), UnitRange(0, 10)),
+                NamedRange(Dimension("K"), UnitRange(0, 10)),
             ),
             Domain(
-                (Dimension("I"), UnitRange(0, 10)),
-                (Dimension("J"), UnitRange(0, 10)),
-                (Dimension("X"), UnitRange(100, 110)),
+                NamedRange(Dimension("I"), UnitRange(0, 10)),
+                NamedRange(Dimension("J"), UnitRange(0, 10)),
+                NamedRange(Dimension("X"), UnitRange(100, 110)),
             ),
         ),
         (
             Dimension("J"),
-            [(Dimension("X"), UnitRange(100, 110)), (Dimension("Z"), UnitRange(100, 110))],
+            [
+                NamedRange(Dimension("X"), UnitRange(100, 110)),
+                NamedRange(Dimension("Z"), UnitRange(100, 110)),
+            ],
             Domain(
-                (Dimension("I"), UnitRange(0, 10)),
-                (Dimension("J"), UnitRange(0, 10)),
-                (Dimension("K"), UnitRange(0, 10)),
+                NamedRange(Dimension("I"), UnitRange(0, 10)),
+                NamedRange(Dimension("J"), UnitRange(0, 10)),
+                NamedRange(Dimension("K"), UnitRange(0, 10)),
             ),
             Domain(
-                (Dimension("I"), UnitRange(0, 10)),
-                (Dimension("X"), UnitRange(100, 110)),
-                (Dimension("Z"), UnitRange(100, 110)),
-                (Dimension("K"), UnitRange(0, 10)),
+                NamedRange(Dimension("I"), UnitRange(0, 10)),
+                NamedRange(Dimension("X"), UnitRange(100, 110)),
+                NamedRange(Dimension("Z"), UnitRange(100, 110)),
+                NamedRange(Dimension("K"), UnitRange(0, 10)),
             ),
         ),
         # Invalid indices
         (
             3,
-            [(Dimension("X"), UnitRange(100, 110))],
+            [NamedRange(Dimension("X"), UnitRange(100, 110))],
             Domain(
-                (Dimension("I"), UnitRange(0, 10)),
-                (Dimension("J"), UnitRange(0, 10)),
-                (Dimension("K"), UnitRange(0, 10)),
+                NamedRange(Dimension("I"), UnitRange(0, 10)),
+                NamedRange(Dimension("J"), UnitRange(0, 10)),
+                NamedRange(Dimension("K"), UnitRange(0, 10)),
             ),
             IndexError,
         ),
         (
             -4,
-            [(Dimension("X"), UnitRange(100, 110))],
+            [NamedRange(Dimension("X"), UnitRange(100, 110))],
             Domain(
-                (Dimension("I"), UnitRange(0, 10)),
-                (Dimension("J"), UnitRange(0, 10)),
-                (Dimension("K"), UnitRange(0, 10)),
+                NamedRange(Dimension("I"), UnitRange(0, 10)),
+                NamedRange(Dimension("J"), UnitRange(0, 10)),
+                NamedRange(Dimension("K"), UnitRange(0, 10)),
             ),
             IndexError,
         ),
         (
             Dimension("Foo"),
-            [(Dimension("X"), UnitRange(100, 110))],
+            [NamedRange(Dimension("X"), UnitRange(100, 110))],
             Domain(
-                (Dimension("I"), UnitRange(0, 10)),
-                (Dimension("J"), UnitRange(0, 10)),
-                (Dimension("K"), UnitRange(0, 10)),
+                NamedRange(Dimension("I"), UnitRange(0, 10)),
+                NamedRange(Dimension("J"), UnitRange(0, 10)),
+                NamedRange(Dimension("K"), UnitRange(0, 10)),
             ),
             ValueError,
         ),
@@ -565,3 +609,25 @@ def test_dimension_promotion(
             promote_dims(*dim_list)
 
         assert exc_info.match(expected_error_msg)
+
+
+class TestCartesianConnectivity:
+    def test_for_translation(self):
+        offset = 5
+        I = common.Dimension("I")
+
+        result = common.CartesianConnectivity.for_translation(I, offset)
+        assert isinstance(result, common.CartesianConnectivity)
+        assert result.domain_dim == I
+        assert result.codomain == I
+        assert result.offset == offset
+
+    def test_for_relocation(self):
+        I = common.Dimension("I")
+        I_half = common.Dimension("I_half")
+
+        result = common.CartesianConnectivity.for_relocation(I, I_half)
+        assert isinstance(result, common.CartesianConnectivity)
+        assert result.domain_dim == I_half
+        assert result.codomain == I
+        assert result.offset == 0

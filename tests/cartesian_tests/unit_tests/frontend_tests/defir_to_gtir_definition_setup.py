@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import itertools
 from typing import Any, Iterator, List, Set, Tuple, Union
@@ -182,9 +176,7 @@ class TComputationBlock(TObject):
                 end=AxisBound(level=LevelMarker.END, offset=self.end),
             ),
             iteration_order=self.order,
-            body=BlockStmt(
-                stmts=temp_decls + [stmt.build() for stmt in self.children],
-            ),
+            body=BlockStmt(stmts=temp_decls + [stmt.build() for stmt in self.children]),
             loc=self.loc,
         )
 
@@ -218,9 +210,7 @@ class TAssign(TStatement):
         if isinstance(self._value, str):
             value = TFieldRef(name=self._value, offset=self.offset)
         value.loc = Location(
-            line=self.loc.line,
-            column=self.loc.column + self.target.width + 3,
-            scope=self.loc.scope,
+            line=self.loc.line, column=self.loc.column + self.target.width + 3, scope=self.loc.scope
         )
         value.parent = self
         return value
@@ -267,11 +257,7 @@ class TFieldRef(TObject):
     def build(self):
         if self.parent:
             self.loc.scope = self.parent.child_scope
-        return FieldRef(
-            name=self.name,
-            offset=self.offset,
-            loc=self.loc,
-        )
+        return FieldRef(name=self.name, offset=self.offset, loc=self.loc)
 
     @property
     def height(self) -> int:
@@ -287,24 +273,14 @@ class TFieldRef(TObject):
 
 
 class TScalarLiteral(TObject):
-    def __init__(
-        self,
-        *,
-        value: Any,
-        loc: Location = None,
-        parent: TObject = None,
-    ):
+    def __init__(self, *, value: Any, loc: Location = None, parent: TObject = None):
         super().__init__(loc or Location(line=0, column=0), parent=parent)
         self.value = value
 
     def build(self):
         if self.parent:
             self.loc.scope = self.parent.child_scope
-        return ScalarLiteral(
-            value=self.value,
-            data_type=DataType.AUTO,
-            loc=self.loc,
-        )
+        return ScalarLiteral(value=self.value, data_type=DataType.AUTO, loc=self.loc)
 
     @property
     def height(self) -> int:

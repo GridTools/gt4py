@@ -1,47 +1,71 @@
+#
+# Generated automatically by cog from pyproject.toml and requirements-dev.in
+# Run: 
+#       tox r -e requirements-common
+#
+
 ##[[[cog
-## import re, tomli
-## project = tomli.loads(open("pyproject.toml").read())
-## requirements = set(
-##     rr
-##     for r in (
-##         project["project"]["dependencies"]
-##         + open("requirements-dev.in").readlines()
-##     )
-##     if (rr := r.strip()) and not rr.startswith('#')
-## )
-## for r in sorted(requirements):
-##     m = re.match("^([\w-][\w\d\[\]-]*)[=>~][=]([^,]+)", r)
-##     print(f"{m[1]}=={m[2].strip()}")
+## import copy, sys
+## from packaging import requirements as reqs, specifiers as specs
+## if sys.version_info >= (3, 11):
+##     import tomllib
+## else:
+##     import tomli as tomllib
+##
+## def make_min_req(r: reqs.Requirement) -> reqs.Requirement:
+##     for s in r.specifier:
+##        if (ss := str(s)).startswith(">"):
+##            assert ss.startswith(">="), f"'{r!s}' requires a '>=' constraint"
+##            min_spec = specs.SpecifierSet(f"=={ss[2:]}")
+##            break
+##     min_r = copy.deepcopy(r)
+##     min_r.specifier = min_spec
+##     return min_r
+##
+## project = tomllib.loads(open("pyproject.toml").read())
+## all_cpu_extra = project["project"]["optional-dependencies"]["all-cpu"]
+## assert len(all_cpu_extra) == 1 and all_cpu_extra[0].startswith("gt4py[")
+## opt_req_versions = {
+##     reqs.Requirement(r).name: reqs.Requirement(r)
+##     for e in reqs.Requirement(all_cpu_extra[0]).extras
+##     for r in project["project"]["optional-dependencies"][e]
+## }
+## requirements = [
+##     reqs.Requirement(rr)
+##     for r in (project["project"]["dependencies"] + open("requirements-dev.in").readlines())
+##     if (rr := (r[: r.find("#")] if "#" in r else r))
+## ]
+## processed = set()
+## result = []
+## for r in requirements:
+##     assert r.name not in processed
+##     processed.add(r.name)
+##     if not r.specifier:
+##         assert r.name in opt_req_versions, f"Missing contraints for '{r.name}'"
+##         r = opt_req_versions[r.name]
+##     result.append(str(make_min_req(r)))
+## print("\n".join(sorted(result)))
 ##]]]
-astunparse==1.6.3;python_version<'3.9'
+astunparse==1.6.3; python_version < "3.9"
 attrs==21.3
 black==22.3
 boltons==20.1
+bump-my-version==0.12.0
 cached-property==1.5.1
 clang-format==9.0
 click==8.0.0
 cmake==3.22
 cogapp==3.3
 coverage[toml]==5.0
-cytoolz==0.12.0
+cytoolz==0.12.1
 darglint==1.6
 deepdiff==5.6.0
 devtools==0.6
-factory-boy==3.1
-flake8-bugbear==20.11.1
-flake8-builtins==1.5.3
-flake8-debugger==4.0.0
-flake8-docstrings==1.5.0
-flake8-eradicate==1.3.0
-flake8-mutable==1.2.0
-flake8-pyproject==1.2.2
-flake8-rst-docstrings==0.0.14
-flake8==5.0.4
+factory-boy==3.3.0
 frozendict==2.3
-gridtools-cpp==2.3.1
+gridtools-cpp==2.3.6
 hypothesis==6.0.0
-importlib-resources==5.0;python_version<'3.9'
-isort==5.10
+importlib-resources==5.0; python_version < "3.9"
 jinja2==3.0.0
 jupytext==1.14
 lark==1.1.2
@@ -51,27 +75,30 @@ mypy==1.0
 nanobind==1.4.0
 nbmake==1.4.6
 ninja==1.10
-numpy==1.21.2
+numpy==1.23.3
 packaging==20.0
 pip-tools==6.10
 pipdeptree==2.3
 pre-commit==2.17
 psutil==5.0
-pybind11==2.5
-pygments==2.7
+pybind11==2.10.1
+pygments==2.7.3
 pytest-cache==1.0
 pytest-cov==2.8
+pytest-custom-exit-code==0.3.0
 pytest-factoryboy==2.0.3
+pytest-instafail==0.5.0
 pytest-xdist[psutil]==2.4
 pytest==7.0
-ruff==0.0.265
+ruff==0.2.0
 setuptools==65.5.0
 sphinx==4.4
 sphinx_rtd_theme==1.0
 tabulate==0.8.10
-tomli==2.0.1
+tach==0.10.7
+tomli==2.0.1; python_version < "3.11"
 tox==3.2.0
-types-all==1.0.0
-typing-extensions==4.2
+types-tabulate==0.8.10
+typing-extensions==4.10.0
 xxhash==1.4.4
 ##[[[end]]]

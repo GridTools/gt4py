@@ -1,22 +1,16 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import numpy as np
 import pytest
 
 
-pytest.importorskip("atlas4py")  # isort: skip
+pytest.importorskip("atlas4py")
 
 import gt4py.next as gtx
 from gt4py.next.iterator import library
@@ -38,11 +32,11 @@ from gt4py.next.iterator.builtins import (
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 from gt4py.next.iterator.transforms.pass_manager import LiftMode
 
-from next_tests.integration_tests.multi_feature_tests.iterator_tests.fvm_nabla_setup import (
+from next_tests.integration_tests.multi_feature_tests.fvm_nabla_setup import (
     assert_close,
     nabla_setup,
 )
-from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
+from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
 Vertex = gtx.Dimension("Vertex")
@@ -61,18 +55,8 @@ def compute_zavgS(pp, S_M):
 
 
 @fendef
-def compute_zavgS_fencil(
-    n_edges,
-    out,
-    pp,
-    S_M,
-):
-    closure(
-        unstructured_domain(named_range(Edge, 0, n_edges)),
-        compute_zavgS,
-        out,
-        [pp, S_M],
-    )
+def compute_zavgS_fencil(n_edges, out, pp, S_M):
+    closure(unstructured_domain(named_range(Edge, 0, n_edges)), compute_zavgS, out, [pp, S_M])
 
 
 @fundef
@@ -116,15 +100,7 @@ def compute_pnabla2(pp, S_M, sign, vol):
 
 
 @fendef
-def nabla(
-    n_nodes,
-    out,
-    pp,
-    S_MXX,
-    S_MYY,
-    sign,
-    vol,
-):
+def nabla(n_nodes, out, pp, S_MXX, S_MYY, sign, vol):
     closure(
         unstructured_domain(named_range(Vertex, 0, n_nodes)),
         pnabla,
@@ -134,7 +110,7 @@ def nabla(
 
 
 @pytest.mark.requires_atlas
-def test_compute_zavgS(program_processor, lift_mode):
+def test_compute_zavgS(program_processor):
     program_processor, validate = program_processor
     setup = nabla_setup()
 
@@ -155,7 +131,6 @@ def test_compute_zavgS(program_processor, lift_mode):
         pp,
         S_MXX,
         offset_provider={"E2V": e2v},
-        lift_mode=lift_mode,
     )
 
     if validate:
@@ -170,7 +145,6 @@ def test_compute_zavgS(program_processor, lift_mode):
         pp,
         S_MYY,
         offset_provider={"E2V": e2v},
-        lift_mode=lift_mode,
     )
     if validate:
         assert_close(-1000788897.3202186, np.min(zavgS.asnumpy()))
@@ -178,22 +152,12 @@ def test_compute_zavgS(program_processor, lift_mode):
 
 
 @fendef
-def compute_zavgS2_fencil(
-    n_edges,
-    out,
-    pp,
-    S_M,
-):
-    closure(
-        unstructured_domain(named_range(Edge, 0, n_edges)),
-        compute_zavgS2,
-        out,
-        [pp, S_M],
-    )
+def compute_zavgS2_fencil(n_edges, out, pp, S_M):
+    closure(unstructured_domain(named_range(Edge, 0, n_edges)), compute_zavgS2, out, [pp, S_M])
 
 
 @pytest.mark.requires_atlas
-def test_compute_zavgS2(program_processor, lift_mode):
+def test_compute_zavgS2(program_processor):
     program_processor, validate = program_processor
     setup = nabla_setup()
 
@@ -218,7 +182,6 @@ def test_compute_zavgS2(program_processor, lift_mode):
         pp,
         S,
         offset_provider={"E2V": e2v},
-        lift_mode=lift_mode,
     )
 
     if validate:
@@ -230,10 +193,9 @@ def test_compute_zavgS2(program_processor, lift_mode):
 
 
 @pytest.mark.requires_atlas
-def test_nabla(program_processor, lift_mode):
+def test_nabla(program_processor):
     program_processor, validate = program_processor
-    if lift_mode != LiftMode.FORCE_INLINE:
-        pytest.xfail("shifted input arguments not supported for lift_mode != LiftMode.FORCE_INLINE")
+
     setup = nabla_setup()
 
     sign = gtx.as_field([Vertex, V2EDim], setup.sign_field)
@@ -262,7 +224,6 @@ def test_nabla(program_processor, lift_mode):
         sign,
         vol,
         offset_provider={"E2V": e2v, "V2E": v2e},
-        lift_mode=lift_mode,
     )
 
     if validate:
@@ -273,14 +234,7 @@ def test_nabla(program_processor, lift_mode):
 
 
 @fendef
-def nabla2(
-    n_nodes,
-    out,
-    pp,
-    S,
-    sign,
-    vol,
-):
+def nabla2(n_nodes, out, pp, S, sign, vol):
     closure(
         unstructured_domain(named_range(Vertex, 0, n_nodes)),
         compute_pnabla2,
@@ -290,7 +244,7 @@ def nabla2(
 
 
 @pytest.mark.requires_atlas
-def test_nabla2(program_processor, lift_mode):
+def test_nabla2(program_processor):
     program_processor, validate = program_processor
     setup = nabla_setup()
 
@@ -309,7 +263,9 @@ def test_nabla2(program_processor, lift_mode):
         AtlasTable(setup.nodes2edge_connectivity), Vertex, Edge, 7
     )
 
-    nabla2(
+    run_processor(
+        nabla2,
+        program_processor,
         setup.nodes_size,
         (pnabla_MXX, pnabla_MYY),
         pp,
@@ -317,8 +273,6 @@ def test_nabla2(program_processor, lift_mode):
         sign,
         vol,
         offset_provider={"E2V": e2v, "V2E": v2e},
-        program_processor=program_processor,
-        lift_mode=lift_mode,
     )
 
     if validate:
@@ -369,10 +323,9 @@ def nabla_sign(n_nodes, out_MXX, out_MYY, pp, S_MXX, S_MYY, vol, node_index, is_
 
 
 @pytest.mark.requires_atlas
-def test_nabla_sign(program_processor, lift_mode):
+def test_nabla_sign(program_processor):
     program_processor, validate = program_processor
-    if lift_mode != LiftMode.FORCE_INLINE:
-        pytest.xfail("test is broken due to bad lift semantics in iterator IR")
+
     setup = nabla_setup()
 
     is_pole_edge = gtx.as_field([Edge], setup.is_pole_edge_field)
@@ -403,7 +356,6 @@ def test_nabla_sign(program_processor, lift_mode):
         gtx.index_field(Vertex),
         is_pole_edge,
         offset_provider={"E2V": e2v, "V2E": v2e},
-        lift_mode=lift_mode,
     )
 
     if validate:

@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import ast
 import dataclasses
@@ -27,17 +21,15 @@ class RemoveDocstrings(ast.NodeTransformer):
     >>> def example_docstring():
     ...     a = 1
     ...     "This is a docstring"
+    ...
     ...     def example_docstring_2():
-    ...          a = 2.0
-    ...          "This is a new docstring"
-    ...          return a
+    ...         a = 2.0
+    ...         "This is a new docstring"
+    ...         return a
+    ...
     ...     a = example_docstring_2()
     ...     return a
-    >>> print(ast.unparse(
-    ...     RemoveDocstrings.apply(
-    ...         ast.parse(inspect.getsource(example_docstring))
-    ...     )
-    ... ))
+    >>> print(ast.unparse(RemoveDocstrings.apply(ast.parse(inspect.getsource(example_docstring)))))
     def example_docstring():
         a = 1
     <BLANKLINE>

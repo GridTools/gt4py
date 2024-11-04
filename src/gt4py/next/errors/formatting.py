@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """Utility functions for formatting :class:`DSLError` and its subclasses."""
 
@@ -78,10 +72,7 @@ def _format_cause(cause: BaseException) -> list[str]:
 def _format_traceback(tb: types.TracebackType) -> list[str]:
     """Format the traceback of an exception."""
     intro_message = "Traceback (most recent call last):"
-    traceback_strs = [
-        f"{intro_message}\n",
-        *traceback.format_tb(tb),
-    ]
+    traceback_strs = [f"{intro_message}\n", *traceback.format_tb(tb)]
     return traceback_strs
 
 

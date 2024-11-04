@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -22,6 +16,7 @@ import shutil
 import subprocess
 from typing import Optional, TypeVar
 
+from gt4py.next import config
 from gt4py.next.otf import languages, stages
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.compilation import build_data, cache, compiler
@@ -44,18 +39,16 @@ class CompiledbFactory(
     Generate a compiledb only if there isn't one for the given combination of cmake configuration and library dependencies.
     """
 
-    cmake_build_type: cmake.BuildType = cmake.BuildType.DEBUG
+    cmake_build_type: config.CMakeBuildType = config.CMakeBuildType.DEBUG
     cmake_extra_flags: list[str] = dataclasses.field(default_factory=list)
     renew_compiledb: bool = False
 
     def __call__(
         self,
         source: stages.CompilableSource[
-            SrcL,
-            languages.LanguageWithHeaderFilesSettings,
-            languages.Python,
+            SrcL, languages.LanguageWithHeaderFilesSettings, languages.Python
         ],
-        cache_strategy: cache.Strategy,
+        cache_lifetime: config.BuildCacheLifetime,
     ) -> CompiledbProject:
         if not source.binding_source:
             raise NotImplementedError(
@@ -71,20 +64,21 @@ class CompiledbFactory(
             cmake_flags=self.cmake_extra_flags or [],
             language=source.program_source.language,
             language_settings=source.program_source.language_settings,
+            implicit_domain=source.program_source.implicit_domain,
         )
 
         if self.renew_compiledb or not (
-            compiledb_template := _cc_find_compiledb(cc_prototype_program_source, cache_strategy)
+            compiledb_template := _cc_find_compiledb(cc_prototype_program_source, cache_lifetime)
         ):
             compiledb_template = _cc_create_compiledb(
                 cc_prototype_program_source,
                 build_type=self.cmake_build_type,
                 cmake_flags=self.cmake_extra_flags or [],
-                cache_strategy=cache_strategy,
+                cache_lifetime=cache_lifetime,
             )
 
         return CompiledbProject(
-            root_path=cache.get_cache_folder(source, cache_strategy),
+            root_path=cache.get_cache_folder(source, cache_lifetime),
             program_name=name,
             source_files={
                 header_name: source.program_source.source_code,
@@ -216,10 +210,11 @@ def _cc_prototype_program_name(
 
 def _cc_prototype_program_source(
     deps: tuple[interface.LibraryDependency, ...],
-    build_type: cmake.BuildType,
+    build_type: config.CMakeBuildType,
     cmake_flags: list[str],
     language: type[SrcL],
     language_settings: languages.LanguageWithHeaderFilesSettings,
+    implicit_domain: bool,
 ) -> stages.ProgramSource:
     name = _cc_prototype_program_name(deps, build_type.value, cmake_flags)
     return stages.ProgramSource(
@@ -228,14 +223,15 @@ def _cc_prototype_program_source(
         library_deps=deps,
         language=language,
         language_settings=language_settings,
+        implicit_domain=implicit_domain,
     )
 
 
 def _cc_find_compiledb(
-    prototype_program_source: stages.ProgramSource, cache_strategy: cache.Strategy
+    prototype_program_source: stages.ProgramSource, cache_lifetime: config.BuildCacheLifetime
 ) -> Optional[pathlib.Path]:
     cache_path = cache.get_cache_folder(
-        stages.CompilableSource(prototype_program_source, None), cache_strategy
+        stages.CompilableSource(prototype_program_source, None), cache_lifetime
     )
     compile_db_path = cache_path / "compile_commands.json"
     if compile_db_path.exists():
@@ -245,13 +241,13 @@ def _cc_find_compiledb(
 
 def _cc_create_compiledb(
     prototype_program_source: stages.ProgramSource,
-    build_type: cmake.BuildType,
+    build_type: config.CMakeBuildType,
     cmake_flags: list[str],
-    cache_strategy: cache.Strategy,
+    cache_lifetime: config.BuildCacheLifetime,
 ) -> pathlib.Path:
     name = prototype_program_source.entry_point.name
     cache_path = cache.get_cache_folder(
-        stages.CompilableSource(prototype_program_source, None), cache_strategy
+        stages.CompilableSource(prototype_program_source, None), cache_lifetime
     )
 
     header_ext = prototype_program_source.language_settings.header_extension
@@ -259,8 +255,8 @@ def _cc_create_compiledb(
     prog_src_name = f"{name}.{header_ext}"
     binding_src_name = f"{name}.{src_ext}"
     cmake_languages = [cmake_lists.Language(name="CXX")]
-    if prototype_program_source.language is languages.Cuda:
-        cmake_languages = [*cmake_languages, cmake_lists.Language(name="CUDA")]
+    if (src_lang := prototype_program_source.language) in [languages.CUDA, languages.HIP]:
+        cmake_languages = [*cmake_languages, cmake_lists.Language(name=src_lang.__name__)]
 
     prototype_project = cmake.CMakeProject(
         generator_name="Ninja",
@@ -285,9 +281,7 @@ def _cc_create_compiledb(
 
     with log_file.open("w") as log_file_pointer:
         commands_json_str = subprocess.check_output(
-            ["ninja", "-t", "compdb"],
-            cwd=cache_path / "build",
-            stderr=log_file_pointer,
+            ["ninja", "-t", "compdb"], cwd=cache_path / "build", stderr=log_file_pointer
         ).decode("utf-8")
         commands = json.loads(commands_json_str)
 

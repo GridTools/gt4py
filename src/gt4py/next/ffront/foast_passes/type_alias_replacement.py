@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from dataclasses import dataclass
 from typing import Any, cast
@@ -53,7 +47,7 @@ class TypeAliasReplacement(NodeTranslator, traits.VisitorWithSymbolTableTrait):
             and node_id not in TYPE_BUILTIN_NAMES
         )
 
-    def visit_Name(self, node: foast.Name, **kwargs) -> foast.Name:
+    def visit_Name(self, node: foast.Name, **kwargs: Any) -> foast.Name:
         if self.is_type_alias(node.id):
             return foast.Name(
                 id=self.closure_vars[node.id].__name__, location=node.location, type=node.type
@@ -94,7 +88,7 @@ class TypeAliasReplacement(NodeTranslator, traits.VisitorWithSymbolTableTrait):
         return new_closure_vars
 
     def visit_FunctionDefinition(
-        self, node: foast.FunctionDefinition, **kwargs
+        self, node: foast.FunctionDefinition, **kwargs: Any
     ) -> foast.FunctionDefinition:
         return foast.FunctionDefinition(
             id=node.id,

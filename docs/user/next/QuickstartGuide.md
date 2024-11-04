@@ -5,7 +5,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.14.0
+    jupytext_version: 1.16.1
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -46,7 +46,7 @@ The following snippet imports the most commonly used features that are needed to
 import numpy as np
 
 import gt4py.next as gtx
-from gt4py.next import float64, neighbor_sum, where
+from gt4py.next import float64, neighbor_sum, where, Dims
 ```
 
 #### Fields
@@ -70,18 +70,16 @@ b = gtx.as_field([CellDim, KDim], np.full(shape=grid_shape, fill_value=b_value, 
 Additional numpy-equivalent constructors are available, namely `ones`, `zeros`, `empty`, `full`. These require domain, dtype, and allocator (e.g. a backend) specifications.
 
 ```{code-cell} ipython3
-from gt4py._core import definitions as core_defs
+I = gtx.Dimension("I")
+J = gtx.Dimension("J")
+
 array_of_ones_numpy = np.ones((grid_shape[0], grid_shape[1]))
-field_of_ones = gtx.constructors.ones(
+field_of_ones = gtx.ones(
     domain={I: range(grid_shape[0]), J: range(grid_shape[0])},
-    dtype=core_defs.dtype(np.float64),
-    allocator=gtx.program_processors.runners.roundtrip.backend
+    dtype=np.float64,
+    allocator=gtx.itir_python
 )
 ```
-
-_Note: The interface to construct fields is provisional only and will change soon._
-
-+++
 
 #### Field operators
 
@@ -91,11 +89,12 @@ Let's see an example for a field operator that adds two fields elementwise:
 
 ```{code-cell} ipython3
 @gtx.field_operator
-def add(a: gtx.Field[[CellDim, KDim], float64],
-        b: gtx.Field[[CellDim, KDim], float64]) -> gtx.Field[[CellDim, KDim], float64]:
+def add(a: gtx.Field[Dims[CellDim, KDim], float64],
+        b: gtx.Field[Dims[CellDim, KDim], float64]) -> gtx.Field[Dims[CellDim, KDim], float64]:
     return a + b
 ```
 
+\_Note: for now `Dims` is not mandatory, hence this type hint is also accepted: `gtx.Field[[CellDim, KDim], float64]`
 You can call field operators from [programs](#Programs), other field operators, or directly. The code snippet below shows a direct call, in which case you have to supply two additional arguments: `out`, which is a field to write the return value to, and `offset_provider`, which is left empty for now. The result of the field operator is a field with all entries equal to 5, but for brevity, only the average and the standard deviation of the entries are printed:
 
 ```{code-cell} ipython3
@@ -115,9 +114,9 @@ This example program below calls the above elementwise addition field operator t
 
 ```{code-cell} ipython3
 @gtx.program
-def run_add(a : gtx.Field[[CellDim, KDim], float64],
-            b : gtx.Field[[CellDim, KDim], float64],
-            result : gtx.Field[[CellDim, KDim], float64]):
+def run_add(a : gtx.Field[Dims[CellDim, KDim], float64],
+            b : gtx.Field[Dims[CellDim, KDim], float64],
+            result : gtx.Field[Dims[CellDim, KDim], float64]):
     add(a, b, out=result)
     add(b, result, out=result)
 ```
@@ -162,9 +161,9 @@ This section approaches the pseudo-laplacian by introducing the required APIs pr
 
 The examples related to unstructured meshes use the mesh below. The edges (in blue) and the cells (in red) are numbered with zero-based indices.
 
-| ![grid_topo](connectivity_numbered_grid.svg) |
-| :------------------------------------------: |
-|         _The mesh with the indices_          |
+| ![grid_topo](workshop/images/connectivity_numbered_grid.svg) |
+| :----------------------------------------------------------: |
+|                 _The mesh with the indices_                  |
 
 +++
 
@@ -216,9 +215,9 @@ cell_values = gtx.as_field([CellDim], np.array([1.0, 1.0, 2.0, 3.0, 5.0, 8.0]))
 edge_values = gtx.as_field([EdgeDim], np.zeros((12,)))
 ```
 
-| ![cell_values](connectivity_cell_field.svg) |
-| :-----------------------------------------: |
-|                _Cell values_                |
+| ![cell_values](workshop/images/connectivity_cell_field.svg) |
+| :---------------------------------------------------------: |
+|                        _Cell values_                        |
 
 +++
 
@@ -247,11 +246,11 @@ Pay attention to the syntax where the field offset `E2C` can be freely accessed 
 
 ```{code-cell} ipython3
 @gtx.field_operator
-def nearest_cell_to_edge(cell_values: gtx.Field[[CellDim], float64]) -> gtx.Field[[EdgeDim], float64]:
+def nearest_cell_to_edge(cell_values: gtx.Field[Dims[CellDim], float64]) -> gtx.Field[Dims[EdgeDim], float64]:
     return cell_values(E2C[0])
 
 @gtx.program
-def run_nearest_cell_to_edge(cell_values: gtx.Field[[CellDim], float64], out : gtx.Field[[EdgeDim], float64]):
+def run_nearest_cell_to_edge(cell_values: gtx.Field[Dims[CellDim], float64], out : gtx.Field[Dims[EdgeDim], float64]):
     nearest_cell_to_edge(cell_values, out=out)
 
 run_nearest_cell_to_edge(cell_values, edge_values, offset_provider={"E2C": E2C_offset_provider})
@@ -261,9 +260,9 @@ print("0th adjacent cell's value: {}".format(edge_values.asnumpy()))
 
 Running the above snippet results in the following edge field:
 
-| ![nearest_cell_values](connectivity_numbered_grid.svg) | $\mapsto$ | ![grid_topo](connectivity_edge_0th_cell.svg) |
-| :----------------------------------------------------: | :-------: | :------------------------------------------: |
-|                    _Domain (edges)_                    |           |                _Edge values_                 |
+| ![nearest_cell_values](workshop/images/connectivity_numbered_grid.svg) | $\mapsto$ | ![grid_topo](workshop/images/connectivity_edge_0th_cell.svg) |
+| :--------------------------------------------------------------------: | :-------: | :----------------------------------------------------------: |
+|                            _Domain (edges)_                            |           |                        _Edge values_                         |
 
 +++
 
@@ -273,12 +272,12 @@ Similarly to the previous example, the output is once again a field on edges. Th
 
 ```{code-cell} ipython3
 @gtx.field_operator
-def sum_adjacent_cells(cells : gtx.Field[[CellDim], float64]) -> gtx.Field[[EdgeDim], float64]:
-    # type of cells(E2C) is gtx.Field[[CellDim, E2CDim], float64]
+def sum_adjacent_cells(cells : gtx.Field[Dims[CellDim], float64]) -> gtx.Field[Dims[EdgeDim], float64]:
+    # type of cells(E2C) is gtx.Field[Dims[EdgeDim, E2CDim], float64]
     return neighbor_sum(cells(E2C), axis=E2CDim)
 
 @gtx.program
-def run_sum_adjacent_cells(cells : gtx.Field[[CellDim], float64], out : gtx.Field[[EdgeDim], float64]):
+def run_sum_adjacent_cells(cells : gtx.Field[Dims[CellDim], float64], out : gtx.Field[Dims[EdgeDim], float64]):
     sum_adjacent_cells(cells, out=out)
 
 run_sum_adjacent_cells(cell_values, edge_values, offset_provider={"E2C": E2C_offset_provider})
@@ -288,9 +287,9 @@ print("sum of adjacent cells: {}".format(edge_values.asnumpy()))
 
 For the border edges, the results are unchanged compared to the previous example, but the inner edges now contain the sum of the two adjacent cells:
 
-| ![nearest_cell_values](connectivity_numbered_grid.svg) | $\mapsto$ | ![cell_values](connectivity_edge_cell_sum.svg) |
-| :----------------------------------------------------: | :-------: | :--------------------------------------------: |
-|                    _Domain (edges)_                    |           |                 _Edge values_                  |
+| ![nearest_cell_values](workshop/images/connectivity_numbered_grid.svg) | $\mapsto$ | ![cell_values](workshop/images/connectivity_edge_cell_sum.svg) |
+| :--------------------------------------------------------------------: | :-------: | :------------------------------------------------------------: |
+|                            _Domain (edges)_                            |           |                         _Edge values_                          |
 
 +++
 
@@ -302,7 +301,7 @@ This function takes 3 input arguments:
 - mask: a field with dtype boolean
 - true branch: a tuple, a field, or a scalar
 - false branch: a tuple, a field, of a scalar
-  The mask can be directly a field of booleans (e.g. `gtx.Field[[CellDim], bool]`) or an expression evaluating to this type (e.g. `gtx.Field[[CellDim], float64] > 3`).
+  The mask can be directly a field of booleans (e.g. `gtx.Field[Dims[CellDim], bool]`) or an expression evaluating to this type (e.g. `gtx.Field[[CellDim], float64] > 3`).
   The `where` builtin loops over each entry of the mask and returns values corresponding to the same indexes of either the true or the false branch.
   In the case where the true and false branches are either fields or scalars, the resulting output will be a field including all dimensions from all inputs. For example:
 
@@ -312,8 +311,8 @@ result_where = gtx.as_field([CellDim, KDim], np.zeros(shape=grid_shape))
 b = 6.0
 
 @gtx.field_operator
-def conditional(mask: gtx.Field[[CellDim, KDim], bool], a: gtx.Field[[CellDim, KDim], float64], b: float
-) -> gtx.Field[[CellDim, KDim], float64]:
+def conditional(mask: gtx.Field[Dims[CellDim, KDim], bool], a: gtx.Field[Dims[CellDim, KDim], float64], b: float
+) -> gtx.Field[Dims[CellDim, KDim], float64]:
     return where(mask, a, b)
 
 conditional(mask, a, b, out=result_where, offset_provider={})
@@ -329,13 +328,13 @@ result_1 = gtx.as_field([CellDim, KDim], np.zeros(shape=grid_shape))
 result_2 = gtx.as_field([CellDim, KDim], np.zeros(shape=grid_shape))
 
 @gtx.field_operator
-def _conditional_tuple(mask: gtx.Field[[CellDim, KDim], bool], a: gtx.Field[[CellDim, KDim], float64], b: float
-) -> tuple[gtx.Field[[CellDim, KDim], float64], gtx.Field[[CellDim, KDim], float64]]:
+def _conditional_tuple(mask: gtx.Field[Dims[CellDim, KDim], bool], a: gtx.Field[Dims[CellDim, KDim], float64], b: float
+) -> tuple[gtx.Field[Dims[CellDim, KDim], float64], gtx.Field[Dims[CellDim, KDim], float64]]:
     return where(mask, (a, b), (b, a))
 
 @gtx.program
-def conditional_tuple(mask: gtx.Field[[CellDim, KDim], bool], a: gtx.Field[[CellDim, KDim], float64], b: float,
-result_1: gtx.Field[[CellDim, KDim], float64], result_2: gtx.Field[[CellDim, KDim], float64]
+def conditional_tuple(mask: gtx.Field[Dims[CellDim, KDim], bool], a: gtx.Field[Dims[CellDim, KDim], float64], b: float,
+result_1: gtx.Field[Dims[CellDim, KDim], float64], result_2: gtx.Field[Dims[CellDim, KDim], float64]
 ):
      _conditional_tuple(mask, a, b, out=(result_1, result_2))
 
@@ -360,17 +359,17 @@ result_2 = gtx.as_field([CellDim, KDim], np.zeros(shape=grid_shape))
 
 @gtx.field_operator
 def _conditional_tuple_nested(
-    mask: gtx.Field[[CellDim, KDim], bool], a: gtx.Field[[CellDim, KDim], float64], b: gtx.Field[[CellDim, KDim], float64], c: gtx.Field[[CellDim, KDim], float64], d: gtx.Field[[CellDim, KDim], float64]
+    mask: gtx.Field[Dims[CellDim, KDim], bool], a: gtx.Field[Dims[CellDim, KDim], float64], b: gtx.Field[Dims[CellDim, KDim], float64], c: gtx.Field[Dims[CellDim, KDim], float64], d: gtx.Field[Dims[CellDim, KDim], float64]
 ) -> tuple[
-    tuple[gtx.Field[[CellDim, KDim], float64], gtx.Field[[CellDim, KDim], float64]],
-    tuple[gtx.Field[[CellDim, KDim], float64], gtx.Field[[CellDim, KDim], float64]],
+    tuple[gtx.Field[Dims[CellDim, KDim], float64], gtx.Field[Dims[CellDim, KDim], float64]],
+    tuple[gtx.Field[Dims[CellDim, KDim], float64], gtx.Field[Dims[CellDim, KDim], float64]],
 ]:
     return where(mask, ((a, b), (b, a)), ((c, d), (d, c)))
 
 @gtx.program
 def conditional_tuple_nested(
-    mask: gtx.Field[[CellDim, KDim], bool], a: gtx.Field[[CellDim, KDim], float64], b: gtx.Field[[CellDim, KDim], float64], c: gtx.Field[[CellDim, KDim], float64], d: gtx.Field[[CellDim, KDim], float64],
-    result_1: gtx.Field[[CellDim, KDim], float64], result_2: gtx.Field[[CellDim, KDim], float64]
+    mask: gtx.Field[Dims[CellDim, KDim], bool], a: gtx.Field[Dims[CellDim, KDim], float64], b: gtx.Field[Dims[CellDim, KDim], float64], c: gtx.Field[Dims[CellDim, KDim], float64], d: gtx.Field[Dims[CellDim, KDim], float64],
+    result_1: gtx.Field[Dims[CellDim, KDim], float64], result_2: gtx.Field[Dims[CellDim, KDim], float64]
 ):
     _conditional_tuple_nested(mask, a, b, c, d, out=((result_1, result_2), (result_2, result_1)))
 
@@ -425,19 +424,19 @@ The second lines first creates a temporary field using `edge_differences(C2E)`, 
 
 ```{code-cell} ipython3
 @gtx.field_operator
-def pseudo_lap(cells : gtx.Field[[CellDim], float64],
-               edge_weights : gtx.Field[[CellDim, C2EDim], float64]) -> gtx.Field[[CellDim], float64]:
-    edge_differences = cells(E2C[0]) - cells(E2C[1]) # type: gtx.Field[[EdgeDim], float64]
-    return neighbor_sum(edge_differences(C2E) * edge_weights, axis=C2EDim)
+def pseudo_lap(cells : gtx.Field[Dims[CellDim], float64],
+               edge_weights : gtx.Field[Dims[CellDim, C2EDim], float64]) -> gtx.Field[Dims[CellDim], float64]:
+    edges = cells(E2C[0]) # type: gtx.Field[Dims[EdgeDim], float64]
+    return neighbor_sum(edges(C2E) * edge_weights, axis=C2EDim)
 ```
 
 The program itself is just a shallow wrapper over the `pseudo_lap` field operator. The significant part is how offset providers for both the edge-to-cell and cell-to-edge connectivities are supplied when the program is called:
 
 ```{code-cell} ipython3
 @gtx.program
-def run_pseudo_laplacian(cells : gtx.Field[[CellDim], float64],
-                         edge_weights : gtx.Field[[CellDim, C2EDim], float64],
-                         out : gtx.Field[[CellDim], float64]):
+def run_pseudo_laplacian(cells : gtx.Field[Dims[CellDim], float64],
+                         edge_weights : gtx.Field[Dims[CellDim, C2EDim], float64],
+                         out : gtx.Field[Dims[CellDim], float64]):
     pseudo_lap(cells, edge_weights, out=out)
 
 result_pseudo_lap = gtx.as_field([CellDim], np.zeros(shape=(6,)))
@@ -454,7 +453,11 @@ As a closure, here is an example of chaining field operators, which is very simp
 
 ```{code-cell} ipython3
 @gtx.field_operator
-def pseudo_laplap(cells : gtx.Field[[CellDim], float64],
-                  edge_weights : gtx.Field[[CellDim, C2EDim], float64]) -> gtx.Field[[CellDim], float64]:
+def pseudo_laplap(cells : gtx.Field[Dims[CellDim], float64],
+                  edge_weights : gtx.Field[Dims[CellDim, C2EDim], float64]) -> gtx.Field[Dims[CellDim], float64]:
     return pseudo_lap(pseudo_lap(cells, edge_weights), edge_weights)
+```
+
+```{code-cell} ipython3
+
 ```

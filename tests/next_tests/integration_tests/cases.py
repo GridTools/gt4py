@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -28,14 +22,26 @@ import gt4py.next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import Self
-from gt4py.next import allocators as next_allocators, common, constructors, field_utils
+from gt4py.next import (
+    allocators as next_allocators,
+    backend as next_backend,
+    common,
+    constructors,
+    field_utils,
+)
 from gt4py.next.ffront import decorator
-from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 from next_tests import definitions as test_definitions
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (  # noqa: F401 #  fixture and aliases
+from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (  # noqa: F401 [unused-import]
+    C2E,
+    C2V,
+    E2V,
+    V2E,
+    C2EDim,
+    C2VDim,
     Cell,
+    E2VDim,
     Edge,
     IDim,
     Ioff,
@@ -43,11 +49,13 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     Joff,
     KDim,
     Koff,
+    V2EDim,
     Vertex,
     exec_alloc_descriptor,
-    reduction_setup,
+    mesh_descriptor,
 )
 
+from gt4py.next import utils as gt_utils
 
 # mypy does not accept [IDim, ...] as a type
 
@@ -61,19 +69,10 @@ IKFloatField: TypeAlias = gtx.Field[[IDim, KDim], np.float64]  # type: ignore [v
 IJKField: TypeAlias = gtx.Field[[IDim, JDim, KDim], np.int32]  # type: ignore [valid-type]
 IJKFloatField: TypeAlias = gtx.Field[[IDim, JDim, KDim], np.float64]  # type: ignore [valid-type]
 VField: TypeAlias = gtx.Field[[Vertex], np.int32]  # type: ignore [valid-type]
+VBoolField: TypeAlias = gtx.Field[[Vertex], bool]  # type: ignore [valid-type]
 EField: TypeAlias = gtx.Field[[Edge], np.int32]  # type: ignore [valid-type]
 CField: TypeAlias = gtx.Field[[Cell], np.int32]  # type: ignore [valid-type]
 EmptyField: TypeAlias = gtx.Field[[], np.int32]  # type: ignore [valid-type]
-
-# TODO(ricoh): unify the following with the `ffront_test_utils.reduction_setup`
-#   fixture if `ffront_test_utils.reduction_setup` is not completely superseded
-#   by `unstructured_case`.
-V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
-E2VDim = gtx.Dimension("E2V", kind=gtx.DimensionKind.LOCAL)
-C2EDim = gtx.Dimension("C2E", kind=common.DimensionKind.LOCAL)
-V2E = gtx.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
-E2V = gtx.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
-C2E = gtx.FieldOffset("C2E", source=Edge, target=(Cell, C2EDim))
 
 ScalarValue: TypeAlias = core_defs.Scalar
 FieldValue: TypeAlias = gtx.Field
@@ -95,8 +94,7 @@ RETURN = "return"
 
 class DataInitializer(Protocol):
     @property
-    def scalar_value(self) -> ScalarValue:
-        ...
+    def scalar_value(self) -> ScalarValue: ...
 
     def scalar(self, dtype: np.typing.DTypeLike) -> ScalarValue:
         # some unlikely numpy dtypes are picky about arguments
@@ -107,8 +105,7 @@ class DataInitializer(Protocol):
         allocator: next_allocators.FieldBufferAllocatorProtocol,
         sizes: dict[gtx.Dimension, int],
         dtype: np.typing.DTypeLike,
-    ) -> FieldValue:
-        ...
+    ) -> FieldValue: ...
 
     def from_case(
         self: Self,
@@ -143,10 +140,7 @@ class ConstInitializer(DataInitializer):
         dtype: np.typing.DTypeLike,
     ) -> FieldValue:
         return constructors.full(
-            domain=common.domain(sizes),
-            fill_value=self.value,
-            dtype=dtype,
-            allocator=allocator,
+            domain=common.domain(sizes), fill_value=self.value, dtype=dtype, allocator=allocator
         )
 
 
@@ -249,22 +243,19 @@ class Builder:
 
 
 @typing.overload
-def make_builder(*args: Callable) -> Callable[..., Builder]:
-    ...
+def make_builder(*args: Callable) -> Callable[..., Builder]: ...
 
 
 @typing.overload
 def make_builder(
     *args: Literal[None], **kwargs: dict[str, Any]
-) -> Callable[[Callable], Callable[..., Builder]]:
-    ...
+) -> Callable[[Callable], Callable[..., Builder]]: ...
 
 
 @typing.overload
 def make_builder(
     *args: Optional[Callable], **kwargs: dict[str, Any]
-) -> Callable[[Callable], Callable[..., Builder]] | Callable[..., Builder]:
-    ...
+) -> Callable[[Callable], Callable[..., Builder]] | Callable[..., Builder]: ...
 
 
 # TODO(ricoh): Think about improving the type hints using `typing.ParamSpec`.
@@ -305,8 +296,7 @@ def make_builder(
         argspec = inspect.getfullargspec(func)
 
         @dataclasses.dataclass(frozen=True)
-        class NewBuilder(Builder):
-            ...
+        class NewBuilder(Builder): ...
 
         for argname in argspec.args + argspec.kwonlyargs:
             setattr(NewBuilder, argname, make_setter(argname))
@@ -383,7 +373,7 @@ def run(
     """Run fieldview code in the context of a given test case."""
     if kwargs.get("offset_provider", None) is None:
         kwargs["offset_provider"] = case.offset_provider
-    fieldview_prog.with_grid_type(case.grid_type).with_backend(case.executor)(*args, **kwargs)
+    fieldview_prog.with_grid_type(case.grid_type).with_backend(case.backend)(*args, **kwargs)
 
 
 def verify(
@@ -425,13 +415,7 @@ def verify(
     Else, ``inout`` will not be passed and compared to ``ref``.
     """
     if out:
-        run(
-            case,
-            fieldview_prog,
-            *args,
-            out=out,
-            offset_provider=offset_provider,
-        )
+        run(case, fieldview_prog, *args, out=out, offset_provider=offset_provider)
     else:
         run(case, fieldview_prog, *args, offset_provider=offset_provider)
 
@@ -468,7 +452,9 @@ def verify_with_default_data(
             ``comparison(ref, <out | inout>)`` and should return a boolean.
     """
     inps, kwfields = get_default_data(case, fieldop)
-    ref_args = tuple(i.asnumpy() if common.is_field(i) else i for i in inps)
+    ref_args: tuple = gt_utils.tree_map(
+        lambda x: x.asnumpy() if isinstance(x, common.Field) else x
+    )(inps)
     verify(
         case,
         fieldop,
@@ -482,11 +468,17 @@ def verify_with_default_data(
 
 @pytest.fixture
 def cartesian_case(
-    exec_alloc_descriptor: test_definitions.ExecutionAndAllocatorDescriptor,  # noqa: F811 # fixtures
+    exec_alloc_descriptor: test_definitions.EmbeddedDummyBackend | next_backend.Backend,
 ):
     yield Case(
-        exec_alloc_descriptor.executor,
-        offset_provider={"Ioff": IDim, "Joff": JDim, "Koff": KDim},
+        None
+        if isinstance(exec_alloc_descriptor, test_definitions.EmbeddedDummyBackend)
+        else exec_alloc_descriptor,
+        offset_provider={
+            "Ioff": IDim,
+            "Joff": JDim,
+            "Koff": KDim,
+        },
         default_sizes={IDim: 10, JDim: 10, KDim: 10},
         grid_type=common.GridType.CARTESIAN,
         allocator=exec_alloc_descriptor.allocator,
@@ -495,17 +487,19 @@ def cartesian_case(
 
 @pytest.fixture
 def unstructured_case(
-    reduction_setup,  # noqa: F811 # fixtures
-    exec_alloc_descriptor: test_definitions.ExecutionAndAllocatorDescriptor,  # noqa: F811 # fixtures
+    mesh_descriptor,
+    exec_alloc_descriptor: test_definitions.EmbeddedDummyBackend | next_backend.Backend,
 ):
     yield Case(
-        exec_alloc_descriptor.executor,
-        offset_provider=reduction_setup.offset_provider,
+        None
+        if isinstance(exec_alloc_descriptor, test_definitions.EmbeddedDummyBackend)
+        else exec_alloc_descriptor,
+        offset_provider=mesh_descriptor.offset_provider,
         default_sizes={
-            Vertex: reduction_setup.num_vertices,
-            Edge: reduction_setup.num_edges,
-            Cell: reduction_setup.num_cells,
-            KDim: reduction_setup.k_levels,
+            Vertex: mesh_descriptor.num_vertices,
+            Edge: mesh_descriptor.num_edges,
+            Cell: mesh_descriptor.num_cells,
+            KDim: 10,
         },
         grid_type=common.GridType.UNSTRUCTURED,
         allocator=exec_alloc_descriptor.allocator,
@@ -571,8 +565,7 @@ def get_param_size(param_type: ts.TypeSpec, sizes: dict[gtx.Dimension, int]) -> 
 
 
 def extend_sizes(
-    sizes: dict[gtx.Dimension, int],
-    extend: Optional[dict[gtx.Dimension, tuple[int, int]]] = None,
+    sizes: dict[gtx.Dimension, int], extend: Optional[dict[gtx.Dimension, tuple[int, int]]] = None
 ) -> dict[gtx.Dimension, int]:
     """Calculate the sizes per dimension given a set of extensions."""
     sizes = sizes.copy()
@@ -583,8 +576,7 @@ def extend_sizes(
 
 
 def get_default_data(
-    case: Case,
-    fieldview_prog: decorator.FieldOperator | decorator.Program,
+    case: Case, fieldview_prog: decorator.FieldOperator | decorator.Program
 ) -> tuple[tuple[gtx.Field | ScalarValue | tuple, ...], dict[str, gtx.Field]]:
     """
     Allocate default data for a fieldview code object given a test case.
@@ -609,7 +601,7 @@ def get_default_data(
 class Case:
     """Parametrizable components for single feature integration tests."""
 
-    executor: Optional[ppi.ProgramProcessor]
+    backend: Optional[next_backend.Backend]
     offset_provider: dict[str, common.Connectivity | gtx.Dimension]
     default_sizes: dict[gtx.Dimension, int]
     grid_type: common.GridType

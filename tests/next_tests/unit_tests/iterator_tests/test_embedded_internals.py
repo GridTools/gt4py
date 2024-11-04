@@ -1,25 +1,19 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import contextvars as cvars
-import threading
 from typing import Any, Callable, Optional
 
 import numpy as np
 import pytest
 
 from gt4py.next import common
+from gt4py.next.embedded import context as embedded_context
 from gt4py.next.iterator import embedded
 
 
@@ -30,8 +24,8 @@ def _run_within_context(
     offset_provider: Optional[embedded.OffsetProvider] = None,
 ) -> Any:
     def wrapped_func():
-        embedded.column_range_cvar.set(column_range)
-        embedded.offset_provider_cvar.set(offset_provider)
+        embedded_context.closure_column_range.set(column_range)
+        embedded_context.offset_provider.set(offset_provider)
         func()
 
     cvars.copy_context().run(wrapped_func)
@@ -59,10 +53,12 @@ def test_column_ufunc():
         assert res.kstart == 1
 
     # Setting an invalid column_range here shouldn't affect other contexts
-    embedded.column_range_cvar.set(range(2, 999))
+    embedded_context.closure_column_range.set(range(2, 999))
     _run_within_context(
         lambda: test_func(2, 3),
-        column_range=(common.Dimension("K", kind=common.DimensionKind.VERTICAL), range(0, 3)),
+        column_range=common.NamedRange(
+            common.Dimension("K", kind=common.DimensionKind.VERTICAL), range(0, 3)
+        ),
     )
 
 

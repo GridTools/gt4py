@@ -1,24 +1,19 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import math
 
 import numpy as np
 
+from gt4py.next import config
 from gt4py.next.otf import workflow
 from gt4py.next.otf.binding import nanobind
-from gt4py.next.otf.compilation import cache, compiler
+from gt4py.next.otf.compilation import compiler
 from gt4py.next.otf.compilation.build_systems import cmake, compiledb
 
 from next_tests.unit_tests.otf_tests.compilation_tests.build_systems_tests.conftest import (
@@ -30,8 +25,8 @@ def test_gtfn_cpp_with_cmake(program_source_with_name):
     example_program_source = program_source_with_name("gtfn_cpp_with_cmake")
     build_the_program = workflow.make_step(nanobind.bind_source).chain(
         compiler.Compiler(
-            cache_strategy=cache.Strategy.SESSION, builder_factory=cmake.CMakeFactory()
-        ),
+            cache_lifetime=config.BuildCacheLifetime.SESSION, builder_factory=cmake.CMakeFactory()
+        )
     )
     compiled_program = build_the_program(example_program_source)
     buf = (np.zeros(shape=(6, 5), dtype=np.float32), (0, 0))
@@ -48,9 +43,9 @@ def test_gtfn_cpp_with_compiledb(program_source_with_name):
     example_program_source = program_source_with_name("gtfn_cpp_with_compiledb")
     build_the_program = workflow.make_step(nanobind.bind_source).chain(
         compiler.Compiler(
-            cache_strategy=cache.Strategy.SESSION,
+            cache_lifetime=config.BuildCacheLifetime.SESSION,
             builder_factory=compiledb.CompiledbFactory(),
-        ),
+        )
     )
     compiled_program = build_the_program(example_program_source)
     buf = (np.zeros(shape=(6, 5), dtype=np.float32), (0, 0))

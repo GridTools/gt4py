@@ -1,19 +1,15 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.pretty_printer import PrettyPrinter, pformat
+from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.type_system import type_specifications as ts
 
 
 def test_hmerge():
@@ -34,14 +30,7 @@ def test_vmerge():
     a = ["This is", "block ‘a’."]
     b = ["This is", "block ‘b’."]
     c = ["This is", "block ‘c’."]
-    expected = [
-        "This is",
-        "block ‘a’.",
-        "This is",
-        "block ‘b’.",
-        "This is",
-        "block ‘c’.",
-    ]
+    expected = ["This is", "block ‘a’.", "This is", "block ‘b’.", "This is", "block ‘c’."]
     actual = PrettyPrinter()._vmerge(a, b, c)
     assert actual == expected
 
@@ -118,14 +107,14 @@ def test_arithmetic():
                     ir.FunCall(
                         fun=ir.SymRef(id="plus"),
                         args=[
-                            ir.Literal(value="1", type="int64"),
-                            ir.Literal(value="2", type="int64"),
+                            im.literal("1", "int64"),
+                            im.literal("2", "int64"),
                         ],
                     ),
-                    ir.Literal(value="3", type="int64"),
+                    im.literal("3", "int64"),
                 ],
             ),
-            ir.Literal(value="4", type="int64"),
+            im.literal("4", "int64"),
         ],
     )
     expected = "(1 + 2) × 3 / 4"
@@ -139,17 +128,11 @@ def test_associativity():
         args=[
             ir.FunCall(
                 fun=ir.SymRef(id="plus"),
-                args=[
-                    ir.Literal(value="1", type="int64"),
-                    ir.Literal(value="2", type="int64"),
-                ],
+                args=[im.literal("1", "int64"), im.literal("2", "int64")],
             ),
             ir.FunCall(
                 fun=ir.SymRef(id="plus"),
-                args=[
-                    ir.Literal(value="3", type="int64"),
-                    ir.Literal(value="4", type="int64"),
-                ],
+                args=[im.literal("3", "int64"), im.literal("4", "int64")],
             ),
         ],
     )
@@ -168,6 +151,13 @@ def test_deref():
 def test_lift():
     testee = ir.FunCall(fun=ir.SymRef(id="lift"), args=[ir.SymRef(id="x")])
     expected = "↑x"
+    actual = pformat(testee)
+    assert actual == expected
+
+
+def test_as_fieldop():
+    testee = ir.FunCall(fun=ir.SymRef(id="as_fieldop"), args=[ir.SymRef(id="x")])
+    expected = "⇑x"
     actual = pformat(testee)
     assert actual == expected
 
@@ -200,8 +190,7 @@ def test_bool_arithmetic():
 
 def test_shift():
     testee = ir.FunCall(
-        fun=ir.SymRef(id="shift"),
-        args=[ir.OffsetLiteral(value="I"), ir.OffsetLiteral(value=1)],
+        fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="I"), ir.OffsetLiteral(value=1)]
     )
     expected = "⟪Iₒ, 1ₒ⟫"
     actual = pformat(testee)
@@ -211,7 +200,7 @@ def test_shift():
 def test_tuple_get():
     testee = ir.FunCall(
         fun=ir.SymRef(id="tuple_get"),
-        args=[ir.Literal(value="42", type=ir.INTEGER_INDEX_BUILTIN), ir.SymRef(id="x")],
+        args=[im.literal("42", ir.INTEGER_INDEX_BUILTIN), ir.SymRef(id="x")],
     )
     expected = "x[42]"
     actual = pformat(testee)
@@ -225,20 +214,33 @@ def test_make_tuple():
     assert actual == expected
 
 
-def test_named_range():
+def test_axis_literal_horizontal():
+    testee = ir.AxisLiteral(value="I", kind=ir.DimensionKind.HORIZONTAL)
+    expected = "Iₕ"
+    actual = pformat(testee)
+    assert actual == expected
+
+
+def test_axis_literal_vertical():
+    testee = ir.AxisLiteral(value="I", kind=ir.DimensionKind.VERTICAL)
+    expected = "Iᵥ"
+    actual = pformat(testee)
+    assert actual == expected
+
+
+def test_named_range_horizontal():
     testee = ir.FunCall(
         fun=ir.SymRef(id="named_range"),
         args=[ir.AxisLiteral(value="IDim"), ir.SymRef(id="x"), ir.SymRef(id="y")],
     )
-    expected = "IDim: [x, y)"
+    expected = "IDimₕ: [x, y)"
     actual = pformat(testee)
     assert actual == expected
 
 
 def test_cartesian_domain():
     testee = ir.FunCall(
-        fun=ir.SymRef(id="cartesian_domain"),
-        args=[ir.SymRef(id="x"), ir.SymRef(id="y")],
+        fun=ir.SymRef(id="cartesian_domain"), args=[ir.SymRef(id="x"), ir.SymRef(id="y")]
     )
     expected = "c⟨ x, y ⟩"
     actual = pformat(testee)
@@ -247,8 +249,7 @@ def test_cartesian_domain():
 
 def test_unstructured_domain():
     testee = ir.FunCall(
-        fun=ir.SymRef(id="unstructured_domain"),
-        args=[ir.SymRef(id="x"), ir.SymRef(id="y")],
+        fun=ir.SymRef(id="unstructured_domain"), args=[ir.SymRef(id="x"), ir.SymRef(id="y")]
     )
     expected = "u⟨ x, y ⟩"
     actual = pformat(testee)
@@ -257,8 +258,7 @@ def test_unstructured_domain():
 
 def test_if_short():
     testee = ir.FunCall(
-        fun=ir.SymRef(id="if_"),
-        args=[ir.SymRef(id="x"), ir.SymRef(id="y"), ir.SymRef(id="z")],
+        fun=ir.SymRef(id="if_"), args=[ir.SymRef(id="x"), ir.SymRef(id="y"), ir.SymRef(id="z")]
     )
     expected = "if x then y else z"
     actual = pformat(testee)
@@ -282,10 +282,7 @@ def test_if_long():
 
 
 def test_fun_call():
-    testee = ir.FunCall(
-        fun=ir.SymRef(id="f"),
-        args=[ir.SymRef(id="x")],
-    )
+    testee = ir.FunCall(fun=ir.SymRef(id="f"), args=[ir.SymRef(id="x")])
     expected = "f(x)"
     actual = pformat(testee)
     assert actual == expected
@@ -293,8 +290,7 @@ def test_fun_call():
 
 def test_lambda_call():
     testee = ir.FunCall(
-        fun=ir.Lambda(params=[ir.Sym(id="x")], expr=ir.SymRef(id="x")),
-        args=[ir.SymRef(id="x")],
+        fun=ir.Lambda(params=[ir.Sym(id="x")], expr=ir.SymRef(id="x")), args=[ir.SymRef(id="x")]
     )
     expected = "(λ(x) → x)(x)"
     actual = pformat(testee)
@@ -304,6 +300,15 @@ def test_lambda_call():
 def test_function_definition():
     testee = ir.FunctionDefinition(id="f", params=[ir.Sym(id="x")], expr=ir.SymRef(id="x"))
     expected = "f = λ(x) → x;"
+    actual = pformat(testee)
+    assert actual == expected
+
+
+def test_temporary():
+    testee = ir.Temporary(
+        id="t", domain=ir.SymRef(id="domain"), dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    )
+    expected = "t = temporary(domain=domain, dtype=float64);"
     actual = pformat(testee)
     assert actual == expected
 
@@ -320,6 +325,18 @@ def test_stencil_closure():
     assert actual == expected
 
 
+def test_set_at():
+    testee = ir.SetAt(
+        expr=ir.SymRef(id="x"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+        target=ir.SymRef(id="y"),
+    )
+    expected = "y @ cartesian_domain() ← x;"
+    actual = pformat(testee)
+    assert actual == expected
+
+
+# TODO(havogt): remove after refactoring.
 def test_fencil_definition():
     testee = ir.FencilDefinition(
         id="f",
@@ -338,4 +355,31 @@ def test_fencil_definition():
     )
     actual = pformat(testee)
     expected = "f(d, x, y) {\n  g = λ(x) → x;\n  y ← (deref)(x) @ cartesian_domain();\n}"
+    assert actual == expected
+
+
+def test_program():
+    testee = ir.Program(
+        id="f",
+        function_definitions=[
+            ir.FunctionDefinition(id="g", params=[ir.Sym(id="x")], expr=ir.SymRef(id="x"))
+        ],
+        params=[ir.Sym(id="d"), ir.Sym(id="x"), ir.Sym(id="y")],
+        declarations=[
+            ir.Temporary(
+                id="tmp",
+                domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+                dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
+            ),
+        ],
+        body=[
+            ir.SetAt(
+                expr=ir.SymRef(id="x"),
+                domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+                target=ir.SymRef(id="y"),
+            )
+        ],
+    )
+    actual = pformat(testee)
+    expected = "f(d, x, y) {\n  g = λ(x) → x;\n  tmp = temporary(domain=cartesian_domain(), dtype=float64);\n  y @ cartesian_domain() ← x;\n}"
     assert actual == expected

@@ -1,16 +1,11 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 import builtins
 import dataclasses
 import math
@@ -20,7 +15,6 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-import gt4py.next.program_processors.processor_interface as ppi
 from gt4py.next.iterator import builtins as it_builtins
 from gt4py.next.iterator.builtins import (
     and_,
@@ -138,11 +132,7 @@ def arithmetic_and_logical_test_data():
         (minus, [2.0, 3.0], -1.0),
         (multiplies, [2.0, 3.0], 6.0),
         (divides, [6.0, 2.0], 3.0),
-        (
-            if_,
-            [[True, False], [1.0, 1.0], [2.0, 2.0]],
-            [1.0, 2.0],
-        ),
+        (if_, [[True, False], [1.0, 1.0], [2.0, 2.0]], [1.0, 2.0]),
         (mod, [5, 2], 1),
         (greater, [[2.0, 1.0, 1.0], [1.0, 2.0, 1.0]], [True, False, False]),
         (greater_equal, [[2.0, 1.0, 1.0], [1.0, 2.0, 1.0]], [True, False, True]),
@@ -188,15 +178,13 @@ def test_arithmetic_and_logical_functors_gtfn(builtin, inputs, expected):
     inps = field_maker(*array_maker(*inputs))
     out = field_maker((np.zeros_like(*array_maker(expected))))[0]
 
-    gtfn_executor = run_gtfn.executor
     gtfn_without_transforms = dataclasses.replace(
-        gtfn_executor,
-        otf_workflow=gtfn_executor.otf_workflow.replace(
-            translation=gtfn_executor.otf_workflow.translation.replace(
-                enable_itir_transforms=False
-            ),
-        ),
-    )  # avoid inlining the function
+        run_gtfn,
+        executor=run_gtfn.executor.replace(
+            translation=run_gtfn.executor.translation.replace(enable_itir_transforms=False),
+        ),  # avoid inlining the function
+    )
+
     fencil(builtin, out, *inps, processor=gtfn_without_transforms)
 
     assert np.allclose(out.asnumpy(), expected)
@@ -206,7 +194,6 @@ def test_arithmetic_and_logical_functors_gtfn(builtin, inputs, expected):
 @pytest.mark.parametrize("builtin_name, inputs", math_builtin_test_data())
 def test_math_function_builtins(program_processor, builtin_name, inputs, as_column):
     program_processor, validate = program_processor
-    # validate = ppi.is_program_backend(program_processor)
 
     if builtin_name == "gamma":
         # numpy has no gamma function
@@ -345,7 +332,6 @@ def test_cast(program_processor, as_column, input_value, dtype, np_dtype):
         out=out,
         offset_provider={},
         column_axis=column_axis,
-        debug=True,
     )
 
     if validate:

@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import numpy as np
 import pytest
@@ -45,35 +39,22 @@ def tuple_output2(inp1, inp2):
     return make_tuple(deref(inp1), deref(inp2))
 
 
-@pytest.mark.parametrize(
-    "stencil",
-    [tuple_output1, tuple_output2],
-)
+@pytest.mark.parametrize("stencil", [tuple_output1, tuple_output2])
 @pytest.mark.uses_tuple_returns
 def test_tuple_output(program_processor, stencil):
     program_processor, validate = program_processor
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
-    inp1 = gtx.as_field(
-        [IDim, JDim, KDim],
-        rng.normal(size=(shape[0], shape[1], shape[2])),
-    )
-    inp2 = gtx.as_field(
-        [IDim, JDim, KDim],
-        rng.normal(size=(shape[0], shape[1], shape[2])),
-    )
+    inp1 = gtx.as_field([IDim, JDim, KDim], rng.normal(size=(shape[0], shape[1], shape[2])))
+    inp2 = gtx.as_field([IDim, JDim, KDim], rng.normal(size=(shape[0], shape[1], shape[2])))
 
     out = (
         gtx.as_field([IDim, JDim, KDim], np.zeros(shape)),
         gtx.as_field([IDim, JDim, KDim], np.zeros(shape)),
     )
 
-    dom = {
-        IDim: range(0, shape[0]),
-        JDim: range(0, shape[1]),
-        KDim: range(0, shape[2]),
-    }
+    dom = {IDim: range(0, shape[0]), JDim: range(0, shape[1]), KDim: range(0, shape[2])}
     run_processor(stencil[dom], program_processor, inp1, inp2, out=out, offset_provider={})
     if validate:
         assert np.allclose(inp1.asnumpy(), out[0].asnumpy())
@@ -100,22 +81,10 @@ def test_tuple_of_tuple_of_field_output(program_processor):
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
-    inp1 = gtx.as_field(
-        [IDim, JDim, KDim],
-        rng.normal(size=(shape[0], shape[1], shape[2])),
-    )
-    inp2 = gtx.as_field(
-        [IDim, JDim, KDim],
-        rng.normal(size=(shape[0], shape[1], shape[2])),
-    )
-    inp3 = gtx.as_field(
-        [IDim, JDim, KDim],
-        rng.normal(size=(shape[0], shape[1], shape[2])),
-    )
-    inp4 = gtx.as_field(
-        [IDim, JDim, KDim],
-        rng.normal(size=(shape[0], shape[1], shape[2])),
-    )
+    inp1 = gtx.as_field([IDim, JDim, KDim], rng.normal(size=(shape[0], shape[1], shape[2])))
+    inp2 = gtx.as_field([IDim, JDim, KDim], rng.normal(size=(shape[0], shape[1], shape[2])))
+    inp3 = gtx.as_field([IDim, JDim, KDim], rng.normal(size=(shape[0], shape[1], shape[2])))
+    inp4 = gtx.as_field([IDim, JDim, KDim], rng.normal(size=(shape[0], shape[1], shape[2])))
 
     out = (
         (
@@ -128,20 +97,9 @@ def test_tuple_of_tuple_of_field_output(program_processor):
         ),
     )
 
-    dom = {
-        IDim: range(0, shape[0]),
-        JDim: range(0, shape[1]),
-        KDim: range(0, shape[2]),
-    }
+    dom = {IDim: range(0, shape[0]), JDim: range(0, shape[1]), KDim: range(0, shape[2])}
     run_processor(
-        stencil[dom],
-        program_processor,
-        inp1,
-        inp2,
-        inp3,
-        inp4,
-        out=out,
-        offset_provider={},
+        stencil[dom], program_processor, inp1, inp2, inp3, inp4, out=out, offset_provider={}
     )
     if validate:
         assert np.allclose(inp1.asnumpy(), out[0][0].asnumpy())
@@ -150,10 +108,7 @@ def test_tuple_of_tuple_of_field_output(program_processor):
         assert np.allclose(inp4.asnumpy(), out[1][1].asnumpy())
 
 
-@pytest.mark.parametrize(
-    "stencil",
-    [tuple_output1, tuple_output2],
-)
+@pytest.mark.parametrize("stencil", [tuple_output1, tuple_output2])
 def test_tuple_of_field_output_constructed_inside(program_processor, stencil):
     program_processor, validate = program_processor
 
@@ -172,14 +127,8 @@ def test_tuple_of_field_output_constructed_inside(program_processor, stencil):
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
-    inp1 = gtx.as_field(
-        [IDim, JDim, KDim],
-        rng.normal(size=(shape[0], shape[1], shape[2])),
-    )
-    inp2 = gtx.as_field(
-        [IDim, JDim, KDim],
-        rng.normal(size=(shape[0], shape[1], shape[2])),
-    )
+    inp1 = gtx.as_field([IDim, JDim, KDim], rng.normal(size=(shape[0], shape[1], shape[2])))
+    inp2 = gtx.as_field([IDim, JDim, KDim], rng.normal(size=(shape[0], shape[1], shape[2])))
 
     out1 = gtx.as_field([IDim, JDim, KDim], np.zeros(shape))
     out2 = gtx.as_field([IDim, JDim, KDim], np.zeros(shape))
@@ -223,18 +172,9 @@ def test_asymetric_nested_tuple_of_field_output_constructed_inside(program_proce
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
-    inp1 = gtx.as_field(
-        [IDim, JDim, KDim],
-        rng.normal(size=(shape[0], shape[1], shape[2])),
-    )
-    inp2 = gtx.as_field(
-        [IDim, JDim, KDim],
-        rng.normal(size=(shape[0], shape[1], shape[2])),
-    )
-    inp3 = gtx.as_field(
-        [IDim, JDim, KDim],
-        rng.normal(size=(shape[0], shape[1], shape[2])),
-    )
+    inp1 = gtx.as_field([IDim, JDim, KDim], rng.normal(size=(shape[0], shape[1], shape[2])))
+    inp2 = gtx.as_field([IDim, JDim, KDim], rng.normal(size=(shape[0], shape[1], shape[2])))
+    inp3 = gtx.as_field([IDim, JDim, KDim], rng.normal(size=(shape[0], shape[1], shape[2])))
 
     out1 = gtx.as_field([IDim, JDim, KDim], np.zeros(shape))
     out2 = gtx.as_field([IDim, JDim, KDim], np.zeros(shape))
@@ -261,32 +201,19 @@ def test_asymetric_nested_tuple_of_field_output_constructed_inside(program_proce
 
 
 @pytest.mark.xfail(reason="Implement wrapper for extradim as tuple")
-@pytest.mark.parametrize(
-    "stencil",
-    [tuple_output1, tuple_output2],
-)
+@pytest.mark.parametrize("stencil", [tuple_output1, tuple_output2])
 def test_field_of_extra_dim_output(program_processor, stencil):
     program_processor, validate = program_processor
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
-    inp1 = gtx.as_field(
-        [IDim, JDim, KDim],
-        rng.normal(size=(shape[0], shape[1], shape[2])),
-    )
-    inp2 = gtx.as_field(
-        [IDim, JDim, KDim],
-        rng.normal(size=(shape[0], shape[1], shape[2])),
-    )
+    inp1 = gtx.as_field([IDim, JDim, KDim], rng.normal(size=(shape[0], shape[1], shape[2])))
+    inp2 = gtx.as_field([IDim, JDim, KDim], rng.normal(size=(shape[0], shape[1], shape[2])))
 
     out_np = np.zeros(shape + [2])
     out = gtx.as_field([IDim, JDim, KDim, None], out_np)
 
-    dom = {
-        IDim: range(0, shape[0]),
-        JDim: range(0, shape[1]),
-        KDim: range(0, shape[2]),
-    }
+    dom = {IDim: range(0, shape[0]), JDim: range(0, shape[1]), KDim: range(0, shape[2])}
     run_processor(stencil[dom], program_processor, inp1, inp2, out=out, offset_provider={})
     if validate:
         assert np.allclose(inp1, out_np[:, :, :, 0])
@@ -305,25 +232,20 @@ def test_tuple_field_input(program_processor):
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
-    inp1 = gtx.as_field(
-        [IDim, JDim, KDim],
-        rng.normal(size=(shape[0], shape[1], shape[2])),
-    )
+    inp1 = gtx.as_field([IDim, JDim, KDim], rng.normal(size=(shape[0], shape[1], shape[2])))
     inp2 = gtx.as_field(
         [IDim, JDim, KDim],
-        rng.normal(size=(shape[0], shape[1], shape[2])),
+        rng.normal(
+            size=(shape[0], shape[1], shape[2] + 1)
+        ),  # TODO(havogt) currently we allow different sizes, needed for icon4py compatibility
     )
 
     out = gtx.as_field([IDim, JDim, KDim], np.zeros(shape))
 
-    dom = {
-        IDim: range(0, shape[0]),
-        JDim: range(0, shape[1]),
-        KDim: range(0, shape[2]),
-    }
+    dom = {IDim: range(0, shape[0]), JDim: range(0, shape[1]), KDim: range(0, shape[2])}
     run_processor(tuple_input[dom], program_processor, (inp1, inp2), out=out, offset_provider={})
     if validate:
-        assert np.allclose(inp1.asnumpy() + inp2.asnumpy(), out.asnumpy())
+        assert np.allclose(inp1.asnumpy() + inp2.asnumpy()[:, :, :-1], out.asnumpy())
 
 
 @pytest.mark.xfail(reason="Implement wrapper for extradim as tuple")
@@ -340,11 +262,7 @@ def test_field_of_extra_dim_input(program_processor):
     inp = gtx.as_field([IDim, JDim, KDim, None], inp)
     out = gtx.as_field([IDim, JDim, KDim], np.zeros(shape))
 
-    dom = {
-        IDim: range(0, shape[0]),
-        JDim: range(0, shape[1]),
-        KDim: range(0, shape[2]),
-    }
+    dom = {IDim: range(0, shape[0]), JDim: range(0, shape[1]), KDim: range(0, shape[2])}
     run_processor(tuple_input[dom], program_processor, inp, out=out, offset_provider={})
     if validate:
         assert np.allclose(np.asarray(inp1) + np.asarray(inp2), out)
@@ -375,11 +293,7 @@ def test_tuple_of_tuple_of_field_input(program_processor):
 
     out = gtx.as_field([IDim, JDim, KDim], np.zeros(shape))
 
-    dom = {
-        IDim: range(0, shape[0]),
-        JDim: range(0, shape[1]),
-        KDim: range(0, shape[2]),
-    }
+    dom = {IDim: range(0, shape[0]), JDim: range(0, shape[1]), KDim: range(0, shape[2])}
     run_processor(
         tuple_tuple_input[dom],
         program_processor,
@@ -406,17 +320,69 @@ def test_field_of_2_extra_dim_input(program_processor):
 
     out = gtx.as_field([IDim, JDim, KDim], np.zeros(shape))
 
-    dom = {
-        IDim: range(0, shape[0]),
-        JDim: range(0, shape[1]),
-        KDim: range(0, shape[2]),
-    }
+    dom = {IDim: range(0, shape[0]), JDim: range(0, shape[1]), KDim: range(0, shape[2])}
+    run_processor(tuple_tuple_input[dom], program_processor, inp, out=out, offset_provider={})
+    if validate:
+        assert np.allclose(np.sum(inp, axis=(3, 4)), out)
+
+
+@pytest.mark.uses_tuple_args
+def test_scalar_tuple_args(program_processor):
+    @fundef
+    def stencil(inp):
+        inp_deref = deref(inp)
+        return (
+            tuple_get(0, inp_deref)
+            + 2 * tuple_get(0, tuple_get(1, inp_deref))
+            + 3 * tuple_get(1, tuple_get(1, inp_deref))
+        )
+
+    program_processor, validate = program_processor
+
+    shape = [5]
+
+    out = gtx.as_field([IDim], np.zeros(shape, dtype=np.int32))
+
+    dom = {IDim: range(0, shape[0])}
     run_processor(
-        tuple_tuple_input[dom],
+        stencil[dom],
         program_processor,
-        inp,
+        (1, (2, 3)),
         out=out,
         offset_provider={},
     )
     if validate:
-        assert np.allclose(np.sum(inp, axis=(3, 4)), out)
+        assert np.allclose((1 + 2 * 2 + 3 * 3), out.asnumpy())
+
+
+@pytest.mark.uses_tuple_args
+def test_mixed_field_scalar_tuple_arg(program_processor):
+    @fundef
+    def stencil(inp):
+        inp_deref = deref(inp)
+        return (
+            tuple_get(0, inp_deref)
+            + 2.0 * tuple_get(0, tuple_get(1, inp_deref))
+            + 3.0 * tuple_get(1, tuple_get(1, inp_deref))
+            + 5.0 * tuple_get(2, tuple_get(1, inp_deref))
+        )
+
+    program_processor, validate = program_processor
+
+    shape = [5]
+
+    rng = np.random.default_rng()
+
+    inp = gtx.as_field([IDim], rng.normal(size=shape))
+    out = gtx.as_field([IDim], np.zeros(shape))
+
+    dom = {IDim: range(0, shape[0])}
+    run_processor(
+        stencil[dom],
+        program_processor,
+        (1.0, (2.0, inp, 3.0)),
+        out=out,
+        offset_provider={},
+    )
+    if validate:
+        assert np.allclose((1 + 2 * 2 + 3 * inp.asnumpy() + 5 * 3), out.asnumpy())

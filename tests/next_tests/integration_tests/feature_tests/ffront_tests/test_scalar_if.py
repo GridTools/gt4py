@@ -1,17 +1,10 @@
-# -*- coding: utf-8 -*-
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from functools import reduce
 
@@ -68,10 +61,7 @@ def test_simple_if(condition, cartesian_case):
 def test_simple_if_conditional(condition1, condition2, cartesian_case):
     @field_operator
     def simple_if(
-        a: cases.IField,
-        b: cases.IField,
-        condition1: bool,
-        condition2: bool,
+        a: cases.IField, b: cases.IField, condition1: bool, condition2: bool
     ) -> cases.IField:
         if condition1:
             result1 = a
@@ -241,10 +231,10 @@ def test_nested_if_stmt_conditional(cartesian_case, condition1, condition2):
     out = cases.allocate(cartesian_case, nested_if_conditional_return, cases.RETURN)()
 
     ref = {
-        (True, True): np.asarray(inp) + 1,
-        (True, False): np.asarray(inp) + 2,
-        (False, True): np.asarray(inp) + 3,
-        (False, False): np.asarray(inp) + 3,
+        (True, True): inp.asnumpy() + 1,
+        (True, False): inp.asnumpy() + 2,
+        (False, True): inp.asnumpy() + 3,
+        (False, False): inp.asnumpy() + 3,
     }
 
     cases.verify(
@@ -289,7 +279,7 @@ def test_nested_if(cartesian_case, condition):
         b,
         condition,
         out=out,
-        ref=np.asarray(a) + 1 if condition else np.asarray(b) + 5,
+        ref=a.asnumpy() + 1 if condition else b.asnumpy() + 5,
     )
 
 
@@ -362,8 +352,7 @@ def test_if_non_boolean_condition():
 
 def test_if_inconsistent_types():
     with pytest.raises(
-        errors.DSLError,
-        match="Inconsistent types between two branches for variable",
+        errors.DSLError, match="Inconsistent types between two branches for variable"
     ):
 
         @field_operator

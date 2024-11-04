@@ -1,18 +1,14 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """Caching strategies for stencil generation."""
+
+from __future__ import annotations
 
 import abc
 import inspect
@@ -35,7 +31,7 @@ if TYPE_CHECKING:
 class CachingStrategy(abc.ABC):
     name: str
 
-    def __init__(self, builder: "StencilBuilder"):
+    def __init__(self, builder: StencilBuilder):
         self.builder = builder
 
     @property
@@ -182,7 +178,7 @@ class JITCachingStrategy(CachingStrategy):
 
     def __init__(
         self,
-        builder: "StencilBuilder",
+        builder: StencilBuilder,
         *,
         root_path: Optional[str] = None,
         dir_name: Optional[str] = None,
@@ -312,6 +308,20 @@ class JITCachingStrategy(CachingStrategy):
             "api_annotations": f"[{', '.join(self._extract_api_annotations())}]",
             **self._externals,
         }
+        debug_mode = self.builder.options.backend_opts.get("debug_mode", False)
+        fingerprint["debug_mode"] = debug_mode
+        if not debug_mode and self.builder.backend.name != "numpy":
+            fingerprint["opt_level"] = self.builder.options.backend_opts.get(
+                "opt_level", gt_config.GT4PY_COMPILE_OPT_LEVEL
+            )
+            fingerprint["extra_opt_flags"] = self.builder.options.backend_opts.get(
+                "extra_opt_flags", gt_config.GT4PY_EXTRA_COMPILE_OPT_FLAGS
+            )
+            fingerprint["extra_compile_args"] = self.builder.options.backend_opts.get(
+                "extra_compile_args", gt_config.GT4PY_EXTRA_COMPILE_ARGS
+            )
+        if self.builder.backend.name == "dace:gpu":
+            fingerprint["default_block_size"] = gt_config.DACE_DEFAULT_BLOCK_SIZE
 
         # typeignore because attrclass StencilID has generated constructor
         return StencilID(  # type: ignore
@@ -360,7 +370,7 @@ class NoCachingStrategy(CachingStrategy):
 
     name = "nocaching"
 
-    def __init__(self, builder: "StencilBuilder", *, output_path: pathlib.Path = pathlib.Path(".")):
+    def __init__(self, builder: StencilBuilder, *, output_path: pathlib.Path = pathlib.Path(".")):
         super().__init__(builder)
         self._output_path = output_path
 
@@ -403,7 +413,7 @@ class NoCachingStrategy(CachingStrategy):
 
 
 def strategy_factory(
-    name: str, builder: "StencilBuilder", *args: Any, **kwargs: Any
+    name: str, builder: StencilBuilder, *args: Any, **kwargs: Any
 ) -> CachingStrategy:
     strategies = {"jit": JITCachingStrategy, "nocaching": NoCachingStrategy}
     return strategies[name](builder, *args, **kwargs)

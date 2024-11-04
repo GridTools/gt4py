@@ -1,18 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Optional, cast
+from typing import Any, Optional, TypeVar, cast
 
 import gt4py.next.ffront.field_operator_ast as foast
 from gt4py.eve import NodeTranslator, NodeVisitor, traits
@@ -20,12 +14,16 @@ from gt4py.next import errors
 from gt4py.next.common import DimensionKind
 from gt4py.next.ffront import (  # noqa
     dialect_ast_enums,
+    experimental,
     fbuiltins,
     type_info as ti_ffront,
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.foast_passes.utils import compute_assign_indices
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
+
+
+OperatorNodeT = TypeVar("OperatorNodeT", bound=foast.LocatedNode)
 
 
 def with_altered_scalar_kind(
@@ -41,7 +39,9 @@ def with_altered_scalar_kind(
     >>> print(with_altered_scalar_kind(scalar_t, ts.ScalarKind.BOOL))
     bool
 
-    >>> field_t = ts.FieldType(dims=[Dimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+    >>> field_t = ts.FieldType(
+    ...     dims=[Dimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    ... )
     >>> print(with_altered_scalar_kind(field_t, ts.ScalarKind.FLOAT32))
     Field[[I], float32]
     """
@@ -57,9 +57,7 @@ def with_altered_scalar_kind(
 
 
 def construct_tuple_type(
-    true_branch_types: list,
-    false_branch_types: list,
-    mask_type: ts.FieldType,
+    true_branch_types: list, false_branch_types: list, mask_type: ts.FieldType
 ) -> list:
     """
     Recursively construct  the return types for the tuple return branch.
@@ -67,9 +65,14 @@ def construct_tuple_type(
     Examples:
     ---------
     >>> from gt4py.next import Dimension
-    >>> mask_type = ts.FieldType(dims=[Dimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL))
+    >>> mask_type = ts.FieldType(
+    ...     dims=[Dimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL)
+    ... )
     >>> true_branch_types = [ts.ScalarType(kind=ts.ScalarKind), ts.ScalarType(kind=ts.ScalarKind)]
-    >>> false_branch_types = [ts.FieldType(dims=[Dimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind)), ts.ScalarType(kind=ts.ScalarKind)]
+    >>> false_branch_types = [
+    ...     ts.FieldType(dims=[Dimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind)),
+    ...     ts.ScalarType(kind=ts.ScalarKind),
+    ... ]
     >>> print(construct_tuple_type(true_branch_types, false_branch_types, mask_type))
     [FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<enum 'ScalarKind'>, shape=None)), FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<enum 'ScalarKind'>, shape=None))]
     """
@@ -104,24 +107,26 @@ def promote_to_mask_type(
     >>> dtype = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     >>> promote_to_mask_type(ts.FieldType(dims=[I, J], dtype=bool_type), ts.ScalarType(kind=dtype))
     FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None), shape=None))
-    >>> promote_to_mask_type(ts.FieldType(dims=[I, J], dtype=bool_type), ts.FieldType(dims=[I], dtype=dtype))
+    >>> promote_to_mask_type(
+    ...     ts.FieldType(dims=[I, J], dtype=bool_type), ts.FieldType(dims=[I], dtype=dtype)
+    ... )
     FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None))
-    >>> promote_to_mask_type(ts.FieldType(dims=[I], dtype=bool_type), ts.FieldType(dims=[I,J], dtype=dtype))
+    >>> promote_to_mask_type(
+    ...     ts.FieldType(dims=[I], dtype=bool_type), ts.FieldType(dims=[I, J], dtype=dtype)
+    ... )
     FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None))
     """
     if isinstance(input_type, ts.ScalarType) or not all(
         item in input_type.dims for item in mask_type.dims
     ):
         return_dtype = input_type.dtype if isinstance(input_type, ts.FieldType) else input_type
-        return type_info.promote(
-            input_type, ts.FieldType(dims=mask_type.dims, dtype=return_dtype)
-        )  # type: ignore
+        return type_info.promote(input_type, ts.FieldType(dims=mask_type.dims, dtype=return_dtype))  # type: ignore
     else:
         return input_type
 
 
 def deduce_stmt_return_type(
-    node: foast.BlockStmt, *, requires_unconditional_return=True
+    node: foast.BlockStmt, *, requires_unconditional_return: bool = True
 ) -> Optional[ts.TypeSpec]:
     """
     Deduce type of value returned inside a block statement.
@@ -201,7 +206,7 @@ class FieldOperatorTypeDeductionCompletnessValidator(NodeVisitor):
 
     def visit_LocatedNode(
         self, node: foast.LocatedNode, *, incomplete_nodes: list[foast.LocatedNode]
-    ):
+    ) -> None:
         self.generic_visit(node, incomplete_nodes=incomplete_nodes)
 
         if hasattr(node, "type") and not type_info.is_concrete(node.type):
@@ -233,19 +238,22 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     DeferredType(constraint=None)
 
     >>> typed_fieldop = FieldOperatorTypeDeduction.apply(untyped_fieldop)
-    >>> assert typed_fieldop.body.stmts[0].value.type == ts.FieldType(dtype=ts.ScalarType(
-    ...     kind=ts.ScalarKind.FLOAT64), dims=[IDim])
+    >>> assert typed_fieldop.body.stmts[0].value.type == ts.FieldType(
+    ...     dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64), dims=[IDim]
+    ... )
     """
 
     @classmethod
-    def apply(cls, node: foast.FunctionDefinition) -> foast.FunctionDefinition:
+    def apply(cls, node: OperatorNodeT) -> OperatorNodeT:
         typed_foast_node = cls().visit(node)
 
         FieldOperatorTypeDeductionCompletnessValidator.apply(typed_foast_node)
 
         return typed_foast_node
 
-    def visit_FunctionDefinition(self, node: foast.FunctionDefinition, **kwargs):
+    def visit_FunctionDefinition(
+        self, node: foast.FunctionDefinition, **kwargs: Any
+    ) -> foast.FunctionDefinition:
         new_params = self.visit(node.params, **kwargs)
         new_body = self.visit(node.body, **kwargs)
         new_closure_vars = self.visit(node.closure_vars, **kwargs)
@@ -271,7 +279,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         )
 
     # TODO(tehrengruber): make sure all scalar arguments are lifted to 0-dim field args
-    def visit_FieldOperator(self, node: foast.FieldOperator, **kwargs) -> foast.FieldOperator:
+    def visit_FieldOperator(self, node: foast.FieldOperator, **kwargs: Any) -> foast.FieldOperator:
         new_definition = self.visit(node.definition, **kwargs)
         return foast.FieldOperator(
             id=node.id,
@@ -280,12 +288,11 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             type=ts_ffront.FieldOperatorType(definition=new_definition.type),
         )
 
-    def visit_ScanOperator(self, node: foast.ScanOperator, **kwargs) -> foast.ScanOperator:
+    def visit_ScanOperator(self, node: foast.ScanOperator, **kwargs: Any) -> foast.ScanOperator:
         new_axis = self.visit(node.axis, **kwargs)
         if not isinstance(new_axis.type, ts.DimensionType):
             raise errors.DSLError(
-                node.location,
-                f"Argument 'axis' to scan operator '{node.id}' must be a dimension.",
+                node.location, f"Argument 'axis' to scan operator '{node.id}' must be a dimension."
             )
         if not new_axis.type.dim.kind == DimensionKind.VERTICAL:
             raise errors.DSLError(
@@ -309,7 +316,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
         new_definition = self.visit(node.definition, **kwargs)
         new_def_type = new_definition.type
-        carry_type = list(new_def_type.pos_or_kw_args.values())[0]
+        carry_type = next(iter(new_def_type.pos_or_kw_args.values()))
         if new_init.type != new_def_type.returns:
             raise errors.DSLError(
                 node.location,
@@ -317,17 +324,14 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 f"expected '{new_def_type.returns}', got '{new_init.type}'.",
             )
         elif new_init.type != carry_type:
-            carry_arg_name = list(new_def_type.pos_or_kw_args.keys())[0]
+            carry_arg_name = next(iter(new_def_type.pos_or_kw_args.keys()))
             raise errors.DSLError(
                 node.location,
                 f"Argument 'init' to scan operator '{node.id}' must have same type as '{carry_arg_name}' argument: "
                 f"expected '{carry_type}', got '{new_init.type}'.",
             )
 
-        new_type = ts_ffront.ScanOperatorType(
-            axis=new_axis.type.dim,
-            definition=new_def_type,
-        )
+        new_type = ts_ffront.ScanOperatorType(axis=new_axis.type.dim, definition=new_def_type)
         return foast.ScanOperator(
             id=node.id,
             axis=new_axis,
@@ -338,7 +342,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             location=node.location,
         )
 
-    def visit_Name(self, node: foast.Name, **kwargs) -> foast.Name:
+    def visit_Name(self, node: foast.Name, **kwargs: Any) -> foast.Name:
         symtable = kwargs["symtable"]
         if node.id not in symtable or symtable[node.id].type is None:
             raise errors.DSLError(node.location, f"Undeclared symbol '{node.id}'.")
@@ -346,7 +350,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         symbol = symtable[node.id]
         return foast.Name(id=node.id, type=symbol.type, location=node.location)
 
-    def visit_Assign(self, node: foast.Assign, **kwargs) -> foast.Assign:
+    def visit_Assign(self, node: foast.Assign, **kwargs: Any) -> foast.Assign:
         new_value = node.value
         if not type_info.is_concrete(node.value.type):
             new_value = self.visit(node.value, **kwargs)
@@ -354,7 +358,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         return foast.Assign(target=new_target, value=new_value, location=node.location)
 
     def visit_TupleTargetAssign(
-        self, node: foast.TupleTargetAssign, **kwargs
+        self, node: foast.TupleTargetAssign, **kwargs: Any
     ) -> foast.TupleTargetAssign:
         TargetType = list[foast.Starred | foast.Symbol]
         values = self.visit(node.value, **kwargs)
@@ -403,7 +407,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         return foast.TupleTargetAssign(targets=new_targets, value=values, location=node.location)
 
-    def visit_IfStmt(self, node: foast.IfStmt, **kwargs) -> foast.IfStmt:
+    def visit_IfStmt(self, node: foast.IfStmt, **kwargs: Any) -> foast.IfStmt:
         symtable = kwargs["symtable"]
 
         new_true_branch = self.visit(node.true_branch, **kwargs)
@@ -438,17 +442,14 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     f"got types '{true_type}' and '{false_type}.",
                 )
             # TODO: properly patch symtable (new node?)
-            symtable[sym].type = new_node.annex.propagated_symbols[
-                sym
-            ].type = new_true_branch.annex.symtable[sym].type
+            symtable[sym].type = new_node.annex.propagated_symbols[sym].type = (
+                new_true_branch.annex.symtable[sym].type
+            )
 
         return new_node
 
     def visit_Symbol(
-        self,
-        node: foast.Symbol,
-        refine_type: Optional[ts.FieldType] = None,
-        **kwargs,
+        self, node: foast.Symbol, refine_type: Optional[ts.FieldType] = None, **kwargs: Any
     ) -> foast.Symbol:
         symtable = kwargs["symtable"]
         if refine_type:
@@ -467,7 +468,16 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             return new_node
         return node
 
-    def visit_Subscript(self, node: foast.Subscript, **kwargs) -> foast.Subscript:
+    def visit_Attribute(self, node: foast.Attribute, **kwargs: Any) -> foast.Attribute:
+        new_value = self.visit(node.value, **kwargs)
+        return foast.Attribute(
+            value=new_value,
+            attr=node.attr,
+            location=node.location,
+            type=getattr(new_value.type, node.attr),
+        )
+
+    def visit_Subscript(self, node: foast.Subscript, **kwargs: Any) -> foast.Subscript:
         new_value = self.visit(node.value, **kwargs)
         new_type: Optional[ts.TypeSpec] = None
         match new_value.type:
@@ -498,7 +508,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             value=new_value, index=node.index, type=new_type, location=node.location
         )
 
-    def visit_BinOp(self, node: foast.BinOp, **kwargs) -> foast.BinOp:
+    def visit_BinOp(self, node: foast.BinOp, **kwargs: Any) -> foast.BinOp:
         new_left = self.visit(node.left, **kwargs)
         new_right = self.visit(node.right, **kwargs)
         new_type = self._deduce_binop_type(node, left=new_left, right=new_right)
@@ -506,7 +516,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             op=node.op, left=new_left, right=new_right, location=node.location, type=new_type
         )
 
-    def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs) -> foast.TernaryExpr:
+    def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs: Any) -> foast.TernaryExpr:
         new_condition = self.visit(node.condition, **kwargs)
         new_true_expr = self.visit(node.true_expr, **kwargs)
         new_false_expr = self.visit(node.false_expr, **kwargs)
@@ -542,7 +552,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
         return true_expr.type
 
-    def visit_Compare(self, node: foast.Compare, **kwargs) -> foast.Compare:
+    def visit_Compare(self, node: foast.Compare, **kwargs: Any) -> foast.Compare:
         new_left = self.visit(node.left, **kwargs)
         new_right = self.visit(node.right, **kwargs)
         new_type = self._deduce_compare_type(node, left=new_left, right=new_right)
@@ -551,7 +561,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         )
 
     def _deduce_compare_type(
-        self, node: foast.Compare, *, left: foast.Expr, right: foast.Expr, **kwargs
+        self, node: foast.Compare, *, left: foast.Expr, right: foast.Expr, **kwargs: Any
     ) -> Optional[ts.TypeSpec]:
         # check both types compatible
         for arg in (left, right):
@@ -577,13 +587,20 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             ) from ex
 
     def _deduce_binop_type(
-        self,
-        node: foast.BinOp,
-        *,
-        left: foast.Expr,
-        right: foast.Expr,
-        **kwargs,
+        self, node: foast.BinOp, *, left: foast.Expr, right: foast.Expr, **kwargs: Any
     ) -> Optional[ts.TypeSpec]:
+        # e.g. `IDim+1`
+        if (
+            isinstance(left.type, ts.DimensionType)
+            and isinstance(right.type, ts.ScalarType)
+            and type_info.is_integral(right.type)
+        ):
+            return ts.OffsetType(source=left.type.dim, target=(left.type.dim,))
+        if isinstance(left.type, ts.OffsetType):
+            raise errors.DSLError(
+                node.location, f"Type '{left.type}' can not be used in operator '{node.op}'."
+            )
+
         logical_ops = {
             dialect_ast_enums.BinaryOperator.BIT_AND,
             dialect_ast_enums.BinaryOperator.BIT_OR,
@@ -631,15 +648,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 f"Incompatible datatypes in operator '{node.op}': '{left.type}' and '{right.type}'.",
             )
 
-    def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> foast.UnaryOp:
+    def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs: Any) -> foast.UnaryOp:
         new_operand = self.visit(node.operand, **kwargs)
         is_compatible = (
             type_info.is_logical
             if node.op
-            in [
-                dialect_ast_enums.UnaryOperator.NOT,
-                dialect_ast_enums.UnaryOperator.INVERT,
-            ]
+            in [dialect_ast_enums.UnaryOperator.NOT, dialect_ast_enums.UnaryOperator.INVERT]
             else type_info.is_arithmetic
         )
         if not is_compatible(new_operand.type):
@@ -651,12 +665,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             op=node.op, operand=new_operand, location=node.location, type=new_operand.type
         )
 
-    def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs) -> foast.TupleExpr:
+    def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs: Any) -> foast.TupleExpr:
         new_elts = self.visit(node.elts, **kwargs)
         new_type = ts.TupleType(types=[element.type for element in new_elts])
         return foast.TupleExpr(elts=new_elts, type=new_type, location=node.location)
 
-    def visit_Call(self, node: foast.Call, **kwargs) -> foast.Call:
+    def visit_Call(self, node: foast.Call, **kwargs: Any) -> foast.Call:
         new_func = self.visit(node.func, **kwargs)
         new_args = self.visit(node.args, **kwargs)
         new_kwargs = self.visit(node.kwargs, **kwargs)
@@ -687,10 +701,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         # ensure signature is valid
         try:
             type_info.accepts_args(
-                func_type,
-                with_args=arg_types,
-                with_kwargs=kwarg_types,
-                raise_exception=True,
+                func_type, with_args=arg_types, with_kwargs=kwarg_types, raise_exception=True
             )
         except ValueError as err:
             raise errors.DSLError(
@@ -717,14 +728,15 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             isinstance(new_func.type, ts.FunctionType)
             and not type_info.is_concrete(return_type)
             and isinstance(new_func, foast.Name)
-            and new_func.id in fbuiltins.FUN_BUILTIN_NAMES
+            and new_func.id
+            in (fbuiltins.FUN_BUILTIN_NAMES + experimental.EXPERIMENTAL_FUN_BUILTIN_NAMES)
         ):
             visitor = getattr(self, f"_visit_{new_func.id}")
             return visitor(new_node, **kwargs)
 
         return new_node
 
-    def _visit_math_built_in(self, node: foast.Call, **kwargs) -> foast.Call:
+    def _visit_math_built_in(self, node: foast.Call, **kwargs: Any) -> foast.Call:
         func_name = cast(foast.Name, node.func).id
 
         # validate arguments
@@ -788,7 +800,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             type=return_type,
         )
 
-    def _visit_reduction(self, node: foast.Call, **kwargs) -> foast.Call:
+    def _visit_reduction(self, node: foast.Call, **kwargs: Any) -> foast.Call:
         field_type = cast(ts.FieldType, node.args[0].type)
         reduction_dim = cast(ts.DimensionType, node.kwargs["axis"].type).dim
         # TODO: This code does not handle ellipses for dimensions. Fix it.
@@ -797,13 +809,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             field_dims_str = ", ".join(str(dim) for dim in field_type.dims)
             raise errors.DSLError(
                 node.location,
-                f"Incompatible field argument in call to '{str(node.func)}'. "
+                f"Incompatible field argument in call to '{node.func!s}'. "
                 f"Expected a field with dimension '{reduction_dim}', got "
                 f"'{field_dims_str}'.",
             )
         return_type = ts.FieldType(
-            dims=[dim for dim in field_type.dims if dim != reduction_dim],
-            dtype=field_type.dtype,
+            dims=[dim for dim in field_type.dims if dim != reduction_dim], dtype=field_type.dtype
         )
 
         return foast.Call(
@@ -814,17 +825,16 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             type=return_type,
         )
 
-    def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> foast.Call:
+    def _visit_neighbor_sum(self, node: foast.Call, **kwargs: Any) -> foast.Call:
         return self._visit_reduction(node, **kwargs)
 
-    def _visit_max_over(self, node: foast.Call, **kwargs) -> foast.Call:
+    def _visit_max_over(self, node: foast.Call, **kwargs: Any) -> foast.Call:
         return self._visit_reduction(node, **kwargs)
 
-    def _visit_min_over(self, node: foast.Call, **kwargs) -> foast.Call:
+    def _visit_min_over(self, node: foast.Call, **kwargs: Any) -> foast.Call:
         return self._visit_reduction(node, **kwargs)
 
-    def _visit_astype(self, node: foast.Call, **kwargs) -> foast.Call:
-        return_type: ts.TupleType | ts.ScalarType | ts.FieldType
+    def _visit_astype(self, node: foast.Call, **kwargs: Any) -> foast.Call:
         value, new_type = node.args
         assert isinstance(
             value.type, (ts.FieldType, ts.ScalarType, ts.TupleType)
@@ -839,11 +849,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
 
         return_type = type_info.apply_to_primitive_constituents(
-            value.type,
             lambda primitive_type: with_altered_scalar_kind(
                 primitive_type, getattr(ts.ScalarKind, new_type.id.upper())
             ),
+            value.type,
         )
+        assert isinstance(return_type, (ts.TupleType, ts.ScalarType, ts.FieldType))
 
         return foast.Call(
             func=node.func,
@@ -853,7 +864,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             location=node.location,
         )
 
-    def _visit_as_offset(self, node: foast.Call, **kwargs) -> foast.Call:
+    def _visit_as_offset(self, node: foast.Call, **kwargs: Any) -> foast.Call:
         arg_0 = node.args[0].type
         arg_1 = node.args[1].type
         assert isinstance(arg_0, ts.OffsetType)
@@ -861,7 +872,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if not type_info.is_integral(arg_1):
             raise errors.DSLError(
                 node.location,
-                f"Incompatible argument in call to '{str(node.func)}': "
+                f"Incompatible argument in call to '{node.func!s}': "
                 f"expected integer for offset field dtype, got '{arg_1.dtype}'. "
                 f"{node.location}",
             )
@@ -869,20 +880,16 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if arg_0.source not in arg_1.dims:
             raise errors.DSLError(
                 node.location,
-                f"Incompatible argument in call to '{str(node.func)}': "
+                f"Incompatible argument in call to '{node.func!s}': "
                 f"'{arg_0.source}' not in list of offset field dimensions '{arg_1.dims}'. "
                 f"{node.location}",
             )
 
         return foast.Call(
-            func=node.func,
-            args=node.args,
-            kwargs=node.kwargs,
-            type=arg_0,
-            location=node.location,
+            func=node.func, args=node.args, kwargs=node.kwargs, type=arg_0, location=node.location
         )
 
-    def _visit_where(self, node: foast.Call, **kwargs) -> foast.Call:
+    def _visit_where(self, node: foast.Call, **kwargs: Any) -> foast.Call:
         mask_type = cast(ts.FieldType, node.args[0].type)
         true_branch_type = node.args[1].type
         false_branch_type = node.args[2].type
@@ -890,7 +897,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if not type_info.is_logical(mask_type):
             raise errors.DSLError(
                 node.location,
-                f"Incompatible argument in call to '{str(node.func)}': expected "
+                f"Incompatible argument in call to '{node.func!s}': expected "
                 f"a field with dtype 'bool', got '{mask_type}'.",
             )
 
@@ -908,7 +915,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             ):
                 raise errors.DSLError(
                     node.location,
-                    f"Return arguments need to be of same type in '{str(node.func)}', got "
+                    f"Return arguments need to be of same type in '{node.func!s}', got "
                     f"'{node.args[1].type}' and '{node.args[2].type}'.",
                 )
             else:
@@ -919,8 +926,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         except ValueError as ex:
             raise errors.DSLError(
-                node.location,
-                f"Incompatible argument in call to '{str(node.func)}'.",
+                node.location, f"Incompatible argument in call to '{node.func!s}'."
             ) from ex
 
         return foast.Call(
@@ -931,14 +937,16 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             location=node.location,
         )
 
-    def _visit_broadcast(self, node: foast.Call, **kwargs) -> foast.Call:
+    _visit_concat_where = _visit_where
+
+    def _visit_broadcast(self, node: foast.Call, **kwargs: Any) -> foast.Call:
         arg_type = cast(ts.FieldType | ts.ScalarType, node.args[0].type)
         broadcast_dims_expr = cast(foast.TupleExpr, node.args[1]).elts
 
         if any([not (isinstance(elt.type, ts.DimensionType)) for elt in broadcast_dims_expr]):
             raise errors.DSLError(
                 node.location,
-                f"Incompatible broadcast dimension type in '{str(node.func)}': expected "
+                f"Incompatible broadcast dimension type in '{node.func!s}': expected "
                 f"all broadcast dimensions to be of type 'Dimension'.",
             )
 
@@ -947,14 +955,11 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if not set((arg_dims := type_info.extract_dims(arg_type))).issubset(set(broadcast_dims)):
             raise errors.DSLError(
                 node.location,
-                f"Incompatible broadcast dimensions in '{str(node.func)}': expected "
+                f"Incompatible broadcast dimensions in '{node.func!s}': expected "
                 f"broadcast dimension(s) '{set(arg_dims).difference(set(broadcast_dims))}' missing",
             )
 
-        return_type = ts.FieldType(
-            dims=broadcast_dims,
-            dtype=type_info.extract_dtype(arg_type),
-        )
+        return_type = ts.FieldType(dims=broadcast_dims, dtype=type_info.extract_dtype(arg_type))
 
         return foast.Call(
             func=node.func,
@@ -964,7 +969,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             type=return_type,
         )
 
-    def visit_Constant(self, node: foast.Constant, **kwargs) -> foast.Constant:
+    def visit_Constant(self, node: foast.Constant, **kwargs: Any) -> foast.Constant:
         try:
             type_ = type_translation.from_value(node.value)
         except ValueError as e:

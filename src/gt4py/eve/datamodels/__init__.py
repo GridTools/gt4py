@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """Data Model classes and related utils and validators.
 
@@ -61,7 +55,7 @@ Examples:
     ...     name: str
     ...     amount: int
     ...
-    ...     @validator('name')
+    ...     @validator("name")
     ...     def _name_validator(self, attribute, value):
     ...         if len(value) < 3:
     ...             raise ValueError(
@@ -99,7 +93,7 @@ Examples:
     ...     num_instances: ClassVar[int] = 0
     ...
     ...     def __init__(self, a: int, b: int) -> None:
-    ...         self.__auto_init__(a/b)
+    ...         self.__auto_init__(a / b)
     ...
     ...     def __pre_init__(self) -> None:
     ...         self.__class__.num_instances += 1
@@ -113,5 +107,5 @@ Examples:
 
 """
 
-from . import core as core, validators as validators  # noqa: F401  # imported but unused
-from .core import *  # noqa:   # star unused import
+from . import core as core, validators as validators  # imported but unused
+from .core import *  # noqa: F403 [undefined-local-with-import-star]

@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -28,7 +22,7 @@ MISSING_FILENAME = "<string>"
 
 
 def get_closure_vars_from_function(function: Callable) -> dict[str, Any]:
-    (nonlocals, globals, builtins, unbound) = inspect.getclosurevars(function)  # noqa: A001
+    (nonlocals, globals, builtins, unbound) = inspect.getclosurevars(function)  # noqa: A001 [builtin-variable-shadowing]
     return {**builtins, **globals, **nonlocals}  # nonlocals override globals
 
 
@@ -106,11 +100,11 @@ class SourceDefinition:
     >>> def foo(a):
     ...     return a
     >>> src_def = SourceDefinition.from_function(foo)
-    >>> print(src_def) # doctest:+ELLIPSIS
+    >>> print(src_def)  # doctest:+ELLIPSIS
     SourceDefinition(source='def foo(a):...', filename='...', line_offset=0, column_offset=0)
 
     >>> source, filename, starting_line = src_def
-    >>> print(source) # doctest:+ELLIPSIS
+    >>> print(source)  # doctest:+ELLIPSIS
     def foo(a):
         return a
     ...
@@ -139,10 +133,10 @@ class SymbolNames:
     """
 
     params: set[str]
-    locals: set[str]  # noqa: A003  # shadowing a python builtin
+    locals: set[str]  # shadowing a python builtin
     imported: set[str]
     nonlocals: set[str]
-    globals: set[str]  # noqa: A003  # shadowing a python builtin
+    globals: set[str]  # shadowing a python builtin
 
     @functools.cached_property
     def all_locals(self) -> set[str]:

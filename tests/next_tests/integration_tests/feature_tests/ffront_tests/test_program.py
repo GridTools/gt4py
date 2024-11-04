@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 # TODO(tehrengruber): All field operators and programs should be executable
 #  as is at some point. Adopt tests to also run on the regular python objects.
@@ -40,7 +34,7 @@ from next_tests.past_common_fixtures import (
 
 
 def test_identity_fo_execution(cartesian_case, identity_def):
-    identity = gtx.field_operator(identity_def, backend=cartesian_case.executor)
+    identity = gtx.field_operator(identity_def, backend=cartesian_case.backend)
 
     in_field = cases.allocate(cartesian_case, identity, "in_field").strategy(
         cases.ConstInitializer(1)
@@ -88,13 +82,13 @@ def test_shift_by_one_execution(cartesian_case):
 
 
 def test_copy_execution(cartesian_case, copy_program_def):
-    copy_program = gtx.program(copy_program_def, backend=cartesian_case.executor)
+    copy_program = gtx.program(copy_program_def, backend=cartesian_case.backend)
 
     cases.verify_with_default_data(cartesian_case, copy_program, ref=lambda in_field: in_field)
 
 
 def test_double_copy_execution(cartesian_case, double_copy_program_def):
-    double_copy_program = gtx.program(double_copy_program_def, backend=cartesian_case.executor)
+    double_copy_program = gtx.program(double_copy_program_def, backend=cartesian_case.backend)
 
     cases.verify_with_default_data(
         cartesian_case, double_copy_program, ref=lambda in_field, intermediate_field: in_field
@@ -102,7 +96,7 @@ def test_double_copy_execution(cartesian_case, double_copy_program_def):
 
 
 def test_copy_restricted_execution(cartesian_case, copy_restrict_program_def):
-    copy_restrict_program = gtx.program(copy_restrict_program_def, backend=cartesian_case.executor)
+    copy_restrict_program = gtx.program(copy_restrict_program_def, backend=cartesian_case.backend)
 
     cases.verify_with_default_data(
         cartesian_case,
@@ -130,9 +124,7 @@ def test_calling_fo_from_fo_execution(cartesian_case):
         pow_three(in_field, out=out)
 
     cases.verify_with_default_data(
-        cartesian_case,
-        fo_from_fo_program,
-        ref=lambda in_field: in_field**3,
+        cartesian_case, fo_from_fo_program, ref=lambda in_field: in_field**3
     )
 
 
@@ -224,7 +216,7 @@ def test_tuple_program_return_constructed_inside_nested(cartesian_case):
 
 
 def test_wrong_argument_type(cartesian_case, copy_program_def):
-    copy_program = gtx.program(copy_program_def, backend=cartesian_case.executor)
+    copy_program = gtx.program(copy_program_def, backend=cartesian_case.backend)
 
     inp = cartesian_case.as_field([JDim], np.ones((cartesian_case.default_sizes[JDim],)))
     out = cases.allocate(cartesian_case, copy_program, "out").strategy(cases.ConstInitializer(1))()
@@ -236,7 +228,7 @@ def test_wrong_argument_type(cartesian_case, copy_program_def):
 
     msgs = [
         r"- Expected argument 'in_field' to be of type 'Field\[\[IDim], float64\]',"
-        r" got 'Field\[\[JDim\], float64\]'.",
+        r" got 'Field\[\[JDim\], float64\]'."
     ]
     for msg in msgs:
         assert re.search(msg, exc_info.value.__cause__.args[0]) is not None
@@ -256,7 +248,6 @@ def test_dimensions_domain(cartesian_case):
     out_field = cases.allocate(cartesian_case, empty_domain_program, "out_field")()
 
     with pytest.raises(
-        ValueError,
-        match=(r"Dimensions in out field and field domain are not equivalent"),
+        ValueError, match=(r"Dimensions in out field and field domain are not equivalent")
     ):
         cases.run(cartesian_case, empty_domain_program, a, out_field, offset_provider={})

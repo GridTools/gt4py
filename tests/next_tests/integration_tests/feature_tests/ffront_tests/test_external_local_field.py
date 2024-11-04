@@ -1,28 +1,22 @@
-# -*- coding: utf-8 -*-
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import int32, neighbor_sum
+from gt4py.next import common, int32, neighbor_sum
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import V2E, Edge, V2EDim, Vertex, unstructured_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     exec_alloc_descriptor,
-    reduction_setup,
+    mesh_descriptor,
 )
 
 
@@ -43,13 +37,14 @@ def test_external_local_field(unstructured_case):
     )
     ones = cases.allocate(unstructured_case, testee, "ones").strategy(cases.ConstInitializer(1))()
 
+    v2e_table = unstructured_case.offset_provider["V2E"].table
     cases.verify(
         unstructured_case,
         testee,
         inp,
         ones,
         out=cases.allocate(unstructured_case, testee, cases.RETURN)(),
-        ref=np.sum(unstructured_case.offset_provider["V2E"].table, axis=1),
+        ref=np.sum(v2e_table, axis=1, initial=0, where=v2e_table != common._DEFAULT_SKIP_VALUE),
     )
 
 

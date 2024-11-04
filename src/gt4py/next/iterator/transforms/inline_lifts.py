@@ -1,21 +1,14 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
 import enum
-from collections.abc import Callable
-from typing import Optional
+from typing import Callable, Optional
 
 import gt4py.eve as eve
 from gt4py.eve import NodeTranslator, traits
@@ -71,9 +64,7 @@ def _is_scan(node: ir.FunCall):
 
 
 def _transform_and_extract_lift_args(
-    node: ir.FunCall,
-    symtable: dict[eve.SymbolName, ir.Sym],
-    extracted_args: dict[ir.Sym, ir.Expr],
+    node: ir.FunCall, symtable: dict[eve.SymbolName, ir.Sym], extracted_args: dict[ir.Sym, ir.Expr]
 ):
     """
     Transform and extract non-symbol arguments of a lifted stencil call.
@@ -204,7 +195,7 @@ class InlineLifts(
                 assert len(node.args[0].fun.args) == 1
                 args = node.args[0].args
                 if len(args) == 0:
-                    return ir.Literal(value="True", type="bool")
+                    return im.literal_from_value(True)
 
                 res = ir.FunCall(fun=ir.SymRef(id="can_deref"), args=[args[0]])
                 for arg in args[1:]:

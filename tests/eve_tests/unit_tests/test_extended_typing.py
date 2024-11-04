@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -111,125 +105,6 @@ class IncompleteClass:
     DEFINITIONS = {}
     exec(TEST_SRC, None, DEFINITIONS)
     yield types.SimpleNamespace(**DEFINITIONS)
-
-
-class TestExtendedProtocol:
-    def test_instance_check_shortcut(self, sample_class_defs):
-        ConcreteClass = sample_class_defs.ConcreteClass
-        IncompleteClass = sample_class_defs.IncompleteClass
-        NoDataProto = sample_class_defs.NoDataProto
-        DataProto = sample_class_defs.DataProto
-
-        # Undecorated runtime protocol checks should fail
-        with pytest.raises(
-            TypeError, match="checks can only be used with @runtime_checkable protocols"
-        ):
-            assert isinstance(ConcreteClass(), NoDataProto)
-
-        # Standard runtime protocol checks
-        xtyping.runtime_checkable(NoDataProto)
-        assert isinstance(ConcreteClass(), NoDataProto)
-        assert isinstance(ConcreteClass(), DataProto)
-        assert not isinstance(IncompleteClass(), NoDataProto)
-
-        # Standard runtime protocol checks from extended decorator (behavior should be the same)
-        xtyping.extended_runtime_checkable(
-            NoDataProto, instance_check_shortcut=False, subclass_check_with_data_members=False
-        )
-        assert isinstance(ConcreteClass(), NoDataProto)
-        assert isinstance(ConcreteClass(), DataProto)
-        assert not isinstance(IncompleteClass(), NoDataProto)
-
-        # Runtime protocol checks from extended decorator with shortcuts
-        xtyping.extended_runtime_checkable(
-            instance_check_shortcut=True, subclass_check_with_data_members=False
-        )(NoDataProto)
-        assert isinstance(ConcreteClass(), NoDataProto)
-        assert isinstance(ConcreteClass(), DataProto)
-        assert not isinstance(IncompleteClass(), NoDataProto)
-
-    def test_instance_check_shortcut_performance(self, sample_class_defs):
-        # TODO(egparedes): change testing strategy to avoid timings
-        pytest.skip()
-
-        PASS_STMT = "isinstance(ConcreteClass(), NoDataProto)"
-        FAIL_STMT = "isinstance(IncompleteClass(), NoDataProto)"
-        DEFINITIONS = sample_class_defs.__dict__
-        NUM_REPETITIONS = 10000
-
-        # Timings for standard runtime_checkable()
-        xtyping.runtime_checkable(sample_class_defs.NoDataProto)
-        std_pass_time = timeit.timeit(stmt=PASS_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS)
-        std_fail_time = timeit.timeit(stmt=FAIL_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS)
-
-        # Standard runtime protocol checks from extended decorator.
-        # Expected performance should be roughly the same.
-        xtyping.runtime_checkable(sample_class_defs.NoDataProto)
-        std_from_ext_pass_time = timeit.timeit(
-            stmt=PASS_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS
-        )
-        std_from_ext_fail_time = timeit.timeit(
-            stmt=FAIL_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS
-        )
-        bound_factor = 3.0
-
-        assert (1 / bound_factor) < (std_pass_time / std_from_ext_pass_time) < bound_factor
-        assert (1 / bound_factor) < (std_fail_time / std_from_ext_fail_time) < bound_factor
-
-        # Runtime protocol checks from extended decorator with shortcuts
-        # Expected performance should be much better.
-        xtyping.extended_runtime_checkable(
-            instance_check_shortcut=True, subclass_check_with_data_members=False
-        )(sample_class_defs.NoDataProto)
-        ext_pass_time = timeit.timeit(stmt=PASS_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS)
-        ext_fail_time = timeit.timeit(stmt=FAIL_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS)
-        bound_factor = 10.0
-
-        assert std_pass_time / ext_pass_time > bound_factor
-        assert std_pass_time / ext_fail_time > bound_factor
-
-    def test_subclass_check_with_data_members(self, sample_class_defs):
-        ConcreteClass = sample_class_defs.ConcreteClass
-        NoDataProto = sample_class_defs.NoDataProto
-        DataProto = sample_class_defs.DataProto
-
-        # Undecorated runtime protocol checks should fail
-        with pytest.raises(
-            TypeError, match="checks can only be used with @runtime_checkable protocols"
-        ):
-            assert issubclass(ConcreteClass, DataProto)
-
-        # Standard runtime protocol checks
-        xtyping.runtime_checkable(NoDataProto)
-        assert isinstance(ConcreteClass(), NoDataProto)
-        assert issubclass(ConcreteClass, NoDataProto)
-
-        with pytest.raises(
-            TypeError, match="Protocols with non-method members don't support issubclass()"
-        ):
-            assert issubclass(ConcreteClass, DataProto)
-
-        # Standard runtime protocol checks from extended decorator.
-        # Expected behavior and performance should be roughly the same.
-        xtyping.extended_runtime_checkable(
-            instance_check_shortcut=False, subclass_check_with_data_members=False
-        )(DataProto)
-        assert isinstance(ConcreteClass(), NoDataProto)
-        assert issubclass(ConcreteClass, NoDataProto)
-
-        with pytest.raises(
-            TypeError, match="Protocols with non-method members don't support issubclass()"
-        ):
-            assert issubclass(ConcreteClass, DataProto)
-
-        # Runtime protocol checks from extended decorator with shortcuts
-        xtyping.extended_runtime_checkable(
-            instance_check_shortcut=False, subclass_check_with_data_members=True
-        )(DataProto)
-        assert isinstance(ConcreteClass(), DataProto)
-        assert issubclass(ConcreteClass, DataProto)
-        assert isinstance(ConcreteClass(), NoDataProto)
-        assert issubclass(ConcreteClass, NoDataProto)
 
 
 def test_supports_array_interface():
@@ -413,12 +288,10 @@ class TestHashableTypings:
 
 def test_is_protocol():
     class AProtocol(typing.Protocol):
-        def do_something(self, value: int) -> int:
-            ...
+        def do_something(self, value: int) -> int: ...
 
     class NotProtocol(AProtocol):
-        def do_something_else(self, value: float) -> float:
-            ...
+        def do_something_else(self, value: float) -> float: ...
 
     class AXProtocol(xtyping.Protocol):
         A = 1
@@ -427,8 +300,7 @@ def test_is_protocol():
         A = 1
 
     class AgainProtocol(AProtocol, xtyping.Protocol):
-        def do_something_else(self, value: float) -> float:
-            ...
+        def do_something_else(self, value: float) -> float: ...
 
     assert xtyping.is_protocol(AProtocol)
     assert xtyping.is_protocol(AXProtocol)
@@ -440,16 +312,13 @@ def test_is_protocol():
 
 
 def test_get_partial_type_hints():
-    def f1(a: int) -> float:
-        ...
+    def f1(a: int) -> float: ...
 
     assert xtyping.get_partial_type_hints(f1) == {"a": int, "return": float}
 
-    class MissingRef:
-        ...
+    class MissingRef: ...
 
-    def f_partial(a: int) -> MissingRef:
-        ...
+    def f_partial(a: int) -> MissingRef: ...
 
     # This is expected behavior because this test file uses
     # 'from __future__ import annotations' and therefore local
@@ -467,8 +336,7 @@ def test_get_partial_type_hints():
         "return": int,
     }
 
-    def f_nested_partial(a: int) -> Dict[str, MissingRef]:
-        ...
+    def f_nested_partial(a: int) -> Dict[str, MissingRef]: ...
 
     assert xtyping.get_partial_type_hints(f_nested_partial) == {
         "a": int,
@@ -500,8 +368,7 @@ def test_eval_forward_ref():
         == Dict[str, Tuple[int, float]]
     )
 
-    class MissingRef:
-        ...
+    class MissingRef: ...
 
     assert (
         xtyping.eval_forward_ref("Callable[[int], MissingRef]", localns={"MissingRef": MissingRef})
@@ -523,9 +390,7 @@ def test_eval_forward_ref():
             globalns={"Annotated": Annotated, "Callable": Callable},
             localns={"MissingRef": MissingRef},
         )
-    ) == Callable[
-        [int], MissingRef
-    ] or (  # some patch versions of cpython3.9 show weird behaviors
+    ) == Callable[[int], MissingRef] or (  # some patch versions of cpython3.9 show weird behaviors
         sys.version_info >= (3, 9)
         and sys.version_info < (3, 10)
         and (ref == Callable[[Annotated[int, "Foo"]], MissingRef])
@@ -559,19 +424,16 @@ def test_infer_type():
 
     assert xtyping.infer_type(str) == Type[str]
 
-    class A:
-        ...
+    class A: ...
 
     assert xtyping.infer_type(A()) == A
     assert xtyping.infer_type(A) == Type[A]
 
-    def f1():
-        ...
+    def f1(): ...
 
     assert xtyping.infer_type(f1) == Callable[[], Any]
 
-    def f2(a: int, b: float) -> None:
-        ...
+    def f2(a: int, b: float) -> None: ...
 
     assert xtyping.infer_type(f2) == Callable[[int, float], type(None)]
 
@@ -579,8 +441,7 @@ def test_infer_type():
         a: Dict[Tuple[str, ...], List[int]],
         b: List[Callable[[List[int]], Set[Set[int]]]],
         c: Type[List[int]],
-    ) -> Any:
-        ...
+    ) -> Any: ...
 
     assert (
         xtyping.infer_type(f3)
@@ -594,8 +455,7 @@ def test_infer_type():
         ]
     )
 
-    def f4(a: int, b: float, *, foo: Tuple[str, ...] = ()) -> None:
-        ...
+    def f4(a: int, b: float, *, foo: Tuple[str, ...] = ()) -> None: ...
 
     assert xtyping.infer_type(f4) == Callable[[int, float], type(None)]
     assert (

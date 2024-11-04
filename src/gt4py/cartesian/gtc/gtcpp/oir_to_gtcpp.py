@@ -1,23 +1,19 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+from __future__ import annotations
 
 import functools
 import itertools
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Set, Union, cast
 
-from devtools import debug  # noqa: F401
+from devtools import debug  # noqa: F401 [unused-import]
 from typing_extensions import Protocol
 
 from gt4py import eve
@@ -94,8 +90,7 @@ def _make_axis_offset_expr(
 
 
 class SymbolNameCreator(Protocol):
-    def __call__(self, name: str) -> str:
-        ...
+    def __call__(self, name: str) -> str: ...
 
 
 class OIRToGTCpp(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
@@ -117,7 +112,7 @@ class OIRToGTCpp(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
         def add_temporaries(
             self, temporaries: List[gtcpp.Temporary]
-        ) -> "OIRToGTCpp.GTComputationContext":
+        ) -> OIRToGTCpp.GTComputationContext:
             self.temporaries.extend(temporaries)
             return self
 
@@ -125,7 +120,7 @@ class OIRToGTCpp(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         def arguments(self) -> List[gtcpp.Arg]:
             return [gtcpp.Arg(name=name) for name in self._arguments]
 
-        def add_arguments(self, arguments: Set[str]) -> "OIRToGTCpp.GTComputationContext":
+        def add_arguments(self, arguments: Set[str]) -> OIRToGTCpp.GTComputationContext:
             self._arguments.update(arguments)
             return self
 
@@ -163,9 +158,7 @@ class OIRToGTCpp(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     def visit_BinaryOp(self, node: oir.BinaryOp, **kwargs: Any) -> gtcpp.BinaryOp:
         return gtcpp.BinaryOp(
-            op=node.op,
-            left=self.visit(node.left, **kwargs),
-            right=self.visit(node.right, **kwargs),
+            op=node.op, left=self.visit(node.left, **kwargs), right=self.visit(node.right, **kwargs)
         )
 
     def visit_TernaryOp(self, node: oir.TernaryOp, **kwargs: Any) -> gtcpp.TernaryOp:
@@ -230,7 +223,7 @@ class OIRToGTCpp(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         )
 
     def _mask_to_expr(
-        self, mask: common.HorizontalMask, comp_ctx: "GTComputationContext"
+        self, mask: common.HorizontalMask, comp_ctx: GTComputationContext
     ) -> gtcpp.Expr:
         mask_expr: List[gtcpp.Expr] = []
         for axis_index, interval in enumerate(mask.intervals):
@@ -297,8 +290,8 @@ class OIRToGTCpp(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         self,
         node: oir.HorizontalExecution,
         *,
-        prog_ctx: "ProgramContext",
-        comp_ctx: "GTComputationContext",
+        prog_ctx: ProgramContext,
+        comp_ctx: GTComputationContext,
         interval: gtcpp.GTInterval,
         **kwargs: Any,
     ) -> gtcpp.GTStage:
@@ -330,11 +323,7 @@ class OIRToGTCpp(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         return gtcpp.GTStage(functor=functor_name, args=stage_args)
 
     def visit_VerticalLoop(
-        self,
-        node: oir.VerticalLoop,
-        *,
-        comp_ctx: GTComputationContext,
-        **kwargs: Any,
+        self, node: oir.VerticalLoop, *, comp_ctx: GTComputationContext, **kwargs: Any
     ) -> gtcpp.GTMultiStage:
         # the following visit assumes that temporaries are already available in comp_ctx
         stages = list(

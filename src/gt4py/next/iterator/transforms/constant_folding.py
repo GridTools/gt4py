@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next.iterator import embedded, ir
@@ -28,6 +22,13 @@ class ConstantFolding(PreserveLocationVisitor, NodeTranslator):
 
         if (
             isinstance(new_node.fun, ir.SymRef)
+            and new_node.fun.id in ["minimum", "maximum"]
+            and new_node.args[0] == new_node.args[1]
+        ):  # `minimum(a, a)` -> `a`
+            return new_node.args[0]
+
+        if (
+            isinstance(new_node.fun, ir.SymRef)
             and new_node.fun.id == "if_"
             and isinstance(new_node.args[0], ir.Literal)
         ):  # `if_(True, true_branch, false_branch)` -> `true_branch`
@@ -42,9 +43,15 @@ class ConstantFolding(PreserveLocationVisitor, NodeTranslator):
             and len(new_node.args) > 0
             and all(isinstance(arg, ir.Literal) for arg in new_node.args)
         ):  # `1 + 1` -> `2`
-            if new_node.fun.id in ir.ARITHMETIC_BUILTINS:
-                fun = getattr(embedded, str(new_node.fun.id))
-                arg_values = [getattr(embedded, str(arg.type))(arg.value) for arg in new_node.args]  # type: ignore[attr-defined] # arg type already established in if condition
-                new_node = im.literal_from_value(fun(*arg_values))
+            try:
+                if new_node.fun.id in ir.ARITHMETIC_BUILTINS:
+                    fun = getattr(embedded, str(new_node.fun.id))
+                    arg_values = [
+                        getattr(embedded, str(arg.type))(arg.value)  # type: ignore[attr-defined] # arg type already established in if condition
+                        for arg in new_node.args
+                    ]
+                    new_node = im.literal_from_value(fun(*arg_values))
+            except ValueError:
+                pass  # happens for inf and neginf
 
         return new_node

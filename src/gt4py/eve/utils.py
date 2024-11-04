@@ -1,19 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """General utility functions. Some functionalities are directly imported from dependencies."""
-
 
 from __future__ import annotations
 
@@ -35,12 +28,12 @@ import warnings
 
 import deepdiff
 import xxhash
-from boltons.iterutils import (  # noqa: F401
+from boltons.iterutils import (
     flatten as flatten,
     flatten_iter as flatten_iter,
     is_collection as is_collection,
 )
-from boltons.strutils import (  # noqa: F401
+from boltons.strutils import (
     a10n as a10n,
     asciify as asciify,
     format_int_list as format_int_list,
@@ -53,6 +46,7 @@ from boltons.strutils import (  # noqa: F401
 from . import extended_typing as xtyping
 from .extended_typing import (
     Any,
+    ArgsOnlyCallable,
     Callable,
     Collection,
     Dict,
@@ -79,10 +73,19 @@ try:
     import cytoolz as toolz
 except ModuleNotFoundError:
     # Fall back to pure Python toolz
-    import toolz  # noqa: F401
+    import toolz
 
 
 T = TypeVar("T")
+
+
+def first(iterable: Iterable[T], *, default: Union[T, NothingType] = NOTHING) -> T:
+    try:
+        return next(iter(iterable))
+    except StopIteration as error:
+        if default is not NOTHING:
+            return cast(T, default)
+        raise error
 
 
 def isinstancechecker(type_info: Union[Type, Iterable[Type]]) -> Callable[[Any], bool]:
@@ -92,7 +95,7 @@ def isinstancechecker(type_info: Union[Type, Iterable[Type]]) -> Callable[[Any],
         >>> checker = isinstancechecker((int, str))
         >>> checker(3)
         True
-        >>> checker('3')
+        >>> checker("3")
         True
         >>> checker(3.3)
         False
@@ -117,17 +120,17 @@ def attrchecker(*names: str) -> Callable[[Any], bool]:
 
     Examples:
         >>> from collections import namedtuple
-        >>> Point = namedtuple('Point', ['x', 'y'])
+        >>> Point = namedtuple("Point", ["x", "y"])
         >>> point = Point(1.0, 2.0)
-        >>> checker = attrchecker('x')
+        >>> checker = attrchecker("x")
         >>> checker(point)
         True
 
-        >>> checker = attrchecker('x', 'y')
+        >>> checker = attrchecker("x", "y")
         >>> checker(point)
         True
 
-        >>> checker = attrchecker('z')
+        >>> checker = attrchecker("z")
         >>> checker(point)
         False
 
@@ -144,19 +147,19 @@ def attrgetter_(*names: str, default: Any = NOTHING) -> Callable[[Any], Any]:
 
     Examples:
         >>> from collections import namedtuple
-        >>> Point = namedtuple('Point', ['x', 'y'])
+        >>> Point = namedtuple("Point", ["x", "y"])
         >>> point = Point(1.0, 2.0)
-        >>> getter = attrgetter_('x')
+        >>> getter = attrgetter_("x")
         >>> getter(point)
         1.0
 
         >>> import math
-        >>> getter = attrgetter_('z', default=math.nan)
+        >>> getter = attrgetter_("z", default=math.nan)
         >>> getter(point)
         nan
 
         >>> import math
-        >>> getter = attrgetter_('x', 'y', 'z', default=math.nan)
+        >>> getter = attrgetter_("x", "y", "z", default=math.nan)
         >>> getter(point)
         (1.0, 2.0, nan)
 
@@ -187,12 +190,12 @@ def getitem_(obj: Any, key: Any, default: Any = NOTHING) -> Any:
     Similar to :func:`operator.getitem()` but accepts a default value.
 
     Examples:
-        >>> d = {'a': 1}
-        >>> getitem_(d, 'a')
+        >>> d = {"a": 1}
+        >>> getitem_(d, "a")
         1
 
-        >>> d = {'a': 1}
-        >>> getitem_(d, 'b', 'default')
+        >>> d = {"a": 1}
+        >>> getitem_(d, "b", "default")
         'default'
 
     """
@@ -213,13 +216,13 @@ def itemgetter_(key: Any, default: Any = NOTHING) -> Callable[[Any], Any]:
     Similar to :func:`operator.itemgetter()` but accepts a default value.
 
     Examples:
-        >>> d = {'a': 1}
-        >>> getter = itemgetter_('a')
+        >>> d = {"a": 1}
+        >>> getter = itemgetter_("a")
         >>> getter(d)
         1
 
-        >>> d = {'a': 1}
-        >>> getter = itemgetter_('b', 'default')
+        >>> d = {"a": 1}
+        >>> getter = itemgetter_("b", "default")
         >>> getter(d)
         'default'
 
@@ -228,7 +231,29 @@ def itemgetter_(key: Any, default: Any = NOTHING) -> Callable[[Any], Any]:
 
 
 _P = ParamSpec("_P")
+_S = TypeVar("_S")
 _T = TypeVar("_T")
+
+
+@dataclasses.dataclass(frozen=True)
+class IndexerCallable(Generic[_S, _T]):
+    """
+    An indexer class applying the wrapped function to the index arguments.
+
+    Examples:
+        >>> indexer = IndexerCallable(lambda x: x**2)
+        >>> indexer[3]
+        9
+
+        >>> indexer = IndexerCallable(lambda a, b: a + b)
+        >>> indexer[3, 4]
+        7
+    """
+
+    func: ArgsOnlyCallable[_S, _T]
+
+    def __getitem__(self, key: _S | Tuple[_S, ...]) -> _T:
+        return self.func(*key) if isinstance(key, tuple) else self.func(key)
 
 
 class fluid_partial(functools.partial):
@@ -241,18 +266,16 @@ class fluid_partial(functools.partial):
 @overload
 def with_fluid_partial(
     func: Literal[None] = None, *args: Any, **kwargs: Any
-) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]:
-    ...
+) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]: ...
 
 
 @overload
-def with_fluid_partial(  # noqa: F811  # redefinition of unused function
+def with_fluid_partial(  # redefinition of unused function
     func: Callable[_P, _T], *args: Any, **kwargs: Any
-) -> Callable[_P, _T]:
-    ...
+) -> Callable[_P, _T]: ...
 
 
-def with_fluid_partial(  # noqa: F811  # redefinition of unused function
+def with_fluid_partial(  # redefinition of unused function
     func: Optional[Callable[..., Any]] = None, *args: Any, **kwargs: Any
 ) -> Union[Callable[..., Any], Callable[[Callable[..., Any]], Callable[..., Any]]]:
     """Add a `partial` attribute to the decorated function.
@@ -271,7 +294,6 @@ def with_fluid_partial(  # noqa: F811  # redefinition of unused function
         >>> @with_fluid_partial
         ... def add(a, b):
         ...     return a + b
-        ...
         >>> add.partial(1)(2)
         3
     """
@@ -286,18 +308,16 @@ def with_fluid_partial(  # noqa: F811  # redefinition of unused function
 @overload
 def optional_lru_cache(
     func: Literal[None] = None, *, maxsize: Optional[int] = 128, typed: bool = False
-) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]:
-    ...
+) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]: ...
 
 
 @overload
-def optional_lru_cache(  # noqa: F811  # redefinition of unused function
+def optional_lru_cache(  # redefinition of unused function
     func: Callable[_P, _T], *, maxsize: Optional[int] = 128, typed: bool = False
-) -> Callable[_P, _T]:
-    ...
+) -> Callable[_P, _T]: ...
 
 
-def optional_lru_cache(  # noqa: F811  # redefinition of unused function
+def optional_lru_cache(  # redefinition of unused function
     func: Optional[Callable[_P, _T]] = None, *, maxsize: Optional[int] = 128, typed: bool = False
 ) -> Union[Callable[_P, _T], Callable[[Callable[_P, _T]], Callable[_P, _T]]]:
     """Wrap :func:`functools.lru_cache` to fall back to the original function if arguments are not hashable.
@@ -307,7 +327,6 @@ def optional_lru_cache(  # noqa: F811  # redefinition of unused function
         ... def func(a, b):
         ...     print(f"Inside func({a}, {b})")
         ...     return a + b
-        ...
         >>> print(func(1, 3))
         Inside func(1, 3)
         4
@@ -350,14 +369,11 @@ def register_subclasses(*subclasses: Type) -> Callable[[Type], Type]:
         >>> import abc
         >>> class MyVirtualSubclassA:
         ...     pass
-        ...
         >>> class MyVirtualSubclassB:
-        ...    pass
-        ...
+        ...     pass
         >>> @register_subclasses(MyVirtualSubclassA, MyVirtualSubclassB)
         ... class MyBaseClass(abc.ABC):
-        ...    pass
-        ...
+        ...     pass
         >>> issubclass(MyVirtualSubclassA, MyBaseClass) and issubclass(MyVirtualSubclassB, MyBaseClass)
         True
 
@@ -411,12 +427,14 @@ def content_hash(*args: Any, hash_algorithm: str | xtyping.HashlibAlgorithm | No
 
     """
     if hash_algorithm is None:
-        hash_algorithm = xxhash.xxh64()  # type: ignore[assignment]
+        hasher = xxhash.xxh64()
     elif isinstance(hash_algorithm, str):
-        hash_algorithm = hashlib.new(hash_algorithm)  # type: ignore[assignment]
+        hasher = hashlib.new(hash_algorithm)
+    else:
+        hasher = hash_algorithm
 
-    hash_algorithm.update(pickle.dumps(args))  # type: ignore[union-attr]
-    result = hash_algorithm.hexdigest()  # type: ignore[union-attr]
+    hasher.update(pickle.dumps(args))
+    result = hasher.hexdigest()
     assert isinstance(result, str)
 
     return result
@@ -438,11 +456,7 @@ def dhash(obj: Any, **kwargs: Any) -> str:
 
 
 def pprint_ddiff(
-    old: Any,
-    new: Any,
-    *,
-    pprint_opts: Optional[Dict[str, Any]] = None,
-    **kwargs: Any,
+    old: Any, new: Any, *, pprint_opts: Optional[Dict[str, Any]] = None, **kwargs: Any
 ) -> None:
     """Pretty printing of deepdiff.DeepDiff objects.
 
@@ -705,7 +719,7 @@ class UIDGenerator:
         if warn_unsafe is None:
             warn_unsafe = self.warn_unsafe
         if warn_unsafe and start < next(self._counter):
-            warnings.warn("Unsafe reset of UIDGenerator ({self})")
+            warnings.warn("Unsafe reset of UIDGenerator ({self})", stacklevel=2)
         self._counter = itertools.count(start)
 
         return self
@@ -753,7 +767,7 @@ class XIterable(Iterable[T]):
     def __iter__(self) -> Iterator[T]:
         return self.iterator
 
-    def map(self, func: Callable) -> XIterable[Any]:  # noqa  # A003: shadowing a python builtin
+    def map(self, func: Callable) -> XIterable[Any]:  # A003: shadowing a python builtin
         """Apply a callable to every iterator element.
 
         Equivalent to ``map(func, self)``.
@@ -793,9 +807,7 @@ class XIterable(Iterable[T]):
             raise ValueError(f"Invalid function or callable: '{func}'.")
         return XIterable(map(func, self.iterator))
 
-    def filter(  # noqa  # A003: shadowing a python builtin
-        self, func: Callable[..., bool]
-    ) -> XIterable[T]:
+    def filter(self, func: Callable[..., bool]) -> XIterable[T]:  # A003: shadowing a python builtin
         """Filter elements with callables.
 
         Equivalent to ``filter(func, self)``.
@@ -826,7 +838,7 @@ class XIterable(Iterable[T]):
         Equivalent to ``xiter(item for item in self if isinstance(item, types))``.
 
         Examples:
-            >>> it = xiter([1, '2', 3.3, [4, 5], {6, 7}])
+            >>> it = xiter([1, "2", 3.3, [4, 5], {6, 7}])
             >>> list(it.if_isinstance(int, float))
             [1, 3.3]
 
@@ -839,7 +851,7 @@ class XIterable(Iterable[T]):
         Equivalent to ``xiter(item for item in self if not isinstance(item, types))``.
 
         Examples:
-            >>> it = xiter([1, '2', 3.3, [4, 5], {6, 7}])
+            >>> it = xiter([1, "2", 3.3, [4, 5], {6, 7}])
             >>> list(it.if_not_isinstance(int, float))
             ['2', [4, 5], {6, 7}]
 
@@ -946,18 +958,18 @@ class XIterable(Iterable[T]):
         Equivalent to ``filter(attrchecker(names), self)``.
 
         Examples:
-            >>> it = xiter([1, '2', 3.3, [4, 5], {6, 7}])
-            >>> list(it.if_hasattr('__len__'))
+            >>> it = xiter([1, "2", 3.3, [4, 5], {6, 7}])
+            >>> list(it.if_hasattr("__len__"))
             ['2', [4, 5], {6, 7}]
 
-            >>> it = xiter([1, '2', 3.3, [4, 5], {6, 7}])
-            >>> list(it.if_hasattr('__len__', 'index'))
+            >>> it = xiter([1, "2", 3.3, [4, 5], {6, 7}])
+            >>> list(it.if_hasattr("__len__", "index"))
             ['2', [4, 5]]
 
         """
         return XIterable(filter(attrchecker(*names), self.iterator))
 
-    def getattr(  # noqa  # A003: shadowing a python builtin
+    def getattr(  # A003: shadowing a python builtin
         self, *names: str, default: Any = NOTHING
     ) -> XIterable[Any]:
         """Get provided attributes from each item in a sequence.
@@ -972,13 +984,13 @@ class XIterable(Iterable[T]):
 
         Examples:
             >>> from collections import namedtuple
-            >>> Point = namedtuple('Point', ['x', 'y'])
+            >>> Point = namedtuple("Point", ["x", "y"])
             >>> it = xiter([Point(1.0, -1.0), Point(2.0, -2.0), Point(3.0, -3.0)])
-            >>> list(it.getattr('y'))
+            >>> list(it.getattr("y"))
             [-1.0, -2.0, -3.0]
 
             >>> it = xiter([Point(1.0, -1.0), Point(2.0, -2.0), Point(3.0, -3.0)])
-            >>> list(it.getattr('x', 'z', default=None))
+            >>> list(it.getattr("x", "z", default=None))
             [(1.0, None), (2.0, None), (3.0, None)]
 
         """
@@ -995,16 +1007,18 @@ class XIterable(Iterable[T]):
 
         For detailed information check :func:`toolz.itertoolz.pluck` reference.
 
-            >>> it = xiter([('a', 1), ('b', 2), ('c', 3)])
+            >>> it = xiter([("a", 1), ("b", 2), ("c", 3)])
             >>> list(it.getitem(0))
             ['a', 'b', 'c']
 
-            >>> it = xiter([
-            ...     dict(name="AA", age=20, country="US"),
-            ...     dict(name="BB", age=30, country="UK"),
-            ...     dict(name="CC", age=40, country="EU"),
-            ...     dict(country="CH")
-            ... ])
+            >>> it = xiter(
+            ...     [
+            ...         dict(name="AA", age=20, country="US"),
+            ...         dict(name="BB", age=30, country="UK"),
+            ...         dict(name="CC", age=40, country="EU"),
+            ...         dict(country="CH"),
+            ...     ]
+            ... )
             >>> list(it.getitem("name", "age", default=None))
             [('AA', 20), ('BB', 30), ('CC', 40), (None, None)]
 
@@ -1027,12 +1041,12 @@ class XIterable(Iterable[T]):
         For detailed information check :func:`itertools.chain` reference.
 
         Examples:
-            >>> it_a, it_b = xiter(range(2)), xiter(['a', 'b'])
+            >>> it_a, it_b = xiter(range(2)), xiter(["a", "b"])
             >>> list(it_a.chain(it_b))
             [0, 1, 'a', 'b']
 
             >>> it_a = xiter(range(2))
-            >>> list(it_a.chain(['a', 'b'], ['A', 'B']))
+            >>> list(it_a.chain(["a", "b"], ["A", "B"]))
             [0, 1, 'a', 'b', 'A', 'B']
 
         """
@@ -1040,10 +1054,7 @@ class XIterable(Iterable[T]):
         return XIterable(itertools.chain(self.iterator, *iterators))
 
     def diff(
-        self,
-        *others: Iterable,
-        default: Any = NOTHING,
-        key: Union[NOTHING, Callable] = NOTHING,
+        self, *others: Iterable, default: Any = NOTHING, key: Union[NOTHING, Callable] = NOTHING
     ) -> XIterable[Tuple[T, S]]:
         """Diff iterators.
 
@@ -1096,7 +1107,7 @@ class XIterable(Iterable[T]):
         For detailed information check :func:`itertools.product` reference.
 
         Examples:
-            >>> it_a, it_b = xiter([0, 1]), xiter(['a', 'b'])
+            >>> it_a, it_b = xiter([0, 1]), xiter(["a", "b"])
             >>> list(it_a.product(it_b))
             [(0, 'a'), (0, 'b'), (1, 'a'), (1, 'b')]
 
@@ -1179,7 +1190,7 @@ class XIterable(Iterable[T]):
             raise ValueError(f"Only positive integer numbers are accepted (provided: {n}).")
         return XIterable(toolz.itertoolz.take_nth(n, self.iterator))
 
-    def zip(  # noqa  # A003: shadowing a python builtin
+    def zip(  # A003: shadowing a python builtin
         self, *others: Iterable, fill: Any = NOTHING
     ) -> XIterable[Tuple[T, S]]:
         """Zip iterators.
@@ -1193,16 +1204,16 @@ class XIterable(Iterable[T]):
 
         Examples:
             >>> it_a = xiter(range(3))
-            >>> it_b = ['a', 'b', 'c']
+            >>> it_b = ["a", "b", "c"]
             >>> list(it_a.zip(it_b))
             [(0, 'a'), (1, 'b'), (2, 'c')]
 
             >>> it = xiter(range(3))
-            >>> list(it.zip(['a', 'b', 'c'], ['A', 'B', 'C']))
+            >>> list(it.zip(["a", "b", "c"], ["A", "B", "C"]))
             [(0, 'a', 'A'), (1, 'b', 'B'), (2, 'c', 'C')]
 
             >>> it = xiter(range(5))
-            >>> list(it.zip(['a', 'b', 'c'], ['A', 'B', 'C'], fill=None))
+            >>> list(it.zip(["a", "b", "c"], ["A", "B", "C"], fill=None))
             [(0, 'a', 'A'), (1, 'b', 'B'), (2, 'c', 'C'), (3, None, None), (4, None, None)]
 
         """
@@ -1220,7 +1231,7 @@ class XIterable(Iterable[T]):
         For detailed information check :func:`zip` reference.
 
         Examples:
-            >>> it = xiter([('a', 1), ('b', 2), ('c', 3)])
+            >>> it = xiter([("a", 1), ("b", 2), ("c", 3)])
             >>> list(it.unzip())
             [('a', 'b', 'c'), (1, 2, 3)]
 
@@ -1228,12 +1239,10 @@ class XIterable(Iterable[T]):
         return XIterable(zip(*self.iterator))
 
     @typing.overload
-    def islice(self, __stop: int) -> XIterable[T]:
-        ...
+    def islice(self, __stop: int) -> XIterable[T]: ...
 
     @typing.overload
-    def islice(self, __start: int, __stop: int, __step: int = 1) -> XIterable[T]:
-        ...
+    def islice(self, __start: int, __stop: int, __step: int = 1) -> XIterable[T]: ...
 
     def islice(
         self,
@@ -1302,7 +1311,7 @@ class XIterable(Iterable[T]):
             >>> list(it.unique())
             [1, 2, 3]
 
-            >>> it = xiter(['cat', 'mouse', 'dog', 'hen'])
+            >>> it = xiter(["cat", "mouse", "dog", "hen"])
             >>> list(it.unique(key=len))
             ['cat', 'mouse']
 
@@ -1315,24 +1324,20 @@ class XIterable(Iterable[T]):
     @typing.overload
     def groupby(
         self, key: str, *other_keys: str, as_dict: bool = False
-    ) -> XIterable[Tuple[Any, List[T]]]:
-        ...
+    ) -> XIterable[Tuple[Any, List[T]]]: ...
 
     @typing.overload
-    def groupby(self, key: List[Any], *, as_dict: bool = False) -> XIterable[Tuple[Any, List[T]]]:
-        ...
+    def groupby(
+        self, key: List[Any], *, as_dict: bool = False
+    ) -> XIterable[Tuple[Any, List[T]]]: ...
 
     @typing.overload
     def groupby(
         self, key: Callable[[T], Any], *, as_dict: bool = False
-    ) -> XIterable[Tuple[Any, List[T]]]:
-        ...
+    ) -> XIterable[Tuple[Any, List[T]]]: ...
 
     def groupby(
-        self,
-        key: Union[str, List[Any], Callable[[T], Any]],
-        *attr_keys: str,
-        as_dict: bool = False,
+        self, key: Union[str, List[Any], Callable[[T], Any]], *attr_keys: str, as_dict: bool = False
     ) -> Union[XIterable[Tuple[Any, List[T]]], Dict]:
         """Group a sequence by a given key.
 
@@ -1354,29 +1359,29 @@ class XIterable(Iterable[T]):
         For detailed information check :func:`toolz.itertoolz.groupby` reference.
 
         Examples:
-            >>> it = xiter([(1.0, -1.0), (1.0,-2.0), (2.2, -3.0)])
+            >>> it = xiter([(1.0, -1.0), (1.0, -2.0), (2.2, -3.0)])
             >>> list(it.groupby([0]))
             [(1.0, [(1.0, -1.0), (1.0, -2.0)]), (2.2, [(2.2, -3.0)])]
 
             >>> data = [
-            ...     {'x': 1.0, 'y': -1.0, 'z': 1.0},
-            ...     {'x': 1.0, 'y': -2.0, 'z': 1.0},
-            ...     {'x': 2.2, 'y': -3.0, 'z': 2.2}
+            ...     {"x": 1.0, "y": -1.0, "z": 1.0},
+            ...     {"x": 1.0, "y": -2.0, "z": 1.0},
+            ...     {"x": 2.2, "y": -3.0, "z": 2.2},
             ... ]
-            >>> list(xiter(data).groupby(['x']))
+            >>> list(xiter(data).groupby(["x"]))
             [(1.0, [{'x': 1.0, 'y': -1.0, 'z': 1.0}, {'x': 1.0, 'y': -2.0, 'z': 1.0}]), (2.2, [{'x': 2.2, 'y': -3.0, 'z': 2.2}])]
-            >>> list(xiter(data).groupby(['x', 'z']))
+            >>> list(xiter(data).groupby(["x", "z"]))
             [((1.0, 1.0), [{'x': 1.0, 'y': -1.0, 'z': 1.0}, {'x': 1.0, 'y': -2.0, 'z': 1.0}]), ((2.2, 2.2), [{'x': 2.2, 'y': -3.0, 'z': 2.2}])]
 
             >>> from collections import namedtuple
-            >>> Point = namedtuple('Point', ['x', 'y', 'z'])
+            >>> Point = namedtuple("Point", ["x", "y", "z"])
             >>> data = [Point(1.0, -2.0, 1.0), Point(1.0, -2.0, 1.0), Point(2.2, 3.0, 2.0)]
-            >>> list(xiter(data).groupby('x'))
+            >>> list(xiter(data).groupby("x"))
             [(1.0, [Point(x=1.0, y=-2.0, z=1.0), Point(x=1.0, y=-2.0, z=1.0)]), (2.2, [Point(x=2.2, y=3.0, z=2.0)])]
-            >>> list(xiter(data).groupby('x', 'z'))
+            >>> list(xiter(data).groupby("x", "z"))
             [((1.0, 1.0), [Point(x=1.0, y=-2.0, z=1.0), Point(x=1.0, y=-2.0, z=1.0)]), ((2.2, 2.0), [Point(x=2.2, y=3.0, z=2.0)])]
 
-            >>> it = xiter(['Alice', 'Bob', 'Charlie', 'Dan', 'Edith', 'Frank'])
+            >>> it = xiter(["Alice", "Bob", "Charlie", "Dan", "Edith", "Frank"])
             >>> list(it.groupby(len))
             [(5, ['Alice', 'Edith', 'Frank']), (3, ['Bob', 'Dan']), (7, ['Charlie'])]
 
@@ -1439,8 +1444,12 @@ class XIterable(Iterable[T]):
             >>> it.reduce((lambda accu, i: accu + i), init=0)
             10
 
-            >>> it = xiter(['a', 'b', 'c', 'd', 'e'])
-            >>> sorted(it.reduce((lambda accu, item: (accu or set()) | {item} if item in 'aeiou' else accu)))
+            >>> it = xiter(["a", "b", "c", "d", "e"])
+            >>> sorted(
+            ...     it.reduce(
+            ...         (lambda accu, item: (accu or set()) | {item} if item in "aeiou" else accu)
+            ...     )
+            ... )
             ['a', 'e']
 
         """
@@ -1454,8 +1463,7 @@ class XIterable(Iterable[T]):
         *,
         as_dict: Literal[False],
         init: Union[S, NothingType],
-    ) -> XIterable[Tuple[str, S]]:
-        ...
+    ) -> XIterable[Tuple[str, S]]: ...
 
     @typing.overload
     def reduceby(
@@ -1466,8 +1474,7 @@ class XIterable(Iterable[T]):
         *attr_keys: str,
         as_dict: Literal[False],
         init: Union[S, NothingType],
-    ) -> XIterable[Tuple[Tuple[str, ...], S]]:
-        ...
+    ) -> XIterable[Tuple[Tuple[str, ...], S]]: ...
 
     @typing.overload
     def reduceby(
@@ -1477,8 +1484,7 @@ class XIterable(Iterable[T]):
         *,
         as_dict: Literal[True],
         init: Union[S, NothingType],
-    ) -> Dict[str, S]:
-        ...
+    ) -> Dict[str, S]: ...
 
     @typing.overload
     def reduceby(
@@ -1489,8 +1495,7 @@ class XIterable(Iterable[T]):
         *attr_keys: str,
         as_dict: Literal[True],
         init: Union[S, NothingType],
-    ) -> Dict[Tuple[str, ...], S]:
-        ...
+    ) -> Dict[Tuple[str, ...], S]: ...
 
     @typing.overload
     def reduceby(
@@ -1500,8 +1505,7 @@ class XIterable(Iterable[T]):
         *,
         as_dict: Literal[False],
         init: Union[S, NothingType],
-    ) -> XIterable[Tuple[K, S]]:
-        ...
+    ) -> XIterable[Tuple[K, S]]: ...
 
     @typing.overload
     def reduceby(
@@ -1511,8 +1515,7 @@ class XIterable(Iterable[T]):
         *,
         as_dict: Literal[True],
         init: Union[S, NothingType],
-    ) -> Dict[K, S]:
-        ...
+    ) -> Dict[K, S]: ...
 
     @typing.overload
     def reduceby(
@@ -1522,8 +1525,7 @@ class XIterable(Iterable[T]):
         *,
         as_dict: Literal[False],
         init: Union[S, NothingType],
-    ) -> XIterable[Tuple[K, S]]:
-        ...
+    ) -> XIterable[Tuple[K, S]]: ...
 
     @typing.overload
     def reduceby(
@@ -1533,8 +1535,7 @@ class XIterable(Iterable[T]):
         *,
         as_dict: Literal[True],
         init: Union[S, NothingType],
-    ) -> Dict[K, S]:
-        ...
+    ) -> Dict[K, S]: ...
 
     def reduceby(
         self,
@@ -1573,33 +1574,37 @@ class XIterable(Iterable[T]):
         For detailed information check :func:`toolz.itertoolz.reduceby` reference.
 
         Examples:
-            >>> it = xiter([(1.0, -1.0), (1.0,-2.0), (2.2, -3.0)])
+            >>> it = xiter([(1.0, -1.0), (1.0, -2.0), (2.2, -3.0)])
             >>> list(it.reduceby((lambda accu, _: accu + 1), [0], init=0))
             [(1.0, 2), (2.2, 1)]
 
             >>> data = [
-            ...     {'x': 1.0, 'y': -1.0, 'z': 1.0},
-            ...     {'x': 1.0, 'y': -2.0, 'z': 1.0},
-            ...     {'x': 2.2, 'y': -3.0, 'z': 2.2}
+            ...     {"x": 1.0, "y": -1.0, "z": 1.0},
+            ...     {"x": 1.0, "y": -2.0, "z": 1.0},
+            ...     {"x": 2.2, "y": -3.0, "z": 2.2},
             ... ]
-            >>> list(xiter(data).reduceby((lambda accu, _: accu + 1), ['x'], init=0))
+            >>> list(xiter(data).reduceby((lambda accu, _: accu + 1), ["x"], init=0))
             [(1.0, 2), (2.2, 1)]
-            >>> list(xiter(data).reduceby((lambda accu, _: accu + 1), ['x', 'z'], init=0))
+            >>> list(xiter(data).reduceby((lambda accu, _: accu + 1), ["x", "z"], init=0))
             [((1.0, 1.0), 2), ((2.2, 2.2), 1)]
 
             >>> from collections import namedtuple
-            >>> Point = namedtuple('Point', ['x', 'y', 'z'])
+            >>> Point = namedtuple("Point", ["x", "y", "z"])
             >>> data = [Point(1.0, -2.0, 1.0), Point(1.0, -2.0, 1.0), Point(2.2, 3.0, 2.0)]
-            >>> list(xiter(data).reduceby((lambda accu, _: accu + 1), 'x', init=0))
+            >>> list(xiter(data).reduceby((lambda accu, _: accu + 1), "x", init=0))
             [(1.0, 2), (2.2, 1)]
-            >>> list(xiter(data).reduceby((lambda accu, _: accu + 1), 'x', 'z', init=0))
+            >>> list(xiter(data).reduceby((lambda accu, _: accu + 1), "x", "z", init=0))
             [((1.0, 1.0), 2), ((2.2, 2.0), 1)]
 
-            >>> it = xiter(['Alice', 'Bob', 'Charlie', 'Dan', 'Edith', 'Frank'])
-            >>> list(it.reduceby(lambda nvowels, name: nvowels + sum(i in 'aeiou' for i in name), len, init=0))
+            >>> it = xiter(["Alice", "Bob", "Charlie", "Dan", "Edith", "Frank"])
+            >>> list(
+            ...     it.reduceby(
+            ...         lambda nvowels, name: nvowels + sum(i in "aeiou" for i in name), len, init=0
+            ...     )
+            ... )
             [(5, 4), (3, 2), (7, 3)]
 
-        """  # noqa: RST203, RST301  # sphinx.napoleon conventions confuse RST validator
+        """  # sphinx.napoleon conventions confuse RST validator
         if (not callable(key) and not isinstance(key, (int, str, list))) or not all(
             isinstance(i, str) for i in attr_keys
         ):

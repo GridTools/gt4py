@@ -1,16 +1,11 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 # TODO(tehrengruber): The style of the tests in this file is not optimal as a single change in the
 #  lowering can (and often does) make all of them fail. Once we have embedded field view we want to
 #  switch to executing the different cases here; once with a regular backend (i.e. including
@@ -32,6 +27,7 @@ from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_specifications as ts, type_translation
+from gt4py.next.iterator.type_system import type_specifications as it_ts
 
 
 IDim = gtx.Dimension("IDim")
@@ -85,7 +81,7 @@ def test_multicopy():
     parsed = FieldOperatorParser.apply_to_function(multicopy)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.promote_to_lifted_stencil("make_tuple")("inp1", "inp2")
+    reference = im.make_tuple("inp1", "inp2")
 
     assert lowered.expr == reference
 
@@ -140,15 +136,13 @@ def test_temp_assignment():
     parsed = FieldOperatorParser.apply_to_function(copy_field)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.let(
-        itir.Sym(id=ssa.unique_name("tmp", 0), dtype=("float64", False), kind="Iterator"), "inp"
-    )(
+    reference = im.let(ssa.unique_name("tmp", 0), "inp")(
         im.let(
-            itir.Sym(id=ssa.unique_name("inp", 0), dtype=("float64", False), kind="Iterator"),
+            ssa.unique_name("inp", 0),
             ssa.unique_name("tmp", 0),
         )(
             im.let(
-                itir.Sym(id=ssa.unique_name("tmp2", 0), dtype=("float64", False), kind="Iterator"),
+                ssa.unique_name("tmp2", 0),
                 ssa.unique_name("inp", 0),
             )(ssa.unique_name("tmp2", 0))
         )
@@ -167,18 +161,34 @@ def test_unary_ops():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.let(
-        itir.Sym(id=ssa.unique_name("tmp", 0), dtype=("float64", False), kind="Iterator"),
+        ssa.unique_name("tmp", 0),
         im.promote_to_lifted_stencil("plus")(
             im.promote_to_const_iterator(im.literal("0", "float64")), "inp"
         ),
     )(
         im.let(
-            itir.Sym(id=ssa.unique_name("tmp", 1), dtype=("float64", False), kind="Iterator"),
+            ssa.unique_name("tmp", 1),
             im.promote_to_lifted_stencil("minus")(
                 im.promote_to_const_iterator(im.literal("0", "float64")), ssa.unique_name("tmp", 0)
             ),
         )(ssa.unique_name("tmp", 1))
     )
+
+    assert lowered.expr == reference
+
+
+@pytest.mark.parametrize("var, var_type", [("-1.0", "float64"), ("True", "bool")])
+def test_unary_op_type_conversion(var, var_type):
+    def unary_float():
+        return float(-1)
+
+    def unary_bool():
+        return bool(-1)
+
+    fun = unary_bool if var_type == "bool" else unary_float
+    parsed = FieldOperatorParser.apply_to_function(fun)
+    lowered = FieldOperatorLowering.apply(parsed)
+    reference = im.promote_to_const_iterator(im.literal(var, var_type))
 
     assert lowered.expr == reference
 
@@ -195,17 +205,17 @@ def test_unpacking():
     parsed = FieldOperatorParser.apply_to_function(unpacking)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    tuple_expr = im.promote_to_lifted_stencil("make_tuple")("inp1", "inp2")
-    tuple_access_0 = im.promote_to_lifted_stencil(lambda x: im.tuple_get(0, x))("__tuple_tmp_0")
-    tuple_access_1 = im.promote_to_lifted_stencil(lambda x: im.tuple_get(1, x))("__tuple_tmp_0")
+    tuple_expr = im.make_tuple("inp1", "inp2")
+    tuple_access_0 = im.tuple_get(0, "__tuple_tmp_0")
+    tuple_access_1 = im.tuple_get(1, "__tuple_tmp_0")
 
     reference = im.let("__tuple_tmp_0", tuple_expr)(
         im.let(
-            itir.Sym(id=ssa.unique_name("tmp1", 0), dtype=("float64", False), kind="Iterator"),
+            ssa.unique_name("tmp1", 0),
             tuple_access_0,
         )(
             im.let(
-                itir.Sym(id=ssa.unique_name("tmp2", 0), dtype=("float64", False), kind="Iterator"),
+                ssa.unique_name("tmp2", 0),
                 tuple_access_1,
             )(ssa.unique_name("tmp1", 0))
         )
@@ -248,7 +258,7 @@ def test_call():
     parsed = FieldOperatorParser.apply_to_function(call)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.lift(im.lambda_("__arg0")(im.call("identity")("__arg0")))("inp")
+    reference = im.call("identity")("inp")
 
     assert lowered.expr == reference
 
@@ -263,7 +273,7 @@ def test_temp_tuple():
     parsed = FieldOperatorParser.apply_to_function(temp_tuple)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    tuple_expr = im.promote_to_lifted_stencil("make_tuple")("a", "b")
+    tuple_expr = im.make_tuple("a", "b")
     reference = im.let(ssa.unique_name("tmp", 0), tuple_expr)(ssa.unique_name("tmp", 0))
 
     assert lowered.expr == reference
@@ -480,11 +490,9 @@ def test_reduction_lowering_simple():
             im.call("reduce")(
                 "plus",
                 im.deref(im.promote_to_const_iterator(im.literal(value="0", typename="float64"))),
-            ),
+            )
         )
-    )(
-        im.lifted_neighbors("V2E", "edge_f"),
-    )
+    )(im.lifted_neighbors("V2E", "edge_f"))
 
     assert lowered.expr == reference
 
@@ -505,7 +513,7 @@ def test_reduction_lowering_expr():
     )
 
     reference = im.let(
-        itir.Sym(id=ssa.unique_name("e1_nbh", 0), dtype=("float64", True), kind="Iterator"),
+        ssa.unique_name("e1_nbh", 0),
         im.lifted_neighbors("V2E", "e1"),
     )(
         im.promote_to_lifted_stencil(
@@ -515,32 +523,22 @@ def test_reduction_lowering_expr():
                     im.deref(
                         im.promote_to_const_iterator(im.literal(value="0", typename="float64"))
                     ),
-                ),
+                )
             )
-        )(
-            mapped,
-        )
+        )(mapped)
     )
 
     assert lowered.expr == reference
 
 
 def test_builtin_int_constructors():
-    def int_constrs() -> (
-        tuple[
-            int32,
-            int32,
-            int64,
-            int32,
-            int64,
-        ]
-    ):
+    def int_constrs() -> tuple[int32, int32, int64, int32, int64]:
         return 1, int32(1), int64(1), int32("1"), int64("1")
 
     parsed = FieldOperatorParser.apply_to_function(int_constrs)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.promote_to_lifted_stencil("make_tuple")(
+    reference = im.make_tuple(
         im.promote_to_const_iterator(im.literal("1", "int32")),
         im.promote_to_const_iterator(im.literal("1", "int32")),
         im.promote_to_const_iterator(im.literal("1", "int64")),
@@ -552,17 +550,7 @@ def test_builtin_int_constructors():
 
 
 def test_builtin_float_constructors():
-    def float_constrs() -> (
-        tuple[
-            float,
-            float,
-            float32,
-            float64,
-            float,
-            float32,
-            float64,
-        ]
-    ):
+    def float_constrs() -> tuple[float, float, float32, float64, float, float32, float64]:
         return (
             0.1,
             float(0.1),
@@ -576,14 +564,14 @@ def test_builtin_float_constructors():
     parsed = FieldOperatorParser.apply_to_function(float_constrs)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.promote_to_lifted_stencil("make_tuple")(
+    reference = im.make_tuple(
         im.promote_to_const_iterator(im.literal("0.1", "float64")),
         im.promote_to_const_iterator(im.literal("0.1", "float64")),
         im.promote_to_const_iterator(im.literal("0.1", "float32")),
         im.promote_to_const_iterator(im.literal("0.1", "float64")),
-        im.promote_to_const_iterator(im.literal(".1", "float64")),
-        im.promote_to_const_iterator(im.literal(".1", "float32")),
-        im.promote_to_const_iterator(im.literal(".1", "float64")),
+        im.promote_to_const_iterator(im.literal("0.1", "float64")),
+        im.promote_to_const_iterator(im.literal("0.1", "float32")),
+        im.promote_to_const_iterator(im.literal("0.1", "float64")),
     )
 
     assert lowered.expr == reference
@@ -596,7 +584,7 @@ def test_builtin_bool_constructors():
     parsed = FieldOperatorParser.apply_to_function(bool_constrs)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.promote_to_lifted_stencil("make_tuple")(
+    reference = im.make_tuple(
         im.promote_to_const_iterator(im.literal(str(True), "bool")),
         im.promote_to_const_iterator(im.literal(str(False), "bool")),
         im.promote_to_const_iterator(im.literal(str(True), "bool")),

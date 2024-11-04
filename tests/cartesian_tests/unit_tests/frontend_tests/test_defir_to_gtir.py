@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import numpy as np
 import pytest
@@ -28,7 +22,7 @@ from gt4py.cartesian.frontend.nodes import (
 )
 from gt4py.cartesian.gtc import common, gtir
 
-from cartesian_tests.unit_tests.frontend_tests.defir_to_gtir_definition_setup import (  # noqa: F401
+from cartesian_tests.unit_tests.frontend_tests.defir_to_gtir_definition_setup import (  # noqa: F401 [unused-import]
     BlockStmt,
     IterationOrder,
     TAssign,
@@ -45,13 +39,14 @@ def defir_to_gtir():
 
 
 def test_stencil_definition(
-    defir_to_gtir, ijk_domain  # noqa: F811 [redefinition, reason: fixture]
+    defir_to_gtir,
+    ijk_domain,  # [redefinition, reason: fixture]
 ):
     stencil_definition = (
         TDefinition(name="definition", domain=ijk_domain, fields=["a", "b"])
         .add_blocks(
             TComputationBlock(order=IterationOrder.PARALLEL).add_statements(
-                TAssign("a", "b", (0, 0, 0)),
+                TAssign("a", "b", (0, 0, 0))
             )
         )
         .build()

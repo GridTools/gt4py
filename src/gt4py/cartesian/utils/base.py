@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """Basic utilities for Python programming."""
 
@@ -38,10 +32,6 @@ def slugify(value: str, *, replace_spaces=True, valid_symbols="-_.()", invalid_m
     if replace_spaces:
         slug = slug.replace(" ", "_")
     return slug
-
-
-# def stringify(value):
-#     pass
 
 
 def jsonify(value, indent=2):
@@ -197,7 +187,7 @@ def shashed_id(*args, length=10, hash_algorithm=None):
     return shash(*args, hash_algorithm=hash_algorithm)[:length]
 
 
-def classmethod_to_function(class_method, instance=None, owner=type(None), remove_cls_arg=False):
+def classmethod_to_function(class_method, instance=None, owner=None, remove_cls_arg=False):
     if remove_cls_arg:
         return functools.partial(class_method.__get__(instance, owner), None)
     else:

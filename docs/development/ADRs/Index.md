@@ -38,7 +38,7 @@ _None_
 
 ### Transformations
 
-_None_
+- [0018 - Canonical Form of an SDFG in GT4Py (Especially for Optimizations)](0018-Canonical_SDFG_in_GT4Py_Transformations.md)
 
 ### Backends and Code Generation
 
@@ -46,6 +46,8 @@ _None_
 - [0007 - Fencil Processors](0007-Fencil-Processors.md)
 - [0008 - Mapping Domain to Cpp Backend](0008-Mapping_Domain_to_Cpp-Backend.md)
 - [0016 - Multiple Backends and Build Systems](0016-Multiple-Backends-and-Build-Systems.md)
+- [0017 - Toolchain Configuration](0017-Toolchain-Configuration.md)
+- [0018 - Canonical Form of an SDFG in GT4Py (Especially for Optimizations)](0018-Canonical_SDFG_in_GT4Py_Transformations.md)
 
 ### Python Integration
 
