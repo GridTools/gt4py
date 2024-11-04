@@ -86,16 +86,12 @@ def test_write_map_neighbors_and_const_list():
 
 
 def test_write_map_conditional_neighbors_and_const_list():
-    pytest.xfail(
-        "In the current implementation the type for the temporary field is different for `make_const_list` and `neighbors`."
-    )
-
     def testee(inp, mask):
         domain = runtime.UnstructuredDomain({E: range(2)})
         return as_fieldop(lambda m, x, y: map_(if_)(deref(m), deref(x), deref(y)), domain)(
-            mask,
+            as_fieldop(lambda it: make_const_list(deref(it)), domain)(mask),
             as_fieldop(lambda it: neighbors(E2V, it), domain)(inp),
-            as_fieldop(lambda: make_const_list(42.0), domain)(),
+            as_fieldop(lambda it: make_const_list(deref(it)), domain)(42.0),
         )
 
     inp = gtx.as_field([V], np.arange(3))
