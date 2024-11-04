@@ -280,7 +280,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         elif isinstance(gt_type, ts.ScalarType):
             dc_dtype = dace_utils.as_dace_type(gt_type)
-            if name in symbolic_arguments:
+            if dace_utils.is_field_symbol(name) or name in symbolic_arguments:
                 if name in sdfg.symbols:
                     # Sometimes, when the field domain is implicitly derived from the
                     # field domain, the gt4py lowering adds the field size as a scalar
