@@ -97,7 +97,7 @@ def _get_shape_args(
                     # TODO(edopao): This case is only hit if all fields in a tuple have the same dims and sizes.
                     raise ValueError(
                         f"Expected array size {sym.name} for arg {name} to be {shape_args[sym.name]}, got {size}."
-                    )                    
+                    )
             elif sym != size:
                 raise ValueError(
                     f"Expected shape {arrays[name].shape} for arg {name}, got {value.shape}."
