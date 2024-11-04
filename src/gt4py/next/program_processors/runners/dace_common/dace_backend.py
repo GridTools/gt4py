@@ -32,7 +32,7 @@ def _convert_arg(arg: Any, sdfg_param: str, use_field_canonical_representation: 
         # Note that 'ndarray.item()' always transforms the numpy scalar to a python scalar,
         # which may change its precision. To avoid this, we use here the empty tuple as index
         # for 'ndarray.__getitem__()'.
-        return arg.ndarray[()]
+        return arg.asnumpy()[()]
     # field domain offsets are not supported
     non_zero_offsets = [
         (dim, dim_range)
@@ -165,12 +165,9 @@ def get_sdfg_args(
         sdfg:               The SDFG for which we want to get the arguments.
     """
     offset_provider = kwargs["offset_provider"]
-    xp = cp if on_gpu else np
 
     dace_args = _get_args(sdfg, args, use_field_canonical_representation)
-    dace_field_args = {
-        n: v for n, v in dace_args.items() if (not xp.isscalar(v)) and (len(v.shape) != 0)
-    }
+    dace_field_args = {n: v for n, v in dace_args.items() if not np.isscalar(v)}
     dace_conn_args = get_sdfg_conn_args(sdfg, offset_provider, on_gpu)
     dace_shapes = _get_shape_args(sdfg.arrays, dace_field_args)
     dace_conn_shapes = _get_shape_args(sdfg.arrays, dace_conn_args)
