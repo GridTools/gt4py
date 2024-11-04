@@ -18,6 +18,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 )
 
 
+@pytest.mark.requires_gtir_dace_gpu_fix
 @pytest.mark.uses_cartesian_shift
 def test_where_k_offset(cartesian_case):
     @gtx.field_operator

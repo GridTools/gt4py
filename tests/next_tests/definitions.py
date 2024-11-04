@@ -87,6 +87,8 @@ class ProgramFormatterId(_PythonObjectIdMixin, str, enum.Enum):
 # to avoid needing to mark all tests.
 ALL = "all"
 REQUIRES_ATLAS = "requires_atlas"
+# TODO(edopao): Remove, once issues are fixed
+REQUIRES_GTIR_DACE_GPU_FIX = "requires_gtir_dace_gpu_fix"
 # TODO(havogt): Remove, skipped during refactoring to GTIR
 STARTS_FROM_GTIR_PROGRAM = "starts_from_gtir_program"
 USES_APPLIED_SHIFTS = "uses_applied_shifts"
@@ -181,7 +183,8 @@ BACKEND_SKIP_TEST_MATRIX = {
     OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.GTIR_DACE_CPU: GTIR_DACE_SKIP_TEST_LIST,
-    OptionalProgramBackendId.GTIR_DACE_GPU: GTIR_DACE_SKIP_TEST_LIST,
+    OptionalProgramBackendId.GTIR_DACE_GPU: GTIR_DACE_SKIP_TEST_LIST
+    + [(REQUIRES_GTIR_DACE_GPU_FIX, XFAIL, UNSUPPORTED_MESSAGE)],
     ProgramBackendId.GTFN_CPU: GTFN_SKIP_TEST_LIST
     + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
     ProgramBackendId.GTFN_CPU_IMPERATIVE: GTFN_SKIP_TEST_LIST
