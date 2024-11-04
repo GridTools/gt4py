@@ -131,7 +131,9 @@ def test_gtfn_file_cache(fencil_example):
         gpu=False, cached=True, otf_workflow__cached_translation=False
     ).executor.step.translation
 
-    cached_gtfn_translation_step  # run cached translation step once to populate cache
+    cached_gtfn_translation_step(
+        compilable_program
+    )  # run cached translation step once to populate cache
     assert bare_gtfn_translation_step(compilable_program) == cached_gtfn_translation_step(
         compilable_program
     )
