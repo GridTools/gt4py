@@ -88,10 +88,15 @@ def _get_shape_args(
     for name, value in args.items():
         for sym, size in zip(arrays[name].shape, value.shape, strict=True):
             if isinstance(sym, dace.symbol):
-                assert sym.name not in shape_args
-                shape_args[sym.name] = size
+                if sym.name not in shape_args:
+                    shape_args[sym.name] = size
+                elif shape_args[sym.name] != size:
+                    # TODO(edopao): This case is only hit if all fields in a tuple have the same dims and sizes.
+                    raise ValueError(
+                        f"Expected array size {sym.name} for arg {name} to be {shape_args[sym.name]}, got {size}."
+                    )
             elif sym != size:
-                raise RuntimeError(
+                raise ValueError(
                     f"Expected shape {arrays[name].shape} for arg {name}, got {value.shape}."
                 )
     return shape_args
@@ -109,10 +114,15 @@ def _get_stride_args(
                     f"Stride ({stride_size} bytes) for argument '{sym}' must be a multiple of item size ({value.itemsize} bytes)."
                 )
             if isinstance(sym, dace.symbol):
-                assert sym.name not in stride_args
-                stride_args[str(sym)] = stride
+                if sym.name not in stride_args:
+                    stride_args[str(sym)] = stride
+                elif stride_args[sym.name] != stride:
+                    # TODO(edopao): This case is only hit if all fields in a tuple have the same dims and sizes.
+                    raise ValueError(
+                        f"Expected array stride {sym.name} for arg {name} to be {stride_args[sym.name]}, got {stride}."
+                    )
             elif sym != stride:
-                raise RuntimeError(
+                raise ValueError(
                     f"Expected stride {arrays[name].strides} for arg {name}, got {value.strides}."
                 )
     return stride_args

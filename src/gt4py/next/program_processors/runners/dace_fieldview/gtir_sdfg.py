@@ -217,6 +217,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         name: str,
         gt_type: ts.DataType,
         transient: bool = True,
+        tuple_name: Optional[str] = None,
     ) -> list[tuple[str, ts.DataType]]:
         """
         Add storage in the SDFG for a given GT4Py data symbol.
@@ -236,6 +237,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             name: Symbol Name to be allocated.
             gt_type: GT4Py symbol type.
             transient: True when the data symbol has to be allocated as internal storage.
+            tuple_name: Must be set for tuple fields in order to use the same array shape and strides symbols.
 
         Returns:
             List of tuples '(data_name, gt_type)' where 'data_name' is the name of
@@ -250,7 +252,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 name, gt_type, flatten=True
             ):
                 tuple_fields.extend(
-                    self._add_storage(sdfg, symbolic_arguments, tname, tsymbol_type, transient)
+                    self._add_storage(
+                        sdfg, symbolic_arguments, tname, tsymbol_type, transient, tuple_name=name
+                    )
                 )
             return tuple_fields
 
@@ -260,9 +264,16 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 return self._add_storage(sdfg, symbolic_arguments, name, gt_type.dtype, transient)
             # handle default case: field with one or more dimensions
             dc_dtype = dace_utils.as_dace_type(gt_type.dtype)
-            # use symbolic shape, which allows to invoke the program with fields of different size;
-            # and symbolic strides, which enables decoupling the memory layout from generated code.
-            sym_shape, sym_strides = self._make_array_shape_and_strides(name, gt_type.dims)
+            if tuple_name is None:
+                # Use symbolic shape, which allows to invoke the program with fields of different size;
+                # and symbolic strides, which enables decoupling the memory layout from generated code.
+                sym_shape, sym_strides = self._make_array_shape_and_strides(name, gt_type.dims)
+            else:
+                # All fields in a tuple must have the same dims and sizes,
+                # therefore we use the same shape and strides symbols based on 'tuple_name'.
+                sym_shape, sym_strides = self._make_array_shape_and_strides(
+                    tuple_name, gt_type.dims
+                )
             sdfg.add_array(name, sym_shape, dc_dtype, strides=sym_strides, transient=transient)
 
             return [(name, gt_type)]
