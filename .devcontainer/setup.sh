@@ -1,6 +1,5 @@
 #!/bin/sh
 
-export PRE_COMMIT_HOME=/workspaces/.caches/pre-commit
 ln -sfn /workspaces/gt4py/.devcontainer/.vscode /workspaces/gt4py/.vscode
 python -m venv .venv
 source .venv/bin/activate
