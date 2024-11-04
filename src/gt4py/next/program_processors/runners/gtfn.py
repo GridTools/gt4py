@@ -120,9 +120,14 @@ def compilation_hash(otf_closure: stages.CompilableProgram) -> int:
 
 
 def generate_stencil_source_hash_function(inp: stages.CompilableProgram) -> str:
+    """
+    Generates a unique hash string for a stencil source program representing
+    the program, sorted offset_provider, and column_axis.
+    """
     program: itir.FencilDefinition | itir.Program = inp.data
     offset_provider: dict[str, Connectivity | Dimension] = inp.args.offset_provider
     column_axis: Optional[common.Dimension] = inp.args.column_axis
+
     program_hash = utils.content_hash(
         (
             program,
@@ -135,6 +140,12 @@ def generate_stencil_source_hash_function(inp: stages.CompilableProgram) -> str:
 
 
 class FileCache(diskcache.Cache):
+    """
+    This class extends `diskcache.Cache` to ensure the cache is closed upon deletion,
+    i.e. it ensures that any resources associated with the cache are properly
+    released when the instance is garbage collected.
+    """
+
     def __del__(self) -> None:
         self.close()
 

@@ -24,6 +24,13 @@ from gt4py.next.otf import arguments, languages, stages, workflow, toolchain
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.program_processors.runners import gtfn
 from gt4py.next.type_system import type_translation
+from next_tests.integration_tests import cases
+
+from next_tests.integration_tests.cases import cartesian_case
+
+from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+    exec_alloc_descriptor,
+)
 
 
 @pytest.fixture
@@ -144,3 +151,25 @@ def test_gtfn_file_cache(fencil_example):
         bare_gtfn_translation_step(compilable_program)
         == cached_gtfn_translation_step.cache[cache_key]
     )
+
+
+def test_gtfn_file_cache_whole_workflow(cartesian_case):
+    if cartesian_case.backend != gtfn.run_gtfn:
+        pytest.skip("Skipping backend.")
+    cartesian_case.backend = gtfn.GTFNBackendFactory(
+        gpu=False, cached=True, otf_workflow__cached_translation=True
+    )
+
+    @gtx.field_operator
+    def testee(a: cases.IJKField) -> cases.IJKField:
+        field_tuple = (a, a)
+        field_0 = field_tuple[0]
+        field_1 = field_tuple[1]
+        return field_0
+
+    # first call: this generates the cache file
+    cases.verify_with_default_data(cartesian_case, testee, ref=lambda a: a)
+    # clearing the OTFCompileWorkflow cache such that the OTFCompileWorkflow step is executed again
+    object.__setattr__(cartesian_case.backend.executor, "cache", {})
+    # second call: the cache file is used
+    cases.verify_with_default_data(cartesian_case, testee, ref=lambda a: a)

@@ -68,28 +68,6 @@ def test_copy(cartesian_case):
     cases.verify_with_default_data(cartesian_case, testee, ref=lambda a: a)
 
 
-def test_gtfn_file_cache(cartesian_case):
-    if cartesian_case.backend != gtfn.run_gtfn:
-        pytest.skip("Skipping backend.")
-    cartesian_case.backend = gtfn.GTFNBackendFactory(
-        gpu=False, cached=True, otf_workflow__cached_translation=True
-    )
-
-    @gtx.field_operator
-    def testee(a: cases.IJKField) -> cases.IJKField:
-        field_tuple = (a, a)
-        field_0 = field_tuple[0]
-        field_1 = field_tuple[1]
-        return field_0
-
-    # first call: this generates the cache file
-    cases.verify_with_default_data(cartesian_case, testee, ref=lambda a: a)
-    # clearing the OTFCompileWorkflow cache such that the OTFCompileWorkflow step is executed again
-    object.__setattr__(cartesian_case.backend.executor, "cache", {})
-    # second call: the cache file is used
-    cases.verify_with_default_data(cartesian_case, testee, ref=lambda a: a)
-
-
 @pytest.mark.uses_tuple_returns
 def test_multicopy(cartesian_case):
     @gtx.field_operator
