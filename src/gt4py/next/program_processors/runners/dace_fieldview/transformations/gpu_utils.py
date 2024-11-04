@@ -24,7 +24,6 @@ from gt4py.next.program_processors.runners.dace_fieldview import (
 
 def gt_gpu_transformation(
     sdfg: dace.SDFG,
-    run_simplify: bool = False,
     try_removing_trivial_maps: bool = True,
     use_gpu_storage: bool = True,
     gpu_block_size: Optional[Sequence[int | str] | str] = None,
@@ -47,7 +46,6 @@ def gt_gpu_transformation(
 
     Args:
         sdfg: The SDFG that should be processed.
-        run_simplify: Run simplify pass after applying GPU transformations.
         try_removing_trivial_maps: Try to get rid of trivial maps by incorporating them.
         use_gpu_storage: Assume that the non global memory is already on the GPU. This
             will avoid the data copy from host to GPU memory.
@@ -85,9 +83,7 @@ def gt_gpu_transformation(
         simplify=False,
     )
     # The documentation recommends to run simplify afterwards
-    # TODO(phimuell): Re-enable simplify after dace is upgraded to v1.0.0
-    if run_simplify:
-        gtx_transformations.gt_simplify(sdfg)
+    gtx_transformations.gt_simplify(sdfg)
 
     if try_removing_trivial_maps:
         # A Tasklet, outside of a Map, that writes into an array on GPU can not work
