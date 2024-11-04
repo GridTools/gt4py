@@ -148,7 +148,7 @@ class NdArrayField(
             raise ValueError(
                 f"'as_scalar' is only valid on 0-dimensional 'Field's, got a {self.domain.ndim}-dimensional 'Field'."
             )
-        return self.ndarray.item()
+        return self.ndarray[()] if self.array_ns == np else cp.asnumpy(self.ndarray)[()]
 
     @property
     def codomain(self) -> type[core_defs.ScalarT]:
