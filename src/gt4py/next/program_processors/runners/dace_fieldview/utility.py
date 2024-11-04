@@ -81,7 +81,7 @@ def replace_invalid_symbols(sdfg: dace.SDFG, ir: gtir.Program) -> gtir.Program:
     the input IR is returned without copying it.
     """
 
-    class ReplaceSymrefs(eve.PreserveLocationVisitor, eve.NodeTranslator):
+    class ReplaceSymbols(eve.PreserveLocationVisitor, eve.NodeTranslator):
         T = TypeVar("T", gtir.Sym, gtir.SymRef)
 
         def _replace_sym(self, node: T, symtable: Dict[str, str]) -> T:
@@ -100,10 +100,10 @@ def replace_invalid_symbols(sdfg: dace.SDFG, ir: gtir.Program) -> gtir.Program:
 
     invalid_symbols_mapping = {
         sym_id: sdfg.temp_data_name()
-        for sym in eve.walk_values(ir).if_isinstance(gtir.SymRef).to_set()
+        for sym in eve.walk_values(ir).if_isinstance(gtir.Sym).to_set()
         if not dace.dtypes.validate_name(sym_id := str(sym.id))
     }
     if len(invalid_symbols_mapping) != 0:
-        return ReplaceSymrefs().visit(ir, symtable=invalid_symbols_mapping)
+        return ReplaceSymbols().visit(ir, symtable=invalid_symbols_mapping)
     else:
         return ir
