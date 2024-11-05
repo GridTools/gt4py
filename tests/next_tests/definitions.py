@@ -43,11 +43,10 @@ class _PythonObjectIdMixin:
 class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
     GTFN_CPU = "gt4py.next.program_processors.runners.gtfn.run_gtfn"
     GTFN_CPU_IMPERATIVE = "gt4py.next.program_processors.runners.gtfn.run_gtfn_imperative"
-    GTFN_CPU_WITH_TEMPORARIES = (
-        "gt4py.next.program_processors.runners.gtfn.run_gtfn_with_temporaries"
-    )
+    GTFN_CPU_NO_TRANSFORMS = "gt4py.next.program_processors.runners.gtfn.run_gtfn_no_transforms"
     GTFN_GPU = "gt4py.next.program_processors.runners.gtfn.run_gtfn_gpu"
     ROUNDTRIP = "gt4py.next.program_processors.runners.roundtrip.default"
+    ROUNDTRIP_NO_TRANSFORMS = "gt4py.next.program_processors.runners.roundtrip.no_transforms"
     GTIR_EMBEDDED = "gt4py.next.program_processors.runners.roundtrip.gtir"
     ROUNDTRIP_WITH_TEMPORARIES = "gt4py.next.program_processors.runners.roundtrip.with_temporaries"
     DOUBLE_ROUNDTRIP = "gt4py.next.program_processors.runners.double_roundtrip.backend"
@@ -127,6 +126,7 @@ REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE = (
 # Common list of feature markers to skip
 COMMON_SKIP_TEST_LIST = [
     (REQUIRES_ATLAS, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
+    (USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE),
     (STARTS_FROM_GTIR_PROGRAM, SKIP, UNSUPPORTED_MESSAGE),
     (USES_APPLIED_SHIFTS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_NEGATIVE_MODULO, XFAIL, UNSUPPORTED_MESSAGE),
@@ -181,12 +181,13 @@ BACKEND_SKIP_TEST_MATRIX = {
     + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
     ProgramBackendId.GTFN_GPU: GTFN_SKIP_TEST_LIST
     + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
-    ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES: GTFN_SKIP_TEST_LIST
-    + [(USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE)],
     ProgramFormatterId.GTFN_CPP_FORMATTER: [
         (USES_REDUCTION_WITH_ONLY_SPARSE_FIELDS, XFAIL, REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE)
     ],
-    ProgramBackendId.ROUNDTRIP: [(USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE)],
+    ProgramBackendId.ROUNDTRIP: [
+        (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),
+        (USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE),
+    ],
     ProgramBackendId.ROUNDTRIP_WITH_TEMPORARIES: [
         (ALL, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),

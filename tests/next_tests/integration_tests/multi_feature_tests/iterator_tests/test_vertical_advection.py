@@ -91,6 +91,10 @@ def fen_solve_tridiag2(i_size, j_size, k_size, a, b, c, d, x):
 @pytest.mark.parametrize("fencil", [fen_solve_tridiag, fen_solve_tridiag2])
 def test_tridiag(fencil, tridiag_reference, program_processor):
     program_processor, validate = program_processor
+
+    if "dace" in program_processor.name:
+        pytest.xfail("Dace ITIR backend doesn't support the IR format used in this test.")
+
     a, b, c, d, x = tridiag_reference
     shape = a.shape
     as_3d_field = gtx.as_field.partial([IDim, JDim, KDim])

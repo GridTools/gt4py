@@ -223,6 +223,7 @@ class Roundtrip(workflow.Workflow[stages.CompilableProgram, stages.CompiledProgr
         return decorated_fencil
 
 
+# TODO(tehrengruber): introduce factory
 default = next_backend.Backend(
     name="roundtrip",
     executor=Roundtrip(
@@ -242,6 +243,12 @@ with_temporaries = next_backend.Backend(
             extract_temporaries=True,
         )
     ),
+    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
+    transforms=next_backend.DEFAULT_TRANSFORMS,
+)
+no_transforms = next_backend.Backend(
+    name="roundtrip",
+    executor=Roundtrip(transforms=lambda o, *, offset_provider: o),
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
     transforms=next_backend.DEFAULT_TRANSFORMS,
 )
