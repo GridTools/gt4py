@@ -141,7 +141,7 @@ def _extract_accessed_domains(
     return typing.cast(ACCESSED_DOMAINS, accessed_domains)
 
 
-def infer_as_fieldop(
+def _infer_as_fieldop(
     applied_fieldop: itir.FunCall,
     target_domain: DOMAIN,
     offset_provider: common.OffsetProvider,
@@ -204,7 +204,7 @@ def infer_as_fieldop(
     return transformed_call, accessed_domains_without_tmp
 
 
-def infer_let(
+def _infer_let(
     let_expr: itir.FunCall,
     input_domain: DOMAIN,
     offset_provider: common.OffsetProvider,
@@ -245,7 +245,7 @@ def infer_let(
     return transformed_call, accessed_domains_outer
 
 
-def infer_make_tuple(
+def _infer_make_tuple(
     expr: itir.Expr,
     domain: DOMAIN,
     offset_provider: common.OffsetProvider,
@@ -274,7 +274,7 @@ def infer_make_tuple(
     return result_expr, actual_domains
 
 
-def infer_tuple_get(
+def _infer_tuple_get(
     expr: itir.Expr,
     domain: DOMAIN,
     offset_provider: common.OffsetProvider,
@@ -295,7 +295,7 @@ def infer_tuple_get(
     return infered_args_expr, actual_domains
 
 
-def infer_if(
+def _infer_if(
     expr: itir.Expr,
     domain: DOMAIN,
     offset_provider: common.OffsetProvider,
@@ -326,15 +326,15 @@ def _infer_expr(
     elif isinstance(expr, itir.Literal):
         return expr, {}
     elif cpm.is_applied_as_fieldop(expr):
-        return infer_as_fieldop(expr, domain, offset_provider, symbolic_domain_sizes)
+        return _infer_as_fieldop(expr, domain, offset_provider, symbolic_domain_sizes)
     elif cpm.is_let(expr):
-        return infer_let(expr, domain, offset_provider, symbolic_domain_sizes)
+        return _infer_let(expr, domain, offset_provider, symbolic_domain_sizes)
     elif cpm.is_call_to(expr, "make_tuple"):
-        return infer_make_tuple(expr, domain, offset_provider, symbolic_domain_sizes)
+        return _infer_make_tuple(expr, domain, offset_provider, symbolic_domain_sizes)
     elif cpm.is_call_to(expr, "tuple_get"):
-        return infer_tuple_get(expr, domain, offset_provider, symbolic_domain_sizes)
+        return _infer_tuple_get(expr, domain, offset_provider, symbolic_domain_sizes)
     elif cpm.is_call_to(expr, "if_"):
-        return infer_if(expr, domain, offset_provider, symbolic_domain_sizes)
+        return _infer_if(expr, domain, offset_provider, symbolic_domain_sizes)
     elif (
         cpm.is_call_to(expr, itir.ARITHMETIC_BUILTINS)
         or cpm.is_call_to(expr, itir.TYPEBUILTINS)
@@ -409,6 +409,11 @@ def infer_program(
     offset_provider: common.OffsetProvider,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
 ) -> itir.Program:
+    """
+    Infer the domain of all field subexpressions inside a program.
+
+    See :func:`infer_expr` for more details.
+    """
     assert (
         not program.function_definitions
     ), "Domain propagation does not support function definitions."

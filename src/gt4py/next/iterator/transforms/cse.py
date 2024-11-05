@@ -388,7 +388,7 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
         >>> x = itir.SymRef(id="x")
         >>> plus = lambda a, b: itir.FunCall(fun=itir.SymRef(id=("plus")), args=[a, b])
         >>> expr = plus(plus(x, x), plus(x, x))
-        >>> print(CommonSubexpressionElimination.apply(expr, is_local_view=True))
+        >>> print(CommonSubexpressionElimination.apply(expr, within_stencil=True))
         (λ(_cs_1) → _cs_1 + _cs_1)(x + x)
 
     The pass visits the tree top-down starting from the root node, e.g. an itir.Program.
@@ -410,33 +410,33 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
     def apply(
         cls,
         node: ProgramOrExpr,
-        is_local_view: bool | None = None,
+        within_stencil: bool | None = None,
         offset_provider: common.OffsetProvider | None = None,
     ) -> ProgramOrExpr:
         is_program = isinstance(node, (itir.Program, itir.FencilDefinition))
         if is_program:
-            assert is_local_view is None
-            is_local_view = False
+            assert within_stencil is None
+            within_stencil = False
         else:
             assert (
-                is_local_view is not None
-            ), "The expression's context must be specified using `is_local_view`."
+                within_stencil is not None
+            ), "The expression's context must be specified using `within_stencil`."
 
         offset_provider = offset_provider or {}
         node = itir_type_inference.infer(
             node, offset_provider=offset_provider, allow_undeclared_symbols=not is_program
         )
-        return cls().visit(node, is_local_view=is_local_view)
+        return cls().visit(node, within_stencil=within_stencil)
 
     def generic_visit(self, node, **kwargs):
         if cpm.is_call_to("as_fieldop", node):
-            assert not kwargs.get("is_local_view")
-        is_local_view = cpm.is_call_to("as_fieldop", node) or kwargs.get("is_local_view")
+            assert not kwargs.get("within_stencil")
+        within_stencil = cpm.is_call_to("as_fieldop", node) or kwargs.get("within_stencil")
 
-        return super().generic_visit(node, **(kwargs | {"is_local_view": is_local_view}))
+        return super().generic_visit(node, **(kwargs | {"within_stencil": within_stencil}))
 
     def visit_FunCall(self, node: itir.FunCall, **kwargs):
-        is_local_view = kwargs["is_local_view"]
+        within_stencil = kwargs["within_stencil"]
 
         if cpm.is_call_to(node, ("cartesian_domain", "unstructured_domain")):
             return node
@@ -446,7 +446,7 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
             #  view, even though the syntactic context `node` is in field view.
             # note: what is extracted is sketched in the docstring above. keep it updated.
             if num_occurences > 1:
-                if is_local_view:
+                if within_stencil:
                     return True
                 else:
                     # only extract fields outside of `as_fieldop`

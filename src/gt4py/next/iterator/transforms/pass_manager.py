@@ -53,7 +53,8 @@ def apply_common_transforms(
     temporary_extraction_heuristics: Optional[
         Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
     ] = None,
-    #: A dictionary mapping axes names, e.g., `I`, `Vertex`, to a symbol name that evaluates to the length of that axis.
+    #: A dictionary mapping axes names to their length. See :func:`infer_domain.infer_expr` for
+    #: more details.
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
 ) -> itir.Program:
     # FIXME[#1582](tehrengruber): Rewrite iterator tests with itir.Program and remove this
