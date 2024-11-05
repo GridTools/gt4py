@@ -222,6 +222,7 @@ GTFN_BUILTINS = [
     "unstructured_domain",
     "named_range",
     "reduce",
+    "index",
 ]
 ARITHMETIC_BUILTINS = itir.ARITHMETIC_BUILTINS
 TYPEBUILTINS = itir.TYPEBUILTINS

@@ -18,7 +18,6 @@ import numpy as np
 from gt4py._core import definitions as core_defs
 from gt4py.eve import codegen
 from gt4py.next import common
-from gt4py.next.common import Connectivity, Dimension
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import pass_manager
@@ -83,7 +82,7 @@ class GTFNTranslationStep(
         self,
         program: itir.FencilDefinition | itir.Program,
         arg_types: tuple[ts.TypeSpec, ...],
-        offset_provider: dict[str, Connectivity | Dimension],
+        offset_provider: common.OffsetProvider,
     ) -> tuple[list[interface.Parameter], list[str]]:
         parameters: list[interface.Parameter] = []
         arg_exprs: list[str] = []
@@ -106,20 +105,20 @@ class GTFNTranslationStep(
                         # translate sparse dimensions to tuple dtype
                         dim_name = dim.value
                         connectivity = offset_provider[dim_name]
-                        assert isinstance(connectivity, Connectivity)
+                        assert isinstance(connectivity, common.Connectivity)
                         size = connectivity.max_neighbors
                         arg = f"gridtools::sid::dimension_to_tuple_like<generated::{dim_name}_t, {size}>({arg})"
             arg_exprs.append(arg)
         return parameters, arg_exprs
 
     def _process_connectivity_args(
-        self, offset_provider: dict[str, Connectivity | Dimension]
+        self, offset_provider: dict[str, common.Connectivity | common.Dimension]
     ) -> tuple[list[interface.Parameter], list[str]]:
         parameters: list[interface.Parameter] = []
         arg_exprs: list[str] = []
 
         for name, connectivity in offset_provider.items():
-            if isinstance(connectivity, Connectivity):
+            if isinstance(connectivity, common.Connectivity):
                 if connectivity.index_type not in [np.int32, np.int64]:
                     raise ValueError(
                         "Neighbor table indices must be of type 'np.int32' or 'np.int64'."
@@ -130,7 +129,12 @@ class GTFNTranslationStep(
                     interface.Parameter(
                         name=GENERATED_CONNECTIVITY_PARAM_PREFIX + name.lower(),
                         type_=ts.FieldType(
-                            dims=[connectivity.origin_axis, Dimension(name)],
+                            dims=[
+                                connectivity.origin_axis,
+                                common.Dimension(
+                                    name, kind=common.DimensionKind.LOCAL
+                                ),  # TODO(havogt): we should not use the name of the offset as the name of the local dimension
+                            ],
                             dtype=ts.ScalarType(
                                 type_translation.get_scalar_kind(connectivity.index_type)
                             ),
@@ -148,7 +152,7 @@ class GTFNTranslationStep(
                 arg_exprs.append(
                     f"gridtools::hymap::keys<generated::{name}_t>::make_values({nbtbl})"
                 )
-            elif isinstance(connectivity, Dimension):
+            elif isinstance(connectivity, common.Dimension):
                 pass
             else:
                 raise AssertionError(
@@ -161,7 +165,7 @@ class GTFNTranslationStep(
     def _preprocess_program(
         self,
         program: itir.FencilDefinition | itir.Program,
-        offset_provider: dict[str, Connectivity | Dimension],
+        offset_provider: dict[str, common.Connectivity | common.Dimension],
     ) -> itir.Program:
         apply_common_transforms = functools.partial(
             pass_manager.apply_common_transforms,
@@ -190,7 +194,7 @@ class GTFNTranslationStep(
     def generate_stencil_source(
         self,
         program: itir.FencilDefinition | itir.Program,
-        offset_provider: dict[str, Connectivity | Dimension],
+        offset_provider: dict[str, common.Connectivity | common.Dimension],
         column_axis: Optional[common.Dimension],
     ) -> str:
         if self.enable_itir_transforms:

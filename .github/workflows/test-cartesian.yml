@@ -28,7 +28,7 @@ jobs:
         python-version: ["3.8", "3.9", "3.10", "3.11"]
         tox-factor: [internal, dace]
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     - name: Install boost
       shell: bash
       run: |
@@ -40,7 +40,7 @@ jobs:
         mv boost_1_76_0/boost boost/include/
         echo "BOOST_ROOT=${PWD}/boost" >> $GITHUB_ENV
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
