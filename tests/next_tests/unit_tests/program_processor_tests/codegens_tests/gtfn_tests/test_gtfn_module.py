@@ -25,6 +25,7 @@ from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.program_processors.runners import gtfn
 from gt4py.next.type_system import type_translation
 from next_tests.integration_tests import cases
+from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import KDim
 
 from next_tests.integration_tests.cases import cartesian_case
 
@@ -97,9 +98,8 @@ def test_hash_and_diskcache(fencil_example):
             *parameters, **{"offset_provider": {}}
         ),
     )
-
-    hash = gtfn.generate_stencil_source_hash_function(compilable_program)
-    path = str(gt4py.next.config.BUILD_CACHE_DIR / gt4py.next.config.GTFN_SOURCE_CACHE_DIR)
+    hash = gtfn.fingerprint_compilable_program(compilable_program)
+    path = tempfile.gettempdir()
     with diskcache.Cache(path) as cache:
         cache[hash] = compilable_program
 
@@ -111,15 +111,27 @@ def test_hash_and_diskcache(fencil_example):
         del reopened_cache[hash]  # delete data
 
     # hash creation is deterministic
-    assert hash == gtfn.generate_stencil_source_hash_function(compilable_program)
-    assert hash == gtfn.generate_stencil_source_hash_function(compilable_program_from_cache)
+    assert hash == gtfn.fingerprint_compilable_program(compilable_program)
+    assert hash == gtfn.fingerprint_compilable_program(compilable_program_from_cache)
 
     # hash is different if program changes
-    altered_program = copy.deepcopy(compilable_program)
-    altered_program.data.id = "example2"
-    assert gtfn.generate_stencil_source_hash_function(
+    altered_program_id = copy.deepcopy(compilable_program)
+    altered_program_id.data.id = "example2"
+    assert gtfn.fingerprint_compilable_program(
         compilable_program
-    ) != gtfn.generate_stencil_source_hash_function(altered_program)
+    ) != gtfn.fingerprint_compilable_program(altered_program_id)
+
+    altered_program_offset_provider = copy.deepcopy(compilable_program)
+    object.__setattr__(altered_program_offset_provider.args, "offset_provider", {"Koff": KDim})
+    assert gtfn.fingerprint_compilable_program(
+        compilable_program
+    ) != gtfn.fingerprint_compilable_program(altered_program_offset_provider)
+
+    altered_program_column_axis = copy.deepcopy(compilable_program)
+    object.__setattr__(altered_program_column_axis.args, "column_axis", KDim)
+    assert gtfn.fingerprint_compilable_program(
+        compilable_program
+    ) != gtfn.fingerprint_compilable_program(altered_program_column_axis)
 
 
 def test_gtfn_file_cache(fencil_example):
@@ -138,14 +150,16 @@ def test_gtfn_file_cache(fencil_example):
         gpu=False, cached=True, otf_workflow__cached_translation=False
     ).executor.step.translation
 
-    cached_gtfn_translation_step(
-        compilable_program
-    )  # run cached translation step once to populate cache
+    cache_key = gtfn.fingerprint_compilable_program(compilable_program)
+
+    # ensure the actual cached step in the backend generates the cache item for the test
+    if cache_key in (translation_cache := cached_gtfn_translation_step.cache):
+        del translation_cache[hash]
+    cached_gtfn_translation_step(compilable_program)
     assert bare_gtfn_translation_step(compilable_program) == cached_gtfn_translation_step(
         compilable_program
     )
 
-    cache_key = gtfn.generate_stencil_source_hash_function(compilable_program)
     assert cache_key in cached_gtfn_translation_step.cache
     assert (
         bare_gtfn_translation_step(compilable_program)
@@ -153,6 +167,7 @@ def test_gtfn_file_cache(fencil_example):
     )
 
 
+# TODO(egparedes): we should switch to use the cached backend by default and then remove this test
 def test_gtfn_file_cache_whole_workflow(cartesian_case):
     if cartesian_case.backend != gtfn.run_gtfn:
         pytest.skip("Skipping backend.")

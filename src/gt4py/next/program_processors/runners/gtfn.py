@@ -119,7 +119,7 @@ def compilation_hash(otf_closure: stages.CompilableProgram) -> int:
     )
 
 
-def generate_stencil_source_hash_function(inp: stages.CompilableProgram) -> str:
+def fingerprint_compilable_program(inp: stages.CompilableProgram) -> str:
     """
     Generates a unique hash string for a stencil source program representing
     the program, sorted offset_provider, and column_axis.
@@ -167,8 +167,8 @@ class GTFNCompileWorkflowFactory(factory.Factory):
             translation=factory.LazyAttribute(
                 lambda o: workflow.CachedStep(
                     o.translation_,
-                    hash_function=generate_stencil_source_hash_function,
-                    cache=FileCache(str(config.BUILD_CACHE_DIR / config.GTFN_SOURCE_CACHE_DIR)),
+                    hash_function=fingerprint_compilable_program,
+                    cache=FileCache(str(config.BUILD_CACHE_DIR / "gtfn_cache")),
                 )
             ),
         )
