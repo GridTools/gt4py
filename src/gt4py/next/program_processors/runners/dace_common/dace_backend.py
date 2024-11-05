@@ -91,7 +91,11 @@ def _get_shape_args(
                 if sym.name not in shape_args:
                     shape_args[sym.name] = size
                 elif shape_args[sym.name] != size:
-                    # TODO(edopao): This case is only hit if all fields in a tuple have the same dims and sizes.
+                    # The same shape symbol is used by all fields of a tuple, because the current assumption is that all fields
+                    # in a tuple have the same dimensions and sizes. Therefore, this if-branch only exists to ensure that array
+                    # size (i.e. the value assigned to the shape symbol) is the same for all fields in a tuple.
+                    # TODO(edopao): change to `assert sym.name not in shape_args` to ensure that shape symbols are unique,
+                    # once the assumption on tuples is removed.
                     raise ValueError(
                         f"Expected array size {sym.name} for arg {name} to be {shape_args[sym.name]}, got {size}."
                     )
@@ -117,7 +121,9 @@ def _get_stride_args(
                 if sym.name not in stride_args:
                     stride_args[str(sym)] = stride
                 elif stride_args[sym.name] != stride:
-                    # TODO(edopao): This case is only hit if all fields in a tuple have the same dims and sizes.
+                    # See above comment in `_get_shape_args`, same for stride symbols of fields in a tuple.
+                    # TODO(edopao): change to `assert sym.name not in stride_args` to ensure that stride symbols are unique,
+                    # once the assumption on tuples is removed.
                     raise ValueError(
                         f"Expected array stride {sym.name} for arg {name} to be {stride_args[sym.name]}, got {stride}."
                     )
