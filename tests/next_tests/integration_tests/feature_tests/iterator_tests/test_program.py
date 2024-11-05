@@ -88,6 +88,7 @@ def index_program_shift(out, size):
     )
 
 
+@pytest.mark.starts_from_gtir_program
 @pytest.mark.uses_index_builtin
 def test_index_builtin_shift(program_processor):
     program_processor, validate = program_processor

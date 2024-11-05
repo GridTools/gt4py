@@ -262,16 +262,8 @@ def test_gtir_tuple_args():
     sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
 
     x_fields = (a, a, b)
-    x_symbols = dict(
-        __x_0_size_0=FSYMBOLS["__x_size_0"],
-        __x_0_stride_0=FSYMBOLS["__x_stride_0"],
-        __x_1_0_size_0=FSYMBOLS["__x_size_0"],
-        __x_1_0_stride_0=FSYMBOLS["__x_stride_0"],
-        __x_1_1_size_0=FSYMBOLS["__y_size_0"],
-        __x_1_1_stride_0=FSYMBOLS["__y_stride_0"],
-    )
 
-    sdfg(*x_fields, c, **FSYMBOLS, **x_symbols)
+    sdfg(*x_fields, c, **FSYMBOLS)
     assert np.allclose(c, a * 2 + b)
 
 
@@ -432,16 +424,8 @@ def test_gtir_tuple_return():
     sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
 
     z_fields = (np.empty_like(a), np.empty_like(a), np.empty_like(a))
-    z_symbols = dict(
-        __z_0_0_size_0=FSYMBOLS["__x_size_0"],
-        __z_0_0_stride_0=FSYMBOLS["__x_stride_0"],
-        __z_0_1_size_0=FSYMBOLS["__x_size_0"],
-        __z_0_1_stride_0=FSYMBOLS["__x_stride_0"],
-        __z_1_size_0=FSYMBOLS["__x_size_0"],
-        __z_1_stride_0=FSYMBOLS["__x_stride_0"],
-    )
 
-    sdfg(a, b, *z_fields, **FSYMBOLS, **z_symbols)
+    sdfg(a, b, *z_fields, **FSYMBOLS)
     assert np.allclose(z_fields[0], a + b)
     assert np.allclose(z_fields[1], a)
     assert np.allclose(z_fields[2], b)
@@ -694,18 +678,11 @@ def test_gtir_cond_with_tuple_return():
     b = np.random.rand(N)
     c = np.random.rand(N)
 
-    z_symbols = dict(
-        __z_0_size_0=FSYMBOLS["__x_size_0"],
-        __z_0_stride_0=FSYMBOLS["__x_stride_0"],
-        __z_1_size_0=FSYMBOLS["__x_size_0"],
-        __z_1_stride_0=FSYMBOLS["__x_stride_0"],
-    )
-
     sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
 
     for s in [False, True]:
         z_fields = (np.empty_like(a), np.empty_like(a))
-        sdfg(a, b, c, *z_fields, pred=np.bool_(s), **FSYMBOLS, **z_symbols)
+        sdfg(a, b, c, *z_fields, pred=np.bool_(s), **FSYMBOLS)
         assert np.allclose(z_fields[0], a if s else b)
         assert np.allclose(z_fields[1], b if s else a)
 
@@ -1833,14 +1810,8 @@ def test_gtir_let_lambda_with_tuple1():
     sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
 
     z_fields = (np.empty_like(a), np.empty_like(a))
-    z_symbols = dict(
-        __z_0_size_0=FSYMBOLS["__x_size_0"],
-        __z_0_stride_0=FSYMBOLS["__x_stride_0"],
-        __z_1_size_0=FSYMBOLS["__x_size_0"],
-        __z_1_stride_0=FSYMBOLS["__x_stride_0"],
-    )
 
-    sdfg(a, b, *z_fields, **FSYMBOLS, **z_symbols)
+    sdfg(a, b, *z_fields, **FSYMBOLS)
     assert np.allclose(z_fields[0], a)
     assert np.allclose(z_fields[1], b)
 
@@ -1879,16 +1850,8 @@ def test_gtir_let_lambda_with_tuple2():
     sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
 
     z_fields = (np.empty_like(a), np.empty_like(a), np.empty_like(a))
-    z_symbols = dict(
-        __z_0_size_0=FSYMBOLS["__x_size_0"],
-        __z_0_stride_0=FSYMBOLS["__x_stride_0"],
-        __z_1_size_0=FSYMBOLS["__x_size_0"],
-        __z_1_stride_0=FSYMBOLS["__x_stride_0"],
-        __z_2_size_0=FSYMBOLS["__x_size_0"],
-        __z_2_stride_0=FSYMBOLS["__x_stride_0"],
-    )
 
-    sdfg(a, b, *z_fields, **FSYMBOLS, **z_symbols)
+    sdfg(a, b, *z_fields, **FSYMBOLS)
     assert np.allclose(z_fields[0], a + b)
     assert np.allclose(z_fields[1], val)
     assert np.allclose(z_fields[2], b)
@@ -1939,13 +1902,9 @@ def test_gtir_if_scalars():
     d2 = np.random.randint(0, 1000)
 
     sdfg = dace_backend.build_sdfg_from_gtir(testee, {})
-    x_symbols = dict(
-        __x_0_size_0=FSYMBOLS["__x_size_0"],
-        __x_0_stride_0=FSYMBOLS["__x_stride_0"],
-    )
 
     for s in [False, True]:
-        sdfg(x_0=a, x_1_0=d1, x_1_1=d2, z=b, pred=np.bool_(s), **FSYMBOLS, **x_symbols)
+        sdfg(x_0=a, x_1_0=d1, x_1_1=d2, z=b, pred=np.bool_(s), **FSYMBOLS)
         assert np.allclose(b, (a + d1 if s else a + d2))
 
 
