@@ -22,7 +22,7 @@ RUN apt-get update -qq && apt-get install -qq -y --no-install-recommends \
     tk-dev \
     libffi-dev \
     liblzma-dev \
-    python-openssl \
+    python3-openssl \
     libreadline-dev \
     git \
     rustc \
