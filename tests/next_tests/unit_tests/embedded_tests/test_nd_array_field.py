@@ -264,6 +264,16 @@ def test_binary_operations_with_intersection(binary_arithmetic_op, dims, expecte
     assert np.allclose(op_result.ndarray, expected_result)
 
 
+def test_as_scalar(nd_array_implementation):
+    testee = common._field(
+        nd_array_implementation.asarray(42.0, dtype=np.float32), domain=common.Domain()
+    )
+
+    result = testee.as_scalar()
+    assert result == 42.0
+    assert isinstance(result, np.float32)
+
+
 def product_nd_array_implementation_params():
     for xp1 in nd_array_field._nd_array_implementations:
         for xp2 in nd_array_field._nd_array_implementations:
@@ -639,7 +649,6 @@ def test_absolute_indexing_value_return():
 
     named_index = (NamedIndex(D0, 12), NamedIndex(D1, 6))
     assert isinstance(field, common.Field)
-    value = field[named_index]
 
     assert isinstance(value, common.Field)
     assert value.as_scalar() == 21
