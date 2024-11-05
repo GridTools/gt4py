@@ -649,6 +649,7 @@ def test_absolute_indexing_value_return():
 
     named_index = (NamedIndex(D0, 12), NamedIndex(D1, 6))
     assert isinstance(field, common.Field)
+    value = field[named_index]
 
     assert isinstance(value, common.Field)
     assert value.as_scalar() == 21
