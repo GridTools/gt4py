@@ -145,7 +145,6 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
             node,
             read_memlets=node.read_memlets,
             write_memlets=node.write_memlets,
-            sdfg_ctx=sdfg_ctx,
             symtable=symtable,
         )
 
