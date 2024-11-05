@@ -179,10 +179,12 @@ class StencilExecution(Stmt):
     ) -> None:
         for inp in inputs:
             if not _is_tuple_expr_of(
-                lambda expr: isinstance(expr, (SymRef, SidComposite, SidFromScalar)), inp
+                lambda expr: isinstance(expr, (SymRef, SidComposite, SidFromScalar))
+                or (isinstance(expr, FunCall) and isinstance(expr.fun, SymRef) and expr.fun.id == "index"),
+                inp,
             ):
                 raise ValueError(
-                    "Only 'SymRef', 'SidComposite', 'SidFromScalar' or tuple expr thereof allowed."
+                    "Only 'SymRef', 'SidComposite', 'SidFromScalar', 'index' call or tuple expr thereof allowed."
                 )
 
 
