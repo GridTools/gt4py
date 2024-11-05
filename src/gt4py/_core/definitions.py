@@ -14,6 +14,10 @@ import enum
 import functools
 import math
 import numbers
+try:
+    from ml_dtypes import bfloat16
+except ModuleNotFoundError:
+    bfloat16 = None
 
 import numpy as np
 import numpy.typing as npt
@@ -63,6 +67,8 @@ uint32 = np.uint32
 uint64 = np.uint64
 
 float16 = np.float16
+if bfloat16:
+    bfloat16 = bfloat16
 float32 = np.float32
 float64 = np.float64
 
@@ -94,8 +100,10 @@ IntegralScalar: TypeAlias = Union[IntScalar, UnsignedIntScalar]
 IntegralT = TypeVar("IntegralT", bound=IntegralScalar)
 INTEGRAL_TYPES: Final[Tuple[type, ...]] = (*INT_TYPES, *UINT_TYPES)
 
-
-FloatingScalar: TypeAlias = Union[float16, float32, float64, float]
+if bfloat16:
+    FloatingScalar: TypeAlias = Union[float16, bfloat16, float32, float64, float]
+else:
+    FloatingScalar: TypeAlias = Union[float16, float32, float64, float]
 FloatingT = TypeVar("FloatingT", bound=FloatingScalar)
 FLOAT_TYPES: Final[Tuple[type, ...]] = cast(
     Tuple[type, ...],
@@ -318,6 +326,12 @@ class FloatingDType(DType[FloatingT]):
 @dataclasses.dataclass(frozen=True) # TODO
 class Float16DType(FloatingDType[float16]):
     scalar_type: Final[Type[float16]] = dataclasses.field(default=float16, init=False)
+
+if bfloat16:
+    @dataclasses.dataclass(frozen=True)  # TODO
+    class BFloat16DType(FloatingDType[bfloat16]):
+        scalar_type: Final[Type[bfloat16]] = dataclasses.field(default=bfloat16, init=False)
+
 
 @dataclasses.dataclass(frozen=True)
 class Float32DType(FloatingDType[float32]):

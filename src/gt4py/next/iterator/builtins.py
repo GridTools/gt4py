@@ -7,7 +7,10 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from gt4py.next.iterator.dispatcher import Dispatcher
-
+try:
+    from ml_dtypes import bfloat16
+except ModuleNotFoundError:
+    bfloat16 = None
 
 builtin_dispatch = Dispatcher()
 
@@ -377,6 +380,11 @@ def float(*args):  # noqa: A001 [builtin-variable-shadowing]
     raise BackendNotSelectedError()
 
 
+if bfloat16:
+    @builtin_dispatch
+    def bfloat16(*args):
+        raise BackendNotSelectedError()
+
 @builtin_dispatch
 def float16(*args):
     raise BackendNotSelectedError()
@@ -436,6 +444,9 @@ TYPEBUILTINS = {
     "float64",
     "bool",
 }  # TODO(tehrengruber): This list already exists in ir.py; unify.
+if bfloat16:
+    TYPEBUILTINS.add("bfloat16")
+
 MATH_BUILTINS = (
     UNARY_MATH_NUMBER_BUILTINS
     | UNARY_MATH_FP_BUILTINS

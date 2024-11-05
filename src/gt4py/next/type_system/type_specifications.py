@@ -81,9 +81,10 @@ class ScalarKind(IntEnum):
     INT64 = 8
     UINT64 = 9
     FLOAT16 = 10
-    FLOAT32 = 11
-    FLOAT64 = 12
-    STRING = 13
+    BFLOAT16 = 11
+    FLOAT32 = 12
+    FLOAT64 = 13
+    STRING = 14
 
 
 @dataclass(frozen=True)

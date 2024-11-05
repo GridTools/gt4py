@@ -53,6 +53,7 @@ def pytype_to_cpptype(t: ts.ScalarType | str) -> Optional[str]:
     try:
         return {
             "float16": "std::float16_t",
+            "bfloat16": "std::bfloat16_t",
             "float32": "float",
             "float64": "double",
             "int8": "std::int8_t",

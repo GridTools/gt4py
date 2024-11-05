@@ -23,6 +23,10 @@ from typing import (
 )
 
 import numpy as np
+try:
+    from ml_dtypes import bfloat16, finfo
+except ModuleNotFoundError:
+    bfloat16 = None
 
 from gt4py.eve.utils import XIterable, xiter
 from gt4py.next import common
@@ -236,6 +240,7 @@ def is_floating_point(symbol_type: ts.TypeSpec) -> bool:
     """
     return extract_dtype(symbol_type).kind in [
         ts.ScalarKind.FLOAT16,
+        ts.ScalarKind.BFLOAT16,
         ts.ScalarKind.FLOAT32,
         ts.ScalarKind.FLOAT64,
     ]
@@ -327,7 +332,7 @@ def is_arithmetic(symbol_type: ts.TypeSpec) -> bool:
 
 def arithmetic_bounds(arithmetic_type: ts.ScalarType) -> tuple[np.number, np.number]:
     assert is_arithmetic(arithmetic_type)
-    return {  # type: ignore[return-value] # why resolved to `tuple[object, object]`?
+    bounds = {  # type: ignore[return-value] # why resolved to `tuple[object, object]`?
         ts.ScalarKind.FLOAT16: (np.finfo(np.float16).min, np.finfo(np.float16).max),  # todo: cleanup?
         ts.ScalarKind.FLOAT32: (np.finfo(np.float32).min, np.finfo(np.float32).max),
         ts.ScalarKind.FLOAT64: (np.finfo(np.float64).min, np.finfo(np.float64).max),
@@ -339,7 +344,10 @@ def arithmetic_bounds(arithmetic_type: ts.ScalarType) -> tuple[np.number, np.num
         ts.ScalarKind.UINT32: (np.iinfo(np.uint32).min, np.iinfo(np.uint32).max),
         ts.ScalarKind.INT64: (np.iinfo(np.int64).min, np.iinfo(np.int64).max),
         ts.ScalarKind.UINT64: (np.iinfo(np.uint64).min, np.iinfo(np.uint64).max),
-    }[arithmetic_type.kind]
+    }
+    if bfloat16:
+        bounds[ts.ScalarKind.BFLOAT16] = (finfo(bfloat16).min, finfo(bfloat16).max)
+    return bounds[arithmetic_type.kind]
 
 
 def is_type_or_tuple_of_type(type_: ts.TypeSpec, expected_type: type | tuple) -> bool:

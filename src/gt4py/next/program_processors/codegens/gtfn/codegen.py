@@ -7,6 +7,10 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from typing import Any, Collection, Final, Union
+try:
+    import ml_dtypes
+except ModuleNotFoundError:
+    bfloat16 = None
 
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
@@ -78,6 +82,8 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         "mod": "std::modulus{}",
         "not_": "std::logical_not{}",
     }
+    if ml_dtypes:
+        _builtins_mapping["bfloat16"] = "std::bfloat16_t"
 
     Sym = as_fmt("{id}")
 
@@ -107,6 +113,8 @@ class GTFNCodegen(codegen.TemplatedGenerator):
                 return self.asfloat(node.value)
             case "std::float16_t":
                 return "std::float16_t("+self.asfloat(node.value)+")"  # TODO: this is not a proper solution
+            case "std::bfloat16_t":
+                return "std::bfloat16_t("+self.asfloat(node.value)+")"  # TODO: this is not a proper solution
             case "bool":
                 return node.value.lower()
             case _:
