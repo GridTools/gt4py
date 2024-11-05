@@ -73,7 +73,7 @@ def get_tasklet_symbol(
     if offset is None:
         return access_name
 
-    # add (per axis) offset markers, e.g. gtIN__Akm1 for A[0, 0, -1]
+    # add (per axis) offset markers, e.g. gtIN__A_km1 for A[0, 0, -1]
     offset_strings = []
     for axis in dcir.Axis.dims_3d():
         axis_offset = offset.to_dict()[axis.lower()]

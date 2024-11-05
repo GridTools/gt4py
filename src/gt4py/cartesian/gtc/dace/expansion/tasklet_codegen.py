@@ -104,9 +104,6 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
                 "Memlet connector and tasklet variable mismatch, DaCe IR error."
             ) from None
 
-        if node.offset == common.CartesianOffset.zero() and len(node.data_index) == 0:
-            return node.name
-
         index_strs = []
         if node.offset is not None:
             index_strs.append(
