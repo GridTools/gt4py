@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
+from gt4py.next import backend
 from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import set_at, fendef, fundef
 from gt4py.next.program_processors.formatters import gtfn as gtfn_formatters
@@ -92,7 +93,7 @@ def fen_solve_tridiag2(i_size, j_size, k_size, a, b, c, d, x):
 def test_tridiag(fencil, tridiag_reference, program_processor):
     program_processor, validate = program_processor
 
-    if "dace" in program_processor.name:
+    if isinstance(program_processor, backend.Backend) and "dace" in program_processor.name:
         pytest.xfail("Dace ITIR backend doesn't support the IR format used in this test.")
 
     a, b, c, d, x = tridiag_reference
