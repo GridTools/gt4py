@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import copy
-from typing import Any, ChainMap, List, Optional, Set, Union
+from typing import Any, ChainMap, List, Optional, Union
 
 import dace
 import dace.data
@@ -99,6 +99,7 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
                     access_info=memlet.access_info,
                     symtable=symtable,
                     in_idx=True,
+                    is_target=False,
                     **kwargs,
                 )
             )
@@ -210,14 +211,7 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
     LocalScalarDecl = as_fmt("{name}: {dtype}")
 
     def visit_Tasklet(self, node: dcir.Tasklet, **kwargs: Any) -> str:
-        # We keep a list of all scalar variables that we access inside this
-        # Tasklet. That information is used to derive read after write situations
-        # where we need to make sure to read the updated version of that scalar
-        # variable.
-        targets: Set[eve.SymbolRef] = set()
-        return "\n".join(
-            self.visit(node.decls, **kwargs) + self.visit(node.stmts, targets=targets, **kwargs)
-        )
+        return "\n".join(self.visit(node.decls, **kwargs) + self.visit(node.stmts, **kwargs))
 
     def visit_HorizontalRestriction(self, node: dcir.HorizontalRestriction, **kwargs: Any) -> str:
         condition = node.mask
