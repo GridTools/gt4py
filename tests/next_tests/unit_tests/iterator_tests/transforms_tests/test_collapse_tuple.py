@@ -237,5 +237,5 @@ def test_tuple_get_on_untyped_ref():
     # test pass gracefully handles untyped nodes.
     testee = im.tuple_get(0, im.ref("val", ts.DeferredType(constraint=None)))
 
-    actual = CollapseTuple.apply(testee, allow_undeclared_symbols=True)
+    actual = CollapseTuple.apply(testee, allow_undeclared_symbols=True, is_local_view=False)
     assert actual == testee
