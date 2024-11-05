@@ -217,6 +217,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         name: str,
         gt_type: ts.DataType,
         transient: bool = True,
+        tuple_name: Optional[str] = None,
     ) -> list[tuple[str, ts.DataType]]:
         """
         Add storage in the SDFG for a given GT4Py data symbol.
@@ -236,6 +237,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             name: Symbol Name to be allocated.
             gt_type: GT4Py symbol type.
             transient: True when the data symbol has to be allocated as internal storage.
+            tuple_name: Must be set for tuple fields in order to use the same array shape and strides symbols.
 
         Returns:
             List of tuples '(data_name, gt_type)' where 'data_name' is the name of
@@ -250,7 +252,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 name, gt_type, flatten=True
             ):
                 tuple_fields.extend(
-                    self._add_storage(sdfg, symbolic_arguments, tname, tsymbol_type, transient)
+                    self._add_storage(
+                        sdfg, symbolic_arguments, tname, tsymbol_type, transient, tuple_name=name
+                    )
                 )
             return tuple_fields
 
@@ -260,16 +264,23 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 return self._add_storage(sdfg, symbolic_arguments, name, gt_type.dtype, transient)
             # handle default case: field with one or more dimensions
             dc_dtype = dace_utils.as_dace_type(gt_type.dtype)
-            # use symbolic shape, which allows to invoke the program with fields of different size;
-            # and symbolic strides, which enables decoupling the memory layout from generated code.
-            sym_shape, sym_strides = self._make_array_shape_and_strides(name, gt_type.dims)
+            if tuple_name is None:
+                # Use symbolic shape, which allows to invoke the program with fields of different size;
+                # and symbolic strides, which enables decoupling the memory layout from generated code.
+                sym_shape, sym_strides = self._make_array_shape_and_strides(name, gt_type.dims)
+            else:
+                # All fields in a tuple must have the same dims and sizes,
+                # therefore we use the same shape and strides symbols based on 'tuple_name'.
+                sym_shape, sym_strides = self._make_array_shape_and_strides(
+                    tuple_name, gt_type.dims
+                )
             sdfg.add_array(name, sym_shape, dc_dtype, strides=sym_strides, transient=transient)
 
             return [(name, gt_type)]
 
         elif isinstance(gt_type, ts.ScalarType):
             dc_dtype = dace_utils.as_dace_type(gt_type)
-            if name in symbolic_arguments:
+            if dace_utils.is_field_symbol(name) or name in symbolic_arguments:
                 if name in sdfg.symbols:
                     # Sometimes, when the field domain is implicitly derived from the
                     # field domain, the gt4py lowering adds the field size as a scalar
@@ -399,6 +410,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         sdfg = dace.SDFG(node.id)
         sdfg.debuginfo = dace_utils.debug_info(node, default=sdfg.debuginfo)
+
+        # DaCe requires C-compatible strings for the names of data containers,
+        # such as arrays and scalars. GT4Py uses a unicode symbols ('ᐞ') as name
+        # separator in the SSA pass, which generates invalid symbols for DaCe.
+        # Here we find new names for invalid symbols present in the IR.
+        node = dace_gtir_utils.replace_invalid_symbols(sdfg, node)
+
+        # start block of the stateful graph
         entry_state = sdfg.add_state("program_entry", is_start_block=True)
 
         # declarations of temporaries result in transient array definitions in the SDFG
