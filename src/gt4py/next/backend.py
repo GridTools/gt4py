@@ -136,6 +136,7 @@ class Transforms(workflow.MultiWorkflow[INPUT_PAIR, stages.CompilableProgram]):
 DEFAULT_TRANSFORMS: Transforms = Transforms()
 
 # FIXME[#1582](havogt): remove after refactoring to GTIR
+# note: this step is deliberately placed here, such that the cache is shared
 _foast_to_itir_step = foast_to_itir.adapted_foast_to_itir_factory(cached=True)
 LEGACY_TRANSFORMS: Transforms = Transforms(
     past_to_itir=past_to_itir.past_to_itir_factory(to_gtir=False),

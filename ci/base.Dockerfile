@@ -1,5 +1,5 @@
 ARG CUDA_VERSION=12.5.0
-FROM docker.io/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu20.04
+FROM docker.io/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu22.04
 ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
 
