@@ -129,7 +129,7 @@ def add_func_to_fingerprint(obj: types.FunctionType, hasher: xtyping.HashlibAlgo
 
 @add_content_to_fingerprint.register
 def add_dict_to_fingerprint(obj: dict, hasher: xtyping.HashlibAlgorithm) -> None:
-    for key, value in obj.items():
+    for key, value in sorted(obj.items()):
         add_content_to_fingerprint(key, hasher)
         add_content_to_fingerprint(value, hasher)
 
@@ -152,5 +152,4 @@ def add_foast_located_node_to_fingerprint(
     obj: foast.LocatedNode, hasher: xtyping.HashlibAlgorithm
 ) -> None:
     add_content_to_fingerprint(obj.location, hasher)
-    add_content_to_fingerprint(str(obj), hasher)
     add_content_to_fingerprint(str(obj), hasher)
