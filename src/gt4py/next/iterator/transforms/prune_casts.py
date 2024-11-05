@@ -23,20 +23,31 @@ class PruneCasts(PreserveLocationVisitor, NodeTranslator):
     def visit_FunCall(self, node: ir.FunCall) -> ir.Node:
         node = self.generic_visit(node)
 
-        if not cpm.is_call_to(node, "cast_"):
-            return node
+        if cpm.is_call_to(node, "cast_"):
+            value, type_constructor = node.args
 
-        value, type_constructor = node.args
+            assert (
+                value.type
+                and isinstance(type_constructor, ir.SymRef)
+                and (type_constructor.id in ir.TYPEBUILTINS)
+            )
+            dtype = ts.ScalarType(kind=getattr(ts.ScalarKind, type_constructor.id.upper()))
 
-        assert (
-            value.type
-            and isinstance(type_constructor, ir.SymRef)
-            and (type_constructor.id in ir.TYPEBUILTINS)
-        )
-        dtype = ts.ScalarType(kind=getattr(ts.ScalarKind, type_constructor.id.upper()))
+            if value.type == dtype:
+                return value
 
-        if value.type == dtype:
-            return value
+        elif (
+            cpm.is_applied_as_fieldop(node)
+            and isinstance(node.fun.args[0], ir.Lambda)  # type: ignore[attr-defined]
+            and cpm.is_call_to(node.fun.args[0].expr, "deref")  # type: ignore[attr-defined]
+        ):
+            # pruning of cast expressions may leave some trivial as_fieldop field copies
+            lambda_node = node.fun.args[0]  # type: ignore[attr-defined]
+            assert isinstance(lambda_node.expr, ir.FunCall)
+            if len(lambda_node.params) == 1 and cpm.is_ref_to(
+                lambda_node.expr.args[0], lambda_node.params[0].id
+            ):
+                return node.args[0]
 
         return node
 

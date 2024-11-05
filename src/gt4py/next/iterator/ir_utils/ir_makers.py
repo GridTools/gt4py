@@ -498,6 +498,28 @@ def op_as_fieldop(
     return _impl
 
 
+def cast_as_fieldop(type_: str, domain: Optional[itir.FunCall] = None):
+    """
+    Promotes the function `cast_` to a field_operator.
+
+    Args:
+        type_: the target type to be passed as argument to `cast_` function.
+        domain: the domain of the returned field.
+
+    Returns:
+        A function from Fields to Field.
+
+    Examples:
+        >>> str(cast_as_fieldop("float32")("a"))
+        '(⇑(λ(__arg0) → cast_(·__arg0, float32)))(a)'
+    """
+
+    def _impl(it: itir.Expr) -> itir.FunCall:
+        return as_fieldop(lambda_("a")(call("cast_")(deref("a"), type_)), domain)(it)
+
+    return _impl
+
+
 def map_(op):
     """Create a `map_` call."""
     return call(call("map_")(op))
