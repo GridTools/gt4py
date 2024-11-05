@@ -710,46 +710,51 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             head_state.add_edge(src_node, None, nsdfg_node, connector, memlet)
 
         def make_temps(
-            output_data: gtir_builtin_translators.FieldopData,
+            inner_data: gtir_builtin_translators.FieldopData,
         ) -> gtir_builtin_translators.FieldopData:
             """
             This function will be called while traversing the result of the lambda
             dataflow to setup the intermediate data nodes in the parent SDFG and
             the data edges from the nested-SDFG output connectors.
             """
-            desc = output_data.dc_node.desc(nsdfg)
-            if desc.transient:
+            inner_desc = inner_data.dc_node.desc(nsdfg)
+            if inner_desc.transient:
                 # Transient nodes actually contain some result produced by the dataflow
                 # itself, therefore these nodes are changed to non-transient and an output
                 # edge will write the result from the nested-SDFG to a new intermediate
                 # data node in the parent context.
-                desc.transient = False
-                temp, _ = sdfg.add_temp_transient_like(desc)
-                connector = output_data.dc_node.data
-                dst_node = head_state.add_access(temp)
+                inner_desc.transient = False
+                outer, outer_desc = sdfg.add_temp_transient_like(inner_desc)
+                # We cannot use a copy of the inner data descriptor directly, we have to apply the symbol mapping.
+                dace.symbolic.safe_replace(
+                    nsdfg_symbols_mapping,
+                    lambda m: dace.sdfg.replace_properties_dict(outer_desc, m),
+                )
+                connector = inner_data.dc_node.data
+                outer_node = head_state.add_access(outer)
                 head_state.add_edge(
-                    nsdfg_node, connector, dst_node, None, sdfg.make_array_memlet(temp)
+                    nsdfg_node, connector, outer_node, None, sdfg.make_array_memlet(outer)
                 )
-                temp_field = gtir_builtin_translators.FieldopData(
-                    dst_node, output_data.gt_dtype, output_data.local_offset
+                outer_data = gtir_builtin_translators.FieldopData(
+                    outer_node, inner_data.gt_dtype, inner_data.local_offset
                 )
-            elif output_data.dc_node.data in lambda_arg_nodes:
+            elif inner_data.dc_node.data in lambda_arg_nodes:
                 # This if branch and the next one handle the non-transient result nodes.
                 # Non-transient nodes are just input nodes that are immediately returned
                 # by the lambda expression. Therefore, these nodes are already available
                 # in the parent context and can be directly accessed there.
-                temp_field = lambda_arg_nodes[output_data.dc_node.data]
+                outer_data = lambda_arg_nodes[inner_data.dc_node.data]
             else:
-                dc_node = head_state.add_access(output_data.dc_node.data)
-                temp_field = gtir_builtin_translators.FieldopData(
-                    dc_node, output_data.gt_dtype, output_data.local_offset
+                outer_node = head_state.add_access(inner_data.dc_node.data)
+                outer_data = gtir_builtin_translators.FieldopData(
+                    outer_node, inner_data.gt_dtype, inner_data.local_offset
                 )
             # Isolated access node will make validation fail.
             # Isolated access nodes can be found in the join-state of an if-expression
             # or in lambda expressions that just construct tuples from input arguments.
-            if nstate.degree(output_data.dc_node) == 0:
-                nstate.remove_node(output_data.dc_node)
-            return temp_field
+            if nstate.degree(inner_data.dc_node) == 0:
+                nstate.remove_node(inner_data.dc_node)
+            return outer_data
 
         return gtx_utils.tree_map(make_temps)(lambda_result)
 
