@@ -24,8 +24,7 @@ from gt4py.cartesian.gtc.dace.symbol_utils import data_type_to_dace_typeclass
 from gt4py.cartesian.gtc.dace.utils import get_dace_debuginfo, make_dace_subset
 
 
-def exported_scalar_name(*, local_name: Union[eve.SymbolName, eve.SymbolRef]) -> eve.SymbolName:
-    #return eve.SymbolName(f"gtEXP__{local_name}")
+def exported_scalar_name(*, local_name: Union[eve.SymbolName, eve.SymbolRef]) -> str:
     return local_name.removeprefix("gtOUT__").removeprefix("gtIN__")
 
 
@@ -256,7 +255,9 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         assert isinstance(node.condition.stmts[0], dcir.AssignStmt)
         assert isinstance(node.condition.stmts[0].left, dcir.ScalarAccess)
         if node.condition.stmts[0].left.original_name is None:
-            raise ValueError(f"Original node name not found for {node.name}. DaCe IR error.")
+            raise ValueError(
+                f"Original node name not found for {node.condition.stmts[0].left.name}. DaCe IR error."
+            )
 
         sdfg_ctx.add_while(condition_name=node.condition.stmts[0].left.original_name)
         assert sdfg_ctx.state.label.startswith("while_init")
@@ -307,7 +308,9 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         assert isinstance(node.condition.stmts[0], dcir.AssignStmt)
         assert isinstance(node.condition.stmts[0].left, dcir.ScalarAccess)
         if node.condition.stmts[0].left.original_name is None:
-            raise ValueError(f"Original node name not found for {node.name}. DaCe IR error.")
+            raise ValueError(
+                f"Original node name not found for {node.condition.stmts[0].left.name}. DaCe IR error."
+            )
 
         sdfg_ctx.add_condition(condition_name=node.condition.stmts[0].left.original_name)
         assert sdfg_ctx.state.label.startswith("condition_init")

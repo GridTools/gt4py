@@ -334,8 +334,6 @@ class DaCeIRBuilder(eve.NodeTranslator):
 
         res: Union[dcir.IndexAccess, dcir.ScalarAccess]
         if node.name in var_offset_fields.union(K_write_with_offset):
-            # If write in K, we consider the variable to always be a target
-            # is_target = is_target or node.name in targets # or node.name in K_write_with_offset
             name = get_tasklet_symbol(node.name, offset=node.offset, is_target=is_target)
             res = dcir.IndexAccess(
                 name=name,
@@ -374,7 +372,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
                         targets=targets,
                         var_offset_fields=var_offset_fields,
                         K_write_with_offset=K_write_with_offset,
-                        **kwargs
+                        **kwargs,
                     ),
                     dtype=node.dtype,
                 )
@@ -397,11 +395,13 @@ class DaCeIRBuilder(eve.NodeTranslator):
             # Handle function parameters differently because they are always available
             symbol_collector.add_symbol(node.name, dtype=node.dtype)
             return dcir.ScalarAccess(name=node.name, dtype=node.dtype, is_target=is_target)
-        
+
         # Rename local scalars inside tasklets such that we can pass them from one state
         # to another (same as we do for index access).
         tasklet_name = get_tasklet_symbol(node.name, is_target=is_target)
-        return dcir.ScalarAccess(name=tasklet_name, original_name=node.name, dtype=node.dtype, is_target=is_target)
+        return dcir.ScalarAccess(
+            name=tasklet_name, original_name=node.name, dtype=node.dtype, is_target=is_target
+        )
 
     def visit_AssignStmt(self, node: oir.AssignStmt, *, targets, **kwargs: Any) -> dcir.AssignStmt:
         # Visiting order matters because targets must not contain the target symbols from the left visit
@@ -416,16 +416,32 @@ class DaCeIRBuilder(eve.NodeTranslator):
         memlets: List[dcir.Memlet],
         global_ctx: DaCeIRBuilder.GlobalContext,
         symbol_collector: DaCeIRBuilder.SymbolCollector,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> dcir.Tasklet:
         condition_expression = node.mask if isinstance(node, oir.MaskStmt) else node.cond
-        tmp_name = f"if_expression_{id(node)}" if isinstance(node, oir.MaskStmt) else f"while_expression_{id(node)}"
+        tmp_name = (
+            f"if_expression_{id(node)}"
+            if isinstance(node, oir.MaskStmt)
+            else f"while_expression_{id(node)}"
+        )
 
         statement = dcir.AssignStmt(
             # Visiting order matters because targets must not contain the target symbols from the left visit
-            right=self.visit(condition_expression, is_target=False, global_ctx=global_ctx, symbol_collector=symbol_collector, **kwargs),
-            left=dcir.ScalarAccess(name=get_tasklet_symbol(tmp_name, is_target=True), original_name=tmp_name, dtype=common.DataType.BOOL, loc=node.loc, is_target=True),
-            loc=node.loc
+            right=self.visit(
+                condition_expression,
+                is_target=False,
+                global_ctx=global_ctx,
+                symbol_collector=symbol_collector,
+                **kwargs,
+            ),
+            left=dcir.ScalarAccess(
+                name=get_tasklet_symbol(tmp_name, is_target=True),
+                original_name=tmp_name,
+                dtype=common.DataType.BOOL,
+                loc=node.loc,
+                is_target=True,
+            ),
+            loc=node.loc,
         )
         read_memlets = []
 
@@ -446,17 +462,9 @@ class DaCeIRBuilder(eve.NodeTranslator):
                 )
 
             # Memlets aren't hashable, we thus can't use a set
-            if (
-                len(matches) > 0
-                and matches[0].is_write
-                and not matches[0].is_read
-            ):
+            if len(matches) > 0 and matches[0].is_write and not matches[0].is_read:
                 raise RuntimeError("We shouldn't match with write-only memlet")
-            if (
-                len(matches) > 0
-                and matches[0].is_read
-                and matches[0] not in read_memlets
-            ):
+            if len(matches) > 0 and matches[0].is_read and matches[0] not in read_memlets:
                 read_memlets.append(matches[0].copy(update={}))
 
         tasklet = dcir.Tasklet(
@@ -493,7 +501,13 @@ class DaCeIRBuilder(eve.NodeTranslator):
                 symbol_collector=symbol_collector,
                 **kwargs,
             ),
-            true_state=self.visit(code_block, memlets=memlets, global_ctx=global_ctx, symbol_collector=symbol_collector, **kwargs),
+            true_state=self.visit(
+                code_block,
+                memlets=memlets,
+                global_ctx=global_ctx,
+                symbol_collector=symbol_collector,
+                **kwargs,
+            ),
         )
 
     def visit_While(
@@ -513,7 +527,13 @@ class DaCeIRBuilder(eve.NodeTranslator):
                 symbol_collector=symbol_collector,
                 **kwargs,
             ),
-            body=self.visit(code_block, memlets=memlets, global_ctx=global_ctx, symbol_collector=symbol_collector, **kwargs),
+            body=self.visit(
+                code_block,
+                memlets=memlets,
+                global_ctx=global_ctx,
+                symbol_collector=symbol_collector,
+                **kwargs,
+            ),
         )
 
     def visit_Cast(self, node: oir.Cast, **kwargs: Any) -> dcir.Cast:
@@ -531,35 +551,42 @@ class DaCeIRBuilder(eve.NodeTranslator):
             false_expr=self.visit(node.false_expr, **kwargs),
             dtype=node.dtype,
         )
-    
+
     def _fix_scalar_access_read_after_write(self, tasklet: dcir.Tasklet) -> dcir.Tasklet:
         """
         This function fixes read after write situations for scalar accesses within a Tasklet.
 
         We can't detect these (in general) when building the DaCe IR directly because we don't
-        know where the "Tasklet boundaries" are.
+        know where the Tasklet boundaries are.
         """
 
         class FixScalarReadAfterWrite(eve.NodeTranslator):
-            def visit_ScalarAccess(self, node: dcir.ScalarAccess, targets: Set[eve.SymbolRef], **kwargs: Any) -> dcir.ScalarAccess:
+            def visit_ScalarAccess(
+                self, node: dcir.ScalarAccess, targets: Set[str], **kwargs: Any
+            ) -> dcir.ScalarAccess:
                 if node.original_name is None:
                     # Field access can be represented as ScalarAccess. They don't have an original_name
                     # and that is fine. We shouldn't mess with them.
                     return copy.deepcopy(node)
-                
+
                 # Handle write
                 if node.is_target:
                     targets.add(node.original_name)
                     return copy.deepcopy(node)
-                
+
                 # Handle read after write
                 if node.original_name in targets:
                     new_name = get_tasklet_symbol(node.original_name, is_target=True)
-                    return dcir.ScalarAccess(name=new_name, original_name=node.original_name, loc=node.loc, dtype=node.dtype, is_target=node.is_target)
-                
+                    return dcir.ScalarAccess(
+                        name=new_name,
+                        original_name=node.original_name,
+                        loc=node.loc,
+                        dtype=node.dtype,
+                        is_target=node.is_target,
+                    )
+
                 # Handle general read
                 return copy.deepcopy(node)
-                
 
             def visit_AssignStmt(self, node: dcir.AssignStmt, **kwargs: Any) -> dcir.AssignStmt:
                 return dcir.AssignStmt(
@@ -569,42 +596,9 @@ class DaCeIRBuilder(eve.NodeTranslator):
                     loc=node.loc,
                 )
 
-            #@classmethod
-            #def apply_fix(cls, node: dcir.Tasklet, **kwargs: Any) -> dcir.Tasklet:
-            #    # NOTE This is not named 'apply' b/c the base class has a method with
-            #    # that name and a different type signature.
-            #    if not isinstance(node, dcir.Tasklet):
-            #        raise ValueError("apply() requires dcir.Tasklet node")
-            #    
-            #    
-            #    return super().apply(node, targets=targets, **kwargs)
-
         # Scalars that we write to inside this Tasklet.
-        targets: Set[eve.SymbolRef] = set()
+        targets: Set[str] = set()
         return FixScalarReadAfterWrite().visit(tasklet, targets=targets)
-
-        ## Scalars that we write to inside this Tasklet.
-        #targets: Set[eve.SymbolRef] = set()
-        #
-        #for node in tasklet.walk_values().if_isinstance(dcir.ScalarAccess):
-        #    # Our type hint system isn't good enough. Even though we filter on Scalar_Access
-        #    # nodes, `node` is typed as `Any`.
-        #    assert isinstance(node, dcir.ScalarAccess)
-        #
-        #    # Field access can be represented as ScalarAccess. They don't have an original_name
-        #    # and that is fine. We shouldn't mess with them.
-        #    if node.original_name is None:
-        #        continue
-        #
-        #    # Handle write access
-        #    if node.is_target:
-        #        targets.add(node.original_name)
-        #        continue
-        #
-        #    # Handle read access
-        #    if node.original_name in targets:
-        #        # Read after write detected
-        #        node.name = get_tasklet_symbol(node.original_name, is_target=True)
 
     def _fix_memlet_array_access(
         self,
@@ -794,10 +788,6 @@ class DaCeIRBuilder(eve.NodeTranslator):
             k_interval=k_interval,
         )
 
-        # local_scalar_declarations: List[dcir.LocalScalarDecl] = [
-        #     self.visit(declaration, **kwargs) for declaration in node.declarations
-        # ]
-
         code_block = oir.CodeBlock(body=node.body, loc=node.loc, label=f"he_{id(node)}")
 
         dcir_nodes = self.visit(
@@ -807,7 +797,6 @@ class DaCeIRBuilder(eve.NodeTranslator):
             symbol_collector=symbol_collector,
             k_interval=k_interval,
             memlets=[*read_memlets, *write_memlets],
-            # declarations=local_scalar_declarations,
             **kwargs,
         )
 
@@ -887,7 +876,10 @@ class DaCeIRBuilder(eve.NodeTranslator):
         nodes = flatten_list(nodes)
         if all(isinstance(n, (dcir.NestedSDFG, dcir.DomainMap, dcir.Tasklet)) for n in nodes):
             return nodes
-        if not all(isinstance(n, (dcir.ComputationState, dcir.Condition, dcir.DomainLoop, dcir.WhileLoop)) for n in nodes):
+        if not all(
+            isinstance(n, (dcir.ComputationState, dcir.Condition, dcir.DomainLoop, dcir.WhileLoop))
+            for n in nodes
+        ):
             raise ValueError("Can't mix dataflow and state nodes on same level.")
 
         read_memlets, write_memlets, field_memlets = union_inout_memlets(nodes)

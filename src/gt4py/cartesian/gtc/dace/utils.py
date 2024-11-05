@@ -67,7 +67,10 @@ def replace_strides(arrays: List[dace.data.Array], get_layout_map) -> Dict[str, 
 
 
 def get_tasklet_symbol(
-    name: eve.SymbolRef, *, offset: Optional[Union[CartesianOffset, VariableKOffset]] = None, is_target: bool
+    name: str,
+    *,
+    offset: Optional[Union[CartesianOffset, VariableKOffset]] = None,
+    is_target: bool,
 ):
     access_name = f"gtOUT__{name}" if is_target else f"gtIN__{name}"
     if offset is None:
@@ -78,7 +81,9 @@ def get_tasklet_symbol(
     for axis in dcir.Axis.dims_3d():
         axis_offset = offset.to_dict()[axis.lower()]
         if axis_offset is not None and axis_offset != 0:
-            offset_strings.append(axis.lower() + ("m" if axis_offset < 0 else "p") + f"{abs(axis_offset):d}")
+            offset_strings.append(
+                axis.lower() + ("m" if axis_offset < 0 else "p") + f"{abs(axis_offset):d}"
+            )
 
     return access_name + "_".join(offset_strings)
 
