@@ -40,12 +40,11 @@ class PruneCasts(PreserveLocationVisitor, NodeTranslator):
             cpm.is_applied_as_fieldop(node)
             and isinstance(node.fun.args[0], ir.Lambda)  # type: ignore[attr-defined]
             and cpm.is_call_to(node.fun.args[0].expr, "deref")  # type: ignore[attr-defined]
+            and cpm.is_ref_to(node.fun.args[0].expr.args[0], node.fun.args[0].params[0].id)  # type: ignore[attr-defined]
         ):
-            # pruning of cast expressions may leave some trivial `as_fieldop` field copies
-            lambda_node = node.fun.args[0]  # type: ignore[attr-defined]
-            assert len(lambda_node.params) == 1
-            if cpm.is_ref_to(lambda_node.expr.args[0], lambda_node.params[0].id):  # type: ignore[attr-defined]
-                return node.args[0]
+            # pruning of cast expressions may leave some trivial `as_fieldop` expressions
+            # with form '(⇑(λ(__arg) → ·__arg))(a)'
+            return node.args[0]
 
         return node
 
