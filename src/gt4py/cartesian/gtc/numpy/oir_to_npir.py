@@ -157,13 +157,12 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_While(
         self, node: oir.While, *, mask: Optional[npir.Expr] = None, **kwargs: Any
     ) -> npir.While:
-        cond = self.visit(node.cond, mask=mask, **kwargs)
+        cond_expr = self.visit(node.cond, **kwargs)
         if mask:
-            mask = npir.VectorLogic(op=common.LogicalOperator.AND, left=mask, right=cond)
-        else:
-            mask = cond
+            cond_expr = npir.VectorLogic(op=common.LogicalOperator.AND, left=mask, right=cond_expr)
+
         return npir.While(
-            cond=cond, body=utils.flatten_list(self.visit(node.body, mask=mask, **kwargs))
+            cond=cond_expr, body=utils.flatten_list(self.visit(node.body, mask=cond_expr, **kwargs))
         )
 
     def visit_HorizontalRestriction(
