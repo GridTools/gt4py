@@ -285,11 +285,9 @@ class ItirToSDFG(eve.NodeVisitor):
 
         # Add connectivities as SDFG storages.
         for offset, offset_provider in neighbor_tables.items():
-            scalar_kind = tt.get_scalar_kind(offset_provider.index_type)
+            scalar_type = tt.from_dtype(offset_provider.dtype)
             local_dim = Dimension(offset, kind=DimensionKind.LOCAL)
-            type_ = ts.FieldType(
-                [offset_provider.origin_axis, local_dim], ts.ScalarType(scalar_kind)
-            )
+            type_ = ts.FieldType([offset_provider.origin_axis, local_dim], scalar_type)
             self.add_storage(
                 program_sdfg,
                 dace_utils.connectivity_identifier(offset),

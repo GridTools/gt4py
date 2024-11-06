@@ -28,15 +28,15 @@ def _max_domain_sizes_by_location_type(offset_provider: Mapping[str, Any]) -> di
     """
     sizes = dict[str, int]()
     for provider in offset_provider.values():
-        if isinstance(provider, gtx.NeighborTableOffsetProvider):
-            assert provider.origin_axis.kind == gtx.DimensionKind.HORIZONTAL
-            assert provider.neighbor_axis.kind == gtx.DimensionKind.HORIZONTAL
-            sizes[provider.origin_axis.value] = max(
-                sizes.get(provider.origin_axis.value, 0), provider.table.shape[0]
+        if isinstance(provider, common.ConnectivityField):
+            assert provider.domain.dims[0].kind == gtx.DimensionKind.HORIZONTAL
+            assert provider.codomain.kind == gtx.DimensionKind.HORIZONTAL
+            sizes[provider.domain.dims[0].value] = max(
+                sizes.get(provider.domain.dims[0].value, 0), provider.ndarray.shape[0]
             )
-            sizes[provider.neighbor_axis.value] = max(
-                sizes.get(provider.neighbor_axis.value, 0),
-                provider.table.max() + 1,  # type: ignore[attr-defined] # TODO(havogt): improve typing for NDArrayObject
+            sizes[provider.codomain.value] = max(
+                sizes.get(provider.codomain.value, 0),
+                provider.ndarray.max() + 1,  # type: ignore[attr-defined] # TODO(havogt): improve typing for NDArrayObject
             )
     return sizes
 

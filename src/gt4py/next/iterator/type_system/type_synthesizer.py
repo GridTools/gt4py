@@ -378,7 +378,7 @@ def shift(*offset_literals, offset_provider: common.OffsetProvider) -> TypeSynth
             provider = offset_provider[offset_axis.value.value]  # TODO: naming
             if isinstance(provider, common.Dimension):
                 pass
-            elif isinstance(provider, common.Connectivity):
+            elif isinstance(provider, common.ConnectivityField):
                 found = False
                 for i, dim in enumerate(new_position_dims):
                     if dim.value == provider.origin_axis.value:

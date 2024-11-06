@@ -86,7 +86,7 @@ def extract_connectivity_args(
                     "Only 'NeighborTable' connectivities implemented at this point."
                 )
             # copying to device here is a fallback for easy testing and might be removed later
-            conn_arg = _ensure_is_on_device(conn.table, device)
+            conn_arg = _ensure_is_on_device(conn.ndarray, device)
             args.append((conn_arg, tuple([0] * 2)))
         elif isinstance(conn, common.Dimension):
             pass

@@ -150,7 +150,7 @@ def get_sdfg_conn_args(
         assert isinstance(connectivity, gtx_common.NeighborTable)
         param = dace_utils.connectivity_identifier(offset)
         if param in sdfg.arrays:
-            connectivity_args[param] = _ensure_is_on_device(connectivity.table, device)
+            connectivity_args[param] = _ensure_is_on_device(connectivity.ndarray, device)
 
     return connectivity_args
 

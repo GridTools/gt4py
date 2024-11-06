@@ -120,7 +120,7 @@ class GTFNTranslationStep(
 
         for name, connectivity in offset_provider.items():
             if isinstance(connectivity, common.Connectivity):
-                if connectivity.index_type not in [np.int32, np.int64]:
+                if connectivity.dtype.scalar_type not in [np.int32, np.int64]:
                     raise ValueError(
                         "Neighbor table indices must be of type 'np.int32' or 'np.int64'."
                     )
@@ -136,9 +136,7 @@ class GTFNTranslationStep(
                                     name, kind=common.DimensionKind.LOCAL
                                 ),  # TODO(havogt): we should not use the name of the offset as the name of the local dimension
                             ],
-                            dtype=ts.ScalarType(
-                                type_translation.get_scalar_kind(connectivity.index_type)
-                            ),
+                            dtype=type_translation.from_dtype(connectivity.dtype),
                         ),
                     )
                 )

@@ -818,12 +818,31 @@ class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, 
     @abc.abstractmethod
     def codomain(self) -> DimT: ...
 
+    def __hash__(self) -> int:
+        return hash((self.domain, self.codomain))  # TODO
+
     @property
     def kind(self) -> ConnectivityKind:
         return ConnectivityKind.remapping()
 
     @abc.abstractmethod
     def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]: ...
+
+    @property
+    def origin_axis(self) -> Dimension:
+        return self.domain.dims[0]  # TODO remove, just for transition
+
+    @property
+    def max_neighbors(self) -> int:
+        return self.domain.ranges[1].stop - self.domain.ranges[1].start
+
+    @property
+    def neighbor_axis(self) -> Dimension:
+        return self.codomain
+
+    @property
+    def table(self) -> npt.NDArray:
+        return self.ndarray
 
     @property
     @abc.abstractmethod
@@ -915,23 +934,26 @@ def _connectivity(
     raise NotImplementedError
 
 
-@runtime_checkable
-class Connectivity(Protocol):
-    max_neighbors: int
-    has_skip_values: bool
-    origin_axis: Dimension
-    neighbor_axis: Dimension
-    index_type: type[int] | type[np.int32] | type[np.int64]
+# @runtime_checkable
+# class Connectivity(Protocol):
+#     max_neighbors: int
+#     has_skip_values: bool
+#     origin_axis: Dimension
+#     neighbor_axis: Dimension
+#     index_type: type[int] | type[np.int32] | type[np.int64]
 
-    def mapped_index(
-        self, cur_index: int | np.integer, neigh_index: int | np.integer
-    ) -> Optional[int | np.integer]:
-        """Return neighbor index."""
+#     def mapped_index(
+#         self, cur_index: int | np.integer, neigh_index: int | np.integer
+#     ) -> Optional[int | np.integer]:
+#         """Return neighbor index."""
 
 
-@runtime_checkable
-class NeighborTable(Connectivity, Protocol):
-    table: npt.NDArray
+# @runtime_checkable
+# class NeighborTable(Connectivity, Protocol):
+#     table: npt.NDArray
+
+Connectivity: TypeAlias = ConnectivityField
+NeighborTable: TypeAlias = ConnectivityField  # TODO actually NDArrayConnectivityField
 
 
 OffsetProviderElem: TypeAlias = Dimension | Connectivity

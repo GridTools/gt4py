@@ -50,6 +50,7 @@ from gt4py.next import common, field_utils
 from gt4py.next.embedded import (
     context as embedded_context,
     exceptions as embedded_exceptions,
+    nd_array_field,
     operators,
 )
 from gt4py.next.ffront import fbuiltins
@@ -93,57 +94,28 @@ Scalar: TypeAlias = (
 class SparseTag(Tag): ...
 
 
-class NeighborTableOffsetProvider:
-    def __init__(
-        self,
-        table: core_defs.NDArrayObject,
-        origin_axis: common.Dimension,
-        neighbor_axis: common.Dimension,
-        max_neighbors: int,
-        has_skip_values=True,
-    ) -> None:
-        self.table = table
-        self.origin_axis = origin_axis
-        self.neighbor_axis = neighbor_axis
-        assert not hasattr(table, "shape") or table.shape[1] == max_neighbors
-        self.max_neighbors = max_neighbors
-        self.has_skip_values = has_skip_values
-        self.index_type = table.dtype
+@xtyping.deprecated("Use a 'ConnectivityField' instead.")
+def NeighborTableOffsetProvider(
+    table: core_defs.NDArrayObject,
+    origin_axis: common.Dimension,
+    neighbor_axis: common.Dimension,
+    max_neighbors: int,
+    has_skip_values=True,
+) -> None:
+    return common._connectivity(
+        table,
+        codomain=neighbor_axis,
+        domain={
+            origin_axis: table.shape[0],
+            common.Dimension(
+                value="_DummyLocalDim", kind=common.DimensionKind.LOCAL
+            ): max_neighbors,
+        },
+        skip_value=common._DEFAULT_SKIP_VALUE if has_skip_values else None,
+    )
 
-    def mapped_index(
-        self, primary: common.IntIndex, neighbor_idx: common.IntIndex
-    ) -> common.IntIndex:
-        res = self.table[(primary, neighbor_idx)]
-        assert common.is_int_index(res)
-        return res
-
-    if dace:
-        # Extension of NeighborTableOffsetProvider adding SDFGConvertible support in GT4Py Programs
-        def _dace_data_ptr(self) -> int:
-            obj = self.table
-            if dace.dtypes.is_array(obj):
-                if hasattr(obj, "__array_interface__"):
-                    return obj.__array_interface__["data"][0]
-                if hasattr(obj, "__cuda_array_interface__"):
-                    return obj.__cuda_array_interface__["data"][0]
-            raise ValueError("Unsupported data container.")
-
-        def _dace_descriptor(self) -> dace.data.Data:
-            return dace.data.create_datadescriptor(self.table)
-    else:
-
-        def _dace_data_ptr(self) -> NoReturn:  # type: ignore[misc]
-            raise NotImplementedError(
-                "data_ptr is only supported when the 'dace' module is available."
-            )
-
-        def _dace_descriptor(self) -> NoReturn:  # type: ignore[misc]
-            raise NotImplementedError(
-                "__descriptor__ is only supported when the 'dace' module is available."
-            )
-
-    data_ptr = _dace_data_ptr
-    __descriptor__ = _dace_descriptor
+    # data_ptr = _dace_data_ptr
+    # __descriptor__ = _dace_descriptor
 
 
 class StridedNeighborOffsetProvider:
@@ -600,7 +572,7 @@ def execute_shift(
                     assert isinstance(offset_implementation, common.Connectivity)
                     cur_index = pos[offset_implementation.origin_axis.value]
                     assert common.is_int_index(cur_index)
-                    if offset_implementation.mapped_index(cur_index, index) in [
+                    if offset_implementation[cur_index, index] in [
                         None,
                         common._DEFAULT_SKIP_VALUE,
                     ]:
@@ -627,13 +599,13 @@ def execute_shift(
         new_pos.pop(offset_implementation.origin_axis.value)
         cur_index = pos[offset_implementation.origin_axis.value]
         assert common.is_int_index(cur_index)
-        if offset_implementation.mapped_index(cur_index, index) in [
+        if offset_implementation[cur_index, index] in [
             None,
             common._DEFAULT_SKIP_VALUE,
         ]:
             return None
         else:
-            new_index = offset_implementation.mapped_index(cur_index, index)
+            new_index = offset_implementation[cur_index, index].as_scalar()
             assert new_index is not None
             new_pos[offset_implementation.neighbor_axis.value] = int(new_index)
 

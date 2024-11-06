@@ -86,6 +86,7 @@ def run_processor(
 
 @dataclasses.dataclass
 class DummyConnectivity:
+    # TODO
     max_neighbors: int
     has_skip_values: int
     origin_axis: gtx.Dimension = gtx.Dimension("dummy_origin")

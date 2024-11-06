@@ -50,7 +50,8 @@ class JITArgs:
 
 
 @dataclasses.dataclass(frozen=True)
-class CompileTimeConnectivity(common.Connectivity):
+class CompileTimeConnectivity:  # (common.Connectivity):
+    # TODO
     """Compile-time standin for a GTX connectivity, retaining everything except the connectivity tables."""
 
     max_neighbors: int

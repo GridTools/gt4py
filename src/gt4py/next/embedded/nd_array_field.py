@@ -466,6 +466,9 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
     _skip_value: Optional[core_defs.IntegralScalar]
     _kind: Optional[common.ConnectivityKind] = None
 
+    def __hash__(self) -> int:
+        return hash((self.domain, self.codomain))  # TODO
+
     def __post_init__(self) -> None:
         assert self._kind is None or bool(self._kind & common.ConnectivityKind.ALTER_DIMS) == (
             self.domain.dim_index(self.codomain) is not None
@@ -995,15 +998,15 @@ def _make_reduction(
         offset_definition = current_offset_provider[
             axis.value
         ]  # assumes offset and local dimension have same name
-        assert isinstance(offset_definition, itir_embedded.NeighborTableOffsetProvider)
+        assert isinstance(offset_definition, common.ConnectivityField)
         new_domain = common.Domain(*[nr for nr in field.domain if nr.dim != axis])
 
         broadcast_slice = tuple(
-            slice(None) if d in [axis, offset_definition.origin_axis] else xp.newaxis
+            slice(None) if d in [axis, offset_definition.domain.dims[0]] else xp.newaxis
             for d in field.domain.dims
         )
         masked_array = xp.where(
-            xp.asarray(offset_definition.table[broadcast_slice]) != common._DEFAULT_SKIP_VALUE,
+            xp.asarray(offset_definition.ndarray[broadcast_slice]) != common._DEFAULT_SKIP_VALUE,
             field.ndarray,
             initial_value_op(field),
         )

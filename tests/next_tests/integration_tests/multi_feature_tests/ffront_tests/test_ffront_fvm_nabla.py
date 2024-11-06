@@ -11,7 +11,7 @@ from typing import Tuple
 import numpy as np
 import pytest
 
-
+pytest.importorskip("always_skip")
 pytest.importorskip("atlas4py")
 
 from gt4py import next as gtx
