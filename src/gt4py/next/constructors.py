@@ -80,7 +80,7 @@ def empty(
     buffer = next_allocators.allocate(
         domain, dtype, aligned_index=aligned_index, allocator=allocator, device=device
     )
-    res = common._field(buffer.ndarray, domain=domain)
+    res = common._field(buffer, domain=domain)
     assert isinstance(res, common.MutableField)
     assert isinstance(res, nd_array_field.NdArrayField)
     return res
@@ -343,9 +343,9 @@ def as_connectivity(
         device = core_defs.Device(*data.__dlpack_device__())
     buffer = next_allocators.allocate(actual_domain, dtype, allocator=allocator, device=device)
     # TODO(havogt): consider adding MutableNDArrayObject
-    buffer.ndarray[...] = storage_utils.asarray(data)  # type: ignore[index]
+    buffer[...] = storage_utils.asarray(data)  # type: ignore[index]
     connectivity_field = common._connectivity(
-        buffer.ndarray, codomain=codomain, domain=actual_domain, skip_value=skip_value
+        buffer, codomain=codomain, domain=actual_domain, skip_value=skip_value
     )
     assert isinstance(connectivity_field, nd_array_field.NdArrayConnectivityField)
 
