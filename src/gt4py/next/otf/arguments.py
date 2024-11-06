@@ -23,13 +23,15 @@
 from __future__ import annotations
 
 import dataclasses
+import functools
 import typing
-from typing import Any, Iterable, Iterator, Optional
+from typing import TYPE_CHECKING, Any, Iterable, Iterator, Optional
 
-import numpy as np
-from typing_extensions import Self
+from typing_extensions import Never, Self
 
+from gt4py._core import definitions as core_defs
 from gt4py.next import common
+from gt4py.next.ffront.fbuiltins import FieldOffset
 from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
@@ -50,36 +52,89 @@ class JITArgs:
 
 
 @dataclasses.dataclass(frozen=True)
-class CompileTimeConnectivity:  # (common.Connectivity):
-    # TODO
-    """Compile-time standin for a GTX connectivity, retaining everything except the connectivity tables."""
+class CompileTimeConnectivity(common.ConnectivityField[common.DimsT, common.DimT]):
+    """
+    Compile-time standin for a ConnectivityField, retaining everything except the connectivity tables.
 
-    max_neighbors: int
-    has_skip_values: bool
-    origin_axis: common.Dimension
-    neighbor_axis: common.Dimension
-    index_type: type[int] | type[np.int32] | type[np.int64]
+    TODO(havogt): replace by the `type(ConnectivityField)`.
+    """
 
-    def mapped_index(
-        self, cur_index: int | np.integer, neigh_index: int | np.integer
-    ) -> Optional[int | np.integer]:
-        raise NotImplementedError(
-            "A CompileTimeConnectivity instance should not call `mapped_index`."
-        )
+    domain: common.Domain  # TODO(havogt) Domain[common.DimsT]
+    codomain: common.DimT
+    skip_value: Optional[core_defs.IntegralScalar] = None
+    dtype: core_defs.DType
+
+    def __init__(
+        self,
+        domain: common.Domain,
+        codomain: common.DimT,
+        skip_value: Optional[core_defs.IntegralScalar],
+        dtype: core_defs.DType,
+    ) -> None:
+        object.__setattr__(self, "domain", domain)
+        object.__setattr__(self, "codomain", codomain)
+        object.__setattr__(self, "skip_value", skip_value)
+        object.__setattr__(self, "dtype", dtype)
 
     @classmethod
-    def from_connectivity(cls, connectivity: common.Connectivity) -> Self:
+    def from_connectivity(cls, connectivity: common.ConnectivityField) -> Self:
         return cls(
-            max_neighbors=connectivity.max_neighbors,
-            has_skip_values=connectivity.has_skip_values,
-            origin_axis=connectivity.origin_axis,
-            neighbor_axis=connectivity.neighbor_axis,
-            index_type=connectivity.index_type,
+            domain=connectivity.domain,
+            codomain=connectivity.codomain,
+            skip_value=connectivity.skip_value,
+            dtype=connectivity.dtype,
         )
 
     @property
-    def table(self) -> None:
-        return None
+    def __gt_origin__(self) -> tuple[int, ...]:
+        raise NotImplementedError()
+
+    if not TYPE_CHECKING:
+
+        @functools.cached_property
+        def codomain(self) -> common.DimT:
+            raise RuntimeError("This property should be always set in the constructor.")
+
+        @functools.cached_property
+        def domain(self) -> common.Domain:
+            raise RuntimeError("This property should be always set in the constructor.")
+
+        @functools.cached_property
+        def skip_value(self) -> core_defs.IntegralScalar:
+            raise RuntimeError("This property should be always set in the constructor.")
+
+        @functools.cached_property
+        def dtype(self) -> core_defs.DType:
+            raise RuntimeError("This property should be always set in the constructor.")
+
+    @property
+    def ndarray(self) -> Never:
+        raise NotImplementedError()
+
+    def asnumpy(self) -> Never:
+        raise NotImplementedError()
+
+    def premap(self, index_field: common.ConnectivityField | FieldOffset) -> Never:
+        raise NotImplementedError()
+
+    def restrict(self, index: common.AnyIndexSpec) -> Never:
+        raise NotImplementedError()
+
+    def __call__(
+        self,
+        index_field: common.ConnectivityField | FieldOffset,
+        *args: common.ConnectivityField | FieldOffset,
+    ) -> Never:
+        raise NotImplementedError()
+
+    def __getitem__(self, index: common.AnyIndexSpec) -> Never:
+        raise NotImplementedError()
+
+    def inverse_image(self, image_range: common.UnitRange | common.NamedRange) -> Never:
+        raise NotImplementedError()
+
+    def as_scalar(self) -> Never:
+        raise NotImplementedError()
 
 
 @dataclasses.dataclass(frozen=True)
