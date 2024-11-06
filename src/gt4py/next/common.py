@@ -841,6 +841,10 @@ class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, 
         return self.codomain
 
     @property
+    def has_skip_values(self) -> bool:
+        return self.skip_value is not None
+
+    @property
     def table(self) -> npt.NDArray:
         return self.ndarray
 
