@@ -10,6 +10,7 @@
 
 import pytest
 import numpy as np
+import copy
 
 from gt4py.next.program_processors.runners.dace_fieldview import (
     transformations as gtx_transformations,
@@ -19,6 +20,7 @@ from . import util
 
 
 dace = pytest.importorskip("dace")
+import dace
 from dace.sdfg import nodes as dace_nodes
 
 
@@ -61,7 +63,11 @@ def test_gt4py_redundant_array_elimination():
     state.add_nedge(
         state.add_access("c"),
         tmp1,
-        dace.Memlet("c[0:2, 0:2] -> 18:20, 17:19"),
+        dace.Memlet.simple(
+            data="c",
+            subset_str="0:2, 0:2",
+            other_subset_str="18:20, 17:19",
+        ),
     )
     state.add_nedge(
         state.add_access("d"),
@@ -77,7 +83,7 @@ def test_gt4py_redundant_array_elimination():
     )
     sdfg.validate()
 
-    count = sdfg.apply_transformations(
+    count = sdfg.apply_transformations_repeated(
         gtx_transformations.GT4PyRednundantArrayElimination(),
         validate_all=True,
     )
@@ -122,12 +128,13 @@ def test_gt4py_redundant_array_elimination_unequal_shape():
     sdfg.validate()
 
     origin = np.array(np.random.rand(30), dtype=np.float64, copy=True)
-    v_ref = np.array(np.random.rand(10), dtype=np.float64, copy=True)
-    v_ref[1:9] = 0.0
+    v_ref = np.zeros((10), dtype=np.float64)
+    v_ref_init = v_ref.copy()
     v_res = v_ref.copy()
 
     csdfg_org = sdfg.compile()
     csdfg_org(origin=origin, v=v_ref)
+    assert not np.allclose(v_ref, v_ref_init)
 
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.GT4PyRednundantArrayElimination(),
@@ -139,3 +146,306 @@ def test_gt4py_redundant_array_elimination_unequal_shape():
     csdfg_opt = sdfg.compile()
     csdfg_opt(origin=origin, v=v_res)
     assert np.allclose(v_ref, v_res), f"Expected {v_ref}, but got {v_res}."
+
+
+def test_gt4py_redundant_array_elimination_unequal_shape_2():
+    sdfg: dace.SDFG = dace.SDFG(
+        util.unique_name("test_gt4py_redundant_array_elimination_full_read")
+    )
+    state: dace.SDFGState = sdfg.add_state(is_start_block=True)
+    array_names = ["input_", "read", "write", "output_"]
+    for name in array_names:
+        sdfg.add_array(
+            name,
+            shape=(50,),
+            dtype=dace.float64,
+            transient=True,
+        )
+    sdfg.arrays["input_"].transient = False
+    sdfg.arrays["write"].shape = (100,)
+    sdfg.arrays["write"].total_size = 100
+    sdfg.arrays["output_"].transient = False
+    sdfg.arrays["output_"].shape = (100,)
+    sdfg.arrays["output_"].total_size = 100
+    input_, read, write, output_ = (state.add_access(name) for name in array_names)
+    state.remove_node(output_)
+
+    def _mk_memlet(an):
+        return dace.Memlet.from_array(an.data, an.desc(sdfg))
+
+    state.add_nedge(input_, read, _mk_memlet(input_))
+    state.add_nedge(
+        read,
+        write,
+        dace.Memlet.simple(data="read", subset_str="0:50", other_subset_str="10:60"),
+    )
+
+    state2 = sdfg.add_state_after(state)
+    write2 = state2.add_access("write")
+    state2.add_nedge(write2, state2.add_access("output_"), _mk_memlet(write2))
+    sdfg.validate()
+
+    call_args = {
+        "input_": np.array(np.random.rand(50), dtype=np.float64, copy=True),
+        "output_": np.array(np.random.rand(100), dtype=np.float64, copy=True),
+    }
+
+    transformation_applied = False
+    try:
+        gtx_transformations.GT4PyRednundantArrayElimination.apply_to(
+            verify=True,
+            sdfg=sdfg,
+            read=read,
+            write=write,
+        )
+        transformation_applied = True
+    except ValueError as e:
+        pass
+    assert transformation_applied
+
+    # Now compile the SDFG again to see if there were changes.
+    csdfg = sdfg.compile()
+    csdfg(**call_args)
+
+    assert np.allclose(
+        call_args["input_"],
+        call_args["output_"][10:60],
+    )
+
+
+def _make_too_big_copy_sdfg(
+    write_is_global: bool,
+    offset_starts_at_zero: bool,
+) -> tuple[dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.AccessNode]:
+    """SDFGs for the `test_gt4py_redundant_array_elimination_too_big_*()` tests.
+
+    Tests the following scenario:
+    ```python
+        read[0:100] = ...
+        write[0:50] = read[a:(a+50)]
+    ```
+
+    This will be simplified to `write[0:100] = ...`, under the condition, that
+    - `write` is a transient
+    - `a` is equal to `0`.
+
+    Args:
+        write_is_global: Makes `write` a global, i.e. non-transient.
+        offset_starts_at_zero: Make `a` to `o`.
+    """
+    sdfg: dace.SDFG = dace.SDFG(util.unique_name("test_gt4py_redundant_array_elimination_too_big"))
+    state: dace.SDFGState = sdfg.add_state(is_start_block=True)
+
+    arr_names = ["input_", "tmp", "read", "write", "return_"]
+    for name in arr_names:
+        sdfg.add_array(
+            name=name,
+            shape=(100,),
+            dtype=dace.float64,
+            transient=True,
+        )
+    for name in ["input_", "return_"]:
+        sdfg.arrays[name].transient = False
+    if write_is_global:
+        sdfg.arrays["write"].transient = False
+    input_, tmp, read, write = (state.add_access(name) for name in arr_names[:-1])
+
+    def _mk_memlet(an):
+        return dace.Memlet.from_array(an.data, an.desc(sdfg))
+
+    state.add_nedge(input_, tmp, _mk_memlet(tmp))
+    state.add_nedge(tmp, read, _mk_memlet(read))
+    if offset_starts_at_zero:
+        state.add_nedge(
+            read,
+            write,
+            dace.Memlet.simple(data="read", subset_str="0:50", other_subset_str="0:50"),
+        )
+    else:
+        state.add_nedge(
+            read,
+            write,
+            dace.Memlet.simple(data="read", subset_str="0:50", other_subset_str="10:60"),
+        )
+
+    state2 = sdfg.add_state_after(state)
+    return_s2 = state2.add_access("return_")
+    write_s2 = state2.add_access("write")
+    state2.add_nedge(
+        write_s2,
+        return_s2,
+        _mk_memlet(return_s2),
+    )
+    sdfg.validate()
+
+    return sdfg, state, read, write
+
+
+def _apply_and_run_to_big_copy_sdfg(
+    sdfg: dace.SDFG,
+    state: dace.SDFGState,
+    read: dace_nodes.AccessNode,
+    write: dace_nodes.AccessNode,
+    should_apply: bool,
+) -> bool:
+    """Tests SDFG for the `test_gt4py_redundant_array_elimination_too_big_*` family.
+
+    This function tests SDFG that were generated by the `_make_too_big_copy_sdfg()`
+    function. It will first run the SDFG to get the ground truth. Then the
+    transformation is applied and the SDFG is checked again.
+
+    Args:
+        sdfg: The SDFG that should be checked, not modified yet.
+        state: The state inside the SDFG.
+        read: The access node representing `read`
+        write: The access node representing `write`.
+        should_apply: Indicate if the transformation should apply or not.
+    """
+
+    if not should_apply:
+        # In case the transformation should not apply, we only check this.
+        # TODO: change to `can_be_applied_to()` once we update DaCe.
+        expected_result = False
+        try:
+            gtx_transformations.GT4PyRednundantArrayElimination.apply_to(
+                verify=True,
+                sdfg=sdfg,
+                read=read,
+                write=write,
+            )
+        except ValueError as e:
+            if str(e).startswith("Transformation cannot be"):
+                expected_result = True
+        assert expected_result, "The transformation applied but it should not."
+        return True
+
+    # Now generate the input arguments.
+    ref_call_args = {}
+    for aname, adesc in sdfg.arrays.items():
+        if adesc.transient:
+            continue
+        ref_call_args[aname] = np.array(np.random.rand(100), dtype=np.float64, copy=True)
+    res_call_args = copy.deepcopy(ref_call_args)
+
+    # Now call the SDFG before we modify it.
+    csdfg_ref = sdfg.compile()
+    csdfg_ref(**ref_call_args)
+
+    # Now we apply the transformation to the SDFG.
+    transformation_applied = False
+    try:
+        gtx_transformations.GT4PyRednundantArrayElimination.apply_to(
+            verify=True,
+            sdfg=sdfg,
+            read=read,
+            write=write,
+        )
+        transformation_applied = True
+    except ValueError as e:
+        pass
+    assert transformation_applied
+
+    # Now compile the SDFG again to see if there were changes.
+    sdfg.name = sdfg.name + "_transformed"
+    sdfg._regenerate_code = True
+    sdfg._recompile = True
+    csdfg_res = sdfg.compile()
+    csdfg_res(**res_call_args)
+
+    # Now we compare the two result. It is important that we only compare the
+    #  lower 50 entries, this is because how the SDFG is constructed.
+    assert np.allclose(
+        ref_call_args["return_"][0:50],
+        res_call_args["return_"][0:50],
+    ), f"Comparison failed."
+
+    return True
+
+
+def _test_gt4py_redundant_array_elimination_too_big(
+    write_is_global: bool,
+    offset_starts_at_zero: bool,
+    should_apply: bool,
+):
+    test_sdfg = _make_too_big_copy_sdfg(
+        write_is_global=write_is_global,
+        offset_starts_at_zero=offset_starts_at_zero,
+    )
+    _apply_and_run_to_big_copy_sdfg(
+        *test_sdfg,
+        should_apply=should_apply,
+    )
+
+
+def test_gt4py_redundant_array_elimination_too_big_trans_same_off():
+    """
+    Because `write` is a transient and the offsets are the same, it will apply.
+    """
+    _test_gt4py_redundant_array_elimination_too_big(
+        write_is_global=False,
+        offset_starts_at_zero=True,
+        should_apply=True,
+    )
+
+
+def test_gt4py_redundant_array_elimination_too_big_trans_diff_off():
+    """
+    `write` is a transient, but the offsets are not the same, the transformation does not apply.
+    """
+    _test_gt4py_redundant_array_elimination_too_big(
+        write_is_global=False, offset_starts_at_zero=False, should_apply=False
+    )
+
+
+def test_gt4py_redundant_array_elimination_too_big_global_same_off():
+    """
+    Same situation as in `test_gt4py_redundant_array_elimination_too_big_trans_same_off()`,
+    but now `write` is not a transient. Because of this the transformation will no
+    longer apply because this would change the semantics, which is observable, since
+    `write` is global.
+    """
+    _test_gt4py_redundant_array_elimination_too_big(
+        write_is_global=True,
+        offset_starts_at_zero=True,
+        should_apply=False,
+    )
+
+
+def test_gt4py_redundant_array_elimination_too_big_global_diff_off():
+    _test_gt4py_redundant_array_elimination_too_big(
+        write_is_global=True,
+        offset_starts_at_zero=False,
+        should_apply=False,
+    )
+
+
+def test_gt4py_redundant_array_elimination_self_write():
+    """
+    The producer of `read` is also `write`.
+
+    This is only allowed if `write` is global, however, in any cases it is forbidden.
+    """
+    sdfg: dace.SDFG = dace.SDFG(
+        util.unique_name("test_gt4py_redundant_array_elimination_same_read")
+    )
+    state: dace.SDFGState = sdfg.add_state(is_start_block=True)
+
+    for name in ["input_", "tmp"]:
+        sdfg.add_array(name, shape=(100,), dtype=dace.float64, transient=True)
+    sdfg.arrays["input_"].transient = False
+
+    input_ = state.add_access("input_")
+    read = state.add_access("tmp")
+    write = state.add_access("input_")  # Intentional
+
+    def _mk_memlet(an):
+        return dace.Memlet.from_array(an.data, an.desc(sdfg))
+
+    state.add_nedge(input_, read, _mk_memlet(input_))
+    state.add_nedge(read, write, _mk_memlet(write))
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.GT4PyRednundantArrayElimination(),
+        validate_all=True,
+    )
+    assert count == 0

@@ -277,11 +277,13 @@ def gt_reduce_distributed_buffering(
 class GT4PyRednundantArrayElimination(dace_transformation.SingleStateTransformation):
     """Special version of the redundant array removal transformation.
 
-    DaCe is not able to remove redundant arrays. This transformation is specially
+    DaCe is not able to remove some redundant arrays. This transformation is specially
     designed to remove these transient arrays. It matches two array `read` that is
     read and written into `write`. The transformation applies if:
     - `read` is a transient non view array.
     - `write` has input degree 1 and output degree zero (sink node might be lifted).
+    - If `write` is non-transient, then `read` shall not have a upstream access node
+        that refers to the same global data.
     - `read` has input degree larger than zero and output degree 1.
     - `read` does not appear in any other state that is reachable from this state.
     - `read` and `write` have the same dimensionality.
@@ -336,18 +338,111 @@ class GT4PyRednundantArrayElimination(dace_transformation.SingleStateTransformat
         if graph.in_degree(write_an) != 1:
             return False
 
-        # NOTE:
-        #   We do _not_ require that the whole `read` array is read, nor this array
-        #   is fully written. If it is not fully written (at this access node) then
-        #   these parts will remain undefined (as the array can not be written to).
-        #   If we would require that `read` is fully read, but `read` is not fully
-        #   written to in the first place, we would override undefined data with
-        #   undefined data.
+        # Check if used anywhere else.
+        # TODO(phimuell): Find a way to cache this information.
+        if self._check_if_read_is_used_downstream(graph, sdfg):
+            return False
 
-        # By requiring the same shape, we do not have to do subset translation.
-        if write_desc.shape != read_desc.shape:
-            # In certain cases we allow that the two data have different shapes.
+        # If `write` is global memory, then we do not remove `read` if there if
+        #  `read` is written to by another access node that also refers to `write`.
+        #  Essentially this prevents that global data can write into itself. It
+        #  might be possible to lift it in some cases, but not in all cases.
+        #  Consider this case:
+        # ```
+        #   tmp = a[0:20]  # noqa: ERA001 [commented-out-code]
+        #   a[10:30] = tmp  # noqa: ERA001 [commented-out-code]
+        # ```
+        #  which can only be solved, if the copy is done backwards (I am not
+        #  sure if DaCe uses `memmove()`), but any way we fully forbid that case,
+        #  since it is bother line invalid anyway.
+        if not write_desc.transient:
+            for read_in_edge in graph.in_edges(read_an):
+                producer_node = read_in_edge.src
+                if not isinstance(producer_node, dace_nodes.AccessNode):
+                    continue
+                producer_desc = producer_node.desc(sdfg)
+                if producer_node.data == write_an.data:
+                    return False
+                elif isinstance(producer_desc, dace_data.View):
+                    # TODO(phimuell): Handle this case
+                    return False
+
+        # NOTE: We do _not_ require that the whole `read` array is actually read, nor
+        #  that the array is fully written to. Because of our SDFG structure.
+        #  What we accepts depends on if `read` and `write` have the same shape.
+        if write_desc.shape == read_desc.shape:
+            # If `read` and write` have the same shape, then there are only one
+            #  kind of restriction. Consider the following:
+            # ```
+            #   read[0:100] = ...  # noqa: ERA001 [commented-out-code]
+            #   write[0:50] = read[0:50]  # noqa: ERA001 [commented-out-code]
+            # ```
+            #  This would become:
+            # ```
+            #   write[0:100] = ...  # noqa: ERA001 [commented-out-code]
+            # ```
+            #  This is a semantic change, since now `write` is defined in the range
+            #  `0:100` instead of `0:50` as before. However, because it has only one
+            #  incoming edge and our SSA rule, we know that the range `50:100` could
+            #  only contain invalid data, so reading from it would be wrong anyway
+            #  so we can safely write to it. The only problem is if `write` is
+            #  non transient data, in which case we would need to adjust the subsets.
+            #  The second problem if transactions should as:
+            # ```
+            #   read[0:100] = ...  # noqa: ERA001 [commented-out-code]
+            #   write[0:50] = read[25:75]  # noqa: ERA001 [commented-out-code]
+            # ```
+            #  This is a problem, because now we need to introduce offsets.
+            read_out_edge = next(iter(graph.out_edges(read_an)))
+            write_dst_subset = read_out_edge.data.get_dst_subset(read_out_edge, graph)
+            if write_dst_subset is None:
+                write_dst_subset = dace_subsets.Range.from_array(write_desc)
+
+            if not write_desc.transient:
+                # `write` is not a transient. In this case we must ensure that
+                #  `read` is not used to filter out some reads.
+                for read_in_edge in graph.in_edges(read_an):
+                    read_dst_subset = read_in_edge.data.get_dst_subset(read_in_edge, graph)
+                    if read_dst_subset is None:
+                        read_dst_subset = dace_subsets.Range.from_array(read_desc)
+                    # Test if the edges writes something that is later not read.
+                    if not write_dst_subset.covers(read_dst_subset):
+                        return False
+            else:
+                # `write` is a transient, so the only thing we care is the start
+                #  of the range we read/write. This is not a real restriction, it
+                #  just allows us to skip offset computation.
+                write_subset_min = write_dst_subset.min_element()
+                for read_in_edge in graph.in_edges(read_an):
+                    read_dst_subset = read_in_edge.data.get_dst_subset(read_in_edge, graph)
+                    if read_dst_subset is None:
+                        read_dst_subset = dace_subsets.Range.from_array(read_desc)
+                    read_dst_subset_min = read_dst_subset.min_element()
+                    if read_dst_subset_min != write_subset_min:
+                        return False
+                for read_out_edge in graph.out_edges(read_an):
+                    read_src_subset = read_out_edge.data.get_src_subset(read_out_edge, graph)
+                    if read_src_subset is None:
+                        read_src_subset = dace_subsets.Range.from_array(read_desc)
+                    read_src_subset_min = read_src_subset.min_element()
+                    if read_src_subset_min != write_subset_min:
+                        return False
+        else:
+            # They have different shapes, which is much more complicated to handle.
+
+            # For simplicity we assume that there is only one producer.
+            #  And that they have the same dimensionality.
             if graph.in_degree(read_an) != 1:
+                return False
+            if len(write_desc.shape) != len(read_desc.shape):
+                return False
+
+            read_in_edge = next(iter(graph.in_edges(read_an)))
+            read_out_edge = next(iter(graph.out_edges(read_an)))
+
+            # We also request that `read` is written to by another access node.
+            #  Because it is the only way how we can control what we write into `read`.
+            if not isinstance(read_in_edge.dst, dace_nodes.AccessNode):
                 return False
 
             # Check if everything that is read from `read` is also defined.
@@ -355,8 +450,6 @@ class GT4PyRednundantArrayElimination(dace_transformation.SingleStateTransformat
             #  later on. If we would remove this restriction it means that we would
             #  allow to copy around undefined data. Which might be helpful in some
             #  cases, especially in chains, but we currently do not handle it.
-            read_in_edge = next(iter(graph.in_edges(read_an)))
-            read_out_edge = next(iter(graph.out_edges(read_an)))
             read_isubset = read_in_edge.data.get_dst_subset(read_in_edge, graph)
             read_osubset = read_out_edge.data.get_src_subset(read_out_edge, graph)
             if read_osubset is None:
@@ -367,13 +460,11 @@ class GT4PyRednundantArrayElimination(dace_transformation.SingleStateTransformat
                 return False
             if not isinstance(read_osubset, dace_subsets.Range):
                 return False
-            if read_isubset.size() != read_osubset.size():
+            # If everything is written into `read` that is not also read later and
+            #  transferred to `write`. However, we have to exclude the case if both
+            #  have the same size.
+            if read_osubset.covers(read_isubset) and (not read_osubset == read_isubset):
                 return False
-
-        # Check if used anywhere else.
-        # TODO(phimuell): Find a way to cache this information.
-        if self._check_if_read_is_used_downstream(graph, sdfg):
-            return False
 
         return True
 
@@ -417,6 +508,7 @@ class GT4PyRednundantArrayElimination(dace_transformation.SingleStateTransformat
         curr_dst_subset = copy.deepcopy(write_in_edge.data.get_dst_subset(write_in_edge, graph))
         if curr_dst_subset is None:
             curr_dst_subset = dace_subsets.Range.from_array(write_desc)
+        curr_dst_subset_start = curr_dst_subset.min_element()
 
         if write_desc.shape == read_desc.shape:
             # The shapes are the same, so no subset translation is needed.
@@ -425,9 +517,16 @@ class GT4PyRednundantArrayElimination(dace_transformation.SingleStateTransformat
                 src_subset: dace_subsets.Subset = copy.deepcopy(
                     org_memlet.get_src_subset(iedge, graph)
                 )
+                if src_subset is None and isinstance(iedge.src, dace_nodes.AccessNode):
+                    src_subset = dace_subsets.Range.from_array(iedge.src.desc(sdfg))
+                if src_subset is not None:
+                    src_subset.offset(curr_dst_subset_start, negative=False)
+
                 dst_subset: dace_subsets.Subset = copy.deepcopy(
                     org_memlet.get_dst_subset(iedge, graph)
                 )
+                if dst_subset is None and isinstance(iedge.dst, dace_nodes.AccessNode):
+                    dst_subset = dace_subsets.Range.from_array(iedge.dst.desc.sdfg)
                 new_edge = graph.add_edge(
                     iedge.src,
                     iedge.src_conn,
@@ -437,11 +536,9 @@ class GT4PyRednundantArrayElimination(dace_transformation.SingleStateTransformat
                 )
                 # Modify the memlet, mostly adjust the subset and direction.
                 new_edge.data.data = write_name
+                new_edge.data.try_initialize(graph.parent, graph, new_edge)
                 new_edge.data.subset = dst_subset
                 new_edge.data.other_subset = src_subset
-                new_edge.data.try_initialize(graph.parent, graph, new_edge)
-                assert src_subset is new_edge.data.src_subset
-                assert dst_subset is new_edge.data.dst_subset
                 graph.remove_edge(iedge)
 
         else:
