@@ -511,11 +511,11 @@ def cast_as_fieldop(type_: str, domain: Optional[itir.FunCall] = None):
 
     Examples:
         >>> str(cast_as_fieldop("float32")("a"))
-        '(⇑(λ(__arg0) → cast_(·__arg0, float32)))(a)'
+        '(⇑(λ(__arg) → cast_(·__arg, float32)))(a)'
     """
 
     def _impl(it: itir.Expr) -> itir.FunCall:
-        return as_fieldop(lambda_("a")(call("cast_")(deref("a"), type_)), domain)(it)
+        return as_fieldop(lambda_("__arg")(call("cast_")(deref("__arg"), type_)), domain)(it)
 
     return _impl
 
