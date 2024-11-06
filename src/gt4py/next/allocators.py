@@ -60,7 +60,7 @@ class FieldBufferAllocatorProtocol(Protocol[core_defs.DeviceTypeT]):
         dtype: core_defs.DType[core_defs.ScalarT],
         device_id: int = 0,
         aligned_index: Optional[Sequence[common.NamedIndex]] = None,  # absolute position
-    ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]: ...
+    ) -> core_allocators._NDBuffer: ...
 
 
 def is_field_allocator(obj: Any) -> TypeGuard[FieldBufferAllocatorProtocol]:
@@ -160,7 +160,7 @@ class BaseFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceType
         dtype: core_defs.DType[core_defs.ScalarT],
         device_id: int = 0,
         aligned_index: Optional[Sequence[common.NamedIndex]] = None,  # absolute position
-    ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]:
+    ) -> core_allocators._NDBuffer:
         shape = domain.shape
         layout_map = self.layout_mapper(domain.dims)
         # TODO(egparedes): add support for non-empty aligned index values
@@ -168,7 +168,7 @@ class BaseFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceType
 
         return self.buffer_allocator.allocate(
             shape, dtype, device_id, layout_map, self.byte_alignment, aligned_index
-        )
+        ).ndarray
 
 
 if TYPE_CHECKING:
@@ -199,12 +199,31 @@ def horizontal_first_layout_mapper(
     return valid_layout_map
 
 
+def c_layout_mapper(dims: Sequence[common.Dimension]) -> core_allocators.BufferLayoutMap:
+    layout_map = tuple(range(len(dims)))
+    assert core_allocators.is_valid_layout_map(layout_map)
+
+    return layout_map
+
+
 if TYPE_CHECKING:
     __horizontal_first_layout_mapper: FieldLayoutMapper = horizontal_first_layout_mapper
 
 
 #: Registry of default allocators for each device type.
 device_allocators: dict[core_defs.DeviceType, FieldBufferAllocatorProtocol] = {}
+
+
+class CLayoutCPUFieldBufferAllocator(BaseFieldBufferAllocator[core_defs.CPUDeviceTyping]):
+    """A field buffer allocator for CPU devices that uses a C-style layout."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            device_type=core_defs.DeviceType.CPU,
+            array_utils=core_allocators.numpy_array_utils,
+            layout_mapper=c_layout_mapper,
+            byte_alignment=1,
+        )
 
 
 class StandardCPUFieldBufferAllocator(BaseFieldBufferAllocator[core_defs.CPUDeviceTyping]):
@@ -221,8 +240,43 @@ class StandardCPUFieldBufferAllocator(BaseFieldBufferAllocator[core_defs.CPUDevi
 
 device_allocators[core_defs.DeviceType.CPU] = StandardCPUFieldBufferAllocator()
 
-
 assert is_field_allocator(device_allocators[core_defs.DeviceType.CPU])
+
+try:
+    # TODO use pattern from GPU allocation (InvalidBufferAllocator)
+    import jax.numpy as jnp
+except ImportError:
+    jnp = None
+
+if jnp:
+    from jax import config
+
+    config.update("jax_enable_x64", True)
+
+    class StandardJAXCPUFieldBufferAllocator(
+        FieldBufferAllocatorProtocol[core_defs.CPUDeviceTyping]
+    ):
+        @property
+        def __gt_device_type__(self) -> core_defs.CPUDeviceTyping:
+            return core_defs.DeviceType.CPU
+
+        def __gt_allocate__(
+            self,
+            domain: common.Domain,
+            dtype: core_defs.DType[core_defs.ScalarT],
+            device_id: int = 0,
+            aligned_index: Optional[Sequence[common.NamedIndex]] = None,  # absolute position
+        ) -> core_allocators.TensorBuffer[core_defs.CPUDeviceTyping, core_defs.ScalarT]:
+            return jnp.empty(domain.shape, dtype=dtype)
+            # TODO
+            # tensor_buffer = CLayoutCPUFieldBufferAllocator().__gt_allocate__(
+            #     domain, dtype, device_id, aligned_index
+            # )
+            # object.__setattr__(
+            #     tensor_buffer, "ndarray", jnp.from_dlpack(tensor_buffer.ndarray)
+            # )  # TODO mutating a frozen object
+            # return tensor_buffer
+            ...
 
 
 @dataclasses.dataclass(frozen=True)
@@ -242,7 +296,7 @@ class InvalidFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceT
         dtype: core_defs.DType[core_defs.ScalarT],
         device_id: int = 0,
         aligned_index: Optional[Sequence[common.NamedIndex]] = None,  # absolute position
-    ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]:
+    ) -> core_allocators._NDBuffer:
         raise self.exception
 
 
@@ -299,7 +353,7 @@ def allocate(
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
     allocator: Optional[FieldBufferAllocationUtil] = None,
     device: Optional[core_defs.Device] = None,
-) -> core_allocators.TensorBuffer:
+) -> core_allocators._NDBuffer:
     """
     Allocate a TensorBuffer for the given domain and device or allocator.
 

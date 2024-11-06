@@ -309,6 +309,7 @@ def test_reduction_expression_with_where_and_scalar(unstructured_case):
 
 
 @pytest.mark.uses_tuple_returns
+@pytest.mark.uses_bool_field
 def test_conditional_nested_tuple(cartesian_case):
     @gtx.field_operator
     def conditional_nested_tuple(
@@ -382,6 +383,7 @@ def test_broadcast_shifted(cartesian_case):
     )
 
 
+@pytest.mark.uses_bool_field
 def test_conditional(cartesian_case):
     @gtx.field_operator
     def conditional(
@@ -406,6 +408,7 @@ def test_conditional(cartesian_case):
     )
 
 
+@pytest.mark.uses_bool_field
 def test_conditional_promotion(cartesian_case):
     @gtx.field_operator
     def conditional_promotion(mask: cases.IBoolField, a: cases.IFloatField) -> cases.IFloatField:
@@ -431,6 +434,7 @@ def test_conditional_compareop(cartesian_case):
 
 
 @pytest.mark.uses_cartesian_shift
+@pytest.mark.uses_bool_field
 def test_conditional_shifted(cartesian_case):
     @gtx.field_operator
     def conditional_shifted(

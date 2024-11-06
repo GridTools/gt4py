@@ -238,6 +238,7 @@ markers = [
   'requires_atlas: tests that require `atlas4py` bindings package',
   'requires_dace: tests that require `dace` package',
   'requires_gpu: tests that require a NVidia GPU (`cupy` and `cudatoolkit` are required)',
+  'requires_jax: tests that require the `jax` package',
   'starts_from_gtir_program: tests that require backend to start lowering from GTIR program',
   'uses_applied_shifts: tests that require backend support for applied-shifts',
   'uses_constant_fields: tests that require backend support for constant fields',
@@ -264,6 +265,7 @@ markers = [
   'uses_cartesian_shift: tests that use a Cartesian connectivity',
   'uses_unstructured_shift: tests that use a unstructured connectivity',
   'uses_max_over: tests that use the max_over builtin',
+  'uses_bool_field: tests that use a bool field',
   'uses_mesh_with_skip_values: tests that use a mesh with skip values',
   'checks_specific_error: tests that rely on the backend to produce a specific error message'
 ]

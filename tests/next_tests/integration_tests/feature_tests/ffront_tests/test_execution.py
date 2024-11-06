@@ -415,6 +415,7 @@ def test_astype_int(cartesian_case):
 
 
 @pytest.mark.uses_tuple_returns
+@pytest.mark.uses_bool_field
 def test_astype_on_tuples(cartesian_case):
     @gtx.field_operator
     def field_op_returning_a_tuple(
@@ -474,6 +475,7 @@ def test_astype_on_tuples(cartesian_case):
     )
 
 
+@pytest.mark.uses_bool_field
 def test_astype_bool_field(cartesian_case):
     @gtx.field_operator
     def testee(a: cases.IFloatField) -> gtx.Field[[IDim], bool]:
@@ -485,6 +487,7 @@ def test_astype_bool_field(cartesian_case):
     )
 
 
+@pytest.mark.uses_bool_field
 @pytest.mark.parametrize("inp", [0.0, 2.0])
 def test_astype_bool_scalar(cartesian_case, inp):
     @gtx.field_operator
@@ -510,6 +513,7 @@ def test_astype_float(cartesian_case):
     )
 
 
+@pytest.mark.uses_bool_field
 @pytest.mark.uses_dynamic_offsets
 def test_offset_field(cartesian_case):
     ref = np.full(

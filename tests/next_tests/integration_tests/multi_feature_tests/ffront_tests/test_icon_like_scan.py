@@ -207,6 +207,7 @@ def test_setup(exec_alloc_descriptor):
 
 
 @pytest.mark.uses_tuple_returns
+@pytest.mark.uses_bool_field
 @pytest.mark.uses_scan_requiring_projector
 def test_solve_nonhydro_stencil_52_like_z_q(test_setup):
     cases.verify(
@@ -226,6 +227,7 @@ def test_solve_nonhydro_stencil_52_like_z_q(test_setup):
 
 
 @pytest.mark.uses_tuple_returns
+@pytest.mark.uses_bool_field
 def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup):
     if (
         test_setup.case.backend
@@ -253,6 +255,7 @@ def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup):
 
 
 @pytest.mark.uses_tuple_returns
+@pytest.mark.uses_bool_field
 def test_solve_nonhydro_stencil_52_like(test_setup):
     if (
         test_setup.case.backend
@@ -274,6 +277,7 @@ def test_solve_nonhydro_stencil_52_like(test_setup):
     assert np.allclose(test_setup.w_ref, test_setup.w.asnumpy())
 
 
+@pytest.mark.uses_bool_field
 @pytest.mark.uses_tuple_returns
 def test_solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(test_setup):
     if (

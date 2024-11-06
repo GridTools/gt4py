@@ -1076,8 +1076,18 @@ if jnp:
             index: common.AnyIndexSpec,
             value: common.Field | core_defs.NDArrayObject | core_defs.ScalarT,
         ) -> None:
-            # TODO(havogt): use something like `self.ndarray = self.ndarray.at(index).set(value)`
-            raise NotImplementedError("'__setitem__' for JaxArrayField not yet implemented.")
+            target_domain, target_slice = self._slice(index)
+
+            if isinstance(value, NdArrayField):
+                if not value.domain == target_domain:
+                    raise ValueError(
+                        f"Incompatible `Domain` in assignment. Source domain = {value.domain}, target domain = {target_domain}."
+                    )
+                value = value.ndarray
+
+            assert hasattr(self._ndarray, "at")
+            # TODO must not update a field of a frozen obj
+            object.__setattr__(self, "_ndarray", self._ndarray.at[target_slice].set(value))
 
     common._field.register(jnp.ndarray, JaxArrayField.from_array)
 

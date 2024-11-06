@@ -95,7 +95,7 @@ def test_ffront_lap(cartesian_case):
         in_field,
         out_field,
         inout=out_field[1:-1, 1:-1],
-        ref=lap_ref(in_field.ndarray),
+        ref=lap_ref(in_field.asnumpy()),
     )
 
 
@@ -125,5 +125,5 @@ def test_ffront_laplap(cartesian_case):
         in_field,
         out_field,
         inout=out_field[2:-2, 2:-2],
-        ref=lap_ref(lap_ref(in_field.array_ns.asarray(in_field.ndarray))),
+        ref=lap_ref(lap_ref(in_field.as_numpy())),
     )

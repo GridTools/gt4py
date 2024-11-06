@@ -55,16 +55,18 @@ class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
 
 @dataclasses.dataclass(frozen=True)
 class EmbeddedDummyBackend:
-    allocator: next_allocators.FieldBufferAllocatorProtocol
+    allocator: next_allocators.FieldBufferAllocatorProtocol  # TODO make it field constructor
 
 
 numpy_execution = EmbeddedDummyBackend(next_allocators.StandardCPUFieldBufferAllocator())
 cupy_execution = EmbeddedDummyBackend(next_allocators.StandardGPUFieldBufferAllocator())
+jax_execution = EmbeddedDummyBackend(next_allocators.StandardJAXCPUFieldBufferAllocator())
 
 
 class EmbeddedIds(_PythonObjectIdMixin, str, enum.Enum):
     NUMPY_EXECUTION = "next_tests.definitions.numpy_execution"
     CUPY_EXECUTION = "next_tests.definitions.cupy_execution"
+    JAX_EXECUTION = "next_tests.definitions.jax_execution"
 
 
 class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
@@ -115,6 +117,7 @@ USES_ZERO_DIMENSIONAL_FIELDS = "uses_zero_dimensional_fields"
 USES_CARTESIAN_SHIFT = "uses_cartesian_shift"
 USES_UNSTRUCTURED_SHIFT = "uses_unstructured_shift"
 USES_MAX_OVER = "uses_max_over"
+USES_BOOL_FIELD = "uses_bool_field"
 USES_MESH_WITH_SKIP_VALUES = "uses_mesh_with_skip_values"
 USES_SCALAR_IN_DOMAIN_AND_FO = "uses_scalar_in_domain_and_fo"
 CHECKS_SPECIFIC_ERROR = "checks_specific_error"
@@ -178,6 +181,11 @@ GTFN_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
 BACKEND_SKIP_TEST_MATRIX = {
     EmbeddedIds.NUMPY_EXECUTION: EMBEDDED_SKIP_LIST,
     EmbeddedIds.CUPY_EXECUTION: EMBEDDED_SKIP_LIST,
+    EmbeddedIds.JAX_EXECUTION: EMBEDDED_SKIP_LIST
+    + [
+        # dlpack support for `bool` arrays is not yet available in jax, see https://github.com/google/jax/issues/19352
+        (USES_BOOL_FIELD, XFAIL, UNSUPPORTED_MESSAGE)
+    ],
     OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.GTIR_DACE_CPU: GTIR_DACE_SKIP_TEST_LIST,
