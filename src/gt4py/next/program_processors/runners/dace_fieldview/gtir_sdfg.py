@@ -709,20 +709,27 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
             head_state.add_edge(src_node, None, nsdfg_node, connector, memlet)
 
-        def make_temps(
+        def construct_output_for_nested_sdfg(
             inner_data: gtir_builtin_translators.FieldopData,
         ) -> gtir_builtin_translators.FieldopData:
             """
-            This function will be called while traversing the result of the lambda
-            dataflow to setup the intermediate data nodes in the parent SDFG and
-            the data edges from the nested-SDFG output connectors.
+            This function makes a data container that lives inside a nested SDFG, denoted by `inner_data`,
+            available in the parent SDFG.
+            In order to achieve this, the data container inside the nested SDFG is marked as non-transient
+            (in other words, externally allocated - a requirement of the SDFG IR) and a new data container
+            is created within the parent SDFG, with the same properties (shape, stride, etc.) of `inner_data`
+            but appropriatly remapped using the symbol mapping table.
+            For lambda arguments that are simply returned by the lambda, the `inner_data` was already mapped
+            to a parent SDFG data container, therefore it can be directly accessed in the parent SDFG.
+            The same happens to symbols available in the lambda context but not explicitly passed as lambda
+            arguments, that are simply returned by the lambda: it can be directly accessed in the parent SDFG.
             """
             inner_desc = inner_data.dc_node.desc(nsdfg)
             if inner_desc.transient:
-                # Transient nodes actually contain some result produced by the dataflow
-                # itself, therefore these nodes are changed to non-transient and an output
-                # edge will write the result from the nested-SDFG to a new intermediate
-                # data node in the parent context.
+                # Transient data nodes only exist within the nested SDFG. In order to return some result data,
+                # the corresponding data container inside the nested SDFG has to be changed to non-transient,
+                # that is externally allocated, as required by the SDFG IR. An output edge will write the result
+                # from the nested-SDFG to a new intermediate data container allocated in the parent SDFG.
                 inner_desc.transient = False
                 outer, outer_desc = sdfg.add_temp_transient_like(inner_desc)
                 # We cannot use a copy of the inner data descriptor directly, we have to apply the symbol mapping.
@@ -756,7 +763,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 nstate.remove_node(inner_data.dc_node)
             return outer_data
 
-        return gtx_utils.tree_map(make_temps)(lambda_result)
+        return gtx_utils.tree_map(construct_output_for_nested_sdfg)(lambda_result)
 
     def visit_Literal(
         self,
