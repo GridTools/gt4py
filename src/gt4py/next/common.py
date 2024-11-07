@@ -857,7 +857,13 @@ class ConnectivityField(
 
     @property
     def source_dim(self) -> Dimension:
-        return self.domain.dims[0]  # TODO remove, just for transition
+        return self.domain.dims[0]
+
+    @property
+    def neighbor_dim(self) -> Dimension:
+        # TODO(havogt): we should refactor ConnectivityField to distinguish between 1-1 and 1-N Connecitivities
+        assert len(self.domain.dims) == 2
+        return self.domain.dims[1]
 
     @property
     def max_neighbors(self) -> int:

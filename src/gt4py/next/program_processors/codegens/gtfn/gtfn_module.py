@@ -130,12 +130,7 @@ class GTFNTranslationStep(
                     interface.Parameter(
                         name=GENERATED_CONNECTIVITY_PARAM_PREFIX + name.lower(),
                         type_=ts.FieldType(
-                            dims=[
-                                connectivity.source_dim,
-                                common.Dimension(
-                                    name, kind=common.DimensionKind.LOCAL
-                                ),  # TODO(havogt): we should not use the name of the offset as the name of the local dimension
-                            ],
+                            dims=connectivity.domain.dims,
                             dtype=type_translation.from_dtype(connectivity.dtype),
                         ),
                     )

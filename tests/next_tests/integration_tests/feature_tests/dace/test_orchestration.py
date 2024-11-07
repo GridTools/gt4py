@@ -58,12 +58,12 @@ def test_sdfgConvertible_laplap(cartesian_case):
     in_field = cases.allocate(cartesian_case, laplap_program, "in_field")()
     out_field = cases.allocate(cartesian_case, laplap_program, "out_field")()
 
-    connectivities = {}  # Dict of NeighborOffsetProviders, where self.ndarray = None
+    connectivities = {}  # OffsetProvider without runtime information
     for k, v in cartesian_case.offset_provider.items():
-        if hasattr(v, "table"):
-            connectivities[k] = arguments.CompileTimeConnectivity(
-                v.max_neighbors, v.has_skip_values, v.source_dim, v.codomain, v.ndarray.dtype
-            )
+        assert False  # TODO check this case again
+        if isinstance(v, gtx.ConnectivityField):
+            connectivities[k] = v.type_()
+            assert False
         else:
             connectivities[k] = v
 

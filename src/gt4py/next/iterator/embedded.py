@@ -96,7 +96,7 @@ class SparseTag(Tag): ...
 @xtyping.deprecated("Use a 'ConnectivityField' instead.")
 def NeighborTableOffsetProvider(
     table: core_defs.NDArrayObject,
-    source_dim: common.Dimension,
+    origin_axis: common.Dimension,
     neighbor_axis: common.Dimension,
     max_neighbors: int,
     has_skip_values=True,
@@ -105,7 +105,7 @@ def NeighborTableOffsetProvider(
         table,
         codomain=neighbor_axis,
         domain={
-            source_dim: table.shape[0],
+            origin_axis: table.shape[0],
             common.Dimension(
                 value="_DummyLocalDim", kind=common.DimensionKind.LOCAL
             ): max_neighbors,
@@ -168,7 +168,7 @@ class StridedConnectivityField(common.ConnectivityField):
             raise NotImplementedError()  # TODO(havogt): add proper slicing
         return ConstantField(item[0] * self.max_neighbors + item[1])
 
-    def as_scalar(self) -> Never:
+    def as_scalar(self) -> xtyping.Never:
         raise NotImplementedError()
 
     def __call__(
@@ -1476,7 +1476,9 @@ class _List(Generic[DT]):
         assert isinstance(element_type, ts.DataType)
         return itir_ts.ListType(
             element_type=element_type,
-            offset_type=common.Dimension(value=offset_tag, kind=common.DimensionKind.LOCAL),
+            offset_type=common.Dimension(
+                value=offset_tag, kind=common.DimensionKind.LOCAL
+            ),  # TODO CHECK THIS PATTERN DURING THIS CLEANUP!
         )
 
 
