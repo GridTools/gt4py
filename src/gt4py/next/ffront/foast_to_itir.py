@@ -465,8 +465,9 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             raise FieldOperatorLoweringError(
                 f"Type cast only supports literal arguments, {node.type} not supported."
             )
-        # if bfloat16 and node_kind == 'bfloat16':
-        #     val = float(val)
+        # TODO: why?
+        if bfloat16 and node_kind == 'bfloat16':
+            val = float(val)
         val = target_type(val)
 
         return im.promote_to_const_iterator(im.literal(str(val), node_kind))

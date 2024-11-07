@@ -1209,7 +1209,7 @@ def test_constant_closure_vars(cartesian_case):
 
 
 @pytest.mark.uses_half_precision
-def test_flaot16(cartesian_case):
+def test_float16(cartesian_case):
     dtype = np.float16
 
     @gtx.field_operator
@@ -1225,8 +1225,8 @@ def test_bfloat16(cartesian_case):
     dtype = bfloat16
 
     @gtx.field_operator
-    def multiply_by_two_(input: cases.IBFloatField) -> cases.IBFloatField:
-        return input #* astype(input2, dtype) * scalar ** dtype(1.0) #TODO
+    def multiply_by_two(input: cases.IBFloatField, input2: cases.IBFloatField, scalar: bfloat16) -> cases.IBFloatField:
+        return dtype(2) * input * astype(input2, dtype) * scalar ** dtype(1.0) #TODO fails with 0.5
     cases.verify_with_default_data(
-        cartesian_case, multiply_by_two_, ref=lambda input:  input #* input2 * scalar ** dtype(1.0) #TODO
+        cartesian_case, multiply_by_two, ref=lambda input, input2, scalar: dtype(2) * input * input2 * scalar ** dtype(1.0)
     )

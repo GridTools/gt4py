@@ -32,6 +32,14 @@ def convert_arg(arg: Any) -> Any:
     if isinstance(arg, common.Field):
         arr = arg.ndarray
         origin = getattr(arg, "__gt_origin__", tuple([0] * len(arg.domain)))
+
+        # TODO: bloody hack just to get a dlpack compatible array of bfloat16s
+        from ml_dtypes import bfloat16
+        import jax
+        import jax.numpy as jnp
+        if arr.dtype == bfloat16:
+            arr = jnp.asarray(arr, dtype=jnp.bfloat16)
+
         return arr, origin
     else:
         return arg

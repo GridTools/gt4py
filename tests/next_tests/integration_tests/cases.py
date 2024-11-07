@@ -198,7 +198,7 @@ class UniqueInitializer(DataInitializer):
     data containers.
     """
 
-    start: int = 0
+    start: int = 1  # PR comment: do not start from zero as this has the same value as zero-initialized memory
 
     @property
     def scalar_value(self) -> ScalarValue:
