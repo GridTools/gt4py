@@ -8,19 +8,14 @@
 
 import numpy as np
 import pytest
-import tempfile
-import pathlib
-import os
-import pickle
 import copy
 import diskcache
 
 
 import gt4py.next as gtx
-import gt4py.next.config
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.otf import arguments, languages, stages, workflow, toolchain
+from gt4py.next.otf import arguments, languages, stages
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.program_processors.runners import gtfn
 from gt4py.next.type_system import type_translation
@@ -90,7 +85,7 @@ def test_codegen(fencil_example):
     assert module.language is languages.CPP
 
 
-def test_hash_and_diskcache(fencil_example):
+def test_hash_and_diskcache(fencil_example, tmp_path):
     fencil, parameters = fencil_example
     compilable_program = stages.CompilableProgram(
         data=fencil,
@@ -99,12 +94,12 @@ def test_hash_and_diskcache(fencil_example):
         ),
     )
     hash = gtfn.fingerprint_compilable_program(compilable_program)
-    path = tempfile.gettempdir()
-    with diskcache.Cache(path) as cache:
+
+    with diskcache.Cache(tmp_path) as cache:
         cache[hash] = compilable_program
 
     # check content of cash file
-    with diskcache.Cache(path) as reopened_cache:
+    with diskcache.Cache(tmp_path) as reopened_cache:
         assert hash in reopened_cache
         compilable_program_from_cache = reopened_cache[hash]
         assert compilable_program == compilable_program_from_cache
@@ -154,7 +149,7 @@ def test_gtfn_file_cache(fencil_example):
 
     # ensure the actual cached step in the backend generates the cache item for the test
     if cache_key in (translation_cache := cached_gtfn_translation_step.cache):
-        del translation_cache[hash]
+        del translation_cache[cache_key]
     cached_gtfn_translation_step(compilable_program)
     assert bare_gtfn_translation_step(compilable_program) == cached_gtfn_translation_step(
         compilable_program

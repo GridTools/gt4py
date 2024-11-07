@@ -33,7 +33,7 @@ from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.program_processors.runners import gtfn
 from gt4py.next.type_system import type_specifications as ts
 from gt4py.next import utils as gt_utils
-from gt4py.next import config
+
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
     C2E,
