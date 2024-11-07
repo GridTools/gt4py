@@ -9,17 +9,14 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import TypeAlias, Sequence, Never, Self
+from typing import TypeAlias
 
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import backend
+from gt4py.next import backend, common
 from gt4py.next.iterator import runtime
 from gt4py.next.program_processors import program_formatter
-from gt4py._core import definitions as core_defs
-from gt4py.next import common
-from gt4py.next.ffront import fbuiltins
 
 import next_tests
 
