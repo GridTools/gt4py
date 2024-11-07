@@ -777,6 +777,22 @@ class MutableField(Field[DimsT, core_defs.ScalarT], Protocol[DimsT, core_defs.Sc
     def __setitem__(self, index: AnyIndexSpec, value: Field | core_defs.ScalarT) -> None: ...
 
 
+@runtime_checkable
+class Connectivity(Protocol):
+    max_neighbors: int
+    has_skip_values: bool
+    origin_axis: Dimension
+    neighbor_axis: Dimension
+
+
+@dataclasses.dataclass(frozen=True, eq=False)
+class ConnectivityType(Connectivity):
+    max_neighbors: int
+    has_skip_values: bool
+    origin_axis: Dimension
+    neighbor_axis: Dimension
+
+
 class ConnectivityKind(enum.Flag):
     """
     Describes the kind of connectivity field.
@@ -813,11 +829,9 @@ class ConnectivityKind(enum.Flag):
 
 @runtime_checkable
 # type: ignore[misc] # DimT should be covariant, but then it breaks in other places
-class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT]):
-    from gt4py.next.type_system import (
-        type_specifications as ts,
-    )  # cyclic import, # TODO resolve by not using common.Dimension in typespec
-
+class ConnectivityField(
+    Field[DimsT, core_defs.IntegralScalar], Connectivity, Protocol[DimsT, DimT]
+):
     @property
     @abc.abstractmethod
     def codomain(self) -> DimT: ...
@@ -825,19 +839,14 @@ class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, 
     def __hash__(self) -> int:
         return hash((self.domain, self.codomain))  # TODO
 
-    def __gt_type__(self) -> ts.TypeSpec:
-        from gt4py.next.type_system import (
-            type_specifications as ts,
-            type_translation as tt,
-        )  # cyclic import
+    def type_(self) -> ConnectivityType:
+        """Extract the static information of the connectivity field."""
 
-        # Note: we could refactor the class such that `type(ConnectivityField)` contains this info
-        return ts.ConnectivityFieldType(
-            domain_dims=list(self.domain.dims),
-            codomain_dim=self.codomain,
+        return ConnectivityType(
             max_neighbors=self.max_neighbors,
             has_skip_values=self.has_skip_values,
-            dtype=tt.from_dtype(self.dtype),
+            origin_axis=self.origin_axis,
+            neighbor_axis=self.neighbor_axis,
         )
 
     @property
@@ -958,24 +967,9 @@ def _connectivity(
 
 
 # @runtime_checkable
-# class Connectivity(Protocol):
-#     max_neighbors: int
-#     has_skip_values: bool
-#     origin_axis: Dimension
-#     neighbor_axis: Dimension
-#     index_type: type[int] | type[np.int32] | type[np.int64]
-
-#     def mapped_index(
-#         self, cur_index: int | np.integer, neigh_index: int | np.integer
-#     ) -> Optional[int | np.integer]:
-#         """Return neighbor index."""
-
-
-# @runtime_checkable
 # class NeighborTable(Connectivity, Protocol):
 #     table: npt.NDArray
 
-Connectivity: TypeAlias = ConnectivityField
 NeighborTable: TypeAlias = ConnectivityField  # TODO actually NDArrayConnectivityField
 
 

@@ -116,18 +116,6 @@ class FieldType(DataType, CallableType):
 
 
 @dataclass(frozen=True)
-class ConnectivityFieldType(DataType):
-    domain_dims: list[func_common.Dimension]
-    codomain_dim: func_common.Dimension
-    max_neighbors: int
-    has_skip_values: bool
-    dtype: ScalarType
-
-    def __str__(self) -> str:
-        return f"ConnectivityFieldType[{self.domain_dims}, {self.codomain_dim}, {self.max_neighbors}, {self.has_skip_values}, {self.dtype}]"
-
-
-@dataclass(frozen=True)
 class FunctionType(TypeSpec, CallableType):
     pos_only_args: Sequence[TypeSpec]
     pos_or_kw_args: dict[str, TypeSpec]

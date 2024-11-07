@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import TypeAlias
+from typing import TypeAlias, Sequence, Never, Self
 
 import pytest
 
@@ -17,7 +17,9 @@ import gt4py.next as gtx
 from gt4py.next import backend
 from gt4py.next.iterator import runtime
 from gt4py.next.program_processors import program_formatter
-
+from gt4py._core import definitions as core_defs
+from gt4py.next import common
+from gt4py.next.ffront import fbuiltins
 
 import next_tests
 
@@ -85,13 +87,8 @@ def run_processor(
 
 
 @dataclasses.dataclass
-class DummyConnectivity:
-    # TODO
+class DummyConnectivity(common.Connectivity):
     max_neighbors: int
     has_skip_values: int
     origin_axis: gtx.Dimension = gtx.Dimension("dummy_origin")
     neighbor_axis: gtx.Dimension = gtx.Dimension("dummy_neighbor")
-    index_type: type[int] = int
-
-    def mapped_index(_, __) -> int:
-        return 0

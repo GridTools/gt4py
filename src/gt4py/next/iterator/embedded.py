@@ -114,6 +114,84 @@ def NeighborTableOffsetProvider(
     )
 
 
+# TODO(havogt): complete implementation and make available for fieldview embedded
+@dataclasses.dataclass(frozen=True)
+class StridedConnectivityField(common.ConnectivityField):
+    domain_dims: tuple[common.Dimension, common.Dimension]
+    codomain_dim: common.Dimension
+    _max_neighbors: int
+
+    def __init__(
+        self,
+        domain_dims: Sequence[common.Dimension],
+        codomain_dim: common.Dimension,
+        max_neighbors: int,
+    ):
+        object.__setattr__(self, "domain_dims", tuple(domain_dims))
+        object.__setattr__(self, "codomain_dim", codomain_dim)
+        object.__setattr__(self, "_max_neighbors", max_neighbors)
+
+    @property
+    def __gt_origin__(self) -> core_defs.Tuple[fbuiltins.int]:
+        raise NotImplementedError
+
+    @property
+    def domain(self) -> common.Domain:
+        return common.Domain(
+            dims=self.domain_dims,
+            ranges=(common.UnitRange.infinite(), common.unit_range(self._max_neighbors)),
+        )
+
+    @property
+    def codomain(self) -> common.Dimension:
+        return self.codomain_dim
+
+    @property
+    def dtype(self) -> core_defs.DType[core_defs.IntegralScalar]:
+        return core_defs.Int32DType()  # type: ignore[return-value]
+
+    @property
+    def ndarray(self) -> core_defs.NDArrayObject:
+        raise NotImplementedError
+
+    def asnumpy(self) -> np.ndarray:
+        raise NotImplementedError
+
+    def premap(self, index_field: common.ConnectivityField | fbuiltins.FieldOffset) -> common.Field:
+        raise NotImplementedError
+
+    def restrict(
+        self,
+        item: common.AnyIndexSpec,
+    ) -> Self:
+        if not isinstance(item, tuple) and not len(item) == 2:
+            raise NotImplementedError()  # TODO(havogt): add proper slicing
+        return ConstantField(item[0] * self.max_neighbors + item[1])
+
+    def as_scalar(self) -> Never:
+        raise NotImplementedError()
+
+    def __call__(
+        self,
+        index_field: common.ConnectivityField | fbuiltins.FieldOffset,
+        *args: common.ConnectivityField | fbuiltins.FieldOffset,
+    ) -> common.Field:
+        raise NotImplementedError()
+
+    __getitem__ = restrict
+
+    def inverse_image(
+        self, image_range: common.UnitRange | common.NamedRange
+    ) -> Sequence[common.NamedRange]:
+        raise NotImplementedError
+
+    @property
+    def skip_value(
+        self,
+    ) -> None:
+        return None
+
+
 class StridedNeighborOffsetProvider:
     def __init__(
         self,
