@@ -18,7 +18,7 @@ import functools
 import numpy as np
 import pytest
 
-from gt4py.next import common as gtx_common
+from gt4py.next import common as gtx_common, constructors
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_specifications as ts
@@ -1398,21 +1398,24 @@ def test_gtir_reduce_dot_product():
     assert isinstance(connectivity_V2E, gtx_common.NeighborTable)
 
     # create mesh with skip values
-    connectivity_V2E_skip = copy.deepcopy(connectivity_V2E)
-    connectivity_V2E_skip.has_skip_values = True
-    connectivity_V2E_skip.table = np.asarray(
-        [
-            [x if i != skip_idx else gtx_common._DEFAULT_SKIP_VALUE for i, x in enumerate(row)]
-            for skip_idx, row in zip(
-                np.random.randint(0, connectivity_V2E.max_neighbors, size=SIMPLE_MESH.num_vertices),
-                connectivity_V2E.table,
-                strict=True,
-            )
-        ],
-        dtype=connectivity_V2E.table.dtype,
+    connectivity_V2E_skip = gtx_common._connectivity(
+        np.asarray(
+            [
+                [x if i != skip_idx else gtx_common._DEFAULT_SKIP_VALUE for i, x in enumerate(row)]
+                for skip_idx, row in zip(
+                    np.random.randint(
+                        0, connectivity_V2E.max_neighbors, size=SIMPLE_MESH.num_vertices
+                    ),
+                    connectivity_V2E.ndarray,
+                    strict=True,
+                )
+            ],
+            dtype=connectivity_V2E.ndarray.dtype,
+        ),
+        domain=connectivity_V2E.domain,
+        codomain=connectivity_V2E.codomain,
+        skip_value=gtx_common._DEFAULT_SKIP_VALUE,
     )
-    # safety check that the connectivity table actually contains skip values
-    assert len(np.where(connectivity_V2E.table == gtx_common._DEFAULT_SKIP_VALUE)) != 0
 
     offset_provider = SIMPLE_MESH_OFFSET_PROVIDER | {
         "V2E_skip": connectivity_V2E_skip,
@@ -1547,17 +1550,25 @@ def test_gtir_reduce_with_cond_neighbors():
 
     connectivity_V2E_simple = SIMPLE_MESH_OFFSET_PROVIDER["V2E"]
     assert isinstance(connectivity_V2E_simple, gtx_common.NeighborTable)
-    connectivity_V2E_skip_values = copy.deepcopy(SKIP_VALUE_MESH_OFFSET_PROVIDER["V2E"])
-    assert isinstance(connectivity_V2E_skip_values, gtx_common.NeighborTable)
-    assert SKIP_VALUE_MESH.num_vertices <= SIMPLE_MESH.num_vertices
-    connectivity_V2E_skip_values.table = np.concatenate(
-        (
-            connectivity_V2E_skip_values.table[:, 0 : connectivity_V2E_simple.max_neighbors],
-            connectivity_V2E_simple.table[SKIP_VALUE_MESH.num_vertices :, :],
+    # create mesh with skip values
+    connectivity_V2E_skip_values = gtx_common._connectivity(
+        np.asarray(
+            [
+                [x if i != skip_idx else gtx_common._DEFAULT_SKIP_VALUE for i, x in enumerate(row)]
+                for skip_idx, row in zip(
+                    np.random.randint(
+                        0, connectivity_V2E_simple.max_neighbors, size=SIMPLE_MESH.num_vertices
+                    ),
+                    connectivity_V2E_simple.ndarray,
+                    strict=True,
+                )
+            ],
+            dtype=connectivity_V2E_simple.ndarray.dtype,
         ),
-        axis=0,
+        domain=connectivity_V2E_simple.domain,
+        codomain=connectivity_V2E_simple.codomain,
+        skip_value=gtx_common._DEFAULT_SKIP_VALUE,
     )
-    connectivity_V2E_skip_values.max_neighbors = connectivity_V2E_simple.max_neighbors
 
     e = np.random.rand(SIMPLE_MESH.num_edges)
 
