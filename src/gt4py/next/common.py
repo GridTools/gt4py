@@ -18,7 +18,6 @@ import types
 from collections.abc import Mapping, Sequence
 
 import numpy as np
-import numpy.typing as npt
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import utils
@@ -871,10 +870,6 @@ class ConnectivityField(
     @property
     def has_skip_values(self) -> bool:
         return self.skip_value is not None
-
-    @property
-    def table(self) -> core_defs.NDArrayObject:
-        return self.ndarray
 
     @property
     @abc.abstractmethod

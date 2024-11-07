@@ -148,14 +148,14 @@ def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
 
     # check that test connectivities are allocated on host memory
     # this is an assumption to test that fast_call cannot be used for gpu tests
-    assert isinstance(connectivity_E2V.table, np.ndarray)
+    assert isinstance(connectivity_E2V.ndarray, np.ndarray)
 
     @gtx.field_operator
     def testee(a: cases.VField) -> cases.EField:
         return a(E2V[0])
 
     (a,), kwfields = cases.get_default_data(unstructured_case, testee)
-    numpy_ref = lambda a: a[connectivity_E2V.table[:, 0]]
+    numpy_ref = lambda a: a[connectivity_E2V.ndarray[:, 0]]
 
     mock_fast_call, mock_construct_args = make_mocks(monkeypatch)
 
@@ -194,7 +194,7 @@ def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
             "E2V": gtx.as_connectivity(
                 domain=connectivity_E2V.domain,
                 codomain=connectivity_E2V.codomain,
-                data=cp.asarray(connectivity_E2V.table),
+                data=cp.asarray(connectivity_E2V.ndarray),
                 skip_value=connectivity_E2V.skip_value,
             )
         }

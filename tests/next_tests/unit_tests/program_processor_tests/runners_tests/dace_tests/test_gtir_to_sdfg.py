@@ -1026,8 +1026,8 @@ def test_gtir_connectivity_shift():
     assert isinstance(connectivity_E2V, gtx_common.NeighborTable)
 
     ev = np.random.rand(SIMPLE_MESH.num_edges, SIMPLE_MESH.num_vertices)
-    ref = ev[connectivity_C2E.table[:, C2E_neighbor_idx], :][
-        :, connectivity_E2V.table[:, E2V_neighbor_idx]
+    ref = ev[connectivity_C2E.ndarray[:, C2E_neighbor_idx], :][
+        :, connectivity_E2V.ndarray[:, E2V_neighbor_idx]
     ]
 
     for i, stencil in enumerate(
@@ -1064,8 +1064,8 @@ def test_gtir_connectivity_shift():
             ev,
             c2e_offset=np.full(SIMPLE_MESH.num_cells, C2E_neighbor_idx, dtype=np.int32),
             e2v_offset=np.full(SIMPLE_MESH.num_edges, E2V_neighbor_idx, dtype=np.int32),
-            connectivity_C2E=connectivity_C2E.table,
-            connectivity_E2V=connectivity_E2V.table,
+            connectivity_C2E=connectivity_C2E.ndarray,
+            connectivity_E2V=connectivity_E2V.ndarray,
             **FSYMBOLS,
             **make_mesh_symbols(SIMPLE_MESH),
             __ce_field_size_0=SIMPLE_MESH.num_cells,
@@ -1124,7 +1124,9 @@ def test_gtir_connectivity_shift_chain():
     assert isinstance(connectivity_V2E, gtx_common.NeighborTable)
 
     e = np.random.rand(SIMPLE_MESH.num_edges)
-    ref = e[connectivity_V2E.table[connectivity_E2V.table[:, E2V_neighbor_idx], V2E_neighbor_idx]]
+    ref = e[
+        connectivity_V2E.ndarray[connectivity_E2V.ndarray[:, E2V_neighbor_idx], V2E_neighbor_idx]
+    ]
 
     # new empty output field
     e_out = np.empty_like(e)
@@ -1132,8 +1134,8 @@ def test_gtir_connectivity_shift_chain():
     sdfg(
         e,
         e_out,
-        connectivity_E2V=connectivity_E2V.table,
-        connectivity_V2E=connectivity_V2E.table,
+        connectivity_E2V=connectivity_E2V.ndarray,
+        connectivity_V2E=connectivity_V2E.ndarray,
         **FSYMBOLS,
         **make_mesh_symbols(SIMPLE_MESH),
         __edges_out_size_0=SIMPLE_MESH.num_edges,
@@ -1187,14 +1189,14 @@ def test_gtir_neighbors_as_input():
 
     v_ref = [
         functools.reduce(lambda x, y: x + y, v2e_values + e[v2e_neighbors], init_value)
-        for v2e_neighbors, v2e_values in zip(connectivity_V2E.table, v2e_field, strict=True)
+        for v2e_neighbors, v2e_values in zip(connectivity_V2E.ndarray, v2e_field, strict=True)
     ]
 
     sdfg(
         v2e_field,
         e,
         v,
-        connectivity_V2E=connectivity_V2E.table,
+        connectivity_V2E=connectivity_V2E.ndarray,
         **FSYMBOLS,
         **make_mesh_symbols(SIMPLE_MESH),
         __v2e_field_size_0=SIMPLE_MESH.num_vertices,
@@ -1245,7 +1247,7 @@ def test_gtir_neighbors_as_output():
     sdfg(
         e,
         v2e_field,
-        connectivity_V2E=connectivity_V2E.table,
+        connectivity_V2E=connectivity_V2E.ndarray,
         **FSYMBOLS,
         **make_mesh_symbols(SIMPLE_MESH),
         __v2e_field_size_0=SIMPLE_MESH.num_vertices,
@@ -1253,7 +1255,7 @@ def test_gtir_neighbors_as_output():
         __v2e_field_stride_0=connectivity_V2E.max_neighbors,
         __v2e_field_stride_1=1,
     )
-    assert np.allclose(v2e_field, e[connectivity_V2E.table])
+    assert np.allclose(v2e_field, e[connectivity_V2E.ndarray])
 
 
 def test_gtir_reduce():
@@ -1286,7 +1288,7 @@ def test_gtir_reduce():
     e = np.random.rand(SIMPLE_MESH.num_edges)
     v_ref = [
         functools.reduce(lambda x, y: x + y, e[v2e_neighbors], init_value)
-        for v2e_neighbors in connectivity_V2E.table
+        for v2e_neighbors in connectivity_V2E.ndarray
     ]
 
     for i, stencil in enumerate([stencil_inlined, stencil_fieldview]):
@@ -1315,7 +1317,7 @@ def test_gtir_reduce():
         sdfg(
             e,
             v,
-            connectivity_V2E=connectivity_V2E.table,
+            connectivity_V2E=connectivity_V2E.ndarray,
             **FSYMBOLS,
             **make_mesh_symbols(SIMPLE_MESH),
         )
@@ -1354,7 +1356,7 @@ def test_gtir_reduce_with_skip_values():
         functools.reduce(
             lambda x, y: x + y, [e[i] if i != -1 else 0.0 for i in v2e_neighbors], init_value
         )
-        for v2e_neighbors in connectivity_V2E.table
+        for v2e_neighbors in connectivity_V2E.ndarray
     ]
 
     for i, stencil in enumerate([stencil_inlined, stencil_fieldview]):
@@ -1383,7 +1385,7 @@ def test_gtir_reduce_with_skip_values():
         sdfg(
             e,
             v,
-            connectivity_V2E=connectivity_V2E.table,
+            connectivity_V2E=connectivity_V2E.ndarray,
             **FSYMBOLS,
             **make_mesh_symbols(SKIP_VALUE_MESH),
         )
@@ -1440,7 +1442,7 @@ def test_gtir_reduce_dot_product():
             init_value,
         )
         for v2e_neighbors, v2e_skip_neighbors in zip(
-            connectivity_V2E.table, connectivity_V2E_skip.table
+            connectivity_V2E.ndarray, connectivity_V2E_skip.ndarray
         )
     ]
 
@@ -1504,8 +1506,8 @@ def test_gtir_reduce_dot_product():
         sdfg(
             e,
             v,
-            connectivity_V2E=connectivity_V2E.table,
-            connectivity_V2E_skip=connectivity_V2E_skip.table,
+            connectivity_V2E=connectivity_V2E.ndarray,
+            connectivity_V2E_skip=connectivity_V2E_skip.ndarray,
             **FSYMBOLS,
             **make_mesh_symbols(SIMPLE_MESH),
             **V2E_SKIP_SYMBOLS,
@@ -1584,15 +1586,17 @@ def test_gtir_reduce_with_cond_neighbors():
                 lambda x, y: x + y, [e[i] if i != -1 else 0.0 for i in v2e_neighbors], init_value
             )
             for v2e_neighbors in (
-                connectivity_V2E_simple.table if use_full else connectivity_V2E_skip_values.table
+                connectivity_V2E_simple.ndarray
+                if use_full
+                else connectivity_V2E_skip_values.ndarray
             )
         ]
         sdfg(
             np.bool_(use_full),
             e,
             v,
-            connectivity_V2E=connectivity_V2E_skip_values.table,
-            connectivity_V2E_FULL=connectivity_V2E_simple.table,
+            connectivity_V2E=connectivity_V2E_skip_values.ndarray,
+            connectivity_V2E_FULL=connectivity_V2E_simple.ndarray,
             **FSYMBOLS,
             **make_mesh_symbols(SIMPLE_MESH),
             __connectivity_V2E_FULL_size_0=SIMPLE_MESH.num_edges,
@@ -1735,16 +1739,16 @@ def test_gtir_let_lambda_with_connectivity():
     v = np.random.rand(SIMPLE_MESH.num_vertices)
     c = np.empty(SIMPLE_MESH.num_cells)
     ref = (
-        e[connectivity_C2E.table[:, C2E_neighbor_idx]]
-        + v[connectivity_C2V.table[:, C2V_neighbor_idx]]
+        e[connectivity_C2E.ndarray[:, C2E_neighbor_idx]]
+        + v[connectivity_C2V.ndarray[:, C2V_neighbor_idx]]
     )
 
     sdfg(
         cells=c,
         edges=e,
         vertices=v,
-        connectivity_C2E=connectivity_C2E.table,
-        connectivity_C2V=connectivity_C2V.table,
+        connectivity_C2E=connectivity_C2E.ndarray,
+        connectivity_C2V=connectivity_C2V.ndarray,
         **FSYMBOLS,
         **make_mesh_symbols(SIMPLE_MESH),
     )
