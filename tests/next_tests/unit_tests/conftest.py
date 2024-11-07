@@ -88,4 +88,4 @@ class DummyConnectivity(common.Connectivity):
     max_neighbors: int
     has_skip_values: int
     origin_axis: gtx.Dimension = gtx.Dimension("dummy_origin")
-    neighbor_axis: gtx.Dimension = gtx.Dimension("dummy_neighbor")
+    codomain: gtx.Dimension = gtx.Dimension("dummy_neighbor")

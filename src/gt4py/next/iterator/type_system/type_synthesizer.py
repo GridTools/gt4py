@@ -383,7 +383,7 @@ def shift(*offset_literals, offset_provider: common.OffsetProvider) -> TypeSynth
                 for i, dim in enumerate(new_position_dims):
                     if dim.value == provider.origin_axis.value:
                         assert not found
-                        new_position_dims[i] = provider.neighbor_axis
+                        new_position_dims[i] = provider.codomain
                         found = True
                 assert found
             else:

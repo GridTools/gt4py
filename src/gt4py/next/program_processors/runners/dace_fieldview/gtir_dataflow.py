@@ -519,7 +519,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         it = self.visit(node.args[1])
         assert isinstance(it, IteratorExpr)
-        assert offset_provider.neighbor_axis in it.dimensions
+        assert offset_provider.codomain in it.dimensions
         assert offset_provider.origin_axis in it.indices
         origin_index = it.indices[offset_provider.origin_axis]
         assert isinstance(origin_index, SymbolExpr)
@@ -547,7 +547,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                 sbs.Range.from_string(
                     ",".join(
                         it.indices[dim].value  # type: ignore[union-attr]
-                        if dim != offset_provider.neighbor_axis
+                        if dim != offset_provider.codomain
                         else f"0:{size}"
                         for dim, size in zip(it.dimensions, field_desc.shape, strict=True)
                     )
@@ -1055,8 +1055,8 @@ class LambdaToDataflow(eve.NodeVisitor):
         offset_expr: DataExpr,
     ) -> IteratorExpr:
         """Implements shift in unstructured domain by means of a neighbor table."""
-        assert connectivity.neighbor_axis in it.dimensions
-        neighbor_dim = connectivity.neighbor_axis
+        assert connectivity.codomain in it.dimensions
+        neighbor_dim = connectivity.codomain
         assert neighbor_dim not in it.indices
 
         origin_dim = connectivity.origin_axis

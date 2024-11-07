@@ -194,7 +194,7 @@ def _visit_lift_in_neighbors_reduction(
     neighbor_value_node: dace.nodes.AccessNode,
 ) -> list[ValueExpr]:
     assert transformer.context.reduce_identity is not None
-    neighbor_dim = offset_provider.neighbor_axis.value
+    neighbor_dim = offset_provider.codomain.value
     origin_dim = offset_provider.origin_axis.value
 
     lifted_args: list[IteratorExpr | ValueExpr] = []
@@ -423,7 +423,7 @@ def builtin_neighbors(
     else:
         sorted_dims = transformer.get_sorted_field_dimensions(iterator.dimensions)
         data_access_index = ",".join(f"{dim}_v" for dim in sorted_dims)
-        connector_neighbor_dim = f"{offset_provider.neighbor_axis.value}_v"
+        connector_neighbor_dim = f"{offset_provider.codomain.value}_v"
         data_access_tasklet = state.add_tasklet(
             "data_access",
             code=f"__data = __field[{data_access_index}] "
@@ -445,7 +445,7 @@ def builtin_neighbors(
         )
         for dim in iterator.dimensions:
             connector = f"{dim}_v"
-            if dim == offset_provider.neighbor_axis.value:
+            if dim == offset_provider.codomain.value:
                 state.add_edge(
                     neighbor_index_node,
                     None,
@@ -1137,7 +1137,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             assert len(dims_not_indexed) == 1
             offset = dims_not_indexed[0]
             offset_provider = self.offset_provider[offset]
-            neighbor_dim = offset_provider.neighbor_axis.value
+            neighbor_dim = offset_provider.codomain.value
 
             result_name = unique_var_name()
             self.context.body.add_array(
@@ -1219,7 +1219,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             )
 
             shifted_dim = offset_provider.origin_axis.value
-            target_dim = offset_provider.neighbor_axis.value
+            target_dim = offset_provider.codomain.value
             args = [
                 ValueExpr(connectivity, _INDEX_DTYPE),
                 ValueExpr(iterator.indices[shifted_dim], offset_node.dtype),

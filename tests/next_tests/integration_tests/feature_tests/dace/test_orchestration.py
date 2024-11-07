@@ -62,7 +62,7 @@ def test_sdfgConvertible_laplap(cartesian_case):
     for k, v in cartesian_case.offset_provider.items():
         if hasattr(v, "table"):
             connectivities[k] = arguments.CompileTimeConnectivity(
-                v.max_neighbors, v.has_skip_values, v.origin_axis, v.neighbor_axis, v.ndarray.dtype
+                v.max_neighbors, v.has_skip_values, v.origin_axis, v.codomain, v.ndarray.dtype
             )
         else:
             connectivities[k] = v

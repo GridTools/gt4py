@@ -196,12 +196,12 @@ class StridedNeighborOffsetProvider:
     def __init__(
         self,
         origin_axis: common.Dimension,
-        neighbor_axis: common.Dimension,
+        codomain: common.Dimension,
         max_neighbors: int,
         has_skip_values=True,
     ) -> None:
         self.origin_axis = origin_axis
-        self.neighbor_axis = neighbor_axis
+        self.codomain = codomain
         self.max_neighbors = max_neighbors
         self.has_skip_values = has_skip_values
         self.index_type = int
@@ -681,7 +681,7 @@ def execute_shift(
         else:
             new_index = offset_implementation[cur_index, index].as_scalar()
             assert new_index is not None
-            new_pos[offset_implementation.neighbor_axis.value] = int(new_index)
+            new_pos[offset_implementation.codomain.value] = int(new_index)
 
         return new_pos
 

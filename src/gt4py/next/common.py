@@ -781,7 +781,7 @@ class Connectivity(Protocol):
     max_neighbors: int
     has_skip_values: bool
     origin_axis: Dimension
-    neighbor_axis: Dimension
+    codomain: Dimension
 
 
 @dataclasses.dataclass(frozen=True, eq=False)
@@ -789,7 +789,7 @@ class ConnectivityType(Connectivity):
     max_neighbors: int
     has_skip_values: bool
     origin_axis: Dimension
-    neighbor_axis: Dimension
+    codomain: Dimension
 
 
 class ConnectivityKind(enum.Flag):
@@ -845,7 +845,7 @@ class ConnectivityField(
             max_neighbors=self.max_neighbors,
             has_skip_values=self.has_skip_values,
             origin_axis=self.origin_axis,
-            neighbor_axis=self.neighbor_axis,
+            codomain=self.codomain,
         )
 
     @property
@@ -864,7 +864,7 @@ class ConnectivityField(
         return self.domain.ranges[1].stop - self.domain.ranges[1].start
 
     @property
-    def neighbor_axis(self) -> Dimension:
+    def codomain(self) -> Dimension:
         return self.codomain
 
     @property
