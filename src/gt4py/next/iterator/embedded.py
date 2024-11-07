@@ -96,7 +96,7 @@ class SparseTag(Tag): ...
 @xtyping.deprecated("Use a 'ConnectivityField' instead.")
 def NeighborTableOffsetProvider(
     table: core_defs.NDArrayObject,
-    origin_axis: common.Dimension,
+    source_dim: common.Dimension,
     neighbor_axis: common.Dimension,
     max_neighbors: int,
     has_skip_values=True,
@@ -105,7 +105,7 @@ def NeighborTableOffsetProvider(
         table,
         codomain=neighbor_axis,
         domain={
-            origin_axis: table.shape[0],
+            source_dim: table.shape[0],
             common.Dimension(
                 value="_DummyLocalDim", kind=common.DimensionKind.LOCAL
             ): max_neighbors,
@@ -195,12 +195,12 @@ class StridedConnectivityField(common.ConnectivityField):
 class StridedNeighborOffsetProvider:
     def __init__(
         self,
-        origin_axis: common.Dimension,
+        source_dim: common.Dimension,
         codomain: common.Dimension,
         max_neighbors: int,
         has_skip_values=True,
     ) -> None:
-        self.origin_axis = origin_axis
+        self.source_dim = source_dim
         self.codomain = codomain
         self.max_neighbors = max_neighbors
         self.has_skip_values = has_skip_values
@@ -644,7 +644,7 @@ def execute_shift(
                 else:
                     offset_implementation = offset_provider[tag]
                     assert isinstance(offset_implementation, common.Connectivity)
-                    cur_index = pos[offset_implementation.origin_axis.value]
+                    cur_index = pos[offset_implementation.source_dim.value]
                     assert common.is_int_index(cur_index)
                     if offset_implementation[cur_index, index].as_scalar() in [
                         None,
@@ -668,10 +668,10 @@ def execute_shift(
         return new_pos
     else:
         assert isinstance(offset_implementation, common.Connectivity)
-        assert offset_implementation.origin_axis.value in pos
+        assert offset_implementation.source_dim.value in pos
         new_pos = pos.copy()
-        new_pos.pop(offset_implementation.origin_axis.value)
-        cur_index = pos[offset_implementation.origin_axis.value]
+        new_pos.pop(offset_implementation.source_dim.value)
+        cur_index = pos[offset_implementation.source_dim.value]
         assert common.is_int_index(cur_index)
         if offset_implementation[cur_index, index].as_scalar() in [
             None,

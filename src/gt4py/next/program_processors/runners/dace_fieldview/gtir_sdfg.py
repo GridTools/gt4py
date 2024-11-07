@@ -381,7 +381,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         ).items():
             scalar_type = tt.from_dtype(offset_provider.dtype)
             local_dim = gtx_common.Dimension(offset, kind=gtx_common.DimensionKind.LOCAL)
-            gt_type = ts.FieldType([offset_provider.origin_axis, local_dim], scalar_type)
+            gt_type = ts.FieldType([offset_provider.source_dim, local_dim], scalar_type)
             # We store all connectivity tables as transient arrays here; later, while building
             # the field operator expressions, we change to non-transient (i.e. allocated externally)
             # the tables that are actually used. This way, we avoid adding SDFG arguments for

@@ -87,5 +87,5 @@ def run_processor(
 class DummyConnectivity(common.Connectivity):
     max_neighbors: int
     has_skip_values: int
-    origin_axis: gtx.Dimension = gtx.Dimension("dummy_origin")
+    source_dim: gtx.Dimension = gtx.Dimension("dummy_origin")
     codomain: gtx.Dimension = gtx.Dimension("dummy_neighbor")

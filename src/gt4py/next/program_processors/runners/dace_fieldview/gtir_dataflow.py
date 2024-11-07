@@ -520,8 +520,8 @@ class LambdaToDataflow(eve.NodeVisitor):
         it = self.visit(node.args[1])
         assert isinstance(it, IteratorExpr)
         assert offset_provider.codomain in it.dimensions
-        assert offset_provider.origin_axis in it.indices
-        origin_index = it.indices[offset_provider.origin_axis]
+        assert offset_provider.source_dim in it.indices
+        origin_index = it.indices[offset_provider.source_dim]
         assert isinstance(origin_index, SymbolExpr)
         assert all(isinstance(index, SymbolExpr) for index in it.indices.values())
 
@@ -712,7 +712,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             connectivity_desc = self.sdfg.arrays[connectivity]
             connectivity_desc.transient = False
 
-            origin_map_index = dace_gtir_utils.get_map_variable(offset_provider.origin_axis)
+            origin_map_index = dace_gtir_utils.get_map_variable(offset_provider.source_dim)
 
             connectivity_slice = self._construct_local_view(
                 MemletExpr(
@@ -772,7 +772,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         corresponding neighbor index in the connectivity table is valid, or the
         identity value if the neighbor index is missing.
         """
-        origin_map_index = dace_gtir_utils.get_map_variable(offset_provider.origin_axis)
+        origin_map_index = dace_gtir_utils.get_map_variable(offset_provider.source_dim)
 
         assert input_expr.local_offset is not None
         connectivity = dace_utils.connectivity_identifier(input_expr.local_offset)
@@ -1059,7 +1059,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         neighbor_dim = connectivity.codomain
         assert neighbor_dim not in it.indices
 
-        origin_dim = connectivity.origin_axis
+        origin_dim = connectivity.source_dim
         assert origin_dim in it.indices
         origin_index = it.indices[origin_dim]
         assert isinstance(origin_index, SymbolExpr)

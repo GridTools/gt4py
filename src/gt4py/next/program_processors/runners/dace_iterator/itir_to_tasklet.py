@@ -195,7 +195,7 @@ def _visit_lift_in_neighbors_reduction(
 ) -> list[ValueExpr]:
     assert transformer.context.reduce_identity is not None
     neighbor_dim = offset_provider.codomain.value
-    origin_dim = offset_provider.origin_axis.value
+    origin_dim = offset_provider.source_dim.value
 
     lifted_args: list[IteratorExpr | ValueExpr] = []
     for arg in node_args:
@@ -351,7 +351,7 @@ def builtin_neighbors(
         iterator = transformer.visit(data)
     assert isinstance(iterator, IteratorExpr)
     field_desc = iterator.field.desc(transformer.context.body)
-    origin_index_node = iterator.indices[offset_provider.origin_axis.value]
+    origin_index_node = iterator.indices[offset_provider.source_dim.value]
 
     assert transformer.context.reduce_identity is not None
     assert transformer.context.reduce_identity.dtype == iterator.dtype
@@ -1218,7 +1218,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 dace_utils.connectivity_identifier(offset_dim), debuginfo=di
             )
 
-            shifted_dim = offset_provider.origin_axis.value
+            shifted_dim = offset_provider.source_dim.value
             target_dim = offset_provider.codomain.value
             args = [
                 ValueExpr(connectivity, _INDEX_DTYPE),

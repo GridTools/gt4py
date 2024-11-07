@@ -260,7 +260,7 @@ def _get_dimensions_from_offset_provider(
         if isinstance(provider, common.Dimension):
             dimensions[provider.value] = provider
         elif isinstance(provider, common.Connectivity):
-            dimensions[provider.origin_axis.value] = provider.origin_axis
+            dimensions[provider.source_dim.value] = provider.source_dim
             dimensions[provider.codomain.value] = provider.codomain
     return dimensions
 

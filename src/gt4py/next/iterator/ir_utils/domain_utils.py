@@ -23,7 +23,7 @@ def _max_domain_sizes_by_location_type(offset_provider: Mapping[str, Any]) -> di
     """
     Extract horizontal domain sizes from an `offset_provider`.
 
-    Considers the shape of the neighbor table to get the size of each `origin_axis` and the maximum
+    Considers the shape of the neighbor table to get the size of each `source_dim` and the maximum
     value inside the neighbor table to get the size of each `codomain`.
     """
     sizes = dict[str, int]()
@@ -122,7 +122,7 @@ class SymbolicDomain:
                 # note: ugly but cheap re-computation, but should disappear
                 horizontal_sizes = _max_domain_sizes_by_location_type(offset_provider)
 
-                old_dim = nbt_provider.origin_axis
+                old_dim = nbt_provider.source_dim
                 new_dim = nbt_provider.codomain
 
                 assert new_dim not in new_ranges or old_dim == new_dim

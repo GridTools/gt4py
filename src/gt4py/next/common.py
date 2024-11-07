@@ -780,7 +780,7 @@ class MutableField(Field[DimsT, core_defs.ScalarT], Protocol[DimsT, core_defs.Sc
 class Connectivity(Protocol):
     max_neighbors: int
     has_skip_values: bool
-    origin_axis: Dimension
+    source_dim: Dimension
     codomain: Dimension
 
 
@@ -788,7 +788,7 @@ class Connectivity(Protocol):
 class ConnectivityType(Connectivity):
     max_neighbors: int
     has_skip_values: bool
-    origin_axis: Dimension
+    source_dim: Dimension
     codomain: Dimension
 
 
@@ -844,7 +844,7 @@ class ConnectivityField(
         return ConnectivityType(
             max_neighbors=self.max_neighbors,
             has_skip_values=self.has_skip_values,
-            origin_axis=self.origin_axis,
+            source_dim=self.source_dim,
             codomain=self.codomain,
         )
 
@@ -856,16 +856,12 @@ class ConnectivityField(
     def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]: ...
 
     @property
-    def origin_axis(self) -> Dimension:
+    def source_dim(self) -> Dimension:
         return self.domain.dims[0]  # TODO remove, just for transition
 
     @property
     def max_neighbors(self) -> int:
         return self.domain.ranges[1].stop - self.domain.ranges[1].start
-
-    @property
-    def codomain(self) -> Dimension:
-        return self.codomain
 
     @property
     def has_skip_values(self) -> bool:

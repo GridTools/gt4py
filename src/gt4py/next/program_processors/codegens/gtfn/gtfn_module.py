@@ -131,7 +131,7 @@ class GTFNTranslationStep(
                         name=GENERATED_CONNECTIVITY_PARAM_PREFIX + name.lower(),
                         type_=ts.FieldType(
                             dims=[
-                                connectivity.origin_axis,
+                                connectivity.source_dim,
                                 common.Dimension(
                                     name, kind=common.DimensionKind.LOCAL
                                 ),  # TODO(havogt): we should not use the name of the offset as the name of the local dimension
@@ -144,7 +144,7 @@ class GTFNTranslationStep(
                 # connectivity argument expression
                 nbtbl = (
                     f"gridtools::fn::sid_neighbor_table::as_neighbor_table<"
-                    f"generated::{connectivity.origin_axis.value}_t, "
+                    f"generated::{connectivity.source_dim.value}_t, "
                     f"generated::{name}_t, {connectivity.max_neighbors}"
                     f">(std::forward<decltype({GENERATED_CONNECTIVITY_PARAM_PREFIX}{name.lower()})>({GENERATED_CONNECTIVITY_PARAM_PREFIX}{name.lower()}))"
                 )

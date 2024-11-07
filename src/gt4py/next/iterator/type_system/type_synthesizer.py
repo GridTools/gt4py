@@ -381,7 +381,7 @@ def shift(*offset_literals, offset_provider: common.OffsetProvider) -> TypeSynth
             elif isinstance(provider, common.ConnectivityField):
                 found = False
                 for i, dim in enumerate(new_position_dims):
-                    if dim.value == provider.origin_axis.value:
+                    if dim.value == provider.source_dim.value:
                         assert not found
                         new_position_dims[i] = provider.codomain
                         found = True
