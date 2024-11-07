@@ -133,8 +133,10 @@ def unique_var_name():
 
 def new_array_symbols(name: str, ndim: int) -> tuple[list[dace.symbol], list[dace.symbol]]:
     dtype = dace.int64
-    shape = [dace.symbol(unique_name(f"{name}_shape{i}"), dtype) for i in range(ndim)]
-    strides = [dace.symbol(unique_name(f"{name}_stride{i}"), dtype) for i in range(ndim)]
+    shape = [dace.symbol(dace_utils.field_size_symbol_name(name, i), dtype) for i in range(ndim)]
+    strides = [
+        dace.symbol(dace_utils.field_stride_symbol_name(name, i), dtype) for i in range(ndim)
+    ]
     return shape, strides
 
 
