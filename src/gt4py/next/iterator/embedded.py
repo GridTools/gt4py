@@ -50,7 +50,6 @@ from gt4py.next import common, field_utils
 from gt4py.next.embedded import (
     context as embedded_context,
     exceptions as embedded_exceptions,
-    nd_array_field,
     operators,
 )
 from gt4py.next.ffront import fbuiltins
@@ -101,7 +100,7 @@ def NeighborTableOffsetProvider(
     neighbor_axis: common.Dimension,
     max_neighbors: int,
     has_skip_values=True,
-) -> None:
+) -> common.ConnectivityField:
     return common._connectivity(
         table,
         codomain=neighbor_axis,
@@ -113,9 +112,6 @@ def NeighborTableOffsetProvider(
         },
         skip_value=common._DEFAULT_SKIP_VALUE if has_skip_values else None,
     )
-
-    # data_ptr = _dace_data_ptr
-    # __descriptor__ = _dace_descriptor
 
 
 class StridedNeighborOffsetProvider:
@@ -572,7 +568,7 @@ def execute_shift(
                     assert isinstance(offset_implementation, common.Connectivity)
                     cur_index = pos[offset_implementation.origin_axis.value]
                     assert common.is_int_index(cur_index)
-                    if offset_implementation[cur_index, index] in [
+                    if offset_implementation[cur_index, index].as_scalar() in [
                         None,
                         common._DEFAULT_SKIP_VALUE,
                     ]:
@@ -599,7 +595,7 @@ def execute_shift(
         new_pos.pop(offset_implementation.origin_axis.value)
         cur_index = pos[offset_implementation.origin_axis.value]
         assert common.is_int_index(cur_index)
-        if offset_implementation[cur_index, index] in [
+        if offset_implementation[cur_index, index].as_scalar() in [
             None,
             common._DEFAULT_SKIP_VALUE,
         ]:

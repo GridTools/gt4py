@@ -14,11 +14,12 @@ from typing import Iterable, Optional, Literal, Union
 
 from gt4py import eve
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
+from gt4py.next import constructors
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import infer_domain
 from gt4py.next.iterator.ir_utils import domain_utils
 from gt4py.next.common import Dimension
-from gt4py.next import common, NeighborTableOffsetProvider
+from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 from gt4py.next import utils
@@ -29,6 +30,7 @@ JDim = common.Dimension(value="JDim", kind=common.DimensionKind.HORIZONTAL)
 KDim = common.Dimension(value="KDim", kind=common.DimensionKind.VERTICAL)
 Vertex = common.Dimension(value="Vertex", kind=common.DimensionKind.HORIZONTAL)
 Edge = common.Dimension(value="Edge", kind=common.DimensionKind.HORIZONTAL)
+E2VDim = common.Dimension(value="E2V", kind=common.DimensionKind.LOCAL)
 
 
 @pytest.fixture
@@ -39,11 +41,10 @@ def offset_provider():
 @pytest.fixture
 def unstructured_offset_provider():
     return {
-        "E2V": NeighborTableOffsetProvider(
-            np.array([[0, 1]], dtype=np.int32),
-            Edge,
-            Vertex,
-            2,
+        "E2V": constructors.as_connectivity(
+            domain={Edge: 1, E2VDim: 2},
+            codomain=Vertex,
+            data=np.array([[0, 1]], dtype=np.int32),
         )
     }
 

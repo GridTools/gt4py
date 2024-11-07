@@ -313,7 +313,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             if hasattr(v, "table") and conn_id in self.sdfg_closure_vars["sdfg.arrays"]:
                 if conn_id not in Program.connectivity_tables_data_descriptors:
                     Program.connectivity_tables_data_descriptors[conn_id] = dace.data.Array(
-                        dtype=dace.int64 if v.index_type == np.int64 else dace.int32,
+                        dtype=dace.int64 if v.dtype.scalar_type == np.int64 else dace.int32,
                         shape=[
                             symbols[dace_utils.field_size_symbol_name(conn_id, 0)],
                             symbols[dace_utils.field_size_symbol_name(conn_id, 1)],

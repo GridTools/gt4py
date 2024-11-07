@@ -60,8 +60,8 @@ def convert_args(
 
 
 def _ensure_is_on_device(
-    connectivity_arg: npt.NDArray, device: core_defs.DeviceType
-) -> npt.NDArray:
+    connectivity_arg: core_defs.NDArrayObject, device: core_defs.DeviceType
+) -> core_defs.NDArrayObject:
     if device in [core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM]:
         import cupy as cp
 

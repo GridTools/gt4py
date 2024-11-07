@@ -814,12 +814,31 @@ class ConnectivityKind(enum.Flag):
 @runtime_checkable
 # type: ignore[misc] # DimT should be covariant, but then it breaks in other places
 class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT]):
+    from gt4py.next.type_system import (
+        type_specifications as ts,
+    )  # cyclic import, # TODO resolve by not using common.Dimension in typespec
+
     @property
     @abc.abstractmethod
     def codomain(self) -> DimT: ...
 
     def __hash__(self) -> int:
         return hash((self.domain, self.codomain))  # TODO
+
+    def __gt_type__(self) -> ts.TypeSpec:
+        from gt4py.next.type_system import (
+            type_specifications as ts,
+            type_translation as tt,
+        )  # cyclic import
+
+        # Note: we could refactor the class such that `type(ConnectivityField)` contains this info
+        return ts.ConnectivityFieldType(
+            domain_dims=list(self.domain.dims),
+            codomain_dim=self.codomain,
+            max_neighbors=self.max_neighbors,
+            has_skip_values=self.has_skip_values,
+            dtype=tt.from_dtype(self.dtype),
+        )
 
     @property
     def kind(self) -> ConnectivityKind:
@@ -845,7 +864,7 @@ class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, 
         return self.skip_value is not None
 
     @property
-    def table(self) -> npt.NDArray:
+    def table(self) -> core_defs.NDArrayObject:
         return self.ndarray
 
     @property

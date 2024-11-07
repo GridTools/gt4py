@@ -23,6 +23,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     Vertex,
     Edge,
     E2V,
+    E2VDim,
 )
 from next_tests.integration_tests.multi_feature_tests.ffront_tests.test_laplacian import (
     lap_program,
@@ -104,12 +105,8 @@ def test_sdfgConvertible_connectivities(unstructured_case):
     allocator, backend = unstructured_case.allocator, unstructured_case.backend
 
     if backend == run_dace_gpu:
-        import cupy as xp
-
         dace_storage_type = dace.StorageType.GPU_Global
     else:
-        import numpy as xp
-
         dace_storage_type = dace.StorageType.Default
 
     rows = dace.symbol("rows")
@@ -130,20 +127,23 @@ def test_sdfgConvertible_connectivities(unstructured_case):
             a, out, offset_provider=offset_provider
         )
 
-    e2v = gtx.NeighborTableOffsetProvider(
-        xp.asarray([[0, 1], [1, 2], [2, 0]]), Edge, Vertex, 2, False
+    e2v = gtx.as_connectivity(
+        [Edge, E2VDim],
+        codomain=Vertex,
+        data=np.asarray([[0, 1], [1, 2], [2, 0]]),
+        allocator=allocator,
     )
-    connectivities = {}
-    connectivities["E2V"] = arguments.CompileTimeConnectivity(
-        e2v.max_neighbors, e2v.has_skip_values, e2v.origin_axis, e2v.neighbor_axis, e2v.table.dtype
-    )
+    connectivities = {"E2V": e2v}
     offset_provider = OffsetProvider_t.dtype._typeclass.as_ctypes()(E2V=e2v.data_ptr())
 
     SDFG = sdfg.to_sdfg(connectivities=connectivities)
     cSDFG = SDFG.compile()
 
-    a = gtx.as_field([Vertex], xp.asarray([0.0, 1.0, 2.0]), allocator=allocator)
+    a = gtx.as_field([Vertex], np.asarray([0.0, 1.0, 2.0]), allocator=allocator)
     out = gtx.zeros({Edge: 3}, allocator=allocator)
+    e2v_ndarray_copy = (
+        e2v.ndarray.copy()
+    )  # otherwise DaCe complains about the gt4py custom allocated view
     # This is a low level interface to call the compiled SDFG.
     # It is not supposed to be used in user code.
     # The high level interface should be provided by a DaCe Orchestrator,
@@ -155,21 +155,21 @@ def test_sdfgConvertible_connectivities(unstructured_case):
         offset_provider,
         rows=3,
         cols=2,
-        connectivity_E2V=e2v.table,
-        __connectivity_E2V_stride_0=get_stride_from_numpy_to_dace(
-            xp.asnumpy(e2v.table) if backend == run_dace_gpu else e2v.table, 0
-        ),
-        __connectivity_E2V_stride_1=get_stride_from_numpy_to_dace(
-            xp.asnumpy(e2v.table) if backend == run_dace_gpu else e2v.table, 1
-        ),
+        connectivity_E2V=e2v_ndarray_copy,
+        __connectivity_E2V_stride_0=get_stride_from_numpy_to_dace(e2v_ndarray_copy, 0),
+        __connectivity_E2V_stride_1=get_stride_from_numpy_to_dace(e2v_ndarray_copy, 1),
     )
 
-    e2v_xp = xp.asnumpy(e2v.table) if backend == run_dace_gpu else e2v.table
-    assert np.allclose(gtx.field_utils.asnumpy(out), gtx.field_utils.asnumpy(a)[e2v_xp[:, 0]])
+    e2v_np = e2v.asnumpy()
+    assert np.allclose(out.asnumpy(), a.asnumpy()[e2v_np[:, 0]])
 
-    e2v = gtx.NeighborTableOffsetProvider(
-        xp.asarray([[1, 0], [2, 1], [0, 2]]), Edge, Vertex, 2, False
+    e2v = gtx.as_connectivity(
+        [Edge, E2VDim],
+        codomain=Vertex,
+        data=np.asarray([[1, 0], [2, 1], [0, 2]]),
+        allocator=allocator,
     )
+    e2v_ndarray_copy = e2v.ndarray.copy()
     offset_provider = OffsetProvider_t.dtype._typeclass.as_ctypes()(E2V=e2v.data_ptr())
     cSDFG(
         a,
@@ -177,17 +177,13 @@ def test_sdfgConvertible_connectivities(unstructured_case):
         offset_provider,
         rows=3,
         cols=2,
-        connectivity_E2V=e2v.table,
-        __connectivity_E2V_stride_0=get_stride_from_numpy_to_dace(
-            xp.asnumpy(e2v.table) if backend == run_dace_gpu else e2v.table, 0
-        ),
-        __connectivity_E2V_stride_1=get_stride_from_numpy_to_dace(
-            xp.asnumpy(e2v.table) if backend == run_dace_gpu else e2v.table, 1
-        ),
+        connectivity_E2V=e2v_ndarray_copy,
+        __connectivity_E2V_stride_0=get_stride_from_numpy_to_dace(e2v_ndarray_copy, 0),
+        __connectivity_E2V_stride_1=get_stride_from_numpy_to_dace(e2v_ndarray_copy, 1),
     )
 
-    e2v_xp = xp.asnumpy(e2v.table) if backend == run_dace_gpu else e2v.table
-    assert np.allclose(gtx.field_utils.asnumpy(out), gtx.field_utils.asnumpy(a)[e2v_xp[:, 0]])
+    e2v_np = e2v.asnumpy()
+    assert np.allclose(out.asnumpy(), a.asnumpy()[e2v_np[:, 0]])
 
 
 def get_stride_from_numpy_to_dace(numpy_array: np.ndarray, axis: int) -> int:
