@@ -14,6 +14,7 @@ import dace
 import gt4py.next.iterator.ir as itir
 from gt4py import eve
 from gt4py.next.common import Connectivity
+from gt4py.next.ffront import fbuiltins as gtx_fbuiltins
 from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
 
 
@@ -132,7 +133,7 @@ def unique_var_name():
 
 
 def new_array_symbols(name: str, ndim: int) -> tuple[list[dace.symbol], list[dace.symbol]]:
-    dtype = dace.int64
+    dtype = dace.dtype_to_typeclass(gtx_fbuiltins.IndexType)
     shape = [dace.symbol(dace_utils.field_size_symbol_name(name, i), dtype) for i in range(ndim)]
     strides = [
         dace.symbol(dace_utils.field_stride_symbol_name(name, i), dtype) for i in range(ndim)
