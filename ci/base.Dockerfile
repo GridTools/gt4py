@@ -1,5 +1,5 @@
-ARG CUDA_VERSION=12.6.2
-FROM docker.io/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu22.04
+ARG CUDA_VERSION=12.5.0
+FROM docker.io/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu20.04
 ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
 
@@ -22,7 +22,7 @@ RUN apt-get update -qq && apt-get install -qq -y --no-install-recommends \
     tk-dev \
     libffi-dev \
     liblzma-dev \
-    python3-openssl \
+    python-openssl \
     libreadline-dev \
     git \
     rustc \

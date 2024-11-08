@@ -46,12 +46,12 @@ stages:
 .build_baseimage_x86_64:
   extends: [.container-builder-cscs-zen2, .build_baseimage]
   variables:
-    CUDA_VERSION: 11.7.1
+    CUDA_VERSION: 11.2.2
     CUPY_PACKAGE: cupy-cuda11x
 .build_baseimage_aarch64:
   extends: [.container-builder-cscs-gh200, .build_baseimage]
   variables:
-    CUDA_VERSION: 12.6.2
+    CUDA_VERSION: 12.4.1
     CUPY_PACKAGE: cupy-cuda12x
   # TODO: enable CI job when Todi is back in operational state
   when: manual
