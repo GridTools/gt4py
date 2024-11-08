@@ -782,6 +782,7 @@ class Connectivity(Protocol):
     has_skip_values: bool
     source_dim: Dimension
     codomain: Dimension
+    dtype: core_defs.DType
 
 
 @dataclasses.dataclass(frozen=True, eq=False)
@@ -790,6 +791,7 @@ class ConnectivityType(Connectivity):
     has_skip_values: bool
     source_dim: Dimension
     codomain: Dimension
+    dtype: core_defs.DType
 
 
 class ConnectivityKind(enum.Flag):
@@ -846,6 +848,7 @@ class ConnectivityField(
             has_skip_values=self.has_skip_values,
             source_dim=self.source_dim,
             codomain=self.codomain,
+            dtype=self.dtype,
         )
 
     @property

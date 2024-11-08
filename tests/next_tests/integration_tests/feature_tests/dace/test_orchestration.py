@@ -58,25 +58,16 @@ def test_sdfgConvertible_laplap(cartesian_case):
     in_field = cases.allocate(cartesian_case, laplap_program, "in_field")()
     out_field = cases.allocate(cartesian_case, laplap_program, "out_field")()
 
-    connectivities = {}  # OffsetProvider without runtime information
-    for k, v in cartesian_case.offset_provider.items():
-        assert False  # TODO check this case again
-        if isinstance(v, gtx.ConnectivityField):
-            connectivities[k] = v.type_()
-            assert False
-        else:
-            connectivities[k] = v
-
     # Test DaCe closure support
     @dace.program
     def sdfg():
         tmp_field = xp.empty_like(out_field)
         lap_program.with_grid_type(cartesian_case.grid_type).with_backend(
             cartesian_case.backend
-        ).with_connectivities(connectivities)(in_field, tmp_field)
+        ).with_connectivities(cartesian_case.offset_provider)(in_field, tmp_field)
         lap_program.with_grid_type(cartesian_case.grid_type).with_backend(
             cartesian_case.backend
-        ).with_connectivities(connectivities)(tmp_field, out_field)
+        ).with_connectivities(cartesian_case.offset_provider)(tmp_field, out_field)
 
     sdfg()
 
@@ -133,7 +124,7 @@ def test_sdfgConvertible_connectivities(unstructured_case):
         data=np.asarray([[0, 1], [1, 2], [2, 0]]),
         allocator=allocator,
     )
-    connectivities = {"E2V": e2v}
+    connectivities = {"E2V": e2v.type_()}
     offset_provider = OffsetProvider_t.dtype._typeclass.as_ctypes()(E2V=e2v.data_ptr())
 
     SDFG = sdfg.to_sdfg(connectivities=connectivities)
