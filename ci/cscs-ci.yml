@@ -156,7 +156,7 @@ build_py38_image_x86_64:
     NUM_PROCESSES: auto
     VIRTUALENV_SYSTEM_SITE_PACKAGES: 1
 .test_helper_x86_64:
-  extends: [.container-runner-daint-cpu, .test_helper]
+  extends: [.container-runner-daint-mc, .test_helper]
   parallel:
     matrix:
     - SUBPACKAGE: [cartesian, storage]
