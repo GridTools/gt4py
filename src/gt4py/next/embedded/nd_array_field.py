@@ -36,7 +36,6 @@ from gt4py.next.embedded import (
     exceptions as embedded_exceptions,
 )
 from gt4py.next.ffront import experimental, fbuiltins
-from gt4py.next.iterator import embedded as itir_embedded
 
 
 try:

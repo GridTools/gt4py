@@ -16,7 +16,6 @@ from typing import Any, Callable, Final, Generic, ParamSpec, Tuple, TypeAlias, T
 import numpy as np
 from numpy import float32, float64, int32, int64
 
-import gt4py.next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.common import Dimension, Field  # noqa: F401 [unused-import] for TYPE_BUILTINS

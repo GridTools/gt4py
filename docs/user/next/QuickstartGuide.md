@@ -150,10 +150,21 @@ The sign of the edge difference in the sum of the pseudo-laplacian is always suc
 
 This section approaches the pseudo-laplacian by introducing the required APIs progressively through the following subsections:
 
-- [Defining the mesh and the connectivities (adjacencies) between cells and edges](#Defining-the-mesh-and-its-connectivities)
-- [Using connectivities in field operators](#Using-connectivities-in-field-operators)
-- [Using reductions on connected mesh elements](#Using-reductions-on-connected-mesh-elements)
-- [Implementing the actual pseudo-laplacian](#Implementing-the-pseudo-laplacian)
+- [Getting started with the GT4Py declarative frontend](#getting-started-with-the-gt4py-declarative-frontend)
+  - [Installation](#installation)
+  - [Programming guide](#programming-guide)
+    - [Key concepts and application structure](#key-concepts-and-application-structure)
+      - [Importing features](#importing-features)
+      - [Fields](#fields)
+      - [Field operators](#field-operators)
+      - [Programs](#programs)
+      - [Composing field operators and programs](#composing-field-operators-and-programs)
+    - [Operations on unstructured meshes](#operations-on-unstructured-meshes)
+      - [Defining the mesh and its connectivities](#defining-the-mesh-and-its-connectivities)
+      - [Using connectivities in field operators](#using-connectivities-in-field-operators)
+      - [Using reductions on connected mesh elements](#using-reductions-on-connected-mesh-elements)
+      - [Using conditionals on fields](#using-conditionals-on-fields)
+      - [Implementing the pseudo-laplacian](#implementing-the-pseudo-laplacian)
 
 +++
 
@@ -237,7 +248,7 @@ E2C = gtx.FieldOffset("E2C", source=CellDim, target=(EdgeDim,E2CDim))
 Note that the field offset does not contain the actual connectivity table, that's provided through an _offset provider_:
 
 ```{code-cell} ipython3
-E2C_offset_provider = gtx.NeighborTableOffsetProvider(edge_to_cell_table, EdgeDim, CellDim, 2)
+E2C_offset_provider = gtx.as_connectivity([EdgeDim, E2CDim], codomain=CellDim, data=edge_to_cell_table)
 ```
 
 The field operator `nearest_cell_to_edge` below shows an example of applying this transform. There is a little twist though: the subscript in `E2C[0]` means that only the value of the first connected cell is taken, the second (if exists) is ignored.
@@ -385,7 +396,7 @@ As explained in the section outline, the pseudo-laplacian needs the cell-to-edge
 C2EDim = gtx.Dimension("C2E", kind=gtx.DimensionKind.LOCAL)
 C2E = gtx.FieldOffset("C2E", source=EdgeDim, target=(CellDim, C2EDim))
 
-C2E_offset_provider = gtx.NeighborTableOffsetProvider(cell_to_edge_table, CellDim, EdgeDim, 3)
+C2E_offset_provider = gtx.NeighborTableOffsetProvider([CellDim, C2EDim], codomain=EdgeDim, data=cell_to_edge_table)
 ```
 
 **Weights of edge differences:**
