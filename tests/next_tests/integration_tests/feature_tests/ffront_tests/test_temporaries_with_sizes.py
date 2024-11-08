@@ -65,12 +65,14 @@ def testee():
 
 
 def test_verification(testee, run_gtfn_with_temporaries_and_symbolic_sizes, mesh_descriptor):
-    if platform.machine() == 'x86_64':
-        pytest.xfail(reason="The C++ code generated in this test contains unicode characters "
-                            "(coming from the ssa pass) which is not supported by gcc 9 used"
-                            "in the CI. Bumping the container version sadly did not work for"
-                            "unrelated and unclear reasons. Since the issue is not present"
-                            "on Alps we just skip the test for now before investing more time.")
+    if platform.machine() == "x86_64":
+        pytest.xfail(
+            reason="The C++ code generated in this test contains unicode characters "
+            "(coming from the ssa pass) which is not supported by gcc 9 used"
+            "in the CI. Bumping the container version sadly did not work for"
+            "unrelated and unclear reasons. Since the issue is not present"
+            "on Alps we just skip the test for now before investing more time."
+        )
 
     unstructured_case = Case(
         run_gtfn_with_temporaries_and_symbolic_sizes,
