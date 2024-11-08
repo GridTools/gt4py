@@ -23,28 +23,20 @@ class PruneCasts(PreserveLocationVisitor, NodeTranslator):
     def visit_FunCall(self, node: ir.FunCall) -> ir.Node:
         node = self.generic_visit(node)
 
-        if cpm.is_call_to(node, "cast_"):
-            value, type_constructor = node.args
+        if not cpm.is_call_to(node, "cast_"):
+            return node
 
-            assert (
-                value.type
-                and isinstance(type_constructor, ir.SymRef)
-                and (type_constructor.id in ir.TYPEBUILTINS)
-            )
-            dtype = ts.ScalarType(kind=getattr(ts.ScalarKind, type_constructor.id.upper()))
+        value, type_constructor = node.args
 
-            if value.type == dtype:
-                return value
+        assert (
+            value.type
+            and isinstance(type_constructor, ir.SymRef)
+            and (type_constructor.id in ir.TYPEBUILTINS)
+        )
+        dtype = ts.ScalarType(kind=getattr(ts.ScalarKind, type_constructor.id.upper()))
 
-        elif (
-            cpm.is_applied_as_fieldop(node)
-            and isinstance(node.fun.args[0], ir.Lambda)  # type: ignore[attr-defined]
-            and cpm.is_call_to(node.fun.args[0].expr, "deref")  # type: ignore[attr-defined]
-            and cpm.is_ref_to(node.fun.args[0].expr.args[0], node.fun.args[0].params[0].id)  # type: ignore[attr-defined]
-        ):
-            # pruning of cast expressions may leave some trivial `as_fieldop` expressions
-            # with form '(⇑(λ(__arg) → ·__arg))(a)'
-            return node.args[0]
+        if value.type == dtype:
+            return value
 
         return node
 
