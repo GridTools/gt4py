@@ -36,6 +36,8 @@ RUN wget --quiet https://archives.boost.io/release/1.85.0/source/boost_1_85_0.ta
     mv boost_1_85_0/boost /usr/local/include/ && \
     rm boost_1_85_0.tar.gz boost_hash.txt
 
+RUN ./install_cuda_driver.sh 470.57.02
+
 ENV BOOST_ROOT /usr/local/
 ENV CUDA_HOME /usr/local/cuda
 

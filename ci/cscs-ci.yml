@@ -147,7 +147,7 @@ build_py38_image_x86_64:
   image: $CSCS_REGISTRY_PATH/public/$ARCH/gt4py/gt4py-ci:$CI_COMMIT_SHA-$PYVERSION
   script:
   - cd /gt4py.src
-#  - python -c "import cupy"
+  - python -c "import cupy"
   - tox run -e $SUBPACKAGE-$PYVERSION_PREFIX$VARIANT$SUBVARIANT
   variables:
     CRAY_CUDA_MPS: 1
@@ -156,16 +156,16 @@ build_py38_image_x86_64:
     NUM_PROCESSES: auto
     VIRTUALENV_SYSTEM_SITE_PACKAGES: 1
 .test_helper_x86_64:
-  extends: [.container-runner-daint-mc, .test_helper]
+  extends: [.container-runner-daint-gpu, .test_helper]
   parallel:
     matrix:
     - SUBPACKAGE: [cartesian, storage]
       VARIANT: [-internal, -dace]
-      SUBVARIANT: [-cpu]
+      SUBVARIANT: [-cuda11x, -cpu]
     - SUBPACKAGE: eve
     - SUBPACKAGE: next
       VARIANT: [-nomesh, -atlas]
-      SUBVARIANT: [-cpu]
+      SUBVARIANT: [-cuda11x, -cpu]
 .test_helper_aarch64:
   extends: [.container-runner-todi-gh200, .test_helper]
   parallel:
