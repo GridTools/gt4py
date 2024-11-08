@@ -23,6 +23,10 @@ from typing import (
 )
 
 import numpy as np
+try:
+    import ml_dtypes
+except ModuleNotFoundError:
+    ml_dtypes = None
 
 from gt4py.eve.utils import XIterable, xiter
 from gt4py.next import common
@@ -234,7 +238,12 @@ def is_floating_point(symbol_type: ts.TypeSpec) -> bool:
     >>> is_floating_point(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)))
     True
     """
-    return extract_dtype(symbol_type).kind in [ts.ScalarKind.FLOAT32, ts.ScalarKind.FLOAT64]
+    return extract_dtype(symbol_type).kind in [
+        ts.ScalarKind.FLOAT16,
+        ts.ScalarKind.BFLOAT16,
+        ts.ScalarKind.FLOAT32,
+        ts.ScalarKind.FLOAT64,
+    ]
 
 
 def is_integer(symbol_type: ts.TypeSpec) -> bool:
@@ -251,7 +260,12 @@ def is_integer(symbol_type: ts.TypeSpec) -> bool:
     False
     """
     return isinstance(symbol_type, ts.ScalarType) and symbol_type.kind in {
+        ts.ScalarKind.INT8,
+        ts.ScalarKind.UINT8,
+        ts.ScalarKind.INT16,
+        ts.ScalarKind.UINT16,
         ts.ScalarKind.INT32,
+        ts.ScalarKind.UINT32,
         ts.ScalarKind.INT64,
     }
 
@@ -318,12 +332,22 @@ def is_arithmetic(symbol_type: ts.TypeSpec) -> bool:
 
 def arithmetic_bounds(arithmetic_type: ts.ScalarType) -> tuple[np.number, np.number]:
     assert is_arithmetic(arithmetic_type)
-    return {  # type: ignore[return-value] # why resolved to `tuple[object, object]`?
+    bounds = {  # type: ignore[return-value] # why resolved to `tuple[object, object]`?
+        ts.ScalarKind.FLOAT16: (np.finfo(np.float16).min, np.finfo(np.float16).max),  # todo: cleanup?
         ts.ScalarKind.FLOAT32: (np.finfo(np.float32).min, np.finfo(np.float32).max),
         ts.ScalarKind.FLOAT64: (np.finfo(np.float64).min, np.finfo(np.float64).max),
+        ts.ScalarKind.INT8: (np.iinfo(np.int8).min, np.iinfo(np.int8).max),
+        ts.ScalarKind.UINT8: (np.iinfo(np.uint8).min, np.iinfo(np.uint8).max),
+        ts.ScalarKind.INT16: (np.iinfo(np.int16).min, np.iinfo(np.int16).max),
+        ts.ScalarKind.UINT16: (np.iinfo(np.uint16).min, np.iinfo(np.uint16).max),
         ts.ScalarKind.INT32: (np.iinfo(np.int32).min, np.iinfo(np.int32).max),
+        ts.ScalarKind.UINT32: (np.iinfo(np.uint32).min, np.iinfo(np.uint32).max),
         ts.ScalarKind.INT64: (np.iinfo(np.int64).min, np.iinfo(np.int64).max),
-    }[arithmetic_type.kind]
+        ts.ScalarKind.UINT64: (np.iinfo(np.uint64).min, np.iinfo(np.uint64).max),
+    }
+    if ml_dtypes:
+        bounds[ts.ScalarKind.BFLOAT16] = (ml_dtypes.finfo(ml_dtypes.bfloat16).min, ml_dtypes.finfo(ml_dtypes.bfloat16).max)
+    return bounds[arithmetic_type.kind]
 
 
 def is_type_or_tuple_of_type(type_: ts.TypeSpec, expected_type: type | tuple) -> bool:

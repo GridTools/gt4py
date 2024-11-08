@@ -24,17 +24,14 @@ FIELD_SYMBOL_RE: Final[re.Pattern] = re.compile("__.+_(size|stride)_\d+")
 
 def as_dace_type(type_: ts.ScalarType) -> dace.typeclass:
     """Converts GT4Py scalar type to corresponding DaCe type."""
-    if type_.kind == ts.ScalarKind.BOOL:
-        return dace.bool_
-    elif type_.kind == ts.ScalarKind.INT32:
-        return dace.int32
-    elif type_.kind == ts.ScalarKind.INT64:
-        return dace.int64
-    elif type_.kind == ts.ScalarKind.FLOAT32:
-        return dace.float32
-    elif type_.kind == ts.ScalarKind.FLOAT64:
-        return dace.float64
-    raise ValueError(f"Scalar type '{type_}' not supported.")
+
+    match type_.kind:
+        case ts.ScalarKind.BOOL:
+            return dace.bool_
+        case ts.ScalarKind():
+            return getattr(dace, type_.kind.name.lower())
+        case _:
+            raise ValueError(f"Scalar type '{type_}' not supported.")
 
 
 def as_itir_type(dtype: dace.typeclass) -> ts.ScalarType:

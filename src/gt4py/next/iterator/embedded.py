@@ -20,6 +20,10 @@ import warnings
 
 import numpy as np
 import numpy.typing as npt
+try:
+    import ml_dtypes
+except ModuleNotFoundError:
+    ml_dtypes = None
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
@@ -86,8 +90,23 @@ FieldAxis: TypeAlias = common.Dimension
 TupleAxis: TypeAlias = type[None]
 Axis: TypeAlias = Union[FieldAxis, TupleAxis]
 Scalar: TypeAlias = (
-    SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64 | np.bool_
+    SupportsInt
+    | SupportsFloat
+    | np.int8
+    | np.uint8
+    | np.int16
+    | np.uint16
+    | np.int32
+    | np.uint32
+    | np.int64
+    | np.uint64
+    | np.float16
+    | np.float32
+    | np.float64
+    | np.bool_
 )
+if ml_dtypes:
+    Scalar = Scalar | ml_dtypes.bfloat16
 
 
 class SparseTag(Tag): ...
@@ -556,6 +575,8 @@ for math_builtin_name in builtins.MATH_BUILTINS:
     impl: Callable
     if math_builtin_name == "gamma":
         continue  # treated explicitly
+    elif math_builtin_name == "bfloat16" and ml_dtypes:
+        impl = ml_dtypes.bfloat16  # treated explicitly
     elif math_builtin_name in python_builtins:
         # TODO: Should potentially use numpy fixed size types to be consistent
         #   with compiled backends. Currently using Python types to preserve

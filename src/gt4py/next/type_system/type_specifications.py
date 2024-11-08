@@ -72,11 +72,19 @@ class OffsetType(TypeSpec):
 
 class ScalarKind(IntEnum):
     BOOL = 1
-    INT32 = 32
-    INT64 = 64
-    FLOAT32 = 1032
-    FLOAT64 = 1064
-    STRING = 3001
+    INT8 = 2
+    UINT8 = 3
+    INT16 = 4
+    UINT16 = 5
+    INT32 = 6
+    UINT32 = 7
+    INT64 = 8
+    UINT64 = 9
+    FLOAT16 = 10
+    BFLOAT16 = 11
+    FLOAT32 = 12
+    FLOAT64 = 13
+    STRING = 14
 
 
 @dataclass(frozen=True)

@@ -15,7 +15,10 @@ from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from gt4py.eve.utils import noninstantiable
 from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts
-
+try:
+    import ml_dtypes
+except ModuleNotFoundError:
+    ml_dtypes = None
 
 DimensionKind = common.DimensionKind
 
@@ -166,8 +169,19 @@ ARITHMETIC_BUILTINS = {
 
 #: builtin / dtype used to construct integer indices, like domain bounds
 INTEGER_INDEX_BUILTIN = "int32"
-INTEGER_BUILTINS = {"int32", "int64"}
-FLOATING_POINT_BUILTINS = {"float32", "float64"}
+INTEGER_BUILTINS = {
+    "int8",
+    "uint8",
+    "int16",
+    "uint16",
+    "int32",
+    "uint32",
+    "int64",
+    "uint64",
+}  # Todo: should we distinguish int and uint?
+FLOATING_POINT_BUILTINS = {"float16", "float32", "float64"}
+if ml_dtypes.bfloat16:
+    FLOATING_POINT_BUILTINS.add("bfloat16")
 TYPEBUILTINS = {*INTEGER_BUILTINS, *FLOATING_POINT_BUILTINS, "bool"}
 
 BUILTINS = {
