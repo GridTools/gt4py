@@ -241,7 +241,7 @@ def test_can_deref(program_processor, stencil):
     program_processor, validate = program_processor
 
     Node = gtx.Dimension("Node")
-    NeighDim = gtx.Dimension("NeighDim", kind=gtx.DimensionKind.LOCAL)
+    NeighDim = gtx.Dimension("Neighbor", kind=gtx.DimensionKind.LOCAL)
 
     inp = gtx.as_field([Node], np.ones((1,), dtype=np.int32))
     out = gtx.as_field([Node], np.asarray([0], dtype=inp.dtype))
