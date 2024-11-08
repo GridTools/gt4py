@@ -166,19 +166,19 @@ class GTFNCompileWorkflowFactory(factory.Factory):
         cached_translation = factory.Trait(
             translation=factory.LazyAttribute(
                 lambda o: workflow.CachedStep(
-                    o.translation_,
+                    o.uncached_translation,
                     hash_function=fingerprint_compilable_program,
                     cache=FileCache(str(config.BUILD_CACHE_DIR / "gtfn_cache")),
                 )
             ),
         )
 
-        translation_ = factory.SubFactory(
+        uncached_translation = factory.SubFactory(
             gtfn_module.GTFNTranslationStepFactory,
             device_type=factory.SelfAttribute("..device_type"),
         )
 
-    translation = factory.LazyAttribute(lambda o: o.translation_)
+    translation = factory.LazyAttribute(lambda o: o.uncached_translation)
 
     bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableSource] = (
         nanobind.bind_source
@@ -240,4 +240,4 @@ run_gtfn_gpu = GTFNBackendFactory(gpu=True)
 
 run_gtfn_gpu_cached = GTFNBackendFactory(gpu=True, cached=True)
 
-run_gtfn_no_transforms = GTFNBackendFactory(otf_workflow__translation__enable_itir_transforms=False)
+run_gtfn_no_transforms = GTFNBackendFactory(otf_workflow__uncached_translation__enable_itir_transforms=False)
