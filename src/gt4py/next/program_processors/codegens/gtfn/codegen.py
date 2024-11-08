@@ -10,7 +10,7 @@ from typing import Any, Collection, Final, Union
 try:
     import ml_dtypes
 except ModuleNotFoundError:
-    bfloat16 = None
+    ml_dtypes = None
 
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako

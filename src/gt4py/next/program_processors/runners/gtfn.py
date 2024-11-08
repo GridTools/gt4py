@@ -34,11 +34,14 @@ def convert_arg(arg: Any) -> Any:
         origin = getattr(arg, "__gt_origin__", tuple([0] * len(arg.domain)))
 
         # TODO: bloody hack just to get a dlpack compatible array of bfloat16s
-        from ml_dtypes import bfloat16
-        import jax
-        import jax.numpy as jnp
-        if arr.dtype == bfloat16:
-            arr = jnp.asarray(arr, dtype=jnp.bfloat16)
+        try:
+            from ml_dtypes import bfloat16
+            import jax.numpy as jnp
+            if arr.dtype == bfloat16:
+                arr = jnp.asarray(arr, dtype=jnp.bfloat16)
+        except:
+            raise ValueError("ml_dtypes and jax must to be installed.")
+
 
         return arr, origin
     else:

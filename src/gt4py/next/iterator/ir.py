@@ -16,9 +16,9 @@ from gt4py.eve.utils import noninstantiable
 from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts
 try:
-    from ml_dtypes import bfloat16
+    import ml_dtypes
 except ModuleNotFoundError:
-    bfloat16 = None
+    ml_dtypes = None
 
 DimensionKind = common.DimensionKind
 
@@ -175,7 +175,7 @@ INTEGER_BUILTINS = {
     "uint64",
 }  # Todo: should we distinguish int and uint?
 FLOATING_POINT_BUILTINS = {"float16", "float32", "float64"}
-if bfloat16:
+if ml_dtypes.bfloat16:
     FLOATING_POINT_BUILTINS.add("bfloat16")
 TYPEBUILTINS = {*INTEGER_BUILTINS, *FLOATING_POINT_BUILTINS, "bool"}
 

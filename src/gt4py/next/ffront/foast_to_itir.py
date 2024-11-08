@@ -32,9 +32,9 @@ from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 try:
-    from ml_dtypes import bfloat16
+    import ml_dtypes
 except ModuleNotFoundError:
-    bfloat16 = None
+    ml_dtypes = None
 
 
 def foast_to_itir(inp: FOP) -> itir.Expr:
@@ -466,7 +466,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
                 f"Type cast only supports literal arguments, {node.type} not supported."
             )
         # TODO: why?
-        if bfloat16 and node_kind == 'bfloat16':
+        if ml_dtypes and node_kind == 'bfloat16':
             val = float(val)
         val = target_type(val)
 

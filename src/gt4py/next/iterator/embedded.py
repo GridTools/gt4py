@@ -21,9 +21,9 @@ import warnings
 import numpy as np
 import numpy.typing as npt
 try:
-    from ml_dtypes import bfloat16
+    import ml_dtypes
 except ModuleNotFoundError:
-    bfloat16 = None
+    ml_dtypes = None
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
@@ -104,8 +104,8 @@ Scalar: TypeAlias = (
     | np.float64
     | np.bool_
 )
-if bfloat16:
-    Scalar = Scalar | bfloat16
+if ml_dtypes:
+    Scalar = Scalar | ml_dtypes.bfloat16
 
 
 class SparseTag(Tag): ...
@@ -558,8 +558,8 @@ for math_builtin_name in builtins.MATH_BUILTINS:
     impl: Callable
     if math_builtin_name == "gamma":
         continue  # treated explicitly
-    elif math_builtin_name == "bfloat16" and bfloat16:
-        impl = bfloat16  # treated explicitly
+    elif math_builtin_name == "bfloat16" and ml_dtypes:
+        impl = ml_dtypes.bfloat16  # treated explicitly
     elif math_builtin_name in python_builtins:
         # TODO: Should potentially use numpy fixed size types to be consistent
         #   with compiled backends. Currently using Python types to preserve

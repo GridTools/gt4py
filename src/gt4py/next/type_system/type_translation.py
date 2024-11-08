@@ -19,9 +19,9 @@ from typing import Any, ForwardRef, Optional
 import numpy as np
 import numpy.typing as npt
 try:
-    from ml_dtypes import bfloat16
+    import ml_dtypes
 except ModuleNotFoundError:
-    bfloat16 = None
+    ml_dtypes = None
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
@@ -50,7 +50,7 @@ def get_scalar_kind(dtype: npt.DTypeLike) -> ts.ScalarKind:
                 return ts.ScalarKind.STRING
             case np.dtype():
                 return getattr(ts.ScalarKind, dt.name.upper())
-            case _ if bfloat16 and dt == bfloat16:
+            case _ if ml_dtypes and dt == ml_dtypes.bfloat16:
                 return ts.ScalarKind.BFLOAT16
             case _:
                 raise ValueError(f"Impossible to map '{dtype}' value to a 'ScalarKind'.")

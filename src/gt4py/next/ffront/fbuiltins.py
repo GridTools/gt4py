@@ -28,9 +28,9 @@ from numpy import (
     uint64,
 )
 try:
-    from ml_dtypes import bfloat16
+    import ml_dtypes
 except ModuleNotFoundError:
-    bfloat16 = None
+    ml_dtypes = None
 
 import gt4py.next as gtx
 from gt4py._core import definitions as core_defs
@@ -59,7 +59,8 @@ TYPE_BUILTINS = [
     float64,
     *PYTHON_TYPE_BUILTINS,
 ]  # TODO(tehrengruber): validate matches itir type builtins?
-if bfloat16:
+if ml_dtypes:
+    from ml_dtypes import bfloat16
     TYPE_BUILTINS.append(bfloat16)
 
 TYPE_BUILTIN_NAMES = [t.__name__ for t in TYPE_BUILTINS]

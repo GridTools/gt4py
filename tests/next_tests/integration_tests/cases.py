@@ -18,9 +18,9 @@ from typing import Any, Callable, Literal, Optional, Protocol, TypeAlias
 import numpy as np
 import pytest
 try:
-    from ml_dtypes import bfloat16
+    import ml_dtypes
 except ModuleNotFoundError:
-    bfloat16 = None
+    ml_dtypes = None
 
 import gt4py.next as gtx
 from gt4py._core import definitions as core_defs
@@ -66,8 +66,8 @@ from gt4py.next import utils as gt_utils
 IField: TypeAlias = gtx.Field[[IDim], np.int32]  # type: ignore [valid-type]
 IFloatField: TypeAlias = gtx.Field[[IDim], np.float64]  # type: ignore [valid-type]
 IHalfField: TypeAlias = gtx.Field[[IDim], np.float16]  # type: ignore [valid-type]
-if bfloat16:
-    IBFloatField: TypeAlias = gtx.Field[[IDim], bfloat16]  # type: ignore [valid-type]
+if ml_dtypes:
+    IBFloatField: TypeAlias = gtx.Field[[IDim], ml_dtypes.bfloat16]  # type: ignore [valid-type]
 IBoolField: TypeAlias = gtx.Field[[IDim], bool]  # type: ignore [valid-type]
 KField: TypeAlias = gtx.Field[[KDim], np.int32]  # type: ignore [valid-type]
 IJField: TypeAlias = gtx.Field[[IDim, JDim], np.int32]  # type: ignore [valid-type]
@@ -430,7 +430,7 @@ def verify(
     out_comp_ndarray = field_utils.asnumpy(out_comp)
     ref_ndarray = field_utils.asnumpy(ref)
 
-    if bfloat16 and out_comp_ndarray.dtype == bfloat16:
+    if ml_dtypes and out_comp_ndarray.dtype == ml_dtypes.bfloat16:
         out_comp_ndarray = out_comp_ndarray.astype(np.float32)
         ref_ndarray = ref_ndarray.astype(np.float32)
 

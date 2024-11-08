@@ -8,9 +8,9 @@
 
 from gt4py.next.iterator.dispatcher import Dispatcher
 try:
-    from ml_dtypes import bfloat16
+    import ml_dtypes
 except ModuleNotFoundError:
-    bfloat16 = None
+    ml_dtypes = None
 
 builtin_dispatch = Dispatcher()
 
@@ -380,7 +380,7 @@ def float(*args):  # noqa: A001 [builtin-variable-shadowing]
     raise BackendNotSelectedError()
 
 
-if bfloat16:
+if ml_dtypes:
     @builtin_dispatch
     def bfloat16(*args):
         raise BackendNotSelectedError()
@@ -444,7 +444,7 @@ TYPEBUILTINS = {
     "float64",
     "bool",
 }  # TODO(tehrengruber): This list already exists in ir.py; unify.
-if bfloat16:
+if ml_dtypes:
     TYPEBUILTINS.add("bfloat16")
 
 MATH_BUILTINS = (

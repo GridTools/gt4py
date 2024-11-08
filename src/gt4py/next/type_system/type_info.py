@@ -24,9 +24,9 @@ from typing import (
 
 import numpy as np
 try:
-    from ml_dtypes import bfloat16, finfo
+    import ml_dtypes
 except ModuleNotFoundError:
-    bfloat16 = None
+    ml_dtypes = None
 
 from gt4py.eve.utils import XIterable, xiter
 from gt4py.next import common
@@ -345,8 +345,8 @@ def arithmetic_bounds(arithmetic_type: ts.ScalarType) -> tuple[np.number, np.num
         ts.ScalarKind.INT64: (np.iinfo(np.int64).min, np.iinfo(np.int64).max),
         ts.ScalarKind.UINT64: (np.iinfo(np.uint64).min, np.iinfo(np.uint64).max),
     }
-    if bfloat16:
-        bounds[ts.ScalarKind.BFLOAT16] = (finfo(bfloat16).min, finfo(bfloat16).max)
+    if ml_dtypes:
+        bounds[ts.ScalarKind.BFLOAT16] = (ml_dtypes.finfo(ml_dtypes.bfloat16).min, ml_dtypes.finfo(ml_dtypes.bfloat16).max)
     return bounds[arithmetic_type.kind]
 
 
