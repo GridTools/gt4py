@@ -34,6 +34,7 @@ dependencies = [
   'cytoolz>=0.12.1',
   'deepdiff>=5.6.0',
   'devtools>=0.6',
+  'diskcache>=5.6.3',
   'factory-boy>=3.3.0',
   'frozendict>=2.3',
   'gridtools-cpp>=2.3.6,==2.*',

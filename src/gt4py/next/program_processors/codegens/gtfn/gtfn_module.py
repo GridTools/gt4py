@@ -212,6 +212,7 @@ class GTFNTranslationStep(
             generated_code = GTFNIMCodegen.apply(gtfn_im_ir)
         else:
             generated_code = GTFNCodegen.apply(gtfn_ir)
+
         return codegen.format_source("cpp", generated_code, style="LLVM")
 
     def __call__(
