@@ -262,16 +262,8 @@ def test_gtir_tuple_args():
     sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
 
     x_fields = (a, a, b)
-    x_symbols = dict(
-        __x_0_size_0=FSYMBOLS["__x_size_0"],
-        __x_0_stride_0=FSYMBOLS["__x_stride_0"],
-        __x_1_0_size_0=FSYMBOLS["__x_size_0"],
-        __x_1_0_stride_0=FSYMBOLS["__x_stride_0"],
-        __x_1_1_size_0=FSYMBOLS["__y_size_0"],
-        __x_1_1_stride_0=FSYMBOLS["__y_stride_0"],
-    )
 
-    sdfg(*x_fields, c, **FSYMBOLS, **x_symbols)
+    sdfg(*x_fields, c, **FSYMBOLS)
     assert np.allclose(c, a * 2 + b)
 
 
@@ -432,16 +424,8 @@ def test_gtir_tuple_return():
     sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
 
     z_fields = (np.empty_like(a), np.empty_like(a), np.empty_like(a))
-    z_symbols = dict(
-        __z_0_0_size_0=FSYMBOLS["__x_size_0"],
-        __z_0_0_stride_0=FSYMBOLS["__x_stride_0"],
-        __z_0_1_size_0=FSYMBOLS["__x_size_0"],
-        __z_0_1_stride_0=FSYMBOLS["__x_stride_0"],
-        __z_1_size_0=FSYMBOLS["__x_size_0"],
-        __z_1_stride_0=FSYMBOLS["__x_stride_0"],
-    )
 
-    sdfg(a, b, *z_fields, **FSYMBOLS, **z_symbols)
+    sdfg(a, b, *z_fields, **FSYMBOLS)
     assert np.allclose(z_fields[0], a + b)
     assert np.allclose(z_fields[1], a)
     assert np.allclose(z_fields[2], b)
@@ -637,7 +621,7 @@ def test_gtir_cond():
                 expr=im.op_as_fieldop("plus", domain)(
                     "x",
                     im.if_(
-                        im.greater(gtir.SymRef(id="s1"), gtir.SymRef(id="s2")),
+                        im.greater("s1", "s2"),
                         im.op_as_fieldop("plus", domain)("y", "scalar"),
                         im.op_as_fieldop("plus", domain)("w", "scalar"),
                     ),
@@ -679,7 +663,7 @@ def test_gtir_cond_with_tuple_return():
                 expr=im.tuple_get(
                     0,
                     im.if_(
-                        gtir.SymRef(id="pred"),
+                        "pred",
                         im.make_tuple(im.make_tuple("x", "y"), "w"),
                         im.make_tuple(im.make_tuple("y", "x"), "w"),
                     ),
@@ -694,18 +678,11 @@ def test_gtir_cond_with_tuple_return():
     b = np.random.rand(N)
     c = np.random.rand(N)
 
-    z_symbols = dict(
-        __z_0_size_0=FSYMBOLS["__x_size_0"],
-        __z_0_stride_0=FSYMBOLS["__x_stride_0"],
-        __z_1_size_0=FSYMBOLS["__x_size_0"],
-        __z_1_stride_0=FSYMBOLS["__x_stride_0"],
-    )
-
     sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
 
     for s in [False, True]:
         z_fields = (np.empty_like(a), np.empty_like(a))
-        sdfg(a, b, c, *z_fields, pred=np.bool_(s), **FSYMBOLS, **z_symbols)
+        sdfg(a, b, c, *z_fields, pred=np.bool_(s), **FSYMBOLS)
         assert np.allclose(z_fields[0], a if s else b)
         assert np.allclose(z_fields[1], b if s else a)
 
@@ -726,10 +703,10 @@ def test_gtir_cond_nested():
         body=[
             gtir.SetAt(
                 expr=im.if_(
-                    gtir.SymRef(id="pred_1"),
+                    "pred_1",
                     im.op_as_fieldop("plus", domain)("x", 1.0),
                     im.if_(
-                        gtir.SymRef(id="pred_2"),
+                        "pred_2",
                         im.op_as_fieldop("plus", domain)("x", 2.0),
                         im.op_as_fieldop("plus", domain)("x", 3.0),
                     ),
@@ -1557,7 +1534,7 @@ def test_gtir_reduce_with_cond_neighbors():
                     vertex_domain,
                 )(
                     im.if_(
-                        gtir.SymRef(id="pred"),
+                        "pred",
                         im.as_fieldop_neighbors("V2E_FULL", "edges", vertex_domain),
                         im.as_fieldop_neighbors("V2E", "edges", vertex_domain),
                     )
@@ -1629,20 +1606,20 @@ def test_gtir_let_lambda():
         declarations=[],
         body=[
             gtir.SetAt(
-                # `x1` is a let-lambda expression representing `x * 3`
-                # `x2` is a let-lambda expression representing `x * 4`
-                #  - note that the let-symbol `x2` is used twice, in a nested let-expression, to test aliasing of the symbol
-                # `x3` is a let-lambda expression simply accessing `x` field symref
-                expr=im.let("x1", im.op_as_fieldop("multiplies", subdomain)(3.0, "x"))(
+                # `xᐞ1` is a let-lambda expression representing `x * 3`
+                # `xᐞ2` is a let-lambda expression representing `x * 4`
+                #  - note that the let-symbol `xᐞ2` is used twice, in a nested let-expression, to test aliasing of the symbol
+                # `xᐞ3` is a let-lambda expression simply accessing `x` field symref
+                expr=im.let("xᐞ1", im.op_as_fieldop("multiplies", subdomain)(3.0, "x"))(
                     im.let(
-                        "x2",
-                        im.let("x2", im.op_as_fieldop("multiplies", domain)(2.0, "x"))(
-                            im.op_as_fieldop("plus", subdomain)("x2", "x2")
+                        "xᐞ2",
+                        im.let("xᐞ2", im.op_as_fieldop("multiplies", domain)(2.0, "x"))(
+                            im.op_as_fieldop("plus", subdomain)("xᐞ2", "xᐞ2")
                         ),
                     )(
-                        im.let("x3", "x")(
+                        im.let("xᐞ3", "x")(
                             im.op_as_fieldop("plus", subdomain)(
-                                "x1", im.op_as_fieldop("plus", subdomain)("x2", "x3")
+                                "xᐞ1", im.op_as_fieldop("plus", subdomain)("xᐞ2", "xᐞ3")
                             )
                         )
                     )
@@ -1779,11 +1756,7 @@ def test_gtir_let_lambda_with_cond():
             gtir.SetAt(
                 expr=im.let("x1", "x")(
                     im.let("x2", im.op_as_fieldop("multiplies", domain)(2.0, "x"))(
-                        im.if_(
-                            gtir.SymRef(id="pred"),
-                            im.as_fieldop(im.lambda_("a")(im.deref("a")), domain)("x1"),
-                            im.as_fieldop(im.lambda_("a")(im.deref("a")), domain)("x2"),
-                        )
+                        im.if_("pred", "x1", "x2")
                     )
                 ),
                 domain=domain,
@@ -1833,14 +1806,8 @@ def test_gtir_let_lambda_with_tuple1():
     sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
 
     z_fields = (np.empty_like(a), np.empty_like(a))
-    z_symbols = dict(
-        __z_0_size_0=FSYMBOLS["__x_size_0"],
-        __z_0_stride_0=FSYMBOLS["__x_stride_0"],
-        __z_1_size_0=FSYMBOLS["__x_size_0"],
-        __z_1_stride_0=FSYMBOLS["__x_stride_0"],
-    )
 
-    sdfg(a, b, *z_fields, **FSYMBOLS, **z_symbols)
+    sdfg(a, b, *z_fields, **FSYMBOLS)
     assert np.allclose(z_fields[0], a)
     assert np.allclose(z_fields[1], b)
 
@@ -1879,16 +1846,8 @@ def test_gtir_let_lambda_with_tuple2():
     sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
 
     z_fields = (np.empty_like(a), np.empty_like(a), np.empty_like(a))
-    z_symbols = dict(
-        __z_0_size_0=FSYMBOLS["__x_size_0"],
-        __z_0_stride_0=FSYMBOLS["__x_stride_0"],
-        __z_1_size_0=FSYMBOLS["__x_size_0"],
-        __z_1_stride_0=FSYMBOLS["__x_stride_0"],
-        __z_2_size_0=FSYMBOLS["__x_size_0"],
-        __z_2_stride_0=FSYMBOLS["__x_stride_0"],
-    )
 
-    sdfg(a, b, *z_fields, **FSYMBOLS, **z_symbols)
+    sdfg(a, b, *z_fields, **FSYMBOLS)
     assert np.allclose(z_fields[0], a + b)
     assert np.allclose(z_fields[1], val)
     assert np.allclose(z_fields[2], b)
@@ -1939,13 +1898,9 @@ def test_gtir_if_scalars():
     d2 = np.random.randint(0, 1000)
 
     sdfg = dace_backend.build_sdfg_from_gtir(testee, {})
-    x_symbols = dict(
-        __x_0_size_0=FSYMBOLS["__x_size_0"],
-        __x_0_stride_0=FSYMBOLS["__x_stride_0"],
-    )
 
     for s in [False, True]:
-        sdfg(x_0=a, x_1_0=d1, x_1_1=d2, z=b, pred=np.bool_(s), **FSYMBOLS, **x_symbols)
+        sdfg(x_0=a, x_1_0=d1, x_1_1=d2, z=b, pred=np.bool_(s), **FSYMBOLS)
         assert np.allclose(b, (a + d1 if s else a + d2))
 
 

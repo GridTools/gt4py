@@ -71,6 +71,7 @@ class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
     DACE_CPU = "gt4py.next.program_processors.runners.dace.itir_cpu"
     DACE_GPU = "gt4py.next.program_processors.runners.dace.itir_gpu"
     GTIR_DACE_CPU = "gt4py.next.program_processors.runners.dace.gtir_cpu"
+    GTIR_DACE_GPU = "gt4py.next.program_processors.runners.dace.gtir_gpu"
 
 
 class ProgramFormatterId(_PythonObjectIdMixin, str, enum.Enum):
@@ -118,6 +119,7 @@ USES_MESH_WITH_SKIP_VALUES = "uses_mesh_with_skip_values"
 USES_SCALAR_IN_DOMAIN_AND_FO = "uses_scalar_in_domain_and_fo"
 CHECKS_SPECIFIC_ERROR = "checks_specific_error"
 USES_HALF_PRECISION = "uses_half_precision"
+USES_INDEX_BUILTIN = "uses_index_builtin"
 
 # Skip messages (available format keys: 'marker', 'backend')
 UNSUPPORTED_MESSAGE = "'{marker}' tests not supported by '{backend}' backend"
@@ -128,7 +130,6 @@ REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE = (
 # Common list of feature markers to skip
 COMMON_SKIP_TEST_LIST = [
     (REQUIRES_ATLAS, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
-    (STARTS_FROM_GTIR_PROGRAM, SKIP, UNSUPPORTED_MESSAGE),
     (USES_APPLIED_SHIFTS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_IF_STMTS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_NEGATIVE_MODULO, XFAIL, UNSUPPORTED_MESSAGE),
@@ -147,9 +148,14 @@ DACE_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
     (USES_TUPLE_RETURNS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_ZERO_DIMENSIONAL_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_HALF_PRECISION, XFAIL, UNSUPPORTED_MESSAGE),
+    (STARTS_FROM_GTIR_PROGRAM, SKIP, UNSUPPORTED_MESSAGE),
 ]
 GTIR_DACE_SKIP_TEST_LIST = [
-    (ALL, SKIP, UNSUPPORTED_MESSAGE),
+    (USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_INDEX_BUILTIN, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_NEGATIVE_MODULO, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_SCAN, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),
 ]
 EMBEDDED_SKIP_LIST = [
     (USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE),
@@ -177,6 +183,11 @@ BACKEND_SKIP_TEST_MATRIX = {
     OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.GTIR_DACE_CPU: GTIR_DACE_SKIP_TEST_LIST,
+    OptionalProgramBackendId.GTIR_DACE_GPU: GTIR_DACE_SKIP_TEST_LIST
+    + [
+        # TODO(edopao): Enable when GPU codegen issues related to symbolic domain are fixed.
+        (ALL, XFAIL, UNSUPPORTED_MESSAGE),
+    ],
     ProgramBackendId.GTFN_CPU: GTFN_SKIP_TEST_LIST
     + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
     ProgramBackendId.GTFN_CPU_IMPERATIVE: GTFN_SKIP_TEST_LIST
@@ -189,6 +200,10 @@ BACKEND_SKIP_TEST_MATRIX = {
         (USES_REDUCTION_WITH_ONLY_SPARSE_FIELDS, XFAIL, REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE)
     ],
     ProgramBackendId.ROUNDTRIP: [(USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE)],
+    ProgramBackendId.GTIR_EMBEDDED: [
+        (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),
+        (USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE),
+    ],
     ProgramBackendId.ROUNDTRIP_WITH_TEMPORARIES: [
         (ALL, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),

@@ -217,6 +217,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         name: str,
         gt_type: ts.DataType,
         transient: bool = True,
+        tuple_name: Optional[str] = None,
     ) -> list[tuple[str, ts.DataType]]:
         """
         Add storage in the SDFG for a given GT4Py data symbol.
@@ -236,6 +237,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             name: Symbol Name to be allocated.
             gt_type: GT4Py symbol type.
             transient: True when the data symbol has to be allocated as internal storage.
+            tuple_name: Must be set for tuple fields in order to use the same array shape and strides symbols.
 
         Returns:
             List of tuples '(data_name, gt_type)' where 'data_name' is the name of
@@ -250,7 +252,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 name, gt_type, flatten=True
             ):
                 tuple_fields.extend(
-                    self._add_storage(sdfg, symbolic_arguments, tname, tsymbol_type, transient)
+                    self._add_storage(
+                        sdfg, symbolic_arguments, tname, tsymbol_type, transient, tuple_name=name
+                    )
                 )
             return tuple_fields
 
@@ -260,16 +264,23 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 return self._add_storage(sdfg, symbolic_arguments, name, gt_type.dtype, transient)
             # handle default case: field with one or more dimensions
             dc_dtype = dace_utils.as_dace_type(gt_type.dtype)
-            # use symbolic shape, which allows to invoke the program with fields of different size;
-            # and symbolic strides, which enables decoupling the memory layout from generated code.
-            sym_shape, sym_strides = self._make_array_shape_and_strides(name, gt_type.dims)
+            if tuple_name is None:
+                # Use symbolic shape, which allows to invoke the program with fields of different size;
+                # and symbolic strides, which enables decoupling the memory layout from generated code.
+                sym_shape, sym_strides = self._make_array_shape_and_strides(name, gt_type.dims)
+            else:
+                # All fields in a tuple must have the same dims and sizes,
+                # therefore we use the same shape and strides symbols based on 'tuple_name'.
+                sym_shape, sym_strides = self._make_array_shape_and_strides(
+                    tuple_name, gt_type.dims
+                )
             sdfg.add_array(name, sym_shape, dc_dtype, strides=sym_strides, transient=transient)
 
             return [(name, gt_type)]
 
         elif isinstance(gt_type, ts.ScalarType):
             dc_dtype = dace_utils.as_dace_type(gt_type)
-            if name in symbolic_arguments:
+            if dace_utils.is_field_symbol(name) or name in symbolic_arguments:
                 if name in sdfg.symbols:
                     # Sometimes, when the field domain is implicitly derived from the
                     # field domain, the gt4py lowering adds the field size as a scalar
@@ -399,6 +410,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         sdfg = dace.SDFG(node.id)
         sdfg.debuginfo = dace_utils.debug_info(node, default=sdfg.debuginfo)
+
+        # DaCe requires C-compatible strings for the names of data containers,
+        # such as arrays and scalars. GT4Py uses a unicode symbols ('ᐞ') as name
+        # separator in the SSA pass, which generates invalid symbols for DaCe.
+        # Here we find new names for invalid symbols present in the IR.
+        node = dace_gtir_utils.replace_invalid_symbols(sdfg, node)
+
+        # start block of the stateful graph
         entry_state = sdfg.add_state("program_entry", is_start_block=True)
 
         # declarations of temporaries result in transient array definitions in the SDFG
@@ -690,49 +709,61 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
             head_state.add_edge(src_node, None, nsdfg_node, connector, memlet)
 
-        def make_temps(
-            output_data: gtir_builtin_translators.FieldopData,
+        def construct_output_for_nested_sdfg(
+            inner_data: gtir_builtin_translators.FieldopData,
         ) -> gtir_builtin_translators.FieldopData:
             """
-            This function will be called while traversing the result of the lambda
-            dataflow to setup the intermediate data nodes in the parent SDFG and
-            the data edges from the nested-SDFG output connectors.
+            This function makes a data container that lives inside a nested SDFG, denoted by `inner_data`,
+            available in the parent SDFG.
+            In order to achieve this, the data container inside the nested SDFG is marked as non-transient
+            (in other words, externally allocated - a requirement of the SDFG IR) and a new data container
+            is created within the parent SDFG, with the same properties (shape, stride, etc.) of `inner_data`
+            but appropriatly remapped using the symbol mapping table.
+            For lambda arguments that are simply returned by the lambda, the `inner_data` was already mapped
+            to a parent SDFG data container, therefore it can be directly accessed in the parent SDFG.
+            The same happens to symbols available in the lambda context but not explicitly passed as lambda
+            arguments, that are simply returned by the lambda: it can be directly accessed in the parent SDFG.
             """
-            desc = output_data.dc_node.desc(nsdfg)
-            if desc.transient:
-                # Transient nodes actually contain some result produced by the dataflow
-                # itself, therefore these nodes are changed to non-transient and an output
-                # edge will write the result from the nested-SDFG to a new intermediate
-                # data node in the parent context.
-                desc.transient = False
-                temp, _ = sdfg.add_temp_transient_like(desc)
-                connector = output_data.dc_node.data
-                dst_node = head_state.add_access(temp)
+            inner_desc = inner_data.dc_node.desc(nsdfg)
+            if inner_desc.transient:
+                # Transient data nodes only exist within the nested SDFG. In order to return some result data,
+                # the corresponding data container inside the nested SDFG has to be changed to non-transient,
+                # that is externally allocated, as required by the SDFG IR. An output edge will write the result
+                # from the nested-SDFG to a new intermediate data container allocated in the parent SDFG.
+                inner_desc.transient = False
+                outer, outer_desc = sdfg.add_temp_transient_like(inner_desc)
+                # We cannot use a copy of the inner data descriptor directly, we have to apply the symbol mapping.
+                dace.symbolic.safe_replace(
+                    nsdfg_symbols_mapping,
+                    lambda m: dace.sdfg.replace_properties_dict(outer_desc, m),
+                )
+                connector = inner_data.dc_node.data
+                outer_node = head_state.add_access(outer)
                 head_state.add_edge(
-                    nsdfg_node, connector, dst_node, None, sdfg.make_array_memlet(temp)
+                    nsdfg_node, connector, outer_node, None, sdfg.make_array_memlet(outer)
                 )
-                temp_field = gtir_builtin_translators.FieldopData(
-                    dst_node, output_data.gt_dtype, output_data.local_offset
+                outer_data = gtir_builtin_translators.FieldopData(
+                    outer_node, inner_data.gt_dtype, inner_data.local_offset
                 )
-            elif output_data.dc_node.data in lambda_arg_nodes:
+            elif inner_data.dc_node.data in lambda_arg_nodes:
                 # This if branch and the next one handle the non-transient result nodes.
                 # Non-transient nodes are just input nodes that are immediately returned
                 # by the lambda expression. Therefore, these nodes are already available
                 # in the parent context and can be directly accessed there.
-                temp_field = lambda_arg_nodes[output_data.dc_node.data]
+                outer_data = lambda_arg_nodes[inner_data.dc_node.data]
             else:
-                dc_node = head_state.add_access(output_data.dc_node.data)
-                temp_field = gtir_builtin_translators.FieldopData(
-                    dc_node, output_data.gt_dtype, output_data.local_offset
+                outer_node = head_state.add_access(inner_data.dc_node.data)
+                outer_data = gtir_builtin_translators.FieldopData(
+                    outer_node, inner_data.gt_dtype, inner_data.local_offset
                 )
             # Isolated access node will make validation fail.
             # Isolated access nodes can be found in the join-state of an if-expression
             # or in lambda expressions that just construct tuples from input arguments.
-            if nstate.degree(output_data.dc_node) == 0:
-                nstate.remove_node(output_data.dc_node)
-            return temp_field
+            if nstate.degree(inner_data.dc_node) == 0:
+                nstate.remove_node(inner_data.dc_node)
+            return outer_data
 
-        return gtx_utils.tree_map(make_temps)(lambda_result)
+        return gtx_utils.tree_map(construct_output_for_nested_sdfg)(lambda_result)
 
     def visit_Literal(
         self,

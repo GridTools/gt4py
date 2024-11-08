@@ -58,6 +58,7 @@ from gt4py.next.embedded import (
 )
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import builtins, runtime
+from gt4py.next.iterator.type_system import type_specifications as itir_ts
 from gt4py.next.otf import arguments
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
@@ -205,6 +206,12 @@ MaybePosition: TypeAlias = Optional[Position]
 NamedFieldIndices: TypeAlias = Mapping[Tag, FieldIndex | SparsePositionEntry]
 
 
+# Magic local dimension for the result of a `make_const_list`.
+# A clean implementation will probably involve to tag the `make_const_list`
+# with the neighborhood it is meant to be used with.
+_CONST_DIM = common.Dimension(value="_CONST_DIM", kind=common.DimensionKind.LOCAL)
+
+
 @runtime_checkable
 class ItIterator(Protocol):
     """
@@ -246,6 +253,12 @@ class MutableLocatedField(LocatedField, Protocol):
     def field_setitem(self, indices: NamedFieldIndices, value: Any) -> None: ...
 
 
+def _numpy_structured_value_to_tuples(value: Any) -> Any:
+    if _elem_dtype(value).names is not None:
+        return tuple(_numpy_structured_value_to_tuples(v) for v in value)
+    return value
+
+
 class Column(np.lib.mixins.NDArrayOperatorsMixin):
     """Represents a column when executed in column mode (`column_axis != None`).
 
@@ -265,6 +278,10 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
     def dtype(self) -> np.dtype:
         # not directly dtype of `self.data` as that might be a structured type containing `None`
         return _elem_dtype(self.data[self.kstart])
+
+    def __gt_type__(self) -> ts.TypeSpec:
+        elem = self.data[self.kstart]
+        return type_translation.from_value(_numpy_structured_value_to_tuples(elem))
 
     def __getitem__(self, i: int) -> Any:
         result = self.data[i - self.kstart]
@@ -597,17 +614,20 @@ def execute_shift(
         for i, p in reversed(list(enumerate(new_entry))):
             # first shift applies to the last sparse dimensions of that axis type
             if p is None:
-                offset_implementation = offset_provider[tag]
-                assert isinstance(offset_implementation, common.Connectivity)
-                cur_index = pos[offset_implementation.origin_axis.value]
-                assert common.is_int_index(cur_index)
-                if offset_implementation.mapped_index(cur_index, index) in [
-                    None,
-                    common._DEFAULT_SKIP_VALUE,
-                ]:
-                    return None
+                if tag == _CONST_DIM.value:
+                    new_entry[i] = 0
+                else:
+                    offset_implementation = offset_provider[tag]
+                    assert isinstance(offset_implementation, common.Connectivity)
+                    cur_index = pos[offset_implementation.origin_axis.value]
+                    assert common.is_int_index(cur_index)
+                    if offset_implementation.mapped_index(cur_index, index) in [
+                        None,
+                        common._DEFAULT_SKIP_VALUE,
+                    ]:
+                        return None
 
-                new_entry[i] = index
+                    new_entry[i] = index
                 break
         # the assertions above confirm pos is incomplete casting here to avoid duplicating work in a type guard
         return cast(IncompletePosition, pos) | {tag: new_entry}
@@ -941,9 +961,9 @@ class MDIterator:
         return _make_tuple(self.field, position, column_axis=self.column_axis)
 
 
-def _get_sparse_dimensions(axes: Sequence[common.Dimension]) -> list[Tag]:
+def _get_sparse_dimensions(axes: Sequence[common.Dimension]) -> list[common.Dimension]:
     return [
-        axis.value
+        axis
         for axis in axes
         if isinstance(axis, common.Dimension) and axis.kind == common.DimensionKind.LOCAL
     ]
@@ -966,7 +986,7 @@ def make_in_iterator(
     new_pos: Position = pos.copy()
     for sparse_dim in set(sparse_dimensions):
         init = [None] * sparse_dimensions.count(sparse_dim)
-        new_pos[sparse_dim] = init  # type: ignore[assignment] # looks like mypy is confused
+        new_pos[sparse_dim.value] = init  # type: ignore[assignment] # looks like mypy is confused
     if column_dimension is not None:
         column_range = embedded_context.closure_column_range.get().unit_range
         # if we deal with column stencil the column position is just an offset by which the whole column needs to be shifted
@@ -977,7 +997,7 @@ def make_in_iterator(
     )
     if len(sparse_dimensions) >= 1:
         if len(sparse_dimensions) == 1:
-            return SparseListIterator(it, sparse_dimensions[0])
+            return SparseListIterator(it, sparse_dimensions[0].value)
         else:
             raise NotImplementedError(
                 f"More than one local dimension is currently not supported, got {sparse_dimensions}."
@@ -1025,7 +1045,17 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
 
     def field_setitem(self, named_indices: NamedFieldIndices, value: Any):
         if isinstance(self._ndarrayfield, common.MutableField):
-            self._ndarrayfield[self._translate_named_indices(named_indices)] = value
+            if isinstance(value, _List):
+                for i, v in enumerate(value):  # type:ignore[var-annotated, arg-type]
+                    self._ndarrayfield[
+                        self._translate_named_indices({**named_indices, value.offset.value: i})  # type: ignore[dict-item]
+                    ] = v
+            elif isinstance(value, _ConstList):
+                self._ndarrayfield[
+                    self._translate_named_indices({**named_indices, _CONST_DIM.value: 0})
+                ] = value.value
+            else:
+                self._ndarrayfield[self._translate_named_indices(named_indices)] = value
         else:
             raise RuntimeError("Assigment into a non-mutable Field is not allowed.")
 
@@ -1195,12 +1225,14 @@ class IndexField(common.Field):
 
     def restrict(self, item: common.AnyIndexSpec) -> Self:
         if isinstance(item, Sequence) and all(isinstance(e, common.NamedIndex) for e in item):
+            assert len(item) == 1
             assert isinstance(item[0], common.NamedIndex)  # for mypy errors on multiple lines below
             d, r = item[0]
             assert d == self._dimension
             assert isinstance(r, core_defs.INTEGRAL_TYPES)
+            # TODO(tehrengruber): Use a regular zero dimensional field instead.
             return self.__class__(self._dimension, r)
-        # TODO set a domain...
+        # TODO: set a domain...
         raise NotImplementedError()
 
     __call__ = premap
@@ -1404,7 +1436,23 @@ def shift(*offsets: Union[runtime.Offset, int]) -> Callable[[ItIterator], ItIter
 DT = TypeVar("DT")
 
 
-class _List(tuple, Generic[DT]): ...
+@dataclasses.dataclass(frozen=True)
+class _List(Generic[DT]):
+    values: tuple[DT, ...]
+    offset: runtime.Offset
+
+    def __getitem__(self, i: int):
+        return self.values[i]
+
+    def __gt_type__(self) -> itir_ts.ListType:
+        offset_tag = self.offset.value
+        assert isinstance(offset_tag, str)
+        element_type = type_translation.from_value(self.values[0])
+        assert isinstance(element_type, ts.DataType)
+        return itir_ts.ListType(
+            element_type=element_type,
+            offset_type=common.Dimension(value=offset_tag, kind=common.DimensionKind.LOCAL),
+        )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -1413,6 +1461,14 @@ class _ConstList(Generic[DT]):
 
     def __getitem__(self, _):
         return self.value
+
+    def __gt_type__(self) -> itir_ts.ListType:
+        element_type = type_translation.from_value(self.value)
+        assert isinstance(element_type, ts.DataType)
+        return itir_ts.ListType(
+            element_type=element_type,
+            offset_type=_CONST_DIM,
+        )
 
 
 @builtins.neighbors.register(EMBEDDED)
@@ -1424,9 +1480,12 @@ def neighbors(offset: runtime.Offset, it: ItIterator) -> _List:
     connectivity = offset_provider[offset_str]
     assert isinstance(connectivity, common.Connectivity)
     return _List(
-        shifted.deref()
-        for i in range(connectivity.max_neighbors)
-        if (shifted := it.shift(offset_str, i)).can_deref()
+        values=tuple(
+            shifted.deref()
+            for i in range(connectivity.max_neighbors)
+            if (shifted := it.shift(offset_str, i)).can_deref()
+        ),
+        offset=offset,
     )
 
 
@@ -1435,10 +1494,23 @@ def list_get(i, lst: _List[Optional[DT]]) -> Optional[DT]:
     return lst[i]
 
 
+def _get_offset(*lists: _List | _ConstList) -> Optional[runtime.Offset]:
+    offsets = set((lst.offset for lst in lists if hasattr(lst, "offset")))
+    if len(offsets) == 0:
+        return None
+    if len(offsets) == 1:
+        return offsets.pop()
+    raise AssertionError("All lists must have the same offset.")
+
+
 @builtins.map_.register(EMBEDDED)
 def map_(op):
     def impl_(*lists):
-        return _List(map(lambda x: op(*x), zip(*lists)))
+        offset = _get_offset(*lists)
+        if offset is None:
+            return _ConstList(value=op(*[lst.value for lst in lists]))
+        else:
+            return _List(values=tuple(map(lambda x: op(*x), zip(*lists))), offset=offset)
 
     return impl_
 
@@ -1459,7 +1531,7 @@ def reduce(fun, init):
                 break
         # we can check a single argument for length,
         # because all arguments share the same pattern
-        n = len(lst)
+        n = len(lst.values)
         res = init
         for i in range(n):
             res = fun(res, *(lst[i] for lst in lists))
@@ -1475,14 +1547,23 @@ class SparseListIterator:
     offsets: Sequence[OffsetPart] = dataclasses.field(default_factory=list, kw_only=True)
 
     def deref(self) -> Any:
+        if self.list_offset == _CONST_DIM.value:
+            return _ConstList(
+                value=self.it.shift(*self.offsets, SparseTag(self.list_offset), 0).deref()
+            )
         offset_provider = embedded_context.offset_provider.get()
         assert offset_provider is not None
         connectivity = offset_provider[self.list_offset]
         assert isinstance(connectivity, common.Connectivity)
         return _List(
-            shifted.deref()
-            for i in range(connectivity.max_neighbors)
-            if (shifted := self.it.shift(*self.offsets, SparseTag(self.list_offset), i)).can_deref()
+            values=tuple(
+                shifted.deref()
+                for i in range(connectivity.max_neighbors)
+                if (
+                    shifted := self.it.shift(*self.offsets, SparseTag(self.list_offset), i)
+                ).can_deref()
+            ),
+            offset=runtime.Offset(value=self.list_offset),
         )
 
     def can_deref(self) -> bool:
@@ -1675,16 +1756,6 @@ def _extract_column_range(domain) -> common.NamedRange | eve.NothingType:
     return eve.NOTHING
 
 
-def _structured_dtype_to_typespec(structured_dtype: np.dtype) -> ts.ScalarType | ts.TupleType:
-    if structured_dtype.names is None:
-        return type_translation.from_dtype(core_defs.dtype(structured_dtype))
-    return ts.TupleType(
-        types=[
-            _structured_dtype_to_typespec(structured_dtype[name]) for name in structured_dtype.names
-        ]
-    )
-
-
 def _get_output_type(
     fun: Callable,
     domain_: runtime.CartesianDomain | runtime.UnstructuredDomain,
@@ -1703,8 +1774,29 @@ def _get_output_type(
     with embedded_context.new_context(closure_column_range=col_range) as ctx:
         single_pos_result = ctx.run(_compute_at_position, fun, args, pos_in_domain, col_dim)
     assert single_pos_result is not _UNDEFINED, "Stencil contains an Out-Of-Bound access."
-    dtype = _elem_dtype(single_pos_result)
-    return _structured_dtype_to_typespec(dtype)
+    return type_translation.from_value(single_pos_result)
+
+
+def _fieldspec_list_to_value(
+    domain: common.Domain, type_: ts.TypeSpec
+) -> tuple[common.Domain, ts.TypeSpec]:
+    """Translate the list element type into the domain."""
+    if isinstance(type_, itir_ts.ListType):
+        if type_.offset_type == _CONST_DIM:
+            return domain.insert(
+                len(domain), common.named_range((_CONST_DIM, 1))
+            ), type_.element_type
+        else:
+            offset_provider = embedded_context.offset_provider.get()
+            offset_type = type_.offset_type
+            assert isinstance(offset_type, common.Dimension)
+            connectivity = offset_provider[offset_type.value]
+            assert isinstance(connectivity, common.Connectivity)
+            return domain.insert(
+                len(domain),
+                common.named_range((offset_type, connectivity.max_neighbors)),
+            ), type_.element_type
+    return domain, type_
 
 
 @builtins.as_fieldop.register(EMBEDDED)
@@ -1712,7 +1804,9 @@ def as_fieldop(fun: Callable, domain: runtime.CartesianDomain | runtime.Unstruct
     def impl(*args):
         xp = field_utils.get_array_ns(*args)
         type_ = _get_output_type(fun, domain, [promote_scalars(arg) for arg in args])
-        out = field_utils.field_from_typespec(type_, common.domain(domain), xp)
+
+        new_domain, type_ = _fieldspec_list_to_value(common.domain(domain), type_)
+        out = field_utils.field_from_typespec(type_, new_domain, xp)
 
         # TODO(havogt): after updating all tests to use the new program,
         # we should get rid of closure and move the implementation to this function
@@ -1720,6 +1814,11 @@ def as_fieldop(fun: Callable, domain: runtime.CartesianDomain | runtime.Unstruct
         return out
 
     return impl
+
+
+@builtins.index.register(EMBEDDED)
+def index(axis: common.Dimension) -> common.Field:
+    return IndexField(axis)
 
 
 @runtime.closure.register(EMBEDDED)

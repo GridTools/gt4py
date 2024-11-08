@@ -279,7 +279,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     #include <gridtools/fn/${grid_type_str}.hpp>
     #include <gridtools/fn/sid_neighbor_table.hpp>
     #include <gridtools/stencil/global_parameter.hpp>
-
+    
     namespace generated{
 
     namespace gtfn = ::gridtools::fn;

@@ -619,7 +619,6 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 tuple_constructor=lambda *elements: SidComposite(values=list(elements)),
             )
 
-            assert isinstance(lowered_input_as_sid, (SidComposite, SidFromScalar, SymRef))
             lowered_inputs.append(lowered_input_as_sid)
 
         backend = Backend(domain=self.visit(domain, stencil=stencil, **kwargs))

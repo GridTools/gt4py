@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
-from typing import Literal
+from typing import Literal, Optional
 
 from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts
@@ -31,6 +31,9 @@ class OffsetLiteralType(ts.TypeSpec):
 @dataclasses.dataclass(frozen=True)
 class ListType(ts.DataType):
     element_type: ts.DataType
+    # TODO(havogt): the `offset_type` is not yet used in type_inference,
+    # it is meant to describe the neighborhood (via the local dimension)
+    offset_type: Optional[common.Dimension] = None
 
 
 @dataclasses.dataclass(frozen=True)

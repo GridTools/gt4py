@@ -272,7 +272,7 @@ def _make_unary_math_builtin(name: str) -> None:
             value
         )  # default implementation for scalars, Fields are handled via dispatch
 
-        return _math_builtin(value)
+        return cast(common.Field | core_defs.ScalarT, _math_builtin(value))  # type: ignore[operator] # calling a function of unknown type
 
     impl.__name__ = name
     globals()[name] = BuiltInFunction(impl)
