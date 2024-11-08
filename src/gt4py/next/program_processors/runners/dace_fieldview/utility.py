@@ -68,7 +68,7 @@ def get_tuple_type(data: tuple[Any, ...]) -> ts.TupleType:
     Compute the `ts.TupleType` corresponding to the structure of a tuple of data nodes.
     """
     return ts.TupleType(
-        types=[get_tuple_type(d) if isinstance(d, tuple) else d.gt_dtype for d in data]
+        types=[get_tuple_type(d) if isinstance(d, tuple) else d.gt_type for d in data]
     )
 
 
