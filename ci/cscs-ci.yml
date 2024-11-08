@@ -156,16 +156,16 @@ build_py38_image_x86_64:
     NUM_PROCESSES: auto
     VIRTUALENV_SYSTEM_SITE_PACKAGES: 1
 .test_helper_x86_64:
-  extends: [.container-runner-daint-gpu, .test_helper]
+  extends: [.container-runner-daint-cpu, .test_helper]
   parallel:
     matrix:
     - SUBPACKAGE: [cartesian, storage]
       VARIANT: [-internal, -dace]
-      SUBVARIANT: [-cuda11x, -cpu]
+      SUBVARIANT: [-cpu]
     - SUBPACKAGE: eve
     - SUBPACKAGE: next
       VARIANT: [-nomesh, -atlas]
-      SUBVARIANT: [-cuda11x, -cpu]
+      SUBVARIANT: [-cpu]
 .test_helper_aarch64:
   extends: [.container-runner-todi-gh200, .test_helper]
   parallel:
