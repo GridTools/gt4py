@@ -46,7 +46,7 @@ stages:
 .build_baseimage_x86_64:
   extends: [.container-builder-cscs-zen2, .build_baseimage]
   variables:
-    CUDA_VERSION: 11.7.1
+    CUDA_VERSION: 11.8.0
     CUPY_PACKAGE: cupy-cuda11x
 .build_baseimage_aarch64:
   extends: [.container-builder-cscs-gh200, .build_baseimage]
@@ -152,7 +152,7 @@ build_py38_image_x86_64:
   variables:
     CRAY_CUDA_MPS: 1
     SLURM_JOB_NUM_NODES: 1
-    SLURM_TIMELIMIT: 60  # TODO revert to 15
+    SLURM_TIMELIMIT: 15
     NUM_PROCESSES: auto
     VIRTUALENV_SYSTEM_SITE_PACKAGES: 1
 .test_helper_x86_64:
