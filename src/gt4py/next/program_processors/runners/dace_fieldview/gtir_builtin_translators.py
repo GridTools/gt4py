@@ -249,7 +249,8 @@ def translate_as_fieldop(
         if cpm.is_call_to(stencil_expr.expr, "deref") and cpm.is_ref_to(
             stencil_expr.expr.args[0], stencil_expr.params[0].id
         ):
-            # Prune trivial field operators that are doing element-wise copy of the input field
+            # Prune trivial field operators with the form '(⇑(λ(__arg) → ·__arg))(a)'
+            # that are doing element-wise copy of the input field.
             return sdfg_builder.visit(node.args[0], sdfg=sdfg, head_state=state)
         else:
             # Default case, handled below: the argument expression is a lambda function
