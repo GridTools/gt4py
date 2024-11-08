@@ -246,9 +246,15 @@ def translate_as_fieldop(
     stencil_expr, domain_expr = fun_node.args
 
     if isinstance(stencil_expr, gtir.Lambda):
-        # Default case, handled below: the argument expression is a lambda function
-        # representing the stencil operation to be computed over the field domain.
-        pass
+        if cpm.is_call_to(stencil_expr.expr, "deref") and cpm.is_ref_to(
+            stencil_expr.expr.args[0], stencil_expr.params[0].id
+        ):
+            # Prune trivial field operators that are doing element-wise copy of the input field
+            return sdfg_builder.visit(node.args[0], sdfg=sdfg, head_state=state)
+        else:
+            # Default case, handled below: the argument expression is a lambda function
+            # representing the stencil operation to be computed over the field domain.
+            pass
     elif cpm.is_ref_to(stencil_expr, "deref"):
         # Special usage of 'deref' as argument to fieldop expression, to pass a scalar
         # value to 'as_fieldop' function. It results in broadcasting the scalar value

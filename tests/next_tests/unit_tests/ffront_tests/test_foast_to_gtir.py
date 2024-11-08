@@ -284,9 +284,7 @@ def test_astype():
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.as_fieldop(im.lambda_("__val")(im.call("cast_")(im.deref("__val"), "int32")))(
-        "a"
-    )
+    reference = im.cast_as_fieldop("int32")("a")
 
     assert lowered.expr == reference
 
@@ -312,12 +310,8 @@ def test_astype_tuple():
     lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
 
     reference = im.make_tuple(
-        im.as_fieldop(im.lambda_("__val")(im.call("cast_")(im.deref("__val"), "int32")))(
-            im.tuple_get(0, "a")
-        ),
-        im.as_fieldop(im.lambda_("__val")(im.call("cast_")(im.deref("__val"), "int32")))(
-            im.tuple_get(1, "a")
-        ),
+        im.cast_as_fieldop("int32")(im.tuple_get(0, "a")),
+        im.cast_as_fieldop("int32")(im.tuple_get(1, "a")),
     )
 
     assert lowered_inlined.expr == reference
@@ -332,9 +326,7 @@ def test_astype_tuple_scalar_and_field():
     lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
 
     reference = im.make_tuple(
-        im.as_fieldop(im.lambda_("__val")(im.call("cast_")(im.deref("__val"), "int32")))(
-            im.tuple_get(0, "a")
-        ),
+        im.cast_as_fieldop("int32")(im.tuple_get(0, "a")),
         im.call("cast_")(im.tuple_get(1, "a"), "int32"),
     )
 
@@ -356,16 +348,10 @@ def test_astype_nested_tuple():
 
     reference = im.make_tuple(
         im.make_tuple(
-            im.as_fieldop(im.lambda_("__val")(im.call("cast_")(im.deref("__val"), "int32")))(
-                im.tuple_get(0, im.tuple_get(0, "a"))
-            ),
-            im.as_fieldop(im.lambda_("__val")(im.call("cast_")(im.deref("__val"), "int32")))(
-                im.tuple_get(1, im.tuple_get(0, "a"))
-            ),
+            im.cast_as_fieldop("int32")(im.tuple_get(0, im.tuple_get(0, "a"))),
+            im.cast_as_fieldop("int32")(im.tuple_get(1, im.tuple_get(0, "a"))),
         ),
-        im.as_fieldop(im.lambda_("__val")(im.call("cast_")(im.deref("__val"), "int32")))(
-            im.tuple_get(1, "a")
-        ),
+        im.cast_as_fieldop("int32")(im.tuple_get(1, "a")),
     )
 
     assert lowered_inlined.expr == reference
