@@ -57,6 +57,15 @@ def is_applied_as_fieldop(arg: itir.Node) -> TypeGuard[itir.FunCall]:
     return isinstance(arg, itir.FunCall) and is_call_to(arg.fun, "as_fieldop")
 
 
+def is_op_as_fieldop(node: itir.Node, op: str) -> TypeGuard[itir.FunCall]:
+    """Match expressions of the form `as_fieldop(λ(...) → op(...))(*args)`."""
+    return (
+        is_applied_as_fieldop(node)
+        and isinstance(node.fun.args[0], itir.Lambda)  # type: ignore[attr-defined]
+        and is_call_to(node.fun.args[0].expr, op)  # type: ignore[attr-defined]
+    )
+
+
 def is_let(node: itir.Node) -> TypeGuard[itir.FunCall]:
     """Match expression of the form `(λ(...) → ...)(...)`."""
     return isinstance(node, itir.FunCall) and isinstance(node.fun, itir.Lambda)
