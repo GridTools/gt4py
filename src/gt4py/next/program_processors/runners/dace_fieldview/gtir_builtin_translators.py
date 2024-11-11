@@ -45,14 +45,10 @@ class FieldopData:
     Args:
         dc_node: DaCe access node to the data storage.
         gt_type: GT4Py type definition, which includes the field domain information.
-        offset_type: Provides information about the local dimension in`FieldType` data.
-            Set to 'None' for scalar data. Can be 'None' for `FieldType` data with
-            only global (horizontal or vertical) dimensions.
     """
 
     dc_node: dace.nodes.AccessNode
     gt_type: ts.FieldType | ts.ScalarType
-    offset_type: Optional[gtx_common.Dimension] = None
 
 
 FieldopDomain: TypeAlias = list[
@@ -126,17 +122,29 @@ def _parse_fieldop_arg(
             dc_node=arg.dc_node, gt_dtype=arg.gt_type, subset=sbs.Indices([0])
         )
     elif isinstance(arg.gt_type, ts.FieldType):
+        field_dtype: itir_ts.ListType | ts.ScalarType
+        local_dims = [dim for dim in arg.gt_type.dims if dim.kind == gtx_common.DimensionKind.LOCAL]
+        if len(local_dims) == 0:
+            field_dtype = arg.gt_type.dtype
+            field_dims = arg.gt_type.dims
+        elif len(local_dims) == 1:
+            field_dtype = itir_ts.ListType(
+                element_type=arg.gt_type.dtype, offset_type=local_dims[0]
+            )
+            field_dims = [
+                dim for dim in arg.gt_type.dims if dim.kind != gtx_common.DimensionKind.LOCAL
+            ]
+        else:
+            raise ValueError(
+                f"Unexpected data field {arg.dc_node.data} with more than one local dimension."
+            )
+
         indices: dict[gtx_common.Dimension, gtir_dataflow.DataExpr] = {
             dim: gtir_dataflow.SymbolExpr(dace_gtir_utils.get_map_variable(dim), INDEX_DTYPE)
             for dim, _, _ in domain
-            if dim.kind != gtx_common.DimensionKind.LOCAL
         }
-        return gtir_dataflow.IteratorExpr(
-            field=arg.dc_node,
-            gt_dtype=arg.gt_type.dtype,
-            dimensions=arg.gt_type.dims,
-            indices=indices,
-        )
+
+        return gtir_dataflow.IteratorExpr(arg.dc_node, field_dtype, field_dims, indices)
     else:
         raise NotImplementedError(f"Node type {type(arg.gt_type)} not supported.")
 
@@ -180,32 +188,22 @@ def _create_temporary_field(
     output_desc = dataflow_output.result.dc_node.desc(sdfg)
     if isinstance(output_desc, dace.data.Array):
         assert isinstance(node_type.dtype, itir_ts.ListType)
-        assert isinstance(node_type.dtype.element_type, ts.ScalarType)
-        field_dtype = node_type.dtype.element_type
         # extend the array with the local dimensions added by the field operator (e.g. `neighbors`)
         field_shape.extend(output_desc.shape)
-    elif isinstance(output_desc, dace.data.Scalar):
-        field_dtype = node_type.dtype
-    else:
-        raise ValueError(f"Cannot create field for dace type {output_desc}.")
 
     # allocate local temporary storage
-    temp_name, _ = sdfg.add_temp_transient(field_shape, dace_utils.as_dace_type(field_dtype))
+    temp_name, _ = sdfg.add_temp_transient(field_shape, output_desc.dtype)
     field_node = state.add_access(temp_name)
 
     if isinstance(dataflow_output.result.gt_dtype, ts.ScalarType):
-        assert dataflow_output.result.gt_dtype == node_type.dtype
-        field_type = ts.FieldType(field_dims, node_type.dtype)
-        offset_type = None
+        field_dtype = dataflow_output.result.gt_dtype
     else:
-        assert isinstance(node_type.dtype, itir_ts.ListType)
-        assert isinstance(node_type.dtype.element_type, ts.ScalarType)
-        assert dataflow_output.result.gt_dtype.element_type == node_type.dtype.element_type
+        assert isinstance(dataflow_output.result.gt_dtype.element_type, ts.ScalarType)
+        field_dtype = dataflow_output.result.gt_dtype.element_type
         assert dataflow_output.result.gt_dtype.offset_type is not None
-        offset_type = dataflow_output.result.gt_dtype.offset_type
-        field_type = ts.FieldType(field_dims, node_type.dtype.element_type)
+        field_dims.append(dataflow_output.result.gt_dtype.offset_type)
 
-    return FieldopData(field_node, field_type, offset_type)
+    return FieldopData(field_node, ts.FieldType(field_dims, field_dtype))
 
 
 def extract_domain(node: gtir.Node) -> FieldopDomain:
@@ -287,7 +285,6 @@ def translate_as_fieldop(
 
     if isinstance(node.type.dtype, itir_ts.ListType):
         assert isinstance(output_desc, dace.data.Array)
-        assert set(output_desc.offset) == {0}
         # additional local dimension for neighbors
         # TODO(phimuell): Investigate if we should swap the two.
         output_subset = sbs.Range.from_indices(domain_indices) + sbs.Range.from_array(output_desc)
@@ -397,7 +394,7 @@ def translate_broadcast_scalar(
         external_edges=True,
     )
 
-    return FieldopData(output_node, ts.FieldType(field_dims, gt_dtype), offset_type=None)
+    return FieldopData(output_node, ts.FieldType(field_dims, gt_dtype))
 
 
 def translate_if(
@@ -458,7 +455,7 @@ def translate_if(
         outer, _ = sdfg.add_temp_transient_like(inner_desc)
         outer_node = state.add_access(outer)
 
-        return FieldopData(outer_node, inner_data.gt_type, inner_data.offset_type)
+        return FieldopData(outer_node, inner_data.gt_type)
 
     result_temps = gtx_utils.tree_map(construct_output)(true_br_args)
 
@@ -470,7 +467,10 @@ def translate_if(
     )
 
     for true_br, false_br, temp in fields:
-        assert true_br.gt_type == false_br.gt_type
+        if true_br.gt_type != false_br.gt_type:
+            raise ValueError(
+                f"Data type on if-branches differ: {true_br.gt_type} vs {false_br.gt_type}."
+            )
         true_br_node = true_br.dc_node
         false_br_node = false_br.dc_node
 
@@ -501,23 +501,7 @@ def _get_data_nodes(
 ) -> FieldopResult:
     if isinstance(data_type, ts.FieldType):
         data_node = state.add_access(data_name)
-        local_dims = [dim for dim in data_type.dims if dim.kind == gtx_common.DimensionKind.LOCAL]
-        if len(local_dims) == 0:
-            return FieldopData(data_node, data_type, offset_type=None)
-        elif len(local_dims) == 1:
-            # we ensure that the name of the local dimension corresponds to a valid
-            # connectivity-based offset provider
-            offset_type = next(iter(local_dims))
-            assert isinstance(
-                sdfg_builder.get_offset_provider(offset_type.value), gtx_common.Connectivity
-            )
-            field_type = ts.FieldType(
-                dims=[dim for dim in data_type.dims if dim.kind != gtx_common.DimensionKind.LOCAL],
-                dtype=data_type.dtype,
-            )
-            return FieldopData(data_node, field_type, offset_type)
-        else:
-            raise ValueError(f"Field {data_name} has more than one local dimension.")
+        return FieldopData(data_node, data_type)
 
     elif isinstance(data_type, ts.ScalarType):
         if data_name in sdfg.symbols:
@@ -527,12 +511,14 @@ def _get_data_nodes(
         else:
             data_node = state.add_access(data_name)
         return FieldopData(data_node, data_type)
+
     elif isinstance(data_type, ts.TupleType):
         tuple_fields = dace_gtir_utils.get_tuple_fields(data_name, data_type)
         return tuple(
             _get_data_nodes(sdfg, state, sdfg_builder, fname, ftype)
             for fname, ftype in tuple_fields
         )
+
     else:
         raise NotImplementedError(f"Symbol type {type(data_type)} not supported.")
 

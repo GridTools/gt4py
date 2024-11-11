@@ -29,6 +29,12 @@ from gt4py.next.program_processors.runners.dace_fieldview import (
 from gt4py.next.type_system import type_info as ti, type_specifications as ts
 
 
+# Magic local dimension for the result of a `make_const_list`.
+# A clean implementation will probably involve to tag the `make_const_list`
+# with the neighborhood it is meant to be used with.
+_CONST_DIM = gtx_common.Dimension(value="_CONST_DIM", kind=gtx_common.DimensionKind.LOCAL)
+
+
 @dataclasses.dataclass(frozen=True)
 class ValueExpr:
     """
@@ -379,15 +385,19 @@ class LambdaToDataflow(eve.NodeVisitor):
         src_connector: str,
         use_array: bool = False,
     ) -> ValueExpr:
-        temp_name = self.sdfg.temp_data_name()
+        data_type: itir_ts.ListType | ts.ScalarType
         if use_array:
             # In some cases, such as result data with list-type annotation, we want
             # that output data is represented as an array (single-element 1D array)
             # in order to allow for composition of array shape in external memlets.
-            self.sdfg.add_array(temp_name, (1,), dc_dtype, transient=True)
+            temp_name, _ = self.sdfg.add_temp_transient((1,), dc_dtype)
+            data_type = itir_ts.ListType(
+                element_type=dace_utils.as_itir_type(dc_dtype), offset_type=_CONST_DIM
+            )
         else:
+            temp_name = self.sdfg.temp_data_name()
             self.sdfg.add_scalar(temp_name, dc_dtype, transient=True)
-        data_type = dace_utils.as_itir_type(dc_dtype)
+            data_type = dace_utils.as_itir_type(dc_dtype)
         temp_node = self.state.add_access(temp_name)
         self._add_edge(
             src_node,
@@ -429,78 +439,86 @@ class LambdaToDataflow(eve.NodeVisitor):
             assert len(arg_expr.dimensions) == 0
             assert isinstance(node.type, ts.ScalarType)
             return MemletExpr(arg_expr.field, arg_expr.gt_dtype, subset="0")
+
         # default case: deref a field with one or more dimensions
-        assert len(field_desc.shape) == len(arg_expr.dimensions)
         if all(isinstance(index, SymbolExpr) for index in arg_expr.indices.values()):
             # when all indices are symblic expressions, we can perform direct field access through a memlet
+            if isinstance(arg_expr.gt_dtype, itir_ts.ListType):
+                assert len(field_desc.shape) == len(arg_expr.dimensions) + 1
+                assert arg_expr.gt_dtype.offset_type is not None
+                field_dims = [*arg_expr.dimensions, arg_expr.gt_dtype.offset_type]
+            else:
+                assert len(field_desc.shape) == len(arg_expr.dimensions)
+                field_dims = arg_expr.dimensions
+
             field_subset = sbs.Range(
                 (arg_expr.indices[dim].value, arg_expr.indices[dim].value, 1)  # type: ignore[union-attr]
                 if dim in arg_expr.indices
                 else (0, size - 1, 1)
-                for dim, size in zip(arg_expr.dimensions, field_desc.shape)
+                for dim, size in zip(field_dims, field_desc.shape)
             )
             return MemletExpr(arg_expr.field, arg_expr.gt_dtype, field_subset)
 
-        else:
-            # we use a tasklet to dereference an iterator when one or more indices are the result of some computation,
-            # either indirection through connectivity table or dynamic cartesian offset.
-            assert all(dim in arg_expr.indices for dim in arg_expr.dimensions)
-            field_indices = [(dim, arg_expr.indices[dim]) for dim in arg_expr.dimensions]
-            index_connectors = [
-                IndexConnectorFmt.format(dim=dim.value)
-                for dim, index in field_indices
-                if not isinstance(index, SymbolExpr)
-            ]
-            # here `internals` refer to the names used as index in the tasklet code string:
-            # an index can be either a connector name (for dynamic/indirect indices)
-            # or a symbol value (for literal values and scalar arguments).
-            index_internals = ",".join(
-                str(index.value)
-                if isinstance(index, SymbolExpr)
-                else IndexConnectorFmt.format(dim=dim.value)
-                for dim, index in field_indices
-            )
-            deref_node = self._add_tasklet(
-                "runtime_deref",
-                {"field"} | set(index_connectors),
-                {"val"},
-                code=f"val = field[{index_internals}]",
-            )
-            # add new termination point for the field parameter
-            self._add_input_data_edge(
-                arg_expr.field,
-                sbs.Range.from_array(field_desc),
-                deref_node,
-                "field",
-            )
+        # we use a tasklet to dereference an iterator when one or more indices are the result of some computation,
+        # either indirection through connectivity table or dynamic cartesian offset.
+        assert all(dim in arg_expr.indices for dim in arg_expr.dimensions)
+        assert len(field_desc.shape) == len(arg_expr.dimensions)
+        field_indices = [(dim, arg_expr.indices[dim]) for dim in arg_expr.dimensions]
+        index_connectors = [
+            IndexConnectorFmt.format(dim=dim.value)
+            for dim, index in field_indices
+            if not isinstance(index, SymbolExpr)
+        ]
+        # here `internals` refer to the names used as index in the tasklet code string:
+        # an index can be either a connector name (for dynamic/indirect indices)
+        # or a symbol value (for literal values and scalar arguments).
+        index_internals = ",".join(
+            str(index.value)
+            if isinstance(index, SymbolExpr)
+            else IndexConnectorFmt.format(dim=dim.value)
+            for dim, index in field_indices
+        )
+        deref_node = self._add_tasklet(
+            "runtime_deref",
+            {"field"} | set(index_connectors),
+            {"val"},
+            code=f"val = field[{index_internals}]",
+        )
+        # add new termination point for the field parameter
+        self._add_input_data_edge(
+            arg_expr.field,
+            sbs.Range.from_array(field_desc),
+            deref_node,
+            "field",
+        )
 
-            for dim, index_expr in field_indices:
-                # add termination points for the dynamic iterator indices
-                deref_connector = IndexConnectorFmt.format(dim=dim.value)
-                if isinstance(index_expr, MemletExpr):
-                    self._add_input_data_edge(
-                        index_expr.dc_node,
-                        index_expr.subset,
-                        deref_node,
-                        deref_connector,
-                    )
+        for dim, index_expr in field_indices:
+            # add termination points for the dynamic iterator indices
+            deref_connector = IndexConnectorFmt.format(dim=dim.value)
+            if isinstance(index_expr, MemletExpr):
+                self._add_input_data_edge(
+                    index_expr.dc_node,
+                    index_expr.subset,
+                    deref_node,
+                    deref_connector,
+                )
 
-                elif isinstance(index_expr, ValueExpr):
-                    self._add_edge(
-                        index_expr.dc_node,
-                        None,
-                        deref_node,
-                        deref_connector,
-                        dace.Memlet(data=index_expr.dc_node.data, subset="0"),
-                    )
-                else:
-                    assert isinstance(index_expr, SymbolExpr)
+            elif isinstance(index_expr, ValueExpr):
+                self._add_edge(
+                    index_expr.dc_node,
+                    None,
+                    deref_node,
+                    deref_connector,
+                    dace.Memlet(data=index_expr.dc_node.data, subset="0"),
+                )
+            else:
+                assert isinstance(index_expr, SymbolExpr)
 
-            return self._construct_tasklet_result(field_desc.dtype, deref_node, "val")
+        return self._construct_tasklet_result(field_desc.dtype, deref_node, "val")
 
     def _visit_neighbors(self, node: gtir.FunCall) -> ValueExpr:
-        assert len(node.args) == 2
         assert isinstance(node.type, itir_ts.ListType)
+        assert len(node.args) == 2
 
         assert isinstance(node.args[0], gtir.OffsetLiteral)
         offset = node.args[0].value
@@ -560,8 +578,8 @@ class LambdaToDataflow(eve.NodeVisitor):
             (offset_provider.max_neighbors,), field_desc.dtype
         )
         neighbors_node = self.state.add_access(neighbors_temp)
-
-        neighbor_idx = dace_gtir_utils.get_map_variable(offset)
+        offset_type = gtx_common.Dimension(offset, gtx_common.DimensionKind.LOCAL)
+        neighbor_idx = dace_gtir_utils.get_map_variable(offset_type)
 
         index_connector = "__index"
         output_connector = "__val"
@@ -599,7 +617,9 @@ class LambdaToDataflow(eve.NodeVisitor):
             external_edges=True,
         )
 
-        return ValueExpr(neighbors_node, node.type)
+        return ValueExpr(
+            dc_node=neighbors_node, gt_dtype=itir_ts.ListType(node.type.element_type, offset_type)
+        )
 
     def _visit_map(self, node: gtir.FunCall) -> ValueExpr:
         """
@@ -624,8 +644,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert isinstance(node.type.element_type, ts.ScalarType)
         dc_dtype = dace_utils.as_dace_type(node.type.element_type)
 
-        input_args = [self.visit(arg) for arg in node.args]
-        input_connectors = [f"__arg{i}" for i in range(len(input_args))]
+        input_connectors = [f"__arg{i}" for i in range(len(node.args))]
         output_connector = "__out"
 
         # Here we build the body of the tasklet
@@ -633,28 +652,29 @@ class LambdaToDataflow(eve.NodeVisitor):
         fun_python_code = gtir_python_codegen.get_source(fun_node)
         tasklet_expression = f"{output_connector} = {fun_python_code}"
 
-        input_offset_types = [
-            input_arg.gt_dtype.offset_type
-            for input_arg in input_args
-            if isinstance(input_arg.gt_dtype, itir_ts.ListType)
-        ]
-        if len(input_offset_types) == 0:
+        input_args = [self.visit(arg) for arg in node.args]
+        input_connectivities: dict[gtx_common.Dimension, gtx_common.Connectivity] = {}
+        for input_arg in input_args:
+            assert isinstance(input_arg.gt_dtype, itir_ts.ListType)
+            assert input_arg.gt_dtype.offset_type is not None
+            offset_type = input_arg.gt_dtype.offset_type
+            if offset_type == _CONST_DIM:
+                # this input argument is the result of `make_const_list`
+                continue
+            offset_provider = self.subgraph_builder.get_offset_provider(offset_type.value)
+            assert isinstance(offset_provider, gtx_common.Connectivity)
+            input_connectivities[offset_type] = offset_provider
+
+        if len(input_connectivities) == 0:
             raise ValueError(f"Missing information on local dimension for map node {node}.")
 
         # GT4Py guarantees that all connectivities used to generate lists of neighbors
         # have the same length, that is the same value of 'max_neighbors'.
-        local_connectivities: dict[gtx_common.Dimension, gtx_common.Connectivity] = {}
-        for offset_type in input_offset_types:
-            assert offset_type is not None
-            offset_provider = self.subgraph_builder.get_offset_provider(offset_type.value)
-            assert isinstance(offset_provider, gtx_common.Connectivity)
-            local_connectivities[offset_type] = offset_provider
-
-        if len(set(table.max_neighbors for table in local_connectivities.values())) != 1:
+        if len(set(table.max_neighbors for table in input_connectivities.values())) != 1:
             raise ValueError(
                 "Unexpected arguments to map expression with different local dimensions."
             )
-        offset_type, offset_provider = next(iter(local_connectivities.items()))
+        offset_type, offset_provider = next(iter(input_connectivities.items()))
         local_size = offset_provider.max_neighbors
         map_index = dace_gtir_utils.get_map_variable(offset_type)
 
@@ -666,23 +686,22 @@ class LambdaToDataflow(eve.NodeVisitor):
         # than representing map-to-map edges (which require memlets with 2 pass-nodes).
         input_memlets = {}
         input_nodes = {}
-        for conn, input_expr in zip(input_connectors, input_args):
-            input_node = self._construct_local_view(input_expr).dc_node
+        for conn, input_arg in zip(input_connectors, input_args):
+            input_node = self._construct_local_view(input_arg).dc_node
             input_desc = input_node.desc(self.sdfg)
             # we assume that there is a single local dimension
             if len(input_desc.shape) != 1:
                 raise ValueError(f"More than one local dimension in map expression {node}.")
             input_size = input_desc.shape[0]
             if input_size == 1:
+                assert input_arg.gt_dtype.offset_type == _CONST_DIM
                 input_memlets[conn] = dace.Memlet(data=input_node.data, subset="0")
-            elif input_size != local_size:
+            elif input_size == local_size:
+                input_memlets[conn] = dace.Memlet(data=input_node.data, subset=map_index)
+            else:
                 raise ValueError(
                     f"Argument to map node with local size {input_size}, expected {local_size}."
                 )
-            else:
-                assert isinstance(input_expr.gt_dtype, itir_ts.ListType)
-                input_memlets[conn] = dace.Memlet(data=input_node.data, subset=map_index)
-
             input_nodes[input_node.data] = input_node
 
         result, _ = self.sdfg.add_temp_transient((local_size,), dc_dtype)
@@ -690,19 +709,16 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         skip_value_connectivities: dict[gtx_common.Dimension, gtx_common.Connectivity] = {
             offset_type: offset_provider
-            for offset_type, offset_provider in local_connectivities.items()
+            for offset_type, offset_provider in input_connectivities.items()
             if offset_provider.has_skip_values
         }
 
         if len(skip_value_connectivities) == 0:
             result_offset_type = offset_type
-        else:
+        elif len(skip_value_connectivities) == 1:
             # In case one or more of input expressions contain skip values, we use
             # the connectivity-based offset provider as mask for map computation.
             # Therefore, the result of map computation will also contain skip values.
-            # GT4Py guarantees that the skip values are placed in the same positions
-            # for all input expressions.
-
             result_offset_type, offset_provider = next(iter(skip_value_connectivities.items()))
 
             connectivity = dace_utils.connectivity_identifier(result_offset_type.value)
@@ -737,6 +753,8 @@ class LambdaToDataflow(eve.NodeVisitor):
             tasklet_expression += (
                 f" if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {skip_value}"
             )
+        else:
+            raise ValueError("Unexpected arguments to map expression with different neighborhood.")
 
         self._add_mapped_tasklet(
             name="map",
