@@ -469,7 +469,7 @@ def translate_if(
     for true_br, false_br, temp in fields:
         if true_br.gt_type != false_br.gt_type:
             raise ValueError(
-                f"Data type on if-branches differ: {true_br.gt_type} vs {false_br.gt_type}."
+                f"Different type of result fields on if-branches '{true_br.gt_type}' vs '{false_br.gt_type}'."
             )
         true_br_node = true_br.dc_node
         false_br_node = false_br.dc_node
