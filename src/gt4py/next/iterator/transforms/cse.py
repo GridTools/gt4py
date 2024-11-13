@@ -434,13 +434,11 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
                 if is_local_view:
                     return True
                 # condition is only necessary since typing on lambdas is not preserved during
-                #  the pass
+                #  the transformation
                 elif not isinstance(subexpr, itir.Lambda):
                     # only extract fields outside of `as_fieldop`
                     # `as_fieldop(...)(field_expr, field_expr)`
                     # -> `(λ(_cs_1) → as_fieldop(...)(_cs_1, _cs_1))(field_expr)`
-                    # only extract if subexpression is not a trivial tuple expressions, e.g.,
-                    # `make_tuple(a, b)`, as this would result in a more costly temporary.
                     assert isinstance(subexpr.type, ts.TypeSpec)
                     if all(
                         isinstance(stype, ts.FieldType)
