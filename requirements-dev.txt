@@ -55,7 +55,6 @@ fparser==0.1.4            # via -c constraints.txt, dace
 frozendict==2.4.6         # via -c constraints.txt, gt4py (pyproject.toml)
 gitdb==4.0.11             # via -c constraints.txt, gitpython
 gitpython==3.1.43         # via -c constraints.txt, tach
-gridtools-cpp==2.3.7      # via -c constraints.txt, gt4py (pyproject.toml)
 hypothesis==6.113.0       # via -c constraints.txt, -r requirements-dev.in, gt4py (pyproject.toml)
 identify==2.6.1           # via -c constraints.txt, pre-commit
 idna==3.10                # via -c constraints.txt, requests
@@ -180,3 +179,6 @@ zipp==3.20.2              # via -c constraints.txt, importlib-metadata, importli
 # The following packages are considered to be unsafe in a requirements file:
 pip==24.3.1               # via -c constraints.txt, pip-tools, pipdeptree
 setuptools==75.3.0        # via -c constraints.txt, gt4py (pyproject.toml), pip-tools, setuptools-scm
+
+--extra-index-url https://test.pypi.org/simple/
+gridtools-cpp==2.3.8      # via -c constraints.txt, gt4py (pyproject.toml)
