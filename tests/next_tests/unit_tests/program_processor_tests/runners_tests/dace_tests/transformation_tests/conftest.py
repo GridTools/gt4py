@@ -11,7 +11,7 @@ from typing import Generator
 import pytest
 
 
-@pytest.fixture()
+@pytest.fixture(autouse=True)
 def set_dace_settings() -> Generator[None, None, None]:
     """Sets the common DaCe settings for the tests.
 

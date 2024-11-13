@@ -8,7 +8,6 @@
 
 import pytest
 
-
 dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes
 
@@ -17,8 +16,6 @@ from gt4py.next.program_processors.runners.dace_fieldview import (
 )
 
 from . import util
-
-import dace
 
 
 def test_constant_substitution():
