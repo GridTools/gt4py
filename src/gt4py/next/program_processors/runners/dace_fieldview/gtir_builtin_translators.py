@@ -188,8 +188,14 @@ def _create_temporary_field(
     output_desc = dataflow_output.result.dc_node.desc(sdfg)
     if isinstance(output_desc, dace.data.Array):
         assert isinstance(node_type.dtype, itir_ts.ListType)
+        assert isinstance(node_type.dtype.element_type, ts.ScalarType)
+        assert output_desc.dtype == dace_utils.as_dace_type(node_type.dtype.element_type)
         # extend the array with the local dimensions added by the field operator (e.g. `neighbors`)
         field_shape.extend(output_desc.shape)
+    elif isinstance(output_desc, dace.data.Scalar):
+        assert output_desc.dtype == dace_utils.as_dace_type(node_type.dtype)
+    else:
+        raise ValueError(f"Cannot create field for dace type {output_desc}.")
 
     # allocate local temporary storage
     temp_name, _ = sdfg.add_temp_transient(field_shape, output_desc.dtype)
