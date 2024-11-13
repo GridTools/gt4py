@@ -14,6 +14,7 @@ import math
 import operator
 from typing import Callable, Iterable, TypeVar, Union, cast
 
+import gt4py.next.iterator.ir_utils.ir_makers as im
 from gt4py.eve import (
     NodeTranslator,
     NodeVisitor,
@@ -241,7 +242,6 @@ def extract_subexpression(
     Examples:
         Default case for `(x+y) + ((x+y)+z)`:
 
-        >>> import gt4py.next.iterator.ir_utils.ir_makers as im
         >>> from gt4py.eve.utils import UIDGenerator
         >>> expr = im.plus(im.plus("x", "y"), im.plus(im.plus("x", "y"), "z"))
         >>> predicate = lambda subexpr, num_occurences: num_occurences > 1
@@ -433,10 +433,14 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
             if num_occurences > 1:
                 if is_local_view:
                     return True
-                else:
+                # condition is only necessary since typing on lambdas is not preserved during
+                #  the pass
+                elif not isinstance(subexpr, itir.Lambda):
                     # only extract fields outside of `as_fieldop`
                     # `as_fieldop(...)(field_expr, field_expr)`
                     # -> `(λ(_cs_1) → as_fieldop(...)(_cs_1, _cs_1))(field_expr)`
+                    # only extract if subexpression is not a trivial tuple expressions, e.g.,
+                    # `make_tuple(a, b)`, as this would result in a more costly temporary.
                     assert isinstance(subexpr.type, ts.TypeSpec)
                     if all(
                         isinstance(stype, ts.FieldType)
@@ -451,10 +455,8 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
             return self.generic_visit(node, **kwargs)
 
         # apply remapping
-        result = itir.FunCall(
-            fun=itir.Lambda(params=list(extracted.keys()), expr=new_expr),
-            args=list(extracted.values()),
-        )
+        result = im.let(*extracted.items())(new_expr)
+        itir_type_inference.copy_type(from_=node, to=result, allow_untyped=True)
 
         # if the node id is ignored (because its parent is eliminated), but it occurs
         # multiple times then we want to visit the final result once more.
