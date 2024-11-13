@@ -61,6 +61,8 @@ def gt_simplify(
     Further, the function will run the following passes in addition to DaCe simplify:
     - `GT4PyRednundantArrayElimination`: Special version of the array removal, see
         documentation of `GT4PyRednundantArrayElimination`.
+    - `GT4PyGlobalSelfCopyElimination`: Special copy pattern that in the context
+        of GT4Py based SDFG behaves as a no op.
 
     Furthermore, by default, or if `None` is passed for `skip` the passes listed in
     `GT_SIMPLIFY_DEFAULT_SKIP_SET` will be skipped.
@@ -114,6 +116,16 @@ def gt_simplify(
         if array_elimination_result is not None:
             result = result or {}
             result["GT4PyRednundantArrayElimination"] = array_elimination_result
+
+    if "GT4PyGlobalSelfCopyElimination" not in skip:
+        self_copy_removal_result = sdfg.apply_transformations_repeated(
+            GT4PyGlobalSelfCopyElimination(),
+            validate=validate,
+            validate_all=validate_all,
+        )
+        if self_copy_removal_result is not None:
+            result = result or {}
+            result["self_copy_removal_result"] = self_copy_removal_result
 
     return result
 
