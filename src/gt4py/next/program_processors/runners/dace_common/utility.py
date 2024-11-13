@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import re
-from typing import Final, Optional, Sequence
+from typing import Final, Literal, Optional, Sequence
 
 import dace
 
@@ -51,12 +51,20 @@ def connectivity_identifier(name: str) -> str:
     return f"connectivity_{name}"
 
 
+def field_symbol_name(field_name: str, axis: int, sym: Literal["size", "offset", "stride"]) -> str:
+    return f"__{field_name}_{sym}_{axis}"
+
+
 def field_size_symbol_name(field_name: str, axis: int) -> str:
-    return f"__{field_name}_size_{axis}"
+    return field_symbol_name(field_name, axis, "size")
+
+
+def field_offset_symbol_name(field_name: str, axis: int) -> str:
+    return field_symbol_name(field_name, axis, "offset")
 
 
 def field_stride_symbol_name(field_name: str, axis: int) -> str:
-    return f"__{field_name}_stride_{axis}"
+    return field_symbol_name(field_name, axis, "stride")
 
 
 def is_field_symbol(name: str) -> bool:

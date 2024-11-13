@@ -138,9 +138,9 @@ def _parse_fieldop_arg(
         raise NotImplementedError(f"Node type {type(arg.gt_dtype)} not supported.")
 
 
-def _get_field_shape(
+def _get_field_layout(
     domain: FieldopDomain,
-) -> tuple[list[gtx_common.Dimension], list[dace.symbolic.SymExpr]]:
+) -> tuple[list[gtx_common.Dimension], list[dace.symbolic.SymExpr], list[dace.symbolic.SymExpr]]:
     """
     Parse the field operator domain and generates the shape of the result field.
 
@@ -157,11 +157,15 @@ def _get_field_shape(
         domain: The field operator domain.
 
     Returns:
-        A tuple of two lists: the list of field dimensions and the list of dace
-        array sizes in each dimension.
+        A tuple of three lists containing:
+            - the field dimensions
+            - the dace array offset in each dimension
+            - the dace array size in each dimension
     """
-    domain_dims, _, domain_ubs = zip(*domain)
-    return list(domain_dims), list(domain_ubs)
+    domain_dims, domain_lbs, domain_ubs = zip(*domain)
+    shape = [(ub - lb) for lb, ub in zip(domain_lbs, domain_ubs)]
+    offset = [(-lb) for lb in domain_lbs]
+    return list(domain_dims), offset, shape
 
 
 def _create_temporary_field(
@@ -172,22 +176,23 @@ def _create_temporary_field(
     dataflow_output: gtir_dataflow.DataflowOutputEdge,
 ) -> FieldopData:
     """Helper method to allocate a temporary field where to write the output of a field operator."""
-    field_dims, field_shape = _get_field_shape(domain)
+    field_dims, field_offset, field_shape = _get_field_layout(domain)
 
     output_desc = dataflow_output.result.dc_node.desc(sdfg)
     if isinstance(output_desc, dace.data.Array):
         assert isinstance(node_type.dtype, itir_ts.ListType)
         assert isinstance(node_type.dtype.element_type, ts.ScalarType)
-        field_dtype = node_type.dtype.element_type
+        assert output_desc.dtype == dace_utils.as_dace_type(node_type.dtype.element_type)
         # extend the array with the local dimensions added by the field operator (e.g. `neighbors`)
+        field_offset.extend(output_desc.offset)
         field_shape.extend(output_desc.shape)
     elif isinstance(output_desc, dace.data.Scalar):
-        field_dtype = node_type.dtype
+        assert output_desc.dtype == dace_utils.as_dace_type(node_type.dtype)
     else:
         raise ValueError(f"Cannot create field for dace type {output_desc}.")
 
     # allocate local temporary storage
-    temp_name, _ = sdfg.add_temp_transient(field_shape, dace_utils.as_dace_type(field_dtype))
+    temp_name, _ = sdfg.add_temp_transient(field_shape, output_desc.dtype, offset=field_offset)
     field_node = state.add_access(temp_name)
     field_type = ts.FieldType(field_dims, node_type.dtype)
 
@@ -327,7 +332,7 @@ def translate_broadcast_scalar(
     assert cpm.is_ref_to(stencil_expr, "deref")
 
     domain = extract_domain(domain_expr)
-    field_dims, field_shape = _get_field_shape(domain)
+    field_dims, field_offset, field_shape = _get_field_layout(domain)
     field_subset = sbs.Range.from_string(
         ",".join(dace_gtir_utils.get_map_variable(dim) for dim in field_dims)
     )
@@ -365,7 +370,9 @@ def translate_broadcast_scalar(
     else:
         raise ValueError(f"Unexpected argument {node.args[0]} in broadcast expression.")
 
-    output, _ = sdfg.add_temp_transient(field_shape, input_node.desc(sdfg).dtype)
+    output, _ = sdfg.add_temp_transient(
+        field_shape, input_node.desc(sdfg).dtype, offset=field_offset
+    )
     output_node = state.add_access(output)
 
     sdfg_builder.add_mapped_tasklet(

@@ -182,9 +182,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     def unique_tasklet_name(self, name: str) -> str:
         return f"{self.tasklet_uids.sequential_id()}_{name}"
 
-    def _make_array_shape_and_strides(
+    def _make_array_symbols(
         self, name: str, dims: Sequence[gtx_common.Dimension]
-    ) -> tuple[list[dace.symbol], list[dace.symbol]]:
+    ) -> tuple[list[dace.symbol], list[dace.symbol], list[dace.symbol]]:
         """
         Parse field dimensions and allocate symbols for array shape and strides.
 
@@ -192,7 +192,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         the corresponding array shape dimension is set to an integer literal value.
 
         Returns:
-            Two lists of symbols, one for the shape and the other for the strides of the array.
+            Three lists of symbols:
+                - the shape of the array
+                - the array offset
+                - the array strides
         """
         dc_dtype = gtir_builtin_translators.INDEX_DTYPE
         neighbor_tables = dace_utils.filter_connectivities(self.offset_provider)
@@ -204,11 +207,15 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             )
             for i, dim in enumerate(dims)
         ]
+        offset = [
+            dace.symbol(dace_utils.field_offset_symbol_name(name, i), dc_dtype)
+            for i in range(len(dims))
+        ]
         strides = [
             dace.symbol(dace_utils.field_stride_symbol_name(name, i), dc_dtype)
             for i in range(len(dims))
         ]
-        return shape, strides
+        return shape, offset, strides
 
     def _add_storage(
         self,
@@ -218,6 +225,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         gt_type: ts.DataType,
         transient: bool = True,
         tuple_name: Optional[str] = None,
+        use_offset: bool = False,
     ) -> list[tuple[str, ts.DataType]]:
         """
         Add storage in the SDFG for a given GT4Py data symbol.
@@ -238,6 +246,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             gt_type: GT4Py symbol type.
             transient: True when the data symbol has to be allocated as internal storage.
             tuple_name: Must be set for tuple fields in order to use the same array shape and strides symbols.
+            use_offset: In let-statements nested SDFG we use array offset for non zero-based field dimensions.
 
         Returns:
             List of tuples '(data_name, gt_type)' where 'data_name' is the name of
@@ -267,14 +276,21 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             if tuple_name is None:
                 # Use symbolic shape, which allows to invoke the program with fields of different size;
                 # and symbolic strides, which enables decoupling the memory layout from generated code.
-                sym_shape, sym_strides = self._make_array_shape_and_strides(name, gt_type.dims)
+                sym_shape, sym_offset, sym_strides = self._make_array_symbols(name, gt_type.dims)
             else:
                 # All fields in a tuple must have the same dims and sizes,
                 # therefore we use the same shape and strides symbols based on 'tuple_name'.
-                sym_shape, sym_strides = self._make_array_shape_and_strides(
+                sym_shape, sym_offset, sym_strides = self._make_array_symbols(
                     tuple_name, gt_type.dims
                 )
-            sdfg.add_array(name, sym_shape, dc_dtype, strides=sym_strides, transient=transient)
+            sdfg.add_array(
+                name,
+                sym_shape,
+                dc_dtype,
+                strides=sym_strides,
+                offset=(sym_offset if use_offset else None),
+                transient=transient,
+            )
 
             return [(name, gt_type)]
 
@@ -356,6 +372,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         sdfg: dace.SDFG,
         node_params: Sequence[gtir.Sym],
         symbolic_arguments: set[str],
+        use_offset: bool = False,
     ) -> list[str]:
         """
         Helper function to add storage for node parameters and connectivity tables.
@@ -371,7 +388,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             pname = str(param.id)
             assert isinstance(param.type, (ts.DataType))
             sdfg_args += self._add_storage(
-                sdfg, symbolic_arguments, pname, param.type, transient=False
+                sdfg, symbolic_arguments, pname, param.type, transient=False, use_offset=use_offset
             )
             self.global_symbols[pname] = param.type
 
@@ -597,7 +614,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         ]
         lambda_domain_symbols = _collect_symbols_in_domain_expressions(node.expr, lambda_params)
         lambda_translator._add_sdfg_params(
-            nsdfg, node_params=lambda_params, symbolic_arguments=lambda_domain_symbols
+            nsdfg,
+            node_params=lambda_params,
+            symbolic_arguments=lambda_domain_symbols,
+            use_offset=True,
         )
 
         lambda_result = lambda_translator.visit(
@@ -658,8 +678,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             nsdfg_symbols_mapping |= {
                 str(nested_symbol): parent_symbol
                 for nested_symbol, parent_symbol in zip(
-                    [*nsdfg_datadesc.shape, *nsdfg_datadesc.strides],
-                    [*datadesc.shape, *datadesc.strides],
+                    [*nsdfg_datadesc.shape, *nsdfg_datadesc.offset, *nsdfg_datadesc.strides],
+                    [*datadesc.shape, *datadesc.offset, *datadesc.strides],
                     strict=True,
                 )
                 if isinstance(nested_symbol, dace.symbol)

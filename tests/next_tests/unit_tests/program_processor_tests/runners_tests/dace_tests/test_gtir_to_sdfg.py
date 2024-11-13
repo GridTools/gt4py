@@ -47,7 +47,7 @@ EFTYPE = ts.FieldType(dims=[Edge], dtype=FLOAT_TYPE)
 VFTYPE = ts.FieldType(dims=[Vertex], dtype=FLOAT_TYPE)
 V2E_FTYPE = ts.FieldType(dims=[Vertex, V2EDim], dtype=EFTYPE.dtype)
 CARTESIAN_OFFSETS = {
-    "IDim": IDim,
+    IDim.value: IDim,
 }
 SIMPLE_MESH: MeshDescriptor = simple_mesh()
 SIMPLE_MESH_OFFSET_PROVIDER: dict[str, gtx_common.Connectivity | gtx_common.Dimension] = (
@@ -743,13 +743,13 @@ def test_gtir_cartesian_shift_left():
 
     # cartesian shift with literal integer offset
     stencil1_inlined = im.as_fieldop(
-        im.lambda_("a")(im.plus(im.deref(im.shift("IDim", OFFSET)("a")), DELTA)),
+        im.lambda_("a")(im.plus(im.deref(im.shift(IDim.value, OFFSET)("a")), DELTA)),
         domain,
     )("x")
     # fieldview flavor of same stencil, in which a temporary field is initialized with the `DELTA` constant value
     stencil1_fieldview = im.op_as_fieldop("plus", domain)(
         im.as_fieldop(
-            im.lambda_("a")(im.deref(im.shift("IDim", OFFSET)("a"))),
+            im.lambda_("a")(im.deref(im.shift(IDim.value, OFFSET)("a"))),
             domain,
         )("x"),
         im.as_fieldop(im.lambda_()(DELTA), domain)(),
@@ -757,13 +757,15 @@ def test_gtir_cartesian_shift_left():
 
     # use dynamic offset retrieved from field
     stencil2_inlined = im.as_fieldop(
-        im.lambda_("a", "off")(im.plus(im.deref(im.shift("IDim", im.deref("off"))("a")), DELTA)),
+        im.lambda_("a", "off")(
+            im.plus(im.deref(im.shift(IDim.value, im.deref("off"))("a")), DELTA)
+        ),
         domain,
     )("x", "x_offset")
     # fieldview flavor of same stencil
     stencil2_fieldview = im.op_as_fieldop("plus", domain)(
         im.as_fieldop(
-            im.lambda_("a", "off")(im.deref(im.shift("IDim", im.deref("off"))("a"))),
+            im.lambda_("a", "off")(im.deref(im.shift(IDim.value, im.deref("off"))("a"))),
             domain,
         )("x", "x_offset"),
         im.as_fieldop(im.lambda_()(DELTA), domain)(),
@@ -772,14 +774,14 @@ def test_gtir_cartesian_shift_left():
     # use the result of an arithmetic field operation as dynamic offset
     stencil3_inlined = im.as_fieldop(
         im.lambda_("a", "off")(
-            im.plus(im.deref(im.shift("IDim", im.plus(im.deref("off"), 0))("a")), DELTA)
+            im.plus(im.deref(im.shift(IDim.value, im.plus(im.deref("off"), 0))("a")), DELTA)
         ),
         domain,
     )("x", "x_offset")
     # fieldview flavor of same stencil
     stencil3_fieldview = im.op_as_fieldop("plus", domain)(
         im.as_fieldop(
-            im.lambda_("a", "off")(im.deref(im.shift("IDim", im.deref("off"))("a"))),
+            im.lambda_("a", "off")(im.deref(im.shift(IDim.value, im.deref("off"))("a"))),
             domain,
         )(
             "x",
@@ -836,13 +838,13 @@ def test_gtir_cartesian_shift_right():
 
     # cartesian shift with literal integer offset
     stencil1_inlined = im.as_fieldop(
-        im.lambda_("a")(im.plus(im.deref(im.shift("IDim", -OFFSET)("a")), DELTA)),
+        im.lambda_("a")(im.plus(im.deref(im.shift(IDim.value, -OFFSET)("a")), DELTA)),
         domain,
     )("x")
     # fieldview flavor of same stencil, in which a temporary field is initialized with the `DELTA` constant value
     stencil1_fieldview = im.op_as_fieldop("plus", domain)(
         im.as_fieldop(
-            im.lambda_("a")(im.deref(im.shift("IDim", -OFFSET)("a"))),
+            im.lambda_("a")(im.deref(im.shift(IDim.value, -OFFSET)("a"))),
             domain,
         )("x"),
         im.as_fieldop(im.lambda_()(DELTA), domain)(),
@@ -850,13 +852,15 @@ def test_gtir_cartesian_shift_right():
 
     # use dynamic offset retrieved from field
     stencil2_inlined = im.as_fieldop(
-        im.lambda_("a", "off")(im.plus(im.deref(im.shift("IDim", im.deref("off"))("a")), DELTA)),
+        im.lambda_("a", "off")(
+            im.plus(im.deref(im.shift(IDim.value, im.deref("off"))("a")), DELTA)
+        ),
         domain,
     )("x", "x_offset")
     # fieldview flavor of same stencil
     stencil2_fieldview = im.op_as_fieldop("plus", domain)(
         im.as_fieldop(
-            im.lambda_("a", "off")(im.deref(im.shift("IDim", im.deref("off"))("a"))),
+            im.lambda_("a", "off")(im.deref(im.shift(IDim.value, im.deref("off"))("a"))),
             domain,
         )("x", "x_offset"),
         im.as_fieldop(im.lambda_()(DELTA), domain)(),
@@ -865,14 +869,14 @@ def test_gtir_cartesian_shift_right():
     # use the result of an arithmetic field operation as dynamic offset
     stencil3_inlined = im.as_fieldop(
         im.lambda_("a", "off")(
-            im.plus(im.deref(im.shift("IDim", im.plus(im.deref("off"), 0))("a")), DELTA)
+            im.plus(im.deref(im.shift(IDim.value, im.plus(im.deref("off"), 0))("a")), DELTA)
         ),
         domain,
     )("x", "x_offset")
     # fieldview flavor of same stencil
     stencil3_fieldview = im.op_as_fieldop("plus", domain)(
         im.as_fieldop(
-            im.lambda_("a", "off")(im.deref(im.shift("IDim", im.deref("off"))("a"))),
+            im.lambda_("a", "off")(im.deref(im.shift(IDim.value, im.deref("off"))("a"))),
             domain,
         )(
             "x",
@@ -1590,6 +1594,91 @@ def test_gtir_reduce_with_cond_neighbors():
             __connectivity_V2E_FULL_stride_1=1,
         )
         assert np.allclose(v, v_ref)
+
+
+def test_gtir_domain():
+    MARGIN = 2
+    assert MARGIN < N
+    OFFSET = 1000 * 1000 * 1000
+    domain = im.domain(
+        gtx_common.GridType.CARTESIAN, ranges={IDim: (MARGIN, im.minus("size", MARGIN))}
+    )
+    left_domain = im.domain(
+        gtx_common.GridType.CARTESIAN,
+        ranges={IDim: (im.minus(MARGIN, OFFSET), im.minus(im.minus("size", MARGIN), OFFSET))},
+    )
+    right_domain = im.domain(
+        gtx_common.GridType.CARTESIAN,
+        ranges={IDim: (im.plus(MARGIN, OFFSET), im.plus(im.plus("size", MARGIN), OFFSET))},
+    )
+    shift_left_stencil = im.lambda_("a")(im.deref(im.shift(IDim.value, OFFSET)("a")))
+    shift_right_stencil = im.lambda_("a")(im.deref(im.shift(IDim.value, -OFFSET)("a")))
+    testee = gtir.Program(
+        id="let_lambda",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="x", type=IFTYPE),
+            gtir.Sym(id="y", type=IFTYPE),
+            gtir.Sym(id="size", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.let(
+                    "xᐞ1",
+                    im.op_as_fieldop("multiplies", left_domain)(
+                        4.0,
+                        im.as_fieldop(
+                            shift_left_stencil,
+                            left_domain,
+                        )("x"),
+                    ),
+                )(
+                    im.let(
+                        "xᐞ2",
+                        im.op_as_fieldop("multiplies", right_domain)(
+                            3.0,
+                            im.as_fieldop(
+                                shift_right_stencil,
+                                right_domain,
+                            )("x"),
+                        ),
+                    )(
+                        im.let(
+                            "xᐞ3",
+                            im.as_fieldop(
+                                shift_right_stencil,
+                                domain,
+                            )("xᐞ1"),
+                        )(
+                            im.let(
+                                "xᐞ4",
+                                im.as_fieldop(
+                                    shift_left_stencil,
+                                    domain,
+                                )("xᐞ2"),
+                            )(
+                                im.let("xᐞ5", im.op_as_fieldop("plus", domain)("xᐞ3", "xᐞ4"))(
+                                    im.op_as_fieldop("plus", domain)("xᐞ5", "x")
+                                )
+                            )
+                        )
+                    )
+                ),
+                domain=domain,
+                target=gtir.SymRef(id="y"),
+            )
+        ],
+    )
+
+    a = np.random.rand(N)
+    b = np.random.rand(N)
+    ref = np.concatenate((b[0:MARGIN], a[MARGIN : N - MARGIN] * 8, b[N - MARGIN : N]))
+
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
+
+    sdfg(a, b, **FSYMBOLS)
+    assert np.allclose(b, ref)
 
 
 def test_gtir_let_lambda():
