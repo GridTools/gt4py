@@ -77,55 +77,67 @@ def gt_simplify(
     Note:
         Currently DaCe does not provide a way to inject or exchange sub passes in
         simplify. The custom inline pass is run at the beginning and the array
-        elimination at the begin. Thus, `gt_simplify()` might not result in a fix
-        point. This is an implementation detail that will change in the future.
+        elimination at the end. The whole process is run inside a loop that ensures
+        that `gt_simplify()` results in a fix point.
     """
     # Ensure that `skip` is a `set`
     skip = GT_SIMPLIFY_DEFAULT_SKIP_SET if skip is None else set(skip)
 
     result: Optional[dict[str, Any]] = None
 
-    if "InlineSDFGs" not in skip:
-        inline_res = gt_inline_nested_sdfg(
-            sdfg=sdfg,
-            multistate=True,
-            permissive=False,
+    at_least_one_xtrans_run = True
+
+    while at_least_one_xtrans_run:
+        at_least_one_xtrans_run = False
+
+        if "InlineSDFGs" not in skip:
+            inline_res = gt_inline_nested_sdfg(
+                sdfg=sdfg,
+                multistate=True,
+                permissive=False,
+                validate=validate,
+                validate_all=validate_all,
+            )
+            if inline_res is not None:
+                at_least_one_xtrans_run = True
+                result = result or {}
+                result.update(inline_res)
+
+        simplify_res = dace_passes.SimplifyPass(
             validate=validate,
             validate_all=validate_all,
-        )
-        if inline_res is not None:
-            result = inline_res
+            verbose=False,
+            skip=(skip | {"InlineSDFGs"}),
+        ).apply_pass(sdfg, {})
 
-    simplify_res = dace_passes.SimplifyPass(
-        validate=validate,
-        validate_all=validate_all,
-        verbose=False,
-        skip=(skip | {"InlineSDFGs"}),
-    ).apply_pass(sdfg, {})
-
-    if simplify_res is not None:
-        result = result or {}
-        result.update(simplify_res)
-
-    if "GT4PyRednundantArrayElimination" not in skip:
-        array_elimination_result = sdfg.apply_transformations_repeated(
-            GT4PyRednundantArrayElimination(),
-            validate=validate,
-            validate_all=validate_all,
-        )
-        if array_elimination_result is not None:
+        if simplify_res is not None:
+            at_least_one_xtrans_run = True
             result = result or {}
-            result["GT4PyRednundantArrayElimination"] = array_elimination_result
+            result.update(simplify_res)
 
-    if "GT4PyGlobalSelfCopyElimination" not in skip:
-        self_copy_removal_result = sdfg.apply_transformations_repeated(
-            GT4PyGlobalSelfCopyElimination(),
-            validate=validate,
-            validate_all=validate_all,
-        )
-        if self_copy_removal_result is not None:
-            result = result or {}
-            result["self_copy_removal_result"] = self_copy_removal_result
+        if "GT4PyRednundantArrayElimination" not in skip:
+            array_elimination_result = sdfg.apply_transformations_repeated(
+                GT4PyRednundantArrayElimination(),
+                validate=validate,
+                validate_all=validate_all,
+            )
+            if array_elimination_result > 0:
+                at_least_one_xtrans_run = True
+                result = result or {}
+                result.setdefault("GT4PyRednundantArrayElimination", 0)
+                result["GT4PyRednundantArrayElimination"] += array_elimination_result
+
+        if "GT4PyGlobalSelfCopyElimination" not in skip:
+            self_copy_removal_result = sdfg.apply_transformations_repeated(
+                GT4PyGlobalSelfCopyElimination(),
+                validate=validate,
+                validate_all=validate_all,
+            )
+            if self_copy_removal_result > 0:
+                at_least_one_xtrans_run = True
+                result = result or {}
+                result.setdefault("GT4PyGlobalSelfCopyElimination", 0)
+                result["GT4PyGlobalSelfCopyElimination"] += self_copy_removal_result
 
     return result
 
