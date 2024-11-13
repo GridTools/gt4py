@@ -21,6 +21,7 @@ from .map_orderer import MapIterationOrder
 from .map_promoter import SerialMapPromoter
 from .simplify import (
     GT_SIMPLIFY_DEFAULT_SKIP_SET,
+    GT4PyGlobalSelfCopyElimination,
     GT4PyRednundantArrayElimination,
     gt_inline_nested_sdfg,
     gt_reduce_distributed_buffering,
@@ -34,6 +35,7 @@ from .util import gt_find_constant_arguments, gt_make_transients_persistent
 __all__ = [
     "GT_SIMPLIFY_DEFAULT_SKIP_SET",
     "GPUSetBlockSize",
+    "GT4PyGlobalSelfCopyElimination",
     "GT4PyRednundantArrayElimination",
     "LoopBlocking",
     "MapIterationOrder",
