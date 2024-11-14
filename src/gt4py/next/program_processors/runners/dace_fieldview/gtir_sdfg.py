@@ -155,7 +155,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     from where to continue building the SDFG.
     """
 
-    offset_provider: gtx_common.OffsetProvider
+    offset_provider_type: gtx_common.OffsetProviderType
     global_symbols: dict[str, ts.DataType] = dataclasses.field(default_factory=lambda: {})
     map_uids: eve.utils.UIDGenerator = dataclasses.field(
         init=False, repr=False, default_factory=lambda: eve.utils.UIDGenerator(prefix="map")
@@ -164,8 +164,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         init=False, repr=False, default_factory=lambda: eve.utils.UIDGenerator(prefix="tlet")
     )
 
-    def get_offset_provider(self, offset: str) -> gtx_common.OffsetProviderElem:
-        return self.offset_provider[offset]
+    def get_offset_provider(self, offset: str) -> gtx_common.OffsetProviderTypeElem:
+        return self.offset_provider_type[offset]
 
     def get_symbol_type(self, symbol_name: str) -> ts.DataType:
         return self.global_symbols[symbol_name]
@@ -195,10 +195,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             Two lists of symbols, one for the shape and the other for the strides of the array.
         """
         dc_dtype = gtir_builtin_translators.INDEX_DTYPE
-        neighbor_tables = dace_utils.filter_connectivities(self.offset_provider)
+        neighbor_table_types = dace_utils.filter_connectivities(self.offset_provider_type)
         shape = [
             (
-                neighbor_tables[dim.value].max_neighbors
+                neighbor_table_types[dim.value].max_neighbors
                 if dim.kind == gtx_common.DimensionKind.LOCAL
                 else dace.symbol(dace_utils.field_size_symbol_name(name, i), dc_dtype)
             )
@@ -376,12 +376,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             self.global_symbols[pname] = param.type
 
         # add SDFG storage for connectivity tables
-        for offset, offset_provider in dace_utils.filter_connectivities(
-            self.offset_provider
+        for offset, connectivity_type in dace_utils.filter_connectivities(
+            self.offset_provider_type
         ).items():
-            scalar_type = tt.from_dtype(offset_provider.dtype)
-            local_dim = gtx_common.Dimension(offset, kind=gtx_common.DimensionKind.LOCAL)
-            gt_type = ts.FieldType([offset_provider.source_dim, local_dim], scalar_type)
+            scalar_type = tt.from_dtype(connectivity_type.dtype)
+            gt_type = ts.FieldType(
+                [connectivity_type.source_dim, connectivity_type.neighbor_dim], scalar_type
+            )
             # We store all connectivity tables as transient arrays here; later, while building
             # the field operator expressions, we change to non-transient (i.e. allocated externally)
             # the tables that are actually used. This way, we avoid adding SDFG arguments for
@@ -782,7 +783,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
 def build_sdfg_from_gtir(
     ir: gtir.Program,
-    offset_provider: gtx_common.OffsetProvider,
+    offset_provider_type: gtx_common.OffsetProviderType,
 ) -> dace.SDFG:
     """
     Receives a GTIR program and lowers it to a DaCe SDFG.
@@ -798,9 +799,9 @@ def build_sdfg_from_gtir(
         An SDFG in the DaCe canonical form (simplified)
     """
 
-    ir = gtir_type_inference.infer(ir, offset_provider=offset_provider)
+    ir = gtir_type_inference.infer(ir, offset_provider_type=offset_provider_type)
     ir = ir_prune_casts.PruneCasts().visit(ir)
-    sdfg_genenerator = GTIRToSDFG(offset_provider)
+    sdfg_genenerator = GTIRToSDFG(offset_provider_type)
     sdfg = sdfg_genenerator.visit(ir)
     assert isinstance(sdfg, dace.SDFG)
 

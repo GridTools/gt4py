@@ -124,7 +124,7 @@ def test_sdfgConvertible_connectivities(unstructured_case):
         data=np.asarray([[0, 1], [1, 2], [2, 0]]),
         allocator=allocator,
     )
-    connectivities = {"E2V": e2v.type_()}
+    connectivities = {"E2V": e2v.__gt_type__()}
     offset_provider = OffsetProvider_t.dtype._typeclass.as_ctypes()(E2V=e2v.data_ptr())
 
     SDFG = sdfg.to_sdfg(connectivities=connectivities)

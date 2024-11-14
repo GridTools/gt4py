@@ -396,7 +396,7 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
         cls,
         node: ProgramOrExpr,
         is_local_view: bool | None = None,
-        offset_provider: common.OffsetProvider | None = None,
+        offset_provider_type: common.OffsetProviderType | None = None,
     ) -> ProgramOrExpr:
         is_program = isinstance(node, (itir.Program, itir.FencilDefinition))
         if is_program:
@@ -407,9 +407,9 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
                 is_local_view is not None
             ), "The expression's context must be specified using `is_local_view`."
 
-        offset_provider = offset_provider or {}
+        offset_provider_type = offset_provider_type or {}
         node = itir_type_inference.infer(
-            node, offset_provider=offset_provider, allow_undeclared_symbols=not is_program
+            node, offset_provider_type=offset_provider_type, allow_undeclared_symbols=not is_program
         )
         return cls().visit(node, is_local_view=is_local_view)
 

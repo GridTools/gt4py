@@ -54,7 +54,9 @@ def preprocess_program(
         unroll_reduce=unroll_reduce,
     )
 
-    node = itir_type_inference.infer(node, offset_provider=offset_provider)
+    node = itir_type_inference.infer(
+        node, offset_provider_type=common.offset_provider_to_type(offset_provider)
+    )
 
     if isinstance(node, itir.Program):
         fencil_definition = program_to_fencil.program_to_fencil(node)

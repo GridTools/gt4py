@@ -302,7 +302,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     }
     _unary_op_map: ClassVar[dict[str, str]] = {"not_": "!"}
 
-    offset_provider: dict
+    offset_provider_type: common.OffsetProviderType
     column_axis: Optional[common.Dimension]
     grid_type: common.GridType
 
@@ -317,18 +317,18 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         cls,
         node: itir.Program,
         *,
-        offset_provider: dict,
+        offset_provider_type: common.OffsetProviderType,
         column_axis: Optional[common.Dimension],
     ) -> Program:
         if not isinstance(node, itir.Program):
             raise TypeError(f"Expected a 'Program', got '{type(node).__name__}'.")
 
-        node = itir_type_inference.infer(node, offset_provider=offset_provider)
+        node = itir_type_inference.infer(node, offset_provider_type=offset_provider_type)
         grid_type = _get_gridtype(node.body)
         if grid_type == common.GridType.UNSTRUCTURED:
             node = _CannonicalizeUnstructuredDomain.apply(node)
         return cls(
-            offset_provider=offset_provider, column_axis=column_axis, grid_type=grid_type
+            offset_provider_type=offset_provider_type, column_axis=column_axis, grid_type=grid_type
         ).visit(node)
 
     def visit_Sym(self, node: itir.Sym, **kwargs: Any) -> Sym:

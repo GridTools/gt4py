@@ -19,7 +19,7 @@ import numpy as np
 
 import gt4py.eve.codegen
 from gt4py import eve
-from gt4py.next import Dimension
+from gt4py.next import common
 from gt4py.next.common import _DEFAULT_SKIP_VALUE as neighbor_skip_value, Connectivity
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir import FunCall, Lambda
@@ -187,7 +187,7 @@ def _visit_lift_in_neighbors_reduction(
     transformer: PythonTaskletCodegen,
     node: itir.FunCall,
     node_args: Sequence[IteratorExpr | list[ValueExpr]],
-    offset_provider: Connectivity,
+    offset_provider: ConnectivityField,
     map_entry: dace.nodes.MapEntry,
     map_exit: dace.nodes.MapExit,
     neighbor_index_node: dace.nodes.AccessNode,
@@ -334,7 +334,7 @@ def builtin_neighbors(
     offset_dim = offset_literal.value
     assert isinstance(offset_dim, str)
     offset_provider = transformer.offset_provider[offset_dim]
-    if not isinstance(offset_provider, Connectivity):
+    if not common.is_neighbor_table(offset_provider):
         raise NotImplementedError(
             "Neighbor reduction only implemented for connectivity based on neighbor tables."
         )
@@ -351,7 +351,8 @@ def builtin_neighbors(
         iterator = transformer.visit(data)
     assert isinstance(iterator, IteratorExpr)
     field_desc = iterator.field.desc(transformer.context.body)
-    origin_index_node = iterator.indices[offset_provider.source_dim.value]
+    offset_provider_type = offset_provider.__gt_type__()
+    origin_index_node = iterator.indices[offset_provider_type.source_dim.value]
 
     assert transformer.context.reduce_identity is not None
     assert transformer.context.reduce_identity.dtype == iterator.dtype
@@ -361,7 +362,7 @@ def builtin_neighbors(
     sdfg.add_array(
         neighbor_value_var,
         dtype=iterator.dtype,
-        shape=(offset_provider.max_neighbors,),
+        shape=(offset_provider_type.max_neighbors,),
         transient=True,
     )
     neighbor_value_node = state.add_access(neighbor_value_var, debuginfo=di)
@@ -375,7 +376,7 @@ def builtin_neighbors(
     neighbor_map_index = unique_name(f"{offset_dim}_neighbor_map_idx")
     me, mx = state.add_map(
         f"{offset_dim}_neighbor_map",
-        ndrange={neighbor_map_index: f"0:{offset_provider.max_neighbors}"},
+        ndrange={neighbor_map_index: f"0:{offset_provider_type.max_neighbors}"},
         debuginfo=di,
     )
 
@@ -429,7 +430,7 @@ def builtin_neighbors(
             code=f"__data = __field[{data_access_index}] "
             + (
                 f"if {connector_neighbor_dim} != {neighbor_skip_value} else {transformer.context.reduce_identity.value}"
-                if offset_provider.has_skip_values
+                if offset_provider_type.has_skip_values
                 else ""
             ),
             inputs={"__field"} | {f"{dim}_v" for dim in iterator.dimensions},
@@ -470,7 +471,7 @@ def builtin_neighbors(
             src_conn="__data",
         )
 
-    if not offset_provider.has_skip_values:
+    if not offset_provider_type.has_skip_values:
         return [ValueExpr(neighbor_value_node, iterator.dtype)]
     else:
         """
@@ -483,7 +484,7 @@ def builtin_neighbors(
         sdfg.add_array(
             neighbor_valid_var,
             dtype=dace.dtypes.bool,
-            shape=(offset_provider.max_neighbors,),
+            shape=(offset_provider_type.max_neighbors,),
             transient=True,
         )
         neighbor_valid_node = state.add_access(neighbor_valid_var, debuginfo=di)

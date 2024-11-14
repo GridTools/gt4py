@@ -835,10 +835,11 @@ class ConnectivityKind(enum.Flag):
 class ConnectivityType:  # TODO(havogt): would better live in type_specifications but would have to solve a circular import
     domain: tuple[Dimension, ...]
     codomain: Dimension
-    skip_value: Optional[int] = None
+    dtype: core_defs.DType
+    skip_value: Optional[int]
 
     @property
-    def has_skip_value(self) -> bool:
+    def has_skip_values(self) -> bool:
         return self.skip_value is not None
 
 
@@ -866,19 +867,21 @@ class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, 
     def __hash__(self) -> int:
         return hash((self.domain, self.codomain))  # TODO
 
-    def type_(self) -> ConnectivityType:
-        # TODO(havogt): make this `__gt_type__` after the types inherit from TypeSpec
+    def __gt_type__(self) -> ConnectivityType:
         if isinstance(self, NeighborConnectivity):
             return NeighborConnectivityType(
                 domain=self.domain.dims,
                 codomain=self.codomain,
+                dtype=self.dtype,
                 skip_value=self.skip_value,
-                max_neighbors=self.max_neighbors,
+                max_neighbors=self.ndarray.shape[1],
             )
         else:
             return ConnectivityType(
                 domain=self.domain.dims,
                 codomain=self.codomain,
+                dtype=self.dtype,
+                skip_value=self.skip_value,
             )
 
     @property
@@ -951,6 +954,9 @@ class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, 
         raise TypeError("'ConnectivityField' does not support this operation.")
 
 
+Connectivity: TypeAlias = ConnectivityField
+
+
 # Utility function to construct a `Field` from different buffer representations.
 # Consider removing this function and using `Field` constructor directly. See also `_connectivity`.
 @functools.singledispatch
@@ -980,10 +986,12 @@ def _connectivity(
 
 class NeighborConnectivity(ConnectivityField, Protocol):
     # TODO(havogt): work towards encoding this properly in the type
-    ...
+    def __gt_type__(self) -> NeighborConnectivityType: ...
 
 
 def is_neighbor_connectivity(obj: Any) -> TypeGuard[NeighborConnectivity]:
+    if not isinstance(obj, ConnectivityField):
+        return False
     domain_dims = obj.domain.dims
     return (
         len(domain_dims) == 2
@@ -1011,6 +1019,12 @@ OffsetProviderElem: TypeAlias = Dimension | NeighborConnectivity
 OffsetProviderTypeElem: TypeAlias = Dimension | NeighborConnectivityType
 OffsetProvider: TypeAlias = Mapping[Tag, OffsetProviderElem]
 OffsetProviderType: TypeAlias = Mapping[Tag, OffsetProviderTypeElem]
+
+
+def offset_provider_to_type(offset_provider: OffsetProvider) -> OffsetProviderType:
+    return {
+        k: v.__gt_type__() if is_neighbor_connectivity(v) else v for k, v in offset_provider.items()
+    }
 
 
 DomainDimT = TypeVar("DomainDimT", bound="Dimension")

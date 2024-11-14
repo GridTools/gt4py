@@ -108,7 +108,7 @@ def _make_array_shape_and_strides(
     neighbor_tables = dace_utils.filter_connectivities(offset_provider)
     shape = [
         (
-            neighbor_tables[dim.value].max_neighbors
+            neighbor_tables[dim.value].__gt_type__().max_neighbors
             if dim.kind == DimensionKind.LOCAL
             # we reuse the same gt4py symbol for field size passed as scalar argument which is used in closure domain
             else dace.symbol(dace_utils.field_size_symbol_name(name, i), dtype)
@@ -284,10 +284,12 @@ class ItirToSDFG(eve.NodeVisitor):
             last_state = entry_state
 
         # Add connectivities as SDFG storages.
-        for offset, offset_provider in neighbor_tables.items():
-            scalar_type = tt.from_dtype(offset_provider.dtype)
-            local_dim = Dimension(offset, kind=DimensionKind.LOCAL)
-            type_ = ts.FieldType([offset_provider.source_dim, local_dim], scalar_type)
+        for offset, connectivity in neighbor_tables.items():
+            scalar_type = tt.from_dtype(connectivity.dtype)
+            connectivity_type = connectivity.__gt_type__()
+            type_ = ts.FieldType(
+                [connectivity_type.source_dim, connectivity_type.neighbor_dim], scalar_type
+            )
             self.add_storage(
                 program_sdfg,
                 dace_utils.connectivity_identifier(offset),

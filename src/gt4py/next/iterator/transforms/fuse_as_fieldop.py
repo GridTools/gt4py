@@ -10,6 +10,7 @@ import dataclasses
 from typing import Optional
 
 from gt4py import eve
+from gt4py.next import common
 from gt4py.eve import utils as eve_utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
@@ -121,12 +122,14 @@ class FuseAsFieldOp(eve.NodeTranslator):
         cls,
         node: itir.Program,
         *,
-        offset_provider,
+        offset_provider_type: common.OffsetProviderType,
         uids: Optional[eve_utils.UIDGenerator] = None,
         allow_undeclared_symbols=False,
     ):
         node = type_inference.infer(
-            node, offset_provider=offset_provider, allow_undeclared_symbols=allow_undeclared_symbols
+            node,
+            offset_provider_type=offset_provider_type,
+            allow_undeclared_symbols=allow_undeclared_symbols,
         )
 
         if not uids:

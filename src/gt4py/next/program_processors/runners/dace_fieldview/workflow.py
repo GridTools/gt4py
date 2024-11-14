@@ -52,7 +52,9 @@ class DaCeTranslator(
         on_gpu: bool,
     ) -> dace.SDFG:
         ir = itir_transforms.apply_fieldview_transforms(ir, offset_provider=offset_provider)
-        sdfg = gtir_sdfg.build_sdfg_from_gtir(ir, offset_provider=offset_provider)
+        sdfg = gtir_sdfg.build_sdfg_from_gtir(
+            ir, offset_provider_type=common.offset_provider_to_type(offset_provider)
+        )
 
         if auto_opt:
             gtx_transformations.gt_auto_optimize(sdfg, gpu=on_gpu)
@@ -70,7 +72,7 @@ class DaCeTranslator(
 
         sdfg = self.generate_sdfg(
             program,
-            inp.args.offset_provider,
+            inp.args.offset_provider,  # TODO should be offset_provider_type
             inp.args.column_axis,
             auto_opt=self.auto_optimize,
             on_gpu=(self.device_type == gtx_allocators.CUPY_DEVICE),

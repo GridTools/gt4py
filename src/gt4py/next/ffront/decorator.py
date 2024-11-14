@@ -30,7 +30,6 @@ from gt4py.next import (
     embedded as next_embedded,
     errors,
 )
-from gt4py.next.common import Connectivity, Dimension, GridType
 from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
     field_operator_ast as foast,
@@ -82,15 +81,15 @@ class Program:
 
     definition_stage: ffront_stages.ProgramDefinition
     backend: Optional[next_backend.Backend]
-    connectivities: Optional[dict[str, Connectivity]]
+    connectivities: Optional[dict[str, common.ConnectivityType]]  # TODO or NeighborConnectivityType
 
     @classmethod
     def from_function(
         cls,
         definition: types.FunctionType,
         backend: Optional[next_backend],
-        grid_type: Optional[GridType] = None,
-        connectivities: Optional[dict[str, Connectivity]] = None,
+        grid_type: Optional[common.GridType] = None,
+        connectivities: Optional[dict[str, common.ConnectivityType]] = None,
     ) -> Program:
         program_def = ffront_stages.ProgramDefinition(definition=definition, grid_type=grid_type)
         return cls(definition_stage=program_def, backend=backend, connectivities=connectivities)
@@ -140,10 +139,13 @@ class Program:
     def with_backend(self, backend: next_backend.Backend) -> Program:
         return dataclasses.replace(self, backend=backend)
 
-    def with_connectivities(self, connectivities: dict[str, Connectivity]) -> Program:
+    def with_connectivities(self, connectivities: dict[str, common.ConnectivityType]) -> Program:
+        assert all(
+            isinstance(conn_type, common.ConnectivityType) for conn_type in connectivities.values()
+        )
         return dataclasses.replace(self, connectivities=connectivities)
 
-    def with_grid_type(self, grid_type: GridType) -> Program:
+    def with_grid_type(self, grid_type: common.GridType) -> Program:
         return dataclasses.replace(
             self, definition_stage=dataclasses.replace(self.definition_stage, grid_type=grid_type)
         )
@@ -226,9 +228,7 @@ class Program:
                         )
         return implicit_offset_provider
 
-    def __call__(
-        self, *args: Any, offset_provider: dict[str, Dimension | Connectivity], **kwargs: Any
-    ) -> None:
+    def __call__(self, *args: Any, offset_provider: common.OffsetProvider, **kwargs: Any) -> None:
         offset_provider = offset_provider | self._implicit_offset_provider
         if self.backend is None:
             warnings.warn(
@@ -287,19 +287,17 @@ class FrozenProgram:
     def with_backend(self, backend: next_backend.Backend) -> FrozenProgram:
         return self.__class__(program=self.program, backend=backend)
 
-    def with_grid_type(self, grid_type: GridType) -> FrozenProgram:
+    def with_grid_type(self, grid_type: common.GridType) -> FrozenProgram:
         return self.__class__(
             program=dataclasses.replace(self.program, grid_type=grid_type), backend=self.backend
         )
 
     def jit(
-        self, *args: Any, offset_provider: dict[str, Dimension | Connectivity], **kwargs: Any
+        self, *args: Any, offset_provider: common.OffsetProvider, **kwargs: Any
     ) -> stages.CompiledProgram:
         return self.backend.jit(self.program, *args, offset_provider=offset_provider, **kwargs)
 
-    def __call__(
-        self, *args: Any, offset_provider: dict[str, Dimension | Connectivity], **kwargs: Any
-    ) -> None:
+    def __call__(self, *args: Any, offset_provider: common.OffsetProvider, **kwargs: Any) -> None:
         args, kwargs = signature.convert_to_positional(self.program, *args, **kwargs)
 
         if not self._compiled_program:
@@ -328,7 +326,7 @@ class ProgramFromPast(Program):
 
     past_stage: ffront_stages.PastProgramDefinition
 
-    def __call__(self, *args: Any, offset_provider: dict[str, Dimension], **kwargs: Any) -> None:
+    def __call__(self, *args: Any, offset_provider: common.OffsetProvider, **kwargs: Any) -> None:
         if self.backend is None:
             raise NotImplementedError(
                 "Programs created from a PAST node (without a function definition) can not be executed in embedded mode"
@@ -350,7 +348,7 @@ class ProgramFromPast(Program):
 class ProgramWithBoundArgs(Program):
     bound_args: dict[str, typing.Union[float, int, bool]] = None
 
-    def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs):
+    def __call__(self, *args, offset_provider: common.OffsetProvider, **kwargs):
         type_ = self.past_stage.past_node.type
         new_type = ts_ffront.ProgramType(
             definition=ts.FunctionType(
@@ -436,7 +434,7 @@ def program(
     *,
     # `NOTHING` -> default backend, `None` -> no backend (embedded execution)
     backend: next_backend.Backend | eve.NOTHING = eve.NOTHING,
-    grid_type: Optional[GridType] = None,
+    grid_type: Optional[common.GridType] = None,
     frozen: bool = False,
 ) -> Program | FrozenProgram | Callable[[types.FunctionType], Program | FrozenProgram]:
     """
@@ -506,7 +504,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         cls,
         definition: types.FunctionType,
         backend: Optional[next_backend.Backend],
-        grid_type: Optional[GridType] = None,
+        grid_type: Optional[common.GridType] = None,
         *,
         operator_node_cls: type[OperatorNodeT] = foast.FieldOperator,
         operator_attributes: Optional[dict[str, Any]] = None,
@@ -557,7 +555,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     def with_backend(self, backend: next_backend.Backend) -> FieldOperator:
         return dataclasses.replace(self, backend=backend)
 
-    def with_grid_type(self, grid_type: GridType) -> FieldOperator:
+    def with_grid_type(self, grid_type: common.GridType) -> FieldOperator:
         return dataclasses.replace(
             self, definition_stage=dataclasses.replace(self.definition_stage, grid_type=grid_type)
         )
@@ -688,33 +686,33 @@ def field_operator(definition=None, *, backend=eve.NOTHING, grid_type=None):
 def scan_operator(
     definition: types.FunctionType,
     *,
-    axis: Dimension,
+    axis: common.Dimension,
     forward: bool,
     init: core_defs.Scalar,
     backend: Optional[str],
-    grid_type: GridType,
+    grid_type: common.GridType,
 ) -> FieldOperator[foast.ScanOperator]: ...
 
 
 @typing.overload
 def scan_operator(
     *,
-    axis: Dimension,
+    axis: common.Dimension,
     forward: bool,
     init: core_defs.Scalar,
     backend: Optional[str],
-    grid_type: GridType,
+    grid_type: common.GridType,
 ) -> Callable[[types.FunctionType], FieldOperator[foast.ScanOperator]]: ...
 
 
 def scan_operator(
     definition: Optional[types.FunctionType] = None,
     *,
-    axis: Dimension,
+    axis: common.Dimension,
     forward: bool = True,
     init: core_defs.Scalar = 0.0,
     backend=eve.NOTHING,
-    grid_type: GridType = None,
+    grid_type: common.GridType = None,
 ) -> (
     FieldOperator[foast.ScanOperator]
     | Callable[[types.FunctionType], FieldOperator[foast.ScanOperator]]

@@ -623,8 +623,9 @@ def execute_shift(
                     new_entry[i] = 0
                 else:
                     offset_implementation = offset_provider[tag]
-                    assert isinstance(offset_implementation, common.Connectivity)
-                    cur_index = pos[offset_implementation.source_dim.value]
+                    assert common.is_neighbor_connectivity(offset_implementation)
+                    source_dim = offset_implementation.__gt_type__().source_dim
+                    cur_index = pos[source_dim.value]
                     assert common.is_int_index(cur_index)
                     if offset_implementation[cur_index, index].as_scalar() in [
                         None,
@@ -646,12 +647,12 @@ def execute_shift(
         else:
             raise AssertionError()
         return new_pos
-    else:
-        assert isinstance(offset_implementation, common.Connectivity)
-        assert offset_implementation.source_dim.value in pos
+    elif common.is_neighbor_connectivity(offset_implementation):
+        source_dim = offset_implementation.__gt_type__().source_dim
+        assert source_dim.value in pos
         new_pos = pos.copy()
-        new_pos.pop(offset_implementation.source_dim.value)
-        cur_index = pos[offset_implementation.source_dim.value]
+        new_pos.pop(source_dim.value)
+        cur_index = pos[source_dim.value]
         assert common.is_int_index(cur_index)
         if offset_implementation[cur_index, index].as_scalar() in [
             None,
@@ -1485,11 +1486,11 @@ def neighbors(offset: runtime.Offset, it: ItIterator) -> _List:
     offset_provider = embedded_context.offset_provider.get()
     assert offset_provider is not None
     connectivity = offset_provider[offset_str]
-    assert isinstance(connectivity, common.Connectivity)
+    assert isinstance(connectivity, common.NeighborConnectivity)
     return _List(
         values=tuple(
             shifted.deref()
-            for i in range(connectivity.max_neighbors)
+            for i in range(connectivity.__gt_type__().max_neighbors)
             if (shifted := it.shift(offset_str, i)).can_deref()
         ),
         offset=offset,
@@ -1561,11 +1562,11 @@ class SparseListIterator:
         offset_provider = embedded_context.offset_provider.get()
         assert offset_provider is not None
         connectivity = offset_provider[self.list_offset]
-        assert isinstance(connectivity, common.Connectivity)
+        assert isinstance(connectivity, common.NeighborConnectivity)
         return _List(
             values=tuple(
                 shifted.deref()
-                for i in range(connectivity.max_neighbors)
+                for i in range(connectivity.__gt_type__().max_neighbors)
                 if (
                     shifted := self.it.shift(*self.offsets, SparseTag(self.list_offset), i)
                 ).can_deref()
@@ -1798,10 +1799,10 @@ def _fieldspec_list_to_value(
             offset_type = type_.offset_type
             assert isinstance(offset_type, common.Dimension)
             connectivity = offset_provider[offset_type.value]
-            assert isinstance(connectivity, common.Connectivity)
+            assert common.is_neighbor_connectivity(connectivity)
             return domain.insert(
                 len(domain),
-                common.named_range((offset_type, connectivity.max_neighbors)),
+                common.named_range((offset_type, connectivity.__gt_type__().max_neighbors)),
             ), type_.element_type
     return domain, type_
 

@@ -515,7 +515,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         offset = node.args[0].value
         assert isinstance(offset, str)
         offset_provider = self.subgraph_builder.get_offset_provider(offset)
-        assert isinstance(offset_provider, gtx_common.Connectivity)
+        assert isinstance(offset_provider, gtx_common.NeighborConnectivityType)
 
         it = self.visit(node.args[1])
         assert isinstance(it, IteratorExpr)
@@ -883,7 +883,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert isinstance(input_expr, (MemletExpr, ValueExpr))
         assert input_expr.local_offset is not None
         offset_provider = self.subgraph_builder.get_offset_provider(input_expr.local_offset)
-        assert isinstance(offset_provider, gtx_common.Connectivity)
+        assert isinstance(offset_provider, gtx_common.NeighborConnectivityType)
 
         if offset_provider.has_skip_values:
             self._make_reduce_with_skip_values(

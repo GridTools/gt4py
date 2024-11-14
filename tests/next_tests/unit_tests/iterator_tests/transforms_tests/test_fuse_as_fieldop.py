@@ -30,7 +30,7 @@ def test_trivial():
         d,
     )(im.ref("inp1", field_type), im.ref("inp2", field_type), im.ref("inp3", field_type))
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
-        testee, offset_provider={}, allow_undeclared_symbols=True
+        testee, offset_provider_type={}, allow_undeclared_symbols=True
     )
     assert actual == expected
 
@@ -40,7 +40,7 @@ def test_trivial_literal():
     testee = im.op_as_fieldop("plus", d)(im.op_as_fieldop("multiplies", d)(1, 2), 3)
     expected = im.as_fieldop(im.lambda_()(im.plus(im.multiplies_(1, 2), 3)), d)()
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
-        testee, offset_provider={}, allow_undeclared_symbols=True
+        testee, offset_provider_type={}, allow_undeclared_symbols=True
     )
     assert actual == expected
 
@@ -60,7 +60,7 @@ def test_symref_used_twice():
         d,
     )("inp1", "inp2")
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
-        testee, offset_provider={}, allow_undeclared_symbols=True
+        testee, offset_provider_type={}, allow_undeclared_symbols=True
     )
     assert actual == expected
 
@@ -75,7 +75,7 @@ def test_no_inline():
         d1,
     )(im.as_fieldop(im.lambda_("inp1")(im.deref("inp1")), d2)(im.ref("inp1", field_type)))
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
-        testee, offset_provider={"IOff": IDim}, allow_undeclared_symbols=True
+        testee, offset_provider_type={"IOff": IDim}, allow_undeclared_symbols=True
     )
     assert actual == testee
 
@@ -107,6 +107,6 @@ def test_partial_inline():
         d1,
     )(im.as_fieldop(im.lambda_("inp1")(im.deref("inp1")), d2)(im.ref("inp1", field_type)), "inp1")
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
-        testee, offset_provider={"IOff": IDim}, allow_undeclared_symbols=True
+        testee, offset_provider_type={"IOff": IDim}, allow_undeclared_symbols=True
     )
     assert actual == expected

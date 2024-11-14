@@ -28,14 +28,13 @@ def _max_domain_sizes_by_location_type(offset_provider: Mapping[str, Any]) -> di
     """
     sizes = dict[str, int]()
     for provider in offset_provider.values():
-        if isinstance(provider, common.ConnectivityField):
-            assert provider.domain.dims[0].kind == gtx.DimensionKind.HORIZONTAL
-            assert provider.codomain.kind == gtx.DimensionKind.HORIZONTAL
-            sizes[provider.domain.dims[0].value] = max(
-                sizes.get(provider.domain.dims[0].value, 0), provider.ndarray.shape[0]
+        if common.is_neighbor_connectivity(provider):
+            conn_type = provider.__gt_type__()
+            sizes[conn_type.source_dim.value] = max(
+                sizes.get(conn_type.source_dim.value, 0), provider.ndarray.shape[0]
             )
-            sizes[provider.codomain.value] = max(
-                sizes.get(provider.codomain.value, 0),
+            sizes[conn_type.codomain.value] = max(
+                sizes.get(conn_type.codomain.value, 0),
                 provider.ndarray.max() + 1,  # type: ignore[attr-defined] # TODO(havogt): improve typing for NDArrayObject
             )
     return sizes
@@ -111,7 +110,7 @@ class SymbolicDomain:
                 new_ranges[current_dim] = SymbolicRange.translate(
                     self.ranges[current_dim], val.value
                 )
-            elif isinstance(nbt_provider, common.Connectivity):
+            elif common.is_neighbor_connectivity(nbt_provider):
                 # unstructured shift
                 assert (
                     isinstance(val, itir.OffsetLiteral) and isinstance(val.value, int)
@@ -122,8 +121,8 @@ class SymbolicDomain:
                 # note: ugly but cheap re-computation, but should disappear
                 horizontal_sizes = _max_domain_sizes_by_location_type(offset_provider)
 
-                old_dim = nbt_provider.source_dim
-                new_dim = nbt_provider.codomain
+                old_dim = nbt_provider.__gt_type__().source_dim
+                new_dim = nbt_provider.__gt_type__().codomain
 
                 assert new_dim not in new_ranges or old_dim == new_dim
 
