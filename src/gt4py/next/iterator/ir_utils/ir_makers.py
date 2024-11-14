@@ -498,6 +498,11 @@ def op_as_fieldop(
     return _impl
 
 
+def index(dim: common.Dimension) -> itir.FunCall:
+    """Create a call to the `index` builtin on a given dimension, shorthand for `call("index")(dim)`."""
+    return call("index")(itir.AxisLiteral(value=dim.value, kind=dim.kind))
+
+
 def map_(op):
     """Create a `map_` call."""
     return call(call("map_")(op))

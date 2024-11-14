@@ -1935,3 +1935,39 @@ def test_gtir_if_values():
 
     sdfg(a, b, c, **FSYMBOLS)
     assert np.allclose(c, np.where(a < b, a, b))
+
+
+def test_gtir_index():
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
+    subdomain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, im.minus("size", 1))})
+
+    testee = gtir.Program(
+        id="gtir_cast",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="x", type=ts.FieldType(dims=[IDim], dtype=SIZE_TYPE)),
+            gtir.Sym(id="size", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.let("i", im.index(IDim))(
+                    im.op_as_fieldop("plus", domain)(
+                        "i",
+                        im.as_fieldop(
+                            im.lambda_("a")(im.deref(im.shift(IDim.value, 1)("a"))), subdomain
+                        )("i"),
+                    )
+                ),
+                domain=subdomain,
+                target=gtir.SymRef(id="x"),
+            )
+        ],
+    )
+
+    v = np.empty(N, dtype=np.int32)
+
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
+
+    sdfg(v, **FSYMBOLS)
+    np.allclose(v[: N - 1], np.arange(N - 1, dtype=np.int32) + np.arange(1, N, dtype=np.int32))

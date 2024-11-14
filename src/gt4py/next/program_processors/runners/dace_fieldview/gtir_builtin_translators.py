@@ -478,6 +478,16 @@ def translate_if(
     return result_temps
 
 
+def translate_index(
+    node: gtir.Node,
+    sdfg: dace.SDFG,
+    state: dace.SDFGState,
+    sdfg_builder: gtir_sdfg.SDFGBuilder,
+) -> FieldopResult:
+    """Generates the dataflow subgraph for the `if_` builtin function."""
+    raise NotImplementedError
+
+
 def _get_data_nodes(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
@@ -719,6 +729,7 @@ if TYPE_CHECKING:
         translate_as_fieldop,
         translate_broadcast_scalar,
         translate_if,
+        translate_index,
         translate_literal,
         translate_make_tuple,
         translate_tuple_get,
