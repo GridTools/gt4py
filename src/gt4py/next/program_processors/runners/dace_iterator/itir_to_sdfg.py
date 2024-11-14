@@ -15,6 +15,7 @@ from dace.sdfg.state import LoopRegion
 import gt4py.eve as eve
 from gt4py.next import Dimension, DimensionKind
 from gt4py.next.common import Connectivity
+from gt4py.next.ffront import fbuiltins as gtx_fbuiltins
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir import Expr, FunCall, Literal, Sym, SymRef
 from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
@@ -103,7 +104,7 @@ def _make_array_shape_and_strides(
     tuple(shape, strides)
         The output tuple fields are arrays of dace symbolic expressions.
     """
-    dtype = dace.int32
+    dtype = dace.dtype_to_typeclass(gtx_fbuiltins.IndexType)
     sorted_dims = dace_utils.get_sorted_dims(dims) if sort_dims else list(enumerate(dims))
     neighbor_tables = dace_utils.filter_connectivities(offset_provider)
     shape = [
@@ -357,7 +358,10 @@ class ItirToSDFG(eve.NodeVisitor):
         closure_state = closure_sdfg.add_state("closure_entry")
         closure_init_state = closure_sdfg.add_state_before(closure_state, "closure_init", True)
 
-        input_names = [str(inp.id) for inp in node.inputs]
+        assert all(
+            isinstance(inp, SymRef) for inp in node.inputs
+        )  # backend only supports SymRef inputs, not `index` calls
+        input_names = [str(inp.id) for inp in node.inputs]  # type: ignore[union-attr]  # ensured by assert
         neighbor_tables = get_used_connectivities(node, self.offset_provider)
         connectivity_names = [
             dace_utils.connectivity_identifier(offset) for offset in neighbor_tables.keys()
@@ -565,7 +569,10 @@ class ItirToSDFG(eve.NodeVisitor):
 
         assert isinstance(node.output, SymRef)
         neighbor_tables = get_used_connectivities(node, self.offset_provider)
-        input_names = [str(inp.id) for inp in node.inputs]
+        assert all(
+            isinstance(inp, SymRef) for inp in node.inputs
+        )  # backend only supports SymRef inputs, not `index` calls
+        input_names = [str(inp.id) for inp in node.inputs]  # type: ignore[union-attr]  # ensured by assert
         connectivity_names = [
             dace_utils.connectivity_identifier(offset) for offset in neighbor_tables.keys()
         ]
@@ -732,7 +739,10 @@ class ItirToSDFG(eve.NodeVisitor):
         ],
     ) -> tuple[dace.SDFG, dict[str, str | dace.subsets.Subset], list[str]]:
         neighbor_tables = get_used_connectivities(node, self.offset_provider)
-        input_names = [str(inp.id) for inp in node.inputs]
+        assert all(
+            isinstance(inp, SymRef) for inp in node.inputs
+        )  # backend only supports SymRef inputs, not `index` calls
+        input_names = [str(inp.id) for inp in node.inputs]  # type: ignore[union-attr]  # ensured by assert
         connectivity_names = [
             dace_utils.connectivity_identifier(offset) for offset in neighbor_tables.keys()
         ]

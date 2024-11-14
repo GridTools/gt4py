@@ -220,6 +220,94 @@ def test_reduction_with_common_expression(unstructured_case):
     )
 
 
+@pytest.mark.uses_unstructured_shift
+def test_reduction_expression_with_where(unstructured_case):
+    @gtx.field_operator
+    def testee(mask: cases.VBoolField, inp: cases.EField) -> cases.VField:
+        return neighbor_sum(where(mask, inp(V2E), inp(V2E)), axis=V2EDim)
+
+    v2e_table = unstructured_case.offset_provider["V2E"].table
+
+    mask = unstructured_case.as_field(
+        [Vertex], np.random.choice(a=[False, True], size=unstructured_case.default_sizes[Vertex])
+    )
+    inp = cases.allocate(unstructured_case, testee, "inp")()
+    out = cases.allocate(unstructured_case, testee, cases.RETURN)()
+
+    cases.verify(
+        unstructured_case,
+        testee,
+        mask,
+        inp,
+        out=out,
+        ref=np.sum(
+            inp.asnumpy()[v2e_table],
+            axis=1,
+            initial=0,
+            where=v2e_table != common._DEFAULT_SKIP_VALUE,
+        ),
+    )
+
+
+@pytest.mark.uses_unstructured_shift
+def test_reduction_expression_with_where_and_tuples(unstructured_case):
+    @gtx.field_operator
+    def testee(mask: cases.VBoolField, inp: cases.EField) -> cases.VField:
+        return neighbor_sum(where(mask, (inp(V2E), inp(V2E)), (inp(V2E), inp(V2E)))[1], axis=V2EDim)
+
+    v2e_table = unstructured_case.offset_provider["V2E"].table
+
+    mask = unstructured_case.as_field(
+        [Vertex], np.random.choice(a=[False, True], size=unstructured_case.default_sizes[Vertex])
+    )
+    inp = cases.allocate(unstructured_case, testee, "inp")()
+    out = cases.allocate(unstructured_case, testee, cases.RETURN)()
+
+    cases.verify(
+        unstructured_case,
+        testee,
+        mask,
+        inp,
+        out=out,
+        ref=np.sum(
+            inp.asnumpy()[v2e_table],
+            axis=1,
+            initial=0,
+            where=v2e_table != common._DEFAULT_SKIP_VALUE,
+        ),
+    )
+
+
+@pytest.mark.uses_unstructured_shift
+def test_reduction_expression_with_where_and_scalar(unstructured_case):
+    @gtx.field_operator
+    def testee(mask: cases.VBoolField, inp: cases.EField) -> cases.VField:
+        return neighbor_sum(inp(V2E) + where(mask, inp(V2E), 1), axis=V2EDim)
+
+    v2e_table = unstructured_case.offset_provider["V2E"].table
+
+    mask = unstructured_case.as_field(
+        [Vertex], np.random.choice(a=[False, True], size=unstructured_case.default_sizes[Vertex])
+    )
+    inp = cases.allocate(unstructured_case, testee, "inp")()
+    out = cases.allocate(unstructured_case, testee, cases.RETURN)()
+
+    cases.verify(
+        unstructured_case,
+        testee,
+        mask,
+        inp,
+        out=out,
+        ref=np.sum(
+            inp.asnumpy()[v2e_table]
+            + np.where(np.expand_dims(mask.asnumpy(), 1), inp.asnumpy()[v2e_table], 1),
+            axis=1,
+            initial=0,
+            where=v2e_table != common._DEFAULT_SKIP_VALUE,
+        ),
+    )
+
+
 @pytest.mark.uses_tuple_returns
 def test_conditional_nested_tuple(cartesian_case):
     @gtx.field_operator

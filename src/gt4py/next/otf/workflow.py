@@ -12,6 +12,7 @@ import abc
 import dataclasses
 import functools
 import typing
+from collections.abc import MutableMapping
 from typing import Any, Callable, Generic, Protocol, TypeVar
 
 from typing_extensions import Self
@@ -253,16 +254,15 @@ class CachedStep(
 
     step: Workflow[StartT, EndT]
     hash_function: Callable[[StartT], HashT] = dataclasses.field(default=hash)  # type: ignore[assignment]
-
-    _cache: dict[HashT, EndT] = dataclasses.field(repr=False, init=False, default_factory=dict)
+    cache: MutableMapping[HashT, EndT] = dataclasses.field(repr=False, default_factory=dict)
 
     def __call__(self, inp: StartT) -> EndT:
         """Run the step only if the input is not cached, else return from cache."""
         hash_ = self.hash_function(inp)
         try:
-            result = self._cache[hash_]
+            result = self.cache[hash_]
         except KeyError:
-            result = self._cache[hash_] = self.step(inp)
+            result = self.cache[hash_] = self.step(inp)
         return result
 
 

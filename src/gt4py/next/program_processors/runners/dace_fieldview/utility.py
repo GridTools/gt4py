@@ -9,18 +9,26 @@
 from __future__ import annotations
 
 import itertools
-from typing import Any
+from typing import Any, Dict, TypeVar
 
+import dace
+
+from gt4py import eve
 from gt4py.next import common as gtx_common
+from gt4py.next.iterator import ir as gtir
 from gt4py.next.type_system import type_specifications as ts
 
 
-def get_map_variable(dim: gtx_common.Dimension) -> str:
+def get_map_variable(dim: gtx_common.Dimension | str) -> str:
     """
     Format map variable name based on the naming convention for application-specific SDFG transformations.
     """
+    if not isinstance(dim, gtx_common.Dimension):
+        if len(dim) != 0:
+            dim = gtx_common.Dimension(dim, gtx_common.DimensionKind.LOCAL)
+        else:
+            raise ValueError("Dimension name cannot be empty.")
     suffix = "dim" if dim.kind == gtx_common.DimensionKind.LOCAL else ""
-    # TODO(edopao): raise exception if dim.value is empty
     return f"i_{dim.value}_gtx_{dim.kind}{suffix}"
 
 
@@ -60,5 +68,42 @@ def get_tuple_type(data: tuple[Any, ...]) -> ts.TupleType:
     Compute the `ts.TupleType` corresponding to the structure of a tuple of data nodes.
     """
     return ts.TupleType(
-        types=[get_tuple_type(d) if isinstance(d, tuple) else d.data_type for d in data]
+        types=[get_tuple_type(d) if isinstance(d, tuple) else d.gt_dtype for d in data]
     )
+
+
+def replace_invalid_symbols(sdfg: dace.SDFG, ir: gtir.Program) -> gtir.Program:
+    """
+    Ensure that all symbols used in the program IR are valid strings (e.g. no unicode-strings).
+
+    If any invalid symbol present, this funtion returns a copy of the input IR where
+    the invalid symbols have been replaced with new names. If all symbols are valid,
+    the input IR is returned without copying it.
+    """
+
+    class ReplaceSymbols(eve.PreserveLocationVisitor, eve.NodeTranslator):
+        T = TypeVar("T", gtir.Sym, gtir.SymRef)
+
+        def _replace_sym(self, node: T, symtable: Dict[str, str]) -> T:
+            sym = str(node.id)
+            return type(node)(id=symtable.get(sym, sym), type=node.type)
+
+        def visit_Sym(self, node: gtir.Sym, *, symtable: Dict[str, str]) -> gtir.Sym:
+            return self._replace_sym(node, symtable)
+
+        def visit_SymRef(self, node: gtir.SymRef, *, symtable: Dict[str, str]) -> gtir.SymRef:
+            return self._replace_sym(node, symtable)
+
+    # program arguments are checked separetely, because they cannot be replaced
+    if not all(dace.dtypes.validate_name(str(sym.id)) for sym in ir.params):
+        raise ValueError("Invalid symbol in program parameters.")
+
+    invalid_symbols_mapping = {
+        sym_id: sdfg.temp_data_name()
+        for sym in eve.walk_values(ir).if_isinstance(gtir.Sym).to_set()
+        if not dace.dtypes.validate_name(sym_id := str(sym.id))
+    }
+    if len(invalid_symbols_mapping) != 0:
+        return ReplaceSymbols().visit(ir, symtable=invalid_symbols_mapping)
+    else:
+        return ir

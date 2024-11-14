@@ -25,7 +25,30 @@ import next_tests
 ProgramProcessor: TypeAlias = backend.Backend | program_formatter.ProgramFormatter
 
 
-@pytest.fixture(
+def _program_processor(request) -> tuple[ProgramProcessor, bool]:
+    """
+    Fixture creating program processors on-demand for tests.
+
+    Notes:
+        Check ADR 15 for details on the test-exclusion matrices.
+    """
+    processor_id, is_backend = request.param
+    if processor_id is None:
+        return None, is_backend
+
+    processor = processor_id.load()
+
+    for marker, skip_mark, msg in next_tests.definitions.BACKEND_SKIP_TEST_MATRIX.get(
+        processor_id, []
+    ):
+        if marker == next_tests.definitions.ALL or request.node.get_closest_marker(marker):
+            skip_mark(msg.format(marker=marker, backend=processor_id))
+
+    return processor, is_backend
+
+
+program_processor = pytest.fixture(
+    _program_processor,
     params=[
         (None, True),
         (next_tests.definitions.ProgramBackendId.ROUNDTRIP, True),
@@ -49,26 +72,16 @@ ProgramProcessor: TypeAlias = backend.Backend | program_formatter.ProgramFormatt
     ],
     ids=lambda p: p[0].short_id() if p[0] is not None else "None",
 )
-def program_processor(request) -> tuple[ProgramProcessor, bool]:
-    """
-    Fixture creating program processors on-demand for tests.
 
-    Notes:
-        Check ADR 15 for details on the test-exclusion matrices.
-    """
-    processor_id, is_backend = request.param
-    if processor_id is None:
-        return None, is_backend
-
-    processor = processor_id.load()
-
-    for marker, skip_mark, msg in next_tests.definitions.BACKEND_SKIP_TEST_MATRIX.get(
-        processor_id, []
-    ):
-        if marker == next_tests.definitions.ALL or request.node.get_closest_marker(marker):
-            skip_mark(msg.format(marker=marker, backend=processor_id))
-
-    return processor, is_backend
+program_processor_no_transforms = pytest.fixture(
+    _program_processor,
+    params=[
+        (None, True),
+        (next_tests.definitions.ProgramBackendId.GTFN_CPU_NO_TRANSFORMS, True),
+        (next_tests.definitions.ProgramBackendId.ROUNDTRIP_NO_TRANSFORMS, True),
+    ],
+    ids=lambda p: p[0].short_id() if p[0] is not None else "None",
+)
 
 
 def run_processor(

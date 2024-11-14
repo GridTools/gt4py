@@ -7,9 +7,12 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from functools import reduce
-
+from gt4py.next.otf import languages, stages, workflow
+from gt4py.next.otf.binding import interface
 import numpy as np
 import pytest
+import diskcache
+from gt4py.eve import SymbolName
 
 import gt4py.next as gtx
 from gt4py.next import (
@@ -219,6 +222,7 @@ def test_scalar_tuple_arg(unstructured_case):
 
 
 @pytest.mark.uses_tuple_args
+@pytest.mark.uses_zero_dimensional_fields
 def test_zero_dim_tuple_arg(unstructured_case):
     @gtx.field_operator
     def testee(

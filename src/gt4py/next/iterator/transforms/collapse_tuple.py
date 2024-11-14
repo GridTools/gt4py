@@ -16,6 +16,7 @@ from typing import Optional
 
 from gt4py import eve
 from gt4py.eve import utils as eve_utils
+from gt4py.next import common
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils import (
     common_pattern_matcher as cpm,
@@ -104,10 +105,10 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         *,
         ignore_tuple_size: bool = False,
         remove_letified_make_tuple_elements: bool = True,
-        offset_provider=None,
-        is_local_view=None,
+        offset_provider: Optional[common.OffsetProvider] = None,
+        within_stencil: Optional[bool] = None,
         # manually passing flags is mostly for allowing separate testing of the modes
-        flags=None,
+        flags: Optional[Flag] = None,
         # allow sym references without a symbol declaration, mostly for testing
         allow_undeclared_symbols: bool = False,
     ) -> ir.Node:
@@ -128,11 +129,11 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         offset_provider = offset_provider or {}
 
         if isinstance(node, (ir.Program, ir.FencilDefinition)):
-            is_local_view = False
-        assert is_local_view in [
+            within_stencil = False
+        assert within_stencil in [
             True,
             False,
-        ], "Parameter 'is_local_view' mandatory if node is not a 'Program'."
+        ], "Parameter 'within_stencil' mandatory if node is not a 'Program'."
 
         if not ignore_tuple_size:
             node = itir_type_inference.infer(
@@ -144,7 +145,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         new_node = cls(
             ignore_tuple_size=ignore_tuple_size,
             flags=flags,
-        ).visit(node, is_local_view=is_local_view)
+        ).visit(node, within_stencil=within_stencil)
 
         # inline to remove left-overs from LETIFY_MAKE_TUPLE_ELEMENTS. this is important
         # as otherwise two equal expressions containing a tuple will not be equal anymore
@@ -159,9 +160,8 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return new_node
 
     def visit_FunCall(self, node: ir.FunCall, **kwargs) -> ir.Node:
-        # don't visit stencil argument of `as_fieldop`
         if cpm.is_call_to(node, "as_fieldop"):
-            kwargs = {**kwargs, "is_local_view": True}
+            kwargs = {**kwargs, "within_stencil": True}
 
         node = self.generic_visit(node, **kwargs)
         return self.fp_transform(node, **kwargs)
@@ -206,13 +206,13 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
                     # tuple argument differs, just continue with the rest of the tree
                     return None
 
-            # this occurs in case of a scan returning a tuple, e.g.:
-            #  `tuple_get(0, as_fieldop(scan(...)(...))(...))`
-            if isinstance(first_expr.type, ts.DeferredType):
-                return None
-
-            assert self.ignore_tuple_size or isinstance(first_expr.type, ts.TupleType)
-            if self.ignore_tuple_size or len(first_expr.type.types) == len(node.args):  # type: ignore[union-attr] # ensured by assert above
+            assert self.ignore_tuple_size or isinstance(
+                first_expr.type, (ts.TupleType, ts.DeferredType)
+            )
+            if self.ignore_tuple_size or (
+                isinstance(first_expr.type, ts.TupleType)
+                and len(first_expr.type.types) == len(node.args)
+            ):
                 return first_expr
         return None
 
@@ -291,7 +291,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
     def transform_propagate_to_if_on_tuples(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
         # TODO(tehrengruber): This significantly increases the size of the tree. Skip transformation
         #  in local-view for now. Revisit.
-        if not cpm.is_call_to(node, "if_") and not kwargs["is_local_view"]:
+        if not cpm.is_call_to(node, "if_") and not kwargs["within_stencil"]:
             # TODO(tehrengruber): Only inline if type of branch value is a tuple.
             # Examples:
             # `(if cond then {1, 2} else {3, 4})[0]` -> `if cond then {1, 2}[0] else {3, 4}[0]`

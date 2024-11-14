@@ -227,14 +227,6 @@ def test_solve_nonhydro_stencil_52_like_z_q(test_setup):
 
 @pytest.mark.uses_tuple_returns
 def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup):
-    if (
-        test_setup.case.backend
-        == test_definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES.load()
-    ):
-        pytest.xfail(
-            "Needs implementation of scan projector. Breaks in type inference as executed"
-            "again after CollapseTuple."
-        )
     if test_setup.case.backend == test_definitions.ProgramBackendId.ROUNDTRIP.load():
         pytest.xfail("Needs proper handling of tuple[Column] <-> Column[tuple].")
 

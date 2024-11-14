@@ -141,7 +141,7 @@ def _extract_accessed_domains(
     return typing.cast(ACCESSED_DOMAINS, accessed_domains)
 
 
-def infer_as_fieldop(
+def _infer_as_fieldop(
     applied_fieldop: itir.FunCall,
     target_domain: DOMAIN,
     offset_provider: common.OffsetProvider,
@@ -204,7 +204,7 @@ def infer_as_fieldop(
     return transformed_call, accessed_domains_without_tmp
 
 
-def infer_let(
+def _infer_let(
     let_expr: itir.FunCall,
     input_domain: DOMAIN,
     offset_provider: common.OffsetProvider,
@@ -245,7 +245,7 @@ def infer_let(
     return transformed_call, accessed_domains_outer
 
 
-def infer_make_tuple(
+def _infer_make_tuple(
     expr: itir.Expr,
     domain: DOMAIN,
     offset_provider: common.OffsetProvider,
@@ -274,7 +274,7 @@ def infer_make_tuple(
     return result_expr, actual_domains
 
 
-def infer_tuple_get(
+def _infer_tuple_get(
     expr: itir.Expr,
     domain: DOMAIN,
     offset_provider: common.OffsetProvider,
@@ -295,7 +295,7 @@ def infer_tuple_get(
     return infered_args_expr, actual_domains
 
 
-def infer_if(
+def _infer_if(
     expr: itir.Expr,
     domain: DOMAIN,
     offset_provider: common.OffsetProvider,
@@ -326,19 +326,19 @@ def _infer_expr(
     elif isinstance(expr, itir.Literal):
         return expr, {}
     elif cpm.is_applied_as_fieldop(expr):
-        return infer_as_fieldop(expr, domain, offset_provider, symbolic_domain_sizes)
+        return _infer_as_fieldop(expr, domain, offset_provider, symbolic_domain_sizes)
     elif cpm.is_let(expr):
-        return infer_let(expr, domain, offset_provider, symbolic_domain_sizes)
+        return _infer_let(expr, domain, offset_provider, symbolic_domain_sizes)
     elif cpm.is_call_to(expr, "make_tuple"):
-        return infer_make_tuple(expr, domain, offset_provider, symbolic_domain_sizes)
+        return _infer_make_tuple(expr, domain, offset_provider, symbolic_domain_sizes)
     elif cpm.is_call_to(expr, "tuple_get"):
-        return infer_tuple_get(expr, domain, offset_provider, symbolic_domain_sizes)
+        return _infer_tuple_get(expr, domain, offset_provider, symbolic_domain_sizes)
     elif cpm.is_call_to(expr, "if_"):
-        return infer_if(expr, domain, offset_provider, symbolic_domain_sizes)
+        return _infer_if(expr, domain, offset_provider, symbolic_domain_sizes)
     elif (
         cpm.is_call_to(expr, itir.ARITHMETIC_BUILTINS)
         or cpm.is_call_to(expr, itir.TYPEBUILTINS)
-        or cpm.is_call_to(expr, "cast_")
+        or cpm.is_call_to(expr, ("cast_", "index", "unstructured_domain", "cartesian_domain"))
     ):
         return expr, {}
     else:
@@ -351,10 +351,57 @@ def infer_expr(
     offset_provider: common.OffsetProvider,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
 ) -> tuple[itir.Expr, ACCESSED_DOMAINS]:
+    """
+    Infer the domain of all field subexpressions of `expr`.
+
+    Given an expression `expr` and the domain it is accessed at, back-propagate the domain of all
+    (field-typed) subexpression.
+
+    Arguments:
+    - expr: The expression to be inferred.
+    - domain: The domain `expr` is read at.
+    - symbolic_domain_sizes: A dictionary mapping axes names, e.g., `I`, `Vertex`, to a symbol
+      name that evaluates to the length of that axis.
+
+    Returns:
+      A tuple containing the inferred expression with all applied `as_fieldop` (that are accessed)
+      having a domain argument now, and a dictionary mapping symbol names referenced in `expr` to
+      domain they are accessed at.
+    """
     # this is just a small wrapper that populates the `domain` annex
     expr, accessed_domains = _infer_expr(expr, domain, offset_provider, symbolic_domain_sizes)
     expr.annex.domain = domain
     return expr, accessed_domains
+
+
+def _infer_stmt(
+    stmt: itir.Stmt,
+    offset_provider: common.OffsetProvider,
+    symbolic_domain_sizes: Optional[dict[str, str]],
+):
+    if isinstance(stmt, itir.SetAt):
+        transformed_call, _unused_domain = infer_expr(
+            stmt.expr,
+            domain_utils.SymbolicDomain.from_expr(stmt.domain),
+            offset_provider,
+            symbolic_domain_sizes,
+        )
+        return itir.SetAt(
+            expr=transformed_call,
+            domain=stmt.domain,
+            target=stmt.target,
+        )
+    elif isinstance(stmt, itir.IfStmt):
+        return itir.IfStmt(
+            cond=stmt.cond,
+            true_branch=[
+                _infer_stmt(c, offset_provider, symbolic_domain_sizes) for c in stmt.true_branch
+            ],
+            false_branch=[
+                _infer_stmt(c, offset_provider, symbolic_domain_sizes) for c in stmt.false_branch
+            ],
+        )
+    raise ValueError(f"Unsupported stmt: {stmt}")
 
 
 def infer_program(
@@ -362,32 +409,19 @@ def infer_program(
     offset_provider: common.OffsetProvider,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
 ) -> itir.Program:
-    transformed_set_ats: list[itir.SetAt] = []
+    """
+    Infer the domain of all field subexpressions inside a program.
+
+    See :func:`infer_expr` for more details.
+    """
     assert (
         not program.function_definitions
     ), "Domain propagation does not support function definitions."
-
-    for set_at in program.body:
-        assert isinstance(set_at, itir.SetAt)
-
-        transformed_call, _unused_domain = infer_expr(
-            set_at.expr,
-            domain_utils.SymbolicDomain.from_expr(set_at.domain),
-            offset_provider,
-            symbolic_domain_sizes,
-        )
-        transformed_set_ats.append(
-            itir.SetAt(
-                expr=transformed_call,
-                domain=set_at.domain,
-                target=set_at.target,
-            ),
-        )
 
     return itir.Program(
         id=program.id,
         function_definitions=program.function_definitions,
         params=program.params,
         declarations=program.declarations,
-        body=transformed_set_ats,
+        body=[_infer_stmt(stmt, offset_provider, symbolic_domain_sizes) for stmt in program.body],
     )

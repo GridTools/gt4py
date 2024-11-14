@@ -24,6 +24,7 @@ import gt4py.next.iterator.ir as itir
 from gt4py.next import common
 from gt4py.next.ffront import decorator
 from gt4py.next.iterator import transforms as itir_transforms
+from gt4py.next.iterator.ir import SymRef
 from gt4py.next.iterator.transforms import (
     pass_manager_legacy as legacy_itir_transforms,
     program_to_fencil,
@@ -200,11 +201,16 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         # Halo exchange related metadata, i.e. gt4py_program_input_fields, gt4py_program_output_fields, offset_providers_per_input_field
         # Add them as dynamic properties to the SDFG
 
-        input_fields = [
-            str(in_field.id)
+        assert all(
+            isinstance(in_field, SymRef)
             for closure in self.itir.closures
             for in_field in closure.inputs
-            if str(in_field.id) in fields
+        )  # backend only supports SymRef inputs, not `index` calls
+        input_fields = [
+            str(in_field.id)  # type: ignore[union-attr]  # ensured by assert
+            for closure in self.itir.closures
+            for in_field in closure.inputs
+            if str(in_field.id) in fields  # type: ignore[union-attr]  # ensured by assert
         ]
         sdfg.gt4py_program_input_fields = {
             in_field: dim
@@ -240,6 +246,9 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
                 closure.stencil, num_args=len(closure.inputs)
             )
             for param, shifts in zip(closure.inputs, params_shifts):
+                assert isinstance(
+                    param, SymRef
+                )  # backend only supports SymRef inputs, not `index` calls
                 if not isinstance(param.id, str):
                     continue
                 if param.id not in sdfg.gt4py_program_input_fields:

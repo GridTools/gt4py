@@ -383,7 +383,6 @@ def test_shift_sparse_input_field2(program_processor):
     if program_processor in [
         gtfn.run_gtfn,
         gtfn.run_gtfn_imperative,
-        gtfn.run_gtfn_with_temporaries,
     ]:
         pytest.xfail(
             "Bug in bindings/compilation/caching: only the first program seems to be compiled."

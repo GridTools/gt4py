@@ -138,6 +138,8 @@ class BackendOption(click.ParamType):
         self, value: str, param: Optional[click.Parameter], ctx: Optional[click.Context]
     ) -> Tuple[str, Any]:
         backend = ctx.params["backend"] if ctx else gt4pyc.backend.from_name("numpy")
+        assert isinstance(backend, type)
+        assert issubclass(backend, gt4pyc.backend.Backend)
         name, value = self._try_split(value)
         if name.strip() not in backend.options:
             self.fail(f"Backend {backend.name} received unknown option: {name}!")

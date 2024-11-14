@@ -93,7 +93,9 @@ class SymbolicDomain:
             ...,
         ],
         offset_provider: common.OffsetProvider,
-        symbolic_domain_sizes: Optional[dict[str, str]],
+        #: A dictionary mapping axes names to their length. See
+        #: func:`gt4py.next.iterator.transforms.infer_domain.infer_expr` for more details.
+        symbolic_domain_sizes: Optional[dict[str, str]] = None,
     ) -> SymbolicDomain:
         dims = list(self.ranges.keys())
         new_ranges = {dim: self.ranges[dim] for dim in dims}
