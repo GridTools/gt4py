@@ -212,37 +212,40 @@ def simple_mesh() -> MeshDescriptor:
     assert all(len(row) == 2 for row in e2v_arr)
     e2v_arr = np.asarray(e2v_arr, dtype=gtx.IndexType)
 
+    offset_provider = {
+        V2E.value: common._connectivity(
+            v2e_arr,
+            codomain=Edge,
+            domain={Vertex: v2e_arr.shape[0], V2EDim: 4},
+            skip_value=None,
+        ),
+        E2V.value: common._connectivity(
+            e2v_arr,
+            codomain=Vertex,
+            domain={Edge: e2v_arr.shape[0], E2VDim: 2},
+            skip_value=None,
+        ),
+        C2V.value: common._connectivity(
+            c2v_arr,
+            codomain=Vertex,
+            domain={Cell: c2v_arr.shape[0], C2VDim: 4},
+            skip_value=None,
+        ),
+        C2E.value: common._connectivity(
+            c2e_arr,
+            codomain=Edge,
+            domain={Cell: c2e_arr.shape[0], C2EDim: 4},
+            skip_value=None,
+        ),
+    }
+
     return types.SimpleNamespace(
         name="simple_mesh",
         num_vertices=num_vertices,
         num_edges=np.int32(num_edges),
         num_cells=num_cells,
-        offset_provider={
-            V2E.value: common._connectivity(
-                v2e_arr,
-                codomain=Edge,
-                domain={Vertex: v2e_arr.shape[0], V2EDim: 4},
-                skip_value=None,
-            ),
-            E2V.value: common._connectivity(
-                e2v_arr,
-                codomain=Vertex,
-                domain={Edge: e2v_arr.shape[0], E2VDim: 2},
-                skip_value=None,
-            ),
-            C2V.value: common._connectivity(
-                c2v_arr,
-                codomain=Vertex,
-                domain={Cell: c2v_arr.shape[0], C2VDim: 4},
-                skip_value=None,
-            ),
-            C2E.value: common._connectivity(
-                c2e_arr,
-                codomain=Edge,
-                domain={Cell: c2e_arr.shape[0], C2EDim: 4},
-                skip_value=None,
-            ),
-        },
+        offset_provider=offset_provider,
+        offset_provider_type=common.offset_provider_to_type(offset_provider),
     )
 
 
@@ -300,37 +303,40 @@ def skip_value_mesh() -> MeshDescriptor:
         dtype=gtx.IndexType,
     )
 
+    offset_provider = {
+        V2E.value: common._connectivity(
+            v2e_arr,
+            codomain=Edge,
+            domain={Vertex: v2e_arr.shape[0], V2EDim: 5},
+            skip_value=common._DEFAULT_SKIP_VALUE,
+        ),
+        E2V.value: common._connectivity(
+            e2v_arr,
+            codomain=Vertex,
+            domain={Edge: e2v_arr.shape[0], E2VDim: 2},
+            skip_value=None,
+        ),
+        C2V.value: common._connectivity(
+            c2v_arr,
+            codomain=Vertex,
+            domain={Cell: c2v_arr.shape[0], C2VDim: 3},
+            skip_value=None,
+        ),
+        C2E.value: common._connectivity(
+            c2e_arr,
+            codomain=Edge,
+            domain={Cell: c2e_arr.shape[0], C2EDim: 3},
+            skip_value=None,
+        ),
+    }
+
     return types.SimpleNamespace(
         name="skip_value_mesh",
         num_vertices=num_vertices,
         num_edges=num_edges,
         num_cells=num_cells,
-        offset_provider={
-            V2E.value: common._connectivity(
-                v2e_arr,
-                codomain=Edge,
-                domain={Vertex: v2e_arr.shape[0], V2EDim: 5},
-                skip_value=common._DEFAULT_SKIP_VALUE,
-            ),
-            E2V.value: common._connectivity(
-                e2v_arr,
-                codomain=Vertex,
-                domain={Edge: e2v_arr.shape[0], E2VDim: 2},
-                skip_value=None,
-            ),
-            C2V.value: common._connectivity(
-                c2v_arr,
-                codomain=Vertex,
-                domain={Cell: c2v_arr.shape[0], C2VDim: 3},
-                skip_value=None,
-            ),
-            C2E.value: common._connectivity(
-                c2e_arr,
-                codomain=Edge,
-                domain={Cell: c2e_arr.shape[0], C2EDim: 3},
-                skip_value=None,
-            ),
-        },
+        offset_provider=offset_provider,
+        offset_provider_type=common.offset_provider_to_type(offset_provider),
     )
 
 

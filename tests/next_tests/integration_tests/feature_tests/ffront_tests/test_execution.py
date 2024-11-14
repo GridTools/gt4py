@@ -640,7 +640,7 @@ def test_tuple_with_local_field_in_reduction_shifted(unstructured_case):
         unstructured_case,
         reduce_tuple_element,
         ref=lambda e, v: np.sum(
-            e[v2e.ndarray] + np.tile(v, (v2e.max_neighbors, 1)).T,
+            e[v2e.ndarray] + np.tile(v, (v2e.shape[1], 1)).T,
             axis=1,
             initial=0,
             where=v2e.ndarray != common._DEFAULT_SKIP_VALUE,

@@ -495,7 +495,7 @@ def _get_data_nodes(
             # connectivity-based offset provider
             local_offset = next(iter(local_dims)).value
             assert isinstance(
-                sdfg_builder.get_offset_provider(local_offset), gtx_common.Connectivity
+                sdfg_builder.get_offset_provider_type(local_offset), gtx_common.Connectivity
             )
         else:
             local_offset = None

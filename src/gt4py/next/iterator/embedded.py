@@ -1700,9 +1700,9 @@ def _dimension_to_tag(domain: Domain) -> dict[Tag, range]:
     return {k.value if isinstance(k, common.Dimension) else k: v for k, v in domain.items()}
 
 
-def _validate_domain(domain: Domain, offset_provider: OffsetProvider) -> None:
+def _validate_domain(domain: Domain, offset_provider_type: common.OffsetProviderType) -> None:
     if isinstance(domain, runtime.CartesianDomain):
-        if any(isinstance(o, common.Connectivity) for o in offset_provider.values()):
+        if any(isinstance(o, common.ConnectivityType) for o in offset_provider_type.values()):
             raise RuntimeError(
                 "Got a 'CartesianDomain', but found a 'Connectivity' in 'offset_provider', expected 'UnstructuredDomain'."
             )
@@ -1838,7 +1838,7 @@ def closure(
 ) -> None:
     assert embedded_context.within_valid_context()
     offset_provider = embedded_context.offset_provider.get()
-    _validate_domain(domain_, offset_provider)
+    _validate_domain(domain_, common.offset_provider_to_type(offset_provider))
     domain: dict[Tag, range] = _dimension_to_tag(domain_)
     if not (isinstance(out, common.Field) or is_tuple_of_field(out)):
         raise TypeError("'Out' needs to be a located field.")

@@ -514,7 +514,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert isinstance(node.args[0], gtir.OffsetLiteral)
         offset = node.args[0].value
         assert isinstance(offset, str)
-        offset_provider = self.subgraph_builder.get_offset_provider(offset)
+        offset_provider = self.subgraph_builder.get_offset_provider_type(offset)
         assert isinstance(offset_provider, gtx_common.NeighborConnectivityType)
 
         it = self.visit(node.args[1])
@@ -648,7 +648,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         # have the same length, that is the same value of 'max_neighbors'.
         local_connectivities = dace_utils.filter_connectivities(
             {
-                offset: self.subgraph_builder.get_offset_provider(offset)
+                offset: self.subgraph_builder.get_offset_provider_type(offset)
                 for offset in input_local_offsets
             }
         )
@@ -882,7 +882,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         input_expr = self.visit(node.args[0])
         assert isinstance(input_expr, (MemletExpr, ValueExpr))
         assert input_expr.local_offset is not None
-        offset_provider = self.subgraph_builder.get_offset_provider(input_expr.local_offset)
+        offset_provider = self.subgraph_builder.get_offset_provider_type(input_expr.local_offset)
         assert isinstance(offset_provider, gtx_common.NeighborConnectivityType)
 
         if offset_provider.has_skip_values:
@@ -1097,7 +1097,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert isinstance(offset_provider_arg, gtir.OffsetLiteral)
         offset = offset_provider_arg.value
         assert isinstance(offset, str)
-        offset_provider = self.subgraph_builder.get_offset_provider(offset)
+        offset_provider = self.subgraph_builder.get_offset_provider_type(offset)
         # second argument should be the offset value, which could be a symbolic expression or a dynamic offset
         offset_expr = (
             SymbolExpr(offset_value_arg.value, IndexDType)

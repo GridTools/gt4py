@@ -41,7 +41,7 @@ class DataflowBuilder(Protocol):
     """Visitor interface to build a dataflow subgraph."""
 
     @abc.abstractmethod
-    def get_offset_provider(self, offset: str) -> gtx_common.OffsetProviderElem: ...
+    def get_offset_provider_type(self, offset: str) -> gtx_common.OffsetProviderElem: ...
 
     @abc.abstractmethod
     def unique_nsdfg_name(self, sdfg: dace.SDFG, prefix: str) -> str: ...
@@ -164,7 +164,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         init=False, repr=False, default_factory=lambda: eve.utils.UIDGenerator(prefix="tlet")
     )
 
-    def get_offset_provider(self, offset: str) -> gtx_common.OffsetProviderTypeElem:
+    def get_offset_provider_type(self, offset: str) -> gtx_common.OffsetProviderTypeElem:
         return self.offset_provider_type[offset]
 
     def get_symbol_type(self, symbol_name: str) -> ts.DataType:
@@ -586,7 +586,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         }
 
         # lower let-statement lambda node as a nested SDFG
-        lambda_translator = GTIRToSDFG(self.offset_provider, lambda_symbols)
+        lambda_translator = GTIRToSDFG(self.offset_provider_type, lambda_symbols)
         nsdfg = dace.SDFG(name=self.unique_nsdfg_name(sdfg, "lambda"))
         nstate = nsdfg.add_state("lambda")
 
@@ -631,7 +631,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         )
         connectivity_arrays = {
             dace_utils.connectivity_identifier(offset)
-            for offset in dace_utils.filter_connectivities(self.offset_provider)
+            for offset in dace_utils.filter_connectivities(self.offset_provider_type)
         }
 
         input_memlets = {}
@@ -793,7 +793,7 @@ def build_sdfg_from_gtir(
 
     Args:
         ir: The GTIR program node to be lowered to SDFG
-        offset_provider: The definitions of offset providers used by the program node
+        offset_provider_type: The definitions of offset providers used by the program node
 
     Returns:
         An SDFG in the DaCe canonical form (simplified)

@@ -817,8 +817,8 @@ class ConnectivityKind(enum.Flag):
 class ConnectivityType:  # TODO(havogt): would better live in type_specifications but would have to solve a circular import
     domain: tuple[Dimension, ...]
     codomain: Dimension
-    dtype: core_defs.DType
     skip_value: Optional[int]
+    dtype: core_defs.DType
 
     @property
     def has_skip_values(self) -> bool:

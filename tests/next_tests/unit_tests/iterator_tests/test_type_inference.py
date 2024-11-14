@@ -218,11 +218,11 @@ def expression_test_cases():
 @pytest.mark.parametrize("test_case", expression_test_cases())
 def test_expression_type(test_case):
     mesh = simple_mesh()
-    offset_provider = {**mesh.offset_provider, "Ioff": IDim, "Joff": JDim, "Koff": KDim}
+    offset_provider_type = {**mesh.offset_provider_type, "Ioff": IDim, "Joff": JDim, "Koff": KDim}
 
     testee, expected_type = test_case
     result = itir_type_inference.infer(
-        testee, offset_provider_type=offset_provider, allow_undeclared_symbols=True
+        testee, offset_provider_type=offset_provider_type, allow_undeclared_symbols=True
     )
     assert result.type == expected_type
 
@@ -255,7 +255,7 @@ def test_late_offset_axis():
     testee = im.call(func)(im.ensure_offset("V2E"))
 
     result = itir_type_inference.infer(
-        testee, offset_provider_type=mesh.offset_provider, allow_undeclared_symbols=True
+        testee, offset_provider_type=mesh.offset_provider_type, allow_undeclared_symbols=True
     )
     assert result.type == it_on_e_of_e_type
 
@@ -340,7 +340,7 @@ def test_unstructured_fencil_definition():
         ],
     )
 
-    result = itir_type_inference.infer(testee, offset_provider_type=mesh.offset_provider)
+    result = itir_type_inference.infer(testee, offset_provider_type=mesh.offset_provider_type)
 
     closure_type = it_ts.StencilClosureType(
         domain=it_ts.DomainType(dims=[Vertex, KDim]),
@@ -433,7 +433,7 @@ def test_fencil_with_nb_field_input():
         ],
     )
 
-    result = itir_type_inference.infer(testee, offset_provider_type=mesh.offset_provider)
+    result = itir_type_inference.infer(testee, offset_provider_type=mesh.offset_provider_type)
 
     assert result.closures[0].stencil.expr.args[0].type == float64_list_type
     assert result.closures[0].stencil.type.returns == float64_type
