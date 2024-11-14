@@ -677,6 +677,9 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     @property
     def dtype(self) -> core_defs.DType[core_defs.ScalarT]: ...
 
+    # TODO(havogt)
+    # This property is wrong, because for a function field we would not know to which NDArrayObject we want to convert
+    # at the very least, we need to take an allocator and rename this to `as_ndarray`.
     @property
     def ndarray(self) -> core_defs.NDArrayObject: ...
 
@@ -776,22 +779,22 @@ class MutableField(Field[DimsT, core_defs.ScalarT], Protocol[DimsT, core_defs.Sc
     def __setitem__(self, index: AnyIndexSpec, value: Field | core_defs.ScalarT) -> None: ...
 
 
-@runtime_checkable
-class Connectivity(Protocol):
-    max_neighbors: int
-    has_skip_values: bool
-    source_dim: Dimension
-    codomain: Dimension
-    dtype: core_defs.DType
+# @runtime_checkable
+# class Connectivity(Protocol):
+#     max_neighbors: int
+#     has_skip_values: bool
+#     source_dim: Dimension
+#     codomain: Dimension
+#     dtype: core_defs.DType
 
 
-@dataclasses.dataclass(frozen=True, eq=False)
-class ConnectivityType(Connectivity):
-    max_neighbors: int
-    has_skip_values: bool
-    source_dim: Dimension
-    codomain: Dimension
-    dtype: core_defs.DType
+# @dataclasses.dataclass(frozen=True, eq=False)
+# class ConnectivityType(Connectivity):
+#     max_neighbors: int
+#     has_skip_values: bool
+#     source_dim: Dimension
+#     codomain: Dimension
+#     dtype: core_defs.DType
 
 
 class ConnectivityKind(enum.Flag):
@@ -828,11 +831,34 @@ class ConnectivityKind(enum.Flag):
         return cls.ALTER_DIMS | cls.ALTER_STRUCT
 
 
+@dataclasses.dataclass(frozen=True)
+class ConnectivityType:  # TODO(havogt): would better live in type_specifications but would have to solve a circular import
+    domain: tuple[Dimension, ...]
+    codomain: Dimension
+    skip_value: Optional[int] = None
+
+    @property
+    def has_skip_value(self) -> bool:
+        return self.skip_value is not None
+
+
+@dataclasses.dataclass(frozen=True)
+class NeighborConnectivityType(ConnectivityType):
+    # TODO(havogt): refactor towards encoding this information in the local dimensions of the ConnectivityType.domain
+    max_neighbors: int
+
+    @property
+    def source_dim(self) -> Dimension:
+        return self.domain[0]
+
+    @property
+    def neighbor_dim(self) -> Dimension:
+        return self.domain[1]
+
+
 @runtime_checkable
 # type: ignore[misc] # DimT should be covariant, but then it breaks in other places
-class ConnectivityField(
-    Field[DimsT, core_defs.IntegralScalar], Connectivity, Protocol[DimsT, DimT]
-):
+class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT]):
     @property
     @abc.abstractmethod
     def codomain(self) -> DimT: ...
@@ -841,15 +867,19 @@ class ConnectivityField(
         return hash((self.domain, self.codomain))  # TODO
 
     def type_(self) -> ConnectivityType:
-        """Extract the static information of the connectivity field."""
-
-        return ConnectivityType(
-            max_neighbors=self.max_neighbors,
-            has_skip_values=self.has_skip_values,
-            source_dim=self.source_dim,
-            codomain=self.codomain,
-            dtype=self.dtype,
-        )
+        # TODO(havogt): make this `__gt_type__` after the types inherit from TypeSpec
+        if isinstance(self, NeighborConnectivity):
+            return NeighborConnectivityType(
+                domain=self.domain.dims,
+                codomain=self.codomain,
+                skip_value=self.skip_value,
+                max_neighbors=self.max_neighbors,
+            )
+        else:
+            return ConnectivityType(
+                domain=self.domain.dims,
+                codomain=self.codomain,
+            )
 
     @property
     def kind(self) -> ConnectivityKind:
@@ -857,24 +887,6 @@ class ConnectivityField(
 
     @abc.abstractmethod
     def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]: ...
-
-    @property
-    def source_dim(self) -> Dimension:
-        return self.domain.dims[0]
-
-    @property
-    def neighbor_dim(self) -> Dimension:
-        # TODO(havogt): we should refactor ConnectivityField to distinguish between 1-1 and 1-N Connecitivities
-        assert len(self.domain.dims) == 2
-        return self.domain.dims[1]
-
-    @property
-    def max_neighbors(self) -> int:
-        return self.domain.ranges[1].stop - self.domain.ranges[1].start
-
-    @property
-    def has_skip_values(self) -> bool:
-        return self.skip_value is not None
 
     @property
     @abc.abstractmethod
@@ -966,15 +978,39 @@ def _connectivity(
     raise NotImplementedError
 
 
-# @runtime_checkable
-# class NeighborTable(Connectivity, Protocol):
-#     table: npt.NDArray
-
-NeighborTable: TypeAlias = ConnectivityField  # TODO actually NDArrayConnectivityField
+class NeighborConnectivity(ConnectivityField, Protocol):
+    # TODO(havogt): work towards encoding this properly in the type
+    ...
 
 
-OffsetProviderElem: TypeAlias = Dimension | Connectivity
+def is_neighbor_connectivity(obj: Any) -> TypeGuard[NeighborConnectivity]:
+    domain_dims = obj.domain.dims
+    return (
+        len(domain_dims) == 2
+        and domain_dims[0].kind is DimensionKind.HORIZONTAL
+        and domain_dims[1].kind is DimensionKind.LOCAL
+    )
+
+
+class NeighborTable(
+    NeighborConnectivity, Protocol
+):  # TODO(havogt): try to express by inheriting from NdArrayConnectivityField (but this would require a protocol to move it out of `embedded.nd_array_field`)
+    @property
+    def ndarray(self) -> core_defs.NDArrayObject:
+        # Note that this property is currently already there from inheriting from `Field`,
+        # however this seems wrong, therefore we explicitly introduce it here (or it should come
+        # implicitly from the `NdArrayConnectivityField` protocol).
+        ...
+
+
+def is_neighbor_table(obj: Any) -> TypeGuard[NeighborTable]:
+    return is_neighbor_connectivity(obj) and hasattr(obj, "ndarray")
+
+
+OffsetProviderElem: TypeAlias = Dimension | NeighborConnectivity
+OffsetProviderTypeElem: TypeAlias = Dimension | NeighborConnectivityType
 OffsetProvider: TypeAlias = Mapping[Tag, OffsetProviderElem]
+OffsetProviderType: TypeAlias = Mapping[Tag, OffsetProviderTypeElem]
 
 
 DomainDimT = TypeVar("DomainDimT", bound="Dimension")

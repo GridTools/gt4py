@@ -192,26 +192,6 @@ class StridedConnectivityField(common.ConnectivityField):
         return None
 
 
-class StridedNeighborOffsetProvider:
-    def __init__(
-        self,
-        source_dim: common.Dimension,
-        codomain: common.Dimension,
-        max_neighbors: int,
-        has_skip_values=True,
-    ) -> None:
-        self.source_dim = source_dim
-        self.codomain = codomain
-        self.max_neighbors = max_neighbors
-        self.has_skip_values = has_skip_values
-        self.index_type = int
-
-    def mapped_index(
-        self, primary: common.IntIndex, neighbor_idx: common.IntIndex
-    ) -> common.IntIndex:
-        return primary * self.max_neighbors + neighbor_idx
-
-
 # Offsets
 OffsetPart: TypeAlias = Tag | common.IntIndex
 CompleteOffset: TypeAlias = tuple[Tag, common.IntIndex]

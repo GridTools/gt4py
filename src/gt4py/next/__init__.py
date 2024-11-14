@@ -41,7 +41,6 @@ from .ffront.fbuiltins import *  # noqa: F403 [undefined-local-with-import-star]
 from .ffront.fbuiltins import FieldOffset
 from .iterator.embedded import (
     NeighborTableOffsetProvider,  # TODO(havogt): depreacted, remove later
-    StridedNeighborOffsetProvider,
     index_field,
     np_as_located_field,
 )
@@ -77,7 +76,6 @@ __all__ = [
     "as_connectivity",
     # from iterator
     "NeighborTableOffsetProvider",
-    "StridedNeighborOffsetProvider",
     "index_field",
     "np_as_located_field",
     # from ffront

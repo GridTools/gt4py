@@ -310,7 +310,11 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         closure_dict = {}
         for k, v in offset_provider.items():  # type: ignore[union-attr]
             conn_id = dace_utils.connectivity_identifier(k)
-            if hasattr(v, "table") and conn_id in self.sdfg_closure_vars["sdfg.arrays"]:
+            # TODO: more cleanup above when accessing "table"
+            if (
+                isinstance(v, common.ConnectivityType)
+                and conn_id in self.sdfg_closure_vars["sdfg.arrays"]
+            ):
                 if conn_id not in Program.connectivity_tables_data_descriptors:
                     Program.connectivity_tables_data_descriptors[conn_id] = dace.data.Array(
                         dtype=dace.int64 if v.dtype.scalar_type == np.int64 else dace.int32,
