@@ -81,7 +81,9 @@ def debug_info(
 
 def filter_connectivities(
     offset_provider: gtx_common.OffsetProvider | gtx_common.OffsetProviderType,
-) -> dict[str, gtx_common.Connectivity]:
+) -> dict[
+    str, gtx_common.NeighborTable | gtx_common.NeighborConnectivityType
+]:  # TODO check if this function is used to filter runtime connectivities
     """
     Filter offset providers of type `Connectivity`.
 

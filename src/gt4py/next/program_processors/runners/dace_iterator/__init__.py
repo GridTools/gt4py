@@ -111,7 +111,11 @@ def build_sdfg_from_itir(
         program, offset_provider, lift_mode, symbolic_domain_sizes, temporary_extraction_heuristics
     )
     sdfg_genenerator = ItirToSDFG(
-        list(arg_types), offset_provider, tmps, use_field_canonical_representation, column_axis
+        list(arg_types),
+        common.offset_provider_to_type(offset_provider),
+        tmps,
+        use_field_canonical_representation,
+        column_axis,
     )
     sdfg = sdfg_genenerator.visit(program)
     if sdfg is None:

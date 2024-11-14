@@ -87,6 +87,7 @@ def apply_common_transforms(
     # FIXME[#1582](tehrengruber): Revisit and cleanup after new GTIR temporary pass is in place
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
 ) -> itir.Program:
+    offset_provider_type = common.offset_provider_to_type(offset_provider)
     if isinstance(ir, itir.FencilDefinition):
         ir = fencil_to_program.FencilToProgram().apply(
             ir
@@ -127,7 +128,7 @@ def apply_common_transforms(
         # is constant-folded the surrounding tuple_get calls can be removed.
         inlined = CollapseTuple.apply(  # type: ignore[assignment] # still a `itir.Program`
             inlined,
-            offset_provider_type=offset_provider,
+            offset_provider_type=offset_provider_type,
             # TODO(tehrengruber): disabled since it increases compile-time too much right now
             flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
         )
@@ -177,7 +178,7 @@ def apply_common_transforms(
         ir = CollapseTuple.apply(  # type: ignore[assignment] # still a `itir.Program`
             ir,
             ignore_tuple_size=True,
-            offset_provider_type=offset_provider,
+            offset_provider_type=offset_provider_type,
             # TODO(tehrengruber): disabled since it increases compile-time too much right now
             flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
         )
@@ -192,9 +193,7 @@ def apply_common_transforms(
 
     if unroll_reduce:
         for _ in range(10):
-            unrolled = UnrollReduce.apply(
-                ir, offset_provider_type=common.offset_provider_to_type(offset_provider)
-            )
+            unrolled = UnrollReduce.apply(ir, offset_provider_type=offset_provider_type)
             if unrolled == ir:
                 break
             ir = unrolled  # type: ignore[assignment] # still a `itir.Program`
@@ -209,9 +208,7 @@ def apply_common_transforms(
     ir = ScanEtaReduction().visit(ir)
 
     if common_subexpression_elimination:
-        ir = CommonSubexpressionElimination.apply(
-            ir, offset_provider_type=common.offset_provider_to_type(offset_provider)
-        )
+        ir = CommonSubexpressionElimination.apply(ir, offset_provider_type=offset_provider_type)
         ir = MergeLet().visit(ir)
 
     ir = InlineLambdas.apply(
@@ -228,6 +225,8 @@ def apply_fieldview_transforms(
     ir = inline_fundefs.InlineFundefs().visit(ir)
     ir = inline_fundefs.prune_unreferenced_fundefs(ir)
     ir = InlineLambdas.apply(ir, opcount_preserving=True, force_inline_lambda_args=True)
-    ir = CollapseTuple.apply(ir, offset_provider_type=offset_provider)  # type: ignore[assignment] # type is still `itir.Program`
+    ir = CollapseTuple.apply(
+        ir, offset_provider_type=common.offset_provider_to_type(offset_provider)
+    )  # type: ignore[assignment] # type is still `itir.Program`
     ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
     return ir

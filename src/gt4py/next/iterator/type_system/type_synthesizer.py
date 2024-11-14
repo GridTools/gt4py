@@ -379,19 +379,19 @@ def shift(*offset_literals, offset_provider_type: common.OffsetProviderType) -> 
             assert isinstance(offset_axis, it_ts.OffsetLiteralType) and isinstance(
                 offset_axis.value, common.Dimension
             )
-            provider = offset_provider_type[offset_axis.value.value]  # TODO: naming
-            if isinstance(provider, common.Dimension):
+            type_ = offset_provider_type[offset_axis.value.value]
+            if isinstance(type_, common.Dimension):
                 pass
-            elif isinstance(provider, common.Connectivity):
+            elif isinstance(type_, common.NeighborConnectivityType):
                 found = False
                 for i, dim in enumerate(new_position_dims):
-                    if dim.value == provider.source_dim.value:
+                    if dim.value == type_.source_dim.value:
                         assert not found
-                        new_position_dims[i] = provider.codomain
+                        new_position_dims[i] = type_.codomain
                         found = True
                 assert found
             else:
-                raise NotImplementedError()
+                raise NotImplementedError(f"{type_} is not a supported Connectivity type.")
         return it_ts.IteratorType(
             position_dims=new_position_dims,
             defined_dims=it.defined_dims,

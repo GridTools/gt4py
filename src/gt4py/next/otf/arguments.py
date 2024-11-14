@@ -54,8 +54,12 @@ class CompileTimeArgs:
 
     args: tuple[ts.TypeSpec, ...]
     kwargs: dict[str, ts.TypeSpec]
-    offset_provider: dict[str, common.Connectivity | common.Dimension]
+    offset_provider: common.OffsetProvider  # TODO(havogt): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
     column_axis: Optional[common.Dimension]
+
+    @property
+    def offset_provider_type(self) -> common.OffsetProviderType:
+        return common.offset_provider_to_type(self.offset_provider)
 
     @classmethod
     def from_concrete_no_size(cls, *args: Any, **kwargs: Any) -> Self:
@@ -65,7 +69,7 @@ class CompileTimeArgs:
         offset_provider = kwargs_copy.pop("offset_provider", {})
         return cls(
             args=compile_args,
-            offset_provider=offset_provider,  # TODO(havogt): here we should propagate only the type of the connectivities, but currently the temporary pass requies more info
+            offset_provider=offset_provider,
             column_axis=kwargs_copy.pop("column_axis", None),
             kwargs={
                 k: type_translation.from_value(v) for k, v in kwargs_copy.items() if v is not None

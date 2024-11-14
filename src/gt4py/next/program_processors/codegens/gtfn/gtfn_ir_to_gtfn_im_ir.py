@@ -86,16 +86,16 @@ def _is_reduce(node: gtfn_ir.FunCall) -> TypeGuard[gtfn_ir.FunCall]:
 
 def _get_connectivity(
     applied_reduce_node: gtfn_ir.FunCall,
-    offset_provider: dict[str, common.Dimension | common.Connectivity],
+    offset_provider_type: common.OffsetProviderType,
 ) -> common.Connectivity:
     """Return single connectivity that is compatible with the arguments of the reduce."""
     if not _is_reduce(applied_reduce_node):
         raise ValueError("Expected a call to a 'reduce' object, i.e. 'reduce(...)(...)'.")
 
-    connectivities: list[common.Connectivity] = []
+    connectivities: list[common.NeighborConnectivity] = []
     for o in _get_partial_offset_tags(applied_reduce_node.args):
         conn = offset_provider[o]
-        assert isinstance(conn, common.Connectivity)
+        assert isinstance(conn, common.NeighborConnectivity)
         connectivities.append(conn)
 
     if not connectivities:
@@ -226,6 +226,7 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             self.imp_list_ir.append(AssignStmt(lhs=gtfn_ir_common.SymRef(id=red_idx), rhs=rhs))
 
     def handle_Reduction(self, node: gtfn_ir.FunCall, **kwargs: Any) -> gtfn_ir_common.SymRef:
+        raise AssertionError("Is this ever called?")
         offset_provider = kwargs["offset_provider"]
         assert offset_provider is not None
 

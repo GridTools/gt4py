@@ -779,24 +779,6 @@ class MutableField(Field[DimsT, core_defs.ScalarT], Protocol[DimsT, core_defs.Sc
     def __setitem__(self, index: AnyIndexSpec, value: Field | core_defs.ScalarT) -> None: ...
 
 
-# @runtime_checkable
-# class Connectivity(Protocol):
-#     max_neighbors: int
-#     has_skip_values: bool
-#     source_dim: Dimension
-#     codomain: Dimension
-#     dtype: core_defs.DType
-
-
-# @dataclasses.dataclass(frozen=True, eq=False)
-# class ConnectivityType(Connectivity):
-#     max_neighbors: int
-#     has_skip_values: bool
-#     source_dim: Dimension
-#     codomain: Dimension
-#     dtype: core_defs.DType
-
-
 class ConnectivityKind(enum.Flag):
     """
     Describes the kind of connectivity field.
