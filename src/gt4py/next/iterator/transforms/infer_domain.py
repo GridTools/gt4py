@@ -63,7 +63,7 @@ def _domain_union_with_none(
     if any(d == "UNKNOWN" for d in domains):
         return "UNKNOWN"
 
-    filtered_domains: list[domain_utils.SymbolicDomain] = [d for d in domains if d is not None]  # type: ignore[misc]  # domain can never be none because as such cases are filtered above
+    filtered_domains: list[domain_utils.SymbolicDomain] = [d for d in domains if d is not None]  # type: ignore[misc]  # domain can never be none because as these cases are filtered above
     if len(filtered_domains) == 0:
         return None
     return domain_utils.domain_union(*filtered_domains)
@@ -130,7 +130,8 @@ def _extract_accessed_domains(
     shifts_results = trace_shifts.trace_stencil(stencil, num_args=len(input_ids))
 
     for in_field_id, shifts_list in zip(input_ids, shifts_results, strict=True):
-        # special marker for dynamic shifts
+        # TODO(tehrengruber): Dynamic shifts are not supported by `SymbolicDomain.translate`. Use
+        #  special `UNKNOWN` marker for them until we have implemented a proper solution.
         if any(s == trace_shifts.Sentinel.VALUE for shift in shifts_list for s in shift):
             accessed_domains[in_field_id] = "UNKNOWN"
             continue
