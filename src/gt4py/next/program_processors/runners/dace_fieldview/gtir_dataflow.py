@@ -385,19 +385,16 @@ class LambdaToDataflow(eve.NodeVisitor):
         src_connector: str,
         use_array: bool = False,
     ) -> ValueExpr:
-        data_type: itir_ts.ListType | ts.ScalarType
+        data_type = dace_utils.as_itir_type(dc_dtype)
         if use_array:
             # In some cases, such as result data with list-type annotation, we want
             # that output data is represented as an array (single-element 1D array)
             # in order to allow for composition of array shape in external memlets.
             temp_name, _ = self.sdfg.add_temp_transient((1,), dc_dtype)
-            data_type = itir_ts.ListType(
-                element_type=dace_utils.as_itir_type(dc_dtype), offset_type=_CONST_DIM
-            )
         else:
             temp_name = self.sdfg.temp_data_name()
             self.sdfg.add_scalar(temp_name, dc_dtype, transient=True)
-            data_type = dace_utils.as_itir_type(dc_dtype)
+
         temp_node = self.state.add_access(temp_name)
         self._add_edge(
             src_node,
@@ -406,7 +403,14 @@ class LambdaToDataflow(eve.NodeVisitor):
             None,
             dace.Memlet(data=temp_name, subset="0"),
         )
-        return ValueExpr(temp_node, data_type)
+        return ValueExpr(
+            dc_node=temp_node,
+            gt_dtype=(
+                itir_ts.ListType(element_type=data_type, offset_type=_CONST_DIM)
+                if use_array
+                else data_type
+            ),
+        )
 
     def _visit_deref(self, node: gtir.FunCall) -> DataExpr:
         """
@@ -670,10 +674,16 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         # GT4Py guarantees that all connectivities used to generate lists of neighbors
         # have the same length, that is the same value of 'max_neighbors'.
-        if len(set(table.max_neighbors for table in input_connectivities.values())) != 1:
-            raise ValueError(
-                "Unexpected arguments to map expression with different local dimensions."
+        if (
+            len(
+                set(
+                    (conn.has_skip_values, conn.max_neighbors)
+                    for conn in input_connectivities.values()
+                )
             )
+            != 1
+        ):
+            raise ValueError("Unexpected arguments to map expression with different neighborhood.")
         offset_type, offset_provider = next(iter(input_connectivities.items()))
         local_size = offset_provider.max_neighbors
         map_index = dace_gtir_utils.get_map_variable(offset_type)
@@ -707,21 +717,10 @@ class LambdaToDataflow(eve.NodeVisitor):
         result, _ = self.sdfg.add_temp_transient((local_size,), dc_dtype)
         result_node = self.state.add_access(result)
 
-        skip_value_connectivities: dict[gtx_common.Dimension, gtx_common.Connectivity] = {
-            offset_type: offset_provider
-            for offset_type, offset_provider in input_connectivities.items()
-            if offset_provider.has_skip_values
-        }
-
-        if len(skip_value_connectivities) == 0:
-            result_offset_type = offset_type
-        elif len(skip_value_connectivities) == 1:
-            # In case one or more of input expressions contain skip values, we use
+        if offset_provider.has_skip_values:
+            # In case the `map_` input expressions contain skip values, we use
             # the connectivity-based offset provider as mask for map computation.
-            # Therefore, the result of map computation will also contain skip values.
-            result_offset_type, offset_provider = next(iter(skip_value_connectivities.items()))
-
-            connectivity = dace_utils.connectivity_identifier(result_offset_type.value)
+            connectivity = dace_utils.connectivity_identifier(offset_type.value)
             connectivity_desc = self.sdfg.arrays[connectivity]
             connectivity_desc.transient = False
 
@@ -753,8 +752,6 @@ class LambdaToDataflow(eve.NodeVisitor):
             tasklet_expression += (
                 f" if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {skip_value}"
             )
-        else:
-            raise ValueError("Unexpected arguments to map expression with different neighborhood.")
 
         self._add_mapped_tasklet(
             name="map",
@@ -771,7 +768,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         return ValueExpr(
             dc_node=result_node,
-            gt_dtype=itir_ts.ListType(node.type.element_type, result_offset_type),
+            gt_dtype=itir_ts.ListType(node.type.element_type, offset_type),
         )
 
     def _make_reduce_with_skip_values(

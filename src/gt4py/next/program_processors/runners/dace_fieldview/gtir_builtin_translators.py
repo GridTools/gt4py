@@ -50,6 +50,45 @@ class FieldopData:
     dc_node: dace.nodes.AccessNode
     gt_type: ts.FieldType | ts.ScalarType
 
+    def get_local_view(
+        self, domain: FieldopDomain
+    ) -> gtir_dataflow.IteratorExpr | gtir_dataflow.MemletExpr:
+        """Helper method to access a field in local view, given a field operator domain."""
+        if isinstance(self.gt_type, ts.ScalarType):
+            return gtir_dataflow.MemletExpr(
+                dc_node=self.dc_node, gt_dtype=self.gt_type, subset=sbs.Indices([0])
+            )
+
+        if isinstance(self.gt_type, ts.FieldType):
+            indices: dict[gtx_common.Dimension, gtir_dataflow.DataExpr] = {
+                dim: gtir_dataflow.SymbolExpr(dace_gtir_utils.get_map_variable(dim), INDEX_DTYPE)
+                for dim, _, _ in domain
+            }
+            local_dims = [
+                dim for dim in self.gt_type.dims if dim.kind == gtx_common.DimensionKind.LOCAL
+            ]
+
+            if len(local_dims) == 0:
+                return gtir_dataflow.IteratorExpr(
+                    self.dc_node, self.gt_type.dtype, self.gt_type.dims, indices
+                )
+
+            elif len(local_dims) == 1:
+                field_dtype = itir_ts.ListType(
+                    element_type=self.gt_type.dtype, offset_type=local_dims[0]
+                )
+                field_dims = [
+                    dim for dim in self.gt_type.dims if dim.kind != gtx_common.DimensionKind.LOCAL
+                ]
+                return gtir_dataflow.IteratorExpr(self.dc_node, field_dtype, field_dims, indices)
+
+            else:
+                raise ValueError(
+                    f"Unexpected data field {self.dc_node.data} with more than one local dimension."
+                )
+
+        raise NotImplementedError(f"Node type {type(self.gt_type)} not supported.")
+
 
 FieldopDomain: TypeAlias = list[
     tuple[gtx_common.Dimension, dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]
@@ -107,46 +146,13 @@ def _parse_fieldop_arg(
 ) -> gtir_dataflow.IteratorExpr | gtir_dataflow.MemletExpr:
     """Helper method to visit an expression passed as argument to a field operator."""
 
-    arg = sdfg_builder.visit(
-        node,
-        sdfg=sdfg,
-        head_state=state,
-    )
+    arg = sdfg_builder.visit(node, sdfg=sdfg, head_state=state)
 
     # arguments passed to field operator should be plain fields, not tuples of fields
     if not isinstance(arg, FieldopData):
         raise ValueError(f"Received {node} as argument to field operator, expected a field.")
 
-    if isinstance(arg.gt_type, ts.ScalarType):
-        return gtir_dataflow.MemletExpr(
-            dc_node=arg.dc_node, gt_dtype=arg.gt_type, subset=sbs.Indices([0])
-        )
-    elif isinstance(arg.gt_type, ts.FieldType):
-        field_dtype: itir_ts.ListType | ts.ScalarType
-        local_dims = [dim for dim in arg.gt_type.dims if dim.kind == gtx_common.DimensionKind.LOCAL]
-        if len(local_dims) == 0:
-            field_dtype = arg.gt_type.dtype
-            field_dims = arg.gt_type.dims
-        elif len(local_dims) == 1:
-            field_dtype = itir_ts.ListType(
-                element_type=arg.gt_type.dtype, offset_type=local_dims[0]
-            )
-            field_dims = [
-                dim for dim in arg.gt_type.dims if dim.kind != gtx_common.DimensionKind.LOCAL
-            ]
-        else:
-            raise ValueError(
-                f"Unexpected data field {arg.dc_node.data} with more than one local dimension."
-            )
-
-        indices: dict[gtx_common.Dimension, gtir_dataflow.DataExpr] = {
-            dim: gtir_dataflow.SymbolExpr(dace_gtir_utils.get_map_variable(dim), INDEX_DTYPE)
-            for dim, _, _ in domain
-        }
-
-        return gtir_dataflow.IteratorExpr(arg.dc_node, field_dtype, field_dims, indices)
-    else:
-        raise NotImplementedError(f"Node type {type(arg.gt_type)} not supported.")
+    return arg.get_local_view(domain)
 
 
 def _get_field_shape(
