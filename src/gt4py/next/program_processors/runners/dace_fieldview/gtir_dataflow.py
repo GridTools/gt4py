@@ -1057,7 +1057,6 @@ class LambdaToDataflow(eve.NodeVisitor):
         """Implements shift in unstructured domain by means of a neighbor table."""
         assert connectivity.neighbor_axis in it.dimensions
         neighbor_dim = connectivity.neighbor_axis
-        assert neighbor_dim not in it.indices
 
         origin_dim = connectivity.origin_axis
         assert origin_dim in it.indices
