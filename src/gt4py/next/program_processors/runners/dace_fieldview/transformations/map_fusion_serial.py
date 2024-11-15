@@ -820,6 +820,7 @@ class MapFusionSerial(mfh.MapFusionHelper):
                     shape=new_inter_shape,
                     dtype=inter_desc.dtype,
                     find_new_name=True,
+                    storage=dtypes.StorageType.Register,
                 )
             new_inter_node: nodes.AccessNode = state.add_access(new_inter_name)
 
