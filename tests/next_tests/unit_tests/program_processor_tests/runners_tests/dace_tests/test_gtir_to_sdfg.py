@@ -1596,7 +1596,7 @@ def test_gtir_reduce_with_cond_neighbors():
         assert np.allclose(v, v_ref)
 
 
-def test_gtir_domain():
+def test_gtir_symbolic_domain():
     MARGIN = 2
     assert MARGIN < N
     OFFSET = 1000 * 1000 * 1000
@@ -1614,7 +1614,7 @@ def test_gtir_domain():
     shift_left_stencil = im.lambda_("a")(im.deref(im.shift(IDim.value, OFFSET)("a")))
     shift_right_stencil = im.lambda_("a")(im.deref(im.shift(IDim.value, -OFFSET)("a")))
     testee = gtir.Program(
-        id="let_lambda",
+        id="symbolic_domain",
         function_definitions=[],
         params=[
             gtir.Sym(id="x", type=IFTYPE),
