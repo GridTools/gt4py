@@ -87,7 +87,7 @@ class DaCeTranslator(
         sdfg = self.generate_sdfg(
             program,
             inp.args.args,
-            inp.args.offset_provider,
+            common.offset_provider_to_type(inp.args.offset_provider),
             inp.args.column_axis,
         )
 
