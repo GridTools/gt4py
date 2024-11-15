@@ -363,9 +363,19 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             if isinstance(node_desc, dace.data.View):
                 # Views are forbidden.
                 return None
-            if node_desc.lifetime != dace.dtypes.AllocationLifetime.Scope:
-                # The access node has to life fully within the scope.
+
+            # The access node inside either has scope lifetime or is a scalar.
+            if isinstance(node_desc, dace.data.Scalar):
+                pass
+            elif node_desc.lifetime != dace.dtypes.AllocationLifetime.Scope:
                 return None
+
+        elif isinstance(node_to_classify, dace_nodes.MapEntry):
+            # We classify `MapEntries` as dependent nodes, we could now start
+            #  looking if if the whole map is independent, but it is currently an
+            #  overkill.
+            return False
+
         else:
             # Any other node type we can not handle, so the partition can not exist.
             # TODO(phimuell): Try to handle certain kind of library nodes.
