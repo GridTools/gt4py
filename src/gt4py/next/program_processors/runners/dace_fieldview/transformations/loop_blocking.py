@@ -630,5 +630,9 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             inner_exit.add_in_connector("IN_" + edge_conn)
             inner_exit.add_out_connector("OUT_" + edge_conn)
 
+        # There is an invalid cache state in the SDFG, that makes the memlet
+        #  propagation fail, to clear the cache we call the hash function.
+        #  See: https://github.com/spcl/dace/issues/1703
+        _ = sdfg.hash_sdfg()
         # TODO(phimuell): Use a less expensive method.
         dace.sdfg.propagation.propagate_memlets_state(sdfg, state)
