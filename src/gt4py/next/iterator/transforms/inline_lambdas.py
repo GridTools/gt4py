@@ -14,6 +14,7 @@ from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
 from gt4py.next.iterator.transforms.remap_symbols import RemapSymbolRefs, RenameSymbols
 from gt4py.next.iterator.transforms.symbol_ref_utils import CountSymbolRefs
+from gt4py.next.iterator.type_system import inference as itir_inference
 
 
 # TODO(tehrengruber): Reduce complexity of the function by removing the different options here
@@ -98,7 +99,7 @@ def inline_lambda(  # see todo above
         new_expr.location = node.location
         return new_expr
     else:
-        return ir.FunCall(
+        new_expr = ir.FunCall(
             fun=ir.Lambda(
                 params=[
                     param
@@ -110,6 +111,11 @@ def inline_lambda(  # see todo above
             args=[arg for arg, eligible in zip(node.args, eligible_params) if not eligible],
             location=node.location,
         )
+        for attr in ("type", "recorded_shifts", "domain"):
+            if hasattr(node.annex, attr):
+                setattr(new_expr.annex, attr, getattr(node.annex, attr))
+        itir_inference.copy_type(from_=node, to=new_expr, allow_untyped=True)
+        return new_expr
 
 
 @dataclasses.dataclass
@@ -117,10 +123,10 @@ class InlineLambdas(PreserveLocationVisitor, NodeTranslator):
     """
     Inline lambda calls by substituting every argument by its value.
 
-    Note: This pass preserves, but doesn't use the `type` and `recorded_shifts` annex.
+    Note: This pass preserves, but doesn't use the `type` `recorded_shifts`, `domain` annex.
     """
 
-    PRESERVED_ANNEX_ATTRS = ("type", "recorded_shifts")
+    PRESERVED_ANNEX_ATTRS = ("type", "recorded_shifts", "domain")
 
     opcount_preserving: bool
 
