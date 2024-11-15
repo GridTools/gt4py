@@ -49,7 +49,6 @@ no_backend = NoBackend(
         next_tests.definitions.ProgramBackendId.GTIR_EMBEDDED,
         next_tests.definitions.ProgramBackendId.GTFN_CPU,
         next_tests.definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE,
-        next_tests.definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES,
         pytest.param(
             next_tests.definitions.ProgramBackendId.GTFN_GPU, marks=pytest.mark.requires_gpu
         ),
