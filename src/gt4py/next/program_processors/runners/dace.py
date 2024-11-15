@@ -9,7 +9,6 @@
 import factory
 
 from gt4py.next import backend
-from gt4py.next.ffront import foast_to_gtir, foast_to_past, past_to_itir
 from gt4py.next.program_processors.runners.dace_fieldview import workflow as dace_fieldview_workflow
 from gt4py.next.program_processors.runners.dace_iterator import workflow as dace_iterator_workflow
 from gt4py.next.program_processors.runners.gtfn import GTFNBackendFactory
@@ -33,7 +32,7 @@ class DaCeIteratorBackendFactory(GTFNBackendFactory):
         lambda o: f"run_dace_{o.name_device}{o.name_temps}{o.name_cached}{o.name_postfix}.itir"
     )
 
-    transforms = backend.DEFAULT_TRANSFORMS
+    transforms = backend.LEGACY_TRANSFORMS
 
 
 run_dace_cpu = DaCeIteratorBackendFactory(cached=True, auto_optimize=True)
@@ -59,13 +58,7 @@ class DaCeFieldviewBackendFactory(GTFNBackendFactory):
         lambda o: f"run_dace_{o.name_device}{o.name_temps}{o.name_cached}{o.name_postfix}.gtir"
     )
 
-    transforms = backend.Transforms(
-        past_to_itir=past_to_itir.past_to_itir_factory(to_gtir=True),
-        foast_to_itir=foast_to_gtir.adapted_foast_to_gtir_factory(),
-        field_view_op_to_prog=foast_to_past.operator_to_program_factory(
-            foast_to_itir_step=foast_to_gtir.adapted_foast_to_gtir_factory()
-        ),
-    )
+    transforms = backend.DEFAULT_TRANSFORMS
 
 
 gtir_cpu = DaCeFieldviewBackendFactory(cached=True, auto_optimize=False)

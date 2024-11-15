@@ -108,7 +108,7 @@ def past_to_itir(inp: AOT_PRG, to_gtir: bool = False) -> stages.CompilableProgra
 
 # FIXME[#1582](havogt): remove `to_gtir` arg after refactoring to GTIR
 def past_to_itir_factory(
-    cached: bool = True, to_gtir: bool = False
+    cached: bool = True, to_gtir: bool = True
 ) -> workflow.Workflow[AOT_PRG, stages.CompilableProgram]:
     wf = workflow.make_step(functools.partial(past_to_itir, to_gtir=to_gtir))
     if cached:
