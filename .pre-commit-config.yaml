@@ -43,7 +43,6 @@ repos:
   - id: check-merge-conflict
   - id: check-toml
   - id: check-yaml
-  - id: debug-statements
 
 - repo: https://github.com/astral-sh/ruff-pre-commit
   ##[[[cog
@@ -51,7 +50,7 @@ repos:
   ## version = re.search('ruff==([0-9\.]*)', open("constraints.txt").read())[1]
   ## print(f"rev: v{version}")
   ##]]]
-  rev: v0.7.2
+  rev: v0.7.3
   ##[[[end]]]
   hooks:
     # Run the linter.
@@ -97,14 +96,14 @@ repos:
     - boltons==24.1.0
     - cached-property==2.0.1
     - click==8.1.7
-    - cmake==3.30.5
+    - cmake==3.31.0.1
     - cytoolz==1.0.0
     - deepdiff==8.0.1
     - devtools==0.12.2
     - diskcache==5.6.3
     - factory-boy==3.3.1
     - frozendict==2.4.6
-    - gridtools-cpp==2.3.6
+    - gridtools-cpp==2.3.8
     - importlib-resources==6.4.5
     - jinja2==3.1.4
     - lark==1.2.2
@@ -112,7 +111,7 @@ repos:
     - nanobind==2.2.0
     - ninja==1.11.1.1
     - numpy==1.24.4
-    - packaging==24.1
+    - packaging==24.2
     - pybind11==2.13.6
     - setuptools==75.3.0
     - tabulate==0.9.0

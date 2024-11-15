@@ -20,7 +20,7 @@ from gt4py.eve import codegen
 from gt4py.next import common
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.transforms import LiftMode, fencil_to_program, pass_manager
+from gt4py.next.iterator.transforms import pass_manager
 from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
 from gt4py.next.program_processors.codegens.gtfn.codegen import GTFNCodegen, GTFNIMCodegen
@@ -51,7 +51,6 @@ class GTFNTranslationStep(
     # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
     enable_itir_transforms: bool = True
     use_imperative_backend: bool = False
-    lift_mode: Optional[LiftMode] = None
     device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
     symbolic_domain_sizes: Optional[dict[str, str]] = None
     temporary_extraction_heuristics: Optional[
@@ -168,14 +167,9 @@ class GTFNTranslationStep(
         program: itir.FencilDefinition | itir.Program,
         offset_provider: dict[str, common.Connectivity | common.Dimension],
     ) -> itir.Program:
-        if isinstance(program, itir.FencilDefinition) and not self.enable_itir_transforms:
-            return fencil_to_program.FencilToProgram().apply(
-                program
-            )  # FIXME[#1582](tehrengruber): should be removed after refactoring to combined IR
-
         apply_common_transforms = functools.partial(
             pass_manager.apply_common_transforms,
-            lift_mode=self.lift_mode,
+            extract_temporaries=True,
             offset_provider=offset_provider,
             # sid::composite (via hymap) supports assigning from tuple with more elements to tuple with fewer elements
             unconditionally_collapse_tuples=True,
@@ -203,7 +197,12 @@ class GTFNTranslationStep(
         offset_provider: dict[str, common.Connectivity | common.Dimension],
         column_axis: Optional[common.Dimension],
     ) -> str:
-        new_program = self._preprocess_program(program, offset_provider)
+        if self.enable_itir_transforms:
+            new_program = self._preprocess_program(program, offset_provider)
+        else:
+            assert isinstance(program, itir.Program)
+            new_program = program
+
         gtfn_ir = GTFN_lowering.apply(
             new_program, offset_provider=offset_provider, column_axis=column_axis
         )
