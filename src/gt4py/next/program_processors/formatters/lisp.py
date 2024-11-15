@@ -11,7 +11,7 @@ from typing import Any
 from gt4py.eve.codegen import FormatTemplate as as_fmt, TemplatedGenerator
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import apply_common_transforms
-from gt4py.next.program_processors.processor_interface import program_formatter
+from gt4py.next.program_processors import program_formatter
 
 
 class ToLispLike(TemplatedGenerator):
@@ -50,10 +50,8 @@ class ToLispLike(TemplatedGenerator):
     )
 
     @classmethod
-    def apply(cls, root: itir.Node, **kwargs: Any) -> str:  # type: ignore[override]
-        transformed = apply_common_transforms(
-            root, lift_mode=kwargs.get("lift_mode"), offset_provider=kwargs["offset_provider"]
-        )
+    def apply(cls, root: itir.FencilDefinition, **kwargs: Any) -> str:  # type: ignore[override]
+        transformed = apply_common_transforms(root, offset_provider=kwargs["offset_provider"])
         generated_code = super().apply(transformed, **kwargs)
         try:
             from yasi import indent_code
@@ -64,6 +62,6 @@ class ToLispLike(TemplatedGenerator):
             return generated_code
 
 
-@program_formatter
+@program_formatter.program_formatter
 def format_lisp(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> str:
     return ToLispLike.apply(program, **kwargs)

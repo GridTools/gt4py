@@ -21,5 +21,5 @@ __copyright__: Final = "Copyright (c) 2014-2024 ETH Zurich"
 __license__: Final = "BSD-3-Clause"
 
 
-__version__: Final = "1.0.3"
+__version__: Final = "1.0.4"
 __version_info__: Final = pkg_version.parse(__version__)

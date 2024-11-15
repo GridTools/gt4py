@@ -9,13 +9,15 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Generic, Optional, Protocol, TypeVar
+from typing import Any, Generic, Optional, Protocol, TypeAlias, TypeVar
 
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import languages
+from gt4py.next.otf import arguments, languages, toolchain
 from gt4py.next.otf.binding import interface
 
 
+PrgT = TypeVar("PrgT")
+ArgT = TypeVar("ArgT")
 SrcL = TypeVar("SrcL", bound=languages.LanguageTag)
 TgtL = TypeVar("TgtL", bound=languages.LanguageTag)
 SettingT = TypeVar("SettingT", bound=languages.LanguageSettings)
@@ -24,13 +26,9 @@ TgtL_co = TypeVar("TgtL_co", bound=languages.LanguageTag, covariant=True)
 SettingT_co = TypeVar("SettingT_co", bound=languages.LanguageSettings, covariant=True)
 
 
-@dataclasses.dataclass(frozen=True)
-class ProgramCall:
-    """ITIR/GTIR representation of a program together with arguments to be passed to it."""
-
-    program: itir.FencilDefinition | itir.Program
-    args: tuple[Any, ...]
-    kwargs: dict[str, Any]
+CompilableProgram: TypeAlias = toolchain.CompilableProgram[
+    itir.FencilDefinition | itir.Program, arguments.CompileTimeArgs
+]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -49,6 +47,7 @@ class ProgramSource(Generic[SrcL, SettingT]):
     library_deps: tuple[interface.LibraryDependency, ...]
     language: type[SrcL]
     language_settings: SettingT
+    implicit_domain: bool
 
     def __post_init__(self) -> None:
         if not isinstance(self.language_settings, self.language.settings_class):
@@ -108,6 +107,12 @@ class CompiledProgram(Protocol):
     """Executable python representation of a program."""
 
     def __call__(self, *args: Any, **kwargs: Any) -> None: ...
+
+
+class ExtendedCompiledProgram(CompiledProgram):
+    """Executable python representation of a program with extra info."""
+
+    implicit_domain: bool
 
 
 def _unique_libs(*args: interface.LibraryDependency) -> tuple[interface.LibraryDependency, ...]:

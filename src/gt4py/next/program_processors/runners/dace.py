@@ -8,10 +8,7 @@
 
 import factory
 
-from gt4py.next import allocators as next_allocators, backend as next_backend
-from gt4py.next.ffront import foast_to_gtir, past_to_itir, stages as ffront_stages
-from gt4py.next.otf import workflow
-from gt4py.next.program_processors import modular_executor
+from gt4py.next import backend
 from gt4py.next.program_processors.runners.dace_fieldview import workflow as dace_fieldview_workflow
 from gt4py.next.program_processors.runners.dace_iterator import workflow as dace_iterator_workflow
 from gt4py.next.program_processors.runners.gtfn import GTFNBackendFactory
@@ -26,13 +23,16 @@ class DaCeIteratorBackendFactory(GTFNBackendFactory):
                 "..use_field_canonical_representation"
             ),
         )
-        name = factory.LazyAttribute(
-            lambda o: f"run_dace_{o.name_device}{o.name_temps}{o.name_cached}{o.name_postfix}"
-        )
         auto_optimize = factory.Trait(
-            otf_workflow__translation__auto_optimize=True, name_temps="_opt"
+            otf_workflow__translation__auto_optimize=True, name_postfix="_opt"
         )
         use_field_canonical_representation: bool = False
+
+    name = factory.LazyAttribute(
+        lambda o: f"run_dace_{o.name_device}{o.name_temps}{o.name_cached}{o.name_postfix}.itir"
+    )
+
+    transforms = backend.LEGACY_TRANSFORMS
 
 
 run_dace_cpu = DaCeIteratorBackendFactory(cached=True, auto_optimize=True)
@@ -44,18 +44,22 @@ run_dace_gpu_noopt = DaCeIteratorBackendFactory(gpu=True, cached=True, auto_opti
 itir_cpu = run_dace_cpu
 itir_gpu = run_dace_gpu
 
-gtir_cpu = next_backend.Backend(
-    executor=modular_executor.ModularExecutor(
-        otf_workflow=dace_fieldview_workflow.DaCeWorkflowFactory(), name="dace.gtir.cpu"
-    ),
-    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
-    transforms_fop=next_backend.FieldopTransformWorkflow(
-        past_to_itir=past_to_itir.PastToItirFactory(to_gtir=True),
-        foast_to_itir=workflow.CachedStep(
-            step=foast_to_gtir.foast_to_gtir, hash_function=ffront_stages.fingerprint_stage
-        ),
-    ),
-    transforms_prog=next_backend.ProgramTransformWorkflow(
-        past_to_itir=past_to_itir.PastToItirFactory(to_gtir=True)
-    ),
-)
+
+class DaCeFieldviewBackendFactory(GTFNBackendFactory):
+    class Params:
+        otf_workflow = factory.SubFactory(
+            dace_fieldview_workflow.DaCeWorkflowFactory,
+            device_type=factory.SelfAttribute("..device_type"),
+            auto_optimize=factory.SelfAttribute("..auto_optimize"),
+        )
+        auto_optimize = factory.Trait(name_postfix="_opt")
+
+    name = factory.LazyAttribute(
+        lambda o: f"run_dace_{o.name_device}{o.name_temps}{o.name_cached}{o.name_postfix}.gtir"
+    )
+
+    transforms = backend.DEFAULT_TRANSFORMS
+
+
+gtir_cpu = DaCeFieldviewBackendFactory(cached=True, auto_optimize=False)
+gtir_gpu = DaCeFieldviewBackendFactory(gpu=True, cached=True, auto_optimize=False)

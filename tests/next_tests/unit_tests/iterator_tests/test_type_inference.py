@@ -103,6 +103,10 @@ def expression_test_cases():
         # tuple_get
         (im.tuple_get(0, im.make_tuple(im.ref("a", int_type), im.ref("b", bool_type))), int_type),
         (im.tuple_get(1, im.make_tuple(im.ref("a", int_type), im.ref("b", bool_type))), bool_type),
+        (
+            im.tuple_get(0, im.ref("t", ts.DeferredType(constraint=None))),
+            ts.DeferredType(constraint=None),
+        ),
         # neighbors
         (
             im.neighbors("E2V", im.ref("a", it_on_e_of_e_type)),
@@ -171,9 +175,15 @@ def expression_test_cases():
             )(im.ref("inp1", float_i_field), im.ref("inp2", float_i_field)),
             ts.TupleType(types=[float_i_field, float_i_field]),
         ),
-        # cond
         (
-            im.cond(
+            im.as_fieldop(im.lambda_("x")(im.deref("x")))(
+                im.ref("inp", ts.DeferredType(constraint=None))
+            ),
+            ts.DeferredType(constraint=None),
+        ),
+        # if in field-view scope
+        (
+            im.if_(
                 False,
                 im.call(
                     im.call("as_fieldop")(
@@ -195,7 +205,7 @@ def expression_test_cases():
             float_i_field,
         ),
         (
-            im.cond(
+            im.if_(
                 False,
                 im.make_tuple(im.ref("inp", float_i_field), im.ref("inp", float_i_field)),
                 im.make_tuple(im.ref("inp", float_i_field), im.ref("inp", float_i_field)),
@@ -455,4 +465,66 @@ def test_program_tuple_setat_short_target():
     assert (
         isinstance(result.body[0].target.type, ts.TupleType)
         and len(result.body[0].target.type.types) == 1
+    )
+
+
+def test_program_setat_without_domain():
+    cartesian_domain = im.call("cartesian_domain")(
+        im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
+    )
+
+    testee = itir.Program(
+        id="f",
+        function_definitions=[],
+        params=[im.sym("inp", float_i_field), im.sym("out", float_i_field)],
+        declarations=[],
+        body=[
+            itir.SetAt(
+                expr=im.as_fieldop(im.lambda_("x")(im.deref("x")))("inp"),
+                domain=cartesian_domain,
+                target=im.ref("out", float_i_field),
+            )
+        ],
+    )
+
+    result = itir_type_inference.infer(testee, offset_provider={"Ioff": IDim})
+
+    assert (
+        isinstance(result.body[0].expr.type, ts.DeferredType)
+        and result.body[0].expr.type.constraint == ts.FieldType
+    )
+
+
+def test_if_stmt():
+    cartesian_domain = im.call("cartesian_domain")(
+        im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
+    )
+
+    testee = itir.IfStmt(
+        cond=im.literal_from_value(True),
+        true_branch=[
+            itir.SetAt(
+                expr=im.as_fieldop("deref", cartesian_domain)(im.ref("inp", float_i_field)),
+                domain=cartesian_domain,
+                target=im.ref("out", float_i_field),
+            )
+        ],
+        false_branch=[],
+    )
+
+    result = itir_type_inference.infer(testee, offset_provider={}, allow_undeclared_symbols=True)
+    assert result.cond.type == bool_type
+    assert result.true_branch[0].expr.type == float_i_field
+
+
+def test_as_fieldop_without_domain():
+    testee = im.as_fieldop(im.lambda_("it")(im.deref(im.shift("IOff", 1)("it"))))(
+        im.ref("inp", float_i_field)
+    )
+    result = itir_type_inference.infer(
+        testee, offset_provider={"IOff": IDim}, allow_undeclared_symbols=True
+    )
+    assert result.type == ts.DeferredType(constraint=ts.FieldType)
+    assert result.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
+        position_dims="unknown", defined_dims=float_i_field.dims, element_type=float_i_field.dtype
     )

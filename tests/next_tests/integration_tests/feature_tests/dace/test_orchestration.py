@@ -13,6 +13,7 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.next import backend as next_backend
+from gt4py.next.otf import arguments
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import cartesian_case, unstructured_case
@@ -31,7 +32,10 @@ from next_tests.integration_tests.multi_feature_tests.ffront_tests.test_laplacia
 
 try:
     import dace
-    from gt4py.next.program_processors.runners.dace import run_dace_cpu, run_dace_gpu
+    from gt4py.next.program_processors.runners.dace import (
+        itir_cpu as run_dace_cpu,
+        itir_gpu as run_dace_gpu,
+    )
 except ImportError:
     dace: Optional[ModuleType] = None  # type:ignore[no-redef]
     run_dace_cpu: Optional[next_backend.Backend] = None
@@ -42,10 +46,10 @@ pytestmark = pytest.mark.requires_dace
 
 def test_sdfgConvertible_laplap(cartesian_case):
     # TODO(kotsaloscv): Temporary solution until the `requires_dace` marker is fully functional
-    if cartesian_case.executor not in [run_dace_cpu, run_dace_gpu]:
+    if cartesian_case.backend not in [run_dace_cpu, run_dace_gpu]:
         pytest.skip("DaCe-related test: Test SDFGConvertible interface for GT4Py programs")
 
-    if cartesian_case.executor == run_dace_gpu:
+    if cartesian_case.backend == run_dace_gpu:
         import cupy as xp
     else:
         import numpy as xp
@@ -56,7 +60,7 @@ def test_sdfgConvertible_laplap(cartesian_case):
     connectivities = {}  # Dict of NeighborOffsetProviders, where self.table = None
     for k, v in cartesian_case.offset_provider.items():
         if hasattr(v, "table"):
-            connectivities[k] = gtx.CompileTimeConnectivity(
+            connectivities[k] = arguments.CompileTimeConnectivity(
                 v.max_neighbors, v.has_skip_values, v.origin_axis, v.neighbor_axis, v.table.dtype
             )
         else:
@@ -67,10 +71,10 @@ def test_sdfgConvertible_laplap(cartesian_case):
     def sdfg():
         tmp_field = xp.empty_like(out_field)
         lap_program.with_grid_type(cartesian_case.grid_type).with_backend(
-            cartesian_case.executor
+            cartesian_case.backend
         ).with_connectivities(connectivities)(in_field, tmp_field)
         lap_program.with_grid_type(cartesian_case.grid_type).with_backend(
-            cartesian_case.executor
+            cartesian_case.backend
         ).with_connectivities(connectivities)(tmp_field, out_field)
 
     sdfg()
@@ -94,10 +98,10 @@ def testee(a: gtx.Field[gtx.Dims[Vertex], gtx.float64], b: gtx.Field[gtx.Dims[Ed
 @pytest.mark.uses_unstructured_shift
 def test_sdfgConvertible_connectivities(unstructured_case):
     # TODO(kotsaloscv): Temporary solution until the `requires_dace` marker is fully functional
-    if unstructured_case.executor not in [run_dace_cpu, run_dace_gpu]:
+    if unstructured_case.backend not in [run_dace_cpu, run_dace_gpu]:
         pytest.skip("DaCe-related test: Test SDFGConvertible interface for GT4Py programs")
 
-    allocator, backend = unstructured_case.allocator, unstructured_case.executor
+    allocator, backend = unstructured_case.allocator, unstructured_case.backend
 
     if backend == run_dace_gpu:
         import cupy as xp
@@ -130,7 +134,7 @@ def test_sdfgConvertible_connectivities(unstructured_case):
         xp.asarray([[0, 1], [1, 2], [2, 0]]), Edge, Vertex, 2, False
     )
     connectivities = {}
-    connectivities["E2V"] = gtx.CompileTimeConnectivity(
+    connectivities["E2V"] = arguments.CompileTimeConnectivity(
         e2v.max_neighbors, e2v.has_skip_values, e2v.origin_axis, e2v.neighbor_axis, e2v.table.dtype
     )
     offset_provider = OffsetProvider_t.dtype._typeclass.as_ctypes()(E2V=e2v.data_ptr())

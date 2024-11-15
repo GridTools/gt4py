@@ -15,8 +15,7 @@ from typing import Final, Optional, Protocol
 
 import pytest
 
-from gt4py.next import allocators as next_allocators
-from gt4py.next.program_processors import processor_interface as ppi
+from gt4py.next import allocators as next_allocators, backend as next_backend
 
 
 # Skip definitions
@@ -44,33 +43,22 @@ class _PythonObjectIdMixin:
 class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
     GTFN_CPU = "gt4py.next.program_processors.runners.gtfn.run_gtfn"
     GTFN_CPU_IMPERATIVE = "gt4py.next.program_processors.runners.gtfn.run_gtfn_imperative"
-    GTFN_CPU_WITH_TEMPORARIES = (
-        "gt4py.next.program_processors.runners.gtfn.run_gtfn_with_temporaries"
-    )
+    GTFN_CPU_NO_TRANSFORMS = "gt4py.next.program_processors.runners.gtfn.run_gtfn_no_transforms"
     GTFN_GPU = "gt4py.next.program_processors.runners.gtfn.run_gtfn_gpu"
     ROUNDTRIP = "gt4py.next.program_processors.runners.roundtrip.default"
+    ROUNDTRIP_NO_TRANSFORMS = "gt4py.next.program_processors.runners.roundtrip.no_transforms"
     GTIR_EMBEDDED = "gt4py.next.program_processors.runners.roundtrip.gtir"
     ROUNDTRIP_WITH_TEMPORARIES = "gt4py.next.program_processors.runners.roundtrip.with_temporaries"
     DOUBLE_ROUNDTRIP = "gt4py.next.program_processors.runners.double_roundtrip.backend"
 
 
-class ExecutionAndAllocatorDescriptor(Protocol):
-    # Used for test infrastructure, consider implementing this in gt4py when refactoring otf
-    @property
-    def executor(self) -> Optional[ppi.ProgramExecutor]: ...
-
-    @property
-    def allocator(self) -> next_allocators.FieldBufferAllocatorProtocol: ...
-
-
 @dataclasses.dataclass(frozen=True)
-class EmbeddedExecutionDescriptor:
+class EmbeddedDummyBackend:
     allocator: next_allocators.FieldBufferAllocatorProtocol
-    executor: Final = None
 
 
-numpy_execution = EmbeddedExecutionDescriptor(next_allocators.StandardCPUFieldBufferAllocator())
-cupy_execution = EmbeddedExecutionDescriptor(next_allocators.StandardGPUFieldBufferAllocator())
+numpy_execution = EmbeddedDummyBackend(next_allocators.StandardCPUFieldBufferAllocator())
+cupy_execution = EmbeddedDummyBackend(next_allocators.StandardGPUFieldBufferAllocator())
 
 
 class EmbeddedIds(_PythonObjectIdMixin, str, enum.Enum):
@@ -82,6 +70,7 @@ class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
     DACE_CPU = "gt4py.next.program_processors.runners.dace.itir_cpu"
     DACE_GPU = "gt4py.next.program_processors.runners.dace.itir_gpu"
     GTIR_DACE_CPU = "gt4py.next.program_processors.runners.dace.gtir_cpu"
+    GTIR_DACE_GPU = "gt4py.next.program_processors.runners.dace.gtir_gpu"
 
 
 class ProgramFormatterId(_PythonObjectIdMixin, str, enum.Enum):
@@ -104,6 +93,7 @@ USES_CONSTANT_FIELDS = "uses_constant_fields"
 USES_DYNAMIC_OFFSETS = "uses_dynamic_offsets"
 USES_FLOORDIV = "uses_floordiv"
 USES_IF_STMTS = "uses_if_stmts"
+USES_IR_IF_STMTS = "uses_ir_if_stmts"
 USES_INDEX_FIELDS = "uses_index_fields"
 USES_LIFT_EXPRESSIONS = "uses_lift_expressions"
 USES_NEGATIVE_MODULO = "uses_negative_modulo"
@@ -111,6 +101,7 @@ USES_ORIGIN = "uses_origin"
 USES_REDUCTION_OVER_LIFT_EXPRESSIONS = "uses_reduction_over_lift_expressions"
 USES_SCAN = "uses_scan"
 USES_SCAN_IN_FIELD_OPERATOR = "uses_scan_in_field_operator"
+USES_SCAN_IN_STENCIL = "uses_scan_in_stencil"
 USES_SCAN_WITHOUT_FIELD_ARGS = "uses_scan_without_field_args"
 USES_SCAN_NESTED = "uses_scan_nested"
 USES_SCAN_REQUIRING_PROJECTOR = "uses_scan_requiring_projector"
@@ -127,6 +118,7 @@ USES_MAX_OVER = "uses_max_over"
 USES_MESH_WITH_SKIP_VALUES = "uses_mesh_with_skip_values"
 USES_SCALAR_IN_DOMAIN_AND_FO = "uses_scalar_in_domain_and_fo"
 CHECKS_SPECIFIC_ERROR = "checks_specific_error"
+USES_INDEX_BUILTIN = "uses_index_builtin"
 
 # Skip messages (available format keys: 'marker', 'backend')
 UNSUPPORTED_MESSAGE = "'{marker}' tests not supported by '{backend}' backend"
@@ -137,15 +129,20 @@ REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE = (
 # Common list of feature markers to skip
 COMMON_SKIP_TEST_LIST = [
     (REQUIRES_ATLAS, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
-    (STARTS_FROM_GTIR_PROGRAM, SKIP, UNSUPPORTED_MESSAGE),
     (USES_APPLIED_SHIFTS, XFAIL, UNSUPPORTED_MESSAGE),
-    (USES_IF_STMTS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_NEGATIVE_MODULO, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_REDUCTION_WITH_ONLY_SPARSE_FIELDS, XFAIL, REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE),
-    (USES_SCAN_IN_FIELD_OPERATOR, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),
 ]
+# Markers to skip because of missing features in the domain inference
+DOMAIN_INFERENCE_SKIP_LIST = [
+    (USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_STRIDED_NEIGHBOR_OFFSET, XFAIL, UNSUPPORTED_MESSAGE),
+]
 DACE_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
+    (USES_IF_STMTS, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_SCAN_IN_FIELD_OPERATOR, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_IR_IF_STMTS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_SCALAR_IN_DOMAIN_AND_FO, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_INDEX_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_LIFT_EXPRESSIONS, XFAIL, UNSUPPORTED_MESSAGE),
@@ -154,9 +151,13 @@ DACE_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
     (USES_TUPLE_ARGS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_TUPLE_RETURNS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_ZERO_DIMENSIONAL_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
+    (STARTS_FROM_GTIR_PROGRAM, SKIP, UNSUPPORTED_MESSAGE),
 ]
-GTIR_DACE_SKIP_TEST_LIST = [
-    (ALL, SKIP, UNSUPPORTED_MESSAGE),
+GTIR_DACE_SKIP_TEST_LIST = DOMAIN_INFERENCE_SKIP_LIST + [
+    (USES_INDEX_BUILTIN, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_NEGATIVE_MODULO, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_SCAN, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),
 ]
 EMBEDDED_SKIP_LIST = [
     (USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE),
@@ -167,14 +168,22 @@ EMBEDDED_SKIP_LIST = [
         UNSUPPORTED_MESSAGE,
     ),  # we can't extract the field type from scan args
 ]
-GTFN_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
-    # floordiv not yet supported, see https://github.com/GridTools/gt4py/issues/1136
-    (USES_FLOORDIV, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
-    (USES_STRIDED_NEIGHBOR_OFFSET, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
-    # max_over broken, see https://github.com/GridTools/gt4py/issues/1289
-    (USES_MAX_OVER, XFAIL, UNSUPPORTED_MESSAGE),
-    (USES_SCAN_REQUIRING_PROJECTOR, XFAIL, UNSUPPORTED_MESSAGE),
+ROUNDTRIP_SKIP_LIST = DOMAIN_INFERENCE_SKIP_LIST + [
+    (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),
 ]
+GTFN_SKIP_TEST_LIST = (
+    COMMON_SKIP_TEST_LIST
+    + DOMAIN_INFERENCE_SKIP_LIST
+    + [
+        # floordiv not yet supported, see https://github.com/GridTools/gt4py/issues/1136
+        (USES_FLOORDIV, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
+        (USES_SCAN_IN_STENCIL, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
+        (USES_STRIDED_NEIGHBOR_OFFSET, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
+        # max_over broken, see https://github.com/GridTools/gt4py/issues/1289
+        (USES_MAX_OVER, XFAIL, UNSUPPORTED_MESSAGE),
+        (USES_SCAN_REQUIRING_PROJECTOR, XFAIL, UNSUPPORTED_MESSAGE),
+    ]
+)
 
 #: Skip matrix, contains for each backend processor a list of tuples with following fields:
 #: (<test_marker>, <skip_definition, <skip_message>)
@@ -184,21 +193,29 @@ BACKEND_SKIP_TEST_MATRIX = {
     OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.GTIR_DACE_CPU: GTIR_DACE_SKIP_TEST_LIST,
+    OptionalProgramBackendId.GTIR_DACE_GPU: GTIR_DACE_SKIP_TEST_LIST
+    + [
+        # TODO(edopao): Enable when GPU codegen issues related to symbolic domain are fixed.
+        (ALL, XFAIL, UNSUPPORTED_MESSAGE),
+    ],
     ProgramBackendId.GTFN_CPU: GTFN_SKIP_TEST_LIST
     + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
     ProgramBackendId.GTFN_CPU_IMPERATIVE: GTFN_SKIP_TEST_LIST
     + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
     ProgramBackendId.GTFN_GPU: GTFN_SKIP_TEST_LIST
     + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
-    ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES: GTFN_SKIP_TEST_LIST
-    + [(USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE)],
-    ProgramFormatterId.GTFN_CPP_FORMATTER: [
-        (USES_REDUCTION_WITH_ONLY_SPARSE_FIELDS, XFAIL, REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE)
+    ProgramFormatterId.GTFN_CPP_FORMATTER: DOMAIN_INFERENCE_SKIP_LIST
+    + [
+        (USES_SCAN_IN_STENCIL, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
+        (USES_REDUCTION_WITH_ONLY_SPARSE_FIELDS, XFAIL, REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE),
     ],
-    ProgramBackendId.ROUNDTRIP: [(USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE)],
-    ProgramBackendId.ROUNDTRIP_WITH_TEMPORARIES: [
-        (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),
-        (USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE),
+    ProgramFormatterId.LISP_FORMATTER: DOMAIN_INFERENCE_SKIP_LIST,
+    ProgramBackendId.ROUNDTRIP: ROUNDTRIP_SKIP_LIST,
+    ProgramBackendId.DOUBLE_ROUNDTRIP: ROUNDTRIP_SKIP_LIST,
+    ProgramBackendId.ROUNDTRIP_WITH_TEMPORARIES: ROUNDTRIP_SKIP_LIST
+    + [
+        (ALL, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_STRIDED_NEIGHBOR_OFFSET, XFAIL, UNSUPPORTED_MESSAGE),
     ],
+    ProgramBackendId.GTIR_EMBEDDED: ROUNDTRIP_SKIP_LIST,
 }

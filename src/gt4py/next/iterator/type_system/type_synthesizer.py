@@ -70,13 +70,14 @@ def _register_builtin_type_synthesizer(
     *,
     fun_names: Optional[Iterable[str]] = None,
 ):
-    def wrapper(synthesizer: Callable[..., TypeOrTypeSynthesizer]) -> None:
-        # store names in function object for better debuggability
-        synthesizer.fun_names = fun_names or [synthesizer.__name__]  # type: ignore[attr-defined]
-        for f in synthesizer.fun_names:  # type: ignore[attr-defined]
-            builtin_type_synthesizers[f] = TypeSynthesizer(type_synthesizer=synthesizer)
+    if synthesizer is None:
+        return functools.partial(_register_builtin_type_synthesizer, fun_names=fun_names)
 
-    return wrapper(synthesizer) if synthesizer else wrapper
+    # store names in function object for better debuggability
+    synthesizer.fun_names = fun_names or [synthesizer.__name__]  # type: ignore[attr-defined]
+    for f in synthesizer.fun_names:  # type: ignore[attr-defined]
+        builtin_type_synthesizers[f] = TypeSynthesizer(type_synthesizer=synthesizer)
+    return synthesizer
 
 
 @_register_builtin_type_synthesizer(
@@ -136,12 +137,20 @@ def can_deref(it: it_ts.IteratorType | ts.DeferredType) -> ts.ScalarType:
 
 
 @_register_builtin_type_synthesizer
-def if_(cond: ts.ScalarType, true_branch: ts.DataType, false_branch: ts.DataType) -> ts.DataType:
-    assert isinstance(cond, ts.ScalarType) and cond.kind == ts.ScalarKind.BOOL
+def if_(pred: ts.ScalarType, true_branch: ts.DataType, false_branch: ts.DataType) -> ts.DataType:
+    if isinstance(true_branch, ts.TupleType) and isinstance(false_branch, ts.TupleType):
+        return tree_map(
+            collection_type=ts.TupleType,
+            result_collection_constructor=lambda elts: ts.TupleType(types=[*elts]),
+        )(functools.partial(if_, pred))(true_branch, false_branch)
+
+    assert not isinstance(true_branch, ts.TupleType) and not isinstance(false_branch, ts.TupleType)
+    assert isinstance(pred, ts.ScalarType) and pred.kind == ts.ScalarKind.BOOL
     # TODO(tehrengruber): Enable this or a similar check. In case the true- and false-branch are
     #  iterators defined on different positions this fails. For the GTFN backend we also don't
     #  want this, but for roundtrip it is totally fine.
     # assert true_branch == false_branch  # noqa: ERA001
+
     return true_branch
 
 
@@ -178,6 +187,14 @@ def _(*args: it_ts.NamedRangeType) -> it_ts.DomainType:
 @_register_builtin_type_synthesizer
 def make_tuple(*args: ts.DataType) -> ts.TupleType:
     return ts.TupleType(types=list(args))
+
+
+@_register_builtin_type_synthesizer
+def index(arg: ts.DimensionType) -> ts.FieldType:
+    return ts.FieldType(
+        dims=[arg.dim],
+        dtype=ts.ScalarType(kind=getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())),
+    )
 
 
 @_register_builtin_type_synthesizer
@@ -262,38 +279,46 @@ def _convert_as_fieldop_input_to_iterator(
 
 @_register_builtin_type_synthesizer
 def as_fieldop(
-    stencil: TypeSynthesizer, domain: it_ts.DomainType, offset_provider: common.OffsetProvider
+    stencil: TypeSynthesizer,
+    domain: Optional[it_ts.DomainType] = None,
+    *,
+    offset_provider: common.OffsetProvider,
 ) -> TypeSynthesizer:
+    # In case we don't have a domain argument to `as_fieldop` we can not infer the exact result
+    # type. In order to still allow some passes which don't need this information to run before the
+    # domain inference, we continue with a dummy domain. One example is the CollapseTuple pass
+    # which only needs information about the structure, e.g. how many tuple elements does this node
+    # have, but not the dimensions of a field.
+    # Note that it might appear as if using the TraceShift pass would allow us to deduce the return
+    # type of `as_fieldop` without a domain, but this is not the case, since we don't have
+    # information on the ordering of dimensions. In this example
+    #   `as_fieldop(it1, it2 -> deref(it1) + deref(it2))(i_field, j_field)`
+    # it is unclear if the result has dimension I, J or J, I.
+    if domain is None:
+        domain = it_ts.DomainType(dims="unknown")
+
     @TypeSynthesizer
-    def applied_as_fieldop(*fields) -> ts.FieldType:
+    def applied_as_fieldop(*fields) -> ts.FieldType | ts.DeferredType:
+        if any(
+            isinstance(el, ts.DeferredType)
+            for f in fields
+            for el in type_info.primitive_constituents(f)
+        ):
+            return ts.DeferredType(constraint=None)
+
         stencil_return = stencil(
             *(_convert_as_fieldop_input_to_iterator(domain, field) for field in fields),
             offset_provider=offset_provider,
         )
         assert isinstance(stencil_return, ts.DataType)
         return type_info.apply_to_primitive_constituents(
-            lambda el_type: ts.FieldType(dims=domain.dims, dtype=el_type), stencil_return
+            lambda el_type: ts.FieldType(dims=domain.dims, dtype=el_type)
+            if domain.dims != "unknown"
+            else ts.DeferredType(constraint=ts.FieldType),
+            stencil_return,
         )
 
     return applied_as_fieldop
-
-
-@_register_builtin_type_synthesizer
-def cond(pred: ts.ScalarType, true_branch: ts.DataType, false_branch: ts.DataType) -> ts.DataType:
-    def type_synthesizer_per_element(
-        pred: ts.ScalarType,
-        true_branch: ts.DataType,
-        false_branch: ts.DataType,
-    ):
-        assert isinstance(pred, ts.ScalarType) and pred.kind == ts.ScalarKind.BOOL
-        assert true_branch == false_branch
-
-        return true_branch
-
-    return tree_map(
-        collection_type=ts.TupleType,
-        result_collection_constructor=lambda elts: ts.TupleType(types=[*elts]),
-    )(functools.partial(type_synthesizer_per_element, pred))(true_branch, false_branch)
 
 
 @_register_builtin_type_synthesizer
@@ -338,7 +363,7 @@ def reduce(op: TypeSynthesizer, init: ts.TypeSpec) -> TypeSynthesizer:
 
 
 @_register_builtin_type_synthesizer
-def shift(*offset_literals, offset_provider) -> TypeSynthesizer:
+def shift(*offset_literals, offset_provider: common.OffsetProvider) -> TypeSynthesizer:
     @TypeSynthesizer
     def apply_shift(
         it: it_ts.IteratorType | ts.DeferredType,

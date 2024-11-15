@@ -15,7 +15,6 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-import gt4py.next.program_processors.processor_interface as ppi
 from gt4py.next.iterator import builtins as it_builtins
 from gt4py.next.iterator.builtins import (
     and_,
@@ -46,8 +45,9 @@ from gt4py.next.iterator.builtins import (
     plus,
     shift,
     xor_,
+    as_fieldop,
 )
-from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
+from gt4py.next.iterator.runtime import set_at, closure, fendef, fundef, offset
 from gt4py.next.program_processors.runners.gtfn import run_gtfn
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
@@ -88,7 +88,9 @@ def fencil(builtin, out, *inps, processor, as_column=False):
 
         @fendef(offset_provider={}, column_axis=column_axis)
         def fenimpl(size, arg0, out):
-            closure(cartesian_domain(named_range(IDim, 0, size)), dispatch, out, [arg0])
+            domain = cartesian_domain(named_range(IDim, 0, size))
+
+            set_at(as_fieldop(dispatch, domain)(arg0), domain, out)
 
     elif len(inps) == 2:
 
@@ -103,7 +105,9 @@ def fencil(builtin, out, *inps, processor, as_column=False):
 
         @fendef(offset_provider={}, column_axis=column_axis)
         def fenimpl(size, arg0, arg1, out):
-            closure(cartesian_domain(named_range(IDim, 0, size)), dispatch, out, [arg0, arg1])
+            domain = cartesian_domain(named_range(IDim, 0, size))
+
+            set_at(as_fieldop(dispatch, domain)(arg0, arg1), domain, out)
 
     elif len(inps) == 3:
 
@@ -118,7 +122,9 @@ def fencil(builtin, out, *inps, processor, as_column=False):
 
         @fendef(offset_provider={}, column_axis=column_axis)
         def fenimpl(size, arg0, arg1, arg2, out):
-            closure(cartesian_domain(named_range(IDim, 0, size)), dispatch, out, [arg0, arg1, arg2])
+            domain = cartesian_domain(named_range(IDim, 0, size))
+
+            set_at(as_fieldop(dispatch, domain)(arg0, arg1, arg2), domain, out)
 
     else:
         raise AssertionError("Add overload.")
@@ -179,13 +185,13 @@ def test_arithmetic_and_logical_functors_gtfn(builtin, inputs, expected):
     inps = field_maker(*array_maker(*inputs))
     out = field_maker((np.zeros_like(*array_maker(expected))))[0]
 
-    gtfn_executor = run_gtfn.executor
     gtfn_without_transforms = dataclasses.replace(
-        gtfn_executor,
-        otf_workflow=gtfn_executor.otf_workflow.replace(
-            translation=gtfn_executor.otf_workflow.translation.replace(enable_itir_transforms=False)
-        ),
-    )  # avoid inlining the function
+        run_gtfn,
+        executor=run_gtfn.executor.replace(
+            translation=run_gtfn.executor.translation.replace(enable_itir_transforms=False),
+        ),  # avoid inlining the function
+    )
+
     fencil(builtin, out, *inps, processor=gtfn_without_transforms)
 
     assert np.allclose(out.asnumpy(), expected)
@@ -195,7 +201,6 @@ def test_arithmetic_and_logical_functors_gtfn(builtin, inputs, expected):
 @pytest.mark.parametrize("builtin_name, inputs", math_builtin_test_data())
 def test_math_function_builtins(program_processor, builtin_name, inputs, as_column):
     program_processor, validate = program_processor
-    # validate = ppi.is_program_backend(program_processor)
 
     if builtin_name == "gamma":
         # numpy has no gamma function
@@ -334,7 +339,6 @@ def test_cast(program_processor, as_column, input_value, dtype, np_dtype):
         out=out,
         offset_provider={},
         column_axis=column_axis,
-        debug=True,
     )
 
     if validate:
