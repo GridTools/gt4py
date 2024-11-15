@@ -47,7 +47,7 @@ exceptiongroup==1.2.2     # via -c constraints.txt, hypothesis, pytest
 execnet==2.1.1            # via -c constraints.txt, pytest-cache, pytest-xdist
 executing==2.1.0          # via -c constraints.txt, devtools, stack-data
 factory-boy==3.3.1        # via -c constraints.txt, gt4py (pyproject.toml), pytest-factoryboy
-faker==30.8.2             # via -c constraints.txt, factory-boy
+faker==33.0.0             # via -c constraints.txt, factory-boy
 fastjsonschema==2.20.0    # via -c constraints.txt, nbformat
 filelock==3.16.1          # via -c constraints.txt, tox, virtualenv
 fonttools==4.54.1         # via -c constraints.txt, matplotlib
@@ -55,6 +55,7 @@ fparser==0.1.4            # via -c constraints.txt, dace
 frozendict==2.4.6         # via -c constraints.txt, gt4py (pyproject.toml)
 gitdb==4.0.11             # via -c constraints.txt, gitpython
 gitpython==3.1.43         # via -c constraints.txt, tach
+gridtools-cpp==2.3.8      # via -c constraints.txt, gt4py (pyproject.toml)
 hypothesis==6.113.0       # via -c constraints.txt, -r requirements-dev.in, gt4py (pyproject.toml)
 identify==2.6.1           # via -c constraints.txt, pre-commit
 idna==3.10                # via -c constraints.txt, requests
@@ -136,7 +137,7 @@ questionary==2.0.1        # via -c constraints.txt, bump-my-version
 referencing==0.35.1       # via -c constraints.txt, jsonschema, jsonschema-specifications
 requests==2.32.3          # via -c constraints.txt, sphinx
 rich==13.9.4              # via -c constraints.txt, bump-my-version, rich-click, tach
-rich-click==1.8.3         # via -c constraints.txt, bump-my-version
+rich-click==1.8.4         # via -c constraints.txt, bump-my-version
 rpds-py==0.20.1           # via -c constraints.txt, jsonschema, referencing
 ruff==0.7.3               # via -c constraints.txt, -r requirements-dev.in
 setuptools-scm==8.1.0     # via -c constraints.txt, fparser
@@ -145,7 +146,7 @@ smmap==5.0.1              # via -c constraints.txt, gitdb
 snowballstemmer==2.2.0    # via -c constraints.txt, sphinx
 sortedcontainers==2.4.0   # via -c constraints.txt, hypothesis
 sphinx==7.1.2             # via -c constraints.txt, -r requirements-dev.in, sphinx-rtd-theme, sphinxcontrib-jquery
-sphinx-rtd-theme==3.0.1   # via -c constraints.txt, -r requirements-dev.in
+sphinx-rtd-theme==3.0.2   # via -c constraints.txt, -r requirements-dev.in
 sphinxcontrib-applehelp==1.0.4  # via -c constraints.txt, sphinx
 sphinxcontrib-devhelp==1.0.2  # via -c constraints.txt, sphinx
 sphinxcontrib-htmlhelp==2.0.1  # via -c constraints.txt, sphinx
@@ -158,7 +159,7 @@ stdlib-list==0.10.0       # via -c constraints.txt, tach
 sympy==1.12.1             # via -c constraints.txt, dace, gt4py (pyproject.toml)
 tabulate==0.9.0           # via -c constraints.txt, gt4py (pyproject.toml)
 tach==0.14.3              # via -c constraints.txt, -r requirements-dev.in
-tomli==2.0.2 ; python_version < "3.11"  # via -c constraints.txt, -r requirements-dev.in, black, build, coverage, jupytext, mypy, pip-tools, pyproject-api, pytest, setuptools-scm, tach, tox
+tomli==2.1.0 ; python_version < "3.11"  # via -c constraints.txt, -r requirements-dev.in, black, build, coverage, jupytext, mypy, pip-tools, pyproject-api, pytest, setuptools-scm, tach, tox
 tomli-w==1.0.0            # via -c constraints.txt, tach
 tomlkit==0.13.2           # via -c constraints.txt, bump-my-version
 toolz==1.0.0              # via -c constraints.txt, cytoolz
@@ -179,6 +180,3 @@ zipp==3.20.2              # via -c constraints.txt, importlib-metadata, importli
 # The following packages are considered to be unsafe in a requirements file:
 pip==24.3.1               # via -c constraints.txt, pip-tools, pipdeptree
 setuptools==75.3.0        # via -c constraints.txt, gt4py (pyproject.toml), pip-tools, setuptools-scm
-
---extra-index-url https://test.pypi.org/simple/
-gridtools-cpp==2.3.8      # via -c constraints.txt, gt4py (pyproject.toml)

@@ -14,6 +14,7 @@ from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
 from gt4py.next.iterator.transforms.remap_symbols import RemapSymbolRefs, RenameSymbols
 from gt4py.next.iterator.transforms.symbol_ref_utils import CountSymbolRefs
+from gt4py.next.iterator.type_system import inference as itir_inference
 
 
 # TODO(tehrengruber): Reduce complexity of the function by removing the different options here
@@ -113,6 +114,7 @@ def inline_lambda(  # see todo above
         for attr in ("type", "recorded_shifts", "domain"):
             if hasattr(node.annex, attr):
                 setattr(new_expr.annex, attr, getattr(node.annex, attr))
+        itir_inference.copy_type(from_=node, to=new_expr, allow_untyped=True)
         return new_expr
 
 
