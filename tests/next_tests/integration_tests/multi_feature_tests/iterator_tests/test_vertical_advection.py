@@ -10,9 +10,9 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
+from gt4py.next import backend
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.runtime import closure, fendef, fundef
-from gt4py.next.iterator.transforms import LiftMode
+from gt4py.next.iterator.runtime import set_at, fendef, fundef
 from gt4py.next.program_processors.formatters import gtfn as gtfn_formatters
 from gt4py.next.program_processors.runners import gtfn
 
@@ -42,22 +42,17 @@ def tridiag_backward2(x_kp1, cp, dp):
 
 
 @fundef
-def solve_tridiag(a, b, c, d):
-    cpdp = lift(scan(tridiag_forward, True, make_tuple(0.0, 0.0)))(a, b, c, d)
-    return scan(tridiag_backward, False, 0.0)(cpdp)
-
-
-def tuple_get_it(i, x):
-    def stencil(x):
-        return tuple_get(i, deref(x))
-
-    return lift(stencil)(x)
+def solve_tridiag(domain, a, b, c, d):
+    cpdp = as_fieldop(scan(tridiag_forward, True, make_tuple(0.0, 0.0)), domain)(a, b, c, d)
+    return as_fieldop(scan(tridiag_backward, False, 0.0), domain)(cpdp)
 
 
 @fundef
-def solve_tridiag2(a, b, c, d):
-    cpdp = lift(scan(tridiag_forward, True, make_tuple(0.0, 0.0)))(a, b, c, d)
-    return scan(tridiag_backward2, False, 0.0)(tuple_get_it(0, cpdp), tuple_get_it(1, cpdp))
+def solve_tridiag2(domain, a, b, c, d):
+    cpdp = as_fieldop(scan(tridiag_forward, True, make_tuple(0.0, 0.0)), domain)(a, b, c, d)
+    return as_fieldop(scan(tridiag_backward2, False, 0.0), domain)(
+        tuple_get(0, cpdp), tuple_get(1, cpdp)
+    )
 
 
 @pytest.fixture
@@ -80,40 +75,27 @@ def tridiag_reference():
 
 @fendef
 def fen_solve_tridiag(i_size, j_size, k_size, a, b, c, d, x):
-    closure(
-        cartesian_domain(
-            named_range(IDim, 0, i_size), named_range(JDim, 0, j_size), named_range(KDim, 0, k_size)
-        ),
-        solve_tridiag,
-        x,
-        [a, b, c, d],
+    domain = cartesian_domain(
+        named_range(IDim, 0, i_size), named_range(JDim, 0, j_size), named_range(KDim, 0, k_size)
     )
+    set_at(solve_tridiag(domain, a, b, c, d), domain, x)
 
 
 @fendef
 def fen_solve_tridiag2(i_size, j_size, k_size, a, b, c, d, x):
-    closure(
-        cartesian_domain(
-            named_range(IDim, 0, i_size), named_range(JDim, 0, j_size), named_range(KDim, 0, k_size)
-        ),
-        solve_tridiag2,
-        x,
-        [a, b, c, d],
+    domain = cartesian_domain(
+        named_range(IDim, 0, i_size), named_range(JDim, 0, j_size), named_range(KDim, 0, k_size)
     )
+    set_at(solve_tridiag2(domain, a, b, c, d), domain, x)
 
 
 @pytest.mark.parametrize("fencil", [fen_solve_tridiag, fen_solve_tridiag2])
-@pytest.mark.uses_lift_expressions
 def test_tridiag(fencil, tridiag_reference, program_processor):
     program_processor, validate = program_processor
-    if program_processor in [
-        gtfn.run_gtfn,
-        gtfn.run_gtfn_imperative,
-        gtfn_formatters.format_cpp,
-    ]:
-        pytest.skip("gtfn does only support lifted scans when using temporaries")
-    if program_processor == gtfn.run_gtfn_with_temporaries:
-        pytest.xfail("tuple_get on columns not supported.")
+
+    if isinstance(program_processor, backend.Backend) and "dace" in program_processor.name:
+        pytest.xfail("Dace ITIR backend doesn't support the IR format used in this test.")
+
     a, b, c, d, x = tridiag_reference
     shape = a.shape
     as_3d_field = gtx.as_field.partial([IDim, JDim, KDim])
