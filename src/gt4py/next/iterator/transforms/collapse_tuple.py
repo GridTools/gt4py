@@ -289,9 +289,12 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return None
 
     def transform_propagate_to_if_on_tuples(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
-        # TODO(tehrengruber): This significantly increases the size of the tree. Skip transformation
-        #  in local-view for now. Revisit.
-        if not cpm.is_call_to(node, "if_") and not kwargs["within_stencil"]:
+        if kwargs["within_stencil"]:
+            # TODO(tehrengruber): This significantly increases the size of the tree. Skip transformation
+            #  in local-view for now. Revisit.
+            return None
+
+        if not cpm.is_call_to(node, "if_"):
             # TODO(tehrengruber): Only inline if type of branch value is a tuple.
             # Examples:
             # `(if cond then {1, 2} else {3, 4})[0]` -> `if cond then {1, 2}[0] else {3, 4}[0]`
