@@ -100,8 +100,12 @@ def test_sdfgConvertible_connectivities(unstructured_case):
     allocator, backend = unstructured_case.allocator, unstructured_case.backend
 
     if backend == run_dace_gpu:
+        import cupy as xp
+
         dace_storage_type = dace.StorageType.GPU_Global
     else:
+        import numpy as xp
+
         dace_storage_type = dace.StorageType.Default
 
     rows = dace.symbol("rows")
@@ -125,7 +129,7 @@ def test_sdfgConvertible_connectivities(unstructured_case):
     e2v = gtx.as_connectivity(
         [Edge, E2VDim],
         codomain=Vertex,
-        data=np.asarray([[0, 1], [1, 2], [2, 0]]),
+        data=xp.asarray([[0, 1], [1, 2], [2, 0]]),
         allocator=allocator,
     )
     connectivities = {"E2V": e2v.__gt_type__()}
@@ -134,7 +138,7 @@ def test_sdfgConvertible_connectivities(unstructured_case):
     SDFG = sdfg.to_sdfg(connectivities=connectivities)
     cSDFG = SDFG.compile()
 
-    a = gtx.as_field([Vertex], np.asarray([0.0, 1.0, 2.0]), allocator=allocator)
+    a = gtx.as_field([Vertex], xp.asarray([0.0, 1.0, 2.0]), allocator=allocator)
     out = gtx.zeros({Edge: 3}, allocator=allocator)
     e2v_ndarray_copy = (
         e2v.ndarray.copy()
@@ -161,7 +165,7 @@ def test_sdfgConvertible_connectivities(unstructured_case):
     e2v = gtx.as_connectivity(
         [Edge, E2VDim],
         codomain=Vertex,
-        data=np.asarray([[1, 0], [2, 1], [0, 2]]),
+        data=xp.asarray([[1, 0], [2, 1], [0, 2]]),
         allocator=allocator,
     )
     e2v_ndarray_copy = e2v.ndarray.copy()

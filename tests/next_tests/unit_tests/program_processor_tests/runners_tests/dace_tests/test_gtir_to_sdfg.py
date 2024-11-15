@@ -1177,7 +1177,7 @@ def test_gtir_neighbors_as_input():
     connectivity_V2E = SIMPLE_MESH.offset_provider["V2E"]
     assert isinstance(connectivity_V2E, gtx_common.NeighborTable)
 
-    v2e_field = np.random.rand(SIMPLE_MESH.num_vertices, connectivity_V2E.max_neighbors)
+    v2e_field = np.random.rand(SIMPLE_MESH.num_vertices, connectivity_V2E.shape[1])
     e = np.random.rand(SIMPLE_MESH.num_edges)
     v = np.empty(SIMPLE_MESH.num_vertices, dtype=v2e_field.dtype)
 
@@ -1194,8 +1194,8 @@ def test_gtir_neighbors_as_input():
         **FSYMBOLS,
         **make_mesh_symbols(SIMPLE_MESH),
         __v2e_field_size_0=SIMPLE_MESH.num_vertices,
-        __v2e_field_size_1=connectivity_V2E.max_neighbors,
-        __v2e_field_stride_0=connectivity_V2E.max_neighbors,
+        __v2e_field_size_1=connectivity_V2E.shape[1],
+        __v2e_field_stride_0=connectivity_V2E.shape[1],
         __v2e_field_stride_1=1,
     )
     assert np.allclose(v, v_ref)
