@@ -89,7 +89,8 @@ def apply_common_transforms(
     offset_provider_type: Optional[common.OffsetProviderType] = None,
 ) -> itir.Program:
     # TODO(havogt): if the runtime `offset_provider` is not passed, we cannot run global_tmps
-    offset_provider_type = offset_provider_type or common.offset_provider_to_type(offset_provider)
+    if offset_provider_type is None:
+        offset_provider_type = common.offset_provider_to_type(offset_provider)
 
     if isinstance(ir, itir.FencilDefinition):
         ir = fencil_to_program.FencilToProgram().apply(
