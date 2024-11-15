@@ -35,7 +35,7 @@ from .itir_to_sdfg import ItirToSDFG
 
 def preprocess_program(
     program: itir.FencilDefinition,
-    offset_provider: Mapping[str, Any],
+    offset_provider_type: common.OffsetProviderType,
     lift_mode: itir_transforms.LiftMode,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
     temporary_extraction_heuristics: Optional[
@@ -48,15 +48,13 @@ def preprocess_program(
         common_subexpression_elimination=False,
         force_inline_lambda_args=True,
         lift_mode=lift_mode,
-        offset_provider=offset_provider,
+        offset_provider_type=offset_provider_type,
         symbolic_domain_sizes=symbolic_domain_sizes,
         temporary_extraction_heuristics=temporary_extraction_heuristics,
         unroll_reduce=unroll_reduce,
     )
 
-    node = itir_type_inference.infer(
-        node, offset_provider_type=common.offset_provider_to_type(offset_provider)
-    )
+    node = itir_type_inference.infer(node, offset_provider_type=offset_provider_type)
 
     if isinstance(node, itir.Program):
         fencil_definition = program_to_fencil.program_to_fencil(node)
@@ -71,7 +69,7 @@ def preprocess_program(
 def build_sdfg_from_itir(
     program: itir.FencilDefinition,
     arg_types: Sequence[ts.TypeSpec],
-    offset_provider: dict[str, Any],
+    offset_provider_type: common.OffsetProviderType,
     auto_optimize: bool = False,
     on_gpu: bool = False,
     column_axis: Optional[common.Dimension] = None,
@@ -108,11 +106,15 @@ def build_sdfg_from_itir(
 
     # visit ITIR and generate SDFG
     program, tmps = preprocess_program(
-        program, offset_provider, lift_mode, symbolic_domain_sizes, temporary_extraction_heuristics
+        program,
+        offset_provider_type,
+        lift_mode,
+        symbolic_domain_sizes,
+        temporary_extraction_heuristics,
     )
     sdfg_genenerator = ItirToSDFG(
         list(arg_types),
-        common.offset_provider_to_type(offset_provider),
+        offset_provider_type,
         tmps,
         use_field_canonical_representation,
         column_axis,
@@ -189,14 +191,12 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             raise ValueError(
                 "[DaCe Orchestration] Connectivities -at compile time- are required to generate the SDFG. Use `with_connectivities` method."
             )
-        offset_provider = (
-            self.connectivities | self._implicit_offset_provider
-        )  # tables are None at this point
+        offset_provider_type = self.connectivities | self._implicit_offset_provider
 
         sdfg = self.backend.executor.step.translation.generate_sdfg(  # type: ignore[union-attr]
             self.itir,
             arg_types,
-            offset_provider=offset_provider,
+            offset_provider_type=offset_provider_type,
             column_axis=kwargs.get("column_axis", None),
         )
         self.sdfg_closure_vars["sdfg.arrays"] = sdfg.arrays  # use it in __sdfg_closure__
@@ -241,7 +241,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
 
         sdfg.offset_providers_per_input_field = {}
         itir_tmp = itir_transforms.apply_common_transforms(
-            self.itir, offset_provider=offset_provider
+            self.itir, offset_provider_type=offset_provider_type
         )
         itir_tmp_fencil = program_to_fencil.program_to_fencil(itir_tmp)
         for closure in itir_tmp_fencil.closures:
@@ -270,7 +270,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         the offset providers are not part of GT4Py Program's arguments.
         Keep in mind, that `__sdfg_closure__` is called after `__sdfg__` method.
         """
-        offset_provider = self.connectivities
+        offset_provider_type = self.connectivities
 
         # Define DaCe symbols
         connectivity_table_size_symbols = {
@@ -279,9 +279,9 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             ): dace.symbol(
                 dace_utils.field_size_symbol_name(dace_utils.connectivity_identifier(k), axis)
             )
-            for k, v in offset_provider.items()  # type: ignore[union-attr]
+            for k, v in offset_provider_type.items()  # type: ignore[union-attr]
             for axis in [0, 1]
-            if hasattr(v, "table")
+            if isinstance(v, common.NeighborConnectivityType)
             and dace_utils.connectivity_identifier(k) in self.sdfg_closure_vars["sdfg.arrays"]
         }
 
@@ -291,9 +291,9 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             ): dace.symbol(
                 dace_utils.field_stride_symbol_name(dace_utils.connectivity_identifier(k), axis)
             )
-            for k, v in offset_provider.items()  # type: ignore[union-attr]
+            for k, v in offset_provider_type.items()  # type: ignore[union-attr]
             for axis in [0, 1]
-            if hasattr(v, "table")
+            if isinstance(v, common.NeighborConnectivityType)
             and dace_utils.connectivity_identifier(k) in self.sdfg_closure_vars["sdfg.arrays"]
         }
 
@@ -301,8 +301,8 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
 
         # Define the storage location (e.g. CPU, GPU) of the connectivity tables
         if "storage" not in Program.connectivity_tables_data_descriptors:
-            for k, v in offset_provider.items():  # type: ignore[union-attr]
-                if not hasattr(v, "table"):
+            for k, v in offset_provider_type.items():  # type: ignore[union-attr]
+                if not isinstance(v, common.NeighborConnectivityType):
                     continue
                 if dace_utils.connectivity_identifier(k) in self.sdfg_closure_vars["sdfg.arrays"]:
                     Program.connectivity_tables_data_descriptors["storage"] = (
@@ -314,11 +314,10 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
 
         # Build the closure dictionary
         closure_dict = {}
-        for k, v in offset_provider.items():  # type: ignore[union-attr]
+        for k, v in offset_provider_type.items():  # type: ignore[union-attr]
             conn_id = dace_utils.connectivity_identifier(k)
-            # TODO: more cleanup above when accessing "table"
             if (
-                isinstance(v, common.ConnectivityType)
+                isinstance(v, common.NeighborConnectivityType)
                 and conn_id in self.sdfg_closure_vars["sdfg.arrays"]
             ):
                 if conn_id not in Program.connectivity_tables_data_descriptors:

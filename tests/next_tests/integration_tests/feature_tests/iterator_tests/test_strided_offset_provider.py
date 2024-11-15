@@ -44,7 +44,7 @@ def test_strided_offset_provider(program_processor):
     program_processor, validate = program_processor
 
     LocA_size = 2
-    max_neighbors = LocA2LocAB_offset_provider.max_neighbors
+    max_neighbors = LocA2LocAB_offset_provider.__gt_type__().max_neighbors
     LocAB_size = LocA_size * max_neighbors
 
     rng = np.random.default_rng()

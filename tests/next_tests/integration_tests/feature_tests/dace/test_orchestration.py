@@ -12,7 +12,7 @@ from types import ModuleType
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import backend as next_backend
+from gt4py.next import backend as next_backend, common
 from gt4py.next.otf import arguments
 
 from next_tests.integration_tests import cases
@@ -64,10 +64,14 @@ def test_sdfgConvertible_laplap(cartesian_case):
         tmp_field = xp.empty_like(out_field)
         lap_program.with_grid_type(cartesian_case.grid_type).with_backend(
             cartesian_case.backend
-        ).with_connectivities(cartesian_case.offset_provider)(in_field, tmp_field)
+        ).with_connectivities(common.offset_provider_to_type(cartesian_case.offset_provider))(
+            in_field, tmp_field
+        )
         lap_program.with_grid_type(cartesian_case.grid_type).with_backend(
             cartesian_case.backend
-        ).with_connectivities(cartesian_case.offset_provider)(tmp_field, out_field)
+        ).with_connectivities(common.offset_provider_to_type(cartesian_case.offset_provider))(
+            tmp_field, out_field
+        )
 
     sdfg()
 

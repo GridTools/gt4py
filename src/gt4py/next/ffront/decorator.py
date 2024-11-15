@@ -81,7 +81,7 @@ class Program:
 
     definition_stage: ffront_stages.ProgramDefinition
     backend: Optional[next_backend.Backend]
-    connectivities: Optional[dict[str, common.ConnectivityType]]  # TODO or NeighborConnectivityType
+    connectivities: Optional[common.OffsetProviderType] = None
 
     @classmethod
     def from_function(
@@ -89,7 +89,7 @@ class Program:
         definition: types.FunctionType,
         backend: Optional[next_backend],
         grid_type: Optional[common.GridType] = None,
-        connectivities: Optional[dict[str, common.ConnectivityType]] = None,
+        connectivities: Optional[common.OffsetProviderType] = None,
     ) -> Program:
         program_def = ffront_stages.ProgramDefinition(definition=definition, grid_type=grid_type)
         return cls(definition_stage=program_def, backend=backend, connectivities=connectivities)
@@ -139,10 +139,7 @@ class Program:
     def with_backend(self, backend: next_backend.Backend) -> Program:
         return dataclasses.replace(self, backend=backend)
 
-    def with_connectivities(self, connectivities: dict[str, common.ConnectivityType]) -> Program:
-        assert all(
-            isinstance(conn_type, common.ConnectivityType) for conn_type in connectivities.values()
-        )
+    def with_connectivities(self, connectivities: common.OffsetProviderType) -> Program:
         return dataclasses.replace(self, connectivities=connectivities)
 
     def with_grid_type(self, grid_type: common.GridType) -> Program:

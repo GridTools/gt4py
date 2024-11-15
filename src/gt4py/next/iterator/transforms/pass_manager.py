@@ -75,7 +75,7 @@ def apply_common_transforms(
     ir: itir.Program | itir.FencilDefinition,
     *,
     lift_mode=None,
-    offset_provider=None,
+    offset_provider=None,  # TODO(havogt): should be replaced by offset_provider_type
     unroll_reduce=False,
     common_subexpression_elimination=True,
     force_inline_lambda_args=False,
@@ -86,8 +86,11 @@ def apply_common_transforms(
     ] = None,
     # FIXME[#1582](tehrengruber): Revisit and cleanup after new GTIR temporary pass is in place
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
+    offset_provider_type: Optional[common.OffsetProviderType] = None,
 ) -> itir.Program:
-    offset_provider_type = common.offset_provider_to_type(offset_provider)
+    # TODO(havogt): if the runtime `offset_provider` is not passed, we cannot run global_tmps
+    offset_provider_type = offset_provider_type or common.offset_provider_to_type(offset_provider)
+
     if isinstance(ir, itir.FencilDefinition):
         ir = fencil_to_program.FencilToProgram().apply(
             ir

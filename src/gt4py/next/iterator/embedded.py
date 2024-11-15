@@ -135,6 +135,15 @@ class StridedConnectivityField(common.ConnectivityField):
     def __gt_origin__(self) -> core_defs.Tuple[fbuiltins.int]:
         raise NotImplementedError
 
+    def __gt_type__(self) -> common.NeighborConnectivityType:
+        return common.NeighborConnectivityType(
+            domain=self.domain_dims,
+            codomain=self.codomain_dim,
+            max_neighbors=self._max_neighbors,
+            skip_value=self.skip_value,
+            dtype=self.dtype,
+        )
+
     @property
     def domain(self) -> common.Domain:
         return common.Domain(
@@ -166,7 +175,7 @@ class StridedConnectivityField(common.ConnectivityField):
     ) -> Self:
         if not isinstance(item, tuple) and not len(item) == 2:
             raise NotImplementedError()  # TODO(havogt): add proper slicing
-        return ConstantField(item[0] * self.max_neighbors + item[1])
+        return ConstantField(item[0] * self._max_neighbors + item[1])
 
     def as_scalar(self) -> xtyping.Never:
         raise NotImplementedError()

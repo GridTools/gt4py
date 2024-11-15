@@ -10,8 +10,8 @@ import dataclasses
 from typing import Optional
 
 from gt4py import eve
-from gt4py.next import common
 from gt4py.eve import utils as eve_utils
+from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms import inline_lambdas, inline_lifts, trace_shifts
@@ -77,7 +77,7 @@ class FuseAsFieldOp(eve.NodeTranslator):
     )
     >>> print(
     ...     FuseAsFieldOp.apply(
-    ...         nested_as_fieldop, offset_provider={}, allow_undeclared_symbols=True
+    ...         nested_as_fieldop, offset_provider_type={}, allow_undeclared_symbols=True
     ...     )
     ... )
     as_fieldop(λ(inp1, inp2, inp3) → ·inp1 × ·inp2 + ·inp3, c⟨ IDimₕ: [0, 1) ⟩)(inp1, inp2, inp3)
