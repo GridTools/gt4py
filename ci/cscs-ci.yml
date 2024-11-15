@@ -46,13 +46,16 @@ stages:
 .build_baseimage_x86_64:
   extends: [.container-builder-cscs-zen2, .build_baseimage]
   variables:
-    CUDA_VERSION: 11.8.0
+    CUDA_VERSION: 11.2.2
     CUPY_PACKAGE: cupy-cuda11x
+    CUPY_VERSION: 12.3.0 # latest version that supports cuda 11
+    UBUNTU_VERSION: 20.04  # 22.04 hangs on daint in some tests for unknown reasons.
 .build_baseimage_aarch64:
   extends: [.container-builder-cscs-gh200, .build_baseimage]
   variables:
     CUDA_VERSION: 12.6.2
     CUPY_PACKAGE: cupy-cuda12x
+    CUPY_VERSION: 13.3.0
   # TODO: enable CI job when Todi is back in operational state
   when: manual
 

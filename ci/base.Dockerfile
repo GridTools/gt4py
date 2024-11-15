@@ -1,5 +1,6 @@
 ARG CUDA_VERSION=12.6.2
-FROM docker.io/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu22.04
+ARG UBUNTU_VERSION=22.04
+FROM docker.io/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION}
 ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
 
@@ -22,7 +23,7 @@ RUN apt-get update -qq && apt-get install -qq -y --no-install-recommends \
     tk-dev \
     libffi-dev \
     liblzma-dev \
-    python3-openssl \
+    $( [ "${UBUNTU_VERSION}" = "20.04" ] && echo "python-openssl" || echo "python3-openssl" ) \
     libreadline-dev \
     git \
     rustc \
@@ -35,9 +36,6 @@ RUN wget --quiet https://archives.boost.io/release/1.85.0/source/boost_1_85_0.ta
     tar xzf boost_1_85_0.tar.gz && \
     mv boost_1_85_0/boost /usr/local/include/ && \
     rm boost_1_85_0.tar.gz boost_hash.txt
-
-COPY ./ci/install_cuda_driver.sh ./install_cuda_driver.sh
-RUN ./install_cuda_driver.sh 470.57.02
 
 ENV BOOST_ROOT /usr/local/
 ENV CUDA_HOME /usr/local/cuda
@@ -58,4 +56,4 @@ RUN pyenv update && \
 ENV PATH="/root/.pyenv/shims:${PATH}"
 
 ARG CUPY_PACKAGE=cupy-cuda12x
-RUN pip install --upgrade pip setuptools wheel tox ${CUPY_PACKAGE}==13.3.0
+RUN pip install --upgrade pip setuptools wheel tox ${CUPY_PACKAGE}==12.3.0
