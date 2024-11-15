@@ -101,6 +101,7 @@ USES_ORIGIN = "uses_origin"
 USES_REDUCTION_OVER_LIFT_EXPRESSIONS = "uses_reduction_over_lift_expressions"
 USES_SCAN = "uses_scan"
 USES_SCAN_IN_FIELD_OPERATOR = "uses_scan_in_field_operator"
+USES_SCAN_IN_STENCIL = "uses_scan_in_stencil"
 USES_SCAN_WITHOUT_FIELD_ARGS = "uses_scan_without_field_args"
 USES_SCAN_NESTED = "uses_scan_nested"
 USES_SCAN_REQUIRING_PROJECTOR = "uses_scan_requiring_projector"
@@ -176,6 +177,7 @@ GTFN_SKIP_TEST_LIST = (
     + [
         # floordiv not yet supported, see https://github.com/GridTools/gt4py/issues/1136
         (USES_FLOORDIV, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
+        (USES_SCAN_IN_STENCIL, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
         (USES_STRIDED_NEIGHBOR_OFFSET, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
         # max_over broken, see https://github.com/GridTools/gt4py/issues/1289
         (USES_MAX_OVER, XFAIL, UNSUPPORTED_MESSAGE),
@@ -204,6 +206,7 @@ BACKEND_SKIP_TEST_MATRIX = {
     + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
     ProgramFormatterId.GTFN_CPP_FORMATTER: DOMAIN_INFERENCE_SKIP_LIST
     + [
+        (USES_SCAN_IN_STENCIL, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
         (USES_REDUCTION_WITH_ONLY_SPARSE_FIELDS, XFAIL, REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE),
     ],
     ProgramFormatterId.LISP_FORMATTER: DOMAIN_INFERENCE_SKIP_LIST,
