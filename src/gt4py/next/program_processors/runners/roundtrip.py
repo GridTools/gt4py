@@ -103,6 +103,7 @@ def fencil_generator(
     Arguments:
         ir: The iterator IR (ITIR) node.
         debug: Keep module source containing fencil implementation.
+        extract_temporaries: Extract intermediate field values into temporaries.
         use_embedded: Directly use builtins from embedded backend instead of
                       generic dispatcher. Gives faster performance and is easier
                       to debug.
@@ -209,7 +210,7 @@ class Roundtrip(workflow.Workflow[stages.CompilableProgram, stages.CompiledProgr
         ) -> None:
             if out is not None:
                 args = (*args, out)
-            if not column_axis:
+            if not column_axis:  # TODO(tehrengruber): This variable is never used. Bug?
                 column_axis = inp.args.column_axis
             fencil(
                 *args,
@@ -222,11 +223,13 @@ class Roundtrip(workflow.Workflow[stages.CompilableProgram, stages.CompiledProgr
         return decorated_fencil
 
 
+# TODO(tehrengruber): introduce factory
 default = next_backend.Backend(
     name="roundtrip",
     executor=Roundtrip(
         transforms=functools.partial(
-            itir_transforms.apply_common_transforms, lift_mode=itir_transforms.LiftMode.FORCE_INLINE
+            itir_transforms.apply_common_transforms,
+            extract_temporaries=False,
         )
     ),
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
@@ -237,9 +240,15 @@ with_temporaries = next_backend.Backend(
     executor=Roundtrip(
         transforms=functools.partial(
             itir_transforms.apply_common_transforms,
-            lift_mode=itir_transforms.LiftMode.USE_TEMPORARIES,
+            extract_temporaries=True,
         )
     ),
+    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
+    transforms=next_backend.DEFAULT_TRANSFORMS,
+)
+no_transforms = next_backend.Backend(
+    name="roundtrip",
+    executor=Roundtrip(transforms=lambda o, *, offset_provider: o),
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
     transforms=next_backend.DEFAULT_TRANSFORMS,
 )
@@ -257,3 +266,4 @@ gtir = next_backend.Backend(
         ),
     ),
 )
+foast_to_gtir_step = foast_to_gtir.adapted_foast_to_gtir_factory(cached=True)

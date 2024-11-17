@@ -14,7 +14,12 @@ from gt4py.eve import utils as eve_utils
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
-from gt4py.next.iterator.transforms import inline_lambdas, inline_lifts, trace_shifts
+from gt4py.next.iterator.transforms import (
+    inline_center_deref_lift_vars,
+    inline_lambdas,
+    inline_lifts,
+    trace_shifts,
+)
 from gt4py.next.iterator.type_system import (
     inference as type_inference,
     type_specifications as it_ts,
@@ -53,6 +58,14 @@ def _canonicalize_as_fieldop(expr: itir.FunCall) -> itir.FunCall:
         return new_expr
 
     return expr
+
+
+def _is_tuple_expr_of_literals(expr: itir.Expr):
+    if cpm.is_call_to(expr, "make_tuple"):
+        return all(_is_tuple_expr_of_literals(arg) for arg in expr.args)
+    if cpm.is_call_to(expr, "tuple_get"):
+        return _is_tuple_expr_of_literals(expr.args[1])
+    return isinstance(expr, itir.Literal)
 
 
 @dataclasses.dataclass
@@ -156,11 +169,15 @@ class FuseAsFieldOp(eve.NodeTranslator):
 
             for stencil_param, arg, arg_shifts in zip(stencil.params, args, shifts, strict=True):
                 assert isinstance(arg.type, ts.TypeSpec)
-                dtype = type_info.extract_dtype(arg.type)
+                dtype = type_info.apply_to_primitive_constituents(type_info.extract_dtype, arg.type)
                 # TODO(tehrengruber): make this configurable
-                should_inline = isinstance(arg, itir.Literal) or (
+                should_inline = _is_tuple_expr_of_literals(arg) or (
                     isinstance(arg, itir.FunCall)
-                    and (cpm.is_call_to(arg.fun, "as_fieldop") or cpm.is_call_to(arg, "if_"))
+                    and (
+                        cpm.is_call_to(arg.fun, "as_fieldop")
+                        and isinstance(arg.fun.args[0], itir.Lambda)
+                        or cpm.is_call_to(arg, "if_")
+                    )
                     and (isinstance(dtype, it_ts.ListType) or len(arg_shifts) <= 1)
                 )
                 if should_inline:
@@ -171,7 +188,7 @@ class FuseAsFieldOp(eve.NodeTranslator):
                         type_ = arg.type
                         arg = im.op_as_fieldop("if_")(*arg.args)
                         arg.type = type_
-                    elif isinstance(arg, itir.Literal):
+                    elif _is_tuple_expr_of_literals(arg):
                         arg = im.op_as_fieldop(im.lambda_()(arg))()
                     else:
                         raise NotImplementedError()
@@ -182,6 +199,7 @@ class FuseAsFieldOp(eve.NodeTranslator):
 
                     new_args = _merge_arguments(new_args, extracted_args)
                 else:
+                    assert not isinstance(dtype, it_ts.ListType)
                     new_param: str
                     if isinstance(
                         arg, itir.SymRef
@@ -192,15 +210,19 @@ class FuseAsFieldOp(eve.NodeTranslator):
                         new_param = stencil_param.id
                     new_args = _merge_arguments(new_args, {new_param: arg})
 
-            # simplify stencil directly to keep the tree small
-            new_stencil_body = inline_lambdas.InlineLambdas.apply(
-                new_stencil_body, opcount_preserving=True
-            )
-            new_stencil_body = inline_lifts.InlineLifts().visit(new_stencil_body)
-
             new_node = im.as_fieldop(im.lambda_(*new_args.keys())(new_stencil_body), domain)(
                 *new_args.values()
             )
+
+            # simplify stencil directly to keep the tree small
+            new_node = inline_center_deref_lift_vars.InlineCenterDerefLiftVars.apply(
+                new_node
+            )  # to keep the tree small
+            new_node = inline_lambdas.InlineLambdas.apply(
+                new_node, opcount_preserving=True, force_inline_lift_args=True
+            )
+            new_node = inline_lifts.InlineLifts().visit(new_node)
+
             type_inference.copy_type(from_=node, to=new_node)
 
             return new_node

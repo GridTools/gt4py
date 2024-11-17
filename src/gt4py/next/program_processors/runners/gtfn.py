@@ -8,16 +8,19 @@
 
 import functools
 import warnings
-from typing import Any
+from typing import Any, Optional
 
+import diskcache
 import factory
 import numpy.typing as npt
 
 import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
+from gt4py.eve import utils
 from gt4py.eve.utils import content_hash
 from gt4py.next import backend, common, config
-from gt4py.next.iterator import transforms
+from gt4py.next.common import Connectivity, Dimension
+from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import arguments, recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import compiler
@@ -116,6 +119,37 @@ def compilation_hash(otf_closure: stages.CompilableProgram) -> int:
     )
 
 
+def fingerprint_compilable_program(inp: stages.CompilableProgram) -> str:
+    """
+    Generates a unique hash string for a stencil source program representing
+    the program, sorted offset_provider, and column_axis.
+    """
+    program: itir.FencilDefinition | itir.Program = inp.data
+    offset_provider: dict[str, Connectivity | Dimension] = inp.args.offset_provider
+    column_axis: Optional[common.Dimension] = inp.args.column_axis
+
+    program_hash = utils.content_hash(
+        (
+            program,
+            sorted(offset_provider.items(), key=lambda el: el[0]),
+            column_axis,
+        )
+    )
+
+    return program_hash
+
+
+class FileCache(diskcache.Cache):
+    """
+    This class extends `diskcache.Cache` to ensure the cache is closed upon deletion,
+    i.e. it ensures that any resources associated with the cache are properly
+    released when the instance is garbage collected.
+    """
+
+    def __del__(self) -> None:
+        self.close()
+
+
 class GTFNCompileWorkflowFactory(factory.Factory):
     class Meta:
         model = recipes.OTFCompileWorkflow
@@ -129,10 +163,23 @@ class GTFNCompileWorkflowFactory(factory.Factory):
             lambda o: compiledb.CompiledbFactory(cmake_build_type=o.cmake_build_type)
         )
 
-    translation = factory.SubFactory(
-        gtfn_module.GTFNTranslationStepFactory,
-        device_type=factory.SelfAttribute("..device_type"),
-    )
+        cached_translation = factory.Trait(
+            translation=factory.LazyAttribute(
+                lambda o: workflow.CachedStep(
+                    o.bare_translation,
+                    hash_function=fingerprint_compilable_program,
+                    cache=FileCache(str(config.BUILD_CACHE_DIR / "gtfn_cache")),
+                )
+            ),
+        )
+
+        bare_translation = factory.SubFactory(
+            gtfn_module.GTFNTranslationStepFactory,
+            device_type=factory.SelfAttribute("..device_type"),
+        )
+
+    translation = factory.LazyAttribute(lambda o: o.bare_translation)
+
     bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableSource] = (
         nanobind.bind_source
     )
@@ -166,12 +213,6 @@ class GTFNBackendFactory(factory.Factory):
             ),
             name_cached="_cached",
         )
-        use_temporaries = factory.Trait(
-            # FIXME[#1582](tehrengruber): Revisit and cleanup after new GTIR temporary pass is in place
-            otf_workflow__translation__lift_mode=transforms.LiftMode.USE_TEMPORARIES,
-            # otf_workflow__translation__temporary_extraction_heuristics=global_tmps.SimpleTemporaryExtractionHeuristics,  # noqa: ERA001
-            name_temps="_with_temporaries",
-        )
         device_type = core_defs.DeviceType.CPU
         hash_function = compilation_hash
         otf_workflow = factory.SubFactory(
@@ -193,10 +234,12 @@ run_gtfn_imperative = GTFNBackendFactory(
     name_postfix="_imperative", otf_workflow__translation__use_imperative_backend=True
 )
 
-run_gtfn_cached = GTFNBackendFactory(cached=True)
-
-run_gtfn_with_temporaries = GTFNBackendFactory(use_temporaries=True)
+run_gtfn_cached = GTFNBackendFactory(cached=True, otf_workflow__cached_translation=True)
 
 run_gtfn_gpu = GTFNBackendFactory(gpu=True)
 
 run_gtfn_gpu_cached = GTFNBackendFactory(gpu=True, cached=True)
+
+run_gtfn_no_transforms = GTFNBackendFactory(
+    otf_workflow__bare_translation__enable_itir_transforms=False
+)

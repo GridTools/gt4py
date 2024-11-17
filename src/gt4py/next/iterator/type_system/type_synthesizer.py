@@ -299,7 +299,11 @@ def as_fieldop(
 
     @TypeSynthesizer
     def applied_as_fieldop(*fields) -> ts.FieldType | ts.DeferredType:
-        if any(isinstance(f, ts.DeferredType) for f in fields):
+        if any(
+            isinstance(el, ts.DeferredType)
+            for f in fields
+            for el in type_info.primitive_constituents(f)
+        ):
             return ts.DeferredType(constraint=None)
 
         stencil_return = stencil(

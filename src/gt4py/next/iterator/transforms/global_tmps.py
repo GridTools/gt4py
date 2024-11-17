@@ -175,7 +175,10 @@ def _transform_stmt(
 
 
 def create_global_tmps(
-    program: itir.Program, offset_provider: common.OffsetProvider
+    program: itir.Program,
+    offset_provider: common.OffsetProvider,
+    *,
+    uids: Optional[eve_utils.UIDGenerator] = None,
 ) -> itir.Program:
     """
     Given an `itir.Program` create temporaries for intermediate values.
@@ -188,7 +191,8 @@ def create_global_tmps(
         program, offset_provider_type=common.offset_provider_to_type(offset_provider)
     )
 
-    uids = eve_utils.UIDGenerator(prefix="__tmp")
+    if not uids:
+        uids = eve_utils.UIDGenerator(prefix="__tmp")
     declarations = program.declarations.copy()
     new_body = []
 

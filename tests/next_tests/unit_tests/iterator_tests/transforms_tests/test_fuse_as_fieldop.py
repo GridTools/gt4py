@@ -45,6 +45,31 @@ def test_trivial_literal():
     assert actual == expected
 
 
+def test_tuple_arg():
+    d = im.domain("cartesian_domain", {})
+    testee = im.op_as_fieldop("plus", d)(
+        im.op_as_fieldop(im.lambda_("t")(im.plus(im.tuple_get(0, "t"), im.tuple_get(1, "t"))), d)(
+            im.make_tuple(1, 2)
+        ),
+        3,
+    )
+    expected = im.as_fieldop(
+        im.lambda_()(
+            im.plus(
+                im.let("t", im.make_tuple(1, 2))(
+                    im.plus(im.tuple_get(0, "t"), im.tuple_get(1, "t"))
+                ),
+                3,
+            )
+        ),
+        d,
+    )()
+    actual = fuse_as_fieldop.FuseAsFieldOp.apply(
+        testee, offset_provider={}, allow_undeclared_symbols=True
+    )
+    assert actual == expected
+
+
 def test_symref_used_twice():
     d = im.domain("cartesian_domain", {IDim: (0, 1)})
     testee = im.as_fieldop(im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))), d)(

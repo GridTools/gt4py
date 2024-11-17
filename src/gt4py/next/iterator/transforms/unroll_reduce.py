@@ -30,7 +30,14 @@ def _is_neighbors_or_lifted_and_neighbors(arg: itir.Expr) -> TypeGuard[itir.FunC
 
 
 def _get_neighbors_args(reduce_args: Iterable[itir.Expr]) -> Iterator[itir.FunCall]:
-    return filter(_is_neighbors_or_lifted_and_neighbors, reduce_args)
+    flat_reduce_args: list[itir.Expr] = []
+    for arg in reduce_args:
+        if cpm.is_call_to(arg, "if_"):
+            flat_reduce_args.extend(_get_neighbors_args(arg.args[1:3]))
+        else:
+            flat_reduce_args.append(arg)
+
+    return filter(_is_neighbors_or_lifted_and_neighbors, flat_reduce_args)
 
 
 def _is_list_of_funcalls(lst: list) -> TypeGuard[list[itir.FunCall]]:

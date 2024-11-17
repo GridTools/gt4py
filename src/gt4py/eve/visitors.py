@@ -45,7 +45,7 @@ class NodeVisitor:
         3. ``self.generic_visit()``.
 
     This dispatching mechanism is implemented in the main :meth:`visit`
-    method and can be overriden in subclasses. Therefore, a simple way to extend
+    method and can be overridden in subclasses. Therefore, a simple way to extend
     the behavior of a visitor is by inheriting from lightweight `trait` classes
     with a custom ``visit()`` method, which wraps the call to the superclass'
     ``visit()`` and adds extra pre and post visit logic. Check :mod:`eve.traits`
@@ -82,7 +82,7 @@ class NodeVisitor:
 
     Notes:
         If you want to apply changes to nodes during the traversal,
-        use the :class:`NodeMutator` subclass, which handles correctly
+        use the :class:`NodeTranslator` subclass, which handles correctly
         structural modifications of the visited tree.
 
     """

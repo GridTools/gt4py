@@ -14,6 +14,7 @@ from dace.sdfg.state import LoopRegion
 
 import gt4py.eve as eve
 from gt4py.next import Dimension, DimensionKind, common
+from gt4py.next.ffront import fbuiltins as gtx_fbuiltins
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir import Expr, FunCall, Literal, Sym, SymRef
 from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
@@ -105,7 +106,7 @@ def _make_array_shape_and_strides(
     tuple(shape, strides)
         The output tuple fields are arrays of dace symbolic expressions.
     """
-    dtype = dace.int32
+    dtype = dace.dtype_to_typeclass(gtx_fbuiltins.IndexType)
     sorted_dims = dace_utils.get_sorted_dims(dims) if sort_dims else list(enumerate(dims))
     connectivity_types = dace_utils.filter_connectivities(offset_provider_type)
     shape = [
