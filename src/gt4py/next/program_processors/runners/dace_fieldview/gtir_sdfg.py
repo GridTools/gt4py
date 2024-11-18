@@ -344,9 +344,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 head_state.add_nedge(
                     field.dc_node, temp_node, sdfg.make_array_memlet(field.dc_node.data)
                 )
-                return gtir_builtin_translators.FieldopData(
-                    temp_node, field.gt_dtype, field.local_offset
-                )
+                return gtir_builtin_translators.FieldopData(temp_node, field.gt_type)
 
         temp_result = gtx_utils.tree_map(make_temps)(result)
         return list(gtx_utils.flatten_nested_tuple((temp_result,)))
@@ -489,9 +487,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             target_desc = sdfg.arrays[target.dc_node.data]
             assert not target_desc.transient
 
-            if isinstance(target.gt_dtype, ts.FieldType):
+            if isinstance(target.gt_type, ts.FieldType):
                 subset = ",".join(
-                    f"{domain[dim][0]}:{domain[dim][1]}" for dim in target.gt_dtype.dims
+                    f"{domain[dim][0]}:{domain[dim][1]}" for dim in target.gt_type.dims
                 )
             else:
                 assert len(domain) == 0
@@ -582,7 +580,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             sym: self.global_symbols[sym]
             for sym in symbol_ref_utils.collect_symbol_refs(node.expr, self.global_symbols.keys())
         } | {
-            pname: dace_gtir_utils.get_tuple_type(arg) if isinstance(arg, tuple) else arg.gt_dtype
+            pname: dace_gtir_utils.get_tuple_type(arg) if isinstance(arg, tuple) else arg.gt_type
             for pname, arg in lambda_args_mapping
         }
 
@@ -742,9 +740,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 head_state.add_edge(
                     nsdfg_node, connector, outer_node, None, sdfg.make_array_memlet(outer)
                 )
-                outer_data = gtir_builtin_translators.FieldopData(
-                    outer_node, inner_data.gt_dtype, inner_data.local_offset
-                )
+                outer_data = gtir_builtin_translators.FieldopData(outer_node, inner_data.gt_type)
             elif inner_data.dc_node.data in lambda_arg_nodes:
                 # This if branch and the next one handle the non-transient result nodes.
                 # Non-transient nodes are just input nodes that are immediately returned
@@ -753,9 +749,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 outer_data = lambda_arg_nodes[inner_data.dc_node.data]
             else:
                 outer_node = head_state.add_access(inner_data.dc_node.data)
-                outer_data = gtir_builtin_translators.FieldopData(
-                    outer_node, inner_data.gt_dtype, inner_data.local_offset
-                )
+                outer_data = gtir_builtin_translators.FieldopData(outer_node, inner_data.gt_type)
             # Isolated access node will make validation fail.
             # Isolated access nodes can be found in the join-state of an if-expression
             # or in lambda expressions that just construct tuples from input arguments.
