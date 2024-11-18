@@ -12,7 +12,7 @@ import dataclasses
 import functools
 import types
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Callable, Optional, Union
 
 import devtools
 
