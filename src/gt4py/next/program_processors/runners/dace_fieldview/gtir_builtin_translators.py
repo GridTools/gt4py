@@ -49,6 +49,7 @@ class FieldopData:
 
     dc_node: dace.nodes.AccessNode
     gt_type: ts.FieldType | ts.ScalarType
+    offset: Optional[list[dace.symbolic.SymExpr]]
 
     def get_local_view(
         self, domain: FieldopDomain
@@ -64,13 +65,18 @@ class FieldopData:
                 dim: gtir_dataflow.SymbolExpr(dace_gtir_utils.get_map_variable(dim), INDEX_DTYPE)
                 for dim, _, _ in domain
             }
+            if self.offset is None:
+                offsets = {dim: dace.symbolic.SymExpr(0) for dim in self.gt_type.dims}
+            else:
+                offsets = dict(zip(self.gt_type.dims, self.offset, strict=True))
+
             local_dims = [
                 dim for dim in self.gt_type.dims if dim.kind == gtx_common.DimensionKind.LOCAL
             ]
 
             if len(local_dims) == 0:
                 return gtir_dataflow.IteratorExpr(
-                    self.dc_node, self.gt_type.dtype, self.gt_type.dims, indices
+                    self.dc_node, self.gt_type.dtype, self.gt_type.dims, indices, offsets
                 )
 
             elif len(local_dims) == 1:
@@ -80,7 +86,9 @@ class FieldopData:
                 field_dims = [
                     dim for dim in self.gt_type.dims if dim.kind != gtx_common.DimensionKind.LOCAL
                 ]
-                return gtir_dataflow.IteratorExpr(self.dc_node, field_dtype, field_dims, indices)
+                return gtir_dataflow.IteratorExpr(
+                    self.dc_node, field_dtype, field_dims, indices, offsets
+                )
 
             else:
                 raise ValueError(
@@ -101,7 +109,7 @@ Domain of a field operator represented as a list of tuples with 3 elements:
 """
 
 
-FieldopResult: TypeAlias = FieldopData | tuple[FieldopData | tuple, ...]
+FieldopValue: TypeAlias = FieldopData | tuple[FieldopData | tuple, ...]
 """Result of a field operator, can be either a field or a tuple fields."""
 
 
@@ -117,7 +125,7 @@ class PrimitiveTranslator(Protocol):
         sdfg: dace.SDFG,
         state: dace.SDFGState,
         sdfg_builder: gtir_sdfg.SDFGBuilder,
-    ) -> FieldopResult:
+    ) -> FieldopValue:
         """Creates the dataflow subgraph representing a GTIR primitive function.
 
         This method is used by derived classes to build a specialized subgraph
@@ -175,14 +183,13 @@ def _get_field_layout(
 
     Returns:
         A tuple of three lists containing:
-            - the field dimensions
-            - the dace array offset in each dimension
-            - the dace array size in each dimension
+            - the domain dimensions
+            - the domain offset in each dimension
+            - the domain size in each dimension
     """
     domain_dims, domain_lbs, domain_ubs = zip(*domain)
-    shape = [(ub - lb) for lb, ub in zip(domain_lbs, domain_ubs)]
-    offset = [(-lb) for lb in domain_lbs]
-    return list(domain_dims), offset, shape
+    size = [(ub - lb) for lb, ub in zip(domain_lbs, domain_ubs)]
+    return list(domain_dims), list(domain_lbs), size
 
 
 def _create_temporary_field(
@@ -209,7 +216,7 @@ def _create_temporary_field(
         raise ValueError(f"Cannot create field for dace type {output_desc}.")
 
     # allocate local temporary storage
-    temp_name, _ = sdfg.add_temp_transient(field_shape, output_desc.dtype, offset=field_offset)
+    temp_name, _ = sdfg.add_temp_transient(field_shape, output_desc.dtype)
     field_node = state.add_access(temp_name)
 
     if isinstance(dataflow_output.result.gt_dtype, ts.ScalarType):
@@ -220,7 +227,7 @@ def _create_temporary_field(
         assert dataflow_output.result.gt_dtype.offset_type is not None
         field_dims.append(dataflow_output.result.gt_dtype.offset_type)
 
-    return FieldopData(field_node, ts.FieldType(field_dims, field_dtype))
+    return FieldopData(field_node, ts.FieldType(field_dims, field_dtype), field_offset)
 
 
 def extract_domain(node: gtir.Node) -> FieldopDomain:
@@ -252,7 +259,7 @@ def translate_as_fieldop(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-) -> FieldopResult:
+) -> FieldopValue:
     """
     Generates the dataflow subgraph for the `as_fieldop` builtin function.
 
@@ -290,7 +297,9 @@ def translate_as_fieldop(
 
     # parse the domain of the field operator
     domain = extract_domain(domain_expr)
-    domain_indices = sbs.Indices([dace_gtir_utils.get_map_variable(dim) for dim, _, _ in domain])
+    domain_indices = sbs.Indices(
+        [dace_gtir_utils.get_map_variable(dim) - lower_bound for dim, lower_bound, _ in domain]
+    )
 
     # visit the list of arguments to be passed to the lambda expression
     stencil_args = [_parse_fieldop_arg(arg, sdfg, state, sdfg_builder, domain) for arg in node.args]
@@ -337,7 +346,7 @@ def translate_broadcast_scalar(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-) -> FieldopResult:
+) -> FieldopValue:
     """
     Generates the dataflow subgraph for the 'as_fieldop' builtin function for the
     special case where the argument to 'as_fieldop' is a 'deref' scalar expression,
@@ -357,7 +366,10 @@ def translate_broadcast_scalar(
     domain = extract_domain(domain_expr)
     field_dims, field_offset, field_shape = _get_field_layout(domain)
     field_subset = sbs.Range.from_string(
-        ",".join(dace_gtir_utils.get_map_variable(dim) for dim in field_dims)
+        ",".join(
+            dace_gtir_utils.get_map_variable(dim) - offset
+            for dim, offset in zip(field_dims, field_offset)
+        )
     )
 
     assert len(node.args) == 1
@@ -380,10 +392,10 @@ def translate_broadcast_scalar(
             if dim not in field_dims
         ):
             input_subset = ",".join(
-                dace_gtir_utils.get_map_variable(dim)
+                f"{dace_gtir_utils.get_map_variable(dim)} - {offset}"
                 if dim in field_dims
-                else scalar_expr.indices[dim].value  # type: ignore[union-attr] # catched by exception above
-                for dim in scalar_expr.dimensions
+                else f"{scalar_expr.indices[dim].value} - {offset}"  # type: ignore[union-attr] # catched by exception above
+                for dim, offset in zip(scalar_expr.dimensions, scalar_expr.offsets, strict=True)
             )
         else:
             raise ValueError(f"Cannot deref field {scalar_expr.field} in broadcast expression.")
@@ -393,9 +405,7 @@ def translate_broadcast_scalar(
     else:
         raise ValueError(f"Unexpected argument {node.args[0]} in broadcast expression.")
 
-    output, _ = sdfg.add_temp_transient(
-        field_shape, input_node.desc(sdfg).dtype, offset=field_offset
-    )
+    output, _ = sdfg.add_temp_transient(field_shape, input_node.desc(sdfg).dtype)
     output_node = state.add_access(output)
 
     sdfg_builder.add_mapped_tasklet(
@@ -413,7 +423,7 @@ def translate_broadcast_scalar(
         external_edges=True,
     )
 
-    return FieldopData(output_node, ts.FieldType(field_dims, gt_dtype))
+    return FieldopData(output_node, ts.FieldType(field_dims, gt_dtype), field_offset)
 
 
 def translate_if(
@@ -421,7 +431,7 @@ def translate_if(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-) -> FieldopResult:
+) -> FieldopValue:
     """Generates the dataflow subgraph for the `if_` builtin function."""
     assert cpm.is_call_to(node, "if_")
     assert len(node.args) == 3
@@ -474,7 +484,7 @@ def translate_if(
         outer, _ = sdfg.add_temp_transient_like(inner_desc)
         outer_node = state.add_access(outer)
 
-        return FieldopData(outer_node, inner_data.gt_type)
+        return FieldopData(outer_node, inner_data.gt_type, inner_data.offset)
 
     result_temps = gtx_utils.tree_map(construct_output)(true_br_args)
 
@@ -517,10 +527,11 @@ def _get_data_nodes(
     sdfg_builder: gtir_sdfg.SDFGBuilder,
     data_name: str,
     data_type: ts.DataType,
-) -> FieldopResult:
+    offset: Optional[list[dace.symbolic.SymExpr]],
+) -> FieldopValue:
     if isinstance(data_type, ts.FieldType):
         data_node = state.add_access(data_name)
-        return FieldopData(data_node, data_type)
+        return FieldopData(data_node, data_type, offset)
 
     elif isinstance(data_type, ts.ScalarType):
         if data_name in sdfg.symbols:
@@ -529,12 +540,13 @@ def _get_data_nodes(
             )
         else:
             data_node = state.add_access(data_name)
-        return FieldopData(data_node, data_type)
+        assert offset is None
+        return FieldopData(data_node, data_type, offset=None)
 
     elif isinstance(data_type, ts.TupleType):
         tuple_fields = dace_gtir_utils.get_tuple_fields(data_name, data_type)
         return tuple(
-            _get_data_nodes(sdfg, state, sdfg_builder, fname, ftype)
+            _get_data_nodes(sdfg, state, sdfg_builder, fname, ftype, offset)
             for fname, ftype in tuple_fields
         )
 
@@ -579,14 +591,14 @@ def translate_literal(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-) -> FieldopResult:
+) -> FieldopValue:
     """Generates the dataflow subgraph for a `ir.Literal` node."""
     assert isinstance(node, gtir.Literal)
 
     data_type = node.type
     data_node = _get_symbolic_value(sdfg, state, sdfg_builder, node.value, data_type)
 
-    return FieldopData(data_node, data_type)
+    return FieldopData(data_node, data_type, offset=None)
 
 
 def translate_make_tuple(
@@ -594,7 +606,7 @@ def translate_make_tuple(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-) -> FieldopResult:
+) -> FieldopValue:
     assert cpm.is_call_to(node, "make_tuple")
     return tuple(
         sdfg_builder.visit(
@@ -611,7 +623,7 @@ def translate_tuple_get(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-) -> FieldopResult:
+) -> FieldopValue:
     assert cpm.is_call_to(node, "tuple_get")
     assert len(node.args) == 2
 
@@ -641,7 +653,7 @@ def translate_scalar_expr(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-) -> FieldopResult:
+) -> FieldopValue:
     assert isinstance(node, gtir.FunCall)
     assert isinstance(node.type, ts.ScalarType)
 
@@ -654,7 +666,7 @@ def translate_scalar_expr(
         if isinstance(arg_expr, gtir.SymRef):
             try:
                 # `gt_symbol` refers to symbols defined in the GT4Py program
-                gt_symbol_type = sdfg_builder.get_symbol_type(arg_expr.id)
+                gt_symbol_type = sdfg_builder.get_symbol_desc(arg_expr.id)
                 if not isinstance(gt_symbol_type, ts.ScalarType):
                     raise ValueError(f"Invalid argument to scalar expression {arg_expr}.")
             except KeyError:
@@ -715,7 +727,7 @@ def translate_scalar_expr(
         dace.Memlet(data=temp_name, subset="0"),
     )
 
-    return FieldopData(temp_node, node.type)
+    return FieldopData(temp_node, node.type, offset=None)
 
 
 def translate_symbol_ref(
@@ -723,18 +735,18 @@ def translate_symbol_ref(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-) -> FieldopResult:
+) -> FieldopValue:
     """Generates the dataflow subgraph for a `ir.SymRef` node."""
     assert isinstance(node, gtir.SymRef)
 
     symbol_name = str(node.id)
     # we retrieve the type of the symbol in the GT4Py prgram
-    gt_symbol_type = sdfg_builder.get_symbol_type(symbol_name)
+    gt_symbol_type, offset = sdfg_builder.get_symbol_desc(symbol_name)
 
     # Create new access node in current state. It is possible that multiple
     # access nodes are created in one state for the same data container.
     # We rely on the dace simplify pass to remove duplicated access nodes.
-    return _get_data_nodes(sdfg, state, sdfg_builder, symbol_name, gt_symbol_type)
+    return _get_data_nodes(sdfg, state, sdfg_builder, symbol_name, gt_symbol_type, offset)
 
 
 if TYPE_CHECKING:

@@ -94,12 +94,15 @@ class IteratorExpr:
             to order the map index variables and dereference an element in the field.
         indices: Maps each dimension to an index value, which could be either a symbolic value
             or the result of a tasklet computation like neighbors connectivity or dynamic offset.
+        offsets: Maps each dimension to a domain offset, when the dimension range does not start
+            from zero.
     """
 
     field: dace.nodes.AccessNode
     gt_dtype: itir_ts.ListType | ts.ScalarType
     dimensions: list[gtx_common.Dimension]
     indices: dict[gtx_common.Dimension, DataExpr]
+    offsets: dict[gtx_common.Dimension, dace.symbolic.SymExpr]
 
 
 class DataflowInputEdge(Protocol):
@@ -455,10 +458,10 @@ class LambdaToDataflow(eve.NodeVisitor):
                 assert len(field_desc.shape) == len(arg_expr.dimensions)
                 field_dims = arg_expr.dimensions
 
-            field_subset = sbs.Range(
-                (arg_expr.indices[dim].value, arg_expr.indices[dim].value, 1)  # type: ignore[union-attr]
+            field_subset = sbs.Range.from_string(
+                f"{arg_expr.indices[dim].value - arg_expr.offsets[dim]}"  # type: ignore[union-attr]
                 if dim in arg_expr.indices
-                else (0, size - 1, 1)
+                else f"{arg_expr.offsets[dim]}:{size + arg_expr.offsets[dim]}"
                 for dim, size in zip(field_dims, field_desc.shape)
             )
             return MemletExpr(arg_expr.field, arg_expr.gt_dtype, field_subset)
@@ -1033,6 +1036,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                 dim: (new_index if dim == offset_dim else index)
                 for dim, index in it.indices.items()
             },
+            offsets=it.offsets,
         )
 
     def _make_dynamic_neighbor_offset(
@@ -1111,7 +1115,11 @@ class LambdaToDataflow(eve.NodeVisitor):
             )
 
         return IteratorExpr(
-            field=it.field, gt_dtype=it.gt_dtype, dimensions=it.dimensions, indices=shifted_indices
+            field=it.field,
+            gt_dtype=it.gt_dtype,
+            dimensions=it.dimensions,
+            indices=shifted_indices,
+            offsets=it.offsets,
         )
 
     def _visit_shift(self, node: gtir.FunCall) -> IteratorExpr:

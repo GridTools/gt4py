@@ -51,16 +51,12 @@ def connectivity_identifier(name: str) -> str:
     return f"connectivity_{name}"
 
 
-def field_symbol_name(field_name: str, axis: int, sym: Literal["size", "offset", "stride"]) -> str:
+def field_symbol_name(field_name: str, axis: int, sym: Literal["size", "stride"]) -> str:
     return f"__{field_name}_{sym}_{axis}"
 
 
 def field_size_symbol_name(field_name: str, axis: int) -> str:
     return field_symbol_name(field_name, axis, "size")
-
-
-def field_offset_symbol_name(field_name: str, axis: int) -> str:
-    return field_symbol_name(field_name, axis, "offset")
 
 
 def field_stride_symbol_name(field_name: str, axis: int) -> str:
