@@ -83,6 +83,9 @@ def _is_reduce(node: gtfn_ir.FunCall) -> TypeGuard[gtfn_ir.FunCall]:
     )
 
 
+# TODO: end of code clone
+
+
 class PlugInCurrentIdx(NodeTranslator):
     def visit_SymRef(
         self, node: gtfn_ir_common.SymRef

@@ -1465,12 +1465,12 @@ class _List(Generic[DT]):
         assert isinstance(offset_tag, str)
         element_type = type_translation.from_value(self.values[0])
         assert isinstance(element_type, ts.DataType)
-        return itir_ts.ListType(
-            element_type=element_type,
-            offset_type=common.Dimension(
-                value=offset_tag, kind=common.DimensionKind.LOCAL
-            ),  # TODO CHECK THIS PATTERN DURING THIS CLEANUP!
-        )
+        offset_provider = embedded_context.offset_provider.get()
+        assert offset_provider is not None
+        connectivity = offset_provider[offset_tag]
+        assert common.is_neighbor_connectivity(connectivity)
+        local_dim = connectivity.__gt_type__().neighbor_dim
+        return itir_ts.ListType(element_type=element_type, offset_type=local_dim)
 
 
 @dataclasses.dataclass(frozen=True)

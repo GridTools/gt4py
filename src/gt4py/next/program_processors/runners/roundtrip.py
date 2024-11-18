@@ -111,7 +111,15 @@ def fencil_generator(
     """
     # TODO(tehrengruber): just a temporary solution until we have a proper generic
     #  caching mechanism
-    cache_key = hash((ir, transforms, debug, use_embedded, tuple(offset_provider.items())))
+    cache_key = hash(
+        (
+            ir,
+            transforms,
+            debug,
+            use_embedded,
+            tuple(common.offset_provider_to_type(offset_provider).items()),
+        )
+    )
     if cache_key in _FENCIL_CACHE:
         if debug:
             print(f"Using cached fencil for key {cache_key}")
