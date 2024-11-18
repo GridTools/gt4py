@@ -26,93 +26,35 @@ def has_skip_values(request):
 @pytest.fixture
 def basic_reduction():
     UIDs.reset_sequence()
-    return ir.FunCall(
-        fun=ir.FunCall(
-            fun=ir.SymRef(id="reduce"),
-            args=[ir.SymRef(id="foo"), im.literal("0.0", "float64")],
-        ),
-        args=[
-            ir.FunCall(
-                fun=ir.SymRef(id="neighbors"),
-                args=[ir.OffsetLiteral(value="Dim"), ir.SymRef(id="x")],
-            )
-        ],
-    )
+    return im.call(im.call("reduce")("foo", 0.0))(im.neighbors("Dim", "x"))
 
 
 @pytest.fixture
 def reduction_with_shift_on_second_arg():
     UIDs.reset_sequence()
-    return ir.FunCall(
-        fun=ir.FunCall(
-            fun=ir.SymRef(id="reduce"),
-            args=[ir.SymRef(id="foo"), im.literal("0.0", "float64")],
-        ),
-        args=[
-            ir.SymRef(id="x"),
-            ir.FunCall(
-                fun=ir.SymRef(id="neighbors"),
-                args=[ir.OffsetLiteral(value="Dim"), ir.SymRef(id="y")],
-            ),
-        ],
-    )
+    return im.call(im.call("reduce")("foo", 0.0))("x", im.neighbors("Dim", "y"))
 
 
 @pytest.fixture
 def reduction_with_incompatible_shifts():
     UIDs.reset_sequence()
-    return ir.FunCall(
-        fun=ir.FunCall(
-            fun=ir.SymRef(id="reduce"),
-            args=[ir.SymRef(id="foo"), im.literal("0.0", "float64")],
-        ),
-        args=[
-            ir.FunCall(
-                fun=ir.SymRef(id="neighbors"),
-                args=[ir.OffsetLiteral(value="Dim"), ir.SymRef(id="x")],
-            ),
-            ir.FunCall(
-                fun=ir.SymRef(id="neighbors"),
-                args=[ir.OffsetLiteral(value="Dim2"), ir.SymRef(id="y")],
-            ),
-        ],
+    return im.call(im.call("reduce")("foo", 0.0))(
+        im.neighbors("Dim", "x"), im.neighbors("Dim2", "y")
     )
 
 
 @pytest.fixture
 def reduction_with_irrelevant_full_shift():
     UIDs.reset_sequence()
-    return ir.FunCall(
-        fun=ir.FunCall(
-            fun=ir.SymRef(id="reduce"),
-            args=[ir.SymRef(id="foo"), im.literal("0.0", "float64")],
-        ),
-        args=[
-            ir.FunCall(
-                fun=ir.SymRef(id="neighbors"),
-                args=[
-                    ir.OffsetLiteral(value="Dim"),
-                    ir.FunCall(
-                        fun=ir.FunCall(
-                            fun=ir.SymRef(id="shift"),
-                            args=[
-                                ir.OffsetLiteral(value="IrrelevantDim"),
-                                ir.OffsetLiteral(value="0"),
-                            ],
-                        ),
-                        args=[ir.SymRef(id="x")],
-                    ),
-                ],
-            ),
-            ir.FunCall(
-                fun=ir.SymRef(id="neighbors"),
-                args=[ir.OffsetLiteral(value="Dim"), ir.SymRef(id="y")],
-            ),
-        ],
+    return im.call(im.call("reduce")("foo", 0.0))(
+        im.neighbors("Dim", im.shift("IrrelevantDim", 0)("x")), im.neighbors("Dim", "y")
     )
 
 
-# TODO add a test with lift
+@pytest.fixture
+def reduction_if():
+    UIDs.reset_sequence()
+    return im.call(im.call("reduce")("foo", 0.0))(im.if_(True, im.neighbors("Dim", "x"), "y"))
 
 
 @pytest.mark.parametrize(
@@ -121,6 +63,7 @@ def reduction_with_irrelevant_full_shift():
         "basic_reduction",
         "reduction_with_irrelevant_full_shift",
         "reduction_with_shift_on_second_arg",
+        "reduction_if",
     ],
 )
 def test_get_partial_offsets(reduction, request):
@@ -175,6 +118,14 @@ def test_reduction_with_shift_on_second_arg(reduction_with_shift_on_second_arg, 
 
     offset_provider = {"Dim": DummyConnectivity(max_neighbors=1, has_skip_values=has_skip_values)}
     actual = UnrollReduce.apply(reduction_with_shift_on_second_arg, offset_provider=offset_provider)
+    assert actual == expected
+
+
+def test_reduction_with_if(reduction_if):
+    expected = _expected(reduction_if, "Dim", 2, False)
+
+    offset_provider = {"Dim": DummyConnectivity(max_neighbors=2, has_skip_values=False)}
+    actual = UnrollReduce.apply(reduction_if, offset_provider=offset_provider)
     assert actual == expected
 
 

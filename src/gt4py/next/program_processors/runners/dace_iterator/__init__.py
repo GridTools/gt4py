@@ -25,7 +25,10 @@ from gt4py.next import common
 from gt4py.next.ffront import decorator
 from gt4py.next.iterator import transforms as itir_transforms
 from gt4py.next.iterator.ir import SymRef
-from gt4py.next.iterator.transforms import program_to_fencil
+from gt4py.next.iterator.transforms import (
+    pass_manager_legacy as legacy_itir_transforms,
+    program_to_fencil,
+)
 from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
 from gt4py.next.type_system import type_specifications as ts
@@ -36,14 +39,14 @@ from .itir_to_sdfg import ItirToSDFG
 def preprocess_program(
     program: itir.FencilDefinition,
     offset_provider: Mapping[str, Any],
-    lift_mode: itir_transforms.LiftMode,
+    lift_mode: legacy_itir_transforms.LiftMode,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
     temporary_extraction_heuristics: Optional[
         Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
     ] = None,
     unroll_reduce: bool = False,
 ):
-    node = itir_transforms.apply_common_transforms(
+    node = legacy_itir_transforms.apply_common_transforms(
         program,
         common_subexpression_elimination=False,
         force_inline_lambda_args=True,
@@ -73,7 +76,7 @@ def build_sdfg_from_itir(
     auto_optimize: bool = False,
     on_gpu: bool = False,
     column_axis: Optional[common.Dimension] = None,
-    lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE,
+    lift_mode: legacy_itir_transforms.LiftMode = legacy_itir_transforms.LiftMode.FORCE_INLINE,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
     temporary_extraction_heuristics: Optional[
         Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
@@ -234,7 +237,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         }
 
         sdfg.offset_providers_per_input_field = {}
-        itir_tmp = itir_transforms.apply_common_transforms(
+        itir_tmp = legacy_itir_transforms.apply_common_transforms(
             self.itir, offset_provider=offset_provider
         )
         itir_tmp_fencil = program_to_fencil.program_to_fencil(itir_tmp)

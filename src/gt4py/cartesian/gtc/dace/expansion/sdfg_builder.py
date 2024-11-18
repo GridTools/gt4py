@@ -89,7 +89,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         scope_node: dcir.ComputationNode,
         sdfg_ctx: StencilComputationSDFGBuilder.SDFGContext,
         node_ctx: StencilComputationSDFGBuilder.NodeContext,
-        connector_prefix="",
+        connector_prefix: str = "",
         symtable: ChainMap[eve.SymbolRef, dcir.Decl],
     ) -> None:
         field_decl = symtable[node.field]
@@ -139,13 +139,12 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         sdfg_ctx: StencilComputationSDFGBuilder.SDFGContext,
         node_ctx: StencilComputationSDFGBuilder.NodeContext,
         symtable: ChainMap[eve.SymbolRef, dcir.Decl],
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         code = TaskletCodegen.apply_codegen(
             node,
             read_memlets=node.read_memlets,
             write_memlets=node.write_memlets,
-            sdfg_ctx=sdfg_ctx,
             symtable=symtable,
         )
 
@@ -177,7 +176,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
             tasklet, tasklet, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx
         )
 
-    def visit_Range(self, node: dcir.Range, **kwargs) -> Dict[str, str]:
+    def visit_Range(self, node: dcir.Range, **kwargs: Any) -> Dict[str, str]:
         start, end = node.interval.to_dace_symbolic()
         return {node.var: str(dace.subsets.Range([(start, end - 1, node.stride)]))}
 
@@ -187,7 +186,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         *,
         node_ctx: StencilComputationSDFGBuilder.NodeContext,
         sdfg_ctx: StencilComputationSDFGBuilder.SDFGContext,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         ndranges = {
             k: v
@@ -248,7 +247,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         node: dcir.DomainLoop,
         *,
         sdfg_ctx: StencilComputationSDFGBuilder.SDFGContext,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         sdfg_ctx = sdfg_ctx.add_loop(node.index_range)
         self.visit(node.loop_states, sdfg_ctx=sdfg_ctx, **kwargs)
@@ -259,7 +258,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         node: dcir.ComputationState,
         *,
         sdfg_ctx: StencilComputationSDFGBuilder.SDFGContext,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         sdfg_ctx.add_state()
         read_acc_and_conn: Dict[Optional[str], Tuple[dace.nodes.Node, Optional[str]]] = {}
@@ -289,7 +288,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         *,
         sdfg_ctx: StencilComputationSDFGBuilder.SDFGContext,
         non_transients: Set[eve.SymbolRef],
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         assert len(node.strides) == len(node.shape)
         sdfg_ctx.sdfg.add_array(
@@ -307,7 +306,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         node: dcir.SymbolDecl,
         *,
         sdfg_ctx: StencilComputationSDFGBuilder.SDFGContext,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         if node.name not in sdfg_ctx.sdfg.symbols:
             sdfg_ctx.sdfg.add_symbol(node.name, stype=data_type_to_dace_typeclass(node.dtype))
@@ -319,7 +318,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         sdfg_ctx: Optional[StencilComputationSDFGBuilder.SDFGContext] = None,
         node_ctx: Optional[StencilComputationSDFGBuilder.NodeContext] = None,
         symtable: ChainMap[eve.SymbolRef, Any],
-        **kwargs,
+        **kwargs: Any,
     ) -> dace.nodes.NestedSDFG:
         sdfg = dace.SDFG(node.label)
         inner_sdfg_ctx = StencilComputationSDFGBuilder.SDFGContext(
@@ -365,13 +364,12 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
             StencilComputationSDFGBuilder._add_empty_edges(
                 nsdfg, nsdfg, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx
             )
-        else:
-            nsdfg = dace.nodes.NestedSDFG(
-                label=sdfg.label,
-                sdfg=sdfg,
-                inputs={memlet.connector for memlet in node.read_memlets},
-                outputs={memlet.connector for memlet in node.write_memlets},
-                symbol_mapping=symbol_mapping,
-            )
+            return nsdfg
 
-        return nsdfg
+        return dace.nodes.NestedSDFG(
+            label=sdfg.label,
+            sdfg=sdfg,
+            inputs={memlet.connector for memlet in node.read_memlets},
+            outputs={memlet.connector for memlet in node.write_memlets},
+            symbol_mapping=symbol_mapping,
+        )

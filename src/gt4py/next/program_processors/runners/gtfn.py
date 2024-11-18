@@ -20,7 +20,7 @@ from gt4py.eve import utils
 from gt4py.eve.utils import content_hash
 from gt4py.next import backend, common, config
 from gt4py.next.common import Connectivity, Dimension
-from gt4py.next.iterator import ir as itir, transforms
+from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import arguments, recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import compiler
@@ -166,19 +166,19 @@ class GTFNCompileWorkflowFactory(factory.Factory):
         cached_translation = factory.Trait(
             translation=factory.LazyAttribute(
                 lambda o: workflow.CachedStep(
-                    o.translation_,
+                    o.bare_translation,
                     hash_function=fingerprint_compilable_program,
                     cache=FileCache(str(config.BUILD_CACHE_DIR / "gtfn_cache")),
                 )
             ),
         )
 
-        translation_ = factory.SubFactory(
+        bare_translation = factory.SubFactory(
             gtfn_module.GTFNTranslationStepFactory,
             device_type=factory.SelfAttribute("..device_type"),
         )
 
-    translation = factory.LazyAttribute(lambda o: o.translation_)
+    translation = factory.LazyAttribute(lambda o: o.bare_translation)
 
     bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableSource] = (
         nanobind.bind_source
@@ -213,12 +213,6 @@ class GTFNBackendFactory(factory.Factory):
             ),
             name_cached="_cached",
         )
-        use_temporaries = factory.Trait(
-            # FIXME[#1582](tehrengruber): Revisit and cleanup after new GTIR temporary pass is in place
-            otf_workflow__translation__lift_mode=transforms.LiftMode.USE_TEMPORARIES,
-            # otf_workflow__translation__temporary_extraction_heuristics=global_tmps.SimpleTemporaryExtractionHeuristics,  # noqa: ERA001
-            name_temps="_with_temporaries",
-        )
         device_type = core_defs.DeviceType.CPU
         hash_function = compilation_hash
         otf_workflow = factory.SubFactory(
@@ -242,8 +236,10 @@ run_gtfn_imperative = GTFNBackendFactory(
 
 run_gtfn_cached = GTFNBackendFactory(cached=True, otf_workflow__cached_translation=True)
 
-run_gtfn_with_temporaries = GTFNBackendFactory(use_temporaries=True)
-
 run_gtfn_gpu = GTFNBackendFactory(gpu=True)
 
 run_gtfn_gpu_cached = GTFNBackendFactory(gpu=True, cached=True)
+
+run_gtfn_no_transforms = GTFNBackendFactory(
+    otf_workflow__bare_translation__enable_itir_transforms=False
+)
