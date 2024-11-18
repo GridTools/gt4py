@@ -58,7 +58,7 @@ class DaCeTranslator(
             gtx_transformations.gt_auto_optimize(sdfg, gpu=on_gpu)
         elif on_gpu:
             # We run simplify to bring the SDFG into a canonical form that the gpu transformations
-            # can handle. This is a workaround for an issue with scalar expressions that are 
+            # can handle. This is a workaround for an issue with scalar expressions that are
             # promoted to symbolic expressions and therefore computed on the host (CPU), but the
             # intermediate result is written to a GPU global variable.
             gtx_transformations.gt_simplify(sdfg)
