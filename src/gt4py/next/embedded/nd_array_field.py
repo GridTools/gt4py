@@ -465,9 +465,6 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
     _skip_value: Optional[core_defs.IntegralScalar]
     _kind: Optional[common.ConnectivityKind] = None
 
-    def __hash__(self) -> int:
-        return hash((self.domain, self.codomain))  # TODO
-
     def __post_init__(self) -> None:
         assert self._kind is None or bool(self._kind & common.ConnectivityKind.ALTER_DIMS) == (
             self.domain.dim_index(self.codomain) is not None

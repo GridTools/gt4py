@@ -333,16 +333,14 @@ class FieldOffset(runtime.Offset):
         if isinstance(offset_definition, common.Dimension):
             connectivity = common.CartesianConnectivity(offset_definition, offset)
         elif isinstance(offset_definition, common.ConnectivityField):
-            unrestricted_connectivity = self.as_connectivity_field()
-            assert unrestricted_connectivity.domain.ndim > 1
+            assert common.is_neighbor_connectivity(offset_definition)
             named_index = common.NamedIndex(self.target[-1], offset)
-            connectivity = unrestricted_connectivity[named_index]
+            connectivity = offset_definition[named_index]
         else:
             raise NotImplementedError()
 
         return connectivity
 
-    # TODO can we remove this function?
     def as_connectivity_field(self) -> common.ConnectivityField:
         """Convert to connectivity field using the offset providers in current embedded execution context."""
         from gt4py.next import embedded  # avoid circular import
