@@ -1127,12 +1127,13 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             dims_not_indexed = [dim for dim in iterator.dimensions if dim not in iterator.indices]
             assert len(dims_not_indexed) == 1
             offset = dims_not_indexed[0]
-            offset_provider = self.offset_provider_type[offset]
-            neighbor_dim = offset_provider.codomain.value
+            offset_provider_type = self.offset_provider_type[offset]
+            assert isinstance(offset_provider_type, common.NeighborConnectivityType)
+            neighbor_dim = offset_provider_type.codomain.value
 
             result_name = unique_var_name()
             self.context.body.add_array(
-                result_name, (offset_provider.max_neighbors,), iterator.dtype, transient=True
+                result_name, (offset_provider_type.max_neighbors,), iterator.dtype, transient=True
             )
             result_array = self.context.body.arrays[result_name]
             result_node = self.context.state.add_access(result_name, debuginfo=di)
@@ -1149,7 +1150,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
 
             # we create a mapped tasklet for array slicing
             index_name = unique_name(f"_i_{neighbor_dim}")
-            map_ranges = {index_name: f"0:{offset_provider.max_neighbors}"}
+            map_ranges = {index_name: f"0:{offset_provider_type.max_neighbors}"}
             src_subset = ",".join(
                 [f"_i_{dim}" if dim in iterator.indices else index_name for dim in sorted_dims]
             )
@@ -1204,26 +1205,29 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         assert offset_node.dtype in dace.dtypes.INTEGER_TYPES
 
         if isinstance(self.offset_provider_type[offset_dim], common.NeighborConnectivityType):
-            offset_provider = self.offset_provider_type[offset_dim]
+            offset_provider_type = cast(
+                common.NeighborConnectivityType, self.offset_provider_type[offset_dim]
+            )  # ensured by condition
             connectivity = self.context.state.add_access(
                 dace_utils.connectivity_identifier(offset_dim), debuginfo=di
             )
 
-            shifted_dim = offset_provider.source_dim.value
-            target_dim = offset_provider.codomain.value
+            shifted_dim_tag = offset_provider_type.source_dim.value
+            target_dim_tag = offset_provider_type.codomain.value
             args = [
                 ValueExpr(connectivity, _INDEX_DTYPE),
-                ValueExpr(iterator.indices[shifted_dim], offset_node.dtype),
+                ValueExpr(iterator.indices[shifted_dim_tag], offset_node.dtype),
                 offset_node,
             ]
             internals = [f"{arg.value.data}_v" for arg in args]
             expr = f"{internals[0]}[{internals[1]}, {internals[2]}]"
         else:
-            assert isinstance(self.offset_provider_type[offset_dim], common.Dimension)
+            shifted_dim = self.offset_provider_type[offset_dim]
+            assert isinstance(shifted_dim, common.Dimension)
 
-            shifted_dim = self.offset_provider_type[offset_dim].value
-            target_dim = shifted_dim
-            args = [ValueExpr(iterator.indices[shifted_dim], offset_node.dtype), offset_node]
+            shifted_dim_tag = shifted_dim.value
+            target_dim_tag = shifted_dim_tag
+            args = [ValueExpr(iterator.indices[shifted_dim_tag], offset_node.dtype), offset_node]
             internals = [f"{arg.value.data}_v" for arg in args]
             expr = f"{internals[0]} + {internals[1]}"
 
@@ -1232,8 +1236,8 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         )[0].value
 
         shifted_index = {dim: value for dim, value in iterator.indices.items()}
-        del shifted_index[shifted_dim]
-        shifted_index[target_dim] = shifted_value
+        del shifted_index[shifted_dim_tag]
+        shifted_index[target_dim_tag] = shifted_value
 
         return IteratorExpr(iterator.field, shifted_index, iterator.dtype, iterator.dimensions)
 

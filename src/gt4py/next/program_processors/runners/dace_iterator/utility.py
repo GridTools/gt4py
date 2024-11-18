@@ -21,7 +21,7 @@ from gt4py.next.program_processors.runners.dace_common import utility as dace_ut
 def get_used_connectivities(
     node: itir.Node, offset_provider_type: common.OffsetProviderType
 ) -> dict[str, common.NeighborConnectivityType]:
-    connectivities = dace_utils.filter_connectivities(offset_provider_type)
+    connectivities = dace_utils.filter_connectivity_types(offset_provider_type)
     offset_dims = set(eve.walk_values(node).if_isinstance(itir.OffsetLiteral).getattr("value"))
     return {offset: connectivities[offset] for offset in offset_dims if offset in connectivities}
 

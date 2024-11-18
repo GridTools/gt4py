@@ -194,7 +194,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             raise ValueError(
                 "[DaCe Orchestration] Connectivities -at compile time- are required to generate the SDFG. Use `with_connectivities` method."
             )
-        offset_provider_type = self.connectivities | self._implicit_offset_provider
+        offset_provider_type = {**self.connectivities, **self._implicit_offset_provider}
 
         sdfg = self.backend.executor.step.translation.generate_sdfg(  # type: ignore[union-attr]
             self.itir,

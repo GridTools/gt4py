@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import warnings
-from typing import Any, Optional, Sequence, cast
+from typing import Optional, Sequence, cast
 
 import dace
 from dace.sdfg.state import LoopRegion
@@ -108,7 +108,7 @@ def _make_array_shape_and_strides(
     """
     dtype = dace.dtype_to_typeclass(gtx_fbuiltins.IndexType)
     sorted_dims = dace_utils.get_sorted_dims(dims) if sort_dims else list(enumerate(dims))
-    connectivity_types = dace_utils.filter_connectivities(offset_provider_type)
+    connectivity_types = dace_utils.filter_connectivity_types(offset_provider_type)
     shape = [
         (
             connectivity_types[dim.value].max_neighbors
@@ -146,7 +146,7 @@ class ItirToSDFG(eve.NodeVisitor):
     param_types: list[ts.TypeSpec]
     storage_types: dict[str, ts.TypeSpec]
     column_axis: Optional[Dimension]
-    offset_provider_type: dict[str, Any]
+    offset_provider_type: common.OffsetProviderType
     unique_id: int
     use_field_canonical_representation: bool
 

@@ -41,7 +41,7 @@ class DataflowBuilder(Protocol):
     """Visitor interface to build a dataflow subgraph."""
 
     @abc.abstractmethod
-    def get_offset_provider_type(self, offset: str) -> gtx_common.OffsetProviderElem: ...
+    def get_offset_provider_type(self, offset: str) -> gtx_common.OffsetProviderTypeElem: ...
 
     @abc.abstractmethod
     def unique_nsdfg_name(self, sdfg: dace.SDFG, prefix: str) -> str: ...
@@ -195,7 +195,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             Two lists of symbols, one for the shape and the other for the strides of the array.
         """
         dc_dtype = gtir_builtin_translators.INDEX_DTYPE
-        neighbor_table_types = dace_utils.filter_connectivities(self.offset_provider_type)
+        neighbor_table_types = dace_utils.filter_connectivity_types(self.offset_provider_type)
         shape = [
             (
                 neighbor_table_types[dim.value].max_neighbors
@@ -374,7 +374,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             self.global_symbols[pname] = param.type
 
         # add SDFG storage for connectivity tables
-        for offset, connectivity_type in dace_utils.filter_connectivities(
+        for offset, connectivity_type in dace_utils.filter_connectivity_types(
             self.offset_provider_type
         ).items():
             scalar_type = tt.from_dtype(connectivity_type.dtype)
@@ -629,7 +629,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         )
         connectivity_arrays = {
             dace_utils.connectivity_identifier(offset)
-            for offset in dace_utils.filter_connectivities(self.offset_provider_type)
+            for offset in dace_utils.filter_connectivity_types(self.offset_provider_type)
         }
 
         input_memlets = {}

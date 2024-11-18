@@ -94,7 +94,7 @@ def fencil_generator(
     ir: itir.Program | itir.FencilDefinition,
     debug: bool,
     use_embedded: bool,
-    offset_provider: dict[str, common.Connectivity | common.Dimension],
+    offset_provider: common.OffsetProvider,
     transforms: itir_transforms.ITIRTransform,
 ) -> stages.CompiledProgram:
     """

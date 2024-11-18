@@ -198,7 +198,7 @@ class Program:
         return self._frontend_transforms.past_to_itir(no_args_past).data
 
     @functools.cached_property
-    def _implicit_offset_provider(self) -> dict[common.Tag, common.OffsetProviderElem]:
+    def _implicit_offset_provider(self) -> dict[str, common.Dimension]:
         """
         Add all implicit offset providers.
 

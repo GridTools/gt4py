@@ -657,7 +657,9 @@ class LambdaToDataflow(eve.NodeVisitor):
         tasklet_expression = f"{output_connector} = {fun_python_code}"
 
         input_args = [self.visit(arg) for arg in node.args]
-        input_connectivity_types: dict[gtx_common.Dimension, gtx_common.Connectivity] = {}
+        input_connectivity_types: dict[
+            gtx_common.Dimension, gtx_common.NeighborConnectivityType
+        ] = {}
         for input_arg in input_args:
             assert isinstance(input_arg.gt_dtype, itir_ts.ListType)
             assert input_arg.gt_dtype.offset_type is not None
@@ -665,9 +667,9 @@ class LambdaToDataflow(eve.NodeVisitor):
             if offset_type == _CONST_DIM:
                 # this input argument is the result of `make_const_list`
                 continue
-            offset_provider_type = self.subgraph_builder.get_offset_provider_type(offset_type.value)
-            assert isinstance(offset_provider_type, gtx_common.NeighborConnectivityType)
-            input_connectivity_types[offset_type] = offset_provider_type
+            offset_provider_t = self.subgraph_builder.get_offset_provider_type(offset_type.value)
+            assert isinstance(offset_provider_t, gtx_common.NeighborConnectivityType)
+            input_connectivity_types[offset_type] = offset_provider_t
 
         if len(input_connectivity_types) == 0:
             raise ValueError(f"Missing information on local dimension for map node {node}.")
@@ -1087,7 +1089,7 @@ class LambdaToDataflow(eve.NodeVisitor):
     def _make_unstructured_shift(
         self,
         it: IteratorExpr,
-        connectivity: gtx_common.Connectivity,
+        connectivity: gtx_common.NeighborConnectivityType,
         offset_table_node: dace.nodes.AccessNode,
         offset_expr: DataExpr,
     ) -> IteratorExpr:
@@ -1137,7 +1139,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert isinstance(offset_provider_arg, gtir.OffsetLiteral)
         offset = offset_provider_arg.value
         assert isinstance(offset, str)
-        offset_provider = self.subgraph_builder.get_offset_provider_type(offset)
+        offset_provider_type = self.subgraph_builder.get_offset_provider_type(offset)
         # second argument should be the offset value, which could be a symbolic expression or a dynamic offset
         offset_expr = (
             SymbolExpr(offset_value_arg.value, IndexDType)
@@ -1145,8 +1147,8 @@ class LambdaToDataflow(eve.NodeVisitor):
             else self.visit(offset_value_arg)
         )
 
-        if isinstance(offset_provider, gtx_common.Dimension):
-            return self._make_cartesian_shift(it, offset_provider, offset_expr)
+        if isinstance(offset_provider_type, gtx_common.Dimension):
+            return self._make_cartesian_shift(it, offset_provider_type, offset_expr)
         else:
             # initially, the storage for the connectivity tables is created as transient;
             # when the tables are used, the storage is changed to non-transient,
@@ -1156,7 +1158,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             offset_table_node = self.state.add_access(offset_table)
 
             return self._make_unstructured_shift(
-                it, offset_provider, offset_table_node, offset_expr
+                it, offset_provider_type, offset_table_node, offset_expr
             )
 
     def _visit_generic_builtin(self, node: gtir.FunCall) -> ValueExpr:

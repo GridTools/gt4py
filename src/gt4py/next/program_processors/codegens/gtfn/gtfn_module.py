@@ -129,7 +129,7 @@ class GTFNTranslationStep(
                     interface.Parameter(
                         name=GENERATED_CONNECTIVITY_PARAM_PREFIX + name.lower(),
                         type_=ts.FieldType(
-                            dims=connectivity_type.domain,
+                            dims=list(connectivity_type.domain),
                             dtype=type_translation.from_dtype(connectivity_type.dtype),
                         ),
                     )
@@ -158,7 +158,7 @@ class GTFNTranslationStep(
     def _preprocess_program(
         self,
         program: itir.FencilDefinition | itir.Program,
-        offset_provider: dict[str, common.Connectivity | common.Dimension],
+        offset_provider: common.OffsetProvider,
     ) -> itir.Program:
         apply_common_transforms = functools.partial(
             pass_manager.apply_common_transforms,
@@ -187,7 +187,7 @@ class GTFNTranslationStep(
     def generate_stencil_source(
         self,
         program: itir.FencilDefinition | itir.Program,
-        offset_provider: dict[str, common.Connectivity | common.Dimension],
+        offset_provider: common.OffsetProvider,
         column_axis: Optional[common.Dimension],
     ) -> str:
         if self.enable_itir_transforms:

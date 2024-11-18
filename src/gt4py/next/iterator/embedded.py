@@ -132,7 +132,7 @@ class StridedConnectivityField(common.ConnectivityField):
         object.__setattr__(self, "_max_neighbors", max_neighbors)
 
     @property
-    def __gt_origin__(self) -> core_defs.Tuple[fbuiltins.int]:
+    def __gt_origin__(self) -> xtyping.Never:
         raise NotImplementedError
 
     def __gt_type__(self) -> common.NeighborConnectivityType:
@@ -169,13 +169,14 @@ class StridedConnectivityField(common.ConnectivityField):
     def premap(self, index_field: common.ConnectivityField | fbuiltins.FieldOffset) -> common.Field:
         raise NotImplementedError
 
-    def restrict(
+    def restrict(  # type: ignore[override]
         self,
         item: common.AnyIndexSpec,
-    ) -> Self:
-        if not isinstance(item, tuple) and not len(item) == 2:
+    ) -> common.Field:
+        if not isinstance(item, tuple) or (isinstance(item, tuple) and not len(item) == 2):
             raise NotImplementedError()  # TODO(havogt): add proper slicing
-        return ConstantField(item[0] * self._max_neighbors + item[1])
+        index = item[0] * self._max_neighbors + item[1]  # type: ignore[operator, call-overload]
+        return ConstantField(index)
 
     def as_scalar(self) -> xtyping.Never:
         raise NotImplementedError()
@@ -187,7 +188,7 @@ class StridedConnectivityField(common.ConnectivityField):
     ) -> common.Field:
         raise NotImplementedError()
 
-    __getitem__ = restrict
+    __getitem__ = restrict  # type: ignore[assignment]
 
     def inverse_image(
         self, image_range: common.UnitRange | common.NamedRange
@@ -1495,7 +1496,7 @@ def neighbors(offset: runtime.Offset, it: ItIterator) -> _List:
     offset_provider = embedded_context.offset_provider.get()
     assert offset_provider is not None
     connectivity = offset_provider[offset_str]
-    assert isinstance(connectivity, common.NeighborConnectivity)
+    assert common.is_neighbor_connectivity(connectivity)
     return _List(
         values=tuple(
             shifted.deref()
@@ -1571,7 +1572,7 @@ class SparseListIterator:
         offset_provider = embedded_context.offset_provider.get()
         assert offset_provider is not None
         connectivity = offset_provider[self.list_offset]
-        assert isinstance(connectivity, common.NeighborConnectivity)
+        assert common.is_neighbor_connectivity(connectivity)
         return _List(
             values=tuple(
                 shifted.deref()

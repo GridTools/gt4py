@@ -817,7 +817,7 @@ class ConnectivityKind(enum.Flag):
 class ConnectivityType:  # TODO(havogt): would better live in type_specifications but would have to solve a circular import
     domain: tuple[Dimension, ...]
     codomain: Dimension
-    skip_value: Optional[int]
+    skip_value: Optional[core_defs.IntegralScalar]
     dtype: core_defs.DType
 
     @property
@@ -846,11 +846,8 @@ class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, 
     @abc.abstractmethod
     def codomain(self) -> DimT: ...
 
-    def __hash__(self) -> int:
-        return hash((self.domain, self.codomain))  # TODO
-
     def __gt_type__(self) -> ConnectivityType:
-        if isinstance(self, NeighborConnectivity):
+        if is_neighbor_connectivity(self):
             return NeighborConnectivityType(
                 domain=self.domain.dims,
                 codomain=self.codomain,
@@ -1005,7 +1002,7 @@ OffsetProviderType: TypeAlias = Mapping[Tag, OffsetProviderTypeElem]
 
 def offset_provider_to_type(offset_provider: OffsetProvider) -> OffsetProviderType:
     return {
-        k: v.__gt_type__() if is_neighbor_connectivity(v) else v for k, v in offset_provider.items()
+        k: v.__gt_type__() if isinstance(v, Connectivity) else v for k, v in offset_provider.items()
     }
 
 
