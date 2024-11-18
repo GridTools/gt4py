@@ -43,7 +43,7 @@ class ITIRTransform(Protocol):
 def apply_common_transforms(
     ir: itir.Program | itir.FencilDefinition,
     *,
-    offset_provider=None,  # TODO(havogt): should be replaced by offset_provider_type
+    offset_provider=None,  # TODO(havogt): should be replaced by offset_provider_type, but global_tmps currently relies on runtime info
     extract_temporaries=False,
     unroll_reduce=False,
     common_subexpression_elimination=True,
