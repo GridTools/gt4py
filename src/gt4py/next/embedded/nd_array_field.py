@@ -997,7 +997,7 @@ def _make_reduction(
         offset_definition = current_offset_provider[
             axis.value
         ]  # assumes offset and local dimension have same name
-        assert isinstance(offset_definition, common.ConnectivityField)
+        assert common.is_neighbor_table(offset_definition)
         new_domain = common.Domain(*[nr for nr in field.domain if nr.dim != axis])
 
         broadcast_slice = tuple(
