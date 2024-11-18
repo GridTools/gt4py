@@ -1352,7 +1352,9 @@ def test_gtir_reduce_with_skip_values():
     e = np.random.rand(SKIP_VALUE_MESH.num_edges)
     v_ref = [
         functools.reduce(
-            lambda x, y: x + y, [e[i] if i != -1 else 0.0 for i in v2e_neighbors], init_value
+            lambda x, y: x + y,
+            [e[i] if i != gtx_common._DEFAULT_SKIP_VALUE else 0.0 for i in v2e_neighbors],
+            init_value,
         )
         for v2e_neighbors in connectivity_V2E.table
     ]
@@ -1394,120 +1396,74 @@ def test_gtir_reduce_dot_product():
     init_value = np.random.rand()
     vertex_domain = im.domain(gtx_common.GridType.UNSTRUCTURED, ranges={Vertex: (0, "nvertices")})
 
-    connectivity_V2E = SIMPLE_MESH_OFFSET_PROVIDER["V2E"]
+    connectivity_V2E = SKIP_VALUE_MESH_OFFSET_PROVIDER["V2E"]
     assert isinstance(connectivity_V2E, gtx_common.NeighborTable)
 
-    # create mesh with skip values
-    connectivity_V2E_skip = copy.deepcopy(connectivity_V2E)
-    connectivity_V2E_skip.has_skip_values = True
-    connectivity_V2E_skip.table = np.asarray(
-        [
-            [x if i != skip_idx else gtx_common._DEFAULT_SKIP_VALUE for i, x in enumerate(row)]
-            for skip_idx, row in zip(
-                np.random.randint(0, connectivity_V2E.max_neighbors, size=SIMPLE_MESH.num_vertices),
-                connectivity_V2E.table,
-                strict=True,
-            )
-        ],
-        dtype=connectivity_V2E.table.dtype,
-    )
-    # safety check that the connectivity table actually contains skip values
-    assert len(np.where(connectivity_V2E.table == gtx_common._DEFAULT_SKIP_VALUE)) != 0
-
-    offset_provider = SIMPLE_MESH_OFFSET_PROVIDER | {
-        "V2E_skip": connectivity_V2E_skip,
-    }
-
-    V2E_SKIP_SYMBOLS = dict(
-        __connectivity_V2E_skip_size_0=SIMPLE_MESH.num_vertices,
-        __connectivity_V2E_skip_size_1=connectivity_V2E_skip.max_neighbors,
-        __connectivity_V2E_skip_stride_0=connectivity_V2E_skip.max_neighbors,
-        __connectivity_V2E_skip_stride_1=1,
-    )
-
-    e = np.random.rand(SIMPLE_MESH.num_edges)
-    v = np.empty(SIMPLE_MESH.num_vertices, dtype=e.dtype)
+    v2e_field = np.random.rand(SKIP_VALUE_MESH.num_vertices, connectivity_V2E.max_neighbors)
+    e = np.random.rand(SKIP_VALUE_MESH.num_edges)
+    v = np.empty(SKIP_VALUE_MESH.num_vertices, dtype=e.dtype)
     v_ref = [
         functools.reduce(
             lambda x, y: x + y,
             map(
                 lambda x: 0.0 if x[1] == gtx_common._DEFAULT_SKIP_VALUE else x[0],
-                zip((e[v2e_neighbors] * e[v2e_skip_neighbors]) + 1.0, v2e_skip_neighbors),
+                zip((e[v2e_neighbors] * v2e_values) + 1.0, v2e_neighbors),
             ),
             init_value,
         )
-        for v2e_neighbors, v2e_skip_neighbors in zip(
-            connectivity_V2E.table, connectivity_V2E_skip.table
-        )
+        for v2e_neighbors, v2e_values in zip(connectivity_V2E.table, v2e_field)
     ]
 
-    stencil_inlined = im.call(
-        im.call("as_fieldop")(
-            im.lambda_("it")(
-                im.call(im.call("reduce")("plus", im.literal_from_value(init_value)))(
-                    im.map_("plus")(
-                        im.map_("multiplies")(
-                            im.neighbors("V2E", "it"),
-                            im.neighbors("V2E_skip", "it"),
+    testee = gtir.Program(
+        id=f"reduce_dot_product",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="v2e_field", type=V2E_FTYPE),
+            gtir.Sym(id="edges", type=EFTYPE),
+            gtir.Sym(id="vertices", type=VFTYPE),
+            gtir.Sym(id="nvertices", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.call(
+                    im.call("as_fieldop")(
+                        im.lambda_("it")(
+                            im.call(im.call("reduce")("plus", im.literal_from_value(init_value)))(
+                                im.deref("it")
+                            )
                         ),
-                        im.call("make_const_list")(1.0),
+                        vertex_domain,
                     )
-                )
-            ),
-            vertex_domain,
-        )
-    )("edges")
-
-    stencil_fieldview = im.call(
-        im.call("as_fieldop")(
-            im.lambda_("it")(
-                im.call(im.call("reduce")("plus", im.literal_from_value(init_value)))(
-                    im.deref("it")
-                )
-            ),
-            vertex_domain,
-        )
-    )(
-        im.op_as_fieldop(im.map_("plus"), vertex_domain)(
-            im.op_as_fieldop(im.map_("multiplies"), vertex_domain)(
-                im.as_fieldop_neighbors("V2E", "edges", vertex_domain),
-                im.as_fieldop_neighbors("V2E_skip", "edges", vertex_domain),
-            ),
-            im.op_as_fieldop("make_const_list", vertex_domain)(1.0),
-        )
+                )(
+                    im.op_as_fieldop(im.map_("plus"), vertex_domain)(
+                        im.op_as_fieldop(im.map_("multiplies"), vertex_domain)(
+                            im.as_fieldop_neighbors("V2E", "edges", vertex_domain),
+                            "v2e_field",
+                        ),
+                        im.op_as_fieldop("make_const_list", vertex_domain)(1.0),
+                    )
+                ),
+                domain=vertex_domain,
+                target=gtir.SymRef(id="vertices"),
+            )
+        ],
     )
 
-    for i, stencil in enumerate([stencil_inlined, stencil_fieldview]):
-        testee = gtir.Program(
-            id=f"reduce_dot_product_{i}",
-            function_definitions=[],
-            params=[
-                gtir.Sym(id="edges", type=EFTYPE),
-                gtir.Sym(id="vertices", type=VFTYPE),
-                gtir.Sym(id="nvertices", type=SIZE_TYPE),
-            ],
-            declarations=[],
-            body=[
-                gtir.SetAt(
-                    expr=stencil,
-                    domain=vertex_domain,
-                    target=gtir.SymRef(id="vertices"),
-                )
-            ],
-        )
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, SKIP_VALUE_MESH_OFFSET_PROVIDER)
 
-        sdfg = dace_backend.build_sdfg_from_gtir(testee, offset_provider)
-
-        sdfg(
-            e,
-            v,
-            connectivity_V2E=connectivity_V2E.table,
-            connectivity_V2E_skip=connectivity_V2E_skip.table,
-            **FSYMBOLS,
-            **make_mesh_symbols(SIMPLE_MESH),
-            **V2E_SKIP_SYMBOLS,
-        )
-        assert np.allclose(v, v_ref)
+    sdfg(
+        v2e_field,
+        e,
+        v,
+        connectivity_V2E=connectivity_V2E.table,
+        **make_mesh_symbols(SKIP_VALUE_MESH),
+        __v2e_field_size_0=SKIP_VALUE_MESH.num_vertices,
+        __v2e_field_size_1=connectivity_V2E.max_neighbors,
+        __v2e_field_stride_0=connectivity_V2E.max_neighbors,
+        __v2e_field_stride_1=1,
+    )
+    assert np.allclose(v, v_ref)
 
 
 def test_gtir_reduce_with_cond_neighbors():
@@ -1518,6 +1474,7 @@ def test_gtir_reduce_with_cond_neighbors():
         function_definitions=[],
         params=[
             gtir.Sym(id="pred", type=ts.ScalarType(ts.ScalarKind.BOOL)),
+            gtir.Sym(id="v2e_field", type=V2E_FTYPE),
             gtir.Sym(id="edges", type=EFTYPE),
             gtir.Sym(id="vertices", type=VFTYPE),
             gtir.Sym(id="nvertices", type=SIZE_TYPE),
@@ -1535,7 +1492,7 @@ def test_gtir_reduce_with_cond_neighbors():
                 )(
                     im.if_(
                         "pred",
-                        im.as_fieldop_neighbors("V2E_FULL", "edges", vertex_domain),
+                        "v2e_field",
                         im.as_fieldop_neighbors("V2E", "edges", vertex_domain),
                     )
                 ),
@@ -1545,49 +1502,45 @@ def test_gtir_reduce_with_cond_neighbors():
         ],
     )
 
-    connectivity_V2E_simple = SIMPLE_MESH_OFFSET_PROVIDER["V2E"]
-    assert isinstance(connectivity_V2E_simple, gtx_common.NeighborTable)
-    connectivity_V2E_skip_values = copy.deepcopy(SKIP_VALUE_MESH_OFFSET_PROVIDER["V2E"])
-    assert isinstance(connectivity_V2E_skip_values, gtx_common.NeighborTable)
-    assert SKIP_VALUE_MESH.num_vertices <= SIMPLE_MESH.num_vertices
-    connectivity_V2E_skip_values.table = np.concatenate(
-        (
-            connectivity_V2E_skip_values.table[:, 0 : connectivity_V2E_simple.max_neighbors],
-            connectivity_V2E_simple.table[SKIP_VALUE_MESH.num_vertices :, :],
-        ),
-        axis=0,
-    )
-    connectivity_V2E_skip_values.max_neighbors = connectivity_V2E_simple.max_neighbors
+    connectivity_V2E = SKIP_VALUE_MESH_OFFSET_PROVIDER["V2E"]
+    assert isinstance(connectivity_V2E, gtx_common.NeighborTable)
 
-    e = np.random.rand(SIMPLE_MESH.num_edges)
+    v2e_field = np.random.rand(SKIP_VALUE_MESH.num_vertices, connectivity_V2E.max_neighbors)
+    e = np.random.rand(SKIP_VALUE_MESH.num_edges)
 
-    for use_full in [False, True]:
-        sdfg = dace_backend.build_sdfg_from_gtir(
-            testee,
-            SIMPLE_MESH_OFFSET_PROVIDER | {"V2E_FULL": connectivity_V2E_skip_values},
-        )
+    for use_sparse in [False, True]:
+        sdfg = dace_backend.build_sdfg_from_gtir(testee, SKIP_VALUE_MESH_OFFSET_PROVIDER)
 
-        v = np.empty(SIMPLE_MESH.num_vertices, dtype=e.dtype)
+        v = np.empty(SKIP_VALUE_MESH.num_vertices, dtype=e.dtype)
         v_ref = [
             functools.reduce(
-                lambda x, y: x + y, [e[i] if i != -1 else 0.0 for i in v2e_neighbors], init_value
+                lambda x, y: x + y,
+                [
+                    v if i != gtx_common._DEFAULT_SKIP_VALUE else 0.0
+                    for i, v in zip(v2e_neighbors, v2e_values, strict=True)
+                ],
+                init_value,
             )
-            for v2e_neighbors in (
-                connectivity_V2E_simple.table if use_full else connectivity_V2E_skip_values.table
+            if use_sparse
+            else functools.reduce(
+                lambda x, y: x + y,
+                [e[i] if i != gtx_common._DEFAULT_SKIP_VALUE else 0.0 for i in v2e_neighbors],
+                init_value,
             )
+            for v2e_neighbors, v2e_values in zip(connectivity_V2E.table, v2e_field, strict=True)
         ]
         sdfg(
-            np.bool_(use_full),
+            np.bool_(use_sparse),
+            v2e_field,
             e,
             v,
-            connectivity_V2E=connectivity_V2E_skip_values.table,
-            connectivity_V2E_FULL=connectivity_V2E_simple.table,
+            connectivity_V2E=connectivity_V2E.table,
             **FSYMBOLS,
-            **make_mesh_symbols(SIMPLE_MESH),
-            __connectivity_V2E_FULL_size_0=SIMPLE_MESH.num_edges,
-            __connectivity_V2E_FULL_size_1=connectivity_V2E_skip_values.max_neighbors,
-            __connectivity_V2E_FULL_stride_0=connectivity_V2E_skip_values.max_neighbors,
-            __connectivity_V2E_FULL_stride_1=1,
+            **make_mesh_symbols(SKIP_VALUE_MESH),
+            __v2e_field_size_0=SKIP_VALUE_MESH.num_vertices,
+            __v2e_field_size_1=connectivity_V2E.max_neighbors,
+            __v2e_field_stride_0=connectivity_V2E.max_neighbors,
+            __v2e_field_stride_1=1,
         )
         assert np.allclose(v, v_ref)
 

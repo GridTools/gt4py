@@ -46,7 +46,7 @@ stages:
 .build_baseimage_x86_64:
   extends: [.container-builder-cscs-zen2, .build_baseimage]
   variables:
-    CUDA_VERSION: 11.2.2
+    CUDA_VERSION: 11.4.3
     CUPY_PACKAGE: cupy-cuda11x
     CUPY_VERSION: 12.3.0 # latest version that supports cuda 11
     UBUNTU_VERSION: 20.04  # 22.04 hangs on daint in some tests for unknown reasons.
