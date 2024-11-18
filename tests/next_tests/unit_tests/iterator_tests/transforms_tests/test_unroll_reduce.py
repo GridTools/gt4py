@@ -10,11 +10,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from gt4py.next import common
 from gt4py.eve.utils import UIDs
+from gt4py.next import common
 from gt4py.next.iterator import ir
-from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce, _get_partial_offset_tags
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce, _get_partial_offset_tags
 
 
 def dummy_connectivity_type(max_neighbors: int, has_skip_values: bool):
@@ -139,8 +139,8 @@ def test_reduction_with_shift_on_second_arg(reduction_with_shift_on_second_arg, 
 def test_reduction_with_if(reduction_if):
     expected = _expected(reduction_if, "Dim", 2, False)
 
-    offset_provider = {"Dim": DummyConnectivity(max_neighbors=2, has_skip_values=False)}
-    actual = UnrollReduce.apply(reduction_if, offset_provider=offset_provider)
+    offset_provider_type = {"Dim": dummy_connectivity_type(max_neighbors=2, has_skip_values=False)}
+    actual = UnrollReduce.apply(reduction_if, offset_provider_type=offset_provider_type)
     assert actual == expected
 
 
