@@ -6,30 +6,31 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import numpy as np
-from typing import Optional
 from types import ModuleType
+from typing import Optional
+
+import numpy as np
 import pytest
 
 import gt4py.next as gtx
 from gt4py.next import backend as next_backend, common
-from gt4py.next.otf import arguments
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import cartesian_case, unstructured_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    exec_alloc_descriptor,
-    mesh_descriptor,
-    Vertex,
-    Edge,
     E2V,
     E2VDim,
+    Edge,
+    Vertex,
+    exec_alloc_descriptor,
+    mesh_descriptor,
 )
 from next_tests.integration_tests.multi_feature_tests.ffront_tests.test_laplacian import (
     lap_program,
-    laplap_program,
     lap_ref,
+    laplap_program,
 )
+
 
 try:
     import dace
