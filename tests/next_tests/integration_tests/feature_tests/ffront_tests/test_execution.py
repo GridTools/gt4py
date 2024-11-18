@@ -7,14 +7,21 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from functools import reduce
+from gt4py.next.otf import languages, stages, workflow
+from gt4py.next.otf.binding import interface
 import numpy as np
 import pytest
+import diskcache
+from gt4py.eve import SymbolName
+
 import gt4py.next as gtx
 from gt4py.next import (
     astype,
     broadcast,
     common,
+    constructors,
     errors,
+    field_utils,
     float32,
     float64,
     int32,
@@ -23,6 +30,8 @@ from gt4py.next import (
     neighbor_sum,
 )
 from gt4py.next.ffront.experimental import as_offset
+from gt4py.next.program_processors.runners import gtfn
+from gt4py.next.type_system import type_specifications as ts
 from gt4py.next import utils as gt_utils
 
 from next_tests.integration_tests import cases
@@ -297,7 +306,7 @@ def test_double_use_scalar(cartesian_case):
     # TODO(tehrengruber): This should be a regression test on ITIR level, but tracing doesn't
     #  work for this case.
     @gtx.field_operator
-    def testee(a: int32, b: int32, c: cases.IField) -> cases.IField:
+    def testee(a: np.int32, b: np.int32, c: cases.IField) -> cases.IField:
         tmp = a * b
         tmp2 = tmp * tmp
         # important part here is that we use the intermediate twice so that it is
