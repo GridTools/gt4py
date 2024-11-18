@@ -151,7 +151,9 @@ def fencil_generator(
         """
     )
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as source_file:
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".py", encoding="utf-8", delete=False
+    ) as source_file:
         source_file_name = source_file.name
         if debug:
             print(source_file_name)
