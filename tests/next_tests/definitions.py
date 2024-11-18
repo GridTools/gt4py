@@ -55,7 +55,6 @@ class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
 @dataclasses.dataclass(frozen=True)
 class EmbeddedDummyBackend:
     allocator: next_allocators.FieldBufferAllocatorProtocol
-    executor = None
 
 
 numpy_execution = EmbeddedDummyBackend(next_allocators.StandardCPUFieldBufferAllocator())
