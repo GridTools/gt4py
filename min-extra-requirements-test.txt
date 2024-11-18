@@ -61,7 +61,7 @@ cmake==3.22
 cogapp==3.3
 coverage[toml]==5.0
 cytoolz==0.12.1
-dace==0.16.1
+dace==1.0.0
 darglint==1.6
 deepdiff==5.6.0
 devtools==0.6
@@ -101,7 +101,6 @@ scipy==1.9.2
 setuptools==65.5.0
 sphinx==4.4
 sphinx_rtd_theme==1.0
-sympy==1.9
 tabulate==0.8.10
 tach==0.10.7
 tomli==2.0.1; python_version < "3.11"
