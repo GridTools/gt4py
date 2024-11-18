@@ -19,123 +19,37 @@ For (fieldview) embedded we introduced a `ConnectivityField` which could be gene
 
 These different concepts had overlap but were not 1-to-1 replacements.
 
-## Definitions
+## Decision
+
+We introduce/update the following concepts
 
 ### Conceptual definitions
 
-**Connection** is a mapping from index to index, possibly defined on different spaces `m: A -> B`, e.g. mapping a vertex index to a cell index, or an I index to another I index.
-**Connectivity** is a mapping from an index (neighbor) to a _Connection_ c: N -> A -> B = N -> m, or alternatively interpretable as a 2-D mapping of a (neighbor, position) to an index.
+**Connectivity** or **ConnectivityField** is a mapping from indices to index. It covers 1-to-1 mappings, e.g. Cartesian shifts, NeighborTables (2D mappings) and dynamic Cartesian shifts.
 
-**NeighborTable** is a _Connectivity_ backed by a buffer.
+**NeighborConnectivity** is a 2D mapping of the N neighbors of a Location A to a Location B.
 
-**ConnectivityField** is a _Connectivity_ with additional operations e.g. addition. Note: this concept seems wrong.
+**NeighborTable** is a _NeighborConnectivity_ backed by a buffer.
 
-**ConnectivityType**, **NeighborTableType** contains all information that is needed for compilation.
+**ConnectivityType**, **NeighborConnectivityType** contains all information that is needed for compilation.
 
 ### Full definitions
 
-```python
-class Connectivity(Protocol):
-    domain: Domain
-    codomain: Dimension
-    def __getitem__(self, index: tuple[NeighborIndex, Index]) -> OtherIndex: ...
-    def inverse_image(...): ...
-    def __gt_type__(self) -> ConnectivityType: ...
+see `next.common` module
 
-
-class ConnectivityType(TypeSpec):
-    domain_dims: tuple[LocalDimension, Dimension]
-    codomain: Dimension
-
-class NeighborConnectivity(Connectivity, Protocol):
-    domain: Domain[LocalDimension, Dimension]
-
-@dataclass
-class NeighborConnectivityType(ConnectivityType): # Should be property of the LocalDimension
-    has_skip_value: bool
-    max_neighbors: int
-```
-
-```python
-class LocalDimensionType:
-    has_skip_value: bool
-    max_neighbors: int
-
-@field_operator(meta={E2V: mesh["E2V"]})
-def foo(e2v: Connectivity[[Edge, E2V], Vertex]):
-    ...
-```
-
-```python
-class NeighborTable(NeighborConnectivity, NDArrayConnectivityField):
-    ...
-```
-
-```python
-ConnectivityField = Connectivity
-```
-
-TODO: where does the inverse image live?
+Note: Currently, the compiled backends supports only NeighborConnectivities that are NeighborTables. We do not yet encode this in the type and postpone discussion to the point where we support alternative implementations (e.g. StridedNeighborConnectivity).
 
 ## Which parts of the toolchain use which concept?
 
-## Decision
+### Embedded
 
-We keep/introduce the following concepts:
+Fieldview embedded supports any kind of Connectivity.
+Iterator embedded supports only NeighborConnectivities.
 
-### ConnectivityType
+### IR transformations and compiled backends
 
-```python
-class ConnectivityType(Protocol):
-    domain_dims: tuple[Dimension, Dimension]
-    codomain: Dimension
-    skip_value: Optional[bool]
-    ...
-```
+All transformations and code-generation should use `ConnectivityType`, not the `Connectivity` which contains the runtime mapping.
 
-Note: This type describes only `Connectivity` not `Connection`, note the `common.CartesianConnectivity` is actually a connection, therefore doesn't have a `ConnectivityType`. Further concept cleanup is required here!
+Note, currently the `global_tmps` pass uses runtime information, therefore this is not strictly enforced.
 
-### NeighborTable
-
-```python
-class NeigborTable:
-    type_: ConnectivityType
-    ndarray
-```
-
-### ConnectivityField
-
-## Future
-
-In the PR with this ADR, we make a step into the following direction.
-
-The IR should contain all information that is required to compile a program. Specifically it should contain the `ConnectivityType`.
-
-## Consequences
-
-[ What becomes easier or more difficult to do because of this change?
-
-Describe both the positive (e.g., improvement of quality attribute satisfaction, follow-up decisions required, ...) and negative (e.g., compromising quality attribute, follow-up decisions required, ...)] outcomes of this decision. ]
-
-## Alternatives Considered
-
-### [option 1]
-
-[example | description | pointer to more information | ...] <!-- optional -->
-
-- Good, because [argument a]
-- Bad, because [argument c]
-- ...
-
-### [option 2]
-
-[example | description | pointer to more information | ...] <!-- optional -->
-
-- Good, because [argument a]
-- Bad, because [argument c]
-- ...
-
-## References <!-- optional -->
-
-- [Someone - Something](https://someone.com/a-title-about-something)
-- ...
+The only supported Connectivities in compiled backends are (currently) NeighborTables.
