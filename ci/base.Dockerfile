@@ -25,7 +25,6 @@ RUN apt-get update -qq && apt-get install -qq -y --no-install-recommends \
     liblzma-dev \
     $( [ "${UBUNTU_VERSION}" = "20.04" ] && echo "python-openssl" || echo "python3-openssl" ) \
     libreadline-dev \
-    gdb \
     git \
     rustc \
     htop && \
