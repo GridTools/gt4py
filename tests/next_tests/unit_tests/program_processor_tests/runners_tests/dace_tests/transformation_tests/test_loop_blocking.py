@@ -504,3 +504,136 @@ def test_empty_memlet_3():
     assert scope_dict[dtask] is inner_mentry
     assert scope_dict[tmp] is inner_mentry
     assert scope_dict[task2] is inner_mentry
+
+
+def _make_loop_blocking_sdfg_with_inner_map(
+    add_independent_part: bool,
+) -> tuple[dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.MapEntry]:
+    """
+    Generate the SDFGs with an inner map.
+
+    The SDFG has an inner map that is classified as dependent. If
+    `add_independent_part` is `True` then the SDFG has a part that is independent.
+    Note that everything is read from a single connector.
+
+    Return:
+        The function will return the SDFG, the state and the map entry for the outer
+        and inner map.
+    """
+    sdfg = dace.SDFG(util.unique_name("sdfg_with_inner_map"))
+    state = sdfg.add_state(is_start_block=True)
+
+    for name in "AB":
+        sdfg.add_array(name, shape=(10, 10), dtype=dace.float64, transient=False)
+
+    me_out, mx_out = state.add_map("outer_map", ndrange={"__i0": "0:10"})
+    me_in, mx_in = state.add_map("inner_map", ndrange={"__i1": "0:10"})
+    A, B = (state.add_access(name) for name in "AB")
+    tskl = state.add_tasklet(
+        "computation", inputs={"__in1", "__in2"}, outputs={"__out"}, code="__out = __in1 + __in2"
+    )
+
+    if add_independent_part:
+        sdfg.add_array("C", shape=(10,), dtype=dace.float64, transient=False)
+        sdfg.add_scalar("tmp", dtype=dace.float64, transient=True)
+        sdfg.add_scalar("tmp2", dtype=dace.float64, transient=True)
+        tmp, tmp2, C = (state.add_access(name) for name in ("tmp", "tmp2", "C"))
+        tskli = state.add_tasklet(
+            "independent_comp", inputs={"__field"}, outputs={"__out"}, code="__out = __field[1, 1]"
+        )
+
+    # construct the inner map of the map.
+    state.add_edge(A, None, me_out, "IN_A", dace.Memlet("A[0:10, 0:10]"))
+    me_out.add_in_connector("IN_A")
+    state.add_edge(me_out, "OUT_A", me_in, "IN_A", dace.Memlet("A[__i0, 0:10]"))
+    me_out.add_out_connector("OUT_A")
+    me_in.add_in_connector("IN_A")
+    state.add_edge(me_in, "OUT_A", tskl, "__in1", dace.Memlet("A[__i0, __i1]"))
+    me_in.add_out_connector("OUT_A")
+
+    state.add_edge(me_out, "OUT_A", me_in, "IN_A1", dace.Memlet("A[__i0, 0:10]"))
+    me_in.add_in_connector("IN_A1")
+    state.add_edge(me_in, "OUT_A1", tskl, "__in2", dace.Memlet("A[__i0, 9 - __i1]"))
+    me_in.add_out_connector("OUT_A1")
+
+    state.add_edge(tskl, "__out", mx_in, "IN_B", dace.Memlet("B[__i0, __i1]"))
+    mx_in.add_in_connector("IN_B")
+    state.add_edge(mx_in, "OUT_B", mx_out, "IN_B", dace.Memlet("B[__i0, 0:10]"))
+    mx_in.add_out_connector("OUT_B")
+    mx_out.add_in_connector("IN_B")
+    state.add_edge(mx_out, "OUT_B", B, None, dace.Memlet("B[0:10, 0:10]"))
+    mx_out.add_out_connector("OUT_B")
+
+    # If requested add a part that is independent, i.e. is before the inner loop
+    if add_independent_part:
+        state.add_edge(me_out, "OUT_A", tskli, "__field", dace.Memlet("A[0:10, 0:10]"))
+        state.add_edge(tskli, "__out", tmp, None, dace.Memlet("tmp[0]"))
+        state.add_edge(tmp, None, tmp2, None, dace.Memlet("tmp2[0]"))
+        state.add_edge(tmp2, None, mx_out, "IN_tmp", dace.Memlet("C[__i0]"))
+        mx_out.add_in_connector("IN_tmp")
+        state.add_edge(mx_out, "OUT_tmp", C, None, dace.Memlet("C[0:10]"))
+        mx_out.add_out_connector("OUT_tmp")
+
+    sdfg.validate()
+    return sdfg, state, me_out, me_in
+
+
+def test_loop_blocking_inner_map():
+    """
+    Tests with an inner map, without an independent part.
+    """
+    sdfg, state, outer_map, inner_map = _make_loop_blocking_sdfg_with_inner_map(False)
+    assert all(oedge.dst is inner_map for oedge in state.out_edges(outer_map))
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(blocking_size=5, blocking_parameter="__i0"),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 1
+    assert all(
+        oedge.dst is not inner_map and isinstance(oedge.dst, dace_nodes.MapEntry)
+        for oedge in state.out_edges(outer_map)
+    )
+    inner_blocking_map: dace_nodes.MapEntry = next(
+        oedge.dst
+        for oedge in state.out_edges(outer_map)
+        if isinstance(oedge.dst, dace_nodes.MapEntry)
+    )
+    assert inner_blocking_map is not inner_map
+
+    assert all(oedge.dst is inner_map for oedge in state.out_edges(inner_blocking_map))
+
+
+def test_loop_blocking_inner_map_with_independent_part():
+    """
+    Tests with an inner map with an independent part.
+    """
+    sdfg, state, outer_map, inner_map = _make_loop_blocking_sdfg_with_inner_map(True)
+
+    # Find the parts that are independent.
+    itskl: dace_nodes.Tasklet = next(
+        oedge.dst
+        for oedge in state.out_edges(outer_map)
+        if isinstance(oedge.dst, dace_nodes.Tasklet)
+    )
+    assert itskl.label == "independent_comp"
+    i_access_node: dace_nodes.AccessNode = next(oedge.dst for oedge in state.out_edges(itskl))
+    assert i_access_node.data == "tmp"
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(blocking_size=5, blocking_parameter="__i0"),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 1
+    inner_blocking_map: dace_nodes.MapEntry = next(
+        oedge.dst
+        for oedge in state.out_edges(outer_map)
+        if isinstance(oedge.dst, dace_nodes.MapEntry)
+    )
+    assert inner_blocking_map is not inner_map
+
+    assert all(oedge.dst in {inner_blocking_map, itskl} for oedge in state.out_edges(outer_map))
+    assert state.scope_dict()[i_access_node] is outer_map
+    assert all(oedge.dst is inner_blocking_map for oedge in state.out_edges(i_access_node))
