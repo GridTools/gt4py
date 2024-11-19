@@ -449,3 +449,85 @@ def test_gt4py_redundant_array_elimination_self_write():
         validate_all=True,
     )
     assert count == 0
+
+
+def _make_global_write_test_sdfg(
+    read_used_for_filter: bool,
+) -> tuple[dace.SDFG, dace.SDFGState]:
+    """
+    Generates the SDFG where `write` is global.
+
+    Used in the `test_gt4py_redundant_array_elimination_global_write_*()` tests.
+    """
+
+    sdfg: dace.SDFG = dace.SDFG(
+        util.unique_name("test_gt4py_redundant_array_elimination_same_read")
+    )
+    state: dace.SDFGState = sdfg.add_state(is_start_block=True)
+
+    sdfg.add_array("read", shape=(100,), dtype=dace.float64, transient=True)
+    sdfg.add_array("write", shape=(100,), dtype=dace.float64, transient=False)
+
+    sdfg.add_array("tmp1", shape=(10,), dtype=dace.float64, transient=False)
+    sdfg.add_array("tmp2", shape=(10,), dtype=dace.float64, transient=False)
+    sdfg.add_scalar("tmps", dtype=dace.float64, transient=False)
+
+    read = state.add_access("read")
+    write = state.add_access("write")
+    tmp1 = state.add_access("tmp1")
+    tmp2 = state.add_access("tmp2")
+    tmps = state.add_access("tmps")
+
+    state.add_nedge(read, write, dace.Memlet("read[0:50] -> [0:50]"))
+
+    state.add_nedge(tmp1, read, dace.Memlet("tmp1[0:10] -> [20:30]"))
+
+    if read_used_for_filter:
+        state.add_nedge(tmp2, read, dace.Memlet("tmp2[0:10] -> [45:55]"))
+    else:
+        state.add_nedge(tmp2, read, dace.Memlet("tmp2[0:10] -> [40:50]"))
+    state.add_nedge(tmps, read, dace.Memlet("tmps[0] -> [3]"))
+    sdfg.validate()
+
+    return (sdfg, state)
+
+
+def test_gt4py_redundant_array_elimination_global_write_in_bound():
+    """
+    `write` is global data, everything is in bound, so it can be applied.
+    """
+    sdfg, state = _make_global_write_test_sdfg(read_used_for_filter=False)
+    access_nodes_pre = util.count_nodes(sdfg, dace_nodes.AccessNode, return_nodes=True)
+    assert len(access_nodes_pre) == 5
+    assert state.number_of_nodes() == 5
+    assert sum(dnode.data == "read" for dnode in access_nodes_pre)
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.GT4PyRedundantArrayElimination(),
+        validate_all=True,
+    )
+    assert count == 1
+
+    access_nodes_after = util.count_nodes(sdfg, dace_nodes.AccessNode, return_nodes=True)
+    assert state.number_of_nodes() == 4
+    assert len(access_nodes_after) == 4
+    assert not any(dnode.data == "read" for dnode in access_nodes_after)
+
+
+def test_gt4py_redundant_array_elimination_global_write_filter():
+    """
+    `write` is global data, `read` used for filtering.
+
+    Because of the filtering, the transformation can not be applied.
+    """
+    sdfg, state = _make_global_write_test_sdfg(read_used_for_filter=True)
+    access_nodes_pre = util.count_nodes(sdfg, dace_nodes.AccessNode, return_nodes=True)
+    assert len(access_nodes_pre) == 5
+    assert state.number_of_nodes() == 5
+    assert sum(dnode.data == "read" for dnode in access_nodes_pre)
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.GT4PyRedundantArrayElimination(),
+        validate_all=True,
+    )
+    assert count == 0
