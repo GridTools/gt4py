@@ -6,27 +6,14 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from gt4py.eve import NodeTranslator, PreserveLocationVisitor
+from gt4py import eve
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.iterator.type_system import inference as ir_type_inference
 from gt4py.next.type_system import type_specifications as ts
 
 
-def _is_cast_redundant(node: ir.FunCall) -> bool:
-    assert cpm.is_call_to(node, "cast_")
-    value, type_constructor = node.args
-
-    assert (
-        value.type
-        and isinstance(type_constructor, ir.SymRef)
-        and (type_constructor.id in ir.TYPEBUILTINS)
-    )
-    dtype = ts.ScalarType(kind=getattr(ts.ScalarKind, type_constructor.id.upper()))
-
-    return value.type == dtype
-
-
-class PruneCasts(PreserveLocationVisitor, NodeTranslator):
+class PruneCasts(eve.NodeTranslator):
     """
     Removes cast expressions where the argument is already in the target type.
 
@@ -34,28 +21,32 @@ class PruneCasts(PreserveLocationVisitor, NodeTranslator):
     therefore it should be applied after type-inference.
     """
 
+    PRESERVED_ANNEX_ATTRS = ("domain",)
+
     def visit_FunCall(self, node: ir.FunCall) -> ir.Node:
-        if cpm.is_op_as_fieldop(node, "cast_"):
-            # Prune trivial `as_fieldop` cast expressions with the form:
-            # as_fieldop(λ(__val) = cast_(deref(__val), float64)))(a)
-            # where 'a' is already a field with data type float64, in this example.
-            lambda_node = node.fun.args[0]  # type: ignore[attr-defined]
-            assert isinstance(lambda_node, ir.Lambda)
-            cast_expr = lambda_node.expr
-            assert isinstance(cast_expr, ir.FunCall)
-            cast_value = cast_expr.args[0]
-            if (
-                _is_cast_redundant(cast_expr)
-                and cpm.is_call_to(cast_value, "deref")
-                and cpm.is_ref_to(cast_value.args[0], lambda_node.params[0].id)
-            ):
-                return self.visit(node.args[0])
+        original_node = node.copy(update={})
+        node = self.generic_visit(original_node)
+        ir_type_inference.copy_type(original_node, node)
 
-        elif cpm.is_call_to(node, "cast_"):
-            if _is_cast_redundant(node):
-                return self.visit(node.args[0])
+        if cpm.is_call_to(node, "cast_"):
+            value, type_constructor = node.args
 
-        return self.generic_visit(node)
+            assert (
+                value.type
+                and isinstance(type_constructor, ir.SymRef)
+                and (type_constructor.id in ir.TYPEBUILTINS)
+            )
+            dtype = ts.ScalarType(kind=getattr(ts.ScalarKind, type_constructor.id.upper()))
+
+            if value.type == dtype:
+                return value
+
+        elif cpm.is_identity_as_fieldop(node):
+            # pruning of cast expressions may leave some trivial `as_fieldop` expressions
+            # with form '(⇑(λ(__arg) → ·__arg))(a)'
+            return node.args[0]
+
+        return node
 
     @classmethod
     def apply(cls, node: ir.Node) -> ir.Node:
