@@ -10,6 +10,7 @@ from collections.abc import Iterable
 from typing import TypeGuard
 
 from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator.ir_utils import ir_makers as im
 
 
 def is_applied_lift(arg: itir.Node) -> TypeGuard[itir.FunCall]:
@@ -57,15 +58,6 @@ def is_applied_as_fieldop(arg: itir.Node) -> TypeGuard[itir.FunCall]:
     return isinstance(arg, itir.FunCall) and is_call_to(arg.fun, "as_fieldop")
 
 
-def is_op_as_fieldop(node: itir.Node, op: str) -> TypeGuard[itir.FunCall]:
-    """Match expressions of the form `as_fieldop(λ(...) → op(...))(*args)`."""
-    return (
-        is_applied_as_fieldop(node)
-        and isinstance(node.fun.args[0], itir.Lambda)  # type: ignore[attr-defined]
-        and is_call_to(node.fun.args[0].expr, op)  # type: ignore[attr-defined]
-    )
-
-
 def is_let(node: itir.Node) -> TypeGuard[itir.FunCall]:
     """Match expression of the form `(λ(...) → ...)(...)`."""
     return isinstance(node, itir.FunCall) and isinstance(node.fun, itir.Lambda)
@@ -93,3 +85,17 @@ def is_call_to(node: itir.Node, fun: str | Iterable[str]) -> TypeGuard[itir.FunC
 
 def is_ref_to(node, ref: str):
     return isinstance(node, itir.SymRef) and node.id == ref
+
+
+def is_identity_as_fieldop(node: itir.Expr):
+    """Match field operators implementing element-wise copy of a field argument."""
+    if not is_applied_as_fieldop(node):
+        return False
+    stencil = node.fun.args[0]  # type: ignore[attr-defined]
+    if (
+        isinstance(stencil, itir.Lambda)
+        and len(stencil.params) == 1
+        and stencil == im.lambda_(stencil.params[0])(im.deref(stencil.params[0].id))
+    ):
+        return True
+    return False

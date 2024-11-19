@@ -550,11 +550,7 @@ def translate_index(
         external_edges=True,
     )
 
-    return FieldopData(
-        output_node,
-        ts.FieldType(field_dims, dace_utils.as_itir_type(INDEX_DTYPE)),
-        local_offset=None,
-    )
+    return FieldopData(output_node, ts.FieldType(field_dims, dace_utils.as_itir_type(INDEX_DTYPE)))
 
 
 def _get_data_nodes(

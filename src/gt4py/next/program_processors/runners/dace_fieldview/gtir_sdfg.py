@@ -800,12 +800,12 @@ def build_sdfg_from_gtir(
         An SDFG in the DaCe canonical form (simplified)
     """
 
+    if len(eve.walk_values(ir).filter(lambda node: cpm.is_call_to(node, "index")).to_list()) != 0:
+        # We need to rerun domain inference because the annex information is not preserved by IR passes,
+        # and the domain information is stored in annex for the nodes implementing the index builtin.
+        ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
     ir = gtir_type_inference.infer(ir, offset_provider=offset_provider)
     ir = ir_prune_casts.PruneCasts().visit(ir)
-    # We need to re-run domain and type inference because this information is not preserved
-    # by IR transformations.
-    ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
-    ir = gtir_type_inference.infer(ir, offset_provider=offset_provider)
     sdfg_genenerator = GTIRToSDFG(offset_provider)
     sdfg = sdfg_genenerator.visit(ir)
     assert isinstance(sdfg, dace.SDFG)
