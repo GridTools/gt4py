@@ -395,7 +395,7 @@ class GT4PyRednundantArrayElimination(dace_transformation.SingleStateTransformat
         #  that the array is fully written to. Because of our SDFG structure.
         #  What we accepts depends on if `read` and `write` have the same shape.
         if write_desc.shape == read_desc.shape:
-            # If `read` and write` have the same shape, then there are only one
+            # If `read` and write` have the same shape, then there are only two
             #  kind of restriction. Consider the following:
             # ```
             #   read[0:100] = ...  # noqa: ERA001 [commented-out-code]
@@ -411,45 +411,47 @@ class GT4PyRednundantArrayElimination(dace_transformation.SingleStateTransformat
             #  only contain invalid data, so reading from it would be wrong anyway
             #  so we can safely write to it. The only problem is if `write` is
             #  non transient data, in which case we would need to adjust the subsets.
-            #  The second problem if transactions should as:
+            #  The second problem are operations such as:
             # ```
             #   read[0:100] = ...  # noqa: ERA001 [commented-out-code]
             #   write[0:50] = read[25:75]  # noqa: ERA001 [commented-out-code]
             # ```
-            #  This is a problem, because now we need to introduce offsets.
+            #  Because now we must account for offsets.
+
+            # What is actually transferred, between `read` and `write`.
             read_out_edge = next(iter(graph.out_edges(read_an)))
             write_dst_subset = read_out_edge.data.get_dst_subset(read_out_edge, graph)
             if write_dst_subset is None:
                 write_dst_subset = dace_subsets.Range.from_array(write_desc)
+            write_src_subset = read_out_edge.data.get_src_subset(read_out_edge, graph)
+            if write_src_subset is None:
+                write_src_subset = dace_subsets.Range.from_array(read_desc)
 
-            if not write_desc.transient:
-                # `write` is not a transient. In this case we must ensure that
-                #  `read` is not used to filter out some reads.
+            # To avoid that we have to take into account offsets we require that
+            #  both offsets starts at zero. Note that this is not a real restriction
+            #  it just makes the implementation simpler.
+            # TODO(phimuell): Lift this restriction.
+            zero_start = (0,) * len(write_desc.shape)
+            if tuple(write_dst_subset.min_element()) != zero_start:
+                return False
+            if tuple(write_src_subset.min_element()) != zero_start:
+                return False
+
+            if write_desc.transient:
+                # `write` is a transient, in which case we can be more permissive.
+                #  Actually the tests above, to ensure that everything starts at
+                #  zero are already enough in the transient case. See also the
+                #  discussion above for more information.
+                pass
+            else:
+                # `write` is global data, so we must be more careful. We have to
+                #  ensure that `read` is not used to filter out some computation.
                 for read_in_edge in graph.in_edges(read_an):
                     read_dst_subset = read_in_edge.data.get_dst_subset(read_in_edge, graph)
                     if read_dst_subset is None:
                         read_dst_subset = dace_subsets.Range.from_array(read_desc)
                     # Test if the edges writes something that is later not read.
-                    if not write_dst_subset.covers(read_dst_subset):
-                        return False
-            else:
-                # `write` is a transient, so the only thing we care is the start
-                #  of the range we read/write. This is not a real restriction, it
-                #  just allows us to skip offset computation.
-                write_subset_min = write_dst_subset.min_element()
-                for read_in_edge in graph.in_edges(read_an):
-                    read_dst_subset = read_in_edge.data.get_dst_subset(read_in_edge, graph)
-                    if read_dst_subset is None:
-                        read_dst_subset = dace_subsets.Range.from_array(read_desc)
-                    read_dst_subset_min = read_dst_subset.min_element()
-                    if read_dst_subset_min != write_subset_min:
-                        return False
-                for read_out_edge in graph.out_edges(read_an):
-                    read_src_subset = read_out_edge.data.get_src_subset(read_out_edge, graph)
-                    if read_src_subset is None:
-                        read_src_subset = dace_subsets.Range.from_array(read_desc)
-                    read_src_subset_min = read_src_subset.min_element()
-                    if read_src_subset_min != write_subset_min:
+                    if not write_src_subset.covers(read_dst_subset):
                         return False
         else:
             # They have different shapes, which is much more complicated to handle.
