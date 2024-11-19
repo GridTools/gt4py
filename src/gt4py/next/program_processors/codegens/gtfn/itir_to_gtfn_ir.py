@@ -15,7 +15,7 @@ from gt4py.eve import utils as eve_utils
 from gt4py.eve.concepts import SymbolName
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import (
     Backend,
@@ -24,6 +24,7 @@ from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import (
     CastExpr,
     FunCall,
     FunctionDefinition,
+    IfStmt,
     IntegralConstant,
     Lambda,
     Literal,
@@ -66,8 +67,32 @@ _vertical_dimension = "gtfn::unstructured::dim::vertical"
 _horizontal_dimension = "gtfn::unstructured::dim::horizontal"
 
 
-def _get_domains(node: Iterable[itir.Stmt]) -> Iterable[itir.FunCall]:
-    return eve_utils.xiter(node).if_isinstance(itir.SetAt).getattr("domain").to_set()
+def _is_tuple_of_ref_or_literal(expr: itir.Expr) -> bool:
+    if (
+        isinstance(expr, itir.FunCall)
+        and isinstance(expr.fun, itir.SymRef)
+        and expr.fun.id == "tuple_get"
+        and len(expr.args) == 2
+        and _is_tuple_of_ref_or_literal(expr.args[1])
+    ):
+        return True
+    if (
+        isinstance(expr, itir.FunCall)
+        and isinstance(expr.fun, itir.SymRef)
+        and expr.fun.id == "make_tuple"
+        and all(_is_tuple_of_ref_or_literal(arg) for arg in expr.args)
+    ):
+        return True
+    if isinstance(expr, (itir.SymRef, itir.Literal)):
+        return True
+    return False
+
+
+def _get_domains(nodes: Iterable[itir.Stmt]) -> Iterable[itir.FunCall]:
+    result = set()
+    for node in nodes:
+        result |= node.walk_values().if_isinstance(itir.SetAt).getattr("domain").to_set()
+    return result
 
 
 def _extract_grid_type(domain: itir.FunCall) -> common.GridType:
@@ -573,9 +598,19 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_Stmt(self, node: itir.Stmt, **kwargs: Any) -> None:
         raise AssertionError("All Stmts need to be handled explicitly.")
 
+    def visit_IfStmt(self, node: itir.IfStmt, **kwargs: Any) -> IfStmt:
+        return IfStmt(
+            cond=self.visit(node.cond, **kwargs),
+            true_branch=self.visit(node.true_branch, **kwargs),
+            false_branch=self.visit(node.false_branch, **kwargs),
+        )
+
     def visit_SetAt(
         self, node: itir.SetAt, *, extracted_functions: list, **kwargs: Any
     ) -> Union[StencilExecution, ScanExecution]:
+        if _is_tuple_of_ref_or_literal(node.expr):
+            node.expr = im.as_fieldop("deref", node.domain)(node.expr)
+
         assert cpm.is_applied_as_fieldop(node.expr)
         stencil = node.expr.fun.args[0]  # type: ignore[attr-defined] # checked in assert
         domain = node.domain
@@ -600,7 +635,6 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 tuple_constructor=lambda *elements: SidComposite(values=list(elements)),
             )
 
-            assert isinstance(lowered_input_as_sid, (SidComposite, SidFromScalar, SymRef))
             lowered_inputs.append(lowered_input_as_sid)
 
         backend = Backend(domain=self.visit(domain, stencil=stencil, **kwargs))

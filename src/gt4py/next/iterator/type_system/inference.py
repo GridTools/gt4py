@@ -19,7 +19,6 @@ from gt4py.eve.extended_typing import Any, Callable, Optional, TypeVar, Union
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_call_to
-from gt4py.next.iterator.transforms import global_tmps
 from gt4py.next.iterator.type_system import type_specifications as it_ts, type_synthesizer
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.type_system.type_info import primitive_constituents
@@ -85,7 +84,7 @@ def _is_compatible_type(type_a: ts.TypeSpec, type_b: ts.TypeSpec):
             is_compatible &= _is_compatible_type(arg_a, arg_b)
         is_compatible &= _is_compatible_type(type_a.returns, type_b.returns)
     else:
-        is_compatible &= type_a == type_b
+        is_compatible &= type_info.is_concretizable(type_a, type_b)
 
     return is_compatible
 
@@ -94,6 +93,16 @@ def _set_node_type(node: itir.Node, type_: ts.TypeSpec) -> None:
     if node.type:
         assert _is_compatible_type(node.type, type_), "Node already has a type which differs."
     node.type = type_
+
+
+def copy_type(from_: itir.Node, to: itir.Node, allow_untyped=False) -> None:
+    """
+    Copy type from one node to another.
+
+    This function mainly exists for readability reasons.
+    """
+    assert allow_untyped is not None or isinstance(from_.type, ts.TypeSpec)
+    _set_node_type(to, from_.type)  # type: ignore[arg-type]
 
 
 def on_inferred(callback: Callable, *args: Union[ts.TypeSpec, ObservableTypeSynthesizer]) -> None:
@@ -282,6 +291,8 @@ def _type_synthesizer_from_function_type(fun_type: ts.FunctionType):
 
 
 class SanitizeTypes(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
+    PRESERVED_ANNEX_ATTRS = ("domain",)
+
     def visit_Node(self, node: itir.Node, *, symtable: dict[str, itir.Node]) -> itir.Node:
         node = self.generic_visit(node)
         # We only want to sanitize types that have been inferred previously such that we don't run
@@ -304,6 +315,8 @@ class ITIRTypeInference(eve.NodeTranslator):
 
     See :method:ITIRTypeInference.apply for more details.
     """
+
+    PRESERVED_ANNEX_ATTRS = ("domain",)
 
     offset_provider: common.OffsetProvider
     #: Mapping from a dimension name to the actual dimension instance.
@@ -422,7 +435,7 @@ class ITIRTypeInference(eve.NodeTranslator):
         result = super().visit(node, **kwargs)
         if isinstance(node, itir.Node):
             if isinstance(result, ts.TypeSpec):
-                if node.type:
+                if node.type and not isinstance(node.type, ts.DeferredType):
                     assert _is_compatible_type(node.type, result)
                 node.type = result
             elif isinstance(result, ObservableTypeSynthesizer) or result is None:
@@ -456,28 +469,6 @@ class ITIRTypeInference(eve.NodeTranslator):
         closures = self.visit(node.closures, ctx=ctx | params | function_definitions)
         return it_ts.FencilType(params=params, closures=closures)
 
-    # TODO(tehrengruber): Remove after new ITIR format with apply_stencil is used everywhere
-    def visit_FencilWithTemporaries(
-        self, node: global_tmps.FencilWithTemporaries, *, ctx
-    ) -> it_ts.FencilType:
-        # TODO(tehrengruber): This implementation is not very appealing. Since we are about to
-        #  refactor the IR anyway this is fine for now.
-        params: dict[str, ts.DataType] = {}
-        for param in node.params:
-            assert isinstance(param.type, ts.DataType)
-            params[param.id] = param.type
-        # infer types of temporary declarations
-        tmps: dict[str, ts.FieldType] = {}
-        for tmp_node in node.tmps:
-            tmps[tmp_node.id] = self.visit(tmp_node, ctx=ctx | params)
-        # and store them in the inner fencil
-        for fencil_param in node.fencil.params:
-            if fencil_param.id in tmps:
-                fencil_param.type = tmps[fencil_param.id]
-        self.visit(node.fencil, ctx=ctx)
-        assert isinstance(node.fencil.type, it_ts.FencilType)
-        return node.fencil.type
-
     def visit_Program(self, node: itir.Program, *, ctx) -> it_ts.ProgramType:
         params: dict[str, ts.DataType] = {}
         for param in node.params:
@@ -494,10 +485,18 @@ class ITIRTypeInference(eve.NodeTranslator):
     def visit_Temporary(self, node: itir.Temporary, *, ctx) -> ts.FieldType | ts.TupleType:
         domain = self.visit(node.domain, ctx=ctx)
         assert isinstance(domain, it_ts.DomainType)
+        assert domain.dims != "unknown"
         assert node.dtype
         return type_info.apply_to_primitive_constituents(
-            lambda dtype: ts.FieldType(dims=domain.dims, dtype=dtype), node.dtype
+            lambda dtype: ts.FieldType(dims=domain.dims, dtype=dtype),  # type: ignore[arg-type]  # ensured by domain.dims != "unknown" above
+            node.dtype,
         )
+
+    def visit_IfStmt(self, node: itir.IfStmt, *, ctx) -> None:
+        cond = self.visit(node.cond, ctx=ctx)
+        assert cond == ts.ScalarType(kind=ts.ScalarKind.BOOL)
+        self.visit(node.true_branch, ctx=ctx)
+        self.visit(node.false_branch, ctx=ctx)
 
     def visit_SetAt(self, node: itir.SetAt, *, ctx) -> None:
         self.visit(node.expr, ctx=ctx)
@@ -512,17 +511,18 @@ class ITIRTypeInference(eve.NodeTranslator):
                 path,
                 node.expr.type,
             )
-            assert isinstance(target_type, ts.FieldType)
-            assert isinstance(expr_type, ts.FieldType)
+            assert isinstance(target_type, (ts.FieldType, ts.DeferredType))
+            assert isinstance(expr_type, (ts.FieldType, ts.DeferredType))
             # TODO(tehrengruber): The lowering emits domains that always have the horizontal domain
             #  first. Since the expr inherits the ordering from the domain this can lead to a mismatch
             #  between the target and expr (e.g. when the target has dimension K, Vertex). We should
             #  probably just change the behaviour of the lowering. Until then we do this more
             #  complicated comparison.
-            assert (
-                set(expr_type.dims) == set(target_type.dims)
-                and target_type.dtype == expr_type.dtype
-            )
+            if isinstance(target_type, ts.FieldType) and isinstance(expr_type, ts.FieldType):
+                assert (
+                    set(expr_type.dims).issubset(set(target_type.dims))
+                    and target_type.dtype == expr_type.dtype
+                )
 
     # TODO(tehrengruber): Remove after new ITIR format with apply_stencil is used everywhere
     def visit_StencilClosure(self, node: itir.StencilClosure, *, ctx) -> it_ts.StencilClosureType:
@@ -624,6 +624,8 @@ class ITIRTypeInference(eve.NodeTranslator):
             self.visit(tuple_, ctx=ctx)  # ensure tuple is typed
             assert isinstance(index_literal, itir.Literal)
             index = int(index_literal.value)
+            if isinstance(tuple_.type, ts.DeferredType):
+                return ts.DeferredType(constraint=None)
             assert isinstance(tuple_.type, ts.TupleType)
             return tuple_.type.types[index]
 

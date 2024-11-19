@@ -9,7 +9,18 @@
 import functools
 import types
 from collections.abc import Callable, Iterator
-from typing import Any, Generic, Literal, Protocol, Type, TypeGuard, TypeVar, cast, overload
+from typing import (
+    Any,
+    Generic,
+    Literal,
+    Protocol,
+    Sequence,
+    Type,
+    TypeGuard,
+    TypeVar,
+    cast,
+    overload,
+)
 
 import numpy as np
 
@@ -448,7 +459,9 @@ def is_concretizable(symbol_type: ts.TypeSpec, to_type: ts.TypeSpec) -> bool:
 
     """
     if isinstance(symbol_type, ts.DeferredType) and (
-        symbol_type.constraint is None or issubclass(type_class(to_type), symbol_type.constraint)
+        symbol_type.constraint is None
+        or (isinstance(to_type, ts.DeferredType) and to_type.constraint is None)
+        or issubclass(type_class(to_type), symbol_type.constraint)
     ):
         return True
     elif is_concrete(symbol_type):
@@ -499,7 +512,7 @@ def promote(
 def return_type(
     callable_type: ts.CallableType,
     *,
-    with_args: list[ts.TypeSpec],
+    with_args: Sequence[ts.TypeSpec],
     with_kwargs: dict[str, ts.TypeSpec],
 ) -> ts.TypeSpec:
     raise NotImplementedError(
@@ -511,7 +524,7 @@ def return_type(
 def return_type_func(
     func_type: ts.FunctionType,
     *,
-    with_args: list[ts.TypeSpec],
+    with_args: Sequence[ts.TypeSpec],
     with_kwargs: dict[str, ts.TypeSpec],
 ) -> ts.TypeSpec:
     return func_type.returns
@@ -521,7 +534,7 @@ def return_type_func(
 def return_type_field(
     field_type: ts.FieldType,
     *,
-    with_args: list[ts.TypeSpec],
+    with_args: Sequence[ts.TypeSpec],
     with_kwargs: dict[str, ts.TypeSpec],
 ) -> ts.FieldType:
     try:
@@ -556,7 +569,7 @@ UNDEFINED_ARG = types.new_class("UNDEFINED_ARG")
 @functools.singledispatch
 def canonicalize_arguments(
     func_type: ts.CallableType,
-    args: tuple | list,
+    args: Sequence,
     kwargs: dict,
     *,
     ignore_errors: bool = False,
@@ -568,7 +581,7 @@ def canonicalize_arguments(
 @canonicalize_arguments.register
 def canonicalize_function_arguments(
     func_type: ts.FunctionType,
-    args: tuple | list,
+    args: Sequence,
     kwargs: dict,
     *,
     ignore_errors: bool = False,
@@ -605,7 +618,7 @@ def canonicalize_function_arguments(
 
 
 def structural_function_signature_incompatibilities(
-    func_type: ts.FunctionType, args: list, kwargs: dict[str, Any]
+    func_type: ts.FunctionType, args: Sequence, kwargs: dict[str, Any]
 ) -> Iterator[str]:
     """
     Return structural incompatibilities for a call to ``func_type`` with given arguments.
@@ -660,7 +673,7 @@ def structural_function_signature_incompatibilities(
 
 @functools.singledispatch
 def function_signature_incompatibilities(
-    func_type: ts.CallableType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
+    func_type: ts.CallableType, args: Sequence[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
 ) -> Iterator[str]:
     """
     Return incompatibilities for a call to ``func_type`` with given arguments.
@@ -673,7 +686,7 @@ def function_signature_incompatibilities(
 @function_signature_incompatibilities.register
 def function_signature_incompatibilities_func(
     func_type: ts.FunctionType,
-    args: list[ts.TypeSpec],
+    args: Sequence[ts.TypeSpec],
     kwargs: dict[str, ts.TypeSpec],
     *,
     skip_canonicalization: bool = False,
@@ -749,7 +762,7 @@ def function_signature_incompatibilities_field(
 def accepts_args(
     callable_type: ts.CallableType,
     *,
-    with_args: list[ts.TypeSpec],
+    with_args: Sequence[ts.TypeSpec],
     with_kwargs: dict[str, ts.TypeSpec],
     raise_exception: bool = False,
 ) -> bool:

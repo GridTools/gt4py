@@ -14,6 +14,7 @@ import math
 import operator
 from typing import Callable, Iterable, TypeVar, Union, cast
 
+import gt4py.next.iterator.ir_utils.ir_makers as im
 from gt4py.eve import (
     NodeTranslator,
     NodeVisitor,
@@ -30,9 +31,24 @@ from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
+def _is_trivial_tuple_expr(node: itir.Expr):
+    """Return if node is a `make_tuple` call with all elements `SymRef`s, `Literal`s or tuples thereof."""
+    if cpm.is_call_to(node, "make_tuple") and all(
+        isinstance(arg, (itir.SymRef, itir.Literal)) or _is_trivial_tuple_expr(arg)
+        for arg in node.args
+    ):
+        return True
+    if cpm.is_call_to(node, "tuple_get") and (
+        isinstance(node.args[1], (itir.SymRef, itir.Literal))
+        or _is_trivial_tuple_expr(node.args[1])
+    ):
+        return True
+    return False
+
+
 @dataclasses.dataclass
 class _NodeReplacer(PreserveLocationVisitor, NodeTranslator):
-    PRESERVED_ANNEX_ATTRS = ("type",)
+    PRESERVED_ANNEX_ATTRS = ("type", "domain")
 
     expr_map: dict[int, itir.SymRef]
 
@@ -43,15 +59,16 @@ class _NodeReplacer(PreserveLocationVisitor, NodeTranslator):
 
     def visit_FunCall(self, node: itir.FunCall) -> itir.Node:
         node = cast(itir.FunCall, self.visit_Expr(node))
+        # TODO(tehrengruber): Use symbol name from the inner let, to increase readability of IR
         # If we encounter an expression like:
         #  (λ(_cs_1) → (λ(a) → a+a)(_cs_1))(outer_expr)
         # (non-recursively) inline the lambda to obtain:
         #  (λ(_cs_1) → _cs_1+_cs_1)(outer_expr)
-        # This allows identifying more common subexpressions later on
+        # In the CSE this allows identifying more common subexpressions later on. Other users
+        # of `extract_subexpression` (e.g. temporary extraction) can also rely on this to avoid
+        # the need to handle this artificial let-statements.
         if isinstance(node, itir.FunCall) and isinstance(node.fun, itir.Lambda):
-            eligible_params = []
-            for arg in node.args:
-                eligible_params.append(isinstance(arg, itir.SymRef) and arg.id.startswith("_cs"))
+            eligible_params = [isinstance(arg, itir.SymRef) for arg in node.args]
             if any(eligible_params):
                 # note: the inline is opcount preserving anyway so avoid the additional
                 # effort in the inliner by disabling opcount preservation.
@@ -240,7 +257,6 @@ def extract_subexpression(
     Examples:
         Default case for `(x+y) + ((x+y)+z)`:
 
-        >>> import gt4py.next.iterator.ir_utils.ir_makers as im
         >>> from gt4py.eve.utils import UIDGenerator
         >>> expr = im.plus(im.plus("x", "y"), im.plus(im.plus("x", "y"), "z"))
         >>> predicate = lambda subexpr, num_occurences: num_occurences > 1
@@ -319,7 +335,7 @@ def extract_subexpression(
     subexprs = CollectSubexpressions.apply(node)
 
     # collect multiple occurrences and map them to fresh symbols
-    expr_map = dict[int, itir.SymRef]()
+    expr_map: dict[int, itir.SymRef] = {}
     ignored_ids = set()
     for expr, subexpr_entry in (
         subexprs.items() if not deepest_expr_first else reversed(subexprs.items())
@@ -372,7 +388,7 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
         >>> x = itir.SymRef(id="x")
         >>> plus = lambda a, b: itir.FunCall(fun=itir.SymRef(id=("plus")), args=[a, b])
         >>> expr = plus(plus(x, x), plus(x, x))
-        >>> print(CommonSubexpressionElimination.apply(expr, is_local_view=True))
+        >>> print(CommonSubexpressionElimination.apply(expr, within_stencil=True))
         (λ(_cs_1) → _cs_1 + _cs_1)(x + x)
 
     The pass visits the tree top-down starting from the root node, e.g. an itir.Program.
@@ -394,33 +410,33 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
     def apply(
         cls,
         node: ProgramOrExpr,
-        is_local_view: bool | None = None,
+        within_stencil: bool | None = None,
         offset_provider: common.OffsetProvider | None = None,
     ) -> ProgramOrExpr:
         is_program = isinstance(node, (itir.Program, itir.FencilDefinition))
         if is_program:
-            assert is_local_view is None
-            is_local_view = False
+            assert within_stencil is None
+            within_stencil = False
         else:
             assert (
-                is_local_view is not None
-            ), "The expression's context must be specified using `is_local_view`."
+                within_stencil is not None
+            ), "The expression's context must be specified using `within_stencil`."
 
         offset_provider = offset_provider or {}
         node = itir_type_inference.infer(
             node, offset_provider=offset_provider, allow_undeclared_symbols=not is_program
         )
-        return cls().visit(node, is_local_view=is_local_view)
+        return cls().visit(node, within_stencil=within_stencil)
 
     def generic_visit(self, node, **kwargs):
         if cpm.is_call_to("as_fieldop", node):
-            assert not kwargs.get("is_local_view")
-        is_local_view = cpm.is_call_to("as_fieldop", node) or kwargs.get("is_local_view")
+            assert not kwargs.get("within_stencil")
+        within_stencil = cpm.is_call_to("as_fieldop", node) or kwargs.get("within_stencil")
 
-        return super().generic_visit(node, **(kwargs | {"is_local_view": is_local_view}))
+        return super().generic_visit(node, **(kwargs | {"within_stencil": within_stencil}))
 
     def visit_FunCall(self, node: itir.FunCall, **kwargs):
-        is_local_view = kwargs["is_local_view"]
+        within_stencil = kwargs["within_stencil"]
 
         if cpm.is_call_to(node, ("cartesian_domain", "unstructured_domain")):
             return node
@@ -430,17 +446,21 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
             #  view, even though the syntactic context `node` is in field view.
             # note: what is extracted is sketched in the docstring above. keep it updated.
             if num_occurences > 1:
-                if is_local_view:
+                if within_stencil:
                     return True
-                else:
+                # condition is only necessary since typing on lambdas is not preserved during
+                #  the transformation
+                elif not isinstance(subexpr, itir.Lambda):
                     # only extract fields outside of `as_fieldop`
                     # `as_fieldop(...)(field_expr, field_expr)`
                     # -> `(λ(_cs_1) → as_fieldop(...)(_cs_1, _cs_1))(field_expr)`
+                    # only extract if subexpression is not a trivial tuple expressions, e.g.,
+                    # `make_tuple(a, b)`, as this would result in a more costly temporary.
                     assert isinstance(subexpr.type, ts.TypeSpec)
                     if all(
                         isinstance(stype, ts.FieldType)
                         for stype in type_info.primitive_constituents(subexpr.type)
-                    ):
+                    ) and not _is_trivial_tuple_expr(subexpr):
                         return True
             return False
 
@@ -450,10 +470,8 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
             return self.generic_visit(node, **kwargs)
 
         # apply remapping
-        result = itir.FunCall(
-            fun=itir.Lambda(params=list(extracted.keys()), expr=new_expr),
-            args=list(extracted.values()),
-        )
+        result = im.let(*extracted.items())(new_expr)
+        itir_type_inference.copy_type(from_=node, to=result, allow_untyped=True)
 
         # if the node id is ignored (because its parent is eliminated), but it occurs
         # multiple times then we want to visit the final result once more.

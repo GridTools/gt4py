@@ -26,17 +26,37 @@ from gt4py.next.ffront import (
 from gt4py.next.ffront.experimental import EXPERIMENTAL_FUN_BUILTIN_NAMES
 from gt4py.next.ffront.fbuiltins import FUN_BUILTIN_NAMES, MATH_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
 from gt4py.next.ffront.foast_introspection import StmtReturnKind, deduce_stmt_return_kind
+from gt4py.next.ffront.stages import AOT_FOP, FOP
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
-def foast_to_itir(inp: ffront_stages.FoastOperatorDefinition) -> itir.Expr:
+def foast_to_itir(inp: FOP) -> itir.Expr:
+    """
+    Lower a FOAST field operator node to Iterator IR.
+
+    See the docstring of `FieldOperatorLowering` for details.
+    """
     return FieldOperatorLowering.apply(inp.foast_node)
 
 
-def promote_to_list(node: foast.Symbol | foast.Expr) -> Callable[[itir.Expr], itir.Expr]:
-    if not type_info.contains_local_field(node.type):
+def foast_to_itir_factory(cached: bool = True) -> workflow.Workflow[FOP, itir.Expr]:
+    """Wrap `foast_to_itir` into a chainable and, optionally, cached workflow step."""
+    wf = foast_to_itir
+    if cached:
+        wf = workflow.CachedStep(step=wf, hash_function=ffront_stages.fingerprint_stage)
+    return wf
+
+
+def adapted_foast_to_itir_factory(**kwargs: Any) -> workflow.Workflow[AOT_FOP, itir.Expr]:
+    """Wrap the `foast_to_itir` workflow step into an adapter to fit into backend transform workflows."""
+    return toolchain.StripArgsAdapter(foast_to_itir_factory(**kwargs))
+
+
+def promote_to_list(node_type: ts.TypeSpec) -> Callable[[itir.Expr], itir.Expr]:
+    if not type_info.contains_local_field(node_type):
         return lambda x: im.promote_to_lifted_stencil("make_const_list")(x)
     return lambda x: x
 
@@ -247,16 +267,16 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         if node.op in [dialect_ast_enums.UnaryOperator.NOT, dialect_ast_enums.UnaryOperator.INVERT]:
             if dtype.kind != ts.ScalarKind.BOOL:
                 raise NotImplementedError(f"'{node.op}' is only supported on 'bool' arguments.")
-            return self._map("not_", node.operand)
+            return self._lower_and_map("not_", node.operand)
 
-        return self._map(
+        return self._lower_and_map(
             node.op.value,
             foast.Constant(value="0", type=dtype, location=node.location),
             node.operand,
         )
 
     def visit_BinOp(self, node: foast.BinOp, **kwargs: Any) -> itir.FunCall:
-        return self._map(node.op.value, node.left, node.right)
+        return self._lower_and_map(node.op.value, node.left, node.right)
 
     def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs: Any) -> itir.FunCall:
         op = "if_"
@@ -266,7 +286,9 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             for arg in args
         ]
         if any(type_info.contains_local_field(arg.type) for arg in args):
-            lowered_args = [promote_to_list(arg)(larg) for arg, larg in zip(args, lowered_args)]
+            lowered_args = [
+                promote_to_list(arg.type)(larg) for arg, larg in zip(args, lowered_args)
+            ]
             op = im.call("map_")(op)
 
         return lowering_utils.to_tuples_of_iterator(
@@ -274,7 +296,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         )
 
     def visit_Compare(self, node: foast.Compare, **kwargs: Any) -> itir.FunCall:
-        return self._map(node.op.value, node.left, node.right)
+        return self._lower_and_map(node.op.value, node.left, node.right)
 
     def _visit_shift(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         current_expr = self.visit(node.func, **kwargs)
@@ -388,9 +410,12 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
 
         lowered_condition = self.visit(condition, **kwargs)
         return lowering_utils.process_elements(
-            lambda tv, fv: im.promote_to_lifted_stencil("if_")(lowered_condition, tv, fv),
+            lambda tv, fv, types: _map(
+                "if_", (lowered_condition, tv, fv), (condition.type, *types)
+            ),
             [self.visit(true_value, **kwargs), self.visit(false_value, **kwargs)],
             node.type,
+            (node.args[1].type, node.args[2].type),
         )
 
     _visit_concat_where = _visit_where
@@ -399,7 +424,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         return self.visit(node.args[0], **kwargs)
 
     def _visit_math_built_in(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
-        return self._map(self.visit(node.func, **kwargs), *node.args)
+        return self._lower_and_map(self.visit(node.func, **kwargs), *node.args)
 
     def _make_reduction_expr(
         self, node: foast.Call, op: str | itir.SymRef, init_expr: itir.Expr, **kwargs: Any
@@ -427,18 +452,23 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         return self._make_reduction_expr(node, "minimum", init_expr, **kwargs)
 
     def _visit_type_constr(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
-        if isinstance(node.args[0], foast.Constant):
-            node_kind = self.visit(node.type).kind.name.lower()
-            target_type = fbuiltins.BUILTINS[node_kind]
-            source_type = {**fbuiltins.BUILTINS, "string": str}[node.args[0].type.__str__().lower()]
-            if target_type is bool and source_type is not bool:
-                return im.promote_to_const_iterator(
-                    im.literal(str(bool(source_type(node.args[0].value))), "bool")
-                )
-            return im.promote_to_const_iterator(im.literal(str(node.args[0].value), node_kind))
-        raise FieldOperatorLoweringError(
-            f"Encountered a type cast, which is not supported: {node}."
-        )
+        el = node.args[0]
+        node_kind = self.visit(node.type).kind.name.lower()
+        source_type = {**fbuiltins.BUILTINS, "string": str}[el.type.__str__().lower()]
+        target_type = fbuiltins.BUILTINS[node_kind]
+
+        if isinstance(el, foast.Constant):
+            val = source_type(el.value)
+        elif isinstance(el, foast.UnaryOp) and isinstance(el.operand, foast.Constant):
+            operand = source_type(el.operand.value)
+            val = eval(f"lambda arg: {el.op}arg")(operand)
+        else:
+            raise FieldOperatorLoweringError(
+                f"Type cast only supports literal arguments, {node.type} not supported."
+            )
+        val = target_type(val)
+
+        return im.promote_to_const_iterator(im.literal(str(val), node_kind))
 
     def _make_literal(self, val: Any, type_: ts.TypeSpec) -> itir.Expr:
         # TODO(havogt): lifted nullary lambdas are not supported in iterator.embedded due to an implementation detail;
@@ -455,13 +485,28 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
     def visit_Constant(self, node: foast.Constant, **kwargs: Any) -> itir.Expr:
         return self._make_literal(node.value, node.type)
 
-    def _map(self, op: itir.Expr | str, *args: Any, **kwargs: Any) -> itir.FunCall:
-        lowered_args = [self.visit(arg, **kwargs) for arg in args]
-        if any(type_info.contains_local_field(arg.type) for arg in args):
-            lowered_args = [promote_to_list(arg)(larg) for arg, larg in zip(args, lowered_args)]
-            op = im.call("map_")(op)
+    def _lower_and_map(self, op: itir.Expr | str, *args: Any, **kwargs: Any) -> itir.FunCall:
+        return _map(
+            op, tuple(self.visit(arg, **kwargs) for arg in args), tuple(arg.type for arg in args)
+        )
 
-        return im.promote_to_lifted_stencil(im.call(op))(*lowered_args)
+
+def _map(
+    op: itir.Expr | str,
+    lowered_args: tuple,
+    original_arg_types: tuple[ts.TypeSpec, ...],
+) -> itir.FunCall:
+    """
+    Mapping includes making the operation an lifted stencil (first kind of mapping), but also `itir.map_`ing lists.
+    """
+    if any(type_info.contains_local_field(arg_type) for arg_type in original_arg_types):
+        lowered_args = tuple(
+            promote_to_list(arg_type)(larg)
+            for arg_type, larg in zip(original_arg_types, lowered_args)
+        )
+        op = im.call("map_")(op)
+
+    return im.promote_to_lifted_stencil(im.call(op))(*lowered_args)
 
 
 class FieldOperatorLoweringError(Exception): ...

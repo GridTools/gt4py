@@ -8,24 +8,24 @@
 
 import functools
 import warnings
-from typing import Any
+from typing import Any, Optional
 
+import diskcache
 import factory
 import numpy.typing as npt
 
 import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
+from gt4py.eve import utils
 from gt4py.eve.utils import content_hash
 from gt4py.next import backend, common, config
-from gt4py.next.iterator import transforms
-from gt4py.next.iterator.transforms import global_tmps
-from gt4py.next.otf import recipes, stages, workflow
+from gt4py.next.common import Connectivity, Dimension
+from gt4py.next.iterator import ir as itir
+from gt4py.next.otf import arguments, recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
-from gt4py.next.program_processors import modular_executor
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
-from gt4py.next.type_system.type_translation import from_value
 
 
 # TODO(ricoh): Add support for the whole range of arguments that can be passed to a fencil.
@@ -41,14 +41,23 @@ def convert_arg(arg: Any) -> Any:
 
 
 def convert_args(
-    inp: stages.CompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
+    inp: stages.ExtendedCompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
 ) -> stages.CompiledProgram:
     def decorated_program(
-        *args: Any, offset_provider: dict[str, common.Connectivity | common.Dimension]
+        *args: Any,
+        offset_provider: dict[str, common.Connectivity | common.Dimension],
+        out: Any = None,
     ) -> None:
+        if out is not None:
+            args = (*args, out)
         converted_args = [convert_arg(arg) for arg in args]
         conn_args = extract_connectivity_args(offset_provider, device)
-        return inp(*converted_args, *conn_args)
+        # generate implicit domain size arguments only if necessary, using `iter_size_args()`
+        return inp(
+            *converted_args,
+            *(arguments.iter_size_args(args) if inp.implicit_domain else ()),
+            *conn_args,
+        )
 
     return decorated_program
 
@@ -56,7 +65,7 @@ def convert_args(
 def _ensure_is_on_device(
     connectivity_arg: npt.NDArray, device: core_defs.DeviceType
 ) -> npt.NDArray:
-    if device == core_defs.DeviceType.CUDA:
+    if device in [core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM]:
         import cupy as cp
 
         if not isinstance(connectivity_arg, cp.ndarray):
@@ -92,22 +101,53 @@ def extract_connectivity_args(
     return args
 
 
-def compilation_hash(otf_closure: stages.ProgramCall) -> int:
+def compilation_hash(otf_closure: stages.CompilableProgram) -> int:
     """Given closure compute a hash uniquely determining if we need to recompile."""
-    offset_provider = otf_closure.kwargs["offset_provider"]
+    offset_provider = otf_closure.args.offset_provider
     return hash(
         (
-            otf_closure.program,
+            otf_closure.data,
             # As the frontend types contain lists they are not hashable. As a workaround we just
             # use content_hash here.
-            content_hash(tuple(from_value(arg) for arg in otf_closure.args)),
+            content_hash(tuple(arg for arg in otf_closure.args.args)),
             # Directly using the `id` of the offset provider is not possible as the decorator adds
             # the implicitly defined ones (i.e. to allow the `TDim + 1` syntax) resulting in a
             # different `id` every time. Instead use the `id` of each individual offset provider.
             tuple((k, id(v)) for (k, v) in offset_provider.items()) if offset_provider else None,
-            otf_closure.kwargs.get("column_axis", None),
+            otf_closure.args.column_axis,
         )
     )
+
+
+def fingerprint_compilable_program(inp: stages.CompilableProgram) -> str:
+    """
+    Generates a unique hash string for a stencil source program representing
+    the program, sorted offset_provider, and column_axis.
+    """
+    program: itir.FencilDefinition | itir.Program = inp.data
+    offset_provider: dict[str, Connectivity | Dimension] = inp.args.offset_provider
+    column_axis: Optional[common.Dimension] = inp.args.column_axis
+
+    program_hash = utils.content_hash(
+        (
+            program,
+            sorted(offset_provider.items(), key=lambda el: el[0]),
+            column_axis,
+        )
+    )
+
+    return program_hash
+
+
+class FileCache(diskcache.Cache):
+    """
+    This class extends `diskcache.Cache` to ensure the cache is closed upon deletion,
+    i.e. it ensures that any resources associated with the cache are properly
+    released when the instance is garbage collected.
+    """
+
+    def __del__(self) -> None:
+        self.close()
 
 
 class GTFNCompileWorkflowFactory(factory.Factory):
@@ -123,9 +163,23 @@ class GTFNCompileWorkflowFactory(factory.Factory):
             lambda o: compiledb.CompiledbFactory(cmake_build_type=o.cmake_build_type)
         )
 
-    translation = factory.SubFactory(
-        gtfn_module.GTFNTranslationStepFactory, device_type=factory.SelfAttribute("..device_type")
-    )
+        cached_translation = factory.Trait(
+            translation=factory.LazyAttribute(
+                lambda o: workflow.CachedStep(
+                    o.bare_translation,
+                    hash_function=fingerprint_compilable_program,
+                    cache=FileCache(str(config.BUILD_CACHE_DIR / "gtfn_cache")),
+                )
+            ),
+        )
+
+        bare_translation = factory.SubFactory(
+            gtfn_module.GTFNTranslationStepFactory,
+            device_type=factory.SelfAttribute("..device_type"),
+        )
+
+    translation = factory.LazyAttribute(lambda o: o.bare_translation)
+
     bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableSource] = (
         nanobind.bind_source
     )
@@ -150,36 +204,28 @@ class GTFNBackendFactory(factory.Factory):
         name_postfix = ""
         gpu = factory.Trait(
             allocator=next_allocators.StandardGPUFieldBufferAllocator(),
-            device_type=core_defs.DeviceType.CUDA,
+            device_type=next_allocators.CUPY_DEVICE or core_defs.DeviceType.CUDA,
             name_device="gpu",
         )
         cached = factory.Trait(
             executor=factory.LazyAttribute(
-                lambda o: modular_executor.ModularExecutor(
-                    otf_workflow=workflow.CachedStep(o.otf_workflow, hash_function=o.hash_function),
-                    name=o.name,
-                )
+                lambda o: workflow.CachedStep(o.otf_workflow, hash_function=o.hash_function)
             ),
             name_cached="_cached",
-        )
-        use_temporaries = factory.Trait(
-            otf_workflow__translation__lift_mode=transforms.LiftMode.USE_TEMPORARIES,
-            otf_workflow__translation__temporary_extraction_heuristics=global_tmps.SimpleTemporaryExtractionHeuristics,
-            name_temps="_with_temporaries",
         )
         device_type = core_defs.DeviceType.CPU
         hash_function = compilation_hash
         otf_workflow = factory.SubFactory(
             GTFNCompileWorkflowFactory, device_type=factory.SelfAttribute("..device_type")
         )
-        name = factory.LazyAttribute(
-            lambda o: f"run_gtfn_{o.name_device}{o.name_temps}{o.name_cached}{o.name_postfix}"
-        )
 
-    executor = factory.LazyAttribute(
-        lambda o: modular_executor.ModularExecutor(otf_workflow=o.otf_workflow, name=o.name)
+    name = factory.LazyAttribute(
+        lambda o: f"run_gtfn_{o.name_device}{o.name_temps}{o.name_cached}{o.name_postfix}"
     )
+
+    executor = factory.LazyAttribute(lambda o: o.otf_workflow)
     allocator = next_allocators.StandardCPUFieldBufferAllocator()
+    transforms = backend.DEFAULT_TRANSFORMS
 
 
 run_gtfn = GTFNBackendFactory()
@@ -188,10 +234,12 @@ run_gtfn_imperative = GTFNBackendFactory(
     name_postfix="_imperative", otf_workflow__translation__use_imperative_backend=True
 )
 
-run_gtfn_cached = GTFNBackendFactory(cached=True)
-
-run_gtfn_with_temporaries = GTFNBackendFactory(use_temporaries=True)
+run_gtfn_cached = GTFNBackendFactory(cached=True, otf_workflow__cached_translation=True)
 
 run_gtfn_gpu = GTFNBackendFactory(gpu=True)
 
 run_gtfn_gpu_cached = GTFNBackendFactory(gpu=True, cached=True)
+
+run_gtfn_no_transforms = GTFNBackendFactory(
+    otf_workflow__bare_translation__enable_itir_transforms=False
+)

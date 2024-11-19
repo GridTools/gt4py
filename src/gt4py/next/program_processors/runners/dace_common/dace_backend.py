@@ -7,14 +7,14 @@
 # SPDX-License-Identifier: BSD-3-Clause
 import warnings
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Any, Iterable
 
 import dace
 import numpy as np
 
-from gt4py.next import common as gtx_common
+from gt4py.next import common as gtx_common, utils as gtx_utils
 
-from . import utility as dace_util
+from . import utility as dace_utils
 
 
 try:
@@ -26,6 +26,13 @@ except ImportError:
 def _convert_arg(arg: Any, sdfg_param: str, use_field_canonical_representation: bool) -> Any:
     if not isinstance(arg, gtx_common.Field):
         return arg
+    if len(arg.domain.dims) == 0:
+        # Pass zero-dimensional fields as scalars.
+        # We need to extract the scalar value from the 0d numpy array without changing its type.
+        # Note that 'ndarray.item()' always transforms the numpy scalar to a python scalar,
+        # which may change its precision. To avoid this, we use here the empty tuple as index
+        # for 'ndarray.__getitem__()'.
+        return arg.asnumpy()[()]
     # field domain offsets are not supported
     non_zero_offsets = [
         (dim, dim_range)
@@ -40,7 +47,7 @@ def _convert_arg(arg: Any, sdfg_param: str, use_field_canonical_representation: 
     if not use_field_canonical_representation:
         return arg.ndarray
     # the canonical representation requires alphabetical ordering of the dimensions in field domain definition
-    sorted_dims = dace_util.get_sorted_dims(arg.domain.dims)
+    sorted_dims = dace_utils.get_sorted_dims(arg.domain.dims)
     ndim = len(sorted_dims)
     dim_indices = [dim_index for dim_index, _ in sorted_dims]
     if isinstance(arg.ndarray, np.ndarray):
@@ -54,9 +61,10 @@ def _get_args(
     sdfg: dace.SDFG, args: Sequence[Any], use_field_canonical_representation: bool
 ) -> dict[str, Any]:
     sdfg_params: Sequence[str] = sdfg.arg_names
+    flat_args: Iterable[Any] = gtx_utils.flatten_nested_tuple(tuple(args))
     return {
         sdfg_param: _convert_arg(arg, sdfg_param, use_field_canonical_representation)
-        for sdfg_param, arg in zip(sdfg_params, args, strict=True)
+        for sdfg_param, arg in zip(sdfg_params, flat_args, strict=True)
     }
 
 
@@ -73,36 +81,34 @@ def _ensure_is_on_device(
     return connectivity_arg
 
 
-def _get_connectivity_args(
-    neighbor_tables: Mapping[str, gtx_common.NeighborTable], device: dace.dtypes.DeviceType
-) -> dict[str, Any]:
-    return {
-        dace_util.connectivity_identifier(offset): _ensure_is_on_device(
-            offset_provider.table, device
-        )
-        for offset, offset_provider in neighbor_tables.items()
-    }
-
-
 def _get_shape_args(
-    arrays: Mapping[str, dace.data.Array], args: Mapping[str, Any]
-) -> Mapping[str, int]:
+    arrays: Mapping[str, dace.data.Array], args: Mapping[str, np.typing.NDArray]
+) -> dict[str, int]:
     shape_args: dict[str, int] = {}
     for name, value in args.items():
         for sym, size in zip(arrays[name].shape, value.shape, strict=True):
             if isinstance(sym, dace.symbol):
-                assert sym.name not in shape_args
-                shape_args[sym.name] = size
+                if sym.name not in shape_args:
+                    shape_args[sym.name] = size
+                elif shape_args[sym.name] != size:
+                    # The same shape symbol is used by all fields of a tuple, because the current assumption is that all fields
+                    # in a tuple have the same dimensions and sizes. Therefore, this if-branch only exists to ensure that array
+                    # size (i.e. the value assigned to the shape symbol) is the same for all fields in a tuple.
+                    # TODO(edopao): change to `assert sym.name not in shape_args` to ensure that shape symbols are unique,
+                    # once the assumption on tuples is removed.
+                    raise ValueError(
+                        f"Expected array size {sym.name} for arg {name} to be {shape_args[sym.name]}, got {size}."
+                    )
             elif sym != size:
-                raise RuntimeError(
+                raise ValueError(
                     f"Expected shape {arrays[name].shape} for arg {name}, got {value.shape}."
                 )
     return shape_args
 
 
 def _get_stride_args(
-    arrays: Mapping[str, dace.data.Array], args: Mapping[str, Any]
-) -> Mapping[str, int]:
+    arrays: Mapping[str, dace.data.Array], args: Mapping[str, np.typing.NDArray]
+) -> dict[str, int]:
     stride_args = {}
     for name, value in args.items():
         for sym, stride_size in zip(arrays[name].strides, value.strides, strict=True):
@@ -112,13 +118,41 @@ def _get_stride_args(
                     f"Stride ({stride_size} bytes) for argument '{sym}' must be a multiple of item size ({value.itemsize} bytes)."
                 )
             if isinstance(sym, dace.symbol):
-                assert sym.name not in stride_args
-                stride_args[str(sym)] = stride
+                if sym.name not in stride_args:
+                    stride_args[str(sym)] = stride
+                elif stride_args[sym.name] != stride:
+                    # See above comment in `_get_shape_args`, same for stride symbols of fields in a tuple.
+                    # TODO(edopao): change to `assert sym.name not in stride_args` to ensure that stride symbols are unique,
+                    # once the assumption on tuples is removed.
+                    raise ValueError(
+                        f"Expected array stride {sym.name} for arg {name} to be {stride_args[sym.name]}, got {stride}."
+                    )
             elif sym != stride:
-                raise RuntimeError(
+                raise ValueError(
                     f"Expected stride {arrays[name].strides} for arg {name}, got {value.strides}."
                 )
     return stride_args
+
+
+def get_sdfg_conn_args(
+    sdfg: dace.SDFG,
+    offset_provider: gtx_common.OffsetProvider,
+    on_gpu: bool,
+) -> dict[str, np.typing.NDArray]:
+    """
+    Extracts the connectivity tables that are used in the sdfg and ensures
+    that the memory buffers are allocated for the target device.
+    """
+    device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
+
+    connectivity_args = {}
+    for offset, connectivity in dace_utils.filter_connectivities(offset_provider).items():
+        assert isinstance(connectivity, gtx_common.NeighborTable)
+        param = dace_utils.connectivity_identifier(offset)
+        if param in sdfg.arrays:
+            connectivity_args[param] = _ensure_is_on_device(connectivity.table, device)
+
+    return connectivity_args
 
 
 def get_sdfg_args(
@@ -138,17 +172,9 @@ def get_sdfg_args(
     """
     offset_provider = kwargs["offset_provider"]
 
-    neighbor_tables: dict[str, gtx_common.NeighborTable] = {}
-    for offset, connectivity in dace_util.filter_connectivities(offset_provider).items():
-        assert isinstance(connectivity, gtx_common.NeighborTable)
-        neighbor_tables[offset] = connectivity
-    device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
-
     dace_args = _get_args(sdfg, args, use_field_canonical_representation)
     dace_field_args = {n: v for n, v in dace_args.items() if not np.isscalar(v)}
-    dace_conn_args = _get_connectivity_args(neighbor_tables, device)
-    # keep only connectivity tables that are used in the sdfg
-    dace_conn_args = {n: v for n, v in dace_conn_args.items() if n in sdfg.arrays}
+    dace_conn_args = get_sdfg_conn_args(sdfg, offset_provider, on_gpu)
     dace_shapes = _get_shape_args(sdfg.arrays, dace_field_args)
     dace_conn_shapes = _get_shape_args(sdfg.arrays, dace_conn_args)
     dace_strides = _get_stride_args(sdfg.arrays, dace_field_args)

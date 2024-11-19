@@ -61,9 +61,9 @@ def get_tasklet_symbol(
     name: eve.SymbolRef, offset: Union[CartesianOffset, VariableKOffset], is_target: bool
 ):
     if is_target:
-        return f"__{name}"
+        return f"gtOUT__{name}"
 
-    acc_name = name + "__"
+    acc_name = f"gtIN__{name}"
     if offset is not None:
         offset_strs = []
         for axis in dcir.Axis.dims_3d():
@@ -230,9 +230,12 @@ class AccessInfoCollector(eve.NodeVisitor):
         region,
         he_grid,
         grid_subset,
+        is_write,
     ) -> dcir.FieldAccessInfo:
+        # Check we have expression offsets in K
+        # OR write offsets in K
         offset = [offset_node.to_dict()[k] for k in "ijk"]
-        if isinstance(offset_node, oir.VariableKOffset):
+        if isinstance(offset_node, oir.VariableKOffset) or (offset[2] != 0 and is_write):
             variable_offset_axes = [dcir.Axis.K]
         else:
             variable_offset_axes = []
@@ -291,6 +294,7 @@ class AccessInfoCollector(eve.NodeVisitor):
             region=region,
             he_grid=he_grid,
             grid_subset=grid_subset,
+            is_write=is_write,
         )
         ctx.access_infos[node.name] = access_info.union(
             ctx.access_infos.get(node.name, access_info)
@@ -329,10 +333,9 @@ def compute_dcir_access_infos(
                     global_grid_subset=access_info.global_grid_subset,
                 )
             )
-    else:
-        res = ctx.access_infos
+        return res
 
-    return res
+    return ctx.access_infos
 
 
 def make_dace_subset(

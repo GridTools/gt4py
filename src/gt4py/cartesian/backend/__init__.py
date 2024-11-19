@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from warnings import warn
+
 from .base import (
     REGISTRY,
     Backend,
@@ -16,13 +18,6 @@ from .base import (
     from_name,
     register,
 )
-
-
-try:
-    from .dace_backend import DaceCPUBackend, DaceGPUBackend
-except ImportError:
-    pass
-
 from .cuda_backend import CudaBackend
 from .gtcpp_backend import GTCpuIfirstBackend, GTCpuKfirstBackend, GTGpuBackend
 from .module_generator import BaseModuleGenerator
@@ -47,5 +42,12 @@ __all__ = [
 ]
 
 
-if "DaceCPUBackend" in globals():
+try:
+    from .dace_backend import DaceCPUBackend, DaceGPUBackend
+
     __all__ += ["DaceCPUBackend", "DaceGPUBackend"]
+except ImportError:
+    warn(
+        "GT4Py was unable to load DaCe. DaCe backends (`dace:cpu` and `dace:gpu`) will not be available.",
+        stacklevel=2,
+    )

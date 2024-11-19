@@ -18,7 +18,7 @@ from numpy import float32, float64, int32, int64
 
 import gt4py.next as gtx
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, embedded
+from gt4py.next import common
 from gt4py.next.common import Dimension, Field  # noqa: F401 [unused-import] for TYPE_BUILTINS
 from gt4py.next.iterator import runtime
 from gt4py.next.type_system import type_specifications as ts
@@ -245,7 +245,7 @@ def _make_unary_math_builtin(name: str) -> None:
             value
         )  # default implementation for scalars, Fields are handled via dispatch
 
-        return _math_builtin(value)
+        return cast(common.Field | core_defs.ScalarT, _math_builtin(value))  # type: ignore[operator] # calling a function of unknown type
 
     impl.__name__ = name
     globals()[name] = BuiltInFunction(impl)
@@ -323,6 +323,8 @@ class FieldOffset(runtime.Offset):
 
     def __getitem__(self, offset: int) -> common.ConnectivityField:
         """Serve as a connectivity factory."""
+        from gt4py.next import embedded  # avoid circular import
+
         assert isinstance(self.value, str)
         current_offset_provider = embedded.context.offset_provider.get(None)
         assert current_offset_provider is not None
@@ -345,6 +347,8 @@ class FieldOffset(runtime.Offset):
 
     def as_connectivity_field(self) -> common.ConnectivityField:
         """Convert to connectivity field using the offset providers in current embedded execution context."""
+        from gt4py.next import embedded  # avoid circular import
+
         assert isinstance(self.value, str)
         current_offset_provider = embedded.context.offset_provider.get(None)
         assert current_offset_provider is not None
