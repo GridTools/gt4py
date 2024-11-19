@@ -61,8 +61,8 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         sdfg = self.backend.executor.step.translation.generate_sdfg(  # type: ignore[attr-defined] # we can assume to get a DaCeTranslationStep here
             gtir_stage.data,
             offset_provider=gtir_stage.args.offset_provider,
-            column_axis=kwargs.get("column_axis", gtir_stage.args.column_axis),
-            auto_opt=True,
+            column_axis=gtir_stage.args.column_axis,
+            auto_opt=False,
             on_gpu=on_gpu,
         )
 
