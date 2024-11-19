@@ -9,9 +9,10 @@
 import dataclasses
 import itertools
 import typing
-from typing import Any, Optional, Sequence
+from typing import Any, ClassVar, Optional, Sequence
 
 import dace
+import numpy as np
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import allocators, backend as next_backend
@@ -25,6 +26,12 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
     """Extension of GT4Py Program implementing the SDFGConvertible interface via GTIR."""
 
     sdfg_closure_cache: dict[str, Any] = dataclasses.field(default_factory=dict)
+    # Being a ClassVar ensures that in an SDFG with multiple nested GT4Py Programs,
+    # there is no name mangling of the connectivity tables used across the nested SDFGs
+    # since they share the same memory address.
+    connectivity_tables_data_descriptors: ClassVar[
+        dict[str, dace.data.Array]
+    ] = {}  # symbolically defined
 
     def __sdfg__(self, *args: Any, **kwargs: Any) -> dace.sdfg.sdfg.SDFG:
         if (self.backend is None) or "dace" not in self.backend.name.lower():
@@ -37,7 +44,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             toolchain.CompilableProgram(
                 data=self.past_stage,
                 args=arguments.CompileTimeArgs(
-                    args=tuple(p.type for p in self.past_stage.past_node.definition.params),
+                    args=tuple(p.type for p in self.past_stage.past_node.params),
                     kwargs={},
                     column_axis=column_axis,
                     offset_provider=offset_provider,
@@ -53,8 +60,8 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
 
         sdfg = self.backend.executor.step.translation.generate_sdfg(  # type: ignore[attr-defined] # we can assume to get a DaCeTranslationStep here
             gtir_stage.data,
-            offset_provider=offset_provider,
-            column_axis=gtir_stage.args.column_axis,
+            offset_provider=gtir_stage.args.offset_provider,
+            column_axis=kwargs.get("column_axis", gtir_stage.args.column_axis),
             auto_opt=True,
             on_gpu=on_gpu,
         )
@@ -73,17 +80,20 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         the offset providers are not part of GT4Py Program's arguments.
         Keep in mind, that `__sdfg_closure__` is called after `__sdfg__` method.
         """
-        symbols = {}
+        closure_dict: dict[str, Any] = {}
 
         if self.connectivities:
-            with_table = (
+            symbols = {}
+            with_table = [
                 name for name, conn in self.connectivities.items() if hasattr(conn, "table")
-            )
-            in_arrays = (
-                name
+            ]
+            in_arrays_with_id = [
+                (name, conn_id)
                 for name in with_table
-                if dace_utils.connectivity_identifier(name) in self.sdfg_closure_cache["arrays"]
-            )
+                if (conn_id := dace_utils.connectivity_identifier(name))
+                in self.sdfg_closure_cache["arrays"]
+            ]
+            in_arrays = (name for name, _ in in_arrays_with_id)
             name_axis = list(itertools.product(in_arrays, [0, 1]))
 
             def size_symbol_name(name: str, axis: int) -> str:
@@ -108,7 +118,31 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
 
             symbols = connectivity_tables_size_symbols | connectivity_table_stride_symbols
 
-        closure_dict: dict[str, Any] = {}
+            # Define the storage location (e.g. CPU, GPU) of the connectivity tables
+            if "storage" not in self.connectivity_tables_data_descriptors:
+                for _, conn_id in in_arrays_with_id:
+                    self.connectivity_tables_data_descriptors["storage"] = self.sdfg_closure_cache[
+                        "arrays"
+                    ][conn_id].storage
+                    break
+
+            # Build the closure dictionary
+            for name, conn_id in in_arrays_with_id:
+                if conn_id not in self.connectivity_tables_data_descriptors:
+                    conn = self.connectivities[name]
+                    self.connectivity_tables_data_descriptors[conn_id] = dace.data.Array(
+                        dtype=dace.int64 if conn.index_type == np.int64 else dace.int32,
+                        shape=[
+                            symbols[dace_utils.field_size_symbol_name(conn_id, 0)],
+                            symbols[dace_utils.field_size_symbol_name(conn_id, 1)],
+                        ],
+                        strides=[
+                            symbols[dace_utils.field_stride_symbol_name(conn_id, 0)],
+                            symbols[dace_utils.field_stride_symbol_name(conn_id, 1)],
+                        ],
+                        storage=Program.connectivity_tables_data_descriptors["storage"],
+                    )
+                closure_dict[conn_id] = self.connectivity_tables_data_descriptors[conn_id]
 
         return closure_dict
 

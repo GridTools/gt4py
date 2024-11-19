@@ -310,7 +310,7 @@ class FrozenProgram:
 
 
 try:
-    from gt4py.next.program_processors.runners.dace_iterator import Program
+    from gt4py.next.program_processors.runners.dace_fieldview.program import Program
 except ImportError:
     pass
 
