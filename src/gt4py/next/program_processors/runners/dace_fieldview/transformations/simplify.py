@@ -456,11 +456,6 @@ class GT4PyRedundantArrayElimination(dace_transformation.SingleStateTransformati
             read_in_edge = next(iter(graph.in_edges(read_an)))
             read_out_edge = next(iter(graph.out_edges(read_an)))
 
-            # We also request that `read` is written to by another access node.
-            #  Because it is the only way how we can control what we write into `read`.
-            if not isinstance(read_in_edge.src, dace_nodes.AccessNode):
-                return False
-
             # Check if everything that is read from `read` is also defined.
             #  This is not a real requirement, it just simplify the offset computation
             #  later on. If we would remove this restriction it means that we would
@@ -476,6 +471,15 @@ class GT4PyRedundantArrayElimination(dace_transformation.SingleStateTransformati
                 return False
             if not isinstance(read_osubset, dace_subsets.Range):
                 return False
+
+            # In case `read` is not written to by an AccessNode, we require that
+            #  everything that is written must also be read. This is because only
+            #  in cases for AccessNodes we can regulate what is further written to
+            #  into `write`.
+            if not isinstance(read_in_edge.src, dace_nodes.AccessNode):
+                if read_isubset != read_osubset:
+                    return False
+
             # If everything is written into `read` that is not also read later and
             #  transferred to `write`. However, we have to exclude the case if both
             #  have the same size.
