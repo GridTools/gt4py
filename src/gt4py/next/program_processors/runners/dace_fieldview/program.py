@@ -62,7 +62,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             gtir_stage.data,
             offset_provider=gtir_stage.args.offset_provider,
             column_axis=gtir_stage.args.column_axis,
-            auto_opt=True,
+            auto_opt=False,
             on_gpu=on_gpu,
         )
 
