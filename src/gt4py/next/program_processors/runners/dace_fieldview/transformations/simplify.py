@@ -962,7 +962,7 @@ class DistributedBufferRelocator(dace_transformation.Pass):
                     data_to_look=wb_localation[0].data,
                     nodes_to_ignore={def_node, wb_localation[0]},
                 ):
-                    continue
+                    break
                 # check if the global data is not used between the definition of
                 #  `src_cont` and where its written back.
                 if gtx_transformations.util.is_accessed_downstream(
@@ -972,7 +972,8 @@ class DistributedBufferRelocator(dace_transformation.Pass):
                     nodes_to_ignore=set(),
                     states_to_ignore={wb_localation[1]},
                 ):
-                    continue
+                    break
+            else:
                 result.append((wb_localation, def_locations))
 
         return result
