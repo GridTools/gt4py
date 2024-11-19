@@ -63,16 +63,12 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         dtype=set,
         allow_none=True,
         default=None,
-        optional=True,
-        optional_condition=lambda _: False,
         desc="Set of nodes that are independent of the blocking parameter.",
     )
     dependent_nodes = dace_properties.Property(
         dtype=set,
         allow_none=True,
         default=None,
-        optional=True,
-        optional_condition=lambda _: False,
         desc="Set of nodes that are dependent on the blocking parameter.",
     )
 
