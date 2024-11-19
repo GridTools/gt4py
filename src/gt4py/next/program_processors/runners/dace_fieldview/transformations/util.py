@@ -8,10 +8,12 @@
 
 """Common functionality for the transformations/optimization pipeline."""
 
-import re
 from typing import Any, Container, Optional
 
 import dace
+from dace.sdfg import nodes as dace_nodes
+
+from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
 
 
 def gt_make_transients_persistent(
@@ -22,24 +24,23 @@ def gt_make_transients_persistent(
     Changes the lifetime of certain transients to `Persistent`.
 
     A persistent lifetime means that the transient is allocated only the very first
-    time and only deallocated if the underlying `CompiledSDFG` object goes out of
-    scope or if the exit handler of the SDFG is called. The main advantage is,
-    that memory must not be allocated, however, the SDFG can not be called by
-    different threads.
+    time the SDFG is executed and only deallocated if the underlying `CompiledSDFG`
+    object goes out of scope. The main advantage is, that memory must not be
+    allocated every time the SDFG is run. The downside is that the SDFG can not be
+    called by different threads.
 
     Args:
         sdfg: The SDFG to process.
         device: The device type.
 
     Returns:
-        A dictionary mapping SDFG IDs to a set of transient arrays that
+        A `dict` mapping SDFG IDs to a set of transient arrays that
         were made persistent.
 
-    Notes:
-        This function was copied from DaCe. Furthermore, the DaCe version does
-        also resets the `wcr_nonatomic` property, i.e. makes every reduction
-        atomic. However, this is only done for GPU and for the top level.
-        This function does not do this.
+    Note:
+        This function is based on a similar function in DaCe. However, the DaCe
+        function does, for unknown reasons, also reset the `wcr_nonatomic` property,
+        but only for GPU.
     """
     result: dict[int, set[str]] = {}
     for nsdfg in sdfg.all_sdfgs_recursive():
@@ -111,11 +112,63 @@ def gt_find_constant_arguments(
     """
     if include is None:
         include = set()
-    name_to_include: re.Pattern = re.compile(".*_(size|shape|stride)_.*")
     ret_value: dict[str, Any] = {}
 
     for name, value in call_args.items():
-        if name in include or (name_to_include.fullmatch(name) and value == 1):
+        if name in include or (dace_utils.is_field_symbol(name) and value == 1):
             ret_value[name] = value
 
     return ret_value
+
+
+def is_accessed_downstream(
+    start_state: dace.SDFGState,
+    sdfg: dace.SDFG,
+    data_to_look: str,
+    nodes_to_ignore: Optional[set[dace_nodes.AccessNode]] = None,
+    states_to_ignore: Optional[set[dace.SDFGState]] = None,
+) -> bool:
+    """Scans for accesses to the data container `data_to_look`.
+
+    The function will go through states that are reachable from `start_state`
+    (including) and test if there is an AccessNode that refers to `data_to_look`.
+    It will return `True` the first time it finds such a node.
+
+    The function will ignore all nodes that are listed in `nodes_to_ignore`.
+    Furthermore, states listed in `states_to_ignore` are considered to non exists.
+    The effect of ignoring states is as they does not exists.
+
+    Args:
+        start_state: The state where the scanning starts.
+        sdfg: The SDFG on which we operate.
+        data_to_look: The data that we want to look for.
+        nodes_to_ignore: Ignore these nodes.
+        states_to_ignore: Ignore these states.
+    """
+    seen_states: set[dace.SDFGState] = set()
+    to_visit: list[dace.SDFGState] = [start_state]
+    ign_dnodes: set[dace_nodes.AccessNode] = nodes_to_ignore or set()
+    ign_states: set[dace.SDFGState] = states_to_ignore or set()
+
+    while len(to_visit) > 0:
+        state = to_visit.pop()
+        seen_states.add(state)
+        for dnode in state.data_nodes():
+            if dnode.data != data_to_look:
+                continue
+            if dnode in ign_dnodes:
+                continue
+            if state.out_degree(dnode) != 0:
+                return True  # There is a read operation
+
+        # Look for new states, also scan the interstate edges.
+        for out_edge in sdfg.out_edges(state):
+            if out_edge.dst in ign_states:
+                continue
+            if data_to_look in out_edge.data.read_symbols():
+                return True
+            if out_edge.dst in seen_states:
+                continue
+            to_visit.append(out_edge.dst)
+
+    return False

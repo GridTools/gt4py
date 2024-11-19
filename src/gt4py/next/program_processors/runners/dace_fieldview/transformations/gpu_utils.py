@@ -55,7 +55,9 @@ def gt_gpu_transformation(
             will avoid the data copy from host to GPU memory.
         gpu_block_size: The size of a thread block on the GPU.
         gpu_launch_bounds: Use this value as `__launch_bounds__` for _all_ GPU Maps.
+            Will only take effect if `gpu_block_size` is specified.
         gpu_launch_factor: Use the number of threads times this value as `__launch_bounds__`
+            Will only take effect if `gpu_block_size` is specified.
         validate: Perform validation during the steps.
         validate_all: Perform extensive validation.
 
@@ -91,17 +93,16 @@ def gt_gpu_transformation(
     gtx_transformations.gt_simplify(sdfg)
 
     if try_removing_trivial_maps:
-        # A Tasklet, outside of a Map, that writes into an array on GPU can not work
-        #  `sdfg.appyl_gpu_transformations()` puts Map around it (if said Tasklet
-        #  would write into a Scalar that then goes into a GPU Map, nothing would
-        #  happen). So we might end up with lot of these trivial Maps, that results
-        #  in a single kernel launch. To prevent this we will try to fuse them.
+        # In DaCe a Tasklet, outside of a Map, can not write into an _array_ that is on
+        #  GPU. `sdfg.appyl_gpu_transformations()` will put a Map around them. So we
+        #  might end up with lots of these trivial Maps, each requiring a separate
+        #  kernel launch. To prevent this we will combine these trivial maps, if
+        #  possible, with their downstream maps.
         sdfg.apply_transformations_once_everywhere(
             TrivialGPUMapElimination(),
             validate=False,
             validate_all=False,
         )
-        # Because of the fusion we are doing we could have created dead data flow.
         gtx_transformations.gt_simplify(sdfg, validate=validate, validate_all=validate_all)
 
     # Set the GPU block size if it is known.
@@ -212,7 +213,7 @@ def _make_gpu_block_getter_for(
     return _gpu_block_getter
 
 
-def _gpu_set_block_size_set_launch_bound(
+def _gpu_launch_bound_parser(
     block_size: tuple[int, int, int],
     launch_bounds: int | str | None,
     launch_factor: int | None = None,
@@ -221,15 +222,14 @@ def _gpu_set_block_size_set_launch_bound(
     if launch_bounds is None and launch_factor is None:
         return None
     elif launch_factor is not None:
-        assert launch_bounds is None, f"{block_size} | {launch_bounds} | {launch_factor}"
+        assert launch_bounds is None
         return str(int(launch_factor) * block_size[0] * block_size[1] * block_size[2])
-    elif launch_bounds is None:
-        return None
-    elif isinstance(launch_bounds, (str, int)):
+    elif launch_bounds is not None:
+        assert isinstance(launch_bounds, (str, int))
         return str(launch_bounds)
     else:
         raise TypeError(
-            f"Does not know how to parse '{launch_bounds}' as 'launch_bounds' argument."
+            f"Does not know how to parse '{launch_bounds}' ({type(launch_bounds).__name__}) as 'launch_bounds' argument."
         )
 
 
@@ -324,13 +324,13 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
             self.block_size_2d = block_size_2d
         if block_size_3d is not None:
             self.block_size_3d = block_size_3d
-        self.launch_bounds_1d = _gpu_set_block_size_set_launch_bound(
+        self.launch_bounds_1d = _gpu_launch_bound_parser(
             self.block_size_1d, launch_bounds_1d, launch_factor_1d
         )
-        self.launch_bounds_2d = _gpu_set_block_size_set_launch_bound(
+        self.launch_bounds_2d = _gpu_launch_bound_parser(
             self.block_size_2d, launch_bounds_2d, launch_factor_2d
         )
-        self.launch_bounds_3d = _gpu_set_block_size_set_launch_bound(
+        self.launch_bounds_3d = _gpu_launch_bound_parser(
             self.block_size_3d, launch_bounds_3d, launch_factor_3d
         )
 
@@ -399,6 +399,9 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
         - This transformation should not be run on its own, instead it
             is run within the context of `gt_gpu_transformation()`.
         - This transformation must be run after the GPU Transformation.
+
+    Todo:
+        - Use the `can_be_applied_to()` feature.
     """
 
     only_gpu_maps = dace_properties.Property(
@@ -426,9 +429,9 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
     ) -> None:
         super().__init__(*args, **kwargs)
         if only_gpu_maps is not None:
-            self.only_gpu_maps = bool(only_gpu_maps)
+            self.only_gpu_maps = only_gpu_maps
         if do_not_fuse is not None:
-            self.do_not_fuse = bool(do_not_fuse)
+            self.do_not_fuse = do_not_fuse
 
     @classmethod
     def expressions(cls) -> Any:

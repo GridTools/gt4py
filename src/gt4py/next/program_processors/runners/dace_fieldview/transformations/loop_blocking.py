@@ -349,8 +349,11 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             if node_to_classify.side_effects:
                 return None
 
-            # A Tasklet must write to an access node, this is needed that something.
-            #  can be cached between the scopes. If not it is dependent.
+            # A Tasklet must write to an AccessNode, because otherwise there would
+            #  be nothing that could be used to cache anything. Furthermore, this
+            #  AccessNode must be outside of the inner loop, i.e. be independent.
+            # TODO: Make this check stronger to ensure that there is always an
+            #   AccessNode that is independent.
             if not all(
                 isinstance(out_edge.dst, dace_nodes.AccessNode)
                 for out_edge in state.out_edges(node_to_classify)

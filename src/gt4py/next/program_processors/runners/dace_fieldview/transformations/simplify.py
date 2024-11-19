@@ -59,8 +59,8 @@ def gt_simplify(
     - `InlineSDFGs`: Instead `gt_inline_nested_sdfg()` will be called.
 
     Further, the function will run the following passes in addition to DaCe simplify:
-    - `GT4PyRednundantArrayElimination`: Special version of the array removal, see
-        documentation of `GT4PyRednundantArrayElimination`.
+    - `GT4PyRedundantArrayElimination`: Special version of the array removal, see
+        documentation of `GT4PyRedundantArrayElimination`.
     - `GT4PyGlobalSelfCopyElimination`: Special copy pattern that in the context
         of GT4Py based SDFG behaves as a no op.
 
@@ -115,17 +115,17 @@ def gt_simplify(
             result = result or {}
             result.update(simplify_res)
 
-        if "GT4PyRednundantArrayElimination" not in skip:
+        if "GT4PyRedundantArrayElimination" not in skip:
             array_elimination_result = sdfg.apply_transformations_repeated(
-                GT4PyRednundantArrayElimination(),
+                GT4PyRedundantArrayElimination(),
                 validate=validate,
                 validate_all=validate_all,
             )
             if array_elimination_result > 0:
                 at_least_one_xtrans_run = True
                 result = result or {}
-                result.setdefault("GT4PyRednundantArrayElimination", 0)
-                result["GT4PyRednundantArrayElimination"] += array_elimination_result
+                result.setdefault("GT4PyRedundantArrayElimination", 0)
+                result["GT4PyRedundantArrayElimination"] += array_elimination_result
 
         if "GT4PyGlobalSelfCopyElimination" not in skip:
             self_copy_removal_result = sdfg.apply_transformations_repeated(
@@ -238,10 +238,10 @@ def gt_substitute_compiletime_symbols(
     validate: bool = False,
     validate_all: bool = False,
 ) -> None:
-    """Substitutes symbols that are known to have a constant value with this value.
+    """Substitutes symbols that are known at compile time with their value.
 
-    Some symbols are known to have a constant value. This function will remove this
-    symbols from the SDFG and replace them with this constant value.
+    Some symbols are known to have a constant value. This function will remove these
+    symbols from the SDFG and replace them with the value.
     An example where this makes sense are strides that are known to be one.
 
     Args:
@@ -249,44 +249,33 @@ def gt_substitute_compiletime_symbols(
         repl: Maps the name of the symbol to the value it should be replaced with.
         validate: Perform validation at the end of the function.
         validate_all: Perform validation also on intermediate steps.
-
-    Note:
-        This function expects that the symbol is replaced with a value. Thus it is
-        allowed to use this function to rename symbols. Furthermore, the function
-        will remove the substituted symbols from the SDFG, by calling
-        `SDFG.remove_symbol()`, which removes the symbol from `.symbols` `dict` as
-        well as from the symbol map in case of a nested SDFG.
     """
-    # For consistency reasons we have to traverse them twice, however, we should
-    #  actually implement a custom replace path.
-    nested_sdfgs = list(sdfg.all_sdfgs_recursive())
 
-    # Now replace the symbolic value with its actual value.
-    for nsdfg in nested_sdfgs:
-        nsdfg.replace_dict(repl)
+    # We will use the `replace` function of the top SDFG, however, lower levels
+    #  are handled using ConstantPropagation.
+    sdfg.replace_dict(repl)
 
-    if validate_all:
-        sdfg.validate()
+    const_prop = dace_passes.ConstantPropagation()
+    const_prop.recursive = True
+    const_prop.progress = False
 
-    # Now we have to clean up. The call above, actually targets that case that we want
-    #  to replace `symbol1` with `symbol2` not necessarily with a value. So the symbols
-    #  are still registered, and the symbol tables now contains
-    #  `{symbol_we_replaced: value_we_used}`, which we will now remove.
-    for nsdfg in nested_sdfgs:
-        nsymbols = nsdfg.symbols
-        for sname in repl.keys():
-            if sname in nsymbols:
-                nsdfg.remove_symbol(sname)
-
-    if validate:
-        sdfg.validate()
+    const_prop.apply_pass(
+        sdfg=sdfg,
+        initial_symbols=repl,
+        _=None,
+    )
+    gt_simplify(
+        sdfg=sdfg,
+        validate=validate,
+        validate_all=validate_all,
+    )
 
 
 def gt_reduce_distributed_buffering(
     sdfg: dace.SDFG,
 ) -> Optional[dict[dace.SDFG, dict[dace.SDFGState, set[str]]]]:
     """Removes distributed write back buffers."""
-    pipeline = dace_ppl.Pipeline([DistributedBufferRelocater()])
+    pipeline = dace_ppl.Pipeline([DistributedBufferRelocator()])
     all_result = {}
 
     for rsdfg in sdfg.all_sdfgs_recursive():
@@ -298,7 +287,7 @@ def gt_reduce_distributed_buffering(
 
 
 @dace_properties.make_properties
-class GT4PyRednundantArrayElimination(dace_transformation.SingleStateTransformation):
+class GT4PyRedundantArrayElimination(dace_transformation.SingleStateTransformation):
     """Special version of the redundant array removal transformation.
 
     DaCe is not able to remove some redundant arrays. This transformation is specially
@@ -318,8 +307,8 @@ class GT4PyRednundantArrayElimination(dace_transformation.SingleStateTransformat
 
     Then array `read` is removed from the SDFG.
 
-    This passes takes advantages of the structure of the SDFG outlined in:
-    https://github.com/GridTools/gt4py/tree/main/docs/development/ADRs/0018-Canonical_SDFG_in_GT4Py_Transformations.md
+    This pass takes advantages of the structure of the SDFG outlined in:
+    docs/development/ADRs/0018-Canonical_SDFG_in_GT4Py_Transformations.md
     """
 
     read = dace_transformation.transformation.PatternNode(dace_nodes.AccessNode)
@@ -378,7 +367,7 @@ class GT4PyRednundantArrayElimination(dace_transformation.SingleStateTransformat
         # ```
         #  which can only be solved, if the copy is done backwards (I am not
         #  sure if DaCe uses `memmove()`), but any way we fully forbid that case,
-        #  since it is bother line invalid anyway.
+        #  since it is bother-line invalid anyway.
         if not write_desc.transient:
             for read_in_edge in graph.in_edges(read_an):
                 producer_node = read_in_edge.src
@@ -455,6 +444,7 @@ class GT4PyRednundantArrayElimination(dace_transformation.SingleStateTransformat
                         return False
         else:
             # They have different shapes, which is much more complicated to handle.
+            # TODO(phimuell): revisit after we have `concat_where`.
 
             # For simplicity we assume that there is only one producer.
             #  And that they have the same dimensionality.
@@ -468,7 +458,7 @@ class GT4PyRednundantArrayElimination(dace_transformation.SingleStateTransformat
 
             # We also request that `read` is written to by another access node.
             #  Because it is the only way how we can control what we write into `read`.
-            if not isinstance(read_in_edge.dst, dace_nodes.AccessNode):
+            if not isinstance(read_in_edge.src, dace_nodes.AccessNode):
                 return False
 
             # Check if everything that is read from `read` is also defined.
@@ -728,35 +718,20 @@ class GT4PyGlobalSelfCopyElimination(dace_transformation.SingleStateTransformati
             start_state: The state where the scanning starts.
             sdfg: The SDFG on which we operate.
             data_to_look: The data that we want to look for.
+
+        Todo:
+            Port this function to use DaCe pass pipeline.
         """
         read_g: dace_nodes.AccessNode = self.node_read_g
         write_g: dace_nodes.AccessNode = self.node_write_g
         tmp_node: dace_nodes.AccessNode = self.node_tmp
 
-        seen_states: set[dace.SDFGState] = set()
-        to_visit: list[dace.SDFGState] = [start_state]
-        ign_dnodes: set[dace_nodes.AccessNode] = {read_g, write_g, tmp_node}
-
-        while len(to_visit) > 0:
-            state = to_visit.pop()
-            seen_states.add(state)
-            for dnode in state.data_nodes():
-                if dnode.data != data_to_look:
-                    continue
-                if dnode in ign_dnodes:
-                    continue
-                if state.out_degree(dnode) != 0:
-                    return True  # There is a read operation
-
-            # Look for new states, also scan the interstate edges.
-            for out_edge in sdfg.out_edges(state):
-                if data_to_look in out_edge.data.read_symbols():
-                    return True
-                if out_edge.dst in seen_states:
-                    continue
-                to_visit.append(out_edge.dst)
-
-        return False
+        return gtx_transformations.util.is_accessed_downstream(
+            start_state=start_state,
+            sdfg=sdfg,
+            data_to_look=data_to_look,
+            nodes_to_ignore={read_g, write_g, tmp_node},
+        )
 
     def apply(
         self,
@@ -790,7 +765,7 @@ AccessLocation: TypeAlias = tuple[dace.SDFGState, dace_nodes.AccessNode]
 
 
 @dace_properties.make_properties
-class DistributedBufferRelocater(dace_transformation.Pass):
+class DistributedBufferRelocator(dace_transformation.Pass):
     """Moves the final write back of the results to where it is needed.
 
     In certain cases, especially in case where we have `if` the result is computed
@@ -815,10 +790,13 @@ class DistributedBufferRelocater(dace_transformation.Pass):
         Because we ensure that that `dst_cont` is non transient this is okay, as our
         rule guarantees this.
 
-    Todo: Also check if the stuff we write back to is used in between.
+    Todo:
+        - Allow that `dst_cont` can also be transient.
+        - Allow that `dst_cont` does not need to be a sink node, this is most
+            likely most relevant if it is transient.
+        - Check if `dst_cont` is used between where we want to place it and
+            where it is currently used.
     """
-
-    CATEGORY: str = "Simplification"
 
     def modifies(self) -> dace_ppl.Modifies:
         return dace_ppl.Modifies.Memlets | dace_ppl.Modifies.AccessNodes
@@ -835,16 +813,6 @@ class DistributedBufferRelocater(dace_transformation.Pass):
     def apply_pass(
         self, sdfg: dace.SDFG, pipeline_results: dict[str, Any]
     ) -> Optional[dict[dace.SDFGState, set[str]]]:
-        """
-        Removes double buffering that is distrbuted among multiple states.
-
-        Returns:
-            TBA
-
-        Args:
-            sdfg: The SDFG to process.
-            pipeline_results: Result of previous analysis passes.
-        """
         reachable: dict[dace.SDFGState, set[dace.SDFGState]] = pipeline_results[
             "StateReachability"
         ][sdfg.cfg_id]
@@ -897,20 +865,30 @@ class DistributedBufferRelocater(dace_transformation.Pass):
         reachable: dict[dace.SDFGState, set[dace.SDFGState]],
         access_sets: dict[dace.SDFGState, tuple[set[str], set[str]]],
     ) -> list[tuple[AccessLocation, list[AccessLocation]]]:
-        """Determines all candidates that needs to be processed.
+        """Determines all temporaries that have to be relocated.
 
         Returns:
-            A list of tuples. The first element of a tuple is an `AccessLocation`,
-            describing where the write back occurs. The second element is a list,
-            containing the locations where the node is originally written.
+            A list of tuples. The first element element of the tuple is an
+            `AccessLocation` that describes where the temporary is read.
+            The second element is a list of `AccessLocation`s that describes
+            where the temporary is defined.
         """
-        # First lets find us all nodes that might be `src_cont` candidate.
+        # All nodes that are used as distributed buffers.
         candidate_src_cont: list[AccessLocation] = []
+
+        # Which `src_cont` access node is written back to which global memory.
+        src_cont_to_global: dict[dace_nodes.AccessNode, str] = {}
+
         for state in sdfg.states():
+            # These are the possible targets we want to write into.
             candidate_dst_nodes: set[dace_nodes.AccessNode] = {
                 node
                 for node in state.sink_nodes()
-                if isinstance(node, dace_nodes.AccessNode) and (not node.desc(sdfg).transient)
+                if (
+                    isinstance(node, dace_nodes.AccessNode)
+                    and state.in_degree(node) == 1
+                    and (not node.desc(sdfg).transient)
+                )
             }
             if len(candidate_dst_nodes) == 0:
                 continue
@@ -918,44 +896,32 @@ class DistributedBufferRelocater(dace_transformation.Pass):
             for src_cont in state.source_nodes():
                 if not isinstance(src_cont, dace_nodes.AccessNode):
                     continue
-                if state.out_degree(src_cont) != 1:
-                    continue
                 if not src_cont.desc(sdfg).transient:
                     continue
-                if not all(edge.dst in candidate_dst_nodes for edge in state.out_edges(src_cont)):
+                if state.out_degree(src_cont) != 1:
+                    continue
+                dst_candidate: dace_nodes.AccessNode = next(
+                    iter(edge.dst for edge in state.out_edges(src_cont))
+                )
+                if dst_candidate not in candidate_dst_nodes:
                     continue
                 candidate_src_cont.append((src_cont, state))
+                src_cont_to_global[src_cont] = dst_candidate.data
 
         if len(candidate_src_cont) == 0:
             return []
-
-        # Now we have to ensure that after `src_cont` has been read is no longer in use.
-        def is_not_used_after(data: str, wb_state: dace.SDFGState) -> bool:
-            for down_state in reachable[wb_state]:
-                if any(data in read_set for read_set, _ in access_sets[down_state]):
-                    return False
-            return True
-
-        candidate_src_cont = [
-            wb_location
-            for wb_location in candidate_src_cont
-            if is_not_used_after(wb_location[0].data, wb_location[1])
-        ]
-
-        if len(candidate_src_cont) == 0:
-            return []
-
-        # Now we have to find the place where the temporary is written.
-        def find_upstream_states(state: dace.SDFGState) -> set[dace.SDFGState]:
-            return {
-                astate
-                for astate in sdfg.states()
-                if astate not in reachable[state] and astate is not state
-            }
 
         # Now we have to find the places where the temporary sources are defined.
         #  I.e. This is also the location where the original value is defined.
-        result: list[tuple[AccessLocation, list[AccessLocation]]] = []
+        result_candidates: list[tuple[AccessLocation, list[AccessLocation]]] = []
+
+        def find_upstream_states(dst_state: dace.SDFGState) -> set[dace.SDFGState]:
+            return {
+                src_state
+                for src_state in sdfg.states()
+                if dst_state in reachable[src_state] and dst_state is not src_state
+            }
+
         for src_cont in candidate_src_cont:
             def_locations: list[AccessLocation] = []
             for upstream_state in find_upstream_states(src_cont[1]):
@@ -966,16 +932,47 @@ class DistributedBufferRelocater(dace_transformation.Pass):
                         if data_node.data == src_cont[0].data
                     )
             if len(def_locations) != 0:
-                result.append((src_cont, def_locations))
+                result_candidates.append((src_cont, def_locations))
 
-        # We know that the temporary value is not modified between when it is written
-        #  and where it is used, i.e. written back to global memory. But this can
-        #  not be said for non global memory, i.e. what we have. So we heve to ensure
-        #  that it is not read/written between the location were the temporary is
-        #  defined, i.e. the new location will be, and where it is currently written
-        #  to.
-        # TODO(phimuell): Implement this.
-        def state_inbetween(state1: dace.SDFGState, state2: dace.SDFGState) -> set[dace.SDFGState]:
-            return reachable[state1].difference(reachable[state2])
+        # This transformation removes `src_cont` by writing its content directly
+        #  to `dst_cont`, at the point where it is defined.
+        #  That this transformation is valid the following conditions have to be met:
+        #   - Between the definition of `src_cont` and the write back to `dst_cont`,
+        #       `dst_cont` can not be accessed.
+        #   - Between the definitions of `src_cont` and the point where it is written
+        #       back, `src_cont` can only be accessed in the range that is written back.
+        #   - After the write back point, `src_cont` shall not be accessed. This
+        #       restriction can be lifted, but it is super strict.
+        #
+        #  To keep the implementation simple, we use the conditions:
+        #   - `src_cont` is only accessed were it is defined and at the write back
+        #       point.
+        #   - Between the definitions of `src_cont` and the write back point,
+        #       `dst_cont` is not used.
+
+        result: list[tuple[AccessLocation, list[AccessLocation]]] = []
+
+        for wb_localation, def_locations in result_candidates:
+            for def_node, def_state in def_locations:
+                # Test if `src_cont` is only accessed where it is defined and
+                #  where it is written back.
+                if gtx_transformations.util.is_accessed_downstream(
+                    start_state=def_state,
+                    sdfg=sdfg,
+                    data_to_look=wb_localation[0].data,
+                    nodes_to_ignore={def_node, wb_localation[0]},
+                ):
+                    continue
+                # check if the global data is not used between the definition of
+                #  `src_cont` and where its written back.
+                if gtx_transformations.util.is_accessed_downstream(
+                    start_state=def_state,
+                    sdfg=sdfg,
+                    data_to_look=src_cont_to_global[wb_localation[0]],
+                    nodes_to_ignore=set(),
+                    states_to_ignore={wb_localation[1]},
+                ):
+                    continue
+                result.append((wb_localation, def_locations))
 
         return result

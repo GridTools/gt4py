@@ -92,7 +92,7 @@ class MapFusionParallel(mfh.MapFusionHelper):
         ):
             return False
 
-        # Since the match expression matches any twp Maps, we have to ensure that
+        # Since the match expression matches any two Maps, we have to ensure that
         #  the maps are parallel. The `can_be_fused()` function already verified
         #  if they are in the same scope.
         if not self.is_parallel(graph=graph, node1=map_entry_1, node2=map_entry_2):

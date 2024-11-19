@@ -84,7 +84,7 @@ def test_gt4py_redundant_array_elimination():
     sdfg.validate()
 
     count = sdfg.apply_transformations_repeated(
-        gtx_transformations.GT4PyRednundantArrayElimination(),
+        gtx_transformations.GT4PyRedundantArrayElimination(),
         validate_all=True,
     )
     assert count == 1
@@ -137,7 +137,7 @@ def test_gt4py_redundant_array_elimination_unequal_shape():
     assert not np.allclose(v_ref, v_ref_init)
 
     count = sdfg.apply_transformations_repeated(
-        gtx_transformations.GT4PyRednundantArrayElimination(),
+        gtx_transformations.GT4PyRedundantArrayElimination(),
         validate=True,
         validate_all=True,
     )
@@ -192,7 +192,7 @@ def test_gt4py_redundant_array_elimination_unequal_shape_2():
 
     transformation_applied = False
     try:
-        gtx_transformations.GT4PyRednundantArrayElimination.apply_to(
+        gtx_transformations.GT4PyRedundantArrayElimination.apply_to(
             verify=True,
             sdfg=sdfg,
             read=read,
@@ -307,7 +307,7 @@ def _apply_and_run_to_big_copy_sdfg(
         # TODO: change to `can_be_applied_to()` once we update DaCe.
         expected_result = False
         try:
-            gtx_transformations.GT4PyRednundantArrayElimination.apply_to(
+            gtx_transformations.GT4PyRedundantArrayElimination.apply_to(
                 verify=True,
                 sdfg=sdfg,
                 read=read,
@@ -334,7 +334,7 @@ def _apply_and_run_to_big_copy_sdfg(
     # Now we apply the transformation to the SDFG.
     transformation_applied = False
     try:
-        gtx_transformations.GT4PyRednundantArrayElimination.apply_to(
+        gtx_transformations.GT4PyRedundantArrayElimination.apply_to(
             verify=True,
             sdfg=sdfg,
             read=read,
@@ -445,7 +445,7 @@ def test_gt4py_redundant_array_elimination_self_write():
     state.add_nedge(read, write, _mk_memlet(write))
 
     count = sdfg.apply_transformations_repeated(
-        gtx_transformations.GT4PyRednundantArrayElimination(),
+        gtx_transformations.GT4PyRedundantArrayElimination(),
         validate_all=True,
     )
     assert count == 0

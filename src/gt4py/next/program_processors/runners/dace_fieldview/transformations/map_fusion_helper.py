@@ -38,9 +38,9 @@ class MapFusionHelper(transformation.SingleStateTransformation):
     Note:
         If `strict_dataflow` mode is enabled then the transformation will not remove
         _direct_ data flow dependency from the graph. Furthermore, the transformation
-        will not remove size 1 dimensions of intermediate it crates.
+        will not remove size 1 dimensions of intermediate it creates.
         This is a compatibility mode, that will limit the applicability of the
-        transformation, but might help transformations that does not fully analyse
+        transformation, but might help transformations that do not fully analyse
         the graph.
     """
 
@@ -125,7 +125,7 @@ class MapFusionHelper(transformation.SingleStateTransformation):
             if scope[map_entry_1] is not None:
                 return False
 
-        # We will now check if there exists a remapping that of the map parameter
+        # We will now check if there exists a remapping of the map parameter
         if (
             self.find_parameter_remapping(first_map=map_entry_1.map, second_map=map_entry_2.map)
             is None
@@ -238,8 +238,8 @@ class MapFusionHelper(transformation.SingleStateTransformation):
         with parameters of the first map.
         Parameters that already have the correct name and compatible range, are not
         included in the return value, thus the keys and values are always different.
-        If no renaming at is _needed_, i.e. all parameter have the same name and range,
-        then the function returns an empty `dict`.
+        If no renaming at all is _needed_, i.e. all parameter have the same name and
+        range, then the function returns an empty `dict`.
         If no remapping exists, then the function will return `None`.
 
         Args:

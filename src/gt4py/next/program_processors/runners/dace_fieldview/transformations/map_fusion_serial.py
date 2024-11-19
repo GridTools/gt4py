@@ -35,7 +35,7 @@ class MapFusionSerial(mfh.MapFusionHelper):
 
     By default, the transformation does not use the strict data flow mode, see
     `MapFusionHelper` for more, however, it might be useful in come cases to enable
-    it.
+    it, especially in the context of DaCe's auto optimizer.
 
     Args:
         only_inner_maps: Only match Maps that are internal, i.e. inside another Map.
@@ -47,7 +47,7 @@ class MapFusionSerial(mfh.MapFusionHelper):
         - This transformation modifies more nodes than it matches.
         - After the transformation has been applied simplify should be run to remove
             some dead data flow, that was introduced to ensure validity.
-        - A `MapFusionSerial` obejct can be initialized and be reused. However,
+        - A `MapFusionSerial` object can be initialized and be reused. However,
             after new access nodes are added to any state, it is no longer valid
             to use the object.
 
@@ -94,7 +94,7 @@ class MapFusionSerial(mfh.MapFusionHelper):
         """Tests if the matched Maps can be merged.
 
         The two Maps are mergeable iff:
-        - Checks general requirements, see `MapFusionHelper.can_be_fused()`.
+        - Satisfies general requirements, see `MapFusionHelper.can_be_fused()`.
         - Tests if the decomposition exists.
         - Tests if there are read write dependencies.
         """
@@ -518,7 +518,7 @@ class MapFusionSerial(mfh.MapFusionHelper):
             #   - The source of the producer can not be a view (we do not handle this)
             #   - The edge shall also not be a reduction edge.
             #   - Defined location to where they write.
-            #   - No dynamic Melets.
+            #   - No dynamic Memlets.
             #  Furthermore, we will also extract the subsets, i.e. the location they
             #  modify inside the intermediate array.
             #  Since we do not allow for WCR, we do not check if the producer subsets intersects.

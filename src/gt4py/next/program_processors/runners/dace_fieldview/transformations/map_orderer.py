@@ -40,7 +40,7 @@ class MapIterationOrder(dace_transformation.SingleStateTransformation):
 
     Args:
         leading_dim: GT4Py dimensions that are associated with the dimension that is
-            supposed to have stride 1. If it is a list.
+            supposed to have stride 1. If it is a list it is used as a ranking.
 
     Note:
         The transformation does follow the rules outlines in
