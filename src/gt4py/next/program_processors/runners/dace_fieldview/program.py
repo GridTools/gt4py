@@ -52,10 +52,8 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             )
         )
 
-        on_gpu = not allocators.is_field_allocator_for(
-            self.backend.allocator, core_defs.DeviceType.CPU
-        ) and not allocators.is_field_allocator_for(
-            self.backend.allocator, core_defs.DeviceType.CPU_PINNED
+        on_gpu = allocators.is_field_allocator_for(
+            self.backend.allocator, core_defs.DeviceType.CUDA
         )
 
         sdfg = self.backend.executor.step.translation.generate_sdfg(  # type: ignore[attr-defined] # we can assume to get a DaCeTranslationStep here
