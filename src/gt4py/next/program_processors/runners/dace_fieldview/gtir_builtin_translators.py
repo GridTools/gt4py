@@ -521,7 +521,11 @@ def translate_index(
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
 ) -> FieldopResult:
-    """Generates a mapped tasklet for the `index` builtin function."""
+    """
+    Lowers the `index` builtin function to a mapped tasklet that writes the dimension
+    index values to a transient array. The extent of the index range is taken from
+    the domain information that should be present in the node annex.
+    """
     assert "domain" in node.annex
     domain = extract_domain(node.annex.domain)
     assert len(domain) == 1
