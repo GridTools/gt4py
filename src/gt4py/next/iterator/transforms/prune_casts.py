@@ -9,7 +9,6 @@
 from gt4py import eve
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
-from gt4py.next.iterator.type_system import inference as ir_type_inference
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -24,9 +23,7 @@ class PruneCasts(eve.NodeTranslator):
     PRESERVED_ANNEX_ATTRS = ("domain",)
 
     def visit_FunCall(self, node: ir.FunCall) -> ir.Node:
-        original_node = node.copy(update={})
         node = self.generic_visit(node)
-        ir_type_inference.copy_type(original_node, node)
 
         if cpm.is_call_to(node, "cast_"):
             value, type_constructor = node.args
