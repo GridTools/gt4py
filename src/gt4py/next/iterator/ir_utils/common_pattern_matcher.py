@@ -88,7 +88,18 @@ def is_ref_to(node, ref: str):
 
 
 def is_identity_as_fieldop(node: itir.Expr):
-    """Match field operators implementing element-wise copy of a field argument."""
+    """
+    Match field operators implementing element-wise copy of a field argument,
+    that is expressions of the form `as_fieldop(stencil)(*args)`
+
+    >>> from gt4py.next.iterator.ir_utils import ir_makers as im
+    >>> node = im.as_fieldop(im.lambda_("__arg0")(im.deref("__arg0")))("a")
+    >>> is_identity_as_fieldop(node)
+    True
+    >>> node = im.as_fieldop("deref")("a")
+    >>> is_identity_as_fieldop(node)
+    False
+    """
     if not is_applied_as_fieldop(node):
         return False
     stencil = node.fun.args[0]  # type: ignore[attr-defined]
