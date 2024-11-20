@@ -800,7 +800,11 @@ def build_sdfg_from_gtir(
         An SDFG in the DaCe canonical form (simplified)
     """
 
-    if len(eve.walk_values(ir).filter(lambda node: cpm.is_call_to(node, "index")).to_list()) != 0:
+    if (
+        eve.walk_values(ir)
+        .filter(lambda node: cpm.is_call_to(node, "index") and "domain" not in node.annex)
+        .to_set()
+    ):
         # We need to rerun domain inference because the annex information is not preserved by IR passes,
         # and the domain information is stored in annex for the nodes implementing the index builtin.
         ir = infer_domain.infer_program(ir, offset_provider=offset_provider)

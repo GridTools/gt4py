@@ -227,29 +227,25 @@ def extract_domain(node: gtir.Node) -> FieldopDomain:
 
     domain = []
 
+    def parse_range_boundary(expr: gtir.Expr) -> str:
+        return dace.symbolic.pystr_to_symbolic(gtir_python_codegen.get_source(expr))
+
     if cpm.is_call_to(node, ("cartesian_domain", "unstructured_domain")):
         for named_range in node.args:
             assert cpm.is_call_to(named_range, "named_range")
             assert len(named_range.args) == 3
             axis = named_range.args[0]
             assert isinstance(axis, gtir.AxisLiteral)
-            lower_bound, upper_bound = (
-                dace.symbolic.pystr_to_symbolic(gtir_python_codegen.get_source(arg))
-                for arg in named_range.args[1:3]
-            )
+            lower_bound, upper_bound = (parse_range_boundary(arg) for arg in named_range.args[1:3])
             dim = gtx_common.Dimension(axis.value, axis.kind)
             domain.append((dim, lower_bound, upper_bound))
 
     elif isinstance(node, domain_utils.SymbolicDomain):
         assert str(node.grid_type) in {"cartesian_domain", "unstructured_domain"}
         for dim, drange in node.ranges.items():
-            lower_bound = dace.symbolic.pystr_to_symbolic(
-                gtir_python_codegen.get_source(drange.start)
+            domain.append(
+                (dim, parse_range_boundary(drange.start), parse_range_boundary(drange.stop))
             )
-            upper_bound = dace.symbolic.pystr_to_symbolic(
-                gtir_python_codegen.get_source(drange.stop)
-            )
-            domain.append((dim, lower_bound, upper_bound))
 
     else:
         raise ValueError(f"Invalid domain {node}.")
@@ -546,6 +542,7 @@ def translate_index(
         inputs={},
         code=f"__val = {dim_index}",
         outputs={"__val": dace.Memlet(data=output_node.data, subset=dim_index)},
+        input_nodes={},
         output_nodes={output_node.data: output_node},
         external_edges=True,
     )
