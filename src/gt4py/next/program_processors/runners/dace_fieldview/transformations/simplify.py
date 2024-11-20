@@ -968,12 +968,22 @@ class DistributedBufferRelocator(dace_transformation.Pass):
                 ):
                     break
                 # check if the global data is not used between the definition of
-                #  `src_cont` and where its written back.
+                #  `dst_cont` and where its written back. We allow one exception,
+                #  if the global data is used in the state the distributed temporary
+                #  is defined is used only for reading then it is ignored. This is
+                #  allowed because of rule 3 of ADR0018.
+                glob_nodes_in_def_state = {
+                    dnode
+                    for dnode in def_state.data_nodes()
+                    if dnode.data == src_cont_to_global[wb_localation[0]]
+                }
+                if any(def_state.in_degree(gdnode) != 0 for gdnode in glob_nodes_in_def_state):
+                    break
                 if gtx_transformations.util.is_accessed_downstream(
                     start_state=def_state,
                     sdfg=sdfg,
                     data_to_look=src_cont_to_global[wb_localation[0]],
-                    nodes_to_ignore=set(),
+                    nodes_to_ignore=glob_nodes_in_def_state,
                     states_to_ignore={wb_localation[1]},
                 ):
                     break
