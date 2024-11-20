@@ -45,6 +45,8 @@ class FieldopData:
     Args:
         dc_node: DaCe access node to the data storage.
         gt_type: GT4Py type definition, which includes the field domain information.
+        offsets: List of index offsets, in each dimension, when the dimension range
+            does not start from zero. Assume zero offset, if not set.
     """
 
     dc_node: dace.nodes.AccessNode
@@ -62,7 +64,10 @@ class FieldopData:
 
         if isinstance(self.gt_type, ts.FieldType):
             indices: dict[gtx_common.Dimension, gtir_dataflow.DataExpr] = {
-                dim: gtir_dataflow.SymbolExpr(dace_gtir_utils.get_map_variable(dim), INDEX_DTYPE)
+                dim: gtir_dataflow.SymbolExpr(
+                    dace.symbolic.pystr_to_symbolic(dace_gtir_utils.get_map_variable(dim)),
+                    INDEX_DTYPE,
+                )
                 for dim, _, _ in domain
             }
             if self.offset is None:
@@ -298,7 +303,10 @@ def translate_as_fieldop(
     # parse the domain of the field operator
     domain = extract_domain(domain_expr)
     domain_indices = sbs.Indices(
-        [dace_gtir_utils.get_map_variable(dim) - lower_bound for dim, lower_bound, _ in domain]
+        [
+            dace.symbolic.pystr_to_symbolic(dace_gtir_utils.get_map_variable(dim)) - lower_bound
+            for dim, lower_bound, _ in domain
+        ]
     )
 
     # visit the list of arguments to be passed to the lambda expression
@@ -365,10 +373,12 @@ def translate_broadcast_scalar(
 
     domain = extract_domain(domain_expr)
     field_dims, field_offset, field_shape = _get_field_layout(domain)
-    field_subset = sbs.Range.from_string(
-        ",".join(
-            dace_gtir_utils.get_map_variable(dim) - offset
-            for dim, offset in zip(field_dims, field_offset)
+    field_subset = sbs.Range.from_indices(
+        sbs.Indices(
+            [
+                dace.symbolic.pystr_to_symbolic(dace_gtir_utils.get_map_variable(dim)) - offset
+                for dim, offset in zip(field_dims, field_offset)
+            ]
         )
     )
 
@@ -392,9 +402,9 @@ def translate_broadcast_scalar(
             if dim not in field_dims
         ):
             input_subset = ",".join(
-                f"{dace_gtir_utils.get_map_variable(dim)} - {offset}"
+                str(dace.symbolic.pystr_to_symbolic(dace_gtir_utils.get_map_variable(dim)) - offset)
                 if dim in field_dims
-                else f"{scalar_expr.indices[dim].value} - {offset}"  # type: ignore[union-attr] # catched by exception above
+                else str(scalar_expr.indices[dim].value - offset)  # type: ignore[union-attr] # catched by exception above
                 for dim, offset in zip(scalar_expr.dimensions, scalar_expr.offsets, strict=True)
             )
         else:
@@ -666,7 +676,7 @@ def translate_scalar_expr(
         if isinstance(arg_expr, gtir.SymRef):
             try:
                 # `gt_symbol` refers to symbols defined in the GT4Py program
-                gt_symbol_type = sdfg_builder.get_symbol_desc(arg_expr.id)
+                gt_symbol_type, _ = sdfg_builder.get_symbol_desc(arg_expr.id)
                 if not isinstance(gt_symbol_type, ts.ScalarType):
                     raise ValueError(f"Invalid argument to scalar expression {arg_expr}.")
             except KeyError:

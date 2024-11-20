@@ -101,7 +101,7 @@ class SDFGBuilder(DataflowBuilder, Protocol):
     @abc.abstractmethod
     def get_symbol_desc(
         self, symbol_name: str
-    ) -> tuple[ts.DataType, Optional[dace.symbolic.SymExpr]]:
+    ) -> tuple[ts.DataType, Optional[list[dace.symbolic.SymExpr]]]:
         """Retrieve the GT4Py data descriptor of a symbol defined in the SDFG."""
         ...
 
@@ -469,7 +469,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
           The SDFG head state, eventually updated if the target write requires a new state.
         """
 
-        temp_fields = self._visit_expression(stmt.expr, sdfg, state)
+        source_fields = self._visit_expression(stmt.expr, sdfg, state)
 
         # the target expression could be a `SymRef` to an output node or a `make_tuple` expression
         # in case the statement returns more than one field
@@ -492,7 +492,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         }
 
         target_state: Optional[dace.SDFGState] = None
-        for temp, target in zip(temp_fields, target_fields, strict=True):
+        for source, target in zip(source_fields, target_fields, strict=True):
             target_desc = sdfg.arrays[target.dc_node.data]
             assert not target_desc.transient
 
@@ -500,9 +500,18 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 subset = ",".join(
                     f"{domain[dim][0]}:{domain[dim][1]}" for dim in target.gt_type.dims
                 )
+                other_subset = (
+                    subset
+                    if source.offset is None
+                    else ",".join(
+                        f"{domain[dim][0] - offset}:{domain[dim][1] - offset}"
+                        for dim, offset in zip(target.gt_type.dims, source.offset, strict=True)
+                    )
+                )
             else:
                 assert len(domain) == 0
                 subset = "0"
+                other_subset = "0"
 
             if target.dc_node.data in state_input_data:
                 # if inout argument, write the result in separate next state
@@ -511,17 +520,17 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     target_state = sdfg.add_state_after(state, f"post_{state.label}")
                 # create new access nodes in the target state
                 target_state.add_nedge(
-                    target_state.add_access(temp.dc_node.data),
+                    target_state.add_access(source.dc_node.data),
                     target_state.add_access(target.dc_node.data),
-                    dace.Memlet(data=target.dc_node.data, subset=subset, other_subset=subset),
+                    dace.Memlet(data=target.dc_node.data, subset=subset, other_subset=other_subset),
                 )
                 # remove isolated access node
                 state.remove_node(target.dc_node)
             else:
                 state.add_nedge(
-                    temp.dc_node,
+                    source.dc_node,
                     target.dc_node,
-                    dace.Memlet(data=target.dc_node.data, subset=subset, other_subset=subset),
+                    dace.Memlet(data=target.dc_node.data, subset=subset, other_subset=other_subset),
                 )
 
         return target_state or state

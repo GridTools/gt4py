@@ -94,8 +94,6 @@ class IteratorExpr:
             to order the map index variables and dereference an element in the field.
         indices: Maps each dimension to an index value, which could be either a symbolic value
             or the result of a tasklet computation like neighbors connectivity or dynamic offset.
-        offsets: Maps each dimension to a domain offset, when the dimension range does not start
-            from zero.
     """
 
     field: dace.nodes.AccessNode
@@ -274,7 +272,13 @@ class LambdaToDataflow(eve.NodeVisitor):
         src_subset: sbs.Range,
         dst_node: dace.nodes.Node,
         dst_conn: Optional[str] = None,
+        offset: Optional[list[dace.symbolic.SymExpr]] = None,
     ) -> None:
+        if offset is not None:
+            src_subset = sbs.Range(
+                (start - off, stop - off, step)
+                for (start, stop, step), off in zip(src_subset, offset, strict=True)
+            )
         edge = MemletInputEdge(self.state, src, src_subset, dst_node, dst_conn)
         self.input_edges.append(edge)
 
@@ -449,7 +453,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         # default case: deref a field with one or more dimensions
         if all(isinstance(index, SymbolExpr) for index in arg_expr.indices.values()):
-            # when all indices are symblic expressions, we can perform direct field access through a memlet
+            # when all indices are symbolic expressions, we can perform direct field access through a memlet
             if isinstance(arg_expr.gt_dtype, itir_ts.ListType):
                 assert len(field_desc.shape) == len(arg_expr.dimensions) + 1
                 assert arg_expr.gt_dtype.offset_type is not None
@@ -459,10 +463,12 @@ class LambdaToDataflow(eve.NodeVisitor):
                 field_dims = arg_expr.dimensions
 
             field_subset = sbs.Range.from_string(
-                f"{arg_expr.indices[dim].value - arg_expr.offsets[dim]}"  # type: ignore[union-attr]
-                if dim in arg_expr.indices
-                else f"{arg_expr.offsets[dim]}:{size + arg_expr.offsets[dim]}"
-                for dim, size in zip(field_dims, field_desc.shape)
+                ",".join(
+                    str(arg_expr.indices[dim].value - arg_expr.offsets[dim])  # type: ignore[union-attr]
+                    if dim in arg_expr.indices
+                    else f"0:{size}"
+                    for dim, size in zip(field_dims, field_desc.shape)
+                )
             )
             return MemletExpr(arg_expr.field, arg_expr.gt_dtype, field_subset)
 
@@ -497,6 +503,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             sbs.Range.from_array(field_desc),
             deref_node,
             "field",
+            offset=[arg_expr.offsets[dim] for dim in arg_expr.dimensions],
         )
 
         for dim, index_expr in field_indices:
