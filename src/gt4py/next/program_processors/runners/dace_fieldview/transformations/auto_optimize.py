@@ -136,12 +136,6 @@ def gt_auto_optimize(
         sdfg.apply_transformations_repeated(
             [
                 dace_dataflow.TrivialMapElimination,
-                # TODO(phimuell): The transformation are interesting, but they have
-                #  a bug as they assume that they are not working inside a map scope.
-                #  Before we use them we have to fix them.
-                #  https://chat.spcl.inf.ethz.ch/spcl/pl/8mtgtqjb378hfy7h9a96sy3nhc
-                # dace_dataflow.MapReduceFusion,
-                # dace_dataflow.MapWCRFusion,
             ],
             validate=validate,
             validate_all=validate_all,
@@ -156,6 +150,15 @@ def gt_auto_optimize(
             validate=validate,
             validate_all=validate_all,
         )
+
+        # After we have created large kernels we run `dace_dataflow.MapReduceFusion`.
+        #  This transformation will put the initialization of the reduction at the
+        #  beginning of the scope, making it possible to fuse the reduction loop
+        #  with other loops.
+        # TODO(phimuell): Fix the transformation.
+        #  https://chat.spcl.inf.ethz.ch/spcl/pl/8mtgtqjb378hfy7h9a96sy3nhc
+        #  However, I have looked at the assembly code and the compiler already
+        #  does this, including unrolling the loops.
 
         # Phase 3: Optimizing the kernels, i.e. the larger maps, themselves.
         #   Currently this only applies fusion inside Maps.
