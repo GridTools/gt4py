@@ -151,14 +151,21 @@ def gt_auto_optimize(
             validate_all=validate_all,
         )
 
-        # After we have created large kernels we run `dace_dataflow.MapReduceFusion`.
-        #  This transformation will put the initialization of the reduction at the
-        #  beginning of the scope, making it possible to fuse the reduction loop
-        #  with other loops.
-        # TODO(phimuell): Fix the transformation.
+        # After we have created big kernels, we will perform some post cleanup.
+        sdfg.apply_transformations_repeated(
+            gtx_transformations.GT4PyMoveTaskletIntoMap,
+            validate=validate,
+            validate_all=validate_all,
+        )
+
+        # TODO(phimuell): The `MapReduceFusion` transformation is interesting as
+        #  it moves the initialization of the accumulator at the top, which allows
+        #  further fusing of the accumulator loop. However the transformation has
+        #  a bug, so we can not use it. Furthermore, I have looked at the assembly
+        #  and the compiler is already doing that.
         #  https://chat.spcl.inf.ethz.ch/spcl/pl/8mtgtqjb378hfy7h9a96sy3nhc
-        #  However, I have looked at the assembly code and the compiler already
-        #  does this, including unrolling the loops.
+
+        # After we have created large kernels we run `dace_dataflow.MapReduceFusion`.
 
         # Phase 3: Optimizing the kernels, i.e. the larger maps, themselves.
         #   Currently this only applies fusion inside Maps.
