@@ -17,7 +17,7 @@
   "postCreateCommand": "bash .devcontainer/setup.sh",
 
   "containerEnv": {
-    "PRE_COMMIT_HOME": "/workspaces/.caches/pre-commit"
+    "PRE_COMMIT_HOME": "/workspaces/gt4py/.caches/pre-commit"
   }
 
   // Configure tool-specific properties.
