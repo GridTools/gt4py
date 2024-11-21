@@ -10,6 +10,7 @@
 
 import collections
 import copy
+import uuid
 from typing import Any, Final, Iterable, Optional, TypeAlias, Union
 
 import dace
@@ -991,3 +992,183 @@ class DistributedBufferRelocator(dace_transformation.Pass):
                 result.append((wb_localation, def_locations))
 
         return result
+
+
+@dace_properties.make_properties
+class GT4PyMoveTaskletIntoMap(dace_transformation.SingleStateTransformation):
+    """Moves a Tasklet, with no input into a map.
+
+    Tasklets without inputs, are mostly used to generate constants.
+    However, if they are outside a Map, then this constant value, is an
+    argument to the kernel, and can not be used by the compiler.
+
+    This transformation moves such Tasklets into a Map scope.
+    """
+
+    tasklet = dace_transformation.PatternNode(dace_nodes.Tasklet)
+    access_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
+    map_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
+
+    def __init__(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+
+    @classmethod
+    def expressions(cls) -> Any:
+        return [dace.sdfg.utils.node_path_graph(cls.tasklet, cls.access_node, cls.map_entry)]
+
+    def can_be_applied(
+        self,
+        graph: dace.SDFGState | dace.SDFG,
+        expr_index: int,
+        sdfg: dace.SDFG,
+        permissive: bool = False,
+    ) -> bool:
+        tasklet: dace_nodes.Tasklet = self.tasklet
+        access_node: dace_nodes.AccessNode = self.access_node
+        access_desc: dace_data.Data = access_node.desc(sdfg)
+        map_entry: dace_nodes.MapEntry = self.map_entry
+
+        if graph.in_degree(tasklet) != 0:
+            return False
+        if graph.out_degree(tasklet) != 1:
+            return False
+        if tasklet.has_side_effects(sdfg):
+            return False
+        if tasklet.code_init.as_string:
+            return False
+        if tasklet.code_exit.as_string:
+            return False
+        if tasklet.code_global.as_string:
+            return False
+        if tasklet.state_fields:
+            return False
+        if not isinstance(access_desc, dace_data.Scalar):
+            return False
+        if not access_desc.transient:
+            return False
+        if not any(
+            edge.dst_conn and edge.dst_conn.startswith("IN_")
+            for edge in graph.out_edges(access_node)
+            if edge.dst is map_entry
+        ):
+            return False
+        # NOTE: We allow that the access node is used in multiple places.
+
+        return True
+
+    def apply(
+        self,
+        graph: dace.SDFGState | dace.SDFG,
+        sdfg: dace.SDFG,
+    ) -> None:
+        tasklet: dace_nodes.Tasklet = self.tasklet
+        access_node: dace_nodes.AccessNode = self.access_node
+        access_desc: dace_data.Scalar = access_node.desc(sdfg)
+        map_entry: dace_nodes.MapEntry = self.map_entry
+
+        # Find _a_ connection that leads from the access node to the map.
+        edge_to_map = next(
+            iter(
+                edge
+                for edge in graph.out_edges(access_node)
+                if edge.dst is map_entry and edge.dst_conn.startswith("IN_")
+            )
+        )
+        connector_name: str = edge_to_map.dst_conn[3:]
+
+        # This is the tasklet that we will put inside the map, note we have to do it
+        #  this way to avoid some name clash stuff.
+        inner_tasklet: dace_nodes.Tasklet = graph.add_tasklet(
+            name=f"{tasklet.label}__clone_{str(uuid.uuid1()).replace('-', '_')}",
+            outputs=tasklet.out_connectors.keys(),
+            inputs=set(),
+            code=tasklet.code,
+            language=tasklet.language,
+            debuginfo=tasklet.debuginfo,
+        )
+        inner_desc: dace_data.Scalar = access_desc.clone()
+        inner_data_name: str = sdfg.add_datadesc(access_node.data, inner_desc, find_new_name=True)
+        inner_an: dace_nodes.AccessNode = graph.add_access(inner_data_name)
+
+        # Connect the tasklet with the map entry and the access node.
+        graph.add_nedge(map_entry, inner_tasklet, dace.Memlet())
+        graph.add_edge(
+            inner_tasklet,
+            next(iter(inner_tasklet.out_connectors.keys())),
+            inner_an,
+            None,
+            dace.Memlet(f"{inner_data_name}[0]"),
+        )
+
+        # Now we will reroute the edges went through the inner map, through the
+        #  inner access node instead.
+        for old_inner_edge in list(
+            graph.out_edges_by_connector(map_entry, "OUT_" + connector_name)
+        ):
+            # We now modify the downstream data. This is because we no longer refer
+            #  to the data outside but the one inside.
+            self._modify_downstream_memlets(
+                state=graph,
+                edge=old_inner_edge,
+                old_data=access_node.data,
+                new_data=inner_data_name,
+            )
+
+            # After we have changed the properties of the MemletTree of `edge`
+            #  we will now reroute it, such that the inner access node is used.
+            graph.add_edge(
+                inner_an,
+                None,
+                old_inner_edge.dst,
+                old_inner_edge.dst_conn,
+                old_inner_edge.data,
+            )
+            graph.remove_edge(old_inner_edge)
+            map_entry.remove_in_connector("IN_" + connector_name)
+            map_entry.remove_out_connector("OUT_" + connector_name)
+
+        # Now we can remove the map connection between the outer/old access
+        #  node and the map.
+        graph.remove_edge(edge_to_map)
+
+        # The data is no longer referenced in this state, so we can potentially
+        #  remove
+        if graph.out_degree(access_node) == 0:
+            if not gtx_transformations.util.is_accessed_downstream(
+                start_state=graph,
+                sdfg=sdfg,
+                data_to_look=access_node.data,
+                nodes_to_ignore={access_node},
+            ):
+                graph.remove_nodes_from([tasklet, access_node])
+                sdfg.remove_data(access_node.data, validate=True)
+
+    def _modify_downstream_memlets(
+        self,
+        state: dace.SDFGState,
+        edge: dace.sdfg.graph.MultiConnectorEdge,
+        old_data: str,
+        new_data: str,
+    ) -> None:
+        """Replaces the data along on the tree defined by `edge`.
+
+        The function will traverse the MemletTree defined by `edge`.
+        Any Memlet that refers to `old_data` will be replaced with
+        `new_data`.
+
+        Args:
+            state: The sate in which we operate.
+            edge: The edge defining the MemletTree.
+            old_data: The name of the data that should be replaced.
+            new_data: The name of the new data the Memlet should refer to.
+        """
+        mtree: dace.memlet.MemletTree = state.memlet_tree(edge)
+        for tedge in mtree.traverse_children(True):
+            # Because we only change the name of the data, we do not change the
+            #  direction of the Memlet, so `{src, dst}_subset` will remain the same.
+            if tedge.edge.data.data == old_data:
+                tedge.edge.data.data = new_data

@@ -22,6 +22,7 @@ from .map_promoter import SerialMapPromoter
 from .simplify import (
     GT_SIMPLIFY_DEFAULT_SKIP_SET,
     GT4PyGlobalSelfCopyElimination,
+    GT4PyMoveTaskletIntoMap,
     GT4PyRedundantArrayElimination,
     gt_inline_nested_sdfg,
     gt_reduce_distributed_buffering,
@@ -37,6 +38,7 @@ __all__ = [
     "GPUSetBlockSize",
     "GT4PyGlobalSelfCopyElimination",
     "GT4PyRedundantArrayElimination",
+    "GT4PyMoveTaskletIntoMap",
     "LoopBlocking",
     "MapIterationOrder",
     "MapFusionParallel",
