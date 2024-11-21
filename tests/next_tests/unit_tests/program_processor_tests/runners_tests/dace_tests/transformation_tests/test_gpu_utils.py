@@ -29,7 +29,7 @@ def _get_trivial_gpu_promotable(
     """Returns an SDFG that is suitable to test the `TrivialGPUMapElimination` promoter.
 
     The first map is a trivial map (`Map[__trival_gpu_it=0]`) containing a Tasklet,
-    that does not have an output, but writes a scalar value into `tmp` (output
+    that does not have an input, but writes a scalar value into `tmp` (output
     connector `__out`), the body of this Tasklet can be controlled through the
     `tasklet_code` argument.
     The second map (`Map[__i0=0:N]`) contains a Tasklet that computes the sum of its
@@ -63,7 +63,7 @@ def _get_trivial_gpu_promotable(
         inputs={},
         code=tasklet_code,
         outputs={"__out": dace.Memlet("tmp[0]")},
-        output_nodes={"tmp": tmp},
+        output_nodes={tmp},
         external_edges=True,
         schedule=schedule,
     )
@@ -76,8 +76,8 @@ def _get_trivial_gpu_promotable(
         },
         code="__out = __in0 + __in1",
         outputs={"__out": dace.Memlet("b[__i0]")},
-        input_nodes={"a": a, "tmp": tmp},
-        output_nodes={"b": b},
+        input_nodes={a, tmp},
+        output_nodes={b},
         external_edges=True,
         schedule=schedule,
     )

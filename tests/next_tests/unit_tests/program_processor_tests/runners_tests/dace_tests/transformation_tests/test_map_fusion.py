@@ -58,14 +58,14 @@ def _make_serial_sdfg_1(
         inputs={"__in0": dace.Memlet("a[__i0, __i1]")},
         code="__out = __in0 + 1.0",
         outputs={"__out": dace.Memlet("tmp[__i0, __i1]")},
-        output_nodes={"tmp": tmp},
+        output_nodes={tmp},
         external_edges=True,
     )
 
     state.add_mapped_tasklet(
         name="second_computation",
         map_ranges=[("__i0", f"0:{N}"), ("__i1", f"0:{N}")],
-        input_nodes={"tmp": tmp},
+        input_nodes={tmp},
         inputs={"__in0": dace.Memlet("tmp[__i0, __i1]")},
         code="__out = __in0 + 3.0",
         outputs={"__out": dace.Memlet("b[__i0, __i1]")},
@@ -118,17 +118,14 @@ def _make_serial_sdfg_2(
             "__out0": dace.Memlet("tmp_1[__i0, __i1]"),
             "__out1": dace.Memlet("tmp_2[__i0, __i1]"),
         },
-        output_nodes={
-            "tmp_1": tmp_1,
-            "tmp_2": tmp_2,
-        },
+        output_nodes={tmp_1, tmp_2},
         external_edges=True,
     )
 
     state.add_mapped_tasklet(
         name="first_computation",
         map_ranges=[("__i0", f"0:{N}"), ("__i1", f"0:{N}")],
-        input_nodes={"tmp_1": tmp_1},
+        input_nodes={tmp_1},
         inputs={"__in0": dace.Memlet("tmp_1[__i0, __i1]")},
         code="__out = __in0 + 3.0",
         outputs={"__out": dace.Memlet("b[__i0, __i1]")},
@@ -137,7 +134,7 @@ def _make_serial_sdfg_2(
     state.add_mapped_tasklet(
         name="second_computation",
         map_ranges=[("__i0", f"0:{N}"), ("__i1", f"0:{N}")],
-        input_nodes={"tmp_2": tmp_2},
+        input_nodes={tmp_2},
         inputs={"__in0": dace.Memlet("tmp_2[__i0, __i1]")},
         code="__out = __in0 - 3.0",
         outputs={"__out": dace.Memlet("c[__i0, __i1]")},
@@ -194,14 +191,14 @@ def _make_serial_sdfg_3(
         },
         code="__out = __in0 + __in1",
         outputs={"__out": dace.Memlet("tmp[__i0]")},
-        output_nodes={"tmp": tmp},
+        output_nodes={tmp},
         external_edges=True,
     )
 
     state.add_mapped_tasklet(
         name="indirect_access",
         map_ranges=[("__i0", f"0:{N_output}")],
-        input_nodes={"tmp": tmp},
+        input_nodes={tmp},
         inputs={
             "__index": dace.Memlet("idx[__i0]"),
             "__array": dace.Memlet.simple("tmp", subset_str=f"0:{N_input}", num_accesses=1),
