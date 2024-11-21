@@ -7,11 +7,14 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import functools
+import pathlib
+import tempfile
 import warnings
 from typing import Any, Optional
 
 import diskcache
 import factory
+import filelock
 import numpy.typing as npt
 
 import gt4py._core.definitions as core_defs
@@ -145,6 +148,16 @@ class FileCache(diskcache.Cache):
     i.e. it ensures that any resources associated with the cache are properly
     released when the instance is garbage collected.
     """
+
+    def __init__(self, directory: Optional[str | pathlib.Path] = None, **settings: Any) -> None:
+        if directory:
+            lock_dir = pathlib.Path(directory).parent
+        else:
+            lock_dir = pathlib.Path(tempfile.gettempdir())
+
+        lock = filelock.FileLock(lock_dir / "file_cache.lock")
+        with lock:
+            super().__init__(directory=directory, **settings)
 
     def __del__(self) -> None:
         self.close()
