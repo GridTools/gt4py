@@ -472,6 +472,14 @@ class CallInliner(ast.NodeTransformer):
                 message="Invalid call signature", loc=nodes.Location.from_ast_node(node)
             ) from ex
 
+        # Inline constant function arguments
+        local_context = {
+            name: arg_node.value
+            for name, arg_node in call_args.items()
+            if isinstance(arg_node, ast.Constant)
+        }
+        ValueInliner.apply(call_ast, local_context)
+
         # Rename local names in subroutine to avoid conflicts with caller context names
         try:
             assign_targets = gt_meta.collect_assign_targets(call_ast, allow_multiple_targets=False)
