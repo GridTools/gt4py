@@ -63,7 +63,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
     _independent_nodes: Optional[set[dace_nodes.AccessNode]]
     _dependent_nodes: Optional[set[dace_nodes.AccessNode]]
 
-    outer_entry = dace_transformation.transformation.PatternNode(dace_nodes.MapEntry)
+    outer_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
 
     def __init__(
         self,
@@ -132,7 +132,6 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
         Performs the operation described in the doc string.
         """
-
         # Now compute the partitions of the nodes.
         self.partition_map_output(graph, sdfg)
 

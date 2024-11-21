@@ -14,11 +14,7 @@ import copy
 from typing import Any, Callable, Final, Optional, Sequence, Union
 
 import dace
-from dace import (
-    data as dace_data,
-    properties as dace_properties,
-    transformation as dace_transformation,
-)
+from dace import properties as dace_properties, transformation as dace_transformation
 from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next.program_processors.runners.dace_fieldview import (
@@ -303,7 +299,7 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
     )
 
     # Pattern matching
-    map_entry = dace_transformation.transformation.PatternNode(dace_nodes.MapEntry)
+    map_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
 
     def __init__(
         self,
@@ -393,15 +389,13 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
     a downstream (serial) map.
 
     Args:
+        do_not_fuse: If `True` then the maps are not fused together.
         only_gpu_maps: Only apply to GPU maps; `True` by default.
 
     Note:
         - This transformation should not be run on its own, instead it
             is run within the context of `gt_gpu_transformation()`.
         - This transformation must be run after the GPU Transformation.
-
-    Todo:
-        - Use the `can_be_applied_to()` feature.
     """
 
     only_gpu_maps = dace_properties.Property(
@@ -412,18 +406,18 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
     do_not_fuse = dace_properties.Property(
         dtype=bool,
         default=False,
-        desc="Only perform the promotion, do not fuse (debug option).",
+        desc="Only perform the promotion, do not fuse.",
     )
 
     # Pattern Matching
-    trivial_map_exit = dace_transformation.transformation.PatternNode(dace_nodes.MapExit)
-    access_node = dace_transformation.transformation.PatternNode(dace_nodes.AccessNode)
-    second_map_entry = dace_transformation.transformation.PatternNode(dace_nodes.MapEntry)
+    trivial_map_exit = dace_transformation.PatternNode(dace_nodes.MapExit)
+    access_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
+    second_map_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
 
     def __init__(
         self,
-        only_gpu_maps: Optional[bool] = None,
         do_not_fuse: Optional[bool] = None,
+        only_gpu_maps: Optional[bool] = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
@@ -459,8 +453,6 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
         trivial_map: dace_nodes.Map = trivial_map_exit.map
         trivial_map_entry: dace_nodes.MapEntry = graph.entry_node(trivial_map_exit)
         second_map: dace_nodes.Map = self.second_map_entry.map
-        access_node: dace_nodes.AccessNode = self.access_node
-        access_desc: dace_data.Data = access_node.desc(sdfg)
 
         # The kind of maps we are interested only have one parameter.
         if len(trivial_map.params) != 1:
@@ -468,32 +460,23 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
         for rng in trivial_map.range.ranges:
             if rng[0] != rng[1]:
                 return False
-        if not all(
-            in_edge.dst_conn.startswith("IN_") for in_edge in graph.in_edges(trivial_map_entry)
-        ):
-            return False
 
-        # The second map shall not be trivial. This is to prevent the case that
-        #  there are two trivial maps one after the other.
-        if len(second_map.params) <= 1:
+        # If we do not not fuse, then the second map can not be trivial.
+        #  If we would not prevent that case then we would match these two
+        #  maps again and again.
+        if self.do_not_fuse and len(second_map.params) <= 1:
             for rng in second_map.range.ranges:
                 if rng[0] == rng[1]:
                     return False
 
-        # This is a cheap way to check if the two maps can be fused.
-        #  TODO(phimuell): Use `can_be_applied_to()` to really check this.
-        if graph.in_degree(access_node) != 1:
-            return False
-        if graph.out_degree(access_node) != 1:
-            return False
-        if graph.out_degree(trivial_map_exit) != 1:
-            return False
-        if isinstance(access_desc, dace_data.View):
-            return False
-
-        # We require that the two schedule are the same.
-        if trivial_map.schedule != second_map.schedule:
-            return False
+        # We now check that the Memlets do not depend on the map parameter.
+        #  This is important for the `can_be_applied_to()` check we do below
+        #  because we can avoid calling the replace function.
+        scope = graph.scope_subgraph(trivial_map_entry)
+        trivial_map_param: str = trivial_map.params[0]
+        for edge in scope.edges():
+            if trivial_map_param in edge.data.free_symbols:
+                return False
 
         # Check if only GPU maps are involved (this is more a testing debug feature).
         if self.only_gpu_maps:
@@ -503,6 +486,26 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
                     dace.dtypes.ScheduleType.GPU_Default,
                 ]:
                     return False
+
+        # Now we check if the two maps can be fused together. For that we have to
+        #  do a temporary promotion, it is important that we do not perform the
+        #  renaming. If the old symbol is still used, it is used inside a tasklet
+        #  so it would show up (temporarily) as free symbol.
+        org_trivial_map_params = copy.deepcopy(trivial_map.params)
+        org_trivial_map_range = copy.deepcopy(trivial_map.range)
+        try:
+            self._promote_map(graph, replace_trivail_map_parameter=False)
+            if not gtx_transformations.MapFusionSerial.can_be_applied_to(
+                sdfg=sdfg,
+                map_exit_1=trivial_map_exit,
+                intermediate_access_node=self.access_node,
+                map_entry_2=self.second_map_entry,
+            ):
+                return False
+        finally:
+            trivial_map.params = org_trivial_map_params
+            trivial_map.range = org_trivial_map_range
+
         return True
 
     def apply(self, graph: Union[dace.SDFGState, dace.SDFG], sdfg: dace.SDFG) -> None:
@@ -528,12 +531,19 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
                 verify=True,
             )
 
-    def _promote_map(self, state: dace.SDFGState) -> None:
+    def _promote_map(
+        self,
+        state: dace.SDFGState,
+        replace_trivail_map_parameter: bool = True,
+    ) -> None:
         """Performs the map promoting.
 
         Essentially this function will copy the parameters and the range from
         the non trivial map (`self.second_map_entry.map`) to the trivial map
         (`self.trivial_map_exit.map`).
+
+        If `replace_trivail_map_parameter` is `True` the default, then the
+        function will also remove the trivial map parameter with its value.
         """
         assert isinstance(self.trivial_map_exit, dace_nodes.MapExit)
         assert isinstance(self.second_map_entry, dace_nodes.MapEntry)
@@ -544,9 +554,10 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
         trivial_map_entry: dace_nodes.MapEntry = state.entry_node(trivial_map_exit)
         second_map: dace_nodes.Map = self.second_map_entry.map
 
-        # Replace the symbols of the map with their value.
-        scope = state.scope_subgraph(trivial_map_entry)
-        scope.replace(trivial_map.params[0], trivial_map.range[0][0])
+        # If requested then replace the map variable with its value.
+        if replace_trivail_map_parameter:
+            scope = state.scope_subgraph(trivial_map_entry)
+            scope.replace(trivial_map.params[0], trivial_map.range[0][0])
 
         # Now copy parameter and the ranges from the second to the trivial map.
         trivial_map.params = copy.deepcopy(second_map.params)

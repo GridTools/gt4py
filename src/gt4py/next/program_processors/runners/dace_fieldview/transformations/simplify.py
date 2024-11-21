@@ -311,8 +311,8 @@ class GT4PyRedundantArrayElimination(dace_transformation.SingleStateTransformati
     docs/development/ADRs/0018-Canonical_SDFG_in_GT4Py_Transformations.md
     """
 
-    read = dace_transformation.transformation.PatternNode(dace_nodes.AccessNode)
-    write = dace_transformation.transformation.PatternNode(dace_nodes.AccessNode)
+    read = dace_transformation.PatternNode(dace_nodes.AccessNode)
+    write = dace_transformation.PatternNode(dace_nodes.AccessNode)
 
     def __init__(
         self,
@@ -654,9 +654,9 @@ class GT4PyGlobalSelfCopyElimination(dace_transformation.SingleStateTransformati
     if `T` is not used downstream. If it is used `T` will be maintained.
     """
 
-    node_read_g = dace_transformation.transformation.PatternNode(dace_nodes.AccessNode)
+    node_read_g = dace_transformation.PatternNode(dace_nodes.AccessNode)
     node_tmp = dace_transformation.transformation.PatternNode(dace_nodes.AccessNode)
-    node_write_g = dace_transformation.transformation.PatternNode(dace_nodes.AccessNode)
+    node_write_g = dace_transformation.PatternNode(dace_nodes.AccessNode)
 
     def __init__(
         self,
@@ -810,8 +810,8 @@ class DistributedBufferRelocator(dace_transformation.Pass):
 
     def depends_on(self) -> set[type[dace_transformation.Pass]]:
         return {
-            dace_transformation.passes.analysis.StateReachability,
-            dace_transformation.passes.analysis.AccessSets,
+            dace_transformation.passes.StateReachability,
+            dace_transformation.passes.AccessSets,
         }
 
     def apply_pass(

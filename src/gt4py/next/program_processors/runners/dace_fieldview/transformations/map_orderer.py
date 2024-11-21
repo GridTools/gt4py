@@ -60,7 +60,7 @@ class MapIterationOrder(dace_transformation.SingleStateTransformation):
         desc="Dimensions that should become the leading dimension.",
     )
 
-    map_entry = dace_transformation.transformation.PatternNode(dace_nodes.MapEntry)
+    map_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
 
     def __init__(
         self,
