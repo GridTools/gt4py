@@ -1,11 +1,10 @@
 #!/bin/sh
 
 ln -sfn /workspaces/gt4py/.devcontainer/.vscode /workspaces/gt4py/.vscode
-python -m venv .venv
+uv venv .venv
 source .venv/bin/activate
-pip install --upgrade pip setuptools wheel
-pip install -e .
-pip install -r requirements-dev.txt
-pip install -i https://test.pypi.org/simple/ atlas4py
+uv pip install -r requirements-dev.txt
+uv pip install -e .
+uv pip install -i https://test.pypi.org/simple/ atlas4py
 pre-commit install --install-hooks
 deactivate
