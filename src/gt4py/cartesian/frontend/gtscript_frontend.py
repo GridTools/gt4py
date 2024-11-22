@@ -441,15 +441,8 @@ class CallInliner(ast.NodeTransformer):
         elif call_name not in self.context or not hasattr(self.context[call_name], "_gtscript_"):
             raise GTScriptSyntaxError("Unknown call", loc=nodes.Location.from_ast_node(node))
 
-        # Recursively inline any possible nested subroutine call
-        call_info = self.context[call_name]._gtscript_
-        call_ast = copy.deepcopy(call_info["ast"])
-        self.current_name = call_name
-        CallInliner.apply(
-            call_ast, call_info["local_context"], call_stack={*self.call_stack, call_name}
-        )
-
         # Extract call arguments
+        call_info = self.context[call_name]._gtscript_
         call_signature = call_info["api_signature"]
         arg_infos = {arg.name: arg.default for arg in call_signature}
         try:
@@ -473,12 +466,19 @@ class CallInliner(ast.NodeTransformer):
             ) from ex
 
         # Inline constant function arguments
+        call_ast = copy.deepcopy(call_info["ast"])
         local_context = {
             name: arg_node.value
             for name, arg_node in call_args.items()
             if isinstance(arg_node, ast.Constant)
         }
         ValueInliner.apply(call_ast, local_context)
+
+        # Recursively inline any possible nested subroutine call
+        self.current_name = call_name
+        CallInliner.apply(
+            call_ast, call_info["local_context"], call_stack={*self.call_stack, call_name}
+        )
 
         # Rename local names in subroutine to avoid conflicts with caller context names
         try:
