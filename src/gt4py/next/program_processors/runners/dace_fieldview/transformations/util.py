@@ -95,12 +95,10 @@ def gt_find_constant_arguments(
     call_args: dict[str, Any],
     include: Optional[Container[str]] = None,
 ) -> dict[str, Any]:
-    """Scanns the calling arguments for candidates that could be constant.
+    """Scans the calling arguments for compile time constants.
 
     The output of this function can be used as input to
     `gt_substitute_compiletime_symbols()`, which then removes these symbols.
-    By default the function will inspect the name using the following regex:
-    `.*_(size|shape|stride)_.*`. Furthermore, the value must be one.
 
     By specifying `include` it is possible to force the function to include
     additional arguments, that would not be matched otherwise. Importantly,
@@ -131,12 +129,12 @@ def is_accessed_downstream(
     """Scans for accesses to the data container `data_to_look`.
 
     The function will go through states that are reachable from `start_state`
-    (including) and test if there is an AccessNode that refers to `data_to_look`.
+    (included) and test if there is an AccessNode that refers to `data_to_look`.
     It will return `True` the first time it finds such a node.
 
     The function will ignore all nodes that are listed in `nodes_to_ignore`.
-    Furthermore, states listed in `states_to_ignore` are considered to non exists.
-    The effect of ignoring states is as they does not exists.
+    Furthermore, states listed in `states_to_ignore` will be ignored, i.e.
+    handled as they did not exist.
 
     Args:
         start_state: The state where the scanning starts.

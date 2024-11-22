@@ -297,14 +297,15 @@ class GT4PyRedundantArrayElimination(dace_transformation.SingleStateTransformati
     - `read` is a transient non view array.
     - `write` has input degree 1 and output degree zero (sink node might be lifted).
     - If `write` is non-transient, then `read` shall not have a upstream access node
-        that refers to the same global data.
+        that refers to the same global data. I.e. `write` cannot write into `write`
+        using `read` as temporary buffer, see `GT4PyGlobalSelfCopyElimination`.
     - `read` has input degree larger than zero and output degree 1.
     - `read` does not appear in any other state that is reachable from this state.
     - `read` and `write` have the same dimensionality.
     - In case they have different sizes the following must hold:
         - `read` has input degree 1.
-        - All subsets have the same size, i.e. everything that is written into `read`
-            is also read from it.
+        - The incoming subset at `read` must be covered by the outgoing subset of
+            `read`.
 
     Then array `read` is removed from the SDFG.
 
@@ -368,7 +369,7 @@ class GT4PyRedundantArrayElimination(dace_transformation.SingleStateTransformati
         # ```
         #  which can only be solved, if the copy is done backwards (I am not
         #  sure if DaCe uses `memmove()`), but any way we fully forbid that case,
-        #  since it is bother-line invalid anyway.
+        #  since it is border-line invalid anyway.
         if not write_desc.transient:
             for read_in_edge in graph.in_edges(read_an):
                 producer_node = read_in_edge.src
@@ -430,8 +431,9 @@ class GT4PyRedundantArrayElimination(dace_transformation.SingleStateTransformati
             if write_desc.transient:
                 # `write` is a transient, in which case we can be more permissive.
                 #  Actually the tests above, to ensure that everything starts at
-                #  zero are already enough in the transient case. See also the
-                #  discussion above for more information.
+                #  zero are already enough in the transient case. Furthermore, we
+                #  also know that they have the same size, so there is no out of
+                #  bound write. See also the discussion above for more information.
                 pass
             else:
                 # `write` is global data, so we must be more careful. We have to
@@ -496,18 +498,12 @@ class GT4PyRedundantArrayElimination(dace_transformation.SingleStateTransformati
     ) -> bool:
         read_an: dace_nodes.AccessNode = self.read
         read_name: str = read_an.data
-
-        to_visit: list[dace.SDFGState] = [edge.dst for edge in sdfg.out_edges(state)]
-        seen: set[dace.SDFGState] = {state}
-
-        while len(to_visit) != 0:
-            state_to_inspect = to_visit.pop()
-            if any(dnode.data == read_name for dnode in state_to_inspect.data_nodes()):
-                return True
-            to_visit.extend(
-                edge.dst for edge in sdfg.out_edges(state_to_inspect) if edge.dst not in seen
-            )
-        return False
+        return gtx_transformations.util.is_accessed_downstream(
+            start_state=state,
+            sdfg=sdfg,
+            data_to_look=read_name,
+            nodes_to_ignore={read_an},
+        )
 
     def apply(
         self,

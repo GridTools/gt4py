@@ -209,7 +209,7 @@ def _make_gpu_block_getter_for(
     return _gpu_block_getter
 
 
-def _gpu_launch_bound_parser(
+def _gpu_launch_bound_parser(  # type: ignore[return]  # MyPy complains about the missing `return` in the `else` branch.
     block_size: tuple[int, int, int],
     launch_bounds: int | str | None,
     launch_factor: int | None = None,
@@ -217,16 +217,13 @@ def _gpu_launch_bound_parser(
     """Used by the `GPUSetBlockSize.__init__()` method to parse the launch bounds."""
     if launch_bounds is None and launch_factor is None:
         return None
-    elif launch_factor is not None:
-        assert launch_bounds is None
+    elif launch_bounds is None and launch_factor is not None:
         return str(int(launch_factor) * block_size[0] * block_size[1] * block_size[2])
-    elif launch_bounds is not None:
+    elif launch_bounds is not None and launch_factor is None:
         assert isinstance(launch_bounds, (str, int))
         return str(launch_bounds)
     else:
-        raise TypeError(
-            f"Does not know how to parse '{launch_bounds}' ({type(launch_bounds).__name__}) as 'launch_bounds' argument."
-        )
+        ValueError("Specified both `launch_bounds` and `launch_factor`.")
 
 
 @dace_properties.make_properties

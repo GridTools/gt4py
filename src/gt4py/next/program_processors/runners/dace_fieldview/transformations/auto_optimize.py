@@ -90,21 +90,23 @@ def gt_auto_optimize(
         gpu_launch_bounds: Use this value as `__launch_bounds__` for _all_ GPU Maps.
         gpu_launch_factor: Use the number of threads times this value as `__launch_bounds__`
             for _all_ GPU Maps.
-        constant_symbols: Replace these symbols with constant values.
+        constant_symbols: A `dict` that maps symbols that are constant to their values.
+            They will be replaced with their value inside the SDFG, which might
+            increase performance.
         validate: Perform validation during the steps.
         validate_all: Perform extensive validation.
 
+
+    Note:
+        For identifying symbols that can be treated as compile time constants
+        `gt_find_constant_arguments()` function can be used.
+
     Todo:
-        - Make sure that `SDFG.simplify()` is not called indirectly, by temporarily
-            overwriting it with `gt_simplify()`.
         - Specify arguments to set the size of GPU thread blocks depending on the
             dimensions. I.e. be able to use a different size for 1D than 2D Maps.
-        - Add a parallel version of Map fusion.
         - Implement some model to further guide to determine what we want to fuse.
             Something along the line "Fuse if operational intensity goes up, but
             not if we have too much internal space (register pressure).
-        - Create a custom array elimination pass that honors rule 1.
-        - Check if a pipeline could be used to speed up some computations.
     """
     device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
 
