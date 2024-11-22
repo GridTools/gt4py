@@ -1815,7 +1815,7 @@ def test_gtir_let_lambda_with_cond():
 
 
 def test_gtir_let_lambda_with_tuple1():
-    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (1, im.minus("size", 1))})
     testee = gtir.Program(
         id="let_lambda_with_tuple1",
         function_definitions=[],
@@ -1846,10 +1846,12 @@ def test_gtir_let_lambda_with_tuple1():
     sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
 
     z_fields = (np.empty_like(a), np.empty_like(a))
+    a_ref = np.concatenate((z_fields[0][:1], a[1 : N - 1], z_fields[0][N - 1 :]))
+    b_ref = np.concatenate((z_fields[1][:1], b[1 : N - 1], z_fields[1][N - 1 :]))
 
     sdfg(a, b, *z_fields, **FSYMBOLS)
-    assert np.allclose(z_fields[0], a)
-    assert np.allclose(z_fields[1], b)
+    assert np.allclose(z_fields[0], a_ref)
+    assert np.allclose(z_fields[1], b_ref)
 
 
 def test_gtir_let_lambda_with_tuple2():

@@ -232,7 +232,11 @@ def _create_temporary_field(
         assert dataflow_output.result.gt_dtype.offset_type is not None
         field_dims.append(dataflow_output.result.gt_dtype.offset_type)
 
-    return FieldopData(field_node, ts.FieldType(field_dims, field_dtype), field_offset)
+    return FieldopData(
+        field_node,
+        ts.FieldType(field_dims, field_dtype),
+        offset=(field_offset if set(field_offset) != {0} else None),
+    )
 
 
 def extract_domain(node: gtir.Node) -> FieldopDomain:
@@ -537,11 +541,11 @@ def _get_data_nodes(
     sdfg_builder: gtir_sdfg.SDFGBuilder,
     data_name: str,
     data_type: ts.DataType,
-    offset: Optional[list[dace.symbolic.SymExpr]],
 ) -> FieldopValue:
     if isinstance(data_type, ts.FieldType):
         data_node = state.add_access(data_name)
-        return FieldopData(data_node, data_type, offset)
+        field_offset = sdfg_builder.get_field_offset(data_name)
+        return FieldopData(data_node, data_type, field_offset)
 
     elif isinstance(data_type, ts.ScalarType):
         if data_name in sdfg.symbols:
@@ -550,13 +554,12 @@ def _get_data_nodes(
             )
         else:
             data_node = state.add_access(data_name)
-        assert offset is None
         return FieldopData(data_node, data_type, offset=None)
 
     elif isinstance(data_type, ts.TupleType):
         tuple_fields = dace_gtir_utils.get_tuple_fields(data_name, data_type)
         return tuple(
-            _get_data_nodes(sdfg, state, sdfg_builder, fname, ftype, offset)
+            _get_data_nodes(sdfg, state, sdfg_builder, fname, ftype)
             for fname, ftype in tuple_fields
         )
 
@@ -676,7 +679,7 @@ def translate_scalar_expr(
         if isinstance(arg_expr, gtir.SymRef):
             try:
                 # `gt_symbol` refers to symbols defined in the GT4Py program
-                gt_symbol_type, _ = sdfg_builder.get_symbol_desc(arg_expr.id)
+                gt_symbol_type = sdfg_builder.get_symbol_type(arg_expr.id)
                 if not isinstance(gt_symbol_type, ts.ScalarType):
                     raise ValueError(f"Invalid argument to scalar expression {arg_expr}.")
             except KeyError:
@@ -751,12 +754,12 @@ def translate_symbol_ref(
 
     symbol_name = str(node.id)
     # we retrieve the type of the symbol in the GT4Py prgram
-    gt_symbol_type, offset = sdfg_builder.get_symbol_desc(symbol_name)
+    gt_symbol_type = sdfg_builder.get_symbol_type(symbol_name)
 
     # Create new access node in current state. It is possible that multiple
     # access nodes are created in one state for the same data container.
     # We rely on the dace simplify pass to remove duplicated access nodes.
-    return _get_data_nodes(sdfg, state, sdfg_builder, symbol_name, gt_symbol_type, offset)
+    return _get_data_nodes(sdfg, state, sdfg_builder, symbol_name, gt_symbol_type)
 
 
 if TYPE_CHECKING:

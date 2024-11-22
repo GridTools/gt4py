@@ -94,6 +94,8 @@ class IteratorExpr:
             to order the map index variables and dereference an element in the field.
         indices: Maps each dimension to an index value, which could be either a symbolic value
             or the result of a tasklet computation like neighbors connectivity or dynamic offset.
+        offsets: Maps each dimension of the field to an offset value, initially set to the start
+            index of the dimension range, and eventually updated by shift expressions.
     """
 
     field: dace.nodes.AccessNode
@@ -272,12 +274,12 @@ class LambdaToDataflow(eve.NodeVisitor):
         src_subset: sbs.Range,
         dst_node: dace.nodes.Node,
         dst_conn: Optional[str] = None,
-        offset: Optional[list[dace.symbolic.SymExpr]] = None,
+        src_offset: Optional[list[dace.symbolic.SymExpr]] = None,
     ) -> None:
-        if offset is not None:
+        if src_offset:
             src_subset = sbs.Range(
                 (start - off, stop - off, step)
-                for (start, stop, step), off in zip(src_subset, offset, strict=True)
+                for (start, stop, step), off in zip(src_subset, src_offset, strict=True)
             )
         edge = MemletInputEdge(self.state, src, src_subset, dst_node, dst_conn)
         self.input_edges.append(edge)
@@ -467,7 +469,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                     str(arg_expr.indices[dim].value - arg_expr.offsets[dim])  # type: ignore[union-attr]
                     if dim in arg_expr.indices
                     else f"0:{size}"
-                    for dim, size in zip(field_dims, field_desc.shape)
+                    for dim, size in zip(field_dims, field_desc.shape, strict=True)
                 )
             )
             return MemletExpr(arg_expr.field, arg_expr.gt_dtype, field_subset)
@@ -503,7 +505,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             sbs.Range.from_array(field_desc),
             deref_node,
             "field",
-            offset=[arg_expr.offsets[dim] for dim in arg_expr.dimensions],
+            src_offset=[arg_expr.offsets[dim] for dim in arg_expr.dimensions],
         )
 
         for dim, index_expr in field_indices:
@@ -974,77 +976,74 @@ class LambdaToDataflow(eve.NodeVisitor):
         self, it: IteratorExpr, offset_dim: gtx_common.Dimension, offset_expr: DataExpr
     ) -> IteratorExpr:
         """Implements cartesian shift along one dimension."""
-        assert offset_dim in it.dimensions
-        new_index: SymbolExpr | ValueExpr
-        assert offset_dim in it.indices
-        index_expr = it.indices[offset_dim]
-        if isinstance(index_expr, SymbolExpr) and isinstance(offset_expr, SymbolExpr):
+        if isinstance(offset_expr, SymbolExpr):
             # purely symbolic expression which can be interpreted at compile time
-            new_index = SymbolExpr(
-                dace.symbolic.pystr_to_symbolic(index_expr.value) + offset_expr.value,
-                index_expr.dc_dtype,
+            return IteratorExpr(
+                it.field,
+                it.gt_dtype,
+                it.dimensions,
+                it.indices,
+                offsets={
+                    dim: offset - dace.symbolic.pystr_to_symbolic(offset_expr.value)
+                    for dim, offset in it.offsets.items()
+                },
+            )
+
+        # the offset needs to be calculated by means of a tasklet (i.e. dynamic offset)
+        index_expr = it.indices[offset_dim]
+        new_index_connector = "shifted_index"
+        if isinstance(index_expr, SymbolExpr):
+            dynamic_offset_tasklet = self._add_tasklet(
+                "dynamic_offset",
+                {"offset"},
+                {new_index_connector},
+                f"{new_index_connector} = {index_expr.value} + offset",
+            )
+        elif isinstance(offset_expr, SymbolExpr):
+            dynamic_offset_tasklet = self._add_tasklet(
+                "dynamic_offset",
+                {"index"},
+                {new_index_connector},
+                f"{new_index_connector} = index + {offset_expr}",
             )
         else:
-            # the offset needs to be calculated by means of a tasklet (i.e. dynamic offset)
-            new_index_connector = "shifted_index"
-            if isinstance(index_expr, SymbolExpr):
-                dynamic_offset_tasklet = self._add_tasklet(
-                    "dynamic_offset",
-                    {"offset"},
-                    {new_index_connector},
-                    f"{new_index_connector} = {index_expr.value} + offset",
-                )
-            elif isinstance(offset_expr, SymbolExpr):
-                dynamic_offset_tasklet = self._add_tasklet(
-                    "dynamic_offset",
-                    {"index"},
-                    {new_index_connector},
-                    f"{new_index_connector} = index + {offset_expr}",
-                )
-            else:
-                dynamic_offset_tasklet = self._add_tasklet(
-                    "dynamic_offset",
-                    {"index", "offset"},
-                    {new_index_connector},
-                    f"{new_index_connector} = index + offset",
-                )
-            for input_expr, input_connector in [(index_expr, "index"), (offset_expr, "offset")]:
-                if isinstance(input_expr, MemletExpr):
-                    self._add_input_data_edge(
-                        input_expr.dc_node,
-                        input_expr.subset,
-                        dynamic_offset_tasklet,
-                        input_connector,
-                    )
-                elif isinstance(input_expr, ValueExpr):
-                    self._add_edge(
-                        input_expr.dc_node,
-                        None,
-                        dynamic_offset_tasklet,
-                        input_connector,
-                        dace.Memlet(data=input_expr.dc_node.data, subset="0"),
-                    )
-
-            if isinstance(index_expr, SymbolExpr):
-                dc_dtype = index_expr.dc_dtype
-            else:
-                dc_dtype = index_expr.dc_node.desc(self.sdfg).dtype
-
-            new_index = self._construct_tasklet_result(
-                dc_dtype, dynamic_offset_tasklet, new_index_connector
+            dynamic_offset_tasklet = self._add_tasklet(
+                "dynamic_offset",
+                {"index", "offset"},
+                {new_index_connector},
+                f"{new_index_connector} = index + offset",
             )
+        for input_expr, input_connector in [(index_expr, "index"), (offset_expr, "offset")]:
+            if isinstance(input_expr, MemletExpr):
+                self._add_input_data_edge(
+                    input_expr.dc_node,
+                    input_expr.subset,
+                    dynamic_offset_tasklet,
+                    input_connector,
+                )
+            elif isinstance(input_expr, ValueExpr):
+                self._add_edge(
+                    input_expr.dc_node,
+                    None,
+                    dynamic_offset_tasklet,
+                    input_connector,
+                    dace.Memlet(data=input_expr.dc_node.data, subset="0"),
+                )
+
+        if isinstance(index_expr, SymbolExpr):
+            dc_dtype = index_expr.dc_dtype
+        else:
+            dc_dtype = index_expr.dc_node.desc(self.sdfg).dtype
+
+        new_index = self._construct_tasklet_result(
+            dc_dtype, dynamic_offset_tasklet, new_index_connector
+        )
 
         # a new iterator with a shifted index along one dimension
-        return IteratorExpr(
-            field=it.field,
-            gt_dtype=it.gt_dtype,
-            dimensions=it.dimensions,
-            indices={
-                dim: (new_index if dim == offset_dim else index)
-                for dim, index in it.indices.items()
-            },
-            offsets=it.offsets,
-        )
+        shifted_indices = {
+            dim: (new_index if dim == offset_dim else index) for dim, index in it.indices.items()
+        }
+        return IteratorExpr(it.field, it.gt_dtype, it.dimensions, shifted_indices, it.offsets)
 
     def _make_dynamic_neighbor_offset(
         self,
@@ -1121,13 +1120,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                 offset_expr, offset_table_node, origin_index
             )
 
-        return IteratorExpr(
-            field=it.field,
-            gt_dtype=it.gt_dtype,
-            dimensions=it.dimensions,
-            indices=shifted_indices,
-            offsets=it.offsets,
-        )
+        return IteratorExpr(it.field, it.gt_dtype, it.dimensions, shifted_indices, it.offsets)
 
     def _visit_shift(self, node: gtir.FunCall) -> IteratorExpr:
         # convert builtin-index type to dace type
