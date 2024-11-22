@@ -9,55 +9,14 @@
 from __future__ import annotations
 
 import itertools
-from typing import Any
+from typing import Any, Dict, TypeVar
 
 import dace
 
+from gt4py import eve
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
-from gt4py.next.program_processors.runners.dace_fieldview import gtir_python_codegen
 from gt4py.next.type_system import type_specifications as ts
-
-
-def get_domain(
-    node: gtir.Expr,
-) -> list[tuple[gtx_common.Dimension, dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]]:
-    """
-    Specialized visit method for domain expressions.
-
-    Returns for each domain dimension the corresponding range.
-
-    TODO: Domain expressions will be recurrent in the GTIR program. An interesting idea
-          would be to cache the results of lowering here (e.g. using `functools.lru_cache`)
-    """
-    assert cpm.is_call_to(node, ("cartesian_domain", "unstructured_domain"))
-
-    domain = []
-    for named_range in node.args:
-        assert cpm.is_call_to(named_range, "named_range")
-        assert len(named_range.args) == 3
-        axis = named_range.args[0]
-        assert isinstance(axis, gtir.AxisLiteral)
-        bounds = [
-            dace.symbolic.pystr_to_symbolic(gtir_python_codegen.get_source(arg))
-            for arg in named_range.args[1:3]
-        ]
-        dim = gtx_common.Dimension(axis.value, axis.kind)
-        domain.append((dim, bounds[0], bounds[1]))
-
-    return domain
-
-
-def get_domain_ranges(
-    node: gtir.Expr,
-) -> dict[gtx_common.Dimension, tuple[dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]]:
-    """
-    Returns domain represented in dictionary form.
-    """
-    domain = get_domain(node)
-
-    return {dim: (lb, ub) for dim, lb, ub in domain}
 
 
 def get_map_variable(dim: gtx_common.Dimension) -> str:
@@ -104,5 +63,42 @@ def get_tuple_type(data: tuple[Any, ...]) -> ts.TupleType:
     Compute the `ts.TupleType` corresponding to the structure of a tuple of data nodes.
     """
     return ts.TupleType(
-        types=[get_tuple_type(d) if isinstance(d, tuple) else d.data_type for d in data]
+        types=[get_tuple_type(d) if isinstance(d, tuple) else d.gt_type for d in data]
     )
+
+
+def replace_invalid_symbols(sdfg: dace.SDFG, ir: gtir.Program) -> gtir.Program:
+    """
+    Ensure that all symbols used in the program IR are valid strings (e.g. no unicode-strings).
+
+    If any invalid symbol present, this funtion returns a copy of the input IR where
+    the invalid symbols have been replaced with new names. If all symbols are valid,
+    the input IR is returned without copying it.
+    """
+
+    class ReplaceSymbols(eve.PreserveLocationVisitor, eve.NodeTranslator):
+        T = TypeVar("T", gtir.Sym, gtir.SymRef)
+
+        def _replace_sym(self, node: T, symtable: Dict[str, str]) -> T:
+            sym = str(node.id)
+            return type(node)(id=symtable.get(sym, sym), type=node.type)
+
+        def visit_Sym(self, node: gtir.Sym, *, symtable: Dict[str, str]) -> gtir.Sym:
+            return self._replace_sym(node, symtable)
+
+        def visit_SymRef(self, node: gtir.SymRef, *, symtable: Dict[str, str]) -> gtir.SymRef:
+            return self._replace_sym(node, symtable)
+
+    # program arguments are checked separetely, because they cannot be replaced
+    if not all(dace.dtypes.validate_name(str(sym.id)) for sym in ir.params):
+        raise ValueError("Invalid symbol in program parameters.")
+
+    invalid_symbols_mapping = {
+        sym_id: sdfg.temp_data_name()
+        for sym in eve.walk_values(ir).if_isinstance(gtir.Sym).to_set()
+        if not dace.dtypes.validate_name(sym_id := str(sym.id))
+    }
+    if len(invalid_symbols_mapping) != 0:
+        return ReplaceSymbols().visit(ir, symtable=invalid_symbols_mapping)
+    else:
+        return ir

@@ -28,6 +28,7 @@ from .oir_utils import (
     StencilFactory,
     VerticalLoopFactory,
     VerticalLoopSectionFactory,
+    WhileFactory,
 )
 
 
@@ -76,6 +77,18 @@ def test_mask_stmt_to_assigns() -> None:
     assign_stmts = OirToNpir().visit(mask_stmt, extent=Extent.zeros(ndims=2))
     assert isinstance(assign_stmts[0].right.cond, npir.FieldSlice)
     assert len(assign_stmts) == 1
+
+
+def test_mask_stmt_to_while() -> None:
+    mask_oir = MaskStmtFactory(body=[WhileFactory()])
+    statements = OirToNpir().visit(mask_oir, extent=Extent.zeros(ndims=2))
+    assert len(statements) == 1
+    assert isinstance(statements[0], npir.While)
+    condition = statements[0].cond
+    assert isinstance(condition, npir.VectorLogic)
+    assert condition.op == common.LogicalOperator.AND
+    mask_npir = OirToNpir().visit(mask_oir.mask)
+    assert condition.left == mask_npir or condition.right == mask_npir
 
 
 def test_mask_propagation() -> None:

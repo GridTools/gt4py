@@ -190,6 +190,14 @@ def make_tuple(*args: ts.DataType) -> ts.TupleType:
 
 
 @_register_builtin_type_synthesizer
+def index(arg: ts.DimensionType) -> ts.FieldType:
+    return ts.FieldType(
+        dims=[arg.dim],
+        dtype=ts.ScalarType(kind=getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())),
+    )
+
+
+@_register_builtin_type_synthesizer
 def neighbors(offset_literal: it_ts.OffsetLiteralType, it: it_ts.IteratorType) -> it_ts.ListType:
     assert (
         isinstance(offset_literal, it_ts.OffsetLiteralType)
@@ -271,17 +279,43 @@ def _convert_as_fieldop_input_to_iterator(
 
 @_register_builtin_type_synthesizer
 def as_fieldop(
-    stencil: TypeSynthesizer, domain: it_ts.DomainType, offset_provider: common.OffsetProvider
+    stencil: TypeSynthesizer,
+    domain: Optional[it_ts.DomainType] = None,
+    *,
+    offset_provider: common.OffsetProvider,
 ) -> TypeSynthesizer:
+    # In case we don't have a domain argument to `as_fieldop` we can not infer the exact result
+    # type. In order to still allow some passes which don't need this information to run before the
+    # domain inference, we continue with a dummy domain. One example is the CollapseTuple pass
+    # which only needs information about the structure, e.g. how many tuple elements does this node
+    # have, but not the dimensions of a field.
+    # Note that it might appear as if using the TraceShift pass would allow us to deduce the return
+    # type of `as_fieldop` without a domain, but this is not the case, since we don't have
+    # information on the ordering of dimensions. In this example
+    #   `as_fieldop(it1, it2 -> deref(it1) + deref(it2))(i_field, j_field)`
+    # it is unclear if the result has dimension I, J or J, I.
+    if domain is None:
+        domain = it_ts.DomainType(dims="unknown")
+
     @TypeSynthesizer
-    def applied_as_fieldop(*fields) -> ts.FieldType:
+    def applied_as_fieldop(*fields) -> ts.FieldType | ts.DeferredType:
+        if any(
+            isinstance(el, ts.DeferredType)
+            for f in fields
+            for el in type_info.primitive_constituents(f)
+        ):
+            return ts.DeferredType(constraint=None)
+
         stencil_return = stencil(
             *(_convert_as_fieldop_input_to_iterator(domain, field) for field in fields),
             offset_provider=offset_provider,
         )
         assert isinstance(stencil_return, ts.DataType)
         return type_info.apply_to_primitive_constituents(
-            lambda el_type: ts.FieldType(dims=domain.dims, dtype=el_type), stencil_return
+            lambda el_type: ts.FieldType(dims=domain.dims, dtype=el_type)
+            if domain.dims != "unknown"
+            else ts.DeferredType(constraint=ts.FieldType),
+            stencil_return,
         )
 
     return applied_as_fieldop
@@ -329,7 +363,7 @@ def reduce(op: TypeSynthesizer, init: ts.TypeSpec) -> TypeSynthesizer:
 
 
 @_register_builtin_type_synthesizer
-def shift(*offset_literals, offset_provider) -> TypeSynthesizer:
+def shift(*offset_literals, offset_provider: common.OffsetProvider) -> TypeSynthesizer:
     @TypeSynthesizer
     def apply_shift(
         it: it_ts.IteratorType | ts.DeferredType,

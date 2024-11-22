@@ -462,7 +462,8 @@ class CallInliner(ast.NodeTransformer):
                     call_args[name] = ast.Constant(value=arg_infos[name])
         except Exception as ex:
             raise GTScriptSyntaxError(
-                message="Invalid call signature", loc=nodes.Location.from_ast_node(node)
+                message=f"Invalid call signature when calling {call_name}",
+                loc=nodes.Location.from_ast_node(node),
             ) from ex
 
         # Inline constant function arguments

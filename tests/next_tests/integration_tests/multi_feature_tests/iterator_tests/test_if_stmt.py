@@ -28,7 +28,7 @@ from gt4py.next.iterator.builtins import cartesian_domain, deref, as_fieldop, na
 from gt4py.next.iterator.runtime import set_at, if_stmt, fendef, fundef, offset
 from gt4py.next.program_processors.runners import gtfn
 
-from next_tests.unit_tests.conftest import program_processor, run_processor
+from next_tests.unit_tests.conftest import program_processor_no_transforms, run_processor
 
 i = offset("i")
 
@@ -43,8 +43,8 @@ IDim = gtx.Dimension("IDim")
 
 @pytest.mark.uses_ir_if_stmts
 @pytest.mark.parametrize("cond", [True, False])
-def test_if_stmt(program_processor, cond):
-    program_processor, validate = program_processor
+def test_if_stmt(program_processor_no_transforms, cond):
+    program_processor, validate = program_processor_no_transforms
     size = 10
 
     @fendef(offset_provider={"i": IDim})

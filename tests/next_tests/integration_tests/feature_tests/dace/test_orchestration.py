@@ -32,7 +32,10 @@ from next_tests.integration_tests.multi_feature_tests.ffront_tests.test_laplacia
 
 try:
     import dace
-    from gt4py.next.program_processors.runners.dace import run_dace_cpu, run_dace_gpu
+    from gt4py.next.program_processors.runners.dace import (
+        itir_cpu as run_dace_cpu,
+        itir_gpu as run_dace_gpu,
+    )
 except ImportError:
     dace: Optional[ModuleType] = None  # type:ignore[no-redef]
     run_dace_cpu: Optional[next_backend.Backend] = None

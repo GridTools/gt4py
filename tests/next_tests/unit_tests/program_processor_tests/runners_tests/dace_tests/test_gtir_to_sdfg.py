@@ -40,10 +40,11 @@ dace_backend = pytest.importorskip("gt4py.next.program_processors.runners.dace_f
 
 
 N = 10
-IFTYPE = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
-CFTYPE = ts.FieldType(dims=[Cell], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
-EFTYPE = ts.FieldType(dims=[Edge], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
-VFTYPE = ts.FieldType(dims=[Vertex], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+FLOAT_TYPE = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+IFTYPE = ts.FieldType(dims=[IDim], dtype=FLOAT_TYPE)
+CFTYPE = ts.FieldType(dims=[Cell], dtype=FLOAT_TYPE)
+EFTYPE = ts.FieldType(dims=[Edge], dtype=FLOAT_TYPE)
+VFTYPE = ts.FieldType(dims=[Vertex], dtype=FLOAT_TYPE)
 V2E_FTYPE = ts.FieldType(dims=[Vertex, V2EDim], dtype=EFTYPE.dtype)
 CARTESIAN_OFFSETS = {
     "IDim": IDim,
@@ -100,10 +101,36 @@ def make_mesh_symbols(mesh: MeshDescriptor):
     )
 
 
-def test_gtir_cast():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
+def test_gtir_broadcast():
+    val = np.random.rand()
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
+    testee = gtir.Program(
+        id="gtir_broadcast",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="x", type=IFTYPE),
+            gtir.Sym(id="size", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.as_fieldop("deref", domain)(val),
+                domain=domain,
+                target=gtir.SymRef(id="x"),
+            )
+        ],
     )
+
+    a = np.empty(N, dtype=np.float64)
+
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
+
+    sdfg(a, **FSYMBOLS)
+    np.testing.assert_array_equal(a, val)
+
+
+def test_gtir_cast():
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     IFTYPE_FLOAT32 = ts.FieldType(IFTYPE.dims, dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
     IFTYPE_BOOL = ts.FieldType(IFTYPE.dims, dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL))
     testee = gtir.Program(
@@ -119,9 +146,7 @@ def test_gtir_cast():
         body=[
             gtir.SetAt(
                 expr=im.op_as_fieldop("eq", domain)(
-                    im.as_fieldop(
-                        im.lambda_("a")(im.call("cast_")(im.deref("a"), "float32")), domain
-                    )("x"),
+                    im.cast_as_fieldop("float32", domain)("x"),
                     "y",
                 ),
                 domain=domain,
@@ -141,9 +166,7 @@ def test_gtir_cast():
 
 
 def test_gtir_copy_self():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 1, 2)
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (1, 2)})
     testee = gtir.Program(
         id="gtir_copy_self",
         function_definitions=[],
@@ -171,9 +194,7 @@ def test_gtir_copy_self():
 
 
 def test_gtir_tuple_swap():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
         id="gtir_tuple_swap",
         function_definitions=[],
@@ -205,9 +226,7 @@ def test_gtir_tuple_swap():
 
 
 def test_gtir_tuple_args():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
         id="gtir_tuple_args",
         function_definitions=[],
@@ -241,23 +260,13 @@ def test_gtir_tuple_args():
     sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
 
     x_fields = (a, a, b)
-    x_symbols = dict(
-        __x_0_size_0=FSYMBOLS["__x_size_0"],
-        __x_0_stride_0=FSYMBOLS["__x_stride_0"],
-        __x_1_0_size_0=FSYMBOLS["__x_size_0"],
-        __x_1_0_stride_0=FSYMBOLS["__x_stride_0"],
-        __x_1_1_size_0=FSYMBOLS["__y_size_0"],
-        __x_1_1_stride_0=FSYMBOLS["__y_stride_0"],
-    )
 
-    sdfg(*x_fields, c, **FSYMBOLS, **x_symbols)
+    sdfg(*x_fields, c, **FSYMBOLS)
     assert np.allclose(c, a * 2 + b)
 
 
 def test_gtir_tuple_expr():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
         id="gtir_tuple_expr",
         function_definitions=[],
@@ -297,10 +306,93 @@ def test_gtir_tuple_expr():
     assert np.allclose(c, a * 2 + b)
 
 
-def test_gtir_tuple_return():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
+def test_gtir_tuple_broadcast_scalar():
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
+    testee = gtir.Program(
+        id="gtir_tuple_broadcast_scalar",
+        function_definitions=[],
+        params=[
+            gtir.Sym(
+                id="x",
+                type=ts.TupleType(types=[FLOAT_TYPE, ts.TupleType(types=[FLOAT_TYPE, FLOAT_TYPE])]),
+            ),
+            gtir.Sym(id="y", type=IFTYPE),
+            gtir.Sym(id="size", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.as_fieldop("deref", domain)(
+                    im.plus(
+                        im.tuple_get(0, "x"),
+                        im.plus(
+                            im.multiplies_(
+                                im.tuple_get(
+                                    0,
+                                    im.tuple_get(1, "x"),
+                                ),
+                                2.0,
+                            ),
+                            im.multiplies_(
+                                im.tuple_get(
+                                    1,
+                                    im.tuple_get(1, "x"),
+                                ),
+                                3.0,
+                            ),
+                        ),
+                    )
+                ),
+                domain=domain,
+                target=gtir.SymRef(id="y"),
+            )
+        ],
     )
+
+    a = np.random.rand()
+    b = np.random.rand()
+    c = np.random.rand()
+    d = np.empty(N, dtype=type(a))
+
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
+
+    x_fields = (a, b, c)
+
+    sdfg(*x_fields, d, **FSYMBOLS)
+    assert np.allclose(d, a + 2 * b + 3 * c)
+
+
+def test_gtir_zero_dim_fields():
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
+    testee = gtir.Program(
+        id="gtir_zero_dim_fields",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="x", type=ts.FieldType(dims=[], dtype=IFTYPE.dtype)),
+            gtir.Sym(id="y", type=IFTYPE),
+            gtir.Sym(id="size", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.as_fieldop("deref", domain)("x"),
+                domain=domain,
+                target=gtir.SymRef(id="y"),
+            )
+        ],
+    )
+
+    a = np.asarray(np.random.rand())
+    b = np.empty(N)
+
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
+
+    sdfg(a.item(), b, **FSYMBOLS)
+    assert np.allclose(a, b)
+
+
+def test_gtir_tuple_return():
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
         id="gtir_tuple_return",
         function_definitions=[],
@@ -330,25 +422,15 @@ def test_gtir_tuple_return():
     sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
 
     z_fields = (np.empty_like(a), np.empty_like(a), np.empty_like(a))
-    z_symbols = dict(
-        __z_0_0_size_0=FSYMBOLS["__x_size_0"],
-        __z_0_0_stride_0=FSYMBOLS["__x_stride_0"],
-        __z_0_1_size_0=FSYMBOLS["__x_size_0"],
-        __z_0_1_stride_0=FSYMBOLS["__x_stride_0"],
-        __z_1_size_0=FSYMBOLS["__x_size_0"],
-        __z_1_stride_0=FSYMBOLS["__x_stride_0"],
-    )
 
-    sdfg(a, b, *z_fields, **FSYMBOLS, **z_symbols)
+    sdfg(a, b, *z_fields, **FSYMBOLS)
     assert np.allclose(z_fields[0], a + b)
     assert np.allclose(z_fields[1], a)
     assert np.allclose(z_fields[2], b)
 
 
 def test_gtir_tuple_target():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
         id="gtir_tuple_target",
         function_definitions=[],
@@ -379,14 +461,12 @@ def test_gtir_tuple_target():
 
 
 def test_gtir_update():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     stencil1 = im.as_fieldop(
-        im.lambda_("a")(im.plus(im.deref("a"), 0 - 1.0)),
+        im.lambda_("a")(im.plus(im.deref("a"), im.plus(im.minus(0.0, 2.0), 1.0))),
         domain,
     )("x")
-    stencil2 = im.op_as_fieldop("plus", domain)("x", 0 - 1.0)
+    stencil2 = im.op_as_fieldop("plus", domain)("x", im.plus(im.minus(0.0, 2.0), 1.0))
 
     for i, stencil in enumerate([stencil1, stencil2]):
         testee = gtir.Program(
@@ -415,9 +495,7 @@ def test_gtir_update():
 
 
 def test_gtir_sum2():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
         id="sum_2fields",
         function_definitions=[],
@@ -448,9 +526,7 @@ def test_gtir_sum2():
 
 
 def test_gtir_sum2_sym():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
         id="sum_2fields_sym",
         function_definitions=[],
@@ -479,9 +555,7 @@ def test_gtir_sum2_sym():
 
 
 def test_gtir_sum3():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     stencil1 = im.op_as_fieldop("plus", domain)(
         "x",
         im.op_as_fieldop("plus", domain)("y", "w"),
@@ -525,9 +599,7 @@ def test_gtir_sum3():
 
 
 def test_gtir_cond():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
         id="cond_2sums",
         function_definitions=[],
@@ -547,7 +619,7 @@ def test_gtir_cond():
                 expr=im.op_as_fieldop("plus", domain)(
                     "x",
                     im.if_(
-                        im.greater(gtir.SymRef(id="s1"), gtir.SymRef(id="s2")),
+                        im.greater("s1", "s2"),
                         im.op_as_fieldop("plus", domain)("y", "scalar"),
                         im.op_as_fieldop("plus", domain)("w", "scalar"),
                     ),
@@ -571,9 +643,7 @@ def test_gtir_cond():
 
 
 def test_gtir_cond_with_tuple_return():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
         id="cond_with_tuple_return",
         function_definitions=[],
@@ -591,7 +661,7 @@ def test_gtir_cond_with_tuple_return():
                 expr=im.tuple_get(
                     0,
                     im.if_(
-                        gtir.SymRef(id="pred"),
+                        "pred",
                         im.make_tuple(im.make_tuple("x", "y"), "w"),
                         im.make_tuple(im.make_tuple("y", "x"), "w"),
                     ),
@@ -606,26 +676,17 @@ def test_gtir_cond_with_tuple_return():
     b = np.random.rand(N)
     c = np.random.rand(N)
 
-    z_symbols = dict(
-        __z_0_size_0=FSYMBOLS["__x_size_0"],
-        __z_0_stride_0=FSYMBOLS["__x_stride_0"],
-        __z_1_size_0=FSYMBOLS["__x_size_0"],
-        __z_1_stride_0=FSYMBOLS["__x_stride_0"],
-    )
-
     sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
 
     for s in [False, True]:
         z_fields = (np.empty_like(a), np.empty_like(a))
-        sdfg(a, b, c, *z_fields, pred=np.bool_(s), **FSYMBOLS, **z_symbols)
+        sdfg(a, b, c, *z_fields, pred=np.bool_(s), **FSYMBOLS)
         assert np.allclose(z_fields[0], a if s else b)
         assert np.allclose(z_fields[1], b if s else a)
 
 
 def test_gtir_cond_nested():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
         id="cond_nested",
         function_definitions=[],
@@ -640,10 +701,10 @@ def test_gtir_cond_nested():
         body=[
             gtir.SetAt(
                 expr=im.if_(
-                    gtir.SymRef(id="pred_1"),
+                    "pred_1",
                     im.op_as_fieldop("plus", domain)("x", 1.0),
                     im.if_(
-                        gtir.SymRef(id="pred_2"),
+                        "pred_2",
                         im.op_as_fieldop("plus", domain)("x", 2.0),
                         im.op_as_fieldop("plus", domain)("x", 3.0),
                     ),
@@ -668,12 +729,14 @@ def test_gtir_cond_nested():
 def test_gtir_cartesian_shift_left():
     DELTA = 3.0
     OFFSET = 1
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(
-            gtir.AxisLiteral(value=IDim.value),
-            0,
-            im.minus(gtir.SymRef(id="size"), gtir.Literal(value=str(OFFSET), type=SIZE_TYPE)),
-        )
+    domain = im.domain(
+        gtx_common.GridType.CARTESIAN,
+        ranges={
+            IDim: (
+                0,
+                im.minus(gtir.SymRef(id="size"), gtir.Literal(value=str(OFFSET), type=SIZE_TYPE)),
+            ),
+        },
     )
 
     # cartesian shift with literal integer offset
@@ -760,18 +823,14 @@ def test_gtir_cartesian_shift_left():
 
         sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
 
-        FSYMBOLS_tmp = FSYMBOLS.copy()
-        FSYMBOLS_tmp["__x_offset_stride_0"] = 1
-        sdfg(a, a_offset, b, **FSYMBOLS_tmp)
+        sdfg(a, a_offset, b, **FSYMBOLS, __x_offset_size_0=N, __x_offset_stride_0=1)
         assert np.allclose(a[OFFSET:] + DELTA, b[:-OFFSET])
 
 
 def test_gtir_cartesian_shift_right():
     DELTA = 3.0
     OFFSET = 1
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), OFFSET, "size")
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (OFFSET, "size")})
 
     # cartesian shift with literal integer offset
     stencil1_inlined = im.as_fieldop(
@@ -857,20 +916,27 @@ def test_gtir_cartesian_shift_right():
 
         sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
 
-        sdfg(a, a_offset, b, **FSYMBOLS, __x_offset_stride_0=1)
+        sdfg(a, a_offset, b, **FSYMBOLS, __x_offset_size_0=N, __x_offset_stride_0=1)
         assert np.allclose(a[:-OFFSET] + DELTA, b[OFFSET:])
 
 
 def test_gtir_connectivity_shift():
     C2E_neighbor_idx = 2
     E2V_neighbor_idx = 1
-    cv_domain = im.call("unstructured_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=Cell.value), 0, "ncells"),
-        im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
+    edge_domain = im.domain(gtx_common.GridType.UNSTRUCTURED, ranges={Edge: (0, "nedges")})
+    ce_domain = im.domain(
+        gtx_common.GridType.UNSTRUCTURED,
+        ranges={
+            Cell: (0, "ncells"),
+            Edge: (0, "nedges"),
+        },
     )
-    ce_domain = im.call("unstructured_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=Cell.value), 0, "ncells"),
-        im.call("named_range")(gtir.AxisLiteral(value=Edge.value), 0, "nedges"),
+    cv_domain = im.domain(
+        gtx_common.GridType.UNSTRUCTURED,
+        ranges={
+            Cell: (0, "ncells"),
+            Vertex: (0, "nvertices"),
+        },
     )
 
     # apply shift 2 times along different dimensions
@@ -944,16 +1010,11 @@ def test_gtir_connectivity_shift():
     )(
         "ev_field",
         "c2e_offset",
-        im.op_as_fieldop(
-            "plus",
-            im.call("unstructured_domain")(
-                im.call("named_range")(gtir.AxisLiteral(value=Edge.value), 0, "nedges"),
-            ),
-        )("e2v_offset", 0),
+        im.op_as_fieldop("plus", edge_domain)("e2v_offset", 0),
     )
 
-    CE_FTYPE = ts.FieldType(dims=[Cell, Edge], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
-    EV_FTYPE = ts.FieldType(dims=[Edge, Vertex], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+    CE_FTYPE = ts.FieldType(dims=[Cell, Edge], dtype=FLOAT_TYPE)
+    EV_FTYPE = ts.FieldType(dims=[Edge, Vertex], dtype=FLOAT_TYPE)
     CELL_OFFSET_FTYPE = ts.FieldType(dims=[Cell], dtype=SIZE_TYPE)
     EDGE_OFFSET_FTYPE = ts.FieldType(dims=[Edge], dtype=SIZE_TYPE)
 
@@ -1013,7 +1074,9 @@ def test_gtir_connectivity_shift():
             __ev_field_size_1=SIMPLE_MESH.num_vertices,
             __ev_field_stride_0=SIMPLE_MESH.num_vertices,
             __ev_field_stride_1=1,
+            __c2e_offset_size_0=SIMPLE_MESH.num_cells,
             __c2e_offset_stride_0=1,
+            __e2v_offset_size_0=SIMPLE_MESH.num_edges,
             __e2v_offset_stride_0=1,
         )
         assert np.allclose(ce, ref)
@@ -1022,12 +1085,8 @@ def test_gtir_connectivity_shift():
 def test_gtir_connectivity_shift_chain():
     E2V_neighbor_idx = 1
     V2E_neighbor_idx = 2
-    edge_domain = im.call("unstructured_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=Edge.value), 0, "nedges")
-    )
-    vertex_domain = im.call("unstructured_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices")
-    )
+    edge_domain = im.domain(gtx_common.GridType.UNSTRUCTURED, ranges={Edge: (0, "nedges")})
+    vertex_domain = im.domain(gtx_common.GridType.UNSTRUCTURED, ranges={Vertex: (0, "nvertices")})
     testee = gtir.Program(
         id="connectivity_shift_chain",
         function_definitions=[],
@@ -1082,35 +1141,35 @@ def test_gtir_connectivity_shift_chain():
 
 
 def test_gtir_neighbors_as_input():
-    # FIXME[#1582](edopao): Enable testcase when type inference is working
-    pytest.skip("Field of lists not fully supported by GTIR type inference")
     init_value = np.random.rand()
-    vertex_domain = im.call("unstructured_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
-    )
+    vertex_domain = im.domain(gtx_common.GridType.UNSTRUCTURED, ranges={Vertex: (0, "nvertices")})
     testee = gtir.Program(
         id="neighbors_as_input",
         function_definitions=[],
         params=[
             gtir.Sym(id="v2e_field", type=V2E_FTYPE),
-            gtir.Sym(id="vertex", type=EFTYPE),
+            gtir.Sym(id="edges", type=EFTYPE),
+            gtir.Sym(id="vertices", type=VFTYPE),
             gtir.Sym(id="nvertices", type=SIZE_TYPE),
         ],
         declarations=[],
         body=[
             gtir.SetAt(
-                expr=im.call(
-                    im.call("as_fieldop")(
-                        im.lambda_("it")(
-                            im.call(im.call("reduce")("plus", im.literal_from_value(init_value)))(
-                                "it"
-                            )
-                        ),
-                        vertex_domain,
+                expr=im.as_fieldop(
+                    im.lambda_("it")(
+                        im.call(im.call("reduce")("plus", im.literal_from_value(init_value)))(
+                            im.deref("it")
+                        )
+                    ),
+                    vertex_domain,
+                )(
+                    im.op_as_fieldop(im.map_("plus"), vertex_domain)(
+                        "v2e_field",
+                        im.as_fieldop_neighbors("V2E", "edges", vertex_domain),
                     )
-                )("v2e_field"),
+                ),
                 domain=vertex_domain,
-                target=gtir.SymRef(id="vertex"),
+                target=gtir.SymRef(id="vertices"),
             )
         ],
     )
@@ -1121,16 +1180,19 @@ def test_gtir_neighbors_as_input():
     assert isinstance(connectivity_V2E, gtx_common.NeighborTable)
 
     v2e_field = np.random.rand(SIMPLE_MESH.num_vertices, connectivity_V2E.max_neighbors)
+    e = np.random.rand(SIMPLE_MESH.num_edges)
     v = np.empty(SIMPLE_MESH.num_vertices, dtype=v2e_field.dtype)
 
     v_ref = [
-        functools.reduce(lambda x, y: x + y, v2e_neighbors, init_value)
-        for v2e_neighbors in v2e_field
+        functools.reduce(lambda x, y: x + y, v2e_values + e[v2e_neighbors], init_value)
+        for v2e_neighbors, v2e_values in zip(connectivity_V2E.table, v2e_field, strict=True)
     ]
 
     sdfg(
         v2e_field,
+        e,
         v,
+        connectivity_V2E=connectivity_V2E.table,
         **FSYMBOLS,
         **make_mesh_symbols(SIMPLE_MESH),
         __v2e_field_size_0=SIMPLE_MESH.num_vertices,
@@ -1144,17 +1206,14 @@ def test_gtir_neighbors_as_input():
 def test_gtir_neighbors_as_output():
     # FIXME[#1582](edopao): Enable testcase when type inference is working
     pytest.skip("Field of lists not fully supported by GTIR type inference")
-    vertex_domain = im.call("unstructured_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
+    v2e_domain = im.domain(
+        gtx_common.GridType.UNSTRUCTURED,
+        ranges={
+            Vertex: (0, "nvertices"),
+            V2EDim: (0, SIMPLE_MESH_OFFSET_PROVIDER["V2E"].max_neighbors),
+        },
     )
-    v2e_domain = im.call("unstructured_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
-        im.call("named_range")(
-            gtir.AxisLiteral(value=V2EDim.value),
-            0,
-            SIMPLE_MESH_OFFSET_PROVIDER["V2E"].max_neighbors,
-        ),
-    )
+    vertex_domain = im.domain(gtx_common.GridType.UNSTRUCTURED, ranges={Vertex: (0, "nvertices")})
     testee = gtir.Program(
         id="neighbors_as_output",
         function_definitions=[],
@@ -1197,9 +1256,7 @@ def test_gtir_neighbors_as_output():
 
 def test_gtir_reduce():
     init_value = np.random.rand()
-    vertex_domain = im.call("unstructured_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
-    )
+    vertex_domain = im.domain(gtx_common.GridType.UNSTRUCTURED, ranges={Vertex: (0, "nvertices")})
     stencil_inlined = im.call(
         im.call("as_fieldop")(
             im.lambda_("it")(
@@ -1265,9 +1322,7 @@ def test_gtir_reduce():
 
 def test_gtir_reduce_with_skip_values():
     init_value = np.random.rand()
-    vertex_domain = im.call("unstructured_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
-    )
+    vertex_domain = im.domain(gtx_common.GridType.UNSTRUCTURED, ranges={Vertex: (0, "nvertices")})
     stencil_inlined = im.call(
         im.call("as_fieldop")(
             im.lambda_("it")(
@@ -1295,7 +1350,9 @@ def test_gtir_reduce_with_skip_values():
     e = np.random.rand(SKIP_VALUE_MESH.num_edges)
     v_ref = [
         functools.reduce(
-            lambda x, y: x + y, [e[i] if i != -1 else 0.0 for i in v2e_neighbors], init_value
+            lambda x, y: x + y,
+            [e[i] if i != gtx_common._DEFAULT_SKIP_VALUE else 0.0 for i in v2e_neighbors],
+            init_value,
         )
         for v2e_neighbors in connectivity_V2E.table
     ]
@@ -1334,25 +1391,32 @@ def test_gtir_reduce_with_skip_values():
 
 
 def test_gtir_reduce_dot_product():
-    # FIXME[#1582](edopao): Enable testcase when type inference is working
-    pytest.skip("Field of lists not fully supported as a type in GTIR yet")
     init_value = np.random.rand()
-    vertex_domain = im.call("unstructured_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
-    )
-    v2e_domain = im.call("unstructured_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
-        im.call("named_range")(
-            gtir.AxisLiteral(value=V2EDim.value),
-            0,
-            SIMPLE_MESH_OFFSET_PROVIDER["V2E"].max_neighbors,
-        ),
-    )
+    vertex_domain = im.domain(gtx_common.GridType.UNSTRUCTURED, ranges={Vertex: (0, "nvertices")})
+
+    connectivity_V2E = SKIP_VALUE_MESH_OFFSET_PROVIDER["V2E"]
+    assert isinstance(connectivity_V2E, gtx_common.NeighborTable)
+
+    v2e_field = np.random.rand(SKIP_VALUE_MESH.num_vertices, connectivity_V2E.max_neighbors)
+    e = np.random.rand(SKIP_VALUE_MESH.num_edges)
+    v = np.empty(SKIP_VALUE_MESH.num_vertices, dtype=e.dtype)
+    v_ref = [
+        functools.reduce(
+            lambda x, y: x + y,
+            map(
+                lambda x: 0.0 if x[1] == gtx_common._DEFAULT_SKIP_VALUE else x[0],
+                zip((e[v2e_neighbors] * v2e_values) + 1.0, v2e_neighbors),
+            ),
+            init_value,
+        )
+        for v2e_neighbors, v2e_values in zip(connectivity_V2E.table, v2e_field)
+    ]
 
     testee = gtir.Program(
-        id="reduce_dot_product",
+        id=f"reduce_dot_product",
         function_definitions=[],
         params=[
+            gtir.Sym(id="v2e_field", type=V2E_FTYPE),
             gtir.Sym(id="edges", type=EFTYPE),
             gtir.Sym(id="vertices", type=VFTYPE),
             gtir.Sym(id="nvertices", type=SIZE_TYPE),
@@ -1370,10 +1434,13 @@ def test_gtir_reduce_dot_product():
                         vertex_domain,
                     )
                 )(
-                    im.op_as_fieldop("multiplies", vertex_domain)(
-                        im.as_fieldop_neighbors("V2E", "edges", vertex_domain),
-                        im.as_fieldop_neighbors("V2E", "edges", vertex_domain),
-                    ),
+                    im.op_as_fieldop(im.map_("plus"), vertex_domain)(
+                        im.op_as_fieldop(im.map_("multiplies"), vertex_domain)(
+                            im.as_fieldop_neighbors("V2E", "edges", vertex_domain),
+                            "v2e_field",
+                        ),
+                        im.op_as_fieldop("make_const_list", vertex_domain)(1.0),
+                    )
                 ),
                 domain=vertex_domain,
                 target=gtir.SymRef(id="vertices"),
@@ -1381,38 +1448,31 @@ def test_gtir_reduce_dot_product():
         ],
     )
 
-    connectivity_V2E = SIMPLE_MESH_OFFSET_PROVIDER["V2E"]
-    assert isinstance(connectivity_V2E, gtx_common.NeighborTable)
-
-    sdfg = dace_backend.build_sdfg_from_gtir(testee, SIMPLE_MESH_OFFSET_PROVIDER)
-
-    e = np.random.rand(SIMPLE_MESH.num_edges)
-    v = np.empty(SIMPLE_MESH.num_vertices, dtype=e.dtype)
-    v_ref = [
-        reduce(lambda x, y: x + y, e[v2e_neighbors] * e[v2e_neighbors], init_value)
-        for v2e_neighbors in connectivity_V2E.table
-    ]
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, SKIP_VALUE_MESH_OFFSET_PROVIDER)
 
     sdfg(
+        v2e_field,
         e,
         v,
         connectivity_V2E=connectivity_V2E.table,
-        **FSYMBOLS,
-        **make_mesh_symbols(SIMPLE_MESH),
+        **make_mesh_symbols(SKIP_VALUE_MESH),
+        __v2e_field_size_0=SKIP_VALUE_MESH.num_vertices,
+        __v2e_field_size_1=connectivity_V2E.max_neighbors,
+        __v2e_field_stride_0=connectivity_V2E.max_neighbors,
+        __v2e_field_stride_1=1,
     )
     assert np.allclose(v, v_ref)
 
 
 def test_gtir_reduce_with_cond_neighbors():
     init_value = np.random.rand()
-    vertex_domain = im.call("unstructured_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=Vertex.value), 0, "nvertices"),
-    )
+    vertex_domain = im.domain(gtx_common.GridType.UNSTRUCTURED, ranges={Vertex: (0, "nvertices")})
     testee = gtir.Program(
         id="reduce_with_cond_neighbors",
         function_definitions=[],
         params=[
             gtir.Sym(id="pred", type=ts.ScalarType(ts.ScalarKind.BOOL)),
+            gtir.Sym(id="v2e_field", type=V2E_FTYPE),
             gtir.Sym(id="edges", type=EFTYPE),
             gtir.Sym(id="vertices", type=VFTYPE),
             gtir.Sym(id="nvertices", type=SIZE_TYPE),
@@ -1429,8 +1489,8 @@ def test_gtir_reduce_with_cond_neighbors():
                     vertex_domain,
                 )(
                     im.if_(
-                        gtir.SymRef(id="pred"),
-                        im.as_fieldop_neighbors("V2E_FULL", "edges", vertex_domain),
+                        "pred",
+                        "v2e_field",
                         im.as_fieldop_neighbors("V2E", "edges", vertex_domain),
                     )
                 ),
@@ -1440,60 +1500,52 @@ def test_gtir_reduce_with_cond_neighbors():
         ],
     )
 
-    connectivity_V2E_simple = SIMPLE_MESH_OFFSET_PROVIDER["V2E"]
-    assert isinstance(connectivity_V2E_simple, gtx_common.NeighborTable)
-    connectivity_V2E_skip_values = copy.deepcopy(SKIP_VALUE_MESH_OFFSET_PROVIDER["V2E"])
-    assert isinstance(connectivity_V2E_skip_values, gtx_common.NeighborTable)
-    assert SKIP_VALUE_MESH.num_vertices <= SIMPLE_MESH.num_vertices
-    connectivity_V2E_skip_values.table = np.concatenate(
-        (
-            connectivity_V2E_skip_values.table[:, 0 : connectivity_V2E_simple.max_neighbors],
-            connectivity_V2E_simple.table[SKIP_VALUE_MESH.num_vertices :, :],
-        ),
-        axis=0,
-    )
-    connectivity_V2E_skip_values.max_neighbors = connectivity_V2E_simple.max_neighbors
+    connectivity_V2E = SKIP_VALUE_MESH_OFFSET_PROVIDER["V2E"]
+    assert isinstance(connectivity_V2E, gtx_common.NeighborTable)
 
-    e = np.random.rand(SIMPLE_MESH.num_edges)
+    v2e_field = np.random.rand(SKIP_VALUE_MESH.num_vertices, connectivity_V2E.max_neighbors)
+    e = np.random.rand(SKIP_VALUE_MESH.num_edges)
 
-    for use_full in [False, True]:
-        sdfg = dace_backend.build_sdfg_from_gtir(
-            testee,
-            SIMPLE_MESH_OFFSET_PROVIDER | {"V2E_FULL": connectivity_V2E_skip_values},
-        )
+    for use_sparse in [False, True]:
+        sdfg = dace_backend.build_sdfg_from_gtir(testee, SKIP_VALUE_MESH_OFFSET_PROVIDER)
 
-        v = np.empty(SIMPLE_MESH.num_vertices, dtype=e.dtype)
+        v = np.empty(SKIP_VALUE_MESH.num_vertices, dtype=e.dtype)
         v_ref = [
             functools.reduce(
-                lambda x, y: x + y, [e[i] if i != -1 else 0.0 for i in v2e_neighbors], init_value
+                lambda x, y: x + y,
+                [
+                    v if i != gtx_common._DEFAULT_SKIP_VALUE else 0.0
+                    for i, v in zip(v2e_neighbors, v2e_values, strict=True)
+                ],
+                init_value,
             )
-            for v2e_neighbors in (
-                connectivity_V2E_simple.table if use_full else connectivity_V2E_skip_values.table
+            if use_sparse
+            else functools.reduce(
+                lambda x, y: x + y,
+                [e[i] if i != gtx_common._DEFAULT_SKIP_VALUE else 0.0 for i in v2e_neighbors],
+                init_value,
             )
+            for v2e_neighbors, v2e_values in zip(connectivity_V2E.table, v2e_field, strict=True)
         ]
         sdfg(
-            np.bool_(use_full),
+            np.bool_(use_sparse),
+            v2e_field,
             e,
             v,
-            connectivity_V2E=connectivity_V2E_skip_values.table,
-            connectivity_V2E_FULL=connectivity_V2E_simple.table,
+            connectivity_V2E=connectivity_V2E.table,
             **FSYMBOLS,
-            **make_mesh_symbols(SIMPLE_MESH),
-            __connectivity_V2E_FULL_size_0=SIMPLE_MESH.num_edges,
-            __connectivity_V2E_FULL_size_1=connectivity_V2E_skip_values.max_neighbors,
-            __connectivity_V2E_FULL_stride_0=connectivity_V2E_skip_values.max_neighbors,
-            __connectivity_V2E_FULL_stride_1=1,
+            **make_mesh_symbols(SKIP_VALUE_MESH),
+            __v2e_field_size_0=SKIP_VALUE_MESH.num_vertices,
+            __v2e_field_size_1=connectivity_V2E.max_neighbors,
+            __v2e_field_stride_0=connectivity_V2E.max_neighbors,
+            __v2e_field_stride_1=1,
         )
         assert np.allclose(v, v_ref)
 
 
 def test_gtir_let_lambda():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
-    subdomain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 1, im.minus("size", 1))
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
+    subdomain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (1, im.minus("size", 1))})
     testee = gtir.Program(
         id="let_lambda",
         function_definitions=[],
@@ -1505,20 +1557,20 @@ def test_gtir_let_lambda():
         declarations=[],
         body=[
             gtir.SetAt(
-                # `x1` is a let-lambda expression representing `x * 3`
-                # `x2` is a let-lambda expression representing `x * 4`
-                #  - note that the let-symbol `x2` is used twice, in a nested let-expression, to test aliasing of the symbol
-                # `x3` is a let-lambda expression simply accessing `x` field symref
-                expr=im.let("x1", im.op_as_fieldop("multiplies", subdomain)(3.0, "x"))(
+                # `xᐞ1` is a let-lambda expression representing `x * 3`
+                # `xᐞ2` is a let-lambda expression representing `x * 4`
+                #  - note that the let-symbol `xᐞ2` is used twice, in a nested let-expression, to test aliasing of the symbol
+                # `xᐞ3` is a let-lambda expression simply accessing `x` field symref
+                expr=im.let("xᐞ1", im.op_as_fieldop("multiplies", subdomain)(3.0, "x"))(
                     im.let(
-                        "x2",
-                        im.let("x2", im.op_as_fieldop("multiplies", domain)(2.0, "x"))(
-                            im.op_as_fieldop("plus", subdomain)("x2", "x2")
+                        "xᐞ2",
+                        im.let("xᐞ2", im.op_as_fieldop("multiplies", domain)(2.0, "x"))(
+                            im.op_as_fieldop("plus", subdomain)("xᐞ2", "xᐞ2")
                         ),
                     )(
-                        im.let("x3", "x")(
+                        im.let("xᐞ3", "x")(
                             im.op_as_fieldop("plus", subdomain)(
-                                "x1", im.op_as_fieldop("plus", subdomain)("x2", "x3")
+                                "xᐞ1", im.op_as_fieldop("plus", subdomain)("xᐞ2", "xᐞ3")
                             )
                         )
                     )
@@ -1539,12 +1591,45 @@ def test_gtir_let_lambda():
     assert np.allclose(b, ref)
 
 
+def test_gtir_let_lambda_scalar_expression():
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
+    testee = gtir.Program(
+        id="let_lambda_scalar_expression",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="a", type=IFTYPE.dtype),
+            gtir.Sym(id="b", type=IFTYPE.dtype),
+            gtir.Sym(id="x", type=IFTYPE),
+            gtir.Sym(id="y", type=IFTYPE),
+            gtir.Sym(id="size", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.let("tmp", im.multiplies_("a", "b"))(
+                    im.op_as_fieldop("multiplies", domain)("x", im.multiplies_("tmp", "tmp"))
+                ),
+                domain=domain,
+                target=gtir.SymRef(id="y"),
+            )
+        ],
+    )
+
+    a = np.random.rand()
+    b = np.random.rand()
+    c = np.random.rand(N)
+    d = np.empty_like(c)
+
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, {})
+
+    sdfg(a, b, c, d, **FSYMBOLS)
+    assert np.allclose(d, (a * a * b * b * c))
+
+
 def test_gtir_let_lambda_with_connectivity():
     C2E_neighbor_idx = 1
     C2V_neighbor_idx = 2
-    cell_domain = im.call("unstructured_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=Cell.value), 0, "ncells"),
-    )
+    cell_domain = im.domain(gtx_common.GridType.UNSTRUCTURED, ranges={Cell: (0, "ncells")})
 
     connectivity_C2E = SIMPLE_MESH_OFFSET_PROVIDER["C2E"]
     assert isinstance(connectivity_C2E, gtx_common.NeighborTable)
@@ -1607,9 +1692,7 @@ def test_gtir_let_lambda_with_connectivity():
 
 
 def test_gtir_let_lambda_with_cond():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
         id="let_lambda_with_cond",
         function_definitions=[],
@@ -1624,11 +1707,7 @@ def test_gtir_let_lambda_with_cond():
             gtir.SetAt(
                 expr=im.let("x1", "x")(
                     im.let("x2", im.op_as_fieldop("multiplies", domain)(2.0, "x"))(
-                        im.if_(
-                            gtir.SymRef(id="pred"),
-                            im.as_fieldop(im.lambda_("a")(im.deref("a")), domain)("x1"),
-                            im.as_fieldop(im.lambda_("a")(im.deref("a")), domain)("x2"),
-                        )
+                        im.if_("pred", "x1", "x2")
                     )
                 ),
                 domain=domain,
@@ -1646,12 +1725,10 @@ def test_gtir_let_lambda_with_cond():
         assert np.allclose(b, a if s else a * 2)
 
 
-def test_gtir_let_lambda_with_tuple():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
+def test_gtir_let_lambda_with_tuple1():
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
-        id="let_lambda_with_tuple",
+        id="let_lambda_with_tuple1",
         function_definitions=[],
         params=[
             gtir.Sym(id="x", type=IFTYPE),
@@ -1680,22 +1757,55 @@ def test_gtir_let_lambda_with_tuple():
     sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
 
     z_fields = (np.empty_like(a), np.empty_like(a))
-    z_symbols = dict(
-        __z_0_size_0=FSYMBOLS["__x_size_0"],
-        __z_0_stride_0=FSYMBOLS["__x_stride_0"],
-        __z_1_size_0=FSYMBOLS["__x_size_0"],
-        __z_1_stride_0=FSYMBOLS["__x_stride_0"],
-    )
 
-    sdfg(a, b, *z_fields, **FSYMBOLS, **z_symbols)
+    sdfg(a, b, *z_fields, **FSYMBOLS)
     assert np.allclose(z_fields[0], a)
     assert np.allclose(z_fields[1], b)
 
 
-def test_gtir_if_scalars():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
+def test_gtir_let_lambda_with_tuple2():
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
+    val = np.random.rand()
+    testee = gtir.Program(
+        id="let_lambda_with_tuple2",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="x", type=IFTYPE),
+            gtir.Sym(id="y", type=IFTYPE),
+            gtir.Sym(id="z", type=ts.TupleType(types=[IFTYPE, IFTYPE, IFTYPE])),
+            gtir.Sym(id="size", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.let("s", im.as_fieldop("deref", domain)(val))(
+                    im.let("t", im.make_tuple("x", "y"))(
+                        im.let("p", im.op_as_fieldop("plus", domain)("x", "y"))(
+                            im.make_tuple("p", "s", im.tuple_get(1, "t"))
+                        )
+                    )
+                ),
+                domain=domain,
+                target=gtir.SymRef(id="z"),
+            )
+        ],
     )
+
+    a = np.random.rand(N)
+    b = np.random.rand(N)
+
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
+
+    z_fields = (np.empty_like(a), np.empty_like(a), np.empty_like(a))
+
+    sdfg(a, b, *z_fields, **FSYMBOLS)
+    assert np.allclose(z_fields[0], a + b)
+    assert np.allclose(z_fields[1], val)
+    assert np.allclose(z_fields[2], b)
+
+
+def test_gtir_if_scalars():
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
         id="if_scalars",
         function_definitions=[],
@@ -1712,9 +1822,9 @@ def test_gtir_if_scalars():
         body=[
             gtir.SetAt(
                 expr=im.let("f", im.tuple_get(0, "x"))(
-                    im.let("y", im.tuple_get(1, "x"))(
-                        im.let("y_0", im.tuple_get(0, "y"))(
-                            im.let("y_1", im.tuple_get(1, "y"))(
+                    im.let("g", im.tuple_get(1, "x"))(
+                        im.let("y_0", im.tuple_get(0, "g"))(
+                            im.let("y_1", im.tuple_get(1, "g"))(
                                 im.op_as_fieldop("plus", domain)(
                                     "f",
                                     im.if_(
@@ -1739,20 +1849,14 @@ def test_gtir_if_scalars():
     d2 = np.random.randint(0, 1000)
 
     sdfg = dace_backend.build_sdfg_from_gtir(testee, {})
-    x_symbols = dict(
-        __x_0_size_0=FSYMBOLS["__x_size_0"],
-        __x_0_stride_0=FSYMBOLS["__x_stride_0"],
-    )
 
     for s in [False, True]:
-        sdfg(x_0=a, x_1_0=d1, x_1_1=d2, z=b, pred=np.bool_(s), **FSYMBOLS, **x_symbols)
+        sdfg(x_0=a, x_1_0=d1, x_1_1=d2, z=b, pred=np.bool_(s), **FSYMBOLS)
         assert np.allclose(b, (a + d1 if s else a + d2))
 
 
 def test_gtir_if_values():
-    domain = im.call("cartesian_domain")(
-        im.call("named_range")(gtir.AxisLiteral(value=IDim.value), 0, "size")
-    )
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
         id="if_values",
         function_definitions=[],

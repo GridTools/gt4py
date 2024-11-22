@@ -17,7 +17,7 @@ import factory
 from dace.codegen.compiled_sdfg import _array_interface_ptr as get_array_interface_ptr
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, config
+from gt4py.next import common, config, utils as gtx_utils
 from gt4py.next.otf import arguments, languages, stages, step_types, workflow
 from gt4py.next.otf.compilation import cache
 from gt4py.next.program_processors.runners.dace_common import dace_backend, utility as dace_utils
@@ -40,7 +40,12 @@ class CompiledDaceProgram(stages.CompiledProgram):
         ]
 
     def __call__(self, *args: Any, **kwargs: Any) -> None:
-        self.sdfg_program(*args, **kwargs)
+        result = self.sdfg_program(*args, **kwargs)
+        assert result is None
+
+    def fast_call(self) -> None:
+        result = self.sdfg_program.fast_call(*self.sdfg_program._lastargs)
+        assert result is None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -104,14 +109,14 @@ def convert_args(
         *args: Any,
         offset_provider: common.OffsetProvider,
         out: Any = None,
-    ) -> Any:
+    ) -> None:
         if out is not None:
             args = (*args, out)
         if len(sdfg.arg_names) > len(args):
             args = (*args, *arguments.iter_size_args(args))
 
         if sdfg_program._lastargs:
-            kwargs = dict(zip(sdfg.arg_names, args, strict=True))
+            kwargs = dict(zip(sdfg.arg_names, gtx_utils.flatten_nested_tuple(args), strict=True))
             kwargs.update(dace_backend.get_sdfg_conn_args(sdfg, offset_provider, on_gpu))
 
             use_fast_call = True
@@ -141,7 +146,7 @@ def convert_args(
                         ), f"argument '{arg_name}' not found."
 
             if use_fast_call:
-                return sdfg_program.fast_call(*sdfg_program._lastargs)
+                return inp.fast_call()
 
         sdfg_args = dace_backend.get_sdfg_args(
             sdfg,

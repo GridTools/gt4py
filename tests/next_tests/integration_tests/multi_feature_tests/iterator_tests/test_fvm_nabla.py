@@ -30,7 +30,6 @@ from gt4py.next.iterator.builtins import (
     unstructured_domain,
 )
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
-from gt4py.next.iterator.transforms.pass_manager import LiftMode
 
 from next_tests.integration_tests.multi_feature_tests.fvm_nabla_setup import (
     assert_close,

@@ -25,32 +25,7 @@ import next_tests
 ProgramProcessor: TypeAlias = backend.Backend | program_formatter.ProgramFormatter
 
 
-@pytest.fixture(
-    params=[
-        (None, True),
-        (next_tests.definitions.ProgramBackendId.ROUNDTRIP, True),
-        (next_tests.definitions.ProgramBackendId.ROUNDTRIP_WITH_TEMPORARIES, True),
-        (next_tests.definitions.ProgramBackendId.DOUBLE_ROUNDTRIP, True),
-        (next_tests.definitions.ProgramBackendId.GTFN_CPU, True),
-        (next_tests.definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE, True),
-        (next_tests.definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES, True),
-        # pytest.param((definitions.ProgramBackendId.GTFN_GPU, True), marks=pytest.mark.requires_gpu), # TODO(havogt): update tests to use proper allocation
-        (next_tests.definitions.ProgramFormatterId.LISP_FORMATTER, False),
-        (next_tests.definitions.ProgramFormatterId.ITIR_PRETTY_PRINTER, False),
-        (next_tests.definitions.ProgramFormatterId.GTFN_CPP_FORMATTER, False),
-        pytest.param(
-            (next_tests.definitions.OptionalProgramBackendId.DACE_CPU, True),
-            marks=pytest.mark.requires_dace,
-        ),
-        # TODO(havogt): update tests to use proper allocation
-        # pytest.param(
-        #     (next_tests.definitions.OptionalProgramBackendId.DACE_GPU, True),
-        #     marks=(pytest.mark.requires_dace, pytest.mark.requires_gpu),
-        # ),
-    ],
-    ids=lambda p: p[0].short_id() if p[0] is not None else "None",
-)
-def program_processor(request) -> tuple[ProgramProcessor, bool]:
+def _program_processor(request) -> tuple[ProgramProcessor, bool]:
     """
     Fixture creating program processors on-demand for tests.
 
@@ -70,6 +45,43 @@ def program_processor(request) -> tuple[ProgramProcessor, bool]:
             skip_mark(msg.format(marker=marker, backend=processor_id))
 
     return processor, is_backend
+
+
+program_processor = pytest.fixture(
+    _program_processor,
+    params=[
+        (None, True),
+        (next_tests.definitions.ProgramBackendId.ROUNDTRIP, True),
+        (next_tests.definitions.ProgramBackendId.ROUNDTRIP_WITH_TEMPORARIES, True),
+        (next_tests.definitions.ProgramBackendId.DOUBLE_ROUNDTRIP, True),
+        (next_tests.definitions.ProgramBackendId.GTFN_CPU, True),
+        (next_tests.definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE, True),
+        # pytest.param((definitions.ProgramBackendId.GTFN_GPU, True), marks=pytest.mark.requires_gpu), # TODO(havogt): update tests to use proper allocation
+        (next_tests.definitions.ProgramFormatterId.LISP_FORMATTER, False),
+        (next_tests.definitions.ProgramFormatterId.ITIR_PRETTY_PRINTER, False),
+        (next_tests.definitions.ProgramFormatterId.GTFN_CPP_FORMATTER, False),
+        pytest.param(
+            (next_tests.definitions.OptionalProgramBackendId.DACE_CPU, True),
+            marks=pytest.mark.requires_dace,
+        ),
+        # TODO(havogt): update tests to use proper allocation
+        # pytest.param(
+        #     (next_tests.definitions.OptionalProgramBackendId.DACE_GPU, True),
+        #     marks=(pytest.mark.requires_dace, pytest.mark.requires_gpu),
+        # ),
+    ],
+    ids=lambda p: p[0].short_id() if p[0] is not None else "None",
+)
+
+program_processor_no_transforms = pytest.fixture(
+    _program_processor,
+    params=[
+        (None, True),
+        (next_tests.definitions.ProgramBackendId.GTFN_CPU_NO_TRANSFORMS, True),
+        (next_tests.definitions.ProgramBackendId.ROUNDTRIP_NO_TRANSFORMS, True),
+    ],
+    ids=lambda p: p[0].short_id() if p[0] is not None else "None",
+)
 
 
 def run_processor(

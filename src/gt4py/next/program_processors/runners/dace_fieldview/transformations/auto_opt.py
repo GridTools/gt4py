@@ -257,9 +257,12 @@ def gt_auto_optimize(
         sdfg.apply_transformations_repeated(
             [
                 dace_dataflow.TrivialMapElimination,
-                # TODO(phimuell): Investigate if these two are appropriate.
-                dace_dataflow.MapReduceFusion,
-                dace_dataflow.MapWCRFusion,
+                # TODO(phimuell): The transformation are interesting, but they have
+                #  a bug as they assume that they are not working inside a map scope.
+                #  Before we use them we have to fix them.
+                #  https://chat.spcl.inf.ethz.ch/spcl/pl/8mtgtqjb378hfy7h9a96sy3nhc
+                # dace_dataflow.MapReduceFusion,
+                # dace_dataflow.MapWCRFusion,
             ],
             validate=validate,
             validate_all=validate_all,

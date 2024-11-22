@@ -78,11 +78,6 @@ def naive_lap(inp):
 def test_anton_toy(stencil, program_processor):
     program_processor, validate = program_processor
 
-    if program_processor in [
-        gtfn.run_gtfn_with_temporaries.executor,
-    ]:
-        pytest.xfail("TODO: issue with temporaries that crashes the application")
-
     if stencil is lap:
         pytest.xfail(
             "Type inference does not support calling lambdas with offset arguments of changing type."

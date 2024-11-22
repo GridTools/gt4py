@@ -37,10 +37,14 @@ class Node(eve.Node):
         return pformat(self)
 
     def __hash__(self) -> int:
-        return hash(type(self)) ^ hash(
-            tuple(
-                hash(tuple(v)) if isinstance(v, list) else hash(v)
-                for v in self.iter_children_values()
+        return hash(
+            (
+                type(self),
+                *(
+                    tuple(v) if isinstance(v, list) else v
+                    for (k, v) in self.iter_children_items()
+                    if k not in ["location", "type"]
+                ),
             )
         )
 
@@ -97,12 +101,17 @@ class StencilClosure(Node):
     domain: FunCall
     stencil: Expr
     output: Union[SymRef, FunCall]
-    inputs: List[SymRef]
+    inputs: List[Union[SymRef, FunCall]]
 
     @datamodels.validator("output")
     def _output_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value):
         if isinstance(value, FunCall) and value.fun != SymRef(id="make_tuple"):
             raise ValueError("Only FunCall to 'make_tuple' allowed.")
+
+    @datamodels.validator("inputs")
+    def _input_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value):
+        if any(isinstance(v, FunCall) and v.fun != SymRef(id="index") for v in value):
+            raise ValueError("Only FunCall to 'index' allowed.")
 
 
 UNARY_MATH_NUMBER_BUILTINS = {"abs"}
@@ -179,6 +188,7 @@ BUILTINS = {
     "can_deref",
     "scan",
     "if_",
+    "index",  # `index(dim)` creates a dim-field that has the current index at each point
     *ARITHMETIC_BUILTINS,
     *TYPEBUILTINS,
 }
@@ -198,7 +208,9 @@ class FencilDefinition(Node, ValidatedSymbolTableTrait):
     closures: List[StencilClosure]
     implicit_domain: bool = False
 
-    _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in BUILTINS]
+    _NODE_SYMBOLS_: ClassVar[List[Sym]] = [
+        Sym(id=name) for name in sorted(BUILTINS)
+    ]  # sorted for serialization stability
 
 
 class Stmt(Node): ...
@@ -230,7 +242,9 @@ class Program(Node, ValidatedSymbolTableTrait):
     body: List[Stmt]
     implicit_domain: bool = False
 
-    _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in GTIR_BUILTINS]
+    _NODE_SYMBOLS_: ClassVar[List[Sym]] = [
+        Sym(id=name) for name in sorted(GTIR_BUILTINS)
+    ]  # sorted for serialization stability
 
 
 # TODO(fthaler): just use hashable types in nodes (tuples instead of lists)

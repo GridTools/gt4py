@@ -39,7 +39,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
 
         def __init__(self, stencil: oir.Stencil):
             self.sdfg = dace.SDFG(stencil.name)
-            self.last_state = self.sdfg.add_state(is_start_state=True)
+            self.last_state = self.sdfg.add_state(is_start_block=True)
             self.decls = {decl.name: decl for decl in stencil.params + stencil.declarations}
             self.block_extents = compute_horizontal_block_extents(stencil)
 

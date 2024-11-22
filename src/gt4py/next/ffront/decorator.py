@@ -34,6 +34,8 @@ from gt4py.next.common import Connectivity, Dimension, GridType
 from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
     field_operator_ast as foast,
+    foast_to_gtir,
+    foast_to_itir,
     past_process_args,
     signature,
     stages as ffront_stages,
@@ -560,10 +562,15 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             self, definition_stage=dataclasses.replace(self.definition_stage, grid_type=grid_type)
         )
 
+    # TODO(tehrengruber): We can not use transforms from `self.backend` since this can be
+    #  a different backend than the one of the program that calls this field operator. Just use
+    #  the hard-coded lowering until this is cleaned up.
     def __gt_itir__(self) -> itir.FunctionDefinition:
-        return self._frontend_transforms.foast_to_itir(
-            toolchain.CompilableProgram(self.foast_stage, arguments.CompileTimeArgs.empty())
-        )
+        return foast_to_itir.foast_to_itir(self.foast_stage)
+
+    # FIXME[#1582](tehrengruber): remove after refactoring to GTIR
+    def __gt_gtir__(self) -> itir.FunctionDefinition:
+        return foast_to_gtir.foast_to_gtir(self.foast_stage)
 
     def __gt_closure_vars__(self) -> dict[str, Any]:
         return self.foast_stage.closure_vars

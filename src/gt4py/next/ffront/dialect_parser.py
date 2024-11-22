@@ -106,11 +106,11 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
 
         # `FixMissingLocations` ensures that all nodes have the location attributes
         assert hasattr(node, "lineno")
-        line = node.lineno + line_offset if node.lineno is not None else None
+        line = node.lineno + line_offset
         assert hasattr(node, "end_lineno")
         end_line = node.end_lineno + line_offset if node.end_lineno is not None else None
         assert hasattr(node, "col_offset")
-        column = 1 + node.col_offset + col_offset if node.col_offset is not None else None
+        column = 1 + node.col_offset + col_offset
         assert hasattr(node, "end_col_offset")
         end_column = (
             1 + node.end_col_offset + col_offset if node.end_col_offset is not None else None

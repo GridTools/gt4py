@@ -46,10 +46,9 @@ no_backend = NoBackend(
 @pytest.fixture(
     params=[
         next_tests.definitions.ProgramBackendId.ROUNDTRIP,
-        # next_tests.definitions.ProgramBackendId.GTIR_EMBEDDED, # FIXME[#1582](havogt): enable once all ingredients for GTIR are available
+        next_tests.definitions.ProgramBackendId.GTIR_EMBEDDED,
         next_tests.definitions.ProgramBackendId.GTFN_CPU,
         next_tests.definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE,
-        next_tests.definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES,
         pytest.param(
             next_tests.definitions.ProgramBackendId.GTFN_GPU, marks=pytest.mark.requires_gpu
         ),
@@ -63,11 +62,15 @@ no_backend = NoBackend(
             marks=pytest.mark.requires_dace,
         ),
         pytest.param(
+            next_tests.definitions.OptionalProgramBackendId.DACE_GPU,
+            marks=(pytest.mark.requires_dace, pytest.mark.requires_gpu),
+        ),
+        pytest.param(
             next_tests.definitions.OptionalProgramBackendId.GTIR_DACE_CPU,
             marks=pytest.mark.requires_dace,
         ),
         pytest.param(
-            next_tests.definitions.OptionalProgramBackendId.DACE_GPU,
+            next_tests.definitions.OptionalProgramBackendId.GTIR_DACE_GPU,
             marks=(pytest.mark.requires_dace, pytest.mark.requires_gpu),
         ),
     ],

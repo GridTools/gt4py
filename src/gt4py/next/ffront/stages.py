@@ -100,6 +100,7 @@ for t in (str, int):
 
 @add_content_to_fingerprint.register(FieldOperatorDefinition)
 @add_content_to_fingerprint.register(FoastOperatorDefinition)
+@add_content_to_fingerprint.register(ProgramDefinition)
 @add_content_to_fingerprint.register(PastProgramDefinition)
 @add_content_to_fingerprint.register(toolchain.CompilableProgram)
 @add_content_to_fingerprint.register(arguments.CompileTimeArgs)
@@ -121,10 +122,14 @@ def add_func_to_fingerprint(obj: types.FunctionType, hasher: xtyping.HashlibAlgo
     for item in sourcedef:
         add_content_to_fingerprint(item, hasher)
 
+    closure_vars = source_utils.get_closure_vars_from_function(obj)
+    for item in sorted(closure_vars.items(), key=lambda x: x[0]):
+        add_content_to_fingerprint(item, hasher)
+
 
 @add_content_to_fingerprint.register
 def add_dict_to_fingerprint(obj: dict, hasher: xtyping.HashlibAlgorithm) -> None:
-    for key, value in obj.items():
+    for key, value in sorted(obj.items()):
         add_content_to_fingerprint(key, hasher)
         add_content_to_fingerprint(value, hasher)
 
@@ -147,5 +152,4 @@ def add_foast_located_node_to_fingerprint(
     obj: foast.LocatedNode, hasher: xtyping.HashlibAlgorithm
 ) -> None:
     add_content_to_fingerprint(obj.location, hasher)
-    add_content_to_fingerprint(str(obj), hasher)
     add_content_to_fingerprint(str(obj), hasher)

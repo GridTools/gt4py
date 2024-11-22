@@ -8,8 +8,7 @@
 
 import factory
 
-from gt4py.next import allocators as next_allocators, backend
-from gt4py.next.ffront import foast_to_gtir, past_to_itir
+from gt4py.next import backend
 from gt4py.next.program_processors.runners.dace_fieldview import workflow as dace_fieldview_workflow
 from gt4py.next.program_processors.runners.dace_iterator import workflow as dace_iterator_workflow
 from gt4py.next.program_processors.runners.gtfn import GTFNBackendFactory
@@ -25,15 +24,15 @@ class DaCeIteratorBackendFactory(GTFNBackendFactory):
             ),
         )
         auto_optimize = factory.Trait(
-            otf_workflow__translation__auto_optimize=True, name_temps="_opt"
+            otf_workflow__translation__auto_optimize=True, name_postfix="_opt"
         )
         use_field_canonical_representation: bool = False
 
     name = factory.LazyAttribute(
-        lambda o: f"run_dace_{o.name_device}{o.name_temps}{o.name_cached}{o.name_postfix}"
+        lambda o: f"run_dace_{o.name_device}{o.name_temps}{o.name_cached}{o.name_postfix}.itir"
     )
 
-    transforms = backend.DEFAULT_TRANSFORMS
+    transforms = backend.LEGACY_TRANSFORMS
 
 
 run_dace_cpu = DaCeIteratorBackendFactory(cached=True, auto_optimize=True)
@@ -45,12 +44,22 @@ run_dace_gpu_noopt = DaCeIteratorBackendFactory(gpu=True, cached=True, auto_opti
 itir_cpu = run_dace_cpu
 itir_gpu = run_dace_gpu
 
-gtir_cpu = backend.Backend(
-    name="dace.gtir.cpu",
-    executor=dace_fieldview_workflow.DaCeWorkflowFactory(),
-    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
-    transforms=backend.Transforms(
-        past_to_itir=past_to_itir.past_to_itir_factory(to_gtir=True),
-        foast_to_itir=foast_to_gtir.adapted_foast_to_gtir_factory(cached=True),
-    ),
-)
+
+class DaCeFieldviewBackendFactory(GTFNBackendFactory):
+    class Params:
+        otf_workflow = factory.SubFactory(
+            dace_fieldview_workflow.DaCeWorkflowFactory,
+            device_type=factory.SelfAttribute("..device_type"),
+            auto_optimize=factory.SelfAttribute("..auto_optimize"),
+        )
+        auto_optimize = factory.Trait(name_postfix="_opt")
+
+    name = factory.LazyAttribute(
+        lambda o: f"run_dace_{o.name_device}{o.name_temps}{o.name_cached}{o.name_postfix}.gtir"
+    )
+
+    transforms = backend.DEFAULT_TRANSFORMS
+
+
+gtir_cpu = DaCeFieldviewBackendFactory(cached=True, auto_optimize=False)
+gtir_gpu = DaCeFieldviewBackendFactory(gpu=True, cached=True, auto_optimize=False)

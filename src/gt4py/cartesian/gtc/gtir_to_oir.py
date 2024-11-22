@@ -7,11 +7,11 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from dataclasses import dataclass, field
-from typing import Any, List, Optional, Set, Union
+from typing import Any, List, Set, Union
 
 from gt4py import eve
-from gt4py.cartesian.gtc import common, gtir, oir, utils
-from gt4py.cartesian.gtc.common import CartesianOffset, DataType, LogicalOperator, UnaryOperator
+from gt4py.cartesian.gtc import gtir, oir, utils
+from gt4py.cartesian.gtc.common import CartesianOffset, DataType, UnaryOperator
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_fields_extents
 
 
@@ -118,15 +118,8 @@ class GTIRToOIR(eve.NodeTranslator):
         )
 
     # --- Statements ---
-    def visit_ParAssignStmt(
-        self, node: gtir.ParAssignStmt, *, mask: Optional[oir.Expr] = None, **kwargs: Any
-    ) -> Union[oir.AssignStmt, oir.MaskStmt]:
-        statement = oir.AssignStmt(left=self.visit(node.left), right=self.visit(node.right))
-        if mask is None:
-            return statement
-
-        # Wrap inside MaskStmt
-        return oir.MaskStmt(body=[statement], mask=mask, loc=node.loc)
+    def visit_ParAssignStmt(self, node: gtir.ParAssignStmt, **kwargs: Any) -> oir.AssignStmt:
+        return oir.AssignStmt(left=self.visit(node.left), right=self.visit(node.right))
 
     def visit_HorizontalRestriction(
         self, node: gtir.HorizontalRestriction, **kwargs: Any
@@ -138,24 +131,19 @@ class GTIRToOIR(eve.NodeTranslator):
 
         return oir.HorizontalRestriction(mask=node.mask, body=body)
 
-    def visit_While(
-        self, node: gtir.While, *, mask: Optional[oir.Expr] = None, **kwargs: Any
-    ) -> oir.While:
+    def visit_While(self, node: gtir.While, **kwargs: Any) -> oir.While:
         body: List[oir.Stmt] = []
         for statement in node.body:
             oir_statement = self.visit(statement, **kwargs)
             body.extend(utils.flatten_list(utils.listify(oir_statement)))
 
         condition: oir.Expr = self.visit(node.cond)
-        if mask:
-            condition = oir.BinaryOp(op=common.LogicalOperator.AND, left=mask, right=condition)
         return oir.While(cond=condition, body=body, loc=node.loc)
 
     def visit_FieldIfStmt(
         self,
         node: gtir.FieldIfStmt,
         *,
-        mask: Optional[oir.Expr] = None,
         ctx: Context,
         **kwargs: Any,
     ) -> List[Union[oir.AssignStmt, oir.MaskStmt]]:
@@ -182,26 +170,17 @@ class GTIRToOIR(eve.NodeTranslator):
             loc=node.loc,
         )
 
-        combined_mask: oir.Expr = condition
-        if mask:
-            combined_mask = oir.BinaryOp(
-                op=LogicalOperator.AND, left=mask, right=combined_mask, loc=node.loc
-            )
         body = utils.flatten_list(
             [self.visit(statement, ctx=ctx, **kwargs) for statement in node.true_branch.body]
         )
-        statements.append(oir.MaskStmt(body=body, mask=combined_mask, loc=node.loc))
+        statements.append(oir.MaskStmt(body=body, mask=condition, loc=node.loc))
 
         if node.false_branch:
-            combined_mask = oir.UnaryOp(op=UnaryOperator.NOT, expr=condition)
-            if mask:
-                combined_mask = oir.BinaryOp(
-                    op=LogicalOperator.AND, left=mask, right=combined_mask, loc=node.loc
-                )
+            negated_condition = oir.UnaryOp(op=UnaryOperator.NOT, expr=condition, loc=node.loc)
             body = utils.flatten_list(
                 [self.visit(statement, ctx=ctx, **kwargs) for statement in node.false_branch.body]
             )
-            statements.append(oir.MaskStmt(body=body, mask=combined_mask, loc=node.loc))
+            statements.append(oir.MaskStmt(body=body, mask=negated_condition, loc=node.loc))
 
         return statements
 
@@ -211,31 +190,21 @@ class GTIRToOIR(eve.NodeTranslator):
         self,
         node: gtir.ScalarIfStmt,
         *,
-        mask: Optional[oir.Expr] = None,
         ctx: Context,
         **kwargs: Any,
     ) -> List[oir.MaskStmt]:
         condition = self.visit(node.cond)
-        combined_mask = condition
-        if mask:
-            combined_mask = oir.BinaryOp(
-                op=LogicalOperator.AND, left=mask, right=condition, loc=node.loc
-            )
-
         body = utils.flatten_list(
             [self.visit(statement, ctx=ctx, **kwargs) for statement in node.true_branch.body]
         )
         statements = [oir.MaskStmt(body=body, mask=condition, loc=node.loc)]
 
         if node.false_branch:
-            combined_mask = oir.UnaryOp(op=UnaryOperator.NOT, expr=condition, loc=node.loc)
-            if mask:
-                combined_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=combined_mask)
-
+            negated_condition = oir.UnaryOp(op=UnaryOperator.NOT, expr=condition, loc=node.loc)
             body = utils.flatten_list(
                 [self.visit(statement, ctx=ctx, **kwargs) for statement in node.false_branch.body]
             )
-            statements.append(oir.MaskStmt(body=body, mask=combined_mask, loc=node.loc))
+            statements.append(oir.MaskStmt(body=body, mask=negated_condition, loc=node.loc))
 
         return statements
 
