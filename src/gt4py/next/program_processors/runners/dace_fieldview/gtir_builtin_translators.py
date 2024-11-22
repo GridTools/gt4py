@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import abc
 import dataclasses
-from typing import TYPE_CHECKING, Final, Iterable, Optional, Protocol, TypeAlias
+from typing import TYPE_CHECKING, Final, Iterable, Optional, Protocol, Sequence, TypeAlias
 
 import dace
 import dace.subsets as sbs
@@ -31,6 +31,18 @@ from gt4py.next.type_system import type_specifications as ts
 
 if TYPE_CHECKING:
     from gt4py.next.program_processors.runners.dace_fieldview import gtir_sdfg
+
+
+def _get_domain_indices(
+    dims: Sequence[gtx_common.Dimension], offsets: Optional[Sequence[dace.symbolic.SymExpr]] = None
+) -> sbs.Indices:
+    offsets = ([dace.symbolic.SymExpr(0)] * len(dims)) if offsets is None else offsets
+    return sbs.Indices(
+        [
+            dace.symbolic.SymExpr(dace_gtir_utils.get_map_variable(dim)) - offset
+            for dim, offset in zip(dims, offsets, strict=True)
+        ]
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -63,17 +75,16 @@ class FieldopData:
             )
 
         if isinstance(self.gt_type, ts.FieldType):
+            domain_dims = [dim for dim, _, _ in domain]
+            domain_indices = _get_domain_indices(domain_dims)
             it_indices: dict[gtx_common.Dimension, gtir_dataflow.DataExpr] = {
-                dim: gtir_dataflow.SymbolExpr(
-                    dace.symbolic.SymExpr(dace_gtir_utils.get_map_variable(dim)),
-                    INDEX_DTYPE,
-                )
-                for dim, _, _ in domain
+                dim: gtir_dataflow.SymbolExpr(index, INDEX_DTYPE)
+                for dim, index in zip(domain_dims, domain_indices)
             }
             if self.offset is None:
-                it_domain = [(dim, dace.symbolic.SymExpr(0)) for dim in self.gt_type.dims]
+                field_domain = [(dim, dace.symbolic.SymExpr(0)) for dim in self.gt_type.dims]
             else:
-                it_domain = list(zip(self.gt_type.dims, self.offset, strict=True))
+                field_domain = list(zip(self.gt_type.dims, self.offset, strict=True))
 
             local_dims = [
                 dim for dim in self.gt_type.dims if dim.kind == gtx_common.DimensionKind.LOCAL
@@ -81,19 +92,21 @@ class FieldopData:
 
             if len(local_dims) == 0:
                 return gtir_dataflow.IteratorExpr(
-                    self.dc_node, self.gt_type.dtype, it_domain, it_indices
+                    self.dc_node, self.gt_type.dtype, field_domain, it_indices
                 )
 
             elif len(local_dims) == 1:
                 field_dtype = itir_ts.ListType(
                     element_type=self.gt_type.dtype, offset_type=local_dims[0]
                 )
-                it_domain = [
+                field_domain = [
                     (dim, offset)
-                    for dim, offset in it_domain
+                    for dim, offset in field_domain
                     if dim.kind != gtx_common.DimensionKind.LOCAL
                 ]
-                return gtir_dataflow.IteratorExpr(self.dc_node, field_dtype, it_domain, it_indices)
+                return gtir_dataflow.IteratorExpr(
+                    self.dc_node, field_dtype, field_domain, it_indices
+                )
 
             else:
                 raise ValueError(
@@ -306,12 +319,8 @@ def translate_as_fieldop(
 
     # parse the domain of the field operator
     domain = extract_domain(domain_expr)
-    domain_indices = sbs.Indices(
-        [
-            dace.symbolic.SymExpr(dace_gtir_utils.get_map_variable(dim)) - lower_bound
-            for dim, lower_bound, _ in domain
-        ]
-    )
+    domain_dims, domain_offsets, _ = zip(*domain)
+    domain_indices = _get_domain_indices(domain_dims, domain_offsets)
 
     # visit the list of arguments to be passed to the lambda expression
     stencil_args = [_parse_fieldop_arg(arg, sdfg, state, sdfg_builder, domain) for arg in node.args]
@@ -376,15 +385,8 @@ def translate_broadcast_scalar(
     assert cpm.is_ref_to(stencil_expr, "deref")
 
     domain = extract_domain(domain_expr)
-    field_dims, field_offset, field_shape = _get_field_layout(domain)
-    field_subset = sbs.Range.from_indices(
-        sbs.Indices(
-            [
-                dace.symbolic.SymExpr(dace_gtir_utils.get_map_variable(dim)) - offset
-                for dim, offset in zip(field_dims, field_offset)
-            ]
-        )
-    )
+    output_dims, output_offset, output_shape = _get_field_layout(domain)
+    field_subset = sbs.Range.from_indices(_get_domain_indices(output_dims, output_offset))
 
     assert len(node.args) == 1
     scalar_expr = _parse_fieldop_arg(node.args[0], sdfg, state, sdfg_builder, domain)
@@ -403,13 +405,15 @@ def translate_broadcast_scalar(
         elif all(
             isinstance(scalar_expr.indices[dim], gtir_dataflow.SymbolExpr)
             for dim, _ in scalar_expr.field_domain
-            if dim not in field_dims
+            if dim not in output_dims
         ):
+            input_dims, input_offsets = zip(*scalar_expr.field_domain)
+            input_indices = _get_domain_indices(input_dims, input_offsets)
             input_subset = ",".join(
-                str(dace.symbolic.SymExpr(dace_gtir_utils.get_map_variable(dim)) - offset)
-                if dim in field_dims
-                else str(scalar_expr.indices[dim].value - offset)  # type: ignore[union-attr] # catched by exception above
-                for dim, offset in scalar_expr.field_domain
+                str(index) if dim in output_dims else str(scalar_expr.indices[dim].value - offset)  # type: ignore[union-attr] # catched by exception above
+                for (dim, offset), index in zip(
+                    scalar_expr.field_domain, input_indices, strict=True
+                )
             )
         else:
             raise ValueError(f"Cannot deref field {scalar_expr.field} in broadcast expression.")
@@ -419,7 +423,7 @@ def translate_broadcast_scalar(
     else:
         raise ValueError(f"Unexpected argument {node.args[0]} in broadcast expression.")
 
-    output, _ = sdfg.add_temp_transient(field_shape, input_node.desc(sdfg).dtype)
+    output, _ = sdfg.add_temp_transient(output_shape, input_node.desc(sdfg).dtype)
     output_node = state.add_access(output)
 
     sdfg_builder.add_mapped_tasklet(
@@ -437,7 +441,7 @@ def translate_broadcast_scalar(
         external_edges=True,
     )
 
-    return FieldopData(output_node, ts.FieldType(field_dims, gt_dtype), field_offset)
+    return FieldopData(output_node, ts.FieldType(output_dims, gt_dtype), output_offset)
 
 
 def translate_if(
