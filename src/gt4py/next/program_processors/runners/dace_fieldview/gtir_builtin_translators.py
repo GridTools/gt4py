@@ -63,7 +63,7 @@ class FieldopData:
             )
 
         if isinstance(self.gt_type, ts.FieldType):
-            indices: dict[gtx_common.Dimension, gtir_dataflow.DataExpr] = {
+            it_indices: dict[gtx_common.Dimension, gtir_dataflow.DataExpr] = {
                 dim: gtir_dataflow.SymbolExpr(
                     dace.symbolic.SymExpr(dace_gtir_utils.get_map_variable(dim)),
                     INDEX_DTYPE,
@@ -71,9 +71,9 @@ class FieldopData:
                 for dim, _, _ in domain
             }
             if self.offset is None:
-                offsets = {dim: dace.symbolic.SymExpr(0) for dim in self.gt_type.dims}
+                it_domain = [(dim, dace.symbolic.SymExpr(0)) for dim in self.gt_type.dims]
             else:
-                offsets = dict(zip(self.gt_type.dims, self.offset, strict=True))
+                it_domain = list(zip(self.gt_type.dims, self.offset, strict=True))
 
             local_dims = [
                 dim for dim in self.gt_type.dims if dim.kind == gtx_common.DimensionKind.LOCAL
@@ -81,19 +81,19 @@ class FieldopData:
 
             if len(local_dims) == 0:
                 return gtir_dataflow.IteratorExpr(
-                    self.dc_node, self.gt_type.dtype, self.gt_type.dims, indices, offsets
+                    self.dc_node, self.gt_type.dtype, it_domain, it_indices
                 )
 
             elif len(local_dims) == 1:
                 field_dtype = itir_ts.ListType(
                     element_type=self.gt_type.dtype, offset_type=local_dims[0]
                 )
-                field_dims = [
-                    dim for dim in self.gt_type.dims if dim.kind != gtx_common.DimensionKind.LOCAL
+                it_domain = [
+                    (dim, offset)
+                    for dim, offset in it_domain
+                    if dim.kind != gtx_common.DimensionKind.LOCAL
                 ]
-                return gtir_dataflow.IteratorExpr(
-                    self.dc_node, field_dtype, field_dims, indices, offsets
-                )
+                return gtir_dataflow.IteratorExpr(self.dc_node, field_dtype, it_domain, it_indices)
 
             else:
                 raise ValueError(
@@ -402,17 +402,14 @@ def translate_broadcast_scalar(
             input_subset = "0"
         elif all(
             isinstance(scalar_expr.indices[dim], gtir_dataflow.SymbolExpr)
-            for dim in scalar_expr.dimensions
+            for dim, _ in scalar_expr.field_domain
             if dim not in field_dims
         ):
             input_subset = ",".join(
-                str(
-                    dace.symbolic.SymExpr(dace_gtir_utils.get_map_variable(dim))
-                    - scalar_expr.offsets[dim]
-                )
+                str(dace.symbolic.SymExpr(dace_gtir_utils.get_map_variable(dim)) - offset)
                 if dim in field_dims
-                else str(scalar_expr.indices[dim].value - scalar_expr.offsets[dim])  # type: ignore[union-attr] # catched by exception above
-                for dim in scalar_expr.dimensions
+                else str(scalar_expr.indices[dim].value - offset)  # type: ignore[union-attr] # catched by exception above
+                for dim, offset in scalar_expr.field_domain
             )
         else:
             raise ValueError(f"Cannot deref field {scalar_expr.field} in broadcast expression.")
