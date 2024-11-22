@@ -444,6 +444,36 @@ class TestRuntimeIfNestedDataDependent(gt_testing.StencilTestSuite):
         field_a += 1
 
 
+class TestRuntimeIfNestedWhile(gt_testing.StencilTestSuite):
+    """Test conditional while statements."""
+
+    dtypes = (np.float_,)
+    domain_range = [(1, 15), (1, 15), (1, 15)]
+    backends = ALL_BACKENDS
+    symbols = dict(
+        infield=gt_testing.field(in_range=(-1, 1), boundary=[(0, 0), (0, 0), (0, 0)]),
+        outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+    )
+
+    def definition(infield, outfield):
+        with computation(PARALLEL), interval(...):
+            if infield < 10:
+                outfield = 1
+                done = False
+                while not done:
+                    outfield = 2
+                    done = True
+            else:
+                condition = True
+                while condition:
+                    outfield = 4
+                    condition = False
+                outfield = 3
+
+    def validation(infield, outfield, *, domain, origin, **kwargs):
+        outfield[...] = 2
+
+
 class TestTernaryOp(gt_testing.StencilTestSuite):
     dtypes = (np.float_,)
     domain_range = [(1, 15), (2, 15), (1, 15)]

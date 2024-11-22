@@ -7,18 +7,14 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from functools import reduce
-
 import numpy as np
 import pytest
-
 import gt4py.next as gtx
 from gt4py.next import (
     astype,
     broadcast,
     common,
-    constructors,
     errors,
-    field_utils,
     float32,
     float64,
     int32,
@@ -27,8 +23,6 @@ from gt4py.next import (
     neighbor_sum,
 )
 from gt4py.next.ffront.experimental import as_offset
-from gt4py.next.program_processors.runners import gtfn
-from gt4py.next.type_system import type_specifications as ts
 from gt4py.next import utils as gt_utils
 
 from next_tests.integration_tests import cases
@@ -296,6 +290,21 @@ def test_scalar_arg_with_field(cartesian_case):
     ref = a[1:] * b
 
     cases.verify(cartesian_case, testee, a, b, out=out, ref=ref)
+
+
+@pytest.mark.uses_tuple_args
+def test_double_use_scalar(cartesian_case):
+    # TODO(tehrengruber): This should be a regression test on ITIR level, but tracing doesn't
+    #  work for this case.
+    @gtx.field_operator
+    def testee(a: int32, b: int32, c: cases.IField) -> cases.IField:
+        tmp = a * b
+        tmp2 = tmp * tmp
+        # important part here is that we use the intermediate twice so that it is
+        # not inlined
+        return tmp2 * tmp2 * c
+
+    cases.verify_with_default_data(cartesian_case, testee, ref=lambda a, b, c: a * b * a * b * c)
 
 
 @pytest.mark.uses_scalar_in_domain_and_fo
@@ -685,9 +694,6 @@ def test_fieldop_from_scan(cartesian_case, forward):
 @pytest.mark.uses_lift_expressions
 @pytest.mark.uses_scan_nested
 def test_solve_triag(cartesian_case):
-    if cartesian_case.backend == gtfn.run_gtfn_with_temporaries:
-        pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
-
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))
     def tridiag_forward(
         state: tuple[float, float], a: float, b: float, c: float, d: float
@@ -786,9 +792,6 @@ def test_ternary_builtin_neighbor_sum(unstructured_case):
 
 @pytest.mark.uses_scan
 def test_ternary_scan(cartesian_case):
-    if cartesian_case.backend in [gtfn.run_gtfn_with_temporaries]:
-        pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
-
     @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
     def simple_scan_operator(carry: float, a: float) -> float:
         return carry if carry > a else carry + 1.0
@@ -811,9 +814,6 @@ def test_ternary_scan(cartesian_case):
 @pytest.mark.uses_scan_without_field_args
 @pytest.mark.uses_tuple_returns
 def test_scan_nested_tuple_output(forward, cartesian_case):
-    if cartesian_case.backend in [gtfn.run_gtfn_with_temporaries]:
-        pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
-
     init = (1, (2, 3))
     k_size = cartesian_case.default_sizes[KDim]
     expected = np.arange(1, 1 + k_size, 1, dtype=int32)

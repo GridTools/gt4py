@@ -730,7 +730,7 @@ class Literal(common.Literal, Expr):
 
 
 class ScalarAccess(common.ScalarAccess, Expr):
-    name: eve.Coerced[eve.SymbolRef]
+    pass
 
 
 class VariableKOffset(common.VariableKOffset[Expr]):

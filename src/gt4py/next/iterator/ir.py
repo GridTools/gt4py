@@ -208,7 +208,9 @@ class FencilDefinition(Node, ValidatedSymbolTableTrait):
     closures: List[StencilClosure]
     implicit_domain: bool = False
 
-    _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in BUILTINS]
+    _NODE_SYMBOLS_: ClassVar[List[Sym]] = [
+        Sym(id=name) for name in sorted(BUILTINS)
+    ]  # sorted for serialization stability
 
 
 class Stmt(Node): ...
@@ -240,7 +242,9 @@ class Program(Node, ValidatedSymbolTableTrait):
     body: List[Stmt]
     implicit_domain: bool = False
 
-    _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in GTIR_BUILTINS]
+    _NODE_SYMBOLS_: ClassVar[List[Sym]] = [
+        Sym(id=name) for name in sorted(GTIR_BUILTINS)
+    ]  # sorted for serialization stability
 
 
 # TODO(fthaler): just use hashable types in nodes (tuples instead of lists)

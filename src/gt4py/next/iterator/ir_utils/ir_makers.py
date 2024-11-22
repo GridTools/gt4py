@@ -10,7 +10,6 @@ import typing
 from typing import Callable, Optional, Union
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve.extended_typing import Dict, Tuple
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.type_system import type_specifications as ts, type_translation
@@ -412,7 +411,7 @@ def promote_to_lifted_stencil(op: str | itir.SymRef | Callable) -> Callable[...,
 
 def domain(
     grid_type: Union[common.GridType, str],
-    ranges: Dict[Union[common.Dimension, str], Tuple[itir.Expr, itir.Expr]],
+    ranges: dict[Union[common.Dimension, str], tuple[itir.Expr, itir.Expr]],
 ) -> itir.FunCall:
     """
     >>> str(
@@ -446,7 +445,7 @@ def domain(
     )
 
 
-def as_fieldop(expr: itir.Expr, domain: Optional[itir.Expr] = None) -> call:
+def as_fieldop(expr: itir.Expr | str, domain: Optional[itir.Expr] = None) -> call:
     """
     Create an `as_fieldop` call.
 
@@ -494,6 +493,28 @@ def op_as_fieldop(
             f"__arg{i}" for i in range(len(its))
         ]  # TODO: `op` must not contain `SymRef(id="__argX")`
         return as_fieldop(lambda_(*args)(op(*[deref(arg) for arg in args])), domain)(*its)
+
+    return _impl
+
+
+def cast_as_fieldop(type_: str, domain: Optional[itir.FunCall] = None):
+    """
+    Promotes the function `cast_` to a field_operator.
+
+    Args:
+        type_: the target type to be passed as argument to `cast_` function.
+        domain: the domain of the returned field.
+
+    Returns:
+        A function from Fields to Field.
+
+    Examples:
+        >>> str(cast_as_fieldop("float32")("a"))
+        '(⇑(λ(__arg0) → cast_(·__arg0, float32)))(a)'
+    """
+
+    def _impl(it: itir.Expr) -> itir.FunCall:
+        return op_as_fieldop(lambda v: call("cast_")(v, type_), domain)(it)
 
     return _impl
 
