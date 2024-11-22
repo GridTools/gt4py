@@ -572,7 +572,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                 gt_dtype=node.type,
                 subset=sbs.Range.from_string(
                     ",".join(
-                        it.indices[dim].value  # type: ignore[union-attr]
+                        str(it.indices[dim].value)  # type: ignore[union-attr]
                         if dim != offset_provider.neighbor_axis
                         else f"0:{size}"
                         for dim, size in zip(it.dimensions, field_desc.shape, strict=True)

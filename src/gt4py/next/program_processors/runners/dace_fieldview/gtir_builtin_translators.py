@@ -406,10 +406,13 @@ def translate_broadcast_scalar(
             if dim not in field_dims
         ):
             input_subset = ",".join(
-                str(dace.symbolic.SymExpr(dace_gtir_utils.get_map_variable(dim)) - offset)
+                str(
+                    dace.symbolic.SymExpr(dace_gtir_utils.get_map_variable(dim))
+                    - scalar_expr.offsets[dim]
+                )
                 if dim in field_dims
-                else str(scalar_expr.indices[dim].value - offset)  # type: ignore[union-attr] # catched by exception above
-                for dim, offset in zip(scalar_expr.dimensions, scalar_expr.offsets, strict=True)
+                else str(scalar_expr.indices[dim].value - scalar_expr.offsets[dim])  # type: ignore[union-attr] # catched by exception above
+                for dim in scalar_expr.dimensions
             )
         else:
             raise ValueError(f"Cannot deref field {scalar_expr.field} in broadcast expression.")
