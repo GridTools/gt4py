@@ -2152,10 +2152,15 @@ class GTScriptParser(ast.NodeVisitor):
 
         ValueInliner.apply(main_func_node, context=local_context)
 
+        # unroll loops over data dimensions
+        # note(stubbiali): address the case of a function called within a for-loop
+        DataDimLoopUnroller.apply(main_func_node, context=local_context)
+
         # Inline function calls
         CallInliner.apply(main_func_node, context=local_context)
 
         # unroll loops over data dimensions
+        # note(stubbiali): address the case of a for-loop inside a function
         DataDimLoopUnroller.apply(main_func_node, context=local_context)
 
         # Evaluate and inline compile-time conditionals
