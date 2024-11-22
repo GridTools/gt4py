@@ -65,7 +65,7 @@ class FieldopData:
         if isinstance(self.gt_type, ts.FieldType):
             indices: dict[gtx_common.Dimension, gtir_dataflow.DataExpr] = {
                 dim: gtir_dataflow.SymbolExpr(
-                    dace.symbolic.pystr_to_symbolic(dace_gtir_utils.get_map_variable(dim)),
+                    dace.symbolic.SymExpr(dace_gtir_utils.get_map_variable(dim)),
                     INDEX_DTYPE,
                 )
                 for dim, _, _ in domain
@@ -308,7 +308,7 @@ def translate_as_fieldop(
     domain = extract_domain(domain_expr)
     domain_indices = sbs.Indices(
         [
-            dace.symbolic.pystr_to_symbolic(dace_gtir_utils.get_map_variable(dim)) - lower_bound
+            dace.symbolic.SymExpr(dace_gtir_utils.get_map_variable(dim)) - lower_bound
             for dim, lower_bound, _ in domain
         ]
     )
@@ -380,7 +380,7 @@ def translate_broadcast_scalar(
     field_subset = sbs.Range.from_indices(
         sbs.Indices(
             [
-                dace.symbolic.pystr_to_symbolic(dace_gtir_utils.get_map_variable(dim)) - offset
+                dace.symbolic.SymExpr(dace_gtir_utils.get_map_variable(dim)) - offset
                 for dim, offset in zip(field_dims, field_offset)
             ]
         )
@@ -406,7 +406,7 @@ def translate_broadcast_scalar(
             if dim not in field_dims
         ):
             input_subset = ",".join(
-                str(dace.symbolic.pystr_to_symbolic(dace_gtir_utils.get_map_variable(dim)) - offset)
+                str(dace.symbolic.SymExpr(dace_gtir_utils.get_map_variable(dim)) - offset)
                 if dim in field_dims
                 else str(scalar_expr.indices[dim].value - offset)  # type: ignore[union-attr] # catched by exception above
                 for dim, offset in zip(scalar_expr.dimensions, scalar_expr.offsets, strict=True)

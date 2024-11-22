@@ -983,10 +983,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                 it.gt_dtype,
                 it.dimensions,
                 it.indices,
-                offsets={
-                    dim: offset - dace.symbolic.pystr_to_symbolic(offset_expr.value)
-                    for dim, offset in it.offsets.items()
-                },
+                offsets={dim: offset - offset_expr.value for dim, offset in it.offsets.items()},
             )
 
         # the offset needs to be calculated by means of a tasklet (i.e. dynamic offset)
