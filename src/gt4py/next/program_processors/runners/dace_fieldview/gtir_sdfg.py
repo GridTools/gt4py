@@ -146,7 +146,7 @@ def _collect_symbols_in_domain_expressions(
     )
 
 
-def _get_tuple_type(data: tuple[gtir_builtin_translators.FieldopValue, ...]) -> ts.TupleType:
+def _get_tuple_type(data: tuple[gtir_builtin_translators.FieldopResult, ...]) -> ts.TupleType:
     """
     Compute the `ts.TupleType` corresponding to the structure of a tuple of data nodes.
     """
@@ -558,7 +558,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         node: gtir.FunCall,
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
-    ) -> gtir_builtin_translators.FieldopValue:
+    ) -> gtir_builtin_translators.FieldopResult:
         # use specialized dataflow builder classes for each builtin function
         if cpm.is_call_to(node, "if_"):
             return gtir_builtin_translators.translate_if(node, sdfg, head_state, self)
@@ -594,8 +594,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         node: gtir.Lambda,
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
-        args: list[gtir_builtin_translators.FieldopValue],
-    ) -> gtir_builtin_translators.FieldopValue:
+        args: list[gtir_builtin_translators.FieldopResult],
+    ) -> gtir_builtin_translators.FieldopResult:
         """
         Translates a `Lambda` node to a nested SDFG in the current state.
 
@@ -613,7 +613,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         def _flatten_tuples(
             name: str,
-            arg: gtir_builtin_translators.FieldopValue,
+            arg: gtir_builtin_translators.FieldopResult,
         ) -> list[tuple[str, gtir_builtin_translators.FieldopData]]:
             if isinstance(arg, tuple):
                 tuple_type = _get_tuple_type(arg)
@@ -825,7 +825,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         node: gtir.Literal,
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
-    ) -> gtir_builtin_translators.FieldopValue:
+    ) -> gtir_builtin_translators.FieldopResult:
         return gtir_builtin_translators.translate_literal(node, sdfg, head_state, self)
 
     def visit_SymRef(
@@ -833,7 +833,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         node: gtir.SymRef,
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
-    ) -> gtir_builtin_translators.FieldopValue:
+    ) -> gtir_builtin_translators.FieldopResult:
         return gtir_builtin_translators.translate_symbol_ref(node, sdfg, head_state, self)
 
 

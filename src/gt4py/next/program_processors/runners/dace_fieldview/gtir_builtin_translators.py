@@ -127,7 +127,7 @@ Domain of a field operator represented as a list of tuples with 3 elements:
 """
 
 
-FieldopValue: TypeAlias = FieldopData | tuple[FieldopData | tuple, ...]
+FieldopResult: TypeAlias = FieldopData | tuple[FieldopData | tuple, ...]
 """Result of a field operator, can be either a field or a tuple fields."""
 
 
@@ -143,7 +143,7 @@ class PrimitiveTranslator(Protocol):
         sdfg: dace.SDFG,
         state: dace.SDFGState,
         sdfg_builder: gtir_sdfg.SDFGBuilder,
-    ) -> FieldopValue:
+    ) -> FieldopResult:
         """Creates the dataflow subgraph representing a GTIR primitive function.
 
         This method is used by derived classes to build a specialized subgraph
@@ -281,7 +281,7 @@ def translate_as_fieldop(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-) -> FieldopValue:
+) -> FieldopResult:
     """
     Generates the dataflow subgraph for the `as_fieldop` builtin function.
 
@@ -367,7 +367,7 @@ def translate_broadcast_scalar(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-) -> FieldopValue:
+) -> FieldopResult:
     """
     Generates the dataflow subgraph for the 'as_fieldop' builtin function for the
     special case where the argument to 'as_fieldop' is a 'deref' scalar expression,
@@ -449,7 +449,7 @@ def translate_if(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-) -> FieldopValue:
+) -> FieldopResult:
     """Generates the dataflow subgraph for the `if_` builtin function."""
     assert cpm.is_call_to(node, "if_")
     assert len(node.args) == 3
@@ -545,7 +545,7 @@ def _get_data_nodes(
     sdfg_builder: gtir_sdfg.SDFGBuilder,
     data_name: str,
     data_type: ts.DataType,
-) -> FieldopValue:
+) -> FieldopResult:
     if isinstance(data_type, ts.FieldType):
         data_node = state.add_access(data_name)
         field_offset = sdfg_builder.get_field_offset(data_name)
@@ -608,7 +608,7 @@ def translate_literal(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-) -> FieldopValue:
+) -> FieldopResult:
     """Generates the dataflow subgraph for a `ir.Literal` node."""
     assert isinstance(node, gtir.Literal)
 
@@ -623,7 +623,7 @@ def translate_make_tuple(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-) -> FieldopValue:
+) -> FieldopResult:
     assert cpm.is_call_to(node, "make_tuple")
     return tuple(
         sdfg_builder.visit(
@@ -640,7 +640,7 @@ def translate_tuple_get(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-) -> FieldopValue:
+) -> FieldopResult:
     assert cpm.is_call_to(node, "tuple_get")
     assert len(node.args) == 2
 
@@ -670,7 +670,7 @@ def translate_scalar_expr(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-) -> FieldopValue:
+) -> FieldopResult:
     assert isinstance(node, gtir.FunCall)
     assert isinstance(node.type, ts.ScalarType)
 
@@ -752,7 +752,7 @@ def translate_symbol_ref(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-) -> FieldopValue:
+) -> FieldopResult:
     """Generates the dataflow subgraph for a `ir.SymRef` node."""
     assert isinstance(node, gtir.SymRef)
 
