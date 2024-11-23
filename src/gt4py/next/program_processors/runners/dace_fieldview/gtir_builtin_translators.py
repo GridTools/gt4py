@@ -36,13 +36,27 @@ if TYPE_CHECKING:
 def _get_domain_indices(
     dims: Sequence[gtx_common.Dimension], offsets: Optional[Sequence[dace.symbolic.SymExpr]] = None
 ) -> sbs.Indices:
-    offsets = ([dace.symbolic.SymExpr(0)] * len(dims)) if offsets is None else offsets
-    return sbs.Indices(
-        [
-            dace.symbolic.SymExpr(dace_gtir_utils.get_map_variable(dim)) - offset
-            for dim, offset in zip(dims, offsets, strict=True)
-        ]
-    )
+    """
+    Helper function to construct the list of indices for a field domain, applying an optional offset
+    in each dimension as start index.
+
+    Args:
+        dims: The field dimensions.
+        offsets: The range start index in each dimension.
+
+    Returns:
+        A list of indices to be used in memlet subset.
+    """
+    index_variables = [dace.symbolic.SymExpr(dace_gtir_utils.get_map_variable(dim)) for dim in dims]
+    if offsets is None:
+        return sbs.Indices(index_variables)
+    else:
+        return sbs.Indices(
+            [
+                index - offset if offset != 0 else index
+                for index, offset in zip(index_variables, offsets, strict=True)
+            ]
+        )
 
 
 @dataclasses.dataclass(frozen=True)
