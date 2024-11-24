@@ -71,8 +71,8 @@ class FieldopData:
     Args:
         dc_node: DaCe access node to the data storage.
         gt_type: GT4Py type definition, which includes the field domain information.
-        offsets: List of index offsets, in each dimension, when the dimension range
-            does not start from zero. Assume zero offset, if not set.
+        offset: List of index offsets, in each dimension, when the dimension range
+            does not start from zero; assume zero offset, if not set.
     """
 
     dc_node: dace.nodes.AccessNode
@@ -82,7 +82,7 @@ class FieldopData:
     def get_local_view(
         self, domain: FieldopDomain
     ) -> gtir_dataflow.IteratorExpr | gtir_dataflow.MemletExpr:
-        """Helper method to access a field in local view, given a field operator domain."""
+        """Helper method to access a field in local view, given the compute domain of a field operator."""
         if isinstance(self.gt_type, ts.ScalarType):
             return gtir_dataflow.MemletExpr(
                 dc_node=self.dc_node, gt_dtype=self.gt_type, subset=sbs.Indices([0])
@@ -400,7 +400,7 @@ def translate_broadcast_scalar(
 
     domain = extract_domain(domain_expr)
     output_dims, output_offset, output_shape = _get_field_layout(domain)
-    field_subset = sbs.Range.from_indices(_get_domain_indices(output_dims, output_offset))
+    output_subset = sbs.Range.from_indices(_get_domain_indices(output_dims, output_offset))
 
     assert len(node.args) == 1
     scalar_expr = _parse_fieldop_arg(node.args[0], sdfg, state, sdfg_builder, domain)
@@ -449,7 +449,7 @@ def translate_broadcast_scalar(
         },
         inputs={"__inp": dace.Memlet(data=input_node.data, subset=input_subset)},
         code="__val = __inp",
-        outputs={"__val": dace.Memlet(data=output_node.data, subset=field_subset)},
+        outputs={"__val": dace.Memlet(data=output_node.data, subset=output_subset)},
         input_nodes={input_node.data: input_node},
         output_nodes={output_node.data: output_node},
         external_edges=True,

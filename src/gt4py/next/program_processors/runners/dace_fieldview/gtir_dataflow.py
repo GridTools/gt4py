@@ -103,8 +103,9 @@ class IteratorExpr:
     field_domain: list[tuple[gtx_common.Dimension, dace.symbolic.SymExpr]]
     indices: dict[gtx_common.Dimension, DataExpr]
 
-    def dims(self) -> list[gtx_common.Dimension]:
-        return [dim for dim, _ in self.field_domain]
+    def can_index(self, dim: gtx_common.Dimension) -> bool:
+        """Returns True if the given dimension is present in the field domain."""
+        return dim in set(d for d, _ in self.field_domain)
 
 
 class DataflowInputEdge(Protocol):
@@ -278,12 +279,15 @@ class LambdaToDataflow(eve.NodeVisitor):
         dst_conn: Optional[str] = None,
         src_offset: Optional[list[dace.symbolic.SymExpr]] = None,
     ) -> None:
-        if src_offset:
-            src_subset = sbs.Range(
+        input_subset = (
+            src_subset
+            if src_offset is None
+            else sbs.Range(
                 (start - off, stop - off, step)
                 for (start, stop, step), off in zip(src_subset, src_offset, strict=True)
             )
-        edge = MemletInputEdge(self.state, src, src_subset, dst_node, dst_conn)
+        )
+        edge = MemletInputEdge(self.state, src, input_subset, dst_node, dst_conn)
         self.input_edges.append(edge)
 
     def _add_edge(
@@ -478,7 +482,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         # we use a tasklet to dereference an iterator when one or more indices are the result of some computation,
         # either indirection through connectivity table or dynamic cartesian offset.
-        assert all(dim in arg_expr.indices for dim in arg_expr.dims())
+        assert all(dim in arg_expr.indices for dim, _ in arg_expr.field_domain)
         assert len(field_desc.shape) == len(arg_expr.field_domain)
         field_indices = [(dim, arg_expr.indices[dim]) for (dim, _) in arg_expr.field_domain]
         index_connectors = [
@@ -546,7 +550,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         it = self.visit(node.args[1])
         assert isinstance(it, IteratorExpr)
-        assert offset_provider.neighbor_axis in it.dims()
+        assert it.can_index(offset_provider.neighbor_axis)
         assert offset_provider.origin_axis in it.indices
         origin_index = it.indices[offset_provider.origin_axis]
         assert isinstance(origin_index, SymbolExpr)
@@ -978,7 +982,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         self, it: IteratorExpr, offset_dim: gtx_common.Dimension, offset_expr: DataExpr
     ) -> IteratorExpr:
         """Implements cartesian shift along one dimension."""
-        assert offset_dim in it.dims()
+        assert it.can_index(offset_dim)
         new_index: SymbolExpr | ValueExpr
         index_expr = it.indices[offset_dim]
         if isinstance(index_expr, SymbolExpr) and isinstance(offset_expr, SymbolExpr):
@@ -1095,7 +1099,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         offset_expr: DataExpr,
     ) -> IteratorExpr:
         """Implements shift in unstructured domain by means of a neighbor table."""
-        assert connectivity.neighbor_axis in it.dims()
+        assert it.can_index(connectivity.neighbor_axis)
         neighbor_dim = connectivity.neighbor_axis
         assert neighbor_dim not in it.indices
 

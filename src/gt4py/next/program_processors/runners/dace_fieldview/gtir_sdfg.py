@@ -100,7 +100,7 @@ class SDFGBuilder(DataflowBuilder, Protocol):
 
     @abc.abstractmethod
     def get_field_offset(self, field_name: str) -> Optional[list[dace.symbolic.SymExpr]]:
-        """Retrieve the field domain offset, that is the list of start indexes for all dimensions."""
+        """Retrieve the field domain offset, that is the list of start indices for all dimensions."""
         ...
 
     @abc.abstractmethod
