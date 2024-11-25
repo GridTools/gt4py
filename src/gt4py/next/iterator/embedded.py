@@ -93,14 +93,14 @@ Scalar: TypeAlias = (
 class SparseTag(Tag): ...
 
 
-@xtyping.deprecated("Use a 'ConnectivityField' instead.")
+@xtyping.deprecated("Use a 'Connectivity' instead.")
 def NeighborTableOffsetProvider(
     table: core_defs.NDArrayObject,
     origin_axis: common.Dimension,
     neighbor_axis: common.Dimension,
     max_neighbors: int,
     has_skip_values=True,
-) -> common.ConnectivityField:
+) -> common.Connectivity:
     return common._connectivity(
         table,
         codomain=neighbor_axis,
@@ -116,7 +116,7 @@ def NeighborTableOffsetProvider(
 
 # TODO(havogt): complete implementation and make available for fieldview embedded
 @dataclasses.dataclass(frozen=True)
-class StridedConnectivityField(common.ConnectivityField):
+class StridedConnectivityField(common.Connectivity):
     domain_dims: tuple[common.Dimension, common.Dimension]
     codomain_dim: common.Dimension
     _max_neighbors: int
@@ -166,7 +166,7 @@ class StridedConnectivityField(common.ConnectivityField):
     def asnumpy(self) -> np.ndarray:
         raise NotImplementedError
 
-    def premap(self, index_field: common.ConnectivityField | fbuiltins.FieldOffset) -> common.Field:
+    def premap(self, index_field: common.Connectivity | fbuiltins.FieldOffset) -> common.Field:
         raise NotImplementedError
 
     def restrict(  # type: ignore[override]
@@ -183,8 +183,8 @@ class StridedConnectivityField(common.ConnectivityField):
 
     def __call__(
         self,
-        index_field: common.ConnectivityField | fbuiltins.FieldOffset,
-        *args: common.ConnectivityField | fbuiltins.FieldOffset,
+        index_field: common.Connectivity | fbuiltins.FieldOffset,
+        *args: common.Connectivity | fbuiltins.FieldOffset,
     ) -> common.Field:
         raise NotImplementedError()
 
@@ -1233,8 +1233,8 @@ class IndexField(common.Field):
 
     def premap(
         self,
-        index_field: common.ConnectivityField | fbuiltins.FieldOffset,
-        *args: common.ConnectivityField | fbuiltins.FieldOffset,
+        index_field: common.Connectivity | fbuiltins.FieldOffset,
+        *args: common.Connectivity | fbuiltins.FieldOffset,
     ) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
@@ -1359,8 +1359,8 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
 
     def premap(
         self,
-        index_field: common.ConnectivityField | fbuiltins.FieldOffset,
-        *args: common.ConnectivityField | fbuiltins.FieldOffset,
+        index_field: common.Connectivity | fbuiltins.FieldOffset,
+        *args: common.Connectivity | fbuiltins.FieldOffset,
     ) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()

@@ -15,7 +15,7 @@ The representation of Connectivities (neighbor tables, NeighborTableOffsetProvid
 
 In the early days of itir, a `offset` was a literal in the IR. Its meaning was only provided at execution time by a mapping from `offset` tag to an entity that we labelled `OffsetProvider`. We had mainly 2 kinds of `OffsetProvider`: a `Dimension` representing a Cartesian shift and a `NeighborTableOffsetProvider` for unstructured shifts.
 For the frontend type-checking we later introduce a `FieldOffset` which contained type information of the mapped dimensions.
-For (fieldview) embedded we introduced a `ConnectivityField` which could be generated from the OffsetProvider information.
+For (fieldview) embedded we introduced a `ConnectivityField` (now `Connectivity`) which could be generated from the OffsetProvider information.
 
 These different concepts had overlap but were not 1-to-1 replacements.
 
@@ -25,7 +25,7 @@ We introduce/update the following concepts
 
 ### Conceptual definitions
 
-**Connectivity** or **ConnectivityField** is a mapping from indices to index. It covers 1-to-1 mappings, e.g. Cartesian shifts, NeighborTables (2D mappings) and dynamic Cartesian shifts.
+**Connectivity** is a mapping from indices to index. It covers 1-to-1 mappings, e.g. Cartesian shifts, NeighborTables (2D mappings) and dynamic Cartesian shifts.
 
 **NeighborConnectivity** is a 2D mapping of the N neighbors of a Location A to a Location B.
 

@@ -292,7 +292,7 @@ def as_connectivity(
     device: Optional[core_defs.Device] = None,
     skip_value: Optional[core_defs.IntegralScalar] = None,
     # TODO: copy=False
-) -> common.ConnectivityField:
+) -> common.Connectivity:
     """
     Construct a connectivity field from the given domain, codomain, and data.
 

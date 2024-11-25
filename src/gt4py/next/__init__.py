@@ -20,7 +20,7 @@ module in question is a submodule, defines `__all__` and exports many public API
 
 from . import common, ffront, iterator, program_processors
 from .common import (
-    ConnectivityField,
+    Connectivity,
     Dimension,
     DimensionKind,
     Dims,
@@ -61,7 +61,7 @@ __all__ = [
     "Dimension",
     "DimensionKind",
     "Field",
-    "ConnectivityField",
+    "Connectivity",
     "GridType",
     "domain",
     "Domain",

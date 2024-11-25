@@ -94,7 +94,7 @@ class Dimension:
     def __call__(self, val: int) -> NamedIndex:
         return NamedIndex(self, val)
 
-    def __add__(self, offset: int) -> ConnectivityField:
+    def __add__(self, offset: int) -> Connectivity:
         # TODO(sf-n): just to avoid circular import. Move or refactor the FieldOffset to avoid this.
         from gt4py.next.ffront import fbuiltins
 
@@ -103,7 +103,7 @@ class Dimension:
             dimension_to_implicit_offset(self.value), source=self, target=(self,)
         )[offset]
 
-    def __sub__(self, offset: int) -> ConnectivityField:
+    def __sub__(self, offset: int) -> Connectivity:
         return self + (-offset)
 
 
@@ -690,7 +690,7 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     def asnumpy(self) -> np.ndarray: ...
 
     @abc.abstractmethod
-    def premap(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> Field: ...
+    def premap(self, index_field: Connectivity | fbuiltins.FieldOffset) -> Field: ...
 
     @abc.abstractmethod
     def restrict(self, item: AnyIndexSpec) -> Self: ...
@@ -702,8 +702,8 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     @abc.abstractmethod
     def __call__(
         self,
-        index_field: ConnectivityField | fbuiltins.FieldOffset,
-        *args: ConnectivityField | fbuiltins.FieldOffset,
+        index_field: Connectivity | fbuiltins.FieldOffset,
+        *args: Connectivity | fbuiltins.FieldOffset,
     ) -> Field: ...
 
     @abc.abstractmethod
@@ -841,7 +841,7 @@ class NeighborConnectivityType(ConnectivityType):
 
 @runtime_checkable
 # type: ignore[misc] # DimT should be covariant, but then it breaks in other places
-class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT]):
+class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT]):
     @property
     @abc.abstractmethod
     def codomain(self) -> DimT: ...
@@ -876,64 +876,61 @@ class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, 
 
     # Operators
     def __abs__(self) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
 
     def __neg__(self) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
 
     def __invert__(self) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
 
     def __eq__(self, other: Any) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
 
     def __ne__(self, other: Any) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
 
     def __add__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
 
     def __radd__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
 
     def __sub__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
 
     def __rsub__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
 
     def __mul__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
 
     def __rmul__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
 
     def __truediv__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
 
     def __rtruediv__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
 
     def __floordiv__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
 
     def __rfloordiv__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
 
     def __pow__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
 
     def __and__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
 
     def __or__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
 
     def __xor__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
-
-
-Connectivity: TypeAlias = ConnectivityField
+        raise TypeError("'Connectivity' does not support this operation.")
 
 
 # Utility function to construct a `Field` from different buffer representations.
@@ -959,17 +956,17 @@ def _connectivity(
     domain: Optional[DomainLike] = None,
     dtype: Optional[core_defs.DType] = None,
     skip_value: Optional[core_defs.IntegralScalar] = None,
-) -> ConnectivityField:
+) -> Connectivity:
     raise NotImplementedError
 
 
-class NeighborConnectivity(ConnectivityField, Protocol):
+class NeighborConnectivity(Connectivity, Protocol):
     # TODO(havogt): work towards encoding this properly in the type
     def __gt_type__(self) -> NeighborConnectivityType: ...
 
 
 def is_neighbor_connectivity(obj: Any) -> TypeGuard[NeighborConnectivity]:
-    if not isinstance(obj, ConnectivityField):
+    if not isinstance(obj, Connectivity):
         return False
     domain_dims = obj.domain.dims
     return (
@@ -1010,7 +1007,7 @@ DomainDimT = TypeVar("DomainDimT", bound="Dimension")
 
 
 @dataclasses.dataclass(frozen=True, eq=False)
-class CartesianConnectivity(ConnectivityField[Dims[DomainDimT], DimT]):
+class CartesianConnectivity(Connectivity[Dims[DomainDimT], DimT]):
     domain_dim: DomainDimT
     codomain: DimT
     offset: int = 0
@@ -1049,7 +1046,7 @@ class CartesianConnectivity(ConnectivityField[Dims[DomainDimT], DimT]):
         return core_defs.Int32DType()  # type: ignore[return-value]
 
     # This is a workaround to make this class concrete, since `codomain` is an
-    # abstract property of the `ConnectivityField` Protocol.
+    # abstract property of the `Connectivity` Protocol.
     if not TYPE_CHECKING:
 
         @functools.cached_property
@@ -1092,9 +1089,9 @@ class CartesianConnectivity(ConnectivityField[Dims[DomainDimT], DimT]):
 
     def premap(
         self,
-        index_field: ConnectivityField | fbuiltins.FieldOffset,
-        *args: ConnectivityField | fbuiltins.FieldOffset,
-    ) -> ConnectivityField:
+        index_field: Connectivity | fbuiltins.FieldOffset,
+        *args: Connectivity | fbuiltins.FieldOffset,
+    ) -> Connectivity:
         raise NotImplementedError()
 
     __call__ = premap

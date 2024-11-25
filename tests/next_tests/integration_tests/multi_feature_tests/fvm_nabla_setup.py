@@ -68,7 +68,7 @@ class nabla_setup:
         self.edges_per_node = edges_per_node
 
     @property
-    def edges2node_connectivity(self) -> gtx.ConnectivityField:
+    def edges2node_connectivity(self) -> gtx.Connectivity:
         return gtx.as_connectivity(
             domain={Edge: self.edges_size, E2VDim: 2},
             codomain=Vertex,
@@ -77,7 +77,7 @@ class nabla_setup:
         )
 
     @property
-    def nodes2edge_connectivity(self) -> gtx.ConnectivityField:
+    def nodes2edge_connectivity(self) -> gtx.Connectivity:
         return gtx.as_connectivity(
             domain={Vertex: self.nodes_size, V2EDim: self.edges_per_node},
             codomain=Edge,

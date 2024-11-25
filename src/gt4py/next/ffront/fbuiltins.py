@@ -54,7 +54,7 @@ def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSp
         return ts.DimensionType
     elif t is FieldOffset:
         return ts.OffsetType
-    elif t is common.ConnectivityField:
+    elif t is common.Connectivity:
         return ts.OffsetType
     elif t is core_defs.ScalarT:
         return ts.ScalarType
@@ -320,7 +320,7 @@ class FieldOffset(runtime.Offset):
     def __gt_type__(self) -> ts.OffsetType:
         return ts.OffsetType(source=self.source, target=self.target)
 
-    def __getitem__(self, offset: int) -> common.ConnectivityField:
+    def __getitem__(self, offset: int) -> common.Connectivity:
         """Serve as a connectivity factory."""
         from gt4py.next import embedded  # avoid circular import
 
@@ -329,10 +329,10 @@ class FieldOffset(runtime.Offset):
         assert current_offset_provider is not None
         offset_definition = current_offset_provider[self.value]
 
-        connectivity: common.ConnectivityField
+        connectivity: common.Connectivity
         if isinstance(offset_definition, common.Dimension):
             connectivity = common.CartesianConnectivity(offset_definition, offset)
-        elif isinstance(offset_definition, common.ConnectivityField):
+        elif isinstance(offset_definition, common.Connectivity):
             assert common.is_neighbor_connectivity(offset_definition)
             named_index = common.NamedIndex(self.target[-1], offset)
             connectivity = offset_definition[named_index]
@@ -341,7 +341,7 @@ class FieldOffset(runtime.Offset):
 
         return connectivity
 
-    def as_connectivity_field(self) -> common.ConnectivityField:
+    def as_connectivity_field(self) -> common.Connectivity:
         """Convert to connectivity field using the offset providers in current embedded execution context."""
         from gt4py.next import embedded  # avoid circular import
 
@@ -352,7 +352,7 @@ class FieldOffset(runtime.Offset):
 
         cache_key = id(offset_definition)
         if (connectivity := self._cache.get(cache_key, None)) is None:
-            if isinstance(offset_definition, common.ConnectivityField):
+            if isinstance(offset_definition, common.Connectivity):
                 connectivity = offset_definition
             else:
                 raise NotImplementedError()
