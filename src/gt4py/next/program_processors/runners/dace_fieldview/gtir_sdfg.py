@@ -99,13 +99,15 @@ class SDFGBuilder(DataflowBuilder, Protocol):
     """Visitor interface available to GTIR-primitive translators."""
 
     @abc.abstractmethod
-    def get_field_offset(self, field_name: str) -> Optional[list[dace.symbolic.SymExpr]]:
-        """Retrieve the field domain offset, that is the list of start indices for all dimensions."""
+    def make_field(
+        self, data_node: dace.nodes.AccessNode, data_type: ts.FieldType | ts.ScalarType
+    ) -> gtir_builtin_translators.FieldopData:
+        """Retrieve the field data descriptor including the domain offset information."""
         ...
 
     @abc.abstractmethod
     def get_symbol_type(self, symbol_name: str) -> ts.DataType:
-        """Retrieve the GT4Py data descriptor of a symbol defined in the SDFG."""
+        """Retrieve the GT4Py type of a symbol used in the SDFG."""
         ...
 
     @abc.abstractmethod
@@ -184,8 +186,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     def get_offset_provider_type(self, offset: str) -> gtx_common.OffsetProviderTypeElem:
         return self.offset_provider_type[offset]
 
-    def get_field_offset(self, field_name: str) -> Optional[list[dace.symbolic.SymExpr]]:
-        return self.field_offsets[field_name]
+    def make_field(
+        self, data_node: dace.nodes.AccessNode, data_type: ts.FieldType | ts.ScalarType
+    ) -> gtir_builtin_translators.FieldopData:
+        if isinstance(data_type, ts.FieldType):
+            domain_offset = self.field_offsets[data_node.data]
+        else:
+            domain_offset = None
+        return gtir_builtin_translators.FieldopData(data_node, data_type, domain_offset)
 
     def get_symbol_type(self, symbol_name: str) -> ts.DataType:
         return self.global_symbols[symbol_name]
@@ -277,8 +285,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             return tuple_fields
 
         elif isinstance(gt_type, ts.FieldType):
-            # ensure that the field offset is defined, eventually zero if set to `None`
-            self.field_offsets[name] = self.field_offsets.get(name, None)
+            if name not in self.field_offsets:
+                # Ensure that the field offset is defined, eventually set to `None`
+                # for program field arguments since they are always passed with full shape.
+                self.field_offsets[name] = None
 
             if len(gt_type.dims) == 0:
                 # represent zero-dimensional fields as scalar arguments
@@ -365,7 +375,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 head_state.add_nedge(
                     field.dc_node, temp_node, sdfg.make_array_memlet(field.dc_node.data)
                 )
-                return gtir_builtin_translators.FieldopData(temp_node, field.gt_type, field.offset)
+                return field.clone(temp_node)
 
         temp_result = gtx_utils.tree_map(make_temps)(result)
         return list(gtx_utils.flatten_nested_tuple((temp_result,)))
@@ -426,6 +436,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         if node.function_definitions:
             raise NotImplementedError("Functions expected to be inlined as lambda calls.")
 
+        # Since program field arguments are passed to the SDFG as full-shape arrays,
+        # there is no offset that needs to be compensated.
+        assert len(self.field_offsets) == 0
+
         sdfg = dace.SDFG(node.id)
         sdfg.debuginfo = dace_utils.debug_info(node, default=sdfg.debuginfo)
 
@@ -450,8 +464,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             head_state = entry_state
 
         domain_symbols = _collect_symbols_in_domain_expressions(node, node.params)
-        # we call `_add_sdfg_params()` with empty offsets dictionary because the field domain
-        # of program arguments is supposed to start from index zero, therefore no offset.
         sdfg_arg_names = self._add_sdfg_params(sdfg, node.params, symbolic_arguments=domain_symbols)
 
         # visit one statement at a time and expand the SDFG from the current head state
@@ -652,9 +664,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             elif isinstance(p_type, ts.TupleType):
                 p_fields = dace_gtir_utils.get_tuple_fields(p_name, p_type, flatten=True)
                 lambda_field_offsets |= {
-                    p_tname: lambda_arg_nodes[p_tname].offset
-                    if p_tname in lambda_arg_nodes
-                    else self.field_offsets[p_tname]
+                    p_tname: (
+                        lambda_arg_nodes[p_tname].offset
+                        if p_tname in lambda_arg_nodes
+                        else self.field_offsets[p_tname]
+                    )
                     for p_tname, p_ttype in p_fields
                     if isinstance(p_ttype, ts.FieldType)
                 }
@@ -798,9 +812,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 head_state.add_edge(
                     nsdfg_node, connector, outer_node, None, sdfg.make_array_memlet(outer)
                 )
-                outer_data = gtir_builtin_translators.FieldopData(
-                    outer_node, inner_data.gt_type, inner_data.offset
-                )
+                outer_data = inner_data.clone(outer_node)
             elif inner_data.dc_node.data in lambda_arg_nodes:
                 # This if branch and the next one handle the non-transient result nodes.
                 # Non-transient nodes are just input nodes that are immediately returned
@@ -809,9 +821,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 outer_data = lambda_arg_nodes[inner_data.dc_node.data]
             else:
                 outer_node = head_state.add_access(inner_data.dc_node.data)
-                outer_data = gtir_builtin_translators.FieldopData(
-                    outer_node, inner_data.gt_type, inner_data.offset
-                )
+                outer_data = inner_data.clone(outer_node)
             # Isolated access node will make validation fail.
             # Isolated access nodes can be found in the join-state of an if-expression
             # or in lambda expressions that just construct tuples from input arguments.

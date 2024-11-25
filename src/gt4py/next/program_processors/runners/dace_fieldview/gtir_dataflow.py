@@ -90,10 +90,10 @@ class IteratorExpr:
     Args:
         field: Access node to the field this iterator operates on.
         gt_dtype: GT4Py data type, which includes the `offset_type` local dimension for lists.
-        field_domain: Field domain represented as a sorted list of dimensions and offsets,
-            needed to order the map index variables and dereference an element in the field.
-            The offset value is either the start index in the dimension range or the result
-            of a shift expression, or a composition of both.
+        field_domain: Field domain represented as a sorted list of dimensions and offset values,
+            used to sort the map index variables in the memlet subset. The offset value is either
+            the start index of dimension range or the compile-time value of a shift expression,
+            or a composition of both.
         indices: Maps each dimension to an index value, which could be either a symbolic value
             or the result of a tasklet computation like neighbors connectivity or dynamic offset.
     """
@@ -103,19 +103,27 @@ class IteratorExpr:
     field_domain: list[tuple[gtx_common.Dimension, dace.symbolic.SymExpr]]
     indices: dict[gtx_common.Dimension, DataExpr]
 
-    def can_index(self, dim: gtx_common.Dimension) -> bool:
-        """Returns True if the given dimension is present in the field domain."""
-        return dim in set(d for d, _ in self.field_domain)
+    def get_memlet_subset(self, sdfg: dace.SDFG) -> sbs.Range:
+        if not all(isinstance(self.indices[dim], SymbolExpr) for dim, _ in self.field_domain):
+            raise ValueError(f"Cannot deref iterator {self}.")
 
-    def make_index(self, dim: gtx_common.Dimension) -> dace.symbolic.SymExpr:
-        """Returns index in the given field dimension, after applying the corresponding offset."""
-        offset = [offset for field_dim, offset in self.field_domain if field_dim == dim]
-        assert len(offset) == 1
-        if not isinstance(self.indices[dim], SymbolExpr):
-            raise ValueError(
-                f"Expected symbolic expression for {dim.value} index, found {self.indices[dim]}."
+        field_desc = self.field.desc(sdfg)
+        if isinstance(self.gt_dtype, itir_ts.ListType):
+            assert len(field_desc.shape) == len(self.field_domain) + 1
+            assert self.gt_dtype.offset_type is not None
+            field_domain = [*self.field_domain, (self.gt_dtype.offset_type, 0)]
+        else:
+            assert len(field_desc.shape) == len(self.field_domain)
+            field_domain = self.field_domain
+
+        return sbs.Range.from_string(
+            ",".join(
+                str(self.indices[dim].value - offset)  # type: ignore[union-attr]
+                if dim in self.indices
+                else f"0:{size}"
+                for (dim, offset), size in zip(field_domain, field_desc.shape, strict=True)
             )
-        return self.indices[dim].value - offset[0]  # type: ignore [union-attr]
+        )
 
 
 class DataflowInputEdge(Protocol):
@@ -470,29 +478,16 @@ class LambdaToDataflow(eve.NodeVisitor):
             return MemletExpr(arg_expr.field, arg_expr.gt_dtype, subset="0")
 
         # default case: deref a field with one or more dimensions
-        field_dims = [dim for dim, _ in arg_expr.field_domain]
         if all(isinstance(index, SymbolExpr) for index in arg_expr.indices.values()):
             # when all indices are symbolic expressions, we can perform direct field access through a memlet
-            if isinstance(arg_expr.gt_dtype, itir_ts.ListType):
-                assert len(field_desc.shape) == len(field_dims) + 1
-                assert arg_expr.gt_dtype.offset_type is not None
-                field_dims = [*field_dims, arg_expr.gt_dtype.offset_type]
-            else:
-                assert len(field_desc.shape) == len(field_dims)
-
-            field_subset = sbs.Range.from_string(
-                ",".join(
-                    str(arg_expr.make_index(dim)) if dim in arg_expr.indices else f"0:{size}"
-                    for dim, size in zip(field_dims, field_desc.shape, strict=True)
-                )
-            )
+            field_subset = arg_expr.get_memlet_subset(self.sdfg)
             return MemletExpr(arg_expr.field, arg_expr.gt_dtype, field_subset)
 
         # we use a tasklet to dereference an iterator when one or more indices are the result of some computation,
         # either indirection through connectivity table or dynamic cartesian offset.
-        assert all(dim in arg_expr.indices for dim in field_dims)
-        assert len(field_desc.shape) == len(field_dims)
-        field_indices = [(dim, arg_expr.indices[dim]) for dim in field_dims]
+        assert all(dim in arg_expr.indices for dim, _ in arg_expr.field_domain)
+        assert len(field_desc.shape) == len(arg_expr.field_domain)
+        field_indices = [(dim, arg_expr.indices[dim]) for dim, _ in arg_expr.field_domain]
         index_connectors = [
             IndexConnectorFmt.format(dim=dim.value)
             for dim, index in field_indices
@@ -558,7 +553,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         it = self.visit(node.args[1])
         assert isinstance(it, IteratorExpr)
-        assert it.can_index(offset_provider.codomain)
+        assert any(dim == offset_provider.codomain for dim, _ in it.field_domain)
         assert offset_provider.source_dim in it.indices
         origin_index = it.indices[offset_provider.source_dim]
         assert isinstance(origin_index, SymbolExpr)
@@ -586,8 +581,12 @@ class LambdaToDataflow(eve.NodeVisitor):
                 gt_dtype=node.type,
                 subset=sbs.Range.from_string(
                     ",".join(
-                        str(it.make_index(dim)) if dim != offset_provider.codomain else f"0:{size}"
-                        for (dim, _), size in zip(it.field_domain, field_desc.shape, strict=True)
+                        str(it.indices[dim].value - offset)  # type: ignore[union-attr]
+                        if dim != offset_provider.codomain
+                        else f"0:{size}"
+                        for (dim, offset), size in zip(
+                            it.field_domain, field_desc.shape, strict=True
+                        )
                     )
                 ),
             )
@@ -995,7 +994,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         self, it: IteratorExpr, offset_dim: gtx_common.Dimension, offset_expr: DataExpr
     ) -> IteratorExpr:
         """Implements cartesian shift along one dimension."""
-        assert it.can_index(offset_dim)
+        assert any(dim == offset_dim for dim, _ in it.field_domain)
         new_index: SymbolExpr | ValueExpr
         index_expr = it.indices[offset_dim]
         if isinstance(index_expr, SymbolExpr) and isinstance(offset_expr, SymbolExpr):
@@ -1112,7 +1111,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         offset_expr: DataExpr,
     ) -> IteratorExpr:
         """Implements shift in unstructured domain by means of a neighbor table."""
-        assert it.can_index(connectivity.codomain)
+        assert any(dim == connectivity.codomain for dim, _ in it.field_domain)
         neighbor_dim = connectivity.codomain
         assert neighbor_dim not in it.indices
 

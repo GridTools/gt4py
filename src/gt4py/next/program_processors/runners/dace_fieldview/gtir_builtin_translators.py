@@ -79,6 +79,10 @@ class FieldopData:
     gt_type: ts.FieldType | ts.ScalarType
     offset: Optional[list[dace.symbolic.SymExpr]]
 
+    def clone(self, data_node: dace.nodes.AccessNode) -> FieldopData:
+        """Create a copy of this data descriptor with a different access node."""
+        return FieldopData(data_node, self.gt_type, self.offset)
+
     def get_local_view(
         self, domain: FieldopDomain
     ) -> gtir_dataflow.IteratorExpr | gtir_dataflow.MemletExpr:
@@ -98,7 +102,9 @@ class FieldopData:
             if self.offset is None:
                 field_domain = [(dim, dace.symbolic.SymExpr(0)) for dim in self.gt_type.dims]
             else:
-                field_domain = list(zip(self.gt_type.dims, self.offset, strict=True))
+                field_domain = [
+                    (dim, off) for dim, off in zip(self.gt_type.dims, self.offset, strict=True)
+                ]
 
             local_dims = [
                 dim for dim in self.gt_type.dims if dim.kind == gtx_common.DimensionKind.LOCAL
@@ -416,19 +422,8 @@ def translate_broadcast_scalar(
         assert isinstance(scalar_expr, gtir_dataflow.IteratorExpr)
         if len(node.args[0].type.dims) == 0:  # zero-dimensional field
             input_subset = "0"
-        elif all(
-            isinstance(scalar_expr.indices[dim], gtir_dataflow.SymbolExpr)
-            for dim, _ in scalar_expr.field_domain
-            if dim not in output_dims
-        ):
-            input_dims, input_offsets = zip(*scalar_expr.field_domain)
-            domain_indices = _get_domain_indices(input_dims, input_offsets)
-            input_subset = ",".join(
-                str(domain_index) if dim in output_dims else str(scalar_expr.make_index(dim))
-                for dim, domain_index in zip(input_dims, domain_indices, strict=True)
-            )
         else:
-            raise ValueError(f"Cannot deref field {scalar_expr.field} in broadcast expression.")
+            input_subset = scalar_expr.get_memlet_subset(sdfg)
 
         input_node = scalar_expr.field
         gt_dtype = node.args[0].type.dtype
@@ -514,7 +509,7 @@ def translate_if(
         outer, _ = sdfg.add_temp_transient_like(inner_desc)
         outer_node = state.add_access(outer)
 
-        return FieldopData(outer_node, inner_data.gt_type, inner_data.offset)
+        return inner_data.clone(outer_node)
 
     result_temps = gtx_utils.tree_map(construct_output)(true_br_args)
 
@@ -560,8 +555,7 @@ def _get_data_nodes(
 ) -> FieldopResult:
     if isinstance(data_type, ts.FieldType):
         data_node = state.add_access(data_name)
-        field_offset = sdfg_builder.get_field_offset(data_name)
-        return FieldopData(data_node, data_type, field_offset)
+        return sdfg_builder.make_field(data_node, data_type)
 
     elif isinstance(data_type, ts.ScalarType):
         if data_name in sdfg.symbols:
@@ -570,7 +564,7 @@ def _get_data_nodes(
             )
         else:
             data_node = state.add_access(data_name)
-        return FieldopData(data_node, data_type, offset=None)
+        return sdfg_builder.make_field(data_node, data_type)
 
     elif isinstance(data_type, ts.TupleType):
         tuple_fields = dace_gtir_utils.get_tuple_fields(data_name, data_type)
