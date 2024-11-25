@@ -50,7 +50,7 @@ repos:
   ## version = re.search('ruff==([0-9\.]*)', open("constraints.txt").read())[1]
   ## print(f"rev: v{version}")
   ##]]]
-  rev: v0.7.3
+  rev: v0.7.4
   ##[[[end]]]
   hooks:
     # Run the linter.

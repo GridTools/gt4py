@@ -29,11 +29,7 @@ def _convert_arg(arg: Any, sdfg_param: str, use_field_canonical_representation: 
         return arg
     if len(arg.domain.dims) == 0:
         # Pass zero-dimensional fields as scalars.
-        # We need to extract the scalar value from the 0d numpy array without changing its type.
-        # Note that 'ndarray.item()' always transforms the numpy scalar to a python scalar,
-        # which may change its precision. To avoid this, we use here the empty tuple as index
-        # for 'ndarray.__getitem__()'.
-        return arg.asnumpy()[()]
+        return arg.as_scalar()
     # field domain offsets are not supported
     non_zero_offsets = [
         (dim, dim_range)

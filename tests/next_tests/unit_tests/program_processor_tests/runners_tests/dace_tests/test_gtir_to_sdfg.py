@@ -140,9 +140,7 @@ def test_gtir_cast():
         body=[
             gtir.SetAt(
                 expr=im.op_as_fieldop("eq", domain)(
-                    im.as_fieldop(
-                        im.lambda_("a")(im.call("cast_")(im.deref("a"), "float32")), domain
-                    )("x"),
+                    im.cast_as_fieldop("float32", domain)("x"),
                     "y",
                 ),
                 domain=domain,
