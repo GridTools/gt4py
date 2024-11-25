@@ -79,19 +79,18 @@ def debug_info(
     return default
 
 
-def filter_connectivities(
-    offset_provider: gtx_common.OffsetProvider,
-) -> dict[str, gtx_common.Connectivity]:
+def filter_connectivity_types(
+    offset_provider_type: gtx_common.OffsetProviderType,
+) -> dict[str, gtx_common.NeighborConnectivityType]:
     """
-    Filter offset providers of type `Connectivity`.
+    Filter offset provider types of type `NeighborConnectivityType`.
 
     In other words, filter out the cartesian offset providers.
-    Returns a new dictionary containing only `Connectivity` values.
     """
     return {
-        offset: table
-        for offset, table in offset_provider.items()
-        if isinstance(table, gtx_common.Connectivity)
+        offset: conn
+        for offset, conn in offset_provider_type.items()
+        if isinstance(conn, gtx_common.NeighborConnectivityType)
     }
 
 

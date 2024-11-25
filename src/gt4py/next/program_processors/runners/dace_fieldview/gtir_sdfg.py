@@ -41,7 +41,7 @@ class DataflowBuilder(Protocol):
     """Visitor interface to build a dataflow subgraph."""
 
     @abc.abstractmethod
-    def get_offset_provider(self, offset: str) -> gtx_common.OffsetProviderElem: ...
+    def get_offset_provider_type(self, offset: str) -> gtx_common.OffsetProviderTypeElem: ...
 
     @abc.abstractmethod
     def unique_nsdfg_name(self, sdfg: dace.SDFG, prefix: str) -> str: ...
@@ -155,7 +155,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     from where to continue building the SDFG.
     """
 
-    offset_provider: gtx_common.OffsetProvider
+    offset_provider_type: gtx_common.OffsetProviderType
     global_symbols: dict[str, ts.DataType] = dataclasses.field(default_factory=lambda: {})
     map_uids: eve.utils.UIDGenerator = dataclasses.field(
         init=False, repr=False, default_factory=lambda: eve.utils.UIDGenerator(prefix="map")
@@ -164,8 +164,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         init=False, repr=False, default_factory=lambda: eve.utils.UIDGenerator(prefix="tlet")
     )
 
-    def get_offset_provider(self, offset: str) -> gtx_common.OffsetProviderElem:
-        return self.offset_provider[offset]
+    def get_offset_provider_type(self, offset: str) -> gtx_common.OffsetProviderTypeElem:
+        return self.offset_provider_type[offset]
 
     def get_symbol_type(self, symbol_name: str) -> ts.DataType:
         return self.global_symbols[symbol_name]
@@ -195,10 +195,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             Two lists of symbols, one for the shape and the other for the strides of the array.
         """
         dc_dtype = gtir_builtin_translators.INDEX_DTYPE
-        neighbor_tables = dace_utils.filter_connectivities(self.offset_provider)
+        neighbor_table_types = dace_utils.filter_connectivity_types(self.offset_provider_type)
         shape = [
             (
-                neighbor_tables[dim.value].max_neighbors
+                neighbor_table_types[dim.value].max_neighbors
                 if dim.kind == gtx_common.DimensionKind.LOCAL
                 else dace.symbol(dace_utils.field_size_symbol_name(name, i), dc_dtype)
             )
@@ -374,13 +374,12 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             self.global_symbols[pname] = param.type
 
         # add SDFG storage for connectivity tables
-        for offset, offset_provider in dace_utils.filter_connectivities(
-            self.offset_provider
+        for offset, connectivity_type in dace_utils.filter_connectivity_types(
+            self.offset_provider_type
         ).items():
-            scalar_kind = tt.get_scalar_kind(offset_provider.index_type)
-            local_dim = gtx_common.Dimension(offset, kind=gtx_common.DimensionKind.LOCAL)
+            scalar_type = tt.from_dtype(connectivity_type.dtype)
             gt_type = ts.FieldType(
-                [offset_provider.origin_axis, local_dim], ts.ScalarType(scalar_kind)
+                [connectivity_type.source_dim, connectivity_type.neighbor_dim], scalar_type
             )
             # We store all connectivity tables as transient arrays here; later, while building
             # the field operator expressions, we change to non-transient (i.e. allocated externally)
@@ -585,7 +584,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         }
 
         # lower let-statement lambda node as a nested SDFG
-        lambda_translator = GTIRToSDFG(self.offset_provider, lambda_symbols)
+        lambda_translator = GTIRToSDFG(self.offset_provider_type, lambda_symbols)
         nsdfg = dace.SDFG(name=self.unique_nsdfg_name(sdfg, "lambda"))
         nstate = nsdfg.add_state("lambda")
 
@@ -630,7 +629,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         )
         connectivity_arrays = {
             dace_utils.connectivity_identifier(offset)
-            for offset in dace_utils.filter_connectivities(self.offset_provider)
+            for offset in dace_utils.filter_connectivity_types(self.offset_provider_type)
         }
 
         input_memlets = {}
@@ -778,7 +777,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
 def build_sdfg_from_gtir(
     ir: gtir.Program,
-    offset_provider: gtx_common.OffsetProvider,
+    offset_provider_type: gtx_common.OffsetProviderType,
 ) -> dace.SDFG:
     """
     Receives a GTIR program and lowers it to a DaCe SDFG.
@@ -788,15 +787,15 @@ def build_sdfg_from_gtir(
 
     Args:
         ir: The GTIR program node to be lowered to SDFG
-        offset_provider: The definitions of offset providers used by the program node
+        offset_provider_type: The definitions of offset providers used by the program node
 
     Returns:
         An SDFG in the DaCe canonical form (simplified)
     """
 
-    ir = gtir_type_inference.infer(ir, offset_provider=offset_provider)
+    ir = gtir_type_inference.infer(ir, offset_provider_type=offset_provider_type)
     ir = ir_prune_casts.PruneCasts().visit(ir)
-    sdfg_genenerator = GTIRToSDFG(offset_provider)
+    sdfg_genenerator = GTIRToSDFG(offset_provider_type)
     sdfg = sdfg_genenerator.visit(ir)
     assert isinstance(sdfg, dace.SDFG)
 

@@ -17,8 +17,8 @@ from gt4py.next.type_system import type_specifications as ts
 
 class InlineScalar(eve.NodeTranslator):
     @classmethod
-    def apply(cls, program: itir.Program, offset_provider: common.OffsetProvider):
-        program = itir_inference.infer(program, offset_provider=offset_provider)
+    def apply(cls, program: itir.Program, offset_provider_type: common.OffsetProviderType):
+        program = itir_inference.infer(program, offset_provider_type=offset_provider_type)
         return cls().visit(program)
 
     def visit_Expr(self, node: itir.Expr):
