@@ -14,10 +14,10 @@ from typing import TypeAlias
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import backend
+from gt4py.next import backend, common
+from gt4py.next.embedded import nd_array_field
 from gt4py.next.iterator import runtime
 from gt4py.next.program_processors import program_formatter
-
 
 import next_tests
 
@@ -97,12 +97,21 @@ def run_processor(
 
 
 @dataclasses.dataclass
-class DummyConnectivity:
+class DummyConnectivity(common.Connectivity):
     max_neighbors: int
     has_skip_values: int
-    origin_axis: gtx.Dimension = gtx.Dimension("dummy_origin")
-    neighbor_axis: gtx.Dimension = gtx.Dimension("dummy_neighbor")
-    index_type: type[int] = int
+    source_dim: gtx.Dimension = gtx.Dimension("dummy_origin")
+    codomain: gtx.Dimension = gtx.Dimension("dummy_neighbor")
 
-    def mapped_index(_, __) -> int:
-        return 0
+
+def nd_array_implementation_params():
+    for xp in nd_array_field._nd_array_implementations:
+        if hasattr(nd_array_field, "cp") and xp == nd_array_field.cp:
+            yield pytest.param(xp, id=xp.__name__, marks=pytest.mark.requires_gpu)
+        else:
+            yield pytest.param(xp, id=xp.__name__)
+
+
+@pytest.fixture(params=nd_array_implementation_params())
+def nd_array_implementation(request):
+    yield request.param

@@ -11,7 +11,6 @@ from typing import Tuple
 import numpy as np
 import pytest
 
-
 pytest.importorskip("atlas4py")
 
 from gt4py import next as gtx
@@ -22,18 +21,15 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     exec_alloc_descriptor,
 )
 from next_tests.integration_tests.multi_feature_tests.fvm_nabla_setup import (
+    E2V,
+    V2E,
+    E2VDim,
+    Edge,
+    V2EDim,
+    Vertex,
     assert_close,
     nabla_setup,
 )
-
-
-Vertex = gtx.Dimension("Vertex")
-Edge = gtx.Dimension("Edge")
-V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
-E2VDim = gtx.Dimension("E2V", kind=gtx.DimensionKind.LOCAL)
-
-V2E = gtx.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
-E2V = gtx.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
 
 
 @gtx.field_operator
@@ -67,21 +63,19 @@ def pnabla(
 
 
 def test_ffront_compute_zavgS(exec_alloc_descriptor):
-    executor, allocator = exec_alloc_descriptor.executor, exec_alloc_descriptor.allocator
+    _, allocator = exec_alloc_descriptor.executor, exec_alloc_descriptor.allocator
 
-    setup = nabla_setup()
-
-    pp = gtx.as_field([Vertex], setup.input_field, allocator=allocator)
-    S_M = tuple(map(gtx.as_field.partial([Edge], allocator=allocator), setup.S_fields))
+    setup = nabla_setup(allocator=allocator)
 
     zavgS = gtx.zeros({Edge: setup.edges_size}, allocator=allocator)
 
-    e2v = gtx.NeighborTableOffsetProvider(
-        atlas_utils.AtlasTable(setup.edges2node_connectivity).asnumpy(), Edge, Vertex, 2, False
-    )
-
-    compute_zavgS.with_backend(exec_alloc_descriptor)(
-        pp, S_M[0], out=zavgS, offset_provider={"E2V": e2v}
+    compute_zavgS.with_backend(
+        None if exec_alloc_descriptor.executor is None else exec_alloc_descriptor
+    )(
+        setup.input_field,
+        setup.S_fields[0],
+        out=zavgS,
+        offset_provider={"E2V": setup.edges2node_connectivity},
     )
 
     assert_close(-199755464.25741270, np.min(zavgS.asnumpy()))
@@ -89,27 +83,23 @@ def test_ffront_compute_zavgS(exec_alloc_descriptor):
 
 
 def test_ffront_nabla(exec_alloc_descriptor):
-    executor, allocator = exec_alloc_descriptor.executor, exec_alloc_descriptor.allocator
+    _, allocator = exec_alloc_descriptor.executor, exec_alloc_descriptor.allocator
 
-    setup = nabla_setup()
-
-    sign = gtx.as_field([Vertex, V2EDim], setup.sign_field, allocator=allocator)
-    pp = gtx.as_field([Vertex], setup.input_field, allocator=allocator)
-    S_M = tuple(map(gtx.as_field.partial([Edge], allocator=allocator), setup.S_fields))
-    vol = gtx.as_field([Vertex], setup.vol_field, allocator=allocator)
+    setup = nabla_setup(allocator=allocator)
 
     pnabla_MXX = gtx.zeros({Vertex: setup.nodes_size}, allocator=allocator)
     pnabla_MYY = gtx.zeros({Vertex: setup.nodes_size}, allocator=allocator)
 
-    e2v = gtx.NeighborTableOffsetProvider(
-        atlas_utils.AtlasTable(setup.edges2node_connectivity).asnumpy(), Edge, Vertex, 2, False
-    )
-    v2e = gtx.NeighborTableOffsetProvider(
-        atlas_utils.AtlasTable(setup.nodes2edge_connectivity).asnumpy(), Vertex, Edge, 7
-    )
-
-    pnabla.with_backend(exec_alloc_descriptor)(
-        pp, S_M, sign, vol, out=(pnabla_MXX, pnabla_MYY), offset_provider={"E2V": e2v, "V2E": v2e}
+    pnabla.with_backend(None if exec_alloc_descriptor.executor is None else exec_alloc_descriptor)(
+        setup.input_field,
+        setup.S_fields,
+        setup.sign_field,
+        setup.vol_field,
+        out=(pnabla_MXX, pnabla_MYY),
+        offset_provider={
+            "E2V": setup.edges2node_connectivity,
+            "V2E": setup.nodes2edge_connectivity,
+        },
     )
 
     # TODO this check is not sensitive enough, need to implement a proper numpy reference!

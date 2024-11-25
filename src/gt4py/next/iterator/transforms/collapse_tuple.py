@@ -105,7 +105,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         *,
         ignore_tuple_size: bool = False,
         remove_letified_make_tuple_elements: bool = True,
-        offset_provider: Optional[common.OffsetProvider] = None,
+        offset_provider_type: Optional[common.OffsetProviderType] = None,
         within_stencil: Optional[bool] = None,
         # manually passing flags is mostly for allowing separate testing of the modes
         flags: Optional[Flag] = None,
@@ -126,7 +126,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 `(λ(_tuple_el_1, _tuple_el_2) → {_tuple_el_1, _tuple_el_2})(1, 2)` -> {1, 2}`
         """
         flags = flags or cls.flags
-        offset_provider = offset_provider or {}
+        offset_provider_type = offset_provider_type or {}
 
         if isinstance(node, (ir.Program, ir.FencilDefinition)):
             within_stencil = False
@@ -138,7 +138,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         if not ignore_tuple_size:
             node = itir_type_inference.infer(
                 node,
-                offset_provider=offset_provider,
+                offset_provider_type=offset_provider_type,
                 allow_undeclared_symbols=allow_undeclared_symbols,
             )
 

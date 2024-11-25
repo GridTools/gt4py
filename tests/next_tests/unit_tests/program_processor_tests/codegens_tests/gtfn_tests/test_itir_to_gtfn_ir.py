@@ -21,7 +21,7 @@ def test_funcall_to_op():
     )
 
     actual = it2gtfn.GTFN_lowering(
-        grid_type=gtx.GridType.CARTESIAN, offset_provider={}, column_axis=None
+        grid_type=gtx.GridType.CARTESIAN, offset_provider_type={}, column_axis=None
     ).visit(testee)
 
     assert expected == actual
@@ -32,7 +32,7 @@ def test_unapplied_funcall_to_function_object():
     expected = gtfn_ir.SymRef(id="plus")
 
     actual = it2gtfn.GTFN_lowering(
-        grid_type=gtx.GridType.CARTESIAN, offset_provider={}, column_axis=None
+        grid_type=gtx.GridType.CARTESIAN, offset_provider_type={}, column_axis=None
     ).visit(testee)
 
     assert expected == actual
