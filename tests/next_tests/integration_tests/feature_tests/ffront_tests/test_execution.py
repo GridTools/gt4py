@@ -81,7 +81,7 @@ def test_cartesian_shift(cartesian_case):
 
 
 @pytest.mark.uses_unstructured_shift
-def test_unstructured_shift(unstructured_case):
+def test_unstructured_shift_indexed(unstructured_case):
     @gtx.field_operator
     def testee(a: cases.VField) -> cases.EField:
         return a(E2V[0])
@@ -90,6 +90,19 @@ def test_unstructured_shift(unstructured_case):
         unstructured_case,
         testee,
         ref=lambda a: a[unstructured_case.offset_provider["E2V"].table[:, 0]],
+    )
+
+
+@pytest.mark.uses_unstructured_shift
+def test_unstructured_shift(unstructured_case):
+    @gtx.field_operator
+    def testee(a: cases.VField) -> cases.EField:
+        return neighbor_sum(a(E2V), axis=E2VDim)
+
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a: np.sum(a[unstructured_case.offset_provider["E2V"].table], axis=1),
     )
 
 
