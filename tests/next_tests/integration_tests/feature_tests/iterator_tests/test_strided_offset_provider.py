@@ -14,6 +14,7 @@ from gt4py.next.iterator.builtins import deref, named_range, shift, unstructured
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 
 from next_tests.unit_tests.conftest import program_processor, run_processor
+from gt4py.next.iterator.embedded import StridedConnectivityField
 
 
 LocA = gtx.Dimension("LocA")
@@ -21,8 +22,10 @@ LocAB = gtx.Dimension("LocAB")
 LocB = gtx.Dimension("LocB")  # unused
 
 LocA2LocAB = offset("O")
-LocA2LocAB_offset_provider = gtx.StridedNeighborOffsetProvider(
-    origin_axis=LocA, neighbor_axis=LocAB, max_neighbors=2, has_skip_values=False
+LocA2LocAB_offset_provider = StridedConnectivityField(
+    domain_dims=(LocA, gtx.Dimension("Dummy", kind=gtx.DimensionKind.LOCAL)),
+    codomain_dim=LocAB,
+    max_neighbors=2,
 )
 
 
@@ -41,7 +44,7 @@ def test_strided_offset_provider(program_processor):
     program_processor, validate = program_processor
 
     LocA_size = 2
-    max_neighbors = LocA2LocAB_offset_provider.max_neighbors
+    max_neighbors = LocA2LocAB_offset_provider.__gt_type__().max_neighbors
     LocAB_size = LocA_size * max_neighbors
 
     rng = np.random.default_rng()
