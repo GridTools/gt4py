@@ -422,12 +422,10 @@ def translate_broadcast_scalar(
             if dim not in output_dims
         ):
             input_dims, input_offsets = zip(*scalar_expr.field_domain)
-            input_indices = _get_domain_indices(input_dims, input_offsets)
+            domain_indices = _get_domain_indices(input_dims, input_offsets)
             input_subset = ",".join(
-                str(index) if dim in output_dims else str(scalar_expr.indices[dim].value - offset)  # type: ignore[union-attr] # catched by exception above
-                for (dim, offset), index in zip(
-                    scalar_expr.field_domain, input_indices, strict=True
-                )
+                str(domain_index) if dim in output_dims else str(scalar_expr.make_index(dim))
+                for dim, domain_index in zip(input_dims, domain_indices, strict=True)
             )
         else:
             raise ValueError(f"Cannot deref field {scalar_expr.field} in broadcast expression.")
