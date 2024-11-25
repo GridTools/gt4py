@@ -72,7 +72,7 @@ class DaCeTranslator(
 
         sdfg = self.generate_sdfg(
             program,
-            inp.args.offset_provider,  # TODO should be offset_provider_type
+            inp.args.offset_provider,  # TODO(havogt): should be offset_provider_type once the transformation don't require run-time info
             inp.args.column_axis,
             auto_opt=self.auto_optimize,
             on_gpu=(self.device_type == gtx_allocators.CUPY_DEVICE),

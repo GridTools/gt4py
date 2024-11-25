@@ -844,7 +844,16 @@ class NeighborConnectivityType(ConnectivityType):
 class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT]):
     @property
     @abc.abstractmethod
-    def codomain(self) -> DimT: ...
+    def codomain(self) -> DimT:
+        """
+        The `codomain` is the set of all indices in a certain `Dimension`.
+
+        We use the `Dimension` itself to describe the (infinite) set of all indices.
+
+        Note:
+        We could restrict the infinite codomain to only the indices that are actually contained in the mapping.
+        Currently, this would just complicate implementation as we do not use this information.
+        """
 
     def __gt_type__(self) -> ConnectivityType:
         if is_neighbor_connectivity(self):
