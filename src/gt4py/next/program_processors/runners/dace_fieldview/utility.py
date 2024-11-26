@@ -45,17 +45,18 @@ def get_tuple_fields(
     ...     ("a_1_1", sty),
     ... ]
     """
+    assert all(isinstance(t, ts.DataType) for t in tuple_type.types)
     fields = [(f"{tuple_name}_{i}", field_type) for i, field_type in enumerate(tuple_type.types)]
     if flatten:
-        expanded_fields = [
+        expanded_fields: list[list[tuple[str, ts.DataType]]] = [
             get_tuple_fields(field_name, field_type)
             if isinstance(field_type, ts.TupleType)
-            else [(field_name, field_type)]
+            else [(field_name, field_type)]  # type: ignore[list-item] # checked in assert
             for field_name, field_type in fields
         ]
         return list(itertools.chain(*expanded_fields))
     else:
-        return fields
+        return fields  # type: ignore[return-value] # checked in assert
 
 
 def get_tuple_type(data: tuple[Any, ...]) -> ts.TupleType:

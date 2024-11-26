@@ -252,8 +252,8 @@ def function_signature_incompatibilities_scanop(
     # build a function type to leverage the already existing signature checking capabilities
     function_type = ts.FunctionType(
         pos_only_args=[],
-        pos_or_kw_args=promoted_params,  # type: ignore[arg-type] # dict is invariant, but we don't care here.
-        kw_only_args=promoted_kwparams,  # type: ignore[arg-type] # same as above
+        pos_or_kw_args=promoted_params,
+        kw_only_args=promoted_kwparams,
         returns=ts.DeferredType(constraint=None),
     )
 

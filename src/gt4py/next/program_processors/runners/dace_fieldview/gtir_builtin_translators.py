@@ -19,7 +19,6 @@ from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.ffront import fbuiltins as gtx_fbuiltins
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
-from gt4py.next.iterator.type_system import type_specifications as itir_ts
 from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_dataflow,
@@ -74,7 +73,7 @@ class FieldopData:
                 )
 
             elif len(local_dims) == 1:
-                field_dtype = itir_ts.ListType(
+                field_dtype = ts.ListType(
                     element_type=self.gt_type.dtype, offset_type=local_dims[0]
                 )
                 field_dims = [
@@ -193,12 +192,13 @@ def _create_temporary_field(
 
     output_desc = dataflow_output.result.dc_node.desc(sdfg)
     if isinstance(output_desc, dace.data.Array):
-        assert isinstance(node_type.dtype, itir_ts.ListType)
+        assert isinstance(node_type.dtype, ts.ListType)
         assert isinstance(node_type.dtype.element_type, ts.ScalarType)
         assert output_desc.dtype == dace_utils.as_dace_type(node_type.dtype.element_type)
         # extend the array with the local dimensions added by the field operator (e.g. `neighbors`)
         field_shape.extend(output_desc.shape)
     elif isinstance(output_desc, dace.data.Scalar):
+        assert isinstance(node_type.dtype, ts.ScalarType)
         assert output_desc.dtype == dace_utils.as_dace_type(node_type.dtype)
     else:
         raise ValueError(f"Cannot create field for dace type {output_desc}.")
@@ -295,7 +295,7 @@ def translate_as_fieldop(
     input_edges, output = taskgen.visit(stencil_expr, args=stencil_args)
     output_desc = output.result.dc_node.desc(sdfg)
 
-    if isinstance(node.type.dtype, itir_ts.ListType):
+    if isinstance(node.type.dtype, ts.ListType):
         assert isinstance(output_desc, dace.data.Array)
         # additional local dimension for neighbors
         # TODO(phimuell): Investigate if we should swap the two.
@@ -367,7 +367,8 @@ def translate_broadcast_scalar(
         gt_dtype = node.args[0].type
     elif isinstance(node.args[0].type, ts.FieldType):
         assert isinstance(scalar_expr, gtir_dataflow.IteratorExpr)
-        if len(node.args[0].type.dims) == 0:  # zero-dimensional field
+        type_ = node.args[0].type
+        if len(type_.dims) == 0:  # zero-dimensional field
             input_subset = "0"
         elif all(
             isinstance(scalar_expr.indices[dim], gtir_dataflow.SymbolExpr)
@@ -384,7 +385,8 @@ def translate_broadcast_scalar(
             raise ValueError(f"Cannot deref field {scalar_expr.field} in broadcast expression.")
 
         input_node = scalar_expr.field
-        gt_dtype = node.args[0].type.dtype
+        assert isinstance(type_.dtype, ts.ScalarType)
+        gt_dtype = type_.dtype
     else:
         raise ValueError(f"Unexpected argument {node.args[0]} in broadcast expression.")
 

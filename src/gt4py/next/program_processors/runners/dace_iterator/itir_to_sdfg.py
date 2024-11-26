@@ -64,7 +64,7 @@ def _get_scan_dim(
     storage_types: dict[str, ts.TypeSpec],
     output: SymRef,
     use_field_canonical_representation: bool,
-) -> tuple[str, int, ts.ScalarType]:
+) -> tuple[str, int, ts.ScalarType | ts.ListType]:
     """
     Extract information about the scan dimension.
 
@@ -170,6 +170,7 @@ class ItirToSDFG(eve.NodeVisitor):
             shape, strides = _make_array_shape_and_strides(
                 name, type_.dims, self.offset_provider_type, sort_dimensions
             )
+            assert isinstance(type_.dtype, ts.ScalarType)
             dtype = dace_utils.as_dace_type(type_.dtype)
             sdfg.add_array(name, shape=shape, strides=strides, dtype=dtype)
 
@@ -595,6 +596,7 @@ class ItirToSDFG(eve.NodeVisitor):
 
         # the carry value of the scan operator exists only in the scope of the scan sdfg
         scan_carry_name = unique_var_name()
+        assert isinstance(scan_dtype, ts.ScalarType)
         scan_sdfg.add_scalar(
             scan_carry_name, dtype=dace_utils.as_dace_type(scan_dtype), transient=True
         )

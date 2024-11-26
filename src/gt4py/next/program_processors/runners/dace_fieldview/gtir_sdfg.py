@@ -251,6 +251,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             for tname, tsymbol_type in dace_gtir_utils.get_tuple_fields(
                 name, gt_type, flatten=True
             ):
+                assert isinstance(tsymbol_type, ts.DataType)
                 tuple_fields.extend(
                     self._add_storage(
                         sdfg, symbolic_arguments, tname, tsymbol_type, transient, tuple_name=name
@@ -263,6 +264,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 # represent zero-dimensional fields as scalar arguments
                 return self._add_storage(sdfg, symbolic_arguments, name, gt_type.dtype, transient)
             # handle default case: field with one or more dimensions
+            assert isinstance(gt_type.dtype, ts.ScalarType)
             dc_dtype = dace_utils.as_dace_type(gt_type.dtype)
             if tuple_name is None:
                 # Use symbolic shape, which allows to invoke the program with fields of different size;

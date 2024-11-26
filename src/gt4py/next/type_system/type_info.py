@@ -78,15 +78,15 @@ def type_class(symbol_type: ts.TypeSpec) -> Type[ts.TypeSpec]:
     >>> type_class(ts.TupleType(types=[])).__name__
     'TupleType'
     """
-    match symbol_type:
-        case ts.DeferredType(constraint):
-            if constraint is None:
-                raise ValueError(f"No type information available for '{symbol_type}'.")
-            elif isinstance(constraint, tuple):
-                raise ValueError(f"Not sufficient type information available for '{symbol_type}'.")
-            return constraint
-        case ts.TypeSpec() as concrete_type:
-            return concrete_type.__class__
+    if isinstance(symbol_type, ts.DeferredType):
+        constraint = symbol_type.constraint
+        if constraint is None:
+            raise ValueError(f"No type information available for '{symbol_type}'.")
+        elif isinstance(constraint, tuple):
+            raise ValueError(f"Not sufficient type information available for '{symbol_type}'.")
+        return constraint
+    if isinstance(symbol_type, ts.TypeSpec):
+        return symbol_type.__class__
     raise ValueError(
         f"Invalid type for TypeInfo: requires '{ts.TypeSpec}', got '{type(symbol_type)}'."
     )
@@ -213,6 +213,7 @@ def extract_dtype(symbol_type: ts.TypeSpec) -> ts.ScalarType:
     """
     match symbol_type:
         case ts.FieldType(dtype=dtype):
+            assert isinstance(dtype, ts.ScalarType)
             return dtype
         case ts.ScalarType() as dtype:
             return dtype
@@ -385,11 +386,10 @@ def extract_dims(symbol_type: ts.TypeSpec) -> list[common.Dimension]:
     >>> extract_dims(ts.FieldType(dims=[I, J], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)))
     [Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)]
     """
-    match symbol_type:
-        case ts.ScalarType():
-            return []
-        case ts.FieldType(dims):
-            return dims
+    if isinstance(symbol_type, ts.ScalarType):
+        return []
+    if isinstance(symbol_type, ts.FieldType):
+        return symbol_type.dims
     raise ValueError(f"Can not extract dimensions from '{symbol_type}'.")
 
 

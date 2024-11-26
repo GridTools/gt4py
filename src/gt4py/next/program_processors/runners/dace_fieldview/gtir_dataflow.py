@@ -19,7 +19,6 @@ from gt4py import eve
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
-from gt4py.next.iterator.type_system import type_specifications as itir_ts
 from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_python_codegen,
@@ -52,7 +51,7 @@ class ValueExpr:
     """
 
     dc_node: dace.nodes.AccessNode
-    gt_dtype: itir_ts.ListType | ts.ScalarType
+    gt_dtype: ts.ListType | ts.ScalarType
 
 
 @dataclasses.dataclass(frozen=True)
@@ -67,7 +66,7 @@ class MemletExpr:
     """
 
     dc_node: dace.nodes.AccessNode
-    gt_dtype: itir_ts.ListType | ts.ScalarType
+    gt_dtype: ts.ListType | ts.ScalarType
     subset: sbs.Indices | sbs.Range
 
 
@@ -97,7 +96,7 @@ class IteratorExpr:
     """
 
     field: dace.nodes.AccessNode
-    gt_dtype: itir_ts.ListType | ts.ScalarType
+    gt_dtype: ts.ListType | ts.ScalarType
     dimensions: list[gtx_common.Dimension]
     indices: dict[gtx_common.Dimension, DataExpr]
 
@@ -406,7 +405,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         return ValueExpr(
             dc_node=temp_node,
             gt_dtype=(
-                itir_ts.ListType(element_type=data_type, offset_type=_CONST_DIM)
+                ts.ListType(element_type=data_type, offset_type=_CONST_DIM)
                 if use_array
                 else data_type
             ),
@@ -447,7 +446,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         # default case: deref a field with one or more dimensions
         if all(isinstance(index, SymbolExpr) for index in arg_expr.indices.values()):
             # when all indices are symblic expressions, we can perform direct field access through a memlet
-            if isinstance(arg_expr.gt_dtype, itir_ts.ListType):
+            if isinstance(arg_expr.gt_dtype, ts.ListType):
                 assert len(field_desc.shape) == len(arg_expr.dimensions) + 1
                 assert arg_expr.gt_dtype.offset_type is not None
                 field_dims = [*arg_expr.dimensions, arg_expr.gt_dtype.offset_type]
@@ -521,7 +520,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         return self._construct_tasklet_result(field_desc.dtype, deref_node, "val")
 
     def _visit_neighbors(self, node: gtir.FunCall) -> ValueExpr:
-        assert isinstance(node.type, itir_ts.ListType)
+        assert isinstance(node.type, ts.ListType)
         assert len(node.args) == 2
 
         assert isinstance(node.args[0], gtir.OffsetLiteral)
@@ -622,7 +621,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         )
 
         return ValueExpr(
-            dc_node=neighbors_node, gt_dtype=itir_ts.ListType(node.type.element_type, offset_type)
+            dc_node=neighbors_node, gt_dtype=ts.ListType(node.type.element_type, offset_type)
         )
 
     def _visit_map(self, node: gtir.FunCall) -> ValueExpr:
@@ -641,7 +640,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         In above example, the result would be an array with size V2E.max_neighbors,
         containing the V2E neighbor values incremented by 1.0.
         """
-        assert isinstance(node.type, itir_ts.ListType)
+        assert isinstance(node.type, ts.ListType)
         assert isinstance(node.fun, gtir.FunCall)
         assert len(node.fun.args) == 1  # the operation to be mapped on the arguments
 
@@ -661,7 +660,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             gtx_common.Dimension, gtx_common.NeighborConnectivityType
         ] = {}
         for input_arg in input_args:
-            assert isinstance(input_arg.gt_dtype, itir_ts.ListType)
+            assert isinstance(input_arg.gt_dtype, ts.ListType)
             assert input_arg.gt_dtype.offset_type is not None
             offset_type = input_arg.gt_dtype.offset_type
             if offset_type == _CONST_DIM:
@@ -731,7 +730,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             connectivity_slice = self._construct_local_view(
                 MemletExpr(
                     dc_node=self.state.add_access(connectivity),
-                    gt_dtype=itir_ts.ListType(
+                    gt_dtype=ts.ListType(
                         element_type=node.type.element_type, offset_type=offset_type
                     ),
                     subset=sbs.Range.from_string(
@@ -770,7 +769,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         return ValueExpr(
             dc_node=result_node,
-            gt_dtype=itir_ts.ListType(node.type.element_type, offset_type),
+            gt_dtype=ts.ListType(node.type.element_type, offset_type),
         )
 
     def _make_reduce_with_skip_values(
@@ -797,7 +796,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         origin_map_index = dace_gtir_utils.get_map_variable(offset_provider_type.source_dim)
 
         assert (
-            isinstance(input_expr.gt_dtype, itir_ts.ListType)
+            isinstance(input_expr.gt_dtype, ts.ListType)
             and input_expr.gt_dtype.offset_type is not None
         )
         offset_type = input_expr.gt_dtype.offset_type
@@ -908,7 +907,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         input_expr = self.visit(node.args[0])
         assert isinstance(input_expr, (MemletExpr, ValueExpr))
         assert (
-            isinstance(input_expr.gt_dtype, itir_ts.ListType)
+            isinstance(input_expr.gt_dtype, ts.ListType)
             and input_expr.gt_dtype.offset_type is not None
         )
         offset_type = input_expr.gt_dtype.offset_type
@@ -1210,7 +1209,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                     connector,
                 )
 
-        if isinstance(node.type, itir_ts.ListType):
+        if isinstance(node.type, ts.ListType):
             # The only builtin function (so far) handled here that returns a list
             # is 'make_const_list'. There are other builtin functions (map_, neighbors)
             # that return a list but they are handled in specialized visit methods.

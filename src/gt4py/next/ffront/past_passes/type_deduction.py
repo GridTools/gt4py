@@ -108,7 +108,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         value = self.visit(node.value, **kwargs)
         return past.Subscript(
             value=value,
-            slice_=self.visit(node.slice_, **kwargs),
+            slice_=node.slice_,  # TODO: I don't think we are using this type
             type=value.type,
             location=node.location,
         )

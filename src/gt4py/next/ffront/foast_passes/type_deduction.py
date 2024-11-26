@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Optional, TypeVar, cast
+from typing import Any, Optional, TypeAlias, TypeVar, cast
 
 import gt4py.next.ffront.field_operator_ast as foast
 from gt4py.eve import NodeTranslator, NodeVisitor, traits
@@ -48,7 +48,7 @@ def with_altered_scalar_kind(
     if isinstance(type_spec, ts.FieldType):
         return ts.FieldType(
             dims=type_spec.dims,
-            dtype=ts.ScalarType(kind=new_scalar_kind, shape=type_spec.dtype.shape),
+            dtype=with_altered_scalar_kind(type_spec.dtype, new_scalar_kind),
         )
     elif isinstance(type_spec, ts.ScalarType):
         return ts.ScalarType(kind=new_scalar_kind, shape=type_spec.shape)
@@ -360,7 +360,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def visit_TupleTargetAssign(
         self, node: foast.TupleTargetAssign, **kwargs: Any
     ) -> foast.TupleTargetAssign:
-        TargetType = list[foast.Starred | foast.Symbol]
+        TargetType: TypeAlias = list[foast.Starred | foast.Symbol]
         values = self.visit(node.value, **kwargs)
 
         if isinstance(values.type, ts.TupleType):
@@ -374,7 +374,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 )
 
             new_targets: TargetType = []
-            new_type: ts.TupleType | ts.DataType
+            new_type: ts.DataType
             for i, index in enumerate(indices):
                 old_target = targets[i]
 
@@ -391,7 +391,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                         location=old_target.location,
                     )
                 else:
-                    new_type = values.type.types[index]
+                    new_type = values.type.types[index]  # type: ignore[assignment] # see check in next line
+                    assert isinstance(new_type, ts.DataType)
                     new_target = self.visit(
                         old_target, refine_type=new_type, location=old_target.location, **kwargs
                     )

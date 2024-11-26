@@ -1527,6 +1527,7 @@ def closure_to_tasklet_sdfg(
             ndim = len(ty.dims)
             shape, strides = new_array_symbols(name, ndim)
             dims = [dim.value for dim in ty.dims]
+            assert isinstance(ty.dtype, ts.ScalarType)
             dtype = dace_utils.as_dace_type(ty.dtype)
             body.add_array(name, shape=shape, strides=strides, dtype=dtype)
             field = state.add_access(name, debuginfo=body.debuginfo)
