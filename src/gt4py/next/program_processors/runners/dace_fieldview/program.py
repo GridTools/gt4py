@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import collections
 import dataclasses
 import itertools
 import typing
@@ -53,6 +54,14 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
                 ),
             )
         )
+        program = typing.cast(
+            itir.Program, gtir_stage.data
+        )  # we already checked that our backend uses GTIR
+
+        _crosscheck_dace_parsing(
+            dace_parsed_args=[*args, *kwargs.values()],
+            gt4py_program_args=[p.type for p in program.params],
+        )
 
         compile_workflow = typing.cast(
             recipes.OTFCompileWorkflow,
@@ -64,11 +73,8 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
 
         self.sdfg_closure_cache["arrays"] = sdfg.arrays
 
-        # Halo exchange related metadata, i.e. gt4py_program_input_fields, gt4py_program_output_fields, offset_providers_per_input_field
-        # Add them as dynamic properties to the SDFG
-        program = typing.cast(
-            itir.Program, gtir_stage.data
-        )  # we already checked that our backend uses GTIR
+        # Halo exchange related metadata, i.e. gt4py_program_input_fields, gt4py_program_output_fields,
+        # offset_providers_per_input_field. Add them as dynamic attributes to the SDFG
         field_params = {
             str(param.id): param for param in program.params if isinstance(param.type, ts.FieldType)
         }
@@ -252,3 +258,37 @@ class OutputNamesExtractor(SymbolNameSetExtractor):
 
     def visit_SymRef(self, node: itir.SymRef) -> set[str]:
         return {str(node.id)}
+
+
+def _crosscheck_dace_parsing(dace_parsed_args: list[Any], gt4py_program_args: list[Any]) -> None:
+    for dace_parsed_arg, gt4py_program_arg in zip(
+        dace_parsed_args,
+        gt4py_program_args,
+        strict=False,  # dace does not see implicit size args
+    ):
+        match dace_parsed_arg:
+            case dace.data.Scalar():
+                assert dace_parsed_arg.type == dace_utils.as_dace_type(gt4py_program_arg)
+            case bool() | np.bool_():
+                assert isinstance(gt4py_program_arg, ts.ScalarType)
+                assert gt4py_program_arg.kind == ts.ScalarKind.BOOL
+            case int() | np.integer():
+                assert isinstance(gt4py_program_arg, ts.ScalarType)
+                assert gt4py_program_arg.kind in [ts.ScalarKind.INT32, ts.ScalarKind.INT64]
+            case float() | np.floating():
+                assert isinstance(gt4py_program_arg, ts.ScalarType)
+                assert gt4py_program_arg.kind in [ts.ScalarKind.FLOAT32, ts.ScalarKind.FLOAT64]
+            case str() | np.str_():
+                assert isinstance(gt4py_program_arg, ts.ScalarType)
+                assert gt4py_program_arg.kind == ts.ScalarKind.STRING
+            case dace.data.Array():
+                assert isinstance(gt4py_program_arg, ts.FieldType)
+                assert len(dace_parsed_arg.shape) == len(gt4py_program_arg.dims)
+                assert dace_parsed_arg.dtype == dace_utils.as_dace_type(gt4py_program_arg.dtype)
+            case dace.data.Structure() | dict() | collections.OrderedDict():
+                # offset provider
+                pass
+            case _:
+                raise ValueError(
+                    f"Unresolved case for {dace_parsed_arg} (==, !=) {gt4py_program_arg}"
+                )
