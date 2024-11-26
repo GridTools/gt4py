@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import abc
 import dataclasses
+import functools
 import itertools
 import operator
 from typing import Any, Dict, Iterable, List, Optional, Protocol, Sequence, Set, Tuple, Union
@@ -41,7 +42,7 @@ class DataflowBuilder(Protocol):
     """Visitor interface to build a dataflow subgraph."""
 
     @abc.abstractmethod
-    def get_offset_provider(self, offset: str) -> gtx_common.OffsetProviderElem: ...
+    def get_offset_provider_type(self, offset: str) -> gtx_common.OffsetProviderTypeElem: ...
 
     @abc.abstractmethod
     def unique_nsdfg_name(self, sdfg: dace.SDFG, prefix: str) -> str: ...
@@ -99,8 +100,15 @@ class SDFGBuilder(DataflowBuilder, Protocol):
     """Visitor interface available to GTIR-primitive translators."""
 
     @abc.abstractmethod
+    def make_field(
+        self, data_node: dace.nodes.AccessNode, data_type: ts.FieldType | ts.ScalarType
+    ) -> gtir_builtin_translators.FieldopData:
+        """Retrieve the field data descriptor including the domain offset information."""
+        ...
+
+    @abc.abstractmethod
     def get_symbol_type(self, symbol_name: str) -> ts.DataType:
-        """Retrieve the GT4Py type of a symbol used in the program."""
+        """Retrieve the GT4Py type of a symbol used in the SDFG."""
         ...
 
     @abc.abstractmethod
@@ -141,6 +149,15 @@ def _collect_symbols_in_domain_expressions(
     )
 
 
+def _get_tuple_type(data: tuple[gtir_builtin_translators.FieldopResult, ...]) -> ts.TupleType:
+    """
+    Compute the `ts.TupleType` corresponding to the structure of a tuple of data nodes.
+    """
+    return ts.TupleType(
+        types=[_get_tuple_type(d) if isinstance(d, tuple) else d.gt_type for d in data]
+    )
+
+
 @dataclasses.dataclass(frozen=True)
 class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     """Provides translation capability from a GTIR program to a DaCe SDFG.
@@ -155,8 +172,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     from where to continue building the SDFG.
     """
 
-    offset_provider: gtx_common.OffsetProvider
+    offset_provider_type: gtx_common.OffsetProviderType
     global_symbols: dict[str, ts.DataType] = dataclasses.field(default_factory=lambda: {})
+    field_offsets: dict[str, Optional[list[dace.symbolic.SymExpr]]] = dataclasses.field(
+        default_factory=lambda: {}
+    )
     map_uids: eve.utils.UIDGenerator = dataclasses.field(
         init=False, repr=False, default_factory=lambda: eve.utils.UIDGenerator(prefix="map")
     )
@@ -164,8 +184,17 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         init=False, repr=False, default_factory=lambda: eve.utils.UIDGenerator(prefix="tlet")
     )
 
-    def get_offset_provider(self, offset: str) -> gtx_common.OffsetProviderElem:
-        return self.offset_provider[offset]
+    def get_offset_provider_type(self, offset: str) -> gtx_common.OffsetProviderTypeElem:
+        return self.offset_provider_type[offset]
+
+    def make_field(
+        self, data_node: dace.nodes.AccessNode, data_type: ts.FieldType | ts.ScalarType
+    ) -> gtir_builtin_translators.FieldopData:
+        if isinstance(data_type, ts.FieldType):
+            domain_offset = self.field_offsets.get(data_node.data, None)
+        else:
+            domain_offset = None
+        return gtir_builtin_translators.FieldopData(data_node, data_type, domain_offset)
 
     def get_symbol_type(self, symbol_name: str) -> ts.DataType:
         return self.global_symbols[symbol_name]
@@ -195,10 +224,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             Two lists of symbols, one for the shape and the other for the strides of the array.
         """
         dc_dtype = gtir_builtin_translators.INDEX_DTYPE
-        neighbor_tables = dace_utils.filter_connectivities(self.offset_provider)
+        neighbor_table_types = dace_utils.filter_connectivity_types(self.offset_provider_type)
         shape = [
             (
-                neighbor_tables[dim.value].max_neighbors
+                neighbor_table_types[dim.value].max_neighbors
                 if dim.kind == gtx_common.DimensionKind.LOCAL
                 else dace.symbol(dace_utils.field_size_symbol_name(name, i), dc_dtype)
             )
@@ -248,12 +277,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         """
         if isinstance(gt_type, ts.TupleType):
             tuple_fields = []
-            for tname, tsymbol_type in dace_gtir_utils.get_tuple_fields(
-                name, gt_type, flatten=True
-            ):
+            for tname, ttype in dace_gtir_utils.get_tuple_fields(name, gt_type, flatten=True):
                 tuple_fields.extend(
                     self._add_storage(
-                        sdfg, symbolic_arguments, tname, tsymbol_type, transient, tuple_name=name
+                        sdfg, symbolic_arguments, tname, ttype, transient, tuple_name=name
                     )
                 )
             return tuple_fields
@@ -275,7 +302,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     tuple_name, gt_type.dims
                 )
             sdfg.add_array(name, sym_shape, dc_dtype, strides=sym_strides, transient=transient)
-
             return [(name, gt_type)]
 
         elif isinstance(gt_type, ts.ScalarType):
@@ -344,7 +370,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 head_state.add_nedge(
                     field.dc_node, temp_node, sdfg.make_array_memlet(field.dc_node.data)
                 )
-                return gtir_builtin_translators.FieldopData(temp_node, field.gt_type)
+                return field.make_copy(temp_node)
 
         temp_result = gtx_utils.tree_map(make_temps)(result)
         return list(gtx_utils.flatten_nested_tuple((temp_result,)))
@@ -374,13 +400,12 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             self.global_symbols[pname] = param.type
 
         # add SDFG storage for connectivity tables
-        for offset, offset_provider in dace_utils.filter_connectivities(
-            self.offset_provider
+        for offset, connectivity_type in dace_utils.filter_connectivity_types(
+            self.offset_provider_type
         ).items():
-            scalar_kind = tt.get_scalar_kind(offset_provider.index_type)
-            local_dim = gtx_common.Dimension(offset, kind=gtx_common.DimensionKind.LOCAL)
+            scalar_type = tt.from_dtype(connectivity_type.dtype)
             gt_type = ts.FieldType(
-                [offset_provider.origin_axis, local_dim], ts.ScalarType(scalar_kind)
+                [connectivity_type.source_dim, connectivity_type.neighbor_dim], scalar_type
             )
             # We store all connectivity tables as transient arrays here; later, while building
             # the field operator expressions, we change to non-transient (i.e. allocated externally)
@@ -405,6 +430,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         """
         if node.function_definitions:
             raise NotImplementedError("Functions expected to be inlined as lambda calls.")
+
+        # Since program field arguments are passed to the SDFG as full-shape arrays,
+        # there is no offset that needs to be compensated.
+        assert len(self.field_offsets) == 0
 
         sdfg = dace.SDFG(node.id)
         sdfg.debuginfo = dace_utils.debug_info(node, default=sdfg.debuginfo)
@@ -460,7 +489,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
           The SDFG head state, eventually updated if the target write requires a new state.
         """
 
-        temp_fields = self._visit_expression(stmt.expr, sdfg, state)
+        source_fields = self._visit_expression(stmt.expr, sdfg, state)
 
         # the target expression could be a `SymRef` to an output node or a `make_tuple` expression
         # in case the statement returns more than one field
@@ -483,17 +512,26 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         }
 
         target_state: Optional[dace.SDFGState] = None
-        for temp, target in zip(temp_fields, target_fields, strict=True):
+        for source, target in zip(source_fields, target_fields, strict=True):
             target_desc = sdfg.arrays[target.dc_node.data]
             assert not target_desc.transient
 
             if isinstance(target.gt_type, ts.FieldType):
-                subset = ",".join(
+                target_subset = ",".join(
                     f"{domain[dim][0]}:{domain[dim][1]}" for dim in target.gt_type.dims
+                )
+                source_subset = (
+                    target_subset
+                    if source.offset is None
+                    else ",".join(
+                        f"{domain[dim][0] - offset}:{domain[dim][1] - offset}"
+                        for dim, offset in zip(target.gt_type.dims, source.offset, strict=True)
+                    )
                 )
             else:
                 assert len(domain) == 0
-                subset = "0"
+                target_subset = "0"
+                source_subset = "0"
 
             if target.dc_node.data in state_input_data:
                 # if inout argument, write the result in separate next state
@@ -502,17 +540,21 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     target_state = sdfg.add_state_after(state, f"post_{state.label}")
                 # create new access nodes in the target state
                 target_state.add_nedge(
-                    target_state.add_access(temp.dc_node.data),
+                    target_state.add_access(source.dc_node.data),
                     target_state.add_access(target.dc_node.data),
-                    dace.Memlet(data=target.dc_node.data, subset=subset, other_subset=subset),
+                    dace.Memlet(
+                        data=target.dc_node.data, subset=target_subset, other_subset=source_subset
+                    ),
                 )
                 # remove isolated access node
                 state.remove_node(target.dc_node)
             else:
                 state.add_nedge(
-                    temp.dc_node,
+                    source.dc_node,
                     target.dc_node,
-                    dace.Memlet(data=target.dc_node.data, subset=subset, other_subset=subset),
+                    dace.Memlet(
+                        data=target.dc_node.data, subset=target_subset, other_subset=source_subset
+                    ),
                 )
 
         return target_state or state
@@ -575,17 +617,65 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             (str(param.id), arg) for param, arg in zip(node.params, args, strict=True)
         ]
 
+        def flatten_tuples(
+            name: str,
+            arg: gtir_builtin_translators.FieldopResult,
+        ) -> list[tuple[str, gtir_builtin_translators.FieldopData]]:
+            if isinstance(arg, tuple):
+                tuple_type = _get_tuple_type(arg)
+                tuple_field_names = [
+                    arg_name for arg_name, _ in dace_gtir_utils.get_tuple_fields(name, tuple_type)
+                ]
+                tuple_args = zip(tuple_field_names, arg, strict=True)
+                return list(
+                    itertools.chain(*[flatten_tuples(fname, farg) for fname, farg in tuple_args])
+                )
+            else:
+                return [(name, arg)]
+
+        lambda_arg_nodes = dict(
+            itertools.chain(*[flatten_tuples(pname, arg) for pname, arg in lambda_args_mapping])
+        )
+
         # inherit symbols from parent scope but eventually override with local symbols
         lambda_symbols = {
             sym: self.global_symbols[sym]
             for sym in symbol_ref_utils.collect_symbol_refs(node.expr, self.global_symbols.keys())
         } | {
-            pname: dace_gtir_utils.get_tuple_type(arg) if isinstance(arg, tuple) else arg.gt_type
+            pname: _get_tuple_type(arg) if isinstance(arg, tuple) else arg.gt_type
             for pname, arg in lambda_args_mapping
         }
 
+        def get_field_domain_offset(
+            p_name: str, p_type: ts.DataType
+        ) -> dict[str, Optional[list[dace.symbolic.SymExpr]]]:
+            if isinstance(p_type, ts.FieldType):
+                if p_name in lambda_arg_nodes:
+                    arg = lambda_arg_nodes[p_name]
+                    assert isinstance(arg, gtir_builtin_translators.FieldopData)
+                    return {p_name: arg.offset}
+                elif field_domain_offset := self.field_offsets.get(p_name, None):
+                    return {p_name: field_domain_offset}
+            elif isinstance(p_type, ts.TupleType):
+                p_fields = dace_gtir_utils.get_tuple_fields(p_name, p_type, flatten=True)
+                return functools.reduce(
+                    lambda field_offsets, field: (
+                        field_offsets | get_field_domain_offset(field[0], field[1])
+                    ),
+                    p_fields,
+                    {},
+                )
+            return {}
+
+        # populate mapping from field name to domain offset
+        lambda_field_offsets: dict[str, Optional[list[dace.symbolic.SymExpr]]] = {}
+        for p_name, p_type in lambda_symbols.items():
+            lambda_field_offsets |= get_field_domain_offset(p_name, p_type)
+
         # lower let-statement lambda node as a nested SDFG
-        lambda_translator = GTIRToSDFG(self.offset_provider, lambda_symbols)
+        lambda_translator = GTIRToSDFG(
+            self.offset_provider_type, lambda_symbols, lambda_field_offsets
+        )
         nsdfg = dace.SDFG(name=self.unique_nsdfg_name(sdfg, "lambda"))
         nstate = nsdfg.add_state("lambda")
 
@@ -604,33 +694,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             head_state=nstate,
         )
 
-        def _flatten_tuples(
-            name: str,
-            arg: gtir_builtin_translators.FieldopResult,
-        ) -> list[tuple[str, gtir_builtin_translators.FieldopData]]:
-            if isinstance(arg, tuple):
-                tuple_type = dace_gtir_utils.get_tuple_type(arg)
-                tuple_field_names = [
-                    arg_name for arg_name, _ in dace_gtir_utils.get_tuple_fields(name, tuple_type)
-                ]
-                tuple_args = zip(tuple_field_names, arg, strict=True)
-                return list(
-                    itertools.chain(*[_flatten_tuples(fname, farg) for fname, farg in tuple_args])
-                )
-            else:
-                return [(name, arg)]
-
         # Process lambda inputs
         #
         # All input arguments are passed as parameters to the nested SDFG, therefore
         # we they are stored as non-transient array and scalar objects.
         #
-        lambda_arg_nodes = dict(
-            itertools.chain(*[_flatten_tuples(pname, arg) for pname, arg in lambda_args_mapping])
-        )
         connectivity_arrays = {
             dace_utils.connectivity_identifier(offset)
-            for offset in dace_utils.filter_connectivities(self.offset_provider)
+            for offset in dace_utils.filter_connectivity_types(self.offset_provider_type)
         }
 
         input_memlets = {}
@@ -740,7 +811,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 head_state.add_edge(
                     nsdfg_node, connector, outer_node, None, sdfg.make_array_memlet(outer)
                 )
-                outer_data = gtir_builtin_translators.FieldopData(outer_node, inner_data.gt_type)
+                outer_data = inner_data.make_copy(outer_node)
             elif inner_data.dc_node.data in lambda_arg_nodes:
                 # This if branch and the next one handle the non-transient result nodes.
                 # Non-transient nodes are just input nodes that are immediately returned
@@ -749,7 +820,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 outer_data = lambda_arg_nodes[inner_data.dc_node.data]
             else:
                 outer_node = head_state.add_access(inner_data.dc_node.data)
-                outer_data = gtir_builtin_translators.FieldopData(outer_node, inner_data.gt_type)
+                outer_data = inner_data.make_copy(outer_node)
             # Isolated access node will make validation fail.
             # Isolated access nodes can be found in the join-state of an if-expression
             # or in lambda expressions that just construct tuples from input arguments.
@@ -778,7 +849,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
 def build_sdfg_from_gtir(
     ir: gtir.Program,
-    offset_provider: gtx_common.OffsetProvider,
+    offset_provider_type: gtx_common.OffsetProviderType,
 ) -> dace.SDFG:
     """
     Receives a GTIR program and lowers it to a DaCe SDFG.
@@ -788,15 +859,15 @@ def build_sdfg_from_gtir(
 
     Args:
         ir: The GTIR program node to be lowered to SDFG
-        offset_provider: The definitions of offset providers used by the program node
+        offset_provider_type: The definitions of offset providers used by the program node
 
     Returns:
         An SDFG in the DaCe canonical form (simplified)
     """
 
-    ir = gtir_type_inference.infer(ir, offset_provider=offset_provider)
+    ir = gtir_type_inference.infer(ir, offset_provider_type=offset_provider_type)
     ir = ir_prune_casts.PruneCasts().visit(ir)
-    sdfg_genenerator = GTIRToSDFG(offset_provider)
+    sdfg_genenerator = GTIRToSDFG(offset_provider_type)
     sdfg = sdfg_genenerator.visit(ir)
     assert isinstance(sdfg, dace.SDFG)
 

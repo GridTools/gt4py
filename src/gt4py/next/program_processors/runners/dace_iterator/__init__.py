@@ -7,10 +7,10 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import warnings
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Sequence
 from inspect import currentframe, getframeinfo
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 import dace
 from dace.sdfg import utils as sdutils
@@ -30,7 +30,7 @@ from .itir_to_sdfg import ItirToSDFG
 
 def preprocess_program(
     program: itir.FencilDefinition,
-    offset_provider: Mapping[str, Any],
+    offset_provider_type: common.OffsetProviderType,
     lift_mode: legacy_itir_transforms.LiftMode,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
     temporary_extraction_heuristics: Optional[
@@ -43,13 +43,13 @@ def preprocess_program(
         common_subexpression_elimination=False,
         force_inline_lambda_args=True,
         lift_mode=lift_mode,
-        offset_provider=offset_provider,
+        offset_provider_type=offset_provider_type,
         symbolic_domain_sizes=symbolic_domain_sizes,
         temporary_extraction_heuristics=temporary_extraction_heuristics,
         unroll_reduce=unroll_reduce,
     )
 
-    node = itir_type_inference.infer(node, offset_provider=offset_provider)
+    node = itir_type_inference.infer(node, offset_provider_type=offset_provider_type)
 
     if isinstance(node, itir.Program):
         fencil_definition = program_to_fencil.program_to_fencil(node)
@@ -64,7 +64,7 @@ def preprocess_program(
 def build_sdfg_from_itir(
     program: itir.FencilDefinition,
     arg_types: Sequence[ts.TypeSpec],
-    offset_provider: dict[str, Any],
+    offset_provider_type: common.OffsetProviderType,
     auto_optimize: bool = False,
     on_gpu: bool = False,
     column_axis: Optional[common.Dimension] = None,
@@ -101,10 +101,18 @@ def build_sdfg_from_itir(
 
     # visit ITIR and generate SDFG
     program, tmps = preprocess_program(
-        program, offset_provider, lift_mode, symbolic_domain_sizes, temporary_extraction_heuristics
+        program,
+        offset_provider_type,
+        lift_mode,
+        symbolic_domain_sizes,
+        temporary_extraction_heuristics,
     )
     sdfg_genenerator = ItirToSDFG(
-        list(arg_types), offset_provider, tmps, use_field_canonical_representation, column_axis
+        list(arg_types),
+        offset_provider_type,
+        tmps,
+        use_field_canonical_representation,
+        column_axis,
     )
     sdfg = sdfg_genenerator.visit(program)
     if sdfg is None:

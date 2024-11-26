@@ -40,7 +40,10 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         if (self.backend is None) or "dace" not in self.backend.name.lower():
             raise ValueError("The SDFG can be generated only for the DaCe backend.")
 
-        offset_provider = (self.connectivities or {}) | self._implicit_offset_provider
+        offset_provider: common.OffsetProvider = {
+            **(self.connectivities or {}),
+            **self._implicit_offset_provider,
+        }
         column_axis = kwargs.get("column_axis", None)
 
         gtir_stage = typing.cast(next_backend.Transforms, self.backend.transforms).past_to_itir(
@@ -122,7 +125,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         if self.connectivities:
             symbols = {}
             with_table = [
-                name for name, conn in self.connectivities.items() if hasattr(conn, "table")
+                name for name, conn in self.connectivities.items() if common.is_neighbor_table(conn)
             ]
             in_arrays_with_id = [
                 (name, conn_id)
@@ -167,8 +170,9 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             for name, conn_id in in_arrays_with_id:
                 if conn_id not in self.connectivity_tables_data_descriptors:
                     conn = self.connectivities[name]
+                    assert common.is_neighbor_table(conn)
                     self.connectivity_tables_data_descriptors[conn_id] = dace.data.Array(
-                        dtype=dace.int64 if conn.index_type == np.int64 else dace.int32,
+                        dtype=dace.int64 if conn.dtype == np.int64 else dace.int32,
                         shape=[
                             symbols[dace_utils.field_size_symbol_name(conn_id, 0)],
                             symbols[dace_utils.field_size_symbol_name(conn_id, 1)],
