@@ -237,7 +237,25 @@ def _create_temporary_field(
     output_dtype: itir_ts.ListType | ts.ScalarType,
     output_desc: Optional[dace.data.Data] = None,
 ) -> tuple[FieldopData, sbs.Indices]:
-    """Helper method to allocate a temporary field where to write the output of a field operator."""
+    """
+    Helper method to allocate a temporary field where to write the output of a field operator.
+
+    Args:
+        sdfg: The SDFG that represents the scope of the field data.
+        state: The SDFG state where to create an access node to the field data.
+        domain: The domain of the field operator that computes the field.
+        node_type: The GT4Py type of the IR node that produces this field.
+        output_dtype: The GT4Py type of the computation result in local view (stencil dataflow).
+        output_desc: The DaCe data descriptor of the computation result, used to extract the local dimension.
+
+    Returns:
+        A tuple of two elements:
+        - The field data descriptor, which includes the field access node in the given `state`
+          and the field offset for data access
+        - The list of indices to perform element access in the field. It needs to be
+          converted to range, before being used as memlet subset, as ranges are better
+          supported throughout DaCe.
+    """
     field_dims, field_offset, field_shape = _get_field_layout(domain)
     field_indices = _get_domain_indices(field_dims, field_offset)
 
