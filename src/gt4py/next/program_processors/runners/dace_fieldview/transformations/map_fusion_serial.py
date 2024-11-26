@@ -42,6 +42,8 @@ class MapFusionSerial(mfh.MapFusionHelper):
         only_toplevel_maps: Only consider Maps that are at the top.
         strict_dataflow: If `True`, the transformation ensures a more
             stricter version of the data flow.
+        fusion_callback: A user supplied function, same signature as `can_be_fused()`,
+            to check if a fusion should be performed.
 
     Notes:
         - This transformation modifies more nodes than it matches.

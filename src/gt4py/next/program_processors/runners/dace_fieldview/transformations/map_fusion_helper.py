@@ -17,12 +17,18 @@ DACE IS MERGED AND THE VERSION WAS UPGRADED.
 # ruff: noqa
 
 import copy
-from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union, Callable, TypeAlias
 
 import dace
 from dace import data, properties, subsets, symbolic, transformation
 from dace.sdfg import SDFG, SDFGState, nodes, validation
 from dace.transformation import helpers
+
+FusionCallback: TypeAlias = Callable[
+    ["MapFusionHelper", nodes.MapEntry, nodes.MapEntry, dace.SDFGState, dace.SDFG, bool], bool
+]
+"""Callback for the map fusion transformation to check if a fusion should be performed.
+"""
 
 
 @properties.make_properties
@@ -34,6 +40,8 @@ class MapFusionHelper(transformation.SingleStateTransformation):
         only_toplevel_maps: Only consider Maps that are at the top.
         strict_dataflow: If `True`, the transformation ensures a more
             stricter version of the data flow.
+        fusion_callback: A user supplied function, same signature as `can_be_fused()`,
+            to check if a fusion should be performed.
 
     Note:
         If `strict_dataflow` mode is enabled then the transformation will not remove
@@ -59,6 +67,12 @@ class MapFusionHelper(transformation.SingleStateTransformation):
         default=False,
         desc="If `True` then the transformation will ensure a more stricter data flow.",
     )
+
+    # Callable that can be specified by the user, if it is specified, it should be
+    #  a callable with the same signature as `can_be_fused()`. If the function returns
+    #  `False` then the fusion will be rejected.
+    _fusion_callback: Optional[FusionCallback]
+
     # Maps SDFGs to the set of data that can not be removed,
     #  because they transmit data _between states_, such data will be made 'shared'.
     #  This variable acts as a cache, and is managed by 'is_shared_data()'.
@@ -69,16 +83,20 @@ class MapFusionHelper(transformation.SingleStateTransformation):
         only_inner_maps: Optional[bool] = None,
         only_toplevel_maps: Optional[bool] = None,
         strict_dataflow: Optional[bool] = None,
+        fusion_callback: Optional[FusionCallback] = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
+        self._shared_data = {}
+        self._fusion_callback = None
         if only_toplevel_maps is not None:
             self.only_toplevel_maps = bool(only_toplevel_maps)
         if only_inner_maps is not None:
             self.only_inner_maps = bool(only_inner_maps)
         if strict_dataflow is not None:
             self.strict_dataflow = bool(strict_dataflow)
-        self._shared_data = {}
+        if fusion_callback is not None:
+            self._fusion_callback = fusion_callback
 
     @classmethod
     def expressions(cls) -> bool:
@@ -96,6 +114,7 @@ class MapFusionHelper(transformation.SingleStateTransformation):
 
         This function only checks constrains that are common between serial and
         parallel map fusion process, which includes:
+        - The registered callback, if specified.
         - The scope of the maps.
         - The scheduling of the maps.
         - The map parameters.
@@ -107,6 +126,11 @@ class MapFusionHelper(transformation.SingleStateTransformation):
             sdfg: The SDFG itself.
             permissive: Currently unused.
         """
+        # Consult the callback if defined.
+        if self._fusion_callback is not None:
+            if not self._fusion_callback(self, map_entry_1, map_entry_2, graph, sdfg, permissive):
+                return False
+
         if self.only_inner_maps and self.only_toplevel_maps:
             raise ValueError("You specified both `only_inner_maps` and `only_toplevel_maps`.")
 
