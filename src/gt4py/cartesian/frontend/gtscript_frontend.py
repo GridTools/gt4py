@@ -705,6 +705,10 @@ def _is_datadims_indexing_name(name: str):
     return name.endswith(f".{_DATADIMS_INDEXER}")
 
 
+def _is_iterator_access(name: str) -> bool:
+    return name.startswith("THIS_K")
+
+
 def _trim_indexing_symbol(name: str):
     return name[: -1 * (len(_DATADIMS_INDEXER) + 1)]
 
@@ -1083,6 +1087,8 @@ class IRMaker(ast.NodeVisitor):
             result = nodes.FieldRef.datadims_index(
                 name=_trim_indexing_symbol(symbol), loc=nodes.Location.from_ast_node(node)
             )
+        elif _is_iterator_access(symbol):
+            return nodes.IteratorAccess()
         else:
             raise AssertionError(f"Missing '{symbol}' symbol definition")
 
@@ -1975,6 +1981,8 @@ class GTScriptParser(ast.NodeVisitor):
         nonlocals: dict, imported: dict, context: dict, *, exhaustive=True
     ):
         result = {}
+        if "THIS_K" in nonlocals:
+            nonlocals.pop("THIS_K")
         accepted_imports = set(imported.keys())
         resolved_imports = {**imported}
         resolved_values_list = list(nonlocals.items())
