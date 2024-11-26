@@ -151,27 +151,19 @@ def test_halo_exchange_helper_attrs(unstructured):
 
     rows = dace.symbol("rows")
     cols = dace.symbol("cols")
-    OffsetProvider_t = dace.data.Structure(
-        {
-            key: dace.data.Array(dtype=dace.int64, shape=[rows, cols], storage=dace_storage_type)
-            for key in unstructured.offset_provider
-        },
-        name="OffsetProvider",
-    )
 
     @dace.program
     def testee_dace(
         a: dace.data.Array(dtype=dace.int64, shape=(rows, cols), storage=dace_storage_type),
         b: dace.data.Array(dtype=dace.int64, shape=(rows, cols), storage=dace_storage_type),
         c: dace.data.Array(dtype=dace.int64, shape=(rows, cols), storage=dace_storage_type),
-        offset_provider: OffsetProvider_t,
-        connectivities: dace.compiletime,
     ):
-        testee_prog.with_grid_type(unstructured.grid_type).with_connectivities(connectivities)(
-            a, b, c, offset_provider=offset_provider
-        )
+        testee_prog(a, b, c)
 
-    sdfg = testee_dace.to_sdfg(connectivities=unstructured.offset_provider)
+    # if simplify=True, DaCe might inline the nested SDFG coming from Program.__sdfg__,
+    # effectively erasing the attributes we want to test for here
+    sdfg = testee_dace.to_sdfg(simplify=False)
+    sdfg.view()
 
     testee = next(
         subgraph for subgraph in sdfg.all_sdfgs_recursive() if subgraph.name == "testee_prog"
