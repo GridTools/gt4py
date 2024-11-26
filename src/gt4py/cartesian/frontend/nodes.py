@@ -430,6 +430,7 @@ class NativeFunction(enum.Enum):
     FLOOR = enum.auto()
     CEIL = enum.auto()
     TRUNC = enum.auto()
+
     ROUND = enum.auto()
     ERF = enum.auto()
     ERFC = enum.auto()
