@@ -106,6 +106,14 @@ def gt_gpu_transformation(
         )
         gtx_transformations.gt_simplify(sdfg, validate=validate, validate_all=validate_all)
 
+    # TODO(phimuell): Fixing the stride problem.
+    sdfg = gt_gpu_transform_non_standard_memlet(
+        sdfg=sdfg,
+        map_postprocess=True,
+        validate=validate,
+        validate_all=validate_all,
+    )
+
     # Set the GPU block size if it is known.
     if gpu_block_size is not None:
         gt_set_gpu_blocksize(
@@ -140,7 +148,8 @@ def gt_gpu_transform_non_standard_memlet(
     to them. The function limits this to only involve maps that have been
     create. It will also set the iteration order correctly.
 
-    This function must be run after the GPU transformation.
+    A user should not call this function directly, instead this function is
+    called by the `gt_gpu_transformation()` function.
 
     Args:
         sdfg: The SDFG that we process.
@@ -150,8 +159,9 @@ def gt_gpu_transform_non_standard_memlet(
         validate_all: Perform validation also on intermediate steps.
 
     Note:
-        Currently the function applies some crude heuristic to determine the
-        correct loop order.
+        - Currently the function applies some crude heuristic to determine the
+            correct loop order.
+        - This function should be called after `gt_set_iteration_order()` has run.
     """
     new_maps: set[dace_nodes.MapEntry] = set()
 
