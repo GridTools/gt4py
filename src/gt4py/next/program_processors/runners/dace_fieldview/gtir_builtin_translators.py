@@ -37,15 +37,17 @@ def _get_domain_indices(
     dims: Sequence[gtx_common.Dimension], offsets: Optional[Sequence[dace.symbolic.SymExpr]] = None
 ) -> sbs.Indices:
     """
-    Helper function to construct the list of indices for a field domain, applying an optional offset
-    in each dimension as start index.
+    Helper function to construct the list of indices for a field domain, applying
+    an optional offset in each dimension as start index.
 
     Args:
         dims: The field dimensions.
         offsets: The range start index in each dimension.
 
     Returns:
-        A list of indices to be used in memlet subset.
+        A list of indices for field access in dace arrays. As this list is returned
+        as `dace.subsets.Indices`, it should be converted to `dace.subsets.Range` before
+        being used in memlet subset because ranges are better supported throughout DaCe.
     """
     index_variables = [dace.symbolic.SymExpr(dace_gtir_utils.get_map_variable(dim)) for dim in dims]
     if offsets is None:
@@ -79,8 +81,9 @@ class FieldopData:
     gt_type: ts.FieldType | ts.ScalarType
     offset: Optional[list[dace.symbolic.SymExpr]]
 
-    def clone(self, data_node: dace.nodes.AccessNode) -> FieldopData:
+    def make_copy(self, data_node: dace.nodes.AccessNode) -> FieldopData:
         """Create a copy of this data descriptor with a different access node."""
+        assert data_node != self.dc_node
         return FieldopData(data_node, self.gt_type, self.offset)
 
     def get_local_view(
@@ -99,17 +102,13 @@ class FieldopData:
                 dim: gtir_dataflow.SymbolExpr(index, INDEX_DTYPE)
                 for dim, index in zip(domain_dims, domain_indices)
             }
-            if self.offset is None:
-                field_domain = [(dim, dace.symbolic.SymExpr(0)) for dim in self.gt_type.dims]
-            else:
-                field_domain = [
-                    (dim, off) for dim, off in zip(self.gt_type.dims, self.offset, strict=True)
-                ]
-
+            field_domain = [
+                (dim, dace.symbolic.SymExpr(0) if self.offset is None else self.offset[i])
+                for i, dim in enumerate(self.gt_type.dims)
+            ]
             local_dims = [
                 dim for dim in self.gt_type.dims if dim.kind == gtx_common.DimensionKind.LOCAL
             ]
-
             if len(local_dims) == 0:
                 return gtir_dataflow.IteratorExpr(
                     self.dc_node, self.gt_type.dtype, field_domain, it_indices
@@ -226,8 +225,8 @@ def _get_field_layout(
             - the domain size in each dimension
     """
     domain_dims, domain_lbs, domain_ubs = zip(*domain)
-    size = [(ub - lb) for lb, ub in zip(domain_lbs, domain_ubs)]
-    return list(domain_dims), list(domain_lbs), size
+    domain_sizes = [(ub - lb) for lb, ub in zip(domain_lbs, domain_ubs)]
+    return list(domain_dims), list(domain_lbs), domain_sizes
 
 
 def _create_temporary_field(
@@ -509,7 +508,7 @@ def translate_if(
         outer, _ = sdfg.add_temp_transient_like(inner_desc)
         outer_node = state.add_access(outer)
 
-        return inner_data.clone(outer_node)
+        return inner_data.make_copy(outer_node)
 
     result_temps = gtx_utils.tree_map(construct_output)(true_br_args)
 

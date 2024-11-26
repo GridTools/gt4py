@@ -91,9 +91,10 @@ class IteratorExpr:
         field: Access node to the field this iterator operates on.
         gt_dtype: GT4Py data type, which includes the `offset_type` local dimension for lists.
         field_domain: Field domain represented as a sorted list of dimensions and offset values,
-            used to sort the map index variables in the memlet subset. The offset value is either
-            the start index of dimension range or the compile-time value of a shift expression,
-            or a composition of both.
+            used to find the position of a map index variable in the memlet subset. The offset
+            value is either the start index of dimension range or the compile-time value of
+            a shift expression, or a composition of both, and it must be subtracted to the index
+            variable when constructing the memlet subset range.
         indices: Maps each dimension to an index value, which could be either a symbolic value
             or the result of a tasklet computation like neighbors connectivity or dynamic offset.
     """

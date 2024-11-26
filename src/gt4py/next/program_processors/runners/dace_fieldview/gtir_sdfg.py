@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import abc
 import dataclasses
+import functools
 import itertools
 import operator
 from typing import Any, Dict, Iterable, List, Optional, Protocol, Sequence, Set, Tuple, Union
@@ -190,7 +191,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         self, data_node: dace.nodes.AccessNode, data_type: ts.FieldType | ts.ScalarType
     ) -> gtir_builtin_translators.FieldopData:
         if isinstance(data_type, ts.FieldType):
-            domain_offset = self.field_offsets[data_node.data]
+            domain_offset = self.field_offsets.get(data_node.data, None)
         else:
             domain_offset = None
         return gtir_builtin_translators.FieldopData(data_node, data_type, domain_offset)
@@ -285,15 +286,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             return tuple_fields
 
         elif isinstance(gt_type, ts.FieldType):
-            if name not in self.field_offsets:
-                # Ensure that the field offset is defined, eventually set to `None`
-                # for program field arguments since they are always passed with full shape.
-                self.field_offsets[name] = None
-
             if len(gt_type.dims) == 0:
                 # represent zero-dimensional fields as scalar arguments
                 return self._add_storage(sdfg, symbolic_arguments, name, gt_type.dtype, transient)
-
             # handle default case: field with one or more dimensions
             dc_dtype = dace_utils.as_dace_type(gt_type.dtype)
             if tuple_name is None:
@@ -375,7 +370,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 head_state.add_nedge(
                     field.dc_node, temp_node, sdfg.make_array_memlet(field.dc_node.data)
                 )
-                return field.clone(temp_node)
+                return field.make_copy(temp_node)
 
         temp_result = gtx_utils.tree_map(make_temps)(result)
         return list(gtx_utils.flatten_nested_tuple((temp_result,)))
@@ -622,7 +617,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             (str(param.id), arg) for param, arg in zip(node.params, args, strict=True)
         ]
 
-        def _flatten_tuples(
+        def flatten_tuples(
             name: str,
             arg: gtir_builtin_translators.FieldopResult,
         ) -> list[tuple[str, gtir_builtin_translators.FieldopData]]:
@@ -633,13 +628,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 ]
                 tuple_args = zip(tuple_field_names, arg, strict=True)
                 return list(
-                    itertools.chain(*[_flatten_tuples(fname, farg) for fname, farg in tuple_args])
+                    itertools.chain(*[flatten_tuples(fname, farg) for fname, farg in tuple_args])
                 )
             else:
                 return [(name, arg)]
 
         lambda_arg_nodes = dict(
-            itertools.chain(*[_flatten_tuples(pname, arg) for pname, arg in lambda_args_mapping])
+            itertools.chain(*[flatten_tuples(pname, arg) for pname, arg in lambda_args_mapping])
         )
 
         # inherit symbols from parent scope but eventually override with local symbols
@@ -651,27 +646,31 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             for pname, arg in lambda_args_mapping
         }
 
-        # populate mapping from field name to domain offset
-        lambda_field_offsets: dict[str, Optional[list[dace.symbolic.SymExpr]]] = {}
-        for p_name, p_type in lambda_symbols.items():
+        def get_field_domain_offset(
+            p_name: str, p_type: ts.DataType
+        ) -> dict[str, Optional[list[dace.symbolic.SymExpr]]]:
             if isinstance(p_type, ts.FieldType):
                 if p_name in lambda_arg_nodes:
                     arg = lambda_arg_nodes[p_name]
                     assert isinstance(arg, gtir_builtin_translators.FieldopData)
-                    lambda_field_offsets[p_name] = arg.offset
-                else:
-                    lambda_field_offsets[p_name] = self.field_offsets[p_name]
+                    return {p_name: arg.offset}
+                elif field_domain_offset := self.field_offsets.get(p_name, None):
+                    return {p_name: field_domain_offset}
             elif isinstance(p_type, ts.TupleType):
                 p_fields = dace_gtir_utils.get_tuple_fields(p_name, p_type, flatten=True)
-                lambda_field_offsets |= {
-                    p_tname: (
-                        lambda_arg_nodes[p_tname].offset
-                        if p_tname in lambda_arg_nodes
-                        else self.field_offsets[p_tname]
-                    )
-                    for p_tname, p_ttype in p_fields
-                    if isinstance(p_ttype, ts.FieldType)
-                }
+                return functools.reduce(
+                    lambda field_offsets, field: (
+                        field_offsets | get_field_domain_offset(field[0], field[1])
+                    ),
+                    p_fields,
+                    {},
+                )
+            return {}
+
+        # populate mapping from field name to domain offset
+        lambda_field_offsets: dict[str, Optional[list[dace.symbolic.SymExpr]]] = {}
+        for p_name, p_type in lambda_symbols.items():
+            lambda_field_offsets |= get_field_domain_offset(p_name, p_type)
 
         # lower let-statement lambda node as a nested SDFG
         lambda_translator = GTIRToSDFG(
@@ -812,7 +811,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 head_state.add_edge(
                     nsdfg_node, connector, outer_node, None, sdfg.make_array_memlet(outer)
                 )
-                outer_data = inner_data.clone(outer_node)
+                outer_data = inner_data.make_copy(outer_node)
             elif inner_data.dc_node.data in lambda_arg_nodes:
                 # This if branch and the next one handle the non-transient result nodes.
                 # Non-transient nodes are just input nodes that are immediately returned
@@ -821,7 +820,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 outer_data = lambda_arg_nodes[inner_data.dc_node.data]
             else:
                 outer_node = head_state.add_access(inner_data.dc_node.data)
-                outer_data = inner_data.clone(outer_node)
+                outer_data = inner_data.make_copy(outer_node)
             # Isolated access node will make validation fail.
             # Isolated access nodes can be found in the join-state of an if-expression
             # or in lambda expressions that just construct tuples from input arguments.
