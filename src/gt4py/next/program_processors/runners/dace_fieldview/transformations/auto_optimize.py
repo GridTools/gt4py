@@ -102,6 +102,12 @@ def gt_auto_optimize(
         `gt_find_constant_arguments()` function can be used.
 
     Todo:
+        - Stride of transients, they are in C order and this should be changed.
+        - Fix the strides and iteration order of the maps that are created due
+            to the memlet to map transformation, that we have to do.
+        - Redundant array removal should be specialized for the case it is the
+            of a map.
+        - Restore rule 3 with, with the layer of access nodes.
         - Specify arguments to set the size of GPU thread blocks depending on the
             dimensions. I.e. be able to use a different size for 1D than 2D Maps.
         - Implement some model to further guide to determine what we want to fuse.

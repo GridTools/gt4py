@@ -255,6 +255,7 @@ def gt_substitute_compiletime_symbols(
         validate=validate,
         validate_all=validate_all,
     )
+    dace.sdfg.propagation.propagate_memlets_sdfg(sdfg)
 
 
 def gt_reduce_distributed_buffering(
