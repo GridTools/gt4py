@@ -234,41 +234,48 @@ def _create_temporary_field(
     state: dace.SDFGState,
     domain: FieldopDomain,
     node_type: ts.FieldType,
-    dataflow_output: gtir_dataflow.DataflowOutputEdge,
-) -> FieldopData:
+    output_dtype: itir_ts.ListType | ts.ScalarType,
+    output_desc: Optional[dace.data.Data] = None,
+) -> tuple[FieldopData, sbs.Indices]:
     """Helper method to allocate a temporary field where to write the output of a field operator."""
     field_dims, field_offset, field_shape = _get_field_layout(domain)
+    field_indices = _get_domain_indices(field_dims, field_offset)
 
-    output_desc = dataflow_output.result.dc_node.desc(sdfg)
-    if isinstance(output_desc, dace.data.Array):
+    if output_desc is None:
+        # assume scalar data
+        dc_dtype = dace_utils.as_dace_type(node_type.dtype)
+    elif isinstance(output_desc, dace.data.Array):
         assert isinstance(node_type.dtype, itir_ts.ListType)
         assert isinstance(node_type.dtype.element_type, ts.ScalarType)
         assert output_desc.dtype == dace_utils.as_dace_type(node_type.dtype.element_type)
+        dc_dtype = output_desc.dtype
         # extend the array with the local dimensions added by the field operator (e.g. `neighbors`)
         field_offset.extend(output_desc.offset)
         field_shape.extend(output_desc.shape)
     elif isinstance(output_desc, dace.data.Scalar):
         assert output_desc.dtype == dace_utils.as_dace_type(node_type.dtype)
+        dc_dtype = output_desc.dtype
     else:
         raise ValueError(f"Cannot create field for dace type {output_desc}.")
 
     # allocate local temporary storage
-    temp_name, _ = sdfg.add_temp_transient(field_shape, output_desc.dtype)
-    field_node = state.add_access(temp_name)
+    field_name, _ = sdfg.add_temp_transient(field_shape, dc_dtype)
+    field_node = state.add_access(field_name)
 
-    if isinstance(dataflow_output.result.gt_dtype, ts.ScalarType):
-        field_dtype = dataflow_output.result.gt_dtype
+    if isinstance(output_dtype, ts.ScalarType):
+        field_dtype = output_dtype
     else:
-        assert isinstance(dataflow_output.result.gt_dtype.element_type, ts.ScalarType)
-        field_dtype = dataflow_output.result.gt_dtype.element_type
-        assert dataflow_output.result.gt_dtype.offset_type is not None
-        field_dims.append(dataflow_output.result.gt_dtype.offset_type)
+        assert isinstance(output_dtype.element_type, ts.ScalarType)
+        field_dtype = output_dtype.element_type
+        assert output_dtype.offset_type is not None
+        field_dims.append(output_dtype.offset_type)
 
-    return FieldopData(
+    field = FieldopData(
         field_node,
         ts.FieldType(field_dims, field_dtype),
         offset=(field_offset if set(field_offset) != {0} else None),
     )
+    return field, field_indices
 
 
 def extract_domain(node: gtir.Node) -> FieldopDomain:
@@ -349,8 +356,6 @@ def translate_as_fieldop(
 
     # parse the domain of the field operator
     domain = extract_domain(domain_expr)
-    domain_dims, domain_offsets, _ = zip(*domain)
-    domain_indices = _get_domain_indices(domain_dims, domain_offsets)
 
     # visit the list of arguments to be passed to the lambda expression
     stencil_args = [_parse_fieldop_arg(arg, sdfg, state, sdfg_builder, domain) for arg in node.args]
@@ -359,15 +364,7 @@ def translate_as_fieldop(
     taskgen = gtir_dataflow.LambdaToDataflow(sdfg, state, sdfg_builder)
     input_edges, output = taskgen.visit(stencil_expr, args=stencil_args)
     output_desc = output.result.dc_node.desc(sdfg)
-
-    if isinstance(node.type.dtype, itir_ts.ListType):
-        assert isinstance(output_desc, dace.data.Array)
-        # additional local dimension for neighbors
-        # TODO(phimuell): Investigate if we should swap the two.
-        output_subset = sbs.Range.from_indices(domain_indices) + sbs.Range.from_array(output_desc)
-    else:
-        assert isinstance(output_desc, dace.data.Scalar)
-        output_subset = sbs.Range.from_indices(domain_indices)
+    output_dtype = output.result.gt_dtype
 
     # create map range corresponding to the field operator domain
     me, mx = sdfg_builder.add_map(
@@ -380,16 +377,27 @@ def translate_as_fieldop(
     )
 
     # allocate local temporary storage for the result field
-    result_field = _create_temporary_field(sdfg, state, domain, node.type, output)
+    output_field, output_indices = _create_temporary_field(
+        sdfg, state, domain, node.type, output_dtype, output_desc
+    )
+
+    if isinstance(node.type.dtype, itir_ts.ListType):
+        assert isinstance(output_desc, dace.data.Array)
+        # additional local dimension for neighbors
+        # TODO(phimuell): Investigate if we should swap the two.
+        output_subset = sbs.Range.from_indices(output_indices) + sbs.Range.from_array(output_desc)
+    else:
+        assert isinstance(output_desc, dace.data.Scalar)
+        output_subset = sbs.Range.from_indices(output_indices)
 
     # here we setup the edges from the map entry node
     for edge in input_edges:
         edge.connect(me)
 
     # and here the edge writing the result data through the map exit node
-    output.connect(mx, result_field.dc_node, output_subset)
+    output.connect(mx, output_field.dc_node, output_subset)
 
-    return result_field
+    return output_field
 
 
 def translate_broadcast_scalar(
@@ -415,8 +423,6 @@ def translate_broadcast_scalar(
     assert cpm.is_ref_to(stencil_expr, "deref")
 
     domain = extract_domain(domain_expr)
-    output_dims, output_offset, output_shape = _get_field_layout(domain)
-    output_subset = sbs.Range.from_indices(_get_domain_indices(output_dims, output_offset))
 
     assert len(node.args) == 1
     scalar_expr = _parse_fieldop_arg(node.args[0], sdfg, state, sdfg_builder, domain)
@@ -427,21 +433,23 @@ def translate_broadcast_scalar(
             str(scalar_expr.subset) if isinstance(scalar_expr, gtir_dataflow.MemletExpr) else "0"
         )
         input_node = scalar_expr.dc_node
-        gt_dtype = node.args[0].type
+        output_dtype = node.args[0].type
     elif isinstance(node.args[0].type, ts.FieldType):
         assert isinstance(scalar_expr, gtir_dataflow.IteratorExpr)
+        assert isinstance(scalar_expr.gt_dtype, ts.ScalarType)
         if len(node.args[0].type.dims) == 0:  # zero-dimensional field
             input_subset = "0"
         else:
             input_subset = scalar_expr.get_memlet_subset(sdfg)
 
         input_node = scalar_expr.field
-        gt_dtype = node.args[0].type.dtype
+        output_dtype = node.args[0].type.dtype
     else:
         raise ValueError(f"Unexpected argument {node.args[0]} in broadcast expression.")
 
-    output, _ = sdfg.add_temp_transient(output_shape, input_node.desc(sdfg).dtype)
-    output_node = state.add_access(output)
+    output_field, output_indices = _create_temporary_field(
+        sdfg, state, domain, node.type, output_dtype
+    )
 
     sdfg_builder.add_mapped_tasklet(
         "broadcast",
@@ -452,13 +460,17 @@ def translate_broadcast_scalar(
         },
         inputs={"__inp": dace.Memlet(data=input_node.data, subset=input_subset)},
         code="__val = __inp",
-        outputs={"__val": dace.Memlet(data=output_node.data, subset=output_subset)},
-        input_nodes={input_node.data: input_node},
-        output_nodes={output_node.data: output_node},
+        outputs={
+            "__val": dace.Memlet(
+                data=output_field.dc_node.data, subset=sbs.Range.from_indices(output_indices)
+            )
+        },
+        input_nodes={input_node},
+        output_nodes={output_field.dc_node},
         external_edges=True,
     )
 
-    return FieldopData(output_node, ts.FieldType(output_dims, gt_dtype), output_offset)
+    return output_field
 
 
 def translate_if(
@@ -573,11 +585,12 @@ def translate_index(
     dim, lower_bound, upper_bound = domain[0]
     dim_index = dace_gtir_utils.get_map_variable(dim)
 
-    field_dims, field_offset, field_shape = _get_field_layout(domain)
-    field_type = ts.FieldType(field_dims, dace_utils.as_itir_type(INDEX_DTYPE))
+    output_dtype = dace_utils.as_itir_type(INDEX_DTYPE)
 
-    output, _ = sdfg.add_temp_transient(field_shape, INDEX_DTYPE)
-    output_node = state.add_access(output)
+    assert isinstance(node.type, ts.FieldType)
+    output_field, output_indices = _create_temporary_field(
+        sdfg, state, domain, node.type, output_dtype
+    )
 
     sdfg_builder.add_mapped_tasklet(
         "index",
@@ -589,16 +602,16 @@ def translate_index(
         code=f"__val = {dim_index}",
         outputs={
             "__val": dace.Memlet(
-                data=output_node.data,
-                subset=sbs.Range.from_indices(_get_domain_indices(field_dims, field_offset)),
+                data=output_field.dc_node.data,
+                subset=sbs.Range.from_indices(output_indices),
             )
         },
         input_nodes={},
-        output_nodes={output_node.data: output_node},
+        output_nodes={output_field.dc_node},
         external_edges=True,
     )
 
-    return FieldopData(output_node, field_type, field_offset)
+    return output_field
 
 
 def _get_data_nodes(
