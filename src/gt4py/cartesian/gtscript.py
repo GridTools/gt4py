@@ -640,6 +640,17 @@ PARALLEL = 0
 """Parallel iteration order."""
 
 
+# GTScript builtins: Iterator Access
+class IteratorAccess:
+    def __init__(self, name: str):
+        assert name
+        self.name = name
+        self._gtscript_ = {"nonlocals": {}, "imported": {}}
+
+
+THIS_K = IteratorAccess("K")
+
+
 class _FieldDescriptor:
     def __init__(self, dtype, axes, data_dims=tuple()):
         if isinstance(dtype, str):

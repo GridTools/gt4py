@@ -36,6 +36,7 @@ from gt4py.cartesian.gtc.oir import (
     HorizontalRestriction,
     IJCache,
     Interval,
+    IteratorAccess,
     KCache,
     Literal,
     LocalScalar,
@@ -217,6 +218,9 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
             return f"np.{data_type.name.lower()}"
         else:
             return data_type.name.lower()
+
+    def visit_IteratorAccess(self, iterator_access: IteratorAccess, **_) -> str:
+        return iterator_access.name.value.lower()
 
     def visit_VariableKOffset(self, variable_k_offset: VariableKOffset, **_) -> str:
         return f"i,j,k+int({self.visit(variable_k_offset.k)})"
