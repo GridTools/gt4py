@@ -24,8 +24,7 @@ on some of the previous ones):
 
 """
 
-from __future__ import annotations  # isort:skip
-
+from __future__ import annotations
 
 from .concepts import (
     AnnexManager,
@@ -89,15 +88,6 @@ __all__ = [
     "SymbolRef",
     "VType",
     "register_annex_user",
-    "# datamodels" "Coerced",
-    "DataModel",
-    "FrozenModel",
-    "GenericDataModel",
-    "Unchecked",
-    "concretize",
-    "datamodel",
-    "field",
-    "frozenmodel",
     # datamodels
     "Coerced",
     "DataModel",
@@ -122,7 +112,7 @@ __all__ = [
     "pre_walk_values",
     "walk_items",
     "walk_values",
-    "# type_definition",
+    # type_definitions"
     "NOTHING",
     "ConstrainedStr",
     "Enum",
