@@ -13,7 +13,12 @@ that explains the general structure and requirements on the SDFGs.
 """
 
 from .auto_optimize import gt_auto_optimize
-from .gpu_utils import GPUSetBlockSize, gt_gpu_transformation, gt_set_gpu_blocksize
+from .gpu_utils import (
+    GPUSetBlockSize,
+    gt_gpu_transform_non_standard_memlet,
+    gt_gpu_transformation,
+    gt_set_gpu_blocksize,
+)
 from .loop_blocking import LoopBlocking
 from .map_fusion_parallel import MapFusionParallel
 from .map_fusion_serial import MapFusionSerial
@@ -53,4 +58,5 @@ __all__ = [
     "gt_reduce_distributed_buffering",
     "gt_find_constant_arguments",
     "gt_substitute_compiletime_symbols",
+    "gt_gpu_transform_non_standard_memlet",
 ]

@@ -14,7 +14,12 @@ import copy
 from typing import Any, Callable, Final, Optional, Sequence, Union
 
 import dace
-from dace import properties as dace_properties, transformation as dace_transformation
+from dace import (
+    dtypes as dace_dtypes,
+    properties as dace_properties,
+    transformation as dace_transformation,
+)
+from dace.codegen.targets import cpp as dace_cpp
 from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next.program_processors.runners.dace_fieldview import (
@@ -112,6 +117,161 @@ def gt_gpu_transformation(
 
     if validate_all or validate:
         sdfg.validate()
+
+    return sdfg
+
+
+def gt_gpu_transform_non_standard_memlet(
+    sdfg: dace.SDFG,
+    map_postprocess: bool,
+    validate: bool = True,
+    validate_all: bool = False,
+) -> dace.SDFG:
+    """Transform some non standard Melets to Maps.
+
+    The GPU code generator is not able to handle certain sets of Memlets. To
+    handle them, the code generator transforms them into copy Maps. The main
+    issue is that these happens after the auto optimizer, thus they will most
+    likely have the wrong iteration order.
+
+    This function allows to perform the preprocessing step before the actual
+    code generation. The function will perform the expansion. If
+    `map_postprocess` is `True` then the function will also apply map fusion
+    to them. The function limits this to only involve maps that have been
+    create. It will also set the iteration order correctly.
+
+    This function must be run after the GPU transformation.
+
+    Args:
+        sdfg: The SDFG that we process.
+        map_postprocess: Enable post processing of the maps that are created.
+            See the Note section below.
+        validate: Perform validation at the end of the function.
+        validate_all: Perform validation also on intermediate steps.
+
+    Note:
+        Currently the function applies some crude heuristic to determine the
+        correct loop order.
+    """
+    new_maps: set[dace_nodes.MapEntry] = set()
+
+    # This code is is copied from DaCe's code generator.
+    for e, state in list(sdfg.all_edges_recursive()):
+        nsdfg = state.parent
+        if (
+            isinstance(e.src, dace_nodes.AccessNode)
+            and isinstance(e.dst, dace_nodes.AccessNode)
+            and e.src.desc(nsdfg).storage == dace_dtypes.StorageType.GPU_Global
+            and e.dst.desc(nsdfg).storage == dace_dtypes.StorageType.GPU_Global
+        ):
+            a: dace_nodes.AccessNode = e.src
+            b: dace_nodes.AccessNode = e.dst
+
+            copy_shape, src_strides, dst_strides, _, _ = dace_cpp.memlet_copy_to_absolute_strides(
+                None, nsdfg, state, e, a, b
+            )
+            dims = len(copy_shape)
+            if dims == 1:
+                continue
+            elif dims == 2:
+                if src_strides[-1] != 1 or dst_strides[-1] != 1:
+                    try:
+                        is_src_cont = src_strides[0] / src_strides[1] == copy_shape[1]
+                        is_dst_cont = dst_strides[0] / dst_strides[1] == copy_shape[1]
+                    except (TypeError, ValueError):
+                        is_src_cont = False
+                        is_dst_cont = False
+                    if is_src_cont and is_dst_cont:
+                        continue
+                else:
+                    continue
+            elif dims > 2:
+                if not (src_strides[-1] != 1 or dst_strides[-1] != 1):
+                    continue
+
+            # For identifying the new map, we first store all neighbors of `a`.
+            old_neighbors_of_a: list[dace_nodes.AccessNode] = [
+                edge.dst for edge in state.out_edges(a)
+            ]
+
+            # Turn unsupported copy to a map
+            try:
+                dace_transformation.dataflow.CopyToMap.apply_to(
+                    nsdfg, save=False, annotate=False, a=a, b=b
+                )
+            except ValueError:  # If transformation doesn't match, continue normally
+                continue
+
+            # We find the new map by comparing the new neighborhood of `a` with the old one.
+            new_nodes: set[dace_nodes.MapEntry] = {
+                edge.dst for edge in state.out_edges(a) if edge.dst not in old_neighbors_of_a
+            }
+            assert any(isinstance(new_node, dace_nodes.MapEntry) for new_node in new_nodes)
+            assert len(new_nodes) == 1
+            new_maps.update(new_nodes)
+
+    # If there are no memlets are translated then we have nothing to do.
+    if len(new_maps) == 0:
+        return sdfg
+
+    # This function allows to restrict any fusion operation to the maps
+    #  that we have just created.
+    def restrict_fusion_to_newly_created_maps(
+        self: gtx_transformations.map_fusion_helper.MapFusionHelper,
+        map_entry_1: dace_nodes.MapEntry,
+        map_entry_2: dace_nodes.MapEntry,
+        graph: Union[dace.SDFGState, dace.SDFG],
+        sdfg: dace.SDFG,
+        permissive: bool,
+    ) -> bool:
+        return any(new_entry in new_maps for new_entry in [map_entry_1, map_entry_2])
+
+    # Using the callback to restrict the fusing
+    sdfg.apply_transformations_repeated(
+        [
+            gtx_transformations.MapFusionSerial(
+                only_toplevel_maps=True,
+                fusion_callback=restrict_fusion_to_newly_created_maps,
+            ),
+            gtx_transformations.MapFusionParallel(
+                only_toplevel_maps=True,
+                fusion_callback=restrict_fusion_to_newly_created_maps,
+            ),
+        ],
+        validate=validate,
+        validate_all=validate_all,
+    )
+
+    # Now we have to find the maps that are still here. We rely here on the fact
+    #  that at least one of the map that is involved in fusing still exists.
+    maps_to_modify: set[dace_nodes.MapEntry] = set()
+    for nsdfg in sdfg.all_sdfgs_recursive():
+        for state in nsdfg.states():
+            for map_entry in state.nodes():
+                if not isinstance(map_entry, dace_nodes.MapEntry):
+                    continue
+                if map_entry in new_maps:
+                    maps_to_modify.add(map_entry)
+    assert 0 < len(maps_to_modify) <= len(new_maps)
+
+    # This is a gross hack, but it is needed, for the following reasons:
+    #  - The transients have C order while the non-transients have (most
+    #       likely) FORTRAN order. So there is not an unique stride dimension.
+    #  - The newly created maps have names that does not reflect GT4Py dimensions,
+    #       thus we can not use `gt_set_iteration_order()`.
+    #  For these reasons we do the simplest thing assume that the maps are created
+    #  in C order and we must make them in FORTRAN order, which means just swapping
+    #  the order of the map parameters.
+    # TODO(phimuell): Do it properly.
+    for me_to_modify in maps_to_modify:
+        map_to_modify: dace_nodes.Map = me_to_modify.map
+        map_to_modify.params = list(reversed(map_to_modify.params))
+        map_to_modify.range = dace.subsets.Range(
+            (r1, r2, r3, t)
+            for (r1, r2, r3), t in zip(
+                reversed(map_to_modify.range.ranges), reversed(map_to_modify.range.tile_sizes)
+            )
+        )
 
     return sdfg
 
