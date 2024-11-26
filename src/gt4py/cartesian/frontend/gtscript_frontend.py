@@ -1391,21 +1391,39 @@ class IRMaker(ast.NodeVisitor):
         return result
 
     def _absolute_K_index_method(self, node: ast.Call):
+        # Dev note: we enforce .at(K=..., ddim=[...]) for the POC
+        #           A better version of this code would look through the keywords
+        #           in any order. `ddim` shall remain optional, K mandatory.
         assert _filter_absolute_K_index_method(node)
-        if len(node.keywords) != 1:
+        if len(node.keywords) != 1 and len(node.keywords) != 2:
             raise GTScriptSyntaxError(
-                message="Absolute K index bad syntax. Must be of the form`.at(K=...)`",
+                message="Absolute K index bad syntax. Must be of the form`.at(K=..., ddim=[...])` "
+                " with the `ddim` argument optional",
                 loc=nodes.Location.from_ast_node(node),
             )
         if node.keywords[0].arg != "K":
             raise GTScriptSyntaxError(
-                message="Absolute K index: bad syntax, only `K` is a valid parameter to `at`. "
+                message="Absolute K index: bad syntax, first argument must be `K`. "
                 "Must be of the form`.at(K=...)`",
+                loc=nodes.Location.from_ast_node(node),
+            )
+        if node.keywords[1].arg != "ddim":
+            raise GTScriptSyntaxError(
+                message="Absolute K index: bad syntax, second argument (optional) must be `ddim`. "
+                "Must be of the form`.at(K=..., ddim=[...])`",
+                loc=nodes.Location.from_ast_node(node),
+            )
+        if node.keywords[1].arg == "ddim" and not isinstance(node.keywords[1].value, ast.List):
+            raise GTScriptSyntaxError(
+                message="Absolute K index: bad syntax, second argument `ddim` (optional) must be "
+                "a list of values. Must be of the form`.at(K=..., ddim=[...])`",
                 loc=nodes.Location.from_ast_node(node),
             )
         field: nodes.FieldRef = self.visit(node.func.value)
         assert isinstance(field, nodes.FieldRef)
         field.offset = nodes.AbsoluteKIndex(k=self.visit(node.keywords[0].value))
+        if len(node.keywords) == 2:
+            field.data_index = [self.visit(value) for value in node.keywords[1].value.elts]
         return field
 
     def visit_Call(self, node: ast.Call):
