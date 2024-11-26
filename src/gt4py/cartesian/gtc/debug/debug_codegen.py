@@ -219,7 +219,7 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
             return data_type.name.lower()
 
     def visit_VariableKOffset(self, variable_k_offset: VariableKOffset, **_) -> str:
-        return f"i,j,k+{self.visit(variable_k_offset.k)}"
+        return f"i,j,k+int({self.visit(variable_k_offset.k)})"
 
     def visit_CartesianOffset(self, cartesian_offset: CartesianOffset, **kwargs) -> str:
         dimensions = kwargs["dimensions"]
