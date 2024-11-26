@@ -112,7 +112,7 @@ __all__ = [
     "pre_walk_values",
     "walk_items",
     "walk_values",
-    # type_definitions"
+    # type_definitions
     "NOTHING",
     "ConstrainedStr",
     "Enum",
