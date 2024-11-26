@@ -573,7 +573,8 @@ def translate_index(
     dim, lower_bound, upper_bound = domain[0]
     dim_index = dace_gtir_utils.get_map_variable(dim)
 
-    field_dims, field_shape = _get_field_shape(domain)
+    field_dims, field_offset, field_shape = _get_field_layout(domain)
+    field_type = ts.FieldType(field_dims, dace_utils.as_itir_type(INDEX_DTYPE))
 
     output, _ = sdfg.add_temp_transient(field_shape, INDEX_DTYPE)
     output_node = state.add_access(output)
@@ -586,13 +587,18 @@ def translate_index(
         },
         inputs={},
         code=f"__val = {dim_index}",
-        outputs={"__val": dace.Memlet(data=output_node.data, subset=dim_index)},
+        outputs={
+            "__val": dace.Memlet(
+                data=output_node.data,
+                subset=sbs.Range.from_indices(_get_domain_indices(field_dims, field_offset)),
+            )
+        },
         input_nodes={},
         output_nodes={output_node.data: output_node},
         external_edges=True,
     )
 
-    return FieldopData(output_node, ts.FieldType(field_dims, dace_utils.as_itir_type(INDEX_DTYPE)))
+    return FieldopData(output_node, field_type, field_offset)
 
 
 def _get_data_nodes(

@@ -521,8 +521,14 @@ def cast_as_fieldop(type_: str, domain: Optional[itir.FunCall] = None):
 
 def index(dim: common.Dimension) -> itir.FunCall:
     """
-    Create a call to the `index` builtin on a given dimension, shorthand for `call("index")(axis)`,
-    after converting the dimension to `itir.AxisLiteral`.
+    Create a call to the `index` builtin, shorthand for `call("index")(axis)`,
+    after converting the given dimension to `itir.AxisLiteral`.
+
+    Args:
+        dim: the dimension corresponding to the index axis.
+
+    Returns:
+        A function that returns a Field of indices in the given dimension.
     """
     return call("index")(itir.AxisLiteral(value=dim.value, kind=dim.kind))
 
