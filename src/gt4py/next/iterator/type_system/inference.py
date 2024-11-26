@@ -508,8 +508,9 @@ class ITIRTypeInference(eve.NodeTranslator):
             # expression is simply discarded.
             expr_type = functools.reduce(
                 lambda tuple_type, i: tuple_type.types[i]  # type: ignore[attr-defined]  # format ensured by primitive_constituents
+                # `ts.DeferredType` only occurs for scans returning a tuple
                 if not isinstance(tuple_type, ts.DeferredType)
-                else ts.DeferredType(constraint=None),  # scan can return a tuple of ts.DeferredType
+                else ts.DeferredType(constraint=None),
                 path,
                 node.expr.type,
             )
