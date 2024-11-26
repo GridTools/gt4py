@@ -21,6 +21,7 @@ from typing import Any, Dict, Final, List, Literal, Optional, Sequence, Set, Tup
 import numpy as np
 
 from gt4py.cartesian import definitions as gt_definitions, gtscript, utils as gt_utils
+from gt4py.cartesian.config import build_settings
 from gt4py.cartesian.frontend import node_util, nodes
 from gt4py.cartesian.frontend.defir_to_gtir import DefIRToGTIR, UnrollVectorAssignments
 from gt4py.cartesian.gtc import utils as gtc_utils
@@ -410,9 +411,9 @@ class CallInliner(ast.NodeTransformer):
         if isinstance(node.value, ast.Call):
             if _filter_absolute_K_index_method(node.value):
                 return node
-            elif (
-                gt_meta.get_qualified_name_from_node(node.value.func) not in gtscript.MATH_BUILTINS
-            ):
+            elif gt_meta.get_qualified_name_from_node(
+                node.value.func
+            ) not in gtscript.MATH_BUILTINS.union(gtscript.TYPE_HINT_AND_CAST_BUILTINS):
                 assert len(node.targets) == 1
                 self.visit(node.value, target_node=node.targets[0])
                 # This node can be now removed since the trivial assignment has been already done
@@ -704,6 +705,10 @@ def _is_datadims_indexing_name(name: str):
     return name.endswith(f".{_DATADIMS_INDEXER}")
 
 
+def _is_iterator_access(name: str) -> bool:
+    return name.startswith("THIS_K")
+
+
 def _trim_indexing_symbol(name: str):
     return name[: -1 * (len(_DATADIMS_INDEXER) + 1)]
 
@@ -777,7 +782,13 @@ class IRMaker(ast.NodeVisitor):
             "floor": nodes.NativeFunction.FLOOR,
             "ceil": nodes.NativeFunction.CEIL,
             "trunc": nodes.NativeFunction.TRUNC,
-            "int": nodes.NativeFunction.INT,
+            "round": nodes.NativeFunction.ROUND,
+            "erf": nodes.NativeFunction.ERF,
+            "erfc": nodes.NativeFunction.ERFC,
+            "i32": nodes.NativeFunction.I32,
+            "i64": nodes.NativeFunction.I64,
+            "f32": nodes.NativeFunction.F32,
+            "f64": nodes.NativeFunction.F64,
         }
 
     def __call__(self, ast_root: ast.AST):
@@ -1023,11 +1034,20 @@ class IRMaker(ast.NodeVisitor):
                 loc=nodes.Location.from_ast_node(node),
             )
         elif isinstance(value, numbers.Number):
-            value_type = (
-                self.dtypes[type(value)]
-                if self.dtypes and type(value) in self.dtypes.keys()
-                else np.dtype(type(value))
-            )
+            if self.dtypes and type(value) in self.dtypes.keys():
+                value_type = self.dtypes[type(value)]
+            else:
+                if build_settings["literal_floating_point_precision"] is not None:
+                    if isinstance(value, int):
+                        value_type = np.dtype(
+                            f"i{int(int(build_settings['literal_floating_point_precision'])/8)}"
+                        )
+                    else:
+                        value_type = np.dtype(
+                            f"f{int(int(build_settings['literal_floating_point_precision'])/8)}"
+                        )
+                else:
+                    value_type = np.dtype(type(value))
             data_type = nodes.DataType.from_dtype(value_type)
             return nodes.ScalarLiteral(value=value, data_type=data_type)
         else:
@@ -1067,6 +1087,8 @@ class IRMaker(ast.NodeVisitor):
             result = nodes.FieldRef.datadims_index(
                 name=_trim_indexing_symbol(symbol), loc=nodes.Location.from_ast_node(node)
             )
+        elif _is_iterator_access(symbol):
+            return nodes.IteratorAccess()
         else:
             raise AssertionError(f"Missing '{symbol}' symbol definition")
 
@@ -1478,23 +1500,39 @@ class IRMaker(ast.NodeVisitor):
 
         return name, spatial_offset, data_index
 
-    def visit_Assign(self, node: ast.Assign) -> list:
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> list:
+        return self._resolve_assign(node, [node.target], target_annotation=node.annotation)
+
+    def visit_Assign(self, node: ast.Assign, **kwargs) -> list:
+        return self._resolve_assign(node, node.targets)
+
+    def _resolve_assign(
+        self,
+        node: Union[ast.AnnAssign, ast.Assign],
+        targets: List[Any],
+        target_annotation: Optional[Any] = None,
+    ) -> list:
         result = []
 
         # Create decls for temporary fields
         target = []
-        if len(node.targets) > 1:
+        if len(targets) > 1:
             raise GTScriptSyntaxError(
                 message="Assignment to multiple variables (e.g. var1 = var2 = value) not supported.",
                 loc=nodes.Location.from_ast_node(node),
             )
 
-        for t in node.targets[0].elts if isinstance(node.targets[0], ast.Tuple) else node.targets:
+        for t in targets[0].elts if isinstance(targets[0], ast.Tuple) else targets:
             name, spatial_offset, data_index = self._parse_assign_target(t)
             if spatial_offset:
                 if spatial_offset[0] != 0 or spatial_offset[1] != 0:
                     raise GTScriptSyntaxError(
                         message="Assignment to non-zero offsets is not supported in IJ.",
+                        loc=nodes.Location.from_ast_node(t),
+                    )
+                if target_annotation is not None:
+                    raise GTScriptSyntaxError(
+                        message="Cannot annotate a temporary Field with offset write. Define first.",
                         loc=nodes.Location.from_ast_node(t),
                     )
                 # Case of K-offset
@@ -1522,9 +1560,20 @@ class IRMaker(ast.NodeVisitor):
                             message="Temporaries with data dimensions need to be declared explicitly.",
                             loc=nodes.Location.from_ast_node(t),
                         )
+                    dtype = nodes.DataType.AUTO
+                    if target_annotation is not None:
+                        source = gt_meta.ast_unparse(target_annotation)
+                        try:
+                            dtype = eval(source, nodes.DataType.FRONTEND_TO_NATIVE)
+                        except NameError:
+                            raise GTScriptSyntaxError(
+                                message=f"Failed to recognize type {source} for local symbol {name}."
+                                f"Available types are {nodes.DataType.FRONTEND_TO_NATIVE.keys()}",
+                                loc=nodes.Location.from_ast_node(t),
+                            ) from None
                     field_decl = nodes.FieldDecl(
                         name=name,
-                        data_type=nodes.DataType.AUTO,
+                        data_type=dtype,
                         axes=nodes.Domain.LatLonGrid().axes_names,
                         is_api=False,
                         loc=nodes.Location.from_ast_node(t),
@@ -1819,6 +1868,7 @@ class GTScriptParser(ast.NodeVisitor):
             "JK": gtscript.JK,
             "np": np,
             **(resolved_externals if externals is not None else nonlocal_symbols),
+            **nodes.DataType.FRONTEND_TO_NATIVE,
         }
         ann_assigns = tuple(filter(lambda stmt: isinstance(stmt, ast.AnnAssign), ast_func_def.body))
         for ann_assign in ann_assigns:
@@ -1827,6 +1877,9 @@ class GTScriptParser(ast.NodeVisitor):
 
             source = gt_meta.ast_unparse(ann_assign.annotation)
             descriptor = eval(source, ann_assign_context)
+            # Scalar annotated are dealt with after inlining
+            if descriptor in nodes.DataType.FRONTEND_TO_NATIVE.values():
+                continue
             temp_annotations[name] = descriptor
             if descriptor.axes != gtscript.IJK:
                 axes = "".join(str(ax) for ax in descriptor.axes)
@@ -1946,6 +1999,8 @@ class GTScriptParser(ast.NodeVisitor):
         nonlocals: dict, imported: dict, context: dict, *, exhaustive=True
     ):
         result = {}
+        if "THIS_K" in nonlocals:
+            nonlocals.pop("THIS_K")
         accepted_imports = set(imported.keys())
         resolved_imports = {**imported}
         resolved_values_list = list(nonlocals.items())

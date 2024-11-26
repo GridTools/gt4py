@@ -25,7 +25,6 @@ from gt4py.cartesian.frontend.nodes import (
     Assign,
     AxisBound,
     AxisInterval,
-    AbsoluteKIndex,
     BinaryOperator,
     BinOpExpr,
     BlockStmt,
@@ -41,6 +40,7 @@ from gt4py.cartesian.frontend.nodes import (
     HorizontalIf,
     If,
     IterationOrder,
+    IteratorAccess,
     LevelMarker,
     NativeFuncCall,
     NativeFunction,
@@ -333,7 +333,13 @@ class DefIRToGTIR(IRNodeVisitor):
         NativeFunction.FLOOR: common.NativeFunction.FLOOR,
         NativeFunction.CEIL: common.NativeFunction.CEIL,
         NativeFunction.TRUNC: common.NativeFunction.TRUNC,
-        NativeFunction.INT: common.NativeFunction.INT,
+        NativeFunction.ROUND: common.NativeFunction.ROUND,
+        NativeFunction.ERF: common.NativeFunction.ERF,
+        NativeFunction.ERFC: common.NativeFunction.ERFC,
+        NativeFunction.I32: common.NativeFunction.I32,
+        NativeFunction.I64: common.NativeFunction.I64,
+        NativeFunction.F64: common.NativeFunction.F64,
+        NativeFunction.F32: common.NativeFunction.F32,
     }
 
     GT4PY_BUILTIN_TO_GTIR = {
@@ -401,6 +407,9 @@ class DefIRToGTIR(IRNodeVisitor):
             temporaries=temporaries,
             loc=location_to_source_location(node.loc),
         )
+
+    def visit_IteratorAccess(self, iterator_access: IteratorAccess) -> gtir.IteratorAccess:
+        return gtir.IteratorAccess(name=gtir.IteratorAccess.AxisName("K"))
 
     def visit_BlockStmt(self, node: BlockStmt) -> List[gtir.Stmt]:
         return [self.visit(s) for s in node.stmts]

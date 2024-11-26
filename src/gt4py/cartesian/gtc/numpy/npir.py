@@ -132,14 +132,6 @@ class FieldSlice(VectorLValue):
     data_index: List[Expr] = eve.field(default_factory=list)
     kind: common.ExprKind = common.ExprKind.FIELD
 
-    @datamodels.validator("data_index")
-    def data_indices_are_scalar(
-        self, attribute: datamodels.Attribute, data_index: List[Expr]
-    ) -> None:
-        for index in data_index:
-            if index.kind != common.ExprKind.SCALAR:
-                raise ValueError("Data indices must be scalars")
-
 
 class ParamAccess(Expr):
     name: eve.Coerced[eve.SymbolRef]
