@@ -73,10 +73,6 @@ if _sys.version_info >= (3, 9):
         Set as AbstractSet,
         ValuesView as ValuesView,
     )
-    from contextlib import (
-        AbstractAsyncContextManager as AsyncContextManager,
-        AbstractContextManager as ContextManager,
-    )
     from re import Match as Match, Pattern as Pattern
 
 
