@@ -143,6 +143,7 @@ def test_sdfgConvertible_connectivities(unstructured_case):
     offset_provider = OffsetProvider_t.dtype._typeclass.as_ctypes()(E2V=e2v.data_ptr())
 
     SDFG = sdfg.to_sdfg(connectivities=connectivities)
+
     cSDFG = SDFG.compile()
 
     a = gtx.as_field([Vertex], xp.asarray([0.0, 1.0, 2.0]), allocator=allocator)

@@ -73,28 +73,31 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             str(param.id): param for param in program.params if isinstance(param.type, ts.FieldType)
         }
 
+        def single_horizontal_dim_per_field(
+            fields: typing.Iterable[itir.Sym],
+        ) -> typing.Iterator[tuple[str, common.Dimension]]:
+            for field in fields:
+                assert isinstance(field.type, ts.FieldType)
+                horizontal_dims = [
+                    dim for dim in field.type.dims if dim.kind is common.DimensionKind.HORIZONTAL
+                ]
+                # do nothing for fields with multiple horizontal dimensions
+                # or without horizontal dimensions
+                # this is only meant for use with unstructured grids
+                if len(horizontal_dims) == 1:
+                    yield str(field.id), horizontal_dims[0]
+
         input_fields = (field_params[name] for name in InputNamesExtractor.only_fields(program))
-        # TODO (ricoh): This will associate the last horizontal dimension of each field with it's name
-        #               as in dace_iterator. Check if that was really the intention.
-        sdfg.gt4py_program_input_fields = {
-            str(field.id): dim
-            for field in input_fields
-            for dim in field.type.dims  # type: ignore[union-attr]  # we know the type is a FieldType
-            if dim.kind is common.DimensionKind.HORIZONTAL
-        }
+        sdfg.gt4py_program_input_fields = dict(single_horizontal_dim_per_field(input_fields))
 
         output_fields = (field_params[name] for name in OutputNamesExtractor.only_fields(program))
-        # TODO (ricoh): This will associate the last horizontal dimension of each field with it's name
-        #               as in dace_iterator. Check if that was really the intention.
-        sdfg.gt4py_program_output_fields = {
-            str(field.id): dim
-            for field in output_fields
-            for dim in field.type.dims  # type: ignore[union-attr]  # we know the type is a FieldType
-            if dim.kind is common.DimensionKind.HORIZONTAL
-        }
+        sdfg.gt4py_program_output_fields = dict(single_horizontal_dim_per_field(output_fields))
 
         # TODO (ricoh): bring back sdfg.offset_providers_per_input_field.
-        # This will require an equivalent to 'itir_transforms.trace_shifts' under GTIR
+        #               A starting point would be to use the "trace_shifts" pass on GTIR
+        #               and associate the extracted shifts with each input field.
+        #               Analogous to the version in `runners.dace_iterator.__init__`, which
+        #               was removed when merging #1742.
 
         return sdfg
 
