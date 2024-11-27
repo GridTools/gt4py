@@ -163,8 +163,6 @@ def _extract_accessed_domains(
         # TODO(tehrengruber): Dynamic shifts are not supported by `SymbolicDomain.translate`. Use
         #  special `UNKNOWN` marker for them until we have implemented a proper solution.
         if any(s == trace_shifts.Sentinel.VALUE for shift in shifts_list for s in shift):
-            if not allow_uninferred:
-                raise ValueError("Dynamic shifts not allowed if `allow_uninferred=False`")
             accessed_domains[in_field_id] = DomainAccessDescriptor.UNKNOWN
             continue
 
