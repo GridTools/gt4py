@@ -384,7 +384,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
     def unique_nsdfg_name(self, prefix: str) -> str:
         """Utility function to generate a unique name for a nested SDFG, starting with the given prefix."""
-        return self.subgraph_builder.unique_nsdfg_name(self.sdfg, prefix)
+        return self.subgraph_builder.unique_nsdfg_name(prefix)
 
     def _construct_local_view(self, field: MemletExpr | ValueExpr) -> ValueExpr:
         if isinstance(field, MemletExpr):
