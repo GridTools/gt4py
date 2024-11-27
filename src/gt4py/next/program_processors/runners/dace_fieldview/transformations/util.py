@@ -8,9 +8,10 @@
 
 """Common functionality for the transformations/optimization pipeline."""
 
-from typing import Any, Container, Optional
+from typing import Any, Container, Optional, Union
 
 import dace
+from dace import data as dace_data
 from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
@@ -170,3 +171,57 @@ def is_accessed_downstream(
             to_visit.append(out_edge.dst)
 
     return False
+
+
+def is_view(
+    node: Union[dace_nodes.AccessNode, dace_data.Data],
+    sdfg: dace.SDFG,
+) -> bool:
+    """Tests if `node` points to a view or not."""
+    node_desc: dace_data.Data = node.desc(sdfg) if isinstance(node, dace_nodes.AccessNode) else node
+    return isinstance(node_desc, dace_data.View)
+
+
+def track_view(
+    view: dace_nodes.AccessNode,
+    state: dace.SDFGState,
+    sdfg: dace.SDFG,
+) -> dace_nodes.AccessNode:
+    """Find the original data of a View.
+
+    Given the View `view`, the function will trace the view back to the original
+    access node. For convenience, if `view` is not a `View` the argument will be
+    returned.
+
+    Args:
+        view: The view that should be traced.
+        state: The state in which we operate.
+        sdfg: The SDFG on which we operate.
+    """
+
+    # Test if it is a view at all, if not return the passed node as source.
+    if not is_view(view, sdfg):
+        return view
+
+    # First determine if the view is used for reading or writing.
+    curr_edge = dace.sdfg.utils.get_view_edge(state, view)
+    if curr_edge is None:
+        raise RuntimeError(f"Failed to determine the direction of the view '{view}'.")
+    if curr_edge.dst_conn == "views":
+        # The view is used for reading.
+        next_node = lambda curr_edge: curr_edge.src  # noqa: E731
+    elif curr_edge.src_conn == "views":
+        # The view is used for writing.
+        next_node = lambda curr_edge: curr_edge.dst  # noqa: E731
+    else:
+        raise RuntimeError(f"Failed to determine the direction of the view '{view}' | {curr_edge}.")
+
+    # Now trace the view back.
+    org_view = view
+    view = next_node(curr_edge)
+    while is_view(view, sdfg):
+        curr_edge = dace.sdfg.utils.get_view_edge(state, view)
+        if curr_edge is None:
+            raise RuntimeError(f"View tracing of '{org_view}' failed at note '{view}'.")
+        view = next_node(curr_edge)
+    return view
