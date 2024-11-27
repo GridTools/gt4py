@@ -17,6 +17,7 @@ import dace
 from dace import (
     data as dace_data,
     properties as dace_properties,
+    subsets as dace_subsets,
     transformation as dace_transformation,
 )
 from dace.sdfg import nodes as dace_nodes
@@ -776,3 +777,217 @@ class GT4PyMoveTaskletIntoMap(dace_transformation.SingleStateTransformation):
             #  direction of the Memlet, so `{src, dst}_subset` will remain the same.
             if tedge.edge.data.data == old_data:
                 tedge.edge.data.data = new_data
+
+
+@dace_properties.make_properties
+class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
+    """Allows to remove unneeded buffering at map output.
+
+    The transformation matches the case `MapExit -> (T) -> (G)`, where `T` is an
+    AccessNode referring to a transient and `G` an AccessNode that refers to non
+    transient memory.
+    If the following conditions are met then `T` is removed.
+    - `T` is not used to filter computations, i.e. what is written into `G`
+        is covered by what is written into `T`.
+    - `T` is not anywhere else.
+    - `G` is not also an input to the map, except there is only a pointwise
+        dependency in `G`, see the note bellow.
+    - Everything needs to be at top scope.
+
+    Notes:
+        - Rule 3 of ADR18, should guarantee that any valid GT4Py program meets the
+            point wise dependency in `G`, for that reason it is possible to disable
+            this test by specifying `assume_pointwise`.
+
+    Todo:
+        - Implement a real pointwise test.
+    """
+
+    map_exit = dace_transformation.PatternNode(dace_nodes.MapExit)
+    tmp_ac = dace_transformation.transformation.PatternNode(dace_nodes.AccessNode)
+    glob_ac = dace_transformation.PatternNode(dace_nodes.AccessNode)
+
+    assume_pointwise = dace_properties.Property(
+        dtype=bool,
+        default=False,
+        desc="Dimensions that should become the leading dimension.",
+    )
+
+    def __init__(
+        self,
+        assume_pointwise: Optional[bool] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        if assume_pointwise is not None:
+            self.assume_pointwise = bool(assume_pointwise)
+
+    @classmethod
+    def expressions(cls) -> Any:
+        return [dace.sdfg.utils.node_path_graph(cls.map_exit, cls.tmp_ac, cls.glob_ac)]
+
+    def depends_on(self) -> set[type[dace_transformation.Pass]]:
+        return {dace_transformation.passes.ConsolidateEdges}
+
+    def can_be_applied(
+        self,
+        graph: dace.SDFGState | dace.SDFG,
+        expr_index: int,
+        sdfg: dace.SDFG,
+        permissive: bool = False,
+    ) -> bool:
+        tmp_ac: dace_nodes.AccessNode = self.tmp_ac
+        glob_ac: dace_nodes.AccessNode = self.glob_ac
+        tmp_desc: dace_data.Data = tmp_ac.desc(sdfg)
+        glob_desc: dace_data.Data = glob_ac.desc(sdfg)
+
+        if not tmp_desc.transient:
+            return False
+        if glob_desc.transient:
+            return False
+        if graph.in_degree(tmp_ac) != 1:
+            return False
+        if any(gtx_transformations.util.is_view(ac, sdfg) for ac in [tmp_ac, glob_ac]):
+            return False
+        if len(glob_desc.shape) != len(tmp_desc.shape):
+            return False
+
+        # Test if we are on the top scope (it is likely).
+        if graph.scope_dict()[glob_ac] is not None:
+            return False
+
+        # Now perform if we are point wise
+        if not self._perform_pointwise_test(graph, sdfg):
+            return False
+
+        # Test if `tmp` is only anywhere else, this is important for removing it.
+        if graph.out_degree(tmp_ac) != 1:
+            return False
+        if gtx_transformations.util.is_accessed_downstream(
+            start_state=graph,
+            sdfg=sdfg,
+            data_to_look=tmp_ac.data,
+            nodes_to_ignore={tmp_ac},
+        ):
+            return False
+
+        # Now we ensure that `tmp` is not used to filter out some computations.
+        map_to_tmp_edge = next(edge for edge in graph.in_edges(tmp_ac))
+        tmp_to_glob_edge = next(edge for edge in graph.out_edges(tmp_ac))
+
+        tmp_in_subset = map_to_tmp_edge.data.get_dst_subset(map_to_tmp_edge, graph)
+        tmp_out_subset = tmp_to_glob_edge.data.get_src_subset(tmp_to_glob_edge, graph)
+        glob_in_subset = tmp_to_glob_edge.data.get_dst_subset(tmp_to_glob_edge, graph)
+        if tmp_in_subset is None:
+            tmp_in_subset = dace_subsets.Range.from_array(tmp_desc)
+        if tmp_out_subset is None:
+            tmp_out_subset = dace_subsets.Range.from_array(tmp_desc)
+        if glob_in_subset is None:
+            return False
+
+        # TODO(phimuell): Do we need simplify in the check.
+        # TODO(phimuell): Restrict this to having the same size.
+        if tmp_out_subset != tmp_in_subset:
+            return False
+        return True
+
+    def _perform_pointwise_test(
+        self,
+        state: dace.SDFGState,
+        sdfg: dace.SDFG,
+    ) -> bool:
+        """Test if `G` is only point wise accessed.
+
+        This function will also consider the `assume_pointwise` property.
+        """
+        map_exit: dace_nodes.MapExit = self.map_exit
+        map_entry: dace_nodes.MapEntry = state.entry_node(map_exit)
+        glob_ac: dace_nodes.AccessNode = self.glob_ac
+        glob_data: str = glob_ac.data
+
+        # First we check if `G` is also an input to this map.
+        conflicting_inputs: set[dace_nodes.AccessNode] = set()
+        for in_edge in state.in_edges(map_entry):
+            if not isinstance(in_edge.src, dace_nodes.AccessNode):
+                continue
+
+            # Find the source of this data, if it is a view we trace it to
+            #  its origin.
+            src_node: dace_nodes.AccessNode = gtx_transformations.util.track_view(
+                in_edge.src, state, sdfg
+            )
+
+            # Test if there is a conflict; We do not store the source but the
+            #  actual node that is adjacent.
+            if src_node.data == glob_data:
+                conflicting_inputs.add(in_edge.src)
+
+        # If there are no conflicting inputs, then we are point wise.
+        #  This is an implementation detail that make life simpler.
+        if len(conflicting_inputs) == 0:
+            return True
+
+        # If we can assume pointwise computations, then we do not have to do
+        #  anything.
+        if self.assume_pointwise:
+            return True
+
+        # Currently the only test that we do is, if we have a view, then we
+        #  are not point wise.
+        # TODO(phimuell): Improve/implement this.
+        return any(gtx_transformations.util.is_view(node, sdfg) for node in conflicting_inputs)
+
+    def apply(
+        self,
+        graph: dace.SDFGState | dace.SDFG,
+        sdfg: dace.SDFG,
+    ) -> None:
+        # Removal
+        # Propagation ofthe shift.
+        map_exit: dace_nodes.MapExit = self.map_exit
+        tmp_ac: dace_nodes.AccessNode = self.tmp_ac
+        tmp_desc: dace_data.Data = tmp_ac.desc(sdfg)
+        tmp_data = tmp_ac.data
+        glob_ac: dace_nodes.AccessNode = self.glob_ac
+        glob_data = glob_ac.data
+
+        map_to_tmp_edge = next(edge for edge in graph.in_edges(tmp_ac))
+        tmp_to_glob_edge = next(edge for edge in graph.out_edges(tmp_ac))
+
+        glob_in_subset = tmp_to_glob_edge.data.get_dst_subset(tmp_to_glob_edge, graph)
+        tmp_out_subset = tmp_to_glob_edge.data.get_src_subset(tmp_to_glob_edge, graph)
+        if tmp_out_subset is None:
+            tmp_out_subset = dace_subsets.Range.from_array(tmp_desc)
+        assert glob_in_subset is not None
+
+        # We now remove the `tmp` node, and create a new connection between
+        #  the global node and the map exit.
+        new_map_to_glob_edge = graph.add_edge(
+            map_exit,
+            map_to_tmp_edge.src_conn,
+            glob_ac,
+            tmp_to_glob_edge.dst_conn,
+            dace.Memlet(
+                data=glob_ac.data,
+                subset=copy.deepcopy(glob_in_subset),
+            ),
+        )
+        graph.remove_edge(map_to_tmp_edge)
+        graph.remove_edge(tmp_to_glob_edge)
+        graph.remove_node(tmp_ac)
+        sdfg.remove_data(tmp_ac.data, validate=False)
+
+        # Now we must modify the memlets inside the map scope, because
+        #  they now write into `G` instead of `tmp`, which has a different
+        #  offset.
+        # NOTE: Assumes that `tmp_out_subset` and `tmp_in_subset` are the same.
+        correcting_offset = glob_in_subset.offset_new(tmp_out_subset, negative=True)
+        mtree = graph.memlet_tree(new_map_to_glob_edge)
+        for tree in mtree.traverse_children(include_self=False):
+            curr_edge = tree.edge
+            curr_dst_subset = curr_edge.data.get_dst_subset(curr_edge, graph)
+            if curr_edge.data.data == tmp_data:
+                curr_edge.data.data = glob_data
+            if curr_dst_subset is not None:
+                curr_dst_subset.offset(correcting_offset, negative=False)
