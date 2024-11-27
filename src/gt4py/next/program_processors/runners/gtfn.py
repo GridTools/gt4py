@@ -15,14 +15,12 @@ from typing import Any, Optional
 import diskcache
 import factory
 import filelock
-import numpy.typing as npt
 
 import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
 from gt4py.eve import utils
 from gt4py.eve.utils import content_hash
 from gt4py.next import backend, common, config
-from gt4py.next.common import Connectivity, Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import arguments, recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
@@ -66,8 +64,8 @@ def convert_args(
 
 
 def _ensure_is_on_device(
-    connectivity_arg: npt.NDArray, device: core_defs.DeviceType
-) -> npt.NDArray:
+    connectivity_arg: core_defs.NDArrayObject, device: core_defs.DeviceType
+) -> core_defs.NDArrayObject:
     if device in [core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM]:
         import cupy as cp
 
@@ -82,17 +80,17 @@ def _ensure_is_on_device(
 
 def extract_connectivity_args(
     offset_provider: dict[str, common.Connectivity | common.Dimension], device: core_defs.DeviceType
-) -> list[tuple[npt.NDArray, tuple[int, ...]]]:
+) -> list[tuple[core_defs.NDArrayObject, tuple[int, ...]]]:
     # note: the order here needs to agree with the order of the generated bindings
-    args: list[tuple[npt.NDArray, tuple[int, ...]]] = []
+    args: list[tuple[core_defs.NDArrayObject, tuple[int, ...]]] = []
     for name, conn in offset_provider.items():
         if isinstance(conn, common.Connectivity):
-            if not isinstance(conn, common.NeighborTable):
+            if not common.is_neighbor_table(conn):
                 raise NotImplementedError(
                     "Only 'NeighborTable' connectivities implemented at this point."
                 )
             # copying to device here is a fallback for easy testing and might be removed later
-            conn_arg = _ensure_is_on_device(conn.table, device)
+            conn_arg = _ensure_is_on_device(conn.ndarray, device)
             args.append((conn_arg, tuple([0] * 2)))
         elif isinstance(conn, common.Dimension):
             pass
@@ -128,7 +126,7 @@ def fingerprint_compilable_program(inp: stages.CompilableProgram) -> str:
     the program, sorted offset_provider, and column_axis.
     """
     program: itir.FencilDefinition | itir.Program = inp.data
-    offset_provider: dict[str, Connectivity | Dimension] = inp.args.offset_provider
+    offset_provider: common.OffsetProvider = inp.args.offset_provider
     column_axis: Optional[common.Dimension] = inp.args.column_axis
 
     program_hash = utils.content_hash(

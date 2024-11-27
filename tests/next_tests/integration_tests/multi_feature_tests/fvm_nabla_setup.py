@@ -20,6 +20,18 @@ from atlas4py import (
     functionspace,
 )
 
+from gt4py import next as gtx
+from gt4py.next.iterator import atlas_utils
+
+
+Vertex = gtx.Dimension("Vertex")
+Edge = gtx.Dimension("Edge")
+V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
+E2VDim = gtx.Dimension("E2V", kind=gtx.DimensionKind.LOCAL)
+
+V2E = gtx.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
+E2V = gtx.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
+
 
 def assert_close(expected, actual):
     assert math.isclose(expected, actual), "expected={}, actual={}".format(expected, actual)
@@ -33,9 +45,10 @@ class nabla_setup:
         config["angle"] = 20.0
         return config
 
-    def __init__(self, *, grid=StructuredGrid("O32"), config=None):
+    def __init__(self, *, allocator, grid=StructuredGrid("O32"), config=None):
         if config is None:
             config = self._default_config()
+        self.allocator = allocator
         mesh = StructuredMeshGenerator(config).generate(grid)
 
         fs_edges = functionspace.EdgeColumns(mesh, halo=1)
@@ -55,12 +68,22 @@ class nabla_setup:
         self.edges_per_node = edges_per_node
 
     @property
-    def edges2node_connectivity(self):
-        return self.mesh.edges.node_connectivity
+    def edges2node_connectivity(self) -> gtx.Connectivity:
+        return gtx.as_connectivity(
+            domain={Edge: self.edges_size, E2VDim: 2},
+            codomain=Vertex,
+            data=atlas_utils.AtlasTable(self.mesh.edges.node_connectivity).asnumpy(),
+            allocator=self.allocator,
+        )
 
     @property
-    def nodes2edge_connectivity(self):
-        return self.mesh.nodes.edge_connectivity
+    def nodes2edge_connectivity(self) -> gtx.Connectivity:
+        return gtx.as_connectivity(
+            domain={Vertex: self.nodes_size, V2EDim: self.edges_per_node},
+            codomain=Edge,
+            data=atlas_utils.AtlasTable(self.mesh.nodes.edge_connectivity).asnumpy(),
+            allocator=self.allocator,
+        )
 
     @property
     def nodes_size(self):
@@ -75,16 +98,16 @@ class nabla_setup:
         return Topology.check(edge_flags[e], Topology.POLE)
 
     @property
-    def is_pole_edge_field(self):
+    def is_pole_edge_field(self) -> gtx.Field:
         edge_flags = np.array(self.mesh.edges.flags())
 
         pole_edge_field = np.zeros((self.edges_size,), dtype=bool)
         for e in range(self.edges_size):
             pole_edge_field[e] = self._is_pole_edge(e, edge_flags)
-        return pole_edge_field
+        return gtx.as_field([Edge], pole_edge_field, allocator=self.allocator)
 
     @property
-    def sign_field(self):
+    def sign_field(self) -> gtx.Field:
         node2edge_sign = np.zeros((self.nodes_size, self.edges_per_node))
         edge_flags = np.array(self.mesh.edges.flags())
 
@@ -100,10 +123,10 @@ class nabla_setup:
                     node2edge_sign[jnode, jedge] = -1.0
                     if self._is_pole_edge(iedge, edge_flags):
                         node2edge_sign[jnode, jedge] = 1.0
-        return node2edge_sign
+        return gtx.as_field([Vertex, V2EDim], node2edge_sign, allocator=self.allocator)
 
     @property
-    def S_fields(self):
+    def S_fields(self) -> tuple[gtx.Field, gtx.Field]:
         S = np.array(self.mesh.edges.field("dual_normals"), copy=False)
         S_MXX = np.zeros((self.edges_size))
         S_MYY = np.zeros((self.edges_size))
@@ -124,10 +147,12 @@ class nabla_setup:
         assert math.isclose(min(S_MYY), -2001577.7946404363)
         assert math.isclose(max(S_MYY), 2001577.7946404363)
 
-        return S_MXX, S_MYY
+        return gtx.as_field([Edge], S_MXX, allocator=self.allocator), gtx.as_field(
+            [Edge], S_MYY, allocator=self.allocator
+        )
 
     @property
-    def vol_field(self):
+    def vol_field(self) -> gtx.Field:
         rpi = 2.0 * math.asin(1.0)
         radius = 6371.22e03
         deg2rad = 2.0 * rpi / 360.0
@@ -142,10 +167,10 @@ class nabla_setup:
         # VOL(min/max):  57510668192.214096    851856184496.32886
         assert_close(57510668192.214096, min(vol))
         assert_close(851856184496.32886, max(vol))
-        return vol
+        return gtx.as_field([Vertex], vol, allocator=self.allocator)
 
     @property
-    def input_field(self):
+    def input_field(self) -> gtx.Field:
         klevel = 0
         MXX = 0
         MYY = 1
@@ -200,4 +225,5 @@ class nabla_setup:
 
         assert_close(0.0000000000000000, min(rzs))
         assert_close(1965.4980340735883, max(rzs))
-        return rzs[:, klevel]
+
+        return gtx.as_field([Vertex], rzs[:, klevel], allocator=self.allocator)

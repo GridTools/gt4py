@@ -7,21 +7,21 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import itertools
-from typing import Any, Mapping
+from typing import Any
 
 import dace
 
 import gt4py.next.iterator.ir as itir
 from gt4py import eve
-from gt4py.next.common import Connectivity
+from gt4py.next import common
 from gt4py.next.ffront import fbuiltins as gtx_fbuiltins
 from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
 
 
 def get_used_connectivities(
-    node: itir.Node, offset_provider: Mapping[str, Any]
-) -> dict[str, Connectivity]:
-    connectivities = dace_utils.filter_connectivities(offset_provider)
+    node: itir.Node, offset_provider_type: common.OffsetProviderType
+) -> dict[str, common.NeighborConnectivityType]:
+    connectivities = dace_utils.filter_connectivity_types(offset_provider_type)
     offset_dims = set(eve.walk_values(node).if_isinstance(itir.OffsetLiteral).getattr("value"))
     return {offset: connectivities[offset] for offset in offset_dims if offset in connectivities}
 
