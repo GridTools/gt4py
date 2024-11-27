@@ -191,13 +191,15 @@ def _infer_as_fieldop(
 ) -> tuple[itir.FunCall, ACCESSED_DOMAINS]:
     assert isinstance(applied_fieldop, itir.FunCall)
     assert cpm.is_call_to(applied_fieldop.fun, "as_fieldop")
-    if target_domain is DomainAccessDescriptor.NEVER:
-        raise ValueError("'target_domain' cannot be 'NEVER'.")
+    if not allow_uninferred and target_domain is DomainAccessDescriptor.NEVER:
+        raise ValueError("'target_domain' cannot be 'NEVER' unless `allow_uninferred=True`.")
     # FIXME[#1582](tehrengruber): Temporary solution for `tuple_get` on scan result. See `test_solve_triag`.
     if isinstance(target_domain, tuple):
         target_domain = _domain_union(*flatten_nested_tuple(target_domain))  # type: ignore[arg-type]  # mypy not smart enough
-    if not isinstance(target_domain, domain_utils.SymbolicDomain):
-        raise ValueError("'target_domain' needs to be a 'domain_utils.SymbolicDomain'.")
+    if not isinstance(target_domain, (domain_utils.SymbolicDomain, DomainAccessDescriptor)):
+        raise ValueError(
+            "'target_domain' needs to be a 'domain_utils.SymbolicDomain' or a 'DomainAccessDescriptor'."
+        )
 
     # `as_fieldop(stencil)(inputs...)`
     stencil, inputs = applied_fieldop.fun.args[0], applied_fieldop.args
@@ -238,7 +240,10 @@ def _infer_as_fieldop(
 
         accessed_domains = _merge_domains(accessed_domains, accessed_domains_tmp)
 
-    target_domain_expr = domain_utils.SymbolicDomain.as_expr(target_domain)
+    if not isinstance(target_domain, DomainAccessDescriptor):
+        target_domain_expr = domain_utils.SymbolicDomain.as_expr(target_domain)
+    else:
+        target_domain_expr = None
     transformed_call = im.as_fieldop(stencil, target_domain_expr)(*transformed_inputs)
 
     accessed_domains_without_tmp = {
