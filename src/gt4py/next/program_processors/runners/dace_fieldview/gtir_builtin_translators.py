@@ -238,7 +238,7 @@ def _create_temporary_field(
     output_desc: Optional[dace.data.Data] = None,
 ) -> tuple[FieldopData, sbs.Indices]:
     """
-    Helper method to allocate a temporary field where to write the output of a field operator.
+    Helper method to allocate a temporary field to store the output of a field operator.
 
     Args:
         sdfg: The SDFG that represents the scope of the field data.
