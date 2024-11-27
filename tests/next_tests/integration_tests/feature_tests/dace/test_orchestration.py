@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import common
+from gt4py.next import allocators as gtx_allocators, common as gtx_common
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import cartesian_case, unstructured_case
@@ -44,7 +44,7 @@ def test_sdfgConvertible_laplap(cartesian_case):
     # TODO(ricoh): enable test after adding GTIR support
     pytest.skip("DaCe SDFGConvertible interface does not support GTIR program.")
 
-    if "gpu" in cartesian_case.backend.name:
+    if gtx_allocators.is_field_allocator_factory_for(cartesian_case.allocator, gtx_allocators.CUPY_DEVICE):
         import cupy as xp
     else:
         import numpy as xp
@@ -58,12 +58,12 @@ def test_sdfgConvertible_laplap(cartesian_case):
         tmp_field = xp.empty_like(out_field)
         lap_program.with_grid_type(cartesian_case.grid_type).with_backend(
             cartesian_case.backend
-        ).with_connectivities(common.offset_provider_to_type(cartesian_case.offset_provider))(
+        ).with_connectivities(gtx_common.offset_provider_to_type(cartesian_case.offset_provider))(
             in_field, tmp_field
         )
         lap_program.with_grid_type(cartesian_case.grid_type).with_backend(
             cartesian_case.backend
-        ).with_connectivities(common.offset_provider_to_type(cartesian_case.offset_provider))(
+        ).with_connectivities(gtx_common.offset_provider_to_type(cartesian_case.offset_provider))(
             tmp_field, out_field
         )
 
@@ -95,7 +95,7 @@ def test_sdfgConvertible_connectivities(unstructured_case):
 
     allocator, backend = unstructured_case.allocator, unstructured_case.backend
 
-    if "gpu" in backend.name:
+    if gtx_allocators.is_field_allocator_factory_for(allocator, gtx_allocators.CUPY_DEVICE):
         import cupy as xp
 
         dace_storage_type = dace.StorageType.GPU_Global
