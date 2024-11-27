@@ -91,7 +91,7 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
             ) from None
 
         index_strs = []
-        if node.offset is not None:
+        if node.offset is not None and node.offset != common.CartesianOffset.zero():
             index_strs.append(
                 self.visit(
                     node.offset,
@@ -106,7 +106,8 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
         index_strs.extend(
             self.visit(idx, symtable=symtable, in_idx=True, **kwargs) for idx in node.data_index
         )
-        return f"{node.name}[{','.join(index_strs)}]"
+
+        return f"{node.name}[{','.join(index_strs)}]" if len(index_strs) > 0 else node.name
 
     def visit_AssignStmt(self, node: dcir.AssignStmt, **kwargs: Any) -> str:
         # Visiting order matters because targets must not contain the target symbols from the left visit

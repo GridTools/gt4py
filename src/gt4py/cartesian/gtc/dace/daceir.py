@@ -527,7 +527,7 @@ class FieldAccessInfo(eve.Node):
 
     @property
     def is_dynamic(self) -> bool:
-        return self.dynamic_access or len(self.variable_offset_axes) > 0
+        return self.dynamic_access # or len(self.variable_offset_axes) > 0
 
     def axes(self):
         yield from self.grid_subset.axes()
