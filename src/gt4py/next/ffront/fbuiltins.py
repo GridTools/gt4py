@@ -16,7 +16,6 @@ from typing import Any, Callable, Final, Generic, ParamSpec, Tuple, TypeAlias, T
 import numpy as np
 from numpy import float32, float64, int32, int64
 
-import gt4py.next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.common import Dimension, Field  # noqa: F401 [unused-import] for TYPE_BUILTINS
@@ -55,7 +54,7 @@ def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSp
         return ts.DimensionType
     elif t is FieldOffset:
         return ts.OffsetType
-    elif t is common.ConnectivityField:
+    elif t is common.Connectivity:
         return ts.OffsetType
     elif t is core_defs.ScalarT:
         return ts.ScalarType
@@ -321,7 +320,7 @@ class FieldOffset(runtime.Offset):
     def __gt_type__(self) -> ts.OffsetType:
         return ts.OffsetType(source=self.source, target=self.target)
 
-    def __getitem__(self, offset: int) -> common.ConnectivityField:
+    def __getitem__(self, offset: int) -> common.Connectivity:
         """Serve as a connectivity factory."""
         from gt4py.next import embedded  # avoid circular import
 
@@ -330,22 +329,19 @@ class FieldOffset(runtime.Offset):
         assert current_offset_provider is not None
         offset_definition = current_offset_provider[self.value]
 
-        connectivity: common.ConnectivityField
+        connectivity: common.Connectivity
         if isinstance(offset_definition, common.Dimension):
             connectivity = common.CartesianConnectivity(offset_definition, offset)
-        elif isinstance(
-            offset_definition, (gtx.NeighborTableOffsetProvider, common.ConnectivityField)
-        ):
-            unrestricted_connectivity = self.as_connectivity_field()
-            assert unrestricted_connectivity.domain.ndim > 1
+        elif isinstance(offset_definition, common.Connectivity):
+            assert common.is_neighbor_connectivity(offset_definition)
             named_index = common.NamedIndex(self.target[-1], offset)
-            connectivity = unrestricted_connectivity[named_index]
+            connectivity = offset_definition[named_index]
         else:
             raise NotImplementedError()
 
         return connectivity
 
-    def as_connectivity_field(self) -> common.ConnectivityField:
+    def as_connectivity_field(self) -> common.Connectivity:
         """Convert to connectivity field using the offset providers in current embedded execution context."""
         from gt4py.next import embedded  # avoid circular import
 
@@ -356,18 +352,8 @@ class FieldOffset(runtime.Offset):
 
         cache_key = id(offset_definition)
         if (connectivity := self._cache.get(cache_key, None)) is None:
-            if isinstance(offset_definition, common.ConnectivityField):
+            if isinstance(offset_definition, common.Connectivity):
                 connectivity = offset_definition
-            elif isinstance(offset_definition, gtx.NeighborTableOffsetProvider):
-                connectivity = gtx.as_connectivity(
-                    domain=self.target,
-                    codomain=self.source,
-                    data=offset_definition.table,
-                    dtype=offset_definition.index_type,
-                    skip_value=(
-                        common._DEFAULT_SKIP_VALUE if offset_definition.has_skip_values else None
-                    ),
-                )
             else:
                 raise NotImplementedError()
 

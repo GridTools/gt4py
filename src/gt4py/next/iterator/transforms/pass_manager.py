@@ -43,8 +43,8 @@ class ITIRTransform(Protocol):
 def apply_common_transforms(
     ir: itir.Program | itir.FencilDefinition,
     *,
+    offset_provider=None,  # TODO(havogt): should be replaced by offset_provider_type, but global_tmps currently relies on runtime info
     extract_temporaries=False,
-    offset_provider=None,
     unroll_reduce=False,
     common_subexpression_elimination=True,
     force_inline_lambda_args=False,
@@ -56,7 +56,12 @@ def apply_common_transforms(
     #: A dictionary mapping axes names to their length. See :func:`infer_domain.infer_expr` for
     #: more details.
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
+    offset_provider_type: Optional[common.OffsetProviderType] = None,
 ) -> itir.Program:
+    # TODO(havogt): if the runtime `offset_provider` is not passed, we cannot run global_tmps
+    if offset_provider_type is None:
+        offset_provider_type = common.offset_provider_to_type(offset_provider)
+
     # FIXME[#1582](tehrengruber): Rewrite iterator tests with itir.Program and remove this
     if isinstance(ir, itir.FencilDefinition):
         ir = fencil_to_program.FencilToProgram.apply(ir)
@@ -75,7 +80,7 @@ def apply_common_transforms(
     # Inline. The domain inference can not handle "user" functions, e.g. `let f = λ(...) → ... in f(...)`
     ir = InlineLambdas.apply(ir, opcount_preserving=True, force_inline_lambda_args=True)
     # required in order to get rid of expressions without a domain (e.g. when a tuple element is never accessed)
-    ir = CollapseTuple.apply(ir, offset_provider=offset_provider)  # type: ignore[assignment]  # always an itir.Program
+    ir = CollapseTuple.apply(ir, offset_provider_type=offset_provider_type)  # type: ignore[assignment]  # always an itir.Program
     ir = infer_domain.infer_program(
         ir,  # type: ignore[arg-type]  # always an itir.Program
         offset_provider=offset_provider,
@@ -89,15 +94,15 @@ def apply_common_transforms(
         inlined = ConstantFolding.apply(inlined)  # type: ignore[assignment]  # always an itir.Program
         # This pass is required to be in the loop such that when an `if_` call with tuple arguments
         # is constant-folded the surrounding tuple_get calls can be removed.
-        inlined = CollapseTuple.apply(inlined, offset_provider=offset_provider)  # type: ignore[assignment]  # always an itir.Program
-        inlined = InlineScalar.apply(inlined, offset_provider=offset_provider)
+        inlined = CollapseTuple.apply(inlined, offset_provider_type=offset_provider_type)  # type: ignore[assignment]  # always an itir.Program
+        inlined = InlineScalar.apply(inlined, offset_provider_type=offset_provider_type)
 
         # This pass is required to run after CollapseTuple as otherwise we can not inline
         # expressions like `tuple_get(make_tuple(as_fieldop(stencil)(...)))` where stencil returns
         # a list. Such expressions must be inlined however because no backend supports such
         # field operators right now.
         inlined = fuse_as_fieldop.FuseAsFieldOp.apply(
-            inlined, uids=mergeasfop_uids, offset_provider=offset_provider
+            inlined, uids=mergeasfop_uids, offset_provider_type=offset_provider_type
         )
 
         if inlined == ir:
@@ -108,19 +113,21 @@ def apply_common_transforms(
 
     # breaks in test_zero_dim_tuple_arg as trivial tuple_get is not inlined
     if common_subexpression_elimination:
-        ir = CommonSubexpressionElimination.apply(ir, offset_provider=offset_provider)
+        ir = CommonSubexpressionElimination.apply(ir, offset_provider_type=offset_provider_type)
         ir = MergeLet().visit(ir)
         ir = InlineLambdas.apply(ir, opcount_preserving=True)
 
     if extract_temporaries:
-        ir = infer(ir, inplace=True, offset_provider=offset_provider)
+        ir = infer(ir, inplace=True, offset_provider_type=offset_provider_type)
         ir = global_tmps.create_global_tmps(ir, offset_provider=offset_provider, uids=tmp_uids)  # type: ignore[arg-type]  # always an itir.Program
 
     # Since `CollapseTuple` relies on the type inference which does not support returning tuples
     # larger than the number of closure outputs as given by the unconditional collapse, we can
     # only run the unconditional version here instead of in the loop above.
     if unconditionally_collapse_tuples:
-        ir = CollapseTuple.apply(ir, ignore_tuple_size=True, offset_provider=offset_provider)  # type: ignore[assignment]  # always an itir.Program
+        ir = CollapseTuple.apply(
+            ir, ignore_tuple_size=True, offset_provider_type=offset_provider_type
+        )  # type: ignore[assignment]  # always an itir.Program
 
     ir = NormalizeShifts().visit(ir)
 
@@ -129,7 +136,7 @@ def apply_common_transforms(
 
     if unroll_reduce:
         for _ in range(10):
-            unrolled = UnrollReduce.apply(ir, offset_provider=offset_provider)
+            unrolled = UnrollReduce.apply(ir, offset_provider_type=offset_provider_type)
             if unrolled == ir:
                 break
             ir = unrolled  # type: ignore[assignment] # still a `itir.Program`
@@ -156,6 +163,8 @@ def apply_fieldview_transforms(
     ir = inline_fundefs.InlineFundefs().visit(ir)
     ir = inline_fundefs.prune_unreferenced_fundefs(ir)
     ir = InlineLambdas.apply(ir, opcount_preserving=True, force_inline_lambda_args=True)
-    ir = CollapseTuple.apply(ir, offset_provider=offset_provider)  # type: ignore[assignment] # type is still `itir.Program`
+    ir = CollapseTuple.apply(
+        ir, offset_provider_type=common.offset_provider_to_type(offset_provider)
+    )  # type: ignore[assignment] # type is still `itir.Program`
     ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
     return ir

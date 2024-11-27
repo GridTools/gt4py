@@ -155,8 +155,6 @@ This section approaches the pseudo-laplacian by introducing the required APIs pr
 - [Using reductions on connected mesh elements](#Using-reductions-on-connected-mesh-elements)
 - [Implementing the actual pseudo-laplacian](#Implementing-the-pseudo-laplacian)
 
-+++
-
 #### Defining the mesh and its connectivities
 
 The examples related to unstructured meshes use the mesh below. The edges (in blue) and the cells (in red) are numbered with zero-based indices.
@@ -237,7 +235,7 @@ E2C = gtx.FieldOffset("E2C", source=CellDim, target=(EdgeDim,E2CDim))
 Note that the field offset does not contain the actual connectivity table, that's provided through an _offset provider_:
 
 ```{code-cell} ipython3
-E2C_offset_provider = gtx.NeighborTableOffsetProvider(edge_to_cell_table, EdgeDim, CellDim, 2)
+E2C_offset_provider = gtx.as_connectivity([EdgeDim, E2CDim], codomain=CellDim, data=edge_to_cell_table, skip_value=-1)
 ```
 
 The field operator `nearest_cell_to_edge` below shows an example of applying this transform. There is a little twist though: the subscript in `E2C[0]` means that only the value of the first connected cell is taken, the second (if exists) is ignored.
@@ -385,7 +383,7 @@ As explained in the section outline, the pseudo-laplacian needs the cell-to-edge
 C2EDim = gtx.Dimension("C2E", kind=gtx.DimensionKind.LOCAL)
 C2E = gtx.FieldOffset("C2E", source=EdgeDim, target=(CellDim, C2EDim))
 
-C2E_offset_provider = gtx.NeighborTableOffsetProvider(cell_to_edge_table, CellDim, EdgeDim, 3)
+C2E_offset_provider = gtx.as_connectivity([CellDim, C2EDim], codomain=EdgeDim, data=cell_to_edge_table, skip_value=-1)
 ```
 
 **Weights of edge differences:**

@@ -94,7 +94,7 @@ def fencil_generator(
     ir: itir.Program | itir.FencilDefinition,
     debug: bool,
     use_embedded: bool,
-    offset_provider: dict[str, common.Connectivity | common.Dimension],
+    offset_provider: common.OffsetProvider,
     transforms: itir_transforms.ITIRTransform,
 ) -> stages.CompiledProgram:
     """
@@ -111,7 +111,15 @@ def fencil_generator(
     """
     # TODO(tehrengruber): just a temporary solution until we have a proper generic
     #  caching mechanism
-    cache_key = hash((ir, transforms, debug, use_embedded, tuple(offset_provider.items())))
+    cache_key = hash(
+        (
+            ir,
+            transforms,
+            debug,
+            use_embedded,
+            tuple(common.offset_provider_to_type(offset_provider).items()),
+        )
+    )
     if cache_key in _FENCIL_CACHE:
         if debug:
             print(f"Using cached fencil for key {cache_key}")
@@ -151,7 +159,9 @@ def fencil_generator(
         """
     )
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as source_file:
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".py", encoding="utf-8", delete=False
+    ) as source_file:
         source_file_name = source_file.name
         if debug:
             print(source_file_name)

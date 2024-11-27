@@ -74,8 +74,8 @@ def _get_tasklet_inout_memlets(
     *,
     get_outputs: bool,
     global_ctx: DaCeIRBuilder.GlobalContext,
-    **kwargs,
-):
+    **kwargs: Any,
+) -> List[dcir.Memlet]:
     access_infos = compute_dcir_access_infos(
         node,
         block_extents=global_ctx.library_node.get_extents,
@@ -85,7 +85,7 @@ def _get_tasklet_inout_memlets(
         **kwargs,
     )
 
-    res = list()
+    memlets: List[dcir.Memlet] = []
     for name, offset, tasklet_symbol in _access_iter(node, get_outputs=get_outputs):
         access_info = access_infos[name]
         if not access_info.variable_offset_axes:
@@ -95,26 +95,27 @@ def _get_tasklet_inout_memlets(
                     axis, extent=(offset_dict[axis.lower()], offset_dict[axis.lower()])
                 )
 
-        memlet = dcir.Memlet(
-            field=name,
-            connector=tasklet_symbol,
-            access_info=access_info,
-            is_read=not get_outputs,
-            is_write=get_outputs,
+        memlets.append(
+            dcir.Memlet(
+                field=name,
+                connector=tasklet_symbol,
+                access_info=access_info,
+                is_read=not get_outputs,
+                is_write=get_outputs,
+            )
         )
-        res.append(memlet)
-    return res
+    return memlets
 
 
-def _all_stmts_same_region(scope_nodes, axis: dcir.Axis, interval):
-    def all_statements_in_region(scope_nodes):
+def _all_stmts_same_region(scope_nodes, axis: dcir.Axis, interval: Any) -> bool:
+    def all_statements_in_region(scope_nodes: List[eve.Node]) -> bool:
         return all(
             isinstance(stmt, dcir.HorizontalRestriction)
             for tasklet in eve.walk_values(scope_nodes).if_isinstance(dcir.Tasklet)
             for stmt in tasklet.stmts
         )
 
-    def all_regions_same(scope_nodes):
+    def all_regions_same(scope_nodes: List[eve.Node]) -> bool:
         return (
             len(
                 set(
@@ -179,11 +180,11 @@ class DaCeIRBuilder(eve.NodeTranslator):
             oir_decl: oir.Decl = self.library_node.declarations[field]
             assert isinstance(oir_decl, oir.FieldDecl)
             dace_array = self.arrays[field]
-            for s in dace_array.strides:
-                for sym in dace.symbolic.symlist(s).values():
-                    symbol_collector.add_symbol(str(sym))
-            for sym in access_info.grid_subset.free_symbols:
-                symbol_collector.add_symbol(sym)
+            for stride in dace_array.strides:
+                for symbol in dace.symbolic.symlist(stride).values():
+                    symbol_collector.add_symbol(str(symbol))
+            for symbol in access_info.grid_subset.free_symbols:
+                symbol_collector.add_symbol(symbol)
 
             return dcir.FieldDecl(
                 name=field,
@@ -236,11 +237,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
             if not isinstance(item, (Map, Loop)):
                 raise ValueError
 
-            if isinstance(item, Map):
-                iterations = item.iterations
-            else:
-                iterations = [item]
-
+            iterations = item.iterations if isinstance(item, Map) else [item]
             grid_subset = self.grid_subset
             for it in iterations:
                 axis = it.axis
@@ -267,13 +264,13 @@ class DaCeIRBuilder(eve.NodeTranslator):
     class SymbolCollector:
         symbol_decls: Dict[str, dcir.SymbolDecl] = dataclasses.field(default_factory=dict)
 
-        def add_symbol(self, name: str, dtype: common.DataType = common.DataType.INT32):
+        def add_symbol(self, name: str, dtype: common.DataType = common.DataType.INT32) -> None:
             if name not in self.symbol_decls:
                 self.symbol_decls[name] = dcir.SymbolDecl(name=name, dtype=dtype)
             else:
                 assert self.symbol_decls[name].dtype == dtype
 
-        def remove_symbol(self, name: eve.SymbolRef):
+        def remove_symbol(self, name: eve.SymbolRef) -> None:
             if name in self.symbol_decls:
                 del self.symbol_decls[name]
 
@@ -304,11 +301,14 @@ class DaCeIRBuilder(eve.NodeTranslator):
                     symbol_collector.add_symbol(axis.iteration_symbol())
                     if bound.level == common.LevelMarker.END:
                         symbol_collector.add_symbol(axis.domain_symbol())
+
         return dcir.HorizontalRestriction(
             mask=node.mask, body=self.visit(node.body, symbol_collector=symbol_collector, **kwargs)
         )
 
-    def visit_VariableKOffset(self, node: oir.VariableKOffset, **kwargs):
+    def visit_VariableKOffset(
+        self, node: oir.VariableKOffset, **kwargs: Any
+    ) -> dcir.VariableKOffset:
         return dcir.VariableKOffset(k=self.visit(node.k, **kwargs))
 
     def visit_LocalScalar(self, node: oir.LocalScalar, **kwargs: Any) -> dcir.LocalScalarDecl:
@@ -419,7 +419,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
         symbol_collector: DaCeIRBuilder.SymbolCollector,
         loop_order,
         k_interval,
-        **kwargs,
+        **kwargs: Any,
     ):
         # skip type checking due to https://github.com/python/mypy/issues/5485
         extent = global_ctx.library_node.get_extents(node)  # type: ignore
@@ -581,7 +581,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
         nodes = flatten_list(nodes)
         if all(isinstance(n, (dcir.NestedSDFG, dcir.DomainMap, dcir.Tasklet)) for n in nodes):
             return nodes
-        elif not all(isinstance(n, (dcir.ComputationState, dcir.DomainLoop)) for n in nodes):
+        if not all(isinstance(n, (dcir.ComputationState, dcir.DomainLoop)) for n in nodes):
             raise ValueError("Can't mix dataflow and state nodes on same level.")
 
         read_memlets, write_memlets, field_memlets = union_inout_memlets(nodes)
@@ -615,10 +615,10 @@ class DaCeIRBuilder(eve.NodeTranslator):
         nodes = flatten_list(nodes)
         if all(isinstance(n, (dcir.ComputationState, dcir.DomainLoop)) for n in nodes):
             return nodes
-        elif all(isinstance(n, (dcir.NestedSDFG, dcir.DomainMap, dcir.Tasklet)) for n in nodes):
+        if all(isinstance(n, (dcir.NestedSDFG, dcir.DomainMap, dcir.Tasklet)) for n in nodes):
             return [dcir.ComputationState(computations=nodes, grid_subset=grid_subset)]
-        else:
-            raise ValueError("Can't mix dataflow and state nodes on same level.")
+
+        raise ValueError("Can't mix dataflow and state nodes on same level.")
 
     def _process_map_item(
         self,
@@ -628,8 +628,8 @@ class DaCeIRBuilder(eve.NodeTranslator):
         global_ctx: DaCeIRBuilder.GlobalContext,
         iteration_ctx: DaCeIRBuilder.IterationContext,
         symbol_collector: DaCeIRBuilder.SymbolCollector,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> List[dcir.DomainMap]:
         grid_subset = iteration_ctx.grid_subset
         read_memlets, write_memlets, _ = union_inout_memlets(list(scope_nodes))
         scope_nodes = self.to_dataflow(
@@ -723,11 +723,11 @@ class DaCeIRBuilder(eve.NodeTranslator):
         scope_nodes,
         item: Loop,
         *,
-        global_ctx,
+        global_ctx: DaCeIRBuilder.GlobalContext,
         iteration_ctx: DaCeIRBuilder.IterationContext,
         symbol_collector: DaCeIRBuilder.SymbolCollector,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> List[dcir.DomainLoop]:
         grid_subset = union_node_grid_subsets(list(scope_nodes))
         read_memlets, write_memlets, _ = union_inout_memlets(list(scope_nodes))
         scope_nodes = self.to_state(scope_nodes, grid_subset=grid_subset)
@@ -793,14 +793,14 @@ class DaCeIRBuilder(eve.NodeTranslator):
     def _process_iteration_item(self, scope, item, **kwargs):
         if isinstance(item, Map):
             return self._process_map_item(scope, item, **kwargs)
-        elif isinstance(item, Loop):
+        if isinstance(item, Loop):
             return self._process_loop_item(scope, item, **kwargs)
-        else:
-            raise ValueError("Invalid expansion specification set.")
+
+        raise ValueError("Invalid expansion specification set.")
 
     def visit_VerticalLoop(
-        self, node: oir.VerticalLoop, *, global_ctx: DaCeIRBuilder.GlobalContext, **kwargs
-    ):
+        self, node: oir.VerticalLoop, *, global_ctx: DaCeIRBuilder.GlobalContext, **kwargs: Any
+    ) -> dcir.NestedSDFG:
         overall_extent = Extent.zeros(2)
         for he in node.walk_values().if_isinstance(oir.HorizontalExecution):
             overall_extent = overall_extent.union(global_ctx.library_node.get_extents(he))
