@@ -36,6 +36,7 @@ def gt_auto_optimize(
     gpu_launch_bounds: Optional[int | str] = None,
     gpu_launch_factor: Optional[int] = None,
     constant_symbols: Optional[dict[str, Any]] = None,
+    assume_pointwise: bool = True,
     validate: bool = True,
     validate_all: bool = False,
     **kwargs: Any,
@@ -93,6 +94,8 @@ def gt_auto_optimize(
         constant_symbols: A `dict` that maps symbols that are constant to their values.
             They will be replaced with their value inside the SDFG, which might
             increase performance.
+        assume_pointwise: Global data in the SDFG is guaranteed to be point wise.
+            See the `GT4PyMapBufferElimination` transformation for more.
         validate: Perform validation during the steps.
         validate_all: Perform extensive validation.
 
@@ -163,8 +166,12 @@ def gt_auto_optimize(
         )
 
         # After we have created big kernels, we will perform some post cleanup.
+        gtx_transformations.gt_reduce_distributed_buffering(sdfg)
         sdfg.apply_transformations_repeated(
-            gtx_transformations.GT4PyMoveTaskletIntoMap,
+            [
+                gtx_transformations.GT4PyMoveTaskletIntoMap,
+                gtx_transformations.GT4PyMapBufferElimination(assume_pointwise=assume_pointwise),
+            ],
             validate=validate,
             validate_all=validate_all,
         )
