@@ -33,6 +33,7 @@ from .simplify import (
     gt_simplify,
     gt_substitute_compiletime_symbols,
 )
+from .strides import gt_change_transient_strides
 from .util import gt_find_constant_arguments, gt_make_transients_persistent
 
 
@@ -48,6 +49,7 @@ __all__ = [
     "SerialMapPromoter",
     "SerialMapPromoterGPU",
     "gt_auto_optimize",
+    "gt_change_transient_strides",
     "gt_gpu_transformation",
     "gt_inline_nested_sdfg",
     "gt_set_iteration_order",
