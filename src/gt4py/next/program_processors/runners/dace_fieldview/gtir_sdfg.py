@@ -359,15 +359,6 @@ def _add_sdfg_params(
     return [arg_name for arg_name, _ in sdfg_args]
 
 
-def _add_storage_for_temporary(temp_decl: gtir.Temporary) -> dict[str, str]:
-    """
-    Add temporary storage (aka transient) for data containers used as GTIR temporaries.
-
-    Assume all temporaries to be fields, therefore represented as dace arrays.
-    """
-    raise NotImplementedError("Temporaries not supported yet by GTIR DaCe backend.")
-
-
 @dataclasses.dataclass(frozen=True)
 class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     """Provides translation capability from a GTIR program to a DaCe SDFG.
@@ -409,6 +400,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 ),
             )
         )
+
+    def add_storage_for_temporary(self, temp_decl: gtir.Temporary) -> None:
+        """
+        Add temporary storage (aka transient) for data containers used as GTIR temporaries.
+
+        Assume all temporaries to be fields, therefore represented as dace arrays.
+        """
+        raise NotImplementedError("Temporaries not supported yet by GTIR DaCe backend.")
 
     def get_offset_provider_type(self, offset: str) -> gtx_common.OffsetProviderTypeElem:
         return self.offset_provider_type[offset]
@@ -480,7 +479,22 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         return list(gtx_utils.flatten_nested_tuple((temp_result,)))
 
     def visit_Program(self, node: gtir.Program) -> None:
-        raise AssertionError("The `Program` node should be handled outside this visitor.")
+        """Translates the body of `ir.Program` inside the SDFG that belongs to this builder."""
+
+        # create start block of the stateful graph
+        assert len(self.sdfg.nodes()) == 0
+        head_state = self.sdfg.add_state("program_entry", is_start_block=True)
+
+        # declarations of temporaries result in transient array definitions in the SDFG
+        for decl in node.declarations:
+            self.add_storage_for_temporary(decl)
+
+        # visit one statement at a time and expand the SDFG from the current head state
+        for i, stmt in enumerate(node.body):
+            # include `debuginfo` only for `ir.Program` and `ir.Stmt` nodes: finer granularity would be too messy
+            head_state = self.sdfg.add_state_after(head_state, f"stmt_{i}")
+            head_state._debuginfo = dace_utils.debug_info(stmt, default=self.sdfg.debuginfo)
+            head_state = self.visit(stmt, state=head_state)
 
     def visit_SetAt(self, stmt: gtir.SetAt, state: dace.SDFGState) -> dace.SDFGState:
         """Visits a `SetAt` statement expression and writes the local result to some external storage.
@@ -850,7 +864,7 @@ def build_sdfg_from_gtir(
         offset_provider_type: The definitions of offset providers used by the program node
 
     Returns:
-        The SDFG as result of the GTIR lowering, without applying any transformation.
+        The SDFG as a result of the GTIR lowering, without applying any transformation.
     """
 
     ir = gtir_type_inference.infer(ir, offset_provider_type=offset_provider_type)
@@ -866,36 +880,17 @@ def build_sdfg_from_gtir(
     # such as arrays and scalars. GT4Py uses a unicode symbols ('ᐞ') as name
     # separator in the SSA pass, which generates invalid symbols for DaCe.
     # Here we find new names for invalid symbols present in the IR.
-    node = dace_gtir_utils.replace_invalid_symbols(sdfg, ir)
+    ir = dace_gtir_utils.replace_invalid_symbols(sdfg, ir)
 
-    # start block of the stateful graph
-    entry_state = sdfg.add_state("program_entry", is_start_block=True)
-
-    # declarations of temporaries result in transient array definitions in the SDFG
-    if node.declarations:
-        temp_symbols: dict[str, str] = {}
-        for decl in node.declarations:
-            temp_symbols |= _add_storage_for_temporary(decl)
-
-        # define symbols for shape and offsets of temporary arrays as interstate edge symbols
-        head_state = sdfg.add_state_after(entry_state, "init_temps", assignments=temp_symbols)
-    else:
-        head_state = entry_state
-
-    domain_symbols = _collect_symbols_in_domain_expressions(node, node.params)
+    domain_symbols = _collect_symbols_in_domain_expressions(ir, ir.params)
     sdfg_builder = GTIRToSDFG(
         sdfg,
         offset_provider_type,
         domain_symbols,
-        global_symbols={p.id: p.type for p in node.params if isinstance(p.type, ts.DataType)},
+        global_symbols={p.id: p.type for p in ir.params if isinstance(p.type, ts.DataType)},
     )
 
-    # visit one statement at a time and expand the SDFG from the current head state
-    for i, stmt in enumerate(node.body):
-        # include `debuginfo` only for `ir.Program` and `ir.Stmt` nodes: finer granularity would be too messy
-        head_state = sdfg.add_state_after(head_state, f"stmt_{i}")
-        head_state._debuginfo = dace_utils.debug_info(stmt, default=sdfg.debuginfo)
-        head_state = sdfg_builder.visit(stmt, state=head_state)
+    sdfg_builder.visit(ir)
 
     # Create the call signature for the SDFG.
     #  Only the arguments required by the GT4Py program, i.e. `node.params`, are added
@@ -903,7 +898,7 @@ def build_sdfg_from_gtir(
     #  the arguments created by the translation process, must be passed as keyword arguments.
     sdfg.arg_names = sdfg_builder.sdfg_arg_names
 
-    # end with validation of the SDFG
+    # End with validation of the SDFG
     sdfg.validate()
 
     return sdfg
