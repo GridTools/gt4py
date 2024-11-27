@@ -497,6 +497,42 @@ def op_as_fieldop(
     return _impl
 
 
+def cast_as_fieldop(type_: str, domain: Optional[itir.FunCall] = None):
+    """
+    Promotes the function `cast_` to a field_operator.
+
+    Args:
+        type_: the target type to be passed as argument to `cast_` function.
+        domain: the domain of the returned field.
+
+    Returns:
+        A function from Fields to Field.
+
+    Examples:
+        >>> str(cast_as_fieldop("float32")("a"))
+        '(⇑(λ(__arg0) → cast_(·__arg0, float32)))(a)'
+    """
+
+    def _impl(it: itir.Expr) -> itir.FunCall:
+        return op_as_fieldop(lambda v: call("cast_")(v, type_), domain)(it)
+
+    return _impl
+
+
+def index(dim: common.Dimension) -> itir.FunCall:
+    """
+    Create a call to the `index` builtin, shorthand for `call("index")(axis)`,
+    after converting the given dimension to `itir.AxisLiteral`.
+
+    Args:
+        dim: the dimension corresponding to the index axis.
+
+    Returns:
+        A function that constructs a Field of indices in the given dimension.
+    """
+    return call("index")(itir.AxisLiteral(value=dim.value, kind=dim.kind))
+
+
 def map_(op):
     """Create a `map_` call."""
     return call(call("map_")(op))

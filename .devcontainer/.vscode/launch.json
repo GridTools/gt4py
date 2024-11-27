@@ -6,7 +6,7 @@
   "configurations": [
     {
       "name": "Python: Current File (just my code)",
-      "type": "debugpy",
+      "type": "python",
       "request": "launch",
       "program": "${file}",
       "console": "integratedTerminal",
@@ -14,20 +14,11 @@
     },
     {
       "name": "Python: Current File (all)",
-      "type": "debugpy",
+      "type": "python",
       "request": "launch",
       "program": "${file}",
       "console": "integratedTerminal",
       "justMyCode": false
-    },
-    {
-      "name": "Python: Debug Tests",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "${file}",
-      "purpose": ["debug-test"],
-      "console": "integratedTerminal",
-      "justMyCode": true
     }
   ]
 }

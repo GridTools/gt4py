@@ -25,13 +25,10 @@ def _dynamic_shift_args(node: itir.Expr) -> None | list[bool]:
         num_args=len(node.args),
         save_to_annex=True,
     )
-    dynamic_shifts = []
-    for param_shifts in params_shifts:
-        has_dynamic_shift = False
-        for shifts in param_shifts:
-            for _, offset in zip(shifts[::2], shifts[1::2], strict=True):
-                has_dynamic_shift |= offset == trace_shifts.Sentinel.VALUE
-        dynamic_shifts.append(has_dynamic_shift)
+    dynamic_shifts = [
+        any(trace_shifts.Sentinel.VALUE in shifts for shifts in param_shifts)
+        for param_shifts in params_shifts
+    ]
     return dynamic_shifts
 
 

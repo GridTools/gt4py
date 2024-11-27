@@ -36,7 +36,6 @@ from gt4py.next.embedded import (
     exceptions as embedded_exceptions,
 )
 from gt4py.next.ffront import experimental, fbuiltins
-from gt4py.next.iterator import embedded as itir_embedded
 
 
 try:
@@ -148,7 +147,8 @@ class NdArrayField(
             raise ValueError(
                 f"'as_scalar' is only valid on 0-dimensional 'Field's, got a {self.domain.ndim}-dimensional 'Field'."
             )
-        return self.ndarray.item()
+        # note: `.item()` will return a Python type, therefore we use indexing with an empty tuple
+        return self.asnumpy()[()]  # type: ignore[return-value] # should be ensured by the 0-d check
 
     @property
     def codomain(self) -> type[core_defs.ScalarT]:
@@ -188,10 +188,10 @@ class NdArrayField(
 
     def premap(
         self: NdArrayField,
-        *connectivities: common.ConnectivityField | fbuiltins.FieldOffset,
+        *connectivities: common.Connectivity | fbuiltins.FieldOffset,
     ) -> NdArrayField:
         """
-        Rearrange the field content using the provided connectivity fields as index mappings.
+        Rearrange the field content using the provided connectivities (index mappings).
 
         This operation is conceptually equivalent to a regular composition of mappings
         `f∘c`, being `c` the `connectivity` argument and `f` the `self` data field.
@@ -205,7 +205,7 @@ class NdArrayField(
         argument used in the right hand side of the operator should therefore have the
         same product of dimensions `c: S × T → A × B`. Such a mapping can also be
         expressed as a pair of mappings `c1: S × T → A` and `c2: S × T → B`, and this
-        is actually the only supported form in GT4Py because `ConnectivityField` instances
+        is actually the only supported form in GT4Py because `Connectivity` instances
         can only deal with a single dimension in its codomain. This approach makes
         connectivities reusable for any combination of dimensions in a field domain
         and matches the NumPy advanced indexing API, which basically is a
@@ -260,15 +260,15 @@ class NdArrayField(
 
         """  # noqa: RUF002  # TODO(egparedes): move docstring to the `premap` builtin function when it exists
 
-        conn_fields: list[common.ConnectivityField] = []
+        conn_fields: list[common.Connectivity] = []
         codomains_counter: collections.Counter[common.Dimension] = collections.Counter()
 
         for connectivity in connectivities:
-            # For neighbor reductions, a FieldOffset is passed instead of an actual ConnectivityField
-            if not isinstance(connectivity, common.ConnectivityField):
+            # For neighbor reductions, a FieldOffset is passed instead of an actual Connectivity
+            if not isinstance(connectivity, common.Connectivity):
                 assert isinstance(connectivity, fbuiltins.FieldOffset)
                 connectivity = connectivity.as_connectivity_field()
-            assert isinstance(connectivity, common.ConnectivityField)
+            assert isinstance(connectivity, common.Connectivity)
 
             # Current implementation relies on skip_value == -1:
             # if we assume the indexed array has at least one element,
@@ -317,8 +317,8 @@ class NdArrayField(
 
     def __call__(
         self,
-        index_field: common.ConnectivityField | fbuiltins.FieldOffset,
-        *args: common.ConnectivityField | fbuiltins.FieldOffset,
+        index_field: common.Connectivity | fbuiltins.FieldOffset,
+        *args: common.Connectivity | fbuiltins.FieldOffset,
     ) -> common.Field:
         return functools.reduce(
             lambda field, current_index_field: field.premap(current_index_field),
@@ -459,7 +459,7 @@ class NdArrayField(
 
 @dataclasses.dataclass(frozen=True)
 class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
-    common.ConnectivityField[common.DimsT, common.DimT],
+    common.Connectivity[common.DimsT, common.DimT],
     NdArrayField[common.DimsT, core_defs.IntegralScalar],
 ):
     _codomain: common.DimT
@@ -578,7 +578,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
     __getitem__ = restrict
 
 
-def _domain_premap(data: NdArrayField, *connectivities: common.ConnectivityField) -> NdArrayField:
+def _domain_premap(data: NdArrayField, *connectivities: common.Connectivity) -> NdArrayField:
     """`premap` implementation transforming only the field domain not the data (i.e. translation and relocation)."""
     new_domain = data.domain
     for connectivity in connectivities:
@@ -667,7 +667,7 @@ def _reshuffling_premap(
     )
 
 
-def _remapping_premap(data: NdArrayField, connectivity: common.ConnectivityField) -> NdArrayField:
+def _remapping_premap(data: NdArrayField, connectivity: common.Connectivity) -> NdArrayField:
     new_dims = {*connectivity.domain.dims} - {connectivity.codomain}
     if repeated_dims := (new_dims & {*data.domain.dims}):
         raise ValueError(f"Remapped field will contain repeated dimensions '{repeated_dims}'.")
@@ -692,7 +692,7 @@ def _remapping_premap(data: NdArrayField, connectivity: common.ConnectivityField
         if restricted_connectivity_domain != connectivity.domain
         else connectivity
     )
-    assert isinstance(restricted_connectivity, common.ConnectivityField)
+    assert isinstance(restricted_connectivity, common.Connectivity)
 
     # 2- then compute the index array
     new_idx_array = xp.asarray(restricted_connectivity.ndarray) - current_range.start
@@ -970,7 +970,7 @@ def _concat_where(
     return cls_.from_array(result_array, domain=result_domain)
 
 
-NdArrayField.register_builtin_func(experimental.concat_where, _concat_where)  # type: ignore[has-type]
+NdArrayField.register_builtin_func(experimental.concat_where, _concat_where)  # type: ignore[arg-type]
 
 
 def _make_reduction(
@@ -995,15 +995,15 @@ def _make_reduction(
         offset_definition = current_offset_provider[
             axis.value
         ]  # assumes offset and local dimension have same name
-        assert isinstance(offset_definition, itir_embedded.NeighborTableOffsetProvider)
+        assert common.is_neighbor_table(offset_definition)
         new_domain = common.Domain(*[nr for nr in field.domain if nr.dim != axis])
 
         broadcast_slice = tuple(
-            slice(None) if d in [axis, offset_definition.origin_axis] else xp.newaxis
+            slice(None) if d in [axis, offset_definition.domain.dims[0]] else xp.newaxis
             for d in field.domain.dims
         )
         masked_array = xp.where(
-            xp.asarray(offset_definition.table[broadcast_slice]) != common._DEFAULT_SKIP_VALUE,
+            xp.asarray(offset_definition.ndarray[broadcast_slice]) != common._DEFAULT_SKIP_VALUE,
             field.ndarray,
             initial_value_op(field),
         )
