@@ -11,7 +11,7 @@
 import collections
 import copy
 import uuid
-from typing import Any, Final, Iterable, Optional, TypeAlias, Union
+from typing import Any, Final, Iterable, Optional, TypeAlias
 
 import dace
 from dace import (
@@ -26,7 +26,6 @@ from dace.transformation import (
     passes as dace_passes,
 )
 
-from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace_fieldview import (
     transformations as gtx_transformations,
 )
@@ -126,36 +125,6 @@ def gt_simplify(
                 result["GT4PyGlobalSelfCopyElimination"] += self_copy_removal_result
 
     return result
-
-
-def gt_set_iteration_order(
-    sdfg: dace.SDFG,
-    leading_dim: Optional[
-        Union[str, gtx_common.Dimension, list[Union[str, gtx_common.Dimension]]]
-    ] = None,
-    validate: bool = True,
-    validate_all: bool = False,
-) -> Any:
-    """Set the iteration order of the Maps correctly.
-
-    Modifies the order of the Map parameters such that `leading_dim`
-    is the fastest varying one, the order of the other dimensions in
-    a Map is unspecific. `leading_dim` should be the dimensions were
-    the stride is one.
-
-    Args:
-        sdfg: The SDFG to process.
-        leading_dim: The leading dimensions.
-        validate: Perform validation at the end of the function.
-        validate_all: Perform validation also on intermediate steps.
-    """
-    return sdfg.apply_transformations_once_everywhere(
-        gtx_transformations.MapIterationOrder(
-            leading_dims=leading_dim,
-        ),
-        validate=validate,
-        validate_all=validate_all,
-    )
 
 
 def gt_inline_nested_sdfg(
