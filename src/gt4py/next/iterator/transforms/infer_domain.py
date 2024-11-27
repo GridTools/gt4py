@@ -150,7 +150,7 @@ def _merge_domains(
 def _extract_accessed_domains(
     stencil: itir.Expr,
     input_ids: list[str],
-    target_domain: domain_utils.SymbolicDomain,
+    target_domain: domain_utils.SymbolicDomain | DomainAccessDescriptor,
     offset_provider: common.OffsetProvider,
     symbolic_domain_sizes: Optional[dict[str, str]],
     allow_uninferred: bool,
@@ -172,6 +172,8 @@ def _extract_accessed_domains(
             domain_utils.SymbolicDomain.translate(
                 target_domain, shift, offset_provider, symbolic_domain_sizes
             )
+            if not isinstance(target_domain, DomainAccessDescriptor)
+            else target_domain
             for shift in shifts_list
         ]
         accessed_domains[in_field_id] = _domain_union(
