@@ -528,7 +528,7 @@ def index(dim: common.Dimension) -> itir.FunCall:
         dim: the dimension corresponding to the index axis.
 
     Returns:
-        A function that returns a Field of indices in the given dimension.
+        A function that constructs a Field of indices in the given dimension.
     """
     return call("index")(itir.AxisLiteral(value=dim.value, kind=dim.kind))
 
