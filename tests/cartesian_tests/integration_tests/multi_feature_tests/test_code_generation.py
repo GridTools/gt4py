@@ -667,6 +667,10 @@ def test_K_offset_write_conditional(backend):
             pytest.skip(
                 f"{backend} backend with CUDA 11 and/or GCC 10.3 is not capable of K offset write, update CUDA/GCC if possible"
             )
+    if backend in ["gt:gpu"]:
+        pytest.skip(
+            f"{backend} backend with is not capable of K offset write, bug remains unsolved: https://github.com/GridTools/gt4py/issues/1754"
+        )
 
     arraylib = get_array_library(backend)
     array_shape = (1, 1, 4)
