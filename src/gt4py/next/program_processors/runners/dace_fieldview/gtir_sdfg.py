@@ -226,7 +226,7 @@ def _add_storage(
         symbolic_arguments: Set of GT4Py scalars that must be represented as SDFG symbols.
         name: Symbol Name to be allocated.
         gt_type: GT4Py symbol type.
-        connectivity_types: Mapping from local dimensions to `NeighborConnectivityType`.
+        neighbor_connectivity_types: Mapping from local dimensions to `NeighborConnectivityType`.
         transient: True when the data symbol has to be allocated as internal storage.
         tuple_name: Must be set for tuple fields in order to use the same array shape and strides symbols.
 
@@ -850,7 +850,7 @@ def build_sdfg_from_gtir(
         offset_provider_type: The definitions of offset providers used by the program node
 
     Returns:
-        An SDFG in the DaCe canonical form (simplified)
+        The SDFG as result of the GTIR lowering, without applying any transformation.
     """
 
     ir = gtir_type_inference.infer(ir, offset_provider_type=offset_provider_type)
