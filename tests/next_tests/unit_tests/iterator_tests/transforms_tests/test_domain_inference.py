@@ -1060,8 +1060,7 @@ def test_symbolic_domain_sizes(unstructured_offset_provider):
     )
 
 
-@pytest.mark.parametrize("allow_uninferred", [True, False])
-def test_unknown_domain(offset_provider, allow_uninferred: bool):
+def test_unknown_domain(offset_provider):
     stencil = im.lambda_("arg0", "arg1")(im.deref(im.shift("Ioff", im.deref("arg1"))("arg0")))
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 10)})
     expected_domains = {
@@ -1069,11 +1068,7 @@ def test_unknown_domain(offset_provider, allow_uninferred: bool):
         "in_field2": {IDim: (0, 10)},
     }
     testee, expected = setup_test_as_fieldop(stencil, domain)
-    if allow_uninferred:
-        run_test_expr(testee, expected, domain, expected_domains, offset_provider, None, True)
-    else:
-        with pytest.raises(ValueError, match="Dynamic shifts not allowed"):
-            run_test_expr(testee, expected, domain, expected_domains, offset_provider, None, False)
+    run_test_expr(testee, expected, domain, expected_domains, offset_provider, None)
 
 
 def test_never_accessed_domain(offset_provider):

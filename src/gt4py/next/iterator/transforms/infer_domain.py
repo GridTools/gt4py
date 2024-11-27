@@ -405,8 +405,8 @@ def infer_expr(
     - domain: The domain `expr` is read at.
     - symbolic_domain_sizes: A dictionary mapping axes names, e.g., `I`, `Vertex`, to a symbol
       name that evaluates to the length of that axis.
-    - allow_uninferred: Allow expressions whose domain is either unknown (e.g. because of a
-      dynamic shift) or empty.
+    - allow_uninferred: Allow `as_fieldop` expressions whose domain is either unknown (e.g.
+      because of a dynamic shift) or empty.
 
     Returns:
       A tuple containing the inferred expression with all applied `as_fieldop` (that are accessed)
