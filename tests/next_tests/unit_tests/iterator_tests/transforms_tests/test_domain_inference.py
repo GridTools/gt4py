@@ -1068,7 +1068,7 @@ def test_unknown_domain(offset_provider):
         "in_field2": {IDim: (0, 10)},
     }
     testee, expected = setup_test_as_fieldop(stencil, domain)
-    run_test_expr(testee, expected, domain, expected_domains, offset_provider, None)
+    run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
 
 def test_never_accessed_domain(offset_provider):
