@@ -568,6 +568,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         # use specialized dataflow builder classes for each builtin function
         if cpm.is_call_to(node, "if_"):
             return gtir_builtin_translators.translate_if(node, sdfg, head_state, self)
+        elif cpm.is_call_to(node, "index"):
+            return gtir_builtin_translators.translate_index(node, sdfg, head_state, self)
         elif cpm.is_call_to(node, "make_tuple"):
             return gtir_builtin_translators.translate_make_tuple(node, sdfg, head_state, self)
         elif cpm.is_call_to(node, "tuple_get"):

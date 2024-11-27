@@ -18,7 +18,7 @@ import dace.subsets as sbs
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.ffront import fbuiltins as gtx_fbuiltins
 from gt4py.next.iterator import ir as gtir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
 from gt4py.next.iterator.type_system import type_specifications as itir_ts
 from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
 from gt4py.next.program_processors.runners.dace_fieldview import (
@@ -277,20 +277,31 @@ def extract_domain(node: gtir.Node) -> FieldopDomain:
     the corresponding lower and upper bounds. The returned lower bound is inclusive,
     the upper bound is exclusive: [lower_bound, upper_bound[
     """
-    assert cpm.is_call_to(node, ("cartesian_domain", "unstructured_domain"))
 
     domain = []
-    for named_range in node.args:
-        assert cpm.is_call_to(named_range, "named_range")
-        assert len(named_range.args) == 3
-        axis = named_range.args[0]
-        assert isinstance(axis, gtir.AxisLiteral)
-        lower_bound, upper_bound = (
-            dace.symbolic.pystr_to_symbolic(gtir_python_codegen.get_source(arg))
-            for arg in named_range.args[1:3]
-        )
-        dim = gtx_common.Dimension(axis.value, axis.kind)
-        domain.append((dim, lower_bound, upper_bound))
+
+    def parse_range_boundary(expr: gtir.Expr) -> str:
+        return dace.symbolic.pystr_to_symbolic(gtir_python_codegen.get_source(expr))
+
+    if cpm.is_call_to(node, ("cartesian_domain", "unstructured_domain")):
+        for named_range in node.args:
+            assert cpm.is_call_to(named_range, "named_range")
+            assert len(named_range.args) == 3
+            axis = named_range.args[0]
+            assert isinstance(axis, gtir.AxisLiteral)
+            lower_bound, upper_bound = (parse_range_boundary(arg) for arg in named_range.args[1:3])
+            dim = gtx_common.Dimension(axis.value, axis.kind)
+            domain.append((dim, lower_bound, upper_bound))
+
+    elif isinstance(node, domain_utils.SymbolicDomain):
+        assert str(node.grid_type) in {"cartesian_domain", "unstructured_domain"}
+        for dim, drange in node.ranges.items():
+            domain.append(
+                (dim, parse_range_boundary(drange.start), parse_range_boundary(drange.stop))
+            )
+
+    else:
+        raise ValueError(f"Invalid domain {node}.")
 
     return domain
 
@@ -545,6 +556,51 @@ def translate_if(
     return result_temps
 
 
+def translate_index(
+    node: gtir.Node,
+    sdfg: dace.SDFG,
+    state: dace.SDFGState,
+    sdfg_builder: gtir_sdfg.SDFGBuilder,
+) -> FieldopResult:
+    """
+    Lowers the `index` builtin function to a mapped tasklet that writes the dimension
+    index values to a transient array. The extent of the index range is taken from
+    the domain information that should be present in the node annex.
+    """
+    assert "domain" in node.annex
+    domain = extract_domain(node.annex.domain)
+    assert len(domain) == 1
+    dim, lower_bound, upper_bound = domain[0]
+    dim_index = dace_gtir_utils.get_map_variable(dim)
+
+    field_dims, field_offset, field_shape = _get_field_layout(domain)
+    field_type = ts.FieldType(field_dims, dace_utils.as_itir_type(INDEX_DTYPE))
+
+    output, _ = sdfg.add_temp_transient(field_shape, INDEX_DTYPE)
+    output_node = state.add_access(output)
+
+    sdfg_builder.add_mapped_tasklet(
+        "index",
+        state,
+        map_ranges={
+            dim_index: f"{lower_bound}:{upper_bound}",
+        },
+        inputs={},
+        code=f"__val = {dim_index}",
+        outputs={
+            "__val": dace.Memlet(
+                data=output_node.data,
+                subset=sbs.Range.from_indices(_get_domain_indices(field_dims, field_offset)),
+            )
+        },
+        input_nodes={},
+        output_nodes={output_node.data: output_node},
+        external_edges=True,
+    )
+
+    return FieldopData(output_node, field_type, field_offset)
+
+
 def _get_data_nodes(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
@@ -777,6 +833,7 @@ if TYPE_CHECKING:
         translate_as_fieldop,
         translate_broadcast_scalar,
         translate_if,
+        translate_index,
         translate_literal,
         translate_make_tuple,
         translate_tuple_get,

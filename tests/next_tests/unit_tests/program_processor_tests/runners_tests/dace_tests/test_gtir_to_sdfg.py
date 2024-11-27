@@ -12,15 +12,15 @@ Test that ITIR can be lowered to SDFG.
 Note: this test module covers the fieldview flavour of ITIR.
 """
 
-import copy
 import functools
 
 import numpy as np
 import pytest
 
-from gt4py.next import common as gtx_common, constructors
+from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.transforms import infer_domain
 from gt4py.next.type_system import type_specifications as ts
 
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
@@ -1973,3 +1973,49 @@ def test_gtir_if_values():
 
     sdfg(a, b, c, **FSYMBOLS)
     assert np.allclose(c, np.where(a < b, a, b))
+
+
+def test_gtir_index():
+    MARGIN = 2
+    assert MARGIN < N
+    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
+    subdomain = im.domain(
+        gtx_common.GridType.CARTESIAN, ranges={IDim: (MARGIN, im.minus("size", MARGIN))}
+    )
+
+    testee = gtir.Program(
+        id="gtir_cast",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="x", type=ts.FieldType(dims=[IDim], dtype=SIZE_TYPE)),
+            gtir.Sym(id="size", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.let("i", im.index(IDim))(
+                    im.op_as_fieldop("plus", domain)(
+                        "i",
+                        im.as_fieldop(
+                            im.lambda_("a")(im.deref(im.shift(IDim.value, 1)("a"))), subdomain
+                        )("i"),
+                    )
+                ),
+                domain=subdomain,
+                target=gtir.SymRef(id="x"),
+            )
+        ],
+    )
+
+    v = np.empty(N, dtype=np.int32)
+
+    # we need to run domain inference in order to add the domain annex information to the index node.
+    testee = infer_domain.infer_program(testee, offset_provider=CARTESIAN_OFFSETS)
+    sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
+
+    ref = np.concatenate(
+        (v[:MARGIN], np.arange(MARGIN, N - MARGIN, dtype=np.int32), v[N - MARGIN :])
+    )
+
+    sdfg(v, **FSYMBOLS)
+    np.allclose(v, ref)
