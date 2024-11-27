@@ -162,8 +162,11 @@ class FileCache(diskcache.Cache):
         with lock:
             super().__init__(directory=directory, **settings)
 
+        self._init_complete = True
+
     def __del__(self) -> None:
-        self.close()
+        if getattr(self, "_init_complete", False):  # skip if `__init__` didn't finished
+            self.close()
 
 
 class GTFNCompileWorkflowFactory(factory.Factory):
