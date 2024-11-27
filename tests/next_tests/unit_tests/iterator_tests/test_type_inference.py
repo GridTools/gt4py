@@ -179,7 +179,7 @@ def expression_test_cases():
             im.as_fieldop(im.lambda_("x")(im.deref("x")))(
                 im.ref("inp", ts.DeferredType(constraint=None))
             ),
-            ts.DeferredType(constraint=None),
+            ts.DeferredType(constraint=ts.TupleType),
         ),
         # if in field-view scope
         (
