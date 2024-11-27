@@ -105,6 +105,9 @@ def gt_auto_optimize(
         - Stride of transients, they are in C order and this should be changed.
         - Fix the strides and iteration order of the maps that are created due
             to the memlet to map transformation, that we have to do.
+        - Set padding of transients, i.e. alignment, the DaCe datadescriptor
+            can do that.
+        - Handle nested SDFGs better.
         - Redundant array removal should be specialized for the case it is the
             of a map.
         - Restore rule 3 with, with the layer of access nodes.
@@ -249,6 +252,9 @@ def gt_auto_optimize(
         dace_aoptimize.set_fast_implementations(sdfg, device)
         # TODO(phimuell): Fix the bug, it uses the tile value and not the stack array value.
         dace_aoptimize.move_small_arrays_to_stack(sdfg)
+
+        # Now we modify the strides.
+        gtx_transformations.gt_change_transient_strides(sdfg, gpu=gpu)
 
         if make_persistent:
             gtx_transformations.gt_make_transients_persistent(sdfg=sdfg, device=device)
