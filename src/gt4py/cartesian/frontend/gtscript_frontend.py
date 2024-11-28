@@ -1460,6 +1460,13 @@ class IRMaker(ast.NodeVisitor):
                                 loc=nodes.Location.from_ast_node(t),
                             )
 
+                    if self.backend_name in ["gt:gpu"]:
+                        raise GTScriptSyntaxError(
+                            message=f"Assignment to non-zero offsets in K is not available in {self.backend_name} as an unsolved bug remains."
+                            "Please refer to https://github.com/GridTools/gt4py/issues/1754.",
+                            loc=nodes.Location.from_ast_node(t),
+                        )
+
             if not self._is_known(name):
                 if name in self.temp_decls:
                     field_decl = self.temp_decls[name]
