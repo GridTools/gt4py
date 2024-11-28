@@ -20,6 +20,7 @@ from gt4py.next.iterator.ir_utils import (
     ir_makers as im,
 )
 from gt4py.next.iterator.transforms import cse, infer_domain, inline_lambdas
+from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 from gt4py.next.iterator.type_system import inference as type_inference
 from gt4py.next.type_system import type_info, type_specifications as ts
 
@@ -200,10 +201,12 @@ def create_global_tmps(
         assert isinstance(stmt, itir.SetAt)
         new_body.extend(_transform_stmt(stmt, uids=uids, declarations=declarations))
 
-    return itir.Program(
-        id=program.id,
-        function_definitions=program.function_definitions,
-        params=program.params,
-        declarations=declarations,
-        body=new_body,
+    return ConstantFolding.apply(  # type: ignore[return-value]  # returns same type as input
+        itir.Program(
+            id=program.id,
+            function_definitions=program.function_definitions,
+            params=program.params,
+            declarations=declarations,
+            body=new_body,
+        )
     )
