@@ -669,7 +669,7 @@ def test_K_offset_write_conditional(backend):
             )
     if backend in ["gt:gpu"]:
         pytest.skip(
-            f"{backend} backend with is not capable of K offset write, bug remains unsolved: https://github.com/GridTools/gt4py/issues/1754"
+            f"{backend} backend is not capable of K offset write, bug remains unsolved: https://github.com/GridTools/gt4py/issues/1754"
         )
 
     arraylib = get_array_library(backend)
