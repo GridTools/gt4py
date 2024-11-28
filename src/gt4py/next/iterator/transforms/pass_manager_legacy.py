@@ -10,6 +10,7 @@ import enum
 from typing import Callable, Optional
 
 from gt4py.eve import utils as eve_utils
+from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import fencil_to_program, inline_fundefs
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
@@ -75,8 +76,13 @@ def apply_common_transforms(
         Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
     ] = None,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
+    offset_provider_type: Optional[common.OffsetProviderType] = None,
 ) -> itir.Program:
     assert isinstance(ir, itir.FencilDefinition)
+    # TODO(havogt): if the runtime `offset_provider` is not passed, we cannot run global_tmps
+    if offset_provider_type is None:
+        offset_provider_type = common.offset_provider_to_type(offset_provider)
+
     ir = fencil_to_program.FencilToProgram().apply(ir)
     icdlv_uids = eve_utils.UIDGenerator()
 
@@ -109,7 +115,7 @@ def apply_common_transforms(
         # is constant-folded the surrounding tuple_get calls can be removed.
         inlined = CollapseTuple.apply(
             inlined,
-            offset_provider=offset_provider,
+            offset_provider_type=offset_provider_type,
             # TODO(tehrengruber): disabled since it increases compile-time too much right now
             flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
         )
@@ -134,7 +140,7 @@ def apply_common_transforms(
         ir = CollapseTuple.apply(
             ir,
             ignore_tuple_size=True,
-            offset_provider=offset_provider,
+            offset_provider_type=offset_provider_type,
             # TODO(tehrengruber): disabled since it increases compile-time too much right now
             flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
         )
@@ -149,7 +155,7 @@ def apply_common_transforms(
 
     if unroll_reduce:
         for _ in range(10):
-            unrolled = UnrollReduce.apply(ir, offset_provider=offset_provider)
+            unrolled = UnrollReduce.apply(ir, offset_provider_type=offset_provider_type)
             if unrolled == ir:
                 break
             ir = unrolled
@@ -164,7 +170,7 @@ def apply_common_transforms(
     ir = ScanEtaReduction().visit(ir)
 
     if common_subexpression_elimination:
-        ir = CommonSubexpressionElimination.apply(ir, offset_provider=offset_provider)  # type: ignore[type-var]  # always an itir.Program
+        ir = CommonSubexpressionElimination.apply(ir, offset_provider_type=offset_provider_type)  # type: ignore[type-var]  # always an itir.Program
         ir = MergeLet().visit(ir)
 
     ir = InlineLambdas.apply(

@@ -52,7 +52,7 @@ class DaCeTranslator(
         self,
         program: itir.FencilDefinition,
         arg_types: Sequence[ts.TypeSpec],
-        offset_provider: dict[str, common.Dimension | common.Connectivity],
+        offset_provider_type: common.OffsetProviderType,
         column_axis: Optional[common.Dimension],
     ) -> dace.SDFG:
         on_gpu = (
@@ -64,7 +64,7 @@ class DaCeTranslator(
         return build_sdfg_from_itir(
             program,
             arg_types,
-            offset_provider=offset_provider,
+            offset_provider_type=offset_provider_type,
             auto_optimize=self.auto_optimize,
             on_gpu=on_gpu,
             column_axis=column_axis,
@@ -87,7 +87,7 @@ class DaCeTranslator(
         sdfg = self.generate_sdfg(
             program,
             inp.args.args,
-            inp.args.offset_provider,
+            common.offset_provider_to_type(inp.args.offset_provider),
             inp.args.column_axis,
         )
 

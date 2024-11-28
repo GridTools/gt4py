@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import itertools
-from typing import Any, Dict, TypeVar
+from typing import Dict, TypeVar
 
 import dace
 
@@ -19,15 +19,10 @@ from gt4py.next.iterator import ir as gtir
 from gt4py.next.type_system import type_specifications as ts
 
 
-def get_map_variable(dim: gtx_common.Dimension | str) -> str:
+def get_map_variable(dim: gtx_common.Dimension) -> str:
     """
     Format map variable name based on the naming convention for application-specific SDFG transformations.
     """
-    if not isinstance(dim, gtx_common.Dimension):
-        if len(dim) != 0:
-            dim = gtx_common.Dimension(dim, gtx_common.DimensionKind.LOCAL)
-        else:
-            raise ValueError("Dimension name cannot be empty.")
     suffix = "dim" if dim.kind == gtx_common.DimensionKind.LOCAL else ""
     return f"i_{dim.value}_gtx_{dim.kind}{suffix}"
 
@@ -61,15 +56,6 @@ def get_tuple_fields(
         return list(itertools.chain(*expanded_fields))
     else:
         return fields
-
-
-def get_tuple_type(data: tuple[Any, ...]) -> ts.TupleType:
-    """
-    Compute the `ts.TupleType` corresponding to the structure of a tuple of data nodes.
-    """
-    return ts.TupleType(
-        types=[get_tuple_type(d) if isinstance(d, tuple) else d.gt_dtype for d in data]
-    )
 
 
 def replace_invalid_symbols(sdfg: dace.SDFG, ir: gtir.Program) -> gtir.Program:

@@ -52,12 +52,19 @@ class DaCeTranslator(
         on_gpu: bool,
     ) -> dace.SDFG:
         ir = itir_transforms.apply_fieldview_transforms(ir, offset_provider=offset_provider)
-        sdfg = gtir_sdfg.build_sdfg_from_gtir(ir, offset_provider=offset_provider)
+        sdfg = gtir_sdfg.build_sdfg_from_gtir(
+            ir, offset_provider_type=common.offset_provider_to_type(offset_provider)
+        )
 
         if auto_opt:
             gtx_transformations.gt_auto_optimize(sdfg, gpu=on_gpu)
         elif on_gpu:
-            gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=False)
+            # We run simplify to bring the SDFG into a canonical form that the gpu transformations
+            # can handle. This is a workaround for an issue with scalar expressions that are
+            # promoted to symbolic expressions and computed on the host (CPU), but the intermediate
+            # result is written to a GPU global variable (https://github.com/spcl/dace/issues/1773).
+            gtx_transformations.gt_simplify(sdfg)
+            gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)
 
         return sdfg
 
@@ -70,7 +77,7 @@ class DaCeTranslator(
 
         sdfg = self.generate_sdfg(
             program,
-            inp.args.offset_provider,
+            inp.args.offset_provider,  # TODO(havogt): should be offset_provider_type once the transformation don't require run-time info
             inp.args.column_axis,
             auto_opt=self.auto_optimize,
             on_gpu=(self.device_type == gtx_allocators.CUPY_DEVICE),

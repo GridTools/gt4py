@@ -21,7 +21,7 @@ from gt4py.next.iterator.transforms.cse import (
 
 
 @pytest.fixture
-def offset_provider(request):
+def offset_provider_type(request):
     return {"I": common.Dimension("I", kind=common.DimensionKind.HORIZONTAL)}
 
 
@@ -137,7 +137,7 @@ def test_lambda_redef_same_arg_scope():
     assert actual == expected
 
 
-def test_if_can_deref_no_extraction(offset_provider):
+def test_if_can_deref_no_extraction(offset_provider_type):
     # Test that a subexpression only occurring in one branch of an `if_` is not moved outside the
     # if statement. A case using `can_deref` is used here as it is common.
 
@@ -157,11 +157,11 @@ def test_if_can_deref_no_extraction(offset_provider):
         )
     )
 
-    actual = CSE.apply(testee, offset_provider=offset_provider, within_stencil=True)
+    actual = CSE.apply(testee, offset_provider_type=offset_provider_type, within_stencil=True)
     assert actual == expected
 
 
-def test_if_can_deref_eligible_extraction(offset_provider):
+def test_if_can_deref_eligible_extraction(offset_provider_type):
     # Test that a subexpression only occurring in both branches of an `if_` is moved outside the
     # if statement. A case using `can_deref` is used here as it is common.
 
@@ -178,11 +178,11 @@ def test_if_can_deref_eligible_extraction(offset_provider):
         )
     )
 
-    actual = CSE.apply(testee, offset_provider=offset_provider, within_stencil=True)
+    actual = CSE.apply(testee, offset_provider_type=offset_provider_type, within_stencil=True)
     assert actual == expected
 
 
-def test_if_eligible_extraction(offset_provider):
+def test_if_eligible_extraction(offset_provider_type):
     # Test that a subexpression only occurring in the condition of an `if_` is moved outside the
     # if statement.
 
@@ -191,7 +191,7 @@ def test_if_eligible_extraction(offset_provider):
     # (λ(_cs_1) → if _cs_1 ∧ _cs_1 then c else d)(a ∧ b)
     expected = im.let("_cs_1", im.and_("a", "b"))(im.if_(im.and_("_cs_1", "_cs_1"), "c", "d"))
 
-    actual = CSE.apply(testee, offset_provider=offset_provider, within_stencil=True)
+    actual = CSE.apply(testee, offset_provider_type=offset_provider_type, within_stencil=True)
     assert actual == expected
 
 
