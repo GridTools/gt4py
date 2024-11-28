@@ -7,10 +7,11 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
-from typing import Optional
+import itertools
+from typing import Optional, Any
 
 from gt4py import eve
-from gt4py.eve import utils as eve_utils
+from gt4py.eve import utils as eve_utils, concepts
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
@@ -162,11 +163,32 @@ def fuse_as_fieldop(
     new_node = inline_lambdas.InlineLambdas.apply(
         new_node, opcount_preserving=True, force_inline_lift_args=True
     )
-    new_node = inline_lifts.InlineLifts().visit(new_node)
+    # This change is neccessary since otherwise InlineLifts loses the type information (observed in temporary_field_for_grid_point_cold_pools_enhancement)
+    stencil, domain = (new_node.fun.args[0], None) if len(new_node.fun.args) == 1 else new_node.fun.args
+    new_stencil = inline_lifts.InlineLifts().visit(stencil)
+    new_node = im.as_fieldop(new_stencil, domain)(*new_node.args)
+
+    if any(arg.type is None for arg in new_node.args):
+        breakpoint()
 
     type_inference.copy_type(from_=expr, to=new_node)
-
     return new_node
+
+def _is_pointwise_as_fieldop(node: itir.Expr) -> bool:
+    # TODO: not only check num shifts == 1 but also not ALL_NEIGHBORS to avoid nested neighbor inline
+    # TODO: maybe only fuse when the number of reads does not increase, e.g. do not inline here
+    # because we have two args:
+    # let tmp = as_fieldop(...)(a, b)
+    #   {as_fieldop(...)(tmp), as_fieldop(...)(tmp)}
+    #
+    if not cpm.is_applied_as_fieldop(node):
+        return False
+
+    stencil: itir.Lambda = node.fun.args[0]
+    shifts = trace_shifts.trace_stencil(stencil, num_args=len(node.args))
+    is_pointwise = all(len(arg_shifts) <= 1 for arg_shifts in shifts)
+    is_pointwise &= not any(trace_shifts.Sentinel.ALL_NEIGHBORS in shift_chain for arg_shifts in shifts for shift_chain in arg_shifts)
+    return is_pointwise
 
 
 @dataclasses.dataclass
@@ -219,11 +241,25 @@ class FuseAsFieldOp(eve.NodeTranslator):
 
         return cls(uids=uids).visit(node)
 
+#     def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
+#         if str(node) == """as_fieldop(λ(hdef_ic_wpᐞ0) → cast_(·hdef_ic_wpᐞ0 × ·hdef_ic_wpᐞ0, float64),
+#            u⟨ Cellₕ: [horizontal_start, horizontal_end), Kᵥ: [vertical_start, vertical_end) ⟩)(
+#   hdef_ic_wpᐞ0
+# )""" or str(node) == 'hdef_ic_wpᐞ0':
+#             breakpoint()
+#         return super().visit(node, **kwargs)
+
     def visit_FunCall(self, node: itir.FunCall):
         node = self.generic_visit(node)
 
         if cpm.is_call_to(node.fun, "as_fieldop"):
             node = _canonicalize_as_fieldop(node)
+
+        if cpm.is_let(node):
+            eligible_args = [_is_pointwise_as_fieldop(arg) for arg in node.args]
+            if any(eligible_args):
+                new_node = inline_lambdas.inline_lambda(node, eligible_params=eligible_args)
+                return self.visit(new_node)
 
         if cpm.is_call_to(node.fun, "as_fieldop") and isinstance(node.fun.args[0], itir.Lambda):
             stencil: itir.Lambda = node.fun.args[0]
@@ -235,18 +271,34 @@ class FuseAsFieldOp(eve.NodeTranslator):
                 assert isinstance(arg.type, ts.TypeSpec)
                 dtype = type_info.apply_to_primitive_constituents(type_info.extract_dtype, arg.type)
                 # TODO(tehrengruber): make this configurable
-                eligible_args.append(
-                    _is_tuple_expr_of_literals(arg)
-                    or (
-                        isinstance(arg, itir.FunCall)
-                        and (
-                            cpm.is_call_to(arg.fun, "as_fieldop")
-                            and isinstance(arg.fun.args[0], itir.Lambda)
-                            or cpm.is_call_to(arg, "if_")
-                        )
-                        and (isinstance(dtype, it_ts.ListType) or len(arg_shifts) <= 1)
-                    )
-                )
+                is_eligible = False
+                is_eligible |= _is_tuple_expr_of_literals(arg)
+                if isinstance(arg, itir.FunCall) and (
+                    cpm.is_call_to(arg.fun, "as_fieldop")
+                    and isinstance(arg.fun.args[0], itir.Lambda)
+                    or cpm.is_call_to(arg, "if_")
+                ):
+                    is_eligible |= isinstance(dtype, it_ts.ListType)
+                    is_eligible |= len(arg_shifts) == 0
+                    # if the argument is only accessed at one neighbor location
+                    is_eligible |= len(arg_shifts) == 1 and not any(
+                        trace_shifts.Sentinel.ALL_NEIGHBORS in shift_chain for shift_chain in arg_shifts)
+
+                    is_eligible |= _is_pointwise_as_fieldop(arg)
+
+                    # if cpm.is_applied_as_fieldop(node):
+                    #     stencil: itir.Lambda = node.fun.args[0]
+                    #     inner_shifts = trace_shifts.trace_stencil(stencil, num_args=len(node.args))
+                    #     # is_pointwise = all(len(arg_shifts) <= 1 for arg_shifts in shifts)
+                    #     total_inner_shifts = {(*outer_shift_chain, *inner_shift_chain) for outer_shift_chain in arg_shifts for inner_shift_chain in inner_arg_shifts for inner_arg_shifts in inner_shifts}
+                    #     is_eligible |=
+                    #     #is_pointwise = not any(
+                    #     #    trace_shifts.Sentinel.ALL_NEIGHBORS in shift_chain for arg_shifts in shifts
+                    #     #    for shift_chain in arg_shifts)
+                    #     return is_pointwise
+                    if not is_eligible:
+                        breakpoint()
+                eligible_args.append(is_eligible)
 
             return fuse_as_fieldop(node, eligible_args, uids=self.uids)
         return node
