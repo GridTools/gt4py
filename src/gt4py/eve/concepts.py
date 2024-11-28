@@ -1,23 +1,15 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """Definitions of basic Eve concepts."""
 
-
 from __future__ import annotations
 
-import ast
 import copy
 import re
 
@@ -58,58 +50,42 @@ class SymbolRef(ConstrainedStr, regex=_SYMBOL_NAME_RE):
 
 @datamodels.datamodel(slots=True, frozen=True)
 class SourceLocation:
-    """Source code location (line, column, source)."""
+    """File-line-column information for source code."""
 
+    filename: Optional[str]
     line: int = datamodels.field(validator=_validators.ge(1))
     column: int = datamodels.field(validator=_validators.ge(1))
-    source: str
     end_line: Optional[int] = datamodels.field(validator=_validators.optional(_validators.ge(1)))
     end_column: Optional[int] = datamodels.field(validator=_validators.optional(_validators.ge(1)))
 
-    @classmethod
-    def from_AST(cls, ast_node: ast.AST, source: Optional[str] = None) -> SourceLocation:
-        if (
-            not isinstance(ast_node, ast.AST)
-            or getattr(ast_node, "lineno", None) is None
-            or getattr(ast_node, "col_offset", None) is None
-        ):
-            raise ValueError(
-                f"Passed AST node '{ast_node}' does not contain a valid source location."
-            )
-        if source is None:
-            source = f"<ast.{type(ast_node).__name__} at 0x{id(ast_node):x}>"
-        return cls(
-            ast_node.lineno,
-            ast_node.col_offset + 1,
-            source,
-            end_line=ast_node.end_lineno,
-            end_column=ast_node.end_col_offset + 1 if ast_node.end_col_offset is not None else None,
-        )
-
     def __init__(
         self,
+        filename: Optional[str],
         line: int,
         column: int,
-        source: str,
-        *,
         end_line: Optional[int] = None,
         end_column: Optional[int] = None,
     ) -> None:
         assert end_column is None or end_line is not None
         self.__auto_init__(  # type: ignore[attr-defined]  # __auto_init__ added dynamically
-            line=line, column=column, source=source, end_line=end_line, end_column=end_column
+            filename=filename, line=line, column=column, end_line=end_line, end_column=end_column
         )
 
     def __str__(self) -> str:
-        src = self.source or ""
+        filename_str = self.filename or "-"
 
-        end_part = ""
-        if self.end_line is not None:
-            end_part += f" to {self.end_line}"
+        end_line_str = self.end_line if self.end_line is not None else "-"
+        end_column_str = self.end_column if self.end_column is not None else "-"
+
+        end_str: Optional[str] = None
         if self.end_column is not None:
-            end_part += f":{self.end_column}"
+            end_str = f"{end_line_str}:{end_column_str}"
+        elif self.end_line is not None:
+            end_str = f"{end_line_str}"
 
-        return f"<{src}:{self.line}:{self.column}{end_part}>"
+        if end_str is not None:
+            return f"<{filename_str}:{self.line}:{self.column} to {end_str}>"
+        return f"<{filename_str}:{self.line}:{self.column}>"
 
 
 @datamodels.datamodel(slots=True, frozen=True)
@@ -196,7 +172,13 @@ class Node(datamodels.DataModel, trees.Tree, kw_only=True):  # type: ignore[call
     frozen classes. Data in the `annex` do not affect the hash or equality
     comparisons of the node, since it is not really a field. Thus, visitors
     and pipeline passes can freely attach computed attributes into the instance
-    `annex`.
+    `annex`. Note that `annex` attribute is not implicitly copied in the
+    :class:`NodeTranslator`. If you want it to persist across multiple
+    :class:`NodeTranslator`s either use a `root_validator` to dynamically
+    (re)compute the annex on node construction (see e.g.
+    :class:`SymbolTableTrait`) or add the parts of the annex that should be
+    preserved to the `PRESERVED_ANNEX_ATTRS` attribute in the
+    :class:`NodeTranslator` class..
     """
 
     __slots__ = ()
@@ -271,7 +253,6 @@ class GenericNode(datamodels.GenericDataModel, Node, kw_only=True):  # type: ign
 
 
 class VType(datamodels.FrozenModel):
-
     # Unique name
     name: str
 

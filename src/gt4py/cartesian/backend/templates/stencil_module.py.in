@@ -1,0 +1,169 @@
+{#
+
+ # GT4Py - GridTools Framework
+ #
+ # Copyright (c) 2014-2024, ETH Zurich
+ # All rights reserved.
+ #
+ # Please, refer to the LICENSE file in the root directory.
+ # SPDX-License-Identifier: BSD-3-Clause
+
+ ---- Template variables ----
+
+    - stencil_unique_name: str
+    - module_name: str
+    - backend: str
+    - arg_fields: [{ "name": str, "dtype": str, "layout_id": int }]
+    - parameters: [{ "name": str, "dtype": str }]
+
+imports, module_members, class_name, class_members, stencil_signature, implementation
+gt_backend, gt_source, gt_domain_info, gt_field_info, gt_parameter_info, gt_constants, gt_options
+
+#}
+
+import pathlib
+import time
+
+import numpy as np
+from numpy import dtype
+{{ imports }}
+
+from gt4py.cartesian.definitions import AccessKind, Boundary, CartesianSpace
+from gt4py.cartesian.stencil_object import DomainInfo, FieldInfo, ParameterInfo
+
+{{ module_members }}
+
+class {{ class_name }}({{ base_class }}):
+    """
+    {{ docstring }}
+
+    The callable interface is the same of the stencil definition function,
+    with some extra keyword arguments. Check :class:`gt4py.StencilObject`
+    for the full specification.
+    """
+
+{%- filter indent(width=4) %}
+{{- class_members }}
+{%- endfilter %}
+
+    _gt_backend_ = "{{ gt_backend }}"
+
+    _gt_source_ = {{ gt_source }}
+
+    _gt_domain_info_ = {{ gt_domain_info }}
+
+    _gt_field_info_ = {{ gt_field_info }}
+
+    _gt_parameter_info_ = {{ gt_parameter_info }}
+
+    _gt_constants_ = {{ gt_constants }}
+
+    _gt_options_ = {{ gt_options }}
+
+    @property
+    def backend(self):
+        return type(self)._gt_backend_
+
+    @property
+    def source(self):
+        return type(self)._gt_source_
+
+    @property
+    def domain_info(self):
+        return type(self)._gt_domain_info_
+
+    @property
+    def field_info(self) -> dict:
+        return type(self)._gt_field_info_
+
+    @property
+    def parameter_info(self) -> dict:
+        return type(self)._gt_parameter_info_
+
+    @property
+    def constants(self) -> dict:
+        return type(self)._gt_constants_
+
+    @property
+    def options(self) -> dict:
+        return type(self)._gt_options_
+
+    def __call__(
+        self, {{ stencil_signature }}, domain=None, origin=None, validate_args=True, exec_info=None
+    ):
+        if exec_info is not None:
+            exec_info["call_start_time"] = time.perf_counter()
+
+        field_args=dict(
+{%- set comma = joiner(", ") -%}{%- for field in field_names -%} {{- comma() }} {{ field }}={{ field }}{%- endfor -%}
+        )
+        parameter_args=dict(
+{%- set comma = joiner(", ") -%}{%- for param in param_names -%} {{- comma() }} {{ param }}={{ param }}{%- endfor -%}
+        )
+        # assert that all required values have been provided
+
+{%- filter indent(width=8) %}
+{{ pre_run }}
+{%- endfilter %}
+
+        self._call_run(
+            field_args=field_args,
+            parameter_args=parameter_args,
+            domain=domain,
+            origin=origin,
+            validate_args=validate_args,
+            exec_info=exec_info,
+        )
+
+{%- filter indent(width=8) %}
+{{ post_run }}
+{%- endfilter %}
+
+        if exec_info is not None:
+            exec_info["call_end_time"] = time.perf_counter()
+
+            if exec_info.setdefault("__aggregate_data", False):
+                stencil_info = exec_info.setdefault("{{ class_name }}", {})
+
+                # Update performance counters
+                stencil_info["call_start_time"] = exec_info["call_start_time"]
+                stencil_info["call_end_time"] = exec_info["call_end_time"]
+                stencil_info["call_time"] = (
+                    stencil_info["call_end_time"]
+                    - stencil_info["call_start_time"]
+                )
+                stencil_info["total_call_time"] = (
+                    stencil_info.get("total_call_time", 0.0)
+                    + stencil_info["call_time"]
+                )
+                stencil_info["ncalls"] = (
+                    stencil_info.get("ncalls", 0) + 1
+                )
+                stencil_info["run_time"] = (
+                    exec_info["run_end_time"]
+                    - exec_info["run_start_time"]
+                )
+                stencil_info["total_run_time"] = (
+                    stencil_info.get("total_run_time", 0.0)
+                    + stencil_info["run_time"]
+                )
+                if "run_cpp_start_time" in exec_info:
+                    stencil_info["run_cpp_time"] = (
+                        exec_info["run_cpp_end_time"]
+                        - exec_info["run_cpp_start_time"]
+                    )
+                    stencil_info["total_run_cpp_time"] = (
+                        stencil_info.get("total_run_cpp_time", 0.0)
+                        + stencil_info["run_cpp_time"]
+                    )
+
+    def run(self, _domain_, _origin_, exec_info, *, {{- field_names|join(", ") -}}, {{- param_names|join(", ") -}}):
+        if exec_info is not None:
+            exec_info["domain"] = _domain_
+            exec_info["origin"] = _origin_
+            exec_info["run_start_time"] = time.perf_counter()
+{%- filter indent(width=8) %}
+{{ implementation }}
+{%- endfilter %}
+        if exec_info is not None:
+            exec_info["run_end_time"] = time.perf_counter()

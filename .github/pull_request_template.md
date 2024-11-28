@@ -1,24 +1,34 @@
-## Description
+<!--
+Delete this comment and add a proper description of the changes contained in this PR. The text here will be used in the commit message since the approved PRs are always squash-merged. The preferred format is:
 
-Describe the content of the PR and links to related issues, bugs of features.
+- PR Title: <type>[<scope>]: <one-line-summary>
+
+    <type>:
+        - build: Changes that affect the build system or external dependencies
+        - ci: Changes to our CI configuration files and scripts
+        - docs: Documentation only changes
+        - feat: A new feature
+        - fix: A bug fix
+        - perf: A code change that improves performance
+        - refactor: A code change that neither fixes a bug nor adds a feature
+        - style: Changes that do not affect the meaning of the code
+        - test: Adding missing tests or correcting existing tests
+
+    <scope>: cartesian | eve | next | storage
+    # ONLY if changes are limited to a specific subsytem
+
+- PR Description:
+
+    Description of the main changes with links to appropriate issues/documents/references/...
+-->
+
+## Description
 
 ## Requirements
 
-Before submitting this PR, please make sure:
+- [ ] All fixes and/or new features come with corresponding tests.
+- [ ] Important design decisions have been documented in the approriate ADR inside the [docs/development/ADRs/](docs/development/ADRs/Index.md) folder.
 
-- [ ] The code builds cleanly without new errors or warnings
-- [ ] The code passes all the existing tests
-- [ ] If this PR adds a new feature, new tests have been added to test these
-new features
-- [ ] All relevant documentation has been updated or added
+If this PR contains code authored by new contributors please make sure:
 
-
-Additionally, if this PR contains code authored by new contributors:
-
-- [ ] All the authors are covered by a valid contributor assignment agreement,
-signed by the employer if needed, provided to ETH Zurich
-- [ ] The names of all the new contributors have been added to an updated
-version of the AUTHORS.rst file included in the PR
- 
-
-
+- [ ] The PR contains an updated version of the `AUTHORS.md` file adding the names of all the new contributors.

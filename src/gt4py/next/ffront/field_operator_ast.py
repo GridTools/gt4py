@@ -1,22 +1,16 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
 from typing import Any, Generic, TypeVar, Union
 
-from gt4py.eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
+from gt4py.eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef, datamodels
 from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.type_definitions import StrEnum
 from gt4py.next.ffront import dialect_ast_enums, type_specifications as ts_ffront
@@ -27,7 +21,7 @@ from gt4py.next.utils import RecursionGuard
 class LocatedNode(Node):
     location: SourceLocation
 
-    def __str__(self):
+    def __str__(self) -> str:
         from gt4py.next.ffront.foast_pretty_printer import pretty_format
 
         try:
@@ -51,8 +45,8 @@ SymbolT = TypeVar("SymbolT", bound=ts.TypeSpec)
 #       class Symbol(eve.GenericNode, LocatedNode, Generic[SymbolT]):
 #
 class Symbol(LocatedNode, Generic[SymbolT]):
-    id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
-    type: Union[SymbolT, ts.DeferredType]  # noqa A003
+    id: Coerced[SymbolName]
+    type: Union[SymbolT, ts.DeferredType]  # A003
     namespace: dialect_ast_enums.Namespace = dialect_ast_enums.Namespace(
         dialect_ast_enums.Namespace.LOCAL
     )
@@ -75,11 +69,11 @@ DimensionSymbol = DataSymbol[DimensionTypeT]
 
 
 class Expr(LocatedNode):
-    type: ts.TypeSpec = ts.DeferredType(constraint=None)  # noqa A003
+    type: ts.TypeSpec = ts.DeferredType(constraint=None)  # A003
 
 
 class Name(Expr):
-    id: Coerced[SymbolRef]  # noqa: A003  # shadowing a python builtin
+    id: Coerced[SymbolRef]
 
 
 class Constant(Expr):
@@ -148,17 +142,16 @@ class TernaryExpr(Expr):
 
 
 class Call(Expr):
-    func: Name
+    func: Expr
     args: list[Expr]
     kwargs: dict[str, Expr]
 
 
-class Stmt(LocatedNode):
-    ...
+class Stmt(LocatedNode): ...
 
 
 class Starred(Expr):
-    id: Union[FieldSymbol, TupleSymbol, ScalarSymbol]  # noqa: A003  # shadowing a python builtin
+    id: Union[FieldSymbol, TupleSymbol, ScalarSymbol]
 
 
 class Assign(Stmt):
@@ -179,30 +172,47 @@ class BlockStmt(Stmt, SymbolTableTrait):
     stmts: list[Stmt]
 
 
+class IfStmt(Stmt):
+    condition: Expr
+    true_branch: BlockStmt
+    false_branch: BlockStmt
+
+    @datamodels.root_validator
+    @classmethod
+    def _collect_common_symbols(cls: type[IfStmt], instance: IfStmt) -> None:
+        common_symbol_names = (
+            instance.true_branch.annex.symtable.keys() & instance.false_branch.annex.symtable.keys()
+        )
+        instance.annex.propagated_symbols = {
+            sym_name: Symbol(
+                id=sym_name, type=ts.DeferredType(constraint=None), location=instance.location
+            )
+            for sym_name in common_symbol_names
+        }
+
+
 class FunctionDefinition(LocatedNode, SymbolTableTrait):
-    id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
+    id: Coerced[SymbolName]
     params: list[DataSymbol]
     body: BlockStmt
     closure_vars: list[Symbol]
-    type: Union[ts.FunctionType, ts.DeferredType] = ts.DeferredType(  # noqa: A003
-        constraint=ts.FunctionType
-    )
+    type: Union[ts.FunctionType, ts.DeferredType] = ts.DeferredType(constraint=ts.FunctionType)
 
 
 class FieldOperator(LocatedNode, SymbolTableTrait):
-    id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
+    id: Coerced[SymbolName]
     definition: FunctionDefinition
-    type: Union[ts_ffront.FieldOperatorType, ts.DeferredType] = ts.DeferredType(  # noqa: A003
+    type: Union[ts_ffront.FieldOperatorType, ts.DeferredType] = ts.DeferredType(
         constraint=ts_ffront.FieldOperatorType
     )
 
 
 class ScanOperator(LocatedNode, SymbolTableTrait):
-    id: Coerced[SymbolName]  # noqa: A003 # shadowing a python builtin
+    id: Coerced[SymbolName]
     axis: Constant
     forward: Constant
     init: Constant
     definition: FunctionDefinition  # scan pass
-    type: Union[ts_ffront.ScanOperatorType, ts.DeferredType] = ts.DeferredType(  # noqa: A003
+    type: Union[ts_ffront.ScanOperatorType, ts.DeferredType] = ts.DeferredType(
         constraint=ts_ffront.ScanOperatorType
     )

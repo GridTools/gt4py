@@ -1,19 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """Definitions of node and visitor trait classes."""
-
 
 from __future__ import annotations
 
@@ -38,6 +31,7 @@ class SymbolTableTrait:
 
     @no_type_check
     @datamodels.root_validator
+    @classmethod
     def _collect_symbol_names(cls: Type[SymbolTableTrait], instance: concepts.Node) -> None:
         collected_symbols = cls.SymbolsCollector.apply(instance)
         instance.annex.symtable = collected_symbols
@@ -58,7 +52,14 @@ class SymbolTableTrait:
                         )
                     self.collected_symbols[symbol_name] = node
 
-            if not isinstance(node, SymbolTableTrait):
+            # TODO(egparedes): revisit and generalize mechanism to resolve name collisions.
+            if hasattr(node.annex, "propagated_symbols"):
+                # ensure we have no collisions
+                assert not set(self.collected_symbols.keys()) & set(
+                    node.annex.propagated_symbols.keys()
+                )
+                self.collected_symbols = {**self.collected_symbols, **node.annex.propagated_symbols}
+            elif not isinstance(node, SymbolTableTrait):
                 # Stop recursion if the node opens a new scope (i.e. node with SymbolTableTrait)
                 self.generic_visit(node)
 
@@ -93,6 +94,7 @@ class SymbolRefsValidatorTrait:
 
     @no_type_check
     @datamodels.root_validator
+    @classmethod
     def _validate_symbol_refs(cls: Type[SymbolRefsValidatorTrait], instance: concepts.Node) -> None:
         validator = cls.SymbolRefsValidator()
         symtable = instance.annex.symtable
@@ -162,4 +164,12 @@ class VisitorWithSymbolTableTrait(visitors.NodeVisitor):
         if new_scope:
             kwargs["symtable"] = kwargs["symtable"].parents
 
+        return result
+
+
+class PreserveLocationVisitor(visitors.NodeVisitor):
+    def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
+        result = super().visit(node, **kwargs)
+        if hasattr(node, "location") and hasattr(result, "location"):
+            result.location = node.location
         return result

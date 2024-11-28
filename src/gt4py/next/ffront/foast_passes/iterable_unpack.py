@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from typing import Any
 
@@ -57,7 +51,7 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
         self.unique_tuple_symbol_id += 1
         return sym
 
-    def visit_BlockStmt(self, node: foast.BlockStmt, **kwargs) -> foast.BlockStmt:
+    def visit_BlockStmt(self, node: foast.BlockStmt, **kwargs: Any) -> foast.BlockStmt:
         unrolled_stmts: list[foast.Assign | foast.BlockStmt | foast.Return] = []
 
         for stmt in node.stmts:
@@ -69,7 +63,7 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                     foast.Assign(target=tuple_symbol, value=stmt.value, location=stmt.location)
                 )
 
-                for (index, subtarget) in zip(indices, targets):
+                for index, subtarget in zip(indices, targets):
                     el_type = subtarget.type
                     tuple_name = foast.Name(
                         id=tuple_symbol.id, type=el_type, location=tuple_symbol.location
@@ -85,14 +79,10 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                         ]
 
                         new_tuple = foast.TupleExpr(
-                            elts=tuple_slice,
-                            type=el_type,
-                            location=stmt.location,
+                            elts=tuple_slice, type=el_type, location=stmt.location
                         )
                         new_assign = foast.Assign(
-                            target=subtarget.id,
-                            value=new_tuple,
-                            location=stmt.location,
+                            target=subtarget.id, value=new_tuple, location=stmt.location
                         )
                     else:
                         new_assign = foast.Assign(

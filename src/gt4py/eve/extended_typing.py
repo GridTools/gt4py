@@ -1,18 +1,13 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
-"""Typing definitions working across different Python versions (via `typing_extensions`).
+"""
+Typing definitions working across different Python versions (via `typing_extensions`).
 
 Definitions in 'typing_extensions' take priority over those in 'typing'.
 """
@@ -22,6 +17,7 @@ from __future__ import annotations
 import abc as _abc
 import array as _array
 import collections.abc as _collections_abc
+import ctypes as _ctypes
 import dataclasses as _dataclasses
 import enum as _enum
 import functools as _functools
@@ -31,31 +27,32 @@ import pickle as _pickle
 import sys as _sys
 import types as _types
 import typing as _typing
-from typing import *  # noqa: F403
-from typing import overload  # Only needed to avoid false flake8 errors
+from typing import *  # noqa: F403 [undefined-local-with-import-star]
+from typing import overload
 
+import numpy.typing as npt
 import typing_extensions as _typing_extensions
-from typing_extensions import *  # type: ignore[assignment]  # noqa: F403
+from typing_extensions import *  # type: ignore[assignment,no-redef]  # noqa: F403 [undefined-local-with-import-star]
 
 
 if _sys.version_info >= (3, 9):
     # Standard library already supports PEP 585 (Type Hinting Generics In Standard Collections)
-    from builtins import (  # type: ignore[assignment]  # isort:skip
-        tuple as Tuple,
-        list as List,
+    from builtins import (  # type: ignore[assignment]
         dict as Dict,
-        set as Set,
         frozenset as FrozenSet,
+        list as List,
+        set as Set,
+        tuple as Tuple,
         type as Type,
     )
-    from collections import (  # isort:skip
+    from collections import (
         ChainMap as ChainMap,
         Counter as Counter,
         OrderedDict as OrderedDict,
         defaultdict as defaultdict,
         deque as deque,
     )
-    from collections.abc import (  # isort:skip
+    from collections.abc import (
         AsyncGenerator as AsyncGenerator,
         AsyncIterable as AsyncIterable,
         AsyncIterator as AsyncIterator,
@@ -77,14 +74,14 @@ if _sys.version_info >= (3, 9):
         MutableSet as MutableSet,
         Reversible as Reversible,
         Sequence as Sequence,
+        Set as AbstractSet,
+        ValuesView as ValuesView,
     )
-    from collections.abc import Set as AbstractSet  # isort:skip
-    from collections.abc import ValuesView as ValuesView  # isort:skip
-    from contextlib import (  # isort:skip
+    from contextlib import (
         AbstractAsyncContextManager as AsyncContextManager,
+        AbstractContextManager as ContextManager,
     )
-    from contextlib import AbstractContextManager as ContextManager  # isort:skip
-    from re import Match as Match, Pattern as Pattern  # isort:skip
+    from re import Match as Match, Pattern as Pattern
 
 
 # These fallbacks are useful for public symbols not exported by default.
@@ -124,10 +121,15 @@ def __dir__() -> List[str]:
     return self_func.__cached_dir
 
 
-_T = TypeVar("_T")
-
 # -- Common type aliases --
 NoArgsCallable = Callable[[], Any]
+
+_A = TypeVar("_A", contravariant=True)
+_R = TypeVar("_R", covariant=True)
+
+
+class ArgsOnlyCallable(Protocol[_A, _R]):
+    def __call__(self, *args: _A) -> _R: ...
 
 
 # -- Typing annotations --
@@ -140,9 +142,7 @@ if _sys.version_info >= (3, 9):
     ]
 else:
     SolvedTypeAnnotation = Union[  # type: ignore[misc]  # mypy consider this assignment a redefinition
-        Type,
-        _typing._SpecialForm,
-        _typing._GenericAlias,  # type: ignore[attr-defined]  # _GenericAlias is not exported in stub
+        Type, _typing._SpecialForm, _typing._GenericAlias  # type: ignore[attr-defined]  # _GenericAlias is not exported in stub
     ]
 
 TypeAnnotation = Union[ForwardRef, SolvedTypeAnnotation]
@@ -174,19 +174,14 @@ class NonDataDescriptor(Protocol[_C, _V]):
     @overload
     def __get__(
         self, _instance: Literal[None], _owner_type: Optional[Type[_C]] = None
-    ) -> NonDataDescriptor[_C, _V]:
-        ...
+    ) -> NonDataDescriptor[_C, _V]: ...
 
     @overload
-    def __get__(  # noqa: F811  # redefinion of unused member
-        self, _instance: _C, _owner_type: Optional[Type[_C]] = None
-    ) -> _V:
-        ...
+    def __get__(self, _instance: _C, _owner_type: Optional[Type[_C]] = None) -> _V: ...
 
-    def __get__(  # noqa: F811  # redefinion of unused member
+    def __get__(
         self, _instance: Optional[_C], _owner_type: Optional[Type[_C]] = None
-    ) -> _V | NonDataDescriptor[_C, _V]:
-        ...
+    ) -> _V | NonDataDescriptor[_C, _V]: ...
 
 
 class DataDescriptor(NonDataDescriptor[_C, _V], Protocol):
@@ -195,11 +190,9 @@ class DataDescriptor(NonDataDescriptor[_C, _V], Protocol):
     See https://docs.python.org/3/howto/descriptor.html for further information.
     """
 
-    def __set__(self, _instance: _C, _value: _V) -> None:
-        ...
+    def __set__(self, _instance: _C, _value: _V) -> None: ...
 
-    def __delete__(self, _instance: _C) -> None:
-        ...
+    def __delete__(self, _instance: _C) -> None: ...
 
 
 # -- Based on typeshed definitions --
@@ -213,178 +206,120 @@ ReadableBuffer: TypeAlias = Union[ReadOnlyBuffer, WriteableBuffer]
 class HashlibAlgorithm(Protocol):
     """Used in the hashlib module of the standard library."""
 
-    digest_size: int
-    block_size: int
-    name: str
+    @property
+    def block_size(self) -> int: ...
 
-    def __init__(self, data: ReadableBuffer = ...) -> None:
-        ...
+    @property
+    def digest_size(self) -> int: ...
 
-    def copy(self) -> HashlibAlgorithm:
-        ...
+    @property
+    def name(self) -> str: ...
 
-    def update(self, data: ReadableBuffer) -> None:
-        ...
+    def __init__(self, data: ReadableBuffer = ...) -> None: ...
 
-    def digest(self) -> bytes:
-        ...
+    def copy(self) -> Self: ...
 
-    def hexdigest(self) -> str:
-        ...
+    def update(self, data: Buffer, /) -> None: ...
+
+    def digest(self) -> bytes: ...
+
+    def hexdigest(self) -> str: ...
 
 
 # -- Third party protocols --
+class SupportsArray(Protocol):
+    def __array__(self, dtype: Optional[npt.DTypeLike] = None, /) -> npt.NDArray[Any]: ...
+
+
+def supports_array(value: Any) -> TypeGuard[SupportsArray]:
+    return hasattr(value, "__array__")
+
+
+class ArrayInterface(Protocol):
+    @property
+    def __array_interface__(self) -> Dict[str, Any]: ...
+
+
+class ArrayInterfaceTypedDict(TypedDict):
+    shape: Tuple[int, ...]
+    typestr: str
+    descr: NotRequired[List[Tuple]]
+    data: NotRequired[Tuple[int, bool]]
+    strides: NotRequired[Optional[Tuple[int, ...]]]
+    mask: NotRequired[Optional["StrictArrayInterface"]]
+    offset: NotRequired[int]
+    version: int
+
+
+class StrictArrayInterface(Protocol):
+    @property
+    def __array_interface__(self) -> ArrayInterfaceTypedDict: ...
+
+
+def supports_array_interface(value: Any) -> TypeGuard[ArrayInterface]:
+    return hasattr(value, "__array_interface__")
+
+
+class CUDAArrayInterface(Protocol):
+    @property
+    def __cuda_array_interface__(self) -> Dict[str, Any]: ...
+
+
+class CUDAArrayInterfaceTypedDict(TypedDict):
+    shape: Tuple[int, ...]
+    typestr: str
+    data: Tuple[int, bool]
+    version: int
+    strides: NotRequired[Optional[Tuple[int, ...]]]
+    descr: NotRequired[List[Tuple]]
+    mask: NotRequired[Optional["StrictCUDAArrayInterface"]]
+    stream: NotRequired[Optional[int]]
+
+
+class StrictCUDAArrayInterface(Protocol):
+    @property
+    def __cuda_array_interface__(self) -> CUDAArrayInterfaceTypedDict: ...
+
+
+def supports_cuda_array_interface(value: Any) -> TypeGuard[CUDAArrayInterface]:
+    """Check if the given value supports the CUDA Array Interface."""
+    return hasattr(value, "__cuda_array_interface__")
+
+
+DLPackDevice = Tuple[int, int]
+
+
+class MultiStreamDLPackBuffer(Protocol):
+    def __dlpack__(self, *, stream: Optional[int] = None) -> Any: ...
+
+    def __dlpack_device__(self) -> DLPackDevice: ...
+
+
+class SingleStreamDLPackBuffer(Protocol):
+    def __dlpack__(self, *, stream: None = None) -> Any: ...
+
+    def __dlpack_device__(self) -> DLPackDevice: ...
+
+
+DLPackBuffer: TypeAlias = Union[MultiStreamDLPackBuffer, SingleStreamDLPackBuffer]
+
+
+def supports_dlpack(value: Any) -> TypeGuard[DLPackBuffer]:
+    """Check if a given object supports the DLPack protocol."""
+    return callable(getattr(value, "__dlpack__", None)) and callable(
+        getattr(value, "__dlpack_device__", None)
+    )
+
+
 class DevToolsPrettyPrintable(Protocol):
     """Used by python-devtools (https://python-devtools.helpmanual.io/)."""
 
-    def __pretty__(self, fmt: Callable[[Any], Any], **kwargs: Any) -> Generator[Any, None, None]:
-        ...
+    def __pretty__(
+        self, fmt: Callable[[Any], Any], **kwargs: Any
+    ) -> Generator[Any, None, None]: ...
 
 
 # -- Added functionality --
-class NonProtocolABCMeta(_typing._ProtocolMeta):
-    """Subclass of :cls:`typing.Protocol`'s metaclass doing instance and subclass checks as ABCMeta."""
-
-    __instancecheck__ = _abc.ABCMeta.__instancecheck__  # type: ignore[assignment]
-    __subclasshook__ = None
-
-
-_ProtoT = TypeVar("_ProtoT", bound=_abc.ABCMeta)
-
-
-@overload
-def extended_runtime_checkable(
-    *,
-    instance_check_shortcut: bool = True,
-    subclass_check_with_data_members: bool = False,
-) -> Callable[[_ProtoT], _ProtoT]:
-    ...
-
-
-@overload
-def extended_runtime_checkable(
-    maybe_cls: _ProtoT,
-    *,
-    instance_check_shortcut: bool = True,
-    subclass_check_with_data_members: bool = False,
-) -> _ProtoT:
-    ...
-
-
-def extended_runtime_checkable(  # noqa: C901  # too complex but unavoidable
-    maybe_cls: Optional[_ProtoT] = None,
-    *,
-    instance_check_shortcut: bool = True,
-    subclass_check_with_data_members: bool = False,
-) -> _ProtoT | Callable[[_ProtoT], _ProtoT]:
-    """Emulates :func:`typing.runtime_checkable` with optional performance shortcuts.
-
-    If all optional shortcuts are set to ``False``, it behaves exactly
-    as :func:`typing.runtime_checkable`.
-
-    Keyword Arguments:
-        instance_check_shortcut: instance checks only use the instance type
-            instead of checking the instance data for members added at runtime.
-        subclass_check_with_data_members: subclass checks also work for
-            protocols with data members.
-    """
-
-    def _decorator(cls: _ProtoT) -> _ProtoT:
-        cls = _typing.runtime_checkable(cls)
-        if not (instance_check_shortcut or subclass_check_with_data_members):
-            return cls
-
-        if instance_check_shortcut:
-            # Monkey patch the decorated protocol class using our custom
-            # metaclass, which assumes that no data members have been
-            # added at runtime and therefore the expensive instance members
-            # checks can be replaced by (cached) tests with class members
-            cls.__class__ = NonProtocolABCMeta  # type: ignore[assignment]
-
-        if subclass_check_with_data_members:
-            assert "__subclasshook__" in cls.__dict__
-            if cls.__subclasshook__.__module__ not in (  # type: ignore[attr-defined]
-                "typing",
-                "typing_extensions",
-                "extended_typing",
-            ):
-                raise TypeError(
-                    "Cannot use 'subclass_check_with_data_members' with custom '__subclasshook__' definitions."
-                )
-
-            _allow_reckless_class_checks = getattr(
-                _typing,
-                "_allow_reckless_class_checks"
-                if hasattr(_typing, "_allow_reckless_class_checks")
-                else "_allow_reckless_class_cheks",  # There is a typo in 3.8 and 3.9
-            )
-
-            _get_protocol_attrs = (
-                _typing._get_protocol_attrs  # type: ignore[attr-defined]  # private member
-            )
-            _is_callable_members_only = (
-                _typing._is_callable_members_only  # type: ignore[attr-defined]  # private member
-            )
-
-            # Define a patched version of the proto hook which ignores
-            # __is_callable_members_only() result at certain points
-            def _patched_proto_hook(other):  # type: ignore[no-untyped-def]
-                if not cls.__dict__.get("_is_protocol", False):
-                    return NotImplemented
-
-                # First, perform various sanity checks.
-                if not getattr(cls, "_is_runtime_protocol", False):
-                    if _allow_reckless_class_checks():
-                        return NotImplemented
-                    raise TypeError(
-                        "Instance and class checks can only be used with"
-                        " @runtime_checkable protocols"
-                    )
-                if not _is_callable_members_only(cls) and _allow_reckless_class_checks():
-                    return NotImplemented
-                    # PATCHED: a TypeError should be raised here if not
-                    # `allow_reckless_class_checks()` but we ignored in
-                    # this patched version`
-                if not isinstance(other, type):
-                    # Same error message as for issubclass(1, int).
-                    raise TypeError("issubclass() arg 1 must be a class")
-
-                # Second, perform the actual structural compatibility check.
-                for attr in _get_protocol_attrs(cls):
-                    for base in other.__mro__:
-                        # Check if the members appears in the class dictionary...
-                        if callable(getattr(cls, attr, None)):  # Method member
-                            if attr in base.__dict__:
-                                if base.__dict__[attr] is None:
-                                    return NotImplemented
-                                break
-                        elif attr in base.__dict__ or (  # Data member
-                            base_annotations := getattr(base, "__annotations__", {})
-                            and isinstance(base_annotations, _collections_abc.Mapping)
-                            and attr in base_annotations
-                        ):
-                            break
-
-                        # ...or in annotations, if it is a sub-protocol.
-                        base_annotations = getattr(base, "__annotations__", {})
-                        if (
-                            isinstance(base_annotations, _collections_abc.Mapping)
-                            and attr in base_annotations
-                            and issubclass(other, Generic)
-                            and other._is_protocol
-                        ):
-                            break
-                    else:
-                        return NotImplemented
-                return True
-
-            cls.__subclasshook__ = _patched_proto_hook  # type: ignore[attr-defined]
-
-        return cls
-
-    return _decorator(maybe_cls) if maybe_cls is not None else _decorator
-
-
 _ArtefactTypes: tuple[type, ...] = tuple()
 if _sys.version_info >= (3, 9):
     _ArtefactTypes = (_types.GenericAlias,)  # type: ignore[attr-defined]  # GenericAlias only from >= 3.8
@@ -393,7 +328,7 @@ if _sys.version_info >= (3, 9):
     if isinstance(_typing.Any, type):  # Python >= 3.11
         _ArtefactTypes = (*_ArtefactTypes, _typing.Any)
 
-# `Any` is a class since typing_extensions >= 4.4
+# `Any` is a class since typing_extensions >= 4.4 and Python 3.11
 if (typing_exts_any := getattr(_typing_extensions, "Any", None)) is not _typing.Any and isinstance(
     typing_exts_any, type
 ):
@@ -404,11 +339,13 @@ def is_actual_type(obj: Any) -> TypeGuard[Type]:
     """Check if an object has an actual type and instead of a typing artefact like ``GenericAlias`` or ``Any``.
 
     This is needed because since Python 3.9:
-        ``isinstance(types.GenericAlias(),  type) is True``
+        ``isinstance(types.GenericAlias(), type) is True``
     and since Python 3.11:
-        ``isinstance(typing.Any,  type) is True``
+        ``isinstance(typing.Any, type) is True``
     """
-    return isinstance(obj, type) and type(obj) not in _ArtefactTypes
+    return (
+        isinstance(obj, type) and (obj not in _ArtefactTypes) and (type(obj) not in _ArtefactTypes)
+    )
 
 
 if hasattr(_typing_extensions, "Any") and _typing.Any is not _typing_extensions.Any:  # type: ignore[attr-defined] # _typing_extensions.Any only from >= 4.4
@@ -427,6 +364,9 @@ else:
 def has_type_parameters(cls: Type) -> bool:
     """Return ``True`` if obj is a generic class with type parameters."""
     return issubclass(cls, Generic) and len(getattr(cls, "__parameters__", [])) > 0  # type: ignore[arg-type]  # Generic not considered as a class
+
+
+_T = TypeVar("_T")
 
 
 def get_actual_type(obj: _T) -> Type[_T]:
@@ -496,9 +436,12 @@ def is_value_hashable_typing(
     return type_annotation is None
 
 
-def is_protocol(type_: Type) -> bool:
+def _is_protocol(type_: type, /) -> bool:
     """Check if a type is a Protocol definition."""
     return getattr(type_, "_is_protocol", False)
+
+
+is_protocol = getattr(_typing_extensions, "is_protocol", _is_protocol)
 
 
 def get_partial_type_hints(
@@ -538,9 +481,12 @@ def get_partial_type_hints(
             resolved_hints = get_type_hints(  # type: ignore[call-arg]  # Python 3.8 does not define `include-extras`
                 obj, globalns=globalns, localns=localns, include_extras=include_extras
             )
-            hints.update(resolved_hints)
+            hints[name] = resolved_hints[name]
         except NameError as error:
             if isinstance(hint, str):
+                # This conversion could be probably skipped in Python versions containing
+                # the fix applied in bpo-41370. Check:
+                # https://github.com/python/cpython/commit/b465b606049f6f7dd0711cb031fdaa251818741a#diff-ddb987fca5f5df0c9a2f5521ed687919d70bb3d64eaeb8021f98833a2a716887R344
                 hints[name] = ForwardRef(hint)
             elif isinstance(hint, (ForwardRef, _typing.ForwardRef)):
                 hints[name] = hint
@@ -570,7 +516,7 @@ def eval_forward_ref(
 
     Examples:
         >>> from typing import Dict, Tuple
-        >>> print("Result:", eval_forward_ref('Dict[str, Tuple[int, float]]'))
+        >>> print("Result:", eval_forward_ref("Dict[str, Tuple[int, float]]"))
         Result: ...ict[str, ...uple[int, float]]
 
     """
@@ -607,11 +553,8 @@ class CallableKwargsInfo:
     data: Dict[str, Any]
 
 
-def infer_type(  # noqa: C901  # function is complex but well organized in independent cases
-    value: Any,
-    *,
-    annotate_callable_kwargs: bool = False,
-    none_as_type: bool = True,
+def infer_type(
+    value: Any, *, annotate_callable_kwargs: bool = False, none_as_type: bool = True
 ) -> TypeAnnotation:
     """Generate a typing definition from a value.
 
@@ -634,10 +577,10 @@ def infer_type(  # noqa: C901  # function is complex but well organized in indep
         >>> infer_type(frozenset([1, 2, 3]))
         frozenset[int]
 
-        >>> infer_type({'a': 0, 'b': 1})
+        >>> infer_type({"a": 0, "b": 1})
         dict[str, int]
 
-        >>> infer_type({'a': 0, 'b': 'B'})
+        >>> infer_type({"a": 0, "b": "B"})
         dict[str, ...Any]
 
         >>> print("Result:", infer_type(lambda a, b: a + b))
@@ -665,7 +608,7 @@ def infer_type(  # noqa: C901  # function is complex but well organized in indep
         ... @extended_infer_type.register(float)
         ... @extended_infer_type.register(complex)
         ... def _infer_type_number(value, *, annotate_callable_kwargs: bool = False):
-        ...    return numbers.Number
+        ...     return numbers.Number
         >>> extended_infer_type(3.4)
         <class 'numbers.Number'>
         >>> infer_type(3.4)
@@ -718,7 +661,10 @@ def infer_type(  # noqa: C901  # function is complex but well organized in indep
                     arg_types.append(annotations.get(p.name, None) or Any)
                 elif p.kind == _inspect.Parameter.KEYWORD_ONLY:
                     kwonly_arg_types[p.name] = annotations.get(p.name, None) or Any
-                elif p.kind in (_inspect.Parameter.VAR_POSITIONAL, _inspect.Parameter.VAR_KEYWORD):
+                elif p.kind in (
+                    _inspect.Parameter.VAR_POSITIONAL,
+                    _inspect.Parameter.VAR_KEYWORD,
+                ):
                     raise TypeError("Variadic callables are not supported")
 
             result: Any = Callable[arg_types, return_type]

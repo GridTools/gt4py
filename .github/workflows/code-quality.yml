@@ -1,0 +1,27 @@
+name: Code Quality
+
+on:
+  push:
+    branches:
+    - main
+    - gtir  # TODO(tehrengruber): remove after GTIR refactoring #1582
+  pull_request:
+    branches:
+    - main
+    - gtir  # TODO(tehrengruber): remove after GTIR refactoring #1582
+
+jobs:
+  code-quality:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.10"
+        cache: 'pip'
+        cache-dependency-path: |
+          **/pyproject.toml
+          **/constraints.txt
+          **/requirements-dev.txt
+    - uses: pre-commit/action@v3.0.1

@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import ast
 import copy
@@ -42,15 +36,15 @@ class FixMissingLocations(ast.NodeTransformer):
             node = copy.copy(node)
             parent_node = self._parent_nodes[-1]
 
-            node.lineno = parent_node.lineno
-            node.col_offset = parent_node.col_offset
+            node.lineno = parent_node.lineno  # type: ignore[attr-defined] # we are adding the attribute which breaks type checking
+            node.col_offset = parent_node.col_offset  # type: ignore[attr-defined]
 
             # the end positions are optional according to
             #  https://docs.python.org/3/library/ast.html#ast.AST.end_col_offset
             if hasattr(parent_node, "end_lineno"):
-                node.end_lineno = parent_node.end_lineno
+                node.end_lineno = parent_node.end_lineno  # type: ignore[attr-defined]
             if hasattr(parent_node, "end_col_offset"):
-                node.end_col_offset = parent_node.end_col_offset
+                node.end_col_offset = parent_node.end_col_offset  # type: ignore[attr-defined]
 
         self._parent_nodes.append(node)
         result = super().generic_visit(node)

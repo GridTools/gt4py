@@ -1,39 +1,34 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
 import inspect
-from typing import List
+import typing
+from typing import ClassVar, List
 
+from gt4py._core import definitions as core_defs
 from gt4py.eve import Node
-from gt4py.next import iterator
-from gt4py.next.iterator import builtins
+from gt4py.next import common, iterator
+from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir import (
     AxisLiteral,
     Expr,
-    FencilDefinition,
     FunCall,
     FunctionDefinition,
     Lambda,
-    Literal,
     NoneLiteral,
     OffsetLiteral,
     StencilClosure,
     Sym,
     SymRef,
 )
-from gt4py.next.iterator.runtime import CartesianAxis
+from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
 TRACING = "tracing"
@@ -86,13 +81,13 @@ def _patch_Expr():
 
     @monkeypatch_method(Expr)
     def __call__(self, *args):
-        return FunCall(fun=self, args=[*make_node(args)])
+        return FunCall(fun=self, args=[make_node(arg) for arg in args])
 
 
 def _patch_FunctionDefinition():
     @monkeypatch_method(FunctionDefinition)
     def __call__(self, *args):
-        return FunCall(fun=SymRef(id=str(self.id)), args=[*make_node(args)])
+        return FunCall(fun=SymRef(id=str(self.id)), args=[make_node(arg) for arg in args])
 
 
 _patch_Expr()
@@ -115,7 +110,7 @@ def _f(fun, *args):
         fun = _s(fun)
 
     args = [trace_function_argument(arg) for arg in args]
-    return FunCall(fun=fun, args=[*make_node(args)])
+    return FunCall(fun=fun, args=[make_node(arg) for arg in args])
 
 
 # shift promotes its arguments to literals, therefore special
@@ -145,6 +140,8 @@ for builtin_name in builtins.BUILTINS:
 def make_node(o):
     if isinstance(o, Node):
         return o
+    if isinstance(o, common.Dimension):
+        return AxisLiteral(value=o.value, kind=o.kind)
     if callable(o):
         if o.__name__ == "<lambda>":
             return lambdadef(o)
@@ -152,23 +149,15 @@ def make_node(o):
             return lambdadef(o)
     if isinstance(o, iterator.runtime.Offset):
         return OffsetLiteral(value=o.value)
-    if isinstance(o, bool):
-        return Literal(value=str(o), type="bool")
-    if isinstance(o, int):
-        return Literal(value=str(o), type="int")
-    if isinstance(o, float):
-        return Literal(value=str(o), type="float")
-    if isinstance(o, CartesianAxis):
-        return AxisLiteral(value=o.value)
+    if isinstance(o, core_defs.Scalar):
+        return im.literal_from_value(o)
     if isinstance(o, tuple):
-        return tuple(make_node(arg) for arg in o)
-    if isinstance(o, list):
-        return list(make_node(arg) for arg in o)
+        return _f("make_tuple", *(make_node(arg) for arg in o))
     if o is None:
         return NoneLiteral()
     if hasattr(o, "fun"):
         return SymRef(id=o.fun.__name__)
-    raise NotImplementedError(f"Cannot handle {o}")
+    raise NotImplementedError(f"Cannot handle '{o}'.")
 
 
 def trace_function_call(fun, *, args=None):
@@ -176,10 +165,7 @@ def trace_function_call(fun, *, args=None):
         args = (_s(param) for param in inspect.signature(fun).parameters.keys())
     body = fun(*list(args))
 
-    if isinstance(body, tuple):
-        return _f("make_tuple", *tuple(make_node(b) for b in body))
-    else:
-        return make_node(body) if body is not None else None
+    return make_node(body) if body is not None else None
 
 
 def lambdadef(fun):
@@ -215,8 +201,11 @@ iterator.runtime.FundefDispatcher.register_hook(FundefTracer())
 
 
 class TracerContext:
-    fundefs: List[FunctionDefinition] = []
-    closures: List[StencilClosure] = []
+    fundefs: ClassVar[List[FunctionDefinition]] = []
+    closures: ClassVar[
+        List[StencilClosure]
+    ] = []  # TODO(havogt): remove after refactoring to `Program` is complete, currently handles both programs and fencils
+    body: ClassVar[List[itir.Stmt]] = []
 
     @classmethod
     def add_fundef(cls, fun):
@@ -227,12 +216,17 @@ class TracerContext:
     def add_closure(cls, closure):
         cls.closures.append(closure)
 
+    @classmethod
+    def add_stmt(cls, stmt):
+        cls.body.append(stmt)
+
     def __enter__(self):
         iterator.builtins.builtin_dispatch.push_key(TRACING)
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         type(self).fundefs = []
         type(self).closures = []
+        type(self).body = []
         iterator.builtins.builtin_dispatch.pop_key()
 
 
@@ -244,46 +238,109 @@ def closure(domain, stencil, output, inputs):
         stencil(*(_s(param) for param in inspect.signature(stencil).parameters))
         stencil = make_node(stencil)
     TracerContext.add_closure(
-        StencilClosure(
-            domain=domain,
-            stencil=stencil,
-            output=output,
-            inputs=inputs,
-        )
+        StencilClosure(domain=domain, stencil=stencil, output=output, inputs=inputs)
     )
 
 
-def _make_param_names(fun, args):
-    """Expand *args parameter with remaining args."""
-    args = [*args]
-    param_names = []
-    for p in inspect.signature(fun).parameters.values():
-        if (
-            p.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD
-            or p.kind == inspect.Parameter.POSITIONAL_ONLY
-        ):
-            args.pop(0)
-            param_names.append(p.name)
-        elif p.kind == inspect.Parameter.VAR_POSITIONAL:
-            for i in range(len(args)):
-                param_names.append(f"_var{i}")
+@iterator.runtime.set_at.register(TRACING)
+def set_at(expr: itir.Expr, domain: itir.Expr, target: itir.Expr) -> None:
+    TracerContext.add_stmt(itir.SetAt(expr=expr, domain=domain, target=target))
+
+
+@iterator.runtime.if_stmt.register(TRACING)
+def if_stmt(
+    cond: itir.Expr, true_branch_f: typing.Callable, false_branch_f: typing.Callable
+) -> None:
+    true_branch: List[itir.Stmt] = []
+    false_branch: List[itir.Stmt] = []
+
+    old_body = TracerContext.body
+    TracerContext.body = true_branch
+    true_branch_f()
+
+    TracerContext.body = false_branch
+    false_branch_f()
+
+    TracerContext.body = old_body
+
+    TracerContext.add_stmt(
+        itir.IfStmt(cond=cond, true_branch=true_branch, false_branch=false_branch)
+    )
+
+
+def _contains_tuple_dtype_field(arg):
+    if isinstance(arg, tuple):
+        return any(_contains_tuple_dtype_field(el) for el in arg)
+    # TODO(tehrengruber): The LocatedField protocol does not have a dtype property and the
+    #  various implementations have different behaviour (some return e.g. `np.dtype("int32")`
+    #  other `np.int32`). We just ignore the error here and postpone fixing this to when
+    #  the new storages land (The implementation here works for LocatedFieldImpl).
+
+    return isinstance(arg, common.Field) and any(dim is None for dim in arg.domain.dims)
+
+
+def _make_fencil_params(fun, args) -> list[Sym]:
+    params: list[Sym] = []
+    param_infos = list(inspect.signature(fun).parameters.values())
+
+    for i, arg in enumerate(args):
+        if i < len(param_infos):
+            param_info = param_infos[i]
         else:
-            raise RuntimeError("Illegal parameter kind")
-    return param_names
+            if param_info.kind != inspect.Parameter.VAR_POSITIONAL:
+                # the last parameter info might also be a keyword or variadic keyword argument, but
+                # they are not supported.
+                raise NotImplementedError(
+                    "Only 'POSITIONAL_OR_KEYWORD' or 'VAR_POSITIONAL' parameters are supported."
+                )
+            param_info = param_infos[-1]
+
+        if param_info.kind == inspect.Parameter.VAR_POSITIONAL:
+            param_name = f"_{param_info.name}{i}"
+        elif param_info.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD:
+            param_name = param_info.name
+        else:
+            raise NotImplementedError(
+                "Only 'POSITIONAL_OR_KEYWORD' or 'VAR_POSITIONAL' parameters are supported."
+            )
+
+        arg_type = None
+        if isinstance(arg, ts.TypeSpec):
+            arg_type = arg
+        else:
+            arg_type = type_translation.from_value(arg)
+
+        params.append(Sym(id=param_name, type=arg_type))
+    return params
 
 
-def trace(fun, args):
+def trace_fencil_definition(
+    fun: typing.Callable, args: typing.Iterable
+) -> itir.FencilDefinition | itir.Program:
+    """
+    Transform fencil given as a callable into `itir.FencilDefinition` using tracing.
+
+    Arguments:
+        fun: The fencil / callable to trace.
+        args: A list of arguments, e.g. fields, scalars, composites thereof, or directly a type.
+    """
     with TracerContext() as _:
-        param_names = _make_param_names(fun, args)
-        trace_function_call(fun, args=(_s(p) for p in param_names))
+        params = _make_fencil_params(fun, args)
+        trace_function_call(fun, args=(_s(param.id) for param in params))
 
-        return FencilDefinition(
-            id=fun.__name__,
-            function_definitions=TracerContext.fundefs,
-            params=list(Sym(id=param) for param in param_names),
-            closures=TracerContext.closures,
-        )
-
-
-def fendef_tracing(fun, *args, **kwargs) -> FencilDefinition:
-    return trace(fun, args=args)
+        if TracerContext.closures:
+            return itir.FencilDefinition(
+                id=fun.__name__,
+                function_definitions=TracerContext.fundefs,
+                params=params,
+                closures=TracerContext.closures,
+            )
+        else:
+            assert TracerContext.body
+            return itir.Program(
+                id=fun.__name__,
+                function_definitions=TracerContext.fundefs,
+                params=params,
+                declarations=[],  # TODO
+                body=TracerContext.body,
+            )

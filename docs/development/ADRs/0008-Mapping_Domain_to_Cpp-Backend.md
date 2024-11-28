@@ -4,12 +4,15 @@ tags: []
 
 # [Mapping Dimensions to the C++-Backend]
 
-- **Status**: valid 
+- **Status**: valid
 - **Authors**: Hannes Vogt (@havogt)
 - **Created**: 2022-06-29
-- **Updated**: 2022-06-29
+- **Updated**: 2023-11-08
 
 This document proposes a (temporary) solution for mapping domain dimensions to field dimensions.
+
+> [!NOTE]
+> This ADR was written before the integration of `gt4py.storage` into `gt4py.next`, so the example is using `np_as_located_field` (now deprecated) instead of `gtx.as_field.partial`. The idea conveyed by the example remains unchanged.
 
 ## Context
 
@@ -17,7 +20,7 @@ The Python embedded execution for Iterator IR keeps track of the current locatio
 
 ### Python side
 
-On the Python side, we label dimensions of fields with the location type, e.g. `Edge` or `Vertex`. The domain uses `named_ranges` that uses the same location types to express *where* to iterate, e.g. `named_range(Vertex, range(0, 100))` is an iteration over the `Vertex` dimension, no order in the domain is required. Additionally, the `Connectivity` (aka `NeighborTableOffsetProvider` in the current implementation) describes the mapping between location types. 
+On the Python side, we label dimensions of fields with the location type, e.g. `Edge` or `Vertex`. The domain uses `named_ranges` that uses the same location types to express _where_ to iterate, e.g. `named_range(Vertex, range(0, 100))` is an iteration over the `Vertex` dimension, no order in the domain is required. Additionally, the `Connectivity` describes the mapping between location types.
 
 ### C++ side
 
@@ -50,6 +53,7 @@ class Dimension:
 # the following field doesn't have correct default order, as without remapping we would interpret first dimension as dim::horizontal
 np_as_located_field(Dimension("K", DimensionKind.VERTICAL), Dimension("Vertex", DimensionKind.HORIZONTAL))
 ```
+
 ### Mapping of Cartesian Offsets to Dimensions
 
 When lowering from iterator IR to gtfn_ir, we replace Cartesian offset tags by Dimension tags.

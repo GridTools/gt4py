@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from typing import Any, Generic, Literal, Optional, TypeVar, Union
 
@@ -29,8 +23,8 @@ SymbolT = TypeVar("SymbolT", bound=ts.TypeSpec)
 
 
 class Symbol(eve.GenericNode, LocatedNode, Generic[SymbolT]):
-    id: Coerced[SymbolName]  # noqa: A003
-    type: Union[SymbolT, ts.DeferredType]  # noqa A003
+    id: Coerced[SymbolName]
+    type: Union[SymbolT, ts.DeferredType]  # A003
     namespace: dialect_ast_enums.Namespace = dialect_ast_enums.Namespace(
         dialect_ast_enums.Namespace.LOCAL
     )
@@ -50,7 +44,7 @@ TupleSymbol = Symbol[TupleTypeT]
 
 
 class Expr(LocatedNode):
-    type: Optional[ts.TypeSpec] = None  # noqa A003
+    type: Optional[ts.TypeSpec] = None  # A003
 
 
 class BinOp(Expr):
@@ -60,7 +54,7 @@ class BinOp(Expr):
 
 
 class Name(Expr):
-    id: Coerced[SymbolRef]  # noqa: A003
+    id: Coerced[SymbolRef]
 
 
 class Call(Expr):
@@ -78,12 +72,17 @@ class TupleExpr(Expr):
     elts: list[Expr]
 
 
+class Attribute(Expr):
+    attr: str
+    value: Expr
+
+
 class Constant(Expr):
     value: Any  # TODO(tehrengruber): be more restrictive
 
 
 class Dict(Expr):
-    keys_: list[Name]
+    keys_: list[Union[Name | Attribute]]
     values_: list[TupleExpr]
 
 
@@ -93,13 +92,12 @@ class Slice(Expr):
     step: Literal[None]
 
 
-class Stmt(LocatedNode):
-    ...
+class Stmt(LocatedNode): ...
 
 
 class Program(LocatedNode, SymbolTableTrait):
-    id: Coerced[SymbolName]  # noqa: A003
-    type: Union[ts_ffront.ProgramType, ts.DeferredType]  # noqa A003
+    id: Coerced[SymbolName]
+    type: Union[ts_ffront.ProgramType, ts.DeferredType]  # A003
     params: list[DataSymbol]
     body: list[Call]
     closure_vars: list[Symbol]

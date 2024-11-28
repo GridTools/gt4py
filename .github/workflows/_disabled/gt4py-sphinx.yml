@@ -1,0 +1,36 @@
+name: Build Docs
+
+on:
+  push:
+    branches:
+    - main
+    - gtir  # TODO(tehrengruber): remove after GTIR refactoring #1582
+  pull_request:
+    branches:
+    - main
+    - gtir  # TODO(tehrengruber): remove after GTIR refactoring #1582
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sphinx-build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python
+      uses: actions/setup-python@v1
+      with:
+        python-version: 3.8
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install -r requirements-dev.txt
+    - name: Install package
+      run: |
+        python -m pip install .[dace]
+    - name: Build documentation
+          # TODO re-enable SPHINXOPTS=-W
+      run: |
+        cd docs && make -e html

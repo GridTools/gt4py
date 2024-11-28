@@ -1,18 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Collection, Union
+from typing import Any, Collection, Final, Union
 
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
@@ -22,12 +16,12 @@ from gt4py.next.program_processors.codegens.gtfn.itir_to_gtfn_ir import pytype_t
 
 
 class GTFNCodegen(codegen.TemplatedGenerator):
-    _grid_type_str = {
+    _grid_type_str: Final = {
         common.GridType.CARTESIAN: "cartesian",
         common.GridType.UNSTRUCTURED: "unstructured",
     }
 
-    _builtins_mapping = {
+    _builtins_mapping: Final = {
         "abs": "std::abs",
         "sin": "std::sin",
         "cos": "std::cos",
@@ -56,10 +50,8 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         "maximum": "std::max",
         "fmod": "std::fmod",
         "power": "std::pow",
-        "float": "double",
         "float32": "float",
         "float64": "double",
-        "int": "long",
         "int32": "std::int32_t",
         "int64": "std::int64_t",
         "bool": "bool",
@@ -100,9 +92,8 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         return value
 
     def visit_Literal(self, node: gtfn_ir.Literal, **kwargs: Any) -> str:
+        # TODO(tehrengruber): isn't this wrong and int32 should be casted to an actual int32?
         match pytype_to_cpptype(node.type):
-            case "int":
-                return node.value + "_c"
             case "float":
                 return self.asfloat(node.value) + "f"
             case "double":
@@ -112,12 +103,16 @@ class GTFNCodegen(codegen.TemplatedGenerator):
             case _:
                 return node.value
 
+    IntegralConstant = as_fmt("{value}_c")
+
     UnaryExpr = as_fmt("{op}({expr})")
-    BinaryExpr = as_fmt("({lhs}{op}{rhs})")
+    # add an extra space between the operators is needed such that `minus(1, -1)` does not get
+    # translated into `1--1`, but `1 - -1`
+    BinaryExpr = as_fmt("({lhs} {op} {rhs})")
     TernaryExpr = as_fmt("({cond}?{true_expr}:{false_expr})")
     CastExpr = as_fmt("static_cast<{new_dtype}>({obj_expr})")
 
-    def visit_TaggedValues(self, node: gtfn_ir.TaggedValues, **kwargs):
+    def visit_TaggedValues(self, node: gtfn_ir.TaggedValues, **kwargs: Any) -> str:
         tags = self.visit(node.tags)
         values = self.visit(node.values)
         if self.is_cartesian:
@@ -137,7 +132,9 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         "::gridtools::sid::composite::keys<${','.join(f'::gridtools::integral_constant<int,{i}>' for i in range(len(values)))}>::make_values(${','.join(values)})"
     )
 
-    def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs):
+    SidFromScalar = as_fmt("gridtools::stencil::global_parameter({arg})")
+
+    def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs: Any) -> str:
         if (
             isinstance(node.fun, gtfn_ir_common.SymRef)
             and node.fun.id in self.user_defined_function_ids
@@ -162,9 +159,21 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         """
     )
 
-    Scan = as_fmt("assign({output}, {function}(), {', '.join([init] + inputs)})")
+    Scan = as_fmt(
+        "assign({output}_c, {function}(), {', '.join([init] + [input + '_c' for input in inputs])})"
+    )
     ScanExecution = as_fmt(
         "{backend}.vertical_executor({axis})().{'.'.join('arg(' + a + ')' for a in args)}.{'.'.join(scans)}.execute();"
+    )
+
+    IfStmt = as_mako(
+        """
+          if (${cond}) {
+            ${'\\n'.join(true_branch)}
+          } else {
+            ${'\\n'.join(false_branch)}
+          }
+        """
     )
 
     ScanPassDefinition = as_mako(
@@ -178,6 +187,10 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         };
         """
     )
+
+    def visit_FunctionDefinition(self, node: gtfn_ir.FunctionDefinition, **kwargs: Any) -> str:
+        expr_ = "return " + self.visit(node.expr)
+        return self.generic_visit(node, expr_=expr_)
 
     FunctionDefinition = as_mako(
         """
@@ -206,13 +219,28 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         """
     )
 
-    def visit_FunctionDefinition(self, node: gtfn_ir.FunctionDefinition, **kwargs):
-        expr_ = "return " + self.visit(node.expr)
-        return self.generic_visit(node, expr_=expr_)
+    def visit_TemporaryAllocation(self, node: gtfn_ir.TemporaryAllocation, **kwargs: Any) -> str:
+        # TODO(tehrengruber): Revisit. We are currently converting an itir.NamedRange with
+        #  start and stop values into an gtfn_ir.(Cartesian|Unstructured)Domain with
+        #  size and offset values, just to here convert back in order to obtain stop values again.
+        # TODO(tehrengruber): Fix memory alignment.
+        assert isinstance(node.domain, (gtfn_ir.CartesianDomain, gtfn_ir.UnstructuredDomain))
+        assert node.domain.tagged_offsets.tags == node.domain.tagged_sizes.tags
+        tags = node.domain.tagged_offsets.tags
+        new_sizes = []
+        for size, offset in zip(node.domain.tagged_offsets.values, node.domain.tagged_sizes.values):
+            new_sizes.append(gtfn_ir.BinaryExpr(op="+", lhs=size, rhs=offset))
+        return self.generic_visit(
+            node,
+            tmp_sizes=self.visit(gtfn_ir.TaggedValues(tags=tags, values=new_sizes), **kwargs),
+            **kwargs,
+        )
 
-    def visit_FencilDefinition(
-        self, node: gtfn_ir.FencilDefinition, **kwargs: Any
-    ) -> Union[str, Collection[str]]:
+    TemporaryAllocation = as_fmt(
+        "auto {id} = gtfn::allocate_global_tmp<{dtype}>(tmp_alloc__, {tmp_sizes});"
+    )
+
+    def visit_Program(self, node: gtfn_ir.Program, **kwargs: Any) -> Union[str, Collection[str]]:
         self.is_cartesian = node.grid_type == common.GridType.CARTESIAN
         self.user_defined_function_ids = list(
             str(fundef.id) for fundef in node.function_definitions
@@ -220,21 +248,19 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         return self.generic_visit(
             node,
             grid_type_str=self._grid_type_str[node.grid_type],
+            block_sizes=self._block_sizes(node.offset_definitions),
             **kwargs,
         )
 
-    TemporaryAllocation = as_fmt(
-        "auto {id} = gtfn::allocate_global_tmp<{dtype}>(tmp_alloc__, {domain}.sizes());"
-    )
-
-    FencilDefinition = as_mako(
+    Program = as_mako(
         """
     #include <cmath>
     #include <cstdint>
     #include <functional>
     #include <gridtools/fn/${grid_type_str}.hpp>
     #include <gridtools/fn/sid_neighbor_table.hpp>
-
+    #include <gridtools/stencil/global_parameter.hpp>
+    
     namespace generated{
 
     namespace gtfn = ::gridtools::fn;
@@ -244,6 +270,8 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     ${'\\n'.join(offset_definitions)}
     ${'\\n'.join(function_definitions)}
+
+    ${block_sizes}
 
     inline auto ${id} = [](auto... connectivities__){
         return [connectivities__...](auto backend, ${','.join('auto&& ' + p for p in params)}){
@@ -257,6 +285,21 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     """
     )
 
+    def _block_sizes(self, offset_definitions: list[gtfn_ir.TagDefinition]) -> str:
+        if self.is_cartesian:
+            block_dims = []
+            block_sizes = [32, 8] + [1] * (len(offset_definitions) - 2)
+            for i, tag in enumerate(offset_definitions):
+                if tag.alias is None:
+                    block_dims.append(
+                        f"gridtools::meta::list<{tag.name.id}_t, "
+                        f"gridtools::integral_constant<int, {block_sizes[i]}>>"
+                    )
+            sizes_str = ",\n".join(block_dims)
+            return f"using block_sizes_t = gridtools::meta::list<{sizes_str}>;"
+        else:
+            return "using block_sizes_t = gridtools::meta::list<gridtools::meta::list<gtfn::unstructured::dim::horizontal, gridtools::integral_constant<int, 32>>, gridtools::meta::list<gtfn::unstructured::dim::vertical, gridtools::integral_constant<int, 8>>>;"
+
     @classmethod
     def apply(cls, root: Any, **kwargs: Any) -> str:
         generated_code = super().apply(root, **kwargs)
@@ -264,10 +307,11 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
 
 class GTFNIMCodegen(GTFNCodegen):
-
     Stmt = as_fmt("{lhs} {op} {rhs};")
 
     InitStmt = as_fmt("{init_type} {lhs} {op} {rhs};")
+
+    EmptyListInitializer = as_mako("{}")
 
     Conditional = as_mako(
         """
@@ -295,14 +339,14 @@ class GTFNIMCodegen(GTFNCodegen):
 
     ReturnStmt = as_fmt("return {ret};")
 
-    def visit_Conditional(self, node: gtfn_im_ir.Conditional, **kwargs):
+    def visit_Conditional(self, node: gtfn_im_ir.Conditional, **kwargs: Any) -> str:
         if_rhs_ = self.visit(node.if_stmt.rhs)
         else_rhs_ = self.visit(node.else_stmt.rhs)
         return self.generic_visit(node, if_rhs_=if_rhs_, else_rhs_=else_rhs_)
 
     def visit_ImperativeFunctionDefinition(
-        self, node: gtfn_im_ir.ImperativeFunctionDefinition, **kwargs
-    ):
+        self, node: gtfn_im_ir.ImperativeFunctionDefinition, **kwargs: Any
+    ) -> str:
         expr_ = "".join(self.visit(stmt) for stmt in node.fun)
         return self.generic_visit(node, expr_=expr_)
 

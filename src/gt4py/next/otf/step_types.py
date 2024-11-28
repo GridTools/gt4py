@@ -1,22 +1,16 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
 from typing import Protocol, TypeVar
 
-from gt4py.next.otf import languages, stages
+from gt4py.next.otf import languages, stages, workflow
 
 
 SrcL = TypeVar("SrcL", bound=languages.LanguageTag)
@@ -27,11 +21,13 @@ TgtL_co = TypeVar("TgtL_co", bound=languages.LanguageTag, covariant=True)
 LS_co = TypeVar("LS_co", bound=languages.LanguageSettings, covariant=True)
 
 
-class TranslationStep(Protocol[SrcL, LS]):
+class TranslationStep(
+    workflow.ReplaceEnabledWorkflowMixin[stages.CompilableProgram, stages.ProgramSource[SrcL, LS]],
+    Protocol[SrcL, LS],
+):
     """Translate a GT4Py program to source code (ProgramCall -> ProgramSource)."""
 
-    def __call__(self, program_call: stages.ProgramCall) -> stages.ProgramSource[SrcL, LS]:
-        ...
+    ...
 
 
 class BindingStep(Protocol[SrcL, LS, TgtL]):
@@ -44,12 +40,15 @@ class BindingStep(Protocol[SrcL, LS, TgtL]):
 
     def __call__(
         self, program_source: stages.ProgramSource[SrcL, LS]
-    ) -> stages.CompilableSource[SrcL, LS, TgtL]:
-        ...
+    ) -> stages.CompilableSource[SrcL, LS, TgtL]: ...
 
 
-class CompilationStep(Protocol[SrcL, LS, TgtL]):
+class CompilationStep(
+    workflow.Workflow[stages.CompilableSource[SrcL, LS, TgtL], stages.CompiledProgram],
+    Protocol[SrcL, LS, TgtL],
+):
     """Compile program source code and bindings into a python callable (CompilableSource -> CompiledProgram)."""
 
-    def __call__(self, source: stages.CompilableSource[SrcL, LS, TgtL]) -> stages.CompiledProgram:
-        ...
+    def __call__(
+        self, source: stages.CompilableSource[SrcL, LS, TgtL]
+    ) -> stages.CompiledProgram: ...

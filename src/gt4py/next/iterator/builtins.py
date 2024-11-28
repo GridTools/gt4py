@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from gt4py.next.iterator.dispatcher import Dispatcher
 
@@ -21,6 +15,16 @@ builtin_dispatch = Dispatcher()
 class BackendNotSelectedError(RuntimeError):
     def __init__(self) -> None:
         super().__init__("Backend not selected")
+
+
+@builtin_dispatch
+def as_fieldop(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def index(*args):
+    raise BackendNotSelectedError()
 
 
 @builtin_dispatch
@@ -35,6 +39,26 @@ def can_deref(*args):
 
 @builtin_dispatch
 def shift(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def neighbors(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def map_(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def make_const_list(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def list_get(*args):
     raise BackendNotSelectedError()
 
 
@@ -164,7 +188,7 @@ def tuple_get(*args):
 
 
 @builtin_dispatch
-def abs(*args):  # noqa: A001
+def abs(*args):  # noqa: A001 [builtin-variable-shadowing]
     raise BackendNotSelectedError()
 
 
@@ -309,7 +333,7 @@ def power(*args):
 
 
 @builtin_dispatch
-def int(*args):  # noqa: A001
+def int(*args):  # noqa: A001 [builtin-variable-shadowing]
     raise BackendNotSelectedError()
 
 
@@ -324,7 +348,7 @@ def int64(*args):
 
 
 @builtin_dispatch
-def float(*args):  # noqa: A001
+def float(*args):  # noqa: A001 [builtin-variable-shadowing]
     raise BackendNotSelectedError()
 
 
@@ -339,7 +363,7 @@ def float64(*args):
 
 
 @builtin_dispatch
-def bool(*args):  # noqa: A001
+def bool(*args):  # noqa: A001 [builtin-variable-shadowing]
     raise BackendNotSelectedError()
 
 
@@ -368,7 +392,7 @@ UNARY_MATH_FP_BUILTINS = {
 }
 UNARY_MATH_FP_PREDICATE_BUILTINS = {"isfinite", "isinf", "isnan"}
 BINARY_MATH_NUMBER_BUILTINS = {"minimum", "maximum", "fmod", "power"}
-TYPEBUILTINS = {"int", "int32", "int64", "float", "float32", "float64", "bool"}
+TYPEBUILTINS = {"int32", "int64", "float32", "float64", "bool"}
 MATH_BUILTINS = (
     UNARY_MATH_NUMBER_BUILTINS
     | UNARY_MATH_FP_BUILTINS
@@ -380,6 +404,10 @@ BUILTINS = {
     "deref",
     "can_deref",
     "shift",
+    "neighbors",
+    "list_get",
+    "make_const_list",
+    "map_",
     "lift",
     "reduce",
     "plus",
@@ -406,6 +434,8 @@ BUILTINS = {
     "cartesian_domain",
     "unstructured_domain",
     "named_range",
+    "as_fieldop",
+    "index",
     *MATH_BUILTINS,
 }
 

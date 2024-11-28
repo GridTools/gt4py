@@ -5,7 +5,7 @@ image:
 tasks:
 - name: Setup venv and dev tools
   init: |
-    ln -s /workspace/gt4py/.gitpod/.vscode /workspace/gt4py/.vscode
+    ln -sfn /workspace/gt4py/.gitpod/.vscode /workspace/gt4py/.vscode
     python -m venv .venv
     source .venv/bin/activate
     pip install --upgrade pip setuptools wheel
@@ -13,6 +13,7 @@ tasks:
     pip install -r requirements-dev.txt
     pip install -i https://test.pypi.org/simple/ atlas4py
     pre-commit install --install-hooks
+    sed 's%# start templated%# start templated\nsource /workspace/gt4py/.venv/bin/activate%' /workspace/gt4py/.git/hooks/pre-commit -i
     deactivate
   command: source .venv/bin/activate
   env:

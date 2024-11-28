@@ -1,23 +1,18 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
 import enum
+import numbers
 import types
 import typing
-from typing import Set  # noqa: F401  # imported but unused (used in exec() context)
+from typing import Set  # noqa: F401 [unused-import] used in exec() context
 from typing import (
     Any,
     Callable,
@@ -821,7 +816,6 @@ class ChildModelWithValidators(ModelWithValidators):
 @typing.no_type_check
 @pytest.mark.parametrize("model_class", [ModelWithValidators, ChildModelWithValidators])
 def test_field_validators(model_class: Type[Union[ModelWithValidators, ChildModelWithValidators]]):
-
     with pytest.raises(ValueError, match="int_value"):
         model_class(int_value=-1)
 
@@ -898,6 +892,7 @@ class ModelWithRootValidators(datamodels.DataModel):
     class_counter: ClassVar[int] = 0
 
     @datamodels.root_validator
+    @classmethod
     def _root_validator(cls: Type[datamodels.DataModel], instance: datamodels.DataModel) -> None:
         assert cls is type(instance)
         assert issubclass(cls, ModelWithRootValidators)
@@ -905,6 +900,7 @@ class ModelWithRootValidators(datamodels.DataModel):
         cls.class_counter = 0
 
     @datamodels.root_validator
+    @classmethod
     def _another_root_validator(
         cls: Type[datamodels.DataModel], instance: datamodels.DataModel
     ) -> None:
@@ -914,6 +910,7 @@ class ModelWithRootValidators(datamodels.DataModel):
         cls.class_counter += 1
 
     @datamodels.root_validator
+    @classmethod
     def _final_root_validator(
         cls: Type[datamodels.DataModel], instance: datamodels.DataModel
     ) -> None:
@@ -940,16 +937,19 @@ def test_root_validators(model_class: Type[datamodels.DataModel]):
 def test_root_validators_in_subclasses():
     class Model(ModelWithRootValidators):
         @datamodels.root_validator
+        @classmethod
         def _root_validator(cls, instance):
             assert cls.class_counter == 2
             cls.class_counter += 10
 
         @datamodels.root_validator
+        @classmethod
         def _another_root_validator(cls, instance):
             assert cls.class_counter == 12
             cls.class_counter += 10
 
         @datamodels.root_validator
+        @classmethod
         def _final_root_validator(cls, instance):
             assert cls.class_counter == 22
             if str(instance.int_value) == instance.str_value:
@@ -991,7 +991,7 @@ def test_field_metadata():
 # Test datamodel options
 class TestDatamodelOptions:
     def test_frozen(self):
-        import attr  # type: ignore[import] # Missing library stubs for Python 3.10)
+        import attr  # Missing library stubs for Python 3.10)
 
         @datamodels.datamodel(frozen=True)
         class FrozenModel:
@@ -1145,66 +1145,80 @@ class TestGenericModelValidation:
         with pytest.raises(TypeError, match="'PartialGenericModel__int.value'"):
             PartialGenericModel__int(value=["1"])
 
-    def test_partial_specialization(self):
-        class PartialGenericModel(datamodels.GenericDataModel, Generic[T, U]):
+    def test_partial_concretization(self):
+        class BaseGenericModel(datamodels.GenericDataModel, Generic[T, U]):
             value: List[Tuple[T, U]]
 
-        PartialGenericModel(value=[])
-        PartialGenericModel(value=[("value", 3)])
-        PartialGenericModel(value=[(1, "value")])
-        PartialGenericModel(value=[(-1.0, "value")])
-        with pytest.raises(TypeError, match="'PartialGenericModel.value'"):
-            PartialGenericModel(value=1)
-        with pytest.raises(TypeError, match="'PartialGenericModel.value'"):
-            PartialGenericModel(value=(1, 2))
-        with pytest.raises(TypeError, match="'PartialGenericModel.value'"):
-            PartialGenericModel(value=[()])
-        with pytest.raises(TypeError, match="'PartialGenericModel.value'"):
-            PartialGenericModel(value=[(1,)])
+        assert len(BaseGenericModel.__parameters__) == 2
 
-        print(f"{PartialGenericModel.__parameters__=}")
-        print(f"{hasattr(PartialGenericModel ,'__args__')=}")
+        BaseGenericModel(value=[])
+        BaseGenericModel(value=[("value", 3)])
+        BaseGenericModel(value=[(1, "value")])
+        BaseGenericModel(value=[(-1.0, "value")])
+        with pytest.raises(TypeError, match="'BaseGenericModel.value'"):
+            BaseGenericModel(value=1)
+        with pytest.raises(TypeError, match="'BaseGenericModel.value'"):
+            BaseGenericModel(value=(1, 2))
+        with pytest.raises(TypeError, match="'BaseGenericModel.value'"):
+            BaseGenericModel(value=[()])
+        with pytest.raises(TypeError, match="'BaseGenericModel.value'"):
+            BaseGenericModel(value=[(1,)])
 
-        PartiallySpecializedGenericModel = PartialGenericModel[int, U]
-        print(f"{PartiallySpecializedGenericModel.__datamodel_fields__=}")
-        print(f"{PartiallySpecializedGenericModel.__parameters__=}")
-        print(f"{PartiallySpecializedGenericModel.__args__=}")
+        PartiallyConcretizedGenericModel = BaseGenericModel[int, U]
 
-        PartiallySpecializedGenericModel(value=[])
-        PartiallySpecializedGenericModel(value=[(1, 2)])
-        PartiallySpecializedGenericModel(value=[(1, "value")])
-        PartiallySpecializedGenericModel(value=[(1, (11, 12))])
+        assert len(PartiallyConcretizedGenericModel.__parameters__) == 1
+
+        PartiallyConcretizedGenericModel(value=[])
+        PartiallyConcretizedGenericModel(value=[(1, 2)])
+        PartiallyConcretizedGenericModel(value=[(1, "value")])
+        PartiallyConcretizedGenericModel(value=[(1, (11, 12))])
         with pytest.raises(TypeError, match=".value'"):
-            PartiallySpecializedGenericModel(value=1)
+            PartiallyConcretizedGenericModel(value=1)
         with pytest.raises(TypeError, match=".value'"):
-            PartiallySpecializedGenericModel(value=(1, 2))
+            PartiallyConcretizedGenericModel(value=(1, 2))
         with pytest.raises(TypeError, match=".value'"):
-            PartiallySpecializedGenericModel(value=[1.0])
+            PartiallyConcretizedGenericModel(value=[1.0])
         with pytest.raises(TypeError, match=".value'"):
-            PartiallySpecializedGenericModel(value=["1"])
+            PartiallyConcretizedGenericModel(value=["1"])
 
-        # TODO(egparedes): after fixing partial nested datamodel specialization
-        # noqa: e800 FullySpecializedGenericModel = PartiallySpecializedGenericModel[str]
-        # noqa: e800 print(f"{FullySpecializedGenericModel.__datamodel_fields__=}")
-        # noqa: e800 print(f"{FullySpecializedGenericModel.__parameters__=}")
-        # noqa: e800 print(f"{FullySpecializedGenericModel.__args__=}")
+        FullyConcretizedGenericModel = PartiallyConcretizedGenericModel[str]
 
-        # noqa: e800 FullySpecializedGenericModel(value=[])
-        # noqa: e800 FullySpecializedGenericModel(value=[(1, "value")])
-        # noqa: e800 with pytest.raises(TypeError, match=".value'"):
-        # noqa: e800     FullySpecializedGenericModel(value=1)
-        # noqa: e800 with pytest.raises(TypeError, match=".value'"):
-        # noqa: e800     FullySpecializedGenericModel(value=(1, 2))
-        # noqa: e800 with pytest.raises(TypeError, match=".value'"):
-        # noqa: e800     FullySpecializedGenericModel(value=[1.0])
-        # noqa: e800 with pytest.raises(TypeError, match=".value'"):
-        # noqa: e800     FullySpecializedGenericModel(value=["1"])
-        # noqa: e800 with pytest.raises(TypeError, match=".value'"):
-        # noqa: e800     FullySpecializedGenericModel(value=1)
-        # noqa: e800 with pytest.raises(TypeError, match=".value'"):
-        # noqa: e800     FullySpecializedGenericModel(value=[(1, 2)])
-        # noqa: e800 with pytest.raises(TypeError, match=".value'"):
-        # noqa: e800     FullySpecializedGenericModel(value=[(1, (11, 12))])
+        assert len(FullyConcretizedGenericModel.__parameters__) == 0
+
+        FullyConcretizedGenericModel(value=[])
+        FullyConcretizedGenericModel(value=[(1, "value")])
+        with pytest.raises(TypeError, match=".value'"):
+            FullyConcretizedGenericModel(value=1)
+        with pytest.raises(TypeError, match=".value'"):
+            FullyConcretizedGenericModel(value=(1, 2))
+        with pytest.raises(TypeError, match=".value'"):
+            FullyConcretizedGenericModel(value=[1.0])
+        with pytest.raises(TypeError, match=".value'"):
+            FullyConcretizedGenericModel(value=["1"])
+        with pytest.raises(TypeError, match=".value'"):
+            FullyConcretizedGenericModel(value=1)
+        with pytest.raises(TypeError, match=".value'"):
+            FullyConcretizedGenericModel(value=[(1, 2)])
+        with pytest.raises(TypeError, match=".value'"):
+            FullyConcretizedGenericModel(value=[(1, (11, 12))])
+
+    def test_partial_concretization_with_typevar(self):
+        class PartialGenericModel(datamodels.GenericDataModel, Generic[T]):
+            a: T
+            values: List[T]
+
+        B = TypeVar("B", bound=numbers.Number)
+        PartiallyConcretizedGenericModel = PartialGenericModel[B]
+
+        PartiallyConcretizedGenericModel(a=1, values=[2, 3])
+        PartiallyConcretizedGenericModel(a=-1.32, values=[2.2, 3j])
+
+        with pytest.raises(TypeError, match=".a'"):
+            PartiallyConcretizedGenericModel(a="1", values=[2, 3])
+        with pytest.raises(TypeError, match=".values'"):
+            PartiallyConcretizedGenericModel(a=1, values=[1, "2"])
+        with pytest.raises(TypeError, match=".values'"):
+            PartiallyConcretizedGenericModel(a=1, values=(1, 2))
 
     # Reuse sample_type_data from test_field_type_hint
     @pytest.mark.parametrize(["type_hint", "valid_values", "wrong_values"], SAMPLE_TYPE_DATA)

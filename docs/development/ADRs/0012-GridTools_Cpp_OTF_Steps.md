@@ -1,5 +1,5 @@
 ---
-tags: [backend,cpp,gridtools,bindings,otf]
+tags: [backend, cpp, gridtools, bindings, otf]
 ---
 
 # GridTools CPP OTF Steps
@@ -41,9 +41,7 @@ It is an instance of `program_processors.codegens.gtfn_modules.GTFNTranslationSt
 
 #### Executor
 
-`program_processors.runners.gtfn_cpu.run_gtfn` is the default `program_processors.processor_interface.ProgramExecutor` implementation of the GTFN backend. It is an instance of `program_processors.runners.gtfn_cpu.GTFNExecutor`, with sensible defaults for the configuration options allowed by that class. These include language settings and which builder should be used. BuildSystemProject configuration can be achieved through passing a fully configured builder factory.
-
-When called the `GTFNExecutor` instance composes a workflow from the above steps, the configured builder, importer and an arguments conversion decorator. The composed workflow is then called just in time for execution.
+`program_processors.runners.gtfn_cpu.run_gtfn` is the default `program_processors.processor_interface.ProgramExecutor` implementation of the GTFN backend. It sets sensible defaults for the configuration options on the individual steps. These include language settings and which builder should be used. Substep configuration can be achieved through passing one or more step instance to `dataclasses.replace(workflow.replace(run_gtfn.workflow, <name>=<instance>))`. Step instances can be obtained by replacing in a similar fashion.
 
 ## Alternatives Considered
 
@@ -51,10 +49,10 @@ When called the `GTFNExecutor` instance composes a workflow from the above steps
 
 In the earlier, Cartesian version of GT4Py backends started out as monoliths with just IR as input and executable program for output.
 
-* Advantages:
+- Advantages:
   - in some cases simpler to write
   - not limited by inter-step interfaces, any information can be available at any step.
-* Disadvantages:
+- Disadvantages:
   - hard to share code between backends
   - more design decisions required for implementing a new backend
   - leads to harder to maintain backends
@@ -64,7 +62,7 @@ In the earlier, Cartesian version of GT4Py backends started out as monoliths wit
 
 The bindings generator and builder steps could have been implemented without consideration for sharing code with future backends.
 
-* Advantages:
+- Advantages:
   - faster to implement
-* Disadvantages:
+- Disadvantages:
   - slows down the next backend implementation

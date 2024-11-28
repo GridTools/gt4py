@@ -1,21 +1,17 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 try:
-    from atlas4py import IrregularConnectivity  # type: ignore[import]
+    from atlas4py import IrregularConnectivity
 except ImportError:
     IrregularConnectivity = None
+
+from gt4py.next import common
 
 
 # TODO(tehrengruber): make this a proper Connectivity instead of faking a numpy array
@@ -29,7 +25,7 @@ class AtlasTable:
             if neigh_index < self.atlas_connectivity.cols(primary_index):
                 return self.atlas_connectivity[primary_index, neigh_index]
             else:
-                return None
+                return common._DEFAULT_SKIP_VALUE
         else:
             if neigh_index < 2:
                 return self.atlas_connectivity[primary_index, neigh_index]
@@ -45,7 +41,7 @@ class AtlasTable:
     def shape(self):
         return (self.atlas_connectivity.rows, self.atlas_connectivity.maxcols)
 
-    def max(self):  # noqa: A003
+    def max(self):
         maximum = -1
         for i in range(self.shape[0]):
             for j in range(self.shape[1]):
@@ -53,3 +49,12 @@ class AtlasTable:
                 if v is not None:
                     maximum = max(maximum, v)
         return maximum
+
+    def asnumpy(self):
+        import numpy as np
+
+        res = np.empty(self.shape, dtype=self.dtype)
+        for i in range(self.shape[0]):
+            for j in range(self.shape[1]):
+                res[i, j] = self[i, j]
+        return res

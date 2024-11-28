@@ -1,25 +1,19 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
-from collections.abc import Callable
-from typing import Optional
+import enum
+from typing import Callable, Optional
 
 import gt4py.eve as eve
 from gt4py.eve import NodeTranslator, traits
-from gt4py.next.ffront import itir_makers as im
 from gt4py.next.iterator import ir
+from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda
 
 
@@ -70,9 +64,7 @@ def _is_scan(node: ir.FunCall):
 
 
 def _transform_and_extract_lift_args(
-    node: ir.FunCall,
-    symtable: dict[eve.SymbolName, ir.Sym],
-    extracted_args: dict[ir.Sym, ir.Expr],
+    node: ir.FunCall, symtable: dict[eve.SymbolName, ir.Sym], extracted_args: dict[ir.Sym, ir.Expr]
 ):
     """
     Transform and extract non-symbol arguments of a lifted stencil call.
@@ -102,22 +94,52 @@ def _transform_and_extract_lift_args(
             extracted_args[new_symbol] = arg
             new_args.append(ir.SymRef(id=new_symbol.id))
 
-    return (im.lift_(inner_stencil)(*new_args), extracted_args)
+    itir_node = im.lift(inner_stencil)(*new_args)
+    itir_node.location = node.location
+    return (itir_node, extracted_args)
 
 
+# TODO(tehrengruber): This pass has many different options that should be written as dedicated
+#  passes. Due to a lack of infrastructure (e.g. no pass manager) to combine passes without
+#  performance degradation we leave everything as one pass for now.
 @dataclasses.dataclass
-class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
+class InlineLifts(
+    traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrait, NodeTranslator
+):
     """Inline lifted function calls.
 
-    Optionally a predicate function can be passed which can enable or disable inlining of specific function nodes.
+    Optionally a predicate function can be passed which can enable or disable inlining of specific
+    function nodes.
     """
 
-    def __init__(self, predicate: Optional[Callable[[ir.Expr, bool], bool]] = None) -> None:
-        super().__init__()
-        if predicate is None:
-            self.predicate = lambda _1, _2: True
-        else:
-            self.predicate = predicate
+    class Flag(enum.IntEnum):
+        #: `shift(...)(lift(f)(args...))` -> `lift(f)(shift(...)(args)...)`
+        PROPAGATE_SHIFT = 1
+        #: `deref(lift(f)())` -> `f()`
+        INLINE_TRIVIAL_DEREF_LIFT = 2
+        #: `deref(lift(f)(args...))` -> `f(args...)`
+        INLINE_DEREF_LIFT = 2 + 4
+        #: `can_deref(lift(f)(args...))` -> `and(can_deref(arg[0]), and(can_deref(arg[1]), ...))`
+        PROPAGATE_CAN_DEREF = 8
+        #: Inline arguments to lifted stencil calls, e.g.:
+        #:  lift(λ(a) → inner_ex(a))(lift(λ(b) → outer_ex(b))(arg))
+        #: is transformed into:
+        #:  lift(λ(b) → inner_ex(outer_ex(b)))(arg)
+        #: Note: This option is only needed when there is no outer `deref` by which the previous
+        #: branches eliminate the lift calls. This occurs for example for the `reduce` builtin
+        #: or when a better readable expression of a lift statement is needed during debugging.
+        #: Due to its complexity we might want to remove this option at some point again,
+        #: when we see that it is not required.
+        INLINE_LIFTED_ARGS = 16
+
+    predicate: Callable[[ir.Expr, bool], bool] = lambda _1, _2: True
+
+    flags: int = (
+        Flag.PROPAGATE_SHIFT
+        | Flag.INLINE_DEREF_LIFT
+        | Flag.PROPAGATE_CAN_DEREF
+        | Flag.INLINE_LIFTED_ARGS
+    )
 
     def visit_FunCall(
         self, node: ir.FunCall, *, is_scan_pass_context=False, recurse=True, **kwargs
@@ -133,8 +155,7 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             else node
         )
 
-        if _is_shift_lift(node):
-            # shift(...)(lift(f)(args...)) -> lift(f)(shift(...)(args)...)
+        if self.flags & self.Flag.PROPAGATE_SHIFT and _is_shift_lift(node):
             shift = node.fun
             assert len(node.args) == 1
             lift_call = node.args[0]
@@ -144,10 +165,15 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             ]
             result = ir.FunCall(fun=lift_call.fun, args=new_args)  # type: ignore[attr-defined] # lift_call already asserted to be of type ir.FunCall
             return self.visit(result, recurse=False, **kwargs)
-        elif node.fun == ir.SymRef(id="deref"):
+        elif self.flags & self.Flag.INLINE_DEREF_LIFT and node.fun == ir.SymRef(id="deref"):
             assert len(node.args) == 1
-            if _is_lift(node.args[0]) and self.predicate(node.args[0], is_scan_pass_context):
-                # deref(lift(f)(args...)) -> f(args...)
+            is_lift = _is_lift(node.args[0])
+            is_eligible = is_lift and self.predicate(node.args[0], is_scan_pass_context)
+            is_trivial = is_lift and len(node.args[0].args) == 0  # type: ignore[attr-defined] # mypy not smart enough
+            if (
+                self.flags & self.Flag.INLINE_DEREF_LIFT
+                or (self.flags & self.Flag.INLINE_TRIVIAL_DEREF_LIFT and is_trivial)
+            ) and is_eligible:
                 assert isinstance(node.args[0], ir.FunCall) and isinstance(
                     node.args[0].fun, ir.FunCall
                 )
@@ -158,19 +184,18 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 if isinstance(f, ir.Lambda):
                     new_node = inline_lambda(new_node, opcount_preserving=True)
                 return self.visit(new_node, **kwargs)
-        elif node.fun == ir.SymRef(id="can_deref"):
+        elif self.flags & self.Flag.PROPAGATE_CAN_DEREF and node.fun == ir.SymRef(id="can_deref"):
             # TODO(havogt): this `can_deref` transformation doesn't look into lifted functions,
             #  this need to be changed to be 100% compliant
             assert len(node.args) == 1
             if _is_lift(node.args[0]) and self.predicate(node.args[0], is_scan_pass_context):
-                # can_deref(lift(f)(args...)) -> and(can_deref(arg[0]), and(can_deref(arg[1]), ...))
                 assert isinstance(node.args[0], ir.FunCall) and isinstance(
                     node.args[0].fun, ir.FunCall
                 )
                 assert len(node.args[0].fun.args) == 1
                 args = node.args[0].args
                 if len(args) == 0:
-                    return ir.Literal(value="True", type="bool")
+                    return im.literal_from_value(True)
 
                 res = ir.FunCall(fun=ir.SymRef(id="can_deref"), args=[args[0]])
                 for arg in args[1:]:
@@ -179,17 +204,12 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                         args=[res, ir.FunCall(fun=ir.SymRef(id="can_deref"), args=[arg])],
                     )
                 return res
-        elif _is_lift(node) and len(node.args) > 0 and self.predicate(node, is_scan_pass_context):
-            # Inline arguments to lifted stencil calls, e.g.:
-            #  lift(λ(a) → inner_ex(a))(lift(λ(b) → outer_ex(b))(arg))
-            # is transformed into:
-            #  lift(λ(b) → inner_ex(outer_ex(b)))(arg)
-            #  lift(λ(a) → inner_ex(shift(...)(a)))(lift(λ(b) → outer_ex(b))(arg))
-            # Note: This branch is only needed when there is no outer `deref` by which the previous
-            # branches eliminate the lift calls. This occurs for example for the `reduce` builtin
-            # or when a better readable expression of a lift statement is needed during debugging.
-            # Due to its complexity we might want to remove this branch at some point again,
-            # when we see that it is not required.
+        elif (
+            self.flags & self.Flag.INLINE_LIFTED_ARGS
+            and _is_lift(node)
+            and len(node.args) > 0
+            and self.predicate(node, is_scan_pass_context)
+        ):
             stencil = node.fun.args[0]  # type: ignore[attr-defined] # node already asserted to be of type ir.FunCall
             eligible_lifted_args = [
                 _is_lift(arg) and self.predicate(arg, is_scan_pass_context) for arg in node.args
@@ -228,7 +248,7 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     **kwargs,
                 )
 
-                new_stencil = im.lambda__(*new_arg_exprs.keys())(inlined_call)
-                return im.lift_(new_stencil)(*new_arg_exprs.values())
+                new_stencil = im.lambda_(*new_arg_exprs.keys())(inlined_call)
+                return im.lift(new_stencil)(*new_arg_exprs.values())
 
         return node

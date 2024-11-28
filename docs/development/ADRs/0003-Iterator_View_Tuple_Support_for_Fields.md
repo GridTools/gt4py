@@ -4,7 +4,7 @@ tags: [iterator]
 
 # Iterator View Tuple Support for Fields
 
-- **Status**: valid 
+- **Status**: valid
 - **Authors**: Hannes Vogt (@havogt)
 - **Created**: 2022-02-16
 - **Updated**: 2022-02-16
@@ -18,10 +18,12 @@ This document covers how fields of tuples and tuples of fields are treated at th
 A stencil in iterator view has a single return value, which can be a tuple. How do we map a tuple return value to field(s)?
 
 If the return value of a stencil is a tuple there are 2 possible relations between these values:
+
 - they are dimensions of the same kind (e.g. the 3 components of wind velocity),
 - they are of different kind, i.e. 2 completely unrelated quantities that just happen to be computed in the same stencil (e.g. temperature and pressure).
-  
+
 The natural representation of the 2 cases are:
+
 - a single field of tuples,
 - a tuple of fields.
 

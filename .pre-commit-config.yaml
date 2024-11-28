@@ -1,85 +1,131 @@
+# -----------------------------------------------------------------------
+# This file contains 'cog' snippets (https://nedbatchelder.com/code/cog/) 
+# to keep version numbers in sync with 'constraints.txt'
+# -----------------------------------------------------------------------
+
 default_language_version:
   python: python3.10
 repos:
-  # - repo: meta
-  #   hooks:
-  #   - id: check-hooks-apply
-  #   - id: check-useless-excludes
-
-- repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: v4.3.0
-  hooks:
-  - id: check-case-conflict
-          # - id: check-json
-  - id: check-merge-conflict
-  - id: check-toml
-  - id: check-yaml
-  - id: debug-statements
-        # - id: fix-encoding-pragma
-        #   args: [--remove]
-        # - id: pretty-format-json
-
+# - repo: meta
+#   hooks:
+#   - id: check-hooks-apply
+#   - id: check-useless-excludes
 - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
-  rev: v2.4.0
+  rev: v2.6.0
   hooks:
   - id: pretty-format-ini
     args: [--autofix]
-      # - id: pretty-format-toml # TODO enable once https://github.com/macisamuele/language-formatters-pre-commit-hooks/issues/133 is resolved
-      #   args: [--autofix]
+    exclude: tox.ini
+  - id: pretty-format-toml
+    args: [--autofix]
+    exclude: tach.toml
   - id: pretty-format-yaml
     args: [--autofix, --preserve-quotes, --indent, "2"]
 
+- repo: https://github.com/pre-commit/mirrors-prettier
+  rev: v3.0.0-alpha.4
+  hooks:
+  - id: prettier
+    types_or: [markdown, json]
+
 - repo: https://github.com/Lucas-C/pre-commit-hooks
-  rev: v1.1.9
+  rev: v1.5.5
   hooks:
   - id: insert-license
-    name: Add license for all GT4Py Python source files
     exclude: ^\..*$
     types: [python]
-    args: [--comment-style, "|#|", --license-filepath, ./LICENSE_HEADER.txt, --fuzzy-match-generates-todo]
+    args: [--comment-style, "|#|", --license-filepath, ./HEADER.txt, --fuzzy-match-generates-todo]
 
-- repo: https://github.com/psf/black
-  rev: 22.10.0
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v4.4.0
   hooks:
-  - id: black
-    args: [--target-version, py310]
+  - id: check-case-conflict
+  - id: check-merge-conflict
+  - id: check-toml
+  - id: check-yaml
 
-- repo: https://github.com/pre-commit/mirrors-isort
-  rev: v5.10.1
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  ##[[[cog
+  ## import re
+  ## version = re.search('ruff==([0-9\.]*)', open("constraints.txt").read())[1]
+  ## print(f"rev: v{version}")
+  ##]]]
+  rev: v0.7.4
+  ##[[[end]]]
   hooks:
-  - id: isort
+    # Run the linter.
+    # TODO: include tests here
+  - id: ruff
+    files: ^src/
+    args: [--fix]
+    # Run the formatter.
+  - id: ruff-format
 
-- repo: https://github.com/PyCQA/flake8
-  rev: 5.0.4
+- repo: https://github.com/gauge-sh/tach-pre-commit
+  rev: v0.10.7
   hooks:
-  - id: flake8
-    additional_dependencies:
-    - darglint
-    - flake8-bugbear
-    - flake8-builtins
-    - flake8-debugger
-    - flake8-docstrings
-    - flake8-eradicate
-    - flake8-mutable
-            # Disabled for now due to random false positives
-            # - flake8-rst-docstrings
-    - pygments
+  - id: tach
+
+- repo: https://github.com/pre-commit/mirrors-mypy
+  ##[[[cog
+  ## import re
+  ## version = re.search('mypy==([0-9\.]*)', open("constraints.txt").read())[1]
+  ## print(f"#========= FROM constraints.txt: v{version} =========")
+  ##]]]
+  #========= FROM constraints.txt: v1.13.0 =========
+  ##[[[end]]]
+  rev: v1.13.0  # MUST match version ^^^^ in constraints.txt (if the mirror is up-to-date)
+  hooks:
+  - id: mypy
+    additional_dependencies:  # versions from constraints.txt
+    ##[[[cog
+    ## import re, sys
+    ## if sys.version_info >= (3, 11):
+    ##    import tomllib
+    ## else:
+    ##    import tomli as tomllib
+    ## constraints = open("constraints.txt").read()
+    ## project = tomllib.loads(open("pyproject.toml").read())
+    ## packages = [re.match('^([\w-][\w\d-]*)', r)[1] for r in project["project"]["dependencies"] if r.strip()]
+    ## for pkg in packages:
+    ##     print(f"- {pkg}==" + str(re.search(f'\n{pkg}==([0-9\.]*)', constraints)[1]))
+    ##]]]
+    - astunparse==1.6.3
+    - attrs==24.2.0
+    - black==24.8.0
+    - boltons==24.1.0
+    - cached-property==2.0.1
+    - click==8.1.7
+    - cmake==3.31.0.1
+    - cytoolz==1.0.0
+    - deepdiff==8.0.1
+    - devtools==0.12.2
+    - diskcache==5.6.3
+    - factory-boy==3.3.1
+    - frozendict==2.4.6
+    - gridtools-cpp==2.3.8
+    - importlib-resources==6.4.5
+    - jinja2==3.1.4
+    - lark==1.2.2
+    - mako==1.3.6
+    - nanobind==2.2.0
+    - ninja==1.11.1.1
+    - numpy==1.24.4
+    - packaging==24.2
+    - pybind11==2.13.6
+    - setuptools==75.3.0
+    - tabulate==0.9.0
+    - typing-extensions==4.12.2
+    - xxhash==3.0.0
+    ##[[[end]]]
+    - types-tabulate
+    - types-typed-ast
+    args: [--no-install-types]
     exclude: |
       (?x)^(
       setup.py |
-      tests/conftest.py |
-      tests/next_tests/.* |
+      build/.* |
+      ci/.* |
+      docs/.* |
+      tests/.*
       )$
-
-- repo: local
-  hooks:
-  - id: mypy
-    name: mypy static type checker
-    entry: |
-      mypy --install-types --non-interactive src/
-    language: system
-    types_or: [python, pyi]
-    always_run: true
-    pass_filenames: false
-    require_serial: true
-    stages: [commit]

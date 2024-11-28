@@ -1,105 +1,59 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
-import ctypes
-import types
-from typing import Final, Sequence, Type
-
-import numpy as np
+from typing import Final, Sequence
 
 from gt4py.next.otf import languages
 from gt4py.next.otf.binding import interface
+from gt4py.next.type_system import type_info as ti, type_specifications as ts
 
 
 CPP_DEFAULT: Final = languages.LanguageWithHeaderFilesSettings(
-    formatter_key="cpp",
-    formatter_style="LLVM",
-    file_extension="cpp",
-    header_extension="cpp.inc",
-)
-
-_TYPE_MAPPING: Final = types.MappingProxyType(
-    {
-        bool: "bool",
-        int: "long",
-        float: "double",
-        complex: "std::complex<double>",
-        np.bool_: "bool",
-        np.byte: "signed char",
-        np.ubyte: "unsigned char",
-        np.short: "short",
-        np.ushort: "unsigned short",
-        np.intc: "int",
-        np.uintc: "unsigned int",
-        np.int_: "long",
-        np.uint: "unsigned long",
-        np.longlong: "long long",
-        np.ulonglong: "unsigned long long",
-        np.single: "float",
-        np.double: "double",
-        np.longdouble: "long double",
-        np.csingle: "std::complex<float>",
-        np.cdouble: "std::complex<double>",
-        np.clongdouble: "std::complex<long double>",
-        ctypes.c_bool: "bool",
-        ctypes.c_char: "char",
-        ctypes.c_wchar: "wchar_t",
-        ctypes.c_byte: "char",
-        ctypes.c_ubyte: "unsigned char",
-        ctypes.c_short: "short",
-        ctypes.c_ushort: "unsigned short",
-        ctypes.c_int: "int",
-        ctypes.c_uint: "unsigned int",
-        ctypes.c_long: "long",
-        ctypes.c_ulong: "unsigned long",
-        ctypes.c_longlong: "long long",
-        ctypes.c_ulonglong: "unsigned long long",
-        ctypes.c_size_t: "std::size_t",
-        ctypes.c_ssize_t: "std::ptrdiff_t",
-        ctypes.c_float: "float",
-        ctypes.c_double: "double",
-        ctypes.c_longdouble: "long double",
-    }
+    formatter_key="cpp", formatter_style="LLVM", file_extension="cpp", header_extension="cpp.inc"
 )
 
 
-def render_python_type(python_type: Type) -> str:
-    return _TYPE_MAPPING[python_type]
-
-
-def _render_function_param(
-    param: interface.ScalarParameter | interface.BufferParameter | interface.ConnectivityParameter,
-    index: int,
-) -> str:
-    if isinstance(param, interface.ScalarParameter):
-        return f"{render_python_type(param.scalar_type.type)} {param.name}"
-    else:
-        return f"BufferT{index}&& {param.name}"
+def render_scalar_type(scalar_type: ts.ScalarType) -> str:
+    match scalar_type.kind:
+        case ts.ScalarKind.BOOL:
+            return "bool"
+        case ts.ScalarKind.INT32:
+            return "std::int32_t"
+        case ts.ScalarKind.INT64:
+            return "std::int64_t"
+        case ts.ScalarKind.FLOAT32:
+            return "float"
+        case ts.ScalarKind.FLOAT64:
+            return "double"
+        case ts.ScalarKind.STRING:
+            return "std::string"
+        case _:
+            raise AssertionError(
+                f"Scalar kind '{scalar_type}' is not implemented when it should be."
+            )
 
 
 def render_function_declaration(function: interface.Function, body: str) -> str:
-    rendered_params = [
-        _render_function_param(param, index) for index, param in enumerate(function.parameters)
-    ]
+    template_params: list[str] = []
+    rendered_params: list[str] = []
+    for index, param in enumerate(function.parameters):
+        if isinstance(param.type_, ts.ScalarType):
+            rendered_params.append(f"{render_scalar_type(param.type_)} {param.name}")
+        elif ti.is_type_or_tuple_of_type(param.type_, (ts.FieldType, ts.ScalarType)):
+            template_param = f"ArgT{index}"
+            template_params.append(f"class {template_param}")
+            rendered_params.append(f"{template_param}&& {param.name}")
+        else:
+            raise ValueError(f"Type '{param.type_}' is not supported in C++ interfaces.")
+
     rendered_decl = f"""decltype(auto) {function.name}({", ".join(rendered_params)}) {{
         {body}
     }}"""
-    template_params = [
-        f"class BufferT{index}"
-        for index, param in enumerate(function.parameters)
-        if isinstance(param, (interface.BufferParameter, interface.ConnectivityParameter))
-    ]
     if template_params:
         return f"""
         template <{', '.join(template_params)}>
