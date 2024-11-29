@@ -289,7 +289,7 @@ def test_astype():
     assert lowered.expr == reference
 
 
-def test_astype_LocalDim():
+def test_astype_local_field():
     def foo(a: gtx.Field[gtx.Dims[Vertex, V2EDim], float64]):
         return astype(a, int32)
 

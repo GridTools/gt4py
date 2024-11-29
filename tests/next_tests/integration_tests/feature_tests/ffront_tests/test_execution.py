@@ -423,16 +423,19 @@ def test_astype_int(cartesian_case):
     )
 
 
-def test_astype_int_sparse(unstructured_case):
+def test_astype_int_local_field(unstructured_case):
     @gtx.field_operator
-    def testee(a: cases.VFloatField) -> gtx.Field[[Edge, E2VDim], int64]:
-        return astype(a(E2V), int64)
+    def testee(a: cases.VFloatField) -> gtx.Field[[Edge], int64]:
+        tmp = astype(a(E2V), int64)
+        return neighbor_sum(tmp, axis=E2VDim)
+
+    e2v_table = unstructured_case.offset_provider["E2V"].ndarray
 
     cases.verify_with_default_data(
         unstructured_case,
         testee,
-        ref=lambda a_: a_.astype(int64),
-        comparison=lambda a_, b_: np.all(a_ == b_),
+        ref=lambda a: np.sum(a.astype(int64)[e2v_table], axis=1, initial=0),
+        comparison=lambda a, b: np.all(a == b),
     )
 
 
