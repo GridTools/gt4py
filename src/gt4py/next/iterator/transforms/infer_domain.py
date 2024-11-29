@@ -22,7 +22,6 @@ from gt4py.next.iterator.ir_utils import (
     ir_makers as im,
 )
 from gt4py.next.iterator.transforms import trace_shifts
-from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 from gt4py.next.utils import flatten_nested_tuple, tree_map
 
 
@@ -419,14 +418,10 @@ def infer_program(
         not program.function_definitions
     ), "Domain propagation does not support function definitions."
 
-    return ConstantFolding.apply(  # type: ignore[return-value]  # returns same type as input
-        itir.Program(
-            id=program.id,
-            function_definitions=program.function_definitions,
-            params=program.params,
-            declarations=program.declarations,
-            body=[
-                _infer_stmt(stmt, offset_provider, symbolic_domain_sizes) for stmt in program.body
-            ],
-        )
+    return itir.Program(
+        id=program.id,
+        function_definitions=program.function_definitions,
+        params=program.params,
+        declarations=program.declarations,
+        body=[_infer_stmt(stmt, offset_provider, symbolic_domain_sizes) for stmt in program.body],
     )

@@ -16,6 +16,7 @@ from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import trace_shifts
+from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 
 
 def _max_domain_sizes_by_location_type(offset_provider: Mapping[str, Any]) -> dict[str, int]:
@@ -168,6 +169,8 @@ def domain_union(*domains: SymbolicDomain) -> SymbolicDomain:
             lambda current_expr, el_expr: im.call("maximum")(current_expr, el_expr),
             [domain.ranges[dim].stop for domain in domains],
         )
+        # constant fold expression to keep the tree small
+        start, stop = ConstantFolding.apply(start), ConstantFolding.apply(stop)  # type: ignore[assignment]  # always an itir.FunCall
         new_domain_ranges[dim] = SymbolicRange(start, stop)
 
     return SymbolicDomain(domains[0].grid_type, new_domain_ranges)
