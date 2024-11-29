@@ -424,6 +424,9 @@ def test_astype_int(cartesian_case):
 
 
 def test_astype_int_local_field(unstructured_case):
+    if unstructured_case.backend and "dace" in unstructured_case.backend.name:
+        pytest.skip("Skipping dace: dace_itir: deprecated soon, dace_gtir: feature missing")
+
     @gtx.field_operator
     def testee(a: gtx.Field[[Vertex], np.float64]) -> gtx.Field[[Edge], int64]:
         tmp = astype(a(E2V), int64)
