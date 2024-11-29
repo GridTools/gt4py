@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any, Callable, Sequence
 
 import numpy as np
 
@@ -118,29 +118,47 @@ class PythonCodegen(codegen.TemplatedGenerator):
     as in the case of field domain definitions, for sybolic array shape and map range.
     """
 
-    SymRef = as_fmt("{id}")
     Literal = as_fmt("{value}")
 
-    def _visit_deref(self, node: gtir.FunCall) -> str:
+    def _visit_deref(self, node: gtir.FunCall, symbol_mapping: dict[str, gtir.Node]) -> str:
         assert len(node.args) == 1
         if isinstance(node.args[0], gtir.SymRef):
-            return self.visit(node.args[0])
+            return self.visit(node.args[0], symbol_mapping=symbol_mapping)
         raise NotImplementedError(f"Unexpected deref with arg type '{type(node.args[0])}'.")
 
-    def visit_FunCall(self, node: gtir.FunCall) -> str:
-        if cpm.is_call_to(node, "deref"):
-            return self._visit_deref(node)
+    def _visit_lambda(
+        self,
+        node: gtir.Lambda,
+        node_args: Sequence[gtir.Node],
+        symbol_mapping: dict[str, gtir.Node],
+    ) -> str:
+        symbol_mapping |= {param.id: arg for param, arg in zip(node.params, node_args)}
+        return self.visit(node.expr, symbol_mapping=symbol_mapping)
+
+    def visit_FunCall(self, node: gtir.FunCall, symbol_mapping: dict[str, gtir.Node]) -> str:
+        if isinstance(node.fun, gtir.Lambda):
+            return self._visit_lambda(node.fun, node.args, symbol_mapping=symbol_mapping)
+        elif cpm.is_call_to(node, "deref"):
+            return self._visit_deref(node, symbol_mapping=symbol_mapping)
         elif isinstance(node.fun, gtir.SymRef):
-            args = self.visit(node.args)
+            args = self.visit(node.args, symbol_mapping=symbol_mapping)
             builtin_name = str(node.fun.id)
             return format_builtin(builtin_name, *args)
         raise NotImplementedError(f"Unexpected 'FunCall' node ({node}).")
 
+    def visit_SymRef(self, node: gtir.SymRef, symbol_mapping: dict[str, gtir.Node]) -> str:
+        symbol = str(node.id)
+        if symbol_mapping and symbol in symbol_mapping:
+            mapped_node = symbol_mapping[symbol]
+            return self.visit(mapped_node, symbol_mapping=symbol_mapping)
+        return symbol
 
-get_source = PythonCodegen.apply
-"""
-Specialized visit method for symbolic expressions.
 
-Returns:
-    A string containing the Python code corresponding to a symbolic expression
-"""
+def get_source(node: gtir.Node) -> str:
+    """
+    Specialized visit method for symbolic expressions.
+
+    Returns:
+        A string containing the Python code corresponding to a symbolic expression
+    """
+    return PythonCodegen.apply(node, symbol_mapping={})
