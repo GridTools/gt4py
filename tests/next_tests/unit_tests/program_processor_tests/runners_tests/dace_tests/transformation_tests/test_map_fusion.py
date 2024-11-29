@@ -452,5 +452,59 @@ def test_indirect_access():
 
 
 def test_indirect_access_2():
-    # TODO(phimuell): Index should be computed and that map should be fusable.
-    pass
+    """Indirect accesses, with non point wise input dependencies.
+
+    Because `a` is used as input and output and `a` is indirectly accessed
+    the access to `a` can not be point wise so, fusing is not possible.
+    """
+    sdfg = dace.SDFG(util.unique_name("indirect_access_sdfg_2"))
+    state = sdfg.add_state(is_start_block=True)
+
+    names = ["a", "b", "idx", "tmp"]
+
+    for name in names:
+        sdfg.add_array(
+            name=name,
+            shape=(10,),
+            dtype=dace.int32 if name == "idx" else dace.float64,
+            transient=False,
+        )
+    sdfg.arrays["tmp"].transient = True
+
+    a_in, b, idx, tmp, a_out = (state.add_access(name) for name in (names + ["a"]))
+
+    state.add_mapped_tasklet(
+        "indirect_access",
+        map_ranges={"__i0": "0:10"},
+        inputs={
+            "__idx": dace.Memlet("idx[__i0]"),
+            "__field": dace.Memlet("a[0:10]", volume=1),
+        },
+        code="__out = __field[__idx]",
+        outputs={"__out": dace.Memlet("tmp[__i0]")},
+        input_nodes={a_in, idx},
+        output_nodes={tmp},
+        external_edges=True,
+    )
+    state.add_mapped_tasklet(
+        "computation",
+        map_ranges={"__i0": "0:10"},
+        inputs={
+            "__in1": dace.Memlet("tmp[__i0]"),
+            "__in2": dace.Memlet("b[__i0]"),
+        },
+        code="__out = __in1 + __in2",
+        outputs={"__out": dace.Memlet("a[__i0]")},
+        input_nodes={tmp, b},
+        output_nodes={a_out},
+        external_edges=True,
+    )
+    sdfg.view()
+    sdfg.validate()
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.MapFusionSerial(),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 0
