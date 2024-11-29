@@ -455,14 +455,15 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         return [arg_name for arg_name, _ in sdfg_args]
 
     def visit_Program(self, node: gtir.Program) -> None:
-        """Translates the body of `ir.Program` inside the SDFG that belongs to this builder."""
+        """Translates the body of a `Program` node into an SDFG."""
 
         # Since program field arguments are passed to the SDFG as full-shape arrays,
         # there is no offset that needs to be compensated.
         assert len(self.field_offsets) == 0
 
         # create start block of the stateful graph
-        assert len(self.sdfg.nodes()) == 0
+        if len(self.sdfg.nodes()) != 0:
+            raise AssertionError("The `Program` node should be visited only once as the root node.")
         head_state = self.sdfg.add_state("program_entry", is_start_block=True)
 
         # declarations of temporaries result in transient array definitions in the SDFG
@@ -681,7 +682,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         #
         connectivity_arrays = {
             dace_utils.connectivity_identifier(offset)
-            for offset in dace_utils.filter_connectivity_types(self.offset_provider_type).keys()
+            for offset in dace_utils.filter_connectivity_types(self.offset_provider_type)
         }
 
         input_memlets = {}
@@ -832,15 +833,20 @@ def build_sdfg_from_gtir(
     """
     Receives a GTIR program and lowers it to a DaCe SDFG.
 
-    The lowering to SDFG requires that the program node is type-annotated, therefore this function
-    runs type ineference as first step.
+    The lowering to SDFG requires that the program node is type-annotated, therefore
+    this function runs type inference on the GTIR as first step.
+    Additionally, it applies the `PruneCasts` pass on the GTIR to remove unnecessary
+    cast expressions, where the input argument already has the target type.
+    The generated SDFG follows the rules outlined in ADR
+    'docs/development/ADRs/0018-Canonical_SDFG_in_GT4Py_Transformations.md'.
+    This function does not apply any SDFG simplify pass nor SDFG transformations.
 
     Args:
         ir: The GTIR program node to be lowered to SDFG
         offset_provider_type: The definitions of offset providers used by the program node
 
     Returns:
-        The SDFG as a result of the GTIR lowering, without applying any transformation.
+        The SDFG generated through the lowering, without applying any post processing to it.
     """
 
     ir = gtir_type_inference.infer(ir, offset_provider_type=offset_provider_type)
