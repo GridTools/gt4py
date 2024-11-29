@@ -102,7 +102,9 @@ def copy_type(from_: itir.Node, to: itir.Node, allow_untyped=False) -> None:
     This function mainly exists for readability reasons.
     """
     assert allow_untyped is not None or isinstance(from_.type, ts.TypeSpec)
-    _set_node_type(to, from_.type)  # type: ignore[arg-type]
+    if from_.type is None:
+        return
+    _set_node_type(to, from_.type)
 
 
 def on_inferred(callback: Callable, *args: Union[ts.TypeSpec, ObservableTypeSynthesizer]) -> None:

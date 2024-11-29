@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional, Set
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor, SymbolTableTrait
 from gt4py.next.iterator import ir
+from gt4py.next.iterator.type_system import inference as type_inference
 
 
 class RemapSymbolRefs(PreserveLocationVisitor, NodeTranslator):
@@ -46,7 +47,9 @@ class RenameSymbols(PreserveLocationVisitor, NodeTranslator):
         self, node: ir.SymRef, *, name_map: Dict[str, str], active: Optional[Set[str]] = None
     ):
         if active and node.id in active:
-            return ir.SymRef(id=name_map.get(node.id, node.id))
+            new_ref = ir.SymRef(id=name_map.get(node.id, node.id))
+            type_inference.copy_type(from_=node, to=new_ref)
+            return new_ref
         return node
 
     def generic_visit(  # type: ignore[override]
