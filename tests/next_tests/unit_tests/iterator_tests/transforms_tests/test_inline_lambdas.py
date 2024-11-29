@@ -84,3 +84,10 @@ def test_inline_lambda_args():
     )
     inlined = InlineLambdas.apply(testee, opcount_preserving=True, force_inline_lambda_args=True)
     assert inlined == expected
+
+
+def test_type_preservation():
+    testee = im.let("a", "b")("a")
+    testee.type = testee.annex.type = ts.ScalarType(kind=ts.ScalarKind.FLOAT32)
+    inlined = InlineLambdas.apply(testee)
+    assert inlined.type == inlined.annex.type == ts.ScalarType(kind=ts.ScalarKind.FLOAT32)
