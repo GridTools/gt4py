@@ -105,6 +105,8 @@ def gt_auto_optimize(
         `gt_find_constant_arguments()` function can be used.
 
     Todo:
+        - Update the description. The Phases are nice, but they have lost their
+            link to reality a little bit.
         - Stride of transients, they are in C order and this should be changed.
         - Fix the strides and iteration order of the maps that are created due
             to the memlet to map transformation, that we have to do.
@@ -216,6 +218,10 @@ def gt_auto_optimize(
                 validate=validate,
                 validate_all=validate_all,
             )
+
+        # We now ensure that point wise computations are properly double buffered.
+        #  The main reason is to ensure that rule 3 of ADR18 is maintained.
+        gtx_transformations.gt_crearte_local_double_buffering(sdfg)
 
         # Phase 5: Apply blocking
         if blocking_dim is not None:
