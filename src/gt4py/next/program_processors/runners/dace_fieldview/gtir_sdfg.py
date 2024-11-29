@@ -457,6 +457,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     def visit_Program(self, node: gtir.Program) -> None:
         """Translates the body of `ir.Program` inside the SDFG that belongs to this builder."""
 
+        # Since program field arguments are passed to the SDFG as full-shape arrays,
+        # there is no offset that needs to be compensated.
+        assert len(self.field_offsets) == 0
+
         # create start block of the stateful graph
         assert len(self.sdfg.nodes()) == 0
         head_state = self.sdfg.add_state("program_entry", is_start_block=True)

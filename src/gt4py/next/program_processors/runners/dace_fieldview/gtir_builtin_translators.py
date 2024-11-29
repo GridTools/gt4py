@@ -257,7 +257,7 @@ def _create_field_operator(
     field_dims, field_offset, field_shape = _get_field_layout(domain)
     field_indices = _get_domain_indices(field_dims, field_offset)
 
-    dataflow_output_desc = sdfg_builder.get_sdfg().data(output_edge.result.dc_node.data)
+    dataflow_output_desc = output_edge.result.dc_node.desc(sdfg_builder.get_sdfg())
 
     field_subset = sbs.Range.from_indices(field_indices)
     if isinstance(output_edge.result.gt_dtype, ts.ScalarType):
