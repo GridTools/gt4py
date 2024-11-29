@@ -485,8 +485,6 @@ def op_as_fieldop(
         >>> str(op_as_fieldop("op")("a", "b"))
         '(⇑(λ(__arg0, __arg1) → op(·__arg0, ·__arg1)))(a, b)'
     """
-    # im.as_fieldop(im.lambda_("__arg0")(im.map_(im.lambda_("val")(im.call("cast_")("val", "int32")))(im.deref("__arg0"))))("a")
-    # (⇑(λ(__arg0) → map_(λ(val) → cast_(val, int32))(·__arg0)))(a)
     if isinstance(op, (str, itir.SymRef, itir.Lambda)):
         op = call(op)
 
