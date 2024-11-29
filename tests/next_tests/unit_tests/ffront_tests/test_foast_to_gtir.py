@@ -289,6 +289,18 @@ def test_astype():
     assert lowered.expr == reference
 
 
+def test_astype_LocalDim():
+    def foo(a: gtx.Field[gtx.Dims[Vertex, V2EDim], float64]):
+        return astype(a, int32)
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.op_as_fieldop(im.map_(im.lambda_("val")(im.call("cast_")("val", "int32"))))("a")
+
+    assert lowered.expr == reference
+
+
 def test_astype_scalar():
     def foo(a: float64):
         return astype(a, int32)

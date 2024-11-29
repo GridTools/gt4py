@@ -423,6 +423,19 @@ def test_astype_int(cartesian_case):
     )
 
 
+def test_astype_int_sparse(unstructured_case):
+    @gtx.field_operator
+    def testee(a: cases.VFloatField) -> gtx.Field[[Edge, E2VDim], int64]:
+        return astype(a(E2V), int64)
+
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a_: a_.astype(int64),
+        comparison=lambda a_, b_: np.all(a_ == b_),
+    )
+
+
 @pytest.mark.uses_tuple_returns
 def test_astype_on_tuples(cartesian_case):
     @gtx.field_operator
