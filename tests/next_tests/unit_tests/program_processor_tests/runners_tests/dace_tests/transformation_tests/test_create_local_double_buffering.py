@@ -154,6 +154,10 @@ def test_local_double_buffering_no_connection():
     count = gtx_transformations.gt_crearte_local_double_buffering(sdfg)
     assert count == 1
 
+    # Ensure that a second application of the transformation does not run again.
+    count_again = gtx_transformations.gt_crearte_local_double_buffering(sdfg)
+    assert count_again == 0
+
     # Find the newly created access node.
     comp_tasklet_producers = [in_edge.src for in_edge in state.in_edges(comp_tskl)]
     assert len(comp_tasklet_producers) == 1
@@ -196,6 +200,39 @@ def test_local_double_buffering_no_apply():
         outputs={"__out": dace.Memlet("B[__i0]")},
         external_edges=True,
     )
+    sdfg.validate()
+
+    count = gtx_transformations.gt_crearte_local_double_buffering(sdfg)
+    assert count == 0
+
+
+def test_local_double_buffering_already_buffered():
+    """It is already buffered."""
+    sdfg = dace.SDFG(util.unique_name("local_double_buffering_no_apply"))
+    state = sdfg.add_state(is_start_block=True)
+    sdfg.add_array(
+        "A",
+        shape=(10,),
+        dtype=dace.float64,
+        transient=False,
+    )
+
+    tsklt, me, mx = state.add_mapped_tasklet(
+        "computation",
+        map_ranges={"__i0": "0:10"},
+        inputs={"__in1": dace.Memlet("A[__i0]")},
+        code="__out = __in1 + 10.0",
+        outputs={"__out": dace.Memlet("A[__i0]")},
+        external_edges=True,
+    )
+
+    sdfg.add_scalar("tmp", dtype=dace.float64, transient=True)
+    tmp = state.add_access("tmp")
+    me_to_tskl_edge = next(iter(state.out_edges(me)))
+
+    state.add_edge(me, me_to_tskl_edge.src_conn, tmp, None, dace.Memlet("A[__i0]"))
+    state.add_edge(tmp, None, tsklt, "__in1", dace.Memlet("tmp[0]"))
+    state.remove_edge(me_to_tskl_edge)
     sdfg.validate()
 
     count = gtx_transformations.gt_crearte_local_double_buffering(sdfg)

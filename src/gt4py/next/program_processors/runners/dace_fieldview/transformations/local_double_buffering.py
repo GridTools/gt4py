@@ -340,22 +340,38 @@ def _check_if_map_must_be_handled(
 
     # TODO(phimuell): What about the case that some data descriptor needs double
     #   buffering, but some do not?
-    for input_node, output_node in inout_datas.values():
+    for inout_data_name in list(inout_datas.keys()):
+        input_node, output_node = inout_datas[inout_data_name]
         input_edges = state.edges_between(input_node, map_entry)
         output_edges = state.edges_between(map_exit, output_node)
-        assert len(input_edges) == 1
-        assert len(output_edges) == 1
-        # TODO(phimuell): Also implement a check that the volume equals the size
-        #   of the subset.
+        assert (
+            len(input_edges) == 1
+        ), f"Expected a single connection between input node and map entry, but found {len(input_edges)}."
+        assert (
+            len(output_edges) == 1
+        ), f"Expected a single connection between map exit and write back node, but found {len(output_edges)}."
+
+        # If there is only one edge on the inside of the map, that goes into an
+        #  AccessNode, then we assume it is double buffered.
+        inner_read_edges = _get_inner_edges(input_edges[0], map_entry, state, False)
+        if (
+            len(inner_read_edges) == 1
+            and isinstance(inner_read_edges[0].dst, dace_nodes.AccessNode)
+            and not gtx_transformations.util.is_view(inner_read_edges[0].dst, sdfg)
+        ):
+            inout_datas.pop(inout_data_name)
+            continue
+
         inner_read_subsets = [
             inner_read_edge.data.get_src_subset(inner_read_edge, state)
-            for inner_read_edge in _get_inner_edges(input_edges[0], map_entry, state, False)
+            for inner_read_edge in inner_read_edges
         ]
         assert all(inner_read_subset is not None for inner_read_subset in inner_read_subsets)
         inner_write_subsets = [
             inner_write_edge.data.get_dst_subset(inner_write_edge, state)
             for inner_write_edge in _get_inner_edges(output_edges[0], map_exit, state, True)
         ]
+        # TODO(phimuell): Also implement a check that the volume equals the size of the subset.
         assert all(inner_write_subset is not None for inner_write_subset in inner_write_subsets)
 
         # For being point wise the subsets must be compatible. The correct check would be:
@@ -370,5 +386,8 @@ def _check_if_map_must_be_handled(
             all_inner_subsets[0] == all_inner_subsets[i] for i in range(1, len(all_inner_subsets))
         ):
             return None
+
+    if len(inout_datas) == 0:
+        return None
 
     return inout_datas
