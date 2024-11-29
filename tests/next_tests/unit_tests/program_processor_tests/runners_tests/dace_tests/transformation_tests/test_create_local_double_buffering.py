@@ -175,3 +175,28 @@ def test_local_double_buffering_no_connection():
     sdfg(**res)
     for name in res:
         assert np.allclose(res[name], ref[name]), f"Failed verification in '{name}'."
+
+
+def test_local_double_buffering_no_apply():
+    """Here it does not apply, because are all distinct."""
+    sdfg = dace.SDFG(util.unique_name("local_double_buffering_no_apply"))
+    state = sdfg.add_state(is_start_block=True)
+    for name in "AB":
+        sdfg.add_array(
+            name,
+            shape=(10,),
+            dtype=dace.float64,
+            transient=False,
+        )
+    state.add_mapped_tasklet(
+        "computation",
+        map_ranges={"__i0": "0:10"},
+        inputs={"__in1": dace.Memlet("A[__i0]")},
+        code="__out = __in1 + 10.0",
+        outputs={"__out": dace.Memlet("B[__i0]")},
+        external_edges=True,
+    )
+    sdfg.validate()
+
+    count = gtx_transformations.gt_crearte_local_double_buffering(sdfg)
+    assert count == 0
