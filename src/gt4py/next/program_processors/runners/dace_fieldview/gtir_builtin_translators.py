@@ -279,9 +279,7 @@ def _create_field_operator(
         field_subset = field_subset + sbs.Range.from_array(dataflow_output_desc)
 
     # allocate local temporary storage
-    field_name, _ = sdfg_builder.get_sdfg().add_temp_transient(
-        field_shape, dataflow_output_desc.dtype
-    )
+    field_name, _ = sdfg_builder.add_temp_array(field_shape, dataflow_output_desc.dtype)
     field_node = state.add_access(field_name)
 
     # create map range corresponding to the field operator domain

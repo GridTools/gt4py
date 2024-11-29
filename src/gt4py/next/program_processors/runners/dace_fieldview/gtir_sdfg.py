@@ -121,6 +121,12 @@ class SDFGBuilder(DataflowBuilder, Protocol):
         """Visit a node of the GT4Py IR."""
         ...
 
+    def add_temp_array(
+        self, shape: Sequence[Any], dtype: dace.dtypes.typeclass, **kwargs: Any
+    ) -> Tuple[str, dace.dtypes.Array]:
+        """Wrapper of `dace.SDFG.add_temp_transient()`."""
+        return self.get_sdfg().add_temp_transient(shape, dtype, **kwargs)
+
     def add_temp_scalar(
         self, dtype: dace.dtypes.typeclass, name: Optional[str] = None, **kwargs: Any
     ) -> Tuple[str, dace.dtypes.Scalar]:
