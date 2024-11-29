@@ -12,6 +12,7 @@ import copy
 
 dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes
+from dace import data as dace_data
 
 from gt4py.next.program_processors.runners.dace_fieldview import (
     transformations as gtx_transformations,
@@ -95,7 +96,7 @@ def _create_sdfg_double_read(
     return sdfg
 
 
-def test_double_read_sdfg():
+def test_local_double_buffering_double_read_sdfg():
     sdfg0 = _create_sdfg_double_read(0)
     sdfg1 = _create_sdfg_double_read(1)
     args0 = {name: np.array(np.random.rand(10), dtype=np.float64, copy=True) for name in "AB"}
@@ -111,3 +112,66 @@ def test_double_read_sdfg():
     sdfg1(**args1)
     for name in args0:
         assert np.allclose(args0[name], args1[name]), f"Failed verification in '{name}'."
+
+
+def test_local_double_buffering_no_connection():
+    """There is no direct connection between read and write."""
+    sdfg = dace.SDFG(util.unique_name("local_double_buffering_no_connection"))
+    state = sdfg.add_state(is_start_block=True)
+    for name in "AB":
+        sdfg.add_array(
+            name,
+            shape=(10,),
+            dtype=dace.float64,
+            transient=False,
+        )
+    A_in, B, A_out = (state.add_access(name) for name in "ABA")
+
+    comp_tskl, me, mx = state.add_mapped_tasklet(
+        "computation",
+        map_ranges={"__i0": "0:10"},
+        inputs={"__in1": dace.Memlet("A[__i0]")},
+        code="__out = __in1 + 10.0",
+        outputs={"__out": dace.Memlet("B[__i0]")},
+        input_nodes={A_in},
+        output_nodes={B},
+        external_edges=True,
+    )
+
+    fill_tasklet = state.add_tasklet(
+        name="fill_tasklet",
+        inputs=set(),
+        code="__out = 2.",
+        outputs={"__out"},
+    )
+    state.add_nedge(me, fill_tasklet, dace.Memlet())
+    state.add_edge(fill_tasklet, "__out", mx, "IN_1", dace.Memlet("A[__i0]"))
+    state.add_edge(mx, "OUT_1", A_out, None, dace.Memlet("A[0:10]"))
+    mx.add_in_connector("IN_1")
+    mx.add_out_connector("OUT_1")
+    sdfg.validate()
+
+    count = gtx_transformations.gt_crearte_local_double_buffering(sdfg)
+    assert count == 1
+
+    # Find the newly created access node.
+    comp_tasklet_producers = [in_edge.src for in_edge in state.in_edges(comp_tskl)]
+    assert len(comp_tasklet_producers) == 1
+    new_double_buffer = comp_tasklet_producers[0]
+    assert isinstance(new_double_buffer, dace_nodes.AccessNode)
+    assert not any(new_double_buffer.data == name for name in "AB")
+    assert isinstance(new_double_buffer.desc(sdfg), dace_data.Scalar)
+    assert new_double_buffer.desc(sdfg).transient
+
+    # The newly created access node, must have an empty Memlet to the fill tasklet.
+    read_dependencies = [
+        out_edge.dst for out_edge in state.out_edges(new_double_buffer) if out_edge.data.is_empty()
+    ]
+    assert len(read_dependencies) == 1
+    assert read_dependencies[0] is fill_tasklet
+
+    res = {name: np.array(np.random.rand(10), dtype=np.float64, copy=True) for name in "AB"}
+    ref = {"A": np.full_like(res["A"], 2.0), "B": res["A"] + 10.0}
+    sdfg(**res)
+    for name in res:
+        assert np.allclose(res[name], ref[name]), f"Failed verification in '{name}'."
