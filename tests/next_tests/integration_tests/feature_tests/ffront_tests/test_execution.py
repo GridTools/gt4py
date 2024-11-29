@@ -425,7 +425,7 @@ def test_astype_int(cartesian_case):
 
 def test_astype_int_local_field(unstructured_case):
     @gtx.field_operator
-    def testee(a: cases.VFloatField) -> gtx.Field[[Edge], int64]:
+    def testee(a: gtx.Field[[Vertex], np.float64]) -> gtx.Field[[Edge], int64]:
         tmp = astype(a(E2V), int64)
         return neighbor_sum(tmp, axis=E2VDim)
 
