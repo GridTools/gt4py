@@ -220,3 +220,45 @@ def test_map_buffer_elimination_offset_5():
         gtx_transformations.GT4PyMapBufferElimination(assume_pointwise=False),
         exp_count=1,
     )
+
+
+def test_map_buffer_elimination_not_apply():
+    """Indirect accessing, because of this the double buffer is needed."""
+    sdfg = dace.SDFG(util.unique_name("map_buffer"))
+    state = sdfg.add_state(is_start_block=True)
+
+    names = ["A", "tmp", "idx"]
+    for name in names:
+        sdfg.add_array(
+            name,
+            shape=(10,),
+            dtype=dace.int32 if name == "tmp" else dace.float64,
+            transient=False,
+        )
+    sdfg.arrays["tmp"].transient = True
+
+    tmp = state.add_access("tmp")
+    state.add_mapped_tasklet(
+        "indirect_accessing",
+        map_ranges={"__i0": "0:10"},
+        inputs={
+            "__field": dace.Memlet("A[0:10]"),
+            "__idx": dace.Memlet("idx[__i0]"),
+        },
+        code="__out = __field[__idx]",
+        outputs={"__out": dace.Memlet("tmp[__i0]")},
+        output_nodes={tmp},
+        external_edges=True,
+    )
+    state.add_nedge(tmp, state.add_access("A"), dace.Memlet("tmp[0:10] -> [0:10]"))
+
+    # TODO(phimuell): Update the transformation such that we can specify
+    #       `assume_pointwise=True` and the test would still pass.
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.GT4PyMapBufferElimination(
+            assume_pointwise=False,
+        ),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 0
