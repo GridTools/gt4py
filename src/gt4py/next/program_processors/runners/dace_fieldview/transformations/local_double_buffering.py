@@ -178,7 +178,9 @@ def _add_local_double_buffering_to_single_data(
             dace.Memlet(
                 data=new_double_inner_buff_name,
                 subset=dace.subsets.Range.from_array(new_double_inner_buff_desc),
-                other_subset=copy.deepcopy(old_inner_read_edge.data.dst_subset),
+                other_subset=copy.deepcopy(
+                    old_inner_read_edge.data.get_dst_subset(old_inner_read_edge, state)
+                ),
             ),
         )
         state.remove_edge(old_inner_read_edge)
@@ -191,7 +193,9 @@ def _add_local_double_buffering_to_single_data(
         None,
         dace.Memlet(
             data=input_node.data,
-            subset=copy.deepcopy(inner_read_edges[0].data.src_subset),
+            subset=copy.deepcopy(
+                inner_read_edges[0].data.get_src_subset(inner_read_edges[0], state)
+            ),
             other_subset=dace.subsets.Range.from_array(new_double_inner_buff_desc),
         ),
     )
