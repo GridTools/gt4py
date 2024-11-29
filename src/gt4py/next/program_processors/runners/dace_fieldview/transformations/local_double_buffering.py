@@ -43,11 +43,11 @@ def gt_crearte_local_double_buffering(
 
     processed_maps = 0
     for nsdfg in sdfg.all_sdfgs_recursive():
-        processed_maps += _ensure_pointwise_data_dependency_non_recursive(nsdfg)
+        processed_maps += _crearte_local_double_buffering_non_recursive(nsdfg)
     return processed_maps
 
 
-def _ensure_pointwise_data_dependency_non_recursive(
+def _crearte_local_double_buffering_non_recursive(
     sdfg: dace.SDFG,
 ) -> int:
     """Implementation of the point wise transformation.
