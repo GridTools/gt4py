@@ -176,195 +176,6 @@ def _get_tuple_type(data: tuple[gtir_builtin_translators.FieldopResult, ...]) ->
     )
 
 
-def _make_array_shape_and_strides(
-    name: str,
-    dims: Sequence[gtx_common.Dimension],
-    neighbor_connectivity_types: dict[str, gtx_common.NeighborConnectivityType],
-) -> tuple[list[dace.symbol], list[dace.symbol]]:
-    """
-    Parse field dimensions and allocate symbols for array shape and strides.
-
-    For local dimensions, the size is known at compile-time and therefore
-    the corresponding array shape dimension is set to an integer literal value.
-
-    Returns:
-        Two lists of symbols, one for the shape and the other for the strides of the array.
-    """
-    dc_dtype = gtir_builtin_translators.INDEX_DTYPE
-    shape = [
-        (
-            neighbor_connectivity_types[dim.value].max_neighbors
-            if dim.kind == gtx_common.DimensionKind.LOCAL
-            else dace.symbol(dace_utils.field_size_symbol_name(name, i), dc_dtype)
-        )
-        for i, dim in enumerate(dims)
-    ]
-    strides = [
-        dace.symbol(dace_utils.field_stride_symbol_name(name, i), dc_dtype)
-        for i in range(len(dims))
-    ]
-    return shape, strides
-
-
-def _add_storage(
-    sdfg: dace.SDFG,
-    symbolic_arguments: set[str],
-    name: str,
-    gt_type: ts.DataType,
-    neighbor_connectivity_types: dict[str, gtx_common.NeighborConnectivityType],
-    transient: bool = True,
-    tuple_name: Optional[str] = None,
-) -> list[tuple[str, ts.DataType]]:
-    """
-    Add storage in the SDFG for a given GT4Py data symbol.
-
-    GT4Py fields are allocated as DaCe arrays. GT4Py scalars are represented
-    as DaCe scalar objects in the SDFG; the exception are the symbols passed as
-    `symbolic_arguments`, e.g. symbols used in domain expressions, and those used
-    for symbolic array shape and strides.
-
-    The fields used as temporary arrays, when `transient = True`, are allocated
-    and exist only within the SDFG; when `transient = False`, the fields have
-    to be allocated outside and have to be passed as arguments to the SDFG call.
-
-    Args:
-        sdfg: The SDFG where storage needs to be allocated.
-        symbolic_arguments: Set of GT4Py scalars that must be represented as SDFG symbols.
-        name: Symbol Name to be allocated.
-        gt_type: GT4Py symbol type.
-        neighbor_connectivity_types: Mapping from local dimensions to `NeighborConnectivityType`.
-        transient: True when the data symbol has to be allocated as internal storage.
-        tuple_name: Must be set for tuple fields in order to use the same array shape and strides symbols.
-
-    Returns:
-        List of tuples '(data_name, gt_type)' where 'data_name' is the name of
-        the data container used as storage in the SDFG and 'gt_type' is the
-        corresponding GT4Py type. In case the storage has to be allocated for
-        a tuple symbol the list contains a flattened version of the tuple,
-        otherwise the list will contain a single entry.
-    """
-    if isinstance(gt_type, ts.TupleType):
-        tuple_fields = []
-        for tname, ttype in dace_gtir_utils.get_tuple_fields(name, gt_type, flatten=True):
-            tuple_fields.extend(
-                _add_storage(
-                    sdfg,
-                    symbolic_arguments,
-                    tname,
-                    ttype,
-                    neighbor_connectivity_types,
-                    transient,
-                    tuple_name=name,
-                )
-            )
-        return tuple_fields
-
-    elif isinstance(gt_type, ts.FieldType):
-        if len(gt_type.dims) == 0:
-            # represent zero-dimensional fields as scalar arguments
-            return _add_storage(
-                sdfg,
-                symbolic_arguments,
-                name,
-                gt_type.dtype,
-                neighbor_connectivity_types,
-                transient,
-            )
-        # handle default case: field with one or more dimensions
-        dc_dtype = dace_utils.as_dace_type(gt_type.dtype)
-        if tuple_name is None:
-            # Use symbolic shape, which allows to invoke the program with fields of different size;
-            # and symbolic strides, which enables decoupling the memory layout from generated code.
-            sym_shape, sym_strides = _make_array_shape_and_strides(
-                name, gt_type.dims, neighbor_connectivity_types
-            )
-        else:
-            # All fields in a tuple must have the same dims and sizes,
-            # therefore we use the same shape and strides symbols based on 'tuple_name'.
-            sym_shape, sym_strides = _make_array_shape_and_strides(
-                tuple_name, gt_type.dims, neighbor_connectivity_types
-            )
-        sdfg.add_array(name, sym_shape, dc_dtype, strides=sym_strides, transient=transient)
-        return [(name, gt_type)]
-
-    elif isinstance(gt_type, ts.ScalarType):
-        dc_dtype = dace_utils.as_dace_type(gt_type)
-        if dace_utils.is_field_symbol(name) or name in symbolic_arguments:
-            if name in sdfg.symbols:
-                # Sometimes, when the field domain is implicitly derived from the
-                # field domain, the gt4py lowering adds the field size as a scalar
-                # argument to the program IR. Suppose a field '__sym', then gt4py
-                # will add '__sym_size_0'.
-                # Therefore, here we check whether the shape symbol was already
-                # created by `_make_array_shape_and_strides()`, when allocating
-                # storage for field arguments. We assume that the scalar argument
-                # for field size, if present, always follows the field argument.
-                assert dace_utils.is_field_symbol(name)
-                if sdfg.symbols[name].dtype != dc_dtype:
-                    raise ValueError(
-                        f"Type mismatch on argument {name}: got {dc_dtype}, expected {sdfg.symbols[name].dtype}."
-                    )
-            else:
-                sdfg.add_symbol(name, dc_dtype)
-        else:
-            sdfg.add_scalar(name, dc_dtype, transient=transient)
-
-        return [(name, gt_type)]
-
-    raise RuntimeError(f"Data type '{type(gt_type)}' not supported.")
-
-
-def _add_sdfg_params(
-    sdfg: dace.SDFG,
-    node_params: Sequence[gtir.Sym],
-    symbolic_arguments: set[str],
-    neighbor_connectivity_types: dict[str, gtx_common.NeighborConnectivityType],
-) -> list[str]:
-    """
-    Helper function to add storage for node parameters and connectivity tables.
-
-    GT4Py field arguments will be translated to `dace.data.Array` objects.
-    GT4Py scalar arguments will be translated to `dace.data.Scalar` objects,
-    except when they are listed in 'symbolic_arguments', in which case they
-    will be represented in the SDFG as DaCe symbols.
-    """
-    # add non-transient arrays and/or SDFG symbols for the program arguments
-    sdfg_args = []
-    for param in node_params:
-        pname = str(param.id)
-        assert isinstance(param.type, (ts.DataType))
-        sdfg_args += _add_storage(
-            sdfg,
-            symbolic_arguments,
-            pname,
-            param.type,
-            neighbor_connectivity_types,
-            transient=False,
-        )
-
-    # add SDFG storage for connectivity tables
-    for offset, connectivity_type in neighbor_connectivity_types.items():
-        scalar_type = tt.from_dtype(connectivity_type.dtype)
-        gt_type = ts.FieldType(
-            [connectivity_type.source_dim, connectivity_type.neighbor_dim], scalar_type
-        )
-        # We store all connectivity tables as transient arrays here; later, while building
-        # the field operator expressions, we change to non-transient (i.e. allocated externally)
-        # the tables that are actually used. This way, we avoid adding SDFG arguments for
-        # the connectivity tables that are not used. The remaining unused transient arrays
-        # are removed by the dace simplify pass.
-        _add_storage(
-            sdfg,
-            symbolic_arguments,
-            dace_utils.connectivity_identifier(offset),
-            gt_type,
-            neighbor_connectivity_types,
-        )
-
-    # the list of all sdfg arguments (aka non-transient arrays) which include tuple-element fields
-    return [arg_name for arg_name, _ in sdfg_args]
-
-
 @dataclasses.dataclass(frozen=True)
 class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     """Provides translation capability from a GTIR program to a DaCe SDFG.
@@ -397,23 +208,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
     def __post_init__(self) -> None:
         self.sdfg_arg_names.extend(
-            _add_sdfg_params(
-                self.sdfg,
+            self._add_sdfg_params(
                 [gtir.Sym(id=k, type=v) for k, v in self.global_symbols.items()],
                 symbolic_arguments=self.domain_symbols,
-                neighbor_connectivity_types=dace_utils.filter_connectivity_types(
-                    self.offset_provider_type
-                ),
             )
         )
-
-    def add_storage_for_temporary(self, temp_decl: gtir.Temporary) -> None:
-        """
-        Add temporary storage (aka transient) for data containers used as GTIR temporaries.
-
-        Assume all temporaries to be fields, therefore represented as dace arrays.
-        """
-        raise NotImplementedError("Temporaries not supported yet by GTIR DaCe backend.")
 
     def get_offset_provider_type(self, offset: str) -> gtx_common.OffsetProviderTypeElem:
         return self.offset_provider_type[offset]
@@ -446,6 +245,132 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
     def unique_tasklet_name(self, name: str) -> str:
         return f"{self.tasklet_uids.sequential_id()}_{name}"
+
+    def _make_array_shape_and_strides(
+        self,
+        name: str,
+        dims: Sequence[gtx_common.Dimension],
+    ) -> tuple[list[dace.symbol], list[dace.symbol]]:
+        """
+        Parse field dimensions and allocate symbols for array shape and strides.
+
+        For local dimensions, the size is known at compile-time and therefore
+        the corresponding array shape dimension is set to an integer literal value.
+
+        Returns:
+            Two lists of symbols, one for the shape and the other for the strides of the array.
+        """
+        dc_dtype = gtir_builtin_translators.INDEX_DTYPE
+        connectivity_types = dace_utils.filter_connectivity_types(self.offset_provider_type)
+        shape = [
+            (
+                connectivity_types[dim.value].max_neighbors
+                if dim.kind == gtx_common.DimensionKind.LOCAL
+                else dace.symbol(dace_utils.field_size_symbol_name(name, i), dc_dtype)
+            )
+            for i, dim in enumerate(dims)
+        ]
+        strides = [
+            dace.symbol(dace_utils.field_stride_symbol_name(name, i), dc_dtype)
+            for i in range(len(dims))
+        ]
+        return shape, strides
+
+    def _add_storage(
+        self,
+        symbolic_arguments: set[str],
+        name: str,
+        gt_type: ts.DataType,
+        transient: bool = True,
+        tuple_name: Optional[str] = None,
+    ) -> list[tuple[str, ts.DataType]]:
+        """
+        Add storage in the SDFG for a given GT4Py data symbol.
+
+        GT4Py fields are allocated as DaCe arrays. GT4Py scalars are represented
+        as DaCe scalar objects in the SDFG; the exception are the symbols passed as
+        `symbolic_arguments`, e.g. symbols used in domain expressions, and those used
+        for symbolic array shape and strides.
+
+        The fields used as temporary arrays, when `transient = True`, are allocated
+        and exist only within the SDFG; when `transient = False`, the fields have
+        to be allocated outside and have to be passed as arguments to the SDFG call.
+
+        Args:
+            sdfg: The SDFG where storage needs to be allocated.
+            symbolic_arguments: Set of GT4Py scalars that must be represented as SDFG symbols.
+            name: Symbol Name to be allocated.
+            gt_type: GT4Py symbol type.
+            transient: True when the data symbol has to be allocated as internal storage.
+            tuple_name: Must be set for tuple fields in order to use the same array shape and strides symbols.
+
+        Returns:
+            List of tuples '(data_name, gt_type)' where 'data_name' is the name of
+            the data container used as storage in the SDFG and 'gt_type' is the
+            corresponding GT4Py type. In case the storage has to be allocated for
+            a tuple symbol the list contains a flattened version of the tuple,
+            otherwise the list will contain a single entry.
+        """
+        if isinstance(gt_type, ts.TupleType):
+            tuple_fields = []
+            for tname, ttype in dace_gtir_utils.get_tuple_fields(name, gt_type, flatten=True):
+                tuple_fields.extend(
+                    self._add_storage(symbolic_arguments, tname, ttype, transient, tuple_name=name)
+                )
+            return tuple_fields
+
+        elif isinstance(gt_type, ts.FieldType):
+            if len(gt_type.dims) == 0:
+                # represent zero-dimensional fields as scalar arguments
+                return self._add_storage(symbolic_arguments, name, gt_type.dtype, transient)
+            # handle default case: field with one or more dimensions
+            dc_dtype = dace_utils.as_dace_type(gt_type.dtype)
+            if tuple_name is None:
+                # Use symbolic shape, which allows to invoke the program with fields of different size;
+                # and symbolic strides, which enables decoupling the memory layout from generated code.
+                sym_shape, sym_strides = self._make_array_shape_and_strides(name, gt_type.dims)
+            else:
+                # All fields in a tuple must have the same dims and sizes,
+                # therefore we use the same shape and strides symbols based on 'tuple_name'.
+                sym_shape, sym_strides = self._make_array_shape_and_strides(
+                    tuple_name, gt_type.dims
+                )
+            self.sdfg.add_array(name, sym_shape, dc_dtype, strides=sym_strides, transient=transient)
+            return [(name, gt_type)]
+
+        elif isinstance(gt_type, ts.ScalarType):
+            dc_dtype = dace_utils.as_dace_type(gt_type)
+            if dace_utils.is_field_symbol(name) or name in symbolic_arguments:
+                if name in self.sdfg.symbols:
+                    # Sometimes, when the field domain is implicitly derived from the
+                    # field domain, the gt4py lowering adds the field size as a scalar
+                    # argument to the program IR. Suppose a field '__sym', then gt4py
+                    # will add '__sym_size_0'.
+                    # Therefore, here we check whether the shape symbol was already
+                    # created by `_make_array_shape_and_strides()`, when allocating
+                    # storage for field arguments. We assume that the scalar argument
+                    # for field size, if present, always follows the field argument.
+                    assert dace_utils.is_field_symbol(name)
+                    if self.sdfg.symbols[name].dtype != dc_dtype:
+                        raise ValueError(
+                            f"Type mismatch on argument {name}: got {dc_dtype}, expected {self.sdfg.symbols[name].dtype}."
+                        )
+                else:
+                    self.sdfg.add_symbol(name, dc_dtype)
+            else:
+                self.sdfg.add_scalar(name, dc_dtype, transient=transient)
+
+            return [(name, gt_type)]
+
+        raise RuntimeError(f"Data type '{type(gt_type)}' not supported.")
+
+    def add_storage_for_temporary(self, temp_decl: gtir.Temporary) -> None:
+        """
+        Add temporary storage (aka transient) for data containers used as GTIR temporaries.
+
+        Assume all temporaries to be fields, therefore represented as dace arrays.
+        """
+        raise NotImplementedError("Temporaries not supported yet by GTIR DaCe backend.")
 
     def _visit_expression(
         self, node: gtir.Expr, head_state: dace.SDFGState, use_temp: bool = True
@@ -483,6 +408,51 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         temp_result = gtx_utils.tree_map(make_temps)(result)
         return list(gtx_utils.flatten_nested_tuple((temp_result,)))
+
+    def _add_sdfg_params(
+        self,
+        node_params: Sequence[gtir.Sym],
+        symbolic_arguments: set[str],
+    ) -> list[str]:
+        """
+        Helper function to add storage for node parameters and connectivity tables.
+
+        GT4Py field arguments will be translated to `dace.data.Array` objects.
+        GT4Py scalar arguments will be translated to `dace.data.Scalar` objects,
+        except when they are listed in 'symbolic_arguments', in which case they
+        will be represented in the SDFG as DaCe symbols.
+        """
+        # add non-transient arrays and/or SDFG symbols for the program arguments
+        sdfg_args = []
+        for param in node_params:
+            pname = str(param.id)
+            assert isinstance(param.type, (ts.DataType))
+            sdfg_args += self._add_storage(
+                symbolic_arguments,
+                pname,
+                param.type,
+                transient=False,
+            )
+
+        # add SDFG storage for connectivity tables
+        for offset, connectivity_type in dace_utils.filter_connectivity_types(
+            self.offset_provider_type
+        ).items():
+            scalar_type = tt.from_dtype(connectivity_type.dtype)
+            gt_type = ts.FieldType(
+                [connectivity_type.source_dim, connectivity_type.neighbor_dim], scalar_type
+            )
+            # We store all connectivity tables as transient arrays here; later, while building
+            # the field operator expressions, we change to non-transient (i.e. allocated externally)
+            # the tables that are actually used. This way, we avoid adding SDFG arguments for
+            # the connectivity tables that are not used. The remaining unused transient arrays
+            # are removed by the dace simplify pass.
+            self._add_storage(
+                symbolic_arguments, dace_utils.connectivity_identifier(offset), gt_type
+            )
+
+        # the list of all sdfg arguments (aka non-transient arrays) which include tuple-element fields
+        return [arg_name for arg_name, _ in sdfg_args]
 
     def visit_Program(self, node: gtir.Program) -> None:
         """Translates the body of `ir.Program` inside the SDFG that belongs to this builder."""
@@ -624,10 +594,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         i.e. a lambda parameter with the same name as a symbol in scope, the parameter will shadow
         the previous symbol during traversal of the lambda expression.
         """
-        neighbor_connectivity_types = dace_utils.filter_connectivity_types(
-            self.offset_provider_type
-        )
-
         lambda_args_mapping = [
             (str(param.id), arg) for param, arg in zip(node.params, args, strict=True)
         ]
@@ -711,7 +677,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         #
         connectivity_arrays = {
             dace_utils.connectivity_identifier(offset)
-            for offset in neighbor_connectivity_types.keys()
+            for offset in dace_utils.filter_connectivity_types(self.offset_provider_type).keys()
         }
 
         input_memlets = {}
