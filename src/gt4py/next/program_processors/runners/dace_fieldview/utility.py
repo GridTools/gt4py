@@ -16,6 +16,7 @@ import dace
 from gt4py import eve
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
+from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -29,7 +30,7 @@ def get_map_variable(dim: gtx_common.Dimension) -> str:
 
 def get_tuple_fields(
     tuple_name: str, tuple_type: ts.TupleType, flatten: bool = False
-) -> list[tuple[str, ts.DataType]]:
+) -> tuple[gtir.Sym, ...]:
     """
     Creates a list of names with the corresponding data type for all elements of the given tuple.
 
@@ -46,16 +47,16 @@ def get_tuple_fields(
     ... ]
     """
     fields = [(f"{tuple_name}_{i}", field_type) for i, field_type in enumerate(tuple_type.types)]
+    expanded_fields = tuple(
+        get_tuple_fields(field_name, field_type, flatten)
+        if isinstance(field_type, ts.TupleType)
+        else im.sym(field_name, field_type)
+        for field_name, field_type in fields
+    )
     if flatten:
-        expanded_fields = [
-            get_tuple_fields(field_name, field_type)
-            if isinstance(field_type, ts.TupleType)
-            else [(field_name, field_type)]
-            for field_name, field_type in fields
-        ]
-        return list(itertools.chain(*expanded_fields))
+        return tuple(itertools.chain(expanded_fields))
     else:
-        return fields
+        return expanded_fields
 
 
 def replace_invalid_symbols(sdfg: dace.SDFG, ir: gtir.Program) -> gtir.Program:

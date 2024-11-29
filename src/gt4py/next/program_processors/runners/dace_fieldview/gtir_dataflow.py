@@ -16,7 +16,7 @@ import dace
 import dace.subsets as sbs
 
 from gt4py import eve
-from gt4py.next import common as gtx_common
+from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.type_system import type_specifications as itir_ts
@@ -68,7 +68,7 @@ class MemletExpr:
 
     dc_node: dace.nodes.AccessNode
     gt_dtype: itir_ts.ListType | ts.ScalarType
-    subset: sbs.Indices | sbs.Range
+    subset: sbs.Range
 
 
 @dataclasses.dataclass(frozen=True)
@@ -138,7 +138,7 @@ class DataflowInputEdge(Protocol):
     """
 
     @abc.abstractmethod
-    def connect(self, me: dace.nodes.MapEntry) -> None: ...
+    def connect(self, map_entry: Optional[dace.nodes.MapEntry]) -> None: ...
 
 
 @dataclasses.dataclass(frozen=True)
@@ -156,15 +156,18 @@ class MemletInputEdge(DataflowInputEdge):
     dest: dace.nodes.AccessNode | dace.nodes.Tasklet
     dest_conn: Optional[str]
 
-    def connect(self, me: dace.nodes.MapEntry) -> None:
+    def connect(self, map_entry: Optional[dace.nodes.MapEntry]) -> None:
         memlet = dace.Memlet(data=self.source.data, subset=self.subset)
-        self.state.add_memlet_path(
-            self.source,
-            me,
-            self.dest,
-            dst_conn=self.dest_conn,
-            memlet=memlet,
-        )
+        if map_entry is None:
+            self.state.add_edge(self.source, None, self.dest, self.dest_conn, memlet)
+        else:
+            self.state.add_memlet_path(
+                self.source,
+                map_entry,
+                self.dest,
+                dst_conn=self.dest_conn,
+                memlet=memlet,
+            )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -179,7 +182,8 @@ class EmptyInputEdge(DataflowInputEdge):
     state: dace.SDFGState
     node: dace.nodes.Tasklet
 
-    def connect(self, me: dace.nodes.MapEntry) -> None:
+    def connect(self, me: Optional[dace.nodes.MapEntry]) -> None:
+        assert me is not None
         self.state.add_nedge(me, self.node, dace.Memlet())
 
 
@@ -276,7 +280,7 @@ class LambdaToDataflow(eve.NodeVisitor):
     state: dace.SDFGState
     subgraph_builder: gtir_sdfg.DataflowBuilder
     input_edges: list[DataflowInputEdge]
-    symbol_map: dict[str, IteratorExpr | MemletExpr | SymbolExpr]
+    symbol_map: dict[str, tuple[IteratorExpr | MemletExpr | SymbolExpr, ...]]
 
     def __init__(
         self,
@@ -1248,12 +1252,38 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         return self._construct_tasklet_result(dc_dtype, tasklet_node, "result", use_array=use_array)
 
-    def visit_FunCall(self, node: gtir.FunCall) -> IteratorExpr | DataExpr:
+    def _visit_make_tuple(self, node: gtir.FunCall) -> tuple[IteratorExpr | DataExpr]:
+        assert cpm.is_call_to(node, "make_tuple")
+        return tuple(self.visit(arg) for arg in node.args)
+
+    def _visit_tuple_get(
+        self, node: gtir.FunCall
+    ) -> IteratorExpr | DataExpr | tuple[IteratorExpr | DataExpr]:
+        assert cpm.is_call_to(node, "tuple_get")
+        assert len(node.args) == 2
+
+        if not isinstance(node.args[0], gtir.Literal):
+            raise ValueError("Tuple can only be subscripted with compile-time constants.")
+        assert ti.is_integral(node.args[0].type)
+        index = int(node.args[0].value)
+
+        tuple_fields = self.visit(node.args[1])
+        return tuple_fields[index]
+
+    def visit_FunCall(
+        self, node: gtir.FunCall
+    ) -> IteratorExpr | DataExpr | tuple[DataflowOutputEdge, ...]:
         if cpm.is_call_to(node, "deref"):
             return self._visit_deref(node)
 
         elif cpm.is_call_to(node, "neighbors"):
             return self._visit_neighbors(node)
+
+        elif cpm.is_call_to(node, "make_tuple"):
+            return self._visit_make_tuple(node)
+
+        elif cpm.is_call_to(node, "tuple_get"):
+            return self._visit_tuple_get(node)
 
         elif cpm.is_applied_map(node):
             return self._visit_map(node)
@@ -1264,6 +1294,10 @@ class LambdaToDataflow(eve.NodeVisitor):
         elif cpm.is_applied_shift(node):
             return self._visit_shift(node)
 
+        elif isinstance(node.fun, gtir.Lambda):
+            lambda_args = [self.visit(arg) for arg in node.args]
+            return self.visit_Lambda(node.fun, args=lambda_args)
+
         elif isinstance(node.fun, gtir.SymRef):
             return self._visit_generic_builtin(node)
 
@@ -1271,41 +1305,76 @@ class LambdaToDataflow(eve.NodeVisitor):
             raise NotImplementedError(f"Invalid 'FunCall' node: {node}.")
 
     def visit_Lambda(
-        self, node: gtir.Lambda, args: list[IteratorExpr | MemletExpr | SymbolExpr]
-    ) -> tuple[list[DataflowInputEdge], DataflowOutputEdge]:
+        self, node: gtir.Lambda, args: list[tuple[IteratorExpr | MemletExpr | SymbolExpr, ...]]
+    ) -> DataflowOutputEdge | tuple[DataflowOutputEdge, ...]:
+        # lambda arguments are mapped to symbols defined in lambda scope
+        prev_symbols: dict[str, Optional[tuple[IteratorExpr | MemletExpr | SymbolExpr, ...]]] = {}
         for p, arg in zip(node.params, args, strict=True):
-            self.symbol_map[str(p.id)] = arg
-        output_expr: DataExpr = self.visit(node.expr)
-        if isinstance(output_expr, ValueExpr):
-            return self.input_edges, DataflowOutputEdge(self.state, output_expr)
+            symbol_name = str(p.id)
+            prev_symbols[symbol_name] = self.symbol_map.get(symbol_name, None)
+            self.symbol_map[symbol_name] = arg
 
-        if isinstance(output_expr, MemletExpr):
-            # special case where the field operator is simply copying data from source to destination node
-            output_dtype = output_expr.dc_node.desc(self.sdfg).dtype
-            tasklet_node = self._add_tasklet("copy", {"__inp"}, {"__out"}, "__out = __inp")
-            self._add_input_data_edge(
-                output_expr.dc_node,
-                output_expr.subset,
-                tasklet_node,
-                "__inp",
-            )
+        result = self.visit(node.expr)
+
+        # remove locally defined lambda symbols and restore previous symbols
+        for symbol_name, arg in prev_symbols.items():
+            if arg is None:
+                self.symbol_map.pop(symbol_name)
+            else:
+                self.symbol_map[symbol_name] = arg
+
+        def make_output_edge(
+            output_expr: ValueExpr | MemletExpr | SymbolExpr,
+        ) -> DataflowOutputEdge:
+            if isinstance(output_expr, ValueExpr):
+                return DataflowOutputEdge(self.state, output_expr)
+
+            if isinstance(output_expr, MemletExpr):
+                # special case where the field operator is simply copying data from source to destination node
+                output_dtype = output_expr.dc_node.desc(self.sdfg).dtype
+                tasklet_node = self._add_tasklet("copy", {"__inp"}, {"__out"}, "__out = __inp")
+                self._add_input_data_edge(
+                    output_expr.dc_node,
+                    output_expr.subset,
+                    tasklet_node,
+                    "__inp",
+                )
+            else:
+                # even simpler case, where a constant value is written to destination node
+                output_dtype = output_expr.dc_dtype
+                tasklet_node = self._add_tasklet(
+                    "write", {}, {"__out"}, f"__out = {output_expr.value}"
+                )
+
+            output_expr = self._construct_tasklet_result(output_dtype, tasklet_node, "__out")
+            return DataflowOutputEdge(self.state, output_expr)
+
+        def parse_result(
+            r: DataflowOutputEdge | ValueExpr | MemletExpr | SymbolExpr,
+        ) -> DataflowOutputEdge:
+            if isinstance(r, DataflowOutputEdge):
+                return r
+            return make_output_edge(r)
+
+        if isinstance(result, tuple):
+            return gtx_utils.tree_map(parse_result)(result)
         else:
-            assert isinstance(output_expr, SymbolExpr)
-            # even simpler case, where a constant value is written to destination node
-            output_dtype = output_expr.dc_dtype
-            tasklet_node = self._add_tasklet("write", {}, {"__out"}, f"__out = {output_expr.value}")
-
-        output_expr = self._construct_tasklet_result(output_dtype, tasklet_node, "__out")
-        return self.input_edges, DataflowOutputEdge(self.state, output_expr)
+            return parse_result(result)
 
     def visit_Literal(self, node: gtir.Literal) -> SymbolExpr:
         dc_dtype = dace_utils.as_dace_type(node.type)
         return SymbolExpr(node.value, dc_dtype)
 
-    def visit_SymRef(self, node: gtir.SymRef) -> IteratorExpr | MemletExpr | SymbolExpr:
+    def visit_SymRef(self, node: gtir.SymRef) -> tuple[IteratorExpr | MemletExpr | SymbolExpr, ...]:
         param = str(node.id)
         if param in self.symbol_map:
             return self.symbol_map[param]
         # if not in the lambda symbol map, this must be a symref to a builtin function
         assert param in gtir_python_codegen.MATH_BUILTINS_MAPPING
         return SymbolExpr(param, dace.string)
+
+    def apply(
+        self, node: gtir.Lambda, args: list[tuple[IteratorExpr | MemletExpr | SymbolExpr, ...]]
+    ) -> tuple[list[DataflowInputEdge], tuple[DataflowOutputEdge]]:
+        output_edges = self.visit_Lambda(node, args=args)
+        return self.input_edges, output_edges

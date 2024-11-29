@@ -22,6 +22,7 @@ import operator
 from typing import Any, Dict, Iterable, List, Optional, Protocol, Sequence, Set, Tuple, Union
 
 import dace
+from dace.sdfg import utils as sdutils
 
 from gt4py import eve
 from gt4py.eve import concepts
@@ -112,6 +113,18 @@ class SDFGBuilder(DataflowBuilder, Protocol):
         ...
 
     @abc.abstractmethod
+    def is_column_dimension(self, dim: gtx_common.Dimension) -> bool:
+        """Check if the given dimension is the column dimension."""
+        ...
+
+    @abc.abstractmethod
+    def nested_context(
+        self, sdfg: dace.SDFG, global_symbols: dict[str, ts.DataType]
+    ) -> SDFGBuilder:
+        """Create a new empty context, useful to build a nested SDFG."""
+        ...
+
+    @abc.abstractmethod
     def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
         """Visit a node of the GT4Py IR."""
         ...
@@ -149,15 +162,6 @@ def _collect_symbols_in_domain_expressions(
     )
 
 
-def _get_tuple_type(data: tuple[gtir_builtin_translators.FieldopResult, ...]) -> ts.TupleType:
-    """
-    Compute the `ts.TupleType` corresponding to the structure of a tuple of data nodes.
-    """
-    return ts.TupleType(
-        types=[_get_tuple_type(d) if isinstance(d, tuple) else d.gt_type for d in data]
-    )
-
-
 @dataclasses.dataclass(frozen=True)
 class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     """Provides translation capability from a GTIR program to a DaCe SDFG.
@@ -173,6 +177,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     """
 
     offset_provider_type: gtx_common.OffsetProviderType
+    column_dim: Optional[gtx_common.Dimension]
     global_symbols: dict[str, ts.DataType] = dataclasses.field(default_factory=lambda: {})
     field_offsets: dict[str, Optional[list[dace.symbolic.SymExpr]]] = dataclasses.field(
         default_factory=lambda: {}
@@ -198,6 +203,22 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
     def get_symbol_type(self, symbol_name: str) -> ts.DataType:
         return self.global_symbols[symbol_name]
+
+    def is_column_dimension(self, dim: gtx_common.Dimension) -> bool:
+        assert self.column_dim
+        return dim == self.column_dim
+
+    def nested_context(
+        self, sdfg: dace.SDFG, global_symbols: dict[str, ts.DataType]
+    ) -> SDFGBuilder:
+        nsdfg_builder = GTIRToSDFG(
+            self.offset_provider_type, self.column_dim, global_symbols, self.field_offsets
+        )
+        nsdfg_params = [
+            gtir.Sym(id=p_name, type=p_type) for p_name, p_type in global_symbols.items()
+        ]
+        nsdfg_builder._add_sdfg_params(sdfg, node_params=nsdfg_params, symbolic_arguments={})
+        return nsdfg_builder
 
     def unique_nsdfg_name(self, sdfg: dace.SDFG, prefix: str) -> str:
         nsdfg_list = [
@@ -277,10 +298,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         """
         if isinstance(gt_type, ts.TupleType):
             tuple_fields = []
-            for tname, ttype in dace_gtir_utils.get_tuple_fields(name, gt_type, flatten=True):
+            for sym in dace_gtir_utils.get_tuple_fields(name, gt_type, flatten=True):
                 tuple_fields.extend(
                     self._add_storage(
-                        sdfg, symbolic_arguments, tname, ttype, transient, tuple_name=name
+                        sdfg, symbolic_arguments, sym.id, sym.type, transient, tuple_name=name
                     )
                 )
             return tuple_fields
@@ -602,7 +623,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         node: gtir.Lambda,
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
-        args: list[gtir_builtin_translators.FieldopResult],
+        args: Sequence[gtir_builtin_translators.FieldopResult],
     ) -> gtir_builtin_translators.FieldopResult:
         """
         Translates a `Lambda` node to a nested SDFG in the current state.
@@ -619,24 +640,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             (str(param.id), arg) for param, arg in zip(node.params, args, strict=True)
         ]
 
-        def flatten_tuples(
-            name: str,
-            arg: gtir_builtin_translators.FieldopResult,
-        ) -> list[tuple[str, gtir_builtin_translators.FieldopData]]:
-            if isinstance(arg, tuple):
-                tuple_type = _get_tuple_type(arg)
-                tuple_field_names = [
-                    arg_name for arg_name, _ in dace_gtir_utils.get_tuple_fields(name, tuple_type)
-                ]
-                tuple_args = zip(tuple_field_names, arg, strict=True)
-                return list(
-                    itertools.chain(*[flatten_tuples(fname, farg) for fname, farg in tuple_args])
-                )
-            else:
-                return [(name, arg)]
-
         lambda_arg_nodes = dict(
-            itertools.chain(*[flatten_tuples(pname, arg) for pname, arg in lambda_args_mapping])
+            itertools.chain(
+                *[
+                    gtir_builtin_translators.flatten_tuples(pname, arg)
+                    for pname, arg in lambda_args_mapping
+                ]
+            )
         )
 
         # inherit symbols from parent scope but eventually override with local symbols
@@ -644,7 +654,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             sym: self.global_symbols[sym]
             for sym in symbol_ref_utils.collect_symbol_refs(node.expr, self.global_symbols.keys())
         } | {
-            pname: _get_tuple_type(arg) if isinstance(arg, tuple) else arg.gt_type
+            pname: gtir_builtin_translators.get_tuple_type(arg)
+            if isinstance(arg, tuple)
+            else arg.gt_type
             for pname, arg in lambda_args_mapping
         }
 
@@ -659,12 +671,12 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 elif field_domain_offset := self.field_offsets.get(p_name, None):
                     return {p_name: field_domain_offset}
             elif isinstance(p_type, ts.TupleType):
-                p_fields = dace_gtir_utils.get_tuple_fields(p_name, p_type, flatten=True)
+                tsyms = dace_gtir_utils.get_tuple_fields(p_name, p_type, flatten=True)
                 return functools.reduce(
-                    lambda field_offsets, field: (
-                        field_offsets | get_field_domain_offset(field[0], field[1])
+                    lambda field_offsets, sym: (
+                        field_offsets | get_field_domain_offset(sym.id, sym.type)
                     ),
-                    p_fields,
+                    tsyms,
                     {},
                 )
             return {}
@@ -676,7 +688,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         # lower let-statement lambda node as a nested SDFG
         lambda_translator = GTIRToSDFG(
-            self.offset_provider_type, lambda_symbols, lambda_field_offsets
+            self.offset_provider_type, self.column_dim, lambda_symbols, lambda_field_offsets
         )
         nsdfg = dace.SDFG(name=self.unique_nsdfg_name(sdfg, "lambda"))
         nstate = nsdfg.add_state("lambda")
@@ -852,6 +864,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 def build_sdfg_from_gtir(
     ir: gtir.Program,
     offset_provider_type: gtx_common.OffsetProviderType,
+    column_dim: Optional[gtx_common.Dimension],
 ) -> dace.SDFG:
     """
     Receives a GTIR program and lowers it to a DaCe SDFG.
@@ -862,6 +875,7 @@ def build_sdfg_from_gtir(
     Args:
         ir: The GTIR program node to be lowered to SDFG
         offset_provider_type: The definitions of offset providers used by the program node
+        column_dim: Vertical dimension used for scan expressions.
 
     Returns:
         An SDFG in the DaCe canonical form (simplified)
@@ -869,8 +883,11 @@ def build_sdfg_from_gtir(
 
     ir = gtir_type_inference.infer(ir, offset_provider_type=offset_provider_type)
     ir = ir_prune_casts.PruneCasts().visit(ir)
-    sdfg_genenerator = GTIRToSDFG(offset_provider_type)
+    sdfg_genenerator = GTIRToSDFG(offset_provider_type, column_dim)
     sdfg = sdfg_genenerator.visit(ir)
     assert isinstance(sdfg, dace.SDFG)
+
+    # TODO(edopao): remove `inline_loop_blocks` when DaCe transformations support LoopRegion construct
+    sdutils.inline_loop_blocks(sdfg)
 
     return sdfg
