@@ -239,7 +239,7 @@ def _check_if_map_must_be_handled_classify_adjacent_access_node(
     # The conflict can only occur for global data, because transients
     #  are only written once.
     if data_desc.transient:
-        return True
+        return False
 
     # Currently we do not handle view, as they need to be traced.
     #  TODO(phimuell): Implement
@@ -315,7 +315,7 @@ def _check_if_map_must_be_handled(
             sdfg=sdfg,
             known_nodes=input_datas,
         ):
-            return None
+            continue
     for out_edge in state.out_edges(map_exit):
         if out_edge.data.is_empty():
             continue
@@ -327,7 +327,7 @@ def _check_if_map_must_be_handled(
             sdfg=sdfg,
             known_nodes=output_datas,
         ):
-            return None
+            continue
 
     # Double buffering is only needed if there inout arguments.
     inout_datas: dict[str, tuple[dace_nodes.AccessNode, dace_nodes.AccessNode]] = {
