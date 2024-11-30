@@ -71,6 +71,7 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
 
         target_compile_features({{project_name}} PRIVATE cxx_std_17)
         set_target_properties({{project_name}} PROPERTIES PREFIX "" SUFFIX ".{{bin_output_suffix}}")
+        target_compile_options({{project_name}} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-ftemplate-depth=10000>)
 
         target_sources({{project_name}}
             PRIVATE
