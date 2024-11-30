@@ -122,15 +122,6 @@ def fuse_as_fieldop(
     new_args: dict[str, itir.Expr] = {}
     new_stencil_body: itir.Expr = stencil.expr
 
-    if str(expr) == """as_fieldop(λ(__arg0_____, __arg1_____) → ·__arg0_____ × ·__arg1_____,
-           u⟨ Vertexₕ: [0, __out_size_0), Kᵥ: [0, __out_size_1) ⟩)(
-  as_fieldop(λ(__arg0_____, __arg1_____) → ·__arg0_____ × ·__arg1_____,
-             u⟨ Vertexₕ: [0, __out_size_0), Kᵥ: [0, __out_size_1) ⟩)(gmmaiᐞ0, tanlatᐞ0),
-  as_fieldop(λ(__arg0_____, __arg1_____) → ·__arg0_____ + ·__arg1_____,
-             u⟨ Vertexₕ: [0, __out_size_0), Kᵥ: [0, __out_size_1) ⟩)(__sym_13, __sym_13)
-)""":
-        breakpoint()
-
     for eligible, stencil_param, arg in zip(eligible_args, stencil.params, args, strict=True):
         if eligible:
             if cpm.is_applied_as_fieldop(arg):
@@ -168,30 +159,24 @@ def fuse_as_fieldop(
 
     stencil = im.lambda_(*new_args.keys())(new_stencil_body)
 
-    try:
-        new_stencil = inline_lambdas.InlineLambdas.apply(
-            stencil, opcount_preserving=True, force_inline_lift_args=False
-        )
-        trace_shifts.trace_stencil(
-            # TODO: required for InlineCenterDerefLiftVars on stencil level, fix pass instead
-            new_stencil, num_args=len(new_args), save_to_annex=True
-        )
-        new_stencil = inline_center_deref_lift_vars.InlineCenterDerefLiftVars.apply(
-            new_stencil, uids=uids
-        )  # to keep the tree small
-        new_stencil = merge_let.MergeLet().visit(new_stencil)
-        new_stencil = inline_lambdas.InlineLambdas.apply(
-            new_stencil, opcount_preserving=True, force_inline_lift_args=True
-        )
-        new_stencil = inline_lifts.InlineLifts().visit(new_stencil)
-        # simplify stencil directly to keep the tree small
-    except:
-        breakpoint()
+    # simplify stencil directly to keep the tree small
+    new_stencil = inline_lambdas.InlineLambdas.apply(
+        stencil, opcount_preserving=True, force_inline_lift_args=False
+    )
+    trace_shifts.trace_stencil(
+        # TODO: required for InlineCenterDerefLiftVars on stencil level, fix pass instead
+        new_stencil, num_args=len(new_args), save_to_annex=True
+    )
+    new_stencil = inline_center_deref_lift_vars.InlineCenterDerefLiftVars.apply(
+        new_stencil, uids=uids
+    )  # to keep the tree small
+    new_stencil = merge_let.MergeLet().visit(new_stencil)
+    new_stencil = inline_lambdas.InlineLambdas.apply(
+        new_stencil, opcount_preserving=True, force_inline_lift_args=True
+    )
+    new_stencil = inline_lifts.InlineLifts().visit(new_stencil)
 
     new_node = im.as_fieldop(new_stencil, domain)(*new_args.values())
-
-    if any(arg.type is None for arg in new_node.args):
-        breakpoint()
 
     type_inference.copy_type(from_=expr, to=new_node)
     return new_node
