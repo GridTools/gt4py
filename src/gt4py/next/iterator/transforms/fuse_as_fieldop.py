@@ -26,7 +26,7 @@ from gt4py.next.iterator.type_system import (
     type_specifications as it_ts,
 )
 from gt4py.next.type_system import type_info, type_specifications as ts
-
+from gt4py.next.iterator.transforms import merge_let
 
 def _merge_arguments(
     args1: dict[str, itir.Expr], arg2: dict[str, itir.Expr]
@@ -84,7 +84,12 @@ def _inline_as_fieldop_arg(
 
     for inner_param, inner_arg in zip(stencil.params, inner_args, strict=True):
         if isinstance(inner_arg, itir.SymRef):
-            stencil_params.append(inner_param)
+            # TODO: this change is required for this case to work correctly: 'as_fieldop(λ(it1, it2) → ·it2 + ·it2,)(__sym_13, __sym_13)'
+            if inner_arg.id in extracted_args:  # TODO: assert same value
+                alias = stencil_params[list(extracted_args.keys()).index(inner_arg.id)]
+                stencil_body = im.let(inner_param, im.ref(alias.id))(stencil_body)
+            else:
+                stencil_params.append(inner_param)
             extracted_args[inner_arg.id] = inner_arg
         elif isinstance(inner_arg, itir.Literal):
             # note: only literals, not all scalar expressions are required as it doesn't make sense
@@ -116,6 +121,15 @@ def fuse_as_fieldop(
 
     new_args: dict[str, itir.Expr] = {}
     new_stencil_body: itir.Expr = stencil.expr
+
+    if str(expr) == """as_fieldop(λ(__arg0_____, __arg1_____) → ·__arg0_____ × ·__arg1_____,
+           u⟨ Vertexₕ: [0, __out_size_0), Kᵥ: [0, __out_size_1) ⟩)(
+  as_fieldop(λ(__arg0_____, __arg1_____) → ·__arg0_____ × ·__arg1_____,
+             u⟨ Vertexₕ: [0, __out_size_0), Kᵥ: [0, __out_size_1) ⟩)(gmmaiᐞ0, tanlatᐞ0),
+  as_fieldop(λ(__arg0_____, __arg1_____) → ·__arg0_____ + ·__arg1_____,
+             u⟨ Vertexₕ: [0, __out_size_0), Kᵥ: [0, __out_size_1) ⟩)(__sym_13, __sym_13)
+)""":
+        breakpoint()
 
     for eligible, stencil_param, arg in zip(eligible_args, stencil.params, args, strict=True):
         if eligible:
@@ -152,21 +166,29 @@ def fuse_as_fieldop(
                 new_param = stencil_param.id
             new_args = _merge_arguments(new_args, {new_param: arg})
 
-    new_node = im.as_fieldop(im.lambda_(*new_args.keys())(new_stencil_body), domain)(
-        *new_args.values()
-    )
+    stencil = im.lambda_(*new_args.keys())(new_stencil_body)
 
-    # simplify stencil directly to keep the tree small
-    new_node = inline_center_deref_lift_vars.InlineCenterDerefLiftVars.apply(
-        new_node
-    )  # to keep the tree small
-    new_node = inline_lambdas.InlineLambdas.apply(
-        new_node, opcount_preserving=True, force_inline_lift_args=True
-    )
-    # This change is neccessary since otherwise InlineLifts loses the type information (observed in temporary_field_for_grid_point_cold_pools_enhancement)
-    stencil, domain = (new_node.fun.args[0], None) if len(new_node.fun.args) == 1 else new_node.fun.args
-    new_stencil = inline_lifts.InlineLifts().visit(stencil)
-    new_node = im.as_fieldop(new_stencil, domain)(*new_node.args)
+    try:
+        new_stencil = inline_lambdas.InlineLambdas.apply(
+            stencil, opcount_preserving=True, force_inline_lift_args=False
+        )
+        trace_shifts.trace_stencil(
+            # TODO: required for InlineCenterDerefLiftVars on stencil level, fix pass instead
+            new_stencil, num_args=len(new_args), save_to_annex=True
+        )
+        new_stencil = inline_center_deref_lift_vars.InlineCenterDerefLiftVars.apply(
+            new_stencil, uids=uids
+        )  # to keep the tree small
+        new_stencil = merge_let.MergeLet().visit(new_stencil)
+        new_stencil = inline_lambdas.InlineLambdas.apply(
+            new_stencil, opcount_preserving=True, force_inline_lift_args=True
+        )
+        new_stencil = inline_lifts.InlineLifts().visit(new_stencil)
+        # simplify stencil directly to keep the tree small
+    except:
+        breakpoint()
+
+    new_node = im.as_fieldop(new_stencil, domain)(*new_args.values())
 
     if any(arg.type is None for arg in new_node.args):
         breakpoint()
@@ -186,9 +208,19 @@ def _is_pointwise_as_fieldop(node: itir.Expr) -> bool:
 
     stencil: itir.Lambda = node.fun.args[0]
     shifts = trace_shifts.trace_stencil(stencil, num_args=len(node.args))
+    #is_pointwise = all(len(arg_shifts) <= 1 for arg_shifts in shifts)
     is_pointwise = all(len(arg_shifts) <= 1 for arg_shifts in shifts)
     is_pointwise &= not any(trace_shifts.Sentinel.ALL_NEIGHBORS in shift_chain for arg_shifts in shifts for shift_chain in arg_shifts)
     return is_pointwise
+
+def _is_center_pos_as_fieldop(node: itir.Expr) -> bool:
+    if not cpm.is_applied_as_fieldop(node):
+        return False
+
+    stencil: itir.Lambda = node.fun.args[0]
+    shifts = trace_shifts.trace_stencil(stencil, num_args=len(node.args))
+    is_center = all(arg_shifts in [set(), {()}] for arg_shifts in shifts)
+    return is_center
 
 
 @dataclasses.dataclass
@@ -250,16 +282,68 @@ class FuseAsFieldOp(eve.NodeTranslator):
 #         return super().visit(node, **kwargs)
 
     def visit_FunCall(self, node: itir.FunCall):
-        node = self.generic_visit(node)
+        # tmp = a + b + c + d
+        # tmp1 = tmp+1
+        # tmp2 = tmp+2
+        # out1 = tmp1+tmp2
+        # out2 = tmp1+d
+
+        # tmp = a + b + c + d
+        # tmp1 = tmp+1
+        # tmp2 = tmp+2
+        # out1 = tmp1+tmp2
+        # out2 = tmp+d
+        if cpm.is_applied_as_fieldop(node):  # don't descend in stencil
+            old_node = node
+            node = im.as_fieldop(*node.fun.args)(*self.generic_visit(node.args))
+            type_inference.copy_type(from_=old_node, to=node)
+        else:
+            node = self.generic_visit(node)
+
+        if cpm.is_call_to(node, "make_tuple"):
+            as_fieldop_args = [arg for arg in node.args if cpm.is_applied_as_fieldop(arg)]
+            distinct_domains = set(arg.fun.args[1] for arg in as_fieldop_args)
+            if len(distinct_domains) != len(as_fieldop_args):
+                new_els = [None for _ in node.args]
+                as_fieldop_args_by_domain: dict[itir.Expr, tuple[int, itir.Expr]] = {}
+                for i, arg in enumerate(node.args):
+                    if cpm.is_applied_as_fieldop(arg):
+                        _, domain = arg.fun.args
+                        as_fieldop_args_by_domain.setdefault(domain, [])
+                        as_fieldop_args_by_domain[domain].append((i, arg))
+                    else:
+                        new_els[i] = arg  # keep as is
+                let_vars = {}
+                for domain, inner_as_fieldop_args in as_fieldop_args_by_domain.items():
+                    if len(inner_as_fieldop_args) > 1:
+                        var = self.uids.sequential_id(prefix="__fasfop")
+                        fused_args = im.op_as_fieldop(lambda *args: im.make_tuple(*args), domain)(*(arg for _, arg in inner_as_fieldop_args))
+                        fused_args.type = ts.TupleType(types=[arg.type for _, arg in inner_as_fieldop_args])
+                        let_vars[var] = self.visit(fused_args)  # TODO: do not recurse into args
+                        for outer_tuple_idx, (inner_tuple_idx, _) in enumerate(inner_as_fieldop_args):
+                            new_els[inner_tuple_idx] = im.tuple_get(outer_tuple_idx, var)
+                    else:
+                        i, arg = inner_as_fieldop_args[0]
+                        new_els[i].append(arg)
+                assert not any(el is None for el in new_els)
+                assert let_vars
+                new_node = im.let(*let_vars.items())(im.make_tuple(*new_els))
+                new_node = inline_lambdas.inline_lambda(new_node, opcount_preserving=True)
+                return new_node
 
         if cpm.is_call_to(node.fun, "as_fieldop"):
             node = _canonicalize_as_fieldop(node)
 
         if cpm.is_let(node):
-            eligible_args = [_is_pointwise_as_fieldop(arg) for arg in node.args]
-            if any(eligible_args):
-                new_node = inline_lambdas.inline_lambda(node, eligible_params=eligible_args)
-                return self.visit(new_node)
+            new_node = inline_lambdas.inline_lambda(node, opcount_preserving=True)
+            if new_node is node:  # nothing has been inlined
+                return new_node
+            return self.visit(new_node)
+            # TODO
+            #eligible_args = [_is_center_pos_as_fieldop(arg) for arg in node.args]
+            #if any(eligible_args):
+            #    new_node = inline_lambdas.inline_lambda(node, eligible_params=eligible_args)
+            #    return self.visit(new_node)
 
         if cpm.is_call_to(node.fun, "as_fieldop") and isinstance(node.fun.args[0], itir.Lambda):
             stencil: itir.Lambda = node.fun.args[0]
@@ -276,15 +360,15 @@ class FuseAsFieldOp(eve.NodeTranslator):
                 if isinstance(arg, itir.FunCall) and (
                     cpm.is_call_to(arg.fun, "as_fieldop")
                     and isinstance(arg.fun.args[0], itir.Lambda)
-                    or cpm.is_call_to(arg, "if_")
+                    or cpm.is_call_to(arg, "if_")  # TODO: this will likely lead to an oob, maybe just on scalars?
                 ):
                     is_eligible |= isinstance(dtype, it_ts.ListType)
                     is_eligible |= len(arg_shifts) == 0
                     # if the argument is only accessed at one neighbor location
-                    is_eligible |= len(arg_shifts) == 1 and not any(
-                        trace_shifts.Sentinel.ALL_NEIGHBORS in shift_chain for shift_chain in arg_shifts)
-
-                    is_eligible |= _is_pointwise_as_fieldop(arg)
+                    #is_eligible |= len(arg_shifts) == 1 and not any(
+                    #    trace_shifts.Sentinel.ALL_NEIGHBORS in shift_chain for shift_chain in arg_shifts)
+                    is_eligible |= arg_shifts in [set(), {()}]
+                    #is_eligible |= _is_pointwise_as_fieldop(arg)
 
                     # if cpm.is_applied_as_fieldop(node):
                     #     stencil: itir.Lambda = node.fun.args[0]
@@ -296,9 +380,10 @@ class FuseAsFieldOp(eve.NodeTranslator):
                     #     #    trace_shifts.Sentinel.ALL_NEIGHBORS in shift_chain for arg_shifts in shifts
                     #     #    for shift_chain in arg_shifts)
                     #     return is_pointwise
-                    if not is_eligible:
-                        breakpoint()
+                    #if not is_eligible:
+                    #    breakpoint()
                 eligible_args.append(is_eligible)
-
-            return fuse_as_fieldop(node, eligible_args, uids=self.uids)
+            if any(eligible_args):
+                # TODO: fuse again?
+                return fuse_as_fieldop(node, eligible_args, uids=self.uids)
         return node

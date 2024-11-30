@@ -9,7 +9,7 @@
 from gt4py import eve
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms import inline_lambdas
 from gt4py.next.iterator.type_system import inference as itir_inference
 from gt4py.next.type_system import type_specifications as ts
@@ -22,7 +22,12 @@ class InlineScalar(eve.NodeTranslator):
         return cls().visit(program)
 
     def visit_Expr(self, node: itir.Expr):
-        node = self.generic_visit(node)
+        if cpm.is_applied_as_fieldop(node):  # don't descend in stencil
+            old_node = node
+            node = im.as_fieldop(*node.fun.args)(*self.generic_visit(node.args))
+            itir_inference.copy_type(from_=old_node, to=node)
+        else:
+            node = self.generic_visit(node)
 
         if cpm.is_let(node):
             eligible_params = [isinstance(arg.type, ts.ScalarType) for arg in node.args]

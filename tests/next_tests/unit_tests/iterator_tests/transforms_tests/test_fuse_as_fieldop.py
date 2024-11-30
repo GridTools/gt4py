@@ -106,6 +106,42 @@ def test_no_inline():
     assert actual == testee
 
 
+def test_staged_inlining():
+    d = im.domain("cartesian_domain", {IDim: (0, 1)})
+    testee = im.let(
+        "tmp", im.op_as_fieldop("plus", d)(im.ref("a", field_type), im.ref("b", field_type))
+    )(
+        im.op_as_fieldop("plus", d)(
+            im.op_as_fieldop(im.lambda_("a")(im.plus("a", 1)), d)("tmp"),
+            im.op_as_fieldop(im.lambda_("a")(im.plus("a", 2)), d)("tmp")
+        )
+    )
+    expected = im.as_fieldop(
+        im.lambda_("a", "b")(
+            im.let("_icdlv_1", im.plus(im.deref("a"), im.deref("b")))(im.plus(im.plus("_icdlv_1", 1), im.plus("_icdlv_1", 2)))
+        ),
+        d,
+    )(im.ref("a", field_type), im.ref("b", field_type))
+    actual = fuse_as_fieldop.FuseAsFieldOp.apply(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True
+    )
+    assert actual == expected
+
+def test_make_tuple_fusion():
+    d = im.domain("cartesian_domain", {IDim: (0, 1)})
+    testee = im.make_tuple(
+        im.as_fieldop("deref", d)(im.ref("a", field_type)),
+        im.as_fieldop("deref", d)(im.ref("a", field_type))
+    )
+    expected = im.as_fieldop(
+        im.lambda_("a")(im.make_tuple("a", "a")),
+        d,
+    )(im.ref("a", field_type))
+    actual = fuse_as_fieldop.FuseAsFieldOp.apply(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True
+    )
+    assert actual == expected
+
 def test_partial_inline():
     d1 = im.domain("cartesian_domain", {IDim: (1, 2)})
     d2 = im.domain("cartesian_domain", {IDim: (0, 3)})
