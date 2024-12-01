@@ -109,8 +109,8 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         #:  in the frontend, where outwards propagation can have devastating effects on the tree
         #:  size, without any gained optimization potential. For example
         #:  ```
-        #:   complex_lambda(if cond
-        #:     if cond
+        #:   complex_lambda(if cond1
+        #:     if cond2
         #:       {...}
         #:     else:
         #:       {...}
