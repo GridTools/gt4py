@@ -16,6 +16,7 @@ import copy
 
 import pytest
 
+from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.type_system import (
@@ -323,8 +324,8 @@ def test_cartesian_fencil_definition():
 def test_unstructured_fencil_definition():
     mesh = simple_mesh()
     unstructured_domain = im.call("unstructured_domain")(
-        im.call("named_range")(itir.AxisLiteral(value="Vertex"), 0, 1),
-        im.call("named_range")(itir.AxisLiteral(value="KDim"), 0, 1),
+        im.call("named_range")(itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL), 0, 1),
+        im.call("named_range")(itir.AxisLiteral(value="KDim", kind=common.DimensionKind.VERTICAL), 0, 1),
     )
 
     testee = itir.FencilDefinition(
