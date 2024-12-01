@@ -5,6 +5,7 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
+import copy
 
 # TODO: test failure when something is not typed after inference is run
 # TODO: test lift with no args
@@ -15,6 +16,7 @@
 
 import pytest
 
+from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.type_system import (
@@ -80,7 +82,9 @@ def expression_test_cases():
         (im.call("make_const_list")(True), it_ts.ListType(element_type=bool_type)),
         (im.call("list_get")(0, im.ref("l", it_ts.ListType(element_type=bool_type))), bool_type),
         (
-            im.call("named_range")(itir.AxisLiteral(value="Vertex"), 0, 1),
+            im.call("named_range")(
+                itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL), 0, 1
+            ),
             it_ts.NamedRangeType(dim=Vertex),
         ),
         (
@@ -91,7 +95,9 @@ def expression_test_cases():
         ),
         (
             im.call("unstructured_domain")(
-                im.call("named_range")(itir.AxisLiteral(value="Vertex"), 0, 1)
+                im.call("named_range")(
+                    itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL), 0, 1
+                )
             ),
             it_ts.DomainType(dims=[Vertex]),
         ),
@@ -157,8 +163,14 @@ def expression_test_cases():
                 im.call("as_fieldop")(
                     im.lambda_("it")(im.deref(im.shift("V2E", 0)("it"))),
                     im.call("unstructured_domain")(
-                        im.call("named_range")(itir.AxisLiteral(value="Vertex"), 0, 1),
-                        im.call("named_range")(itir.AxisLiteral(value="KDim"), 0, 1),
+                        im.call("named_range")(
+                            itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL),
+                            0,
+                            1,
+                        ),
+                        im.call("named_range")(
+                            itir.AxisLiteral(value="KDim", kind=common.DimensionKind.VERTICAL), 0, 1
+                        ),
                     ),
                 )
             )(im.ref("inp", float_edge_k_field)),
@@ -322,8 +334,12 @@ def test_cartesian_fencil_definition():
 def test_unstructured_fencil_definition():
     mesh = simple_mesh()
     unstructured_domain = im.call("unstructured_domain")(
-        im.call("named_range")(itir.AxisLiteral(value="Vertex"), 0, 1),
-        im.call("named_range")(itir.AxisLiteral(value="KDim"), 0, 1),
+        im.call("named_range")(
+            itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL), 0, 1
+        ),
+        im.call("named_range")(
+            itir.AxisLiteral(value="KDim", kind=common.DimensionKind.VERTICAL), 0, 1
+        ),
     )
 
     testee = itir.FencilDefinition(
@@ -415,8 +431,12 @@ def test_function_definition():
 def test_fencil_with_nb_field_input():
     mesh = simple_mesh()
     unstructured_domain = im.call("unstructured_domain")(
-        im.call("named_range")(itir.AxisLiteral(value="Vertex"), 0, 1),
-        im.call("named_range")(itir.AxisLiteral(value="KDim"), 0, 1),
+        im.call("named_range")(
+            itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL), 0, 1
+        ),
+        im.call("named_range")(
+            itir.AxisLiteral(value="KDim", kind=common.DimensionKind.VERTICAL), 0, 1
+        ),
     )
 
     testee = itir.FencilDefinition(
@@ -534,3 +554,21 @@ def test_as_fieldop_without_domain():
     assert result.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
         position_dims="unknown", defined_dims=float_i_field.dims, element_type=float_i_field.dtype
     )
+
+
+def test_reinference():
+    testee = im.make_tuple(im.ref("inp1", float_i_field), im.ref("inp2", float_i_field))
+    result = itir_type_inference.reinfer(copy.deepcopy(testee))
+    assert result.type == ts.TupleType(types=[float_i_field, float_i_field])
+
+
+def test_func_reinference():
+    f_type = ts.FunctionType(
+        pos_only_args=[],
+        pos_or_kw_args={},
+        kw_only_args={},
+        returns=float_i_field,
+    )
+    testee = im.call(im.ref("f", f_type))()
+    result = itir_type_inference.reinfer(copy.deepcopy(testee))
+    assert result.type == float_i_field

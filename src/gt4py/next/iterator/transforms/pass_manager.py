@@ -70,6 +70,7 @@ def apply_common_transforms(
 
     tmp_uids = eve_utils.UIDGenerator(prefix="__tmp")
     mergeasfop_uids = eve_utils.UIDGenerator()
+    collapse_tuple_uids = eve_utils.UIDGenerator()
 
     ir = MergeLet().visit(ir)
     ir = inline_fundefs.InlineFundefs().visit(ir)
@@ -81,7 +82,12 @@ def apply_common_transforms(
     # Inline. The domain inference can not handle "user" functions, e.g. `let f = λ(...) → ... in f(...)`
     ir = InlineLambdas.apply(ir, opcount_preserving=True, force_inline_lambda_args=True)
     # required in order to get rid of expressions without a domain (e.g. when a tuple element is never accessed)
-    ir = CollapseTuple.apply(ir, offset_provider_type=offset_provider_type)  # type: ignore[assignment]  # always an itir.Program
+    ir = CollapseTuple.apply(
+        ir,
+        flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
+        uids=collapse_tuple_uids,
+        offset_provider_type=offset_provider_type,
+    )  # type: ignore[assignment]  # always an itir.Program
     ir = inline_dynamic_shifts.InlineDynamicShifts.apply(
         ir  # type: ignore[arg-type]  # always an itir.Program
     )  # domain inference does not support dynamic offsets yet
@@ -98,7 +104,12 @@ def apply_common_transforms(
         inlined = ConstantFolding.apply(inlined)  # type: ignore[assignment]  # always an itir.Program
         # This pass is required to be in the loop such that when an `if_` call with tuple arguments
         # is constant-folded the surrounding tuple_get calls can be removed.
-        inlined = CollapseTuple.apply(inlined, offset_provider_type=offset_provider_type)  # type: ignore[assignment]  # always an itir.Program
+        inlined = CollapseTuple.apply(
+            inlined,
+            flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
+            uids=collapse_tuple_uids,
+            offset_provider_type=offset_provider_type,
+        )  # type: ignore[assignment]  # always an itir.Program
         inlined = InlineScalar.apply(inlined, offset_provider_type=offset_provider_type)
 
         # This pass is required to run after CollapseTuple as otherwise we can not inline
@@ -130,7 +141,10 @@ def apply_common_transforms(
     # only run the unconditional version here instead of in the loop above.
     if unconditionally_collapse_tuples:
         ir = CollapseTuple.apply(
-            ir, ignore_tuple_size=True, offset_provider_type=offset_provider_type
+            ir,
+            ignore_tuple_size=True,
+            uids=collapse_tuple_uids,
+            offset_provider_type=offset_provider_type,
         )  # type: ignore[assignment]  # always an itir.Program
 
     ir = NormalizeShifts().visit(ir)
@@ -168,7 +182,9 @@ def apply_fieldview_transforms(
     ir = inline_fundefs.prune_unreferenced_fundefs(ir)
     ir = InlineLambdas.apply(ir, opcount_preserving=True, force_inline_lambda_args=True)
     ir = CollapseTuple.apply(
-        ir, offset_provider_type=common.offset_provider_to_type(offset_provider)
+        ir,
+        flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
+        offset_provider_type=common.offset_provider_to_type(offset_provider),
     )  # type: ignore[assignment] # type is still `itir.Program`
     ir = inline_dynamic_shifts.InlineDynamicShifts.apply(
         ir
