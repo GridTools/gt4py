@@ -358,7 +358,7 @@ class ITIRTypeInference(eve.NodeTranslator):
             offset_provider_type: Offset provider dictionary.
             inplace: Write types directly to the given ``node`` instead of returning a copy.
             allow_undeclared_symbols: Allow references to symbols that don't have a corresponding
-              declaration. This is useful for testing or inference on reinferly inferred sub-nodes.
+              declaration. This is useful for testing or inference on partially inferred sub-nodes.
 
         Preconditions:
 
