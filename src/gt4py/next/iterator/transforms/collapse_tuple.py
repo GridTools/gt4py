@@ -105,7 +105,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         INLINE_TRIVIAL_MAKE_TUPLE = enum.auto()
         #:  Similar as `PROPAGATE_TO_IF_ON_TUPLES`, but propagates in the opposite direction, i.e.
         #:  into the tree, allowing removal of tuple expressions across `if_` calls without
-        #:  increasing the size of the tree. This is particullary important for `if` statements
+        #:  increasing the size of the tree. This is particularly important for `if` statements
         #:  in the frontend, where outwards propagation can have devestating effects on the tree
         #:  size, without any gained optimization potential. For example
         #:  ```
