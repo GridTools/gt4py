@@ -82,7 +82,9 @@ def expression_test_cases():
         (im.call("make_const_list")(True), it_ts.ListType(element_type=bool_type)),
         (im.call("list_get")(0, im.ref("l", it_ts.ListType(element_type=bool_type))), bool_type),
         (
-            im.call("named_range")(itir.AxisLiteral(value="Vertex"), 0, 1),
+            im.call("named_range")(
+                itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL), 0, 1
+            ),
             it_ts.NamedRangeType(dim=Vertex),
         ),
         (
@@ -93,7 +95,9 @@ def expression_test_cases():
         ),
         (
             im.call("unstructured_domain")(
-                im.call("named_range")(itir.AxisLiteral(value="Vertex"), 0, 1)
+                im.call("named_range")(
+                    itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL), 0, 1
+                )
             ),
             it_ts.DomainType(dims=[Vertex]),
         ),
@@ -159,8 +163,14 @@ def expression_test_cases():
                 im.call("as_fieldop")(
                     im.lambda_("it")(im.deref(im.shift("V2E", 0)("it"))),
                     im.call("unstructured_domain")(
-                        im.call("named_range")(itir.AxisLiteral(value="Vertex"), 0, 1),
-                        im.call("named_range")(itir.AxisLiteral(value="KDim"), 0, 1),
+                        im.call("named_range")(
+                            itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL),
+                            0,
+                            1,
+                        ),
+                        im.call("named_range")(
+                            itir.AxisLiteral(value="KDim", kind=common.DimensionKind.VERTICAL), 0, 1
+                        ),
                     ),
                 )
             )(im.ref("inp", float_edge_k_field)),
@@ -324,8 +334,12 @@ def test_cartesian_fencil_definition():
 def test_unstructured_fencil_definition():
     mesh = simple_mesh()
     unstructured_domain = im.call("unstructured_domain")(
-        im.call("named_range")(itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL), 0, 1),
-        im.call("named_range")(itir.AxisLiteral(value="KDim", kind=common.DimensionKind.VERTICAL), 0, 1),
+        im.call("named_range")(
+            itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL), 0, 1
+        ),
+        im.call("named_range")(
+            itir.AxisLiteral(value="KDim", kind=common.DimensionKind.VERTICAL), 0, 1
+        ),
     )
 
     testee = itir.FencilDefinition(
@@ -417,8 +431,12 @@ def test_function_definition():
 def test_fencil_with_nb_field_input():
     mesh = simple_mesh()
     unstructured_domain = im.call("unstructured_domain")(
-        im.call("named_range")(itir.AxisLiteral(value="Vertex"), 0, 1),
-        im.call("named_range")(itir.AxisLiteral(value="KDim"), 0, 1),
+        im.call("named_range")(
+            itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL), 0, 1
+        ),
+        im.call("named_range")(
+            itir.AxisLiteral(value="KDim", kind=common.DimensionKind.VERTICAL), 0, 1
+        ),
     )
 
     testee = itir.FencilDefinition(
