@@ -95,7 +95,7 @@ def _set_node_type(node: itir.Node, type_: ts.TypeSpec) -> None:
     node.type = type_
 
 
-def copy_type(from_: itir.Node, to: itir.Node, allow_untyped=False) -> None:
+def copy_type(from_: itir.Node, to: itir.Node, allow_untyped: bool = False) -> None:
     """
     Copy type from one node to another.
 
