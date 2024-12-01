@@ -120,7 +120,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         #:  is problematic, since `PROPAGATE_TO_IF_ON_TUPLES` would propagate and hence duplicate
         #:  `complex_lambda` three times, while we only want to get rid of the tuple expressions
         #:  inside of the `if_`s.
-        #:  Note that this transformation is not mutally exclusive to `PROPAGATE_TO_IF_ON_TUPLES`.
+        #:  Note that this transformation is not mutaly exclusive to `PROPAGATE_TO_IF_ON_TUPLES`.
         PROPAGATE_TO_IF_ON_TUPLES_CPS = enum.auto()
         #: `(if cond then {1, 2} else {3, 4})[0]` -> `if cond then {1, 2}[0] else {3, 4}[0]`
         PROPAGATE_TO_IF_ON_TUPLES = enum.auto()
