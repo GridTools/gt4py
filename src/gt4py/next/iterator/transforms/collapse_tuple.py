@@ -103,8 +103,8 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         #: `let(tup, {trivial_expr1, trivial_expr2})(foo(tup))`
         #:  -> `foo({trivial_expr1, trivial_expr2})`
         INLINE_TRIVIAL_MAKE_TUPLE = enum.auto()
-        #:  Similar as `PROPAGATE_TO_IF_ON_TUPLES`, but propagates in the opposite direction, e.g.
-        #:  into the tree, allowing removal if tuple expressions accross `if_` calls without
+        #:  Similar as `PROPAGATE_TO_IF_ON_TUPLES`, but propagates in the opposite direction, i.e.
+        #:  into the tree, allowing removal of tuple expressions accross `if_` calls without
         #:  increasing the size of the tree. This is particullary important for `if` statements
         #:  in the frontend, where outwards propagation can have devestating effects on the tree
         #:  size. In particular boundary conditions inside of scans, e.g. something like:
