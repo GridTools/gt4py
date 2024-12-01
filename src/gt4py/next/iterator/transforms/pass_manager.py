@@ -85,7 +85,7 @@ def apply_common_transforms(
         ir,
         flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
         uids=collapse_tuple_uids,
-        offset_provider_type=offset_provider_type
+        offset_provider_type=offset_provider_type,
     )  # type: ignore[assignment]  # always an itir.Program
     ir = infer_domain.infer_program(
         ir,  # type: ignore[arg-type]  # always an itir.Program
@@ -104,7 +104,7 @@ def apply_common_transforms(
             inlined,
             flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
             uids=collapse_tuple_uids,
-            offset_provider_type=offset_provider_type
+            offset_provider_type=offset_provider_type,
         )  # type: ignore[assignment]  # always an itir.Program
         inlined = InlineScalar.apply(inlined, offset_provider_type=offset_provider_type)
 
@@ -180,7 +180,7 @@ def apply_fieldview_transforms(
     ir = CollapseTuple.apply(
         ir,
         flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
-        offset_provider_type=common.offset_provider_to_type(offset_provider)
+        offset_provider_type=common.offset_provider_to_type(offset_provider),
     )  # type: ignore[assignment] # type is still `itir.Program`
     ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
     return ir
