@@ -82,7 +82,10 @@ def apply_common_transforms(
     ir = InlineLambdas.apply(ir, opcount_preserving=True, force_inline_lambda_args=True)
     # required in order to get rid of expressions without a domain (e.g. when a tuple element is never accessed)
     ir = CollapseTuple.apply(
-        ir, uids=collapse_tuple_uids, offset_provider_type=offset_provider_type
+        ir,
+        flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
+        uids=collapse_tuple_uids,
+        offset_provider_type=offset_provider_type
     )  # type: ignore[assignment]  # always an itir.Program
     ir = infer_domain.infer_program(
         ir,  # type: ignore[arg-type]  # always an itir.Program
@@ -98,7 +101,10 @@ def apply_common_transforms(
         # This pass is required to be in the loop such that when an `if_` call with tuple arguments
         # is constant-folded the surrounding tuple_get calls can be removed.
         inlined = CollapseTuple.apply(
-            inlined, uids=collapse_tuple_uids, offset_provider_type=offset_provider_type
+            inlined,
+            flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
+            uids=collapse_tuple_uids,
+            offset_provider_type=offset_provider_type
         )  # type: ignore[assignment]  # always an itir.Program
         inlined = InlineScalar.apply(inlined, offset_provider_type=offset_provider_type)
 
@@ -172,7 +178,9 @@ def apply_fieldview_transforms(
     ir = inline_fundefs.prune_unreferenced_fundefs(ir)
     ir = InlineLambdas.apply(ir, opcount_preserving=True, force_inline_lambda_args=True)
     ir = CollapseTuple.apply(
-        ir, offset_provider_type=common.offset_provider_to_type(offset_provider)
+        ir,
+        flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
+        offset_provider_type=common.offset_provider_to_type(offset_provider)
     )  # type: ignore[assignment] # type is still `itir.Program`
     ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
     return ir
