@@ -10,8 +10,8 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next.iterator.builtins import deref, named_range, shift, unstructured_domain
-from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
+from gt4py.next.iterator.builtins import deref, named_range, shift, unstructured_domain, as_fieldop
+from gt4py.next.iterator.runtime import set_at, fendef, fundef, offset
 
 from next_tests.unit_tests.conftest import program_processor, run_processor
 from gt4py.next.iterator.embedded import StridedConnectivityField
@@ -36,7 +36,8 @@ def foo(inp):
 
 @fendef(offset_provider={"O": LocA2LocAB_offset_provider})
 def fencil(size, out, inp):
-    closure(unstructured_domain(named_range(LocA, 0, size)), foo, out, [inp])
+    domain = unstructured_domain(named_range(LocA, 0, size))
+    set_at(as_fieldop(foo, domain)(inp), domain, out)
 
 
 @pytest.mark.uses_strided_neighbor_offset

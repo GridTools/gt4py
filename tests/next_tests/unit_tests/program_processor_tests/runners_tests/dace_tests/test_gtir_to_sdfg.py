@@ -1984,7 +1984,7 @@ def test_gtir_index():
     )
 
     testee = gtir.Program(
-        id="gtir_cast",
+        id="gtir_index",
         function_definitions=[],
         params=[
             gtir.Sym(id="x", type=ts.FieldType(dims=[IDim], dtype=SIZE_TYPE)),
