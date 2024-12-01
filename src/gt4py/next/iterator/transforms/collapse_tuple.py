@@ -107,19 +107,20 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         #:  into the tree, allowing removal of tuple expressions accross `if_` calls without
         #:  increasing the size of the tree. This is particullary important for `if` statements
         #:  in the frontend, where outwards propagation can have devestating effects on the tree
-        #:  size. In particular boundary conditions inside of scans, e.g. something like:
+        #:  size, without any gained optimization potential. For example
         #:  ```
-        #:  if level == 0 then
-        #:    make_tuple("a", "b")
-        #:  else
-        #:    if level == 1 then
-        #:      make_tuple("b", "c")
-        #:  ` else
-        #:      make_tuple("d", "e")
+        #:   complex_lambda(if cond
+        #:     if cond
+        #:       {...}
+        #:     else:
+        #:       {...}
+        #:   else
+        #:     {...})
         #:  ```
-        #:  is problematic, since `PROPAGATE_TO_IF_ON_TUPLES` would also generate a branch for
-        #:  the condition `level == 0` and `level == 1` which can never occur. Note that this
-        #:  transformation is not mutally exclusive to `PROPAGATE_TO_IF_ON_TUPLES`.
+        #:  is problematic, since `PROPAGATE_TO_IF_ON_TUPLES` would propagate and hence duplicate
+        #:  `complex_lambda` three times, while we only want to get rid of the tuple expressions
+        #:  inside of the `if_`s.
+        #:  Note that this transformation is not mutally exclusive to `PROPAGATE_TO_IF_ON_TUPLES`.
         PROPAGATE_TO_IF_ON_TUPLES_CPS = enum.auto()
         #: `(if cond then {1, 2} else {3, 4})[0]` -> `if cond then {1, 2}[0] else {3, 4}[0]`
         PROPAGATE_TO_IF_ON_TUPLES = enum.auto()
