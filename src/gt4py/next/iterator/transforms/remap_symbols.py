@@ -48,7 +48,7 @@ class RenameSymbols(PreserveLocationVisitor, NodeTranslator):
     ):
         if active and node.id in active:
             new_ref = ir.SymRef(id=name_map.get(node.id, node.id))
-            type_inference.copy_type(from_=node, to=new_ref)
+            type_inference.copy_type(from_=node, to=new_ref, allow_untyped=True)
             return new_ref
         return node
 
