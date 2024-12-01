@@ -5,6 +5,7 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
+import copy
 
 # TODO: test failure when something is not typed after inference is run
 # TODO: test lift with no args
@@ -534,3 +535,21 @@ def test_as_fieldop_without_domain():
     assert result.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
         position_dims="unknown", defined_dims=float_i_field.dims, element_type=float_i_field.dtype
     )
+
+
+def test_reinference():
+    testee = im.make_tuple(im.ref("inp1", float_i_field), im.ref("inp2", float_i_field))
+    result = itir_type_inference.reinfer(copy.deepcopy(testee))
+    assert result.type == ts.TupleType(types=[float_i_field, float_i_field])
+
+
+def test_func_reinference():
+    f_type = ts.FunctionType(
+        pos_only_args=[],
+        pos_or_kw_args={},
+        kw_only_args={},
+        returns=float_i_field,
+    )
+    testee = im.call(im.ref("f", f_type))()
+    result = itir_type_inference.reinfer(copy.deepcopy(testee))
+    assert result.type == float_i_field
