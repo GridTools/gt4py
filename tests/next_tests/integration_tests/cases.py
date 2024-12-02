@@ -506,10 +506,8 @@ def unstructured_case(
 
 
 @pytest.fixture
-def unstructured_case_3d(
-    mesh_descriptor,
-    exec_alloc_descriptor: test_definitions.EmbeddedDummyBackend | next_backend.Backend,
-):
+def unstructured_case_3d(unstructured_case):
+  return dataclasses.replace(unstructured_case, default_sizes={**unstructured_case.default_sizes, KDim: 10}, offset_provider={**unstructured_case.offset_provider, "KOff": KDim})
     new_offset_provider = {**mesh_descriptor.offset_provider, "KOff": KDim}
     yield Case(
         None
