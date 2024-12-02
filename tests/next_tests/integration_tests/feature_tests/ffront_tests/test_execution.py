@@ -94,7 +94,9 @@ def test_unstructured_shift(unstructured_case):
 
 
 @pytest.mark.uses_unstructured_shift
-def test_unstructured_shift(unstructured_case):
+def test_horizontal_only_with_3d_mesh(unstructured_case_3d):
+  # test field operator operating only on horizontal fields while using an offset provider
+  # including a vertical dimension.
     @gtx.field_operator
     def testee(a: cases.VField) -> cases.EField:
         return neighbor_sum(a(E2V), axis=E2VDim)
