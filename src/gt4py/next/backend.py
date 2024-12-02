@@ -166,7 +166,12 @@ class Backend(Generic[core_defs.DeviceTypeT]):
     ) -> None:
         if not isinstance(program, IT_PRG):
             args, kwargs = signature.convert_to_positional(program, *args, **kwargs)
-        self.jit(program, *args, **kwargs)(*args, **kwargs)
+        try:
+            compiled = program._compiled
+        except:
+            compiled = self.jit(program, *args, **kwargs)
+            object.__setattr__(program, "_compiled", compiled)
+        compiled(*args, **kwargs)
 
     def jit(self, program: INPUT_DATA, *args: Any, **kwargs: Any) -> stages.CompiledProgram:
         if not isinstance(program, IT_PRG):
