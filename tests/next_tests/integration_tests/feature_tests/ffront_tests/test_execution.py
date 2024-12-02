@@ -81,7 +81,7 @@ def test_cartesian_shift(cartesian_case):
 
 
 @pytest.mark.uses_unstructured_shift
-def test_unstructured_shift_indexed(unstructured_case):
+def test_unstructured_shift(unstructured_case):
     @gtx.field_operator
     def testee(a: cases.VField) -> cases.EField:
         return a(E2V[0])
