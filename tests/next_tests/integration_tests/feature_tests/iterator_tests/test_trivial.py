@@ -12,7 +12,7 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.iterator import transforms
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
+from gt4py.next.iterator.runtime import set_at, fendef, fundef, offset
 
 from next_tests.integration_tests.cases import IDim, JDim, KDim
 from next_tests.unit_tests.conftest import program_processor, run_processor
@@ -94,12 +94,8 @@ def test_shifted_arg_to_lift(program_processor):
 
 @fendef
 def fen_direct_deref(i_size, j_size, out, inp):
-    closure(
-        cartesian_domain(named_range(IDim, 0, i_size), named_range(JDim, 0, j_size)),
-        deref,
-        out,
-        [inp],
-    )
+    domain = cartesian_domain(named_range(IDim, 0, i_size), named_range(JDim, 0, j_size))
+    set_at(as_fieldop(deref, domain)(inp), domain, out)
 
 
 def test_direct_deref(program_processor):
