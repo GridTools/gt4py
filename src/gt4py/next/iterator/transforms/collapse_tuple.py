@@ -185,11 +185,9 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 allow_undeclared_symbols=allow_undeclared_symbols,
             )
 
-        new_node = cls(
-            ignore_tuple_size=ignore_tuple_size,
-            flags=flags,
-            uids=uids,
-        ).visit(node, within_stencil=within_stencil)
+        new_node = cls(ignore_tuple_size=ignore_tuple_size, flags=flags, uids=uids).visit(
+            node, within_stencil=within_stencil
+        )
 
         # inline to remove left-overs from LETIFY_MAKE_TUPLE_ELEMENTS. this is important
         # as otherwise two equal expressions containing a tuple will not be equal anymore
@@ -252,6 +250,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
                     # tuple argument differs, just continue with the rest of the tree
                     return None
 
+            itir_type_inference.reinfer(first_expr)  # type is needed so reinfer on-demand
             assert self.ignore_tuple_size or isinstance(
                 first_expr.type, (ts.TupleType, ts.DeferredType)
             )
@@ -272,7 +271,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
             and isinstance(node.args[0], ir.Literal)
         ):
             # `tuple_get(i, make_tuple(e_0, e_1, ..., e_i, ..., e_N))` -> `e_i`
-            assert type_info.is_integer(node.args[0].type)
+            assert not node.args[0].type or type_info.is_integer(node.args[0].type)
             make_tuple_call = node.args[1]
             idx = int(node.args[0].value)
             assert idx < len(

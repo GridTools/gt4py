@@ -99,7 +99,7 @@ def apply_common_transforms(
     for _ in range(10):
         inlined = ir
 
-        inlined = InlineCenterDerefLiftVars.apply(inlined, uids=icdlv_uids)  # type: ignore[arg-type]  # always a fencil
+        inlined = InlineCenterDerefLiftVars.apply(inlined, uids=icdlv_uids)  # type: ignore[type-var]  # always a fencil
         inlined = _inline_lifts(inlined, lift_mode)
 
         inlined = InlineLambdas.apply(
