@@ -149,7 +149,7 @@ class FileCache(diskcache.Cache):
     issue occurred frequently and was observed to be fixed on distributed file systems, the lock
     does not guarantee correct behavior in particular for accesses to the cache (beyond opening)
     since the underlying SQLite database is unreliable when stored on an NFS based file system.
-    It does however ensure correctness off concurrent cache accesses on a local file system. See
+    It does however ensure correctness of concurrent cache accesses on a local file system. See
     #1745 for more details.
     - closed upon deletion, i.e. it ensures that any resources associated with the cache are
     properly released when the instance is garbage collected.
