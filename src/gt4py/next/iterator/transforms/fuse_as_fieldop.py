@@ -257,6 +257,18 @@ class FuseAsFieldOp(eve.NodeTranslator):
         return cls(uids=uids).visit(node)
 
     def visit_FunCall(self, node: itir.FunCall, **kwargs):
+        # inline all fields with list dtype. This needs to happen before the children are visited
+        # such that the `as_fieldop` can be fused.
+        # TODO(tehrengruber): what should we do in case the field with list dtype is a let itself?
+        #  This could duplicate other expressions which we did not intend to duplicate.
+        # TODO(tehrengruber): Write test-case. E.g. Adding two sparse fields. Sara observed this
+        #  with a cast to a sparse field, but this is likely already covered.
+        if cpm.is_let(node):
+            eligible_args = [isinstance(arg.type, ts.FieldType) and isinstance(arg.type.dtype, it_ts.ListType) for arg in node.args]
+            if any(eligible_args):
+                node = inline_lambdas.inline_lambda(node, eligible_params=eligible_args)
+                return self.visit(node)
+
         if cpm.is_applied_as_fieldop(node):  # don't descend in stencil
             old_node = node
             node = im.as_fieldop(*node.fun.args)(*self.generic_visit(node.args))  # type: ignore[attr-defined]  # ensured by cpm.is_applied_as_fieldop
