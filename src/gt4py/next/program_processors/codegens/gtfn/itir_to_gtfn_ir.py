@@ -159,7 +159,7 @@ def _collect_dimensions_from_domain(
 def _collect_offset_definitions(
     node: itir.Node,
     grid_type: common.GridType,
-    offset_provider: dict[str, common.Dimension | common.Connectivity],
+    offset_provider_type: common.OffsetProviderType,
 ) -> dict[str, TagDefinition]:
     used_offset_tags: set[itir.OffsetLiteral] = (
         node.walk_values()
@@ -167,13 +167,13 @@ def _collect_offset_definitions(
         .filter(lambda offset_literal: isinstance(offset_literal.value, str))
         .getattr("value")
     ).to_set()
-    if not used_offset_tags.issubset(set(offset_provider.keys())):
+    if not used_offset_tags.issubset(set(offset_provider_type.keys())):
         raise AssertionError("ITIR contains an offset tag without a corresponding offset provider.")
     offset_definitions = {}
 
-    for offset_name, dim_or_connectivity in offset_provider.items():
-        if isinstance(dim_or_connectivity, common.Dimension):
-            dim: common.Dimension = dim_or_connectivity
+    for offset_name, dim_or_connectivity_type in offset_provider_type.items():
+        if isinstance(dim_or_connectivity_type, common.Dimension):
+            dim: common.Dimension = dim_or_connectivity_type
             if grid_type == common.GridType.CARTESIAN:
                 # create alias from offset to dimension
                 offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
@@ -204,12 +204,13 @@ def _collect_offset_definitions(
                 offset_definitions[offset_name] = TagDefinition(
                     name=Sym(id=offset_name), alias=SymRef(id=dim.value)
                 )
-        elif isinstance(dim_or_connectivity, common.Connectivity):
+        elif isinstance(
+            connectivity_type := dim_or_connectivity_type, common.NeighborConnectivityType
+        ):
             assert grid_type == common.GridType.UNSTRUCTURED
             offset_definitions[offset_name] = TagDefinition(name=Sym(id=offset_name))
 
-            connectivity: common.Connectivity = dim_or_connectivity
-            for dim in [connectivity.origin_axis, connectivity.neighbor_axis]:
+            for dim in [connectivity_type.source_dim, connectivity_type.codomain]:
                 if dim.kind != common.DimensionKind.HORIZONTAL:
                     raise NotImplementedError()
                 offset_definitions[dim.value] = TagDefinition(
@@ -326,7 +327,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     }
     _unary_op_map: ClassVar[dict[str, str]] = {"not_": "!"}
 
-    offset_provider: dict
+    offset_provider_type: common.OffsetProviderType
     column_axis: Optional[common.Dimension]
     grid_type: common.GridType
 
@@ -341,18 +342,18 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         cls,
         node: itir.Program,
         *,
-        offset_provider: dict,
+        offset_provider_type: common.OffsetProviderType,
         column_axis: Optional[common.Dimension],
     ) -> Program:
         if not isinstance(node, itir.Program):
             raise TypeError(f"Expected a 'Program', got '{type(node).__name__}'.")
 
-        node = itir_type_inference.infer(node, offset_provider=offset_provider)
+        node = itir_type_inference.infer(node, offset_provider_type=offset_provider_type)
         grid_type = _get_gridtype(node.body)
         if grid_type == common.GridType.UNSTRUCTURED:
             node = _CannonicalizeUnstructuredDomain.apply(node)
         return cls(
-            offset_provider=offset_provider, column_axis=column_axis, grid_type=grid_type
+            offset_provider_type=offset_provider_type, column_axis=column_axis, grid_type=grid_type
         ).visit(node)
 
     def visit_Sym(self, node: itir.Sym, **kwargs: Any) -> Sym:
@@ -487,8 +488,8 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         if "stencil" in kwargs:
             shift_offsets = self._collect_offset_or_axis_node(itir.OffsetLiteral, kwargs["stencil"])
             for o in shift_offsets:
-                if o in self.offset_provider and isinstance(
-                    self.offset_provider[o], common.Connectivity
+                if o in self.offset_provider_type and isinstance(
+                    self.offset_provider_type[o], common.NeighborConnectivityType
                 ):
                     connectivities.append(SymRef(id=o))
         return UnstructuredDomain(
@@ -682,7 +683,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         function_definitions = self.visit(node.function_definitions) + extracted_functions
         offset_definitions = {
             **_collect_dimensions_from_domain(node.body),
-            **_collect_offset_definitions(node, self.grid_type, self.offset_provider),
+            **_collect_offset_definitions(node, self.grid_type, self.offset_provider_type),
         }
         return Program(
             id=SymbolName(node.id),

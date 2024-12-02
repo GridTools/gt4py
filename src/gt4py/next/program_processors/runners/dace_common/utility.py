@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import re
-from typing import Final, Optional, Sequence
+from typing import Final, Literal, Optional, Sequence
 
 import dace
 
@@ -51,12 +51,16 @@ def connectivity_identifier(name: str) -> str:
     return f"connectivity_{name}"
 
 
+def field_symbol_name(field_name: str, axis: int, sym: Literal["size", "stride"]) -> str:
+    return f"__{field_name}_{sym}_{axis}"
+
+
 def field_size_symbol_name(field_name: str, axis: int) -> str:
-    return f"__{field_name}_size_{axis}"
+    return field_symbol_name(field_name, axis, "size")
 
 
 def field_stride_symbol_name(field_name: str, axis: int) -> str:
-    return f"__{field_name}_stride_{axis}"
+    return field_symbol_name(field_name, axis, "stride")
 
 
 def is_field_symbol(name: str) -> bool:
@@ -79,19 +83,18 @@ def debug_info(
     return default
 
 
-def filter_connectivities(
-    offset_provider: gtx_common.OffsetProvider,
-) -> dict[str, gtx_common.Connectivity]:
+def filter_connectivity_types(
+    offset_provider_type: gtx_common.OffsetProviderType,
+) -> dict[str, gtx_common.NeighborConnectivityType]:
     """
-    Filter offset providers of type `Connectivity`.
+    Filter offset provider types of type `NeighborConnectivityType`.
 
     In other words, filter out the cartesian offset providers.
-    Returns a new dictionary containing only `Connectivity` values.
     """
     return {
-        offset: table
-        for offset, table in offset_provider.items()
-        if isinstance(table, gtx_common.Connectivity)
+        offset: conn
+        for offset, conn in offset_provider_type.items()
+        if isinstance(conn, gtx_common.NeighborConnectivityType)
     }
 
 
