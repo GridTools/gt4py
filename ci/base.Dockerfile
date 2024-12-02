@@ -1,10 +1,13 @@
-ARG CUDA_VERSION=12.6.2
-ARG UBUNTU_VERSION=22.04
+ARG CUDA_VERSION
+ARG CUPY_PACKAGE
+ARG CUPY_VERSION
+ARG PYVERSION
+ARG UBUNTU_VERSION
 FROM docker.io/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION}
+
 ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
 
-ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -qq && apt-get install -qq -y --no-install-recommends \
     strace \
     build-essential \
@@ -40,8 +43,6 @@ RUN wget --quiet https://archives.boost.io/release/1.85.0/source/boost_1_85_0.ta
 ENV BOOST_ROOT /usr/local/
 ENV CUDA_HOME /usr/local/cuda
 
-ARG PYVERSION
-
 RUN curl https://pyenv.run | bash
 
 ENV PYENV_ROOT /root/.pyenv
@@ -55,6 +56,4 @@ RUN pyenv update && \
 
 ENV PATH="/root/.pyenv/shims:${PATH}"
 
-ARG CUPY_PACKAGE=cupy-cuda12x
-ARG CUPY_VERSION=13.3.0
 RUN pip install --upgrade pip setuptools wheel tox ${CUPY_PACKAGE}==${CUPY_VERSION}
