@@ -490,8 +490,6 @@ def unstructured_case(
     mesh_descriptor,
     exec_alloc_descriptor: test_definitions.EmbeddedDummyBackend | next_backend.Backend,
 ):
-    ditc_3d = mesh_descriptor.offset_provider
-    ditc_3d["Koff"] = KDim
     yield Case(
         None
         if isinstance(exec_alloc_descriptor, test_definitions.EmbeddedDummyBackend)
