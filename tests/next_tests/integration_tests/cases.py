@@ -490,11 +490,34 @@ def unstructured_case(
     mesh_descriptor,
     exec_alloc_descriptor: test_definitions.EmbeddedDummyBackend | next_backend.Backend,
 ):
+    ditc_3d = mesh_descriptor.offset_provider
+    ditc_3d["Koff"] = KDim
     yield Case(
         None
         if isinstance(exec_alloc_descriptor, test_definitions.EmbeddedDummyBackend)
         else exec_alloc_descriptor,
         offset_provider=mesh_descriptor.offset_provider,
+        default_sizes={
+            Vertex: mesh_descriptor.num_vertices,
+            Edge: mesh_descriptor.num_edges,
+            Cell: mesh_descriptor.num_cells,
+        },
+        grid_type=common.GridType.UNSTRUCTURED,
+        allocator=exec_alloc_descriptor.allocator,
+    )
+
+
+@pytest.fixture
+def unstructured_case_3d(
+    mesh_descriptor,
+    exec_alloc_descriptor: test_definitions.EmbeddedDummyBackend | next_backend.Backend,
+):
+    new_offset_provider = {**mesh_descriptor.offset_provider, "KOff": KDim}
+    yield Case(
+        None
+        if isinstance(exec_alloc_descriptor, test_definitions.EmbeddedDummyBackend)
+        else exec_alloc_descriptor,
+        offset_provider=new_offset_provider,
         default_sizes={
             Vertex: mesh_descriptor.num_vertices,
             Edge: mesh_descriptor.num_edges,
