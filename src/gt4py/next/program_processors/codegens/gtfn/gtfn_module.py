@@ -82,7 +82,7 @@ class GTFNTranslationStep(
         self,
         program: itir.FencilDefinition | itir.Program,
         arg_types: tuple[ts.TypeSpec, ...],
-        offset_provider: common.OffsetProvider,
+        offset_provider_type: common.OffsetProviderType,
     ) -> tuple[list[interface.Parameter], list[str]]:
         parameters: list[interface.Parameter] = []
         arg_exprs: list[str] = []
@@ -104,22 +104,22 @@ class GTFNTranslationStep(
                     ):
                         # translate sparse dimensions to tuple dtype
                         dim_name = dim.value
-                        connectivity = offset_provider[dim_name]
-                        assert isinstance(connectivity, common.Connectivity)
+                        connectivity = offset_provider_type[dim_name]
+                        assert isinstance(connectivity, common.NeighborConnectivityType)
                         size = connectivity.max_neighbors
                         arg = f"gridtools::sid::dimension_to_tuple_like<generated::{dim_name}_t, {size}>({arg})"
             arg_exprs.append(arg)
         return parameters, arg_exprs
 
     def _process_connectivity_args(
-        self, offset_provider: dict[str, common.Connectivity | common.Dimension]
+        self, offset_provider_type: common.OffsetProviderType
     ) -> tuple[list[interface.Parameter], list[str]]:
         parameters: list[interface.Parameter] = []
         arg_exprs: list[str] = []
 
-        for name, connectivity in offset_provider.items():
-            if isinstance(connectivity, common.Connectivity):
-                if connectivity.index_type not in [np.int32, np.int64]:
+        for name, connectivity_type in offset_provider_type.items():
+            if isinstance(connectivity_type, common.NeighborConnectivityType):
+                if connectivity_type.dtype.scalar_type not in [np.int32, np.int64]:
                     raise ValueError(
                         "Neighbor table indices must be of type 'np.int32' or 'np.int64'."
                     )
@@ -129,15 +129,8 @@ class GTFNTranslationStep(
                     interface.Parameter(
                         name=GENERATED_CONNECTIVITY_PARAM_PREFIX + name.lower(),
                         type_=ts.FieldType(
-                            dims=[
-                                connectivity.origin_axis,
-                                common.Dimension(
-                                    name, kind=common.DimensionKind.LOCAL
-                                ),  # TODO(havogt): we should not use the name of the offset as the name of the local dimension
-                            ],
-                            dtype=ts.ScalarType(
-                                type_translation.get_scalar_kind(connectivity.index_type)
-                            ),
+                            dims=list(connectivity_type.domain),
+                            dtype=type_translation.from_dtype(connectivity_type.dtype),
                         ),
                     )
                 )
@@ -145,19 +138,19 @@ class GTFNTranslationStep(
                 # connectivity argument expression
                 nbtbl = (
                     f"gridtools::fn::sid_neighbor_table::as_neighbor_table<"
-                    f"generated::{connectivity.origin_axis.value}_t, "
-                    f"generated::{name}_t, {connectivity.max_neighbors}"
+                    f"generated::{connectivity_type.source_dim.value}_t, "
+                    f"generated::{name}_t, {connectivity_type.max_neighbors}"
                     f">(std::forward<decltype({GENERATED_CONNECTIVITY_PARAM_PREFIX}{name.lower()})>({GENERATED_CONNECTIVITY_PARAM_PREFIX}{name.lower()}))"
                 )
                 arg_exprs.append(
                     f"gridtools::hymap::keys<generated::{name}_t>::make_values({nbtbl})"
                 )
-            elif isinstance(connectivity, common.Dimension):
+            elif isinstance(connectivity_type, common.Dimension):
                 pass
             else:
                 raise AssertionError(
-                    f"Expected offset provider '{name}' to be a 'Connectivity' or 'Dimension', "
-                    f"got '{type(connectivity).__name__}'."
+                    f"Expected offset provider type '{name}' to be a 'NeighborConnectivityType' or 'Dimension', "
+                    f"got '{type(connectivity_type).__name__}'."
                 )
 
         return parameters, arg_exprs
@@ -165,7 +158,7 @@ class GTFNTranslationStep(
     def _preprocess_program(
         self,
         program: itir.FencilDefinition | itir.Program,
-        offset_provider: dict[str, common.Connectivity | common.Dimension],
+        offset_provider: common.OffsetProvider,
     ) -> itir.Program:
         apply_common_transforms = functools.partial(
             pass_manager.apply_common_transforms,
@@ -194,7 +187,7 @@ class GTFNTranslationStep(
     def generate_stencil_source(
         self,
         program: itir.FencilDefinition | itir.Program,
-        offset_provider: dict[str, common.Connectivity | common.Dimension],
+        offset_provider: common.OffsetProvider,
         column_axis: Optional[common.Dimension],
     ) -> str:
         if self.enable_itir_transforms:
@@ -204,7 +197,9 @@ class GTFNTranslationStep(
             new_program = program
 
         gtfn_ir = GTFN_lowering.apply(
-            new_program, offset_provider=offset_provider, column_axis=column_axis
+            new_program,
+            offset_provider_type=common.offset_provider_to_type(offset_provider),
+            column_axis=column_axis,
         )
 
         if self.use_imperative_backend:
@@ -224,13 +219,13 @@ class GTFNTranslationStep(
         # handle regular parameters and arguments of the program (i.e. what the user defined in
         #  the program)
         regular_parameters, regular_args_expr = self._process_regular_arguments(
-            program, inp.args.args, inp.args.offset_provider
+            program, inp.args.args, inp.args.offset_provider_type
         )
 
         # handle connectivity parameters and arguments (i.e. what the user provided in the offset
         #  provider)
         connectivity_parameters, connectivity_args_expr = self._process_connectivity_args(
-            inp.args.offset_provider
+            inp.args.offset_provider_type
         )
 
         # combine into a format that is aligned with what the backend expects

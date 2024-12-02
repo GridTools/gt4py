@@ -12,6 +12,7 @@ from typing import Any, Iterable
 import dace
 import numpy as np
 
+from gt4py._core import definitions as core_defs
 from gt4py.next import common as gtx_common, utils as gtx_utils
 
 from . import utility as dace_utils
@@ -65,8 +66,8 @@ def _get_args(
 
 
 def _ensure_is_on_device(
-    connectivity_arg: np.typing.NDArray, device: dace.dtypes.DeviceType
-) -> np.typing.NDArray:
+    connectivity_arg: core_defs.NDArrayObject, device: dace.dtypes.DeviceType
+) -> core_defs.NDArrayObject:
     if device == dace.dtypes.DeviceType.GPU:
         if not isinstance(connectivity_arg, cp.ndarray):
             warnings.warn(
@@ -78,7 +79,7 @@ def _ensure_is_on_device(
 
 
 def _get_shape_args(
-    arrays: Mapping[str, dace.data.Array], args: Mapping[str, np.typing.NDArray]
+    arrays: Mapping[str, dace.data.Array], args: Mapping[str, core_defs.NDArrayObject]
 ) -> dict[str, int]:
     shape_args: dict[str, int] = {}
     for name, value in args.items():
@@ -103,7 +104,7 @@ def _get_shape_args(
 
 
 def _get_stride_args(
-    arrays: Mapping[str, dace.data.Array], args: Mapping[str, np.typing.NDArray]
+    arrays: Mapping[str, dace.data.Array], args: Mapping[str, core_defs.NDArrayObject]
 ) -> dict[str, int]:
     stride_args = {}
     for name, value in args.items():
@@ -134,7 +135,7 @@ def get_sdfg_conn_args(
     sdfg: dace.SDFG,
     offset_provider: gtx_common.OffsetProvider,
     on_gpu: bool,
-) -> dict[str, np.typing.NDArray]:
+) -> dict[str, core_defs.NDArrayObject]:
     """
     Extracts the connectivity tables that are used in the sdfg and ensures
     that the memory buffers are allocated for the target device.
@@ -142,11 +143,11 @@ def get_sdfg_conn_args(
     device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
 
     connectivity_args = {}
-    for offset, connectivity in dace_utils.filter_connectivities(offset_provider).items():
-        assert isinstance(connectivity, gtx_common.NeighborTable)
-        param = dace_utils.connectivity_identifier(offset)
-        if param in sdfg.arrays:
-            connectivity_args[param] = _ensure_is_on_device(connectivity.table, device)
+    for offset, connectivity in offset_provider.items():
+        if gtx_common.is_neighbor_table(connectivity):
+            param = dace_utils.connectivity_identifier(offset)
+            if param in sdfg.arrays:
+                connectivity_args[param] = _ensure_is_on_device(connectivity.ndarray, device)
 
     return connectivity_args
 

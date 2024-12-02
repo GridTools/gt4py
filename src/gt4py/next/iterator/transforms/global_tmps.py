@@ -187,7 +187,9 @@ def create_global_tmps(
     arguments into temporaries.
     """
     program = infer_domain.infer_program(program, offset_provider)
-    program = type_inference.infer(program, offset_provider=offset_provider)
+    program = type_inference.infer(
+        program, offset_provider_type=common.offset_provider_to_type(offset_provider)
+    )
 
     if not uids:
         uids = eve_utils.UIDGenerator(prefix="__tmp")
