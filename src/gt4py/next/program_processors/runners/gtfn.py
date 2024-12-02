@@ -143,9 +143,12 @@ def fingerprint_compilable_program(inp: stages.CompilableProgram) -> str:
 class FileCache(diskcache.Cache):
     """
     This class extends `diskcache.Cache` to ensure the cache is properly
-    - opened on a distributed file system by using a file lock. This guards the creating of the
+    - opened when accessed by multiple processes using a file lock. This guards the creating of the
     cache object, which has been reported to cause `sqlite3.OperationalError: database is locked`
-    errors and slow startup times when multiple processes access the cache concurrently.
+    errors and slow startup times when multiple processes access the cache concurrently. While
+    this issue occurred frequently and was observed to be fixed on distributed file systems, the
+    lock does not guarantee correct behavior in particular for the accesses to the cache (beyond
+    opening. See #1745 for more details.
     - closed upon deletion, i.e. it ensures that any resources associated with the cache are
     properly released when the instance is garbage collected.
     """
