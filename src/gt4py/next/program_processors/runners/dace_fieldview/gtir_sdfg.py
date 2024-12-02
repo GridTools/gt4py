@@ -194,9 +194,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     offset_provider_type: gtx_common.OffsetProviderType
     domain_symbols: set[str]
     global_symbols: dict[str, ts.DataType]
-    field_offsets: dict[str, Optional[list[dace.symbolic.SymExpr]]] = dataclasses.field(
-        default_factory=lambda: {}
-    )
+    field_offsets: dict[str, Optional[list[dace.symbolic.SymExpr]]]
     sdfg_arg_names: list[str] = dataclasses.field(default_factory=lambda: [])
 
     map_uids: eve.utils.UIDGenerator = dataclasses.field(
@@ -870,6 +868,7 @@ def build_sdfg_from_gtir(
         offset_provider_type,
         domain_symbols,
         global_symbols={p.id: p.type for p in ir.params if isinstance(p.type, ts.DataType)},
+        field_offsets={},  # program field arguments are passed to the SDFG as full-shape arrays
     )
 
     sdfg_builder.visit(ir)
