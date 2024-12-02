@@ -181,7 +181,11 @@ def fuse_as_fieldop(
 def _arg_inline_predicate(node: itir.Expr, shifts):
     if _is_tuple_expr_of_literals(node):
         return True
-    if (is_applied_fieldop := cpm.is_applied_as_fieldop(node)) or cpm.is_call_to(node, "if_"):
+    # TODO(tehrengruber): write test case ensuring scan is not tried to be inlined (e.g. test_call_scan_operator_from_field_operator)
+    if (
+        is_applied_fieldop := cpm.is_applied_as_fieldop(node)
+        and not cpm.is_call_to(node.fun.args[0], "scan")  # type: ignore[attr-defined]  # ensured by cpm.is_applied_as_fieldop
+    ) or cpm.is_call_to(node, "if_"):
         # always inline arg if it is an applied fieldop with only a single arg
         if is_applied_fieldop and len(node.args) == 1:
             return True
@@ -264,7 +268,10 @@ class FuseAsFieldOp(eve.NodeTranslator):
         # TODO(tehrengruber): Write test-case. E.g. Adding two sparse fields. Sara observed this
         #  with a cast to a sparse field, but this is likely already covered.
         if cpm.is_let(node):
-            eligible_args = [isinstance(arg.type, ts.FieldType) and isinstance(arg.type.dtype, it_ts.ListType) for arg in node.args]
+            eligible_args = [
+                isinstance(arg.type, ts.FieldType) and isinstance(arg.type.dtype, it_ts.ListType)
+                for arg in node.args
+            ]
             if any(eligible_args):
                 node = inline_lambdas.inline_lambda(node, eligible_params=eligible_args)
                 return self.visit(node)

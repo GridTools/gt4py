@@ -78,6 +78,10 @@ def apply_common_transforms(
     ir = inline_fundefs.prune_unreferenced_fundefs(ir)  # type: ignore[arg-type] # all previous passes return itir.Program
     ir = NormalizeShifts().visit(ir)
 
+    # TODO(tehrengruber): Many iterator test contain lifts that need to be inlined, e.g.
+    #  test_can_deref. We didn't notice previously as FieldOpFusion did this implicitly everywhere.
+    ir = inline_lifts.InlineLifts().visit(ir)
+
     # note: this increases the size of the tree
     # Inline. The domain inference can not handle "user" functions, e.g. `let f = λ(...) → ... in f(...)`
     ir = InlineLambdas.apply(ir, opcount_preserving=True, force_inline_lambda_args=True)
