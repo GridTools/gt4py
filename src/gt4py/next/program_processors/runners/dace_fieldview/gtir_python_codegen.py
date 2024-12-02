@@ -123,8 +123,10 @@ class PythonCodegen(codegen.TemplatedGenerator):
     def visit_FunCall(self, node: gtir.FunCall, args_map: dict[str, gtir.Node]) -> str:
         if isinstance(node.fun, gtir.Lambda):
             # update the mapping from lambda parameters to corresponding argument expressions
-            args_map |= {p.id: arg for p, arg in zip(node.fun.params, node.args, strict=True)}
-            return self.visit(node.fun.expr, args_map=args_map)
+            lambda_args_map = args_map | {
+                p.id: arg for p, arg in zip(node.fun.params, node.args, strict=True)
+            }
+            return self.visit(node.fun.expr, args_map=lambda_args_map)
         elif cpm.is_call_to(node, "deref"):
             assert len(node.args) == 1
             if not isinstance(node.args[0], gtir.SymRef):
