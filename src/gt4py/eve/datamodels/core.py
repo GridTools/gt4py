@@ -24,7 +24,7 @@ import attrs
 
 
 try:
-    # For perfomance reasons, try to use cytoolz when possible (using cython)
+    # For performance reasons, try to use cytoolz when possible (using cython)
     import cytoolz as toolz
 except ModuleNotFoundError:
     # Fall back to pure Python toolz
@@ -270,7 +270,7 @@ def datamodel(
 
 
 @overload
-def datamodel(  # redefinion of unused symbol
+def datamodel(  # redefinition of unused symbol
     cls: Type[_T],
     /,
     *,
@@ -289,7 +289,7 @@ def datamodel(  # redefinion of unused symbol
 
 
 # TODO(egparedes): Use @dataclass_transform(eq_default=True, field_specifiers=("field",))
-def datamodel(  # redefinion of unused symbol
+def datamodel(  # redefinition of unused symbol
     cls: Optional[Type[_T]] = None,
     /,
     *,
@@ -867,7 +867,7 @@ def _substitute_typevars(
 
 def _make_counting_attr_from_attribute(
     field_attrib: Attribute, *, include_type: bool = False, **kwargs: Any
-) -> Any:  # attr.s lies a bit in some typing definitons
+) -> Any:  # attr.s lies a bit in some typing definitions
     args = [
         "default",
         "validator",
@@ -965,7 +965,7 @@ def _make_type_converter(type_annotation: TypeAnnotation, name: str) -> TypeConv
                 return value if isinstance(value, type_annotation) else type_annotation(value)
             except Exception as error:
                 raise TypeError(
-                    f"Error during coertion of given value '{value}' for field '{name}'."
+                    f"Error during coercion of given value '{value}' for field '{name}'."
                 ) from error
 
         return _type_converter
@@ -996,7 +996,7 @@ def _make_type_converter(type_annotation: TypeAnnotation, name: str) -> TypeConv
         return _make_type_converter(origin_type, name)
 
     raise exceptions.EveTypeError(
-        f"Automatic type coertion for {type_annotation} types is not supported."
+        f"Automatic type coercion for {type_annotation} types is not supported."
     )
 
 
@@ -1085,7 +1085,7 @@ def _make_datamodel(
                     )
 
         else:
-            # Create field converter if automatic coertion is enabled
+            # Create field converter if automatic coercion is enabled
             converter: TypeConverter = cast(
                 TypeConverter,
                 _make_type_converter(type_hint, qualified_field_name) if coerce_field else None,
@@ -1099,7 +1099,7 @@ def _make_datamodel(
                 if isinstance(attr_value_in_cls, _KNOWN_MUTABLE_TYPES):
                     warnings.warn(
                         f"'{attr_value_in_cls.__class__.__name__}' value used as default in '{cls.__name__}.{key}'.\n"
-                        "Mutable types should not defbe normally used as field defaults (use 'default_factory' instead).",
+                        "Mutable types should not be used as field defaults (use 'default_factory' instead).",
                         stacklevel=_stacklevel_offset + 2,
                     )
                 setattr(
