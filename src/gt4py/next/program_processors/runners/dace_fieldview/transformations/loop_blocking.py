@@ -356,6 +356,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             if not all(
                 isinstance(out_edge.dst, dace_nodes.AccessNode)
                 for out_edge in state.out_edges(node_to_classify)
+                if not out_edge.data.is_empty()
             ):
                 return False
 
@@ -394,28 +395,8 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         #  for these classification to make sense the partition has to exist in the
         #  first place.
 
-        # Either all incoming edges of a node are empty or none of them. If it has
-        #  empty edges, they are only allowed to come from the map entry.
-        found_empty_edges, found_nonempty_edges = False, False
-        for in_edge in in_edges:
-            if in_edge.data.is_empty():
-                found_empty_edges = True
-                if in_edge.src is not outer_entry:
-                    # The empty edge is not used to keep the node inside the scope
-                    #  defined by the outer map. This is strange and we ignore that.
-                    return None
-            else:
-                found_nonempty_edges = True
-
-        # Test if we found a mixture of empty and nonempty edges.
-        if found_empty_edges and found_nonempty_edges:
-            return None
-
         # There are some very small requirements that we impose on the output edges.
         for out_edge in state.out_edges(node_to_classify):
-            # No empty memlets as output (implementation detail)
-            if out_edge.data.is_empty():
-                return None
             # We consider nodes that are directly connected to the outer map exit as
             #  dependent. This is an implementation detail to avoid some hard cases.
             if out_edge.dst is outer_exit:
@@ -507,22 +488,28 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                 if edge_dst in self._independent_nodes:
                     continue
 
-                # For syntactical reasons there must be an access node on the outside
-                #  of the (inner) scope, that acts as cache. The classification and
-                #  this preconditions on SDFG should ensure that, but there are a few
-                #  super hard edge cases.
-                #  TODO(phimuell): Add an intermediate here in this case
-                if not isinstance(independent_node, dace_nodes.AccessNode):
-                    raise NotImplementedError()
-
                 # Now split `out_edge` such that it passes through the new inner entry.
                 #  We do not need to modify the subsets, i.e. replacing the variable
                 #  on which we block, because the node is independent and the outgoing
                 #  new inner map entry iterate over the blocked variable.
                 if out_edge.data.is_empty():
+                    # `out_edge` is an empty Memlet that ensures its source, which is
+                    #  independent, is sequenced before its destination, which is
+                    #  dependent. We now have to split it into two.
+                    # TODO(phimuell): Can we remove this edge? Is the map enough to
+                    #   ensure proper sequencing?
                     new_in_conn = None
                     new_out_conn = None
                     new_memlet_outside = dace.Memlet()
+
+                elif not isinstance(independent_node, dace_nodes.AccessNode):
+                    # For syntactical reasons there must be an access node on the
+                    #  outside of the (inner) scope, that acts as cache. The
+                    #  classification and this preconditions on SDFG should ensure
+                    #  that, but there are a few super hard edge cases.
+                    # TODO(phimuell): Add an intermediate here in this case
+                    raise NotImplementedError()
+
                 else:
                     # NOTE: This creates more connections that are ultimately
                     #  necessary. However, figuring out which one to use and if
