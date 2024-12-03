@@ -35,8 +35,8 @@ from next_tests.integration_tests.multi_feature_tests.ffront_tests.test_laplacia
 try:
     import dace
     from gt4py.next.program_processors.runners.dace import (
-        itir_cpu as run_dace_cpu,
-        itir_gpu as run_dace_gpu,
+        gtir_cpu as run_dace_cpu,
+        gtir_gpu as run_dace_gpu,
     )
 except ImportError:
     dace: Optional[ModuleType] = None  # type:ignore[no-redef]
@@ -137,6 +137,7 @@ def test_sdfgConvertible_connectivities(unstructured_case):
     offset_provider = OffsetProvider_t.dtype._typeclass.as_ctypes()(E2V=e2v.data_ptr())
 
     SDFG = sdfg.to_sdfg(connectivities=connectivities)
+
     cSDFG = SDFG.compile()
 
     a = gtx.as_field([Vertex], xp.asarray([0.0, 1.0, 2.0]), allocator=allocator)
