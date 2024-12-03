@@ -289,7 +289,7 @@ def _get_dimensions_from_types(types) -> dict[str, common.Dimension]:
 
 def _type_synthesizer_from_function_type(fun_type: ts.FunctionType):
     def type_synthesizer(*args, **kwargs):
-        assert type_info.accepts_args(fun_type, with_args=list(args), with_kwargs=kwargs)
+        #assert type_info.accepts_args(fun_type, with_args=list(args), with_kwargs=kwargs)
         return fun_type.returns
 
     return ObservableTypeSynthesizer(

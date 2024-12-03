@@ -19,7 +19,8 @@ from gt4py.next.iterator.ir_utils import (
     domain_utils,
     ir_makers as im,
 )
-from gt4py.next.iterator.transforms import cse, infer_domain, inline_lambdas
+from gt4py.next.iterator.ir_utils.domain_utils import SymbolicRange, SymbolicDomain
+from gt4py.next.iterator.transforms import cse, infer_domain, inline_lambdas, collapse_tuple
 from gt4py.next.iterator.type_system import inference as type_inference
 from gt4py.next.type_system import type_info, type_specifications as ts
 
@@ -45,6 +46,17 @@ def _transform_if(
             )
         ]
     return None
+
+
+# TODO(tehrengruber): This happens in _tridiagonal
+def _fix_domain_starts(domain: SymbolicDomain):
+    new_ranges = {}
+    for dim, range_ in domain.ranges.items():
+        new_ranges[dim] = SymbolicRange(
+            start=im.call("maximum")(0, range_.start),
+            stop=range_.stop
+        )
+    return SymbolicDomain(grid_type=domain.grid_type, ranges=new_ranges)
 
 
 def _transform_by_pattern(
@@ -81,15 +93,18 @@ def _transform_by_pattern(
             #  able to eliminate all tuples, e.g., by propagating the scalar ifs to the top-level
             #  of a SetAt, the CollapseTuple pass will eliminate most of this cases.
             if isinstance(domain, tuple):
-                flattened_domains: tuple[domain_utils.SymbolicDomain] = (
-                    next_utils.flatten_nested_tuple(domain)  # type: ignore[assignment]  # mypy not smart enough
+                # note: this change is required for the scan in _tridiagonal
+                flattened_domains: tuple[domain_utils.SymbolicDomain] = tuple(
+                    domain for domain in next_utils.flatten_nested_tuple(domain) if not domain is infer_domain.DomainAccessDescriptor.NEVER  # type: ignore[assignment]  # mypy not smart enough
                 )
+                assert len(flattened_domains) > 0
                 if not all(d == flattened_domains[0] for d in flattened_domains):
                     raise NotImplementedError(
                         "Tuple expressions with different domains is not supported yet."
                     )
                 domain = flattened_domains[0]
             assert isinstance(domain, domain_utils.SymbolicDomain)
+            domain = _fix_domain_starts(domain)
             domain_expr = domain.as_expr()
 
             assert isinstance(tmp_expr.type, ts.TypeSpec)
@@ -136,6 +151,35 @@ def _transform_by_pattern(
         return [*tmp_stmts, itir.SetAt(target=stmt.target, domain=stmt.domain, expr=new_expr)]
     return None
 
+def _is_trivial_tuple_expr(node: ir.Expr) -> bool:
+    if cpm.is_call_to(node, "make_tuple"):
+        return all(_is_trivial_tuple_expr(arg) for arg in node.args)
+    if cpm.is_call_to(node, "tuple_get"):
+        return _is_trivial_tuple_expr(node.args[1])
+    if isinstance(node, (itir.SymRef, itir.Literal)):
+        return True
+    if cpm.is_let(node):  # TODO: write test case. occurs in test_preconditioner.py::test_scan_stencils[_tridiagonal_init_v1-_tridiagonal_init_tmp_out-test_case1]
+        return _is_trivial_tuple_expr(node.fun.expr) and all(_is_trivial_tuple_expr(arg) for arg in node.args)
+    return False
+
+# occurs in _tridiagonal
+def _transform_trivial_tuple_expr(stmt: itir.Stmt, declarations: list[itir.Temporary], uids: eve_utils.UIDGenerator):
+    if not isinstance(stmt, itir.SetAt):
+        return None
+    if cpm.is_let(stmt.expr) and any(trivial_args := [_is_trivial_tuple_expr(arg) for arg in stmt.expr.args]):
+        simplified_args = [collapse_tuple.CollapseTuple.apply(
+            type_inference.reinfer(arg),
+            within_stencil=False,
+            allow_undeclared_symbols=True,
+            flags=~collapse_tuple.CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES
+        ) if is_trivial else arg for arg, is_trivial in zip(stmt.expr.args, trivial_args, strict=True)]
+        new_expr = im.let(*zip(stmt.expr.fun.params, simplified_args))(stmt.expr.fun.expr)
+        return [itir.SetAt(
+            expr=inline_lambdas.inline_lambda(new_expr, eligible_params=trivial_args),
+            domain=stmt.domain,
+            target=stmt.target
+        )]
+    return None
 
 def _transform_stmt(
     stmt: itir.Stmt, declarations: list[itir.Temporary], uids: eve_utils.UIDGenerator
@@ -144,6 +188,8 @@ def _transform_stmt(
     stmts: list[itir.Stmt] = []
 
     transforms: list[Callable] = [
+        # transform trivial tuple expr
+        _transform_trivial_tuple_expr,
         # transform `if_` call into `IfStmt`
         _transform_if,
         # extract applied `as_fieldop` to top-level
