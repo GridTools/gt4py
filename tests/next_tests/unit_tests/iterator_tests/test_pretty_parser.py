@@ -127,7 +127,7 @@ def test_make_tuple():
 
 
 def test_named_range_horizontal():
-    testee = "IDimₕ: [x, y)"
+    testee = "IDimₕ: [x, y["
     expected = ir.FunCall(
         fun=ir.SymRef(id="named_range"),
         args=[ir.AxisLiteral(value="IDim"), ir.SymRef(id="x"), ir.SymRef(id="y")],
@@ -137,7 +137,7 @@ def test_named_range_horizontal():
 
 
 def test_named_range_vertical():
-    testee = "IDimᵥ: [x, y)"
+    testee = "IDimᵥ: [x, y["
     expected = ir.FunCall(
         fun=ir.SymRef(id="named_range"),
         args=[

@@ -233,7 +233,7 @@ def test_named_range_horizontal():
         fun=ir.SymRef(id="named_range"),
         args=[ir.AxisLiteral(value="IDim"), ir.SymRef(id="x"), ir.SymRef(id="y")],
     )
-    expected = "IDimₕ: [x, y)"
+    expected = "IDimₕ: [x, y["
     actual = pformat(testee)
     assert actual == expected
 
