@@ -24,7 +24,7 @@ except ImportError:
     cp = None
 
 
-def _convert_arg(arg: Any, sdfg_param: str, use_field_canonical_representation: bool) -> Any:
+def _convert_arg(arg: Any, sdfg_param: str) -> Any:
     if not isinstance(arg, gtx_common.Field):
         return arg
     if len(arg.domain.dims) == 0:
@@ -41,26 +41,14 @@ def _convert_arg(arg: Any, sdfg_param: str, use_field_canonical_representation: 
         raise RuntimeError(
             f"Field '{sdfg_param}' passed as array slice with offset {dim_range.start} on dimension {dim.value}."
         )
-    if not use_field_canonical_representation:
-        return arg.ndarray
-    # the canonical representation requires alphabetical ordering of the dimensions in field domain definition
-    sorted_dims = dace_utils.get_sorted_dims(arg.domain.dims)
-    ndim = len(sorted_dims)
-    dim_indices = [dim_index for dim_index, _ in sorted_dims]
-    if isinstance(arg.ndarray, np.ndarray):
-        return np.moveaxis(arg.ndarray, range(ndim), dim_indices)
-    else:
-        assert cp is not None and isinstance(arg.ndarray, cp.ndarray)
-        return cp.moveaxis(arg.ndarray, range(ndim), dim_indices)
+    return arg.ndarray
 
 
-def _get_args(
-    sdfg: dace.SDFG, args: Sequence[Any], use_field_canonical_representation: bool
-) -> dict[str, Any]:
+def _get_args(sdfg: dace.SDFG, args: Sequence[Any]) -> dict[str, Any]:
     sdfg_params: Sequence[str] = sdfg.arg_names
     flat_args: Iterable[Any] = gtx_utils.flatten_nested_tuple(tuple(args))
     return {
-        sdfg_param: _convert_arg(arg, sdfg_param, use_field_canonical_representation)
+        sdfg_param: _convert_arg(arg, sdfg_param)
         for sdfg_param, arg in zip(sdfg_params, flat_args, strict=True)
     }
 
@@ -154,10 +142,10 @@ def get_sdfg_conn_args(
 
 def get_sdfg_args(
     sdfg: dace.SDFG,
+    offset_provider: gtx_common.OffsetProvider,
     *args: Any,
     check_args: bool = False,
     on_gpu: bool = False,
-    use_field_canonical_representation: bool = True,
     **kwargs: Any,
 ) -> dict[str, Any]:
     """Extracts the arguments needed to call the SDFG.
@@ -166,10 +154,10 @@ def get_sdfg_args(
 
     Args:
         sdfg:               The SDFG for which we want to get the arguments.
+        offset_provider:    Offset provider.
     """
-    offset_provider = kwargs["offset_provider"]
 
-    dace_args = _get_args(sdfg, args, use_field_canonical_representation)
+    dace_args = _get_args(sdfg, args)
     dace_field_args = {n: v for n, v in dace_args.items() if not np.isscalar(v)}
     dace_conn_args = get_sdfg_conn_args(sdfg, offset_provider, on_gpu)
     dace_shapes = _get_shape_args(sdfg.arrays, dace_field_args)

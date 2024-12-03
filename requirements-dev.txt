@@ -49,7 +49,7 @@ executing==2.1.0          # via -c constraints.txt, devtools, stack-data
 factory-boy==3.3.1        # via -c constraints.txt, gt4py (pyproject.toml), pytest-factoryboy
 faker==33.0.0             # via -c constraints.txt, factory-boy
 fastjsonschema==2.20.0    # via -c constraints.txt, nbformat
-filelock==3.16.1          # via -c constraints.txt, tox, virtualenv
+filelock==3.16.1          # via -c constraints.txt, gt4py (pyproject.toml), tox, virtualenv
 fonttools==4.55.0         # via -c constraints.txt, matplotlib
 fparser==0.1.4            # via -c constraints.txt, dace
 frozendict==2.4.6         # via -c constraints.txt, gt4py (pyproject.toml)
@@ -113,8 +113,8 @@ psutil==6.1.0             # via -c constraints.txt, -r requirements-dev.in, ipyk
 ptyprocess==0.7.0         # via -c constraints.txt, pexpect
 pure-eval==0.2.3          # via -c constraints.txt, stack-data
 pybind11==2.13.6          # via -c constraints.txt, gt4py (pyproject.toml)
-pydantic==2.9.2           # via -c constraints.txt, bump-my-version, pydantic-settings
-pydantic-core==2.23.4     # via -c constraints.txt, pydantic
+pydantic==2.10.0          # via -c constraints.txt, bump-my-version, pydantic-settings
+pydantic-core==2.27.0     # via -c constraints.txt, pydantic
 pydantic-settings==2.6.1  # via -c constraints.txt, bump-my-version
 pydot==3.0.2              # via -c constraints.txt, tach
 pygments==2.18.0          # via -c constraints.txt, -r requirements-dev.in, devtools, ipython, nbmake, rich, sphinx
@@ -158,7 +158,7 @@ stack-data==0.6.3         # via -c constraints.txt, ipython
 stdlib-list==0.10.0       # via -c constraints.txt, tach
 sympy==1.13.3             # via -c constraints.txt, dace
 tabulate==0.9.0           # via -c constraints.txt, gt4py (pyproject.toml)
-tach==0.14.3              # via -c constraints.txt, -r requirements-dev.in
+tach==0.14.4              # via -c constraints.txt, -r requirements-dev.in
 tomli==2.1.0 ; python_version < "3.11"  # via -c constraints.txt, -r requirements-dev.in, black, build, coverage, jupytext, mypy, pip-tools, pyproject-api, pytest, setuptools-scm, tach, tox
 tomli-w==1.0.0            # via -c constraints.txt, tach
 tomlkit==0.13.2           # via -c constraints.txt, bump-my-version
