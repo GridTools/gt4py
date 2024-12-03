@@ -190,7 +190,7 @@ class PrettyPrinter(NodeTranslator):
             if fun_name == "named_range" and len(node.args) == 3:
                 # named_range(dim, start, stop) → dim: [star, stop)
                 dim, start, end = self.visit(node.args, prec=0)
-                res = self._hmerge(dim, [": ["], start, [", "], end, [")"])
+                res = self._hmerge(dim, [": ["], start, [", "], end, ["["])  # to get matching parenthesis of functions
                 return self._prec_parens(res, prec, PRECEDENCE["__call__"])
             if fun_name == "cartesian_domain" and len(node.args) >= 1:
                 # cartesian_domain(x, y, ...) → c{ x × y × ... } # noqa: RUF003 [ambiguous-unicode-character-comment]
