@@ -198,6 +198,9 @@ def _collect_offset_definitions(
                         "Mapping an offset to a horizontal dimension in unstructured is not allowed."
                     )
                 # create alias from vertical offset to vertical dimension
+                offset_definitions[dim.value] = TagDefinition(
+                    name=Sym(id=dim.value), alias=_vertical_dimension
+                )
                 offset_definitions[offset_name] = TagDefinition(
                     name=Sym(id=offset_name), alias=SymRef(id=dim.value)
                 )

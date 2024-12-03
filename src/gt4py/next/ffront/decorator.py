@@ -230,7 +230,7 @@ class Program:
         if self.backend is None:
             warnings.warn(
                 UserWarning(
-                    f"Field View Program '{self.definition_stage.definition.__name__}': Using Python execution, consider selecting a perfomance backend."
+                    f"Field View Program '{self.definition_stage.definition.__name__}': Using Python execution, consider selecting a performance backend."
                 ),
                 stacklevel=2,
             )

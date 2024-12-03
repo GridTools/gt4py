@@ -31,14 +31,6 @@ from .extended_typing import (
 from .type_definitions import Enum
 
 
-try:
-    # For performance reasons, try to use cytoolz when possible (using cython)
-    import cytoolz as toolz
-except ModuleNotFoundError:
-    # Fall back to pure Python toolz
-    import toolz  # noqa: F401 [unused-import]
-
-
 TreeKey = Union[int, str]
 
 
