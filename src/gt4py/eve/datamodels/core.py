@@ -1041,11 +1041,6 @@ def _make_datamodel(
     for key in annotations:
         type_hint = annotations[key] = resolved_annotations[key]
 
-        if isinstance(
-            type_hint, types.UnionType
-        ):  # see https://github.com/python/cpython/issues/105499
-            type_hint = typing.Union[type_hint.__args__]
-
         # Skip members annotated as class variables
         if type_hint is ClassVar or xtyping.get_origin(type_hint) is ClassVar:
             continue
@@ -1260,8 +1255,11 @@ def _make_concrete_with_cache(
     if not is_generic_datamodel_class(datamodel_cls):
         raise TypeError(f"'{datamodel_cls.__name__}' is not a generic model class.")
     for t in type_args:
+        _accepted_types: tuple[type, ...] = (type, type(None), xtyping.StdGenericAliasType)
+        if sys.version_info >= (3, 10):
+            _accepted_types = (*_accepted_types, types.UnionType)
         if not (
-            isinstance(t, (type, type(None), xtyping.StdGenericAliasType, types.UnionType))
+            isinstance(t, _accepted_types)
             or (getattr(type(t), "__module__", None) in ("typing", "typing_extensions"))
         ):
             raise TypeError(

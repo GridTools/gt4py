@@ -556,6 +556,7 @@ SAMPLE_TYPE_DATA: Final = [
     ("typing.Set[int]", ({1, 2, 3}, set()), (1, [1], (1,), {1: None})),
     ("typing.Union[int, float, str]", [1, 3.0, "one"], [[1], [], 1j]),
     ("int | float | str", [1, 3.0, "one"], [[1], [], 1j]),
+    ("typing.List[int|float]", [[1, 2.0], []], [1, 2.0, [1, "2.0"]]),
     ("typing.Optional[int]", [1, None], [[1], [], 1j]),
     (
         "typing.Dict[Union[int, float, str], Union[Tuple[int, Optional[float]], Set[int]]]",
