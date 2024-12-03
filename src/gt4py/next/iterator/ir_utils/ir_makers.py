@@ -423,11 +423,11 @@ def domain(
     ...         },
     ...     )
     ... )
-    'c⟨ IDimₕ: [0, 10), JDimₕ: [0, 20) ⟩'
+    'c⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
     >>> str(domain(common.GridType.CARTESIAN, {"IDim": (0, 10), "JDim": (0, 20)}))
-    'c⟨ IDimₕ: [0, 10), JDimₕ: [0, 20) ⟩'
+    'c⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
     >>> str(domain(common.GridType.UNSTRUCTURED, {"IDim": (0, 10), "JDim": (0, 20)}))
-    'u⟨ IDimₕ: [0, 10), JDimₕ: [0, 20) ⟩'
+    'u⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
     """
     if isinstance(grid_type, common.GridType):
         grid_type = f"{grid_type!s}_domain"
