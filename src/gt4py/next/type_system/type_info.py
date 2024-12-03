@@ -197,7 +197,7 @@ def apply_to_primitive_constituents(
         return fun(*symbol_types)
 
 
-def extract_dtype(symbol_type: ts.TypeSpec) -> ts.ScalarType:
+def extract_dtype(symbol_type: ts.TypeSpec) -> ts.ScalarType | ts.ListType:
     """
     Extract the data type from ``symbol_type`` if it is either `FieldType` or `ScalarType`.
 
@@ -213,7 +213,6 @@ def extract_dtype(symbol_type: ts.TypeSpec) -> ts.ScalarType:
     """
     match symbol_type:
         case ts.FieldType(dtype=dtype):
-            assert isinstance(dtype, ts.ScalarType)
             return dtype
         case ts.ScalarType() as dtype:
             return dtype
@@ -235,7 +234,10 @@ def is_floating_point(symbol_type: ts.TypeSpec) -> bool:
     >>> is_floating_point(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)))
     True
     """
-    return extract_dtype(symbol_type).kind in [ts.ScalarKind.FLOAT32, ts.ScalarKind.FLOAT64]
+    return isinstance(symbol_type, ts.ScalarType) and extract_dtype(symbol_type).kind in [  # type: ignore[union-attr] # checked is `ScalarType`
+        ts.ScalarKind.FLOAT32,
+        ts.ScalarKind.FLOAT64,
+    ]
 
 
 def is_integer(symbol_type: ts.TypeSpec) -> bool:
@@ -296,7 +298,10 @@ def is_number(symbol_type: ts.TypeSpec) -> bool:
 
 
 def is_logical(symbol_type: ts.TypeSpec) -> bool:
-    return extract_dtype(symbol_type).kind is ts.ScalarKind.BOOL
+    return (
+        isinstance(symbol_type, ts.ScalarType)
+        and extract_dtype(symbol_type).kind is ts.ScalarKind.BOOL  # type: ignore[union-attr] # checked is `ScalarType`
+    )
 
 
 def is_arithmetic(symbol_type: ts.TypeSpec) -> bool:
@@ -502,7 +507,9 @@ def promote(
         return types[0]
     elif all(isinstance(type_, (ts.ScalarType, ts.FieldType)) for type_ in types):
         dims = common.promote_dims(*(extract_dims(type_) for type_ in types))
-        dtype = cast(ts.ScalarType, promote(*(extract_dtype(type_) for type_ in types)))
+        extracted_dtypes = [extract_dtype(type_) for type_ in types]
+        assert all(isinstance(dtype, ts.ScalarType) for dtype in extracted_dtypes)
+        dtype = cast(ts.ScalarType, promote(*extracted_dtypes))  # type: ignore[arg-type] # checked is `ScalarType`
 
         return ts.FieldType(dims=dims, dtype=dtype)
     raise TypeError("Expected a 'FieldType' or 'ScalarType'.")
