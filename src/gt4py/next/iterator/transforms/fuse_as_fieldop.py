@@ -54,7 +54,7 @@ def _canonicalize_as_fieldop(expr: itir.FunCall) -> itir.FunCall:
     if cpm.is_ref_to(stencil, "deref"):
         stencil = im.lambda_("arg")(im.deref("arg"))
         new_expr = im.as_fieldop(stencil, domain)(*expr.args)
-        type_inference.copy_type(from_=expr, to=new_expr)
+        type_inference.copy_type(from_=expr, to=new_expr, allow_untyped=True)
 
         return new_expr
 
@@ -200,7 +200,7 @@ def fuse_as_fieldop(
 
     new_node = im.as_fieldop(new_stencil, domain)(*new_args.values())
 
-    type_inference.copy_type(from_=expr, to=new_node)
+    type_inference.copy_type(from_=expr, to=new_node, allow_untyped=True)
     return new_node
 
 
