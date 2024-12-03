@@ -85,8 +85,8 @@ class FuseAsFieldOp(eve.NodeTranslator):
     ...     im.ref("inp3", field_type),
     ... )
     >>> print(nested_as_fieldop)
-    as_fieldop(λ(__arg0, __arg1) → ·__arg0 + ·__arg1, c⟨ IDimₕ: [0, 1) ⟩)(
-      as_fieldop(λ(__arg0, __arg1) → ·__arg0 × ·__arg1, c⟨ IDimₕ: [0, 1) ⟩)(inp1, inp2), inp3
+    as_fieldop(λ(__arg0, __arg1) → ·__arg0 + ·__arg1, c⟨ IDimₕ: [0, 1[ ⟩)(
+      as_fieldop(λ(__arg0, __arg1) → ·__arg0 × ·__arg1, c⟨ IDimₕ: [0, 1[ ⟩)(inp1, inp2), inp3
     )
     >>> print(
     ...     FuseAsFieldOp.apply(
