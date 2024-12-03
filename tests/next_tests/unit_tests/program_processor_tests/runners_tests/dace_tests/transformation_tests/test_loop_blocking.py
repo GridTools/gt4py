@@ -637,3 +637,169 @@ def test_loop_blocking_inner_map_with_independent_part():
     assert all(oedge.dst in {inner_blocking_map, itskl} for oedge in state.out_edges(outer_map))
     assert state.scope_dict()[i_access_node] is outer_map
     assert all(oedge.dst is inner_blocking_map for oedge in state.out_edges(i_access_node))
+
+
+def _make_mixed_memlet_sdfg(
+    tskl1_independent: bool,
+) -> tuple[dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.Tasklet, dace_nodes.Tasklet]:
+    """
+    Generates the SDFGs for the mixed Memlet tests.
+
+    The SDFG that is generated has the following structure:
+    - `tsklt2`, is always dependent, it has an incoming connection from the
+        map entry, and an incoming, but empty, connection with `tskl1`.
+    - `tskl1` is connected to the map entry, depending on `tskl1_independent`
+        it is independent or dependent, it has an empty connection to `tskl2`,
+        thus it is sequenced before.
+    - Both have connection to other nodes down stream, but they are dependent.
+
+    Returns:
+        A tuple containing the following objects.
+        - The SDFG.
+        - The SDFG state.
+        - The outer map entry node.
+        - `tskl1`.
+        - `tskl2`.
+    """
+    sdfg = dace.SDFG(util.unique_name("mixed_memlet_sdfg"))
+    state = sdfg.add_state(is_start_block=True)
+    names_array = ["A", "B", "C"]
+    names_scalar = ["tmp1", "tmp2"]
+    for aname in names_array:
+        sdfg.add_array(
+            aname,
+            shape=((10,) if aname == "A" else (10, 10)),
+            dtype=dace.float64,
+            transient=False,
+        )
+    for sname in names_scalar:
+        sdfg.add_scalar(
+            sname,
+            dtype=dace.float64,
+            transient=True,
+        )
+    A, B, C, tmp1, tmp2 = (state.add_access(name) for name in names_array + names_scalar)
+
+    me, mx = state.add_map("outer_map", ndrange={"i": "0:10", "j": "0:10"})
+    tskl1 = state.add_tasklet(
+        "tskl1",
+        inputs={"__in1"},
+        outputs={"__out"},
+        code="__out = __in1" if tskl1_independent else "__out = __in1 + j",
+    )
+    tskl2 = state.add_tasklet(
+        "tskl2",
+        inputs={"__in1"},
+        outputs={"__out"},
+        code="__out = __in1 + 10.0",
+    )
+    tskl3 = state.add_tasklet(
+        "tskl3",
+        inputs={"__in1", "__in2"},
+        outputs={"__out"},
+        code="__out = __in1 + __in2",
+    )
+
+    state.add_edge(A, None, me, "IN_A", dace.Memlet("A[0:10]"))
+    me.add_in_connector("IN_A")
+    state.add_edge(me, "OUT_A", tskl1, "__in1", dace.Memlet("A[i]"))
+    me.add_out_connector("OUT_A")
+    state.add_edge(tskl1, "__out", tmp1, None, dace.Memlet("tmp1[0]"))
+
+    state.add_edge(B, None, me, "IN_B", dace.Memlet("B[0:10, 0:10]"))
+    me.add_in_connector("IN_B")
+    state.add_edge(me, "OUT_B", tskl2, "__in1", dace.Memlet("B[i, j]"))
+    me.add_out_connector("OUT_B")
+    state.add_edge(tskl2, "__out", tmp2, None, dace.Memlet("tmp2[0]"))
+
+    # Add the empty Memlet that sequences `tskl1` before `tskl2`.
+    state.add_edge(tskl1, None, tskl2, None, dace.Memlet())
+
+    state.add_edge(tmp1, None, tskl3, "__in1", dace.Memlet("tmp1[0]"))
+    state.add_edge(tmp2, None, tskl3, "__in2", dace.Memlet("tmp2[0]"))
+    state.add_edge(tskl3, "__out", mx, "IN_C", dace.Memlet("C[i, j]"))
+    mx.add_in_connector("IN_C")
+    state.add_edge(mx, "OUT_C", C, None, dace.Memlet("C[0:10, 0:10]"))
+    mx.add_out_connector("OUT_C")
+    sdfg.validate()
+
+    return (sdfg, state, me, tskl1, tskl2)
+
+
+def _apply_and_run_mixed_memlet_sdfg(sdfg: dace.SDFG) -> None:
+    ref = {
+        "A": np.array(np.random.rand(10), dtype=np.float64, copy=True),
+        "B": np.array(np.random.rand(10, 10), dtype=np.float64, copy=True),
+        "C": np.array(np.random.rand(10, 10), dtype=np.float64, copy=True),
+    }
+    res = copy.deepcopy(ref)
+    sdfg(**ref)
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(blocking_size=2, blocking_parameter="j"),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 1, f"Expected one application, but git {count}"
+    sdfg(**res)
+    assert all(np.allclose(ref[name], res[name]) for name in ref)
+
+
+def test_loop_blocking_mixked_memlets_1():
+    sdfg, state, me, tskl1, tskl2 = _make_mixed_memlet_sdfg(True)
+    mx = state.exit_node(me)
+
+    _apply_and_run_mixed_memlet_sdfg(sdfg)
+    scope_dict = state.scope_dict()
+
+    # Ensure that `tskl1` is independent.
+    assert scope_dict[tskl1] is me
+
+    # The output of `tskl1`, which is `tmp1` should also be classified as independent.
+    tmp1 = next(iter(edge.dst for edge in state.out_edges(tskl1) if not edge.data.is_empty()))
+    assert scope_dict[tmp1] is me
+    assert isinstance(tmp1, dace_nodes.AccessNode)
+    assert tmp1.data == "tmp1"
+
+    # Find the inner map.
+    inner_map_entry: dace_nodes.MapEntry = scope_dict[tskl2]
+    assert inner_map_entry is not me and isinstance(inner_map_entry, dace_nodes.MapEntry)
+    inner_map_exit: dace_nodes.MapExit = state.exit_node(inner_map_entry)
+
+    outer_scope = {tskl1, tmp1, inner_map_entry, inner_map_exit, mx}
+    for node in state.nodes():
+        if scope_dict[node] is None:
+            assert (node is me) or (
+                isinstance(node, dace_nodes.AccessNode) and node.data in {"A", "B", "C"}
+            )
+        elif scope_dict[node] is me:
+            assert node in outer_scope
+        else:
+            assert (
+                (node is inner_map_exit)
+                or (isinstance(node, dace_nodes.AccessNode) and node.data == "tmp2")
+                or (isinstance(node, dace_nodes.Tasklet) and node.label in {"tskl2", "tskl3"})
+            )
+
+
+def test_loop_blocking_mixked_memlets_2():
+    sdfg, state, me, tskl1, tskl2 = _make_mixed_memlet_sdfg(False)
+    mx = state.exit_node(me)
+
+    _apply_and_run_mixed_memlet_sdfg(sdfg)
+    scope_dict = state.scope_dict()
+
+    # Because `tskl1` is now dependent, everything is now dependent.
+    inner_map_entry = scope_dict[tskl1]
+    assert isinstance(inner_map_entry, dace_nodes.MapEntry)
+    assert inner_map_entry is not me
+
+    for node in state.nodes():
+        if scope_dict[node] is None:
+            assert (node is me) or (
+                isinstance(node, dace_nodes.AccessNode) and node.data in {"A", "B", "C"}
+            )
+        elif scope_dict[node] is me:
+            assert isinstance(node, dace_nodes.MapEntry) or (node is mx)
+        else:
+            assert scope_dict[node] is inner_map_entry
