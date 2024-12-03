@@ -221,8 +221,7 @@ def gt_auto_optimize(
 
         # We now ensure that point wise computations are properly double buffered.
         #  The main reason is to ensure that rule 3 of ADR18 is maintained.
-        count = gtx_transformations.gt_crearte_local_double_buffering(sdfg)
-        print(f">>>>> APPLIED {count} LOCAL BUFFERINGS.")
+        gtx_transformations.gt_crearte_local_double_buffering(sdfg)
 
         # Phase 5: Apply blocking
         if blocking_dim is not None:
