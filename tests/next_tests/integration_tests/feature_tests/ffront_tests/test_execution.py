@@ -41,6 +41,7 @@ from next_tests.integration_tests.cases import (
     Edge,
     cartesian_case,
     unstructured_case,
+    unstructured_case_3d,
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     exec_alloc_descriptor,
@@ -90,6 +91,20 @@ def test_unstructured_shift(unstructured_case):
         unstructured_case,
         testee,
         ref=lambda a: a[unstructured_case.offset_provider["E2V"].ndarray[:, 0]],
+    )
+
+
+def test_horizontal_only_with_3d_mesh(unstructured_case_3d):
+    # test field operator operating only on horizontal fields while using an offset provider
+    # including a vertical dimension.
+    @gtx.field_operator
+    def testee(a: cases.VField) -> cases.VField:
+        return a
+
+    cases.verify_with_default_data(
+        unstructured_case_3d,
+        testee,
+        ref=lambda a: a,
     )
 
 
