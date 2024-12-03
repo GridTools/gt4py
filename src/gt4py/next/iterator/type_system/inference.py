@@ -95,14 +95,17 @@ def _set_node_type(node: itir.Node, type_: ts.TypeSpec) -> None:
     node.type = type_
 
 
-def copy_type(from_: itir.Node, to: itir.Node, allow_untyped=False) -> None:
+def copy_type(from_: itir.Node, to: itir.Node, allow_untyped: bool = False) -> None:
     """
     Copy type from one node to another.
 
     This function mainly exists for readability reasons.
     """
     assert allow_untyped is not None or isinstance(from_.type, ts.TypeSpec)
-    _set_node_type(to, from_.type)  # type: ignore[arg-type]
+    if from_.type is None:
+        assert allow_untyped
+        return
+    _set_node_type(to, from_.type)
 
 
 def on_inferred(callback: Callable, *args: Union[ts.TypeSpec, ObservableTypeSynthesizer]) -> None:
@@ -509,7 +512,10 @@ class ITIRTypeInference(eve.NodeTranslator):
             # the target can have fewer elements than the expr in which case the output from the
             # expression is simply discarded.
             expr_type = functools.reduce(
-                lambda tuple_type, i: tuple_type.types[i],  # type: ignore[attr-defined]  # format ensured by primitive_constituents
+                lambda tuple_type, i: tuple_type.types[i]  # type: ignore[attr-defined]  # format ensured by primitive_constituents
+                # `ts.DeferredType` only occurs for scans returning a tuple
+                if not isinstance(tuple_type, ts.DeferredType)
+                else ts.DeferredType(constraint=None),
                 path,
                 node.expr.type,
             )
