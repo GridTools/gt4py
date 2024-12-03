@@ -6,7 +6,6 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import warnings
 from collections.abc import Callable, Sequence
 from inspect import currentframe, getframeinfo
 from pathlib import Path
@@ -120,13 +119,7 @@ def build_sdfg_from_itir(
 
     for nested_sdfg in sdfg.all_sdfgs_recursive():
         if not nested_sdfg.debuginfo:
-            _, frameinfo = (
-                warnings.warn(
-                    f"{nested_sdfg.label} does not have debuginfo. Consider adding them in the corresponding nested sdfg.",
-                    stacklevel=2,
-                ),
-                getframeinfo(currentframe()),  # type: ignore[arg-type]
-            )
+            frameinfo = getframeinfo(currentframe())  # type: ignore[arg-type]
             nested_sdfg.debuginfo = dace.dtypes.DebugInfo(
                 start_line=frameinfo.lineno, end_line=frameinfo.lineno, filename=frameinfo.filename
             )

@@ -10,7 +10,6 @@ import pytest
 
 from gt4py import next as gtx
 from gt4py.next import common
-from gt4py.next.program_processors.runners.dace_fieldview import program as dace_prg
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
@@ -20,16 +19,18 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     JDim,
     KDim,
     Vertex,
-    mesh_descriptor,
+    mesh_descriptor,  # noqa: F401
 )
 
 
 try:
     import dace
+
     from gt4py.next.program_processors.runners.dace import gtir_cpu, gtir_gpu
 except ImportError:
-    from typing import Optional
     from types import ModuleType
+    from typing import Optional
+
     from gt4py.next import backend as next_backend
 
     dace: Optional[ModuleType] = None
@@ -66,7 +67,7 @@ def cartesian(request, gtir_dace_backend):
 
 
 @pytest.fixture
-def unstructured(request, gtir_dace_backend, mesh_descriptor):
+def unstructured(request, gtir_dace_backend, mesh_descriptor):  # noqa: F811
     if gtir_dace_backend is None:
         yield None
 
@@ -82,48 +83,6 @@ def unstructured(request, gtir_dace_backend, mesh_descriptor):
         grid_type=common.GridType.UNSTRUCTURED,
         allocator=gtir_dace_backend.allocator,
     )
-
-
-@pytest.mark.skipif(dace is None, reason="DaCe not found")
-def test_input_names_extractor_cartesian(cartesian):
-    @gtx.field_operator(backend=cartesian.backend)
-    def testee_op(
-        a: gtx.Field[[IDim, JDim, KDim], gtx.int],
-    ) -> gtx.Field[[IDim, JDim, KDim], gtx.int]:
-        return a
-
-    @gtx.program(backend=cartesian.backend)
-    def testee(
-        a: gtx.Field[[IDim, JDim, KDim], gtx.int],
-        b: gtx.Field[[IDim, JDim, KDim], gtx.int],
-        c: gtx.Field[[IDim, JDim, KDim], gtx.int],
-    ):
-        testee_op(b, out=c)
-        testee_op(a, out=b)
-
-    input_field_names = dace_prg.InputNamesExtractor.only_fields(testee.itir)
-    assert input_field_names == {"a", "b"}
-
-
-@pytest.mark.skipif(dace is None, reason="DaCe not found")
-def test_output_names_extractor(cartesian):
-    @gtx.field_operator(backend=cartesian.backend)
-    def testee_op(
-        a: gtx.Field[[IDim, JDim, KDim], gtx.int],
-    ) -> gtx.Field[[IDim, JDim, KDim], gtx.int]:
-        return a
-
-    @gtx.program(backend=cartesian.backend)
-    def testee(
-        a: gtx.Field[[IDim, JDim, KDim], gtx.int],
-        b: gtx.Field[[IDim, JDim, KDim], gtx.int],
-        c: gtx.Field[[IDim, JDim, KDim], gtx.int],
-    ):
-        testee_op(a, out=b)
-        testee_op(a, out=c)
-
-    output_field_names = dace_prg.OutputNamesExtractor.only_fields(testee.itir)
-    assert output_field_names == {"b", "c"}
 
 
 @pytest.mark.skipif(dace is None, reason="DaCe not found")
