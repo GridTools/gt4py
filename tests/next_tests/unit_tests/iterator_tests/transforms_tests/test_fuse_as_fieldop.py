@@ -266,3 +266,14 @@ def test_chained_fusion():
         testee, offset_provider_type={}, allow_undeclared_symbols=True
     )
     assert actual == expected
+
+
+def test_inline_into_scan():
+    d = im.domain("cartesian_domain", {IDim: (0, 1)})
+    scan = im.call("scan")(im.lambda_("state", "a")(im.plus("state", im.deref("a"))), True, 0.0)
+    testee = im.as_fieldop(scan, d)(im.as_fieldop("deref")(im.ref("a", field_type)))
+    expected = im.as_fieldop(scan, d)(im.ref("a", field_type))
+    actual = fuse_as_fieldop.FuseAsFieldOp.apply(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True
+    )
+    assert actual == expected

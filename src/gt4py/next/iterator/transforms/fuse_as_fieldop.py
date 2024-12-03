@@ -54,7 +54,7 @@ def _canonicalize_as_fieldop(expr: itir.FunCall) -> itir.FunCall:
     if cpm.is_ref_to(stencil, "deref"):
         stencil = im.lambda_("arg")(im.deref("arg"))
         new_expr = im.as_fieldop(stencil, domain)(*expr.args)
-        type_inference.copy_type(from_=expr, to=new_expr)
+        type_inference.copy_type(from_=expr, to=new_expr, allow_untyped=True)
 
         return new_expr
 
@@ -109,12 +109,37 @@ def _inline_as_fieldop_arg(
     ), extracted_args
 
 
+def _unwrap_scan(stencil: itir.Lambda | itir.FunCall):
+    if cpm.is_call_to(stencil, "scan"):
+        scan_pass, direction, init = stencil.args
+        assert isinstance(scan_pass, itir.Lambda)
+        # remove scan pass state to be used by caller
+        state_param = scan_pass.params[0]
+        stencil_like = im.lambda_(*scan_pass.params[1:])(scan_pass.expr)
+
+        def restore_scan(transformed_stencil_like: itir.Lambda):
+            new_scan_pass = im.lambda_(state_param, *transformed_stencil_like.params)(
+                im.call(transformed_stencil_like)(
+                    *(param.id for param in transformed_stencil_like.params)
+                )
+            )
+            return im.call("scan")(new_scan_pass, direction, init)
+
+        return stencil_like, restore_scan
+
+    assert isinstance(stencil, itir.Lambda)
+    return stencil, lambda s: s
+
+
 def fuse_as_fieldop(
     expr: itir.Expr, eligible_args: list[bool], *, uids: eve_utils.UIDGenerator
 ) -> itir.Expr:
-    assert cpm.is_applied_as_fieldop(expr) and isinstance(expr.fun.args[0], itir.Lambda)  # type: ignore[attr-defined]  # ensured by is_applied_as_fieldop
+    assert cpm.is_applied_as_fieldop(expr)
 
     stencil: itir.Lambda = expr.fun.args[0]  # type: ignore[attr-defined]  # ensured by is_applied_as_fieldop
+    assert isinstance(expr.fun.args[0], itir.Lambda) or cpm.is_call_to(stencil, "scan")  # type: ignore[attr-defined]  # ensured by is_applied_as_fieldop
+    stencil, restore_scan = _unwrap_scan(stencil)
+
     domain = expr.fun.args[1] if len(expr.fun.args) > 1 else None  # type: ignore[attr-defined]  # ensured by is_applied_as_fieldop
 
     args: list[itir.Expr] = expr.args
@@ -158,6 +183,7 @@ def fuse_as_fieldop(
             new_args = _merge_arguments(new_args, {new_param: arg})
 
     stencil = im.lambda_(*new_args.keys())(new_stencil_body)
+    stencil = restore_scan(stencil)
 
     # simplify stencil directly to keep the tree small
     new_stencil = inline_lambdas.InlineLambdas.apply(
@@ -174,7 +200,7 @@ def fuse_as_fieldop(
 
     new_node = im.as_fieldop(new_stencil, domain)(*new_args.values())
 
-    type_inference.copy_type(from_=expr, to=new_node)
+    type_inference.copy_type(from_=expr, to=new_node, allow_untyped=True)
     return new_node
 
 
@@ -333,10 +359,11 @@ class FuseAsFieldOp(eve.NodeTranslator):
             if new_node is not node:  # nothing has been inlined
                 return self.visit(new_node, **kwargs)
 
-        if cpm.is_call_to(node.fun, "as_fieldop") and isinstance(node.fun.args[0], itir.Lambda):
-            stencil: itir.Lambda = node.fun.args[0]
+        if cpm.is_call_to(node.fun, "as_fieldop"):
+            stencil = node.fun.args[0]
+            assert isinstance(stencil, itir.Lambda) or cpm.is_call_to(stencil, "scan")
             args: list[itir.Expr] = node.args
-            shifts = trace_shifts.trace_stencil(stencil)
+            shifts = trace_shifts.trace_stencil(stencil, num_args=len(args))
 
             eligible_args = [
                 _arg_inline_predicate(arg, arg_shifts)

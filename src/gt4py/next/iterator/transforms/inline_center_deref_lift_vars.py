@@ -59,8 +59,8 @@ class InlineCenterDerefLiftVars(eve.NodeTranslator):
         if not uids:
             uids = eve_utils.UIDGenerator()
         if is_stencil:
-            assert isinstance(node, itir.Lambda)
-            trace_shifts.trace_stencil(node, num_args=len(node.params), save_to_annex=True)
+            assert isinstance(node, itir.Expr)
+            trace_shifts.trace_stencil(node, save_to_annex=True)
         return cls(uids=uids).visit(node)
 
     def visit_FunCall(self, node: itir.FunCall, **kwargs):
