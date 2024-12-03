@@ -524,6 +524,9 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                     new_out_conn = None
                     new_memlet_outside = dace.Memlet()
                 else:
+                    # NOTE: This creates more connections that are ultimately
+                    #  necessary. However, figuring out which one to use and if
+                    #  it would be valid, is very complicated, so we don't do it.
                     new_map_conn = inner_entry.next_connector(try_name=out_edge.data.data)
                     new_in_conn = "IN_" + new_map_conn
                     new_out_conn = "OUT_" + new_map_conn
@@ -563,49 +566,54 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                 #   - An independent node.
                 #  The last case was already handle by the loop above.
                 if edge_src is inner_entry:
-                    # Edge originated originally at an independent node, but was handled.
+                    # Edge originated originally at an independent node, but was
+                    #  already handled by the loop above.
                     assert dependent_node in relocated_nodes
-                    continue
 
                 elif edge_src is not outer_entry:
-                    # Edge originated at a dependent node and there is nothing that
-                    #  we have to do.
-                    continue
+                    # Edge originated at an other dependent node. There is nothing
+                    #  that we have to do.
+                    # NOTE: We can not test if `edge_src` is in `self._dependent_nodes`
+                    #  because it only contains the dependent nodes that are directly
+                    #  connected to the map entry.
+                    assert edge_src not in self._independent_nodes
 
                 elif in_edge.data.is_empty():
-                    # Empty edges are just redirected, such that they now originate
-                    #  at the inner map. If needed we will connect the inner map's
-                    #  entry with an empty edge to the outer entry, later.
+                    # The dependent node has an empty Memlet to the other map.
+                    #  Since the inner map is sequenced after the outer map,
+                    #  we will simply reconnect the edge to the inner map.
+                    # TODO(phimuell): Are there situations where this makes problems.
                     dace_helpers.redirect_edge(state=state, edge=in_edge, new_src=inner_entry)
-                    continue
-                assert edge_src is outer_entry
 
-                # This dependent node originated at the outer map. Thus we have to
-                #  split the edge, such that it now passes through the inner map.
-                new_map_conn = inner_entry.next_connector(try_name=in_edge.src_conn[4:])
-                new_in_conn = "IN_" + new_map_conn
-                new_out_conn = "OUT_" + new_map_conn
-                new_memlet_inner = dace.Memlet.from_array(
-                    in_edge.data.data, sdfg.arrays[in_edge.data.data]
-                )
+                elif edge_src is outer_entry:
+                    # This dependent node originated at the outer map. Thus we have to
+                    #  split the edge, such that it now passes through the inner map.
+                    new_map_conn = inner_entry.next_connector(try_name=in_edge.src_conn[4:])
+                    new_in_conn = "IN_" + new_map_conn
+                    new_out_conn = "OUT_" + new_map_conn
+                    new_memlet_inner = dace.Memlet.from_array(
+                        in_edge.data.data, sdfg.arrays[in_edge.data.data]
+                    )
+                    state.add_edge(
+                        in_edge.src,
+                        in_edge.src_conn,
+                        inner_entry,
+                        new_in_conn,
+                        new_memlet_inner,
+                    )
+                    state.add_edge(
+                        inner_entry,
+                        new_out_conn,
+                        in_edge.dst,
+                        in_edge.dst_conn,
+                        copy.deepcopy(in_edge.data),
+                    )
+                    inner_entry.add_in_connector(new_in_conn)
+                    inner_entry.add_out_connector(new_out_conn)
+                    state.remove_edge(in_edge)
 
-                state.add_edge(
-                    in_edge.src,
-                    in_edge.src_conn,
-                    inner_entry,
-                    new_in_conn,
-                    new_memlet_inner,
-                )
-                state.add_edge(
-                    inner_entry,
-                    new_out_conn,
-                    in_edge.dst,
-                    in_edge.dst_conn,
-                    copy.deepcopy(in_edge.data),
-                )
-                inner_entry.add_in_connector(new_in_conn)
-                inner_entry.add_out_connector(new_out_conn)
-                state.remove_edge(in_edge)
+                else:
+                    raise NotImplementedError("Unknown node configuration.")
 
         # In certain cases it might happen that we need to create an empty
         #  Memlet between the outer map entry and the inner one.
