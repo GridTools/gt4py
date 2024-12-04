@@ -438,6 +438,22 @@ def test_astype_int(cartesian_case):
     )
 
 
+def test_astype_int_local_field(unstructured_case):
+    @gtx.field_operator
+    def testee(a: gtx.Field[[Vertex], np.float64]) -> gtx.Field[[Edge], int64]:
+        tmp = astype(a(E2V), int64)
+        return neighbor_sum(tmp, axis=E2VDim)
+
+    e2v_table = unstructured_case.offset_provider["E2V"].ndarray
+
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a: np.sum(a.astype(int64)[e2v_table], axis=1, initial=0),
+        comparison=lambda a, b: np.all(a == b),
+    )
+
+
 @pytest.mark.uses_tuple_returns
 def test_astype_on_tuples(cartesian_case):
     @gtx.field_operator
