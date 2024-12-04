@@ -85,8 +85,6 @@ class ProgramFormatterId(_PythonObjectIdMixin, str, enum.Enum):
 # to avoid needing to mark all tests.
 ALL = "all"
 REQUIRES_ATLAS = "requires_atlas"
-# TODO(havogt): Remove, skipped during refactoring to GTIR
-STARTS_FROM_GTIR_PROGRAM = "starts_from_gtir_program"
 USES_APPLIED_SHIFTS = "uses_applied_shifts"
 USES_CONSTANT_FIELDS = "uses_constant_fields"
 USES_DYNAMIC_OFFSETS = "uses_dynamic_offsets"
@@ -94,10 +92,8 @@ USES_FLOORDIV = "uses_floordiv"
 USES_IF_STMTS = "uses_if_stmts"
 USES_IR_IF_STMTS = "uses_ir_if_stmts"
 USES_INDEX_FIELDS = "uses_index_fields"
-USES_LIFT_EXPRESSIONS = "uses_lift_expressions"
 USES_NEGATIVE_MODULO = "uses_negative_modulo"
 USES_ORIGIN = "uses_origin"
-USES_REDUCTION_OVER_LIFT_EXPRESSIONS = "uses_reduction_over_lift_expressions"
 USES_SCAN = "uses_scan"
 USES_SCAN_IN_FIELD_OPERATOR = "uses_scan_in_field_operator"
 USES_SCAN_IN_STENCIL = "uses_scan_in_stencil"
@@ -117,7 +113,6 @@ USES_MAX_OVER = "uses_max_over"
 USES_MESH_WITH_SKIP_VALUES = "uses_mesh_with_skip_values"
 USES_SCALAR_IN_DOMAIN_AND_FO = "uses_scalar_in_domain_and_fo"
 CHECKS_SPECIFIC_ERROR = "checks_specific_error"
-USES_INDEX_BUILTIN = "uses_index_builtin"
 
 # Skip messages (available format keys: 'marker', 'backend')
 UNSUPPORTED_MESSAGE = "'{marker}' tests not supported by '{backend}' backend"
