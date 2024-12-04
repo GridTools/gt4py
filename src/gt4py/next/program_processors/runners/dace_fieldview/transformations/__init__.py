@@ -12,32 +12,56 @@ Please also see [ADR0018](https://github.com/GridTools/gt4py/tree/main/docs/deve
 that explains the general structure and requirements on the SDFGs.
 """
 
-from .auto_opt import (
-    GT_SIMPLIFY_DEFAULT_SKIP_SET,
-    gt_auto_optimize,
-    gt_inline_nested_sdfg,
-    gt_set_iteration_order,
-    gt_simplify,
+from .auto_optimize import gt_auto_optimize
+from .gpu_utils import (
+    GPUSetBlockSize,
+    gt_gpu_transform_non_standard_memlet,
+    gt_gpu_transformation,
+    gt_set_gpu_blocksize,
 )
-from .gpu_utils import GPUSetBlockSize, gt_gpu_transformation, gt_set_gpu_blocksize
+from .local_double_buffering import gt_create_local_double_buffering
 from .loop_blocking import LoopBlocking
-from .map_orderer import MapIterationOrder
+from .map_fusion_parallel import MapFusionParallel
+from .map_fusion_serial import MapFusionSerial
+from .map_orderer import MapIterationOrder, gt_set_iteration_order
 from .map_promoter import SerialMapPromoter
-from .map_serial_fusion import SerialMapFusion
+from .simplify import (
+    GT_SIMPLIFY_DEFAULT_SKIP_SET,
+    GT4PyGlobalSelfCopyElimination,
+    GT4PyMapBufferElimination,
+    GT4PyMoveTaskletIntoMap,
+    gt_inline_nested_sdfg,
+    gt_reduce_distributed_buffering,
+    gt_simplify,
+    gt_substitute_compiletime_symbols,
+)
+from .strides import gt_change_transient_strides
+from .util import gt_find_constant_arguments, gt_make_transients_persistent
 
 
 __all__ = [
     "GT_SIMPLIFY_DEFAULT_SKIP_SET",
     "GPUSetBlockSize",
+    "GT4PyGlobalSelfCopyElimination",
+    "GT4PyMoveTaskletIntoMap",
+    "GT4PyMapBufferElimination",
     "LoopBlocking",
     "MapIterationOrder",
-    "SerialMapFusion",
+    "MapFusionParallel",
+    "MapFusionSerial",
     "SerialMapPromoter",
     "SerialMapPromoterGPU",
     "gt_auto_optimize",
+    "gt_change_transient_strides",
+    "gt_create_local_double_buffering",
     "gt_gpu_transformation",
     "gt_inline_nested_sdfg",
     "gt_set_iteration_order",
     "gt_set_gpu_blocksize",
     "gt_simplify",
+    "gt_make_transients_persistent",
+    "gt_reduce_distributed_buffering",
+    "gt_find_constant_arguments",
+    "gt_substitute_compiletime_symbols",
+    "gt_gpu_transform_non_standard_memlet",
 ]
