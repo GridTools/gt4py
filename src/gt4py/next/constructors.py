@@ -290,22 +290,24 @@ def as_connectivity(
     *,
     allocator: Optional[next_allocators.FieldBufferAllocatorProtocol] = None,
     device: Optional[core_defs.Device] = None,
-    skip_value: Optional[core_defs.IntegralScalar] = None,
+    skip_value: core_defs.IntegralScalar | eve.NothingType | None = eve.NOTHING,
     # TODO: copy=False
-) -> common.ConnectivityField:
+) -> common.Connectivity:
     """
-    Construct a connectivity field from the given domain, codomain, and data.
+    Construct a `Connectivity` from the given domain, codomain, and data.
 
     Arguments:
-        domain: The domain of the connectivity field. It can be either a `common.DomainLike` object or a
+        domain: The domain of the connectivity. It can be either a `common.DomainLike` object or a
             sequence of `common.Dimension` objects.
-        codomain: The codomain dimension of the connectivity field.
+        codomain: The codomain dimension of the connectivity.
         data: The data used to construct the connectivity field.
-        dtype: The data type of the connectivity field. If not provided, it will be inferred from the data.
-        allocator: The allocator used to allocate the buffer for the connectivity field. If not provided,
+        dtype: The data type of the connectivity. If not provided, it will be inferred from the data.
+        allocator: The allocator used to allocate the buffer for the connectivity. If not provided,
             a default allocator will be used.
-        device: The device on which the connectivity field will be allocated. If not provided, the default
+        device: The device on which the connectivity will be allocated. If not provided, the default
             device will be used.
+        skip_value: The value that signals missing entries in the neighbor table. Defaults to the default
+            skip value if it is found in data, otherwise to `None` (= no skip value).
 
     Returns:
         The constructed connectivity field.
@@ -313,9 +315,15 @@ def as_connectivity(
     Raises:
         ValueError: If the domain or codomain is invalid, or if the shape of the data does not match the domain shape.
     """
+    if skip_value is eve.NOTHING:
+        skip_value = (
+            common._DEFAULT_SKIP_VALUE if (data == common._DEFAULT_SKIP_VALUE).any() else None
+        )
+
     assert (
         skip_value is None or skip_value == common._DEFAULT_SKIP_VALUE
     )  # TODO(havogt): not yet configurable
+    skip_value = cast(Optional[core_defs.IntegralScalar], skip_value)
     if isinstance(domain, Sequence) and all(isinstance(dim, common.Dimension) for dim in domain):
         domain = cast(Sequence[common.Dimension], domain)
         if len(domain) != data.ndim:

@@ -360,9 +360,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
         def create_cast(expr: itir.Expr, t: tuple[ts.TypeSpec]) -> itir.FunCall:
             if isinstance(t[0], ts.FieldType):
-                return im.as_fieldop(
-                    im.lambda_("__val")(im.call("cast_")(im.deref("__val"), str(new_type)))
-                )(expr)
+                return im.cast_as_fieldop(str(new_type))(expr)
             else:
                 assert isinstance(t[0], ts.ScalarType)
                 return im.call("cast_")(expr, str(new_type))

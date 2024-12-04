@@ -33,11 +33,11 @@ def test_external_local_field(unstructured_case):
         )  # multiplication with shifted `ones` because reduction of only non-shifted field with local dimension is not supported
 
     inp = unstructured_case.as_field(
-        [Vertex, V2EDim], unstructured_case.offset_provider["V2E"].table
+        [Vertex, V2EDim], unstructured_case.offset_provider["V2E"].ndarray
     )
     ones = cases.allocate(unstructured_case, testee, "ones").strategy(cases.ConstInitializer(1))()
 
-    v2e_table = unstructured_case.offset_provider["V2E"].table
+    v2e_table = unstructured_case.offset_provider["V2E"].ndarray
     cases.verify(
         unstructured_case,
         testee,
@@ -57,7 +57,7 @@ def test_external_local_field_only(unstructured_case):
         return neighbor_sum(inp, axis=V2EDim)
 
     inp = unstructured_case.as_field(
-        [Vertex, V2EDim], unstructured_case.offset_provider["V2E"].table
+        [Vertex, V2EDim], unstructured_case.offset_provider["V2E"].ndarray
     )
 
     cases.verify(
@@ -65,7 +65,7 @@ def test_external_local_field_only(unstructured_case):
         testee,
         inp,
         out=cases.allocate(unstructured_case, testee, cases.RETURN)(),
-        ref=np.sum(unstructured_case.offset_provider["V2E"].table, axis=1),
+        ref=np.sum(unstructured_case.offset_provider["V2E"].ndarray, axis=1),
     )
 
 
@@ -76,7 +76,7 @@ def test_write_local_field(unstructured_case):
         return inp(V2E)
 
     out = unstructured_case.as_field(
-        [Vertex, V2EDim], np.zeros_like(unstructured_case.offset_provider["V2E"].table)
+        [Vertex, V2EDim], np.zeros_like(unstructured_case.offset_provider["V2E"].ndarray)
     )
     inp = cases.allocate(unstructured_case, testee, "inp")()
     cases.verify(
@@ -84,5 +84,5 @@ def test_write_local_field(unstructured_case):
         testee,
         inp,
         out=out,
-        ref=inp.asnumpy()[unstructured_case.offset_provider["V2E"].table],
+        ref=inp.asnumpy()[unstructured_case.offset_provider["V2E"].ndarray],
     )
