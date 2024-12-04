@@ -80,6 +80,11 @@ class ScalarType(DataType):
 
 
 class ListType(DataType):
+    """Represents a neighbor list in the ITIR representation.
+
+    Note: not used in the frontend.
+    """
+
     element_type: DataType
     # TODO(havogt): the `offset_type` is not yet used in type_inference,
     # it is meant to describe the neighborhood (via the local dimension)

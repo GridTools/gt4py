@@ -104,11 +104,20 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             location=node.location,
         )
 
+    def visit_Slice(self, node: past.Slice, **kwargs: Any) -> past.Slice:
+        return past.Slice(
+            lower=self.visit(node.lower, **kwargs),
+            upper=self.visit(node.upper, **kwargs),
+            step=self.visit(node.step, **kwargs),
+            type=ts.DeferredType(constraint=None),
+            location=node.location,
+        )
+
     def visit_Subscript(self, node: past.Subscript, **kwargs: Any) -> past.Subscript:
         value = self.visit(node.value, **kwargs)
         return past.Subscript(
             value=value,
-            slice_=node.slice_,  # TODO: I don't think we are using this type
+            slice_=self.visit(node.slice_, **kwargs),
             type=value.type,
             location=node.location,
         )
