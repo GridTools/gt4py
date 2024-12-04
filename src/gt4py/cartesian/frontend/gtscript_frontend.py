@@ -1417,7 +1417,7 @@ class IRMaker(ast.NodeVisitor):
         #           A better version of this code would look through the keywords
         #           in any order. `ddim` shall remain optional, K mandatory.
         assert _filter_absolute_K_index_method(node)
-        if len(node.keywords) != 1 and len(node.keywords) != 2:
+        if len(node.keywords) not in [1, 2]:
             raise GTScriptSyntaxError(
                 message="Absolute K index bad syntax. Must be of the form`.at(K=..., ddim=[...])` "
                 " with the `ddim` argument optional",
