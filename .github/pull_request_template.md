@@ -32,4 +32,3 @@ Delete this comment and add a proper description of the changes contained in thi
 If this PR contains code authored by new contributors please make sure:
 
 - [ ] The PR contains an updated version of the `AUTHORS.md` file adding the names of all the new contributors.
-
