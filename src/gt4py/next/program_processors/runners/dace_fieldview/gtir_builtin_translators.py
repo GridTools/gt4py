@@ -172,11 +172,12 @@ def get_tuple_type(data: tuple[FieldopResult, ...]) -> ts.TupleType:
 def flatten_tuples(name: str, arg: FieldopResult) -> list[tuple[str, FieldopData]]:
     if isinstance(arg, tuple):
         tuple_type = get_tuple_type(arg)
-        tuple_field_names = [
-            str(sym.id) for sym in dace_gtir_utils.get_tuple_fields(name, tuple_type)
+        tuple_symbols = dace_gtir_utils.flatten_tuple_fields(name, tuple_type)
+        tuple_data_fields = gtx_utils.flatten_nested_tuple(arg)
+        return [
+            (str(tsym.id), tfield)
+            for tsym, tfield in zip(tuple_symbols, tuple_data_fields, strict=True)
         ]
-        tuple_args = zip(tuple_field_names, arg, strict=True)
-        return list(itertools.chain(*[flatten_tuples(fname, farg) for fname, farg in tuple_args]))
     else:
         return [(name, arg)]
 
@@ -329,15 +330,16 @@ def _create_field_operator(
         else:
             assert isinstance(sym.type.dtype, itir_ts.ListType)
             assert output_edge.result.gt_dtype.element_type == sym.type.dtype.element_type
-            assert isinstance(dataflow_output_desc, dace.data.Array)
             assert isinstance(output_edge.result.gt_dtype.element_type, ts.ScalarType)
             field_dtype = output_edge.result.gt_dtype.element_type
+            assert isinstance(dataflow_output_desc, dace.data.Array)
+            assert len(dataflow_output_desc.shape) == 1
             # extend the array with the local dimensions added by the field operator (e.g. `neighbors`)
             assert output_edge.result.gt_dtype.offset_type is not None
             field_dims = [*domain_dims, output_edge.result.gt_dtype.offset_type]
-            field_shape = [*domain_shape, dataflow_output_desc.shape]
-            field_offset = [*domain_offset, dataflow_output_desc.offset]
-            field_subset = [*domain_subset, sbs.Range.from_array(dataflow_output_desc)]
+            field_shape = [*domain_shape, dataflow_output_desc.shape[0]]
+            field_offset = [*domain_offset, dataflow_output_desc.offset[0]]
+            field_subset = domain_subset + sbs.Range.from_array(dataflow_output_desc)
 
         # allocate local temporary storage
         field_name, _ = sdfg.add_temp_transient(field_shape, dataflow_output_desc.dtype)
@@ -358,7 +360,7 @@ def _create_field_operator(
     else:
         assert isinstance(node_type, ts.TupleType)
         return gtx_utils.tree_map(create_field)(
-            output_edges, dace_gtir_utils.get_tuple_fields("x", node_type)
+            output_edges, dace_gtir_utils.make_symbol_tuple("x", node_type)
         )
 
 
@@ -448,11 +450,11 @@ def translate_as_fieldop(
 
     # represent the field operator as a mapped tasklet graph, which will range over the field domain
     taskgen = gtir_dataflow.LambdaToDataflow(sdfg, state, sdfg_builder)
-    input_edges, output_edges = taskgen.apply(stencil_expr, args=fieldop_args)
-    assert len(output_edges) == 1
+    input_edges, output_edge = taskgen.apply(stencil_expr, args=fieldop_args)
+    assert isinstance(output_edge, gtir_dataflow.DataflowOutputEdge)
 
     return _create_field_operator(
-        sdfg, state, domain, node.type, sdfg_builder, input_edges, output_edges[0]
+        sdfg, state, domain, node.type, sdfg_builder, input_edges, output_edge
     )
 
 
@@ -623,7 +625,7 @@ def _get_data_nodes(
         return sdfg_builder.make_field(data_node, data_type)
 
     elif isinstance(data_type, ts.TupleType):
-        tuple_syms = dace_gtir_utils.get_tuple_fields(data_name, data_type)
+        tuple_syms = dace_gtir_utils.make_symbol_tuple(data_name, data_type)
         return gtx_utils.tree_map(
             lambda sym: _get_data_nodes(sdfg, state, sdfg_builder, sym.id, sym.type)
         )(tuple_syms)
@@ -918,7 +920,7 @@ def translate_scan(
 
     # now initialize the scan state
     scan_state_input = (
-        dace_gtir_utils.get_tuple_fields(scan_state, scan_state_type)
+        dace_gtir_utils.make_symbol_tuple(scan_state, scan_state_type)
         if isinstance(scan_state_type, ts.TupleType)
         else im.sym(scan_state, scan_state_type)
     )
@@ -992,8 +994,8 @@ def translate_scan(
     lambda_flat_outs = (
         set(
             str(sym.id)
-            for sym in dace_gtir_utils.get_tuple_fields(
-                scan_output_name(scan_state), scan_state_type, flatten=True
+            for sym in dace_gtir_utils.flatten_tuple_fields(
+                scan_output_name(scan_state), scan_state_type
             )
         )
         if isinstance(scan_state_type, ts.TupleType)

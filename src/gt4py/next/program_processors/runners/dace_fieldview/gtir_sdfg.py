@@ -298,7 +298,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         """
         if isinstance(gt_type, ts.TupleType):
             tuple_fields = []
-            for sym in dace_gtir_utils.get_tuple_fields(name, gt_type, flatten=True):
+            for sym in dace_gtir_utils.flatten_tuple_fields(name, gt_type):
                 tuple_fields.extend(
                     self._add_storage(
                         sdfg, symbolic_arguments, sym.id, sym.type, transient, tuple_name=name
@@ -671,7 +671,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 elif field_domain_offset := self.field_offsets.get(p_name, None):
                     return {p_name: field_domain_offset}
             elif isinstance(p_type, ts.TupleType):
-                tsyms = dace_gtir_utils.get_tuple_fields(p_name, p_type, flatten=True)
+                tsyms = dace_gtir_utils.flatten_tuple_fields(p_name, p_type)
                 return functools.reduce(
                     lambda field_offsets, sym: (
                         field_offsets | get_field_domain_offset(sym.id, sym.type)
@@ -864,7 +864,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 def build_sdfg_from_gtir(
     ir: gtir.Program,
     offset_provider_type: gtx_common.OffsetProviderType,
-    column_dim: Optional[gtx_common.Dimension],
+    column_dim: Optional[gtx_common.Dimension] = None,
 ) -> dace.SDFG:
     """
     Receives a GTIR program and lowers it to a DaCe SDFG.

@@ -8,13 +8,12 @@
 
 from __future__ import annotations
 
-import itertools
 from typing import Dict, TypeVar
 
 import dace
 
 from gt4py import eve
-from gt4py.next import common as gtx_common
+from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_specifications as ts
@@ -28,9 +27,28 @@ def get_map_variable(dim: gtx_common.Dimension) -> str:
     return f"i_{dim.value}_gtx_{dim.kind}{suffix}"
 
 
-def get_tuple_fields(
-    tuple_name: str, tuple_type: ts.TupleType, flatten: bool = False
-) -> tuple[gtir.Sym, ...]:
+def make_symbol_tuple(tuple_name: str, tuple_type: ts.TupleType) -> tuple[gtir.Sym, ...]:
+    """
+    Creates a tuple representation of the symbols corresponding to the tuple fields.
+    The constructed tuple presrves the nested nature of the type, is any.
+
+    Examples
+    --------
+    >>> sty = ts.ScalarType(kind=ts.ScalarKind.INT32)
+    >>> fty = ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
+    >>> t = ts.TupleType(types=[sty, ts.TupleType(types=[fty, sty])])
+    >>> assert get_tuple_fields("a", t) == [("a_0", sty), (("a_1_0", fty), ("a_1_1", sty))]
+    """
+    fields = [(f"{tuple_name}_{i}", field_type) for i, field_type in enumerate(tuple_type.types)]
+    return tuple(
+        make_symbol_tuple(field_name, field_type)
+        if isinstance(field_type, ts.TupleType)
+        else im.sym(field_name, field_type)
+        for field_name, field_type in fields
+    )
+
+
+def flatten_tuple_fields(tuple_name: str, tuple_type: ts.TupleType) -> list[gtir.Sym]:
     """
     Creates a list of names with the corresponding data type for all elements of the given tuple.
 
@@ -40,23 +58,10 @@ def get_tuple_fields(
     >>> fty = ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
     >>> t = ts.TupleType(types=[sty, ts.TupleType(types=[fty, sty])])
     >>> assert get_tuple_fields("a", t) == [("a_0", sty), ("a_1", ts.TupleType(types=[fty, sty]))]
-    >>> assert get_tuple_fields("a", t, flatten=True) == [
-    ...     ("a_0", sty),
-    ...     ("a_1_0", fty),
-    ...     ("a_1_1", sty),
-    ... ]
+    >>> assert flatten_tuple_fields("a", t) == [("a_0", sty), ("a_1_0", fty), ("a_1_1", sty)]
     """
-    fields = [(f"{tuple_name}_{i}", field_type) for i, field_type in enumerate(tuple_type.types)]
-    expanded_fields = tuple(
-        get_tuple_fields(field_name, field_type, flatten)
-        if isinstance(field_type, ts.TupleType)
-        else im.sym(field_name, field_type)
-        for field_name, field_type in fields
-    )
-    if flatten:
-        return tuple(itertools.chain(expanded_fields))
-    else:
-        return expanded_fields
+    symbol_tuple = make_symbol_tuple(tuple_name, tuple_type)
+    return list(gtx_utils.flatten_nested_tuple(symbol_tuple))
 
 
 def replace_invalid_symbols(sdfg: dace.SDFG, ir: gtir.Program) -> gtir.Program:
