@@ -201,7 +201,6 @@ class AccessInfoCollector(eve.NodeVisitor):
     def visit_While(self, node: oir.While, *, is_conditional=False, **kwargs):
         self.visit(node.cond, is_conditional=is_conditional, **kwargs)
         self.visit(node.body, is_conditional=True, **kwargs)
-        # self.generic_visit(node, is_conditional=True, **kwargs)
 
     @staticmethod
     def _global_grid_subset(
@@ -345,6 +344,41 @@ def compute_dcir_access_infos(
                 )
             )
         return res
+
+    return ctx.access_infos
+
+
+class TaskletAccessInfoCollector:
+    @dataclass
+    class Context:
+        # TODO: if this never changes, consider moving to the parent class
+        axes: Dict[str, List[dcir.Axis]]
+        # TODO: re-evaluate if that context object is the easiest to get
+        #       access_infos out of the thing at the end
+        access_infos: Dict[str, dcir.FieldAccessInfo] = field(default_factory=dict)
+
+    # For implementation,
+    # see notes in cartesian/gtc/dace/expansion.py / visit_CodeBlock()
+
+
+def compute_tasklet_access_infos(
+    node: oir.CodeBlock,
+    *,
+    declarations: List[oir.FieldDecl],
+    block_extents,
+    collect_read: bool = True,
+    collect_write: bool = True,
+    **kwargs: Any,
+) -> dace.properties.DictProperty:
+    axes = {
+        name: axes_list_from_flags(declaration.dimensions)
+        for name, declaration in declarations.items()
+        if isinstance(declaration, oir.FieldDecl)
+    }
+    ctx = TaskletAccessInfoCollector.Context(axes=axes, access_infos=dict())
+    TaskletAccessInfoCollector(collect_read=collect_read, collect_write=collect_write).visit(
+        node, block_extents=block_extents, ctx=ctx, **kwargs
+    )
 
     return ctx.access_infos
 

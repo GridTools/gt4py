@@ -23,7 +23,7 @@ from gt4py.cartesian.gtc import common, oir
 from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.dace.expansion_specification import Loop, Map, Sections, Stages
 from gt4py.cartesian.gtc.dace.utils import (
-    compute_dcir_access_infos,
+    compute_tasklet_access_infos,
     flatten_list,
     get_tasklet_symbol,
     make_dace_subset,
@@ -77,10 +77,10 @@ def _get_tasklet_inout_memlets(
     global_ctx: DaCeIRBuilder.GlobalContext,
     **kwargs: Any,
 ) -> List[dcir.Memlet]:
-    access_infos = compute_dcir_access_infos(
+    access_infos = compute_tasklet_access_infos(
         node,
         block_extents=global_ctx.library_node.get_extents,
-        oir_decls=global_ctx.library_node.declarations,
+        declarations=global_ctx.library_node.declarations,
         collect_read=not get_outputs,
         collect_write=get_outputs,
         **kwargs,
@@ -649,7 +649,6 @@ class DaCeIRBuilder(eve.NodeTranslator):
         global_ctx: DaCeIRBuilder.GlobalContext,
         iteration_ctx: DaCeIRBuilder.IterationContext,
         symbol_collector: DaCeIRBuilder.SymbolCollector,
-        memlets: Optional[List[dcir.Memlet]] = None,
         k_interval,
         **kwargs: Any,
     ):
@@ -664,7 +663,6 @@ class DaCeIRBuilder(eve.NodeTranslator):
                 symbol_collector=symbol_collector,
                 iteration_ctx=iteration_ctx,
                 k_interval=k_interval,
-                memlets=memlets,
                 **kwargs,
             )
             for statement in node.body
@@ -688,38 +686,15 @@ class DaCeIRBuilder(eve.NodeTranslator):
                 read_memlets: List[dcir.Memlet] = []
                 write_memlets: List[dcir.Memlet] = []
 
-                for block_statement in current_block:
-                    # Match node access in this code block with read/write memlets calculated on
-                    # the full horizontal execution.
-                    # NOTE We should clean this up in the future.
-                    for access_node in block_statement.walk_values().if_isinstance(
-                        dcir.ScalarAccess, dcir.IndexAccess
-                    ):
-                        symbol_name = access_node.name
-                        matches: List[dcir.Memlet] = [
-                            memlet for memlet in memlets if memlet.connector == symbol_name
-                        ]
+                # generate our own read/write memlets here
+                # - adapt _get_tasklet_inout_memlets()
+                #   and gtc/dace/utils.py / compute_tasklet_access_infos()
+                # - or use the passed-along TaskletAccessInfoCollector directly
+                # - generate memlets for each FieldAccess
+                # - pass the memlets to the dcir.Tasklet
+                # - leave `_fix_memlet_array_access` (for now)
+                #  - or make it go away by fixing visit_FieldAccess
 
-                        if len(matches) > 1:
-                            raise RuntimeError(
-                                "Found more than one matching memlet for symbol '%s'" % symbol_name
-                            )
-
-                        # Memlets aren't hashable, we thus can't use a set
-                        if (
-                            len(matches) > 0
-                            and matches[0].is_write
-                            and matches[0] not in write_memlets
-                        ):
-                            write_memlets.append(matches[0].copy(update={}))
-                        if (
-                            len(matches) > 0
-                            and matches[0].is_read
-                            and matches[0] not in read_memlets
-                        ):
-                            read_memlets.append(matches[0].copy(update={}))
-
-                # create a new tasklet
                 tasklet = dcir.Tasklet(
                     decls=[],
                     stmts=current_block,
@@ -772,23 +747,17 @@ class DaCeIRBuilder(eve.NodeTranslator):
         iteration_ctx = iteration_ctx.push_expansion_items(expansion_items)
         assert iteration_ctx.grid_subset == dcir.GridSubset.single_gridpoint()
 
-        read_memlets = _get_tasklet_inout_memlets(
-            node,
-            get_outputs=False,
-            global_ctx=global_ctx,
-            grid_subset=iteration_ctx.grid_subset,
-            k_interval=k_interval,
-        )
-
-        write_memlets = _get_tasklet_inout_memlets(
-            node,
-            get_outputs=True,
-            global_ctx=global_ctx,
-            grid_subset=iteration_ctx.grid_subset,
-            k_interval=k_interval,
-        )
-
         code_block = oir.CodeBlock(body=node.body, loc=node.loc, label=f"he_{id(node)}")
+
+        # - duplicate gtc/dace/utils.py / AccessInfoCollector
+        #   - note: AccessInfoCollector (and compute_dcir_access_infos()) are used in
+        #           other places. It's probably safer not to mess with them (for starters).
+        #   - call it e.g. TaskletAccessInfoCollector
+        #   - what is done in visit_HorizontalExecution should move to __init__
+        #   - delete everything except for visit_FieldAccess()
+        #   - re-evaluate which params you need (e.g. is_conditional can go)
+        # - setup TaskletAccessInfoCollector here (with the HE info) ...
+        # - ... and pass it along with the code_block visitor
 
         dcir_nodes = self.visit(
             code_block,
@@ -796,7 +765,6 @@ class DaCeIRBuilder(eve.NodeTranslator):
             iteration_ctx=iteration_ctx,
             symbol_collector=symbol_collector,
             k_interval=k_interval,
-            memlets=[*read_memlets, *write_memlets],
             **kwargs,
         )
 
