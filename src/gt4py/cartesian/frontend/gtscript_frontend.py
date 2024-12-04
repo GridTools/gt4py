@@ -1429,13 +1429,17 @@ class IRMaker(ast.NodeVisitor):
                 "Must be of the form`.at(K=...)`",
                 loc=nodes.Location.from_ast_node(node),
             )
-        if node.keywords[1].arg != "ddim":
+        if len(node.keywords) > 1 and node.keywords[1].arg != "ddim":
             raise GTScriptSyntaxError(
                 message="Absolute K index: bad syntax, second argument (optional) must be `ddim`. "
                 "Must be of the form`.at(K=..., ddim=[...])`",
                 loc=nodes.Location.from_ast_node(node),
             )
-        if node.keywords[1].arg == "ddim" and not isinstance(node.keywords[1].value, ast.List):
+        if (
+            len(node.keywords) > 1
+            and node.keywords[1].arg == "ddim"
+            and not isinstance(node.keywords[1].value, ast.List)
+        ):
             raise GTScriptSyntaxError(
                 message="Absolute K index: bad syntax, second argument `ddim` (optional) must be "
                 "a list of values. Must be of the form`.at(K=..., ddim=[...])`",
