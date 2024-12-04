@@ -499,7 +499,6 @@ def test_indirect_access_2():
         output_nodes={a_out},
         external_edges=True,
     )
-    sdfg.view()
     sdfg.validate()
 
     count = sdfg.apply_transformations_repeated(

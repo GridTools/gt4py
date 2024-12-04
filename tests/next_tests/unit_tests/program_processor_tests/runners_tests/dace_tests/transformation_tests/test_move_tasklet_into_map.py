@@ -146,15 +146,11 @@ def test_move_tasklet_inside_outer_scalar_used_outside():
     sdfg.add_array("C", shape=(1,), dtype=dace.float64, transient=False)
     state.add_edge(outer_scalar, None, state.add_access("C"), None, dace.Memlet("C[0]"))
 
-    try:
-        count = sdfg.apply_transformations_repeated(
-            gtx_transformations.GT4PyMoveTaskletIntoMap,
-            validate_all=True,
-        )
-        assert count == 1
-    except:
-        sdfg.view()
-        raise
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.GT4PyMoveTaskletIntoMap,
+        validate_all=True,
+    )
+    assert count == 1
 
     A = np.array(np.random.rand(10, 10), dtype=np.float64, copy=True)
     B = np.array(np.random.rand(10, 10), dtype=np.float64, copy=True)
