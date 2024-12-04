@@ -366,7 +366,12 @@ class GT4PyGlobalSelfCopyElimination(dace_transformation.SingleStateTransformati
         if not is_tmp_used_downstream:
             graph.remove_node(read_g)
             graph.remove_node(tmp_node)
-            sdfg.remove_data(tmp_node.data)
+            # It could still be used in a parallel branch.
+            try:
+                sdfg.remove_data(tmp_node.data, validate=True)
+            except ValueError as e:
+                if not str(e).startswith(f"Cannot remove data descriptor {tmp_node.data}:"):
+                    raise
 
 
 AccessLocation: TypeAlias = tuple[dace.SDFGState, dace_nodes.AccessNode]
@@ -750,7 +755,12 @@ class GT4PyMoveTaskletIntoMap(dace_transformation.SingleStateTransformation):
                 nodes_to_ignore={access_node},
             ):
                 graph.remove_nodes_from([tasklet, access_node])
-                sdfg.remove_data(access_node.data, validate=True)
+                # Needed if data is accessed in a parallel branch.
+                try:
+                    sdfg.remove_data(access_node.data, validate=True)
+                except ValueError as e:
+                    if not str(e).startswith(f"Cannot remove data descriptor {access_node.data}:"):
+                        raise
 
     def _modify_downstream_memlets(
         self,
@@ -976,7 +986,14 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
         graph.remove_edge(map_to_tmp_edge)
         graph.remove_edge(tmp_to_glob_edge)
         graph.remove_node(tmp_ac)
-        sdfg.remove_data(tmp_ac.data, validate=False)
+
+        # We can not unconditionally remove the data `tmp` refers to, because
+        #  it could be that in a parallel branch the `tmp` is also defined.
+        try:
+            sdfg.remove_data(tmp_ac.data, validate=True)
+        except ValueError as e:
+            if not str(e).startswith(f"Cannot remove data descriptor {tmp_ac.data}:"):
+                raise
 
         # Now we must modify the memlets inside the map scope, because
         #  they now write into `G` instead of `tmp`, which has a different
