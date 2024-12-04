@@ -1417,7 +1417,7 @@ class IRMaker(ast.NodeVisitor):
         #           A better version of this code would look through the keywords
         #           in any order. `ddim` shall remain optional, K mandatory.
         assert _filter_absolute_K_index_method(node)
-        if len(node.keywords) != 1 and len(node.keywords) != 2:
+        if len(node.keywords) not in [1, 2]:
             raise GTScriptSyntaxError(
                 message="Absolute K index bad syntax. Must be of the form`.at(K=..., ddim=[...])` "
                 " with the `ddim` argument optional",
@@ -1429,13 +1429,17 @@ class IRMaker(ast.NodeVisitor):
                 "Must be of the form`.at(K=...)`",
                 loc=nodes.Location.from_ast_node(node),
             )
-        if node.keywords[1].arg != "ddim":
+        if len(node.keywords) > 1 and node.keywords[1].arg != "ddim":
             raise GTScriptSyntaxError(
                 message="Absolute K index: bad syntax, second argument (optional) must be `ddim`. "
                 "Must be of the form`.at(K=..., ddim=[...])`",
                 loc=nodes.Location.from_ast_node(node),
             )
-        if node.keywords[1].arg == "ddim" and not isinstance(node.keywords[1].value, ast.List):
+        if (
+            len(node.keywords) > 1
+            and node.keywords[1].arg == "ddim"
+            and not isinstance(node.keywords[1].value, ast.List)
+        ):
             raise GTScriptSyntaxError(
                 message="Absolute K index: bad syntax, second argument `ddim` (optional) must be "
                 "a list of values. Must be of the form`.at(K=..., ddim=[...])`",
