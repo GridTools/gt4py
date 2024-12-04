@@ -5,10 +5,12 @@ on:
     branches:
     - main
     - gtir  # TODO(tehrengruber): remove after GTIR refactoring #1582
+    - int_cast_aboslute_k_debug
   pull_request:
     branches:
     - main
     - gtir  # TODO(tehrengruber): remove after GTIR refactoring #1582
+    - int_cast_aboslute_k_debug
     paths-ignore:  # Skip if only gt4py.next and irrelevant doc files have been updated
     - "src/gt4py/next/**"
     - "tests/next_tests/**"

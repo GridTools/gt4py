@@ -5,10 +5,12 @@ on:
     branches:
     - main
     - gtir  # TODO(tehrengruber): remove after GTIR refactoring #1582
+    - int_cast_aboslute_k_debug
   pull_request:
     branches:
     - main
     - gtir  # TODO(tehrengruber): remove after GTIR refactoring #1582
+    - int_cast_aboslute_k_debug
 
 jobs:
   code-quality:
