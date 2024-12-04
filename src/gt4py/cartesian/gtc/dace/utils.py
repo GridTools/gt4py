@@ -199,7 +199,9 @@ class AccessInfoCollector(eve.NodeVisitor):
         self.visit(node.body, is_conditional=True, **kwargs)
 
     def visit_While(self, node: oir.While, *, is_conditional=False, **kwargs):
-        self.generic_visit(node, is_conditional=True, **kwargs)
+        self.visit(node.cond, is_conditional=is_conditional, **kwargs)
+        self.visit(node.body, is_conditional=True, **kwargs)
+        # self.generic_visit(node, is_conditional=True, **kwargs)
 
     @staticmethod
     def _global_grid_subset(
@@ -245,12 +247,8 @@ class AccessInfoCollector(eve.NodeVisitor):
         is_write,
     ) -> dcir.FieldAccessInfo:
         # Check we have expression offsets in K
-        # OR write offsets in K
         offset = [offset_node.to_dict()[k] for k in "ijk"]
-        if isinstance(offset_node, oir.VariableKOffset) or (offset[2] != 0 and is_write):
-            variable_offset_axes = [dcir.Axis.K]
-        else:
-            variable_offset_axes = []
+        variable_offset_axes = [dcir.Axis.K] if isinstance(offset_node, oir.VariableKOffset) else []
 
         global_subset = self._global_grid_subset(region, he_grid, offset)
         intervals = {}
@@ -270,7 +268,7 @@ class AccessInfoCollector(eve.NodeVisitor):
             grid_subset=grid_subset,
             global_grid_subset=global_subset,
             # dynamic_access=len(variable_offset_axes) > 0 or is_conditional or region is not None,
-            dynamic_access=region is not None,
+            dynamic_access=False, # len(variable_offset_axes) > 0,
             variable_offset_axes=variable_offset_axes,
         )
 
@@ -361,7 +359,7 @@ def make_dace_subset(
     for axis in access_info.axes():
         if axis in access_info.variable_offset_axes:
             clamped_access_info = clamped_access_info.clamp_full_axis(axis)
-        if axis in clamped_context_info.variable_offset_axes:
+        if axis in context_info.variable_offset_axes:
             clamped_context_info = clamped_context_info.clamp_full_axis(axis)
     res_ranges = []
 

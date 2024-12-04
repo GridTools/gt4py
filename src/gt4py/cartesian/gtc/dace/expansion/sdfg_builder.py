@@ -206,6 +206,8 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
             subset=make_dace_subset(field_decl.access_info, node.access_info, field_decl.data_dims),
             dynamic=field_decl.is_dynamic,
         )
+        # TODO
+        # assert memlet.volume == 1 for anything except nested sdfgs
         if node.is_read:
             sdfg_ctx.state.add_edge(
                 *node_ctx.input_node_and_conns[memlet.data],

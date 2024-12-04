@@ -59,8 +59,8 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
             data_dims=(),  # data_index added in visit_IndexAccess
         )
         ranges.offset(sym_offsets, negative=False)
-        res = dace.subsets.Range([r for i, r in enumerate(ranges.ranges) if int_sizes[i] != 1])
-        return str(res)
+        return dace.subsets.Range([r for i, r in enumerate(ranges.ranges) if int_sizes[i] != 1])
+        # return str(res)
 
     def visit_CartesianOffset(self, node: common.CartesianOffset, **kwargs: Any) -> str:
         return self._visit_offset(node, **kwargs)
@@ -91,18 +91,18 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
             ) from None
 
         index_strs = []
-        if node.offset is not None and node.offset != common.CartesianOffset.zero():
-            index_strs.append(
-                self.visit(
-                    node.offset,
-                    decl=symtable[memlet.field],
-                    access_info=memlet.access_info,
-                    symtable=symtable,
-                    in_idx=True,
-                    is_target=False,
-                    **kwargs,
-                )
+        if node.offset is not None: # and node.offset != common.CartesianOffset.zero():
+            ranges = self.visit(
+                node.offset,
+                decl=symtable[memlet.field],
+                access_info=memlet.access_info,
+                symtable=symtable,
+                in_idx=True,
+                is_target=False,
+                **kwargs,
             )
+            if len(ranges) > 0:
+                index_strs.append(str(ranges))
         index_strs.extend(
             self.visit(idx, symtable=symtable, in_idx=True, **kwargs) for idx in node.data_index
         )
