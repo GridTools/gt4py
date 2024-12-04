@@ -292,16 +292,26 @@ def _create_field_operator(
     domain_indices = _get_domain_indices(domain_dims, domain_offset)
     domain_subset = sbs.Range.from_indices(domain_indices)
 
-    # create map range corresponding to the field operator domain
-    me, mx = sdfg_builder.add_map(
-        "fieldop",
-        state,
-        ndrange={
-            dace_gtir_utils.get_map_variable(dim): f"{lower_bound}:{upper_bound}"
-            for dim, lower_bound, upper_bound in domain
-            if dim != scan_dim
-        },
-    )
+    if scan_dim is not None:
+        assert domain_dims.index(scan_dim) == (len(domain_dims) - 1)
+        # we construct the fieldo operator only on the horizontal domain
+        domain_subset = sbs.Range(domain_subset[:-1])
+
+    # now check, after removal of the vertical dimension, whether the domain is empty
+    if len(domain_subset) == 0:
+        # no need to create a map scope, the field operator domain is empty
+        me, mx = (None, None)
+    else:
+        # create map range corresponding to the field operator domain
+        me, mx = sdfg_builder.add_map(
+            "fieldop",
+            state,
+            ndrange={
+                dace_gtir_utils.get_map_variable(dim): f"{lower_bound}:{upper_bound}"
+                for dim, lower_bound, upper_bound in domain
+                if dim != scan_dim
+            },
+        )
 
     # here we setup the edges passing through the map entry node
     for edge in input_edges:
@@ -316,14 +326,11 @@ def _create_field_operator(
             field_dtype = output_edge.result.gt_dtype
             field_dims, field_shape, field_offset = (domain_dims, domain_shape, domain_offset)
             if scan_dim is not None:
-                # this is the case of scan expressions, that produce a 1D vertical field
-                assert domain_dims.index(scan_dim) == (len(domain_dims) - 1)
+                # the scan field operator produces a 1D vertical field
                 assert isinstance(dataflow_output_desc, dace.data.Array)
                 assert len(dataflow_output_desc.shape) == 1
                 # the vertical dimension should not belong to the field operator domain
-                field_subset = sbs.Range(domain_subset[:-1]) + sbs.Range.from_array(
-                    dataflow_output_desc
-                )
+                field_subset = domain_subset + sbs.Range.from_array(dataflow_output_desc)
             else:
                 assert isinstance(dataflow_output_desc, dace.data.Scalar)
                 field_subset = domain_subset
@@ -840,7 +847,7 @@ def translate_scan(
     init_value = scan_expr.args[2]
 
     # the scan operator is implemented as an nested SDFG implementing the lambda expression
-    nsdfg = dace.SDFG(name="scan")
+    nsdfg = dace.SDFG(sdfg_builder.unique_nsdfg_name(sdfg, "scan"))
     nsdfg.debuginfo = dace_utils.debug_info(node)
 
     # use the vertical dimension in the domain as scan dimension

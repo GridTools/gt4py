@@ -204,7 +204,7 @@ class DataflowOutputEdge:
 
     def connect(
         self,
-        mx: dace.nodes.MapExit,
+        map_exit: Optional[dace.nodes.MapExit],
         dest: dace.nodes.AccessNode,
         subset: sbs.Range,
     ) -> None:
@@ -218,13 +218,16 @@ class DataflowOutputEdge:
             last_node = self.result.dc_node
             last_node_connector = None
 
-        self.state.add_memlet_path(
-            last_node,
-            mx,
-            dest,
-            src_conn=last_node_connector,
-            memlet=dace.Memlet(data=dest.data, subset=subset),
-        )
+        if map_exit is None:
+            self.state.add_edge(last_node, last_node_connector, dest, None, dace.Memlet(data=dest.data, subset=subset))
+        else:
+            self.state.add_memlet_path(
+                last_node,
+                map_exit,
+                dest,
+                src_conn=last_node_connector,
+                memlet=dace.Memlet(data=dest.data, subset=subset),
+            )
 
 
 DACE_REDUCTION_MAPPING: dict[str, dace.dtypes.ReductionType] = {
