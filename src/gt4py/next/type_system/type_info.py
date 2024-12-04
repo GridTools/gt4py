@@ -234,7 +234,7 @@ def is_floating_point(symbol_type: ts.TypeSpec) -> bool:
     >>> is_floating_point(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)))
     True
     """
-    return isinstance(symbol_type, ts.ScalarType) and extract_dtype(symbol_type).kind in [  # type: ignore[union-attr] # checked is `ScalarType`
+    return isinstance(dtype := extract_dtype(symbol_type), ts.ScalarType) and dtype.kind in [
         ts.ScalarKind.FLOAT32,
         ts.ScalarKind.FLOAT64,
     ]
@@ -299,8 +299,8 @@ def is_number(symbol_type: ts.TypeSpec) -> bool:
 
 def is_logical(symbol_type: ts.TypeSpec) -> bool:
     return (
-        isinstance(symbol_type, ts.ScalarType)
-        and extract_dtype(symbol_type).kind is ts.ScalarKind.BOOL  # type: ignore[union-attr] # checked is `ScalarType`
+        isinstance(dtype := extract_dtype(symbol_type), ts.ScalarType)
+        and dtype.kind is ts.ScalarKind.BOOL
     )
 
 
