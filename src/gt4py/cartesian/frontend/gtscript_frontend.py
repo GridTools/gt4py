@@ -706,7 +706,7 @@ def _is_datadims_indexing_name(name: str):
 
 
 def _is_iterator_access(name: str) -> bool:
-    return name.startswith("THIS_K")
+    return name == "THIS_K"
 
 
 def _trim_indexing_symbol(name: str):
@@ -2003,8 +2003,6 @@ class GTScriptParser(ast.NodeVisitor):
         nonlocals: dict, imported: dict, context: dict, *, exhaustive=True
     ):
         result = {}
-        if "THIS_K" in nonlocals:
-            nonlocals.pop("THIS_K")
         accepted_imports = set(imported.keys())
         resolved_imports = {**imported}
         resolved_values_list = list(nonlocals.items())

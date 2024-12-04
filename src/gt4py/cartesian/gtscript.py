@@ -90,6 +90,7 @@ builtins = {
     "FORWARD",
     "BACKWARD",
     "PARALLEL",
+    "THIS_K",
     "Field",
     "Sequence",
     "externals",
@@ -643,9 +644,7 @@ PARALLEL = 0
 # GTScript builtins: Iterator Access
 class IteratorAccess:
     def __init__(self, name: str):
-        assert name
         self.name = name
-        self._gtscript_ = {"nonlocals": {}, "imported": {}}
 
 
 THIS_K = IteratorAccess("K")
