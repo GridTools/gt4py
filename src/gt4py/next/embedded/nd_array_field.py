@@ -29,7 +29,7 @@ from gt4py.eve.extended_typing import (
     TypeVar,
     cast,
 )
-from gt4py.next import common
+from gt4py.next import allocators, common
 from gt4py.next.embedded import (
     common as embedded_common,
     context as embedded_context,
@@ -116,6 +116,7 @@ class NdArrayField(
 
     _domain: common.Domain
     _ndarray: core_defs.NDArrayObject
+    _allocator: Optional[allocators.ConcreteAllocator]
 
     array_ns: ClassVar[ModuleType]  # TODO(havogt) introduce a NDArrayNamespace protocol
 
@@ -167,6 +168,9 @@ class NdArrayField(
         /,
         *,
         domain: common.DomainLike,
+        allocator: Optional[
+            allocators.ConcreteAllocator
+        ] = None,  # TODO: maybe an NDArrayField always has an allocator?
         dtype: Optional[core_defs.DTypeLike] = None,
     ) -> NdArrayField:
         domain = common.domain(domain)
@@ -184,7 +188,7 @@ class NdArrayField(
         assert len(domain) == array.ndim
         assert all(s == 1 or len(r) == s for r, s in zip(domain.ranges, array.shape))
 
-        return cls(domain, array)
+        return cls(domain, array, allocator)
 
     def premap(
         self: NdArrayField,
@@ -513,6 +517,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
         codomain: common.DimT,
         *,
         domain: common.DomainLike,
+        allocator: Optional[allocators.ConcreteAllocator] = None,
         dtype: Optional[core_defs.DTypeLike] = None,
         skip_value: Optional[core_defs.IntegralScalar] = None,
     ) -> NdArrayConnectivityField:
@@ -533,7 +538,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
 
         assert isinstance(codomain, common.Dimension)
 
-        return cls(domain, array, codomain, _skip_value=skip_value)
+        return cls(domain, array, allocator, codomain, _skip_value=skip_value)
 
     def inverse_image(self, image_range: common.UnitRange | common.NamedRange) -> common.Domain:
         cache_key = hash((id(self.ndarray), self.domain, image_range))

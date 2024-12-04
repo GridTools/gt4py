@@ -11,6 +11,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Optional, cast
 
+from typing_extensions import NotRequired, TypedDict
+
 import gt4py._core.definitions as core_defs
 import gt4py.eve as eve
 import gt4py.eve.extended_typing as xtyping
@@ -77,10 +79,11 @@ def empty(
     dtype = core_defs.dtype(dtype)
     if allocator is None and device is None:
         device = core_defs.Device(core_defs.DeviceType.CPU, device_id=0)
-    buffer = next_allocators.allocate(
+    allocate = next_allocators.make_concrete_allocator(
         domain, dtype, aligned_index=aligned_index, allocator=allocator, device=device
     )
-    res = common._field(buffer.ndarray, domain=domain)
+    buffer = allocate()
+    res = common._field(buffer, domain=domain, allocator=allocate)
     assert isinstance(res, common.MutableField)
     assert isinstance(res, nd_array_field.NdArrayField)
     return res
@@ -349,12 +352,51 @@ def as_connectivity(
 
     if (allocator is None) and (device is None) and xtyping.supports_dlpack(data):
         device = core_defs.Device(*data.__dlpack_device__())
-    buffer = next_allocators.allocate(actual_domain, dtype, allocator=allocator, device=device)
+    allocate = next_allocators.make_concrete_allocator(
+        actual_domain, dtype, allocator=allocator, device=device
+    )
+    buffer = allocate()
     # TODO(havogt): consider adding MutableNDArrayObject
-    buffer.ndarray[...] = storage_utils.asarray(data)  # type: ignore[index]
+    buffer[...] = storage_utils.asarray(data)  # type: ignore[index]
     connectivity_field = common._connectivity(
-        buffer.ndarray, codomain=codomain, domain=actual_domain, skip_value=skip_value
+        buffer, codomain=codomain, domain=actual_domain, skip_value=skip_value, allocator=allocate
     )
     assert isinstance(connectivity_field, nd_array_field.NdArrayConnectivityField)
 
     return connectivity_field
+
+
+_like_field = None  # for more descriptive function signature in editors
+
+
+class AllocatorParams(TypedDict):
+    domain: NotRequired[common.DomainLike]
+    dtype: NotRequired[core_defs.DType[core_defs.ScalarT],]
+    aligned_index: NotRequired[Sequence[common.NamedIndex]]
+    allocator: NotRequired[next_allocators.FieldBufferAllocatorProtocol]
+    device: NotRequired[core_defs.Device]
+
+
+def empty_like(
+    field: nd_array_field.NdArrayField,
+    *,
+    domain: Optional[common.DomainLike] = _like_field,
+    dtype: Optional[core_defs.DTypeLike] = _like_field,
+    aligned_index: Optional[Sequence[common.NamedIndex]] = _like_field,
+    allocator: Optional[next_allocators.FieldBufferAllocationUtil] = _like_field,
+    device: Optional[core_defs.Device] = _like_field,
+) -> nd_array_field.NdArrayField:
+    kwargs: AllocatorParams = {}
+    if domain is not None:
+        kwargs["domain"] = domain
+    if dtype is not None:
+        kwargs["dtype"] = core_defs.dtype(dtype)
+    if aligned_index is not None:
+        kwargs["aligned_index"] = aligned_index
+    if allocator is not eve.NOTHING:
+        kwargs["allocator"] = allocator
+    if device is not eve.NOTHING:
+        kwargs["device"] = device
+    if field._allocator is None:
+        raise ValueError("'Field' does not have an allocator.")  # TODO discuss if this is possible
+    return field._allocator(**kwargs)
