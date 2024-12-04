@@ -60,15 +60,6 @@ program_processor = pytest.fixture(
         (next_tests.definitions.ProgramFormatterId.LISP_FORMATTER, False),
         (next_tests.definitions.ProgramFormatterId.ITIR_PRETTY_PRINTER, False),
         (next_tests.definitions.ProgramFormatterId.GTFN_CPP_FORMATTER, False),
-        pytest.param(
-            (next_tests.definitions.OptionalProgramBackendId.DACE_CPU, True),
-            marks=pytest.mark.requires_dace,
-        ),
-        # TODO(havogt): update tests to use proper allocation
-        # pytest.param(
-        #     (next_tests.definitions.OptionalProgramBackendId.DACE_GPU, True),
-        #     marks=(pytest.mark.requires_dace, pytest.mark.requires_gpu),
-        # ),
     ],
     ids=lambda p: p[0].short_id() if p[0] is not None else "None",
 )
