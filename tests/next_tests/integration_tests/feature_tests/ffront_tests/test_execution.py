@@ -291,7 +291,6 @@ def test_tuple_arg_with_unpromotable_dims(unstructured_case):
     )
 
 
-@pytest.mark.uses_index_fields
 @pytest.mark.uses_cartesian_shift
 def test_scalar_arg_with_field(cartesian_case):
     @gtx.field_operator
@@ -586,7 +585,6 @@ def test_nested_tuple_return(cartesian_case):
 
 
 @pytest.mark.uses_unstructured_shift
-@pytest.mark.uses_reduction_over_lift_expressions
 def test_nested_reduction(unstructured_case):
     @gtx.field_operator
     def testee(a: cases.VField) -> cases.VField:
@@ -706,7 +704,6 @@ def test_fieldop_from_scan(cartesian_case, forward):
 
 
 @pytest.mark.uses_scan
-@pytest.mark.uses_lift_expressions
 @pytest.mark.uses_scan_nested
 def test_solve_triag(cartesian_case):
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))
@@ -788,7 +785,6 @@ def test_ternary_operator_tuple(cartesian_case, left, right):
 
 @pytest.mark.uses_constant_fields
 @pytest.mark.uses_unstructured_shift
-@pytest.mark.uses_reduction_over_lift_expressions
 def test_ternary_builtin_neighbor_sum(unstructured_case):
     @gtx.field_operator
     def testee(a: cases.EField, b: cases.EField) -> cases.VField:
