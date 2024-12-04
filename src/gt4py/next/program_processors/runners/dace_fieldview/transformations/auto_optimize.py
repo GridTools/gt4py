@@ -52,6 +52,9 @@ def gt_auto_optimize(
     different aspects of the SDFG. The initial SDFG is assumed to have a
     very large number of rather simple Maps.
 
+    Note, because of how `gt_auto_optimizer()` works it is not save to call
+    it twice on the same SDFG.
+
     1. Some general simplification transformations, beyond classical simplify,
         are applied to the SDFG.
     2. Tries to create larger kernels by fusing smaller ones, see
