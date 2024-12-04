@@ -362,7 +362,7 @@ def test_this_k_stencil():
 
     @gtscript.stencil(backend="debug")
     def test_stencil(
-        in_field: gtscript.Field[gtscript.K, np.float64],
+        in_field: gtscript.Field[np.float64],
         out_field: gtscript.Field[np.float64],
     ):
         with computation(PARALLEL), interval(...):
