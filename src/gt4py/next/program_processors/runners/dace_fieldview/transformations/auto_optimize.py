@@ -91,11 +91,10 @@ def gt_auto_optimize(
         gpu_launch_bounds: Use this value as `__launch_bounds__` for _all_ GPU Maps.
         gpu_launch_factor: Use the number of threads times this value as `__launch_bounds__`
             for _all_ GPU Maps.
-        constant_symbols: A `dict` that maps symbols that are constant to their values.
-            They will be replaced with their value inside the SDFG, which might
-            increase performance.
-        assume_pointwise: Global data in the SDFG is guaranteed to be point wise.
-            See the `GT4PyMapBufferElimination` transformation for more.
+        constant_symbols: Symbols listed in this `dict` will be replaced by the
+            respective value inside the SDFG. This might increase performance.
+        assume_pointwise: Assume that the SDFG has no risk for race condition in
+            global data access. See the `GT4PyMapBufferElimination` transformation for more.
         validate: Perform validation during the steps.
         validate_all: Perform extensive validation.
 
@@ -107,15 +106,11 @@ def gt_auto_optimize(
     Todo:
         - Update the description. The Phases are nice, but they have lost their
             link to reality a little bit.
-        - Stride of transients, they are in C order and this should be changed.
-        - Fix the strides and iteration order of the maps that are created due
-            to the memlet to map transformation, that we have to do.
+        - Improve the determination of the strides and iteration order of the
+            transients.
         - Set padding of transients, i.e. alignment, the DaCe datadescriptor
             can do that.
         - Handle nested SDFGs better.
-        - Redundant array removal should be specialized for the case it is the
-            of a map.
-        - Restore rule 3 with, with the layer of access nodes.
         - Specify arguments to set the size of GPU thread blocks depending on the
             dimensions. I.e. be able to use a different size for 1D than 2D Maps.
         - Implement some model to further guide to determine what we want to fuse.
@@ -221,7 +216,7 @@ def gt_auto_optimize(
 
         # We now ensure that point wise computations are properly double buffered.
         #  The main reason is to ensure that rule 3 of ADR18 is maintained.
-        gtx_transformations.gt_crearte_local_double_buffering(sdfg)
+        gtx_transformations.gt_create_local_double_buffering(sdfg)
 
         # Phase 5: Apply blocking
         if blocking_dim is not None:

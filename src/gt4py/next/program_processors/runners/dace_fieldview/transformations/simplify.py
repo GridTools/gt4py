@@ -546,13 +546,13 @@ class DistributedBufferRelocator(dace_transformation.Pass):
 
         # This transformation removes `src_cont` by writing its content directly
         #  to `dst_cont`, at the point where it is defined.
-        #  That this transformation is valid the following conditions have to be met:
+        #  For this transformation to be valid the following conditions have to be met:
         #   - Between the definition of `src_cont` and the write back to `dst_cont`,
         #       `dst_cont` can not be accessed.
         #   - Between the definitions of `src_cont` and the point where it is written
         #       back, `src_cont` can only be accessed in the range that is written back.
         #   - After the write back point, `src_cont` shall not be accessed. This
-        #       restriction can be lifted, but it is super strict.
+        #       restriction could be lifted.
         #
         #  To keep the implementation simple, we use the conditions:
         #   - `src_cont` is only accessed were it is defined and at the write back
@@ -604,7 +604,7 @@ class GT4PyMoveTaskletIntoMap(dace_transformation.SingleStateTransformation):
     """Moves a Tasklet, with no input into a map.
 
     Tasklets without inputs, are mostly used to generate constants.
-    However, if they are outside a Map, then this constant value, is an
+    However, if they are outside a Map, then this constant value is an
     argument to the kernel, and can not be used by the compiler.
 
     This transformation moves such Tasklets into a Map scope.
@@ -789,13 +789,13 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
     If the following conditions are met then `T` is removed.
     - `T` is not used to filter computations, i.e. what is written into `G`
         is covered by what is written into `T`.
-    - `T` is not anywhere else.
+    - `T` is not used anywhere else.
     - `G` is not also an input to the map, except there is only a pointwise
-        dependency in `G`, see the note bellow.
+        dependency in `G`, see the note below.
     - Everything needs to be at top scope.
 
     Notes:
-        - Rule 3 of ADR18, should guarantee that any valid GT4Py program meets the
+        - Rule 3 of ADR18 should guarantee that any valid GT4Py program meets the
             point wise dependency in `G`, for that reason it is possible to disable
             this test by specifying `assume_pointwise`.
 
@@ -821,7 +821,7 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
     ) -> None:
         super().__init__(*args, **kwargs)
         if assume_pointwise is not None:
-            self.assume_pointwise = bool(assume_pointwise)
+            self.assume_pointwise = assume_pointwise
 
     @classmethod
     def expressions(cls) -> Any:

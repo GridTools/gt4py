@@ -23,10 +23,10 @@ from gt4py.next.program_processors.runners.dace_fieldview import (
 )
 
 
-def gt_crearte_local_double_buffering(
+def gt_create_local_double_buffering(
     sdfg: dace.SDFG,
 ) -> int:
-    """Modifies the SDFG that point wise data dependencies are stable.
+    """Modifies the SDFG such that point wise data dependencies are stable.
 
     Rule 3 of the ADR18, guarantees that if data is input and output to a map,
     then it must be a non transient array and it must only have point wise
@@ -43,11 +43,11 @@ def gt_crearte_local_double_buffering(
 
     processed_maps = 0
     for nsdfg in sdfg.all_sdfgs_recursive():
-        processed_maps += _crearte_local_double_buffering_non_recursive(nsdfg)
+        processed_maps += _create_local_double_buffering_non_recursive(nsdfg)
     return processed_maps
 
 
-def _crearte_local_double_buffering_non_recursive(
+def _create_local_double_buffering_non_recursive(
     sdfg: dace.SDFG,
 ) -> int:
     """Implementation of the point wise transformation.
@@ -96,7 +96,7 @@ def _add_local_double_buffering_to(
     then the distribution must be done inside the map.
 
     The function will now channel all reads to the data descriptor
-    through an access node, this ensues that the read happened
+    through an access node, this ensures that the read happens
     before the write.
     """
     processed_maps = 0

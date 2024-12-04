@@ -35,7 +35,7 @@ class MapFusionParallel(mfh.MapFusionHelper):
             node as direct ancestor. This will increase the locality of the merge.
         only_inner_maps: Only match Maps that are internal, i.e. inside another Map.
         only_toplevel_maps: Only consider Maps that are at the top.
-        fusion_callback: A user supplied function, same signature as `can_be_fused()`,
+        apply_fusion_callback: A user supplied function, same signature as `can_be_fused()`,
             to check if a fusion should be performed.
 
     Note:

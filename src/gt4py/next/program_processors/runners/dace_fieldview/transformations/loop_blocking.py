@@ -375,7 +375,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
         elif isinstance(node_to_classify, dace_nodes.MapEntry):
             # We classify `MapEntries` as dependent nodes, we could now start
-            #  looking if if the whole map is independent, but it is currently an
+            #  looking if the whole map is independent, but it is currently an
             #  overkill.
             return False
 
@@ -551,7 +551,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                 #   - The outer map.
                 #   - An other dependent node.
                 #   - An independent node.
-                #  The last case was already handle by the loop above.
+                #  The last case was already handled by the loop above.
                 if edge_src is inner_entry:
                     # Edge originated originally at an independent node, but was
                     #  already handled by the loop above.

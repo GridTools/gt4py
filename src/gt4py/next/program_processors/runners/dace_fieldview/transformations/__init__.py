@@ -19,7 +19,7 @@ from .gpu_utils import (
     gt_gpu_transformation,
     gt_set_gpu_blocksize,
 )
-from .local_double_buffering import gt_crearte_local_double_buffering
+from .local_double_buffering import gt_create_local_double_buffering
 from .loop_blocking import LoopBlocking
 from .map_fusion_parallel import MapFusionParallel
 from .map_fusion_serial import MapFusionSerial
@@ -53,7 +53,7 @@ __all__ = [
     "SerialMapPromoterGPU",
     "gt_auto_optimize",
     "gt_change_transient_strides",
-    "gt_crearte_local_double_buffering",
+    "gt_create_local_double_buffering",
     "gt_gpu_transformation",
     "gt_inline_nested_sdfg",
     "gt_set_iteration_order",

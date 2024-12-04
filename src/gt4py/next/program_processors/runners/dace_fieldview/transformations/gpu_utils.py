@@ -95,8 +95,8 @@ def gt_gpu_transformation(
 
     if try_removing_trivial_maps:
         # In DaCe a Tasklet, outside of a Map, can not write into an _array_ that is on
-        #  GPU. `sdfg.appyl_gpu_transformations()` will put a Map around them. So we
-        #  might end up with lots of these trivial Maps, each requiring a separate
+        #  GPU. `sdfg.appyl_gpu_transformations()` will wrap such Tasklets in a Map. So
+        #  we might end up with lots of these trivial Maps, each requiring a separate
         #  kernel launch. To prevent this we will combine these trivial maps, if
         #  possible, with their downstream maps.
         sdfg.apply_transformations_once_everywhere(
@@ -139,14 +139,13 @@ def gt_gpu_transform_non_standard_memlet(
 
     The GPU code generator is not able to handle certain sets of Memlets. To
     handle them, the code generator transforms them into copy Maps. The main
-    issue is that these happens after the auto optimizer, thus they will most
-    likely have the wrong iteration order.
+    issue is that this transformation happens after the auto optimizer, thus
+    the copy-Maps will most likely have the wrong iteration order.
 
     This function allows to perform the preprocessing step before the actual
     code generation. The function will perform the expansion. If
-    `map_postprocess` is `True` then the function will also apply map fusion
-    to them. The function limits this to only involve maps that have been
-    create. It will also set the iteration order correctly.
+    `map_postprocess` is `True` then the function will also apply MapFusion,
+    to these newly created copy-Maps and set their iteration order correctly.
 
     A user should not call this function directly, instead this function is
     called by the `gt_gpu_transformation()` function.
@@ -220,7 +219,7 @@ def gt_gpu_transform_non_standard_memlet(
             assert len(new_nodes) == 1
             new_maps.update(new_nodes)
 
-    # If there are no memlets are translated then we have nothing to do.
+    # If there are no Memlets that are translated to copy-Maps, then we have nothing to do.
     if len(new_maps) == 0:
         return sdfg
 
@@ -241,18 +240,18 @@ def gt_gpu_transform_non_standard_memlet(
         [
             gtx_transformations.MapFusionSerial(
                 only_toplevel_maps=True,
-                fusion_callback=restrict_fusion_to_newly_created_maps,
+                apply_fusion_callback=restrict_fusion_to_newly_created_maps,
             ),
             gtx_transformations.MapFusionParallel(
                 only_toplevel_maps=True,
-                fusion_callback=restrict_fusion_to_newly_created_maps,
+                apply_fusion_callback=restrict_fusion_to_newly_created_maps,
             ),
         ],
         validate=validate,
         validate_all=validate_all,
     )
 
-    # Now we have to find the maps that are still here. We rely here on the fact
+    # Now we have to find the maps that were not fused. We rely here on the fact
     #  that at least one of the map that is involved in fusing still exists.
     maps_to_modify: set[dace_nodes.MapEntry] = set()
     for nsdfg in sdfg.all_sdfgs_recursive():
@@ -269,9 +268,9 @@ def gt_gpu_transform_non_standard_memlet(
     #       likely) FORTRAN order. So there is not an unique stride dimension.
     #  - The newly created maps have names that does not reflect GT4Py dimensions,
     #       thus we can not use `gt_set_iteration_order()`.
-    #  For these reasons we do the simplest thing assume that the maps are created
-    #  in C order and we must make them in FORTRAN order, which means just swapping
-    #  the order of the map parameters.
+    #  For these reasons we do the simplest thing, which is assuming that the maps
+    #  are created in C order and we must make them in FORTRAN order, which means
+    #  just swapping the order of the map parameters.
     # TODO(phimuell): Do it properly.
     for me_to_modify in maps_to_modify:
         map_to_modify: dace_nodes.Map = me_to_modify.map
@@ -709,7 +708,7 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
         the non trivial map (`self.second_map_entry.map`) to the trivial map
         (`self.trivial_map_exit.map`).
 
-        If `replace_trivail_map_parameter` is `True` the default, then the
+        If `replace_trivail_map_parameter` is `True` (the default value), then the
         function will also remove the trivial map parameter with its value.
         """
         assert isinstance(self.trivial_map_exit, dace_nodes.MapExit)

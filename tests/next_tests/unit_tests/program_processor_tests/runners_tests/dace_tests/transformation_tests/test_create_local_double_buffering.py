@@ -102,10 +102,10 @@ def test_local_double_buffering_double_read_sdfg():
     args0 = {name: np.array(np.random.rand(10), dtype=np.float64, copy=True) for name in "AB"}
     args1 = copy.deepcopy(args0)
 
-    count0 = gtx_transformations.gt_crearte_local_double_buffering(sdfg0)
+    count0 = gtx_transformations.gt_create_local_double_buffering(sdfg0)
     assert count0 == 1
 
-    count1 = gtx_transformations.gt_crearte_local_double_buffering(sdfg1)
+    count1 = gtx_transformations.gt_create_local_double_buffering(sdfg1)
     assert count1 == 1
 
     sdfg0(**args0)
@@ -151,11 +151,11 @@ def test_local_double_buffering_no_connection():
     mx.add_out_connector("OUT_1")
     sdfg.validate()
 
-    count = gtx_transformations.gt_crearte_local_double_buffering(sdfg)
+    count = gtx_transformations.gt_create_local_double_buffering(sdfg)
     assert count == 1
 
     # Ensure that a second application of the transformation does not run again.
-    count_again = gtx_transformations.gt_crearte_local_double_buffering(sdfg)
+    count_again = gtx_transformations.gt_create_local_double_buffering(sdfg)
     assert count_again == 0
 
     # Find the newly created access node.
@@ -202,7 +202,7 @@ def test_local_double_buffering_no_apply():
     )
     sdfg.validate()
 
-    count = gtx_transformations.gt_crearte_local_double_buffering(sdfg)
+    count = gtx_transformations.gt_create_local_double_buffering(sdfg)
     assert count == 0
 
 
@@ -235,5 +235,5 @@ def test_local_double_buffering_already_buffered():
     state.remove_edge(me_to_tskl_edge)
     sdfg.validate()
 
-    count = gtx_transformations.gt_crearte_local_double_buffering(sdfg)
+    count = gtx_transformations.gt_create_local_double_buffering(sdfg)
     assert count == 0

@@ -40,7 +40,7 @@ class MapFusionHelper(transformation.SingleStateTransformation):
         only_toplevel_maps: Only consider Maps that are at the top.
         strict_dataflow: If `True`, the transformation ensures a more
             stricter version of the data flow.
-        fusion_callback: A user supplied function, same signature as `can_be_fused()`,
+        apply_fusion_callback: A user supplied function, same signature as `can_be_fused()`,
             to check if a fusion should be performed.
 
     Note:
@@ -71,7 +71,7 @@ class MapFusionHelper(transformation.SingleStateTransformation):
     # Callable that can be specified by the user, if it is specified, it should be
     #  a callable with the same signature as `can_be_fused()`. If the function returns
     #  `False` then the fusion will be rejected.
-    _fusion_callback: Optional[FusionCallback]
+    _apply_fusion_callback: Optional[FusionCallback]
 
     # Maps SDFGs to the set of data that can not be removed,
     #  because they transmit data _between states_, such data will be made 'shared'.
@@ -83,20 +83,20 @@ class MapFusionHelper(transformation.SingleStateTransformation):
         only_inner_maps: Optional[bool] = None,
         only_toplevel_maps: Optional[bool] = None,
         strict_dataflow: Optional[bool] = None,
-        fusion_callback: Optional[FusionCallback] = None,
+        apply_fusion_callback: Optional[FusionCallback] = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self._shared_data = {}
-        self._fusion_callback = None
+        self._apply_fusion_callback = None
         if only_toplevel_maps is not None:
             self.only_toplevel_maps = bool(only_toplevel_maps)
         if only_inner_maps is not None:
             self.only_inner_maps = bool(only_inner_maps)
         if strict_dataflow is not None:
             self.strict_dataflow = bool(strict_dataflow)
-        if fusion_callback is not None:
-            self._fusion_callback = fusion_callback
+        if apply_fusion_callback is not None:
+            self._apply_fusion_callback = apply_fusion_callback
 
     @classmethod
     def expressions(cls) -> bool:
@@ -127,8 +127,10 @@ class MapFusionHelper(transformation.SingleStateTransformation):
             permissive: Currently unused.
         """
         # Consult the callback if defined.
-        if self._fusion_callback is not None:
-            if not self._fusion_callback(self, map_entry_1, map_entry_2, graph, sdfg, permissive):
+        if self._apply_fusion_callback is not None:
+            if not self._apply_fusion_callback(
+                self, map_entry_1, map_entry_2, graph, sdfg, permissive
+            ):
                 return False
 
         if self.only_inner_maps and self.only_toplevel_maps:

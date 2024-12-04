@@ -30,7 +30,7 @@ def gt_change_transient_strides(
 
     Note:
         Currently the function will not scan the access pattern. Instead it will
-        either use FORTRAN order for GPU or C order (which is assumed to b the
+        either use FORTRAN order for GPU or C order (which is assumed to be the
         default, so it is a no ops).
 
     Todo:
