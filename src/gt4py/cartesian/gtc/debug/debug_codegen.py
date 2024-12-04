@@ -247,7 +247,10 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
             data_index_access = ",".join(
                 [self.visit(data_index) for data_index in field_access.data_index]
             )
-            full_string = field_access.name + "[" + offset_str + "," + data_index_access + "]"
+            if offset_str == "":
+                full_string = field_access.name + f"[{data_index_access}]"
+            else:
+                full_string = field_access.name + "[" + offset_str + "," + data_index_access + "]"
         else:
             full_string = field_access.name + "[" + offset_str + "]"
         return full_string
