@@ -38,7 +38,12 @@ class DomainAccessDescriptor(eve.StrEnum):
     NEVER = "never"
 
 
-DOMAIN: TypeAlias = domain_utils.SymbolicDomain | DomainAccessDescriptor | tuple["DOMAIN", ...]
+NON_TUPLE_DOMAIN = domain_utils.SymbolicDomain | DomainAccessDescriptor
+#: The domain can also be a tuple of domains, usually this only occurs for scan operators returning
+#: a tuple since other occurrences for tuples are removed before domain inference. This is
+#: however not a requirement of the pass and `make_tuple(vertex_field, edge_field)` infers just
+#: fine to a tuple of a vertexn and an edge domain.
+DOMAIN: TypeAlias = NON_TUPLE_DOMAIN | tuple["DOMAIN", ...]
 ACCESSED_DOMAINS: TypeAlias = dict[str, DOMAIN]
 
 
@@ -150,11 +155,11 @@ def _merge_domains(
 def _extract_accessed_domains(
     stencil: itir.Expr,
     input_ids: list[str],
-    target_domain: domain_utils.SymbolicDomain | DomainAccessDescriptor,
+    target_domain: NON_TUPLE_DOMAIN,
     offset_provider: common.OffsetProvider,
     symbolic_domain_sizes: Optional[dict[str, str]],
-) -> ACCESSED_DOMAINS:
-    accessed_domains: dict[str, domain_utils.SymbolicDomain | DomainAccessDescriptor] = {}
+) -> dict[str, NON_TUPLE_DOMAIN]:
+    accessed_domains: dict[str, NON_TUPLE_DOMAIN] = {}
 
     shifts_results = trace_shifts.trace_stencil(stencil, num_args=len(input_ids))
 
@@ -177,9 +182,7 @@ def _extract_accessed_domains(
             accessed_domains.get(in_field_id, DomainAccessDescriptor.NEVER), *new_domains
         )
 
-    # Widen type to allow callee to all other types that can be in ACCESSED_DOMAINS, i.e. tuple.
-    # Fine since we transfer ownership of return value to callee.
-    return typing.cast(ACCESSED_DOMAINS, accessed_domains)
+    return accessed_domains
 
 
 def _infer_as_fieldop(
@@ -219,7 +222,7 @@ def _infer_as_fieldop(
             raise ValueError(f"Unsupported expression of type '{type(in_field)}'.")
         input_ids.append(id_)
 
-    inputs_accessed_domains: ACCESSED_DOMAINS = _extract_accessed_domains(
+    inputs_accessed_domains: dict[str, NON_TUPLE_DOMAIN] = _extract_accessed_domains(
         stencil, input_ids, target_domain, offset_provider, symbolic_domain_sizes
     )
 
