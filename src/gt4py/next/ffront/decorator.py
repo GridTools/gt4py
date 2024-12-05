@@ -186,7 +186,7 @@ class Program:
         return transform_utils._get_closure_vars_recursively(self.past_stage.closure_vars)
 
     @functools.cached_property
-    def itir(self) -> itir.FencilDefinition:
+    def gtir(self) -> itir.Program:
         no_args_past = toolchain.CompilableProgram(
             data=ffront_stages.PastProgramDefinition(
                 past_node=self.past_stage.past_node,

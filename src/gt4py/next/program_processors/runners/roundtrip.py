@@ -90,11 +90,11 @@ _FENCIL_CACHE: dict[int, Callable] = {}
 
 
 def fencil_generator(
-    ir: itir.Program | itir.FencilDefinition,
+    ir: itir.Program,
     debug: bool,
     use_embedded: bool,
     offset_provider: common.OffsetProvider,
-    transforms: itir_transforms.ITIRTransform,
+    transforms: itir_transforms.GTIRTransform,
 ) -> stages.CompiledProgram:
     """
     Generate a directly executable fencil from an ITIR node.
@@ -197,7 +197,7 @@ class Roundtrip(workflow.Workflow[stages.CompilableProgram, stages.CompiledProgr
     debug: Optional[bool] = None
     use_embedded: bool = True
     dispatch_backend: Optional[next_backend.Backend] = None
-    transforms: itir_transforms.ITIRTransform = itir_transforms.apply_common_transforms  # type: ignore[assignment] # TODO(havogt): cleanup interface of `apply_common_transforms`
+    transforms: itir_transforms.GTIRTransform = itir_transforms.apply_common_transforms  # type: ignore[assignment] # TODO(havogt): cleanup interface of `apply_common_transforms`
 
     def __call__(self, inp: stages.CompilableProgram) -> stages.CompiledProgram:
         debug = config.DEBUG if self.debug is None else self.debug
@@ -265,10 +265,10 @@ no_transforms = next_backend.Backend(
 
 gtir = next_backend.Backend(
     name="roundtrip_gtir",
-    executor=Roundtrip(transforms=itir_transforms.apply_fieldview_transforms),  # type: ignore[arg-type] # on purpose doesn't support `FencilDefintion` will resolve itself later...
+    executor=Roundtrip(transforms=itir_transforms.apply_fieldview_transforms),
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
     transforms=next_backend.Transforms(
-        past_to_itir=past_to_itir.past_to_itir_factory(to_gtir=True),
+        past_to_itir=past_to_itir.past_to_gtir_factory(),
         foast_to_itir=foast_to_gtir.adapted_foast_to_gtir_factory(cached=True),
         field_view_op_to_prog=foast_to_past.operator_to_program_factory(
             foast_to_itir_step=foast_to_gtir.adapted_foast_to_gtir_factory()
