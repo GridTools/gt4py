@@ -935,7 +935,7 @@ def translate_scan(
         else im.sym(scan_state, scan_state_type)
     )
 
-    def init_scan_state(outer_data: FieldopData, sym: gtir.Sym) -> None:
+    def init_scan_state(sym: gtir.Sym) -> None:
         scan_state = str(sym.id)
         scan_state_desc = nsdfg.data(scan_state)
         input_state = scan_input_name(scan_state)
@@ -948,14 +948,27 @@ def translate_scan(
             nsdfg.make_array_memlet(input_state),
         )
 
-    init_scan_state(init_data, scan_state_input) if isinstance(
-        init_data, FieldopData
-    ) else gtx_utils.tree_map(init_scan_state)(init_data, scan_state_input)
+    init_scan_state(scan_state_input) if isinstance(
+        scan_state_input, FieldopData
+    ) else gtx_utils.tree_map(init_scan_state)(scan_state_input)
 
     # connect the dataflow input directly to the source data nodes, without passing through a map node;
     # the reason is that the map for horizontal domain is outside the scan loop region
     for edge in input_edges:
         edge.connect(map_entry=None)
+
+    # in case tuples are passed as argument, isolated non-transient nodes might be left in the state,
+    # because not all tuple fields are necessarily used in the lambda scope
+    for data_node in compute_state.data_nodes():
+        data_desc = data_node.desc(nsdfg)
+        if (compute_state.degree(data_node) == 0) and (
+            (not data_desc.transient)
+            or data_node.data.startswith(scan_state)  # check for isolated scan state
+        ):
+            # isolated node, connect it to a transient to avoid SDFG validation errors
+            temp, temp_desc = nsdfg.add_temp_transient_like(data_desc)
+            temp_node = compute_state.add_access(temp)
+            compute_state.add_nedge(data_node, temp_node, dace.Memlet.from_array(temp, temp_desc))
 
     # connect the dataflow result nodes to the variables that carry the scan state along the column axis
     def connect_scan_output(

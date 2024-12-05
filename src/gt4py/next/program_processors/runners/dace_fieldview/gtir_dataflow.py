@@ -184,8 +184,8 @@ class EmptyInputEdge(DataflowInputEdge):
     node: dace.nodes.Tasklet
 
     def connect(self, map_entry: Optional[dace.nodes.MapEntry]) -> None:
-        assert map_entry is not None
-        self.state.add_nedge(map_entry, self.node, dace.Memlet())
+        if map_entry is not None:
+            self.state.add_nedge(map_entry, self.node, dace.Memlet())
 
 
 @dataclasses.dataclass(frozen=True)
@@ -678,9 +678,17 @@ class LambdaToDataflow(eve.NodeVisitor):
         for state, arg in zip([tstate, fstate], node.args[1:3]):
             in_edges, out_edge = visit_branch(state, arg)
             for edge in in_edges:
-                if isinstance(edge, EmptyInputEdge):
-                    continue
                 edge.connect(map_entry=None)
+
+            # in case tuples are passed as argument, isolated non-transient nodes might be left in the state,
+            # because not all tuple fields are necessarily used in the lambda scope
+            for data_node in state.data_nodes():
+                data_desc = data_node.desc(nsdfg)
+                if (not data_desc.transient) and (state.degree(data_node) == 0):
+                    # isolated node, connect it to a transient to avoid SDFG validation errors
+                    temp, temp_desc = nsdfg.add_temp_transient_like(data_desc)
+                    temp_node = state.add_access(temp)
+                    state.add_nedge(data_node, temp_node, dace.Memlet.from_array(temp, temp_desc))
 
             def construct_output(
                 output_state: dace.SDFGState, edge: DataflowOutputEdge, sym: gtir.Sym
@@ -705,7 +713,9 @@ class LambdaToDataflow(eve.NodeVisitor):
             if isinstance(out_edge, tuple):
                 assert isinstance(node.type, ts.TupleType)
                 out_symbol = dace_gtir_utils.make_symbol_tuple("__output", node.type)
-                outer_value = gtx_utils.tree_map(lambda x, y: construct_output(state, x, y))(out_edge, out_symbol)
+                outer_value = gtx_utils.tree_map(lambda x, y: construct_output(state, x, y))(
+                    out_edge, out_symbol
+                )
             else:
                 assert isinstance(node.type, ts.FieldType | ts.ScalarType)
                 outer_value = construct_output(state, out_edge, im.sym("__output", node.type))
@@ -1523,19 +1533,6 @@ class LambdaToDataflow(eve.NodeVisitor):
             self.symbol_map[symbol_name] = arg
 
         result = self.visit(node.expr)
-
-        # in case tuples are passed as argument, isolated non-transient nodes might be left in the state,
-        # because not all tuple fields are necessarily used in the lambda scope
-        used_data = set(
-            edge.source.data for edge in self.input_edges if isinstance(edge, MemletInputEdge)
-        )
-        for data_node in self.state.data_nodes():
-            data_desc = data_node.desc(self.sdfg)
-            if (not data_desc.transient) and (data_node.data not in used_data):
-                # isolated node, connect it to a transient to avoid SDFG validation errors
-                temp, temp_desc = self.sdfg.add_temp_transient_like(data_desc)
-                temp_node = self.state.add_access(temp)
-                self.state.add_nedge(data_node, temp_node, dace.Memlet.from_array(temp, temp_desc))
 
         # remove locally defined lambda symbols and restore previous symbols
         for symbol_name, arg in prev_symbols.items():
