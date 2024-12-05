@@ -1839,7 +1839,6 @@ def index(axis: common.Dimension) -> common.Field:
     return IndexField(axis)
 
 
-@runtime.closure.register(EMBEDDED)
 def closure(
     domain_: Domain,
     sten: Callable[..., Any],
