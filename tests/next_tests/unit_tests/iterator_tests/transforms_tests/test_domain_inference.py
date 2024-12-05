@@ -125,8 +125,8 @@ def constant_fold_domain_exprs(arg: itir.Node) -> itir.Node:
 
 
 def constant_fold_accessed_domains(
-    domains: infer_domain.ACCESSED_DOMAINS,
-) -> infer_domain.ACCESSED_DOMAINS:
+    domains: infer_domain.AccessedDomains,
+) -> infer_domain.AccessedDomains:
     def fold_domain(
         domain: domain_utils.SymbolicDomain | Literal[infer_domain.DomainAccessDescriptor.NEVER],
     ):
