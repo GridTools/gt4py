@@ -1707,7 +1707,9 @@ def scan(scan_pass, is_forward: bool, init):
 
 
 def _dimension_to_tag(domain: Domain) -> dict[Tag, range]:
-    return {k.value if isinstance(k, common.Dimension) else k: v for k, v in domain.items()}
+    return type(domain)(  # persist kind of domain
+        **{k.value if isinstance(k, common.Dimension) else k: v for k, v in domain.items()}
+    )
 
 
 def _validate_domain(domain: Domain, offset_provider_type: common.OffsetProviderType) -> None:
