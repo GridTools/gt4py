@@ -217,7 +217,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         nsdfg_params = [
             gtir.Sym(id=p_name, type=p_type) for p_name, p_type in global_symbols.items()
         ]
-        nsdfg_builder._add_sdfg_params(sdfg, node_params=nsdfg_params, symbolic_arguments={})
+        nsdfg_builder._add_sdfg_params(sdfg, node_params=nsdfg_params, symbolic_arguments=None)
         return nsdfg_builder
 
     def unique_nsdfg_name(self, sdfg: dace.SDFG, prefix: str) -> str:
@@ -299,6 +299,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         if isinstance(gt_type, ts.TupleType):
             tuple_fields = []
             for sym in dace_gtir_utils.flatten_tuple_fields(name, gt_type):
+                assert isinstance(sym.type, ts.DataType)
                 tuple_fields.extend(
                     self._add_storage(
                         sdfg, symbolic_arguments, sym.id, sym.type, transient, tuple_name=name
@@ -400,7 +401,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         self,
         sdfg: dace.SDFG,
         node_params: Sequence[gtir.Sym],
-        symbolic_arguments: set[str],
+        symbolic_arguments: Optional[set[str]],
     ) -> list[str]:
         """
         Helper function to add storage for node parameters and connectivity tables.
@@ -410,6 +411,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         except when they are listed in 'symbolic_arguments', in which case they
         will be represented in the SDFG as DaCe symbols.
         """
+        if symbolic_arguments is None:
+            symbolic_arguments = set()
+
         # add non-transient arrays and/or SDFG symbols for the program arguments
         sdfg_args = []
         for param in node_params:
@@ -457,7 +461,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         assert len(self.field_offsets) == 0
 
         sdfg = dace.SDFG(node.id)
-        sdfg.debuginfo = dace_utils.debug_info(node, default=sdfg.debuginfo)
+        sdfg.debuginfo = dace_utils.debug_info(node)
 
         # DaCe requires C-compatible strings for the names of data containers,
         # such as arrays and scalars. GT4Py uses a unicode symbols ('ᐞ') as name
@@ -674,7 +678,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 tsyms = dace_gtir_utils.flatten_tuple_fields(p_name, p_type)
                 return functools.reduce(
                     lambda field_offsets, sym: (
-                        field_offsets | get_field_domain_offset(sym.id, sym.type)
+                        field_offsets | get_field_domain_offset(sym.id, sym.type)  # type: ignore[arg-type]
                     ),
                     tsyms,
                     {},
@@ -691,7 +695,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             self.offset_provider_type, self.column_dim, lambda_symbols, lambda_field_offsets
         )
         nsdfg = dace.SDFG(name=self.unique_nsdfg_name(sdfg, "lambda"))
-        nstate = nsdfg.add_state("lambda")
+        nsdfg.debuginfo = dace_utils.debug_info(node, default=sdfg.debuginfo)
 
         # add sdfg storage for the symbols that need to be passed as input parameters
         lambda_params = [
@@ -702,6 +706,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             nsdfg, node_params=lambda_params, symbolic_arguments=lambda_domain_symbols
         )
 
+        nstate = nsdfg.add_state("lambda")
         lambda_result = lambda_translator.visit(
             node.expr,
             sdfg=nsdfg,
@@ -887,7 +892,7 @@ def build_sdfg_from_gtir(
     sdfg = sdfg_genenerator.visit(ir)
     assert isinstance(sdfg, dace.SDFG)
 
-    # TODO(edopao): remove `inline_loop_blocks` when DaCe transformations support LoopRegion construct
+    # TODO(edopao): remove inlining when DaCe transformations support LoopRegion construct
     sdutils.inline_loop_blocks(sdfg)
 
     return sdfg

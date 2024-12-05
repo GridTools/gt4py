@@ -41,7 +41,7 @@ def make_symbol_tuple(tuple_name: str, tuple_type: ts.TupleType) -> tuple[gtir.S
     """
     fields = [(f"{tuple_name}_{i}", field_type) for i, field_type in enumerate(tuple_type.types)]
     return tuple(
-        make_symbol_tuple(field_name, field_type)
+        make_symbol_tuple(field_name, field_type)  # type: ignore[misc]
         if isinstance(field_type, ts.TupleType)
         else im.sym(field_name, field_type)
         for field_name, field_type in fields

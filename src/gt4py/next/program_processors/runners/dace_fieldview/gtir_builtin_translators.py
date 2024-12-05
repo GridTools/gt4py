@@ -14,7 +14,7 @@ import itertools
 from typing import TYPE_CHECKING, Final, Iterable, Optional, Protocol, Sequence, TypeAlias
 
 import dace
-import dace.subsets as sbs
+from dace import subsets as sbs
 
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.ffront import fbuiltins as gtx_fbuiltins
@@ -315,6 +315,9 @@ def _create_field_operator(
 
     # here we setup the edges passing through the map entry node
     for edge in input_edges:
+        if isinstance(edge, gtir_dataflow.EmptyInputEdge) and me is None:
+            # cannot create empty edge from MapEntry node, if this is not present
+            continue
         edge.connect(me)
 
     def create_field(output_edge: gtir_dataflow.DataflowOutputEdge, sym: gtir.Sym) -> FieldopData:
@@ -848,7 +851,7 @@ def translate_scan(
 
     # the scan operator is implemented as an nested SDFG implementing the lambda expression
     nsdfg = dace.SDFG(sdfg_builder.unique_nsdfg_name(sdfg, "scan"))
-    nsdfg.debuginfo = dace_utils.debug_info(node)
+    nsdfg.debuginfo = dace_utils.debug_info(node, default=sdfg.debuginfo)
 
     # use the vertical dimension in the domain as scan dimension
     scan_domain = [
