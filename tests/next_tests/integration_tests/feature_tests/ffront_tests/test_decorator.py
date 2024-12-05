@@ -30,8 +30,8 @@ def test_program_itir_regression(cartesian_case):
     def testee(a: cases.IField, out: cases.IField):
         testee_op(a, out=out)
 
-    assert isinstance(testee.gtir, itir.Program)
-    assert isinstance(testee.with_backend(cartesian_case.backend).gtir, itir.Program)
+    assert isinstance(testee.itir, itir.Program)
+    assert isinstance(testee.with_backend(cartesian_case.backend).itir, itir.Program)
 
 
 def test_frozen(cartesian_case):
