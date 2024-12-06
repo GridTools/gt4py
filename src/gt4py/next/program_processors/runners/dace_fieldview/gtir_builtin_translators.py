@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import abc
 import dataclasses
-import itertools
 from typing import TYPE_CHECKING, Final, Iterable, Optional, Protocol, Sequence, TypeAlias
 
 import dace
@@ -849,6 +848,54 @@ def translate_scan(
     # params[2]: the value for scan initialization
     init_value = scan_expr.args[2]
 
+    # make naming consistent throughut this function scope
+    def scan_input_name(input_name: str) -> str:
+        return f"__input_{input_name}"
+
+    def scan_output_name(input_name: str) -> str:
+        return f"__output_{input_name}"
+
+    # visit the initialization value of the scan expression
+    init_data = sdfg_builder.visit(init_value, sdfg=sdfg, head_state=state)
+
+    # extract type definition of the scan state
+    scan_state_type = (
+        init_data.gt_type if isinstance(init_data, FieldopData) else get_tuple_type(init_data)
+    )
+
+    # create list of params to the lambda function with associated node type
+    lambda_symbols = {scan_state: scan_state_type} | {
+        str(p.id): arg.type for p, arg in zip(stencil_expr.params[1:], node.args, strict=True)
+    }
+
+    # visit the arguments to be passed to the lambda expression
+    # obs. this must be executed before visiting the lambda expression, in order to populate
+    # the data descriptor with the correct field domain offsets for field arguments
+    lambda_args = [sdfg_builder.visit(arg, sdfg=sdfg, head_state=state) for arg in node.args]
+    lambda_args_mapping = {
+        scan_input_name(scan_state): init_data,
+    } | {
+        str(param.id): arg for param, arg in zip(stencil_expr.params[1:], lambda_args, strict=True)
+    }
+
+    # parse the dataflow input and output symbols
+    lambda_flat_args = {}
+    lambda_field_offsets = {}
+    for param, arg in lambda_args_mapping.items():
+        tuple_fields = flatten_tuples(param, arg)
+        lambda_field_offsets |= {tsym: tfield.offset for tsym, tfield in tuple_fields}
+        lambda_flat_args |= dict(tuple_fields)
+    lambda_flat_outs = (
+        {
+            str(sym.id): sym.type
+            for sym in dace_gtir_utils.flatten_tuple_fields(
+                scan_output_name(scan_state), scan_state_type
+            )
+        }
+        if isinstance(scan_state_type, ts.TupleType)
+        else {scan_output_name(scan_state): scan_state_type}
+    )
+
     # the scan operator is implemented as an nested SDFG implementing the lambda expression
     nsdfg = dace.SDFG(sdfg_builder.unique_nsdfg_name(sdfg, "scan"))
     nsdfg.debuginfo = dace_utils.debug_info(node, default=sdfg.debuginfo)
@@ -900,33 +947,16 @@ def translate_scan(
     init_state = nsdfg.add_state("scan_init", is_start_block=True)
     nsdfg.add_edge(init_state, scan_loop, dace.InterstateEdge())
 
-    def scan_input_name(input_name: str) -> str:
-        return f"__input_{input_name}"
-
-    def scan_output_name(input_name: str) -> str:
-        return f"__output_{input_name}"
-
-    # visit the initialization value of the scan expression
-    init_data = sdfg_builder.visit(init_value, sdfg=sdfg, head_state=state)
-
-    # extract type definition of the scan state
-    scan_state_type = (
-        init_data.gt_type if isinstance(init_data, FieldopData) else get_tuple_type(init_data)
-    )
-
     # visit the list of arguments to be passed to the scan expression
-    nsdfg_symbols = {scan_state: scan_state_type} | {
-        str(p.id): arg.type for p, arg in zip(stencil_expr.params[1:], node.args, strict=True)
-    }
-    nsdfg_builder = sdfg_builder.nested_context(nsdfg, nsdfg_symbols)
-    fieldop_args = [
-        _parse_fieldop_arg(im.ref(p.id), nsdfg, compute_state, nsdfg_builder, domain)
+    stencil_builder = sdfg_builder.nested_context(nsdfg, lambda_symbols, lambda_field_offsets)
+    stencil_args = [
+        _parse_fieldop_arg(im.ref(p.id), nsdfg, compute_state, stencil_builder, domain)
         for p in stencil_expr.params
     ]
 
     # generate the dataflow representing the scan field operator
-    taskgen = gtir_dataflow.LambdaToDataflow(nsdfg, compute_state, nsdfg_builder)
-    input_edges, result = taskgen.apply(stencil_expr, args=fieldop_args)
+    taskgen = gtir_dataflow.LambdaToDataflow(nsdfg, compute_state, stencil_builder)
+    input_edges, result = taskgen.apply(stencil_expr, args=stencil_args)
 
     # now initialize the scan state
     scan_state_input = (
@@ -1004,27 +1034,7 @@ def translate_scan(
         assert isinstance(result, tuple)
         lambda_output = gtx_utils.tree_map(connect_scan_output)(result, scan_state_input)
 
-    # the scan nested SDFG is ready, now we need to instantiate it inside the map implementing the field operator
-    lambda_args = [sdfg_builder.visit(arg, sdfg=sdfg, head_state=state) for arg in node.args]
-    lambda_args_mapping = {
-        scan_input_name(scan_state): init_data,
-    } | {
-        str(param.id): arg for param, arg in zip(stencil_expr.params[1:], lambda_args, strict=True)
-    }
-    lambda_flat_args = dict(
-        itertools.chain(*[flatten_tuples(param, arg) for param, arg in lambda_args_mapping.items()])
-    )
-    lambda_flat_outs = (
-        set(
-            str(sym.id)
-            for sym in dace_gtir_utils.flatten_tuple_fields(
-                scan_output_name(scan_state), scan_state_type
-            )
-        )
-        if isinstance(scan_state_type, ts.TupleType)
-        else {scan_output_name(scan_state)}
-    )
-
+    # build the mapping of symbols from nested SDFG to parent SDFG
     nsdfg_symbols_mapping: dict[str, dace.symbolic.SymExpr] = {}
     for dim, _, _ in horizontal_domain:
         if dim != scan_dim:
@@ -1043,11 +1053,12 @@ def translate_scan(
             if isinstance(nested_symbol, dace.symbol)
         }
 
+    # the scan nested SDFG is ready, now we need to instantiate it inside the map implementing the field operator
     nsdfg_node = state.add_nested_sdfg(
         nsdfg,
         sdfg,
         inputs=set(lambda_flat_args.keys()),
-        outputs=lambda_flat_outs,
+        outputs=set(lambda_flat_outs.keys()),
         symbol_mapping=nsdfg_symbols_mapping,
     )
 

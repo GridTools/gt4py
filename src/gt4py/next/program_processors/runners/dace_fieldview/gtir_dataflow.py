@@ -637,7 +637,9 @@ class LambdaToDataflow(eve.NodeVisitor):
                 arg_data = arg_node.data
                 # SDFG data containers with name prefix '__tmp' are expected to be transients
                 inner_data = (
-                    arg_data.replace("__tmp", "__arg") if arg_data.startswith("__tmp") else arg_data
+                    arg_data.replace("__tmp", "__input")
+                    if arg_data.startswith("__tmp")
+                    else arg_data
                 )
 
                 try:

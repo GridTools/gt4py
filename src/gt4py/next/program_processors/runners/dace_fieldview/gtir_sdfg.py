@@ -119,7 +119,10 @@ class SDFGBuilder(DataflowBuilder, Protocol):
 
     @abc.abstractmethod
     def nested_context(
-        self, sdfg: dace.SDFG, global_symbols: dict[str, ts.DataType]
+        self,
+        sdfg: dace.SDFG,
+        global_symbols: dict[str, ts.DataType],
+        field_offsets: dict[str, Optional[list[dace.symbolic.SymExpr]]],
     ) -> SDFGBuilder:
         """Create a new empty context, useful to build a nested SDFG."""
         ...
@@ -209,10 +212,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         return dim == self.column_dim
 
     def nested_context(
-        self, sdfg: dace.SDFG, global_symbols: dict[str, ts.DataType]
+        self,
+        sdfg: dace.SDFG,
+        global_symbols: dict[str, ts.DataType],
+        field_offsets: dict[str, Optional[list[dace.symbolic.SymExpr]]],
     ) -> SDFGBuilder:
         nsdfg_builder = GTIRToSDFG(
-            self.offset_provider_type, self.column_dim, global_symbols, self.field_offsets
+            self.offset_provider_type, self.column_dim, global_symbols, field_offsets
         )
         nsdfg_params = [
             gtir.Sym(id=p_name, type=p_type) for p_name, p_type in global_symbols.items()
