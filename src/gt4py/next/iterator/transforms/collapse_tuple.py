@@ -128,7 +128,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         flags = flags or cls.flags
         offset_provider_type = offset_provider_type or {}
 
-        if isinstance(node, (ir.Program, ir.FencilDefinition)):
+        if isinstance(node, ir.Program):
             within_stencil = False
         assert within_stencil in [
             True,
