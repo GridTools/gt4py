@@ -29,6 +29,7 @@ class DomainAccessDescriptor(eve.StrEnum):
     """
     Descriptor for domains that could not be inferred.
     """
+
     # TODO(tehrengruber): Revisit this concept. It is strange that we don't have a descriptor
     #  `KNOWN`, but since we don't need it, it wasn't added.
 
@@ -99,7 +100,9 @@ def _domain_union(
     return domain_utils.domain_union(*filtered_domains)
 
 
-def _canonicalize_domain_structure(d1: DomainAccess, d2: DomainAccess) -> tuple[DomainAccess, DomainAccess]:
+def _canonicalize_domain_structure(
+    d1: DomainAccess, d2: DomainAccess
+) -> tuple[DomainAccess, DomainAccess]:
     """
     Given two domains or composites thereof, canonicalize their structure.
 
