@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import re
-from typing import Final, Literal, Optional, Sequence
+from typing import Final, Literal, Optional
 
 import dace
 
@@ -96,10 +96,3 @@ def filter_connectivity_types(
         for offset, conn in offset_provider_type.items()
         if isinstance(conn, gtx_common.NeighborConnectivityType)
     }
-
-
-def get_sorted_dims(
-    dims: Sequence[gtx_common.Dimension],
-) -> Sequence[tuple[int, gtx_common.Dimension]]:
-    """Sort list of dimensions in alphabetical order."""
-    return sorted(enumerate(dims), key=lambda v: v[1].value)

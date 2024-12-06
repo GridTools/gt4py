@@ -69,7 +69,7 @@ from .type_definitions import NOTHING, NothingType
 
 
 try:
-    # For perfomance reasons, try to use cytoolz when possible (using cython)
+    # For performance reasons, try to use cytoolz when possible (using cython)
     import cytoolz as toolz
 except ModuleNotFoundError:
     # Fall back to pure Python toolz

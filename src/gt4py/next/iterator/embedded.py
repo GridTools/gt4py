@@ -1706,8 +1706,10 @@ def scan(scan_pass, is_forward: bool, init):
     return impl
 
 
-def _dimension_to_tag(domain: Domain) -> dict[Tag, range]:
-    return {k.value if isinstance(k, common.Dimension) else k: v for k, v in domain.items()}
+def _dimension_to_tag(
+    domain: runtime.CartesianDomain | runtime.UnstructuredDomain,
+) -> dict[Tag, range]:
+    return {k.value: v for k, v in domain.items()}
 
 
 def _validate_domain(domain: Domain, offset_provider_type: common.OffsetProviderType) -> None:
@@ -1828,7 +1830,7 @@ def as_fieldop(fun: Callable, domain: runtime.CartesianDomain | runtime.Unstruct
 
         # TODO(havogt): after updating all tests to use the new program,
         # we should get rid of closure and move the implementation to this function
-        closure(_dimension_to_tag(domain), fun, out, list(args))
+        closure(domain, fun, out, list(args))
         return out
 
     return impl
@@ -1839,9 +1841,8 @@ def index(axis: common.Dimension) -> common.Field:
     return IndexField(axis)
 
 
-@runtime.closure.register(EMBEDDED)
 def closure(
-    domain_: Domain,
+    domain_: runtime.CartesianDomain | runtime.UnstructuredDomain,
     sten: Callable[..., Any],
     out,  #: MutableLocatedField,
     ins: list[common.Field | Scalar | tuple[common.Field | Scalar | tuple, ...]],
