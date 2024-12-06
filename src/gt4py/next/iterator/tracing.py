@@ -23,7 +23,6 @@ from gt4py.next.iterator.ir import (
     Lambda,
     NoneLiteral,
     OffsetLiteral,
-    StencilClosure,
     Sym,
     SymRef,
 )
@@ -202,19 +201,12 @@ iterator.runtime.FundefDispatcher.register_hook(FundefTracer())
 
 class TracerContext:
     fundefs: ClassVar[List[FunctionDefinition]] = []
-    closures: ClassVar[
-        List[StencilClosure]
-    ] = []  # TODO(havogt): remove after refactoring to `Program` is complete, currently handles both programs and fencils
     body: ClassVar[List[itir.Stmt]] = []
 
     @classmethod
     def add_fundef(cls, fun):
         if fun not in cls.fundefs:
             cls.fundefs.append(fun)
-
-    @classmethod
-    def add_closure(cls, closure):
-        cls.closures.append(closure)
 
     @classmethod
     def add_stmt(cls, stmt):
@@ -225,21 +217,8 @@ class TracerContext:
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         type(self).fundefs = []
-        type(self).closures = []
         type(self).body = []
         iterator.builtins.builtin_dispatch.pop_key()
-
-
-@iterator.runtime.closure.register(TRACING)
-def closure(domain, stencil, output, inputs):
-    if hasattr(stencil, "__name__") and stencil.__name__ in iterator.builtins.__all__:
-        stencil = _s(stencil.__name__)
-    else:
-        stencil(*(_s(param) for param in inspect.signature(stencil).parameters))
-        stencil = make_node(stencil)
-    TracerContext.add_closure(
-        StencilClosure(domain=domain, stencil=stencil, output=output, inputs=inputs)
-    )
 
 
 @iterator.runtime.set_at.register(TRACING)
@@ -328,19 +307,10 @@ def trace_fencil_definition(
         params = _make_fencil_params(fun, args)
         trace_function_call(fun, args=(_s(param.id) for param in params))
 
-        if TracerContext.closures:
-            return itir.FencilDefinition(
-                id=fun.__name__,
-                function_definitions=TracerContext.fundefs,
-                params=params,
-                closures=TracerContext.closures,
-            )
-        else:
-            assert TracerContext.body
-            return itir.Program(
-                id=fun.__name__,
-                function_definitions=TracerContext.fundefs,
-                params=params,
-                declarations=[],  # TODO
-                body=TracerContext.body,
-            )
+        return itir.Program(
+            id=fun.__name__,
+            function_definitions=TracerContext.fundefs,
+            params=params,
+            declarations=[],  # TODO
+            body=TracerContext.body,
+        )
