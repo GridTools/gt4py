@@ -15,7 +15,7 @@ from gt4py import eve
 
 ```python
 cached_lowering_toolchain = gtx.backend.DEFAULT_TRANSFORMS.replace(
-    past_to_itir=gtx.ffront.past_to_itir.past_to_itir_factory(cached=False)
+    past_to_itir=gtx.ffront.past_to_itir.past_to_gtir_factory(cached=False)
 )
 ```
 

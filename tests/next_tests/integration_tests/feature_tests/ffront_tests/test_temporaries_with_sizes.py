@@ -107,12 +107,12 @@ def test_verification(testee, run_gtfn_with_temporaries_and_symbolic_sizes, mesh
 
 
 def test_temporary_symbols(testee, mesh_descriptor):
-    itir_with_tmp = apply_common_transforms(
-        testee.itir,
+    gtir_with_tmp = apply_common_transforms(
+        testee.gtir,
         extract_temporaries=True,
         offset_provider=mesh_descriptor.offset_provider,
     )
 
     params = ["num_vertices", "num_edges", "num_cells"]
     for param in params:
-        assert any([param == str(p) for p in itir_with_tmp.params])
+        assert any([param == str(p) for p in gtir_with_tmp.params])
