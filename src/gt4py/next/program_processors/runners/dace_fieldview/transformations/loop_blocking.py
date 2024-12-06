@@ -36,14 +36,17 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
     What makes this transformation different from simple blocking, is that
     the inner map will not just be inserted right after the outer Map.
     Instead the transformation will first identify all nodes that does not depend
-    on the blocking parameter `I` and relocate them between the outer and inner map.
-    Thus these operations will only be performed once, per inner loop.
+    on the blocking parameter `I`, called independent nodes and relocate them
+    between the outer and inner map. Note that an independent node must be connected
+    to the MapEntry or another independent node.
+    Thus these operations will only be performed once, per outer loop iteration.
 
     Args:
         blocking_size: The size of the block, denoted as `B` above.
         blocking_parameter: On which parameter should we block.
-        require_independent_nodes: If `True` then the transformation will only
-            apply if there are independent nodes. Defaults to `False`.
+        require_independent_nodes: If `True` only apply loop blocking if the Map
+            actually contains independent nodes. Defaults to `False`.
+
     Todo:
         - Modify the inner map such that it always starts at zero.
         - Allow more than one parameter on which we block.
