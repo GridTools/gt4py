@@ -56,7 +56,7 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
         ...     column_axis=None,
         ... )
 
-        >>> itir_copy = past_to_itir(
+        >>> itir_copy = past_to_gtir(
         ...     toolchain.CompilableProgram(copy_program.past_stage, compile_time_args)
         ... )
 
@@ -191,7 +191,6 @@ class ProgramLowering(
     """
 
     grid_type: common.GridType
-    to_gtir: bool = False  # FIXME[#1582](havogt): remove after refactoring to GTIR
 
     # TODO(tehrengruber): enable doctests again. For unknown / obscure reasons
     #  the above doctest fails when executed using `pytest --doctest-modules`.

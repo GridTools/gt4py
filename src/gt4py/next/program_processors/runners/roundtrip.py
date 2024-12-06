@@ -265,7 +265,7 @@ no_transforms = next_backend.Backend(
 
 gtir = next_backend.Backend(
     name="roundtrip_gtir",
-    executor=Roundtrip(transforms=itir_transforms.apply_fieldview_transforms),
+    executor=Roundtrip(transforms=itir_transforms.apply_fieldview_transforms),  # type: ignore[arg-type] # don't understand why mypy complains
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
     transforms=next_backend.Transforms(
         past_to_itir=past_to_itir.past_to_gtir_factory(),
