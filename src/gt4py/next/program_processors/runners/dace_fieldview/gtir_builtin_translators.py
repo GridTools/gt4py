@@ -1022,8 +1022,9 @@ def translate_scan(
             scan_output_name(sym.id), scan_output_shape, scan_result_desc.dtype, find_new_name=True
         )
         output_node = compute_state.add_access(output)
+        output_subset = str(dace.symbolic.SymExpr(scan_loop_var) - scan_lower_bound)
         compute_state.add_nedge(
-            scan_result.dc_node, output_node, dace.Memlet(data=output, subset=scan_loop_var)
+            scan_result.dc_node, output_node, dace.Memlet(data=output, subset=output_subset)
         )
 
         update_state.add_nedge(
