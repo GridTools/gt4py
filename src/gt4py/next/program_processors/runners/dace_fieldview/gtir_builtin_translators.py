@@ -215,7 +215,7 @@ def _parse_fieldop_arg(
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
     domain: FieldopDomain,
-    scan_dim: Optional[gtx_common.Dimension] = None,
+    by_value: bool = False,
 ) -> (
     gtir_dataflow.IteratorExpr
     | gtir_dataflow.MemletExpr
@@ -225,24 +225,18 @@ def _parse_fieldop_arg(
 
     arg = sdfg_builder.visit(node, sdfg=sdfg, head_state=state)
 
-    def scan_arg_wrapper(arg: FieldopData) -> gtir_dataflow.MemletExpr | gtir_dataflow.IteratorExpr:
-        # In case of scan field operator, input 1D fields with scan dimension do not need to be dereferenced.
-        # The iterator expression for such fields is converted into a memlet expression for data access.
+    def get_arg_value(arg: FieldopData) -> gtir_dataflow.MemletExpr | gtir_dataflow.IteratorExpr:
+        # In case of scan field operator, the arguments to the vertical stencil are passed by value.
         arg_expr = arg.get_local_view(domain)
-        if scan_dim is None:
-            return arg_expr
-        if isinstance(arg_expr, gtir_dataflow.MemletExpr):
-            return arg_expr
-        head, *tail = arg_expr.field_domain
-        if tail or head[0] != scan_dim:
+        if not by_value or isinstance(arg_expr, gtir_dataflow.MemletExpr):
             return arg_expr
         return gtir_dataflow.MemletExpr(arg_expr.field, arg_expr.gt_dtype, arg_expr.get_memlet_subset(sdfg))
 
     if isinstance(arg, FieldopData):
-        return scan_arg_wrapper(arg)
+        return get_arg_value(arg)
     else:
         # handle tuples of fields
-        return gtx_utils.tree_map(lambda x: scan_arg_wrapper(x))(arg)
+        return gtx_utils.tree_map(lambda x: get_arg_value(x))(arg)
 
 
 def _get_field_layout(
@@ -967,7 +961,7 @@ def translate_scan(
     # visit the list of arguments to be passed to the scan expression
     stencil_builder = sdfg_builder.nested_context(nsdfg, lambda_symbols, lambda_field_offsets)
     stencil_args = [
-        _parse_fieldop_arg(im.ref(p.id), nsdfg, compute_state, stencil_builder, domain, scan_dim)
+        _parse_fieldop_arg(im.ref(p.id), nsdfg, compute_state, stencil_builder, domain, by_value=True)
         for p in stencil_expr.params
     ]
 
