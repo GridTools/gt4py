@@ -189,15 +189,9 @@ BUILTINS = {
     "scan",
     "if_",
     "index",  # `index(dim)` creates a dim-field that has the current index at each point
+    "as_fieldop",  # `as_fieldop(stencil, domain)` creates field_operator from stencil (domain is optional, but for now required for embedded execution)
     *ARITHMETIC_BUILTINS,
     *TYPEBUILTINS,
-}
-
-# only used in `Program`` not `FencilDefinition`
-# TODO(havogt): restructure after refactoring to GTIR
-GTIR_BUILTINS = {
-    *BUILTINS,
-    "as_fieldop",  # `as_fieldop(stencil, domain)` creates field_operator from stencil (domain is optional, but for now required for embedded execution)
 }
 
 
@@ -243,7 +237,7 @@ class Program(Node, ValidatedSymbolTableTrait):
     implicit_domain: bool = False
 
     _NODE_SYMBOLS_: ClassVar[List[Sym]] = [
-        Sym(id=name) for name in sorted(GTIR_BUILTINS)
+        Sym(id=name) for name in sorted(BUILTINS)
     ]  # sorted for serialization stability
 
 
