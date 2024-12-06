@@ -15,6 +15,7 @@ from gt4py.next.iterator.transforms import (
     fuse_as_fieldop,
     global_tmps,
     infer_domain,
+    inline_dynamic_shifts,
     inline_fundefs,
     inline_lifts,
 )
@@ -73,6 +74,9 @@ def apply_common_transforms(
     ir = InlineLambdas.apply(ir, opcount_preserving=True, force_inline_lambda_args=True)
     # required in order to get rid of expressions without a domain (e.g. when a tuple element is never accessed)
     ir = CollapseTuple.apply(ir, offset_provider_type=offset_provider_type)  # type: ignore[assignment]  # always an itir.Program
+    ir = inline_dynamic_shifts.InlineDynamicShifts.apply(
+        ir
+    )  # domain inference does not support dynamic offsets yet
     ir = infer_domain.infer_program(
         ir,
         offset_provider=offset_provider,
@@ -158,5 +162,8 @@ def apply_fieldview_transforms(
     ir = CollapseTuple.apply(
         ir, offset_provider_type=common.offset_provider_to_type(offset_provider)
     )  # type: ignore[assignment] # type is still `itir.Program`
+    ir = inline_dynamic_shifts.InlineDynamicShifts.apply(
+        ir
+    )  # domain inference does not support dynamic offsets yet
     ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
     return ir
