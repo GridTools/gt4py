@@ -75,7 +75,7 @@ def apply_common_transforms(
     # required in order to get rid of expressions without a domain (e.g. when a tuple element is never accessed)
     ir = CollapseTuple.apply(ir, offset_provider_type=offset_provider_type)  # type: ignore[assignment]  # always an itir.Program
     ir = inline_dynamic_shifts.InlineDynamicShifts.apply(
-        ir  # type: ignore[arg-type]  # always an itir.Program
+        ir
     )  # domain inference does not support dynamic offsets yet
     ir = infer_domain.infer_program(
         ir,
