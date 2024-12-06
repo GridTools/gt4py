@@ -42,7 +42,7 @@ NonTupleDomain: TypeAlias = domain_utils.SymbolicDomain | DomainAccessDescriptor
 #: The domain can also be a tuple of domains, usually this only occurs for scan operators returning
 #: a tuple since other occurrences for tuples are removed before domain inference. This is
 #: however not a requirement of the pass and `make_tuple(vertex_field, edge_field)` infers just
-#: fine to a tuple of a vertexn and an edge domain.
+#: fine to a tuple of a vertex and an edge domain.
 Domain: TypeAlias = NonTupleDomain | tuple["Domain", ...]
 AccessedDomains: TypeAlias = dict[str, Domain]
 
