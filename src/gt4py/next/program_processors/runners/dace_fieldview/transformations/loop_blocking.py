@@ -42,7 +42,8 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
     Args:
         blocking_size: The size of the block, denoted as `B` above.
         blocking_parameter: On which parameter should we block.
-
+        require_independent_nodes: If `True` then the transformation will only
+            apply if there are independent nodes. Defaults to `False`.
     Todo:
         - Modify the inner map such that it always starts at zero.
         - Allow more than one parameter on which we block.
@@ -59,6 +60,12 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         desc="Name of the iteration variable on which to block (must be an exact match);"
         " 'I' in the above description.",
     )
+    require_independent_nodes = dace_properties.Property(
+        dtype=bool,
+        default=False,
+        desc="If 'True' then blocking is only applied if there are independent nodes.",
+    )
+
     # Set of nodes that are independent of the blocking parameter.
     _independent_nodes: Optional[set[dace_nodes.AccessNode]]
     _dependent_nodes: Optional[set[dace_nodes.AccessNode]]
@@ -69,6 +76,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         self,
         blocking_size: Optional[int] = None,
         blocking_parameter: Optional[Union[gtx_common.Dimension, str]] = None,
+        require_independent_nodes: Optional[bool] = None,
     ) -> None:
         super().__init__()
         if isinstance(blocking_parameter, gtx_common.Dimension):
@@ -77,6 +85,8 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             self.blocking_parameter = blocking_parameter
         if blocking_size is not None:
             self.blocking_size = blocking_size
+        if require_independent_nodes is not None:
+            self.require_independent_nodes = require_independent_nodes
         self._independent_nodes = None
         self._dependent_nodes = None
 
@@ -250,6 +260,9 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         member variables are updated. If the partition does not exists the function
         will return `False` and the respective member variables will be `None`.
 
+        The function will honor `self.require_independent_nodes`. Thus if no independent
+        nodes were found the function behaves as if the partition does not exist.
+
         Args:
             state: The state on which we operate.
             sdfg: The SDFG in which we operate on.
@@ -294,6 +307,10 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             # If we found a new independent node then we have to continue.
             if not found_new_independent_node:
                 break
+
+        if self.require_independent_nodes and len(self._independent_nodes) == 0:
+            self._independent_nodes = None
+            return False
 
         # After the independent set is computed compute the set of dependent nodes
         #  as the set of all nodes adjacent to `outer_entry` that are not dependent.
