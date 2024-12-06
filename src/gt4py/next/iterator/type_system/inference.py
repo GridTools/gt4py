@@ -275,8 +275,8 @@ def _get_dimensions_from_types(types) -> dict[str, common.Dimension]:
         if isinstance(obj, common.Dimension):
             yield obj
         elif isinstance(obj, ts.TypeSpec):
-            for field in dataclasses.fields(obj.__class__):
-                yield from _get_dimensions(getattr(obj, field.name))
+            for field in obj.__datamodel_fields__.keys():
+                yield from _get_dimensions(getattr(obj, field))
         elif isinstance(obj, collections.abc.Mapping):
             for el in obj.values():
                 yield from _get_dimensions(el)
@@ -479,7 +479,7 @@ class ITIRTypeInference(eve.NodeTranslator):
         assert domain.dims != "unknown"
         assert node.dtype
         return type_info.apply_to_primitive_constituents(
-            lambda dtype: ts.FieldType(dims=domain.dims, dtype=dtype),  # type: ignore[arg-type]  # ensured by domain.dims != "unknown" above
+            lambda dtype: ts.FieldType(dims=domain.dims, dtype=dtype),
             node.dtype,
         )
 

@@ -155,18 +155,18 @@ def if_(pred: ts.ScalarType, true_branch: ts.DataType, false_branch: ts.DataType
 
 
 @_register_builtin_type_synthesizer
-def make_const_list(scalar: ts.ScalarType) -> it_ts.ListType:
+def make_const_list(scalar: ts.ScalarType) -> ts.ListType:
     assert isinstance(scalar, ts.ScalarType)
-    return it_ts.ListType(element_type=scalar)
+    return ts.ListType(element_type=scalar)
 
 
 @_register_builtin_type_synthesizer
-def list_get(index: ts.ScalarType | it_ts.OffsetLiteralType, list_: it_ts.ListType) -> ts.DataType:
+def list_get(index: ts.ScalarType | it_ts.OffsetLiteralType, list_: ts.ListType) -> ts.DataType:
     if isinstance(index, it_ts.OffsetLiteralType):
         assert isinstance(index.value, ts.ScalarType)
         index = index.value
     assert isinstance(index, ts.ScalarType) and type_info.is_integral(index)
-    assert isinstance(list_, it_ts.ListType)
+    assert isinstance(list_, ts.ListType)
     return list_.element_type
 
 
@@ -198,14 +198,14 @@ def index(arg: ts.DimensionType) -> ts.FieldType:
 
 
 @_register_builtin_type_synthesizer
-def neighbors(offset_literal: it_ts.OffsetLiteralType, it: it_ts.IteratorType) -> it_ts.ListType:
+def neighbors(offset_literal: it_ts.OffsetLiteralType, it: it_ts.IteratorType) -> ts.ListType:
     assert (
         isinstance(offset_literal, it_ts.OffsetLiteralType)
         and isinstance(offset_literal.value, common.Dimension)
         and offset_literal.value.kind == common.DimensionKind.LOCAL
     )
     assert isinstance(it, it_ts.IteratorType)
-    return it_ts.ListType(element_type=it.element_type)
+    return ts.ListType(element_type=it.element_type)
 
 
 @_register_builtin_type_synthesizer
@@ -270,7 +270,7 @@ def _convert_as_fieldop_input_to_iterator(
         else:
             defined_dims.append(dim)
     if is_nb_field:
-        element_type = it_ts.ListType(element_type=element_type)
+        element_type = ts.ListType(element_type=element_type)
 
     return it_ts.IteratorType(
         position_dims=domain.dims, defined_dims=defined_dims, element_type=element_type
@@ -342,14 +342,14 @@ def scan(
 def map_(op: TypeSynthesizer) -> TypeSynthesizer:
     @TypeSynthesizer
     def applied_map(
-        *args: it_ts.ListType, offset_provider_type: common.OffsetProviderType
-    ) -> it_ts.ListType:
+        *args: ts.ListType, offset_provider_type: common.OffsetProviderType
+    ) -> ts.ListType:
         assert len(args) > 0
-        assert all(isinstance(arg, it_ts.ListType) for arg in args)
+        assert all(isinstance(arg, ts.ListType) for arg in args)
         arg_el_types = [arg.element_type for arg in args]
         el_type = op(*arg_el_types, offset_provider_type=offset_provider_type)
         assert isinstance(el_type, ts.DataType)
-        return it_ts.ListType(element_type=el_type)
+        return ts.ListType(element_type=el_type)
 
     return applied_map
 
@@ -357,8 +357,8 @@ def map_(op: TypeSynthesizer) -> TypeSynthesizer:
 @_register_builtin_type_synthesizer
 def reduce(op: TypeSynthesizer, init: ts.TypeSpec) -> TypeSynthesizer:
     @TypeSynthesizer
-    def applied_reduce(*args: it_ts.ListType, offset_provider_type: common.OffsetProviderType):
-        assert all(isinstance(arg, it_ts.ListType) for arg in args)
+    def applied_reduce(*args: ts.ListType, offset_provider_type: common.OffsetProviderType):
+        assert all(isinstance(arg, ts.ListType) for arg in args)
         return op(
             init, *(arg.element_type for arg in args), offset_provider_type=offset_provider_type
         )

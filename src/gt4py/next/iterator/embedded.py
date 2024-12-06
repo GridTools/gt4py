@@ -54,7 +54,6 @@ from gt4py.next.embedded import (
 )
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import builtins, runtime
-from gt4py.next.iterator.type_system import type_specifications as itir_ts
 from gt4py.next.otf import arguments
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
@@ -1460,7 +1459,7 @@ class _List(Generic[DT]):
     def __getitem__(self, i: int):
         return self.values[i]
 
-    def __gt_type__(self) -> itir_ts.ListType:
+    def __gt_type__(self) -> ts.ListType:
         offset_tag = self.offset.value
         assert isinstance(offset_tag, str)
         element_type = type_translation.from_value(self.values[0])
@@ -1470,7 +1469,7 @@ class _List(Generic[DT]):
         connectivity = offset_provider[offset_tag]
         assert common.is_neighbor_connectivity(connectivity)
         local_dim = connectivity.__gt_type__().neighbor_dim
-        return itir_ts.ListType(element_type=element_type, offset_type=local_dim)
+        return ts.ListType(element_type=element_type, offset_type=local_dim)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -1480,10 +1479,10 @@ class _ConstList(Generic[DT]):
     def __getitem__(self, _):
         return self.value
 
-    def __gt_type__(self) -> itir_ts.ListType:
+    def __gt_type__(self) -> ts.ListType:
         element_type = type_translation.from_value(self.value)
         assert isinstance(element_type, ts.DataType)
-        return itir_ts.ListType(
+        return ts.ListType(
             element_type=element_type,
             offset_type=_CONST_DIM,
         )
@@ -1801,7 +1800,7 @@ def _fieldspec_list_to_value(
     domain: common.Domain, type_: ts.TypeSpec
 ) -> tuple[common.Domain, ts.TypeSpec]:
     """Translate the list element type into the domain."""
-    if isinstance(type_, itir_ts.ListType):
+    if isinstance(type_, ts.ListType):
         if type_.offset_type == _CONST_DIM:
             return domain.insert(
                 len(domain), common.named_range((_CONST_DIM, 1))

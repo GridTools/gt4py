@@ -236,6 +236,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs: Any) -> itir.Expr:
         # TODO(tehrengruber): extend iterator ir to support unary operators
         dtype = type_info.extract_dtype(node.type)
+        assert isinstance(dtype, ts.ScalarType)
         if node.op in [dialect_ast_enums.UnaryOperator.NOT, dialect_ast_enums.UnaryOperator.INVERT]:
             if dtype.kind != ts.ScalarKind.BOOL:
                 raise NotImplementedError(f"'{node.op}' is only supported on 'bool' arguments.")
@@ -417,12 +418,14 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
     def _visit_max_over(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         dtype = type_info.extract_dtype(node.type)
+        assert isinstance(dtype, ts.ScalarType)
         min_value, _ = type_info.arithmetic_bounds(dtype)
         init_expr = self._make_literal(str(min_value), dtype)
         return self._make_reduction_expr(node, "maximum", init_expr, **kwargs)
 
     def _visit_min_over(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         dtype = type_info.extract_dtype(node.type)
+        assert isinstance(dtype, ts.ScalarType)
         _, max_value = type_info.arithmetic_bounds(dtype)
         init_expr = self._make_literal(str(max_value), dtype)
         return self._make_reduction_expr(node, "minimum", init_expr, **kwargs)

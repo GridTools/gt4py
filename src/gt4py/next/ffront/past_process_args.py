@@ -109,6 +109,7 @@ def _field_constituents_shape_and_dims(
     match arg_type:
         case ts.TupleType():
             for el, el_type in zip(arg, arg_type.types):
+                assert isinstance(el_type, ts.DataType)
                 yield from _field_constituents_shape_and_dims(el, el_type)
         case ts.FieldType():
             dims = type_info.extract_dims(arg_type)
