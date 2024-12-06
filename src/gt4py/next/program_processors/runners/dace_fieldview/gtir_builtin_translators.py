@@ -230,7 +230,9 @@ def _parse_fieldop_arg(
         arg_expr = arg.get_local_view(domain)
         if not by_value or isinstance(arg_expr, gtir_dataflow.MemletExpr):
             return arg_expr
-        return gtir_dataflow.MemletExpr(arg_expr.field, arg_expr.gt_dtype, arg_expr.get_memlet_subset(sdfg))
+        return gtir_dataflow.MemletExpr(
+            arg_expr.field, arg_expr.gt_dtype, arg_expr.get_memlet_subset(sdfg)
+        )
 
     if isinstance(arg, FieldopData):
         return get_arg_value(arg)
@@ -923,13 +925,6 @@ def translate_scan(
     scan_loop_var = dace_gtir_utils.get_map_variable(scan_dim)
     _, scan_output_offset, scan_output_shape = _get_field_layout(scan_domain)
 
-    # create field operator on the horizontal domain
-    horizontal_domain = [
-        (dim, lower_bound, upper_bound)
-        for dim, lower_bound, upper_bound in domain
-        if dim.kind == gtx_common.DimensionKind.HORIZONTAL
-    ]
-
     # create a loop region for lambda call over the scan dimension
     if scan_forward:
         scan_loop = dace.sdfg.state.LoopRegion(
@@ -961,7 +956,9 @@ def translate_scan(
     # visit the list of arguments to be passed to the scan expression
     stencil_builder = sdfg_builder.nested_context(nsdfg, lambda_symbols, lambda_field_offsets)
     stencil_args = [
-        _parse_fieldop_arg(im.ref(p.id), nsdfg, compute_state, stencil_builder, domain, by_value=True)
+        _parse_fieldop_arg(
+            im.ref(p.id), nsdfg, compute_state, stencil_builder, domain, by_value=True
+        )
         for p in stencil_expr.params
     ]
 
@@ -1047,7 +1044,7 @@ def translate_scan(
 
     # build the mapping of symbols from nested SDFG to parent SDFG
     nsdfg_symbols_mapping: dict[str, dace.symbolic.SymExpr] = {}
-    for dim, _, _ in horizontal_domain:
+    for dim, _, _ in domain:
         if dim != scan_dim:
             dim_map_variable = dace_gtir_utils.get_map_variable(dim)
             nsdfg_symbols_mapping[dim_map_variable] = dim_map_variable
