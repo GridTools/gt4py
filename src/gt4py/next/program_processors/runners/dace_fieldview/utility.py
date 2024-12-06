@@ -37,7 +37,10 @@ def make_symbol_tuple(tuple_name: str, tuple_type: ts.TupleType) -> tuple[gtir.S
     >>> sty = ts.ScalarType(kind=ts.ScalarKind.INT32)
     >>> fty = ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
     >>> t = ts.TupleType(types=[sty, ts.TupleType(types=[fty, sty])])
-    >>> assert get_tuple_fields("a", t) == [("a_0", sty), (("a_1_0", fty), ("a_1_1", sty))]
+    >>> assert make_symbol_tuple("a", t) == (
+    ...     im.sym("a_0", sty),
+    ...     (im.sym("a_1_0", fty), im.sym("a_1_1", sty)),
+    ... )
     """
     fields = [(f"{tuple_name}_{i}", field_type) for i, field_type in enumerate(tuple_type.types)]
     return tuple(
@@ -57,8 +60,11 @@ def flatten_tuple_fields(tuple_name: str, tuple_type: ts.TupleType) -> list[gtir
     >>> sty = ts.ScalarType(kind=ts.ScalarKind.INT32)
     >>> fty = ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
     >>> t = ts.TupleType(types=[sty, ts.TupleType(types=[fty, sty])])
-    >>> assert get_tuple_fields("a", t) == [("a_0", sty), ("a_1", ts.TupleType(types=[fty, sty]))]
-    >>> assert flatten_tuple_fields("a", t) == [("a_0", sty), ("a_1_0", fty), ("a_1_1", sty)]
+    >>> assert flatten_tuple_fields("a", t) == [
+    ...     im.sym("a_0", sty),
+    ...     im.sym("a_1_0", fty),
+    ...     im.sym("a_1_1", sty),
+    ... ]
     """
     symbol_tuple = make_symbol_tuple(tuple_name, tuple_type)
     return list(gtx_utils.flatten_nested_tuple(symbol_tuple))
