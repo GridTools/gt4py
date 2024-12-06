@@ -995,19 +995,6 @@ def translate_scan(
     for edge in input_edges:
         edge.connect(map_entry=None)
 
-    # in case tuples are passed as argument, isolated non-transient nodes might be left in the state,
-    # because not all tuple fields are necessarily used in the lambda scope
-    for data_node in compute_state.data_nodes():
-        data_desc = data_node.desc(nsdfg)
-        if (compute_state.degree(data_node) == 0) and (
-            (not data_desc.transient)
-            or data_node.data.startswith(scan_state)  # check for isolated scan state
-        ):
-            # isolated node, connect it to a transient to avoid SDFG validation errors
-            temp, temp_desc = nsdfg.add_temp_transient_like(data_desc)
-            temp_node = compute_state.add_access(temp)
-            compute_state.add_nedge(data_node, temp_node, dace.Memlet.from_array(temp, temp_desc))
-
     # connect the dataflow result nodes to the variables that carry the scan state along the column axis
     def connect_scan_output(
         scan_output_edge: gtir_dataflow.DataflowOutputEdge, sym: gtir.Sym
@@ -1042,6 +1029,21 @@ def translate_scan(
     else:
         assert isinstance(result, tuple)
         lambda_output = gtx_utils.tree_map(connect_scan_output)(result, scan_state_input)
+
+    # in case tuples are passed as argument, isolated non-transient nodes might be left in the state,
+    # because not all tuple fields are necessarily accessed in the lambda scope
+    for data_node in compute_state.data_nodes():
+        data_desc = data_node.desc(nsdfg)
+        if (compute_state.degree(data_node) == 0) and (
+            (not data_desc.transient)
+            or data_node.data.startswith(
+                scan_state
+            )  # exceptional case where the state is not used, not a scan indeed
+        ):
+            # isolated node, connect it to a transient to avoid SDFG validation errors
+            temp, temp_desc = nsdfg.add_temp_transient_like(data_desc)
+            temp_node = compute_state.add_access(temp)
+            compute_state.add_nedge(data_node, temp_node, dace.Memlet.from_array(temp, temp_desc))
 
     # build the mapping of symbols from nested SDFG to parent SDFG
     nsdfg_symbols_mapping: dict[str, dace.symbolic.SymExpr] = {}

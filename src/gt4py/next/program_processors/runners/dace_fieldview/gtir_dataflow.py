@@ -682,16 +682,6 @@ class LambdaToDataflow(eve.NodeVisitor):
             for edge in in_edges:
                 edge.connect(map_entry=None)
 
-            # in case tuples are passed as argument, isolated non-transient nodes might be left in the state,
-            # because not all tuple fields are necessarily used in the lambda scope
-            for data_node in state.data_nodes():
-                data_desc = data_node.desc(nsdfg)
-                if (not data_desc.transient) and (state.degree(data_node) == 0):
-                    # isolated node, connect it to a transient to avoid SDFG validation errors
-                    temp, temp_desc = nsdfg.add_temp_transient_like(data_desc)
-                    temp_node = state.add_access(temp)
-                    state.add_nedge(data_node, temp_node, dace.Memlet.from_array(temp, temp_desc))
-
             def construct_output(
                 output_state: dace.SDFGState, edge: DataflowOutputEdge, sym: gtir.Sym
             ) -> ValueExpr:
@@ -721,6 +711,16 @@ class LambdaToDataflow(eve.NodeVisitor):
             else:
                 assert isinstance(node.type, ts.FieldType | ts.ScalarType)
                 outer_value = construct_output(state, out_edge, im.sym("__output", node.type))
+
+            # in case tuples are passed as argument, isolated non-transient nodes might be left in the state,
+            # because not all tuple fields are necessarily used in the lambda scope
+            for data_node in state.data_nodes():
+                data_desc = data_node.desc(nsdfg)
+                if (not data_desc.transient) and (state.degree(data_node) == 0):
+                    # isolated node, connect it to a transient to avoid SDFG validation errors
+                    temp, temp_desc = nsdfg.add_temp_transient_like(data_desc)
+                    temp_node = state.add_access(temp)
+                    state.add_nedge(data_node, temp_node, dace.Memlet.from_array(temp, temp_desc))
 
         else:
             result = outer_value
