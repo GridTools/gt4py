@@ -30,27 +30,5 @@ class IteratorType(ts.DataType, ts.CallableType):
     element_type: ts.DataType
 
 
-class StencilClosureType(ts.TypeSpec):
-    domain: DomainType
-    stencil: ts.FunctionType
-    output: ts.FieldType | ts.TupleType
-    inputs: list[ts.FieldType]
-
-    def __post_init__(self):
-        # local import to avoid importing type_info from a type_specification module
-        from gt4py.next.type_system import type_info
-
-        for i, el_type in enumerate(type_info.primitive_constituents(self.output)):
-            assert isinstance(
-                el_type, ts.FieldType
-            ), f"All constituent types must be field types, but the {i}-th element is of type '{el_type}'."
-
-
-# TODO(tehrengruber): Remove after new ITIR format with apply_stencil is used everywhere
-class FencilType(ts.TypeSpec):
-    params: dict[str, ts.DataType]
-    closures: list[StencilClosureType]
-
-
 class ProgramType(ts.TypeSpec):
     params: dict[str, ts.DataType]

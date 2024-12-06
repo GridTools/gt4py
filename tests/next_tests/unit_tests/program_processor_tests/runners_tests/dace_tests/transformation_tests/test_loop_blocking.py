@@ -803,3 +803,52 @@ def test_loop_blocking_mixked_memlets_2():
             assert isinstance(node, dace_nodes.MapEntry) or (node is mx)
         else:
             assert scope_dict[node] is inner_map_entry
+
+
+def test_loop_blocking_no_independent_nodes():
+    import dace
+
+    sdfg = dace.SDFG(util.unique_name("mixed_memlet_sdfg"))
+    state = sdfg.add_state(is_start_block=True)
+    names = ["A", "B"]
+    for aname in names:
+        sdfg.add_array(
+            aname,
+            shape=(10, 10),
+            dtype=dace.float64,
+            transient=False,
+        )
+    state.add_mapped_tasklet(
+        "fully_dependent_computation",
+        map_ranges={"__i0": "0:10", "__i1": "0:10"},
+        inputs={"__in1": dace.Memlet("A[__i0, __i1]")},
+        code="__out = __in1 + 10.0",
+        outputs={"__out": dace.Memlet("B[__i0, __i1]")},
+        external_edges=True,
+    )
+    sdfg.validate()
+
+    # Because there is nothing that is independent the transformation will
+    #  not apply if `require_independent_nodes` is enabled.
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(
+            blocking_size=2,
+            blocking_parameter="__i1",
+            require_independent_nodes=True,
+        ),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 0
+
+    # But it will apply once this requirement is lifted.
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(
+            blocking_size=2,
+            blocking_parameter="__i1",
+            require_independent_nodes=False,
+        ),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 1

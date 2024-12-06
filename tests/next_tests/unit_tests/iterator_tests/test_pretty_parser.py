@@ -7,8 +7,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from gt4py.next.iterator import ir
-from gt4py.next.iterator.pretty_parser import pparse
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.pretty_parser import pparse
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -208,18 +208,6 @@ def test_temporary():
     assert actual == expected
 
 
-def test_stencil_closure():
-    testee = "y ← (deref)(x) @ cartesian_domain();"
-    expected = ir.StencilClosure(
-        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
-        stencil=ir.SymRef(id="deref"),
-        output=ir.SymRef(id="y"),
-        inputs=[ir.SymRef(id="x")],
-    )
-    actual = pparse(testee)
-    assert actual == expected
-
-
 def test_set_at():
     testee = "y @ cartesian_domain() ← x;"
     expected = ir.SetAt(
@@ -257,28 +245,6 @@ def test_if_stmt():
             ),
         ],
         false_branch=[stmt],
-    )
-    actual = pparse(testee)
-    assert actual == expected
-
-
-# TODO(havogt): remove after refactoring to GTIR
-def test_fencil_definition():
-    testee = "f(d, x, y) {\n  g = λ(x) → x;\n  y ← (deref)(x) @ cartesian_domain();\n}"
-    expected = ir.FencilDefinition(
-        id="f",
-        function_definitions=[
-            ir.FunctionDefinition(id="g", params=[ir.Sym(id="x")], expr=ir.SymRef(id="x"))
-        ],
-        params=[ir.Sym(id="d"), ir.Sym(id="x"), ir.Sym(id="y")],
-        closures=[
-            ir.StencilClosure(
-                domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
-                stencil=ir.SymRef(id="deref"),
-                output=ir.SymRef(id="y"),
-                inputs=[ir.SymRef(id="x")],
-            )
-        ],
     )
     actual = pparse(testee)
     assert actual == expected

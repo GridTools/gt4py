@@ -108,7 +108,7 @@ def _get_gridtype(body: list[itir.Stmt]) -> common.GridType:
     grid_types = {_extract_grid_type(d) for d in domains}
     if len(grid_types) != 1:
         raise ValueError(
-            f"Found 'StencilClosures' with more than one 'GridType': '{grid_types}'. This is currently not supported."
+            f"Found 'set_at' with more than one 'GridType': '{grid_types}'. This is currently not supported."
         )
     return grid_types.pop()
 
