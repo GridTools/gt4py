@@ -29,6 +29,8 @@ class DomainAccessDescriptor(eve.StrEnum):
     """
     Descriptor for domains that could not be inferred.
     """
+    # TODO(tehrengruber): Revisit this concept. It is strange that we don't have a descriptor
+    #  `KNOWN`, but since we don't need it, it wasn't added.
 
     #: The access is unknown because of a dynamic shift.whose extent is not known.
     #: E.g.: `(⇑(λ(arg0, arg1) → ·⟪Ioffₒ, ·arg1⟫(arg0)))(in_field1, in_field2)`
@@ -38,13 +40,13 @@ class DomainAccessDescriptor(eve.StrEnum):
     NEVER = "never"
 
 
-NonTupleDomain: TypeAlias = domain_utils.SymbolicDomain | DomainAccessDescriptor
+NonTupleDomainAccess: TypeAlias = domain_utils.SymbolicDomain | DomainAccessDescriptor
 #: The domain can also be a tuple of domains, usually this only occurs for scan operators returning
 #: a tuple since other occurrences for tuples are removed before domain inference. This is
 #: however not a requirement of the pass and `make_tuple(vertex_field, edge_field)` infers just
 #: fine to a tuple of a vertexn and an edge domain.
-Domain: TypeAlias = NonTupleDomain | tuple["Domain", ...]
-AccessedDomains: TypeAlias = dict[str, Domain]
+DomainAccess: TypeAlias = NonTupleDomainAccess | tuple["DomainAccess", ...]
+AccessedDomains: TypeAlias = dict[str, DomainAccess]
 
 
 class InferenceOptions(typing.TypedDict):
@@ -97,7 +99,7 @@ def _domain_union(
     return domain_utils.domain_union(*filtered_domains)
 
 
-def _canonicalize_domain_structure(d1: Domain, d2: Domain) -> tuple[Domain, Domain]:
+def _canonicalize_domain_structure(d1: DomainAccess, d2: DomainAccess) -> tuple[DomainAccess, DomainAccess]:
     """
     Given two domains or composites thereof, canonicalize their structure.
 
@@ -155,11 +157,11 @@ def _merge_domains(
 def _extract_accessed_domains(
     stencil: itir.Expr,
     input_ids: list[str],
-    target_domain: NonTupleDomain,
+    target_domain: NonTupleDomainAccess,
     offset_provider: common.OffsetProvider,
     symbolic_domain_sizes: Optional[dict[str, str]],
-) -> dict[str, NonTupleDomain]:
-    accessed_domains: dict[str, NonTupleDomain] = {}
+) -> dict[str, NonTupleDomainAccess]:
+    accessed_domains: dict[str, NonTupleDomainAccess] = {}
 
     shifts_results = trace_shifts.trace_stencil(stencil, num_args=len(input_ids))
 
@@ -187,7 +189,7 @@ def _extract_accessed_domains(
 
 def _infer_as_fieldop(
     applied_fieldop: itir.FunCall,
-    target_domain: Domain,
+    target_domain: DomainAccess,
     *,
     offset_provider: common.OffsetProvider,
     symbolic_domain_sizes: Optional[dict[str, str]],
@@ -222,7 +224,7 @@ def _infer_as_fieldop(
             raise ValueError(f"Unsupported expression of type '{type(in_field)}'.")
         input_ids.append(id_)
 
-    inputs_accessed_domains: dict[str, NonTupleDomain] = _extract_accessed_domains(
+    inputs_accessed_domains: dict[str, NonTupleDomainAccess] = _extract_accessed_domains(
         stencil, input_ids, target_domain, offset_provider, symbolic_domain_sizes
     )
 
@@ -258,7 +260,7 @@ def _infer_as_fieldop(
 
 def _infer_let(
     let_expr: itir.FunCall,
-    input_domain: Domain,
+    input_domain: DomainAccess,
     **kwargs: Unpack[InferenceOptions],
 ) -> tuple[itir.FunCall, AccessedDomains]:
     assert cpm.is_let(let_expr)
@@ -296,7 +298,7 @@ def _infer_let(
 
 def _infer_make_tuple(
     expr: itir.Expr,
-    domain: Domain,
+    domain: DomainAccess,
     **kwargs: Unpack[InferenceOptions],
 ) -> tuple[itir.Expr, AccessedDomains]:
     assert cpm.is_call_to(expr, "make_tuple")
@@ -323,7 +325,7 @@ def _infer_make_tuple(
 
 def _infer_tuple_get(
     expr: itir.Expr,
-    domain: Domain,
+    domain: DomainAccess,
     **kwargs: Unpack[InferenceOptions],
 ) -> tuple[itir.Expr, AccessedDomains]:
     assert cpm.is_call_to(expr, "tuple_get")
@@ -343,7 +345,7 @@ def _infer_tuple_get(
 
 def _infer_if(
     expr: itir.Expr,
-    domain: Domain,
+    domain: DomainAccess,
     **kwargs: Unpack[InferenceOptions],
 ) -> tuple[itir.Expr, AccessedDomains]:
     assert cpm.is_call_to(expr, "if_")
@@ -360,7 +362,7 @@ def _infer_if(
 
 def _infer_expr(
     expr: itir.Expr,
-    domain: Domain,
+    domain: DomainAccess,
     **kwargs: Unpack[InferenceOptions],
 ) -> tuple[itir.Expr, AccessedDomains]:
     if isinstance(expr, itir.SymRef):
@@ -389,7 +391,7 @@ def _infer_expr(
 
 def infer_expr(
     expr: itir.Expr,
-    domain: Domain,
+    domain: DomainAccess,
     *,
     offset_provider: common.OffsetProvider,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
