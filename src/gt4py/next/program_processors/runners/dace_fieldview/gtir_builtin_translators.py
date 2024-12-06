@@ -215,6 +215,7 @@ def _parse_fieldop_arg(
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
     domain: FieldopDomain,
+    scan_dim: Optional[gtx_common.Dimension] = None,
 ) -> (
     gtir_dataflow.IteratorExpr
     | gtir_dataflow.MemletExpr
@@ -224,11 +225,24 @@ def _parse_fieldop_arg(
 
     arg = sdfg_builder.visit(node, sdfg=sdfg, head_state=state)
 
+    def scan_arg_wrapper(arg: FieldopData) -> gtir_dataflow.MemletExpr | gtir_dataflow.IteratorExpr:
+        # In case of scan field operator, input 1D fields with scan dimension do not need to be dereferenced.
+        # The iterator expression for such fields is converted into a memlet expression for data access.
+        arg_expr = arg.get_local_view(domain)
+        if scan_dim is None:
+            return arg_expr
+        if isinstance(arg_expr, gtir_dataflow.MemletExpr):
+            return arg_expr
+        head, *tail = arg_expr.field_domain
+        if tail or head[0] != scan_dim:
+            return arg_expr
+        return gtir_dataflow.MemletExpr(arg_expr.field, arg_expr.gt_dtype, arg_expr.get_memlet_subset(sdfg))
+
     if isinstance(arg, FieldopData):
-        return arg.get_local_view(domain)
+        return scan_arg_wrapper(arg)
     else:
         # handle tuples of fields
-        return gtx_utils.tree_map(lambda targ: targ.get_local_view(domain))(arg)
+        return gtx_utils.tree_map(lambda x: scan_arg_wrapper(x))(arg)
 
 
 def _get_field_layout(
@@ -834,6 +848,17 @@ def translate_scan(
     # parse the domain of the scan field operator
     domain = extract_domain(domain_expr)
 
+    # use the vertical dimension in the domain as scan dimension
+    scan_domain = [
+        (dim, lower_bound, upper_bound)
+        for dim, lower_bound, upper_bound in domain
+        if dim.kind == gtx_common.DimensionKind.VERTICAL
+    ]
+    assert len(scan_domain) == 1
+    scan_dim, scan_lower_bound, scan_upper_bound = scan_domain[0]
+    assert sdfg_builder.is_column_dimension(scan_dim)
+
+    # parse scan parameters
     assert len(scan_expr.args) == 3
     stencil_expr = scan_expr.args[0]
     assert isinstance(stencil_expr, gtir.Lambda)
@@ -900,15 +925,7 @@ def translate_scan(
     nsdfg = dace.SDFG(sdfg_builder.unique_nsdfg_name(sdfg, "scan"))
     nsdfg.debuginfo = dace_utils.debug_info(node, default=sdfg.debuginfo)
 
-    # use the vertical dimension in the domain as scan dimension
-    scan_domain = [
-        (dim, lower_bound, upper_bound)
-        for dim, lower_bound, upper_bound in domain
-        if dim.kind == gtx_common.DimensionKind.VERTICAL
-    ]
-    assert len(scan_domain) == 1
-    scan_dim, scan_lower_bound, scan_upper_bound = scan_domain[0]
-    assert sdfg_builder.is_column_dimension(scan_dim)
+    # extract the scan loop range
     scan_loop_var = dace_gtir_utils.get_map_variable(scan_dim)
     _, scan_output_offset, scan_output_shape = _get_field_layout(scan_domain)
 
@@ -950,7 +967,7 @@ def translate_scan(
     # visit the list of arguments to be passed to the scan expression
     stencil_builder = sdfg_builder.nested_context(nsdfg, lambda_symbols, lambda_field_offsets)
     stencil_args = [
-        _parse_fieldop_arg(im.ref(p.id), nsdfg, compute_state, stencil_builder, domain)
+        _parse_fieldop_arg(im.ref(p.id), nsdfg, compute_state, stencil_builder, domain, scan_dim)
         for p in stencil_expr.params
     ]
 
