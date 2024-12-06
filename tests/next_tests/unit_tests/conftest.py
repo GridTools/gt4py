@@ -53,6 +53,7 @@ program_processor = pytest.fixture(
         (None, True),
         (next_tests.definitions.ProgramBackendId.ROUNDTRIP, True),
         (next_tests.definitions.ProgramBackendId.ROUNDTRIP_WITH_TEMPORARIES, True),
+        (next_tests.definitions.ProgramBackendId.GTIR_EMBEDDED, True),
         (next_tests.definitions.ProgramBackendId.DOUBLE_ROUNDTRIP, True),
         (next_tests.definitions.ProgramBackendId.GTFN_CPU, True),
         (next_tests.definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE, True),
