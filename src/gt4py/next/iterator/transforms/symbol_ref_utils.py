@@ -69,7 +69,7 @@ class CountSymbolRefs(eve.PreserveLocationVisitor, eve.NodeVisitor):
             Counter({SymRef(id=SymbolRef('x')): 2, SymRef(id=SymbolRef('y')): 2, SymRef(id=SymbolRef('z')): 1})
         """
         if ignore_builtins:
-            inactive_refs = {str(n.id) for n in itir.FencilDefinition._NODE_SYMBOLS_}
+            inactive_refs = {str(n.id) for n in itir.Program._NODE_SYMBOLS_}
         else:
             inactive_refs = set()
 

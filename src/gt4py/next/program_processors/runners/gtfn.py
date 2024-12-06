@@ -125,7 +125,7 @@ def fingerprint_compilable_program(inp: stages.CompilableProgram) -> str:
     Generates a unique hash string for a stencil source program representing
     the program, sorted offset_provider, and column_axis.
     """
-    program: itir.FencilDefinition | itir.Program = inp.data
+    program: itir.Program = inp.data
     offset_provider: common.OffsetProvider = inp.args.offset_provider
     column_axis: Optional[common.Dimension] = inp.args.column_axis
 
