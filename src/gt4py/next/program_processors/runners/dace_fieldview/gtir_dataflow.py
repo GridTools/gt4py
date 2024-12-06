@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import abc
 import dataclasses
-from typing import Any, Dict, Final, List, Optional, Protocol, Set, Tuple, TypeAlias, TypeVar, Union
+from typing import Any, Dict, Final, List, Optional, Protocol, Set, Tuple, TypeAlias, Union
 
 import dace
 from dace import subsets as sbs
@@ -290,7 +290,10 @@ class LambdaToDataflow(eve.NodeVisitor):
     state: dace.SDFGState
     subgraph_builder: gtir_sdfg.DataflowBuilder
     input_edges: list[DataflowInputEdge]
-    symbol_map: dict[str, tuple[IteratorExpr | MemletExpr | SymbolExpr, ...]]
+    symbol_map: dict[
+        str,
+        IteratorExpr | DataExpr | tuple[IteratorExpr | DataExpr | tuple[Any, ...], ...],
+    ]
 
     def __init__(
         self,
@@ -556,7 +559,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         return self._construct_tasklet_result(field_desc.dtype, deref_node, "val")
 
-    def _visit_if(self, node: gtir.FunCall) -> ValueExpr | list[ValueExpr]:
+    def _visit_if(self, node: gtir.FunCall) -> ValueExpr | tuple[ValueExpr | tuple[Any, ...], ...]:
         assert len(node.args) == 3
 
         # TODO(edopao): enable once DaCe supports it in next release
@@ -564,9 +567,12 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         condition_value = self.visit(node.args[0])
         assert (
-            isinstance(condition_value, DataExpr)
-            and isinstance(condition_value.gt_dtype, ts.ScalarType)
-            and condition_value.gt_dtype.kind == ts.ScalarKind.BOOL
+            (
+                isinstance(condition_value.gt_dtype, ts.ScalarType)
+                and condition_value.gt_dtype.kind == ts.ScalarKind.BOOL
+            )
+            if isinstance(condition_value, (MemletExpr, ValueExpr))
+            else (condition_value.dc_dtype == dace.dtypes.bool)
         )
 
         nsdfg = dace.SDFG(self.unique_nsdfg_name(prefix="if_stmt"))
@@ -612,19 +618,20 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         def visit_branch(
             state: dace.SDFGState, expr: gtir.Expr
-        ) -> tuple[list[DataflowInputEdge], tuple[DataflowOutputEdge]]:
+        ) -> tuple[
+            list[DataflowInputEdge],
+            DataflowOutputEdge | tuple[DataflowOutputEdge | tuple[Any, ...], ...],
+        ]:
             assert state in nsdfg.states()
 
-            T = TypeVar("T", IteratorExpr, MemletExpr, ValueExpr)
-
-            def visit_arg(arg: T) -> T:
+            def visit_arg(arg: IteratorExpr | DataExpr) -> IteratorExpr | ValueExpr:
                 if isinstance(arg, IteratorExpr):
                     arg_node = arg.field
                     arg_desc = arg_node.desc(self.sdfg)
                     arg_subset = sbs.Range.from_array(arg_desc)
 
                 else:
-                    assert isinstance(arg, (MemletExpr | ValueExpr))
+                    assert isinstance(arg, (MemletExpr, ValueExpr))
                     arg_node = arg.dc_node
                     if isinstance(arg, MemletExpr):
                         assert set(arg.subset.size()) == {1}
@@ -659,10 +666,16 @@ class LambdaToDataflow(eve.NodeVisitor):
                 if isinstance(arg, IteratorExpr):
                     return IteratorExpr(inner_node, arg.gt_dtype, arg.field_domain, arg.indices)
                 else:
+                    assert isinstance(inner_desc, dace.data.Scalar)
                     return ValueExpr(inner_node, arg.gt_dtype)
 
             lambda_params = []
-            lambda_args = []
+            lambda_args: list[
+                IteratorExpr
+                | MemletExpr
+                | ValueExpr
+                | tuple[IteratorExpr | MemletExpr | ValueExpr | tuple[Any, ...], ...]
+            ] = []
             for p in symbol_ref_utils.collect_symbol_refs(expr, self.symbol_map.keys()):
                 arg = self.symbol_map[p]
                 if isinstance(arg, tuple):
@@ -705,9 +718,9 @@ class LambdaToDataflow(eve.NodeVisitor):
             if isinstance(out_edge, tuple):
                 assert isinstance(node.type, ts.TupleType)
                 out_symbol = dace_gtir_utils.make_symbol_tuple("__output", node.type)
-                outer_value = gtx_utils.tree_map(lambda x, y: construct_output(state, x, y))(
-                    out_edge, out_symbol
-                )
+                outer_value = gtx_utils.tree_map(
+                    lambda x, y, output_state=state: construct_output(output_state, x, y)
+                )(out_edge, out_symbol)
             else:
                 assert isinstance(node.type, ts.FieldType | ts.ScalarType)
                 outer_value = construct_output(state, out_edge, im.sym("__output", node.type))
@@ -725,7 +738,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         else:
             result = outer_value
 
-        outputs = {outval.dc_node.data for outval in gtx_utils.flatten_nested_tuple(result)}
+        outputs = {outval.dc_node.data for outval in gtx_utils.flatten_nested_tuple((result,))}
 
         nsdfg_node = self.state.add_nested_sdfg(
             nsdfg,
@@ -758,10 +771,11 @@ class LambdaToDataflow(eve.NodeVisitor):
             )
             return ValueExpr(output_node, inner_value.gt_dtype)
 
-        if isinstance(result, tuple):
-            return gtx_utils.tree_map(connect_output)(result)
-        else:
-            return connect_output(result)
+        return (
+            gtx_utils.tree_map(connect_output)(result)
+            if isinstance(result, tuple)
+            else connect_output(result)
+        )
 
     def _visit_neighbors(self, node: gtir.FunCall) -> ValueExpr:
         assert isinstance(node.type, itir_ts.ListType)
@@ -1489,7 +1503,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
     def visit_FunCall(
         self, node: gtir.FunCall
-    ) -> IteratorExpr | DataExpr | tuple[DataflowOutputEdge, ...]:
+    ) -> IteratorExpr | DataExpr | tuple[IteratorExpr | DataExpr | tuple[Any, ...], ...]:
         if cpm.is_call_to(node, "deref"):
             return self._visit_deref(node)
 
@@ -1515,8 +1529,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             return self._visit_shift(node)
 
         elif isinstance(node.fun, gtir.Lambda):
-            lambda_args = [self.visit(arg) for arg in node.args]
-            return self.visit_Lambda(node.fun, args=lambda_args)
+            raise AssertionError("Lambda node should be visited with 'apply()' method.")
 
         elif isinstance(node.fun, gtir.SymRef):
             return self._visit_generic_builtin(node)
@@ -1525,23 +1538,9 @@ class LambdaToDataflow(eve.NodeVisitor):
             raise NotImplementedError(f"Invalid 'FunCall' node: {node}.")
 
     def visit_Lambda(
-        self, node: gtir.Lambda, args: list[tuple[IteratorExpr | MemletExpr | SymbolExpr, ...]]
-    ) -> DataflowOutputEdge | tuple[DataflowOutputEdge, ...]:
-        # lambda arguments are mapped to symbols defined in lambda scope
-        prev_symbols: dict[str, Optional[tuple[IteratorExpr | MemletExpr | SymbolExpr, ...]]] = {}
-        for p, arg in zip(node.params, args, strict=True):
-            symbol_name = str(p.id)
-            prev_symbols[symbol_name] = self.symbol_map.get(symbol_name, None)
-            self.symbol_map[symbol_name] = arg
-
+        self, node: gtir.Lambda
+    ) -> DataflowOutputEdge | tuple[DataflowOutputEdge | tuple[Any, ...], ...]:
         result = self.visit(node.expr)
-
-        # remove locally defined lambda symbols and restore previous symbols
-        for symbol_name, arg in prev_symbols.items():
-            if arg is None:
-                self.symbol_map.pop(symbol_name)
-            else:
-                self.symbol_map[symbol_name] = arg
 
         def make_output_edge(
             output_expr: ValueExpr | MemletExpr | SymbolExpr,
@@ -1576,16 +1575,19 @@ class LambdaToDataflow(eve.NodeVisitor):
                 return r
             return make_output_edge(r)
 
-        if isinstance(result, tuple):
-            return gtx_utils.tree_map(parse_result)(result)
-        else:
-            return parse_result(result)
+        return (
+            gtx_utils.tree_map(parse_result)(result)
+            if isinstance(result, tuple)
+            else parse_result(result)
+        )
 
     def visit_Literal(self, node: gtir.Literal) -> SymbolExpr:
         dc_dtype = dace_utils.as_dace_type(node.type)
         return SymbolExpr(node.value, dc_dtype)
 
-    def visit_SymRef(self, node: gtir.SymRef) -> tuple[IteratorExpr | MemletExpr | SymbolExpr, ...]:
+    def visit_SymRef(
+        self, node: gtir.SymRef
+    ) -> IteratorExpr | DataExpr | tuple[IteratorExpr | DataExpr | tuple[Any, ...], ...]:
         param = str(node.id)
         if param in self.symbol_map:
             return self.symbol_map[param]
@@ -1594,7 +1596,45 @@ class LambdaToDataflow(eve.NodeVisitor):
         return SymbolExpr(param, dace.string)
 
     def apply(
-        self, node: gtir.Lambda, args: list[tuple[IteratorExpr | MemletExpr | SymbolExpr, ...]]
-    ) -> tuple[list[DataflowInputEdge], tuple[DataflowOutputEdge]]:
-        output_edges = self.visit_Lambda(node, args=args)
-        return self.input_edges, output_edges
+        self,
+        node: gtir.Lambda,
+        args: list[
+            IteratorExpr
+            | MemletExpr
+            | ValueExpr
+            | tuple[IteratorExpr | MemletExpr | ValueExpr | tuple[Any, ...], ...]
+        ],
+    ) -> tuple[
+        list[DataflowInputEdge],
+        DataflowOutputEdge | tuple[DataflowOutputEdge | tuple[Any, ...], ...],
+    ]:
+        # lambda arguments are mapped to symbols defined in lambda scope
+        prev_symbols: dict[
+            str,
+            Optional[
+                IteratorExpr | DataExpr | tuple[IteratorExpr | DataExpr | tuple[Any, ...], ...]
+            ],
+        ] = {}
+        for p, arg in zip(node.params, args, strict=True):
+            symbol_name = str(p.id)
+            prev_symbols[symbol_name] = self.symbol_map.get(symbol_name, None)
+            self.symbol_map[symbol_name] = arg
+
+        if cpm.is_let(node.expr):
+            let_node = node.expr
+            let_args = [self.visit(arg) for arg in let_node.args]
+            assert isinstance(let_node.fun, gtir.Lambda)
+            input_edges, output_edges = self.apply(let_node.fun, args=let_args)
+
+        else:
+            output_edges = self.visit_Lambda(node)
+            input_edges = self.input_edges
+
+        # remove locally defined lambda symbols and restore previous symbols
+        for symbol_name, prev_value in prev_symbols.items():
+            if prev_value is None:
+                self.symbol_map.pop(symbol_name)
+            else:
+                self.symbol_map[symbol_name] = prev_value
+
+        return input_edges, output_edges
