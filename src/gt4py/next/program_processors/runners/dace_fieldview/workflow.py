@@ -72,7 +72,7 @@ class DaCeTranslator(
         self, inp: stages.CompilableProgram
     ) -> stages.ProgramSource[languages.SDFG, LanguageSettings]:
         """Generate DaCe SDFG file from the GTIR definition."""
-        program: itir.FencilDefinition | itir.Program = inp.data
+        program: itir.Program = inp.data
         assert isinstance(program, itir.Program)
 
         sdfg = self.generate_sdfg(

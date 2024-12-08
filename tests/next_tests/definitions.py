@@ -11,11 +11,10 @@
 import dataclasses
 import enum
 import importlib
-from typing import Final, Optional, Protocol
 
 import pytest
 
-from gt4py.next import allocators as next_allocators, backend as next_backend
+from gt4py.next import allocators as next_allocators
 
 
 # Skip definitions
@@ -67,10 +66,10 @@ class EmbeddedIds(_PythonObjectIdMixin, str, enum.Enum):
 
 
 class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
-    DACE_CPU = "gt4py.next.program_processors.runners.dace.itir_cpu"
-    DACE_GPU = "gt4py.next.program_processors.runners.dace.itir_gpu"
-    GTIR_DACE_CPU = "gt4py.next.program_processors.runners.dace.gtir_cpu"
-    GTIR_DACE_GPU = "gt4py.next.program_processors.runners.dace.gtir_gpu"
+    DACE_CPU = "gt4py.next.program_processors.runners.dace.run_dace_cpu"
+    DACE_GPU = "gt4py.next.program_processors.runners.dace.run_dace_gpu"
+    DACE_CPU_NO_OPT = "gt4py.next.program_processors.runners.dace.run_dace_cpu_noopt"
+    DACE_GPU_NO_OPT = "gt4py.next.program_processors.runners.dace.run_dace_gpu_noopt"
 
 
 class ProgramFormatterId(_PythonObjectIdMixin, str, enum.Enum):
@@ -86,8 +85,6 @@ class ProgramFormatterId(_PythonObjectIdMixin, str, enum.Enum):
 # to avoid needing to mark all tests.
 ALL = "all"
 REQUIRES_ATLAS = "requires_atlas"
-# TODO(havogt): Remove, skipped during refactoring to GTIR
-STARTS_FROM_GTIR_PROGRAM = "starts_from_gtir_program"
 USES_APPLIED_SHIFTS = "uses_applied_shifts"
 USES_CONSTANT_FIELDS = "uses_constant_fields"
 USES_DYNAMIC_OFFSETS = "uses_dynamic_offsets"
@@ -95,10 +92,8 @@ USES_FLOORDIV = "uses_floordiv"
 USES_IF_STMTS = "uses_if_stmts"
 USES_IR_IF_STMTS = "uses_ir_if_stmts"
 USES_INDEX_FIELDS = "uses_index_fields"
-USES_LIFT_EXPRESSIONS = "uses_lift_expressions"
 USES_NEGATIVE_MODULO = "uses_negative_modulo"
 USES_ORIGIN = "uses_origin"
-USES_REDUCTION_OVER_LIFT_EXPRESSIONS = "uses_reduction_over_lift_expressions"
 USES_SCAN = "uses_scan"
 USES_SCAN_IN_FIELD_OPERATOR = "uses_scan_in_field_operator"
 USES_SCAN_IN_STENCIL = "uses_scan_in_stencil"
@@ -118,7 +113,6 @@ USES_MAX_OVER = "uses_max_over"
 USES_MESH_WITH_SKIP_VALUES = "uses_mesh_with_skip_values"
 USES_SCALAR_IN_DOMAIN_AND_FO = "uses_scalar_in_domain_and_fo"
 CHECKS_SPECIFIC_ERROR = "checks_specific_error"
-USES_INDEX_BUILTIN = "uses_index_builtin"
 
 # Skip messages (available format keys: 'marker', 'backend')
 UNSUPPORTED_MESSAGE = "'{marker}' tests not supported by '{backend}' backend"
@@ -138,21 +132,7 @@ COMMON_SKIP_TEST_LIST = [
 DOMAIN_INFERENCE_SKIP_LIST = [
     (USES_STRIDED_NEIGHBOR_OFFSET, XFAIL, UNSUPPORTED_MESSAGE),
 ]
-DACE_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
-    (USES_IF_STMTS, XFAIL, UNSUPPORTED_MESSAGE),
-    (USES_SCAN_IN_FIELD_OPERATOR, XFAIL, UNSUPPORTED_MESSAGE),
-    (USES_IR_IF_STMTS, XFAIL, UNSUPPORTED_MESSAGE),
-    (USES_SCALAR_IN_DOMAIN_AND_FO, XFAIL, UNSUPPORTED_MESSAGE),
-    (USES_INDEX_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
-    (USES_LIFT_EXPRESSIONS, XFAIL, UNSUPPORTED_MESSAGE),
-    (USES_ORIGIN, XFAIL, UNSUPPORTED_MESSAGE),
-    (USES_STRIDED_NEIGHBOR_OFFSET, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
-    (USES_TUPLE_ARGS, XFAIL, UNSUPPORTED_MESSAGE),
-    (USES_TUPLE_RETURNS, XFAIL, UNSUPPORTED_MESSAGE),
-    (USES_ZERO_DIMENSIONAL_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
-    (STARTS_FROM_GTIR_PROGRAM, SKIP, UNSUPPORTED_MESSAGE),
-]
-GTIR_DACE_SKIP_TEST_LIST = DOMAIN_INFERENCE_SKIP_LIST + [
+DACE_SKIP_TEST_LIST = DOMAIN_INFERENCE_SKIP_LIST + [
     (USES_NEGATIVE_MODULO, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_SCAN, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),
@@ -190,8 +170,8 @@ BACKEND_SKIP_TEST_MATRIX = {
     EmbeddedIds.CUPY_EXECUTION: EMBEDDED_SKIP_LIST,
     OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST,
-    OptionalProgramBackendId.GTIR_DACE_CPU: GTIR_DACE_SKIP_TEST_LIST,
-    OptionalProgramBackendId.GTIR_DACE_GPU: GTIR_DACE_SKIP_TEST_LIST,
+    OptionalProgramBackendId.DACE_CPU_NO_OPT: DACE_SKIP_TEST_LIST,
+    OptionalProgramBackendId.DACE_GPU_NO_OPT: DACE_SKIP_TEST_LIST,
     ProgramBackendId.GTFN_CPU: GTFN_SKIP_TEST_LIST
     + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
     ProgramBackendId.GTFN_CPU_IMPERATIVE: GTFN_SKIP_TEST_LIST

@@ -171,7 +171,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         offset_provider_type = offset_provider_type or {}
         uids = uids or eve_utils.UIDGenerator()
 
-        if isinstance(node, (ir.Program, ir.FencilDefinition)):
+        if isinstance(node, ir.Program):
             within_stencil = False
         assert within_stencil in [
             True,

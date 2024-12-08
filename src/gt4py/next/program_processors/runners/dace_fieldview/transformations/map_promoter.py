@@ -299,9 +299,9 @@ class SerialMapPromoter(BaseMapPromoter):
     """
 
     # Pattern Matching
-    exit_first_map = dace_transformation.transformation.PatternNode(dace_nodes.MapExit)
-    access_node = dace_transformation.transformation.PatternNode(dace_nodes.AccessNode)
-    entry_second_map = dace_transformation.transformation.PatternNode(dace_nodes.MapEntry)
+    exit_first_map = dace_transformation.PatternNode(dace_nodes.MapExit)
+    access_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
+    entry_second_map = dace_transformation.PatternNode(dace_nodes.MapEntry)
 
     @classmethod
     def expressions(cls) -> Any:
@@ -346,17 +346,11 @@ class SerialMapPromoter(BaseMapPromoter):
     ) -> bool:
         """This function checks if the promoted maps can be fused by map fusion.
 
-        This function assumes that `self.can_be_applied()` returned `True`.
+        This function assumes that `super().self.can_be_applied()` returned `True`.
 
         Args:
             state: The state in which we operate.
             sdfg: The SDFG we process.
-
-        Note:
-            The current implementation uses a very hacky way to test this.
-
-        Todo:
-            Find a better way of doing it.
         """
         first_map_exit: dace_nodes.MapExit = self.exit_first_map
         access_node: dace_nodes.AccessNode = self.access_node
@@ -373,23 +367,17 @@ class SerialMapPromoter(BaseMapPromoter):
             # This will lead to a promotion of the map, this is needed that
             #  Map fusion can actually inspect them.
             self.apply(graph=state, sdfg=sdfg)
-
-            # Now create the map fusion object that we can then use to check if
-            #  the fusion is possible or not.
-            serial_fuser = gtx_transformations.SerialMapFusion(
-                only_inner_maps=self.only_inner_maps,
-                only_toplevel_maps=self.only_toplevel_maps,
-            )
-            candidate = {
-                type(serial_fuser).map_exit1: first_map_exit,
-                type(serial_fuser).access_node: access_node,
-                type(serial_fuser).map_entry2: second_map_entry,
-            }
-            state_id = sdfg.node_id(state)
-            serial_fuser.setup_match(sdfg, sdfg.cfg_id, state_id, candidate, 0, override=True)
-
-            # Now use the serial fuser to see if fusion would succeed
-            if not serial_fuser.can_be_applied(state, 0, sdfg):
+            if not gtx_transformations.MapFusionSerial.can_be_applied_to(
+                sdfg=sdfg,
+                expr_index=0,
+                options={
+                    "only_inner_maps": self.only_inner_maps,
+                    "only_toplevel_maps": self.only_toplevel_maps,
+                },
+                map_exit_1=first_map_exit,
+                intermediate_access_node=access_node,
+                map_entry_2=second_map_entry,
+            ):
                 return False
 
         finally:

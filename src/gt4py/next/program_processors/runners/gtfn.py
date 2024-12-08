@@ -7,11 +7,14 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import functools
+import pathlib
+import tempfile
 import warnings
 from typing import Any, Optional
 
 import diskcache
 import factory
+import filelock
 
 import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
@@ -122,7 +125,7 @@ def fingerprint_compilable_program(inp: stages.CompilableProgram) -> str:
     Generates a unique hash string for a stencil source program representing
     the program, sorted offset_provider, and column_axis.
     """
-    program: itir.FencilDefinition | itir.Program = inp.data
+    program: itir.Program = inp.data
     offset_provider: common.OffsetProvider = inp.args.offset_provider
     column_axis: Optional[common.Dimension] = inp.args.column_axis
 
@@ -139,13 +142,34 @@ def fingerprint_compilable_program(inp: stages.CompilableProgram) -> str:
 
 class FileCache(diskcache.Cache):
     """
-    This class extends `diskcache.Cache` to ensure the cache is closed upon deletion,
-    i.e. it ensures that any resources associated with the cache are properly
-    released when the instance is garbage collected.
+    This class extends `diskcache.Cache` to ensure the cache is properly
+    - opened when accessed by multiple processes using a file lock. This guards the creating of the
+    cache object, which has been reported to cause `sqlite3.OperationalError: database is locked`
+    errors and slow startup times when multiple processes access the cache concurrently. While this
+    issue occurred frequently and was observed to be fixed on distributed file systems, the lock
+    does not guarantee correct behavior in particular for accesses to the cache (beyond opening)
+    since the underlying SQLite database is unreliable when stored on an NFS based file system.
+    It does however ensure correctness of concurrent cache accesses on a local file system. See
+    #1745 for more details.
+    - closed upon deletion, i.e. it ensures that any resources associated with the cache are
+    properly released when the instance is garbage collected.
     """
 
+    def __init__(self, directory: Optional[str | pathlib.Path] = None, **settings: Any) -> None:
+        if directory:
+            lock_dir = pathlib.Path(directory).parent
+        else:
+            lock_dir = pathlib.Path(tempfile.gettempdir())
+
+        lock = filelock.FileLock(lock_dir / "file_cache.lock")
+        with lock:
+            super().__init__(directory=directory, **settings)
+
+        self._init_complete = True
+
     def __del__(self) -> None:
-        self.close()
+        if getattr(self, "_init_complete", False):  # skip if `__init__` didn't finished
+            self.close()
 
 
 class GTFNCompileWorkflowFactory(factory.Factory):
