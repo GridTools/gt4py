@@ -18,6 +18,7 @@ from gt4py.next.iterator.transforms import (
     inline_center_deref_lift_vars,
     inline_lambdas,
     inline_lifts,
+    merge_let,
     trace_shifts,
 )
 from gt4py.next.iterator.type_system import (
@@ -83,7 +84,12 @@ def _inline_as_fieldop_arg(
 
     for inner_param, inner_arg in zip(stencil.params, inner_args, strict=True):
         if isinstance(inner_arg, itir.SymRef):
-            stencil_params.append(inner_param)
+            if inner_arg.id in extracted_args:
+                assert extracted_args[inner_arg.id] == inner_arg
+                alias = stencil_params[list(extracted_args.keys()).index(inner_arg.id)]
+                stencil_body = im.let(inner_param, im.ref(alias.id))(stencil_body)
+            else:
+                stencil_params.append(inner_param)
             extracted_args[inner_arg.id] = inner_arg
         elif isinstance(inner_arg, itir.Literal):
             # note: only literals, not all scalar expressions are required as it doesn't make sense
@@ -103,12 +109,37 @@ def _inline_as_fieldop_arg(
     ), extracted_args
 
 
+def _unwrap_scan(stencil: itir.Lambda | itir.FunCall):
+    if cpm.is_call_to(stencil, "scan"):
+        scan_pass, direction, init = stencil.args
+        assert isinstance(scan_pass, itir.Lambda)
+        # remove scan pass state to be used by caller
+        state_param = scan_pass.params[0]
+        stencil_like = im.lambda_(*scan_pass.params[1:])(scan_pass.expr)
+
+        def restore_scan(transformed_stencil_like: itir.Lambda):
+            new_scan_pass = im.lambda_(state_param, *transformed_stencil_like.params)(
+                im.call(transformed_stencil_like)(
+                    *(param.id for param in transformed_stencil_like.params)
+                )
+            )
+            return im.call("scan")(new_scan_pass, direction, init)
+
+        return stencil_like, restore_scan
+
+    assert isinstance(stencil, itir.Lambda)
+    return stencil, lambda s: s
+
+
 def fuse_as_fieldop(
     expr: itir.Expr, eligible_args: list[bool], *, uids: eve_utils.UIDGenerator
 ) -> itir.Expr:
-    assert cpm.is_applied_as_fieldop(expr) and isinstance(expr.fun.args[0], itir.Lambda)  # type: ignore[attr-defined]  # ensured by is_applied_as_fieldop
+    assert cpm.is_applied_as_fieldop(expr)
 
     stencil: itir.Lambda = expr.fun.args[0]  # type: ignore[attr-defined]  # ensured by is_applied_as_fieldop
+    assert isinstance(expr.fun.args[0], itir.Lambda) or cpm.is_call_to(stencil, "scan")  # type: ignore[attr-defined]  # ensured by is_applied_as_fieldop
+    stencil, restore_scan = _unwrap_scan(stencil)
+
     domain = expr.fun.args[1] if len(expr.fun.args) > 1 else None  # type: ignore[attr-defined]  # ensured by is_applied_as_fieldop
 
     args: list[itir.Expr] = expr.args
@@ -151,22 +182,58 @@ def fuse_as_fieldop(
                 new_param = stencil_param.id
             new_args = _merge_arguments(new_args, {new_param: arg})
 
-    new_node = im.as_fieldop(im.lambda_(*new_args.keys())(new_stencil_body), domain)(
-        *new_args.values()
-    )
+    stencil = im.lambda_(*new_args.keys())(new_stencil_body)
+    stencil = restore_scan(stencil)
 
     # simplify stencil directly to keep the tree small
-    new_node = inline_center_deref_lift_vars.InlineCenterDerefLiftVars.apply(
-        new_node
-    )  # to keep the tree small
-    new_node = inline_lambdas.InlineLambdas.apply(
-        new_node, opcount_preserving=True, force_inline_lift_args=True
+    new_stencil = inline_lambdas.InlineLambdas.apply(
+        stencil, opcount_preserving=True, force_inline_lift_args=False
     )
-    new_node = inline_lifts.InlineLifts().visit(new_node)
+    new_stencil = inline_center_deref_lift_vars.InlineCenterDerefLiftVars.apply(
+        new_stencil, is_stencil=True, uids=uids
+    )  # to keep the tree small
+    new_stencil = merge_let.MergeLet().visit(new_stencil)
+    new_stencil = inline_lambdas.InlineLambdas.apply(
+        new_stencil, opcount_preserving=True, force_inline_lift_args=True
+    )
+    new_stencil = inline_lifts.InlineLifts().visit(new_stencil)
+
+    new_node = im.as_fieldop(new_stencil, domain)(*new_args.values())
 
     type_inference.copy_type(from_=expr, to=new_node, allow_untyped=True)
-
     return new_node
+
+
+def _arg_inline_predicate(node: itir.Expr, shifts):
+    if _is_tuple_expr_of_literals(node):
+        return True
+    # TODO(tehrengruber): write test case ensuring scan is not tried to be inlined (e.g. test_call_scan_operator_from_field_operator)
+    if (
+        is_applied_fieldop := cpm.is_applied_as_fieldop(node)
+        and not cpm.is_call_to(node.fun.args[0], "scan")  # type: ignore[attr-defined]  # ensured by cpm.is_applied_as_fieldop
+    ) or cpm.is_call_to(node, "if_"):
+        # always inline arg if it is an applied fieldop with only a single arg
+        if is_applied_fieldop and len(node.args) == 1:
+            return True
+        # argument is never used, will be removed when inlined
+        if len(shifts) == 0:
+            return True
+        # applied fieldop with list return type must always be inlined as no backend supports this
+        assert isinstance(node.type, ts.TypeSpec)
+        dtype = type_info.apply_to_primitive_constituents(type_info.extract_dtype, node.type)
+        if isinstance(dtype, it_ts.ListType):
+            return True
+        # only accessed at the center location
+        if shifts in [set(), {()}]:
+            return True
+        # TODO(tehrengruber): Disabled as the InlineCenterDerefLiftVars does not support this yet
+        #  and it would increase the size of the tree otherwise.
+        # if len(shifts) == 1 and not any(
+        #     trace_shifts.Sentinel.ALL_NEIGHBORS in access for access in shifts
+        # ):
+        #     return True  # noqa: ERA001 [commented-out-code]
+
+    return False
 
 
 @dataclasses.dataclass
@@ -219,34 +286,92 @@ class FuseAsFieldOp(eve.NodeTranslator):
 
         return cls(uids=uids).visit(node)
 
-    def visit_FunCall(self, node: itir.FunCall):
-        node = self.generic_visit(node)
+    def visit_FunCall(self, node: itir.FunCall, **kwargs):
+        # inline all fields with list dtype. This needs to happen before the children are visited
+        # such that the `as_fieldop` can be fused.
+        # TODO(tehrengruber): what should we do in case the field with list dtype is a let itself?
+        #  This could duplicate other expressions which we did not intend to duplicate.
+        # TODO(tehrengruber): Write test-case. E.g. Adding two sparse fields. Sara observed this
+        #  with a cast to a sparse field, but this is likely already covered.
+        if cpm.is_let(node):
+            eligible_args = [
+                isinstance(arg.type, ts.FieldType) and isinstance(arg.type.dtype, it_ts.ListType)
+                for arg in node.args
+            ]
+            if any(eligible_args):
+                node = inline_lambdas.inline_lambda(node, eligible_params=eligible_args)
+                return self.visit(node)
+
+        if cpm.is_applied_as_fieldop(node):  # don't descend in stencil
+            old_node = node
+            node = im.as_fieldop(*node.fun.args)(*self.generic_visit(node.args))  # type: ignore[attr-defined]  # ensured by cpm.is_applied_as_fieldop
+            type_inference.copy_type(from_=old_node, to=node)
+        elif kwargs.get("recurse", True):
+            node = self.generic_visit(node, **kwargs)
+
+        if cpm.is_call_to(node, "make_tuple"):
+            as_fieldop_args = [arg for arg in node.args if cpm.is_applied_as_fieldop(arg)]
+            distinct_domains = set(arg.fun.args[1] for arg in as_fieldop_args)  # type: ignore[attr-defined]  # ensured by cpm.is_applied_as_fieldop
+            if len(distinct_domains) != len(as_fieldop_args):
+                new_els: list[itir.Expr | None] = [None for _ in node.args]
+                as_fieldop_args_by_domain: dict[itir.Expr, list[tuple[int, itir.Expr]]] = {}
+                for i, arg in enumerate(node.args):
+                    if cpm.is_applied_as_fieldop(arg):
+                        assert arg.type
+                        _, domain = arg.fun.args  # type: ignore[attr-defined]  # ensured by cpm.is_applied_as_fieldop
+                        as_fieldop_args_by_domain.setdefault(domain, [])
+                        as_fieldop_args_by_domain[domain].append((i, arg))
+                    else:
+                        new_els[i] = arg  # keep as is
+                let_vars = {}
+                for domain, inner_as_fieldop_args in as_fieldop_args_by_domain.items():
+                    if len(inner_as_fieldop_args) > 1:
+                        var = self.uids.sequential_id(prefix="__fasfop")
+                        fused_args = im.op_as_fieldop(lambda *args: im.make_tuple(*args), domain)(
+                            *(arg for _, arg in inner_as_fieldop_args)
+                        )
+                        fused_args.type = ts.TupleType(
+                            types=[arg.type for _, arg in inner_as_fieldop_args]  # type: ignore[misc]  # has type is ensured on list creation
+                        )
+                        # don't recurse into nested args, but only consider newly created `as_fieldop`
+                        let_vars[var] = self.visit(fused_args, **{**kwargs, "recurse": False})
+                        for outer_tuple_idx, (inner_tuple_idx, _) in enumerate(
+                            inner_as_fieldop_args
+                        ):
+                            new_els[inner_tuple_idx] = im.tuple_get(outer_tuple_idx, var)
+                    else:
+                        i, arg = inner_as_fieldop_args[0]
+                        new_els[i] = arg
+                assert not any(el is None for el in new_els)
+                assert let_vars
+                new_node = im.let(*let_vars.items())(im.make_tuple(*new_els))
+                new_node = inline_lambdas.inline_lambda(new_node, opcount_preserving=True)
+                return new_node
 
         if cpm.is_call_to(node.fun, "as_fieldop"):
             node = _canonicalize_as_fieldop(node)
 
-        if cpm.is_call_to(node.fun, "as_fieldop") and isinstance(node.fun.args[0], itir.Lambda):
-            stencil: itir.Lambda = node.fun.args[0]
+        # when multiple `as_fieldop` calls are fused that use the same argument, this argument
+        # might become referenced once only. In order to be able to continue fusing such arguments
+        # try inlining here.
+        if cpm.is_let(node):
+            new_node = inline_lambdas.inline_lambda(node, opcount_preserving=True)
+            if new_node is not node:  # nothing has been inlined
+                return self.visit(new_node, **kwargs)
+
+        if cpm.is_call_to(node.fun, "as_fieldop"):
+            stencil = node.fun.args[0]
+            assert isinstance(stencil, itir.Lambda) or cpm.is_call_to(stencil, "scan")
             args: list[itir.Expr] = node.args
-            shifts = trace_shifts.trace_stencil(stencil)
+            shifts = trace_shifts.trace_stencil(stencil, num_args=len(args))
 
-            eligible_args = []
-            for arg, arg_shifts in zip(args, shifts, strict=True):
-                assert isinstance(arg.type, ts.TypeSpec)
-                dtype = type_info.apply_to_primitive_constituents(type_info.extract_dtype, arg.type)
-                # TODO(tehrengruber): make this configurable
-                eligible_args.append(
-                    _is_tuple_expr_of_literals(arg)
-                    or (
-                        isinstance(arg, itir.FunCall)
-                        and (
-                            cpm.is_call_to(arg.fun, "as_fieldop")
-                            and isinstance(arg.fun.args[0], itir.Lambda)
-                            or cpm.is_call_to(arg, "if_")
-                        )
-                        and (isinstance(dtype, it_ts.ListType) or len(arg_shifts) <= 1)
-                    )
+            eligible_args = [
+                _arg_inline_predicate(arg, arg_shifts)
+                for arg, arg_shifts in zip(args, shifts, strict=True)
+            ]
+            if any(eligible_args):
+                return self.visit(
+                    fuse_as_fieldop(node, eligible_args, uids=self.uids),
+                    **{**kwargs, "recurse": False},
                 )
-
-            return fuse_as_fieldop(node, eligible_args, uids=self.uids)
         return node

@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
-from typing import ClassVar, Optional
+from typing import ClassVar, Optional, TypeVar
 
 import gt4py.next.iterator.ir_utils.common_pattern_matcher as cpm
 from gt4py import eve
@@ -21,6 +21,9 @@ from gt4py.next.iterator.transforms.inline_lifts import InlineLifts
 
 def is_center_derefed_only(node: itir.Node) -> bool:
     return hasattr(node.annex, "recorded_shifts") and node.annex.recorded_shifts in [set(), {()}]
+
+
+T = TypeVar("T", bound=itir.Program | itir.Lambda)
 
 
 @dataclasses.dataclass
@@ -50,9 +53,14 @@ class InlineCenterDerefLiftVars(eve.NodeTranslator):
     uids: eve_utils.UIDGenerator
 
     @classmethod
-    def apply(cls, node: itir.Program, uids: Optional[eve_utils.UIDGenerator] = None):
+    def apply(
+        cls, node: T, *, is_stencil=False, uids: Optional[eve_utils.UIDGenerator] = None
+    ) -> T:
         if not uids:
             uids = eve_utils.UIDGenerator()
+        if is_stencil:
+            assert isinstance(node, itir.Expr)
+            trace_shifts.trace_stencil(node, save_to_annex=True)
         return cls(uids=uids).visit(node)
 
     def visit_FunCall(self, node: itir.FunCall, **kwargs):
