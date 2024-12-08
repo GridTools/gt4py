@@ -93,7 +93,7 @@ class FuseAsFieldOp(eve.NodeTranslator):
     ...         nested_as_fieldop, offset_provider_type={}, allow_undeclared_symbols=True
     ...     )
     ... )
-    as_fieldop(λ(inp1, inp2, inp3) → ·inp1 × ·inp2 + ·inp3, c⟨ IDimₕ: [0, 1) ⟩)(inp1, inp2, inp3)
+    as_fieldop(λ(inp1, inp2, inp3) → ·inp1 × ·inp2 + ·inp3, c⟨ IDimₕ: [0, 1[ ⟩)(inp1, inp2, inp3)
     """  # noqa: RUF002  # ignore ambiguous multiplication character
 
     uids: eve_utils.UIDGenerator
