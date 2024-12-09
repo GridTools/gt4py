@@ -205,50 +205,41 @@ def gt_substitute_compiletime_symbols(
         repl: Maps the name of the symbol to the value it should be replaced with.
         validate: Perform validation at the end of the function.
         validate_all: Perform validation also on intermediate steps.
+
+    Note:
+        Because of [issue 1817](https://github.com/spcl/dace/issues/1817) in DaCe,
+        the function has to run `gt_simplify()`. However, this is an artefact of
+        the implementation and will be changed once the bug is solved.
     """
 
-    # The substitution is performed in this way for the following reasons:
-    #  `ConstantPropagation` would propagate values that are used in conditions.
-    #  But it would not replace the strides of an array a symbol used inside a
-    #  Tasklet, except that Tasklet or the array are inside an Nested SDFG.
-    #  However, `replace_dict()` does such things also on the top level.
-    #  For that reason the function will first use this multi stage version.
+    # Ideally this function would just call `ConstantPropagation` with the replacement
+    #  `dict` and be done. However, because of [issue 1817](https://github.com/spcl/dace/issues/1817)
+    #  in DaCe this is not possible and we have to do it in this awkward way.
+    # TODO(phimuell): Fix this strange behaviour.
 
+    # First we do replacement on the top level SDFG only. However, we have to filter
+    #  out all names that refers to data descriptors, because the replacement function
+    #  can not handle them. We leave this to `ConstantPropagation`.
+    arrays = sdfg.arrays
+    sdfg.replace_dict({sym: value for sym, value in repl.items() if sym not in arrays})
     const_prop = dace_passes.ConstantPropagation()
     const_prop.recursive = True
     const_prop.progress = False
-
-    # Before we will do a first round of DaCe's constant propagation. Followed
-    #  by simplify. The main reason is that if there is an access node in the
-    #  SDFG we would generate an error, if we would use `replace_dict()`.
-    #  Thus we use CP to handle them.
-    sdfg.view()
     const_prop.apply_pass(
         sdfg=sdfg,
         initial_symbols=repl,
         _=None,
+    )
+
+    # To handle some bugs in `ConstantPropagation` we now call simplify.
+    # TODO(phimuell): Once the bug in DaCe is fixed remove this.
+    gt_simplify(
+        sdfg,
+        validate=False,
+        validate_all=validate_all,
     )
     if validate_all:
         sdfg.validate()
-
-    # New we use the `replace_dict()` function. This will get rid of symbols that
-    #  were not handled by constant propagation above. This is mainly the case for
-    #  Symbols used in Tasklets, data descriptors that were not inside a Nested
-    #  SDFG.
-    sdfg.view()
-    sdfg.replace_dict(repl)
-    sdfg.view()
-
-    # Now we will again run constant propagation followed by simplify. This is mostly
-    #  a clean-up pass.
-    # TODO(phimuell): Investigate if it is needed.
-    print("=" * 80)
-    const_prop.apply_pass(
-        sdfg=sdfg,
-        initial_symbols=repl,
-        _=None,
-    )
-    sdfg.view()
 
 
 def gt_reduce_distributed_buffering(
