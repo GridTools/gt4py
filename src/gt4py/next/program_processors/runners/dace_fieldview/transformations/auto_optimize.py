@@ -173,8 +173,7 @@ def gt_auto_optimize(
         sdfg.apply_transformations_repeated(
             [
                 gtx_transformations.GT4PyMoveTaskletIntoMap,
-                # TODO(edopao): investigate correct mapping of stride symbols on scan output
-                # gtx_transformations.GT4PyMapBufferElimination(assume_pointwise=assume_pointwise),
+                gtx_transformations.GT4PyMapBufferElimination(assume_pointwise=assume_pointwise),
             ],
             validate=validate,
             validate_all=validate_all,
