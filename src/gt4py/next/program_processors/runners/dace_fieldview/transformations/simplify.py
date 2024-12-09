@@ -207,25 +207,48 @@ def gt_substitute_compiletime_symbols(
         validate_all: Perform validation also on intermediate steps.
     """
 
-    # We will use the `replace` function of the top SDFG, however, lower levels
-    #  are handled using ConstantPropagation.
-    sdfg.replace_dict(repl)
+    # The substitution is performed in this way for the following reasons:
+    #  `ConstantPropagation` would propagate values that are used in conditions.
+    #  But it would not replace the strides of an array a symbol used inside a
+    #  Tasklet, except that Tasklet or the array are inside an Nested SDFG.
+    #  However, `replace_dict()` does such things also on the top level.
+    #  For that reason the function will first use this multi stage version.
 
     const_prop = dace_passes.ConstantPropagation()
     const_prop.recursive = True
     const_prop.progress = False
 
+    # Before we will do a first round of DaCe's constant propagation. Followed
+    #  by simplify. The main reason is that if there is an access node in the
+    #  SDFG we would generate an error, if we would use `replace_dict()`.
+    #  Thus we use CP to handle them.
+    sdfg.view()
     const_prop.apply_pass(
         sdfg=sdfg,
         initial_symbols=repl,
         _=None,
     )
-    gt_simplify(
+    if validate_all:
+        sdfg.validate()
+
+    # New we use the `replace_dict()` function. This will get rid of symbols that
+    #  were not handled by constant propagation above. This is mainly the case for
+    #  Symbols used in Tasklets, data descriptors that were not inside a Nested
+    #  SDFG.
+    sdfg.view()
+    sdfg.replace_dict(repl)
+    sdfg.view()
+
+    # Now we will again run constant propagation followed by simplify. This is mostly
+    #  a clean-up pass.
+    # TODO(phimuell): Investigate if it is needed.
+    print("=" * 80)
+    const_prop.apply_pass(
         sdfg=sdfg,
-        validate=validate,
-        validate_all=validate_all,
+        initial_symbols=repl,
+        _=None,
     )
-    dace.sdfg.propagation.propagate_memlets_sdfg(sdfg)
+    sdfg.view()
 
 
 def gt_reduce_distributed_buffering(
