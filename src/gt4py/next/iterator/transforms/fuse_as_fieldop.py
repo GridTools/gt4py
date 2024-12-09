@@ -240,8 +240,10 @@ class FuseAsFieldOp(eve.NodeTranslator):
                     or (
                         isinstance(arg, itir.FunCall)
                         and (
-                            cpm.is_call_to(arg.fun, "as_fieldop")
-                            and isinstance(arg.fun.args[0], itir.Lambda)
+                            (
+                                cpm.is_call_to(arg.fun, "as_fieldop")
+                                and isinstance(arg.fun.args[0], itir.Lambda)
+                            )
                             or cpm.is_call_to(arg, "if_")
                         )
                         and (isinstance(dtype, it_ts.ListType) or len(arg_shifts) <= 1)
