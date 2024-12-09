@@ -60,7 +60,7 @@ class FieldBufferAllocatorProtocol(Protocol[core_defs.DeviceTypeT]):
         dtype: core_defs.DType[core_defs.ScalarT],
         device_id: int = 0,
         aligned_index: Optional[Sequence[common.NamedIndex]] = None,  # absolute position
-    ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]: ...
+    ) -> core_defs.NDArrayObject: ...
 
 
 def is_field_allocator(obj: Any) -> TypeGuard[FieldBufferAllocatorProtocol]:
@@ -160,7 +160,7 @@ class BaseFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceType
         dtype: core_defs.DType[core_defs.ScalarT],
         device_id: int = 0,
         aligned_index: Optional[Sequence[common.NamedIndex]] = None,  # absolute position
-    ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]:
+    ) -> core_defs.NDArrayObject:
         shape = domain.shape
         layout_map = self.layout_mapper(domain.dims)
         # TODO(egparedes): add support for non-empty aligned index values
@@ -168,7 +168,7 @@ class BaseFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceType
 
         return self.buffer_allocator.allocate(
             shape, dtype, device_id, layout_map, self.byte_alignment, aligned_index
-        )
+        ).ndarray
 
 
 if TYPE_CHECKING:
@@ -242,7 +242,7 @@ class InvalidFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceT
         dtype: core_defs.DType[core_defs.ScalarT],
         device_id: int = 0,
         aligned_index: Optional[Sequence[common.NamedIndex]] = None,  # absolute position
-    ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]:
+    ) -> core_defs.NDArrayObject:
         raise self.exception
 
 
@@ -292,16 +292,28 @@ StandardGPUFieldBufferAllocator: Final[type[FieldBufferAllocatorProtocol]] = cas
 )
 
 
-def allocate(
-    domain: common.DomainLike,
+class ConcreteAllocator(Protocol):
+    def __call__(
+        domain: common.DomainLike,
+        dtype: core_defs.DType[core_defs.ScalarT],
+        *,
+        aligned_index: Optional[Sequence[common.NamedIndex]],
+        allocator: FieldBufferAllocationUtil,
+        device: core_defs.Device,
+    ) -> core_defs.NDArrayObject: ...
+
+
+def make_concrete_allocator(
+    domain: common.DomainLike,  # TODO: there is an inconsistency between DomainLike and concrete DType, probably accept either (Domain, DType) or (DomainLike, DTypeLike). anyway this is not meant to be user-facing
     dtype: core_defs.DType[core_defs.ScalarT],
     *,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
     allocator: Optional[FieldBufferAllocationUtil] = None,
     device: Optional[core_defs.Device] = None,
-) -> core_allocators.TensorBuffer:
+) -> ConcreteAllocator:
     """
-    Allocate a TensorBuffer for the given domain and device or allocator.
+    TODO: docstring
+    Allocate an NDArrayObject for the given domain and device or allocator.
 
     The arguments `device` and `allocator` are mutually exclusive.
     If `device` is specified, the corresponding default allocator
@@ -334,9 +346,20 @@ def allocate(
     elif device.device_type != actual_allocator.__gt_device_type__:
         raise ValueError(f"Device '{device}' and allocator '{actual_allocator}' are incompatible.")
 
-    return actual_allocator.__gt_allocate__(
-        domain=common.domain(domain),
-        dtype=dtype,
-        device_id=device.device_id,
-        aligned_index=aligned_index,
-    )
+    def allocate(
+        domain: common.DomainLike = domain,
+        dtype: core_defs.DType[core_defs.ScalarT] = dtype,
+        *,
+        aligned_index: Optional[Sequence[common.NamedIndex]] = aligned_index,
+        allocator: FieldBufferAllocationUtil = actual_allocator,
+        device: core_defs.Device = device,
+    ) -> core_defs.NDArrayObject:
+        # TODO check how to get from FieldBufferAllocationUtil to FieldBufferAllocatorProtocol
+        return allocator.__gt_allocate__(
+            domain=common.domain(domain),
+            dtype=dtype,
+            device_id=device.device_id,
+            aligned_index=aligned_index,
+        )
+
+    return allocate
