@@ -17,12 +17,10 @@ import operator
 import types
 
 import numpy as np
-import numpy.typing as npt
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import (
-    TYPE_CHECKING,
     Any,
     Callable,
     Generic,
@@ -31,7 +29,6 @@ from gt4py.eve.extended_typing import (
     Protocol,
     Sequence,
     Tuple,
-    Type,
     TypeAlias,
     TypeGuard,
     Union,
@@ -64,88 +61,6 @@ def is_valid_layout_map(value: Sequence[Any]) -> TypeGuard[BufferLayoutMap]:
     )
 
 
-@dataclasses.dataclass(frozen=True)
-class TensorBuffer(Generic[core_defs.DeviceTypeT, core_defs.ScalarT]):
-    """
-    N-dimensional (tensor-like) memory buffer.
-
-    The actual class of the stored buffer and ndarray instances is
-    represented in the `NDBufferT` parameter and might be any n-dimensional
-    buffer-like class with a compatible buffer interface (e.g. NumPy
-    or CuPy `ndarray`.)
-
-    Attributes:
-        buffer: Raw allocated buffer.
-        memory_address: Memory address of the buffer.
-        device: Device where the buffer is allocated.
-        dtype: Data type descriptor.
-        shape: Tuple with lengths of the corresponding tensor dimensions.
-        strides: Tuple with sizes (in bytes) of the steps in each dimension.
-        layout_map: Tuple with the order of the dimensions in the buffer
-            layout_map[i] = j means that the i-th dimension of the tensor
-            corresponds to the j-th dimension in the (C-layout) buffer.
-        byte_offset: Offset (in bytes) from the beginning of the buffer to
-            the first valid element.
-        byte_alignment: Alignment (in bytes) of the first valid element.
-        aligned_index: N-dimensional index of the first aligned element.
-        ndarray: N-dimensional tensor view of the allocated buffer.
-    """
-
-    buffer: _NDBuffer = dataclasses.field(hash=False)
-    memory_address: int
-    device: core_defs.Device[core_defs.DeviceTypeT]
-    dtype: core_defs.DType[core_defs.ScalarT]
-    shape: core_defs.TensorShape
-    strides: Tuple[int, ...]
-    layout_map: BufferLayoutMap
-    byte_offset: int
-    byte_alignment: int
-    aligned_index: Tuple[int, ...]
-    ndarray: core_defs.NDArrayObject = dataclasses.field(hash=False)
-
-    @property
-    def ndim(self):
-        """Order of the tensor (`len(tensor_buffer.shape)`)."""
-        return len(self.shape)
-
-    def __array__(self, dtype: Optional[npt.DTypeLike] = None, /) -> np.ndarray:
-        if not xtyping.supports_array(self.ndarray):
-            raise TypeError("Cannot export tensor buffer as NumPy array.")
-
-        return self.ndarray.__array__(dtype)
-
-    @property
-    def __array_interface__(self) -> dict[str, Any]:
-        if not xtyping.supports_array_interface(self.ndarray):
-            raise TypeError("Cannot export tensor buffer to NumPy array interface.")
-
-        return self.ndarray.__array_interface__
-
-    @property
-    def __cuda_array_interface__(self) -> dict[str, Any]:
-        if not xtyping.supports_cuda_array_interface(self.ndarray):
-            raise TypeError("Cannot export tensor buffer to CUDA array interface.")
-
-        return self.ndarray.__cuda_array_interface__
-
-    def __dlpack__(self, *, stream: Optional[int] = None) -> Any:
-        if not hasattr(self.ndarray, "__dlpack__"):
-            raise TypeError("Cannot export tensor buffer to DLPack.")
-        return self.ndarray.__dlpack__(stream=stream)  # type: ignore[call-arg,arg-type]  # stream is not always supported
-
-    def __dlpack_device__(self) -> xtyping.DLPackDevice:
-        if not hasattr(self.ndarray, "__dlpack_device__"):
-            raise TypeError("Cannot extract DLPack device from tensor buffer.")
-        return self.ndarray.__dlpack_device__()
-
-
-if TYPE_CHECKING:
-    # TensorBuffer should be compatible with all the expected buffer interfaces
-    __TensorBufferAsArrayInterfaceT: Type[xtyping.ArrayInterface] = TensorBuffer
-    __TensorBufferAsCUDAArrayInterfaceT: Type[xtyping.CUDAArrayInterface] = TensorBuffer
-    __TensorBufferAsDLPackBufferT: Type[xtyping.DLPackBuffer] = TensorBuffer
-
-
 class BufferAllocator(Protocol[core_defs.DeviceTypeT]):
     """Protocol for buffer allocators."""
 
@@ -160,9 +75,9 @@ class BufferAllocator(Protocol[core_defs.DeviceTypeT]):
         layout_map: BufferLayoutMap,
         byte_alignment: int,
         aligned_index: Optional[Sequence[int]] = None,
-    ) -> TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]:
+    ) -> core_defs.NDArrayObject:
         """
-        Allocate a TensorBuffer with the given shape, layout and alignment settings.
+        Allocate an NDArrayObject with the given shape, layout and alignment settings.
 
         Args:
             shape: Tensor dimensions.
@@ -194,7 +109,7 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.DeviceTypeT]):
         layout_map: BufferLayoutMap,
         byte_alignment: int,
         aligned_index: Optional[Sequence[int]] = None,
-    ) -> TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]:
+    ) -> core_defs.NDArrayObject:
         if not core_defs.is_valid_tensor_shape(shape):
             raise ValueError(f"Invalid shape {shape}")
         ndim = len(shape)
@@ -254,24 +169,7 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.DeviceTypeT]):
         ) % byte_alignment
         byte_offset = (aligned_index_offset + allocation_mismatch_offset) % byte_alignment
 
-        # Create shaped view from buffer
-        ndarray = self.tensorize(
-            buffer, dtype, shape, padded_shape, item_size, strides, byte_offset
-        )
-
-        return TensorBuffer(
-            buffer=buffer,
-            memory_address=memory_address,
-            device=core_defs.Device(self.device_type, device_id),
-            dtype=dtype,
-            shape=shape,
-            strides=strides,
-            layout_map=layout_map,
-            byte_offset=byte_offset,
-            byte_alignment=byte_alignment,
-            aligned_index=aligned_index,
-            ndarray=ndarray,
-        )
+        return self.tensorize(buffer, dtype, shape, padded_shape, item_size, strides, byte_offset)
 
     @property
     @abc.abstractmethod
@@ -293,6 +191,7 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.DeviceTypeT]):
         strides: Sequence[int],
         byte_offset: int,
     ) -> core_defs.NDArrayObject:
+        """Create shaped view from buffer."""
         pass
 
 

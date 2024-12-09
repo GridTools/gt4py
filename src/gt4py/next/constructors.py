@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Optional, cast
+from typing import Any, Callable, Optional, Protocol, TypeGuard, cast
 
 from typing_extensions import NotRequired, TypedDict
 
@@ -22,15 +22,67 @@ import gt4py.next.embedded.nd_array_field as nd_array_field
 import gt4py.storage.cartesian.utils as storage_utils
 
 
+class _HasArrayApiCreationFunctions(Protocol):
+    def empty(self, shape: Sequence[int], *, dtype=None, device=None) -> Any: ...
+    def zeros(self, shape: Sequence[int], *, dtype=None, device=None) -> Any: ...
+    def ones(self, shape: Sequence[int], *, dtype=None, device=None) -> Any: ...
+    def full(self, shape: Sequence[int], fill_value, *, dtype=None, device=None) -> Any: ...
+    def asarray(self, obj, *, dtype=None, copy=None) -> Any: ...
+
+
+def _has_array_api_creation_functions(obj: Any) -> TypeGuard[_HasArrayApiCreationFunctions]:
+    return core_defs.is_array_api_namespace(obj) or (
+        hasattr(obj, "emtpy")
+        and hasattr(obj, "zeros")
+        and hasattr(obj, "ones")
+        and hasattr(obj, "full")
+        and hasattr(obj, "asarray")
+    )
+
+
+def _array_api_construction(
+    fun: Callable,
+    *args,
+    domain: common.Domain,
+    dtype: Optional[core_defs.DTypeLike] = None,
+    device: Optional[core_defs.Device] = None,
+    **kwargs: Any,
+):
+    buffer = fun(*args, **kwargs)  # TODO add converted dtype and device
+
+    # xp = array_api_compat.array_namespace(
+    #     buffer
+    # )  # TODO(havogt): replace by buffer.__array_namespace__ once all libraries support that
+    xp = None  # TODO
+
+    def allocate(
+        domain: common.DomainLike = domain,
+        dtype: core_defs.DTypeLike = dtype,
+        *,
+        aligned_index: Optional[Sequence[common.NamedIndex]],
+        allocator: next_allocators.FieldBufferAllocationUtil | core_defs.ArrayApiNamespace = xp,
+        device: core_defs.Device = device,
+    ) -> core_defs.NDArrayObject:
+        # always returns an empty buffer by design
+        return empty(
+            domain, dtype=dtype, aligned_index=aligned_index, allocator=allocator, device=device
+        )
+
+    return common._field(buffer, domain=domain, allocator=allocate)
+
+
 @eve.utils.with_fluid_partial
 def empty(
     domain: common.DomainLike,
     dtype: core_defs.DTypeLike = core_defs.Float64DType(()),  # noqa: B008 [function-call-in-default-argument]
     *,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
-    allocator: Optional[next_allocators.FieldBufferAllocationUtil] = None,
+    allocator: Optional[
+        next_allocators.FieldBufferAllocationUtil | core_defs.ArrayApiNamespace
+    ] = None,  # TODO make sure numpy/cupy etc namespaces are accepted by mypy (maybe we have to allow Any)
     device: Optional[core_defs.Device] = None,
 ) -> nd_array_field.NdArrayField:
+    # TODO: update doc
     """Create a `Field` of uninitialized (undefined) values using the given (or device-default) allocator.
 
     This function supports partial binding of arguments, see :class:`eve.utils.partial` for details.
@@ -76,11 +128,25 @@ def empty(
         >>> b.shape
         (3, 3)
     """
-    dtype = core_defs.dtype(dtype)
+    if _has_array_api_creation_functions(allocator):
+        domain = common.domain(domain)
+        return _array_api_construction(
+            allocator.empty,
+            domain.shape,
+            domain=domain,
+            dtype=dtype,
+            device=device,
+        )
+
     if allocator is None and device is None:
         device = core_defs.Device(core_defs.DeviceType.CPU, device_id=0)
+
     allocate = next_allocators.make_concrete_allocator(
-        domain, dtype, aligned_index=aligned_index, allocator=allocator, device=device
+        domain,
+        dtype,  # TODO resolve dtype-like inside!
+        aligned_index=aligned_index,
+        allocator=allocator,
+        device=device,
     )
     buffer = allocate()
     res = common._field(buffer, domain=domain, allocator=allocate)
@@ -109,6 +175,15 @@ def zeros(
         >>> gtx.zeros({IDim: range(3, 10)}, allocator=gtx.itir_python).ndarray
         array([0., 0., 0., 0., 0., 0., 0.])
     """
+    if _has_array_api_creation_functions(allocator):
+        domain = common.domain(domain)
+        return _array_api_construction(
+            allocator.zeros,
+            domain.shape,
+            domain=domain,
+            dtype=dtype,
+            device=device,
+        )
     field = empty(
         domain=domain, dtype=dtype, aligned_index=aligned_index, allocator=allocator, device=device
     )
@@ -136,6 +211,15 @@ def ones(
         >>> gtx.ones({IDim: range(3, 10)}, allocator=gtx.itir_python).ndarray
         array([1., 1., 1., 1., 1., 1., 1.])
     """
+    if _has_array_api_creation_functions(allocator):
+        domain = common.domain(domain)
+        return _array_api_construction(
+            allocator.ones,
+            domain.shape,
+            domain=domain,
+            dtype=dtype,
+            device=device,
+        )
     field = empty(
         domain=domain, dtype=dtype, aligned_index=aligned_index, allocator=allocator, device=device
     )
@@ -169,6 +253,16 @@ def full(
         >>> gtx.full({IDim: 3}, 5, allocator=gtx.itir_python).ndarray
         array([5, 5, 5])
     """
+    if _has_array_api_creation_functions(allocator):
+        domain = common.domain(domain)
+        return _array_api_construction(
+            allocator.full,
+            domain.shape,
+            fill_value,
+            domain=domain,
+            dtype=dtype,
+            device=device,
+        )
     field = empty(
         domain=domain,
         dtype=dtype if dtype is not None else core_defs.dtype(type(fill_value)),
@@ -235,6 +329,15 @@ def as_field(
         >>> gtx.as_field({IDim: range(-1, 2)}, xdata).domain.ranges[0]
         UnitRange(-1, 2)
     """
+    if _has_array_api_creation_functions(allocator):
+        return _array_api_construction(
+            allocator.asarray,
+            data,
+            domain=common.domain(domain),
+            dtype=dtype,
+            device=device,
+            # copy=copy
+        )
     if isinstance(domain, Sequence) and all(isinstance(dim, common.Dimension) for dim in domain):
         domain = cast(Sequence[common.Dimension], domain)
         if len(domain) != data.ndim:

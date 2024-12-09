@@ -505,3 +505,14 @@ class NDArrayObject(Protocol):
     def __or__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
 
     def __xor__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
+
+
+class ArrayApiNamespace(Protocol):
+    @property
+    def __array_api_version__(self) -> str: ...
+
+    # TODO(havogt): add relevant methods and attributes or wait for the standard to provide it, see e.g. https://github.com/data-apis/array-api/issues/697
+
+
+def is_array_api_namespace(obj: Any) -> TypeGuard[ArrayApiNamespace]:
+    return hasattr(obj, "__array_api_version__")

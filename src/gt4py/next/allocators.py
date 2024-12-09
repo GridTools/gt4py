@@ -168,7 +168,7 @@ class BaseFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceType
 
         return self.buffer_allocator.allocate(
             shape, dtype, device_id, layout_map, self.byte_alignment, aligned_index
-        ).ndarray
+        )
 
 
 if TYPE_CHECKING:
