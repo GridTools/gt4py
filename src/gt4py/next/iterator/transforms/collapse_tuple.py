@@ -65,6 +65,8 @@ def _is_trivial_or_tuple_thereof_expr(node: ir.Node) -> bool:
         return all(_is_trivial_or_tuple_thereof_expr(arg) for arg in node.args)
     if cpm.is_call_to(node, "tuple_get"):
         return _is_trivial_or_tuple_thereof_expr(node.args[1])
+    if cpm.is_call_to(node, "if_"):
+        return all(_is_trivial_or_tuple_thereof_expr(arg) for arg in node.args[1:])
     if isinstance(node, (ir.SymRef, ir.Literal)):
         return True
     if cpm.is_let(node):
@@ -229,7 +231,9 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 method = getattr(self, f"transform_{transformation.name.lower()}")
                 result = method(node, **kwargs)
                 if result is not None:
-                    assert result is not node  # transformation should have returned None, since nothing changed
+                    assert (
+                        result is not node
+                    )  # transformation should have returned None, since nothing changed
                     itir_type_inference.reinfer(result)
                     return result
         return None
@@ -400,6 +404,8 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 # anything compared to regular `propagate_to_if_on_tuples`. Not inling also
                 # works, but we don't want bound lambda functions in our tree (at least right
                 # now).
+                # TODO(tehrengruber): `if_` of trivial expression is also considered fine. This
+                #  will duplicate the condition and unnecessarily increase the size of the tree.
                 if not _is_trivial_or_tuple_thereof_expr(new_f_body):
                     continue
                 f = im.lambda_(*f_params)(new_f_body)
@@ -425,6 +431,8 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
                     cond, *(self.fp_transform(branch, **kwargs) for branch in new_node.args[1:])
                 )
                 return new_node
+
+        return None
 
     def transform_propagate_nested_let(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
         if cpm.is_let(node):
