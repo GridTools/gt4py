@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import errors
+from gt4py.next import errors, constructors, common
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
@@ -251,3 +251,18 @@ def test_dimensions_domain(cartesian_case):
         ValueError, match=(r"Dimensions in out field and field domain are not equivalent")
     ):
         cases.run(cartesian_case, empty_domain_program, a, out_field, offset_provider={})
+
+
+def test_field_arg_with_non_zero_domain_start(cartesian_case, copy_program_def):
+    copy_program = gtx.program(copy_program_def, backend=cartesian_case.backend)
+
+    size = cartesian_case.default_sizes[IDim]
+
+    inp = cases.allocate(cartesian_case, copy_program, "in_field").unique()()
+    out = constructors.empty(
+        common.domain({IDim: (1, size - 2)}),
+        allocator=cartesian_case.allocator,
+    )
+    ref = inp.ndarray[1:-2]
+
+    cases.verify(cartesian_case, copy_program, inp, out=out, ref=ref)
