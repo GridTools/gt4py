@@ -657,10 +657,8 @@ class _FieldDescriptor:
 class _FieldDescriptorMaker:
     @staticmethod
     def _is_axes_spec(spec) -> bool:
-        return (
-            isinstance(spec, Axis)
-            or isinstance(spec, collections.abc.Collection)
-            and all(isinstance(i, Axis) for i in spec)
+        return isinstance(spec, Axis) or (
+            isinstance(spec, collections.abc.Collection) and all(isinstance(i, Axis) for i in spec)
         )
 
     def __getitem__(self, field_spec):
