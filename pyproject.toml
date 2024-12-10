@@ -237,8 +237,9 @@ module = 'gt4py.next.iterator.runtime'
 [tool.pytest.ini_options]
 markers = [
   'all: special marker that skips all tests',
-  'requires_atlas: tests that require `atlas4py` bindings package',
-  'requires_dace: tests that require `dace` package',
+  'requires_atlas: tests that require the `atlas4py` bindings package',
+  'requires_dace: tests that require the `dace` package',
+  'requires_jax: tests that require the `jax` package',
   'requires_gpu: tests that require a NVidia GPU (`cupy` and `cudatoolkit` are required)',
   'uses_applied_shifts: tests that require backend support for applied-shifts',
   'uses_constant_fields: tests that require backend support for constant fields',

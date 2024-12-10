@@ -248,7 +248,7 @@ def allocate_cpu(
     dtype: DTypeLike,
     alignment_bytes: int,
     aligned_index: Optional[Sequence[int]],
-) -> Tuple[allocators._NDBuffer, np.ndarray]:
+) -> np.ndarray:
     device = core_defs.Device(core_defs.DeviceType.CPU, 0)
     buffer = _CPUBufferAllocator.allocate(
         shape,
@@ -258,7 +258,7 @@ def allocate_cpu(
         byte_alignment=alignment_bytes,
         aligned_index=aligned_index,
     )
-    return buffer.buffer, cast(np.ndarray, buffer.ndarray)
+    return cast(np.ndarray, buffer)
 
 
 def _allocate_gpu(
@@ -283,9 +283,7 @@ def _allocate_gpu(
         aligned_index=aligned_index,
     )
 
-    buffer_ndarray = cast("cp.ndarray", buffer.ndarray)
-
-    return buffer.buffer, buffer_ndarray
+    return cast("cp.ndarray", buffer.ndarray)
 
 
 allocate_gpu = _allocate_gpu
@@ -321,8 +319,8 @@ if CUPY_DEVICE == core_defs.DeviceType.ROCM:
         dtype: DTypeLike,
         alignment_bytes: int,
         aligned_index: Optional[Sequence[int]],
-    ) -> Tuple["cp.ndarray", "cp.ndarray"]:
-        buffer, ndarray = _allocate_gpu(shape, layout_map, dtype, alignment_bytes, aligned_index)
-        return buffer, CUDAArrayInterfaceNDArray(ndarray)
+    ) -> "cp.ndarray":
+        ndarray = _allocate_gpu(shape, layout_map, dtype, alignment_bytes, aligned_index)
+        return CUDAArrayInterfaceNDArray(ndarray)
 
     allocate_gpu = _allocate_gpu_rocm

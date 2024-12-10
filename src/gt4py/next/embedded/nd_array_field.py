@@ -334,7 +334,7 @@ class NdArrayField(
         new_domain, buffer_slice = self._slice(index)
         new_buffer = self.ndarray[buffer_slice]
         new_buffer = self.__class__.array_ns.asarray(new_buffer)
-        return self.__class__.from_array(new_buffer, domain=new_domain)
+        return self.__class__.from_array(new_buffer, domain=new_domain, allocator=self._allocator)
 
     __getitem__ = restrict
 
@@ -431,6 +431,17 @@ class NdArrayField(
         )
         assert common.is_relative_index_sequence(slice_)
         return new_domain, slice_
+
+    def __copy__(self) -> Never:
+        # TODO does this make sense?
+        raise NotImplementedError(
+            "`NdArrayField` is frozen, shallow copying is not a useful operation. Did you want to deepcopy?"
+        )
+
+    def __deepcopy__(self, _: Any) -> NdArrayField:
+        ndarray_copy = self._allocator()
+        ndarray_copy[:] = self.ndarray[:]
+        return self.__class__(self.domain, ndarray_copy, _allocator=self._allocator)
 
     if dace:
         # Extension of NdArrayField adding SDFGConvertible support in GT4Py Programs
@@ -575,7 +586,13 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
             xp = cls.array_ns
             new_domain, buffer_slice = self._slice(index)
             new_buffer = xp.asarray(self.ndarray[buffer_slice])
-            restricted_connectivity = cls(new_domain, new_buffer, self.codomain, self.skip_value)
+            restricted_connectivity = cls(
+                new_domain,
+                new_buffer,
+                _allocator=self._allocator,
+                _codomain=self._codomain,
+                _skip_value=self._skip_value,
+            )
             self._cache[cache_key] = restricted_connectivity
 
         return restricted_connectivity
@@ -599,7 +616,9 @@ def _domain_premap(data: NdArrayField, *connectivities: common.Connectivity) -> 
         new_ranges = connectivity.inverse_image(current_range)
         new_domain = new_domain.replace(dim_idx, *new_ranges)
 
-    return data.__class__.from_array(data._ndarray, domain=new_domain, dtype=data.dtype)
+    return data.__class__.from_array(
+        data._ndarray, domain=new_domain, dtype=data.dtype, allocator=data._allocator
+    )
 
 
 def _reshuffling_premap(
@@ -639,7 +658,7 @@ def _reshuffling_premap(
             conn_ndarray = xp.broadcast_to(conn_ndarray, data.domain.shape)
         if conn_ndarray is not conn.ndarray:
             conn = conn.__class__.from_array(
-                conn_ndarray, domain=data.domain, codomain=conn.codomain
+                conn_ndarray, domain=data.domain, codomain=conn.codomain, allocator=conn._allocator
             )
         conn_map[conn.codomain] = conn
         dim_idx = data.domain.dim_index(conn.codomain, allow_missing=False)
@@ -669,6 +688,7 @@ def _reshuffling_premap(
         new_buffer,
         domain=new_domain,
         dtype=data.dtype,
+        allocator=data._allocator,
     )
 
 
@@ -709,6 +729,7 @@ def _remapping_premap(data: NdArrayField, connectivity: common.Connectivity) -> 
         new_buffer,
         domain=new_domain,
         dtype=data.dtype,
+        allocator=data._allocator,
     )
 
 
@@ -877,6 +898,7 @@ def _intersect_fields(
         nd_array_class.from_array(
             f.ndarray[_get_slices_from_domain_slice(f.domain, intersected_domain)],
             domain=intersected_domain,
+            # TODO allocator
         )
         for f, intersected_domain in zip(broadcasted_fields, intersected_domains, strict=True)
     )
@@ -913,6 +935,7 @@ def _concat(*fields: common.Field, dim: common.Dimension) -> common.Field:
             [nd_array_class.array_ns.broadcast_to(f.ndarray, f.domain.shape) for f in fields],
             axis=new_domain.dim_index(dim, allow_missing=False),
         ),
+        # TODO allocator
         domain=new_domain,
     )
 
@@ -1081,8 +1104,16 @@ if jnp:
             index: common.AnyIndexSpec,
             value: common.Field | core_defs.NDArrayObject | core_defs.ScalarT,
         ) -> None:
-            # TODO(havogt): use something like `self.ndarray = self.ndarray.at(index).set(value)`
-            raise NotImplementedError("'__setitem__' for JaxArrayField not yet implemented.")
+            target_domain, target_slice = self._slice(index)
+            if isinstance(value, NdArrayField):
+                if not value.domain == target_domain:
+                    raise ValueError(
+                        f"Incompatible `Domain` in assignment. Source domain = {value.domain}, target domain = {target_domain}."
+                    )
+                value = value.ndarray
+
+            assert hasattr(self._ndarray, "at")
+            object.__setattr__(self, "_ndarray", self._ndarray.at[target_slice].set(value))
 
     common._field.register(jnp.ndarray, JaxArrayField.from_array)
 

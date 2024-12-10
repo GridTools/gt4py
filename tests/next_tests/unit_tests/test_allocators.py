@@ -26,7 +26,7 @@ class DummyAllocator(next_allocators.FieldBufferAllocatorProtocol):
         dtype: core_defs.DType[core_defs.ScalarT],
         device_id: int = 0,
         aligned_index: Optional[Sequence[common.NamedIndex]] = None,
-    ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]:
+    ) -> core_defs.NDArrayObject:
         pass
 
 
@@ -152,7 +152,7 @@ class TestInvalidFieldBufferAllocator:
 
 
 def test_allocate():
-    from gt4py.next.allocators import StandardCPUFieldBufferAllocator, allocate
+    from gt4py.next.allocators import StandardCPUFieldBufferAllocator, make_concrete_allocator
 
     I = common.Dimension("I")
     J = common.Dimension("J")
@@ -161,21 +161,19 @@ def test_allocate():
 
     # Test with a explicit field allocator
     allocator = StandardCPUFieldBufferAllocator()
-    tensor_buffer = allocate(domain, dtype, allocator=allocator)
+    tensor_buffer = make_concrete_allocator(domain, dtype, allocator=allocator)()
     assert tensor_buffer.shape == domain.shape
     assert tensor_buffer.dtype == dtype
-    assert tensor_buffer.device == core_defs.Device(core_defs.DeviceType.CPU, 0)
 
     # Test with a device
     device = core_defs.Device(core_defs.DeviceType.CPU, 0)
-    tensor_buffer = allocate(domain, dtype, device=device)
+    tensor_buffer = make_concrete_allocator(domain, dtype, device=device)()
     assert tensor_buffer.shape == domain.shape
     assert tensor_buffer.dtype == dtype
-    assert tensor_buffer.device == core_defs.Device(core_defs.DeviceType.CPU, 0)
 
     # Test with both allocator and device
     with pytest.raises(ValueError, match="are incompatible"):
-        allocate(
+        make_concrete_allocator(
             domain,
             dtype,
             allocator=allocator,
@@ -184,4 +182,4 @@ def test_allocate():
 
     # Test with no device or allocator
     with pytest.raises(ValueError, match="No 'device' or 'allocator' specified"):
-        allocate(domain, dtype)
+        make_concrete_allocator(domain, dtype)

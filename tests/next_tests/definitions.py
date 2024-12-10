@@ -21,6 +21,14 @@ from gt4py.next import allocators as next_allocators
 XFAIL = pytest.xfail
 SKIP = pytest.skip
 
+try:
+    import jax
+    import jax.numpy as jnp
+
+    jax.config.update("jax_enable_x64", True)
+except ImportError:
+    jnp = None
+
 
 # Program processors
 class _PythonObjectIdMixin:
@@ -58,11 +66,13 @@ class EmbeddedDummyBackend:
 
 numpy_execution = EmbeddedDummyBackend(next_allocators.StandardCPUFieldBufferAllocator())
 cupy_execution = EmbeddedDummyBackend(next_allocators.StandardGPUFieldBufferAllocator())
+jax_execution = EmbeddedDummyBackend(jnp)
 
 
 class EmbeddedIds(_PythonObjectIdMixin, str, enum.Enum):
     NUMPY_EXECUTION = "next_tests.definitions.numpy_execution"
     CUPY_EXECUTION = "next_tests.definitions.cupy_execution"
+    JAX_EXECUTION = "next_tests.definitions.jax_execution"
 
 
 class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
@@ -169,6 +179,7 @@ GTFN_SKIP_TEST_LIST = (
 BACKEND_SKIP_TEST_MATRIX = {
     EmbeddedIds.NUMPY_EXECUTION: EMBEDDED_SKIP_LIST,
     EmbeddedIds.CUPY_EXECUTION: EMBEDDED_SKIP_LIST,
+    EmbeddedIds.JAX_EXECUTION: EMBEDDED_SKIP_LIST,
     OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_CPU_NO_OPT: DACE_SKIP_TEST_LIST,

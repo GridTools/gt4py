@@ -32,7 +32,7 @@ class _HasArrayApiCreationFunctions(Protocol):
 
 def _has_array_api_creation_functions(obj: Any) -> TypeGuard[_HasArrayApiCreationFunctions]:
     return core_defs.is_array_api_namespace(obj) or (
-        hasattr(obj, "emtpy")
+        hasattr(obj, "empty")
         and hasattr(obj, "zeros")
         and hasattr(obj, "ones")
         and hasattr(obj, "full")
@@ -40,20 +40,26 @@ def _has_array_api_creation_functions(obj: Any) -> TypeGuard[_HasArrayApiCreatio
     )
 
 
+def _convert_dtype(
+    xp: Any, dtype: core_defs.DTypeLike
+) -> Any:  # TODO move to core_defs as `to_array_api_dtype`
+    if dtype is None:
+        return None
+    return getattr(xp, core_defs.dtype(dtype).scalar_type.__name__)
+
+
 def _array_api_construction(
-    fun: Callable,
+    xp: _HasArrayApiCreationFunctions,
+    fun: str,
     *args,
     domain: common.Domain,
     dtype: Optional[core_defs.DTypeLike] = None,
     device: Optional[core_defs.Device] = None,
     **kwargs: Any,
 ):
-    buffer = fun(*args, **kwargs)  # TODO add converted dtype and device
-
-    # xp = array_api_compat.array_namespace(
-    #     buffer
-    # )  # TODO(havogt): replace by buffer.__array_namespace__ once all libraries support that
-    xp = None  # TODO
+    if device is not None:
+        raise NotImplementedError("Device specification is not yet supported.")
+    buffer = getattr(xp, fun)(*args, dtype=_convert_dtype(xp, dtype), **kwargs)
 
     def allocate(
         domain: common.DomainLike = domain,
@@ -131,7 +137,8 @@ def empty(
     if _has_array_api_creation_functions(allocator):
         domain = common.domain(domain)
         return _array_api_construction(
-            allocator.empty,
+            allocator,
+            "empty",
             domain.shape,
             domain=domain,
             dtype=dtype,
@@ -143,7 +150,7 @@ def empty(
 
     allocate = next_allocators.make_concrete_allocator(
         domain,
-        dtype,  # TODO resolve dtype-like inside!
+        core_defs.dtype(dtype),
         aligned_index=aligned_index,
         allocator=allocator,
         device=device,
@@ -178,7 +185,8 @@ def zeros(
     if _has_array_api_creation_functions(allocator):
         domain = common.domain(domain)
         return _array_api_construction(
-            allocator.zeros,
+            allocator,
+            "zeros",
             domain.shape,
             domain=domain,
             dtype=dtype,
@@ -214,7 +222,8 @@ def ones(
     if _has_array_api_creation_functions(allocator):
         domain = common.domain(domain)
         return _array_api_construction(
-            allocator.ones,
+            allocator,
+            "ones",
             domain.shape,
             domain=domain,
             dtype=dtype,
@@ -256,7 +265,8 @@ def full(
     if _has_array_api_creation_functions(allocator):
         domain = common.domain(domain)
         return _array_api_construction(
-            allocator.full,
+            allocator,
+            "full",
             domain.shape,
             fill_value,
             domain=domain,
@@ -329,15 +339,6 @@ def as_field(
         >>> gtx.as_field({IDim: range(-1, 2)}, xdata).domain.ranges[0]
         UnitRange(-1, 2)
     """
-    if _has_array_api_creation_functions(allocator):
-        return _array_api_construction(
-            allocator.asarray,
-            data,
-            domain=common.domain(domain),
-            dtype=dtype,
-            device=device,
-            # copy=copy
-        )
     if isinstance(domain, Sequence) and all(isinstance(dim, common.Dimension) for dim in domain):
         domain = cast(Sequence[common.Dimension], domain)
         if len(domain) != data.ndim:
@@ -360,6 +361,16 @@ def as_field(
         if origin:
             raise ValueError(f"Cannot specify origin for domain {domain}")
         actual_domain = common.domain(cast(common.DomainLike, domain))
+    if _has_array_api_creation_functions(allocator):
+        return _array_api_construction(
+            allocator,
+            "asarray",
+            data,
+            domain=actual_domain,
+            dtype=dtype,
+            device=device,
+            # copy=copy
+        )
 
     # TODO(egparedes): allow zero-copy construction (no reallocation) if buffer has
     #   already the correct layout and device.
