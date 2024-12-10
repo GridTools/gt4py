@@ -971,6 +971,40 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
             tmp_out_subset = dace_subsets.Range.from_array(tmp_desc)
         assert glob_in_subset is not None
 
+        # Find the source of the edge entering the map exit node
+        map_exit_in_conn = map_to_tmp_edge.src_conn.replace("OUT_", "IN_")
+        src_to_map_exit_edge = next(
+            edge for edge in graph.in_edges(map_exit) if edge.dst_conn == map_exit_in_conn
+        )
+        if isinstance(src_to_map_exit_edge.src, dace.nodes.NestedSDFG):
+            nsdfg_node = src_to_map_exit_edge.src
+            # We need to propagate the strides inside the nested SDFG on the global arrays
+            # TODO: the stride should be propagated recursively to nested SDFGs, if directly connected
+            new_strides = tuple(
+                stride
+                for stride, to_map_size in zip(
+                    glob_ac.desc(sdfg).strides,
+                    src_to_map_exit_edge.data.subset.size(),
+                    strict=True,
+                )
+                if to_map_size != 1
+            )
+            inner_data = src_to_map_exit_edge.src_conn
+            inner_desc = nsdfg_node.sdfg.arrays[inner_data]
+            if isinstance(inner_desc, dace.data.Array):
+                inner_desc.set_shape(inner_desc.shape, new_strides)
+            else:
+                assert isinstance(inner_desc, dace.data.Scalar)
+                assert len(new_strides) == 0
+                # we convert the scalar data to array to avoid a gpu codegen error
+                nsdfg_node.sdfg.arrays[inner_data] = dace.data.Array(
+                    inner_desc.dtype, (1,), inner_desc.transient
+                )
+            for stride in new_strides:
+                for sym in stride.free_symbols:
+                    nsdfg_node.sdfg.add_symbol(str(sym), sym.dtype)
+                    nsdfg_node.symbol_mapping |= {str(sym): sym}
+
         # We now remove the `tmp` node, and create a new connection between
         #  the global node and the map exit.
         new_map_to_glob_edge = graph.add_edge(
