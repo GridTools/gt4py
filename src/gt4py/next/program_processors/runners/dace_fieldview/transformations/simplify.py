@@ -971,6 +971,31 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
             tmp_out_subset = dace_subsets.Range.from_array(tmp_desc)
         assert glob_in_subset is not None
 
+        map_exit_in_conn = map_to_tmp_edge.src_conn.replace("OUT_", "IN_")
+        src_to_map_exit_edge = next(
+            edge for edge in graph.in_edges(map_exit) if edge.dst_conn == map_exit_in_conn
+        )
+        if isinstance(src_to_map_exit_edge.src, dace.nodes.NestedSDFG):
+            nsdfg_node = src_to_map_exit_edge.src
+            # We need to propagate the strides inside the nested SDFG
+            # TODO: the stride should be propagate recursively to nested SDFGs, if directly connected
+            new_strides = tuple(
+                stride
+                for stride, to_map_size, from_map_size in zip(
+                    glob_ac.desc(sdfg).strides,
+                    src_to_map_exit_edge.data.subset,
+                    glob_in_subset,
+                    strict=True,
+                )
+                if to_map_size == from_map_size
+            )
+            inner_data = src_to_map_exit_edge.src_conn
+            inner_desc = nsdfg_node.sdfg.arrays[inner_data]
+            inner_desc.set_shape(inner_desc.shape, new_strides)
+            for stride in new_strides:
+                for sym in stride.free_symbols:
+                    nsdfg_node.sdfg.add_symbol(str(sym), sym.dtype)
+                    nsdfg_node.symbol_mapping |= {str(sym): sym}
         # We now remove the `tmp` node, and create a new connection between
         #  the global node and the map exit.
         new_map_to_glob_edge = graph.add_edge(

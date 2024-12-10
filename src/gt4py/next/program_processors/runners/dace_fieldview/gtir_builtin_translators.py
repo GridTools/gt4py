@@ -311,10 +311,13 @@ def _create_field_operator(
     domain_indices = _get_domain_indices(domain_dims, domain_offset)
     domain_subset = sbs.Range.from_indices(domain_indices)
 
+    scan_dim_index: Optional[int] = None
     if scan_dim is not None:
-        assert domain_dims.index(scan_dim) == (len(domain_dims) - 1)
-        # we construct the fieldo operator only on the horizontal domain
-        domain_subset = sbs.Range(domain_subset[:-1])
+        scan_dim_index = domain_dims.index(scan_dim)
+        # we construct the field operator only on the horizontal domain
+        domain_subset = sbs.Range(
+            domain_subset[:scan_dim_index] + domain_subset[scan_dim_index + 1 :]
+        )
 
     # now check, after removal of the vertical dimension, whether the domain is empty
     if len(domain_subset) == 0:
@@ -352,7 +355,12 @@ def _create_field_operator(
                 assert isinstance(dataflow_output_desc, dace.data.Array)
                 assert len(dataflow_output_desc.shape) == 1
                 # the vertical dimension should not belong to the field operator domain
-                field_subset = domain_subset + sbs.Range.from_array(dataflow_output_desc)
+                # but we need to write it to the output field
+                field_subset = (
+                    sbs.Range(domain_subset[:scan_dim_index])
+                    + sbs.Range.from_array(dataflow_output_desc)
+                    + sbs.Range(domain_subset[scan_dim_index:])
+                )
             else:
                 assert isinstance(dataflow_output_desc, dace.data.Scalar)
                 field_subset = domain_subset
@@ -371,8 +379,15 @@ def _create_field_operator(
             field_subset = domain_subset + sbs.Range.from_array(dataflow_output_desc)
 
         # allocate local temporary storage
-        field_name, _ = sdfg.add_temp_transient(field_shape, dataflow_output_desc.dtype)
+        field_name, field_desc = sdfg.add_temp_transient(field_shape, dataflow_output_desc.dtype)
         field_node = state.add_access(field_name)
+
+        if scan_dim is not None:
+            # By default, we leave `strides=None` which corresponds to use DaCe default memory layout
+            # for transient arrays. However, for scan field operators we need to ensure that the same
+            # stride is used for the vertical dimension in inner and outer array.
+            scan_output_stride = field_desc.strides[scan_dim_index]
+            dataflow_output_desc.strides = (scan_output_stride,)
 
         # and here the edge writing the dataflow result data through the map exit node
         output_edge.connect(mx, field_node, field_subset)

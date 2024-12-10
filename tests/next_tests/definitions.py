@@ -167,14 +167,8 @@ GTFN_SKIP_TEST_LIST = (
 BACKEND_SKIP_TEST_MATRIX = {
     EmbeddedIds.NUMPY_EXECUTION: EMBEDDED_SKIP_LIST,
     EmbeddedIds.CUPY_EXECUTION: EMBEDDED_SKIP_LIST,
-    OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST
-    + [
-        (USES_SCAN, XFAIL, UNSUPPORTED_MESSAGE)
-    ],  # TODO(edopao): result validation fails with dace optimization
-    OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST
-    + [
-        (USES_SCAN, XFAIL, UNSUPPORTED_MESSAGE)
-    ],  # TODO(edopao): result validation fails with dace optimization
+    OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST,
+    OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_CPU_NO_OPT: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_GPU_NO_OPT: DACE_SKIP_TEST_LIST,
     ProgramBackendId.GTFN_CPU: GTFN_SKIP_TEST_LIST
