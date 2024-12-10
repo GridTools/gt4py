@@ -10,8 +10,15 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next.iterator.builtins import cartesian_domain, deref, lift, named_range, shift
-from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
+from gt4py.next.iterator.builtins import (
+    cartesian_domain,
+    deref,
+    lift,
+    named_range,
+    shift,
+    as_fieldop,
+)
+from gt4py.next.iterator.runtime import set_at, fendef, fundef, offset
 from gt4py.next.program_processors.runners import gtfn
 
 from next_tests.unit_tests.conftest import program_processor, run_processor
@@ -85,14 +92,10 @@ def test_anton_toy(stencil, program_processor):
 
     @fendef(offset_provider={"i": IDim, "j": JDim})
     def fencil(x, y, z, out, inp):
-        closure(
-            cartesian_domain(
-                named_range(IDim, 0, x), named_range(JDim, 0, y), named_range(KDim, 0, z)
-            ),
-            stencil,
-            out,
-            [inp],
+        domain = cartesian_domain(
+            named_range(IDim, 0, x), named_range(JDim, 0, y), named_range(KDim, 0, z)
         )
+        set_at(as_fieldop(stencil, domain)(inp), domain, out)
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()

@@ -56,17 +56,17 @@ if TYPE_CHECKING:
 
 
 def _specialize_transient_strides(sdfg: dace.SDFG, layout_map):
-    repldict = replace_strides(
+    replacement_dictionary = replace_strides(
         [array for array in sdfg.arrays.values() if array.transient], layout_map
     )
-    sdfg.replace_dict(repldict)
+    sdfg.replace_dict(replacement_dictionary)
     for state in sdfg.nodes():
         for node in state.nodes():
             if isinstance(node, dace.nodes.NestedSDFG):
-                for k, v in repldict.items():
+                for k, v in replacement_dictionary.items():
                     if k in node.symbol_mapping:
                         node.symbol_mapping[k] = v
-    for k in repldict.keys():
+    for k in replacement_dictionary.keys():
         if k in sdfg.symbols:
             sdfg.remove_symbol(k)
 
@@ -143,7 +143,7 @@ def _to_device(sdfg: dace.SDFG, device: str) -> None:
                 node.device = dace.DeviceType.GPU
 
 
-def _pre_expand_trafos(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map):
+def _pre_expand_transformations(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map):
     args_data = make_args_data_from_gtir(gtir_pipeline)
 
     # stencils without effect
@@ -164,7 +164,7 @@ def _pre_expand_trafos(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map)
     return sdfg
 
 
-def _post_expand_trafos(sdfg: dace.SDFG):
+def _post_expand_transformations(sdfg: dace.SDFG):
     # DaCe "standard" clean-up transformations
     sdfg.simplify(validate=False)
 
@@ -355,7 +355,7 @@ class SDFGManager:
                 sdfg = OirSDFGBuilder().visit(oir_node)
 
                 _to_device(sdfg, self.builder.backend.storage_info["device"])
-                _pre_expand_trafos(
+                _pre_expand_transformations(
                     self.builder.gtir_pipeline,
                     sdfg,
                     self.builder.backend.storage_info["layout_map"],
@@ -371,7 +371,7 @@ class SDFGManager:
     def _expanded_sdfg(self):
         sdfg = self._unexpanded_sdfg()
         sdfg.expand_library_nodes()
-        _post_expand_trafos(sdfg)
+        _post_expand_transformations(sdfg)
         return sdfg
 
     def expanded_sdfg(self):

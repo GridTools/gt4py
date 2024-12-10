@@ -36,6 +36,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 from . import pytestmark
 
+
 dace_backend = pytest.importorskip("gt4py.next.program_processors.runners.dace_fieldview")
 
 
@@ -1984,7 +1985,7 @@ def test_gtir_index():
     )
 
     testee = gtir.Program(
-        id="gtir_cast",
+        id="gtir_index",
         function_definitions=[],
         params=[
             gtir.Sym(id="x", type=ts.FieldType(dims=[IDim], dtype=SIZE_TYPE)),

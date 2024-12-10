@@ -41,6 +41,7 @@ from next_tests.integration_tests.cases import (
     Edge,
     cartesian_case,
     unstructured_case,
+    unstructured_case_3d,
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     exec_alloc_descriptor,
@@ -90,6 +91,20 @@ def test_unstructured_shift(unstructured_case):
         unstructured_case,
         testee,
         ref=lambda a: a[unstructured_case.offset_provider["E2V"].ndarray[:, 0]],
+    )
+
+
+def test_horizontal_only_with_3d_mesh(unstructured_case_3d):
+    # test field operator operating only on horizontal fields while using an offset provider
+    # including a vertical dimension.
+    @gtx.field_operator
+    def testee(a: cases.VField) -> cases.VField:
+        return a
+
+    cases.verify_with_default_data(
+        unstructured_case_3d,
+        testee,
+        ref=lambda a: a,
     )
 
 
@@ -276,7 +291,6 @@ def test_tuple_arg_with_unpromotable_dims(unstructured_case):
     )
 
 
-@pytest.mark.uses_index_fields
 @pytest.mark.uses_cartesian_shift
 def test_scalar_arg_with_field(cartesian_case):
     @gtx.field_operator
@@ -419,6 +433,22 @@ def test_astype_int(cartesian_case):
         cartesian_case,
         testee,
         ref=lambda a: a.astype(int64),
+        comparison=lambda a, b: np.all(a == b),
+    )
+
+
+def test_astype_int_local_field(unstructured_case):
+    @gtx.field_operator
+    def testee(a: gtx.Field[[Vertex], np.float64]) -> gtx.Field[[Edge], int64]:
+        tmp = astype(a(E2V), int64)
+        return neighbor_sum(tmp, axis=E2VDim)
+
+    e2v_table = unstructured_case.offset_provider["E2V"].ndarray
+
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a: np.sum(a.astype(int64)[e2v_table], axis=1, initial=0),
         comparison=lambda a, b: np.all(a == b),
     )
 
@@ -571,7 +601,6 @@ def test_nested_tuple_return(cartesian_case):
 
 
 @pytest.mark.uses_unstructured_shift
-@pytest.mark.uses_reduction_over_lift_expressions
 def test_nested_reduction(unstructured_case):
     @gtx.field_operator
     def testee(a: cases.VField) -> cases.VField:
@@ -691,7 +720,6 @@ def test_fieldop_from_scan(cartesian_case, forward):
 
 
 @pytest.mark.uses_scan
-@pytest.mark.uses_lift_expressions
 @pytest.mark.uses_scan_nested
 def test_solve_triag(cartesian_case):
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))
@@ -773,7 +801,6 @@ def test_ternary_operator_tuple(cartesian_case, left, right):
 
 @pytest.mark.uses_constant_fields
 @pytest.mark.uses_unstructured_shift
-@pytest.mark.uses_reduction_over_lift_expressions
 def test_ternary_builtin_neighbor_sum(unstructured_case):
     @gtx.field_operator
     def testee(a: cases.EField, b: cases.EField) -> cases.VField:
