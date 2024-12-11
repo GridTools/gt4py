@@ -20,7 +20,7 @@ import gt4py.next.allocators as next_allocators
 from gt4py.eve import utils
 from gt4py.eve.utils import content_hash
 from gt4py.next import NeighborTableOffsetProvider, backend, common, config
-from gt4py.next.embedded.nd_array_field import NumPyArrayField
+from gt4py.next.embedded import nd_array_field
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import arguments
 from gt4py.next.otf import recipes, stages, workflow
@@ -115,6 +115,8 @@ def handle_invalid_type(
 
 type_handlers_connectivity_args = {
     NeighborTableOffsetProvider: handle_connectivity,
+    nd_array_field.NumPyArrayConnectivityField: handle_connectivity,
+    nd_array_field.CuPyArrayConnectivityField:  handle_connectivity,
     common.Dimension: handle_dimension,
 }
 
