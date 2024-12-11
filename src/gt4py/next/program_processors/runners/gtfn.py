@@ -34,7 +34,7 @@ def handle_tuple(arg: Any, convert_arg: Callable) -> Any:
     return tuple(convert_arg(a) for a in arg)
 
 
-def handle_field(arg: Any) -> tuple:
+def handle_field(arg: nd_array_field.NdArrayField) -> tuple:
     arr = arg.ndarray
     origin = getattr(arg, "__gt_origin__", tuple([0] * len(arg.domain)))
     return arr, origin
@@ -45,10 +45,55 @@ type_handlers_convert_args = {
     nd_array_field.NumPyArrayField: handle_field,
 }
 
+ConnectivityArg = tuple[core_defs.NDArrayObject, tuple[int, ...]]
+
+
+def handle_neighbortable(
+    conn: embedded.NeighborTableOffsetProvider,  # type: ignore
+    zero_tuple: tuple[int, ...],
+    device: core_defs.DeviceType,
+    copy: bool,
+) -> ConnectivityArg:
+    if not copy:
+        return (conn.table, zero_tuple)  # type: ignore
+    return (_ensure_is_on_device(conn.table, device), zero_tuple)  # type: ignore
+
+
+def handle_connectivity_field(
+    conn: nd_array_field.NdArrayField,
+    zero_tuple: tuple[int, ...],
+    device: core_defs.DeviceType,
+    copy: bool,
+) -> ConnectivityArg:
+    if not copy:
+        return (conn.ndarray, zero_tuple)
+    return (_ensure_is_on_device(conn.ndarray, device), zero_tuple)
+
+
+def handle_dimension(*args: Any, **kwargs: Any) -> None:
+    return None
+
+
+def handle_invalid_type(conn: Any, *args: Any, **kwargs: Any) -> None:
+    raise AssertionError(
+        f"Unsupported offset provider type '{type(conn).__name__}'. "
+        "Expected 'Connectivity' or 'Dimension'."
+    )
+
+
+type_handlers_connectivity_args = {
+    embedded.NeighborTableOffsetProvider: handle_neighbortable,
+    nd_array_field.NumPyArrayConnectivityField: handle_connectivity_field,
+    common.Dimension: handle_dimension,
+}
+
 try:
     import cupy as cp
 
     type_handlers_convert_args[nd_array_field.CuPyArrayField] = handle_field
+    type_handlers_connectivity_args[nd_array_field.CuPyArrayConnectivityField] = (
+        handle_connectivity_field
+    )
 except ImportError:
     cp = None
 
@@ -85,38 +130,6 @@ def convert_arg(arg: Any) -> Any:
         return handler(arg, convert_arg)
     else:
         return handler(arg)
-
-
-ConnectivityArg = tuple[core_defs.NDArrayObject, tuple[int, ...]]
-
-
-def handle_connectivity(
-    conn: embedded.NeighborTableOffsetProvider,  # type: ignore
-    zero_tuple: tuple[int, ...],
-    device: core_defs.DeviceType,
-    copy: bool,
-) -> ConnectivityArg:
-    if not copy:
-        return (conn.table, zero_tuple)  # type: ignore
-    return (_ensure_is_on_device(conn.table, device), zero_tuple)  # type: ignore
-
-
-def handle_dimension(*args: Any, **kwargs: Any) -> None:
-    return None
-
-
-def handle_invalid_type(conn: Any, *args: Any, **kwargs: Any) -> None:
-    raise AssertionError(
-        f"Unsupported offset provider type '{type(conn).__name__}'. "
-        "Expected 'Connectivity' or 'Dimension'."
-    )
-
-
-type_handlers_connectivity_args = {
-    embedded.NeighborTableOffsetProvider: handle_connectivity,
-    nd_array_field.NumPyArrayConnectivityField: handle_connectivity,
-    common.Dimension: handle_dimension,
-}
 
 
 def _ensure_is_on_device(
