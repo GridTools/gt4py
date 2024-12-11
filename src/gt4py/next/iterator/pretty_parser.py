@@ -8,7 +8,7 @@
 
 from typing import Union
 
-from lark import lark, lexer as lark_lexer, visitors as lark_visitors
+from lark import lark, lexer as lark_lexer, tree as lark_tree, visitors as lark_visitors
 
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils import ir_makers as im
@@ -21,6 +21,7 @@ GRAMMAR = """
         | declaration
         | stencil_closure
         | set_at
+        | if_stmt
         | program
         | prec0
 
@@ -30,9 +31,9 @@ GRAMMAR = """
     INT_LITERAL: SIGNED_INT
     FLOAT_LITERAL: SIGNED_FLOAT
     OFFSET_LITERAL: ( INT_LITERAL | CNAME ) "ₒ"
-    _literal: INT_LITERAL | FLOAT_LITERAL | OFFSET_LITERAL
+    AXIS_LITERAL: CNAME ("ᵥ" | "ₕ")
+    _literal: INT_LITERAL | FLOAT_LITERAL | OFFSET_LITERAL | AXIS_LITERAL
     ID_NAME: CNAME
-    AXIS_NAME: CNAME ("ᵥ" | "ₕ")
 
     ?prec0: prec1
         | "λ(" ( SYM "," )* SYM? ")" "→" prec0 -> lam
@@ -78,13 +79,17 @@ GRAMMAR = """
         | named_range
         | "(" prec0 ")"
 
-    named_range: AXIS_NAME ":" "[" prec0 "," prec0 ")"
+    ?stmt: set_at | if_stmt
+    set_at: prec0 "@" prec0 "←" prec1 ";"
+    else_branch_seperator: "else"
+    if_stmt: "if" "(" prec0 ")" "{" ( stmt )* "}" else_branch_seperator "{" ( stmt )* "}"
+
+    named_range: AXIS_LITERAL ":" "[" prec0 "," prec0 "["
     function_definition: ID_NAME "=" "λ(" ( SYM "," )* SYM? ")" "→" prec0 ";"
     declaration: ID_NAME "=" "temporary(" "domain=" prec0 "," "dtype=" TYPE_LITERAL ")" ";"
     stencil_closure: prec0 "←" "(" prec0 ")" "(" ( SYM_REF ", " )* SYM_REF ")" "@" prec0 ";"
-    set_at: prec0 "@" prec0 "←" prec1 ";"
     fencil_definition: ID_NAME "(" ( SYM "," )* SYM ")" "{" ( function_definition )* ( stencil_closure )+ "}"
-    program: ID_NAME "(" ( SYM "," )* SYM ")" "{" ( function_definition )* ( declaration )* ( set_at )+ "}"
+    program: ID_NAME "(" ( SYM "," )* SYM ")" "{" ( function_definition )* ( declaration )* ( stmt )+ "}"
 
     %import common (CNAME, SIGNED_FLOAT, SIGNED_INT, WS)
     %ignore WS
@@ -123,7 +128,7 @@ class ToIrTransformer(lark_visitors.Transformer):
     def ID_NAME(self, value: lark_lexer.Token) -> str:
         return value.value
 
-    def AXIS_NAME(self, value: lark_lexer.Token) -> ir.AxisLiteral:
+    def AXIS_LITERAL(self, value: lark_lexer.Token) -> ir.AxisLiteral:
         name = value.value[:-1]
         kind = ir.DimensionKind.HORIZONTAL if value.value[-1] == "ₕ" else ir.DimensionKind.VERTICAL
         return ir.AxisLiteral(value=name, kind=kind)
@@ -211,9 +216,26 @@ class ToIrTransformer(lark_visitors.Transformer):
         fid, *params, expr = args
         return ir.FunctionDefinition(id=fid, params=params, expr=expr)
 
-    def stencil_closure(self, *args: ir.Expr) -> ir.StencilClosure:
-        output, stencil, *inputs, domain = args
-        return ir.StencilClosure(domain=domain, stencil=stencil, output=output, inputs=inputs)
+    def if_stmt(self, cond: ir.Expr, *args):
+        found_else_seperator = False
+        true_branch = []
+        false_branch = []
+        for arg in args:
+            if isinstance(arg, lark_tree.Tree):
+                assert arg.data == "else_branch_seperator"
+                found_else_seperator = True
+                continue
+
+            if not found_else_seperator:
+                true_branch.append(arg)
+            else:
+                false_branch.append(arg)
+
+        return ir.IfStmt(
+            cond=cond,
+            true_branch=true_branch,
+            false_branch=false_branch,
+        )
 
     def declaration(self, *args: ir.Expr) -> ir.Temporary:
         tid, domain, dtype = args
@@ -222,23 +244,6 @@ class ToIrTransformer(lark_visitors.Transformer):
     def set_at(self, *args: ir.Expr) -> ir.SetAt:
         target, domain, expr = args
         return ir.SetAt(expr=expr, domain=domain, target=target)
-
-    # TODO(havogt): remove after refactoring.
-    def fencil_definition(self, fid: str, *args: ir.Node) -> ir.FencilDefinition:
-        params = []
-        function_definitions = []
-        closures = []
-        for arg in args:
-            if isinstance(arg, ir.Sym):
-                params.append(arg)
-            elif isinstance(arg, ir.FunctionDefinition):
-                function_definitions.append(arg)
-            else:
-                assert isinstance(arg, ir.StencilClosure)
-                closures.append(arg)
-        return ir.FencilDefinition(
-            id=fid, function_definitions=function_definitions, params=params, closures=closures
-        )
 
     def program(self, fid: str, *args: ir.Node) -> ir.Program:
         params = []
@@ -253,7 +258,7 @@ class ToIrTransformer(lark_visitors.Transformer):
             elif isinstance(arg, ir.Temporary):
                 declarations.append(arg)
             else:
-                assert isinstance(arg, ir.SetAt)
+                assert isinstance(arg, ir.Stmt)
                 body.append(arg)
         return ir.Program(
             id=fid,

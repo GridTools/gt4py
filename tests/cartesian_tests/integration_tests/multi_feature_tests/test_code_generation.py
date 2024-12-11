@@ -27,7 +27,7 @@ from gt4py.cartesian.gtscript import (
 )
 from gt4py.storage.cartesian import utils as storage_utils
 
-from cartesian_tests.definitions import ALL_BACKENDS, CPU_BACKENDS
+from cartesian_tests.definitions import ALL_BACKENDS, CPU_BACKENDS, get_array_library
 from cartesian_tests.integration_tests.multi_feature_tests.stencil_definitions import (
     EXTERNALS_REGISTRY as externals_registry,
     REGISTRY as stencil_definitions,
@@ -190,12 +190,20 @@ def test_lower_dimensional_inputs(backend):
     assert field_3d.shape == full_shape[:]
 
     field_2d = gt_storage.zeros(
-        full_shape[:-1], dtype, backend=backend, aligned_index=aligned_index[:-1], dimensions="IJ"
+        full_shape[:-1],
+        dtype,
+        backend=backend,
+        aligned_index=aligned_index[:-1],
+        dimensions="IJ",
     )
     assert field_2d.shape == full_shape[:-1]
 
     field_1d = gt_storage.ones(
-        full_shape[-1:], dtype, backend=backend, aligned_index=(aligned_index[-1],), dimensions="K"
+        full_shape[-1:],
+        dtype,
+        backend=backend,
+        aligned_index=(aligned_index[-1],),
+        dimensions="K",
     )
     assert list(field_1d.shape) == [full_shape[-1]]
 
@@ -273,7 +281,8 @@ def test_lower_dimensional_masked_2dcond(backend):
 def test_lower_dimensional_inputs_2d_to_3d_forward(backend):
     @gtscript.stencil(backend=backend)
     def copy_2to3(
-        inp: gtscript.Field[gtscript.IJ, np.float_], outp: gtscript.Field[gtscript.IJK, np.float_]
+        inp: gtscript.Field[gtscript.IJ, np.float_],
+        outp: gtscript.Field[gtscript.IJK, np.float_],
     ):
         with computation(FORWARD), interval(...):
             outp[0, 0, 0] = inp
@@ -357,9 +366,6 @@ def test_input_order(backend):
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_variable_offsets(backend):
-    if backend == "dace:cpu":
-        pytest.skip("Internal compiler error in GitHub action container")
-
     @gtscript.stencil(backend=backend)
     def stencil_ij(
         in_field: gtscript.Field[np.float_],
@@ -382,9 +388,6 @@ def test_variable_offsets(backend):
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_variable_offsets_and_while_loop(backend):
-    if backend == "dace:cpu":
-        pytest.skip("Internal compiler error in GitHub action container")
-
     @gtscript.stencil(backend=backend)
     def stencil(
         pe1: gtscript.Field[np.float_],
@@ -418,7 +421,7 @@ def test_nested_while_loop(backend):
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_mask_with_offset_written_in_conditional(backend):
-    @gtscript.stencil(backend, externals={"mord": 5})
+    @gtscript.stencil(backend)
     def stencil(outp: gtscript.Field[np.float_]):
         with computation(PARALLEL), interval(...):
             cond = True
@@ -575,6 +578,133 @@ def test_pruned_args_match(backend):
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_K_offset_write(backend):
+    # Cuda generates bad code for the K offset
+    if backend == "cuda":
+        pytest.skip("cuda K-offset write generates bad code")
+    if backend in ["dace:gpu"]:
+        import cupy as cp
+
+        if cp.cuda.runtime.runtimeGetVersion() < 12000:
+            pytest.skip(
+                f"{backend} backend with CUDA 11 and/or GCC 10.3 is not capable of K offset write, update CUDA/GCC if possible"
+            )
+    if backend in ["gt:gpu"]:
+        pytest.skip(
+            f"{backend} backend is not capable of K offset write, bug remains unsolved: https://github.com/GridTools/gt4py/issues/1754"
+        )
+
+    arraylib = get_array_library(backend)
+    array_shape = (1, 1, 4)
+    K_values = arraylib.arange(start=40, stop=44)
+
+    # Simple case of writing ot an offset.
+    # A is untouched
+    # B is written in K+1 and should have K_values, except for the first element (FORWARD)
+    @gtscript.stencil(backend=backend)
+    def simple(A: Field[np.float64], B: Field[np.float64]):
+        with computation(FORWARD), interval(...):
+            B[0, 0, 1] = A
+
+    A = gt_storage.zeros(
+        backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
+    )
+    A[:, :, :] = K_values
+    B = gt_storage.zeros(
+        backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
+    )
+    simple(A, B)
+    assert (B[:, :, 0] == 0).all()
+    assert (B[:, :, 1:3] == K_values[0:2]).all()
+
+    # Order of operations: FORWARD with negative offset
+    # means while A is update B will have non-updated values of A
+    # Because of the interval, value of B[0] is 0
+    @gtscript.stencil(backend=backend)
+    def forward(A: Field[np.float64], B: Field[np.float64], scalar: np.float64):
+        with computation(FORWARD), interval(1, None):
+            A[0, 0, -1] = scalar
+            B[0, 0, 0] = A
+
+    A = gt_storage.zeros(
+        backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
+    )
+    A[:, :, :] = K_values
+    B = gt_storage.zeros(
+        backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
+    )
+    forward(A, B, 2.0)
+    assert (A[:, :, :3] == 2.0).all()
+    assert (A[:, :, 3] == K_values[3]).all()
+    assert (B[:, :, 0] == 0).all()
+    assert (B[:, :, 1:] == K_values[1:]).all()
+
+    # Order of operations: BACKWARD with negative offset
+    # means A is update B will get the updated values of A
+    @gtscript.stencil(backend=backend)
+    def backward(A: Field[np.float64], B: Field[np.float64], scalar: np.float64):
+        with computation(BACKWARD), interval(1, None):
+            A[0, 0, -1] = scalar
+            B[0, 0, 0] = A
+
+    A = gt_storage.zeros(
+        backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
+    )
+    A[:, :, :] = K_values
+    B = gt_storage.empty(
+        backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
+    )
+    backward(A, B, 2.0)
+    assert (A[:, :, :3] == 2.0).all()
+    assert (A[:, :, 3] == K_values[3]).all()
+    assert (B[:, :, :] == A[:, :, :]).all()
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_K_offset_write_conditional(backend):
+    if backend == "cuda":
+        pytest.skip("Cuda backend is not capable of K offset write")
+    if backend in ["dace:gpu"]:
+        import cupy as cp
+
+        if cp.cuda.runtime.runtimeGetVersion() < 12000:
+            pytest.skip(
+                f"{backend} backend with CUDA 11 and/or GCC 10.3 is not capable of K offset write, update CUDA/GCC if possible"
+            )
+    if backend in ["gt:gpu"]:
+        pytest.skip(
+            f"{backend} backend is not capable of K offset write, bug remains unsolved: https://github.com/GridTools/gt4py/issues/1754"
+        )
+
+    arraylib = get_array_library(backend)
+    array_shape = (1, 1, 4)
+    K_values = arraylib.arange(start=40, stop=44)
+
+    @gtscript.stencil(backend=backend)
+    def column_physics_conditional(A: Field[np.float64], B: Field[np.float64], scalar: np.float64):
+        with computation(BACKWARD), interval(1, None):
+            if A > 0 and B > 0:
+                A[0, 0, -1] = scalar
+                B[0, 0, 1] = A
+            lev = 1
+            while A >= 0 and B >= 0:
+                A[0, 0, lev] = -1
+                B = -1
+                lev = lev + 1
+
+    A = gt_storage.zeros(
+        backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
+    )
+    A[:, :, :] = K_values
+    B = gt_storage.ones(
+        backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
+    )
+    column_physics_conditional(A, B, 2.0)
+    assert (A[0, 0, :] == arraylib.array([2, 2, -1, -1])).all()
+    assert (B[0, 0, :] == arraylib.array([1, -1, 2, 42])).all()
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_direct_datadims_index(backend):
     F64_VEC4 = (np.float64, (2, 2, 2, 2))
 
@@ -588,3 +718,28 @@ def test_direct_datadims_index(backend):
     out = gt_storage.zeros(backend=backend, shape=(2, 2, 2), dtype=np.float64)
     test(out, inp)
     assert (out[:] == 42).all()
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_function_inline_in_while(backend):
+    @gtscript.function
+    def add_42(v):
+        return v + 42
+
+    @gtscript.stencil(backend=backend)
+    def test(
+        in_field: Field[np.float64],
+        out_field: Field[np.float64],
+    ):
+        with computation(PARALLEL), interval(...):
+            count = 1
+            while count < 10:
+                sa = add_42(out_field)
+                out_field = in_field + sa
+                count = count + 1
+
+    domain = (5, 5, 2)
+    in_arr = gt_storage.ones(backend=backend, shape=domain, dtype=np.float64)
+    out_arr = gt_storage.ones(backend=backend, shape=domain, dtype=np.float64)
+    test(in_arr, out_arr)
+    assert (out_arr[:, :, :] == 388.0).all()

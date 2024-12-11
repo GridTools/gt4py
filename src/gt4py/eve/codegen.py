@@ -347,7 +347,7 @@ TemplateT = TypeVar("TemplateT", bound="Template")
 class Template(Protocol):
     """Protocol (abstract base class) defining the Template interface.
 
-    Direct subclassess of this base class only need to implement the
+    Direct subclasses of this base class only need to implement the
     abstract methods to adapt different template engines to this
     interface.
 
@@ -654,8 +654,8 @@ class TemplatedGenerator(NodeVisitor):
 
         Args:
             root: An IR node.
-            node_templates (optiona): see :class:`NodeDumper`.
-            dump_function (optiona): see :class:`NodeDumper`.
+            node_templates (optional): see :class:`NodeDumper`.
+            dump_function (optional): see :class:`NodeDumper`.
             ``**kwargs`` (optional): custom extra parameters forwarded to `visit_NODE_TYPE_NAME()`.
 
         Returns:

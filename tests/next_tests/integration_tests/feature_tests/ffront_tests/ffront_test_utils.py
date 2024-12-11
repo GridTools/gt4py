@@ -13,35 +13,42 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import backend as next_backend, common
+from gt4py._core import definitions as core_defs
+from gt4py.next import backend as next_backend, common, allocators as next_allocators
 from gt4py.next.ffront import decorator
-from gt4py.next.iterator import ir as itir
-from gt4py.next.program_processors import processor_interface as ppi
 
 import next_tests
 
 
-@ppi.program_executor
-def no_exec(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
-    """Temporary default backend to not accidentally test the wrong backend."""
-    raise ValueError("No backend selected! Backend selection is mandatory in tests.")
-
-
 class NoBackend(next_backend.Backend):
+    """Temporary default backend to not accidentally test the wrong backend."""
+
     def __call__(self, program, *args, **kwargs) -> None:
         raise ValueError("No backend selected! Backend selection is mandatory in tests.")
 
+    def __gt_allocator__(
+        self,
+    ) -> next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]:
+        raise ValueError("No backend selected! Backend selection is mandatory in tests.")
 
-no_backend = NoBackend(executor=no_exec, transforms_prog=None, allocator=None)
+
+no_backend = NoBackend(
+    name="no_backend",
+    executor=lambda *args, **kwargs: None,
+    allocator=lambda *args, **kwargs: None,
+    # TODO(tehrengruber): We don't want any transformations, but since `decorator.FieldOperator`
+    #  and `decorator.Program` unconditionally do linting on construction we need the
+    #  transformations. When this is up to the backend we can remove this again.
+    transforms=next_backend.DEFAULT_TRANSFORMS,
+)
 
 
 @pytest.fixture(
     params=[
         next_tests.definitions.ProgramBackendId.ROUNDTRIP,
-        # next_tests.definitions.ProgramBackendId.GTIR_EMBEDDED, # FIXME[#1582](havogt): enable once all incredients for GTIR are available
+        next_tests.definitions.ProgramBackendId.GTIR_EMBEDDED,
         next_tests.definitions.ProgramBackendId.GTFN_CPU,
         next_tests.definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE,
-        next_tests.definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES,
         pytest.param(
             next_tests.definitions.ProgramBackendId.GTFN_GPU, marks=pytest.mark.requires_gpu
         ),
@@ -56,6 +63,14 @@ no_backend = NoBackend(executor=no_exec, transforms_prog=None, allocator=None)
         ),
         pytest.param(
             next_tests.definitions.OptionalProgramBackendId.DACE_GPU,
+            marks=(pytest.mark.requires_dace, pytest.mark.requires_gpu),
+        ),
+        pytest.param(
+            next_tests.definitions.OptionalProgramBackendId.DACE_CPU_NO_OPT,
+            marks=pytest.mark.requires_dace,
+        ),
+        pytest.param(
+            next_tests.definitions.OptionalProgramBackendId.DACE_GPU_NO_OPT,
             marks=(pytest.mark.requires_dace, pytest.mark.requires_gpu),
         ),
     ],
@@ -74,7 +89,7 @@ def exec_alloc_descriptor(request):
     for marker, skip_mark, msg in next_tests.definitions.BACKEND_SKIP_TEST_MATRIX.get(
         backend_id, []
     ):
-        if request.node.get_closest_marker(marker):
+        if marker == next_tests.definitions.ALL or request.node.get_closest_marker(marker):
             skip_mark(msg.format(marker=marker, backend=backend_id))
 
     backup_backend = decorator.DEFAULT_BACKEND
@@ -137,7 +152,10 @@ class MeshDescriptor(Protocol):
     def num_levels(self) -> int: ...
 
     @property
-    def offset_provider(self) -> dict[str, common.Connectivity]: ...
+    def offset_provider(self) -> common.OffsetProvider: ...
+
+    @property
+    def offset_provider_type(self) -> common.OffsetProviderType: ...
 
 
 def simple_mesh() -> MeshDescriptor:
@@ -196,25 +214,40 @@ def simple_mesh() -> MeshDescriptor:
     assert all(len(row) == 2 for row in e2v_arr)
     e2v_arr = np.asarray(e2v_arr, dtype=gtx.IndexType)
 
+    offset_provider = {
+        V2E.value: common._connectivity(
+            v2e_arr,
+            codomain=Edge,
+            domain={Vertex: v2e_arr.shape[0], V2EDim: 4},
+            skip_value=None,
+        ),
+        E2V.value: common._connectivity(
+            e2v_arr,
+            codomain=Vertex,
+            domain={Edge: e2v_arr.shape[0], E2VDim: 2},
+            skip_value=None,
+        ),
+        C2V.value: common._connectivity(
+            c2v_arr,
+            codomain=Vertex,
+            domain={Cell: c2v_arr.shape[0], C2VDim: 4},
+            skip_value=None,
+        ),
+        C2E.value: common._connectivity(
+            c2e_arr,
+            codomain=Edge,
+            domain={Cell: c2e_arr.shape[0], C2EDim: 4},
+            skip_value=None,
+        ),
+    }
+
     return types.SimpleNamespace(
         name="simple_mesh",
         num_vertices=num_vertices,
         num_edges=np.int32(num_edges),
         num_cells=num_cells,
-        offset_provider={
-            V2E.value: gtx.NeighborTableOffsetProvider(
-                v2e_arr, Vertex, Edge, 4, has_skip_values=False
-            ),
-            E2V.value: gtx.NeighborTableOffsetProvider(
-                e2v_arr, Edge, Vertex, 2, has_skip_values=False
-            ),
-            C2V.value: gtx.NeighborTableOffsetProvider(
-                c2v_arr, Cell, Vertex, 4, has_skip_values=False
-            ),
-            C2E.value: gtx.NeighborTableOffsetProvider(
-                c2e_arr, Cell, Edge, 4, has_skip_values=False
-            ),
-        },
+        offset_provider=offset_provider,
+        offset_provider_type=common.offset_provider_to_type(offset_provider),
     )
 
 
@@ -272,25 +305,40 @@ def skip_value_mesh() -> MeshDescriptor:
         dtype=gtx.IndexType,
     )
 
+    offset_provider = {
+        V2E.value: common._connectivity(
+            v2e_arr,
+            codomain=Edge,
+            domain={Vertex: v2e_arr.shape[0], V2EDim: 5},
+            skip_value=common._DEFAULT_SKIP_VALUE,
+        ),
+        E2V.value: common._connectivity(
+            e2v_arr,
+            codomain=Vertex,
+            domain={Edge: e2v_arr.shape[0], E2VDim: 2},
+            skip_value=None,
+        ),
+        C2V.value: common._connectivity(
+            c2v_arr,
+            codomain=Vertex,
+            domain={Cell: c2v_arr.shape[0], C2VDim: 3},
+            skip_value=None,
+        ),
+        C2E.value: common._connectivity(
+            c2e_arr,
+            codomain=Edge,
+            domain={Cell: c2e_arr.shape[0], C2EDim: 3},
+            skip_value=None,
+        ),
+    }
+
     return types.SimpleNamespace(
         name="skip_value_mesh",
         num_vertices=num_vertices,
         num_edges=num_edges,
         num_cells=num_cells,
-        offset_provider={
-            V2E.value: gtx.NeighborTableOffsetProvider(
-                v2e_arr, Vertex, Edge, 5, has_skip_values=True
-            ),
-            E2V.value: gtx.NeighborTableOffsetProvider(
-                e2v_arr, Edge, Vertex, 2, has_skip_values=False
-            ),
-            C2V.value: gtx.NeighborTableOffsetProvider(
-                c2v_arr, Cell, Vertex, 3, has_skip_values=False
-            ),
-            C2E.value: gtx.NeighborTableOffsetProvider(
-                c2e_arr, Cell, Edge, 3, has_skip_values=False
-            ),
-        },
+        offset_provider=offset_provider,
+        offset_provider_type=common.offset_provider_to_type(offset_provider),
     )
 
 

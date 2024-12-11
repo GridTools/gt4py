@@ -132,6 +132,8 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         "::gridtools::sid::composite::keys<${','.join(f'::gridtools::integral_constant<int,{i}>' for i in range(len(values)))}>::make_values(${','.join(values)})"
     )
 
+    SidFromScalar = as_fmt("gridtools::stencil::global_parameter({arg})")
+
     def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs: Any) -> str:
         if (
             isinstance(node.fun, gtfn_ir_common.SymRef)
@@ -162,6 +164,16 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     )
     ScanExecution = as_fmt(
         "{backend}.vertical_executor({axis})().{'.'.join('arg(' + a + ')' for a in args)}.{'.'.join(scans)}.execute();"
+    )
+
+    IfStmt = as_mako(
+        """
+          if (${cond}) {
+            ${'\\n'.join(true_branch)}
+          } else {
+            ${'\\n'.join(false_branch)}
+          }
+        """
     )
 
     ScanPassDefinition = as_mako(
@@ -247,7 +259,8 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     #include <functional>
     #include <gridtools/fn/${grid_type_str}.hpp>
     #include <gridtools/fn/sid_neighbor_table.hpp>
-
+    #include <gridtools/stencil/global_parameter.hpp>
+    
     namespace generated{
 
     namespace gtfn = ::gridtools::fn;

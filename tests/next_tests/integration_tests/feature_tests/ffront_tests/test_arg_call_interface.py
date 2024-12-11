@@ -53,7 +53,7 @@ def test_call_field_operator_from_python(cartesian_case, arg_spec: tuple[tuple[s
     pos_args = [args[name] for name in arg_names]
     kw_args = {name: args[name] for name in kwarg_names}
 
-    testee.with_backend(cartesian_case.executor)(
+    testee.with_backend(cartesian_case.backend)(
         *pos_args, **kw_args, out=out, offset_provider=cartesian_case.offset_provider
     )
 
@@ -79,7 +79,7 @@ def test_call_program_from_python(cartesian_case, arg_spec):
     pos_args = [args[name] for name in arg_names]
     kw_args = {name: args[name] for name in kwarg_names}
 
-    testee.with_backend(cartesian_case.executor)(
+    testee.with_backend(cartesian_case.backend)(
         *pos_args, **kw_args, offset_provider=cartesian_case.offset_provider
     )
 
@@ -270,7 +270,7 @@ def test_call_bound_program_with_wrong_args(cartesian_case, bound_args_testee):
     out = cases.allocate(cartesian_case, bound_args_testee, "out")()
 
     with pytest.raises(TypeError) as exc_info:
-        program_with_bound_arg.with_backend(cartesian_case.executor)(out, offset_provider={})
+        program_with_bound_arg.with_backend(cartesian_case.backend)(out, offset_provider={})
 
     assert (
         re.search(
@@ -286,7 +286,7 @@ def test_call_bound_program_with_already_bound_arg(cartesian_case, bound_args_te
     out = cases.allocate(cartesian_case, bound_args_testee, "out")()
 
     with pytest.raises(TypeError) as exc_info:
-        program_with_bound_arg.with_backend(cartesian_case.executor)(
+        program_with_bound_arg.with_backend(cartesian_case.backend)(
             True, out, arg2=True, offset_provider={}
         )
 

@@ -6,122 +6,100 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import enum
-from typing import Callable, Optional
+from typing import Optional, Protocol
 
 from gt4py.eve import utils as eve_utils
+from gt4py.next import common
 from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator.transforms import (
+    fuse_as_fieldop,
+    global_tmps,
+    infer_domain,
+    inline_dynamic_shifts,
+    inline_fundefs,
+    inline_lifts,
+)
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 from gt4py.next.iterator.transforms.cse import CommonSubexpressionElimination
-from gt4py.next.iterator.transforms.eta_reduction import EtaReduction
 from gt4py.next.iterator.transforms.fuse_maps import FuseMaps
-from gt4py.next.iterator.transforms.global_tmps import CreateGlobalTmps, FencilWithTemporaries
-from gt4py.next.iterator.transforms.inline_center_deref_lift_vars import InlineCenterDerefLiftVars
-from gt4py.next.iterator.transforms.inline_fundefs import InlineFundefs, PruneUnreferencedFundefs
-from gt4py.next.iterator.transforms.inline_into_scan import InlineIntoScan
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
-from gt4py.next.iterator.transforms.inline_lifts import InlineLifts
+from gt4py.next.iterator.transforms.inline_scalar import InlineScalar
 from gt4py.next.iterator.transforms.merge_let import MergeLet
 from gt4py.next.iterator.transforms.normalize_shifts import NormalizeShifts
-from gt4py.next.iterator.transforms.propagate_deref import PropagateDeref
-from gt4py.next.iterator.transforms.scan_eta_reduction import ScanEtaReduction
 from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce
+from gt4py.next.iterator.type_system.inference import infer
 
 
-@enum.unique
-class LiftMode(enum.Enum):
-    FORCE_INLINE = enum.auto()
-    USE_TEMPORARIES = enum.auto()
-
-
-def _inline_lifts(ir, lift_mode):
-    if lift_mode == LiftMode.FORCE_INLINE:
-        return InlineLifts().visit(ir)
-    elif lift_mode == LiftMode.USE_TEMPORARIES:
-        return InlineLifts(
-            flags=InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT
-            | InlineLifts.Flag.INLINE_DEREF_LIFT  # some tuple exprs found in FVM don't work yet.
-        ).visit(ir)
-    else:
-        raise ValueError()
-
-    return ir
-
-
-def _inline_into_scan(ir, *, max_iter=10):
-    for _ in range(10):
-        # in case there are multiple levels of lambdas around the scan we have to do multiple iterations
-        inlined = InlineIntoScan().visit(ir)
-        inlined = InlineLambdas.apply(inlined, opcount_preserving=True, force_inline_lift_args=True)
-        if inlined == ir:
-            break
-        ir = inlined
-    else:
-        raise RuntimeError(f"Inlining into 'scan' did not converge within {max_iter} iterations.")
-    return ir
+class GTIRTransform(Protocol):
+    def __call__(
+        self, _: itir.Program, *, offset_provider: common.OffsetProvider
+    ) -> itir.Program: ...
 
 
 # TODO(tehrengruber): Revisit interface to configure temporary extraction. We currently forward
-#  `lift_mode` and `temporary_extraction_heuristics` which is inconvenient.
+#  `extract_temporaries` and `temporary_extraction_heuristics` which is inconvenient.
 def apply_common_transforms(
-    ir: itir.Node,
+    ir: itir.Program,
     *,
-    lift_mode=None,
-    offset_provider=None,
+    offset_provider=None,  # TODO(havogt): should be replaced by offset_provider_type, but global_tmps currently relies on runtime info
+    extract_temporaries=False,
     unroll_reduce=False,
     common_subexpression_elimination=True,
     force_inline_lambda_args=False,
     unconditionally_collapse_tuples=False,
-    temporary_extraction_heuristics: Optional[
-        Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
-    ] = None,
+    #: A dictionary mapping axes names to their length. See :func:`infer_domain.infer_expr` for
+    #: more details.
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
-) -> itir.FencilDefinition | FencilWithTemporaries | itir.Program:
-    if isinstance(ir, itir.Program):
-        # TODO(havogt): during refactoring to GTIR, we bypass transformations in case we already translated to itir.Program
-        # (currently the case when using the roundtrip backend)
-        return ir
-    icdlv_uids = eve_utils.UIDGenerator()
+    offset_provider_type: Optional[common.OffsetProviderType] = None,
+) -> itir.Program:
+    # TODO(havogt): if the runtime `offset_provider` is not passed, we cannot run global_tmps
+    if offset_provider_type is None:
+        offset_provider_type = common.offset_provider_to_type(offset_provider)
 
-    if lift_mode is None:
-        lift_mode = LiftMode.FORCE_INLINE
-    assert isinstance(lift_mode, LiftMode)
+    assert isinstance(ir, itir.Program)
+
+    tmp_uids = eve_utils.UIDGenerator(prefix="__tmp")
+    mergeasfop_uids = eve_utils.UIDGenerator()
+
     ir = MergeLet().visit(ir)
-    ir = InlineFundefs().visit(ir)
+    ir = inline_fundefs.InlineFundefs().visit(ir)
 
-    ir = PruneUnreferencedFundefs().visit(ir)
-    ir = PropagateDeref.apply(ir)
+    ir = inline_fundefs.prune_unreferenced_fundefs(ir)
     ir = NormalizeShifts().visit(ir)
+
+    # note: this increases the size of the tree
+    # Inline. The domain inference can not handle "user" functions, e.g. `let f = λ(...) → ... in f(...)`
+    ir = InlineLambdas.apply(ir, opcount_preserving=True, force_inline_lambda_args=True)
+    # required in order to get rid of expressions without a domain (e.g. when a tuple element is never accessed)
+    ir = CollapseTuple.apply(ir, offset_provider_type=offset_provider_type)  # type: ignore[assignment]  # always an itir.Program
+    ir = inline_dynamic_shifts.InlineDynamicShifts.apply(
+        ir
+    )  # domain inference does not support dynamic offsets yet
+    ir = infer_domain.infer_program(
+        ir,
+        offset_provider=offset_provider,
+        symbolic_domain_sizes=symbolic_domain_sizes,
+    )
 
     for _ in range(10):
         inlined = ir
 
-        inlined = InlineCenterDerefLiftVars.apply(inlined, uids=icdlv_uids)  # type: ignore[arg-type]  # always a fencil
-        inlined = _inline_lifts(inlined, lift_mode)
-
-        inlined = InlineLambdas.apply(
-            inlined,
-            opcount_preserving=True,
-            force_inline_lift_args=(lift_mode == LiftMode.FORCE_INLINE),
-            # If trivial lifts are not inlined we might create temporaries for constants. In all
-            #  other cases we want it anyway.
-            force_inline_trivial_lift_args=True,
-        )
-        inlined = ConstantFolding.apply(inlined)
+        inlined = InlineLambdas.apply(inlined, opcount_preserving=True)
+        inlined = ConstantFolding.apply(inlined)  # type: ignore[assignment]  # always an itir.Program
         # This pass is required to be in the loop such that when an `if_` call with tuple arguments
         # is constant-folded the surrounding tuple_get calls can be removed.
-        inlined = CollapseTuple.apply(
-            inlined,
-            offset_provider=offset_provider,
-            # TODO(tehrengruber): disabled since it increases compile-time too much right now
-            flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
+        inlined = CollapseTuple.apply(inlined, offset_provider_type=offset_provider_type)  # type: ignore[assignment]  # always an itir.Program
+        inlined = InlineScalar.apply(inlined, offset_provider_type=offset_provider_type)
+
+        # This pass is required to run after CollapseTuple as otherwise we can not inline
+        # expressions like `tuple_get(make_tuple(as_fieldop(stencil)(...)))` where stencil returns
+        # a list. Such expressions must be inlined however because no backend supports such
+        # field operators right now.
+        inlined = fuse_as_fieldop.FuseAsFieldOp.apply(
+            inlined, uids=mergeasfop_uids, offset_provider_type=offset_provider_type
         )
-        # This pass is required such that a deref outside of a
-        # `tuple_get(make_tuple(let(...), ...))` call is propagated into the let after the
-        # `tuple_get` is removed by the `CollapseTuple` pass.
-        inlined = PropagateDeref.apply(inlined)
 
         if inlined == ir:
             break
@@ -129,45 +107,23 @@ def apply_common_transforms(
     else:
         raise RuntimeError("Inlining 'lift' and 'lambdas' did not converge.")
 
-    if lift_mode != LiftMode.FORCE_INLINE:
-        assert offset_provider is not None
-        ir = CreateGlobalTmps().visit(
-            ir,
-            offset_provider=offset_provider,
-            extraction_heuristics=temporary_extraction_heuristics,
-            symbolic_sizes=symbolic_domain_sizes,
-        )
+    # breaks in test_zero_dim_tuple_arg as trivial tuple_get is not inlined
+    if common_subexpression_elimination:
+        ir = CommonSubexpressionElimination.apply(ir, offset_provider_type=offset_provider_type)
+        ir = MergeLet().visit(ir)
+        ir = InlineLambdas.apply(ir, opcount_preserving=True)
 
-        for _ in range(10):
-            inlined = InlineLifts().visit(ir)
-            inlined = InlineLambdas.apply(
-                inlined, opcount_preserving=True, force_inline_lift_args=True
-            )
-            if inlined == ir:
-                break
-            ir = inlined
-        else:
-            raise RuntimeError("Inlining 'lift' and 'lambdas' did not converge.")
-
-        # If after creating temporaries, the scan is not at the top, we inline.
-        # The following example doesn't have a lift around the shift, i.e. temporary pass will not extract it.
-        # λ(inp) → scan(λ(state, k, kp) → state + ·k + ·kp, True, 0.0)(inp, ⟪Koffₒ, 1ₒ⟫(inp))`
-        ir = _inline_into_scan(ir)
+    if extract_temporaries:
+        ir = infer(ir, inplace=True, offset_provider_type=offset_provider_type)
+        ir = global_tmps.create_global_tmps(ir, offset_provider=offset_provider, uids=tmp_uids)
 
     # Since `CollapseTuple` relies on the type inference which does not support returning tuples
     # larger than the number of closure outputs as given by the unconditional collapse, we can
     # only run the unconditional version here instead of in the loop above.
     if unconditionally_collapse_tuples:
         ir = CollapseTuple.apply(
-            ir,
-            ignore_tuple_size=True,
-            offset_provider=offset_provider,
-            # TODO(tehrengruber): disabled since it increases compile-time too much right now
-            flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
-        )
-
-    if lift_mode == LiftMode.FORCE_INLINE:
-        ir = _inline_into_scan(ir)
+            ir, ignore_tuple_size=True, offset_provider_type=offset_provider_type
+        )  # type: ignore[assignment]  # always an itir.Program
 
     ir = NormalizeShifts().visit(ir)
 
@@ -176,27 +132,38 @@ def apply_common_transforms(
 
     if unroll_reduce:
         for _ in range(10):
-            unrolled = UnrollReduce.apply(ir, offset_provider=offset_provider)
+            unrolled = UnrollReduce.apply(ir, offset_provider_type=offset_provider_type)
             if unrolled == ir:
                 break
-            ir = unrolled
+            ir = unrolled  # type: ignore[assignment] # still a `itir.Program`
             ir = CollapseListGet().visit(ir)
             ir = NormalizeShifts().visit(ir)
-            ir = _inline_lifts(ir, LiftMode.FORCE_INLINE)
+            # this is required as nested neighbor reductions can contain lifts, e.g.,
+            # `neighbors(V2Eₒ, ↑f(...))`
+            ir = inline_lifts.InlineLifts().visit(ir)
             ir = NormalizeShifts().visit(ir)
         else:
             raise RuntimeError("Reduction unrolling failed.")
-
-    ir = EtaReduction().visit(ir)
-    ir = ScanEtaReduction().visit(ir)
-
-    if common_subexpression_elimination:
-        ir = CommonSubexpressionElimination().visit(ir)
-        ir = MergeLet().visit(ir)
 
     ir = InlineLambdas.apply(
         ir, opcount_preserving=True, force_inline_lambda_args=force_inline_lambda_args
     )
 
-    assert isinstance(ir, (itir.FencilDefinition, FencilWithTemporaries))
+    assert isinstance(ir, itir.Program)
+    return ir
+
+
+def apply_fieldview_transforms(
+    ir: itir.Program, *, offset_provider: common.OffsetProvider
+) -> itir.Program:
+    ir = inline_fundefs.InlineFundefs().visit(ir)
+    ir = inline_fundefs.prune_unreferenced_fundefs(ir)
+    ir = InlineLambdas.apply(ir, opcount_preserving=True, force_inline_lambda_args=True)
+    ir = CollapseTuple.apply(
+        ir, offset_provider_type=common.offset_provider_to_type(offset_provider)
+    )  # type: ignore[assignment] # type is still `itir.Program`
+    ir = inline_dynamic_shifts.InlineDynamicShifts.apply(
+        ir
+    )  # domain inference does not support dynamic offsets yet
+    ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
     return ir

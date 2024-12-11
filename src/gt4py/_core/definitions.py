@@ -379,6 +379,8 @@ class DeviceType(enum.IntEnum):
     METAL = 8
     VPI = 9
     ROCM = 10
+    CUDA_MANAGED = 13
+    ONE_API = 14
 
 
 CPUDeviceTyping: TypeAlias = Literal[DeviceType.CPU]
@@ -389,6 +391,8 @@ VulkanDeviceTyping: TypeAlias = Literal[DeviceType.VULKAN]
 MetalDeviceTyping: TypeAlias = Literal[DeviceType.METAL]
 VPIDeviceTyping: TypeAlias = Literal[DeviceType.VPI]
 ROCMDeviceTyping: TypeAlias = Literal[DeviceType.ROCM]
+CUDAManagedDeviceTyping: TypeAlias = Literal[DeviceType.CUDA_MANAGED]
+OneApiDeviceTyping: TypeAlias = Literal[DeviceType.ONE_API]
 
 
 DeviceTypeT = TypeVar(
@@ -436,11 +440,19 @@ class NDArrayObject(Protocol):
     def shape(self) -> tuple[int, ...]: ...
 
     @property
+    def strides(self) -> tuple[int, ...]: ...
+
+    @property
     def dtype(self) -> Any: ...
+
+    @property
+    def itemsize(self) -> int: ...
 
     def item(self) -> Any: ...
 
     def astype(self, dtype: npt.DTypeLike) -> NDArrayObject: ...
+
+    def any(self) -> bool: ...
 
     def __getitem__(self, item: Any) -> NDArrayObject: ...
 
@@ -492,4 +504,4 @@ class NDArrayObject(Protocol):
 
     def __or__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
 
-    def __xor(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
+    def __xor__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...

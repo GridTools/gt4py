@@ -12,6 +12,8 @@ This module contains functions to generate callable objects implementing
 a high-level stencil function definition using a specific code generating backend.
 """
 
+from __future__ import annotations
+
 import types
 from typing import TYPE_CHECKING, Any, Dict, Type
 
@@ -31,8 +33,8 @@ def load_stencil(
     definition_func: StencilFunc,
     externals: Dict[str, Any],
     dtypes: Dict[Type, Type],
-    build_options: "BuildOptions",
-) -> Type["StencilObject"]:
+    build_options: BuildOptions,
+) -> Type[StencilObject]:
     """Generate a new class object implementing the provided definition."""
     # Load components
     backend_cls = gt_backend.from_name(backend_name)
@@ -57,10 +59,10 @@ def load_stencil(
 def gtscript_loader(
     definition_func: StencilFunc,
     backend: str,
-    build_options: "BuildOptions",
+    build_options: BuildOptions,
     externals: Dict[str, Any],
     dtypes: Dict[Type, Type],
-) -> "StencilObject":
+) -> StencilObject:
     if not isinstance(definition_func, types.FunctionType):
         raise ValueError("Invalid stencil definition object ({obj})".format(obj=definition_func))
 

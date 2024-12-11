@@ -259,18 +259,6 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.DeviceTypeT]):
             buffer, dtype, shape, padded_shape, item_size, strides, byte_offset
         )
 
-        if self.device_type == core_defs.DeviceType.ROCM:
-            # until we can rely on dlpack
-            ndarray.__hip_array_interface__ = {  # type: ignore[attr-defined]
-                "shape": ndarray.shape,  # type: ignore[union-attr]
-                "typestr": ndarray.dtype.descr[0][1],  # type: ignore[union-attr]
-                "descr": ndarray.dtype.descr,  # type: ignore[union-attr]
-                "stream": 1,
-                "version": 3,
-                "strides": ndarray.strides,  # type: ignore[union-attr, attr-defined]
-                "data": (ndarray.data.ptr, False),  # type: ignore[union-attr, attr-defined]
-            }
-
         return TensorBuffer(
             buffer=buffer,
             memory_address=memory_address,

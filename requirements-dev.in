@@ -11,7 +11,6 @@ cogapp>=3.3
 coverage[toml]>=5.0
 darglint>=1.6
 hypothesis   # constraints in gt4py['testing']
-isort>=5.10
 jupytext>=1.14
 mypy>=1.0
 matplotlib>=3.3
@@ -31,6 +30,7 @@ pytest-instafail>=0.5.0
 ruff>=0.2.0
 sphinx>=4.4
 sphinx_rtd_theme>=1.0
+tach>=0.10.7
 tomli>=2.0.1;python_version<'3.11'
 tox>=3.2.0
 types-tabulate>=0.8.10

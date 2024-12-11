@@ -19,6 +19,7 @@ from gt4py.eve import utils as eve_utils
 from gt4py.next import (
     astype,
     broadcast,
+    common,
     float32,
     float64,
     int32,
@@ -119,6 +120,22 @@ def test_premap():
     assert lowered.expr == reference
 
 
+def test_premap_cartesian_syntax():
+    def foo(inp: gtx.Field[[TDim], float64]):
+        return inp(TDim + 1)
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.as_fieldop(
+        im.lambda_("__it")(
+            im.deref(im.shift(common.dimension_to_implicit_offset(TDim.value), 1)("__it"))
+        )
+    )("inp")
+
+    assert lowered.expr == reference
+
+
 def test_as_offset():
     def foo(inp: gtx.Field[[TDim], float64], offset: gtx.Field[[TDim], int]):
         return inp(as_offset(TOff, offset))
@@ -202,7 +219,7 @@ def test_ternary():
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.cond("a", "b", "c")
+    reference = im.if_("a", "b", "c")
 
     assert lowered.expr == reference
 
@@ -217,7 +234,7 @@ def test_if_unconditional_return():
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.cond("a", "b", "c")
+    reference = im.if_("a", "b", "c")
 
     assert lowered.expr == reference
 
@@ -235,7 +252,7 @@ def test_if_no_return():
     lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
     lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered_inlined)
 
-    reference = im.tuple_get(0, im.cond("a", im.make_tuple("b"), im.make_tuple("c")))
+    reference = im.tuple_get(0, im.if_("a", im.make_tuple("b"), im.make_tuple("c")))
 
     assert lowered_inlined.expr == reference
 
@@ -255,7 +272,7 @@ def test_if_conditional_return():
     lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
     lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered_inlined)
 
-    reference = im.cond("a", "b", im.cond("a", "c", "b"))
+    reference = im.if_("a", "b", im.if_("a", "c", "b"))
 
     assert lowered_inlined.expr == reference
 
@@ -266,12 +283,36 @@ def test_astype():
 
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
 
-    reference = im.as_fieldop(im.lambda_("__val")(im.call("cast_")(im.deref("__val"), "int32")))(
-        "a"
-    )
+    reference = im.cast_as_fieldop("int32")("a")
+
+    assert lowered_inlined.expr == reference
+
+
+def test_astype_local_field():
+    def foo(a: gtx.Field[gtx.Dims[Vertex, V2EDim], float64]):
+        return astype(a, int32)
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.op_as_fieldop(im.map_(im.lambda_("val")(im.call("cast_")("val", "int32"))))("a")
 
     assert lowered.expr == reference
+
+
+def test_astype_scalar():
+    def foo(a: float64):
+        return astype(a, int32)
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+    lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
+
+    reference = im.call("cast_")("a", "int32")
+
+    assert lowered_inlined.expr == reference
 
 
 def test_astype_tuple():
@@ -283,12 +324,24 @@ def test_astype_tuple():
     lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
 
     reference = im.make_tuple(
-        im.as_fieldop(im.lambda_("__val")(im.call("cast_")(im.deref("__val"), "int32")))(
-            im.tuple_get(0, "a")
-        ),
-        im.as_fieldop(im.lambda_("__val")(im.call("cast_")(im.deref("__val"), "int32")))(
-            im.tuple_get(1, "a")
-        ),
+        im.cast_as_fieldop("int32")(im.tuple_get(0, "a")),
+        im.cast_as_fieldop("int32")(im.tuple_get(1, "a")),
+    )
+
+    assert lowered_inlined.expr == reference
+
+
+def test_astype_tuple_scalar_and_field():
+    def foo(a: tuple[gtx.Field[[TDim], float64], float64]):
+        return astype(a, int32)
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+    lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
+
+    reference = im.make_tuple(
+        im.cast_as_fieldop("int32")(im.tuple_get(0, "a")),
+        im.call("cast_")(im.tuple_get(1, "a"), "int32"),
     )
 
     assert lowered_inlined.expr == reference
@@ -309,16 +362,10 @@ def test_astype_nested_tuple():
 
     reference = im.make_tuple(
         im.make_tuple(
-            im.as_fieldop(im.lambda_("__val")(im.call("cast_")(im.deref("__val"), "int32")))(
-                im.tuple_get(0, im.tuple_get(0, "a"))
-            ),
-            im.as_fieldop(im.lambda_("__val")(im.call("cast_")(im.deref("__val"), "int32")))(
-                im.tuple_get(1, im.tuple_get(0, "a"))
-            ),
+            im.cast_as_fieldop("int32")(im.tuple_get(0, im.tuple_get(0, "a"))),
+            im.cast_as_fieldop("int32")(im.tuple_get(1, im.tuple_get(0, "a"))),
         ),
-        im.as_fieldop(im.lambda_("__val")(im.call("cast_")(im.deref("__val"), "int32")))(
-            im.tuple_get(1, "a")
-        ),
+        im.cast_as_fieldop("int32")(im.tuple_get(1, "a")),
     )
 
     assert lowered_inlined.expr == reference
@@ -344,6 +391,22 @@ def test_unary_plus():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.op_as_fieldop("plus")(im.literal("0", "float64"), "inp")
+
+    assert lowered.expr == reference
+
+
+@pytest.mark.parametrize("var, var_type", [("-1.0", "float64"), ("True", "bool")])
+def test_unary_op_type_conversion(var, var_type):
+    def unary_float():
+        return float(-1)
+
+    def unary_bool():
+        return bool(-1)
+
+    fun = unary_bool if var_type == "bool" else unary_float
+    parsed = FieldOperatorParser.apply_to_function(fun)
+    lowered = FieldOperatorLowering.apply(parsed)
+    reference = im.literal(var, var_type)
 
     assert lowered.expr == reference
 
@@ -815,9 +878,9 @@ def test_builtin_float_constructors():
         im.literal("0.1", "float64"),
         im.literal("0.1", "float32"),
         im.literal("0.1", "float64"),
-        im.literal(".1", "float64"),
-        im.literal(".1", "float32"),
-        im.literal(".1", "float64"),
+        im.literal("0.1", "float64"),
+        im.literal("0.1", "float32"),
+        im.literal("0.1", "float64"),
     )
 
     assert lowered.expr == reference
@@ -852,4 +915,15 @@ def test_broadcast():
     lowered = FieldOperatorLowering.apply(parsed)
 
     assert lowered.id == "foo"
-    assert lowered.expr == im.ref("inp")
+    assert lowered.expr == im.as_fieldop("deref")(im.ref("inp"))
+
+
+def test_scalar_broadcast():
+    def foo():
+        return broadcast(1, (UDim, TDim))
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    assert lowered.id == "foo"
+    assert lowered.expr == im.as_fieldop("deref")(1)

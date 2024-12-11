@@ -55,6 +55,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     mesh_descriptor,
 )
 
+from gt4py.next import utils as gt_utils
 
 # mypy does not accept [IDim, ...] as a type
 
@@ -68,6 +69,7 @@ IKFloatField: TypeAlias = gtx.Field[[IDim, KDim], np.float64]  # type: ignore [v
 IJKField: TypeAlias = gtx.Field[[IDim, JDim, KDim], np.int32]  # type: ignore [valid-type]
 IJKFloatField: TypeAlias = gtx.Field[[IDim, JDim, KDim], np.float64]  # type: ignore [valid-type]
 VField: TypeAlias = gtx.Field[[Vertex], np.int32]  # type: ignore [valid-type]
+VBoolField: TypeAlias = gtx.Field[[Vertex], bool]  # type: ignore [valid-type]
 EField: TypeAlias = gtx.Field[[Edge], np.int32]  # type: ignore [valid-type]
 CField: TypeAlias = gtx.Field[[Cell], np.int32]  # type: ignore [valid-type]
 EmptyField: TypeAlias = gtx.Field[[], np.int32]  # type: ignore [valid-type]
@@ -371,7 +373,7 @@ def run(
     """Run fieldview code in the context of a given test case."""
     if kwargs.get("offset_provider", None) is None:
         kwargs["offset_provider"] = case.offset_provider
-    fieldview_prog.with_grid_type(case.grid_type).with_backend(case.executor)(*args, **kwargs)
+    fieldview_prog.with_grid_type(case.grid_type).with_backend(case.backend)(*args, **kwargs)
 
 
 def verify(
@@ -450,7 +452,9 @@ def verify_with_default_data(
             ``comparison(ref, <out | inout>)`` and should return a boolean.
     """
     inps, kwfields = get_default_data(case, fieldop)
-    ref_args = tuple(i.asnumpy() if isinstance(i, common.Field) else i for i in inps)
+    ref_args: tuple = gt_utils.tree_map(
+        lambda x: x.asnumpy() if isinstance(x, common.Field) else x
+    )(inps)
     verify(
         case,
         fieldop,
@@ -463,10 +467,18 @@ def verify_with_default_data(
 
 
 @pytest.fixture
-def cartesian_case(exec_alloc_descriptor: test_definitions.ExecutionAndAllocatorDescriptor):
+def cartesian_case(
+    exec_alloc_descriptor: test_definitions.EmbeddedDummyBackend | next_backend.Backend,
+):
     yield Case(
-        exec_alloc_descriptor if exec_alloc_descriptor.executor else None,
-        offset_provider={"Ioff": IDim, "Joff": JDim, "Koff": KDim},
+        None
+        if isinstance(exec_alloc_descriptor, test_definitions.EmbeddedDummyBackend)
+        else exec_alloc_descriptor,
+        offset_provider={
+            "Ioff": IDim,
+            "Joff": JDim,
+            "Koff": KDim,
+        },
         default_sizes={IDim: 10, JDim: 10, KDim: 10},
         grid_type=common.GridType.CARTESIAN,
         allocator=exec_alloc_descriptor.allocator,
@@ -475,19 +487,30 @@ def cartesian_case(exec_alloc_descriptor: test_definitions.ExecutionAndAllocator
 
 @pytest.fixture
 def unstructured_case(
-    mesh_descriptor, exec_alloc_descriptor: test_definitions.ExecutionAndAllocatorDescriptor
+    mesh_descriptor,
+    exec_alloc_descriptor: test_definitions.EmbeddedDummyBackend | next_backend.Backend,
 ):
     yield Case(
-        exec_alloc_descriptor if exec_alloc_descriptor.executor else None,
+        None
+        if isinstance(exec_alloc_descriptor, test_definitions.EmbeddedDummyBackend)
+        else exec_alloc_descriptor,
         offset_provider=mesh_descriptor.offset_provider,
         default_sizes={
             Vertex: mesh_descriptor.num_vertices,
             Edge: mesh_descriptor.num_edges,
             Cell: mesh_descriptor.num_cells,
-            KDim: 10,
         },
         grid_type=common.GridType.UNSTRUCTURED,
         allocator=exec_alloc_descriptor.allocator,
+    )
+
+
+@pytest.fixture
+def unstructured_case_3d(unstructured_case):
+    return dataclasses.replace(
+        unstructured_case,
+        default_sizes={**unstructured_case.default_sizes, KDim: 10},
+        offset_provider={**unstructured_case.offset_provider, "KOff": KDim},
     )
 
 
@@ -586,7 +609,7 @@ def get_default_data(
 class Case:
     """Parametrizable components for single feature integration tests."""
 
-    executor: Optional[next_backend.Backend]
+    backend: Optional[next_backend.Backend]
     offset_provider: dict[str, common.Connectivity | gtx.Dimension]
     default_sizes: dict[gtx.Dimension, int]
     grid_type: common.GridType

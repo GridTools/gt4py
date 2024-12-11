@@ -8,24 +8,25 @@
 
 from __future__ import annotations
 
+import dataclasses
+import functools
 import types
 from dataclasses import dataclass
-from typing import Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Callable, Optional, Union
 
 import devtools
 
-from gt4py.next import common
+from gt4py.next import common, config
 from gt4py.next.iterator import builtins
 from gt4py.next.iterator.builtins import BackendNotSelectedError, builtin_dispatch
-from gt4py.next.iterator.ir import FencilDefinition
-from gt4py.next.program_processors.processor_interface import (
-    ProgramExecutor,
-    ProgramFormatter,
-    ensure_processor_kind,
-)
+from gt4py.next.program_processors import program_formatter
 
 
-__all__ = ["offset", "fundef", "fendef", "closure", "set_at"]
+if TYPE_CHECKING:
+    # TODO(tehrengruber): remove cirular dependency and import unconditionally
+    from gt4py.next import backend as next_backend
+
+__all__ = ["fendef", "fundef", "if_stmt", "offset", "set_at"]
 
 
 @dataclass(frozen=True)
@@ -49,78 +50,86 @@ class UnstructuredDomain(dict): ...
 fendef_embedded: Optional[Callable[[types.FunctionType], None]] = None
 
 
+@dataclasses.dataclass
 class FendefDispatcher:
-    def __init__(self, function: types.FunctionType, executor_kwargs: dict):
-        self.function = function
-        self.executor_kwargs = executor_kwargs
+    definition: types.FunctionType
+    offset_provider: Optional[common.OffsetProvider]
+    column_axis: Optional[common.Dimension]
 
-    def itir(
-        self,
-        *args,
-        fendef_codegen: Optional[Callable[[types.FunctionType], FencilDefinition]] = None,
-        debug=False,
-        **kwargs,
-    ):
-        args, kwargs = self._rewrite_args(args, kwargs)
+    def itir(self, *args):
+        # TODO(ricoh): refactor so that `tracing` does not import this module
+        #   and can be imported top level. Then set `fendef_tracing` as a
+        #   proper default value, instead of using `None` as a sentinel.
+        from gt4py.next.iterator.tracing import trace_fencil_definition
 
-        # For consistency with `__call__` we also allow these keyword arguments, but ignore them
-        # here, as they are not used for code generation.
-        for ignored_kwarg in ["offset_provider", "lift_mode", "column_axis"]:
-            kwargs.pop(ignored_kwarg, None)
+        fencil_definition = trace_fencil_definition(self.definition, args)
 
-        if fendef_codegen is None:
-            # TODO(ricoh): refactor so that `tracing` does not import this module
-            #   and can be imported top level. Then set `fendef_tracing` as a
-            #   proper default value, instead of using `None` as a sentinel.
-            from gt4py.next.iterator.tracing import trace_fencil_definition
-
-            fendef_codegen = trace_fencil_definition
-        fencil_definition = fendef_codegen(self.function, args, **kwargs)
-        if debug:
+        if config.DEBUG:
             devtools.debug(fencil_definition)
         return fencil_definition
 
-    def __call__(self, *args, backend: Optional[ProgramExecutor] = None, **kwargs):
-        args, kwargs = self._rewrite_args(args, kwargs)
+    def __call__(
+        self,
+        *args,
+        backend: Optional[next_backend.Backend | program_formatter.ProgramFormatter] = None,
+        offset_provider=None,
+        column_axis=None,
+    ):
+        offset_provider = offset_provider or self.offset_provider
+        column_axis = column_axis or self.column_axis
 
         if backend is not None:
-            ensure_processor_kind(backend, ProgramExecutor)
-            backend(self.itir(*args, **kwargs), *args, **kwargs)
+            itir_node = self.itir(*args)
+
+            # TODO(tehrengruber): remove cirular dependency and place import at the top of the file
+            from gt4py.next import backend as next_backend
+
+            if isinstance(backend, next_backend.Backend):
+                assert isinstance(backend, next_backend.Backend)
+                compiled_program = backend.jit(
+                    itir_node, *args, offset_provider=offset_provider, column_axis=column_axis
+                )
+                compiled_program(*args, offset_provider=offset_provider)
+            elif isinstance(backend, program_formatter.ProgramFormatter):
+                return backend(
+                    itir_node, *args, offset_provider=offset_provider, column_axis=column_axis
+                )
+            else:
+                raise ValueError(
+                    "Backend must be a 'gt4py.next.backend.Backend' or "
+                    "'gt4py.next.program_formatter.ProgramFormatter'."
+                )
         else:
             if fendef_embedded is None:
                 raise RuntimeError("Embedded execution is not registered.")
-            fendef_embedded(self.function, *args, **kwargs)
-
-    def format_itir(self, *args, formatter: ProgramFormatter, **kwargs) -> str:
-        ensure_processor_kind(formatter, ProgramFormatter)
-        args, kwargs = self._rewrite_args(args, kwargs)
-        return formatter(self.itir(*args, **kwargs), *args, **kwargs)
-
-    def _rewrite_args(self, args: tuple, kwargs: dict) -> tuple[tuple, dict]:
-        kwargs = self.executor_kwargs | kwargs
-
-        return args, kwargs
+            fendef_embedded(
+                self.definition, *args, offset_provider=offset_provider, column_axis=column_axis
+            )
 
 
-def fendef(*dec_args, **dec_kwargs):
+def fendef(
+    definition: Optional[types.FunctionType] = None,
+    *,
+    offset_provider: Optional[common.OffsetProvider] = None,
+    column_axis: Optional[common.Dimension] = None,
+):
     """
     Dispatches to embedded execution or execution with code generation.
 
     If `backend` keyword argument is not set or None `fendef_embedded` will be called,
     else `fendef_codegen` will be called.
     """
+    if not definition:
+        return functools.partial(fendef, offset_provider=offset_provider, column_axis=column_axis)
 
-    def wrapper(fun):
-        return FendefDispatcher(function=fun, executor_kwargs=dec_kwargs)
-
-    if len(dec_args) == 1 and len(dec_kwargs) == 0 and callable(dec_args[0]):
-        return wrapper(dec_args[0])
-    else:
-        assert len(dec_args) == 0
-        return wrapper
+    return FendefDispatcher(
+        definition=definition, offset_provider=offset_provider or {}, column_axis=column_axis
+    )
 
 
-def _deduce_domain(domain: dict[common.Dimension, range], offset_provider: dict[str, Any]):
+def _deduce_domain(
+    domain: dict[common.Dimension, range], offset_provider_type: common.OffsetProviderType
+):
     if isinstance(domain, UnstructuredDomain):
         domain_builtin = builtins.unstructured_domain
     elif isinstance(domain, CartesianDomain):
@@ -128,7 +137,7 @@ def _deduce_domain(domain: dict[common.Dimension, range], offset_provider: dict[
     else:
         domain_builtin = (
             builtins.unstructured_domain
-            if any(isinstance(o, common.Connectivity) for o in offset_provider.values())
+            if any(isinstance(o, common.ConnectivityType) for o in offset_provider_type.values())
             else builtins.cartesian_domain
         )
 
@@ -153,8 +162,8 @@ class FundefFencilWrapper:
             elif isinstance(dom, dict):
                 # if passed as a dict, we need to convert back to builtins for interpretation by the backends
                 assert offset_provider is not None
-                dom = _deduce_domain(dom, offset_provider)
-            closure(dom, self.fundef_dispatcher, out, [*inps])
+                dom = _deduce_domain(dom, common.offset_provider_to_type(offset_provider))
+            set_at(builtins.as_fieldop(self.fundef_dispatcher, dom)(*inps), dom, out)
 
         return impl
 
@@ -200,10 +209,10 @@ def fundef(fun):
 
 
 @builtin_dispatch
-def closure(*args):  # TODO remove
+def set_at(*args):
     return BackendNotSelectedError()
 
 
 @builtin_dispatch
-def set_at(*args):
+def if_stmt(*args):
     return BackendNotSelectedError()

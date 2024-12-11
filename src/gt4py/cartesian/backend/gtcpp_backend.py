@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 
 from gt4py import storage as gt_storage
@@ -129,7 +131,7 @@ class GTBaseBackend(BaseGTBackend, CLIBackendMixin):
     def _generate_extension(self, uses_cuda: bool) -> Tuple[str, str]:
         return self.make_extension(stencil_ir=self.builder.gtir, uses_cuda=uses_cuda)
 
-    def generate(self) -> Type["StencilObject"]:
+    def generate(self) -> Type[StencilObject]:
         self.check_options(self.builder.options)
 
         pyext_module_name: Optional[str]

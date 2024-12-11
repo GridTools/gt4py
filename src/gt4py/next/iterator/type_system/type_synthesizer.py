@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import dataclasses
+import functools
 import inspect
 
 from gt4py.eve.extended_typing import Callable, Iterable, Optional, Union
@@ -16,6 +17,7 @@ from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_info, type_specifications as ts
+from gt4py.next.utils import tree_map
 
 
 @dataclasses.dataclass
@@ -33,20 +35,20 @@ class TypeSynthesizer:
      - isinstance checks to determine if an object is actually (meant to be) a type
        synthesizer and not just any callable.
      - writing simple type synthesizers without cluttering the signature with the additional
-       offset_provider argument that is only needed by some.
+       offset_provider_type argument that is only needed by some.
     """
 
     type_synthesizer: Callable[..., TypeOrTypeSynthesizer]
 
     def __post_init__(self):
-        if "offset_provider" not in inspect.signature(self.type_synthesizer).parameters:
+        if "offset_provider_type" not in inspect.signature(self.type_synthesizer).parameters:
             synthesizer = self.type_synthesizer
-            self.type_synthesizer = lambda *args, offset_provider: synthesizer(*args)
+            self.type_synthesizer = lambda *args, offset_provider_type: synthesizer(*args)
 
     def __call__(
-        self, *args: TypeOrTypeSynthesizer, offset_provider: common.OffsetProvider
+        self, *args: TypeOrTypeSynthesizer, offset_provider_type: common.OffsetProviderType
     ) -> TypeOrTypeSynthesizer:
-        return self.type_synthesizer(*args, offset_provider=offset_provider)
+        return self.type_synthesizer(*args, offset_provider_type=offset_provider_type)
 
 
 TypeOrTypeSynthesizer = Union[ts.TypeSpec, TypeSynthesizer]
@@ -68,13 +70,14 @@ def _register_builtin_type_synthesizer(
     *,
     fun_names: Optional[Iterable[str]] = None,
 ):
-    def wrapper(synthesizer: Callable[..., TypeOrTypeSynthesizer]) -> None:
-        # store names in function object for better debuggability
-        synthesizer.fun_names = fun_names or [synthesizer.__name__]  # type: ignore[attr-defined]
-        for f in synthesizer.fun_names:  # type: ignore[attr-defined]
-            builtin_type_synthesizers[f] = TypeSynthesizer(type_synthesizer=synthesizer)
+    if synthesizer is None:
+        return functools.partial(_register_builtin_type_synthesizer, fun_names=fun_names)
 
-    return wrapper(synthesizer) if synthesizer else wrapper
+    # store names in function object for better debuggability
+    synthesizer.fun_names = fun_names or [synthesizer.__name__]  # type: ignore[attr-defined]
+    for f in synthesizer.fun_names:  # type: ignore[attr-defined]
+        builtin_type_synthesizers[f] = TypeSynthesizer(type_synthesizer=synthesizer)
+    return synthesizer
 
 
 @_register_builtin_type_synthesizer(
@@ -110,15 +113,17 @@ def _(lhs: ts.ScalarType, rhs: ts.ScalarType) -> ts.ScalarType | ts.TupleType:
 
 
 @_register_builtin_type_synthesizer
-def deref(it: it_ts.IteratorType) -> ts.DataType:
+def deref(it: it_ts.IteratorType | ts.DeferredType) -> ts.DataType | ts.DeferredType:
+    if isinstance(it, ts.DeferredType):
+        return ts.DeferredType(constraint=None)
     assert isinstance(it, it_ts.IteratorType)
     assert _is_derefable_iterator_type(it)
     return it.element_type
 
 
 @_register_builtin_type_synthesizer
-def can_deref(it: it_ts.IteratorType) -> ts.ScalarType:
-    assert isinstance(it, it_ts.IteratorType)
+def can_deref(it: it_ts.IteratorType | ts.DeferredType) -> ts.ScalarType:
+    assert isinstance(it, ts.DeferredType) or isinstance(it, it_ts.IteratorType)
     # note: We don't check if the iterator is derefable here as the iterator only needs to
     # to have a valid position. Consider a nested reduction, e.g.
     #  `reduce(plus, 0)(neighbors(V2Eₒ, (↑(λ(a) → reduce(plus, 0)(neighbors(E2Vₒ, a))))(it))`
@@ -132,12 +137,20 @@ def can_deref(it: it_ts.IteratorType) -> ts.ScalarType:
 
 
 @_register_builtin_type_synthesizer
-def if_(cond: ts.ScalarType, true_branch: ts.DataType, false_branch: ts.DataType) -> ts.DataType:
-    assert isinstance(cond, ts.ScalarType) and cond.kind == ts.ScalarKind.BOOL
+def if_(pred: ts.ScalarType, true_branch: ts.DataType, false_branch: ts.DataType) -> ts.DataType:
+    if isinstance(true_branch, ts.TupleType) and isinstance(false_branch, ts.TupleType):
+        return tree_map(
+            collection_type=ts.TupleType,
+            result_collection_constructor=lambda elts: ts.TupleType(types=[*elts]),
+        )(functools.partial(if_, pred))(true_branch, false_branch)
+
+    assert not isinstance(true_branch, ts.TupleType) and not isinstance(false_branch, ts.TupleType)
+    assert isinstance(pred, ts.ScalarType) and pred.kind == ts.ScalarKind.BOOL
     # TODO(tehrengruber): Enable this or a similar check. In case the true- and false-branch are
     #  iterators defined on different positions this fails. For the GTFN backend we also don't
     #  want this, but for roundtrip it is totally fine.
     # assert true_branch == false_branch  # noqa: ERA001
+
     return true_branch
 
 
@@ -177,6 +190,14 @@ def make_tuple(*args: ts.DataType) -> ts.TupleType:
 
 
 @_register_builtin_type_synthesizer
+def index(arg: ts.DimensionType) -> ts.FieldType:
+    return ts.FieldType(
+        dims=[arg.dim],
+        dtype=ts.ScalarType(kind=getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())),
+    )
+
+
+@_register_builtin_type_synthesizer
 def neighbors(offset_literal: it_ts.OffsetLiteralType, it: it_ts.IteratorType) -> it_ts.ListType:
     assert (
         isinstance(offset_literal, it_ts.OffsetLiteralType)
@@ -191,7 +212,7 @@ def neighbors(offset_literal: it_ts.OffsetLiteralType, it: it_ts.IteratorType) -
 def lift(stencil: TypeSynthesizer) -> TypeSynthesizer:
     @TypeSynthesizer
     def apply_lift(
-        *its: it_ts.IteratorType, offset_provider: common.OffsetProvider
+        *its: it_ts.IteratorType, offset_provider_type: common.OffsetProviderType
     ) -> it_ts.IteratorType:
         assert all(isinstance(it, it_ts.IteratorType) for it in its)
         stencil_args = [
@@ -203,7 +224,7 @@ def lift(stencil: TypeSynthesizer) -> TypeSynthesizer:
             )
             for it in its
         ]
-        stencil_return_type = stencil(*stencil_args, offset_provider=offset_provider)
+        stencil_return_type = stencil(*stencil_args, offset_provider_type=offset_provider_type)
         assert isinstance(stencil_return_type, ts.DataType)
 
         position_dims = its[0].position_dims if its else []
@@ -258,31 +279,46 @@ def _convert_as_fieldop_input_to_iterator(
 
 @_register_builtin_type_synthesizer
 def as_fieldop(
-    stencil: TypeSynthesizer, domain: it_ts.DomainType, offset_provider: common.OffsetProvider
+    stencil: TypeSynthesizer,
+    domain: Optional[it_ts.DomainType] = None,
+    *,
+    offset_provider_type: common.OffsetProviderType,
 ) -> TypeSynthesizer:
+    # In case we don't have a domain argument to `as_fieldop` we can not infer the exact result
+    # type. In order to still allow some passes which don't need this information to run before the
+    # domain inference, we continue with a dummy domain. One example is the CollapseTuple pass
+    # which only needs information about the structure, e.g. how many tuple elements does this node
+    # have, but not the dimensions of a field.
+    # Note that it might appear as if using the TraceShift pass would allow us to deduce the return
+    # type of `as_fieldop` without a domain, but this is not the case, since we don't have
+    # information on the ordering of dimensions. In this example
+    #   `as_fieldop(it1, it2 -> deref(it1) + deref(it2))(i_field, j_field)`
+    # it is unclear if the result has dimension I, J or J, I.
+    if domain is None:
+        domain = it_ts.DomainType(dims="unknown")
+
     @TypeSynthesizer
-    def applied_as_fieldop(*fields) -> ts.FieldType:
+    def applied_as_fieldop(*fields) -> ts.FieldType | ts.DeferredType:
+        if any(
+            isinstance(el, ts.DeferredType)
+            for f in fields
+            for el in type_info.primitive_constituents(f)
+        ):
+            return ts.DeferredType(constraint=None)
+
         stencil_return = stencil(
             *(_convert_as_fieldop_input_to_iterator(domain, field) for field in fields),
-            offset_provider=offset_provider,
+            offset_provider_type=offset_provider_type,
         )
         assert isinstance(stencil_return, ts.DataType)
         return type_info.apply_to_primitive_constituents(
-            lambda el_type: ts.FieldType(dims=domain.dims, dtype=el_type), stencil_return
+            lambda el_type: ts.FieldType(dims=domain.dims, dtype=el_type)
+            if domain.dims != "unknown"
+            else ts.DeferredType(constraint=ts.FieldType),
+            stencil_return,
         )
 
     return applied_as_fieldop
-
-
-@_register_builtin_type_synthesizer
-def cond(
-    pred: ts.ScalarType, true_branch: ts.DataType, false_branch: ts.DataType
-) -> ts.FieldType | ts.DeferredType:
-    assert isinstance(pred, ts.ScalarType) and pred.kind == ts.ScalarKind.BOOL
-    assert true_branch == false_branch
-    assert isinstance(true_branch, (ts.FieldType, ts.DeferredType))
-
-    return true_branch
 
 
 @_register_builtin_type_synthesizer
@@ -292,8 +328,10 @@ def scan(
     assert isinstance(direction, ts.ScalarType) and direction.kind == ts.ScalarKind.BOOL
 
     @TypeSynthesizer
-    def apply_scan(*its: it_ts.IteratorType, offset_provider: common.OffsetProvider) -> ts.DataType:
-        result = scan_pass(init, *its, offset_provider=offset_provider)
+    def apply_scan(
+        *its: it_ts.IteratorType, offset_provider_type: common.OffsetProviderType
+    ) -> ts.DataType:
+        result = scan_pass(init, *its, offset_provider_type=offset_provider_type)
         assert isinstance(result, ts.DataType)
         return result
 
@@ -304,12 +342,12 @@ def scan(
 def map_(op: TypeSynthesizer) -> TypeSynthesizer:
     @TypeSynthesizer
     def applied_map(
-        *args: it_ts.ListType, offset_provider: common.OffsetProvider
+        *args: it_ts.ListType, offset_provider_type: common.OffsetProviderType
     ) -> it_ts.ListType:
         assert len(args) > 0
         assert all(isinstance(arg, it_ts.ListType) for arg in args)
         arg_el_types = [arg.element_type for arg in args]
-        el_type = op(*arg_el_types, offset_provider=offset_provider)
+        el_type = op(*arg_el_types, offset_provider_type=offset_provider_type)
         assert isinstance(el_type, ts.DataType)
         return it_ts.ListType(element_type=el_type)
 
@@ -319,17 +357,23 @@ def map_(op: TypeSynthesizer) -> TypeSynthesizer:
 @_register_builtin_type_synthesizer
 def reduce(op: TypeSynthesizer, init: ts.TypeSpec) -> TypeSynthesizer:
     @TypeSynthesizer
-    def applied_reduce(*args: it_ts.ListType, offset_provider: common.OffsetProvider):
+    def applied_reduce(*args: it_ts.ListType, offset_provider_type: common.OffsetProviderType):
         assert all(isinstance(arg, it_ts.ListType) for arg in args)
-        return op(init, *(arg.element_type for arg in args), offset_provider=offset_provider)
+        return op(
+            init, *(arg.element_type for arg in args), offset_provider_type=offset_provider_type
+        )
 
     return applied_reduce
 
 
 @_register_builtin_type_synthesizer
-def shift(*offset_literals, offset_provider) -> TypeSynthesizer:
+def shift(*offset_literals, offset_provider_type: common.OffsetProviderType) -> TypeSynthesizer:
     @TypeSynthesizer
-    def apply_shift(it: it_ts.IteratorType) -> it_ts.IteratorType:
+    def apply_shift(
+        it: it_ts.IteratorType | ts.DeferredType,
+    ) -> it_ts.IteratorType | ts.DeferredType:
+        if isinstance(it, ts.DeferredType):
+            return ts.DeferredType(constraint=None)
         assert isinstance(it, it_ts.IteratorType)
         if it.position_dims == "unknown":  # nothing to do here
             return it
@@ -339,19 +383,19 @@ def shift(*offset_literals, offset_provider) -> TypeSynthesizer:
             assert isinstance(offset_axis, it_ts.OffsetLiteralType) and isinstance(
                 offset_axis.value, common.Dimension
             )
-            provider = offset_provider[offset_axis.value.value]  # TODO: naming
-            if isinstance(provider, common.Dimension):
+            type_ = offset_provider_type[offset_axis.value.value]
+            if isinstance(type_, common.Dimension):
                 pass
-            elif isinstance(provider, common.Connectivity):
+            elif isinstance(type_, common.NeighborConnectivityType):
                 found = False
                 for i, dim in enumerate(new_position_dims):
-                    if dim.value == provider.origin_axis.value:
+                    if dim.value == type_.source_dim.value:
                         assert not found
-                        new_position_dims[i] = provider.neighbor_axis
+                        new_position_dims[i] = type_.codomain
                         found = True
                 assert found
             else:
-                raise NotImplementedError()
+                raise NotImplementedError(f"{type_} is not a supported Connectivity type.")
         return it_ts.IteratorType(
             position_dims=new_position_dims,
             defined_dims=it.defined_dims,

@@ -6,13 +6,16 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import copy
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, List, Optional, Set, Union
 
 import dace
 
-from gt4py.cartesian.gtc import common, daceir as dcir, oir
+from gt4py.cartesian.gtc import common, oir
+from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.definitions import Extent
 
 
@@ -104,7 +107,8 @@ def get_expansion_order_index(expansion_order, axis):
     for idx, item in enumerate(expansion_order):
         if isinstance(item, Iteration) and item.axis == axis:
             return idx
-        elif isinstance(item, Map):
+
+        if isinstance(item, Map):
             for it in item.iterations:
                 if it.kind == "contiguous" and it.axis == axis:
                     return idx
@@ -133,7 +137,9 @@ def _choose_loop_or_map(node, eo):
     return eo
 
 
-def _order_as_spec(computation_node, expansion_order):
+def _order_as_spec(
+    computation_node: StencilComputation, expansion_order: Union[List[str], List[ExpansionItem]]
+) -> List[ExpansionItem]:
     expansion_order = list(_choose_loop_or_map(computation_node, eo) for eo in expansion_order)
     expansion_specification = []
     for item in expansion_order:
@@ -167,7 +173,7 @@ def _order_as_spec(computation_node, expansion_order):
     return expansion_specification
 
 
-def _populate_strides(node, expansion_specification):
+def _populate_strides(node: StencilComputation, expansion_specification: List[ExpansionItem]):
     """Fill in `stride` attribute of `Iteration` and `Loop` dataclasses.
 
     For loops, stride is set to either -1 or 1, based on iteration order.
@@ -182,10 +188,7 @@ def _populate_strides(node, expansion_specification):
     for it in iterations:
         if isinstance(it, Loop):
             if it.stride is None:
-                if node.oir_node.loop_order == common.LoopOrder.BACKWARD:
-                    it.stride = -1
-                else:
-                    it.stride = 1
+                it.stride = -1 if node.oir_node.loop_order == common.LoopOrder.BACKWARD else 1
         else:
             if it.stride is None:
                 if it.kind == "tiling":
@@ -201,7 +204,7 @@ def _populate_strides(node, expansion_specification):
                     it.stride = 1
 
 
-def _populate_storages(self, expansion_specification):
+def _populate_storages(expansion_specification: List[ExpansionItem]):
     assert all(isinstance(es, ExpansionItem) for es in expansion_specification)
     innermost_axes = set(dcir.Axis.dims_3d())
     tiled_axes = set()
@@ -219,7 +222,7 @@ def _populate_storages(self, expansion_specification):
                     tiled_axes.remove(it.axis)
 
 
-def _populate_cpu_schedules(self, expansion_specification):
+def _populate_cpu_schedules(expansion_specification: List[ExpansionItem]):
     is_outermost = True
     for es in expansion_specification:
         if isinstance(es, Map):
@@ -231,7 +234,7 @@ def _populate_cpu_schedules(self, expansion_specification):
                     es.schedule = dace.ScheduleType.Default
 
 
-def _populate_gpu_schedules(self, expansion_specification):
+def _populate_gpu_schedules(expansion_specification: List[ExpansionItem]):
     # On GPU if any dimension is tiled and has a contiguous map in the same axis further in
     # pick those two maps as Device/ThreadBlock maps. If not, Make just device map with
     # default blocksizes
@@ -264,16 +267,16 @@ def _populate_gpu_schedules(self, expansion_specification):
                         es.schedule = dace.ScheduleType.Default
 
 
-def _populate_schedules(self, expansion_specification):
+def _populate_schedules(node: StencilComputation, expansion_specification: List[ExpansionItem]):
     assert all(isinstance(es, ExpansionItem) for es in expansion_specification)
-    assert hasattr(self, "_device")
-    if self.device == dace.DeviceType.GPU:
-        _populate_gpu_schedules(self, expansion_specification)
+    assert hasattr(node, "_device")
+    if node.device == dace.DeviceType.GPU:
+        _populate_gpu_schedules(expansion_specification)
     else:
-        _populate_cpu_schedules(self, expansion_specification)
+        _populate_cpu_schedules(expansion_specification)
 
 
-def _collapse_maps_gpu(self, expansion_specification):
+def _collapse_maps_gpu(expansion_specification: List[ExpansionItem]) -> List[ExpansionItem]:
     def _union_map_items(last_item, next_item):
         if last_item.schedule == next_item.schedule:
             return (
@@ -304,7 +307,7 @@ def _collapse_maps_gpu(self, expansion_specification):
             ),
         )
 
-    res_items = []
+    res_items: List[ExpansionItem] = []
     for item in expansion_specification:
         if isinstance(item, Map):
             if not res_items or not isinstance(res_items[-1], Map):
@@ -321,8 +324,8 @@ def _collapse_maps_gpu(self, expansion_specification):
     return res_items
 
 
-def _collapse_maps_cpu(self, expansion_specification):
-    res_items = []
+def _collapse_maps_cpu(expansion_specification: List[ExpansionItem]) -> List[ExpansionItem]:
+    res_items: List[ExpansionItem] = []
     for item in expansion_specification:
         if isinstance(item, Map):
             if (
@@ -357,18 +360,18 @@ def _collapse_maps_cpu(self, expansion_specification):
     return res_items
 
 
-def _collapse_maps(self, expansion_specification):
-    assert hasattr(self, "_device")
-    if self.device == dace.DeviceType.GPU:
-        res_items = _collapse_maps_gpu(self, expansion_specification)
+def _collapse_maps(node: StencilComputation, expansion_specification: List[ExpansionItem]):
+    assert hasattr(node, "_device")
+    if node.device == dace.DeviceType.GPU:
+        res_items = _collapse_maps_gpu(expansion_specification)
     else:
-        res_items = _collapse_maps_cpu(self, expansion_specification)
+        res_items = _collapse_maps_cpu(expansion_specification)
     expansion_specification.clear()
     expansion_specification.extend(res_items)
 
 
 def make_expansion_order(
-    node: "StencilComputation", expansion_order: Union[List[str], List[ExpansionItem]]
+    node: StencilComputation, expansion_order: Union[List[str], List[ExpansionItem]]
 ) -> List[ExpansionItem]:
     if expansion_order is None:
         return None
@@ -384,11 +387,11 @@ def make_expansion_order(
     _populate_strides(node, expansion_specification)
     _populate_schedules(node, expansion_specification)
     _collapse_maps(node, expansion_specification)
-    _populate_storages(node, expansion_specification)
+    _populate_storages(expansion_specification)
     return expansion_specification
 
 
-def _k_inside_dims(node: "StencilComputation"):
+def _k_inside_dims(node: StencilComputation):
     # Putting K inside of i or j is valid if
     # * K parallel or
     # * All reads with k-offset to values modified in same HorizontalExecution are not
@@ -438,7 +441,7 @@ def _k_inside_dims(node: "StencilComputation"):
     return res
 
 
-def _k_inside_stages(node: "StencilComputation"):
+def _k_inside_stages(node: StencilComputation):
     # Putting K inside of stages is valid if
     # * K parallel
     # * not "ahead" in order of iteration to fields that are modified in previous
@@ -482,7 +485,7 @@ def _k_inside_stages(node: "StencilComputation"):
 
 @_register_validity_check
 def _sequential_as_loops(
-    node: "StencilComputation", expansion_specification: List[ExpansionItem]
+    node: StencilComputation, expansion_specification: List[ExpansionItem]
 ) -> bool:
     # K can't be Map if not parallel
     if node.oir_node.loop_order != common.LoopOrder.PARALLEL and any(
@@ -510,7 +513,7 @@ def _stages_inside_sections(expansion_specification: List[ExpansionItem], **kwar
 
 @_register_validity_check
 def _k_inside_ij_valid(
-    node: "StencilComputation", expansion_specification: List[ExpansionItem]
+    node: StencilComputation, expansion_specification: List[ExpansionItem]
 ) -> bool:
     # OIR defines that horizontal maps go inside vertical K loop (i.e. all grid points are updated in a
     # HorizontalExecution before the computation of the next one is executed.).  Under certain conditions the semantics
@@ -527,7 +530,7 @@ def _k_inside_ij_valid(
 
 @_register_validity_check
 def _k_inside_stages_valid(
-    node: "StencilComputation", expansion_specification: List[ExpansionItem]
+    node: StencilComputation, expansion_specification: List[ExpansionItem]
 ) -> bool:
     # OIR defines that all horizontal executions of a VerticalLoopSection are run per level. Under certain conditions
     # the semantics remain unchanged even if the k loop is run per horizontal execution. See `_k_inside_stages` for
@@ -544,7 +547,7 @@ def _k_inside_stages_valid(
 
 @_register_validity_check
 def _ij_outside_sections_valid(
-    node: "StencilComputation", expansion_specification: List[ExpansionItem]
+    node: StencilComputation, expansion_specification: List[ExpansionItem]
 ) -> bool:
     # If there are multiple horizontal executions in any section, IJ iteration must go inside sections.
     # TODO: do mergeability checks on a per-axis basis.
@@ -598,7 +601,7 @@ def _iterates_domain(expansion_specification: List[ExpansionItem], **kwargs) -> 
     return True
 
 
-def is_expansion_order_valid(node: "StencilComputation", expansion_order) -> bool:
+def is_expansion_order_valid(node: StencilComputation, expansion_order) -> bool:
     """Check if a given expansion specification valid.
 
     That is, it is semantically valid for the StencilComputation node that is to be configured and currently
