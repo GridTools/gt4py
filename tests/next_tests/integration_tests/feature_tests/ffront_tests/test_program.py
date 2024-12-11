@@ -253,6 +253,7 @@ def test_dimensions_domain(cartesian_case):
         cases.run(cartesian_case, empty_domain_program, a, out_field, offset_provider={})
 
 
+@pytest.mark.uses_origin
 def test_out_field_arg_with_non_zero_domain_start(cartesian_case, copy_program_def):
     copy_program = gtx.program(copy_program_def, backend=cartesian_case.backend)
 
@@ -268,6 +269,7 @@ def test_out_field_arg_with_non_zero_domain_start(cartesian_case, copy_program_d
     cases.verify(cartesian_case, copy_program, inp, out=out, ref=ref)
 
 
+@pytest.mark.uses_origin
 def test_in_field_arg_with_non_zero_domain_start(cartesian_case, copy_program_def):
     @gtx.field_operator
     def identity(a: cases.IField) -> cases.IField:
