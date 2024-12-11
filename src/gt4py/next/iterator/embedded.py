@@ -1160,12 +1160,11 @@ def _shift_field_indices(
 def np_as_located_field(
     *axes: common.Dimension, origin: Optional[dict[common.Dimension, int]] = None
 ) -> Callable[[np.ndarray], common.Field]:
-    if __debug__:
-        warnings.warn(
-            "`np_as_located_field()` is deprecated, use `gtx.as_field()`",
-            DeprecationWarning,
-            stacklevel=2,
-        )
+    warnings.warn(
+        "`np_as_located_field()` is deprecated, use `gtx.as_field()`",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     origin = origin or {}
 
     def _maker(a) -> common.Field:
