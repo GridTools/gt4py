@@ -171,6 +171,7 @@ class NdArrayField(
     ) -> NdArrayField:
         domain = common.domain(domain)
         xp = cls.array_ns
+
         xp_dtype = None if dtype is None else xp.dtype(core_defs.dtype(dtype).scalar_type)
         array = xp.asarray(data, dtype=xp_dtype)
 
