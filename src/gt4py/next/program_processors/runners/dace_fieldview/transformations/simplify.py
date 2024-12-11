@@ -996,10 +996,6 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
             else:
                 assert isinstance(inner_desc, dace.data.Scalar)
                 assert len(new_strides) == 0
-                # we convert the scalar data to array to avoid a gpu codegen error
-                nsdfg_node.sdfg.arrays[inner_data] = dace.data.Array(
-                    inner_desc.dtype, (1,), inner_desc.transient
-                )
             for stride in new_strides:
                 for sym in stride.free_symbols:
                     nsdfg_node.sdfg.add_symbol(str(sym), sym.dtype)
