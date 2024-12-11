@@ -115,7 +115,6 @@ def handle_invalid_type(conn: Any, *args: Any, **kwargs: Any) -> None:
 type_handlers_connectivity_args = {
     embedded.NeighborTableOffsetProvider: handle_connectivity,
     nd_array_field.NumPyArrayConnectivityField: handle_connectivity,
-    nd_array_field.CuPyArrayConnectivityField: handle_connectivity,
     common.Dimension: handle_dimension,
 }
 
