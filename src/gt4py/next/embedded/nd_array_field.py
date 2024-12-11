@@ -169,10 +169,10 @@ class NdArrayField(
         domain: common.DomainLike,
         dtype: Optional[core_defs.DTypeLike] = None,
     ) -> NdArrayField:
+        domain = common.domain(domain)
         xp = cls.array_ns
         xp_dtype = None if dtype is None else xp.dtype(core_defs.dtype(dtype).scalar_type)
         array = xp.asarray(data, dtype=xp_dtype)
-        domain = common.domain(domain)
 
         if dtype is not None:
             assert array.dtype.type == core_defs.dtype(dtype).scalar_type
