@@ -30,7 +30,7 @@ from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_python_codegen,
     utility as dace_gtir_utils,
 )
-from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.type_system import type_info as ti, type_specifications as ts
 
 
 if TYPE_CHECKING:
@@ -366,36 +366,36 @@ def translate_as_fieldop(
     """
     assert isinstance(node, gtir.FunCall)
     assert cpm.is_call_to(node.fun, "as_fieldop")
-    assert isinstance(node.type, ts.FieldType)
 
     fun_node = node.fun
     assert len(fun_node.args) == 2
-    stencil_expr, domain_expr = fun_node.args
+    fieldop_expr, domain_expr = fun_node.args
 
-    if isinstance(stencil_expr, gtir.Lambda):
-        # Default case, handled below: the argument expression is a lambda function
-        # representing the stencil operation to be computed over the field domain.
-        pass
-    elif cpm.is_ref_to(stencil_expr, "deref"):
+    assert isinstance(node.type, ts.FieldType)
+    if cpm.is_ref_to(fieldop_expr, "deref"):
         # Special usage of 'deref' as argument to fieldop expression, to pass a scalar
         # value to 'as_fieldop' function. It results in broadcasting the scalar value
         # over the field domain.
         stencil_expr = im.lambda_("a")(im.deref("a"))
-        stencil_expr.expr.type = node.type.dtype  # type: ignore[attr-defined]
+        stencil_expr.expr.type = node.type.dtype
+    elif isinstance(fieldop_expr, gtir.Lambda):
+        # Default case, handled below: the argument expression is a lambda function
+        # representing the stencil operation to be computed over the field domain.
+        stencil_expr = fieldop_expr
     else:
         raise NotImplementedError(
-            f"Expression type '{type(stencil_expr)}' not supported as argument to 'as_fieldop' node."
+            f"Expression type '{type(fieldop_expr)}' not supported as argument to 'as_fieldop' node."
         )
 
     # parse the domain of the field operator
     domain = extract_domain(domain_expr)
 
     # visit the list of arguments to be passed to the lambda expression
-    stencil_args = [_parse_fieldop_arg(arg, sdfg, state, sdfg_builder, domain) for arg in node.args]
+    fieldop_args = [_parse_fieldop_arg(arg, sdfg, state, sdfg_builder, domain) for arg in node.args]
 
     # represent the field operator as a mapped tasklet graph, which will range over the field domain
     taskgen = gtir_dataflow.LambdaToDataflow(sdfg, state, sdfg_builder)
-    input_edges, output_edge = taskgen.visit(stencil_expr, args=stencil_args)
+    input_edges, output_edge = taskgen.apply(stencil_expr, args=fieldop_args)
 
     return _create_field_operator(
         sdfg, state, domain, node.type, sdfg_builder, input_edges, output_edge
@@ -654,7 +654,7 @@ def translate_tuple_get(
 
     if not isinstance(node.args[0], gtir.Literal):
         raise ValueError("Tuple can only be subscripted with compile-time constants.")
-    assert node.args[0].type == dace_utils.as_itir_type(INDEX_DTYPE)
+    assert ti.is_integral(node.args[0].type)
     index = int(node.args[0].value)
 
     data_nodes = sdfg_builder.visit(

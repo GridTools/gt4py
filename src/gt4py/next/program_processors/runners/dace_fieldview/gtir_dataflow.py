@@ -10,10 +10,22 @@ from __future__ import annotations
 
 import abc
 import dataclasses
-from typing import Any, Dict, Final, List, Optional, Protocol, Set, Tuple, TypeAlias, Union
+from typing import (
+    Any,
+    Dict,
+    Final,
+    List,
+    Optional,
+    Protocol,
+    Sequence,
+    Set,
+    Tuple,
+    TypeAlias,
+    Union,
+)
 
 import dace
-import dace.subsets as sbs
+from dace import subsets as sbs
 
 from gt4py import eve
 from gt4py.next import common as gtx_common
@@ -68,7 +80,7 @@ class MemletExpr:
 
     dc_node: dace.nodes.AccessNode
     gt_dtype: itir_ts.ListType | ts.ScalarType
-    subset: sbs.Indices | sbs.Range
+    subset: sbs.Range
 
 
 @dataclasses.dataclass(frozen=True)
@@ -1264,39 +1276,38 @@ class LambdaToDataflow(eve.NodeVisitor):
         elif cpm.is_applied_shift(node):
             return self._visit_shift(node)
 
+        elif isinstance(node.fun, gtir.Lambda):
+            raise AssertionError("Lambda node should be visited with 'apply()' method.")
+
         elif isinstance(node.fun, gtir.SymRef):
             return self._visit_generic_builtin(node)
 
         else:
             raise NotImplementedError(f"Invalid 'FunCall' node: {node}.")
 
-    def visit_Lambda(
-        self, node: gtir.Lambda, args: list[IteratorExpr | MemletExpr | SymbolExpr]
-    ) -> tuple[list[DataflowInputEdge], DataflowOutputEdge]:
-        for p, arg in zip(node.params, args, strict=True):
-            self.symbol_map[str(p.id)] = arg
-        output_expr: DataExpr = self.visit(node.expr)
-        if isinstance(output_expr, ValueExpr):
-            return self.input_edges, DataflowOutputEdge(self.state, output_expr)
+    def visit_Lambda(self, node: gtir.Lambda) -> DataflowOutputEdge:
+        result: DataExpr = self.visit(node.expr)
 
-        if isinstance(output_expr, MemletExpr):
+        if isinstance(result, ValueExpr):
+            return DataflowOutputEdge(self.state, result)
+
+        if isinstance(result, MemletExpr):
             # special case where the field operator is simply copying data from source to destination node
-            output_dtype = output_expr.dc_node.desc(self.sdfg).dtype
+            output_dtype = result.dc_node.desc(self.sdfg).dtype
             tasklet_node = self._add_tasklet("copy", {"__inp"}, {"__out"}, "__out = __inp")
             self._add_input_data_edge(
-                output_expr.dc_node,
-                output_expr.subset,
+                result.dc_node,
+                result.subset,
                 tasklet_node,
                 "__inp",
             )
         else:
-            assert isinstance(output_expr, SymbolExpr)
             # even simpler case, where a constant value is written to destination node
-            output_dtype = output_expr.dc_dtype
-            tasklet_node = self._add_tasklet("write", {}, {"__out"}, f"__out = {output_expr.value}")
+            output_dtype = result.dc_dtype
+            tasklet_node = self._add_tasklet("write", {}, {"__out"}, f"__out = {result.value}")
 
         output_expr = self._construct_tasklet_result(output_dtype, tasklet_node, "__out")
-        return self.input_edges, DataflowOutputEdge(self.state, output_expr)
+        return DataflowOutputEdge(self.state, output_expr)
 
     def visit_Literal(self, node: gtir.Literal) -> SymbolExpr:
         dc_dtype = dace_utils.as_dace_type(node.type)
@@ -1309,3 +1320,38 @@ class LambdaToDataflow(eve.NodeVisitor):
         # if not in the lambda symbol map, this must be a symref to a builtin function
         assert param in gtir_python_codegen.MATH_BUILTINS_MAPPING
         return SymbolExpr(param, dace.string)
+
+    def apply(
+        self,
+        node: gtir.Lambda,
+        args: Sequence[IteratorExpr | MemletExpr | SymbolExpr],
+    ) -> tuple[list[DataflowInputEdge], DataflowOutputEdge]:
+        # lambda arguments are mapped to symbols defined in lambda scope
+        prev_symbols: dict[
+            str,
+            Optional[IteratorExpr | MemletExpr | SymbolExpr],
+        ] = {}
+        for p, arg in zip(node.params, args, strict=True):
+            symbol_name = str(p.id)
+            prev_symbols[symbol_name] = self.symbol_map.get(symbol_name, None)
+            self.symbol_map[symbol_name] = arg
+
+        if cpm.is_let(node.expr):
+            let_node = node.expr
+            let_args = [self.visit(arg) for arg in let_node.args]
+            assert isinstance(let_node.fun, gtir.Lambda)
+            input_edges, output_edge = self.apply(let_node.fun, args=let_args)
+
+        else:
+            # this lambda is not a let-statement, but a stencil expression
+            output_edge = self.visit_Lambda(node)
+            input_edges = self.input_edges
+
+        # remove locally defined lambda symbols and restore previous symbols
+        for symbol_name, prev_value in prev_symbols.items():
+            if prev_value is None:
+                self.symbol_map.pop(symbol_name)
+            else:
+                self.symbol_map[symbol_name] = prev_value
+
+        return input_edges, output_edge
