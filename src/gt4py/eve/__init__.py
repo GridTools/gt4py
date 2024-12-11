@@ -71,7 +71,7 @@ from .type_definitions import NOTHING, ConstrainedStr, Enum, IntEnum, NothingTyp
 from .visitors import NodeTranslator, NodeVisitor
 
 
-__all__ = [
+__all__ = [  # noqa: RUF022 `__all__` is not sorted
     # version
     "__version__",
     "__version_info__",
