@@ -52,10 +52,7 @@ def handle_neighbortable(
     conn: embedded.NeighborTableOffsetProvider,  # type: ignore
     zero_tuple: tuple[int, ...],
     device: core_defs.DeviceType,
-    copy: bool,
 ) -> ConnectivityArg:
-    if not copy:
-        return (conn.table, zero_tuple)  # type: ignore
     return (_ensure_is_on_device(conn.table, device), zero_tuple)  # type: ignore
 
 
@@ -65,8 +62,6 @@ def handle_connectivity_field(
     device: core_defs.DeviceType,
     copy: bool,
 ) -> ConnectivityArg:
-    if not copy:
-        return (conn.ndarray, zero_tuple)
     return (_ensure_is_on_device(conn.ndarray, device), zero_tuple)
 
 
@@ -150,13 +145,12 @@ def _ensure_is_on_device(
 def extract_connectivity_args(
     offset_provider: dict[str, common.Connectivity | common.Dimension],
     device: core_defs.DeviceType,
-    copy: bool = False,
 ) -> list[ConnectivityArg]:
     zero_tuple = (0, 0)
     args: list[tuple[core_defs.NDArrayObject, tuple[int, ...]]] = []
     for conn in offset_provider.values():
         handler = type_handlers_connectivity_args.get(type(conn), handle_invalid_type)
-        result = handler(conn, zero_tuple, device, copy)  # type: ignore
+        result = handler(conn, zero_tuple, device)  # type: ignore
         if result:
             args.append(result)
     return args
