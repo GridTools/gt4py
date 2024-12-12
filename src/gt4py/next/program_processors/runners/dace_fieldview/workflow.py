@@ -13,6 +13,9 @@ import functools
 from typing import Optional
 
 import dace
+import dace.transformation
+import dace.transformation.auto
+import dace.transformation.auto.auto_optimize
 import factory
 
 from gt4py._core import definitions as core_defs
@@ -56,15 +59,31 @@ class DaCeTranslator(
             ir, common.offset_provider_to_type(offset_provider), column_dim
         )
 
+        # TODO(phimuell): check auto-optimize pipeline on gpu for scan field operators
+        use_gtx_transformations = not on_gpu
+
         if auto_opt:
-            gtx_transformations.gt_auto_optimize(sdfg, gpu=on_gpu)
+            if use_gtx_transformations:
+                gtx_transformations.gt_auto_optimize(sdfg, gpu=on_gpu)
+            else:
+                sdfg.simplify()
+                device_type = dace.dtypes.DeviceType.GPU if on_gpu else dace.dtypes.DeviceType.CPU
+                sdfg = dace.transformation.auto.auto_optimize.auto_optimize(
+                    sdfg, device_type, use_gpu_storage=on_gpu
+                )
         elif on_gpu:
-            # We run simplify to bring the SDFG into a canonical form that the gpu transformations
-            # can handle. This is a workaround for an issue with scalar expressions that are
-            # promoted to symbolic expressions and computed on the host (CPU), but the intermediate
-            # result is written to a GPU global variable (https://github.com/spcl/dace/issues/1773).
-            gtx_transformations.gt_simplify(sdfg)
-            gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)
+            if use_gtx_transformations:
+                # We run simplify to bring the SDFG into a canonical form that the gpu transformations
+                # can handle. This is a workaround for an issue with scalar expressions that are
+                # promoted to symbolic expressions and computed on the host (CPU), but the intermediate
+                # result is written to a GPU global variable (https://github.com/spcl/dace/issues/1773).
+                gtx_transformations.gt_simplify(sdfg)
+                gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)
+            else:
+                sdfg.simplify()
+                dace.transformation.auto.auto_optimize.apply_gpu_storage(sdfg)
+                sdfg.apply_gpu_transformations()
+                sdfg.simplify()
 
         return sdfg
 
