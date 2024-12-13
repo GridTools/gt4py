@@ -13,7 +13,7 @@ import dataclasses
 from typing import TYPE_CHECKING, Final, Iterable, Optional, Protocol, Sequence, TypeAlias
 
 import dace
-import dace.subsets as sbs
+from dace import subsets as dace_subsets
 
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.ffront import fbuiltins as gtx_fbuiltins
@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 
 def _get_domain_indices(
     dims: Sequence[gtx_common.Dimension], offsets: Optional[Sequence[dace.symbolic.SymExpr]] = None
-) -> sbs.Indices:
+) -> dace_subsets.Indices:
     """
     Helper function to construct the list of indices for a field domain, applying
     an optional offset in each dimension as start index.
@@ -55,9 +55,9 @@ def _get_domain_indices(
     """
     index_variables = [dace.symbolic.SymExpr(dace_gtir_utils.get_map_variable(dim)) for dim in dims]
     if offsets is None:
-        return sbs.Indices(index_variables)
+        return dace_subsets.Indices(index_variables)
     else:
-        return sbs.Indices(
+        return dace_subsets.Indices(
             [
                 index - offset if offset != 0 else index
                 for index, offset in zip(index_variables, offsets, strict=True)
@@ -96,7 +96,7 @@ class FieldopData:
         """Helper method to access a field in local view, given the compute domain of a field operator."""
         if isinstance(self.gt_type, ts.ScalarType):
             return gtir_dataflow.MemletExpr(
-                dc_node=self.dc_node, gt_dtype=self.gt_type, subset=sbs.Indices([0])
+                dc_node=self.dc_node, gt_dtype=self.gt_type, subset=dace_subsets.Indices([0])
             )
 
         if isinstance(self.gt_type, ts.FieldType):
@@ -263,7 +263,7 @@ def _create_field_operator(
 
     dataflow_output_desc = output_edge.result.dc_node.desc(sdfg)
 
-    field_subset = sbs.Range.from_indices(field_indices)
+    field_subset = dace_subsets.Range.from_indices(field_indices)
     if isinstance(output_edge.result.gt_dtype, ts.ScalarType):
         assert output_edge.result.gt_dtype == node_type.dtype
         assert isinstance(dataflow_output_desc, dace.data.Scalar)
@@ -280,7 +280,7 @@ def _create_field_operator(
         field_dims.append(output_edge.result.gt_dtype.offset_type)
         field_shape.extend(dataflow_output_desc.shape)
         field_offset.extend(dataflow_output_desc.offset)
-        field_subset = field_subset + sbs.Range.from_array(dataflow_output_desc)
+        field_subset = field_subset + dace_subsets.Range.from_array(dataflow_output_desc)
 
     # allocate local temporary storage
     field_name, _ = sdfg.add_temp_transient(field_shape, dataflow_output_desc.dtype)

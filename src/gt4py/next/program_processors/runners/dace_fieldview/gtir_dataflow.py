@@ -25,7 +25,7 @@ from typing import (
 )
 
 import dace
-from dace import subsets as sbs
+from dace import subsets as dace_subsets
 
 from gt4py import eve
 from gt4py.next import common as gtx_common
@@ -80,7 +80,7 @@ class MemletExpr:
 
     dc_node: dace.nodes.AccessNode
     gt_dtype: itir_ts.ListType | ts.ScalarType
-    subset: sbs.Range
+    subset: dace_subsets.Range
 
 
 @dataclasses.dataclass(frozen=True)
@@ -116,7 +116,7 @@ class IteratorExpr:
     field_domain: list[tuple[gtx_common.Dimension, dace.symbolic.SymExpr]]
     indices: dict[gtx_common.Dimension, DataExpr]
 
-    def get_memlet_subset(self, sdfg: dace.SDFG) -> sbs.Range:
+    def get_memlet_subset(self, sdfg: dace.SDFG) -> dace_subsets.Range:
         if not all(isinstance(self.indices[dim], SymbolExpr) for dim, _ in self.field_domain):
             raise ValueError(f"Cannot deref iterator {self}.")
 
@@ -129,7 +129,7 @@ class IteratorExpr:
             assert len(field_desc.shape) == len(self.field_domain)
             field_domain = self.field_domain
 
-        return sbs.Range.from_string(
+        return dace_subsets.Range.from_string(
             ",".join(
                 str(self.indices[dim].value - offset)  # type: ignore[union-attr]
                 if dim in self.indices
@@ -164,7 +164,7 @@ class MemletInputEdge(DataflowInputEdge):
 
     state: dace.SDFGState
     source: dace.nodes.AccessNode
-    subset: sbs.Range
+    subset: dace_subsets.Range
     dest: dace.nodes.AccessNode | dace.nodes.Tasklet
     dest_conn: Optional[str]
 
@@ -214,7 +214,7 @@ class DataflowOutputEdge:
         self,
         mx: dace.nodes.MapExit,
         dest: dace.nodes.AccessNode,
-        subset: sbs.Range,
+        subset: dace_subsets.Range,
     ) -> None:
         # retrieve the node which writes the result
         last_node = self.state.in_edges(self.result.dc_node)[0].src
@@ -270,8 +270,9 @@ def get_reduce_params(node: gtir.FunCall) -> tuple[str, SymbolExpr, SymbolExpr]:
 
 class LambdaToDataflow(eve.NodeVisitor):
     """
-    Translates an `ir.Lambda` expression to a dataflow graph.
+    Visitor class to translate a `Lambda` expression to a dataflow graph.
 
+    This visitor should be applied by calling `apply()` method on a `Lambda` IR.
     The dataflow graph generated here typically represents the stencil function
     of a field operator. It only computes single elements or pure local fields,
     in case of neighbor values. In case of local fields, the dataflow contains
@@ -305,7 +306,7 @@ class LambdaToDataflow(eve.NodeVisitor):
     def _add_input_data_edge(
         self,
         src: dace.nodes.AccessNode,
-        src_subset: sbs.Range,
+        src_subset: dace_subsets.Range,
         dst_node: dace.nodes.Node,
         dst_conn: Optional[str] = None,
         src_offset: Optional[list[dace.symbolic.SymExpr]] = None,
@@ -313,7 +314,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         input_subset = (
             src_subset
             if src_offset is None
-            else sbs.Range(
+            else dace_subsets.Range(
                 (start - off, stop - off, step)
                 for (start, stop, step), off in zip(src_subset, src_offset, strict=True)
             )
@@ -524,7 +525,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         # add new termination point for the field parameter
         self._add_input_data_edge(
             arg_expr.field,
-            sbs.Range.from_array(field_desc),
+            dace_subsets.Range.from_array(field_desc),
             deref_node,
             "field",
             src_offset=[offset for (_, offset) in arg_expr.field_domain],
@@ -592,7 +593,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             MemletExpr(
                 dc_node=it.field,
                 gt_dtype=node.type,
-                subset=sbs.Range.from_string(
+                subset=dace_subsets.Range.from_string(
                     ",".join(
                         str(it.indices[dim].value - offset)  # type: ignore[union-attr]
                         if dim != offset_provider.codomain
@@ -608,7 +609,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             MemletExpr(
                 dc_node=self.state.add_access(connectivity),
                 gt_dtype=node.type,
-                subset=sbs.Range.from_string(
+                subset=dace_subsets.Range.from_string(
                     f"{origin_index.value}, 0:{offset_provider.max_neighbors}"
                 ),
             )
@@ -770,7 +771,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                     gt_dtype=itir_ts.ListType(
                         element_type=node.type.element_type, offset_type=offset_type
                     ),
-                    subset=sbs.Range.from_string(
+                    subset=dace_subsets.Range.from_string(
                         f"{origin_map_index}, 0:{offset_provider_type.max_neighbors}"
                     ),
                 )
@@ -920,7 +921,9 @@ class LambdaToDataflow(eve.NodeVisitor):
             )
         self._add_input_data_edge(
             connectivity_node,
-            sbs.Range.from_string(f"{origin_map_index}, 0:{offset_provider_type.max_neighbors}"),
+            dace_subsets.Range.from_string(
+                f"{origin_map_index}, 0:{offset_provider_type.max_neighbors}"
+            ),
             nsdfg_node,
             "neighbor_indices",
         )
@@ -1093,7 +1096,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         )
         self._add_input_data_edge(
             offset_table_node,
-            sbs.Range.from_array(offset_table_node.desc(self.sdfg)),
+            dace_subsets.Range.from_array(offset_table_node.desc(self.sdfg)),
             tasklet_node,
             "table",
         )
@@ -1139,7 +1142,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             shifted_indices[neighbor_dim] = MemletExpr(
                 dc_node=offset_table_node,
                 gt_dtype=it.gt_dtype,
-                subset=sbs.Indices([origin_index.value, offset_expr.value]),
+                subset=dace_subsets.Indices([origin_index.value, offset_expr.value]),
             )
         else:
             # dynamic offset: we cannot use a memlet to retrieve the offset value, use a tasklet node
@@ -1277,7 +1280,8 @@ class LambdaToDataflow(eve.NodeVisitor):
             return self._visit_shift(node)
 
         elif isinstance(node.fun, gtir.Lambda):
-            raise AssertionError("Lambda node should be visited with 'apply()' method.")
+            # Lambda node should be visited with 'apply()' method.
+            raise ValueError(f"Unexpected lambda in 'FunCall' node: {node}.")
 
         elif isinstance(node.fun, gtir.SymRef):
             return self._visit_generic_builtin(node)
@@ -1326,32 +1330,39 @@ class LambdaToDataflow(eve.NodeVisitor):
         node: gtir.Lambda,
         args: Sequence[IteratorExpr | MemletExpr | SymbolExpr],
     ) -> tuple[list[DataflowInputEdge], DataflowOutputEdge]:
-        # lambda arguments are mapped to symbols defined in lambda scope
-        prev_symbols: dict[
-            str,
-            Optional[IteratorExpr | MemletExpr | SymbolExpr],
-        ] = {}
-        for p, arg in zip(node.params, args, strict=True):
-            symbol_name = str(p.id)
-            prev_symbols[symbol_name] = self.symbol_map.get(symbol_name, None)
-            self.symbol_map[symbol_name] = arg
+        """
+        Entry point for this visitor class.
+
+        This visitor will translate a `Lambda` node into a dataflow graph to be
+        instantiated inside a map scope implementing the field operator.
+        However, this `apply()` method is responsible to recognize the usage of
+        the `Lambda` node, which can be either a let-statement or the stencil expression
+        in local view. The usage of a `Lambda` as let-statement corresponds to computing
+        some results and making them available inside the lambda scope, represented
+        as a nested SDFG. All let-statements, if any, are supposed to be encountered
+        before the stencil expression. In other words, the `Lambda` node representing
+        the stencil expression is always the innermost node.
+        Therefore, the lowering of let-statements results in recursive calls to
+        `apply()` until the stencil expression is found. At that point, it falls
+        back to the `visit()` function.
+        """
+
+        # lambda arguments are mapped to symbols defined in lambda scope.
+        prev_symbol_map = self.symbol_map
+        self.symbol_map = self.symbol_map.copy()
+        self.symbol_map |= {str(p.id): arg for p, arg in zip(node.params, args, strict=True)}
 
         if cpm.is_let(node.expr):
             let_node = node.expr
             let_args = [self.visit(arg) for arg in let_node.args]
             assert isinstance(let_node.fun, gtir.Lambda)
             input_edges, output_edge = self.apply(let_node.fun, args=let_args)
-
         else:
-            # this lambda is not a let-statement, but a stencil expression
-            output_edge = self.visit_Lambda(node)
+            # this lambda node is not a let-statement, but a stencil expression
+            output_edge = self.visit(node)
             input_edges = self.input_edges
 
         # remove locally defined lambda symbols and restore previous symbols
-        for symbol_name, prev_value in prev_symbols.items():
-            if prev_value is None:
-                self.symbol_map.pop(symbol_name)
-            else:
-                self.symbol_map[symbol_name] = prev_value
+        self.symbol_map = prev_symbol_map
 
         return input_edges, output_edge
