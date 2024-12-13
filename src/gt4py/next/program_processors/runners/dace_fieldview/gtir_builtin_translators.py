@@ -13,7 +13,7 @@ import dataclasses
 from typing import TYPE_CHECKING, Any, Final, Iterable, Optional, Protocol, Sequence, TypeAlias
 
 import dace
-from dace import subsets as sbs
+from dace import subsets as dace_subsets
 
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.ffront import fbuiltins as gtx_fbuiltins
@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 
 def _get_domain_indices(
     dims: Sequence[gtx_common.Dimension], offsets: Optional[Sequence[dace.symbolic.SymExpr]] = None
-) -> sbs.Indices:
+) -> dace_subsets.Indices:
     """
     Helper function to construct the list of indices for a field domain, applying
     an optional offset in each dimension as start index.
@@ -56,9 +56,9 @@ def _get_domain_indices(
     """
     index_variables = [dace.symbolic.SymExpr(dace_gtir_utils.get_map_variable(dim)) for dim in dims]
     if offsets is None:
-        return sbs.Indices(index_variables)
+        return dace_subsets.Indices(index_variables)
     else:
-        return sbs.Indices(
+        return dace_subsets.Indices(
             [
                 index - offset if offset != 0 else index
                 for index, offset in zip(index_variables, offsets, strict=True)
@@ -97,7 +97,7 @@ class FieldopData:
         """Helper method to access a field in local view, given the compute domain of a field operator."""
         if isinstance(self.gt_type, ts.ScalarType):
             return gtir_dataflow.MemletExpr(
-                dc_node=self.dc_node, gt_dtype=self.gt_type, subset=sbs.Indices([0])
+                dc_node=self.dc_node, gt_dtype=self.gt_type, subset=dace_subsets.Indices([0])
             )
 
         if isinstance(self.gt_type, ts.FieldType):
@@ -309,13 +309,13 @@ def _create_field_operator(
     """
     domain_dims, domain_offset, domain_shape = _get_field_layout(domain)
     domain_indices = _get_domain_indices(domain_dims, domain_offset)
-    domain_subset = sbs.Range.from_indices(domain_indices)
+    domain_subset = dace_subsets.Range.from_indices(domain_indices)
 
     scan_dim_index: Optional[int] = None
     if scan_dim is not None:
         scan_dim_index = domain_dims.index(scan_dim)
         # we construct the field operator only on the horizontal domain
-        domain_subset = sbs.Range(
+        domain_subset = dace_subsets.Range(
             domain_subset[:scan_dim_index] + domain_subset[scan_dim_index + 1 :]
         )
 
@@ -357,9 +357,9 @@ def _create_field_operator(
                 # the vertical dimension should not belong to the field operator domain
                 # but we need to write it to the output field
                 field_subset = (
-                    sbs.Range(domain_subset[:scan_dim_index])
-                    + sbs.Range.from_array(dataflow_output_desc)
-                    + sbs.Range(domain_subset[scan_dim_index:])
+                    dace_subsets.Range(domain_subset[:scan_dim_index])
+                    + dace_subsets.Range.from_array(dataflow_output_desc)
+                    + dace_subsets.Range(domain_subset[scan_dim_index:])
                 )
             else:
                 assert isinstance(dataflow_output_desc, dace.data.Scalar)
@@ -376,7 +376,7 @@ def _create_field_operator(
             field_dims = [*domain_dims, output_edge.result.gt_dtype.offset_type]
             field_shape = [*domain_shape, dataflow_output_desc.shape[0]]
             field_offset = [*domain_offset, dataflow_output_desc.offset[0]]
-            field_subset = domain_subset + sbs.Range.from_array(dataflow_output_desc)
+            field_subset = domain_subset + dace_subsets.Range.from_array(dataflow_output_desc)
 
         # allocate local temporary storage
         field_name, field_desc = sdfg.add_temp_transient(field_shape, dataflow_output_desc.dtype)
@@ -1112,7 +1112,7 @@ def translate_scan(
     input_edges = []
     for input_connector, arg in lambda_flat_args.items():
         arg_desc = arg.dc_node.desc(sdfg)
-        input_subset = sbs.Range.from_array(arg_desc)
+        input_subset = dace_subsets.Range.from_array(arg_desc)
         input_edge = gtir_dataflow.MemletInputEdge(
             state, arg.dc_node, input_subset, nsdfg_node, input_connector
         )

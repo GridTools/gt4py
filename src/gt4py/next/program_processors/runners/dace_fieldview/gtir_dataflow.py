@@ -13,7 +13,7 @@ import dataclasses
 from typing import Any, Dict, Final, List, Optional, Protocol, Set, Tuple, TypeAlias, Union
 
 import dace
-from dace import subsets as sbs
+from dace import subsets as dace_subsets
 
 from gt4py import eve
 from gt4py.next import common as gtx_common, utils as gtx_utils
@@ -69,7 +69,7 @@ class MemletExpr:
 
     dc_node: dace.nodes.AccessNode
     gt_dtype: itir_ts.ListType | ts.ScalarType
-    subset: sbs.Range
+    subset: dace_subsets.Range
 
 
 @dataclasses.dataclass(frozen=True)
@@ -105,7 +105,7 @@ class IteratorExpr:
     field_domain: list[tuple[gtx_common.Dimension, dace.symbolic.SymExpr]]
     indices: dict[gtx_common.Dimension, DataExpr]
 
-    def get_memlet_subset(self, sdfg: dace.SDFG) -> sbs.Range:
+    def get_memlet_subset(self, sdfg: dace.SDFG) -> dace_subsets.Range:
         if not all(isinstance(self.indices[dim], SymbolExpr) for dim, _ in self.field_domain):
             raise ValueError(f"Cannot deref iterator {self}.")
 
@@ -118,7 +118,7 @@ class IteratorExpr:
             assert len(field_desc.shape) == len(self.field_domain)
             field_domain = self.field_domain
 
-        return sbs.Range.from_string(
+        return dace_subsets.Range.from_string(
             ",".join(
                 str(self.indices[dim].value - offset)  # type: ignore[union-attr]
                 if dim in self.indices
@@ -153,7 +153,7 @@ class MemletInputEdge(DataflowInputEdge):
 
     state: dace.SDFGState
     source: dace.nodes.AccessNode
-    subset: sbs.Range
+    subset: dace_subsets.Range
     dest: dace.nodes.AccessNode | dace.nodes.Tasklet
     dest_conn: Optional[str]
 
@@ -207,7 +207,7 @@ class DataflowOutputEdge:
         self,
         map_exit: Optional[dace.nodes.MapExit],
         dest: dace.nodes.AccessNode,
-        subset: sbs.Range,
+        subset: dace_subsets.Range,
     ) -> None:
         # retrieve the node which writes the result
         last_node = self.state.in_edges(self.result.dc_node)[0].src
@@ -310,7 +310,7 @@ class LambdaToDataflow(eve.NodeVisitor):
     def _add_input_data_edge(
         self,
         src: dace.nodes.AccessNode,
-        src_subset: sbs.Range,
+        src_subset: dace_subsets.Range,
         dst_node: dace.nodes.Node,
         dst_conn: Optional[str] = None,
         src_offset: Optional[list[dace.symbolic.SymExpr]] = None,
@@ -318,7 +318,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         input_subset = (
             src_subset
             if src_offset is None
-            else sbs.Range(
+            else dace_subsets.Range(
                 (start - off, stop - off, step)
                 for (start, stop, step), off in zip(src_subset, src_offset, strict=True)
             )
@@ -529,7 +529,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         # add new termination point for the field parameter
         self._add_input_data_edge(
             arg_expr.field,
-            sbs.Range.from_array(field_desc),
+            dace_subsets.Range.from_array(field_desc),
             deref_node,
             "field",
             src_offset=[offset for (_, offset) in arg_expr.field_domain],
@@ -600,7 +600,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             nsdfg.add_edge(entry_state, fstate, dace.InterstateEdge(condition="not (__cond)"))
 
         nsdfg_symbol_mapping = {}
-        input_memlets: dict[str, tuple[dace.nodes.AccessNode, Optional[sbs.Range]]] = {}
+        input_memlets: dict[str, tuple[dace.nodes.AccessNode, Optional[dace_subsets.Range]]] = {}
 
         if isinstance(condition_value, SymbolExpr):
             nsdfg.add_symbol("__cond", dace.dtypes.bool)
@@ -608,7 +608,10 @@ class LambdaToDataflow(eve.NodeVisitor):
         else:
             nsdfg.add_scalar("__cond", dace.dtypes.bool)
             if isinstance(condition_value, ValueExpr):
-                input_memlets["__cond"] = (condition_value.dc_node, sbs.Range.from_string("0"))
+                input_memlets["__cond"] = (
+                    condition_value.dc_node,
+                    dace_subsets.Range.from_string("0"),
+                )
             else:
                 assert isinstance(condition_value, MemletExpr)
                 input_memlets["__cond"] = (condition_value.dc_node, condition_value.subset)
@@ -628,7 +631,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                 if isinstance(arg, IteratorExpr):
                     arg_node = arg.field
                     arg_desc = arg_node.desc(self.sdfg)
-                    arg_subset = sbs.Range.from_array(arg_desc)
+                    arg_subset = dace_subsets.Range.from_array(arg_desc)
 
                 else:
                     assert isinstance(arg, (MemletExpr, ValueExpr))
@@ -815,7 +818,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             MemletExpr(
                 dc_node=it.field,
                 gt_dtype=node.type,
-                subset=sbs.Range.from_string(
+                subset=dace_subsets.Range.from_string(
                     ",".join(
                         str(it.indices[dim].value - offset)  # type: ignore[union-attr]
                         if dim != offset_provider.codomain
@@ -831,7 +834,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             MemletExpr(
                 dc_node=self.state.add_access(connectivity),
                 gt_dtype=node.type,
-                subset=sbs.Range.from_string(
+                subset=dace_subsets.Range.from_string(
                     f"{origin_index.value}, 0:{offset_provider.max_neighbors}"
                 ),
             )
@@ -993,7 +996,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                     gt_dtype=itir_ts.ListType(
                         element_type=node.type.element_type, offset_type=offset_type
                     ),
-                    subset=sbs.Range.from_string(
+                    subset=dace_subsets.Range.from_string(
                         f"{origin_map_index}, 0:{offset_provider_type.max_neighbors}"
                     ),
                 )
@@ -1143,7 +1146,9 @@ class LambdaToDataflow(eve.NodeVisitor):
             )
         self._add_input_data_edge(
             connectivity_node,
-            sbs.Range.from_string(f"{origin_map_index}, 0:{offset_provider_type.max_neighbors}"),
+            dace_subsets.Range.from_string(
+                f"{origin_map_index}, 0:{offset_provider_type.max_neighbors}"
+            ),
             nsdfg_node,
             "neighbor_indices",
         )
@@ -1316,7 +1321,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         )
         self._add_input_data_edge(
             offset_table_node,
-            sbs.Range.from_array(offset_table_node.desc(self.sdfg)),
+            dace_subsets.Range.from_array(offset_table_node.desc(self.sdfg)),
             tasklet_node,
             "table",
         )
@@ -1362,7 +1367,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             shifted_indices[neighbor_dim] = MemletExpr(
                 dc_node=offset_table_node,
                 gt_dtype=it.gt_dtype,
-                subset=sbs.Indices([origin_index.value, offset_expr.value]),
+                subset=dace_subsets.Indices([origin_index.value, offset_expr.value]),
             )
         else:
             # dynamic offset: we cannot use a memlet to retrieve the offset value, use a tasklet node
@@ -1529,7 +1534,8 @@ class LambdaToDataflow(eve.NodeVisitor):
             return self._visit_shift(node)
 
         elif isinstance(node.fun, gtir.Lambda):
-            raise AssertionError("Lambda node should be visited with 'apply()' method.")
+            # Lambda node should be visited with 'apply()' method.
+            raise ValueError(f"Unexpected lambda in 'FunCall' node: {node}.")
 
         elif isinstance(node.fun, gtir.SymRef):
             return self._visit_generic_builtin(node)

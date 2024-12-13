@@ -22,7 +22,7 @@ import operator
 from typing import Any, Dict, Iterable, List, Optional, Protocol, Sequence, Set, Tuple, Union
 
 import dace
-from dace.sdfg import utils as sdutils
+from dace.sdfg import utils as dace_sdfg_utils
 
 from gt4py import eve
 from gt4py.eve import concepts
@@ -899,6 +899,6 @@ def build_sdfg_from_gtir(
     assert isinstance(sdfg, dace.SDFG)
 
     # TODO(edopao): remove inlining when DaCe transformations support LoopRegion construct
-    sdutils.inline_loop_blocks(sdfg)
+    dace_sdfg_utils.inline_loop_blocks(sdfg)
 
     return sdfg
