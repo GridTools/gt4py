@@ -1008,9 +1008,10 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
             inner_desc.set_shape(inner_desc.shape, new_strides)
 
             for stride in new_strides:
-                for sym in stride.free_symbols:
-                    nsdfg_node.sdfg.add_symbol(str(sym), sym.dtype)
-                    nsdfg_node.symbol_mapping |= {str(sym): sym}
+                if isinstance(stride, dace.symbolic.symbol):
+                    for sym in stride.free_symbols:
+                        nsdfg_node.sdfg.add_symbol(str(sym), sym.dtype)
+                        nsdfg_node.symbol_mapping |= {str(sym): sym}
 
             for inner_state in nsdfg_node.sdfg.states():
                 for inner_node in inner_state.data_nodes():
