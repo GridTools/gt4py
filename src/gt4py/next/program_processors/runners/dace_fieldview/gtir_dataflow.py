@@ -10,7 +10,19 @@ from __future__ import annotations
 
 import abc
 import dataclasses
-from typing import Any, Dict, Final, List, Optional, Protocol, Set, Tuple, TypeAlias, Union
+from typing import (
+    Any,
+    Dict,
+    Final,
+    List,
+    Optional,
+    Protocol,
+    Sequence,
+    Set,
+    Tuple,
+    TypeAlias,
+    Union,
+)
 
 import dace
 from dace import subsets as dace_subsets
@@ -272,8 +284,9 @@ def get_reduce_params(node: gtir.FunCall) -> tuple[str, SymbolExpr, SymbolExpr]:
 
 class LambdaToDataflow(eve.NodeVisitor):
     """
-    Translates an `ir.Lambda` expression to a dataflow graph.
+    Visitor class to translate a `Lambda` expression to a dataflow graph.
 
+    This visitor should be applied by calling `apply()` method on a `Lambda` IR.
     The dataflow graph generated here typically represents the stencil function
     of a field operator. It only computes single elements or pure local fields,
     in case of neighbor values. In case of local fields, the dataflow contains
@@ -1604,43 +1617,46 @@ class LambdaToDataflow(eve.NodeVisitor):
     def apply(
         self,
         node: gtir.Lambda,
-        args: list[
+        args: Sequence[
             IteratorExpr
             | MemletExpr
             | ValueExpr
             | tuple[IteratorExpr | MemletExpr | ValueExpr | tuple[Any, ...], ...]
         ],
-    ) -> tuple[
-        list[DataflowInputEdge],
-        DataflowOutputEdge | tuple[DataflowOutputEdge | tuple[Any, ...], ...],
-    ]:
-        # lambda arguments are mapped to symbols defined in lambda scope
-        prev_symbols: dict[
-            str,
-            Optional[
-                IteratorExpr | DataExpr | tuple[IteratorExpr | DataExpr | tuple[Any, ...], ...]
-            ],
-        ] = {}
-        for p, arg in zip(node.params, args, strict=True):
-            symbol_name = str(p.id)
-            prev_symbols[symbol_name] = self.symbol_map.get(symbol_name, None)
-            self.symbol_map[symbol_name] = arg
+    ) -> tuple[list[DataflowInputEdge], DataflowOutputEdge]:
+        """
+        Entry point for this visitor class.
+
+        This visitor will translate a `Lambda` node into a dataflow graph to be
+        instantiated inside a map scope implementing the field operator.
+        However, this `apply()` method is responsible to recognize the usage of
+        the `Lambda` node, which can be either a let-statement or the stencil expression
+        in local view. The usage of a `Lambda` as let-statement corresponds to computing
+        some results and making them available inside the lambda scope, represented
+        as a nested SDFG. All let-statements, if any, are supposed to be encountered
+        before the stencil expression. In other words, the `Lambda` node representing
+        the stencil expression is always the innermost node.
+        Therefore, the lowering of let-statements results in recursive calls to
+        `apply()` until the stencil expression is found. At that point, it falls
+        back to the `visit()` function.
+        """
+
+        # lambda arguments are mapped to symbols defined in lambda scope.
+        prev_symbol_map = self.symbol_map
+        self.symbol_map = self.symbol_map.copy()
+        self.symbol_map |= {str(p.id): arg for p, arg in zip(node.params, args, strict=True)}
 
         if cpm.is_let(node.expr):
             let_node = node.expr
             let_args = [self.visit(arg) for arg in let_node.args]
             assert isinstance(let_node.fun, gtir.Lambda)
             input_edges, output_edges = self.apply(let_node.fun, args=let_args)
-
         else:
-            output_edges = self.visit_Lambda(node)
+            # this lambda node is not a let-statement, but a stencil expression
+            output_edges = self.visit(node)
             input_edges = self.input_edges
 
         # remove locally defined lambda symbols and restore previous symbols
-        for symbol_name, prev_value in prev_symbols.items():
-            if prev_value is None:
-                self.symbol_map.pop(symbol_name)
-            else:
-                self.symbol_map[symbol_name] = prev_value
+        self.symbol_map = prev_symbol_map
 
         return input_edges, output_edges
