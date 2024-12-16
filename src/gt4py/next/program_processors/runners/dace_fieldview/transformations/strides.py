@@ -171,6 +171,9 @@ def gt_map_strides_to_src_nested_sdfg(
     if not isinstance(edge.src, dace.nodes.NestedSDFG):
         return
 
+    if isinstance(edge.src.sdfg.data(edge.src_conn), dace.data.Scalar):
+        return  # no strides to propagate
+
     _gt_map_strides_to_nested_sdfg(sdfg, edge.src, edge.src_conn, edge.data, outer_node)
 
     for inner_state in edge.src.sdfg.states():
