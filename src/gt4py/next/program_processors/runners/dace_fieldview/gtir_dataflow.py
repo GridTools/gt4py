@@ -268,6 +268,7 @@ def get_reduce_params(node: gtir.FunCall) -> tuple[str, SymbolExpr, SymbolExpr]:
     return op_name, reduce_init, reduce_identity
 
 
+@dataclasses.dataclass(frozen=True)
 class LambdaToDataflow(eve.NodeVisitor):
     """
     Visitor class to translate a `Lambda` expression to a dataflow graph.
@@ -288,20 +289,10 @@ class LambdaToDataflow(eve.NodeVisitor):
     sdfg: dace.SDFG
     state: dace.SDFGState
     subgraph_builder: gtir_sdfg.DataflowBuilder
-    input_edges: list[DataflowInputEdge]
-    symbol_map: dict[str, IteratorExpr | MemletExpr | SymbolExpr]
-
-    def __init__(
-        self,
-        sdfg: dace.SDFG,
-        state: dace.SDFGState,
-        subgraph_builder: gtir_sdfg.DataflowBuilder,
-    ):
-        self.sdfg = sdfg
-        self.state = state
-        self.subgraph_builder = subgraph_builder
-        self.input_edges = []
-        self.symbol_map = {}
+    input_edges: list[DataflowInputEdge] = dataclasses.field(default_factory=lambda: [])
+    symbol_map: dict[str, IteratorExpr | MemletExpr | SymbolExpr] = dataclasses.field(
+        default_factory=lambda: {}
+    )
 
     def _add_input_data_edge(
         self,
@@ -1280,7 +1271,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             return self._visit_shift(node)
 
         elif isinstance(node.fun, gtir.Lambda):
-            # Lambda node should be visited with 'apply()' method.
+            # Lambda node should be visited with 'visit_let()' method.
             raise ValueError(f"Unexpected lambda in 'FunCall' node: {node}.")
 
         elif isinstance(node.fun, gtir.SymRef):
@@ -1325,7 +1316,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert param in gtir_python_codegen.MATH_BUILTINS_MAPPING
         return SymbolExpr(param, dace.string)
 
-    def _visit_let(
+    def visit_let(
         self,
         node: gtir.Lambda,
         args: Sequence[IteratorExpr | MemletExpr | SymbolExpr],
@@ -1341,53 +1332,51 @@ class LambdaToDataflow(eve.NodeVisitor):
         expression. In other words, the `Lambda` node representing the stencil expression
         is always the innermost node.
         Therefore, the lowering of let-statements results in recursive calls to
-        `_visit_let()` until the stencil expression is found. At that point, it falls
+        `visit_let()` until the stencil expression is found. At that point, it falls
         back to the `visit()` function.
         """
 
         # lambda arguments are mapped to symbols defined in lambda scope.
-        prev_symbol_map = self.symbol_map
-        self.symbol_map = self.symbol_map | {
-            str(p.id): arg for p, arg in zip(node.params, args, strict=True)
-        }
+        for p, arg in zip(node.params, args, strict=True):
+            self.symbol_map[str(p.id)] = arg
 
         if cpm.is_let(node.expr):
             let_node = node.expr
             let_args = [self.visit(arg) for arg in let_node.args]
             assert isinstance(let_node.fun, gtir.Lambda)
-            output_edge = self._visit_let(let_node.fun, args=let_args)
+            return self.visit_let(let_node.fun, args=let_args)
         else:
             # this lambda node is not a let-statement, but a stencil expression
-            output_edge = self.visit(node)
+            return self.visit(node)
 
-        # restore previous symbols, thus removing locally defined lambda symbols in the let-scope
-        self.symbol_map = prev_symbol_map
 
-        return output_edge
+def visit_lambda(
+    sdfg: dace.SDFG,
+    state: dace.SDFGState,
+    sdfg_builder: gtir_sdfg.SDFGBuilder,
+    node: gtir.Lambda,
+    args: Sequence[IteratorExpr | MemletExpr | SymbolExpr],
+) -> tuple[list[DataflowInputEdge], DataflowOutputEdge]:
+    """
+    Entry point to visit a `Lambda` node and lower it to a dataflow graph,
+    that can be instantiated inside a map scope implementing the field operator.
 
-    def apply(
-        self,
-        node: gtir.Lambda,
-        args: Sequence[IteratorExpr | MemletExpr | SymbolExpr],
-    ) -> tuple[list[DataflowInputEdge], DataflowOutputEdge]:
-        """
-        Entry point for this visitor class, that will translate a `Lambda` node
-        into a dataflow graph to be instantiated inside a map scope implementing
-        the field operator.
+    It calls `LambdaToDataflow.visit_let()` to map the lambda arguments to internal
+    parameters and visit the let-statements (if any), which always appear as outermost
+    nodes. Finally, the visitor returns the output edge of the dataflow.
 
-        It calls `_visit_let()` to maps lambda arguments to internal parameters and
-        visit let-statements (if any), which always appear as outermost nodes.
-        The visitor will return the output edge of the dataflow.
+    Args:
+        sdfg: The SDFG where the dataflow graph will be instantiated.
+        state: The SDFG state where the dataflow graph will be instantiated.
+        sdfg_builder: Helper class to build the SDFG.
+        node: Lambda node to visit.
+        args: Arguments passed to lambda node.
 
-        Args:
-            node: Lambda node to visit.
-            args: Arguments passed to lambda node.
-
-        Returns:
-            A tuple of two elements:
-            - List of connections for data inputs to the dataflow.
-            - Output connection edge.
-        """
-
-        output_edge = self._visit_let(node, args)
-        return self.input_edges, output_edge
+    Returns:
+        A tuple of two elements:
+        - List of connections for data inputs to the dataflow.
+        - Output data connection.
+    """
+    taskgen = LambdaToDataflow(sdfg, state, sdfg_builder)
+    output_edge = taskgen.visit_let(node, args)
+    return taskgen.input_edges, output_edge
