@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import functools
+
 import dace
 from dace import data as dace_data
 
@@ -153,11 +155,15 @@ def gt_map_strides_to_nested_sdfg(
     assert isinstance(inner_desc, dace.data.Array)
     inner_desc.set_shape(inner_desc.shape, new_strides)
 
-    for stride in new_strides:
-        if dace.symbolic.issymbolic(stride):
-            for sym in stride.free_symbols:
-                nsdfg_node.sdfg.add_symbol(str(sym), sym.dtype)
-                nsdfg_node.symbol_mapping |= {str(sym): sym}
+    new_strides_symbols: list[dace.symbol] = functools.reduce(
+        lambda acc, itm: acc + list(itm.free_symbols), new_strides, []
+    )
+    new_strides_free_symbols = {
+        sym for sym in new_strides_symbols if sym.name not in nsdfg_node.sdfg.symbols
+    }
+    for sym in new_strides_free_symbols:
+        nsdfg_node.sdfg.add_symbol(sym.name, sym.dtype)
+        nsdfg_node.symbol_mapping |= {sym.name: sym}
 
     for inner_state in nsdfg_node.sdfg.states():
         for inner_node in inner_state.data_nodes():
