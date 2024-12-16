@@ -1325,44 +1325,69 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert param in gtir_python_codegen.MATH_BUILTINS_MAPPING
         return SymbolExpr(param, dace.string)
 
+    def _visit_let(
+        self,
+        node: gtir.Lambda,
+        args: Sequence[IteratorExpr | MemletExpr | SymbolExpr],
+    ) -> DataflowOutputEdge:
+        """
+        Maps lambda arguments to internal parameters.
+
+        This method is responsible to recognize the usage of the `Lambda` node,
+        which can be either a let-statement or the stencil expression in local view.
+        The usage of a `Lambda` as let-statement corresponds to computing some results
+        and making them available inside the lambda scope, represented as a nested SDFG.
+        All let-statements, if any, are supposed to be encountered before the stencil
+        expression. In other words, the `Lambda` node representing the stencil expression
+        is always the innermost node.
+        Therefore, the lowering of let-statements results in recursive calls to
+        `_visit_let()` until the stencil expression is found. At that point, it falls
+        back to the `visit()` function.
+        """
+
+        # lambda arguments are mapped to symbols defined in lambda scope.
+        prev_symbol_map = self.symbol_map
+        self.symbol_map = self.symbol_map | {
+            str(p.id): arg for p, arg in zip(node.params, args, strict=True)
+        }
+
+        if cpm.is_let(node.expr):
+            let_node = node.expr
+            let_args = [self.visit(arg) for arg in let_node.args]
+            assert isinstance(let_node.fun, gtir.Lambda)
+            output_edge = self._visit_let(let_node.fun, args=let_args)
+        else:
+            # this lambda node is not a let-statement, but a stencil expression
+            output_edge = self.visit(node)
+
+        # restore previous symbols, thus removing locally defined lambda symbols in the let-scope
+        self.symbol_map = prev_symbol_map
+
+        return output_edge
+
     def apply(
         self,
         node: gtir.Lambda,
         args: Sequence[IteratorExpr | MemletExpr | SymbolExpr],
     ) -> tuple[list[DataflowInputEdge], DataflowOutputEdge]:
         """
-        Entry point for this visitor class.
+        Entry point for this visitor class, that will translate a `Lambda` node
+        into a dataflow graph to be instantiated inside a map scope implementing
+        the field operator.
 
-        This visitor will translate a `Lambda` node into a dataflow graph to be
-        instantiated inside a map scope implementing the field operator.
-        However, this `apply()` method is responsible to recognize the usage of
-        the `Lambda` node, which can be either a let-statement or the stencil expression
-        in local view. The usage of a `Lambda` as let-statement corresponds to computing
-        some results and making them available inside the lambda scope, represented
-        as a nested SDFG. All let-statements, if any, are supposed to be encountered
-        before the stencil expression. In other words, the `Lambda` node representing
-        the stencil expression is always the innermost node.
-        Therefore, the lowering of let-statements results in recursive calls to
-        `apply()` until the stencil expression is found. At that point, it falls
-        back to the `visit()` function.
+        It calls `_visit_let()` to maps lambda arguments to internal parameters and
+        visit let-statements (if any), which always appear as outermost nodes.
+        The visitor will return the output edge of the dataflow.
+
+        Args:
+            node: Lambda node to visit.
+            args: Arguments passed to lambda node.
+
+        Returns:
+            A tuple of two elements:
+            - List of connections for data inputs to the dataflow.
+            - Output connection edge.
         """
 
-        # lambda arguments are mapped to symbols defined in lambda scope.
-        prev_symbol_map = self.symbol_map
-        self.symbol_map = self.symbol_map.copy()
-        self.symbol_map |= {str(p.id): arg for p, arg in zip(node.params, args, strict=True)}
-
-        if cpm.is_let(node.expr):
-            let_node = node.expr
-            let_args = [self.visit(arg) for arg in let_node.args]
-            assert isinstance(let_node.fun, gtir.Lambda)
-            input_edges, output_edge = self.apply(let_node.fun, args=let_args)
-        else:
-            # this lambda node is not a let-statement, but a stencil expression
-            output_edge = self.visit(node)
-            input_edges = self.input_edges
-
-        # remove locally defined lambda symbols and restore previous symbols
-        self.symbol_map = prev_symbol_map
-
-        return input_edges, output_edge
+        output_edge = self._visit_let(node, args)
+        return self.input_edges, output_edge
