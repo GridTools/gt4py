@@ -495,8 +495,9 @@ def translate_as_fieldop(
     fieldop_args = [_parse_fieldop_arg(arg, sdfg, state, sdfg_builder, domain) for arg in node.args]
 
     # represent the field operator as a mapped tasklet graph, which will range over the field domain
-    taskgen = gtir_dataflow.LambdaToDataflow(sdfg, state, sdfg_builder)
-    input_edges, output_edge = taskgen.apply(stencil_expr, args=fieldop_args)
+    input_edges, output_edge = gtir_dataflow.visit_lambda(
+        sdfg, state, sdfg_builder, stencil_expr, fieldop_args
+    )
     assert isinstance(output_edge, gtir_dataflow.DataflowOutputEdge)
 
     return _create_field_operator(
@@ -993,8 +994,9 @@ def translate_scan(
     ]
 
     # generate the dataflow representing the scan field operator
-    taskgen = gtir_dataflow.LambdaToDataflow(nsdfg, compute_state, stencil_builder)
-    input_edges, result = taskgen.apply(stencil_expr, args=stencil_args)
+    input_edges, result = gtir_dataflow.visit_lambda(
+        nsdfg, compute_state, stencil_builder, stencil_expr, args=stencil_args
+    )
 
     # now initialize the scan state
     scan_state_input = (
