@@ -269,7 +269,7 @@ def gt_auto_optimize(
         dace_aoptimize.move_small_arrays_to_stack(sdfg)
 
         # Now we modify the strides.
-        # TODO: re-enable gtx_transformations.gt_change_transient_strides(sdfg, gpu=gpu)
+        gtx_transformations.gt_change_transient_strides(sdfg, gpu=gpu)
 
         if make_persistent:
             gtx_transformations.gt_make_transients_persistent(sdfg=sdfg, device=device)

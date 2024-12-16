@@ -70,7 +70,9 @@ def _gt_change_transient_strides_non_recursive_impl(
             for data_node in state.data_nodes():
                 if data_node.data == top_level_transient:
                     for in_edge in state.in_edges(data_node):
-                        gt_map_strides_to_nested_sdfg(sdfg, state, in_edge, data_node)
+                        gt_map_strides_to_src_nested_sdfg(sdfg, state, in_edge, data_node)
+                    for out_edge in state.out_edges(data_node):
+                        gt_map_strides_to_dst_nested_sdfg(sdfg, state, out_edge, data_node)
 
 
 def _find_toplevel_transients(
@@ -106,13 +108,13 @@ def _find_toplevel_transients(
     return top_level_transients
 
 
-def gt_map_strides_to_nested_sdfg(
+def gt_map_strides_to_dst_nested_sdfg(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     edge: dace.sdfg.graph.Edge,
     outer_node: dace.nodes.AccessNode,
 ) -> None:
-    """Propagates the strides of the given data node to the nested SDFGs.
+    """Propagates the strides of the given data node to the nested SDFGs on the edge destination.
 
     This function will recursively visit the nested SDFGs connected to the given
     data node and apply mapping from inner to outer strides.
@@ -120,31 +122,81 @@ def gt_map_strides_to_nested_sdfg(
     Args:
         sdfg: The SDFG to process.
         state: The state where the data node is used.
-        edge: The edge that writes to the data node.
+        edge: The edge that reads from the data node, the nested SDFG is expected as the destination.
+        outer_node: The data node whose strides should be propagated.
+    """
+    if isinstance(edge.dst, dace.nodes.MapEntry):
+        # Find the destinaion of the edge entering the map entry node
+        map_entry_out_conn = edge.dst_conn.replace("IN_", "OUT_")
+        for edge_from_map_entry in state.out_edges_by_connector(edge.dst, map_entry_out_conn):
+            gt_map_strides_to_dst_nested_sdfg(sdfg, state, edge_from_map_entry, outer_node)
+        return
+
+    if not isinstance(edge.dst, dace.nodes.NestedSDFG):
+        return
+
+    _gt_map_strides_to_nested_sdfg(sdfg, edge.dst, edge.dst_conn, edge.data, outer_node)
+
+    for inner_state in edge.dst.sdfg.states():
+        for inner_node in inner_state.data_nodes():
+            if inner_node.data == edge.dst:
+                for inner_edge in inner_state.out_edges(inner_node):
+                    gt_map_strides_to_dst_nested_sdfg(sdfg, state, inner_edge, inner_node)
+
+
+def gt_map_strides_to_src_nested_sdfg(
+    sdfg: dace.SDFG,
+    state: dace.SDFGState,
+    edge: dace.sdfg.graph.Edge,
+    outer_node: dace.nodes.AccessNode,
+) -> None:
+    """Propagates the strides of the given data node to the nested SDFGs on the edge source.
+
+    This function will recursively visit the nested SDFGs connected to the given
+    data node and apply mapping from inner to outer strides.
+
+    Args:
+        sdfg: The SDFG to process.
+        state: The state where the data node is used.
+        edge: The edge that writes to the data node, the nested SDFG is expected as the source.
         outer_node: The data node whose strides should be propagated.
     """
     if isinstance(edge.src, dace.nodes.MapExit):
         # Find the source of the edge entering the map exit node
         map_exit_in_conn = edge.src_conn.replace("OUT_", "IN_")
-        for edge_to_map_exit_edge in state.in_edges_by_connector(edge.src, map_exit_in_conn):
-            gt_map_strides_to_nested_sdfg(sdfg, state, edge_to_map_exit_edge, outer_node)
+        for edge_to_map_exit in state.in_edges_by_connector(edge.src, map_exit_in_conn):
+            gt_map_strides_to_src_nested_sdfg(sdfg, state, edge_to_map_exit, outer_node)
         return
 
     if not isinstance(edge.src, dace.nodes.NestedSDFG):
         return
 
+    _gt_map_strides_to_nested_sdfg(sdfg, edge.src, edge.src_conn, edge.data, outer_node)
+
+    for inner_state in edge.src.sdfg.states():
+        for inner_node in inner_state.data_nodes():
+            if inner_node.data == edge.src_conn:
+                for inner_edge in inner_state.in_edges(inner_node):
+                    gt_map_strides_to_src_nested_sdfg(sdfg, state, inner_edge, inner_node)
+
+
+def _gt_map_strides_to_nested_sdfg(
+    sdfg: dace.SDFG,
+    nsdfg_node: dace.nodes.NestedSDFG,
+    inner_data: str,
+    edge_data: dace.Memlet,
+    outer_node: dace.nodes.AccessNode,
+) -> None:
     # We need to propagate the strides inside the nested SDFG on the global arrays
-    nsdfg_node = edge.src
     new_strides = tuple(
         stride
         for stride, to_map_size in zip(
             outer_node.desc(sdfg).strides,
-            edge.data.subset.size(),
+            edge_data.subset.size(),
             strict=True,
         )
         if to_map_size != 1
     )
-    inner_data = edge.src_conn
     inner_desc = nsdfg_node.sdfg.arrays[inner_data]
     assert not inner_desc.transient
 
@@ -153,20 +205,18 @@ def gt_map_strides_to_nested_sdfg(
         return
 
     assert isinstance(inner_desc, dace.data.Array)
-    inner_desc.set_shape(inner_desc.shape, new_strides)
+    if all(isinstance(inner_stride, dace.symbol) for inner_stride in inner_desc.strides):
+        for inner_stride, outer_stride in zip(inner_desc.strides, new_strides, strict=True):
+            nsdfg_node.symbol_mapping[inner_stride.name] = outer_stride
+    else:
+        inner_desc.set_shape(inner_desc.shape, new_strides)
 
-    new_strides_symbols: list[dace.symbol] = functools.reduce(
-        lambda acc, itm: acc + list(itm.free_symbols), new_strides, []
-    )
-    new_strides_free_symbols = {
-        sym for sym in new_strides_symbols if sym.name not in nsdfg_node.sdfg.symbols
-    }
-    for sym in new_strides_free_symbols:
-        nsdfg_node.sdfg.add_symbol(sym.name, sym.dtype)
-        nsdfg_node.symbol_mapping |= {sym.name: sym}
-
-    for inner_state in nsdfg_node.sdfg.states():
-        for inner_node in inner_state.data_nodes():
-            if inner_node.data == inner_data:
-                for inner_edge in inner_state.in_edges(inner_node):
-                    gt_map_strides_to_nested_sdfg(sdfg, state, inner_edge, inner_node)
+        new_strides_symbols: list[dace.symbol] = functools.reduce(
+            lambda acc, itm: acc + list(itm.free_symbols), new_strides, []
+        )
+        new_strides_free_symbols = {
+            sym for sym in new_strides_symbols if sym.name not in nsdfg_node.sdfg.symbols
+        }
+        for sym in new_strides_free_symbols:
+            nsdfg_node.sdfg.add_symbol(sym.name, sym.dtype)
+            nsdfg_node.symbol_mapping[sym.name] = sym

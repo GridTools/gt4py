@@ -972,7 +972,7 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
         assert glob_in_subset is not None
 
         # Recursively visit the nested SDFGs for mapping from inner to outer strides on the vertical dimension
-        gtx_transformations.gt_map_strides_to_nested_sdfg(sdfg, state, map_to_tmp_edge, glob_ac)
+        gtx_transformations.gt_map_strides_to_src_nested_sdfg(sdfg, state, map_to_tmp_edge, glob_ac)
 
         # We now remove the `tmp` node, and create a new connection between
         #  the global node and the map exit.
