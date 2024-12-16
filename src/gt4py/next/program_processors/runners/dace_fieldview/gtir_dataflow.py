@@ -1659,9 +1659,9 @@ def visit_lambda(
     Entry point to visit a `Lambda` node and lower it to a dataflow graph,
     that can be instantiated inside a map scope implementing the field operator.
 
-    It calls `_visit_let()` to map the lambda arguments to internal parameters
-    and visit let-statements (if any), which always appear as outermost nodes.
-    The visitor will return the output edge of the dataflow.
+    It calls `LambdaToDataflow.visit_let()` to map the lambda arguments to internal
+    parameters and visit the let-statements (if any), which always appear as outermost
+    nodes. Finally, the visitor returns the output edge of the dataflow.
 
     Args:
         sdfg: The SDFG where the dataflow graph will be instantiated.

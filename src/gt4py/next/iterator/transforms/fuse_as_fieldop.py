@@ -186,15 +186,15 @@ class FuseAsFieldOp(eve.NodeTranslator):
     ...     im.ref("inp3", field_type),
     ... )
     >>> print(nested_as_fieldop)
-    as_fieldop(λ(__arg0, __arg1) → ·__arg0 + ·__arg1, c⟨ IDimₕ: [0, 1) ⟩)(
-      as_fieldop(λ(__arg0, __arg1) → ·__arg0 × ·__arg1, c⟨ IDimₕ: [0, 1) ⟩)(inp1, inp2), inp3
+    as_fieldop(λ(__arg0, __arg1) → ·__arg0 + ·__arg1, c⟨ IDimₕ: [0, 1[ ⟩)(
+      as_fieldop(λ(__arg0, __arg1) → ·__arg0 × ·__arg1, c⟨ IDimₕ: [0, 1[ ⟩)(inp1, inp2), inp3
     )
     >>> print(
     ...     FuseAsFieldOp.apply(
     ...         nested_as_fieldop, offset_provider_type={}, allow_undeclared_symbols=True
     ...     )
     ... )
-    as_fieldop(λ(inp1, inp2, inp3) → ·inp1 × ·inp2 + ·inp3, c⟨ IDimₕ: [0, 1) ⟩)(inp1, inp2, inp3)
+    as_fieldop(λ(inp1, inp2, inp3) → ·inp1 × ·inp2 + ·inp3, c⟨ IDimₕ: [0, 1[ ⟩)(inp1, inp2, inp3)
     """  # noqa: RUF002  # ignore ambiguous multiplication character
 
     uids: eve_utils.UIDGenerator
@@ -240,8 +240,10 @@ class FuseAsFieldOp(eve.NodeTranslator):
                     or (
                         isinstance(arg, itir.FunCall)
                         and (
-                            cpm.is_call_to(arg.fun, "as_fieldop")
-                            and isinstance(arg.fun.args[0], itir.Lambda)
+                            (
+                                cpm.is_call_to(arg.fun, "as_fieldop")
+                                and isinstance(arg.fun.args[0], itir.Lambda)
+                            )
                             or cpm.is_call_to(arg, "if_")
                         )
                         and (isinstance(dtype, it_ts.ListType) or len(arg_shifts) <= 1)
