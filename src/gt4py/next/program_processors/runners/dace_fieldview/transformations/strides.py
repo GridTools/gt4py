@@ -68,7 +68,7 @@ def _gt_change_transient_strides_non_recursive_impl(
             for data_node in state.data_nodes():
                 if data_node.data == top_level_transient:
                     for in_edge in state.in_edges(data_node):
-                        gt_map_strides(sdfg, state, in_edge, data_node)
+                        gt_map_strides_to_nested_sdfg(sdfg, state, in_edge, data_node)
 
 
 def _find_toplevel_transients(
@@ -104,17 +104,28 @@ def _find_toplevel_transients(
     return top_level_transients
 
 
-def gt_map_strides(
+def gt_map_strides_to_nested_sdfg(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     edge: dace.sdfg.graph.Edge,
     outer_node: dace.nodes.AccessNode,
 ) -> None:
+    """Propagates the strides of the given data node to the nested SDFGs.
+
+    This function will recursively visit the nested SDFGs connected to the given
+    data node and apply mapping from inner to outer strides.
+
+    Args:
+        sdfg: The SDFG to process.
+        state: The state where the data node is used.
+        edge: The edge that writes to the data node.
+        outer_node: The data node whose strides should be propagated.
+    """
     if isinstance(edge.src, dace.nodes.MapExit):
         # Find the source of the edge entering the map exit node
         map_exit_in_conn = edge.src_conn.replace("OUT_", "IN_")
         for edge_to_map_exit_edge in state.in_edges_by_connector(edge.src, map_exit_in_conn):
-            gt_map_strides(sdfg, state, edge_to_map_exit_edge, outer_node)
+            gt_map_strides_to_nested_sdfg(sdfg, state, edge_to_map_exit_edge, outer_node)
         return
 
     if not isinstance(edge.src, dace.nodes.NestedSDFG):
@@ -152,4 +163,4 @@ def gt_map_strides(
         for inner_node in inner_state.data_nodes():
             if inner_node.data == inner_data:
                 for inner_edge in inner_state.in_edges(inner_node):
-                    gt_map_strides(sdfg, state, inner_edge, inner_node)
+                    gt_map_strides_to_nested_sdfg(sdfg, state, inner_edge, inner_node)
