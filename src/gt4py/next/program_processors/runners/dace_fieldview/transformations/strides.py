@@ -154,7 +154,7 @@ def gt_map_strides_to_nested_sdfg(
     inner_desc.set_shape(inner_desc.shape, new_strides)
 
     for stride in new_strides:
-        if isinstance(stride, dace.symbolic.symbol):
+        if dace.symbolic.issymbolic(stride):
             for sym in stride.free_symbols:
                 nsdfg_node.sdfg.add_symbol(str(sym), sym.dtype)
                 nsdfg_node.symbol_mapping |= {str(sym): sym}
