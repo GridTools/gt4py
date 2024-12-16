@@ -64,6 +64,11 @@ def _gt_change_transient_strides_non_recursive_impl(
         #  we simply have to reverse the order.
         new_stride_order = list(range(ndim))
         desc.set_strides_from_layout(*new_stride_order)
+        for state in sdfg.states():
+            for data_node in state.data_nodes():
+                if data_node.data == top_level_transient:
+                    for in_edge in state.in_edges(data_node):
+                        gt_map_strides(sdfg, state, in_edge, data_node)
 
 
 def _find_toplevel_transients(
@@ -97,3 +102,54 @@ def _find_toplevel_transients(
                 continue
             top_level_transients.add(data)
     return top_level_transients
+
+
+def gt_map_strides(
+    sdfg: dace.SDFG,
+    state: dace.SDFGState,
+    edge: dace.sdfg.graph.Edge,
+    outer_node: dace.nodes.AccessNode,
+) -> None:
+    if isinstance(edge.src, dace.nodes.MapExit):
+        # Find the source of the edge entering the map exit node
+        map_exit_in_conn = edge.src_conn.replace("OUT_", "IN_")
+        for edge_to_map_exit_edge in state.in_edges_by_connector(edge.src, map_exit_in_conn):
+            gt_map_strides(sdfg, state, edge_to_map_exit_edge, outer_node)
+        return
+
+    if not isinstance(edge.src, dace.nodes.NestedSDFG):
+        return
+
+    # We need to propagate the strides inside the nested SDFG on the global arrays
+    nsdfg_node = edge.src
+    new_strides = tuple(
+        stride
+        for stride, to_map_size in zip(
+            outer_node.desc(sdfg).strides,
+            edge.data.subset.size(),
+            strict=True,
+        )
+        if to_map_size != 1
+    )
+    inner_data = edge.src_conn
+    inner_desc = nsdfg_node.sdfg.arrays[inner_data]
+    assert not inner_desc.transient
+
+    if isinstance(inner_desc, dace.data.Scalar):
+        assert len(new_strides) == 0
+        return
+
+    assert isinstance(inner_desc, dace.data.Array)
+    inner_desc.set_shape(inner_desc.shape, new_strides)
+
+    for stride in new_strides:
+        if isinstance(stride, dace.symbolic.symbol):
+            for sym in stride.free_symbols:
+                nsdfg_node.sdfg.add_symbol(str(sym), sym.dtype)
+                nsdfg_node.symbol_mapping |= {str(sym): sym}
+
+    for inner_state in nsdfg_node.sdfg.states():
+        for inner_node in inner_state.data_nodes():
+            if inner_node.data == inner_data:
+                for inner_edge in inner_state.in_edges(inner_node):
+                    gt_map_strides(sdfg, state, inner_edge, inner_node)
