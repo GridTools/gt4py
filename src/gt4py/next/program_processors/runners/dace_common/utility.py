@@ -19,7 +19,7 @@ from gt4py.next.type_system import type_specifications as ts
 
 
 # regex to match the symbols for field shape and strides
-FIELD_SYMBOL_RE: Final[re.Pattern] = re.compile(r"__.+_(size|stride)_\d+")
+FIELD_SYMBOL_RE: Final[re.Pattern] = re.compile(r"^__.+_(range_[01]|((size|stride)_\d+))$")
 
 
 def as_dace_type(type_: ts.ScalarType) -> dace.typeclass:
