@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import functools
+from typing import Iterable
 
 import dace
 from dace import data as dace_data
@@ -135,7 +136,8 @@ def gt_map_strides_to_dst_nested_sdfg(
     if not isinstance(edge.dst, dace.nodes.NestedSDFG):
         return
 
-    _gt_map_strides_to_nested_sdfg(sdfg, edge.dst, edge.dst_conn, edge.data, outer_node)
+    outer_strides = outer_node.desc(sdfg).strides
+    _gt_map_strides_to_nested_sdfg(edge.dst, edge.dst_conn, edge.data, outer_strides)
 
     for inner_state in edge.dst.sdfg.states():
         for inner_node in inner_state.data_nodes():
@@ -174,7 +176,8 @@ def gt_map_strides_to_src_nested_sdfg(
     if isinstance(edge.src.sdfg.data(edge.src_conn), dace.data.Scalar):
         return  # no strides to propagate
 
-    _gt_map_strides_to_nested_sdfg(sdfg, edge.src, edge.src_conn, edge.data, outer_node)
+    outer_strides = outer_node.desc(sdfg).strides
+    _gt_map_strides_to_nested_sdfg(edge.src, edge.src_conn, edge.data, outer_strides)
 
     for inner_state in edge.src.sdfg.states():
         for inner_node in inner_state.data_nodes():
@@ -184,17 +187,16 @@ def gt_map_strides_to_src_nested_sdfg(
 
 
 def _gt_map_strides_to_nested_sdfg(
-    sdfg: dace.SDFG,
     nsdfg_node: dace.nodes.NestedSDFG,
     inner_data: str,
     edge_data: dace.Memlet,
-    outer_node: dace.nodes.AccessNode,
+    outer_strides: Iterable[int | dace.symbolic.SymExpr],
 ) -> None:
     # We need to propagate the strides inside the nested SDFG on the global arrays
     new_strides = tuple(
         stride
         for stride, to_map_size in zip(
-            outer_node.desc(sdfg).strides,
+            outer_strides,
             edge_data.subset.size(),
             strict=True,
         )
@@ -215,7 +217,9 @@ def _gt_map_strides_to_nested_sdfg(
         inner_desc.set_shape(inner_desc.shape, new_strides)
 
         new_strides_symbols: list[dace.symbol] = functools.reduce(
-            lambda acc, itm: acc + list(itm.free_symbols) if dace.symbolic.issymbolic(itm) else acc,
+            lambda acc, itm: (acc + list(itm.free_symbols))  # type: ignore[union-attr]
+            if dace.symbolic.issymbolic(itm)
+            else acc,
             new_strides,
             [],
         )
