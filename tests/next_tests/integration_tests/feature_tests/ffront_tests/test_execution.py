@@ -818,6 +818,7 @@ def test_ternary_builtin_neighbor_sum(unstructured_case):
 
 
 @pytest.mark.uses_scan
+@pytest.mark.uses_scan_1d_field
 def test_ternary_scan(cartesian_case):
     @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
     def simple_scan_operator(carry: float, a: float) -> float:
