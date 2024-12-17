@@ -95,7 +95,7 @@ def gt_gpu_transformation(
 
     if try_removing_trivial_maps:
         # In DaCe a Tasklet, outside of a Map, can not write into an _array_ that is on
-        #  GPU. `sdfg.appyl_gpu_transformations()` will wrap such Tasklets in a Map. So
+        #  GPU. `sdfg.apply_gpu_transformations()` will wrap such Tasklets in a Map. So
         #  we might end up with lots of these trivial Maps, each requiring a separate
         #  kernel launch. To prevent this we will combine these trivial maps, if
         #  possible, with their downstream maps.

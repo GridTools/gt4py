@@ -950,7 +950,7 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
 
     def apply(
         self,
-        graph: dace.SDFGState | dace.SDFG,
+        graph: dace.SDFGState,
         sdfg: dace.SDFG,
     ) -> None:
         # Removal
@@ -970,6 +970,9 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
         if tmp_out_subset is None:
             tmp_out_subset = dace_subsets.Range.from_array(tmp_desc)
         assert glob_in_subset is not None
+
+        # Recursively visit the nested SDFGs for mapping from inner to outer strides on the vertical dimension
+        gtx_transformations.gt_map_strides_to_src_nested_sdfg(sdfg, graph, map_to_tmp_edge, glob_ac)
 
         # We now remove the `tmp` node, and create a new connection between
         #  the global node and the map exit.
