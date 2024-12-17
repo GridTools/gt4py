@@ -76,6 +76,14 @@ def gt_gpu_transformation(
         len(kwargs) == 0
     ), f"gt_gpu_transformation(): found unknown arguments: {', '.join(arg for arg in kwargs.keys())}"
 
+    # We run simplify to bring the SDFG into a canonical form that the gpu transformations
+    # can handle. This is a workaround for an issue with scalar expressions that are
+    # promoted to symbolic expressions and computed on the host (CPU), but the intermediate
+    # result is written to a GPU global variable (https://github.com/spcl/dace/issues/1773).
+    dace_transformation.passes.SimplifyPass(
+        validate=validate, validate_all=validate_all, skip={"ConstantPropagation"}
+    ).apply_pass(sdfg, {})
+
     # Turn all global arrays (which we identify as input) into GPU memory.
     #  This way the GPU transformation will not create this copying stuff.
     if use_gpu_storage:
