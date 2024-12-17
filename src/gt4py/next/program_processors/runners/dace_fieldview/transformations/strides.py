@@ -215,7 +215,9 @@ def _gt_map_strides_to_nested_sdfg(
         inner_desc.set_shape(inner_desc.shape, new_strides)
 
         new_strides_symbols: list[dace.symbol] = functools.reduce(
-            lambda acc, itm: acc + list(itm.free_symbols), new_strides, []
+            lambda acc, itm: acc + list(itm.free_symbols) if dace.symbolic.issymbolic(itm) else acc,
+            new_strides,
+            [],
         )
         new_strides_free_symbols = {
             sym for sym in new_strides_symbols if sym.name not in nsdfg_node.sdfg.symbols
