@@ -950,7 +950,7 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
 
     def apply(
         self,
-        state: dace.SDFGState,
+        graph: dace.SDFGState,
         sdfg: dace.SDFG,
     ) -> None:
         # Removal
@@ -962,21 +962,21 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
         glob_ac: dace_nodes.AccessNode = self.glob_ac
         glob_data = glob_ac.data
 
-        map_to_tmp_edge = next(edge for edge in state.in_edges(tmp_ac))
-        tmp_to_glob_edge = next(edge for edge in state.out_edges(tmp_ac))
+        map_to_tmp_edge = next(edge for edge in graph.in_edges(tmp_ac))
+        tmp_to_glob_edge = next(edge for edge in graph.out_edges(tmp_ac))
 
-        glob_in_subset = tmp_to_glob_edge.data.get_dst_subset(tmp_to_glob_edge, state)
-        tmp_out_subset = tmp_to_glob_edge.data.get_src_subset(tmp_to_glob_edge, state)
+        glob_in_subset = tmp_to_glob_edge.data.get_dst_subset(tmp_to_glob_edge, graph)
+        tmp_out_subset = tmp_to_glob_edge.data.get_src_subset(tmp_to_glob_edge, graph)
         if tmp_out_subset is None:
             tmp_out_subset = dace_subsets.Range.from_array(tmp_desc)
         assert glob_in_subset is not None
 
         # Recursively visit the nested SDFGs for mapping from inner to outer strides on the vertical dimension
-        gtx_transformations.gt_map_strides_to_src_nested_sdfg(sdfg, state, map_to_tmp_edge, glob_ac)
+        gtx_transformations.gt_map_strides_to_src_nested_sdfg(sdfg, graph, map_to_tmp_edge, glob_ac)
 
         # We now remove the `tmp` node, and create a new connection between
         #  the global node and the map exit.
-        new_map_to_glob_edge = state.add_edge(
+        new_map_to_glob_edge = graph.add_edge(
             map_exit,
             map_to_tmp_edge.src_conn,
             glob_ac,
@@ -986,9 +986,9 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
                 subset=copy.deepcopy(glob_in_subset),
             ),
         )
-        state.remove_edge(map_to_tmp_edge)
-        state.remove_edge(tmp_to_glob_edge)
-        state.remove_node(tmp_ac)
+        graph.remove_edge(map_to_tmp_edge)
+        graph.remove_edge(tmp_to_glob_edge)
+        graph.remove_node(tmp_ac)
 
         # We can not unconditionally remove the data `tmp` refers to, because
         #  it could be that in a parallel branch the `tmp` is also defined.
@@ -1003,10 +1003,10 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
         #  offset.
         # NOTE: Assumes that `tmp_out_subset` and `tmp_in_subset` are the same.
         correcting_offset = glob_in_subset.offset_new(tmp_out_subset, negative=True)
-        mtree = state.memlet_tree(new_map_to_glob_edge)
+        mtree = graph.memlet_tree(new_map_to_glob_edge)
         for tree in mtree.traverse_children(include_self=False):
             curr_edge = tree.edge
-            curr_dst_subset = curr_edge.data.get_dst_subset(curr_edge, state)
+            curr_dst_subset = curr_edge.data.get_dst_subset(curr_edge, graph)
             if curr_edge.data.data == tmp_data:
                 curr_edge.data.data = glob_data
             if curr_dst_subset is not None:

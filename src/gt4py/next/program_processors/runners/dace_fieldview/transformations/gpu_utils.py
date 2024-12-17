@@ -78,8 +78,9 @@ def gt_gpu_transformation(
 
     # We run simplify to bring the SDFG into a canonical form that the gpu transformations
     # can handle. This is a workaround for an issue with scalar expressions that are
-    # promoted to symbolic expressions and computed on the host (CPU), but the intermediate
-    # result is written to a GPU global variable (https://github.com/spcl/dace/issues/1773).
+    # promoted to symbolic expressions and accessed on the host (CPU) as arguments of
+    # interstate edge conditions, but the scalar data is stored as a GPU global variable.
+    # For details, see the dace issue https://github.com/spcl/dace/issues/1773
     dace_transformation.passes.SimplifyPass(
         validate=validate, validate_all=validate_all, skip={"ConstantPropagation"}
     ).apply_pass(sdfg, {})
