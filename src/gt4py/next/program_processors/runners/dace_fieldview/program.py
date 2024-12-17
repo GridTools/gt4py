@@ -17,7 +17,7 @@ import numpy as np
 
 from gt4py.next import backend as next_backend, common
 from gt4py.next.ffront import decorator
-from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.iterator.transforms import extractors as extractors
 from gt4py.next.otf import arguments, recipes, toolchain
 from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
@@ -46,6 +46,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         }
         column_axis = kwargs.get("column_axis", None)
 
+        # TODO(ricoh): connectivity tables required here for now.
         gtir_stage = typing.cast(next_backend.Transforms, self.backend.transforms).past_to_itir(
             toolchain.CompilableProgram(
                 data=self.past_stage,
@@ -60,6 +61,20 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         program = typing.cast(
             itir.Program, gtir_stage.data
         )  # we already checked that our backend uses GTIR
+        program = itir_transforms.apply_fieldview_transforms(  # run the transforms separately because they require the runtime info
+            program, offset_provider=offset_provider
+        )
+        object.__setattr__(
+            gtir_stage,
+            "data",
+            program,
+        )
+        object.__setattr__(
+            gtir_stage.args, "offset_provider", gtir_stage.args.offset_provider_type
+        )  # TODO(ricoh): currently this is circumventing the frozenness of CompileTimeArgs
+        # in order to isolate DaCe from the runtime tables in connectivities.offset_provider.
+        # These are needed at the time of writing for mandatory GTIR passes.
+        # Remove this as soon as Program does not expect connectivity tables anymore.
 
         _crosscheck_dace_parsing(
             dace_parsed_args=[*args, *kwargs.values()],
@@ -72,7 +87,12 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             if not hasattr(self.backend.executor, "step")
             else self.backend.executor.step,
         )  # We know which backend we are using, but we don't know if the compile workflow is cached.
-        sdfg = dace.SDFG.from_json(compile_workflow.translation(gtir_stage).source_code)
+        # TODO(ricoh): switch 'itir_transforms_off=True' because we ran them separately previously
+        # and so we can ensure the SDFG does not know any runtime info it shouldn't know. Remove with
+        # the other parts of the workaround when possible.
+        sdfg = dace.SDFG.from_json(
+            compile_workflow.translation.replace(itir_transforms_off=True)(gtir_stage).source_code
+        )
 
         self.sdfg_closure_cache["arrays"] = sdfg.arrays
 

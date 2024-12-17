@@ -16,14 +16,14 @@ import gt4py.next as gtx
 from gt4py.next import backend as next_backend, common
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import cartesian_case, unstructured_case
+from next_tests.integration_tests.cases import cartesian_case, unstructured_case  # noqa: F401
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     E2V,
     E2VDim,
     Edge,
     Vertex,
-    exec_alloc_descriptor,
-    mesh_descriptor,
+    exec_alloc_descriptor,  # noqa: F401
+    mesh_descriptor,  # noqa: F401
 )
 from next_tests.integration_tests.multi_feature_tests.ffront_tests.test_laplacian import (
     lap_program,
@@ -34,6 +34,7 @@ from next_tests.integration_tests.multi_feature_tests.ffront_tests.test_laplacia
 
 try:
     import dace
+
     from gt4py.next.program_processors.runners.dace import (
         gtir_cpu as run_dace_cpu,
         gtir_gpu as run_dace_gpu,
@@ -46,7 +47,7 @@ except ImportError:
 pytestmark = pytest.mark.requires_dace
 
 
-def test_sdfgConvertible_laplap(cartesian_case):
+def test_sdfgConvertible_laplap(cartesian_case):  # noqa: F811
     # TODO(kotsaloscv): Temporary solution until the `requires_dace` marker is fully functional
     if cartesian_case.backend not in [run_dace_cpu, run_dace_gpu]:
         pytest.skip("DaCe-related test: Test SDFGConvertible interface for GT4Py programs")
@@ -93,7 +94,7 @@ def testee(a: gtx.Field[gtx.Dims[Vertex], gtx.float64], b: gtx.Field[gtx.Dims[Ed
 
 
 @pytest.mark.uses_unstructured_shift
-def test_sdfgConvertible_connectivities(unstructured_case):
+def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
     # TODO(kotsaloscv): Temporary solution until the `requires_dace` marker is fully functional
     if unstructured_case.backend not in [run_dace_cpu, run_dace_gpu]:
         pytest.skip("DaCe-related test: Test SDFGConvertible interface for GT4Py programs")
@@ -116,32 +117,12 @@ def test_sdfgConvertible_connectivities(unstructured_case):
         name="OffsetProvider",
     )
 
-    @dace.program
-    def sdfg(
-        a: dace.data.Array(dtype=dace.float64, shape=(rows,), storage=dace_storage_type),
-        out: dace.data.Array(dtype=dace.float64, shape=(rows,), storage=dace_storage_type),
-        offset_provider: OffsetProvider_t,
-        connectivities: dace.compiletime,
-    ):
-        testee.with_backend(backend).with_connectivities(connectivities)(
-            a, out, offset_provider=offset_provider
-        )
-
     e2v = gtx.as_connectivity(
         [Edge, E2VDim],
         codomain=Vertex,
         data=xp.asarray([[0, 1], [1, 2], [2, 0]]),
         allocator=allocator,
     )
-    connectivities = {"E2V": e2v.__gt_type__()}
-    offset_provider = OffsetProvider_t.dtype._typeclass.as_ctypes()(E2V=e2v.data_ptr())
-
-    SDFG = sdfg.to_sdfg(connectivities=connectivities)
-
-    cSDFG = SDFG.compile()
-
-    a = gtx.as_field([Vertex], xp.asarray([0.0, 1.0, 2.0]), allocator=allocator)
-    out = gtx.zeros({Edge: 3}, allocator=allocator)
     e2v_ndarray_copy = (
         e2v.ndarray.copy()
     )  # otherwise DaCe complains about the gt4py custom allocated view
@@ -150,15 +131,37 @@ def test_sdfgConvertible_connectivities(unstructured_case):
     # The high level interface should be provided by a DaCe Orchestrator,
     # i.e. decorator that hides the low level operations.
     # This test checks only that the SDFGConvertible interface works correctly.
+
+    testee2 = testee.with_backend(backend).with_connectivities({"E2V": e2v})
+
+    @dace.program
+    def sdfg(
+        a: dace.data.Array(dtype=dace.float64, shape=(rows,), storage=dace_storage_type),
+        out: dace.data.Array(dtype=dace.float64, shape=(rows,), storage=dace_storage_type),
+        offset_provider: OffsetProvider_t,
+        connectivities: dace.compiletime,
+    ):
+        testee2.with_connectivities(connectivities)(a, out, offset_provider=offset_provider)
+        return out
+
+    connectivities = {"E2V": e2v}  # replace 'e2v' with 'e2v.__gt_type__()' when GTIR is AOT
+    offset_provider = OffsetProvider_t.dtype._typeclass.as_ctypes()(E2V=e2v.data_ptr())
+
+    SDFG = sdfg.to_sdfg(connectivities=connectivities)
+
+    cSDFG = SDFG.compile()
+
+    a = gtx.as_field([Vertex], xp.asarray([0.0, 1.0, 2.0]), allocator=allocator)
+    out = gtx.zeros({Edge: 3}, allocator=allocator)
     cSDFG(
         a,
         out,
         offset_provider,
         rows=3,
         cols=2,
-        connectivity_E2V=e2v_ndarray_copy,
-        __connectivity_E2V_stride_0=get_stride_from_numpy_to_dace(e2v_ndarray_copy, 0),
-        __connectivity_E2V_stride_1=get_stride_from_numpy_to_dace(e2v_ndarray_copy, 1),
+        connectivity_E2V=e2v,
+        __connectivity_E2V_stride_0=2,
+        __connectivity_E2V_stride_1=1,
     )
 
     e2v_np = e2v.asnumpy()
@@ -170,18 +173,19 @@ def test_sdfgConvertible_connectivities(unstructured_case):
         data=xp.asarray([[1, 0], [2, 1], [0, 2]]),
         allocator=allocator,
     )
-    e2v_ndarray_copy = e2v.ndarray.copy()
     offset_provider = OffsetProvider_t.dtype._typeclass.as_ctypes()(E2V=e2v.data_ptr())
-    cSDFG(
-        a,
-        out,
-        offset_provider,
-        rows=3,
-        cols=2,
-        connectivity_E2V=e2v_ndarray_copy,
-        __connectivity_E2V_stride_0=get_stride_from_numpy_to_dace(e2v_ndarray_copy, 0),
-        __connectivity_E2V_stride_1=get_stride_from_numpy_to_dace(e2v_ndarray_copy, 1),
-    )
+    with dace.config.temporary_config():
+        dace.config.Config.set("compiler", "allow_view_arguments", value=True)
+        cSDFG(
+            a,
+            out,
+            offset_provider,
+            rows=3,
+            cols=2,
+            connectivity_E2V=e2v,
+            __connectivity_E2V_stride_0=2,
+            __connectivity_E2V_stride_1=1,
+        )
 
     e2v_np = e2v.asnumpy()
     assert np.allclose(out.asnumpy(), a.asnumpy()[e2v_np[:, 0]])
