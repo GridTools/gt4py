@@ -114,6 +114,7 @@ def _gt_change_transient_strides_non_recursive_impl(
         #  propagate the non-transients, because they either come from outside,
         #  or they were already handled in the levels above, where they were
         #  defined and then propagated down.
+        # TODO(phimuell): Updated the functions such that only once scan is needed.
         processed_nsdfgs: set[dace_nodes.NestedSDFG] = set()
         for state, access_node in accesses:
             gt_propagate_strides_from_access_node(
