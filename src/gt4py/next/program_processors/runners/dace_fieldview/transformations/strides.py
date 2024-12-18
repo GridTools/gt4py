@@ -39,8 +39,6 @@ def gt_change_transient_strides(
 
     Todo:
         - Implement the estimation correctly.
-        - Handle the case of nested SDFGs correctly; on the outside a transient,
-            but on the inside a non transient.
     """
     # TODO(phimeull): Implement this function correctly.
 
@@ -50,22 +48,32 @@ def gt_change_transient_strides(
         return sdfg
 
     for nsdfg in sdfg.all_sdfgs_recursive():
-        # TODO(phimuell): Handle the case when transient goes into nested SDFG
-        #   on the inside it is a non transient, so it is ignored.
         _gt_change_transient_strides_non_recursive_impl(nsdfg)
 
 
 def _gt_change_transient_strides_non_recursive_impl(
     sdfg: dace.SDFG,
 ) -> None:
-    """Essentially this function just changes the stride to FORTRAN order.
+    """Set optimal strides of all transients in the SDFG.
+
+    The function will look for all top level transients, see `_gt_find_toplevel_data_accesses()`
+    and set their strides such that the access is optimal, see Note. The function
+    will also run `gt_propagate_strides_of()` to propagate the strides into nested SDFGs.
+
+    This function should never be called directly but always through
+    `gt_change_transient_strides()`!
+
+    Note:
+        Currently the function just reverses the strides of the data descriptor
+        it processes. Since DaCe generates `C` order by default this lead to
+        FORTRAN order, which is (for now) sufficient to optimize the memory
+        layout to GPU.
 
     Todo:
         Make this function more intelligent to analyse the access pattern and then
         figuring out the best order.
     """
-
-    # NOTE: processing the transient here is enough. If we are inside a
+    # NOTE: Processing the transient here is enough. If we are inside a
     #   NestedSDFG then they were handled before on the level above us.
     top_level_transients_and_their_accesses = _gt_find_toplevel_data_accesses(
         sdfg=sdfg,
