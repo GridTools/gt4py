@@ -432,16 +432,14 @@ class NdArrayField(
         assert common.is_relative_index_sequence(slice_)
         return new_domain, slice_
 
-    def __copy__(self) -> Never:
-        # TODO does this make sense?
-        raise NotImplementedError(
-            "`NdArrayField` is frozen, shallow copying is not a useful operation. Did you want to deepcopy?"
-        )
-
-    def __deepcopy__(self, _: Any) -> NdArrayField:
+    def __copy__(self) -> NdArrayField:
+        # Note: `copy` copies the data, following NumPy behavior
         ndarray_copy = self._allocator()
         ndarray_copy[:] = self.ndarray[:]
         return self.__class__(self.domain, ndarray_copy, _allocator=self._allocator)
+
+    def __deepcopy__(self, _: Any) -> NdArrayField:
+        return self.__copy__()
 
     if dace:
         # Extension of NdArrayField adding SDFGConvertible support in GT4Py Programs

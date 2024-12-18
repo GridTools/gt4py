@@ -8,8 +8,9 @@
 
 from __future__ import annotations
 
+import functools
 from collections.abc import Mapping, Sequence
-from typing import Any, Callable, Optional, Protocol, TypeGuard, cast
+from typing import Any, Optional, Protocol, TypeGuard, cast
 
 from typing_extensions import NotRequired, TypedDict
 
@@ -148,9 +149,10 @@ def empty(
     if allocator is None and device is None:
         device = core_defs.Device(core_defs.DeviceType.CPU, device_id=0)
 
-    allocate = next_allocators.make_concrete_allocator(
-        domain,
-        core_defs.dtype(dtype),
+    allocate = functools.partial(
+        next_allocators.allocate,
+        domain=domain,
+        dtype=core_defs.dtype(dtype),
         aligned_index=aligned_index,
         allocator=allocator,
         device=device,
@@ -294,7 +296,7 @@ def as_field(
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
     allocator: Optional[next_allocators.FieldBufferAllocatorProtocol] = None,
     device: Optional[core_defs.Device] = None,
-    # TODO: copy=False
+    # TODO(havogt): copy=False
 ) -> nd_array_field.NdArrayField:
     """Create a Field from an array-like object using the given (or device-default) allocator.
 
@@ -369,7 +371,7 @@ def as_field(
             domain=actual_domain,
             dtype=dtype,
             device=device,
-            # copy=copy
+            # TODO(havogt): copy=copy
         )
 
     # TODO(egparedes): allow zero-copy construction (no reallocation) if buffer has
@@ -466,8 +468,12 @@ def as_connectivity(
 
     if (allocator is None) and (device is None) and xtyping.supports_dlpack(data):
         device = core_defs.Device(*data.__dlpack_device__())
-    allocate = next_allocators.make_concrete_allocator(
-        actual_domain, dtype, allocator=allocator, device=device
+    allocate = functools.partial(
+        next_allocators.allocate,
+        domain=actual_domain,
+        dtype=dtype,
+        allocator=allocator,
+        device=device,
     )
     buffer = allocate()
     # TODO(havogt): consider adding MutableNDArrayObject
@@ -480,10 +486,7 @@ def as_connectivity(
     return connectivity_field
 
 
-_like_field = None  # for more descriptive function signature in editors
-
-
-class AllocatorParams(TypedDict):
+class _AllocatorParams(TypedDict):
     domain: NotRequired[common.DomainLike]
     dtype: NotRequired[core_defs.DType[core_defs.ScalarT],]
     aligned_index: NotRequired[Sequence[common.NamedIndex]]
@@ -494,23 +497,25 @@ class AllocatorParams(TypedDict):
 def empty_like(
     field: nd_array_field.NdArrayField,
     *,
-    domain: Optional[common.DomainLike] = _like_field,
-    dtype: Optional[core_defs.DTypeLike] = _like_field,
-    aligned_index: Optional[Sequence[common.NamedIndex]] = _like_field,
-    allocator: Optional[next_allocators.FieldBufferAllocationUtil] = _like_field,
-    device: Optional[core_defs.Device] = _like_field,
+    domain: Optional[common.DomainLike] = None,
+    dtype: Optional[core_defs.DTypeLike] = None,
+    aligned_index: Optional[Sequence[common.NamedIndex]] = None,
+    allocator: Optional[next_allocators.FieldBufferAllocationUtil] = None,
+    device: Optional[core_defs.Device] = None,
 ) -> nd_array_field.NdArrayField:
-    kwargs: AllocatorParams = {}
+    kwargs: _AllocatorParams = {}
     if domain is not None:
         kwargs["domain"] = domain
     if dtype is not None:
         kwargs["dtype"] = core_defs.dtype(dtype)
     if aligned_index is not None:
         kwargs["aligned_index"] = aligned_index
-    if allocator is not eve.NOTHING:
+    if allocator is not None:
         kwargs["allocator"] = allocator
-    if device is not eve.NOTHING:
+    if device is not None:
         kwargs["device"] = device
     if field._allocator is None:
         raise ValueError("'Field' does not have an allocator.")  # TODO discuss if this is possible
-    return field._allocator(**kwargs)
+
+    allocate = functools.partial(field._allocator, **kwargs)
+    return common._field(allocate(), domain=kwargs.get("domain", field.domain), allocator=allocate)

@@ -292,25 +292,14 @@ StandardGPUFieldBufferAllocator: Final[type[FieldBufferAllocatorProtocol]] = cas
 )
 
 
-class ConcreteAllocator(Protocol):
-    def __call__(
-        domain: common.DomainLike,
-        dtype: core_defs.DType[core_defs.ScalarT],
-        *,
-        aligned_index: Optional[Sequence[common.NamedIndex]],
-        allocator: FieldBufferAllocationUtil,
-        device: core_defs.Device,
-    ) -> core_defs.NDArrayObject: ...
-
-
-def make_concrete_allocator(
+def allocate(
+    *,
     domain: common.DomainLike,  # TODO: there is an inconsistency between DomainLike and concrete DType, probably accept either (Domain, DType) or (DomainLike, DTypeLike). anyway this is not meant to be user-facing
     dtype: core_defs.DType[core_defs.ScalarT],
-    *,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
     allocator: Optional[FieldBufferAllocationUtil] = None,
     device: Optional[core_defs.Device] = None,
-) -> ConcreteAllocator:
+) -> core_defs.NDArrayObject:
     """
     TODO: docstring
     Allocate an NDArrayObject for the given domain and device or allocator.
@@ -346,20 +335,9 @@ def make_concrete_allocator(
     elif device.device_type != actual_allocator.__gt_device_type__:
         raise ValueError(f"Device '{device}' and allocator '{actual_allocator}' are incompatible.")
 
-    def allocate(
-        domain: common.DomainLike = domain,
-        dtype: core_defs.DType[core_defs.ScalarT] = dtype,
-        *,
-        aligned_index: Optional[Sequence[common.NamedIndex]] = aligned_index,
-        allocator: FieldBufferAllocationUtil = actual_allocator,
-        device: core_defs.Device = device,
-    ) -> core_defs.NDArrayObject:
-        # TODO check how to get from FieldBufferAllocationUtil to FieldBufferAllocatorProtocol
-        return allocator.__gt_allocate__(
-            domain=common.domain(domain),
-            dtype=dtype,
-            device_id=device.device_id,
-            aligned_index=aligned_index,
-        )
-
-    return allocate
+    return actual_allocator.__gt_allocate__(
+        domain=common.domain(domain),
+        dtype=dtype,
+        device_id=device.device_id,
+        aligned_index=aligned_index,
+    )

@@ -131,7 +131,9 @@ def test_full(allocator_device_refnamespace):
     assert xp.array_equal(a.ndarray, ref)
 
 
-def test_deepcopy():
+def test_copy():
+    """Ensure data AND layout is preserved."""
+
     testee = gtx.as_field([I, J], np.random.rand(sizes[I], sizes[J]))
     result = copy.deepcopy(testee)
     assert testee.ndarray.strides == result.ndarray.strides
