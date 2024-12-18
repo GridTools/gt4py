@@ -457,16 +457,19 @@ def _gt_find_toplevel_data_accesses(
     """Find all data that is accessed on the top level.
 
     The function will scan the SDFG, ignoring nested one, and return the
-    name of all data (global and transient) that only have AccessNodes on
-    the top level. In data is found that has an AccessNode on both the top
-    level and in a nested scope and error is generated.
-    The function will ignore an access in the following cases:
+    name of all data that only have AccessNodes on the top level. In data
+    is found that has an AccessNode on both the top level and in a nested
+    scope and error is generated.
+    By default the function will return transient and non transient data,
+    however, if `only_transients` is `True` then only transient data will
+    be returned.
+    Furthermore, the function will ignore an access in the following cases:
     - The AccessNode refers to data that is a register.
     - The AccessNode refers to a View.
 
     Args:
         sdfg: The SDFG to process.
-        only_transients: If `True` all non transients will be filtered out.
+        only_transients: If `True` only include transients.
         only_arrays: If `True`, defaults to `False`, only arrays are returned.
 
     Returns:
@@ -524,7 +527,7 @@ def _gt_find_toplevel_data_accesses(
                 continue
 
             # We are only interested in transients
-            if only_transients and desc.transient:
+            if only_transients and (not desc.transient):
                 continue
 
             # Now create the new entry in the list and record the AccessNode.
