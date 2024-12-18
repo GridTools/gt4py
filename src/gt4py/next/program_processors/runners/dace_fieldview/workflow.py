@@ -37,6 +37,7 @@ class DaCeTranslator(
 ):
     device_type: core_defs.DeviceType
     auto_optimize: bool
+    itir_transforms_off: bool = False
 
     def _language_settings(self) -> languages.LanguageSettings:
         return languages.LanguageSettings(
@@ -51,7 +52,8 @@ class DaCeTranslator(
         auto_opt: bool,
         on_gpu: bool,
     ) -> dace.SDFG:
-        ir = itir_transforms.apply_fieldview_transforms(ir, offset_provider=offset_provider)
+        if not self.itir_transforms_off:
+            ir = itir_transforms.apply_fieldview_transforms(ir, offset_provider=offset_provider)
         sdfg = gtir_sdfg.build_sdfg_from_gtir(
             ir, offset_provider_type=common.offset_provider_to_type(offset_provider)
         )
