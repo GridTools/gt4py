@@ -504,7 +504,7 @@ def _gt_find_toplevel_data_accesses(
             #  We do this because register are allocated on the stack, so the compiler
             #  has all information and should organize the best thing possible.
             # TODO(phimuell): verify this.
-            elif desc.storage is not dace.StorageType.Register:
+            elif desc.storage is dace.StorageType.Register:
                 continue
 
             # We are only interested in transients
