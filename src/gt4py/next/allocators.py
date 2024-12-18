@@ -60,7 +60,7 @@ class FieldBufferAllocatorProtocol(Protocol[core_defs.DeviceTypeT]):
         dtype: core_defs.DType[core_defs.ScalarT],
         device_id: int = 0,
         aligned_index: Optional[Sequence[common.NamedIndex]] = None,  # absolute position
-    ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]: ...
+    ) -> core_defs.NDArrayObject: ...
 
 
 def is_field_allocator(obj: Any) -> TypeGuard[FieldBufferAllocatorProtocol]:
@@ -160,7 +160,7 @@ class BaseFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceType
         dtype: core_defs.DType[core_defs.ScalarT],
         device_id: int = 0,
         aligned_index: Optional[Sequence[common.NamedIndex]] = None,  # absolute position
-    ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]:
+    ) -> core_defs.NDArrayObject:
         shape = domain.shape
         layout_map = self.layout_mapper(domain.dims)
         # TODO(egparedes): add support for non-empty aligned index values
@@ -242,7 +242,7 @@ class InvalidFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceT
         dtype: core_defs.DType[core_defs.ScalarT],
         device_id: int = 0,
         aligned_index: Optional[Sequence[common.NamedIndex]] = None,  # absolute position
-    ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]:
+    ) -> core_defs.NDArrayObject:
         raise self.exception
 
 
@@ -293,15 +293,16 @@ StandardGPUFieldBufferAllocator: Final[type[FieldBufferAllocatorProtocol]] = cas
 
 
 def allocate(
-    domain: common.DomainLike,
-    dtype: core_defs.DType[core_defs.ScalarT],
     *,
+    domain: common.DomainLike,  # TODO: there is an inconsistency between DomainLike and concrete DType, probably accept either (Domain, DType) or (DomainLike, DTypeLike). anyway this is not meant to be user-facing
+    dtype: core_defs.DType[core_defs.ScalarT],
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
     allocator: Optional[FieldBufferAllocationUtil] = None,
     device: Optional[core_defs.Device] = None,
-) -> core_allocators.TensorBuffer:
+) -> core_defs.NDArrayObject:
     """
-    Allocate a TensorBuffer for the given domain and device or allocator.
+    TODO: docstring
+    Allocate an NDArrayObject for the given domain and device or allocator.
 
     The arguments `device` and `allocator` are mutually exclusive.
     If `device` is specified, the corresponding default allocator

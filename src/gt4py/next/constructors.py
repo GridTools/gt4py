@@ -8,8 +8,11 @@
 
 from __future__ import annotations
 
+import functools
 from collections.abc import Mapping, Sequence
-from typing import Optional, cast
+from typing import Any, Optional, Protocol, TypeGuard, cast
+
+from typing_extensions import NotRequired, TypedDict
 
 import gt4py._core.definitions as core_defs
 import gt4py.eve as eve
@@ -20,15 +23,73 @@ import gt4py.next.embedded.nd_array_field as nd_array_field
 import gt4py.storage.cartesian.utils as storage_utils
 
 
+class _HasArrayApiCreationFunctions(Protocol):
+    def empty(self, shape: Sequence[int], *, dtype=None, device=None) -> Any: ...
+    def zeros(self, shape: Sequence[int], *, dtype=None, device=None) -> Any: ...
+    def ones(self, shape: Sequence[int], *, dtype=None, device=None) -> Any: ...
+    def full(self, shape: Sequence[int], fill_value, *, dtype=None, device=None) -> Any: ...
+    def asarray(self, obj, *, dtype=None, copy=None) -> Any: ...
+
+
+def _has_array_api_creation_functions(obj: Any) -> TypeGuard[_HasArrayApiCreationFunctions]:
+    return core_defs.is_array_api_namespace(obj) or (
+        hasattr(obj, "empty")
+        and hasattr(obj, "zeros")
+        and hasattr(obj, "ones")
+        and hasattr(obj, "full")
+        and hasattr(obj, "asarray")
+    )
+
+
+def _convert_dtype(
+    xp: Any, dtype: core_defs.DTypeLike
+) -> Any:  # TODO move to core_defs as `to_array_api_dtype`
+    if dtype is None:
+        return None
+    return getattr(xp, core_defs.dtype(dtype).scalar_type.__name__)
+
+
+def _array_api_construction(
+    xp: _HasArrayApiCreationFunctions,
+    fun: str,
+    *args,
+    domain: common.Domain,
+    dtype: Optional[core_defs.DTypeLike] = None,
+    device: Optional[core_defs.Device] = None,
+    **kwargs: Any,
+):
+    if device is not None:
+        raise NotImplementedError("Device specification is not yet supported.")
+    buffer = getattr(xp, fun)(*args, dtype=_convert_dtype(xp, dtype), **kwargs)
+
+    def allocate(
+        domain: common.DomainLike = domain,
+        dtype: core_defs.DTypeLike = dtype,
+        *,
+        aligned_index: Optional[Sequence[common.NamedIndex]],
+        allocator: next_allocators.FieldBufferAllocationUtil | core_defs.ArrayApiNamespace = xp,
+        device: core_defs.Device = device,
+    ) -> core_defs.NDArrayObject:
+        # always returns an empty buffer by design
+        return empty(
+            domain, dtype=dtype, aligned_index=aligned_index, allocator=allocator, device=device
+        )
+
+    return common._field(buffer, domain=domain, allocator=allocate)
+
+
 @eve.utils.with_fluid_partial
 def empty(
     domain: common.DomainLike,
     dtype: core_defs.DTypeLike = core_defs.Float64DType(()),  # noqa: B008 [function-call-in-default-argument]
     *,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
-    allocator: Optional[next_allocators.FieldBufferAllocationUtil] = None,
+    allocator: Optional[
+        next_allocators.FieldBufferAllocationUtil | core_defs.ArrayApiNamespace
+    ] = None,  # TODO make sure numpy/cupy etc namespaces are accepted by mypy (maybe we have to allow Any)
     device: Optional[core_defs.Device] = None,
 ) -> nd_array_field.NdArrayField:
+    # TODO: update doc
     """Create a `Field` of uninitialized (undefined) values using the given (or device-default) allocator.
 
     This function supports partial binding of arguments, see :class:`eve.utils.partial` for details.
@@ -74,13 +135,30 @@ def empty(
         >>> b.shape
         (3, 3)
     """
-    dtype = core_defs.dtype(dtype)
+    if _has_array_api_creation_functions(allocator):
+        domain = common.domain(domain)
+        return _array_api_construction(
+            allocator,
+            "empty",
+            domain.shape,
+            domain=domain,
+            dtype=dtype,
+            device=device,
+        )
+
     if allocator is None and device is None:
         device = core_defs.Device(core_defs.DeviceType.CPU, device_id=0)
-    buffer = next_allocators.allocate(
-        domain, dtype, aligned_index=aligned_index, allocator=allocator, device=device
+
+    allocate = functools.partial(
+        next_allocators.allocate,
+        domain=domain,
+        dtype=core_defs.dtype(dtype),
+        aligned_index=aligned_index,
+        allocator=allocator,
+        device=device,
     )
-    res = common._field(buffer.ndarray, domain=domain)
+    buffer = allocate()
+    res = common._field(buffer, domain=domain, allocator=allocate)
     assert isinstance(res, common.MutableField)
     assert isinstance(res, nd_array_field.NdArrayField)
     return res
@@ -106,6 +184,16 @@ def zeros(
         >>> gtx.zeros({IDim: range(3, 10)}, allocator=gtx.itir_python).ndarray
         array([0., 0., 0., 0., 0., 0., 0.])
     """
+    if _has_array_api_creation_functions(allocator):
+        domain = common.domain(domain)
+        return _array_api_construction(
+            allocator,
+            "zeros",
+            domain.shape,
+            domain=domain,
+            dtype=dtype,
+            device=device,
+        )
     field = empty(
         domain=domain, dtype=dtype, aligned_index=aligned_index, allocator=allocator, device=device
     )
@@ -133,6 +221,16 @@ def ones(
         >>> gtx.ones({IDim: range(3, 10)}, allocator=gtx.itir_python).ndarray
         array([1., 1., 1., 1., 1., 1., 1.])
     """
+    if _has_array_api_creation_functions(allocator):
+        domain = common.domain(domain)
+        return _array_api_construction(
+            allocator,
+            "ones",
+            domain.shape,
+            domain=domain,
+            dtype=dtype,
+            device=device,
+        )
     field = empty(
         domain=domain, dtype=dtype, aligned_index=aligned_index, allocator=allocator, device=device
     )
@@ -166,6 +264,17 @@ def full(
         >>> gtx.full({IDim: 3}, 5, allocator=gtx.itir_python).ndarray
         array([5, 5, 5])
     """
+    if _has_array_api_creation_functions(allocator):
+        domain = common.domain(domain)
+        return _array_api_construction(
+            allocator,
+            "full",
+            domain.shape,
+            fill_value,
+            domain=domain,
+            dtype=dtype,
+            device=device,
+        )
     field = empty(
         domain=domain,
         dtype=dtype if dtype is not None else core_defs.dtype(type(fill_value)),
@@ -187,7 +296,7 @@ def as_field(
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
     allocator: Optional[next_allocators.FieldBufferAllocatorProtocol] = None,
     device: Optional[core_defs.Device] = None,
-    # TODO: copy=False
+    # TODO(havogt): copy=False
 ) -> nd_array_field.NdArrayField:
     """Create a Field from an array-like object using the given (or device-default) allocator.
 
@@ -254,6 +363,16 @@ def as_field(
         if origin:
             raise ValueError(f"Cannot specify origin for domain {domain}")
         actual_domain = common.domain(cast(common.DomainLike, domain))
+    if _has_array_api_creation_functions(allocator):
+        return _array_api_construction(
+            allocator,
+            "asarray",
+            data,
+            domain=actual_domain,
+            dtype=dtype,
+            device=device,
+            # TODO(havogt): copy=copy
+        )
 
     # TODO(egparedes): allow zero-copy construction (no reallocation) if buffer has
     #   already the correct layout and device.
@@ -349,12 +468,54 @@ def as_connectivity(
 
     if (allocator is None) and (device is None) and xtyping.supports_dlpack(data):
         device = core_defs.Device(*data.__dlpack_device__())
-    buffer = next_allocators.allocate(actual_domain, dtype, allocator=allocator, device=device)
+    allocate = functools.partial(
+        next_allocators.allocate,
+        domain=actual_domain,
+        dtype=dtype,
+        allocator=allocator,
+        device=device,
+    )
+    buffer = allocate()
     # TODO(havogt): consider adding MutableNDArrayObject
-    buffer.ndarray[...] = storage_utils.asarray(data)  # type: ignore[index]
+    buffer[...] = storage_utils.asarray(data)  # type: ignore[index]
     connectivity_field = common._connectivity(
-        buffer.ndarray, codomain=codomain, domain=actual_domain, skip_value=skip_value
+        buffer, codomain=codomain, domain=actual_domain, skip_value=skip_value, allocator=allocate
     )
     assert isinstance(connectivity_field, nd_array_field.NdArrayConnectivityField)
 
     return connectivity_field
+
+
+class _AllocatorParams(TypedDict):
+    domain: NotRequired[common.DomainLike]
+    dtype: NotRequired[core_defs.DType[core_defs.ScalarT],]
+    aligned_index: NotRequired[Sequence[common.NamedIndex]]
+    allocator: NotRequired[next_allocators.FieldBufferAllocatorProtocol]
+    device: NotRequired[core_defs.Device]
+
+
+def empty_like(
+    field: nd_array_field.NdArrayField,
+    *,
+    domain: Optional[common.DomainLike] = None,
+    dtype: Optional[core_defs.DTypeLike] = None,
+    aligned_index: Optional[Sequence[common.NamedIndex]] = None,
+    allocator: Optional[next_allocators.FieldBufferAllocationUtil] = None,
+    device: Optional[core_defs.Device] = None,
+) -> nd_array_field.NdArrayField:
+    kwargs: _AllocatorParams = {}
+    if domain is not None:
+        kwargs["domain"] = domain
+    if dtype is not None:
+        kwargs["dtype"] = core_defs.dtype(dtype)
+    if aligned_index is not None:
+        kwargs["aligned_index"] = aligned_index
+    if allocator is not None:
+        kwargs["allocator"] = allocator
+    if device is not None:
+        kwargs["device"] = device
+    if field._allocator is None:
+        raise ValueError("'Field' does not have an allocator.")  # TODO discuss if this is possible
+
+    allocate = functools.partial(field._allocator, **kwargs)
+    return common._field(allocate(), domain=kwargs.get("domain", field.domain), allocator=allocate)
