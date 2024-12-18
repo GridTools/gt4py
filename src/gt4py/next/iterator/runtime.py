@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     # TODO(tehrengruber): remove cirular dependency and import unconditionally
     from gt4py.next import backend as next_backend
 
-__all__ = ["offset", "fundef", "fendef", "closure", "set_at", "if_stmt"]
+__all__ = ["fendef", "fundef", "if_stmt", "offset", "set_at"]
 
 
 @dataclass(frozen=True)
@@ -163,7 +163,7 @@ class FundefFencilWrapper:
                 # if passed as a dict, we need to convert back to builtins for interpretation by the backends
                 assert offset_provider is not None
                 dom = _deduce_domain(dom, common.offset_provider_to_type(offset_provider))
-            closure(dom, self.fundef_dispatcher, out, [*inps])
+            set_at(builtins.as_fieldop(self.fundef_dispatcher, dom)(*inps), dom, out)
 
         return impl
 
@@ -206,11 +206,6 @@ class FundefDispatcher:
 
 def fundef(fun):
     return FundefDispatcher(fun)
-
-
-@builtin_dispatch
-def closure(*args):  # TODO remove
-    return BackendNotSelectedError()
 
 
 @builtin_dispatch

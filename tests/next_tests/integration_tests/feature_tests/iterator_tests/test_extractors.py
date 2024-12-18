@@ -29,16 +29,15 @@ if typing.TYPE_CHECKING:
 try:
     import dace
 
-    from gt4py.next.program_processors.runners.dace import gtir_cpu, gtir_gpu
+    from gt4py.next.program_processors.runners.dace import run_dace_cpu
 except ImportError:
     from gt4py.next import backend as next_backend
 
     dace: Optional[ModuleType] = None
-    gtir_cpu: Optional[next_backend.Backend] = None
-    gtir_gpu: Optional[next_backend.Backend] = None
+    run_dace_cpu: Optional[next_backend.Backend] = None
 
 
-@pytest.fixture(params=[pytest.param(gtir_cpu, marks=pytest.mark.requires_dace), gtx.gtfn_cpu])
+@pytest.fixture(params=[pytest.param(run_dace_cpu, marks=pytest.mark.requires_dace), gtx.gtfn_cpu])
 def gtir_dace_backend(request):
     yield request.param
 

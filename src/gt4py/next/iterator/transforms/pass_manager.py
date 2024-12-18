@@ -6,16 +6,16 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Callable, Optional, Protocol
+from typing import Optional, Protocol
 
 from gt4py.eve import utils as eve_utils
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import (
-    fencil_to_program,
     fuse_as_fieldop,
     global_tmps,
     infer_domain,
+    inline_dynamic_shifts,
     inline_fundefs,
     inline_lifts,
 )
@@ -32,16 +32,16 @@ from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce
 from gt4py.next.iterator.type_system.inference import infer
 
 
-class ITIRTransform(Protocol):
+class GTIRTransform(Protocol):
     def __call__(
-        self, _: itir.Program | itir.FencilDefinition, *, offset_provider: common.OffsetProvider
+        self, _: itir.Program, *, offset_provider: common.OffsetProvider
     ) -> itir.Program: ...
 
 
 # TODO(tehrengruber): Revisit interface to configure temporary extraction. We currently forward
 #  `extract_temporaries` and `temporary_extraction_heuristics` which is inconvenient.
 def apply_common_transforms(
-    ir: itir.Program | itir.FencilDefinition,
+    ir: itir.Program,
     *,
     offset_provider=None,  # TODO(havogt): should be replaced by offset_provider_type, but global_tmps currently relies on runtime info
     extract_temporaries=False,
@@ -49,10 +49,6 @@ def apply_common_transforms(
     common_subexpression_elimination=True,
     force_inline_lambda_args=False,
     unconditionally_collapse_tuples=False,
-    # FIXME[#1582](tehrengruber): Revisit and cleanup after new GTIR temporary pass is in place
-    temporary_extraction_heuristics: Optional[
-        Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
-    ] = None,
     #: A dictionary mapping axes names to their length. See :func:`infer_domain.infer_expr` for
     #: more details.
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
@@ -62,9 +58,6 @@ def apply_common_transforms(
     if offset_provider_type is None:
         offset_provider_type = common.offset_provider_to_type(offset_provider)
 
-    # FIXME[#1582](tehrengruber): Rewrite iterator tests with itir.Program and remove this
-    if isinstance(ir, itir.FencilDefinition):
-        ir = fencil_to_program.FencilToProgram.apply(ir)
     assert isinstance(ir, itir.Program)
 
     tmp_uids = eve_utils.UIDGenerator(prefix="__tmp")
@@ -73,7 +66,7 @@ def apply_common_transforms(
     ir = MergeLet().visit(ir)
     ir = inline_fundefs.InlineFundefs().visit(ir)
 
-    ir = inline_fundefs.prune_unreferenced_fundefs(ir)  # type: ignore[arg-type] # all previous passes return itir.Program
+    ir = inline_fundefs.prune_unreferenced_fundefs(ir)
     ir = NormalizeShifts().visit(ir)
 
     # note: this increases the size of the tree
@@ -81,8 +74,11 @@ def apply_common_transforms(
     ir = InlineLambdas.apply(ir, opcount_preserving=True, force_inline_lambda_args=True)
     # required in order to get rid of expressions without a domain (e.g. when a tuple element is never accessed)
     ir = CollapseTuple.apply(ir, offset_provider_type=offset_provider_type)  # type: ignore[assignment]  # always an itir.Program
+    ir = inline_dynamic_shifts.InlineDynamicShifts.apply(
+        ir
+    )  # domain inference does not support dynamic offsets yet
     ir = infer_domain.infer_program(
-        ir,  # type: ignore[arg-type]  # always an itir.Program
+        ir,
         offset_provider=offset_provider,
         symbolic_domain_sizes=symbolic_domain_sizes,
     )
@@ -119,7 +115,7 @@ def apply_common_transforms(
 
     if extract_temporaries:
         ir = infer(ir, inplace=True, offset_provider_type=offset_provider_type)
-        ir = global_tmps.create_global_tmps(ir, offset_provider=offset_provider, uids=tmp_uids)  # type: ignore[arg-type]  # always an itir.Program
+        ir = global_tmps.create_global_tmps(ir, offset_provider=offset_provider, uids=tmp_uids)
 
     # Since `CollapseTuple` relies on the type inference which does not support returning tuples
     # larger than the number of closure outputs as given by the unconditional collapse, we can
@@ -166,5 +162,8 @@ def apply_fieldview_transforms(
     ir = CollapseTuple.apply(
         ir, offset_provider_type=common.offset_provider_to_type(offset_provider)
     )  # type: ignore[assignment] # type is still `itir.Program`
+    ir = inline_dynamic_shifts.InlineDynamicShifts.apply(
+        ir
+    )  # domain inference does not support dynamic offsets yet
     ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
     return ir

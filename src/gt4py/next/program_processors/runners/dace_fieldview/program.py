@@ -58,9 +58,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
                 ),
             )
         )
-        program = typing.cast(
-            itir.Program, gtir_stage.data
-        )  # we already checked that our backend uses GTIR
+        program = gtir_stage.data
         program = itir_transforms.apply_fieldview_transforms(  # run the transforms separately because they require the runtime info
             program, offset_provider=offset_provider
         )

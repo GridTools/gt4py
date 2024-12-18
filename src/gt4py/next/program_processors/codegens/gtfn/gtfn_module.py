@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import functools
-from typing import Any, Callable, Final, Optional
+from typing import Any, Final, Optional
 
 import factory
 import numpy as np
@@ -53,9 +53,6 @@ class GTFNTranslationStep(
     use_imperative_backend: bool = False
     device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
     symbolic_domain_sizes: Optional[dict[str, str]] = None
-    temporary_extraction_heuristics: Optional[
-        Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
-    ] = None
 
     def _default_language_settings(self) -> languages.LanguageWithHeaderFilesSettings:
         match self.device_type:
@@ -80,7 +77,7 @@ class GTFNTranslationStep(
 
     def _process_regular_arguments(
         self,
-        program: itir.FencilDefinition | itir.Program,
+        program: itir.Program,
         arg_types: tuple[ts.TypeSpec, ...],
         offset_provider_type: common.OffsetProviderType,
     ) -> tuple[list[interface.Parameter], list[str]]:
@@ -157,7 +154,7 @@ class GTFNTranslationStep(
 
     def _preprocess_program(
         self,
-        program: itir.FencilDefinition | itir.Program,
+        program: itir.Program,
         offset_provider: common.OffsetProvider,
     ) -> itir.Program:
         apply_common_transforms = functools.partial(
@@ -167,7 +164,6 @@ class GTFNTranslationStep(
             # sid::composite (via hymap) supports assigning from tuple with more elements to tuple with fewer elements
             unconditionally_collapse_tuples=True,
             symbolic_domain_sizes=self.symbolic_domain_sizes,
-            temporary_extraction_heuristics=self.temporary_extraction_heuristics,
         )
 
         new_program = apply_common_transforms(
@@ -186,7 +182,7 @@ class GTFNTranslationStep(
 
     def generate_stencil_source(
         self,
-        program: itir.FencilDefinition | itir.Program,
+        program: itir.Program,
         offset_provider: common.OffsetProvider,
         column_axis: Optional[common.Dimension],
     ) -> str:
@@ -214,7 +210,7 @@ class GTFNTranslationStep(
         self, inp: stages.CompilableProgram
     ) -> stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings]:
         """Generate GTFN C++ code from the ITIR definition."""
-        program: itir.FencilDefinition | itir.Program = inp.data
+        program: itir.Program = inp.data
 
         # handle regular parameters and arguments of the program (i.e. what the user defined in
         #  the program)

@@ -6,14 +6,11 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from types import ModuleType
-from typing import Optional
-
 import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import backend as next_backend, common
+from gt4py.next import allocators as gtx_allocators, common as gtx_common
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import cartesian_case, unstructured_case  # noqa: F401
@@ -34,25 +31,19 @@ from next_tests.integration_tests.multi_feature_tests.ffront_tests.test_laplacia
 
 try:
     import dace
-
-    from gt4py.next.program_processors.runners.dace import (
-        gtir_cpu as run_dace_cpu,
-        gtir_gpu as run_dace_gpu,
-    )
 except ImportError:
     dace: Optional[ModuleType] = None  # type:ignore[no-redef]
-    run_dace_cpu: Optional[next_backend.Backend] = None
-    run_dace_gpu: Optional[next_backend.Backend] = None
 
 pytestmark = pytest.mark.requires_dace
 
 
 def test_sdfgConvertible_laplap(cartesian_case):  # noqa: F811
-    # TODO(kotsaloscv): Temporary solution until the `requires_dace` marker is fully functional
-    if cartesian_case.backend not in [run_dace_cpu, run_dace_gpu]:
+    if not cartesian_case.backend or "dace" not in cartesian_case.backend.name:
         pytest.skip("DaCe-related test: Test SDFGConvertible interface for GT4Py programs")
 
-    if cartesian_case.backend == run_dace_gpu:
+    allocator, backend = cartesian_case.allocator, cartesian_case.backend
+
+    if gtx_allocators.is_field_allocator_factory_for(allocator, gtx_allocators.CUPY_DEVICE):
         import cupy as xp
     else:
         import numpy as xp
@@ -65,13 +56,13 @@ def test_sdfgConvertible_laplap(cartesian_case):  # noqa: F811
     def sdfg():
         tmp_field = xp.empty_like(out_field)
         lap_program.with_grid_type(cartesian_case.grid_type).with_backend(
-            cartesian_case.backend
-        ).with_connectivities(common.offset_provider_to_type(cartesian_case.offset_provider))(
+            backend
+        ).with_connectivities(gtx_common.offset_provider_to_type(cartesian_case.offset_provider))(
             in_field, tmp_field
         )
         lap_program.with_grid_type(cartesian_case.grid_type).with_backend(
-            cartesian_case.backend
-        ).with_connectivities(common.offset_provider_to_type(cartesian_case.offset_provider))(
+            backend
+        ).with_connectivities(gtx_common.offset_provider_to_type(cartesian_case.offset_provider))(
             tmp_field, out_field
         )
 
@@ -95,13 +86,12 @@ def testee(a: gtx.Field[gtx.Dims[Vertex], gtx.float64], b: gtx.Field[gtx.Dims[Ed
 
 @pytest.mark.uses_unstructured_shift
 def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
-    # TODO(kotsaloscv): Temporary solution until the `requires_dace` marker is fully functional
-    if unstructured_case.backend not in [run_dace_cpu, run_dace_gpu]:
+    if not unstructured_case.backend or "dace" not in unstructured_case.backend.name:
         pytest.skip("DaCe-related test: Test SDFGConvertible interface for GT4Py programs")
 
     allocator, backend = unstructured_case.allocator, unstructured_case.backend
 
-    if backend == run_dace_gpu:
+    if gtx_allocators.is_field_allocator_factory_for(allocator, gtx_allocators.CUPY_DEVICE):
         import cupy as xp
 
         dace_storage_type = dace.StorageType.GPU_Global
