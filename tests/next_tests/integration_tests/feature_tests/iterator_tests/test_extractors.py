@@ -77,7 +77,7 @@ def test_input_names_extractor_cartesian(cartesian):
         testee_op(b, out=c)
         testee_op(a, out=b)
 
-    input_field_names = extractors.InputNamesExtractor.only_fields(testee.itir)
+    input_field_names = extractors.InputNamesExtractor.only_fields(testee.gtir)
     assert input_field_names == {"a", "b"}
 
 
@@ -98,5 +98,5 @@ def test_output_names_extractor(cartesian):
         testee_op(a, out=b)
         testee_op(a, out=c)
 
-    output_field_names = extractors.OutputNamesExtractor.only_fields(testee.itir)
+    output_field_names = extractors.OutputNamesExtractor.only_fields(testee.gtir)
     assert output_field_names == {"b", "c"}
