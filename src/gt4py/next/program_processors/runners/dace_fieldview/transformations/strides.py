@@ -475,7 +475,9 @@ def _gt_find_toplevel_data_accesses(
                 # We also check if it was ever found on the top level, this should
                 #  not happen, as everything should go through Maps. But some strange
                 #  DaCe transformation might do it.
-                assert data in top_level_data, f"Found {data} on the top level and inside a scope."
+                assert (
+                    data not in top_level_data
+                ), f"Found {data} on the top level and inside a scope."
                 not_top_level_data.add(data)
                 continue
 
