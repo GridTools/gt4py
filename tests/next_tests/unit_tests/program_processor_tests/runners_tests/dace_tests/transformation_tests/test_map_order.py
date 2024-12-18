@@ -7,17 +7,19 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import pytest
+
+
+pytest.importorskip("dace")
+
+
 import numpy as np
+from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next.program_processors.runners.dace_fieldview import (
     transformations as gtx_transformations,
 )
 
 from . import util
-
-
-dace = pytest.importorskip("dace")
-from dace.sdfg import nodes as dace_nodes
 
 
 def _perform_reorder_test(

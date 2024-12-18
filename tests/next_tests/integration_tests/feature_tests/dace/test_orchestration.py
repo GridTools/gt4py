@@ -29,12 +29,7 @@ from next_tests.integration_tests.multi_feature_tests.ffront_tests.test_laplacia
 )
 
 
-try:
-    import dace
-except ImportError:
-    dace: Optional[ModuleType] = None  # type:ignore[no-redef]
-
-pytestmark = pytest.mark.requires_dace
+pytest.importorskip("dace")
 
 
 def test_sdfgConvertible_laplap(cartesian_case):
