@@ -14,6 +14,9 @@ from gt4py.next.type_system import type_specifications as ts
 class SymbolNameSetExtractor(eve.NodeVisitor):
     """Extract a set of symbol names"""
 
+    def visit_Literal(self, node: itir.Literal) -> set[str]:
+        return set()
+
     def generic_visitor(self, node: itir.Node) -> set[str]:
         input_fields: set[str] = set()
         for child in eve.trees.iter_children_values(node):
