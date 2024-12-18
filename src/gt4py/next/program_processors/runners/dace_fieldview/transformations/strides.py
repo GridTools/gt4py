@@ -433,7 +433,12 @@ def _gt_map_strides_to_nested_sdfg(
     outer_strides: Iterable[int | dace.symbolic.SymExpr],
     ignore_symbol_mapping: bool = False,
 ) -> None:
-    # TODO(phimuell/edopao): Refactor this function.
+    """
+    Todo:
+        - Refactor this function.
+        - Handle the case the stride is used somewhere else.
+        - Handle the case where we have an explicit size 1 dimension in slicing.
+    """
     # We need to propagate the strides inside the nested SDFG on the global arrays
     new_strides = tuple(
         stride
