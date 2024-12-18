@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import functools
-from typing import Iterable, Optional
+from typing import Iterable, Optional, TypeAlias
 
 import dace
 from dace import data as dace_data
@@ -16,6 +16,19 @@ from dace.sdfg import nodes as dace_nodes
 from gt4py.next.program_processors.runners.dace_fieldview import (
     transformations as gtx_transformations,
 )
+
+
+PropagatedStrideRecord: TypeAlias = tuple[str, dace_nodes.NestedSDFG]
+"""Record of a stride that has been propagated into a NestedSDFG.
+
+The type combines the NestedSDFG into which the strides were already propagated
+and the data within that NestedSDFG to which we have propagated the data,
+which is the connector name on the NestedSDFG.
+We need the NestedSDFG because we have to know what was already processed,
+however, we also need the name within because of aliasing, i.e. a data
+descriptor on the outside could be mapped to multiple data descriptors
+inside the NestedSDFG.
+"""
 
 
 def gt_change_transient_strides(
@@ -118,8 +131,8 @@ def gt_propagate_strides_of(
     """Propagates the strides of `data_name` within the whole SDFG.
 
     This function will call `gt_propagate_strides_from_access_node()` for every
-    AccessNode that refers to `data_name`. It will also make sure that
-    a NestedSDFG is visited only once.
+    AccessNode that refers to `data_name`. It will also make sure that a descriptor
+    inside a NestedSDFG is only processed once.
 
     Args:
         sdfg: The SDFG on which we operate.
@@ -127,7 +140,7 @@ def gt_propagate_strides_of(
     """
 
     # Defining it here ensures that we will not enter an NestedSDFG multiple times.
-    processed_nsdfgs: set[dace_nodes.NestedSDFG] = set()
+    processed_nsdfgs: set[PropagatedStrideRecord] = set()
 
     for state in sdfg.states():
         for dnode in state.data_nodes():
@@ -145,7 +158,7 @@ def gt_propagate_strides_from_access_node(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     outer_node: dace_nodes.AccessNode,
-    processed_nsdfgs: Optional[set[dace_nodes.NestedSDFG]] = None,
+    processed_nsdfgs: Optional[set[PropagatedStrideRecord]] = None,
 ) -> None:
     """Propagates the stride of `outer_node` along all adjacent edges of `outer_node`.
 
@@ -164,7 +177,7 @@ def gt_propagate_strides_from_access_node(
         state: The state where the data node is used.
         edge: The edge that reads from the data node, the nested SDFG is expected as the destination.
         outer_node: The data node whose strides should be propagated.
-        processed_nsdfgs: Set of Nested SDFG that were already processed and will be ignored.
+        processed_nsdfgs: Set of NestedSDFG that were already processed and will be ignored.
             Only specify when you know what your are doing.
         propagate_along_dataflow: Determine the direction of propagation. If `True` the
             function follows the dataflow.
@@ -197,7 +210,7 @@ def gt_map_strides_to_dst_nested_sdfg(
     state: dace.SDFGState,
     edge: dace.sdfg.graph.Edge,
     outer_node: dace.nodes.AccessNode,
-    processed_nsdfgs: Optional[set[dace_nodes.NestedSDFG]] = None,
+    processed_nsdfgs: Optional[set[PropagatedStrideRecord]] = None,
 ) -> None:
     """Propagates the strides of `outer_node` along `edge` along the dataflow.
 
@@ -227,7 +240,7 @@ def gt_map_strides_to_src_nested_sdfg(
     state: dace.SDFGState,
     edge: dace.sdfg.graph.Edge,
     outer_node: dace.nodes.AccessNode,
-    processed_nsdfgs: Optional[set[dace_nodes.NestedSDFG]] = None,
+    processed_nsdfgs: Optional[set[PropagatedStrideRecord]] = None,
 ) -> None:
     """Propagates the strides of `outer_node` along `edge` against the dataflow.
 
@@ -257,7 +270,7 @@ def _gt_map_strides_to_nested_sdfg_src_dst(
     state: dace.SDFGState,
     edge: dace.sdfg.graph.MultiConnectorEdge[dace.Memlet],
     outer_node: dace.nodes.AccessNode,
-    processed_nsdfgs: Optional[set[dace_nodes.NestedSDFG]],
+    processed_nsdfgs: Optional[set[PropagatedStrideRecord]],
     propagate_along_dataflow: bool,
 ) -> None:
     """Propagates the stride of `outer_node` along `edge`.
@@ -348,13 +361,14 @@ def _gt_map_strides_to_nested_sdfg_src_dst(
     elif isinstance(get_node(edge), dace.nodes.NestedSDFG):
         nsdfg_node = get_node(edge)
         inner_data = get_inner_data(edge)
+        process_record = (inner_data, nsdfg_node)
 
-        if nsdfg_node in processed_nsdfgs:
-            # We have processed this nested SDFG already, so we have nothing to do.
+        if process_record in processed_nsdfgs:
+            # We already handled this NestedSDFG and the inner data.
             return
 
         # Mark this nested SDFG as processed.
-        processed_nsdfgs.add(nsdfg_node)
+        processed_nsdfgs.add(process_record)
 
         # Now set the stride of the data descriptor inside the nested SDFG to
         #  the ones it has outside.
