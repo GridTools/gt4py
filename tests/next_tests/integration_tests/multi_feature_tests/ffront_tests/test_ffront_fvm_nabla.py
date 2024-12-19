@@ -11,10 +11,11 @@ from typing import Tuple
 import numpy as np
 import pytest
 
+
 pytest.importorskip("atlas4py")
 
 from gt4py import next as gtx
-from gt4py.next import allocators, neighbor_sum
+from gt4py.next import _allocators, neighbor_sum
 from gt4py.next.iterator import atlas_utils
 
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (

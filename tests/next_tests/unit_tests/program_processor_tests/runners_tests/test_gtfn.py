@@ -20,7 +20,7 @@ other variables are computed at import time based on them.
 """
 
 import gt4py._core.definitions as core_defs
-from gt4py.next import allocators, config
+from gt4py.next import _allocators, config
 from gt4py.next.iterator import transforms
 from gt4py.next.iterator.transforms import global_tmps
 from gt4py.next.otf import workflow
@@ -40,8 +40,8 @@ def test_backend_factory_trait_device():
     assert cpu_version.executor.decoration.keywords["device"] is core_defs.DeviceType.CPU
     assert gpu_version.executor.decoration.keywords["device"] is core_defs.DeviceType.CUDA
 
-    assert allocators.is_field_allocator_for(cpu_version.allocator, core_defs.DeviceType.CPU)
-    assert allocators.is_field_allocator_for(gpu_version.allocator, core_defs.DeviceType.CUDA)
+    assert _allocators.is_field_allocator_for(cpu_version.allocator, core_defs.DeviceType.CPU)
+    assert _allocators.is_field_allocator_for(gpu_version.allocator, core_defs.DeviceType.CUDA)
 
 
 def test_backend_factory_trait_cached():

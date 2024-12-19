@@ -14,7 +14,6 @@ import enum
 import functools
 import math
 import numbers
-from types import ModuleType
 
 import numpy as np
 import numpy.typing as npt
@@ -28,6 +27,7 @@ from gt4py.eve.extended_typing import (
     Iterator,
     Literal,
     Protocol,
+    Self,
     Sequence,
     Tuple,
     Type,
@@ -339,15 +339,6 @@ def dtype(dtype_like: DTypeLike) -> DType:
     return dtype_like if isinstance(dtype_like, DType) else DType(np.dtype(dtype_like).type)
 
 
-def to_array_api_dtype(xp: ModuleType, dtype_: DTypeLike | None) -> Any:
-    """
-    Converts a GT4Py `DTypeLike` to the dtype object of the given Array API namespace.
-
-    Note: For convenience `None` is passed-through as it has a consistent meaning in all Array API implementations.
-    """
-    return None if dtype_ is None else getattr(xp, dtype(dtype_).scalar_type.__name__)
-
-
 # -- Custom protocols  --
 class GTDimsInterface(Protocol):
     """
@@ -415,6 +406,7 @@ DeviceTypeT = TypeVar(
     MetalDeviceTyping,
     VPIDeviceTyping,
     ROCMDeviceTyping,
+    covariant=True,
 )
 
 
@@ -464,7 +456,7 @@ class NDArrayObject(Protocol):
 
     def any(self) -> bool: ...
 
-    def __getitem__(self, item: Any) -> NDArrayObject: ...
+    def __getitem__(self, item: Any) -> Self: ...
 
     def __abs__(self) -> NDArrayObject: ...
 
@@ -517,12 +509,47 @@ class NDArrayObject(Protocol):
     def __xor__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
 
 
+class MutableNDArrayObject(NDArrayObject, Protocol):
+    def __setitem__(self, index: Any, value: Any) -> None: ...
+
+
 class ArrayApiNamespace(Protocol):
-    @property
-    def __array_api_version__(self) -> str: ...
+    def empty(self, shape: Sequence[int], *, dtype: Any = None, device: Any = None) -> Any: ...
+    def zeros(self, shape: Sequence[int], *, dtype: Any = None, device: Any = None) -> Any: ...
+    def ones(self, shape: Sequence[int], *, dtype: Any = None, device: Any = None) -> Any: ...
+    def full(
+        self, shape: Sequence[int], fill_value: Scalar, *, dtype: Any = None, device: Any = None
+    ) -> Any: ...
+    def asarray(self, obj: Any, *, dtype: Any = None, copy: Any = None) -> Any: ...
+
+    # @property # once all relevant implementations have this attribute
+    # def __array_api_version__(self) -> str: ... # noqa: ERA001
 
     # TODO(havogt): add relevant methods and attributes or wait for the standard to provide it, see e.g. https://github.com/data-apis/array-api/issues/697
 
 
 def is_array_api_namespace(obj: Any) -> TypeGuard[ArrayApiNamespace]:
-    return hasattr(obj, "__array_api_version__")
+    # return hasattr(obj, "__array_api_version__") # noqa: ERA001 # once all relevant implementations have this attribute
+    return (
+        hasattr(obj, "empty")
+        and hasattr(obj, "zeros")
+        and hasattr(obj, "ones")
+        and hasattr(obj, "full")
+        and hasattr(obj, "asarray")
+    )
+
+
+def to_array_api_dtype(xp: ArrayApiNamespace, dtype_: DTypeLike | None) -> Any:
+    """
+    Converts a GT4Py `DTypeLike` to the dtype object of the given Array API namespace.
+
+    Note: For convenience `None` is passed-through as it has a consistent meaning in all Array API implementations.
+    """
+    if dtype_ is None:
+        return None
+    else:
+        dtype_ = dtype(dtype_)
+        assert (
+            dtype_.tensor_shape == ()
+        )  # TODO(havogt): support tensor shapes (or remove from our DType)
+        return getattr(xp, dtype_.scalar_type.__name__)

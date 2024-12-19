@@ -75,7 +75,7 @@ class BufferAllocator(Protocol[core_defs.DeviceTypeT]):
         layout_map: BufferLayoutMap,
         byte_alignment: int,
         aligned_index: Optional[Sequence[int]] = None,
-    ) -> core_defs.NDArrayObject:
+    ) -> core_defs.MutableNDArrayObject:
         """
         Allocate an NDArrayObject with the given shape, layout and alignment settings.
 
@@ -109,7 +109,7 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.DeviceTypeT]):
         layout_map: BufferLayoutMap,
         byte_alignment: int,
         aligned_index: Optional[Sequence[int]] = None,
-    ) -> core_defs.NDArrayObject:
+    ) -> core_defs.MutableNDArrayObject:
         if not core_defs.is_valid_tensor_shape(shape):
             raise ValueError(f"Invalid shape {shape}")
         ndim = len(shape)
@@ -190,7 +190,7 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.DeviceTypeT]):
         item_size: int,
         strides: Sequence[int],
         byte_offset: int,
-    ) -> core_defs.NDArrayObject:
+    ) -> core_defs.MutableNDArrayObject:
         """Create shaped view from buffer."""
         pass
 
@@ -200,7 +200,7 @@ class ArrayUtils:
     array_ns: types.ModuleType
     empty: Callable[..., _NDBuffer]
     byte_bounds: Callable[[_NDBuffer], Tuple[int, int]]
-    as_strided: Callable[..., core_defs.NDArrayObject]
+    as_strided: Callable[..., core_defs.MutableNDArrayObject]
 
 
 numpy_array_utils = ArrayUtils(
@@ -258,7 +258,7 @@ class NDArrayBufferAllocator(_BaseNDArrayBufferAllocator[core_defs.DeviceTypeT])
         item_size: int,
         strides: Sequence[int],
         byte_offset: int,
-    ) -> core_defs.NDArrayObject:
+    ) -> core_defs.MutableNDArrayObject:
         aligned_buffer = buffer[byte_offset : byte_offset + math.prod(allocated_shape) * item_size]  # type: ignore[index] # TODO(egparedes): should we extend `_NDBuffer`s to cover __getitem__?
         flat_ndarray = aligned_buffer.view(dtype=np.dtype(dtype))
         tensor_view = self._array_utils.as_strided(

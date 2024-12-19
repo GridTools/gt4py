@@ -6,9 +6,13 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+# TODO: make this module private
+
 import abc
 import dataclasses
 import functools
+
+import array_api_compat
 
 import gt4py._core.definitions as core_defs
 import gt4py.next.common as common
@@ -41,6 +45,68 @@ CUPY_DEVICE: Final[Literal[None, core_defs.DeviceType.CUDA, core_defs.DeviceType
 )
 
 
+class GTArrayAllocationNamespace(Protocol):
+    """
+    Standard Array API-like construction functions based on `domain` instead of `shape`.
+
+    The reason to use `domain` is:
+    - we need the `Dimension`s for getting the desired ordering of strides
+    - `aligned_index` refers to a point in the domain (absolute position), not relative to the array shape
+    """
+
+    # Notes:
+    # - this concept could be evolved to a more general `GTArrayNamespace` that adds all array functions that we use in embedded
+    # - maybe for advanced indexing use-case: extend the namespace with standard compliant fallback functions.
+
+    def empty(
+        self,
+        domain: common.DomainLike,
+        *,
+        dtype: Optional[core_defs.DTypeLike] = None,
+        device: Optional[core_defs.Device] = None,
+        aligned_index: Optional[Sequence[common.NamedIndex]] = None,
+    ) -> core_defs.NDArrayObject: ...
+
+    def zeros(
+        self,
+        domain: common.DomainLike,
+        *,
+        dtype: Optional[core_defs.DTypeLike] = None,
+        device: Optional[core_defs.Device] = None,
+        aligned_index: Optional[Sequence[common.NamedIndex]] = None,
+    ) -> core_defs.NDArrayObject: ...
+
+    def ones(
+        self,
+        domain: common.DomainLike,
+        *,
+        dtype: Optional[core_defs.DTypeLike] = None,
+        device: Optional[core_defs.Device] = None,
+        aligned_index: Optional[Sequence[common.NamedIndex]] = None,
+    ) -> core_defs.NDArrayObject: ...
+
+    def full(
+        self,
+        domain: common.DomainLike,
+        fill_value: core_defs.Scalar,
+        *,
+        dtype: Optional[core_defs.DTypeLike] = None,
+        device: Optional[core_defs.Device] = None,
+        aligned_index: Optional[Sequence[common.NamedIndex]] = None,
+    ) -> core_defs.NDArrayObject: ...
+
+    def asarray(
+        self,
+        data: core_defs.NDArrayObject,
+        *,
+        domain: common.DomainLike,
+        dtype: Optional[core_defs.DTypeLike] = None,
+        device: Optional[core_defs.Device] = None,
+        copy: Optional[bool] = None,
+        aligned_index: Optional[Sequence[common.NamedIndex]] = None,
+    ) -> core_defs.NDArrayObject: ...
+
+
 FieldLayoutMapper: TypeAlias = Callable[
     [Sequence[common.Dimension]], core_allocators.BufferLayoutMap
 ]
@@ -60,7 +126,7 @@ class FieldBufferAllocatorProtocol(Protocol[core_defs.DeviceTypeT]):
         dtype: core_defs.DType[core_defs.ScalarT],
         device_id: int = 0,
         aligned_index: Optional[Sequence[common.NamedIndex]] = None,  # absolute position
-    ) -> core_defs.NDArrayObject: ...
+    ) -> core_defs.MutableNDArrayObject: ...
 
 
 def is_field_allocator(obj: Any) -> TypeGuard[FieldBufferAllocatorProtocol]:
@@ -160,7 +226,7 @@ class BaseFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceType
         dtype: core_defs.DType[core_defs.ScalarT],
         device_id: int = 0,
         aligned_index: Optional[Sequence[common.NamedIndex]] = None,  # absolute position
-    ) -> core_defs.NDArrayObject:
+    ) -> core_defs.MutableNDArrayObject:
         shape = domain.shape
         layout_map = self.layout_mapper(domain.dims)
         # TODO(egparedes): add support for non-empty aligned index values
@@ -242,7 +308,7 @@ class InvalidFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceT
         dtype: core_defs.DType[core_defs.ScalarT],
         device_id: int = 0,
         aligned_index: Optional[Sequence[common.NamedIndex]] = None,  # absolute position
-    ) -> core_defs.NDArrayObject:
+    ) -> core_defs.MutableNDArrayObject:
         raise self.exception
 
 
@@ -294,12 +360,12 @@ StandardGPUFieldBufferAllocator: Final[type[FieldBufferAllocatorProtocol]] = cas
 
 def allocate(
     *,
-    domain: common.DomainLike,  # TODO: there is an inconsistency between DomainLike and concrete DType, probably accept either (Domain, DType) or (DomainLike, DTypeLike). anyway this is not meant to be user-facing
+    domain: common.Domain,
     dtype: core_defs.DType[core_defs.ScalarT],
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
     allocator: Optional[FieldBufferAllocationUtil] = None,
     device: Optional[core_defs.Device] = None,
-) -> core_defs.NDArrayObject:
+) -> core_defs.MutableNDArrayObject:
     """
     TODO: docstring
     Allocate an NDArrayObject for the given domain and device or allocator.
@@ -336,8 +402,213 @@ def allocate(
         raise ValueError(f"Device '{device}' and allocator '{actual_allocator}' are incompatible.")
 
     return actual_allocator.__gt_allocate__(
-        domain=common.domain(domain),
+        domain=domain,
         dtype=dtype,
         device_id=device.device_id,
         aligned_index=aligned_index,
     )
+
+
+def _check_unsupported_device_and_aligned_index(
+    device: Optional[core_defs.Device], aligned_index: Optional[Sequence[common.NamedIndex]]
+) -> None:
+    if aligned_index is not None:
+        raise NotImplementedError("Aligned index is not support for Array API namespaces.")
+    if device is not None:
+        # TODO(havogt): this requires to translate our device object to the concrete Array API implementation's device object
+        raise NotImplementedError("Device specification is not yet supported.")
+
+
+def get_array_allocation_namespace(
+    allocator: FieldBufferAllocationUtil | core_defs.ArrayApiNamespace | None,
+) -> GTArrayAllocationNamespace:
+    if allocator is None:
+        allocator = StandardCPUFieldBufferAllocator()
+    if core_defs.is_array_api_namespace(allocator):
+        assert core_defs.is_array_api_namespace(allocator)
+        array_ns = array_api_compat.array_namespace(allocator.empty([0]))
+
+        class _ArrayNamespaceWrapper:
+            @staticmethod
+            def empty(
+                domain: common.DomainLike,
+                *,
+                dtype: Optional[core_defs.DTypeLike] = None,
+                device: Optional[core_defs.Device] = None,
+                aligned_index: Optional[Sequence[common.NamedIndex]] = None,
+            ) -> core_defs.NDArrayObject:
+                _check_unsupported_device_and_aligned_index(device, aligned_index)
+                return array_ns.empty(
+                    shape=common.domain(domain).shape,
+                    dtype=core_defs.to_array_api_dtype(array_ns, dtype),
+                )
+
+            @staticmethod
+            def zeros(
+                domain: common.DomainLike,
+                *,
+                dtype: Optional[core_defs.DTypeLike] = None,
+                device: Optional[core_defs.Device] = None,
+                aligned_index: Optional[Sequence[common.NamedIndex]] = None,
+            ) -> core_defs.NDArrayObject:
+                _check_unsupported_device_and_aligned_index(device, aligned_index)
+                return array_ns.zeros(
+                    shape=common.domain(domain).shape,
+                    dtype=core_defs.to_array_api_dtype(array_ns, dtype),
+                )
+
+            @staticmethod
+            def ones(
+                domain: common.DomainLike,
+                *,
+                dtype: Optional[core_defs.DTypeLike] = None,
+                device: Optional[core_defs.Device] = None,
+                aligned_index: Optional[Sequence[common.NamedIndex]] = None,
+            ) -> core_defs.NDArrayObject:
+                _check_unsupported_device_and_aligned_index(device, aligned_index)
+                return array_ns.ones(
+                    shape=common.domain(domain).shape,
+                    dtype=core_defs.to_array_api_dtype(array_ns, dtype),
+                )
+
+            @staticmethod
+            def full(
+                domain: common.DomainLike,
+                fill_value: core_defs.Scalar,
+                *,
+                dtype: Optional[core_defs.DTypeLike] = None,
+                device: Optional[core_defs.Device] = None,
+                aligned_index: Optional[Sequence[common.NamedIndex]] = None,
+            ) -> core_defs.NDArrayObject:
+                _check_unsupported_device_and_aligned_index(device, aligned_index)
+                return array_ns.full(
+                    shape=common.domain(domain).shape,
+                    fill_value=fill_value,
+                    dtype=core_defs.to_array_api_dtype(array_ns, dtype),
+                )
+
+            @staticmethod
+            def asarray(
+                data: core_defs.NDArrayObject,
+                *,
+                domain: common.DomainLike,
+                dtype: Optional[core_defs.DTypeLike] = None,
+                device: Optional[core_defs.Device] = None,
+                copy: Optional[bool] = None,
+                aligned_index: Optional[Sequence[common.NamedIndex]] = None,
+            ) -> core_defs.NDArrayObject:
+                _check_unsupported_device_and_aligned_index(device, aligned_index)
+                if not data.shape == common.domain(domain).shape:
+                    raise ValueError(
+                        f"Array of shape '{data.shape}' is incompatible with domain '{domain}'."
+                    )
+
+                return array_ns.asarray(
+                    data, dtype=core_defs.to_array_api_dtype(array_ns, dtype), copy=copy
+                )
+
+        return _ArrayNamespaceWrapper
+
+    else:
+
+        class _CustomAllocationArrayNamespace:
+            @staticmethod
+            def empty(
+                domain: common.DomainLike,
+                *,
+                dtype: Optional[core_defs.DTypeLike] = None,
+                device: Optional[core_defs.Device] = None,
+                aligned_index: Optional[Sequence[common.NamedIndex]] = None,
+            ) -> core_defs.NDArrayObject:
+                assert is_field_allocator(allocator)
+                return allocate(
+                    domain=common.domain(domain),
+                    dtype=core_defs.dtype(dtype),
+                    aligned_index=aligned_index,
+                    allocator=allocator,
+                    device=device,
+                )
+
+            @staticmethod
+            def zeros(
+                domain: common.DomainLike,
+                *,
+                dtype: Optional[core_defs.DTypeLike] = None,
+                device: Optional[core_defs.Device] = None,
+                aligned_index: Optional[Sequence[common.NamedIndex]] = None,
+            ) -> core_defs.NDArrayObject:
+                assert is_field_allocator(allocator)
+                buffer = allocate(
+                    domain=common.domain(domain),
+                    dtype=core_defs.dtype(dtype),
+                    aligned_index=aligned_index,
+                    allocator=allocator,
+                    device=device,
+                )
+                buffer[...] = 0
+                return buffer
+
+            @staticmethod
+            def ones(
+                domain: common.DomainLike,
+                *,
+                dtype: Optional[core_defs.DTypeLike] = None,
+                device: Optional[core_defs.Device] = None,
+                aligned_index: Optional[Sequence[common.NamedIndex]] = None,
+            ) -> core_defs.NDArrayObject:
+                assert is_field_allocator(allocator)
+                buffer = allocate(
+                    domain=common.domain(domain),
+                    dtype=core_defs.dtype(dtype),
+                    aligned_index=aligned_index,
+                    allocator=allocator,
+                    device=device,
+                )
+                buffer[...] = 1
+                return buffer
+
+            @staticmethod
+            def full(
+                domain: common.DomainLike,
+                fill_value: core_defs.Scalar,
+                *,
+                dtype: Optional[core_defs.DTypeLike] = None,
+                device: Optional[core_defs.Device] = None,
+                aligned_index: Optional[Sequence[common.NamedIndex]] = None,
+            ) -> core_defs.NDArrayObject:
+                assert is_field_allocator(allocator)
+                buffer = allocate(
+                    domain=common.domain(domain),
+                    dtype=core_defs.dtype(dtype),  # TODO check all dtypes
+                    aligned_index=aligned_index,
+                    allocator=allocator,
+                    device=device,
+                )
+                buffer[...] = fill_value
+                return buffer
+
+            @staticmethod
+            def asarray(
+                data: core_defs.NDArrayObject,
+                *,
+                domain: common.DomainLike,
+                dtype: Optional[core_defs.DTypeLike] = None,
+                device: Optional[core_defs.Device] = None,
+                copy: Optional[bool] = None,
+                aligned_index: Optional[Sequence[common.NamedIndex]] = None,
+            ) -> core_defs.NDArrayObject:
+                assert is_field_allocator(allocator)
+                if not copy:
+                    raise NotImplementedError("Zero-copy construction is not yet supported.")
+                dtype = core_defs.dtype(data.dtype) if dtype is None else core_defs.dtype(dtype)
+                buffer = allocate(
+                    domain=common.domain(domain),
+                    dtype=dtype,
+                    aligned_index=aligned_index,
+                    allocator=allocator,
+                    device=device,
+                )
+                buffer[...] = array_api_compat.array_namespace(buffer).asarray(data)
+                return buffer
+
+        return _CustomAllocationArrayNamespace

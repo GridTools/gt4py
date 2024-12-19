@@ -267,7 +267,7 @@ def _allocate_gpu(
     dtype: DTypeLike,
     alignment_bytes: int,
     aligned_index: Optional[Sequence[int]],
-) -> Tuple["cp.ndarray", "cp.ndarray"]:
+) -> "cp.ndarray":
     assert cp is not None
     assert _GPUBufferAllocator is not None, "GPU allocation library or device not found"
     device = core_defs.Device(  # type: ignore[type-var]

@@ -12,7 +12,7 @@ from typing import Optional
 import pytest
 
 import gt4py._core.definitions as core_defs
-import gt4py.next.allocators as next_allocators
+import gt4py.next._allocators as next_allocators
 import gt4py.next.common as common
 import gt4py.storage.allocators as core_allocators
 
@@ -108,7 +108,7 @@ def test_get_allocator():
 
 
 def test_horizontal_first_layout_mapper():
-    from gt4py.next.allocators import horizontal_first_layout_mapper
+    from gt4py.next._allocators import horizontal_first_layout_mapper
 
     # Test with only horizontal dimensions
     dims = [
@@ -152,7 +152,7 @@ class TestInvalidFieldBufferAllocator:
 
 
 def test_allocate():
-    from gt4py.next.allocators import StandardCPUFieldBufferAllocator, make_concrete_allocator
+    from gt4py.next._allocators import StandardCPUFieldBufferAllocator, make_concrete_allocator
 
     I = common.Dimension("I")
     J = common.Dimension("J")

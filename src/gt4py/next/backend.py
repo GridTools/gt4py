@@ -13,7 +13,7 @@ import typing
 from typing import Any, Generic
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import allocators as next_allocators
+from gt4py.next import _allocators as next_allocators
 from gt4py.next.ffront import (
     foast_to_gtir,
     foast_to_itir,

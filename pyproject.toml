@@ -24,6 +24,7 @@ classifiers = [
   'Topic :: Scientific/Engineering :: Physics'
 ]
 dependencies = [
+  "array-api-compat>=1.9.1",
   "astunparse>=1.6.3;python_version<'3.9'",
   'attrs>=21.3',
   'black>=22.3',
@@ -265,6 +266,7 @@ markers = [
   'uses_unstructured_shift: tests that use a unstructured connectivity',
   'uses_max_over: tests that use the max_over builtin',
   'uses_mesh_with_skip_values: tests that use a mesh with skip values',
+  'slices_out_argument: tests that slice the out argument in a field_operator call',
   'checks_specific_error: tests that rely on the backend to produce a specific error message'
 ]
 norecursedirs = ['dist', 'build', 'cpp_backend_tests/build*', '_local/*', '.*']

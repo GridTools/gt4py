@@ -27,7 +27,7 @@ import pytest
 
 from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
-from gt4py.next import allocators as next_allocators, common
+from gt4py.next import _allocators as next_allocators, common
 
 
 I = gtx.Dimension("I")

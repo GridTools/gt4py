@@ -950,7 +950,9 @@ def _field(
     /,
     *,
     domain: Optional[DomainLike] = None,
-    allocator: Optional[Any] = None,  # TODO: resolve the type annotation
+    allocation_ns: Optional[
+        Any
+    ] = None,  # TODO: should be `next_allocators.GTArrayAllocationNamespace`
     dtype: Optional[core_defs.DType] = None,
 ) -> Field:
     raise NotImplementedError
@@ -964,7 +966,9 @@ def _connectivity(
     codomain: Dimension,
     *,
     domain: Optional[DomainLike] = None,
-    allocator: Optional[Any] = None,  # TODO: resolve the type annotation
+    allocation_ns: Optional[
+        Any
+    ] = None,  # TODO: should be `next_allocators.GTArrayAllocationNamespace`
     dtype: Optional[core_defs.DType] = None,
     skip_value: Optional[core_defs.IntegralScalar] = None,
 ) -> Connectivity:
