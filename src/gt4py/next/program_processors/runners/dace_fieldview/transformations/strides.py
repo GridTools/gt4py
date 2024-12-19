@@ -484,16 +484,7 @@ def _gt_map_strides_into_nested_sdfg(
 
     new_strides: list = []
     for dim_ostride, dim_oinflow in zip(outer_strides, outer_inflow, strict=True):
-        current_inner_dim = len(new_strides)
-
-        if inner_shape[current_inner_dim] == 1 and dim_oinflow == 1:
-            # There is an explicit size 1 dimension. Because the only valid
-            #  index for this dimension is `0` we can use any value here.
-            #  To give the compiler more information we explicitly use `0`,
-            #  instead of the outer value.
-            new_strides.append(0)
-
-        elif dim_oinflow == 1:
+        if dim_oinflow == 1:
             # Only something flows in, thus there is no stride in this dimension.
             pass
 
