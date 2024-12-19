@@ -487,15 +487,11 @@ def _gt_map_strides_into_nested_sdfg(
         if dim_oinflow == 1:
             # Only something flows in, thus there is no stride in this dimension.
             pass
-
         else:
             # There is inflow into the SDFG, so we need the stride.
             assert dim_oinflow != 0
             new_strides.append(dim_ostride)
         assert len(new_strides) <= len(inner_shape)
-
-    if len(new_strides) != len(inner_shape):
-        raise ValueError("Failed to compute the inner strides.")
 
     # If we have a scalar on the inside, then there is nothing to adjust.
     #  We could have performed the test above, but doing it here, gives us
@@ -509,6 +505,9 @@ def _gt_map_strides_into_nested_sdfg(
         raise TypeError(
             f"Expected that '{inner_data}' is an 'Array' but it is '{type(inner_desc).__name__}'."
         )
+
+    if len(new_strides) != len(inner_shape):
+        raise ValueError("Failed to compute the inner strides.")
 
     # Now we actually replace the strides, there are two ways of doing it.
     #  The first is to create an alias in the `symbol_mapping`, however,
