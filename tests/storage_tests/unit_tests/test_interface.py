@@ -121,16 +121,7 @@ def test_allocate_cpu(param_dict):
     shape = param_dict["shape"]
     layout_map = param_dict["layout_order"]
 
-    raw_buffer, field = allocate_cpu(shape, layout_map, dtype, alignment_bytes, aligned_index)
-
-    # check that memory of field is contained in raw_buffer
-    np_byte_bounds = (
-        np.byte_bounds if hasattr(np, "byte_bounds") else np.lib.array_utils.byte_bounds
-    )
-    assert (
-        np_byte_bounds(field)[0] >= np_byte_bounds(raw_buffer)[0]
-        and np_byte_bounds(field)[1] <= np_byte_bounds(raw_buffer)[1]
-    )
+    field = allocate_cpu(shape, layout_map, dtype, alignment_bytes, aligned_index)
 
     # check if the first compute-domain point in the last dimension is aligned for 100 random "columns"
     import random
@@ -185,17 +176,7 @@ def test_allocate_gpu(param_dict):
     aligned_index = param_dict["aligned_index"]
     shape = param_dict["shape"]
     layout_map = param_dict["layout_order"]
-    device_raw_buffer, device_field = allocate_gpu(
-        shape, layout_map, dtype, alignment_bytes, aligned_index
-    )
-
-    # Would like to check device_field.base against device_raw_buffer but
-    # as_strided returns an ndarray where device_field.base is set to None.
-    # Instead, check that the memory of field is contained in raws buffer
-    assert (
-        device_field.data.ptr >= device_raw_buffer.data.ptr
-        and device_field[-1:].data.ptr <= device_raw_buffer[-1:].data.ptr
-    )
+    device_field = allocate_gpu(shape, layout_map, dtype, alignment_bytes, aligned_index)
 
     # check if the first compute-domain point in the last dimension is aligned for 100 random "columns"
     import random

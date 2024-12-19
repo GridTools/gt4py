@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import copy
 import math
 import operator
 from typing import Callable, Iterable, Optional
@@ -259,6 +260,13 @@ def test_as_scalar(nd_array_implementation):
     result = testee.as_scalar()
     assert result == 42.0
     assert isinstance(result, np.float32)
+
+
+@pytest.mark.parametrize("copy", [copy.copy, copy.deepcopy])
+def test_copy(copy, nd_array_implementation):
+    testee = _make_field_or_scalar([[0, 1], [2, 3]], nd_array_implementation)
+    result = copy(testee)
+    assert np.array_equal(testee.ndarray, result.ndarray)
 
 
 def product_nd_array_implementation_params():
