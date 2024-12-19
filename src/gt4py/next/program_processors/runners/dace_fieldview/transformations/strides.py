@@ -6,8 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import functools
-from typing import Iterable, Optional, TypeAlias
+from typing import Optional, TypeAlias
 
 import dace
 from dace import data as dace_data
@@ -346,6 +345,11 @@ def _gt_map_strides_to_nested_sdfg_src_dst(
         def get_inner_data(edge: dace.sdfg.graph.MultiConnectorEdge[dace.Memlet]) -> str:
             return edge.dst_conn
 
+        def get_subset(
+            edge: dace.sdfg.graph.MultiConnectorEdge[dace.Memlet],
+        ) -> dace.subsets.Subset:
+            return edge.data.src_subset
+
         def next_edges_by_connector(
             state: dace.SDFGState, edge: dace.sdfg.graph.MultiConnectorEdge[dace.Memlet]
         ) -> list[dace.sdfg.graph.MultiConnectorEdge[dace.Memlet]]:
@@ -362,6 +366,11 @@ def _gt_map_strides_to_nested_sdfg_src_dst(
 
         def get_inner_data(edge: dace.sdfg.graph.MultiConnectorEdge[dace.Memlet]) -> str:
             return edge.src_conn
+
+        def get_subset(
+            edge: dace.sdfg.graph.MultiConnectorEdge[dace.Memlet],
+        ) -> dace.subsets.Subset:
+            return edge.data.dst_subset
 
         def next_edges_by_connector(
             state: dace.SDFGState, edge: dace.sdfg.graph.MultiConnectorEdge[dace.Memlet]
@@ -394,11 +403,11 @@ def _gt_map_strides_to_nested_sdfg_src_dst(
 
         # Now set the stride of the data descriptor inside the nested SDFG to
         #  the ones it has outside.
-        _gt_map_strides_to_nested_sdfg(
+        _gt_map_strides_into_nested_sdfg(
             nsdfg_node=nsdfg_node,
             inner_data=inner_data,
-            edge_data=edge.data,
-            outer_strides=outer_node.desc(sdfg).strides,
+            outer_subset=get_subset(edge),
+            outer_desc=outer_node.desc(sdfg),
             ignore_symbol_mapping=ignore_symbol_mapping,
         )
 
@@ -426,59 +435,137 @@ def _gt_map_strides_to_nested_sdfg_src_dst(
             )
 
 
-def _gt_map_strides_to_nested_sdfg(
+def _gt_map_strides_into_nested_sdfg(
     nsdfg_node: dace.nodes.NestedSDFG,
     inner_data: str,
-    edge_data: dace.Memlet,
-    outer_strides: Iterable[int | dace.symbolic.SymExpr],
+    outer_subset: dace.subsets.Subset,
+    outer_desc: dace_data.Data,
     ignore_symbol_mapping: bool = False,
 ) -> None:
-    """
+    """Modify the strides of `inner_data` inside `nsdfg_node` to match `outer_desc`.
+
+    `inner_data` is the name of of a data descriptor inside the NestedSDFG.
+    The function will then modify the modify the strides of `inner_data` to
+    match the ones of `outer_desc`.
+
+    Args:
+        nsdfg_node: The node in the parent SDFG that contains the NestedSDFG.
+        inner_data: The name of the data descriptor that should be processed
+            inside the NestedSDFG (by construction also a connector name).
+        outer_subset: The subset that describes what part of the outer data is
+            mapped into the NestedSDFG.
+        outer_desc: The data descriptor of the data on the outside.
+        ignore_symbol_mapping: If possible the function will perform the renaming
+            through the `symbol_mapping` of the nested SDFG. If `True` then
+            the function will always perform the renaming.
+
     Todo:
-        - Refactor this function.
-        - Handle the case the stride is used somewhere else.
-        - Handle the case where we have an explicit size 1 dimension in slicing.
+        - Handle explicit dimensions of size 1.
     """
-    # We need to propagate the strides inside the nested SDFG on the global arrays
-    new_strides = tuple(
-        stride
-        for stride, to_map_size in zip(
-            outer_strides,
-            edge_data.subset.size(),
-            strict=True,
-        )
-        if to_map_size != 1
-    )
-    inner_desc = nsdfg_node.sdfg.arrays[inner_data]
+    # We need to compute the new strides. In the following we assume that the
+    #  relative order of the dimension does not change, but some dimensions
+    #  that are present on the outside are not present on the inside. For
+    #  example this happens for the Memlet `a[__i0, 0:__a_size1]`.
+    #  We detect this case by checking if that dimension has size 1.
+    # TODO(phimuell): Handle the case were some additional size 1 dimensions are added.
+    inner_desc: dace_data.Data = nsdfg_node.sdfg.arrays[inner_data]
+    inner_shape = inner_desc.shape
+    inner_strides_init = inner_desc.strides
+
+    # TODO(phimuell): For now this is fine, but it should be possisble to allow it.
     assert not inner_desc.transient
 
-    if isinstance(inner_desc, dace.data.Scalar):
-        assert len(new_strides) == 0
+    outer_strides = outer_desc.strides
+    outer_inflow = outer_subset.size()
+
+    new_strides: list = []
+    for dim_ostride, dim_oinflow in zip(outer_strides, outer_inflow, strict=True):
+        current_inner_dim = len(new_strides)
+
+        if inner_shape[current_inner_dim] == 1 and dim_oinflow == 1:
+            # There is an explicit size 1 dimension. Because the only valid
+            #  index for this dimension is `0` we can use any value here.
+            #  To give the compiler more information we explicitly use `0`,
+            #  instead of the outer value.
+            new_strides.append(0)
+
+        elif dim_oinflow == 1:
+            # Only something flows in, thus there is no stride in this dimension.
+            pass
+
+        else:
+            # There is inflow into the SDFG, so we need the stride.
+            assert dim_oinflow != 0
+            new_strides.append(dim_ostride)
+        assert len(new_strides) <= len(inner_shape)
+
+    if len(new_strides) != len(inner_shape):
+        raise ValueError("Failed to compute the inner strides.")
+
+    # If we have a scalar on the inside, then there is nothing to adjust.
+    #  We could have performed the test above, but doing it here, gives us
+    #  the chance of validating it.
+    if isinstance(inner_desc, dace_data.Scalar):
+        if len(new_strides) != 0:
+            raise ValueError(f"Dimensional error for '{inner_data}' in '{nsdfg_node.label}'.")
         return
 
-    assert isinstance(inner_desc, dace.data.Array)
+    if not isinstance(inner_desc, dace_data.Array):
+        raise TypeError(
+            f"Expected that '{inner_data}' is an 'Array' but it is '{type(inner_desc).__name__}'."
+        )
+
+    # Now we actually replace the strides, there are two ways of doing it.
+    #  The first is to create an alias in the `symbol_mapping`, however,
+    #  this is only possible if the current strides are singular symbols,
+    #  like `__a_strides_1`, but not expressions such as `horizontal_end - horizontal_start`
+    #  or literal values.
+    #  The second way would be to replace `strides` attributer of the
+    #  inner data descriptor. In case the new stride consists of expressions
+    #  such as `value1 - value2` we have to make them available inside the
+    #  NestedSDFG. However, it could be that the strides is used somewhere else.
+    # We will do the following, if `ignore_symbol_mapping` is `False` and
+    #  the strides of the inner descriptors are symbols, we will use the
+    #  symbol mapping. Otherwise, we will replace the `strides` attribute
+    #  of the inner descriptor, in addition we will install a remapping,
+    #  for those values that were a symbol.
     if (not ignore_symbol_mapping) and all(
-        isinstance(inner_stride, dace.symbol) for inner_stride in inner_desc.strides
+        isinstance(inner_stride, dace.symbol) for inner_stride in inner_strides_init
     ):
+        # Use the symbol
         for inner_stride, outer_stride in zip(inner_desc.strides, new_strides, strict=True):
             nsdfg_node.symbol_mapping[inner_stride.name] = outer_stride
     else:
-        assert len(inner_desc.shape) == len(new_strides)
+        # We have to replace the `strides` attribute of the inner descriptor.
         inner_desc.set_shape(inner_desc.shape, new_strides)
 
-        new_strides_symbols: list[dace.symbol] = functools.reduce(
-            lambda acc, itm: (acc + list(itm.free_symbols))  # type: ignore[union-attr]
-            if dace.symbolic.issymbolic(itm)
-            else acc,
-            new_strides,
-            [],
-        )
-        new_strides_free_symbols = {
-            sym for sym in new_strides_symbols if sym.name not in nsdfg_node.sdfg.symbols
+        # Now find the free symbols that the new strides need.
+        new_strides_symbols: list[str] = []
+        for new_stride_dim in new_strides:
+            if dace.symbolic.issymbolic(new_stride_dim):
+                new_strides_symbols.append(str(new_stride_dim))
+            else:
+                new_strides_symbols.extend(sym for sym in new_stride_dim.free_symbols)
+
+        # Now we determine the set of symbols that should be mapped inside the NestedSDFG.
+        #  We will exclude all that are already inside the `symbol_mapping` (we do not
+        #  check if they map to the same value, we just hope it). Furthermore,
+        #  we will exclude all symbols that are listed in the `symbols` property
+        #  of the SDFG that is nested, and hope that it has the same meaning.
+        missing_symbol_mappings: set[str] = {
+            sym
+            for sym in new_strides_symbols
+            if not (sym in nsdfg_node.sdfg.symbols or sym in nsdfg_node.symbol_mapping)
         }
-        for sym in new_strides_free_symbols:
-            nsdfg_node.sdfg.add_symbol(sym.name, sym.dtype)
-            nsdfg_node.symbol_mapping[sym.name] = sym
+        for sym in missing_symbol_mappings:
+            # We can not create symbols in the nested SDFG, because we do not have
+            #  the type of the symbols.
+            nsdfg_node.symbol_mapping[sym] = dace.symbolic.pystr_to_symbolic(sym)
+
+        # Now create aliases for the old symbols that were used as strides.
+        for old_sym, new_sym in zip(inner_strides_init, new_strides):
+            if dace.symbolic.issymbolic(old_sym):
+                nsdfg_node.symbol_mapping[str(old_sym)] = dace.symbolic.pystr_to_symbolic(new_sym)
 
 
 def _gt_find_toplevel_data_accesses(
