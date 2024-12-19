@@ -557,17 +557,20 @@ def _gt_map_strides_into_nested_sdfg(
             for sym in new_strides_symbols
             if not (sym in nsdfg_node.sdfg.symbols or sym in nsdfg_node.symbol_mapping)
         }
-        # Now create the symbol we in the NestedSDFG.
+
+        # Now propagate the symbols from the parent SDFG to the NestedSDFG.
         for sym in missing_symbol_mappings:
             if sym in sdfg.symbols:
                 # TODO(phimuell): Handle the case the symbol is already defined.
                 nsdfg_node.sdfg.add_symbol(sym, sdfg.symbols[sym])
             else:
-                # The symbol is not known in the parent SDFG, but we need a symbol
-                #  for it. So we use the default.
-                nsdfg_node.sdfg.add_symbol(sym, dace.symbol("__INVALID_SYMBOL__").dtype)
+                # The symbol is not known in the parent SDFG, but we need to define a
+                #  symbol and for that we need a `dtype`. Our solution (which is as
+                #  wrong as any other) is to create a symbol with that name and then
+                #  use the type that was deduced.
+                nsdfg_node.sdfg.add_symbol(sym, dace.symbol(sym).dtype)
                 warnings.warn(
-                    f"Could not find the symbol '{sym}' in the parent SDFG while modifying the strides.",
+                    f"Could not find the symbol '{sym}' in the parent SDFG while modifying the strides, use '{nsdfg_node.sdfg.symbols[sym]}' as dtype.",
                     stacklevel=1,
                 )
             nsdfg_node.symbol_mapping[sym] = dace.symbolic.pystr_to_symbolic(sym)
