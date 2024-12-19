@@ -79,22 +79,29 @@ ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
     """\
     class Field:
         def __init__(self, field, offsets: Tuple[int, ...], dimensions: Tuple[bool, bool, bool]):
-            ii = iter(range(3))
-            self.idx_to_data = tuple(
-                [next(ii) if has_dim else None for has_dim in dimensions]
-                + list(range(sum(dimensions), len(field.shape)))
-            )
+            self.is_global_table = all(not has_dim for has_dim in dimensions)
+
+            if self.is_global_table:
+                self.idx_to_data = tuple(i for i in range(field.ndim))
+                self.offsets = (0,) * field.ndim
+            else:
+                self.idx_to_data = tuple(
+                    [i if has_dim else None for i, has_dim in enumerate(dimensions)]
+                    + list(range(sum(dimensions), field.ndim))
+                )
+                self.offsets = offsets
 
             shape = [field.shape[i] if i is not None else 1 for i in self.idx_to_data]
             self.field_view = np.reshape(field.data, shape).view(np.ndarray)
-
-            self.offsets = offsets
 
         @classmethod
         def empty(cls, shape, dtype, offset):
             return cls(np.empty(shape, dtype=dtype), offset, (True, True, True))
 
         def shim_key(self, key):
+            if self.is_global_table:
+                return key
+                
             new_args = []
             if not isinstance(key, tuple):
                 key = (key, )
@@ -134,6 +141,7 @@ ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
             return self.field_view.__getitem__(self.shim_key(key))
 
         def __setitem__(self, key, value):
+            assert not self.is_global_table
             return self.field_view.__setitem__(self.shim_key(key), value)
     """
 )
