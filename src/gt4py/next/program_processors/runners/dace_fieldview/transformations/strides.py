@@ -6,7 +6,6 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import warnings
 from typing import Optional, TypeAlias
 
 import dace
@@ -173,7 +172,7 @@ def gt_propagate_strides_from_access_node(
     ignore_symbol_mapping: bool = True,
     processed_nsdfgs: Optional[set[PropagatedStrideRecord]] = None,
 ) -> None:
-    """Propagates the stride of `outer_node` to any adjacent reachable through its edges.
+    """Propagates the stride of `outer_node` to any adjacent NestedSDFG.
 
     The function will propagate the strides of the data descriptor `outer_node`
     refers to along all adjacent edges of `outer_node`. If one of these edges
@@ -227,10 +226,10 @@ def gt_map_strides_to_dst_nested_sdfg(
     ignore_symbol_mapping: bool = False,
     processed_nsdfgs: Optional[set[PropagatedStrideRecord]] = None,
 ) -> None:
-    """Propagates the strides of `outer_node` along `edge` along the dataflow.
+    """Propagates the strides of `outer_node` along `edge` in the dataflow direction.
 
-    In this context "along the dataflow" means that `edge` is an outgoing
-    edge of `outer_node` and the strides are into all NestedSDFGs that
+    In this context "along the dataflow direction" means that `edge` is an outgoing
+    edge of `outer_node` and the strides are propagated into all NestedSDFGs that
     are downstream of `outer_node`.
 
     Except in certain cases this function should not be used directly. It is
@@ -267,11 +266,11 @@ def gt_map_strides_to_src_nested_sdfg(
     ignore_symbol_mapping: bool = False,
     processed_nsdfgs: Optional[set[PropagatedStrideRecord]] = None,
 ) -> None:
-    """Propagates the strides of `outer_node` along `edge` against the dataflow.
+    """Propagates the strides of `outer_node` along `edge` in the opposite direction of the dataflow
 
-    In this context "along the dataflow" means that `edge` is an incoming
-    edge of `outer_node` and the strides are into all NestedSDFGs that
-    are upstream of `outer_node`.
+    In this context "in the opposite direction of the dataflow" means that `edge`
+    is an incoming edge of `outer_node` and the strides are propagated into all
+    NestedSDFGs that are upstream of `outer_node`.
 
     Except in certain cases this function should not be used directly. It is
     instead recommended to use `gt_propagate_strides_of()`, which propagates
@@ -500,13 +499,10 @@ def _gt_map_strides_into_nested_sdfg(
     new_strides: list = []
     for dim_ostride, dim_oinflow in zip(outer_strides, outer_inflow, strict=True):
         if dim_oinflow == 1:
-            # This is the case of implicit slicing along one dimension. The inner
-            #  array descriptor has shape != 1 in `current_inner_dim`, which has
-            #  to map to a subsequent dimension of `outer_inflow`
+            # This is the case of implicit slicing along one dimension.
             pass
         else:
             # There is inflow into the SDFG, so we need the stride.
-            assert dim_oinflow != 0
             new_strides.append(dim_ostride)
         assert len(new_strides) <= len(inner_shape)
 
@@ -580,15 +576,8 @@ def _gt_map_strides_into_nested_sdfg(
 
         # Now propagate the symbols from the parent SDFG to the NestedSDFG.
         for sym in missing_symbol_mappings:
-            if str(sym) in sdfg.symbols:
-                nsdfg_node.sdfg.add_symbol(sym.name, sdfg.symbols[sym.name])
-            else:
-                # The symbol is not known in the parent SDFG, so we add it
-                nsdfg_node.sdfg.add_symbol(sym.name, sym.dtype)
-                warnings.warn(
-                    f"Could not find the symbol '{sym}' in the parent SDFG while modifying the strides, use '{nsdfg_node.sdfg.symbols[sym.name]}' as dtype.",
-                    stacklevel=1,
-                )
+            assert sym.name in sdfg.symbols, f"Expected that '{sym}' is defined in the parent SDFG."
+            nsdfg_node.sdfg.add_symbol(sym.name, sdfg.symbols[sym.name])
             nsdfg_node.symbol_mapping[sym.name] = sym
 
         # Now create aliases for the old symbols that were used as strides.
