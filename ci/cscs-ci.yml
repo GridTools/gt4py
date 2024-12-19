@@ -169,7 +169,7 @@ build_py38_image_x86_64:
       VARIANT: [-nomesh, -atlas]
       SUBVARIANT: [-cuda11x, -cpu]
 .test_helper_aarch64:
-  extends: [.container-runner-santis-gh200, .test_helper]
+  extends: [.container-runner-daint-gh200, .test_helper]
   parallel:
     matrix:
     - SUBPACKAGE: [cartesian, storage]
