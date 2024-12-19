@@ -575,8 +575,6 @@ def _gt_map_strides_into_nested_sdfg(
         # Now propagate the symbols from the parent SDFG to the NestedSDFG.
         for sym in missing_symbol_mappings:
             if sym in sdfg.symbols:
-                # TODO(phimuell): Handle the case the symbol is already defined in
-                #   the nested SDFG.
                 nsdfg_node.sdfg.add_symbol(sym.name, sdfg.symbols[sym.name])
             else:
                 # The symbol is not known in the parent SDFG, so we add it
@@ -589,7 +587,7 @@ def _gt_map_strides_into_nested_sdfg(
 
         # Now create aliases for the old symbols that were used as strides.
         for old_sym, new_sym in zip(inner_strides_init, new_strides):
-            if dace.symbolic.issymbolic(old_sym):
+            if dace.symbolic.issymbolic(old_sym) and old_sym.is_symbol:
                 nsdfg_node.symbol_mapping[str(old_sym)] = dace.symbolic.pystr_to_symbolic(new_sym)
 
 
