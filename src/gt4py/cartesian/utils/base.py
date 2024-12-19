@@ -63,10 +63,8 @@ def flatten_iter(nested_iterables, filter_none=False, *, skip_types=(str, bytes)
 
 def get_member(instance, item_name):
     try:
-        if (
-            isinstance(instance, collections.abc.Mapping)
-            or isinstance(instance, collections.abc.Sequence)
-            and isinstance(item_name, int)
+        if isinstance(instance, collections.abc.Mapping) or (
+            isinstance(instance, collections.abc.Sequence) and isinstance(item_name, int)
         ):
             return instance[item_name]
         else:

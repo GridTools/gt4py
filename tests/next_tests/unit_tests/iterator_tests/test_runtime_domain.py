@@ -27,21 +27,20 @@ connectivity = common.ConnectivityType(
     dtype=None,
 )
 
+I = gtx.Dimension("I")
+
 
 def test_deduce_domain():
     assert isinstance(_deduce_domain({}, {}), CartesianDomain)
     assert isinstance(_deduce_domain(UnstructuredDomain(), {}), UnstructuredDomain)
     assert isinstance(_deduce_domain({}, {"foo": connectivity}), UnstructuredDomain)
     assert isinstance(
-        _deduce_domain(CartesianDomain([("I", range(1))]), {"foo": connectivity}), CartesianDomain
+        _deduce_domain(CartesianDomain([(I, range(1))]), {"foo": connectivity}), CartesianDomain
     )
 
 
-I = gtx.Dimension("I")
-
-
 def test_embedded_error_on_wrong_domain():
-    dom = CartesianDomain([("I", range(1))])
+    dom = CartesianDomain([(I, range(1))])
 
     out = gtx.as_field([I], np.zeros(1))
     with pytest.raises(RuntimeError, match="expected 'UnstructuredDomain'"):

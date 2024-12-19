@@ -28,8 +28,9 @@ from gt4py.next.iterator.builtins import (
     reduce,
     tuple_get,
     unstructured_domain,
+    as_fieldop,
 )
-from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
+from gt4py.next.iterator.runtime import set_at, fendef, fundef, offset
 
 from next_tests.integration_tests.multi_feature_tests.fvm_nabla_setup import (
     assert_close,
@@ -55,7 +56,8 @@ def compute_zavgS(pp, S_M):
 
 @fendef
 def compute_zavgS_fencil(n_edges, out, pp, S_M):
-    closure(unstructured_domain(named_range(Edge, 0, n_edges)), compute_zavgS, out, [pp, S_M])
+    domain = unstructured_domain(named_range(Edge, 0, n_edges))
+    set_at(as_fieldop(compute_zavgS, domain)(pp, S_M), domain, out)
 
 
 @fundef
@@ -100,12 +102,8 @@ def compute_pnabla2(pp, S_M, sign, vol):
 
 @fendef
 def nabla(n_nodes, out, pp, S_MXX, S_MYY, sign, vol):
-    closure(
-        unstructured_domain(named_range(Vertex, 0, n_nodes)),
-        pnabla,
-        out,
-        [pp, S_MXX, S_MYY, sign, vol],
-    )
+    domain = unstructured_domain(named_range(Vertex, 0, n_nodes))
+    set_at(as_fieldop(pnabla, domain)(pp, S_MXX, S_MYY, sign, vol), domain, out)
 
 
 @pytest.mark.requires_atlas
@@ -145,7 +143,8 @@ def test_compute_zavgS(program_processor):
 
 @fendef
 def compute_zavgS2_fencil(n_edges, out, pp, S_M):
-    closure(unstructured_domain(named_range(Edge, 0, n_edges)), compute_zavgS2, out, [pp, S_M])
+    domain = unstructured_domain(named_range(Edge, 0, n_edges))
+    set_at(as_fieldop(compute_zavgS2, domain)(pp, S_M), domain, out)
 
 
 @pytest.mark.requires_atlas
@@ -212,12 +211,8 @@ def test_nabla(program_processor):
 
 @fendef
 def nabla2(n_nodes, out, pp, S, sign, vol):
-    closure(
-        unstructured_domain(named_range(Vertex, 0, n_nodes)),
-        compute_pnabla2,
-        out,
-        [pp, S, sign, vol],
-    )
+    domain = unstructured_domain(named_range(Vertex, 0, n_nodes))
+    set_at(as_fieldop(compute_pnabla2, domain)(pp, S, sign, vol), domain, out)
 
 
 @pytest.mark.requires_atlas
@@ -276,17 +271,16 @@ def compute_pnabla_sign(pp, S_M, vol, node_index, is_pole_edge):
 @fendef
 def nabla_sign(n_nodes, out_MXX, out_MYY, pp, S_MXX, S_MYY, vol, node_index, is_pole_edge):
     # TODO replace by single stencil which returns tuple
-    closure(
-        unstructured_domain(named_range(Vertex, 0, n_nodes)),
-        compute_pnabla_sign,
+    domain = unstructured_domain(named_range(Vertex, 0, n_nodes))
+    set_at(
+        as_fieldop(compute_pnabla_sign, domain)(pp, S_MXX, vol, node_index, is_pole_edge),
+        domain,
         out_MXX,
-        [pp, S_MXX, vol, node_index, is_pole_edge],
     )
-    closure(
-        unstructured_domain(named_range(Vertex, 0, n_nodes)),
-        compute_pnabla_sign,
+    set_at(
+        as_fieldop(compute_pnabla_sign, domain)(pp, S_MYY, vol, node_index, is_pole_edge),
+        domain,
         out_MYY,
-        [pp, S_MYY, vol, node_index, is_pole_edge],
     )
 
 
