@@ -22,10 +22,10 @@ PropagatedStrideRecord: TypeAlias = tuple[str, dace_nodes.NestedSDFG]
 """Record of a stride that has been propagated into a NestedSDFG.
 
 The type combines the NestedSDFG into which the strides were already propagated
-and the data within that NestedSDFG to which we have propagated the data,
+and the data within that NestedSDFG to which we have propagated the strides,
 which is the connector name on the NestedSDFG.
 We need the NestedSDFG because we have to know what was already processed,
-however, we also need the name within because of aliasing, i.e. a data
+however, we also need the inner array name because of aliasing, i.e. a data
 descriptor on the outside could be mapped to multiple data descriptors
 inside the NestedSDFG.
 """
@@ -96,13 +96,14 @@ def _gt_change_transient_strides_non_recursive_impl(
     for top_level_transient, accesses in top_level_transients_and_their_accesses.items():
         desc: dace_data.Array = sdfg.arrays[top_level_transient]
 
-        # Setting the strides only make sense if we have more than two dimensions
+        # Setting the strides only make sense if we have more than one dimensions
         ndim = len(desc.shape)
         if ndim <= 1:
             continue
 
         # We assume that everything is in C order initially, to get FORTRAN order
         #  we simply have to reverse the order.
+        # TODO(phimuell): Improve this.
         new_stride_order = list(range(ndim))
         desc.set_strides_from_layout(*new_stride_order)
 
@@ -110,11 +111,11 @@ def _gt_change_transient_strides_non_recursive_impl(
         #  collected all the AccessNodes we are using the
         #  `gt_propagate_strides_from_access_node()` function, but we have to
         #  create `processed_nsdfg` set already outside here.
-        #  Furthermore, the same comment as above apply, we do not have to
+        #  Furthermore, the same comment as above applies here, we do not have to
         #  propagate the non-transients, because they either come from outside,
         #  or they were already handled in the levels above, where they were
         #  defined and then propagated down.
-        # TODO(phimuell): Updated the functions such that only once scan is needed.
+        # TODO(phimuell): Updated the functions such that only one scan is needed.
         processed_nsdfgs: set[dace_nodes.NestedSDFG] = set()
         for state, access_node in accesses:
             gt_propagate_strides_from_access_node(
@@ -166,7 +167,7 @@ def gt_propagate_strides_from_access_node(
     ignore_symbol_mapping: bool = False,
     processed_nsdfgs: Optional[set[PropagatedStrideRecord]] = None,
 ) -> None:
-    """Propagates the stride of `outer_node` along all adjacent edges of `outer_node`.
+    """Propagates the stride of `outer_node` to any adjacent reachable through its edges.
 
     The function will propagate the strides of the data descriptor `outer_node`
     refers to along all adjacent edges of `outer_node`. If one of these edges
@@ -183,16 +184,13 @@ def gt_propagate_strides_from_access_node(
         state: The state where the data node is used.
         edge: The edge that reads from the data node, the nested SDFG is expected as the destination.
         outer_node: The data node whose strides should be propagated.
-        processed_nsdfgs: Set of NestedSDFG that were already processed and will be ignored.
-            Only specify when you know what your are doing.
         ignore_symbol_mapping: If `False`, the default, try to modify the `symbol_mapping`
             of NestedSDFGs instead of manipulating the data descriptor.
-        propagate_along_dataflow: Determine the direction of propagation. If `True` the
-            function follows the dataflow.
+        processed_nsdfgs: Set of NestedSDFG that were already processed and will be ignored.
+            Only specify when you know what your are doing.
     """
     if processed_nsdfgs is None:
         # For preventing the case that nested SDFGs are handled multiple time.
-        #  TODO: It certainly happens if a node is input and output, but are there other cases?
         processed_nsdfgs = set()
 
     for in_edge in state.in_edges(outer_node):
@@ -225,8 +223,13 @@ def gt_map_strides_to_dst_nested_sdfg(
 ) -> None:
     """Propagates the strides of `outer_node` along `edge` along the dataflow.
 
-    For more information see the description of `_gt_map_strides_to_nested_sdfg_src_dst().
-    However it is recommended to use `gt_propagate_strides_of()` directly.
+    In this context "along the dataflow" means that `edge` is an outgoing
+    edge of `outer_node` and the strides are into all NestedSDFGs that
+    are downstream of `outer_node`.
+
+    Except in certain cases this function should not be used directly. It is
+    instead recommended to use `gt_propagate_strides_of()`, which propagates
+    all edges in the SDFG.
 
     Args:
         sdfg: The SDFG to process.
@@ -235,9 +238,10 @@ def gt_map_strides_to_dst_nested_sdfg(
         outer_node: The data node whose strides should be propagated.
         ignore_symbol_mapping: If `False`, the default, try to modify the `symbol_mapping`
             of NestedSDFGs instead of manipulating the data descriptor.
-        processed_nsdfgs: Set of Nested SDFG that were already processed. Only specify when
+        processed_nsdfgs: Set of NestedSDFGs that were already processed. Only specify when
             you know what your are doing.
     """
+    assert edge.src is outer_node
     _gt_map_strides_to_nested_sdfg_src_dst(
         sdfg=sdfg,
         state=state,
@@ -259,8 +263,13 @@ def gt_map_strides_to_src_nested_sdfg(
 ) -> None:
     """Propagates the strides of `outer_node` along `edge` against the dataflow.
 
-    For more information see the description of `_gt_map_strides_to_nested_sdfg_src_dst().
-    However it is recommended to use `gt_propagate_strides_of()` directly.
+    In this context "along the dataflow" means that `edge` is an incoming
+    edge of `outer_node` and the strides are into all NestedSDFGs that
+    are upstream of `outer_node`.
+
+    Except in certain cases this function should not be used directly. It is
+    instead recommended to use `gt_propagate_strides_of()`, which propagates
+    all edges in the SDFG.
 
     Args:
         sdfg: The SDFG to process.
@@ -269,7 +278,7 @@ def gt_map_strides_to_src_nested_sdfg(
         outer_node: The data node whose strides should be propagated.
         ignore_symbol_mapping: If `False`, the default, try to modify the `symbol_mapping`
             of NestedSDFGs instead of manipulating the data descriptor.
-        processed_nsdfgs: Set of Nested SDFG that were already processed. Only specify when
+        processed_nsdfgs: Set of NestedSDFGs that were already processed. Only specify when
             you know what your are doing.
     """
     _gt_map_strides_to_nested_sdfg_src_dst(
@@ -298,11 +307,11 @@ def _gt_map_strides_to_nested_sdfg_src_dst(
     `propagate_along_dataflow` and propagate the strides of `outer_node`
     into every NestedSDFG that is reachable by following `edge`.
 
-    When the function encounters a NestedSDFG it will determine the the data
-    descriptor `outer_node` refers on the inside of the NestedSDFG.
+    When the function encounters a NestedSDFG it will determine what data
+    the `outer_node` is mapped to on the inside of the NestedSDFG.
     It will then replace the stride of the inner descriptor with the ones
-    of the outside. Afterwards it will recursively propagates the
-    stride inside the NestedSDFG.
+    of the outside. Afterwards it will recursively propagate the strides
+    inside the NestedSDFG.
     During this propagation the function will follow any edges.
 
     If the function reaches a NestedSDFG that is listed inside `processed_nsdfgs`
@@ -417,10 +426,9 @@ def _gt_map_strides_to_nested_sdfg_src_dst(
             ignore_symbol_mapping=ignore_symbol_mapping,
         )
 
-        # Because the function call above if not recursive we have now to scan the
-        #  propagate the change into the nested SDFG. Using
-        #  `_gt_find_toplevel_data_accesses()` is a bit overkill, but allows for a
-        #  more uniform processing.
+        # Since the function call above is not recursive we have now to propagate
+        #  the change into the NestedSDFGs. Using `_gt_find_toplevel_data_accesses()`
+        #  is a bit overkill, but allows for a more uniform processing.
         # TODO(phimuell): Instead of scanning every level for every data we modify
         #   we should scan the whole SDFG once and then reuse this information.
         accesses_in_nested_sdfg = _gt_find_toplevel_data_accesses(
@@ -429,8 +437,8 @@ def _gt_map_strides_to_nested_sdfg_src_dst(
             only_arrays=True,
         )
         for nested_state, nested_access in accesses_in_nested_sdfg.get(inner_data, list()):
-            # We have to use `gt_propagate_strides_of()` here because we have to
-            #  handle its entirety. We could wait until the other branch processes
+            # We have to use `gt_propagate_strides_from_access_node()` here because we
+            #  have to handle its entirety. We could wait until the other branch processes
             #  the nested SDFG, but this might not work, so let's do it fully now.
             gt_propagate_strides_from_access_node(
                 sdfg=nsdfg_node.sdfg,
@@ -451,9 +459,9 @@ def _gt_map_strides_into_nested_sdfg(
 ) -> None:
     """Modify the strides of `inner_data` inside `nsdfg_node` to match `outer_desc`.
 
-    `inner_data` is the name of of a data descriptor inside the NestedSDFG.
-    The function will then modify the modify the strides of `inner_data` to
-    match the ones of `outer_desc`.
+    `inner_data` is the name of a data descriptor inside the NestedSDFG.
+    The function will then modify the strides of `inner_data`, assuming this
+    is an array, to match the ones of `outer_desc`.
 
     Args:
         sdfg: The SDFG containing the NestedSDFG.
@@ -471,17 +479,14 @@ def _gt_map_strides_into_nested_sdfg(
         - Handle explicit dimensions of size 1.
     """
     # We need to compute the new strides. In the following we assume that the
-    #  relative order of the dimension does not change, but some dimensions
-    #  that are present on the outside are not present on the inside. For
-    #  example this happens for the Memlet `a[__i0, 0:__a_size1]`.
-    #  We detect this case by checking if that dimension has size 1.
+    #  relative order of the dimensions does not change, but we support the case
+    #  where some dimensions of the outer data descriptor are not present on the
+    #  inside. For example this happens for the Memlet `a[__i0, 0:__a_size1]`. We
+    #  detect this case by checking if the Memlet subset in that dimension has size 1.
     # TODO(phimuell): Handle the case were some additional size 1 dimensions are added.
     inner_desc: dace_data.Data = nsdfg_node.sdfg.arrays[inner_data]
     inner_shape = inner_desc.shape
     inner_strides_init = inner_desc.strides
-
-    # TODO(phimuell): For now this is fine, but it should be possisble to allow it.
-    assert not inner_desc.transient
 
     outer_strides = outer_desc.strides
     outer_inflow = outer_subset.size()
@@ -489,7 +494,9 @@ def _gt_map_strides_into_nested_sdfg(
     new_strides: list = []
     for dim_ostride, dim_oinflow in zip(outer_strides, outer_inflow, strict=True):
         if dim_oinflow == 1:
-            # Only something flows in, thus there is no stride in this dimension.
+            # This is the case of implicit slicing along one dimension. The inner
+            #  array descriptor has shape != 1 in `current_inner_dim`, which has
+            #  to map to a subsequent dimension of `outer_inflow`
             pass
         else:
             # There is inflow into the SDFG, so we need the stride.
@@ -518,7 +525,7 @@ def _gt_map_strides_into_nested_sdfg(
     #  this is only possible if the current strides are singular symbols,
     #  like `__a_strides_1`, but not expressions such as `horizontal_end - horizontal_start`
     #  or literal values.
-    #  The second way would be to replace `strides` attributer of the
+    #  The second way would be to replace `strides` attribute of the
     #  inner data descriptor. In case the new stride consists of expressions
     #  such as `value1 - value2` we have to make them available inside the
     #  NestedSDFG. However, it could be that the strides is used somewhere else.
@@ -552,6 +559,7 @@ def _gt_map_strides_into_nested_sdfg(
         #  check if they map to the same value, we just hope it). Furthermore,
         #  we will exclude all symbols that are listed in the `symbols` property
         #  of the SDFG that is nested, and hope that it has the same meaning.
+        # TODO(phimuell): Add better checks here.
         missing_symbol_mappings: set[str] = {
             sym
             for sym in new_strides_symbols
@@ -605,9 +613,8 @@ def _gt_find_toplevel_data_accesses(
         only_arrays: If `True`, defaults to `False`, only arrays are returned.
 
     Returns:
-        A `dict` that maps the name of a data container, that should be processed
-        to a list of tuples containing the state where the AccessNode was found
-        and the node.
+        A `dict` that maps the name of a data container, to a list of tuples
+        containing the state where the AccessNode was found and the AccessNode.
     """
     # List of data that is accessed on the top level and all its access node.
     top_level_data: dict[str, list[tuple[dace.SDFGState, dace_nodes.AccessNode]]] = dict()
@@ -637,8 +644,7 @@ def _gt_find_toplevel_data_accesses(
                 continue
 
             elif gtx_transformations.util.is_view(dnode, sdfg):
-                # The AccessNode refers to a View so we ignore it anyway
-                # TODO(phimuell/edopao): Should the function return them?
+                # The AccessNode refers to a View so we ignore it anyway.
                 continue
 
             # We have found a new data node that is on the top node and is unknown.
