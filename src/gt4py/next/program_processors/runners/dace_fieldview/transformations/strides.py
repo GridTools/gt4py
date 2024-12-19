@@ -574,7 +574,7 @@ def _gt_map_strides_into_nested_sdfg(
 
         # Now propagate the symbols from the parent SDFG to the NestedSDFG.
         for sym in missing_symbol_mappings:
-            if sym in sdfg.symbols:
+            if str(sym) in sdfg.symbols:
                 nsdfg_node.sdfg.add_symbol(sym.name, sdfg.symbols[sym.name])
             else:
                 # The symbol is not known in the parent SDFG, so we add it
@@ -583,7 +583,7 @@ def _gt_map_strides_into_nested_sdfg(
                     f"Could not find the symbol '{sym}' in the parent SDFG while modifying the strides, use '{nsdfg_node.sdfg.symbols[sym.name]}' as dtype.",
                     stacklevel=1,
                 )
-                nsdfg_node.symbol_mapping[sym.name] = sym
+            nsdfg_node.symbol_mapping[sym.name] = sym
 
         # Now create aliases for the old symbols that were used as strides.
         for old_sym, new_sym in zip(inner_strides_init, new_strides):
