@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import warnings
 from typing import Optional, TypeAlias
 
 import dace
@@ -408,6 +409,7 @@ def _gt_map_strides_to_nested_sdfg_src_dst(
         # Now set the stride of the data descriptor inside the nested SDFG to
         #  the ones it has outside.
         _gt_map_strides_into_nested_sdfg(
+            sdfg=sdfg,
             nsdfg_node=nsdfg_node,
             inner_data=inner_data,
             outer_subset=get_subset(state, edge),
@@ -440,6 +442,7 @@ def _gt_map_strides_to_nested_sdfg_src_dst(
 
 
 def _gt_map_strides_into_nested_sdfg(
+    sdfg: dace.SDFG,
     nsdfg_node: dace.nodes.NestedSDFG,
     inner_data: str,
     outer_subset: dace.subsets.Subset,
@@ -453,6 +456,7 @@ def _gt_map_strides_into_nested_sdfg(
     match the ones of `outer_desc`.
 
     Args:
+        sdfg: The SDFG containing the NestedSDFG.
         nsdfg_node: The node in the parent SDFG that contains the NestedSDFG.
         inner_data: The name of the data descriptor that should be processed
             inside the NestedSDFG (by construction also a connector name).
@@ -539,7 +543,9 @@ def _gt_map_strides_into_nested_sdfg(
             if dace.symbolic.issymbolic(new_stride_dim):
                 new_strides_symbols.append(str(new_stride_dim))
             else:
-                new_strides_symbols.extend(sym for sym in new_stride_dim.free_symbols)
+                # NOTE: In DaCe `free_symbols` is `set[str]` but in `sympy` it
+                #   returns `set[symbol]`. We need `str` so we have to cast them.
+                new_strides_symbols.extend(str(sym) for sym in new_stride_dim.free_symbols)
 
         # Now we determine the set of symbols that should be mapped inside the NestedSDFG.
         #  We will exclude all that are already inside the `symbol_mapping` (we do not
@@ -551,9 +557,19 @@ def _gt_map_strides_into_nested_sdfg(
             for sym in new_strides_symbols
             if not (sym in nsdfg_node.sdfg.symbols or sym in nsdfg_node.symbol_mapping)
         }
+        # Now create the symbol we in the NestedSDFG.
         for sym in missing_symbol_mappings:
-            # We can not create symbols in the nested SDFG, because we do not have
-            #  the type of the symbols.
+            if sym in sdfg.symbols:
+                # TODO(phimuell): Handle the case the symbol is already defined.
+                nsdfg_node.sdfg.add_symbol(sym, sdfg.symbols[sym])
+            else:
+                # The symbol is not known in the parent SDFG, but we need a symbol
+                #  for it. So we use the default.
+                nsdfg_node.sdfg.add_symbol(sym, dace.symbol("__INVALID_SYMBOL__").dtype)
+                warnings.warn(
+                    f"Could not find the symbol '{sym}' in the parent SDFG while modifying the strides.",
+                    stacklevel=1,
+                )
             nsdfg_node.symbol_mapping[sym] = dace.symbolic.pystr_to_symbolic(sym)
 
         # Now create aliases for the old symbols that were used as strides.
