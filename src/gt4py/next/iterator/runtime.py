@@ -12,7 +12,7 @@ import dataclasses
 import functools
 import types
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Callable, Optional, Union
 
 import devtools
 
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     # TODO(tehrengruber): remove cirular dependency and import unconditionally
     from gt4py.next import backend as next_backend
 
-__all__ = ["offset", "fundef", "fendef", "closure", "set_at", "if_stmt"]
+__all__ = ["fendef", "fundef", "if_stmt", "offset", "set_at"]
 
 
 @dataclass(frozen=True)
@@ -127,7 +127,9 @@ def fendef(
     )
 
 
-def _deduce_domain(domain: dict[common.Dimension, range], offset_provider: dict[str, Any]):
+def _deduce_domain(
+    domain: dict[common.Dimension, range], offset_provider_type: common.OffsetProviderType
+):
     if isinstance(domain, UnstructuredDomain):
         domain_builtin = builtins.unstructured_domain
     elif isinstance(domain, CartesianDomain):
@@ -135,7 +137,7 @@ def _deduce_domain(domain: dict[common.Dimension, range], offset_provider: dict[
     else:
         domain_builtin = (
             builtins.unstructured_domain
-            if any(isinstance(o, common.Connectivity) for o in offset_provider.values())
+            if any(isinstance(o, common.ConnectivityType) for o in offset_provider_type.values())
             else builtins.cartesian_domain
         )
 
@@ -160,8 +162,8 @@ class FundefFencilWrapper:
             elif isinstance(dom, dict):
                 # if passed as a dict, we need to convert back to builtins for interpretation by the backends
                 assert offset_provider is not None
-                dom = _deduce_domain(dom, offset_provider)
-            closure(dom, self.fundef_dispatcher, out, [*inps])
+                dom = _deduce_domain(dom, common.offset_provider_to_type(offset_provider))
+            set_at(builtins.as_fieldop(self.fundef_dispatcher, dom)(*inps), dom, out)
 
         return impl
 
@@ -204,11 +206,6 @@ class FundefDispatcher:
 
 def fundef(fun):
     return FundefDispatcher(fun)
-
-
-@builtin_dispatch
-def closure(*args):  # TODO remove
-    return BackendNotSelectedError()
 
 
 @builtin_dispatch

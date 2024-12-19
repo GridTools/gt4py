@@ -37,7 +37,7 @@ from .base import (
 )
 
 
-__all__ = [
+__all__ = [  # noqa: RUF022 `__all__` is not sorted
     # Modules
     "attrib",
     "meta",

@@ -15,7 +15,7 @@ from gt4py.next.program_processors import program_formatter
 
 
 @program_formatter.program_formatter
-def format_itir_and_check(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> str:
+def format_itir_and_check(program: itir.Program, *args: Any, **kwargs: Any) -> str:
     pretty = pretty_printer.pformat(program)
     parsed = pretty_parser.pparse(pretty)
     assert parsed == program

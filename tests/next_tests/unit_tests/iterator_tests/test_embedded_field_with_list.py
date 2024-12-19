@@ -31,12 +31,10 @@ E2V = gtx.FieldOffset("E2V", source=V, target=(E, E2VDim))
 
 # 0 --0-- 1 --1-- 2
 e2v_arr = np.array([[0, 1], [1, 2]])
-e2v_conn = gtx.NeighborTableOffsetProvider(
-    table=e2v_arr,
-    origin_axis=E,
-    neighbor_axis=V,
-    max_neighbors=2,
-    has_skip_values=False,
+e2v_conn = gtx.as_connectivity(
+    domain={E: 2, E2VDim: 2},
+    codomain=V,
+    data=e2v_arr,
 )
 
 

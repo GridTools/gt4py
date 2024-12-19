@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-__all__ = ["field", "global_name", "none", "parameter", "StencilTestSuite"]
+__all__ = ["StencilTestSuite", "field", "global_name", "none", "parameter"]
 try:
     from .input_strategies import field, global_name, none, parameter
     from .suites import StencilTestSuite

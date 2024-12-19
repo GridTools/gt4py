@@ -84,7 +84,7 @@ GRAMMAR = """
     else_branch_seperator: "else"
     if_stmt: "if" "(" prec0 ")" "{" ( stmt )* "}" else_branch_seperator "{" ( stmt )* "}"
 
-    named_range: AXIS_LITERAL ":" "[" prec0 "," prec0 ")"
+    named_range: AXIS_LITERAL ":" "[" prec0 "," prec0 "["
     function_definition: ID_NAME "=" "λ(" ( SYM "," )* SYM? ")" "→" prec0 ";"
     declaration: ID_NAME "=" "temporary(" "domain=" prec0 "," "dtype=" TYPE_LITERAL ")" ";"
     stencil_closure: prec0 "←" "(" prec0 ")" "(" ( SYM_REF ", " )* SYM_REF ")" "@" prec0 ";"
@@ -216,10 +216,6 @@ class ToIrTransformer(lark_visitors.Transformer):
         fid, *params, expr = args
         return ir.FunctionDefinition(id=fid, params=params, expr=expr)
 
-    def stencil_closure(self, *args: ir.Expr) -> ir.StencilClosure:
-        output, stencil, *inputs, domain = args
-        return ir.StencilClosure(domain=domain, stencil=stencil, output=output, inputs=inputs)
-
     def if_stmt(self, cond: ir.Expr, *args):
         found_else_seperator = False
         true_branch = []
@@ -248,23 +244,6 @@ class ToIrTransformer(lark_visitors.Transformer):
     def set_at(self, *args: ir.Expr) -> ir.SetAt:
         target, domain, expr = args
         return ir.SetAt(expr=expr, domain=domain, target=target)
-
-    # TODO(havogt): remove after refactoring.
-    def fencil_definition(self, fid: str, *args: ir.Node) -> ir.FencilDefinition:
-        params = []
-        function_definitions = []
-        closures = []
-        for arg in args:
-            if isinstance(arg, ir.Sym):
-                params.append(arg)
-            elif isinstance(arg, ir.FunctionDefinition):
-                function_definitions.append(arg)
-            else:
-                assert isinstance(arg, ir.StencilClosure)
-                closures.append(arg)
-        return ir.FencilDefinition(
-            id=fid, function_definitions=function_definitions, params=params, closures=closures
-        )
 
     def program(self, fid: str, *args: ir.Node) -> ir.Program:
         params = []

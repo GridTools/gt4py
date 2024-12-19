@@ -23,9 +23,9 @@ from .exceptions import (
 __all__ = [
     "DSLError",
     "InvalidParameterAnnotationError",
+    "MissingArgumentError",
     "MissingAttributeError",
     "MissingParameterAnnotationError",
-    "MissingArgumentError",
     "UndefinedSymbolError",
     "UnsupportedPythonFeatureError",
 ]

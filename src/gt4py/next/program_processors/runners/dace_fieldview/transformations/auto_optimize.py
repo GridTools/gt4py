@@ -8,10 +8,10 @@
 
 """Fast access to the auto optimization on DaCe."""
 
-from typing import Any, Final, Iterable, Optional, Sequence
+from typing import Any, Optional, Sequence, Union
 
 import dace
-from dace.transformation import dataflow as dace_dataflow, passes as dace_passes
+from dace.transformation import dataflow as dace_dataflow
 from dace.transformation.auto import auto_optimize as dace_aoptimize
 
 from gt4py.next import common as gtx_common
@@ -20,155 +20,24 @@ from gt4py.next.program_processors.runners.dace_fieldview import (
 )
 
 
-GT_SIMPLIFY_DEFAULT_SKIP_SET: Final[set[str]] = {"ScalarToSymbolPromotion", "ConstantPropagation"}
-"""Set of simplify passes `gt_simplify()` skips by default.
-
-The following passes are included:
-- `ScalarToSymbolPromotion`: The lowering has sometimes to turn a scalar into a
-    symbol or vice versa and at a later point to invert this again. However, this
-    pass has some problems with this pattern so for the time being it is disabled.
-- `ConstantPropagation`: Same reasons as `ScalarToSymbolPromotion`.
-"""
-
-
-def gt_simplify(
-    sdfg: dace.SDFG,
-    validate: bool = True,
-    validate_all: bool = False,
-    skip: Optional[Iterable[str]] = None,
-) -> Any:
-    """Performs simplifications on the SDFG in place.
-
-    Instead of calling `sdfg.simplify()` directly, you should use this function,
-    as it is specially tuned for GridTool based SDFGs.
-
-    This function runs the DaCe simplification pass, but the following passes are
-    replaced:
-    - `InlineSDFGs`: Instead `gt_inline_nested_sdfg()` will be called.
-
-    Furthermore, by default, or if `None` is passed fro `skip` the passes listed in
-    `GT_SIMPLIFY_DEFAULT_SKIP_SET` will be skipped.
-
-    Args:
-        sdfg: The SDFG to optimize.
-        validate: Perform validation after the pass has run.
-        validate_all: Perform extensive validation.
-        skip: List of simplify passes that should not be applied, defaults
-            to `GT_SIMPLIFY_DEFAULT_SKIP_SET`.
-    """
-    # Ensure that `skip` is a `set`
-    skip = GT_SIMPLIFY_DEFAULT_SKIP_SET if skip is None else set(skip)
-
-    if "InlineSDFGs" not in skip:
-        gt_inline_nested_sdfg(
-            sdfg=sdfg,
-            multistate=True,
-            permissive=False,
-            validate=validate,
-            validate_all=validate_all,
-        )
-
-    return dace_passes.SimplifyPass(
-        validate=validate,
-        validate_all=validate_all,
-        verbose=False,
-        skip=(skip | {"InlineSDFGs"}),
-    ).apply_pass(sdfg, {})
-
-
-def gt_set_iteration_order(
-    sdfg: dace.SDFG,
-    leading_dim: gtx_common.Dimension,
-    validate: bool = True,
-    validate_all: bool = False,
-) -> Any:
-    """Set the iteration order of the Maps correctly.
-
-    Modifies the order of the Map parameters such that `leading_dim`
-    is the fastest varying one, the order of the other dimensions in
-    a Map is unspecific. `leading_dim` should be the dimensions were
-    the stride is one.
-
-    Args:
-        sdfg: The SDFG to process.
-        leading_dim: The leading dimensions.
-        validate: Perform validation during the steps.
-        validate_all: Perform extensive validation.
-    """
-    return sdfg.apply_transformations_once_everywhere(
-        gtx_transformations.MapIterationOrder(
-            leading_dim=leading_dim,
-        ),
-        validate=validate,
-        validate_all=validate_all,
-    )
-
-
-def gt_inline_nested_sdfg(
-    sdfg: dace.SDFG,
-    multistate: bool = True,
-    permissive: bool = False,
-    validate: bool = True,
-    validate_all: bool = False,
-) -> dace.SDFG:
-    """Perform inlining of nested SDFG into their parent SDFG.
-
-    The function uses DaCe's `InlineSDFG` transformation, the same used in simplify.
-    However, before the inline transformation is run the function will run some
-    cleaning passes that allows inlining nested SDFGs.
-    As a side effect, the function will split stages into more states.
-
-    Args:
-        sdfg: The SDFG that should be processed, will be modified in place and returned.
-        multistate: Allow inlining of multistate nested SDFG, defaults to `True`.
-        permissive: Be less strict on the accepted SDFGs.
-        validate: Perform validation after the transformation has finished.
-        validate_all: Performs extensive validation.
-    """
-    first_iteration = True
-    i = 0
-    while True:
-        print(f"ITERATION: {i}")
-        nb_preproccess = sdfg.apply_transformations_repeated(
-            [dace_dataflow.PruneSymbols, dace_dataflow.PruneConnectors],
-            validate=False,
-            validate_all=validate_all,
-        )
-        if (nb_preproccess == 0) and (not first_iteration):
-            break
-
-        # Create and configure the inline pass
-        inline_sdfg = dace_passes.InlineSDFGs()
-        inline_sdfg.progress = False
-        inline_sdfg.permissive = permissive
-        inline_sdfg.multistate = multistate
-
-        # Apply the inline pass
-        nb_inlines = inline_sdfg.apply_pass(sdfg, {})
-
-        # Check result, if needed and test if we can stop
-        if validate_all or validate:
-            sdfg.validate()
-        if nb_inlines == 0:
-            break
-        first_iteration = False
-
-    return sdfg
-
-
 def gt_auto_optimize(
     sdfg: dace.SDFG,
     gpu: bool,
-    leading_dim: Optional[gtx_common.Dimension] = None,
+    leading_dim: Optional[
+        Union[str, gtx_common.Dimension, list[Union[str, gtx_common.Dimension]]]
+    ] = None,
     aggressive_fusion: bool = True,
     max_optimization_rounds_p2: int = 100,
     make_persistent: bool = True,
     gpu_block_size: Optional[Sequence[int | str] | str] = None,
     blocking_dim: Optional[gtx_common.Dimension] = None,
     blocking_size: int = 10,
+    blocking_only_if_independent_nodes: Optional[bool] = None,
     reuse_transients: bool = False,
     gpu_launch_bounds: Optional[int | str] = None,
     gpu_launch_factor: Optional[int] = None,
+    constant_symbols: Optional[dict[str, Any]] = None,
+    assume_pointwise: bool = True,
     validate: bool = True,
     validate_all: bool = False,
     **kwargs: Any,
@@ -183,6 +52,9 @@ def gt_auto_optimize(
     The auto optimization works in different phases, that focuses each on
     different aspects of the SDFG. The initial SDFG is assumed to have a
     very large number of rather simple Maps.
+
+    Note, because of how `gt_auto_optimizer()` works it is not save to call
+    it twice on the same SDFG.
 
     1. Some general simplification transformations, beyond classical simplify,
         are applied to the SDFG.
@@ -219,24 +91,37 @@ def gt_auto_optimize(
             one for all.
         blocking_dim: On which dimension blocking should be applied.
         blocking_size: How many elements each block should process.
+        blocking_only_if_independent_nodes: If `True` only apply loop blocking if
+            there are independent nodes in the Map, see the `require_independent_nodes`
+            option of the `LoopBlocking` transformation.
         reuse_transients: Run the `TransientReuse` transformation, might reduce memory footprint.
         gpu_launch_bounds: Use this value as `__launch_bounds__` for _all_ GPU Maps.
         gpu_launch_factor: Use the number of threads times this value as `__launch_bounds__`
             for _all_ GPU Maps.
+        constant_symbols: Symbols listed in this `dict` will be replaced by the
+            respective value inside the SDFG. This might increase performance.
+        assume_pointwise: Assume that the SDFG has no risk for race condition in
+            global data access. See the `GT4PyMapBufferElimination` transformation for more.
         validate: Perform validation during the steps.
         validate_all: Perform extensive validation.
 
+    Note:
+        For identifying symbols that can be treated as compile time constants
+        `gt_find_constant_arguments()` function can be used.
+
     Todo:
-        - Make sure that `SDFG.simplify()` is not called indirectly, by temporarily
-            overwriting it with `gt_simplify()`.
+        - Update the description. The Phases are nice, but they have lost their
+            link to reality a little bit.
+        - Improve the determination of the strides and iteration order of the
+            transients.
+        - Set padding of transients, i.e. alignment, the DaCe datadescriptor
+            can do that.
+        - Handle nested SDFGs better.
         - Specify arguments to set the size of GPU thread blocks depending on the
             dimensions. I.e. be able to use a different size for 1D than 2D Maps.
-        - Add a parallel version of Map fusion.
         - Implement some model to further guide to determine what we want to fuse.
             Something along the line "Fuse if operational intensity goes up, but
             not if we have too much internal space (register pressure).
-        - Create a custom array elimination pass that honors rule 1.
-        - Check if a pipeline could be used to speed up some computations.
     """
     device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
 
@@ -249,20 +134,25 @@ def gt_auto_optimize(
         #       to internal serial maps, such that they do not block fusion?
 
         # Phase 1: Initial Cleanup
-        gt_simplify(
+        gtx_transformations.gt_simplify(
             sdfg=sdfg,
             validate=validate,
             validate_all=validate_all,
         )
+        gtx_transformations.gt_reduce_distributed_buffering(sdfg)
+
+        if constant_symbols:
+            gtx_transformations.gt_substitute_compiletime_symbols(
+                sdfg=sdfg,
+                repl=constant_symbols,
+                validate=validate,
+                validate_all=validate_all,
+            )
+        gtx_transformations.gt_simplify(sdfg)
+
         sdfg.apply_transformations_repeated(
             [
                 dace_dataflow.TrivialMapElimination,
-                # TODO(phimuell): The transformation are interesting, but they have
-                #  a bug as they assume that they are not working inside a map scope.
-                #  Before we use them we have to fix them.
-                #  https://chat.spcl.inf.ethz.ch/spcl/pl/8mtgtqjb378hfy7h9a96sy3nhc
-                # dace_dataflow.MapReduceFusion,
-                # dace_dataflow.MapWCRFusion,
             ],
             validate=validate,
             validate_all=validate_all,
@@ -278,27 +168,61 @@ def gt_auto_optimize(
             validate_all=validate_all,
         )
 
-        # Phase 3: Optimizing the kernels, i.e. the larger maps, themselves.
-        #   Currently this only applies fusion inside Maps.
+        # After we have created big kernels, we will perform some post cleanup.
+        gtx_transformations.gt_reduce_distributed_buffering(sdfg)
         sdfg.apply_transformations_repeated(
-            gtx_transformations.SerialMapFusion(
-                only_inner_maps=True,
-            ),
+            [
+                gtx_transformations.GT4PyMoveTaskletIntoMap,
+                gtx_transformations.GT4PyMapBufferElimination(assume_pointwise=assume_pointwise),
+            ],
             validate=validate,
             validate_all=validate_all,
         )
-        gt_simplify(sdfg)
+
+        # TODO(phimuell): The `MapReduceFusion` transformation is interesting as
+        #  it moves the initialization of the accumulator at the top, which allows
+        #  further fusing of the accumulator loop. However the transformation has
+        #  a bug, so we can not use it. Furthermore, I have looked at the assembly
+        #  and the compiler is already doing that.
+        #  https://chat.spcl.inf.ethz.ch/spcl/pl/8mtgtqjb378hfy7h9a96sy3nhc
+
+        # After we have created large kernels we run `dace_dataflow.MapReduceFusion`.
+
+        # Phase 3: Optimizing the kernels, i.e. the larger maps, themselves.
+        #   Currently this only applies fusion inside Maps.
+        gtx_transformations.gt_simplify(sdfg)
+        while True:
+            nb_applied = sdfg.apply_transformations_repeated(
+                [
+                    gtx_transformations.MapFusionSerial(
+                        only_inner_maps=True,
+                    ),
+                    gtx_transformations.MapFusionParallel(
+                        only_inner_maps=True,
+                        only_if_common_ancestor=False,  # TODO(phimuell): Should we?
+                    ),
+                ],
+                validate=validate,
+                validate_all=validate_all,
+            )
+            if not nb_applied:
+                break
+            gtx_transformations.gt_simplify(sdfg)
 
         # Phase 4: Iteration Space
         #   This essentially ensures that the stride 1 dimensions are handled
         #   by the inner most loop nest (CPU) or x-block (GPU)
         if leading_dim is not None:
-            gt_set_iteration_order(
+            gtx_transformations.gt_set_iteration_order(
                 sdfg=sdfg,
                 leading_dim=leading_dim,
                 validate=validate,
                 validate_all=validate_all,
             )
+
+        # We now ensure that point wise computations are properly double buffered.
+        #  The main reason is to ensure that rule 3 of ADR18 is maintained.
+        gtx_transformations.gt_create_local_double_buffering(sdfg)
 
         # Phase 5: Apply blocking
         if blocking_dim is not None:
@@ -306,6 +230,7 @@ def gt_auto_optimize(
                 gtx_transformations.LoopBlocking(
                     blocking_size=blocking_size,
                     blocking_parameter=blocking_dim,
+                    require_independent_nodes=blocking_only_if_independent_nodes,
                 ),
                 validate=validate,
                 validate_all=validate_all,
@@ -342,9 +267,23 @@ def gt_auto_optimize(
         dace_aoptimize.set_fast_implementations(sdfg, device)
         # TODO(phimuell): Fix the bug, it uses the tile value and not the stack array value.
         dace_aoptimize.move_small_arrays_to_stack(sdfg)
+
+        # Now we modify the strides.
+        gtx_transformations.gt_change_transient_strides(sdfg, gpu=gpu)
+
         if make_persistent:
-            # TODO(phimuell): Allow to also to set the lifetime to `SDFG`.
-            dace_aoptimize.make_transients_persistent(sdfg, device)
+            gtx_transformations.gt_make_transients_persistent(sdfg=sdfg, device=device)
+
+            if device == dace.DeviceType.GPU:
+                # NOTE: For unknown reasons the counterpart of the
+                #   `gt_make_transients_persistent()` function in DaCe, resets the
+                #   `wcr_nonatomic` property of every memlet, i.e. makes it atomic.
+                #   However, it does this only for edges on the top level and on GPU.
+                #   For compatibility with DaCe (and until we found out why) the GT4Py
+                #   auto optimizer will emulate this behaviour.
+                for state in sdfg.states():
+                    for edge in state.edges():
+                        edge.data.wcr_nonatomic = False
 
         return sdfg
 
@@ -395,9 +334,17 @@ def gt_auto_fuse_top_level_maps(
         # TODO(phimuell): Add parallel fusion transformation. Should it run after
         #                   or with the serial one?
         sdfg.apply_transformations_repeated(
-            gtx_transformations.SerialMapFusion(
-                only_toplevel_maps=True,
-            ),
+            [
+                gtx_transformations.MapFusionSerial(
+                    only_toplevel_maps=True,
+                ),
+                gtx_transformations.MapFusionParallel(
+                    only_toplevel_maps=True,
+                    # This will lead to the creation of big probably unrelated maps.
+                    #  However, it might be good.
+                    only_if_common_ancestor=False,
+                ),
+            ],
             validate=validate,
             validate_all=validate_all,
         )
@@ -437,7 +384,7 @@ def gt_auto_fuse_top_level_maps(
 
         # The SDFG was modified by the transformations above. The SDFG was
         #  modified. Call Simplify and try again to further optimize.
-        gt_simplify(sdfg, validate=validate, validate_all=validate_all)
+        gtx_transformations.gt_simplify(sdfg, validate=validate, validate_all=validate_all)
 
     else:
         raise RuntimeWarning("Optimization of the SDFG did not converge.")

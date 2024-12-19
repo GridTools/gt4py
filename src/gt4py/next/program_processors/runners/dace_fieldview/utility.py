@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import itertools
-from typing import Any, Dict, TypeVar
+from typing import Dict, TypeVar
 
 import dace
 
@@ -56,15 +56,6 @@ def get_tuple_fields(
         return list(itertools.chain(*expanded_fields))
     else:
         return fields
-
-
-def get_tuple_type(data: tuple[Any, ...]) -> ts.TupleType:
-    """
-    Compute the `ts.TupleType` corresponding to the structure of a tuple of data nodes.
-    """
-    return ts.TupleType(
-        types=[get_tuple_type(d) if isinstance(d, tuple) else d.gt_type for d in data]
-    )
 
 
 def replace_invalid_symbols(sdfg: dace.SDFG, ir: gtir.Program) -> gtir.Program:

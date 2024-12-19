@@ -58,14 +58,14 @@ def _make_serial_sdfg_1(
         inputs={"__in0": dace.Memlet("a[__i0, __i1]")},
         code="__out = __in0 + 1.0",
         outputs={"__out": dace.Memlet("tmp[__i0, __i1]")},
-        output_nodes={"tmp": tmp},
+        output_nodes={tmp},
         external_edges=True,
     )
 
     state.add_mapped_tasklet(
         name="second_computation",
         map_ranges=[("__i0", f"0:{N}"), ("__i1", f"0:{N}")],
-        input_nodes={"tmp": tmp},
+        input_nodes={tmp},
         inputs={"__in0": dace.Memlet("tmp[__i0, __i1]")},
         code="__out = __in0 + 3.0",
         outputs={"__out": dace.Memlet("b[__i0, __i1]")},
@@ -118,17 +118,14 @@ def _make_serial_sdfg_2(
             "__out0": dace.Memlet("tmp_1[__i0, __i1]"),
             "__out1": dace.Memlet("tmp_2[__i0, __i1]"),
         },
-        output_nodes={
-            "tmp_1": tmp_1,
-            "tmp_2": tmp_2,
-        },
+        output_nodes={tmp_1, tmp_2},
         external_edges=True,
     )
 
     state.add_mapped_tasklet(
         name="first_computation",
         map_ranges=[("__i0", f"0:{N}"), ("__i1", f"0:{N}")],
-        input_nodes={"tmp_1": tmp_1},
+        input_nodes={tmp_1},
         inputs={"__in0": dace.Memlet("tmp_1[__i0, __i1]")},
         code="__out = __in0 + 3.0",
         outputs={"__out": dace.Memlet("b[__i0, __i1]")},
@@ -137,7 +134,7 @@ def _make_serial_sdfg_2(
     state.add_mapped_tasklet(
         name="second_computation",
         map_ranges=[("__i0", f"0:{N}"), ("__i1", f"0:{N}")],
-        input_nodes={"tmp_2": tmp_2},
+        input_nodes={tmp_2},
         inputs={"__in0": dace.Memlet("tmp_2[__i0, __i1]")},
         code="__out = __in0 - 3.0",
         outputs={"__out": dace.Memlet("c[__i0, __i1]")},
@@ -194,14 +191,14 @@ def _make_serial_sdfg_3(
         },
         code="__out = __in0 + __in1",
         outputs={"__out": dace.Memlet("tmp[__i0]")},
-        output_nodes={"tmp": tmp},
+        output_nodes={tmp},
         external_edges=True,
     )
 
     state.add_mapped_tasklet(
         name="indirect_access",
         map_ranges=[("__i0", f"0:{N_output}")],
-        input_nodes={"tmp": tmp},
+        input_nodes={tmp},
         inputs={
             "__index": dace.Memlet("idx[__i0]"),
             "__array": dace.Memlet.simple("tmp", subset_str=f"0:{N_input}", num_accesses=1),
@@ -220,19 +217,19 @@ def test_exclusive_itermediate():
     sdfg = _make_serial_sdfg_1(N)
 
     # Now apply the optimizations.
-    assert util._count_nodes(sdfg, dace_nodes.MapEntry) == 2
+    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
     sdfg.apply_transformations(
-        gtx_transformations.SerialMapFusion(),
+        gtx_transformations.MapFusionSerial(),
         validate=True,
         validate_all=True,
     )
-    assert util._count_nodes(sdfg, dace_nodes.MapEntry) == 1
+    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 1
     assert "tmp" not in sdfg.arrays
 
     # Test if the intermediate is a scalar
     intermediate_nodes: list[dace_nodes.Node] = [
         node
-        for node in util._count_nodes(sdfg, dace_nodes.AccessNode, True)
+        for node in util.count_nodes(sdfg, dace_nodes.AccessNode, True)
         if node.data not in ["a", "b"]
     ]
     assert len(intermediate_nodes) == 1
@@ -257,19 +254,19 @@ def test_shared_itermediate():
     sdfg.arrays["tmp"].transient = False
 
     # Now apply the optimizations.
-    assert util._count_nodes(sdfg, dace_nodes.MapEntry) == 2
+    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
     sdfg.apply_transformations(
-        gtx_transformations.SerialMapFusion(),
+        gtx_transformations.MapFusionSerial(),
         validate=True,
         validate_all=True,
     )
-    assert util._count_nodes(sdfg, dace_nodes.MapEntry) == 1
+    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 1
     assert "tmp" in sdfg.arrays
 
     # Test if the intermediate is a scalar
     intermediate_nodes: list[dace_nodes.Node] = [
         node
-        for node in util._count_nodes(sdfg, dace_nodes.AccessNode, True)
+        for node in util.count_nodes(sdfg, dace_nodes.AccessNode, True)
         if node.data not in ["a", "b", "tmp"]
     ]
     assert len(intermediate_nodes) == 1
@@ -291,21 +288,21 @@ def test_pure_output_node():
     """Tests the path of a pure intermediate."""
     N = 10
     sdfg = _make_serial_sdfg_2(N)
-    assert util._count_nodes(sdfg, dace_nodes.MapEntry) == 3
+    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 3
 
     # The first fusion will only bring it down to two maps.
     sdfg.apply_transformations(
-        gtx_transformations.SerialMapFusion(),
+        gtx_transformations.MapFusionSerial(),
         validate=True,
         validate_all=True,
     )
-    assert util._count_nodes(sdfg, dace_nodes.MapEntry) == 2
+    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
     sdfg.apply_transformations(
-        gtx_transformations.SerialMapFusion(),
+        gtx_transformations.MapFusionSerial(),
         validate=True,
         validate_all=True,
     )
-    assert util._count_nodes(sdfg, dace_nodes.MapEntry) == 1
+    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 1
 
     a = np.random.rand(N, N)
     b = np.empty_like(a)
@@ -327,17 +324,17 @@ def test_array_intermediate():
     """
     N = 10
     sdfg = _make_serial_sdfg_1(N)
-    assert util._count_nodes(sdfg, dace_nodes.MapEntry) == 2
+    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
     sdfg.apply_transformations_repeated([dace_dataflow.MapExpansion])
-    assert util._count_nodes(sdfg, dace_nodes.MapEntry) == 4
+    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 4
 
     # Now perform the fusion
     sdfg.apply_transformations(
-        gtx_transformations.SerialMapFusion(only_toplevel_maps=True),
+        gtx_transformations.MapFusionSerial(only_toplevel_maps=True),
         validate=True,
         validate_all=True,
     )
-    map_entries = util._count_nodes(sdfg, dace_nodes.MapEntry, return_nodes=True)
+    map_entries = util.count_nodes(sdfg, dace_nodes.MapEntry, return_nodes=True)
 
     scope = next(iter(sdfg.states())).scope_dict()
     assert len(map_entries) == 3
@@ -349,7 +346,7 @@ def test_array_intermediate():
     # Find the access node that is the new intermediate node.
     inner_access_nodes: list[dace_nodes.AccessNode] = [
         node
-        for node in util._count_nodes(sdfg, dace_nodes.AccessNode, True)
+        for node in util.count_nodes(sdfg, dace_nodes.AccessNode, True)
         if scope[node] is not None
     ]
     assert len(inner_access_nodes) == 1
@@ -374,7 +371,7 @@ def test_interstate_transient():
     """
     N = 10
     sdfg = _make_serial_sdfg_2(N)
-    assert util._count_nodes(sdfg, dace_nodes.MapEntry) == 3
+    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 3
     assert sdfg.number_of_nodes() == 1
 
     # Now add the new state and the new output.
@@ -393,15 +390,15 @@ def test_interstate_transient():
 
     # Now apply the transformation
     sdfg.apply_transformations_repeated(
-        gtx_transformations.SerialMapFusion(),
+        gtx_transformations.MapFusionSerial(),
         validate=True,
         validate_all=True,
     )
     assert "tmp_1" in sdfg.arrays
     assert "tmp_2" not in sdfg.arrays
     assert sdfg.number_of_nodes() == 2
-    assert util._count_nodes(head_state, dace_nodes.MapEntry) == 1
-    assert util._count_nodes(new_state, dace_nodes.MapEntry) == 1
+    assert util.count_nodes(head_state, dace_nodes.MapEntry) == 1
+    assert util.count_nodes(new_state, dace_nodes.MapEntry) == 1
 
     a = np.random.rand(N, N)
     b = np.empty_like(a)
@@ -430,7 +427,7 @@ def test_indirect_access():
     c = np.empty(N_output)
     idx = np.random.randint(low=0, high=N_input, size=N_output, dtype=np.int32)
     sdfg = _make_serial_sdfg_3(N_input=N_input, N_output=N_output)
-    assert util._count_nodes(sdfg, dace_nodes.MapEntry) == 2
+    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
 
     def _ref(a, b, idx):
         tmp = a + b
@@ -443,11 +440,11 @@ def test_indirect_access():
 
     # Now "apply" the transformation
     sdfg.apply_transformations_repeated(
-        gtx_transformations.SerialMapFusion(),
+        gtx_transformations.MapFusionSerial(),
         validate=True,
         validate_all=True,
     )
-    assert util._count_nodes(sdfg, dace_nodes.MapEntry) == 2
+    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
 
     c[:] = -1.0
     sdfg(a=a, b=b, idx=idx, c=c)
@@ -455,5 +452,58 @@ def test_indirect_access():
 
 
 def test_indirect_access_2():
-    # TODO(phimuell): Index should be computed and that map should be fusable.
-    pass
+    """Indirect accesses, with non point wise input dependencies.
+
+    Because `a` is used as input and output and `a` is indirectly accessed
+    the access to `a` can not be point wise so, fusing is not possible.
+    """
+    sdfg = dace.SDFG(util.unique_name("indirect_access_sdfg_2"))
+    state = sdfg.add_state(is_start_block=True)
+
+    names = ["a", "b", "idx", "tmp"]
+
+    for name in names:
+        sdfg.add_array(
+            name=name,
+            shape=(10,),
+            dtype=dace.int32 if name == "idx" else dace.float64,
+            transient=False,
+        )
+    sdfg.arrays["tmp"].transient = True
+
+    a_in, b, idx, tmp, a_out = (state.add_access(name) for name in (names + ["a"]))
+
+    state.add_mapped_tasklet(
+        "indirect_access",
+        map_ranges={"__i0": "0:10"},
+        inputs={
+            "__idx": dace.Memlet("idx[__i0]"),
+            "__field": dace.Memlet("a[0:10]", volume=1),
+        },
+        code="__out = __field[__idx]",
+        outputs={"__out": dace.Memlet("tmp[__i0]")},
+        input_nodes={a_in, idx},
+        output_nodes={tmp},
+        external_edges=True,
+    )
+    state.add_mapped_tasklet(
+        "computation",
+        map_ranges={"__i0": "0:10"},
+        inputs={
+            "__in1": dace.Memlet("tmp[__i0]"),
+            "__in2": dace.Memlet("b[__i0]"),
+        },
+        code="__out = __in1 + __in2",
+        outputs={"__out": dace.Memlet("a[__i0]")},
+        input_nodes={tmp, b},
+        output_nodes={a_out},
+        external_edges=True,
+    )
+    sdfg.validate()
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.MapFusionSerial(),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 0

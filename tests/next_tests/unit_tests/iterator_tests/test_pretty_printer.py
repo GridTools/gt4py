@@ -7,8 +7,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from gt4py.next.iterator import ir
-from gt4py.next.iterator.pretty_printer import PrettyPrinter, pformat
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.pretty_printer import PrettyPrinter, pformat
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -233,7 +233,7 @@ def test_named_range_horizontal():
         fun=ir.SymRef(id="named_range"),
         args=[ir.AxisLiteral(value="IDim"), ir.SymRef(id="x"), ir.SymRef(id="y")],
     )
-    expected = "IDimₕ: [x, y)"
+    expected = "IDimₕ: [x, y["
     actual = pformat(testee)
     assert actual == expected
 
@@ -313,18 +313,6 @@ def test_temporary():
     assert actual == expected
 
 
-def test_stencil_closure():
-    testee = ir.StencilClosure(
-        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
-        stencil=ir.SymRef(id="deref"),
-        output=ir.SymRef(id="y"),
-        inputs=[ir.SymRef(id="x")],
-    )
-    expected = "y ← (deref)(x) @ cartesian_domain();"
-    actual = pformat(testee)
-    assert actual == expected
-
-
 def test_set_at():
     testee = ir.SetAt(
         expr=ir.SymRef(id="x"),
@@ -333,28 +321,6 @@ def test_set_at():
     )
     expected = "y @ cartesian_domain() ← x;"
     actual = pformat(testee)
-    assert actual == expected
-
-
-# TODO(havogt): remove after refactoring.
-def test_fencil_definition():
-    testee = ir.FencilDefinition(
-        id="f",
-        function_definitions=[
-            ir.FunctionDefinition(id="g", params=[ir.Sym(id="x")], expr=ir.SymRef(id="x"))
-        ],
-        params=[ir.Sym(id="d"), ir.Sym(id="x"), ir.Sym(id="y")],
-        closures=[
-            ir.StencilClosure(
-                domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
-                stencil=ir.SymRef(id="deref"),
-                output=ir.SymRef(id="y"),
-                inputs=[ir.SymRef(id="x")],
-            )
-        ],
-    )
-    actual = pformat(testee)
-    expected = "f(d, x, y) {\n  g = λ(x) → x;\n  y ← (deref)(x) @ cartesian_domain();\n}"
     assert actual == expected
 
 

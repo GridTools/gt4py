@@ -42,7 +42,7 @@ if typing.TYPE_CHECKING:
     from .core import DataModelTP, FieldValidator
 
 
-__all__ = [
+__all__ = [  # noqa: RUF022 `__all__` is not sorted
     # reexported from attrs
     "and_",
     "deep_iterable",

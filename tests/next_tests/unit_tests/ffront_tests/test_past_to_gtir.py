@@ -46,7 +46,6 @@ def test_copy_lowering(copy_program_def, gtir_identity_fundef):
         past_node,
         function_definitions=[gtir_identity_fundef],
         grid_type=gtx.GridType.CARTESIAN,
-        to_gtir=True,
     )
     set_at_pattern = P(
         itir.SetAt,
@@ -93,7 +92,6 @@ def test_copy_restrict_lowering(copy_restrict_program_def, gtir_identity_fundef)
         past_node,
         function_definitions=[gtir_identity_fundef],
         grid_type=gtx.GridType.CARTESIAN,
-        to_gtir=True,
     )
     set_at_pattern = P(
         itir.SetAt,
@@ -149,9 +147,7 @@ def test_tuple_constructed_in_out_with_slicing(make_tuple_op):
         make_tuple_op(inp, out=(out1[1:], out2[1:]))
 
     parsed = ProgramParser.apply_to_function(tuple_program)
-    ProgramLowering.apply(
-        parsed, function_definitions=[], grid_type=gtx.GridType.CARTESIAN, to_gtir=True
-    )
+    ProgramLowering.apply(parsed, function_definitions=[], grid_type=gtx.GridType.CARTESIAN)
 
 
 @pytest.mark.xfail(
@@ -166,9 +162,7 @@ def test_tuple_constructed_in_out_with_slicing(make_tuple_op):
         make_tuple_op(inp, out=(out1[1:], out2))
 
     parsed = ProgramParser.apply_to_function(tuple_program)
-    ProgramLowering.apply(
-        parsed, function_definitions=[], grid_type=gtx.GridType.CARTESIAN, to_gtir=True
-    )
+    ProgramLowering.apply(parsed, function_definitions=[], grid_type=gtx.GridType.CARTESIAN)
 
 
 @pytest.mark.xfail
@@ -194,7 +188,6 @@ def test_invalid_call_sig_program(invalid_call_sig_program_def):
             ProgramParser.apply_to_function(invalid_call_sig_program_def),
             function_definitions=[],
             grid_type=gtx.GridType.CARTESIAN,
-            to_gtir=True,
         )
 
     assert exc_info.match("Invalid call to 'identity'")

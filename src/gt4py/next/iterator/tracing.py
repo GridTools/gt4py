@@ -23,7 +23,6 @@ from gt4py.next.iterator.ir import (
     Lambda,
     NoneLiteral,
     OffsetLiteral,
-    StencilClosure,
     Sym,
     SymRef,
 )
@@ -202,19 +201,12 @@ iterator.runtime.FundefDispatcher.register_hook(FundefTracer())
 
 class TracerContext:
     fundefs: ClassVar[List[FunctionDefinition]] = []
-    closures: ClassVar[
-        List[StencilClosure]
-    ] = []  # TODO(havogt): remove after refactoring to `Program` is complete, currently handles both programs and fencils
     body: ClassVar[List[itir.Stmt]] = []
 
     @classmethod
     def add_fundef(cls, fun):
         if fun not in cls.fundefs:
             cls.fundefs.append(fun)
-
-    @classmethod
-    def add_closure(cls, closure):
-        cls.closures.append(closure)
 
     @classmethod
     def add_stmt(cls, stmt):
@@ -225,21 +217,8 @@ class TracerContext:
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         type(self).fundefs = []
-        type(self).closures = []
         type(self).body = []
         iterator.builtins.builtin_dispatch.pop_key()
-
-
-@iterator.runtime.closure.register(TRACING)
-def closure(domain, stencil, output, inputs):
-    if hasattr(stencil, "__name__") and stencil.__name__ in iterator.builtins.__all__:
-        stencil = _s(stencil.__name__)
-    else:
-        stencil(*(_s(param) for param in inspect.signature(stencil).parameters))
-        stencil = make_node(stencil)
-    TracerContext.add_closure(
-        StencilClosure(domain=domain, stencil=stencil, output=output, inputs=inputs)
-    )
 
 
 @iterator.runtime.set_at.register(TRACING)
@@ -279,7 +258,7 @@ def _contains_tuple_dtype_field(arg):
     return isinstance(arg, common.Field) and any(dim is None for dim in arg.domain.dims)
 
 
-def _make_fencil_params(fun, args) -> list[Sym]:
+def _make_program_params(fun, args) -> list[Sym]:
     params: list[Sym] = []
     param_infos = list(inspect.signature(fun).parameters.values())
 
@@ -314,33 +293,22 @@ def _make_fencil_params(fun, args) -> list[Sym]:
     return params
 
 
-def trace_fencil_definition(
-    fun: typing.Callable, args: typing.Iterable
-) -> itir.FencilDefinition | itir.Program:
+def trace_fencil_definition(fun: typing.Callable, args: typing.Iterable) -> itir.Program:
     """
-    Transform fencil given as a callable into `itir.FencilDefinition` using tracing.
+    Transform fencil given as a callable into `itir.Program` using tracing.
 
     Arguments:
-        fun: The fencil / callable to trace.
+        fun: The program / callable to trace.
         args: A list of arguments, e.g. fields, scalars, composites thereof, or directly a type.
     """
     with TracerContext() as _:
-        params = _make_fencil_params(fun, args)
+        params = _make_program_params(fun, args)
         trace_function_call(fun, args=(_s(param.id) for param in params))
 
-        if TracerContext.closures:
-            return itir.FencilDefinition(
-                id=fun.__name__,
-                function_definitions=TracerContext.fundefs,
-                params=params,
-                closures=TracerContext.closures,
-            )
-        else:
-            assert TracerContext.body
-            return itir.Program(
-                id=fun.__name__,
-                function_definitions=TracerContext.fundefs,
-                params=params,
-                declarations=[],  # TODO
-                body=TracerContext.body,
-            )
+        return itir.Program(
+            id=fun.__name__,
+            function_definitions=TracerContext.fundefs,
+            params=params,
+            declarations=[],  # TODO
+            body=TracerContext.body,
+        )

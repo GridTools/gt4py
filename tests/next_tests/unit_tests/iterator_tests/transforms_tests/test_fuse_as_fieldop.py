@@ -13,6 +13,7 @@ from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import fuse_as_fieldop
 from gt4py.next.type_system import type_specifications as ts
 
+
 IDim = gtx.Dimension("IDim")
 field_type = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
 
@@ -30,7 +31,7 @@ def test_trivial():
         d,
     )(im.ref("inp1", field_type), im.ref("inp2", field_type), im.ref("inp3", field_type))
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
-        testee, offset_provider={}, allow_undeclared_symbols=True
+        testee, offset_provider_type={}, allow_undeclared_symbols=True
     )
     assert actual == expected
 
@@ -40,7 +41,7 @@ def test_trivial_literal():
     testee = im.op_as_fieldop("plus", d)(im.op_as_fieldop("multiplies", d)(1, 2), 3)
     expected = im.as_fieldop(im.lambda_()(im.plus(im.multiplies_(1, 2), 3)), d)()
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
-        testee, offset_provider={}, allow_undeclared_symbols=True
+        testee, offset_provider_type={}, allow_undeclared_symbols=True
     )
     assert actual == expected
 
@@ -65,7 +66,7 @@ def test_tuple_arg():
         d,
     )()
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
-        testee, offset_provider={}, allow_undeclared_symbols=True
+        testee, offset_provider_type={}, allow_undeclared_symbols=True
     )
     assert actual == expected
 
@@ -85,7 +86,7 @@ def test_symref_used_twice():
         d,
     )("inp1", "inp2")
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
-        testee, offset_provider={}, allow_undeclared_symbols=True
+        testee, offset_provider_type={}, allow_undeclared_symbols=True
     )
     assert actual == expected
 
@@ -100,7 +101,7 @@ def test_no_inline():
         d1,
     )(im.as_fieldop(im.lambda_("inp1")(im.deref("inp1")), d2)(im.ref("inp1", field_type)))
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
-        testee, offset_provider={"IOff": IDim}, allow_undeclared_symbols=True
+        testee, offset_provider_type={"IOff": IDim}, allow_undeclared_symbols=True
     )
     assert actual == testee
 
@@ -132,6 +133,6 @@ def test_partial_inline():
         d1,
     )(im.as_fieldop(im.lambda_("inp1")(im.deref("inp1")), d2)(im.ref("inp1", field_type)), "inp1")
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
-        testee, offset_provider={"IOff": IDim}, allow_undeclared_symbols=True
+        testee, offset_provider_type={"IOff": IDim}, allow_undeclared_symbols=True
     )
     assert actual == expected

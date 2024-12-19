@@ -421,7 +421,7 @@ def test_nested_while_loop(backend):
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_mask_with_offset_written_in_conditional(backend):
-    @gtscript.stencil(backend, externals={"mord": 5})
+    @gtscript.stencil(backend)
     def stencil(outp: gtscript.Field[np.float_]):
         with computation(PARALLEL), interval(...):
             cond = True
@@ -582,13 +582,17 @@ def test_K_offset_write(backend):
     # Cuda generates bad code for the K offset
     if backend == "cuda":
         pytest.skip("cuda K-offset write generates bad code")
-    if backend in ["gt:gpu", "dace:gpu"]:
+    if backend in ["dace:gpu"]:
         import cupy as cp
 
         if cp.cuda.runtime.runtimeGetVersion() < 12000:
             pytest.skip(
                 f"{backend} backend with CUDA 11 and/or GCC 10.3 is not capable of K offset write, update CUDA/GCC if possible"
             )
+    if backend in ["gt:gpu"]:
+        pytest.skip(
+            f"{backend} backend is not capable of K offset write, bug remains unsolved: https://github.com/GridTools/gt4py/issues/1754"
+        )
 
     arraylib = get_array_library(backend)
     array_shape = (1, 1, 4)
@@ -660,13 +664,17 @@ def test_K_offset_write(backend):
 def test_K_offset_write_conditional(backend):
     if backend == "cuda":
         pytest.skip("Cuda backend is not capable of K offset write")
-    if backend in ["gt:gpu", "dace:gpu"]:
+    if backend in ["dace:gpu"]:
         import cupy as cp
 
         if cp.cuda.runtime.runtimeGetVersion() < 12000:
             pytest.skip(
                 f"{backend} backend with CUDA 11 and/or GCC 10.3 is not capable of K offset write, update CUDA/GCC if possible"
             )
+    if backend in ["gt:gpu"]:
+        pytest.skip(
+            f"{backend} backend is not capable of K offset write, bug remains unsolved: https://github.com/GridTools/gt4py/issues/1754"
+        )
 
     arraylib = get_array_library(backend)
     array_shape = (1, 1, 4)

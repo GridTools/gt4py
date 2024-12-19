@@ -14,7 +14,7 @@ from dace.sdfg import nodes as dace_nodes
 
 
 @overload
-def _count_nodes(
+def count_nodes(
     graph: Union[dace.SDFG, dace.SDFGState],
     node_type: tuple[type, ...] | type,
     return_nodes: Literal[False],
@@ -22,14 +22,14 @@ def _count_nodes(
 
 
 @overload
-def _count_nodes(
+def count_nodes(
     graph: Union[dace.SDFG, dace.SDFGState],
     node_type: tuple[type, ...] | type,
     return_nodes: Literal[True],
 ) -> list[dace_nodes.Node]: ...
 
 
-def _count_nodes(
+def count_nodes(
     graph: Union[dace.SDFG, dace.SDFGState],
     node_type: tuple[type, ...] | type,
     return_nodes: bool = False,

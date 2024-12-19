@@ -311,7 +311,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
                 #          ...
                 #
                 # Since this can be an arbitrary type (not something regular like a collection) there is
-                # no way to check if the type parameter is verifed in the actual instance.
+                # no way to check if the type parameter is verified in the actual instance.
                 # The only check can be done at run-time is to verify that the value is an instance of
                 # the original type, completely ignoring the annotation. Ideally, the static type checker
                 # can do a better job to try figure out if the type parameter is ok ...

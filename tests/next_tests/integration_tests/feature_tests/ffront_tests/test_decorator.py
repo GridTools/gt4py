@@ -21,7 +21,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 )
 
 
-def test_program_itir_regression(cartesian_case):
+def test_program_gtir_regression(cartesian_case):
     @gtx.field_operator(backend=None)
     def testee_op(a: cases.IField) -> cases.IField:
         return a
@@ -30,10 +30,8 @@ def test_program_itir_regression(cartesian_case):
     def testee(a: cases.IField, out: cases.IField):
         testee_op(a, out=out)
 
-    assert isinstance(testee.itir, (itir.Program, itir.FencilDefinition))
-    assert isinstance(
-        testee.with_backend(cartesian_case.backend).itir, (itir.Program, itir.FencilDefinition)
-    )
+    assert isinstance(testee.gtir, itir.Program)
+    assert isinstance(testee.with_backend(cartesian_case.backend).gtir, itir.Program)
 
 
 def test_frozen(cartesian_case):

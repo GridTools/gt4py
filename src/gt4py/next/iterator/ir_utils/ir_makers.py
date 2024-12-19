@@ -423,11 +423,11 @@ def domain(
     ...         },
     ...     )
     ... )
-    'c⟨ IDimₕ: [0, 10), JDimₕ: [0, 20) ⟩'
+    'c⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
     >>> str(domain(common.GridType.CARTESIAN, {"IDim": (0, 10), "JDim": (0, 20)}))
-    'c⟨ IDimₕ: [0, 10), JDimₕ: [0, 20) ⟩'
+    'c⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
     >>> str(domain(common.GridType.UNSTRUCTURED, {"IDim": (0, 10), "JDim": (0, 20)}))
-    'u⟨ IDimₕ: [0, 10), JDimₕ: [0, 20) ⟩'
+    'u⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
     """
     if isinstance(grid_type, common.GridType):
         grid_type = f"{grid_type!s}_domain"
@@ -517,6 +517,20 @@ def cast_as_fieldop(type_: str, domain: Optional[itir.FunCall] = None):
         return op_as_fieldop(lambda v: call("cast_")(v, type_), domain)(it)
 
     return _impl
+
+
+def index(dim: common.Dimension) -> itir.FunCall:
+    """
+    Create a call to the `index` builtin, shorthand for `call("index")(axis)`,
+    after converting the given dimension to `itir.AxisLiteral`.
+
+    Args:
+        dim: the dimension corresponding to the index axis.
+
+    Returns:
+        A function that constructs a Field of indices in the given dimension.
+    """
+    return call("index")(itir.AxisLiteral(value=dim.value, kind=dim.kind))
 
 
 def map_(op):

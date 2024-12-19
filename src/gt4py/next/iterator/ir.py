@@ -9,7 +9,7 @@
 from typing import ClassVar, List, Optional, Union
 
 import gt4py.eve as eve
-from gt4py.eve import Coerced, SymbolName, SymbolRef, datamodels
+from gt4py.eve import Coerced, SymbolName, SymbolRef
 from gt4py.eve.concepts import SourceLocation
 from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from gt4py.eve.utils import noninstantiable
@@ -18,10 +18,6 @@ from gt4py.next.type_system import type_specifications as ts
 
 
 DimensionKind = common.DimensionKind
-
-# TODO(havogt):
-# After completion of refactoring to GTIR, FencilDefinition and StencilClosure should be removed everywhere.
-# During transition, we lower to FencilDefinitions and apply a transformation to GTIR-style afterwards.
 
 
 @noninstantiable
@@ -95,23 +91,6 @@ class FunctionDefinition(Node, SymbolTableTrait):
     id: Coerced[SymbolName]
     params: List[Sym]
     expr: Expr
-
-
-class StencilClosure(Node):
-    domain: FunCall
-    stencil: Expr
-    output: Union[SymRef, FunCall]
-    inputs: List[Union[SymRef, FunCall]]
-
-    @datamodels.validator("output")
-    def _output_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value):
-        if isinstance(value, FunCall) and value.fun != SymRef(id="make_tuple"):
-            raise ValueError("Only FunCall to 'make_tuple' allowed.")
-
-    @datamodels.validator("inputs")
-    def _input_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value):
-        if any(isinstance(v, FunCall) and v.fun != SymRef(id="index") for v in value):
-            raise ValueError("Only FunCall to 'index' allowed.")
 
 
 UNARY_MATH_NUMBER_BUILTINS = {"abs"}
@@ -189,28 +168,10 @@ BUILTINS = {
     "scan",
     "if_",
     "index",  # `index(dim)` creates a dim-field that has the current index at each point
+    "as_fieldop",  # `as_fieldop(stencil, domain)` creates field_operator from stencil (domain is optional, but for now required for embedded execution)
     *ARITHMETIC_BUILTINS,
     *TYPEBUILTINS,
 }
-
-# only used in `Program`` not `FencilDefinition`
-# TODO(havogt): restructure after refactoring to GTIR
-GTIR_BUILTINS = {
-    *BUILTINS,
-    "as_fieldop",  # `as_fieldop(stencil, domain)` creates field_operator from stencil (domain is optional, but for now required for embedded execution)
-}
-
-
-class FencilDefinition(Node, ValidatedSymbolTableTrait):
-    id: Coerced[SymbolName]
-    function_definitions: List[FunctionDefinition]
-    params: List[Sym]
-    closures: List[StencilClosure]
-    implicit_domain: bool = False
-
-    _NODE_SYMBOLS_: ClassVar[List[Sym]] = [
-        Sym(id=name) for name in sorted(BUILTINS)
-    ]  # sorted for serialization stability
 
 
 class Stmt(Node): ...
@@ -243,7 +204,7 @@ class Program(Node, ValidatedSymbolTableTrait):
     implicit_domain: bool = False
 
     _NODE_SYMBOLS_: ClassVar[List[Sym]] = [
-        Sym(id=name) for name in sorted(GTIR_BUILTINS)
+        Sym(id=name) for name in sorted(BUILTINS)
     ]  # sorted for serialization stability
 
 
@@ -258,8 +219,6 @@ SymRef.__hash__ = Node.__hash__  # type: ignore[method-assign]
 Lambda.__hash__ = Node.__hash__  # type: ignore[method-assign]
 FunCall.__hash__ = Node.__hash__  # type: ignore[method-assign]
 FunctionDefinition.__hash__ = Node.__hash__  # type: ignore[method-assign]
-StencilClosure.__hash__ = Node.__hash__  # type: ignore[method-assign]
-FencilDefinition.__hash__ = Node.__hash__  # type: ignore[method-assign]
 Program.__hash__ = Node.__hash__  # type: ignore[method-assign]
 SetAt.__hash__ = Node.__hash__  # type: ignore[method-assign]
 IfStmt.__hash__ = Node.__hash__  # type: ignore[method-assign]

@@ -107,7 +107,8 @@ def get_expansion_order_index(expansion_order, axis):
     for idx, item in enumerate(expansion_order):
         if isinstance(item, Iteration) and item.axis == axis:
             return idx
-        elif isinstance(item, Map):
+
+        if isinstance(item, Map):
             for it in item.iterations:
                 if it.kind == "contiguous" and it.axis == axis:
                     return idx
@@ -136,7 +137,9 @@ def _choose_loop_or_map(node, eo):
     return eo
 
 
-def _order_as_spec(computation_node, expansion_order):
+def _order_as_spec(
+    computation_node: StencilComputation, expansion_order: Union[List[str], List[ExpansionItem]]
+) -> List[ExpansionItem]:
     expansion_order = list(_choose_loop_or_map(computation_node, eo) for eo in expansion_order)
     expansion_specification = []
     for item in expansion_order:
@@ -170,7 +173,7 @@ def _order_as_spec(computation_node, expansion_order):
     return expansion_specification
 
 
-def _populate_strides(node, expansion_specification):
+def _populate_strides(node: StencilComputation, expansion_specification: List[ExpansionItem]):
     """Fill in `stride` attribute of `Iteration` and `Loop` dataclasses.
 
     For loops, stride is set to either -1 or 1, based on iteration order.
@@ -185,10 +188,7 @@ def _populate_strides(node, expansion_specification):
     for it in iterations:
         if isinstance(it, Loop):
             if it.stride is None:
-                if node.oir_node.loop_order == common.LoopOrder.BACKWARD:
-                    it.stride = -1
-                else:
-                    it.stride = 1
+                it.stride = -1 if node.oir_node.loop_order == common.LoopOrder.BACKWARD else 1
         else:
             if it.stride is None:
                 if it.kind == "tiling":
@@ -204,7 +204,7 @@ def _populate_strides(node, expansion_specification):
                     it.stride = 1
 
 
-def _populate_storages(self, expansion_specification):
+def _populate_storages(expansion_specification: List[ExpansionItem]):
     assert all(isinstance(es, ExpansionItem) for es in expansion_specification)
     innermost_axes = set(dcir.Axis.dims_3d())
     tiled_axes = set()
@@ -222,7 +222,7 @@ def _populate_storages(self, expansion_specification):
                     tiled_axes.remove(it.axis)
 
 
-def _populate_cpu_schedules(self, expansion_specification):
+def _populate_cpu_schedules(expansion_specification: List[ExpansionItem]):
     is_outermost = True
     for es in expansion_specification:
         if isinstance(es, Map):
@@ -234,7 +234,7 @@ def _populate_cpu_schedules(self, expansion_specification):
                     es.schedule = dace.ScheduleType.Default
 
 
-def _populate_gpu_schedules(self, expansion_specification):
+def _populate_gpu_schedules(expansion_specification: List[ExpansionItem]):
     # On GPU if any dimension is tiled and has a contiguous map in the same axis further in
     # pick those two maps as Device/ThreadBlock maps. If not, Make just device map with
     # default blocksizes
@@ -267,16 +267,16 @@ def _populate_gpu_schedules(self, expansion_specification):
                         es.schedule = dace.ScheduleType.Default
 
 
-def _populate_schedules(self, expansion_specification):
+def _populate_schedules(node: StencilComputation, expansion_specification: List[ExpansionItem]):
     assert all(isinstance(es, ExpansionItem) for es in expansion_specification)
-    assert hasattr(self, "_device")
-    if self.device == dace.DeviceType.GPU:
-        _populate_gpu_schedules(self, expansion_specification)
+    assert hasattr(node, "_device")
+    if node.device == dace.DeviceType.GPU:
+        _populate_gpu_schedules(expansion_specification)
     else:
-        _populate_cpu_schedules(self, expansion_specification)
+        _populate_cpu_schedules(expansion_specification)
 
 
-def _collapse_maps_gpu(self, expansion_specification):
+def _collapse_maps_gpu(expansion_specification: List[ExpansionItem]) -> List[ExpansionItem]:
     def _union_map_items(last_item, next_item):
         if last_item.schedule == next_item.schedule:
             return (
@@ -307,7 +307,7 @@ def _collapse_maps_gpu(self, expansion_specification):
             ),
         )
 
-    res_items = []
+    res_items: List[ExpansionItem] = []
     for item in expansion_specification:
         if isinstance(item, Map):
             if not res_items or not isinstance(res_items[-1], Map):
@@ -324,8 +324,8 @@ def _collapse_maps_gpu(self, expansion_specification):
     return res_items
 
 
-def _collapse_maps_cpu(self, expansion_specification):
-    res_items = []
+def _collapse_maps_cpu(expansion_specification: List[ExpansionItem]) -> List[ExpansionItem]:
+    res_items: List[ExpansionItem] = []
     for item in expansion_specification:
         if isinstance(item, Map):
             if (
@@ -360,12 +360,12 @@ def _collapse_maps_cpu(self, expansion_specification):
     return res_items
 
 
-def _collapse_maps(self, expansion_specification):
-    assert hasattr(self, "_device")
-    if self.device == dace.DeviceType.GPU:
-        res_items = _collapse_maps_gpu(self, expansion_specification)
+def _collapse_maps(node: StencilComputation, expansion_specification: List[ExpansionItem]):
+    assert hasattr(node, "_device")
+    if node.device == dace.DeviceType.GPU:
+        res_items = _collapse_maps_gpu(expansion_specification)
     else:
-        res_items = _collapse_maps_cpu(self, expansion_specification)
+        res_items = _collapse_maps_cpu(expansion_specification)
     expansion_specification.clear()
     expansion_specification.extend(res_items)
 
@@ -387,7 +387,7 @@ def make_expansion_order(
     _populate_strides(node, expansion_specification)
     _populate_schedules(node, expansion_specification)
     _collapse_maps(node, expansion_specification)
-    _populate_storages(node, expansion_specification)
+    _populate_storages(expansion_specification)
     return expansion_specification
 
 

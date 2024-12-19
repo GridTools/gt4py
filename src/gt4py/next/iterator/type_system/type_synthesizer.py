@@ -35,20 +35,20 @@ class TypeSynthesizer:
      - isinstance checks to determine if an object is actually (meant to be) a type
        synthesizer and not just any callable.
      - writing simple type synthesizers without cluttering the signature with the additional
-       offset_provider argument that is only needed by some.
+       offset_provider_type argument that is only needed by some.
     """
 
     type_synthesizer: Callable[..., TypeOrTypeSynthesizer]
 
     def __post_init__(self):
-        if "offset_provider" not in inspect.signature(self.type_synthesizer).parameters:
+        if "offset_provider_type" not in inspect.signature(self.type_synthesizer).parameters:
             synthesizer = self.type_synthesizer
-            self.type_synthesizer = lambda *args, offset_provider: synthesizer(*args)
+            self.type_synthesizer = lambda *args, offset_provider_type: synthesizer(*args)
 
     def __call__(
-        self, *args: TypeOrTypeSynthesizer, offset_provider: common.OffsetProvider
+        self, *args: TypeOrTypeSynthesizer, offset_provider_type: common.OffsetProviderType
     ) -> TypeOrTypeSynthesizer:
-        return self.type_synthesizer(*args, offset_provider=offset_provider)
+        return self.type_synthesizer(*args, offset_provider_type=offset_provider_type)
 
 
 TypeOrTypeSynthesizer = Union[ts.TypeSpec, TypeSynthesizer]
@@ -212,7 +212,7 @@ def neighbors(offset_literal: it_ts.OffsetLiteralType, it: it_ts.IteratorType) -
 def lift(stencil: TypeSynthesizer) -> TypeSynthesizer:
     @TypeSynthesizer
     def apply_lift(
-        *its: it_ts.IteratorType, offset_provider: common.OffsetProvider
+        *its: it_ts.IteratorType, offset_provider_type: common.OffsetProviderType
     ) -> it_ts.IteratorType:
         assert all(isinstance(it, it_ts.IteratorType) for it in its)
         stencil_args = [
@@ -224,7 +224,7 @@ def lift(stencil: TypeSynthesizer) -> TypeSynthesizer:
             )
             for it in its
         ]
-        stencil_return_type = stencil(*stencil_args, offset_provider=offset_provider)
+        stencil_return_type = stencil(*stencil_args, offset_provider_type=offset_provider_type)
         assert isinstance(stencil_return_type, ts.DataType)
 
         position_dims = its[0].position_dims if its else []
@@ -282,7 +282,7 @@ def as_fieldop(
     stencil: TypeSynthesizer,
     domain: Optional[it_ts.DomainType] = None,
     *,
-    offset_provider: common.OffsetProvider,
+    offset_provider_type: common.OffsetProviderType,
 ) -> TypeSynthesizer:
     # In case we don't have a domain argument to `as_fieldop` we can not infer the exact result
     # type. In order to still allow some passes which don't need this information to run before the
@@ -308,7 +308,7 @@ def as_fieldop(
 
         stencil_return = stencil(
             *(_convert_as_fieldop_input_to_iterator(domain, field) for field in fields),
-            offset_provider=offset_provider,
+            offset_provider_type=offset_provider_type,
         )
         assert isinstance(stencil_return, ts.DataType)
         return type_info.apply_to_primitive_constituents(
@@ -328,8 +328,10 @@ def scan(
     assert isinstance(direction, ts.ScalarType) and direction.kind == ts.ScalarKind.BOOL
 
     @TypeSynthesizer
-    def apply_scan(*its: it_ts.IteratorType, offset_provider: common.OffsetProvider) -> ts.DataType:
-        result = scan_pass(init, *its, offset_provider=offset_provider)
+    def apply_scan(
+        *its: it_ts.IteratorType, offset_provider_type: common.OffsetProviderType
+    ) -> ts.DataType:
+        result = scan_pass(init, *its, offset_provider_type=offset_provider_type)
         assert isinstance(result, ts.DataType)
         return result
 
@@ -340,12 +342,12 @@ def scan(
 def map_(op: TypeSynthesizer) -> TypeSynthesizer:
     @TypeSynthesizer
     def applied_map(
-        *args: it_ts.ListType, offset_provider: common.OffsetProvider
+        *args: it_ts.ListType, offset_provider_type: common.OffsetProviderType
     ) -> it_ts.ListType:
         assert len(args) > 0
         assert all(isinstance(arg, it_ts.ListType) for arg in args)
         arg_el_types = [arg.element_type for arg in args]
-        el_type = op(*arg_el_types, offset_provider=offset_provider)
+        el_type = op(*arg_el_types, offset_provider_type=offset_provider_type)
         assert isinstance(el_type, ts.DataType)
         return it_ts.ListType(element_type=el_type)
 
@@ -355,15 +357,17 @@ def map_(op: TypeSynthesizer) -> TypeSynthesizer:
 @_register_builtin_type_synthesizer
 def reduce(op: TypeSynthesizer, init: ts.TypeSpec) -> TypeSynthesizer:
     @TypeSynthesizer
-    def applied_reduce(*args: it_ts.ListType, offset_provider: common.OffsetProvider):
+    def applied_reduce(*args: it_ts.ListType, offset_provider_type: common.OffsetProviderType):
         assert all(isinstance(arg, it_ts.ListType) for arg in args)
-        return op(init, *(arg.element_type for arg in args), offset_provider=offset_provider)
+        return op(
+            init, *(arg.element_type for arg in args), offset_provider_type=offset_provider_type
+        )
 
     return applied_reduce
 
 
 @_register_builtin_type_synthesizer
-def shift(*offset_literals, offset_provider: common.OffsetProvider) -> TypeSynthesizer:
+def shift(*offset_literals, offset_provider_type: common.OffsetProviderType) -> TypeSynthesizer:
     @TypeSynthesizer
     def apply_shift(
         it: it_ts.IteratorType | ts.DeferredType,
@@ -379,19 +383,19 @@ def shift(*offset_literals, offset_provider: common.OffsetProvider) -> TypeSynth
             assert isinstance(offset_axis, it_ts.OffsetLiteralType) and isinstance(
                 offset_axis.value, common.Dimension
             )
-            provider = offset_provider[offset_axis.value.value]  # TODO: naming
-            if isinstance(provider, common.Dimension):
+            type_ = offset_provider_type[offset_axis.value.value]
+            if isinstance(type_, common.Dimension):
                 pass
-            elif isinstance(provider, common.Connectivity):
+            elif isinstance(type_, common.NeighborConnectivityType):
                 found = False
                 for i, dim in enumerate(new_position_dims):
-                    if dim.value == provider.origin_axis.value:
+                    if dim.value == type_.source_dim.value:
                         assert not found
-                        new_position_dims[i] = provider.neighbor_axis
+                        new_position_dims[i] = type_.codomain
                         found = True
                 assert found
             else:
-                raise NotImplementedError()
+                raise NotImplementedError(f"{type_} is not a supported Connectivity type.")
         return it_ts.IteratorType(
             position_dims=new_position_dims,
             defined_dims=it.defined_dims,

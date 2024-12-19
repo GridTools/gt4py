@@ -159,5 +159,5 @@ venv.bak/
 
 ### Others ###
 .obsidian
-
 coverage.json
+.caches

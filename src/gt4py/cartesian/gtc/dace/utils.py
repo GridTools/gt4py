@@ -40,7 +40,7 @@ def array_dimensions(array: dace.data.Array):
     return dims
 
 
-def replace_strides(arrays, get_layout_map):
+def replace_strides(arrays: List[dace.data.Array], get_layout_map) -> Dict[str, str]:
     symbol_mapping = {}
     for array in arrays:
         dims = array_dimensions(array)

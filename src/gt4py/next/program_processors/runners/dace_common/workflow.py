@@ -150,9 +150,9 @@ def convert_args(
 
         sdfg_args = dace_backend.get_sdfg_args(
             sdfg,
+            offset_provider,
             *args,
             check_args=False,
-            offset_provider=offset_provider,
             on_gpu=on_gpu,
             use_field_canonical_representation=use_field_canonical_representation,
         )

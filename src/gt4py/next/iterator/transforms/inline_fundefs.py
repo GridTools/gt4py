@@ -59,7 +59,7 @@ def prune_unreferenced_fundefs(program: itir.Program) -> itir.Program:
     >>> print(prune_unreferenced_fundefs(program))
     testee(inp, out) {
       fun1 = λ(a) → ·a;
-      out @ c⟨ IDimₕ: [0, 10) ⟩ ← fun1(inp);
+      out @ c⟨ IDimₕ: [0, 10[ ⟩ ← fun1(inp);
     }
     """
     fun_names = [fun.id for fun in program.function_definitions]

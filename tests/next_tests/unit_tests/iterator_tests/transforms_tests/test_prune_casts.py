@@ -8,16 +8,16 @@
 
 from gt4py import next as gtx
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator.transforms.prune_casts import PruneCasts
 from gt4py.next.iterator.type_system import inference as type_inference
+from gt4py.next.type_system import type_specifications as ts
 
 
 def test_prune_casts_simple():
     x_ref = im.ref("x", ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
     y_ref = im.ref("y", ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
     testee = im.call("plus")(im.call("cast_")(x_ref, "float64"), im.call("cast_")(y_ref, "float64"))
-    testee = type_inference.infer(testee, offset_provider={}, allow_undeclared_symbols=True)
+    testee = type_inference.infer(testee, offset_provider_type={}, allow_undeclared_symbols=True)
 
     expected = im.call("plus")(im.call("cast_")(x_ref, "float64"), y_ref)
     actual = PruneCasts.apply(testee)
@@ -32,7 +32,7 @@ def test_prune_casts_fieldop():
         im.cast_as_fieldop("float64")(x_ref),
         im.cast_as_fieldop("float64")(y_ref),
     )
-    testee = type_inference.infer(testee, offset_provider={}, allow_undeclared_symbols=True)
+    testee = type_inference.infer(testee, offset_provider_type={}, allow_undeclared_symbols=True)
 
     expected = im.op_as_fieldop("plus")(
         im.cast_as_fieldop("float64")(x_ref),

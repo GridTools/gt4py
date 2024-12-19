@@ -52,7 +52,7 @@ def test_trivial():
             )
         ],
     )
-    testee = type_inference.infer(testee, offset_provider=offset_provider)
+    testee = type_inference.infer(testee, offset_provider_type=offset_provider)
     testee = infer_domain.infer_program(testee, offset_provider=offset_provider)
 
     expected = program_factory(
@@ -87,7 +87,7 @@ def test_trivial_let():
             )
         ],
     )
-    testee = type_inference.infer(testee, offset_provider=offset_provider)
+    testee = type_inference.infer(testee, offset_provider_type=offset_provider)
     testee = infer_domain.infer_program(testee, offset_provider=offset_provider)
 
     expected = program_factory(
@@ -128,7 +128,7 @@ def test_top_level_if():
             )
         ],
     )
-    testee = type_inference.infer(testee, offset_provider=offset_provider)
+    testee = type_inference.infer(testee, offset_provider_type=offset_provider)
     testee = infer_domain.infer_program(testee, offset_provider=offset_provider)
 
     expected = program_factory(
@@ -186,7 +186,7 @@ def test_nested_if():
             )
         ],
     )
-    testee = type_inference.infer(testee, offset_provider=offset_provider)
+    testee = type_inference.infer(testee, offset_provider_type=offset_provider)
     testee = infer_domain.infer_program(testee, offset_provider=offset_provider)
 
     expected = program_factory(

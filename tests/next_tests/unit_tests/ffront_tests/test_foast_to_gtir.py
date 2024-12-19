@@ -283,8 +283,21 @@ def test_astype():
 
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
 
     reference = im.cast_as_fieldop("int32")("a")
+
+    assert lowered_inlined.expr == reference
+
+
+def test_astype_local_field():
+    def foo(a: gtx.Field[gtx.Dims[Vertex, V2EDim], float64]):
+        return astype(a, int32)
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.op_as_fieldop(im.map_(im.lambda_("val")(im.call("cast_")("val", "int32"))))("a")
 
     assert lowered.expr == reference
 
@@ -295,10 +308,11 @@ def test_astype_scalar():
 
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
 
     reference = im.call("cast_")("a", "int32")
 
-    assert lowered.expr == reference
+    assert lowered_inlined.expr == reference
 
 
 def test_astype_tuple():

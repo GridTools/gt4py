@@ -14,12 +14,8 @@ Definitions in 'typing_extensions' take priority over those in 'typing'.
 
 from __future__ import annotations
 
-import abc as _abc
 import array as _array
-import collections.abc as _collections_abc
-import ctypes as _ctypes
 import dataclasses as _dataclasses
-import enum as _enum
 import functools as _functools
 import inspect as _inspect
 import mmap as _mmap

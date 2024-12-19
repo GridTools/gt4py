@@ -499,10 +499,18 @@ def unstructured_case(
             Vertex: mesh_descriptor.num_vertices,
             Edge: mesh_descriptor.num_edges,
             Cell: mesh_descriptor.num_cells,
-            KDim: 10,
         },
         grid_type=common.GridType.UNSTRUCTURED,
         allocator=exec_alloc_descriptor.allocator,
+    )
+
+
+@pytest.fixture
+def unstructured_case_3d(unstructured_case):
+    return dataclasses.replace(
+        unstructured_case,
+        default_sizes={**unstructured_case.default_sizes, KDim: 10},
+        offset_provider={**unstructured_case.offset_provider, "KOff": KDim},
     )
 
 

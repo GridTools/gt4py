@@ -27,7 +27,7 @@ from .stencil_object import StencilObject
 
 
 __all__ = [
-    "typing",
+    "StencilObject",
     "caching",
     "cli",
     "config",
@@ -39,5 +39,5 @@ __all__ = [
     "stencil_builder",
     "stencil_object",
     "type_hints",
-    "StencilObject",
+    "typing",
 ]
