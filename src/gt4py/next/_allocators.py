@@ -520,7 +520,7 @@ def get_array_allocation_namespace(
                 device: Optional[core_defs.Device] = None,
                 aligned_index: Optional[Sequence[common.NamedIndex]] = None,
             ) -> core_defs.NDArrayObject:
-                assert is_field_allocator(allocator)
+                assert is_field_allocation_tool(allocator)
                 return allocate(
                     domain=common.domain(domain),
                     dtype=core_defs.dtype(dtype),
@@ -537,7 +537,7 @@ def get_array_allocation_namespace(
                 device: Optional[core_defs.Device] = None,
                 aligned_index: Optional[Sequence[common.NamedIndex]] = None,
             ) -> core_defs.NDArrayObject:
-                assert is_field_allocator(allocator)
+                assert is_field_allocation_tool(allocator)
                 buffer = allocate(
                     domain=common.domain(domain),
                     dtype=core_defs.dtype(dtype),
@@ -556,7 +556,7 @@ def get_array_allocation_namespace(
                 device: Optional[core_defs.Device] = None,
                 aligned_index: Optional[Sequence[common.NamedIndex]] = None,
             ) -> core_defs.NDArrayObject:
-                assert is_field_allocator(allocator)
+                assert is_field_allocation_tool(allocator)
                 buffer = allocate(
                     domain=common.domain(domain),
                     dtype=core_defs.dtype(dtype),
@@ -576,7 +576,7 @@ def get_array_allocation_namespace(
                 device: Optional[core_defs.Device] = None,
                 aligned_index: Optional[Sequence[common.NamedIndex]] = None,
             ) -> core_defs.NDArrayObject:
-                assert is_field_allocator(allocator)
+                assert is_field_allocation_tool(allocator)
                 buffer = allocate(
                     domain=common.domain(domain),
                     dtype=core_defs.dtype(dtype),  # TODO check all dtypes
@@ -597,7 +597,7 @@ def get_array_allocation_namespace(
                 copy: Optional[bool] = None,
                 aligned_index: Optional[Sequence[common.NamedIndex]] = None,
             ) -> core_defs.NDArrayObject:
-                assert is_field_allocator(allocator)
+                assert is_field_allocation_tool(allocator)
                 if not copy:
                     raise NotImplementedError("Zero-copy construction is not yet supported.")
                 dtype = core_defs.dtype(data.dtype) if dtype is None else core_defs.dtype(dtype)

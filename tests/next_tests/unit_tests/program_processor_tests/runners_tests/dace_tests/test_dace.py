@@ -173,13 +173,13 @@ def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
         )
         mock_fast_call.assert_called_once()
 
-    if gtx.allocators.is_field_allocator_for(
+    if gtx._allocators.is_field_allocator_for(
         unstructured_case.backend.allocator, core_defs.DeviceType.CPU
     ):
         offset_provider = unstructured_case.offset_provider
     else:
-        assert gtx.allocators.is_field_allocator_for(
-            unstructured_case.backend.allocator, gtx.allocators.CUPY_DEVICE
+        assert gtx._allocators.is_field_allocator_for(
+            unstructured_case.backend.allocator, gtx._allocators.CUPY_DEVICE
         )
 
         import cupy as cp

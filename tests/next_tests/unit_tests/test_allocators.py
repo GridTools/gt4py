@@ -152,7 +152,7 @@ class TestInvalidFieldBufferAllocator:
 
 
 def test_allocate():
-    from gt4py.next._allocators import StandardCPUFieldBufferAllocator, make_concrete_allocator
+    from gt4py.next._allocators import StandardCPUFieldBufferAllocator, allocate
 
     I = common.Dimension("I")
     J = common.Dimension("J")
@@ -161,25 +161,25 @@ def test_allocate():
 
     # Test with a explicit field allocator
     allocator = StandardCPUFieldBufferAllocator()
-    tensor_buffer = make_concrete_allocator(domain, dtype, allocator=allocator)()
+    tensor_buffer = allocate(domain=domain, dtype=dtype, allocator=allocator)
     assert tensor_buffer.shape == domain.shape
     assert tensor_buffer.dtype == dtype
 
     # Test with a device
     device = core_defs.Device(core_defs.DeviceType.CPU, 0)
-    tensor_buffer = make_concrete_allocator(domain, dtype, device=device)()
+    tensor_buffer = allocate(domain=domain, dtype=dtype, device=device)
     assert tensor_buffer.shape == domain.shape
     assert tensor_buffer.dtype == dtype
 
     # Test with both allocator and device
     with pytest.raises(ValueError, match="are incompatible"):
-        make_concrete_allocator(
-            domain,
-            dtype,
+        allocate(
+            domain=domain,
+            dtype=dtype,
             allocator=allocator,
             device=core_defs.Device(core_defs.DeviceType.CUDA, 0),
         )
 
     # Test with no device or allocator
     with pytest.raises(ValueError, match="No 'device' or 'allocator' specified"):
-        make_concrete_allocator(domain, dtype)
+        allocate(domain=domain, dtype=dtype)
