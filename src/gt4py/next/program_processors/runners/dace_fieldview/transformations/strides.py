@@ -541,11 +541,11 @@ def _gt_map_strides_into_nested_sdfg(
         new_strides_symbols: list[str] = []
         for new_stride_dim in new_strides:
             if dace.symbolic.issymbolic(new_stride_dim):
-                new_strides_symbols.append(str(new_stride_dim))
-            else:
                 # NOTE: In DaCe `free_symbols` is `set[str]` but in `sympy` it
                 #   returns `set[symbol]`. We need `str` so we have to cast them.
                 new_strides_symbols.extend(str(sym) for sym in new_stride_dim.free_symbols)
+            else:
+                new_strides_symbols.append(str(new_stride_dim))
 
         # Now we determine the set of symbols that should be mapped inside the NestedSDFG.
         #  We will exclude all that are already inside the `symbol_mapping` (we do not
