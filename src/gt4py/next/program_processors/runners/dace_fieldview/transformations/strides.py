@@ -545,43 +545,47 @@ def _gt_map_strides_into_nested_sdfg(
         inner_desc.set_shape(inner_desc.shape, new_strides)
 
         # Now find the free symbols that the new strides need.
-        new_strides_symbols: list[str] = []
+        #  Note that usually `free_symbols` returns `set[str]`, but here, because
+        #  we fall back on SymPy, we get back symbols. We will keep them, because
+        #  then we can use them to extract the type form them, which we need later.
+        new_strides_symbols: list[dace.symbol] = []
         for new_stride_dim in new_strides:
             if dace.symbolic.issymbolic(new_stride_dim):
-                # NOTE: In DaCe `free_symbols` is `set[str]` but in `sympy` it
-                #   returns `set[symbol]`. We need `str` so we have to cast them.
-                new_strides_symbols.extend(str(sym) for sym in new_stride_dim.free_symbols)
+                new_strides_symbols.extend(sym for sym in new_stride_dim.free_symbols)
             else:
-                new_strides_symbols.append(str(new_stride_dim))
+                # It is not already a symbol, so we turn it into a symbol.
+                #  However, we only add it, if it is also a symbol, for example `1`.
+                #  should not be added.
+                new_stride_symbol = dace.symbolic.pystr_to_symbolic(new_stride_dim)
+                if new_stride_symbol.is_symbol:
+                    new_strides_symbols.append(new_stride_symbol)
 
         # Now we determine the set of symbols that should be mapped inside the NestedSDFG.
         #  We will exclude all that are already inside the `symbol_mapping` (we do not
         #  check if they map to the same value, we just hope it). Furthermore,
         #  we will exclude all symbols that are listed in the `symbols` property
         #  of the SDFG that is nested, and hope that it has the same meaning.
-        # TODO(phimuell): Add better checks here.
-        missing_symbol_mappings: set[str] = {
+        # TODO(phimuell): Add better checks to avoid overwriting.
+        missing_symbol_mappings: set[dace.symbol] = {
             sym
             for sym in new_strides_symbols
-            if not (sym in nsdfg_node.sdfg.symbols or sym in nsdfg_node.symbol_mapping)
+            if not (sym.name in nsdfg_node.sdfg.symbols or sym.name in nsdfg_node.symbol_mapping)
         }
 
         # Now propagate the symbols from the parent SDFG to the NestedSDFG.
         for sym in missing_symbol_mappings:
             if sym in sdfg.symbols:
-                # TODO(phimuell): Handle the case the symbol is already defined.
-                nsdfg_node.sdfg.add_symbol(sym, sdfg.symbols[sym])
+                # TODO(phimuell): Handle the case the symbol is already defined in
+                #   the nested SDFG.
+                nsdfg_node.sdfg.add_symbol(sym.name, sdfg.symbols[sym.name])
             else:
-                # The symbol is not known in the parent SDFG, but we need to define a
-                #  symbol and for that we need a `dtype`. Our solution (which is as
-                #  wrong as any other) is to create a symbol with that name and then
-                #  use the type that was deduced.
-                nsdfg_node.sdfg.add_symbol(sym, dace.symbol(sym).dtype)
+                # The symbol is not known in the parent SDFG, so we add it
+                nsdfg_node.sdfg.add_symbol(sym.name, sym.dtype)
                 warnings.warn(
-                    f"Could not find the symbol '{sym}' in the parent SDFG while modifying the strides, use '{nsdfg_node.sdfg.symbols[sym]}' as dtype.",
+                    f"Could not find the symbol '{sym}' in the parent SDFG while modifying the strides, use '{nsdfg_node.sdfg.symbols[sym.name]}' as dtype.",
                     stacklevel=1,
                 )
-            nsdfg_node.symbol_mapping[sym] = dace.symbolic.pystr_to_symbolic(sym)
+                nsdfg_node.symbol_mapping[sym.name] = sym
 
         # Now create aliases for the old symbols that were used as strides.
         for old_sym, new_sym in zip(inner_strides_init, new_strides):
