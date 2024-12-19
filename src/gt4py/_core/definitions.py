@@ -14,6 +14,7 @@ import enum
 import functools
 import math
 import numbers
+from types import ModuleType
 
 import numpy as np
 import numpy.typing as npt
@@ -336,6 +337,15 @@ DTypeLike = Union[DType, npt.DTypeLike]
 def dtype(dtype_like: DTypeLike) -> DType:
     """Return the DType corresponding to the given dtype-like object."""
     return dtype_like if isinstance(dtype_like, DType) else DType(np.dtype(dtype_like).type)
+
+
+def to_array_api_dtype(xp: ModuleType, dtype_: DTypeLike | None) -> Any:
+    """
+    Converts a GT4Py `DTypeLike` to the dtype object of the given Array API namespace.
+
+    Note: For convenience `None` is passed-through as it has a consistent meaning in all Array API implementations.
+    """
+    return None if dtype_ is None else getattr(xp, dtype(dtype_).scalar_type.__name__)
 
 
 # -- Custom protocols  --

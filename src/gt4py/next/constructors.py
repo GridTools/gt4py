@@ -41,14 +41,6 @@ def _has_array_api_creation_functions(obj: Any) -> TypeGuard[_HasArrayApiCreatio
     )
 
 
-def _convert_dtype(
-    xp: Any, dtype: core_defs.DTypeLike
-) -> Any:  # TODO move to core_defs as `to_array_api_dtype`
-    if dtype is None:
-        return None
-    return getattr(xp, core_defs.dtype(dtype).scalar_type.__name__)
-
-
 def _array_api_construction(
     xp: _HasArrayApiCreationFunctions,
     fun: str,
@@ -60,7 +52,7 @@ def _array_api_construction(
 ):
     if device is not None:
         raise NotImplementedError("Device specification is not yet supported.")
-    buffer = getattr(xp, fun)(*args, dtype=_convert_dtype(xp, dtype), **kwargs)
+    buffer = getattr(xp, fun)(*args, dtype=core_defs.to_array_api_dtype(xp, dtype), **kwargs)
 
     def allocate(
         domain: common.DomainLike = domain,
