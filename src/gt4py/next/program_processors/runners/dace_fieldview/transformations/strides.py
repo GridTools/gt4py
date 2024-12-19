@@ -346,12 +346,14 @@ def _gt_map_strides_to_nested_sdfg_src_dst(
             return edge.dst_conn
 
         def get_subset(
+            state: dace.SDFGState,
             edge: dace.sdfg.graph.MultiConnectorEdge[dace.Memlet],
         ) -> dace.subsets.Subset:
-            return edge.data.src_subset
+            return edge.data.get_src_subset(edge, state)
 
         def next_edges_by_connector(
-            state: dace.SDFGState, edge: dace.sdfg.graph.MultiConnectorEdge[dace.Memlet]
+            state: dace.SDFGState,
+            edge: dace.sdfg.graph.MultiConnectorEdge[dace.Memlet],
         ) -> list[dace.sdfg.graph.MultiConnectorEdge[dace.Memlet]]:
             if edge.dst_conn is None or not edge.dst_conn.startswith("IN_"):
                 return []
@@ -368,12 +370,14 @@ def _gt_map_strides_to_nested_sdfg_src_dst(
             return edge.src_conn
 
         def get_subset(
+            state: dace.SDFGState,
             edge: dace.sdfg.graph.MultiConnectorEdge[dace.Memlet],
         ) -> dace.subsets.Subset:
-            return edge.data.dst_subset
+            return edge.data.get_dst_subset(edge, state)
 
         def next_edges_by_connector(
-            state: dace.SDFGState, edge: dace.sdfg.graph.MultiConnectorEdge[dace.Memlet]
+            state: dace.SDFGState,
+            edge: dace.sdfg.graph.MultiConnectorEdge[dace.Memlet],
         ) -> list[dace.sdfg.graph.MultiConnectorEdge[dace.Memlet]]:
             return list(state.in_edges_by_connector(edge.src, "IN_" + edge.src_conn[4:]))
 
@@ -406,7 +410,7 @@ def _gt_map_strides_to_nested_sdfg_src_dst(
         _gt_map_strides_into_nested_sdfg(
             nsdfg_node=nsdfg_node,
             inner_data=inner_data,
-            outer_subset=get_subset(edge),
+            outer_subset=get_subset(state, edge),
             outer_desc=outer_node.desc(sdfg),
             ignore_symbol_mapping=ignore_symbol_mapping,
         )
