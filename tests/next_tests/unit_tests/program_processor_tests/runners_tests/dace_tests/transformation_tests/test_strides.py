@@ -298,3 +298,108 @@ def test_strides_propagation_ignore_symbol_mapping():
             if nsdfg is not None:
                 assert original_stride in nsdfg.symbol_mapping
                 assert str(nsdfg.symbol_mapping[original_stride]) == exp_stride
+
+
+def _make_strides_propagation_dependent_symbol_nsdfg() -> dace.SDFG:
+    sdfg = dace.SDFG(util.unique_name("nested_sdfg"))
+    state = sdfg.add_state(is_start_block=True)
+
+    array_names = ["a2", "b2"]
+    for name in array_names:
+        stride_sym = dace.symbol(f"{name}_stride", dtype=dace.uint64)
+        sdfg.add_symbol(stride_sym.name, stride_sym.dtype)
+        sdfg.add_array(
+            name,
+            shape=(10,),
+            dtype=dace.float64,
+            strides=(stride_sym,),
+            transient=False,
+        )
+
+    state.add_mapped_tasklet(
+        "nested_comp",
+        map_ranges={"__i0": "0:10"},
+        inputs={"__in1": dace.Memlet("a2[__i0]")},
+        code="__out = __in1 + 10.",
+        outputs={"__out": dace.Memlet("b2[__i0]")},
+        external_edges=True,
+    )
+    sdfg.validate()
+    return sdfg
+
+
+def _make_strides_propagation_dependent_symbol_sdfg() -> tuple[dace.SDFG, dace_nodes.NestedSDFG]:
+    sdfg_level1 = dace.SDFG(util.unique_name("nested_level"))
+    state = sdfg_level1.add_state(is_start_block=True)
+
+    array_names = ["a1", "b1"]
+    for name in array_names:
+        stride_sym1 = dace.symbol(f"{name}_1stride", dtype=dace.uint64)
+        stride_sym2 = dace.symbol(f"{name}_2stride", dtype=dace.int64)
+        sdfg_level1.add_symbol(stride_sym1.name, stride_sym1.dtype)
+        sdfg_level1.add_symbol(stride_sym2.name, stride_sym2.dtype)
+        stride_sym = stride_sym1 * stride_sym2
+        sdfg_level1.add_array(
+            name,
+            shape=(10,),
+            dtype=dace.float64,
+            strides=(stride_sym,),
+            transient=False,
+        )
+
+    sdfg_level2 = _make_strides_propagation_dependent_symbol_nsdfg()
+
+    for sym, sym_dtype in sdfg_level2.symbols.items():
+        sdfg_level1.add_symbol(sym, sym_dtype)
+
+    nsdfg = state.add_nested_sdfg(
+        sdfg=sdfg_level2,
+        parent=sdfg_level1,
+        inputs={"a2"},
+        outputs={"b2"},
+        symbol_mapping={s: s for s in sdfg_level2.symbols},
+    )
+
+    state.add_edge(state.add_access("a1"), None, nsdfg, "a2", dace.Memlet("a1[0:10]"))
+    state.add_edge(nsdfg, "b2", state.add_access("b1"), None, dace.Memlet("b1[0:10]"))
+    sdfg_level1.validate()
+
+    return sdfg_level1, nsdfg
+
+
+def test_strides_propagation_dependent_symbol():
+    sdfg_level1, nsdfg_level2 = _make_strides_propagation_dependent_symbol_sdfg()
+    sym1_dtype = dace.uint64
+    sym2_dtype = dace.int64
+
+    # Ensure that the special symbols are not already present inside the nested SDFG.
+    for aname, adesc in sdfg_level1.arrays.items():
+        sym1 = f"{aname}_1stride"
+        sym2 = f"{aname}_2stride"
+        for sym, dtype in [(sym1, sym1_dtype), (sym2, sym2_dtype)]:
+            assert sym in {fs.name for fs in adesc.strides[0].free_symbols}
+            assert sym not in nsdfg_level2.symbol_mapping
+            assert sym not in nsdfg_level2.sdfg.symbols
+            assert sym in sdfg_level1.symbols
+            assert sdfg_level1.symbols[sym] == dtype
+
+    # Now propagate `a1` and `b1`.
+    gtx_transformations.gt_propagate_strides_of(sdfg_level1, "a1", ignore_symbol_mapping=True)
+    sdfg_level1.validate()
+    gtx_transformations.gt_propagate_strides_of(sdfg_level1, "b1", ignore_symbol_mapping=True)
+    sdfg_level1.validate()
+
+    # Now we check if the update has worked.
+    for aname, adesc in sdfg_level1.arrays.items():
+        sym1 = f"{aname}_1stride"
+        sym2 = f"{aname}_2stride"
+        adesc2 = nsdfg_level2.sdfg.arrays[aname.replace("1", "2")]
+        assert adesc2.strides == adesc.strides
+
+        for sym, dtype in [(sym1, sym1_dtype), (sym2, sym2_dtype)]:
+            assert sym in nsdfg_level2.symbol_mapping
+            assert nsdfg_level2.symbol_mapping[sym].name == sym
+            assert sym in sdfg_level1.symbols
+            assert sdfg_level1.symbols[sym] == dtype
+            assert sym in nsdfg_level2.sdfg.symbols
+            assert nsdfg_level2.sdfg.symbols[sym] == dtype
