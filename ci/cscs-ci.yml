@@ -57,8 +57,6 @@ stages:
     CUPY_PACKAGE: cupy-cuda12x
     CUPY_VERSION: 13.3.0
     UBUNTU_VERSION: 22.04
-  # TODO: enable CI job when Todi is back in operational state
-  when: manual
 
 build_py311_baseimage_x86_64:
   extends: .build_baseimage_x86_64
@@ -156,7 +154,7 @@ build_py38_image_x86_64:
   variables:
     CRAY_CUDA_MPS: 1
     SLURM_JOB_NUM_NODES: 1
-    SLURM_TIMELIMIT: 15
+    SLURM_TIMELIMIT: 30
     NUM_PROCESSES: auto
     VIRTUALENV_SYSTEM_SITE_PACKAGES: 1
 .test_helper_x86_64:
@@ -171,7 +169,7 @@ build_py38_image_x86_64:
       VARIANT: [-nomesh, -atlas]
       SUBVARIANT: [-cuda11x, -cpu]
 .test_helper_aarch64:
-  extends: [.container-runner-todi-gh200, .test_helper]
+  extends: [.container-runner-daint-gh200, .test_helper]
   parallel:
     matrix:
     - SUBPACKAGE: [cartesian, storage]
