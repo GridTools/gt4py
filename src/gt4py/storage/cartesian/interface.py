@@ -97,9 +97,7 @@ def empty(
     assert allocators.is_valid_layout_map(layout_map)
 
     dtype = np.dtype(dtype)
-    _, res = allocate_f(shape, layout_map, dtype, alignment * dtype.itemsize, aligned_index)
-
-    return res
+    return allocate_f(shape, layout_map, dtype, alignment * dtype.itemsize, aligned_index)
 
 
 def ones(

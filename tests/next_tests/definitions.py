@@ -14,12 +14,20 @@ import importlib
 
 import pytest
 
-from gt4py.next import allocators as next_allocators
+from gt4py.next import _allocators as next_allocators
 
 
 # Skip definitions
 XFAIL = pytest.xfail
 SKIP = pytest.skip
+
+try:
+    import jax
+    import jax.numpy as jnp
+
+    jax.config.update("jax_enable_x64", True)
+except ImportError:
+    jnp = None
 
 
 # Program processors
@@ -56,13 +64,19 @@ class EmbeddedDummyBackend:
     allocator: next_allocators.FieldBufferAllocatorProtocol
 
 
-numpy_execution = EmbeddedDummyBackend(next_allocators.StandardCPUFieldBufferAllocator())
+import numpy as np
+
+
+# numpy_execution = EmbeddedDummyBackend(next_allocators.StandardCPUFieldBufferAllocator())
+numpy_execution = EmbeddedDummyBackend(np)
 cupy_execution = EmbeddedDummyBackend(next_allocators.StandardGPUFieldBufferAllocator())
+jax_execution = EmbeddedDummyBackend(jnp)
 
 
 class EmbeddedIds(_PythonObjectIdMixin, str, enum.Enum):
     NUMPY_EXECUTION = "next_tests.definitions.numpy_execution"
     CUPY_EXECUTION = "next_tests.definitions.cupy_execution"
+    JAX_EXECUTION = "next_tests.definitions.jax_execution"
 
 
 class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
@@ -112,6 +126,7 @@ USES_UNSTRUCTURED_SHIFT = "uses_unstructured_shift"
 USES_MAX_OVER = "uses_max_over"
 USES_MESH_WITH_SKIP_VALUES = "uses_mesh_with_skip_values"
 USES_SCALAR_IN_DOMAIN_AND_FO = "uses_scalar_in_domain_and_fo"
+SLICES_OUT_ARGUMENT = "slices_out_argument"
 CHECKS_SPECIFIC_ERROR = "checks_specific_error"
 
 # Skip messages (available format keys: 'marker', 'backend')
@@ -146,6 +161,9 @@ EMBEDDED_SKIP_LIST = [
         UNSUPPORTED_MESSAGE,
     ),  # we can't extract the field type from scan args
 ]
+JAX_SKIP_LIST = EMBEDDED_SKIP_LIST + [
+    (SLICES_OUT_ARGUMENT, XFAIL, UNSUPPORTED_MESSAGE),
+]
 ROUNDTRIP_SKIP_LIST = DOMAIN_INFERENCE_SKIP_LIST + [
     (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),
 ]
@@ -168,6 +186,7 @@ GTFN_SKIP_TEST_LIST = (
 BACKEND_SKIP_TEST_MATRIX = {
     EmbeddedIds.NUMPY_EXECUTION: EMBEDDED_SKIP_LIST,
     EmbeddedIds.CUPY_EXECUTION: EMBEDDED_SKIP_LIST,
+    EmbeddedIds.JAX_EXECUTION: JAX_SKIP_LIST,
     OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_CPU_NO_OPT: DACE_SKIP_TEST_LIST,

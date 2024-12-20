@@ -24,7 +24,7 @@ from gt4py import eve
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import (
-    allocators as next_allocators,
+    _allocators as next_allocators,
     backend as next_backend,
     common,
     embedded as next_embedded,
