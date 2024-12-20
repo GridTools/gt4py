@@ -7,6 +7,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import pytest
+import numpy as np
+import copy
 
 dace = pytest.importorskip("dace")
 from dace import symbolic as dace_symbolic
@@ -302,7 +304,7 @@ def test_strides_propagation_ignore_symbol_mapping():
 
 
 def _make_strides_propagation_dependent_symbol_nsdfg() -> dace.SDFG:
-    sdfg = dace.SDFG(util.unique_name("nested_sdfg"))
+    sdfg = dace.SDFG(util.unique_name("strides_propagation_dependent_symbol_nsdfg"))
     state = sdfg.add_state(is_start_block=True)
 
     array_names = ["a2", "b2"]
@@ -330,7 +332,7 @@ def _make_strides_propagation_dependent_symbol_nsdfg() -> dace.SDFG:
 
 
 def _make_strides_propagation_dependent_symbol_sdfg() -> tuple[dace.SDFG, dace_nodes.NestedSDFG]:
-    sdfg_level1 = dace.SDFG(util.unique_name("nested_level"))
+    sdfg_level1 = dace.SDFG(util.unique_name("strides_propagation_dependent_symbol_sdfg"))
     state = sdfg_level1.add_state(is_start_block=True)
 
     array_names = ["a1", "b1"]
@@ -404,3 +406,126 @@ def test_strides_propagation_dependent_symbol():
             assert sdfg_level1.symbols[sym] == dtype
             assert sym in nsdfg_level2.sdfg.symbols
             assert nsdfg_level2.sdfg.symbols[sym] == dtype
+
+
+def _make_strides_propagation_shared_symbols_nsdfg() -> dace.SDFG:
+    sdfg = dace.SDFG(util.unique_name("strides_propagation_shared_symbols_nsdfg"))
+    state = sdfg.add_state(is_start_block=True)
+
+    # NOTE: Both arrays have the same symbols used for strides.
+    array_names = ["a2", "b2"]
+    stride_sym0 = dace.symbol(f"__stride_0", dtype=dace.uint64)
+    stride_sym1 = dace.symbol(f"__stride_1", dtype=dace.uint64)
+    sdfg.add_symbol(stride_sym0.name, stride_sym0.dtype)
+    sdfg.add_symbol(stride_sym1.name, stride_sym1.dtype)
+    for name in array_names:
+        sdfg.add_array(
+            name,
+            shape=(10, 10),
+            dtype=dace.float64,
+            strides=(stride_sym0, stride_sym1),
+            transient=False,
+        )
+
+    state.add_mapped_tasklet(
+        "nested_comp",
+        map_ranges={
+            "__i0": "0:10",
+            "__i1": "0:10",
+        },
+        inputs={"__in1": dace.Memlet("a2[__i0, __i1]")},
+        code="__out = __in1 + 10.",
+        outputs={"__out": dace.Memlet("b2[__i0, __i1]")},
+        external_edges=True,
+    )
+    sdfg.validate()
+    return sdfg
+
+
+def _make_strides_propagation_shared_symbols_sdfg() -> tuple[dace.SDFG, dace_nodes.NestedSDFG]:
+    sdfg_level1 = dace.SDFG(util.unique_name("strides_propagation_shared_symbols_sdfg"))
+    state = sdfg_level1.add_state(is_start_block=True)
+
+    # NOTE: Both arrays use the same symbols as strides.
+    #   Furthermore, they are the same as in the nested SDFG, i.e. they are shared.
+    array_names = ["a1", "b1"]
+    stride_sym0 = dace.symbol(f"__stride_0", dtype=dace.uint64)
+    stride_sym1 = dace.symbol(f"__stride_1", dtype=dace.uint64)
+    sdfg_level1.add_symbol(stride_sym0.name, stride_sym0.dtype)
+    sdfg_level1.add_symbol(stride_sym1.name, stride_sym1.dtype)
+    for name in array_names:
+        sdfg_level1.add_array(
+            name,
+            shape=(10, 10),
+            dtype=dace.float64,
+            strides=(
+                stride_sym0,
+                stride_sym1,
+            ),
+            transient=False,
+        )
+
+    sdfg_level2 = _make_strides_propagation_shared_symbols_nsdfg()
+    nsdfg = state.add_nested_sdfg(
+        sdfg=sdfg_level2,
+        parent=sdfg_level1,
+        inputs={"a2"},
+        outputs={"b2"},
+        symbol_mapping={s: s for s in sdfg_level2.symbols},
+    )
+
+    state.add_edge(state.add_access("a1"), None, nsdfg, "a2", dace.Memlet("a1[0:10, 0:10]"))
+    state.add_edge(nsdfg, "b2", state.add_access("b1"), None, dace.Memlet("b1[0:10, 0:10]"))
+    sdfg_level1.validate()
+
+    return sdfg_level1, nsdfg
+
+
+def test_strides_propagation_shared_symbols_sdfg():
+    """
+    Note:
+        If `ignore_symbol_mapping` is `False` then this test will fail.
+        This is because the `symbol_mapping` of the NestedSDFG will act on the
+        whole SDFG. Thus it will not only change the strides of `b` but as an
+        unintended side effect also the strides of `a`.
+    """
+
+    def ref(a1, b1):
+        for i in range(10):
+            for j in range(10):
+                b1[i, j] = a1[i, j] + 10.0
+
+    sdfg_level1, nsdfg_level2 = _make_strides_propagation_shared_symbols_sdfg()
+
+    res_args = {
+        "a1": np.array(np.random.rand(10, 10), order="C", dtype=np.float64, copy=True),
+        "b1": np.array(np.random.rand(10, 10), order="F", dtype=np.float64, copy=True),
+    }
+    ref_args = copy.deepcopy(res_args)
+
+    # Now we change the strides of `b1`, and then we propagate the new strides
+    #  into the nested SDFG. We want to keep (for whatever reasons) strides of `a1`.
+    stride_b1_sym0 = dace.symbol(f"__b1_stride_0", dtype=dace.uint64)
+    stride_b1_sym1 = dace.symbol(f"__b1_stride_1", dtype=dace.uint64)
+    sdfg_level1.add_symbol(stride_b1_sym0.name, stride_b1_sym0.dtype)
+    sdfg_level1.add_symbol(stride_b1_sym1.name, stride_b1_sym1.dtype)
+
+    desc_b1 = sdfg_level1.arrays["b1"]
+    desc_b1.set_shape((10, 10), (stride_b1_sym0, stride_b1_sym1))
+
+    # Now we propagate the data into it.
+    gtx_transformations.gt_propagate_strides_of(sdfg=sdfg_level1, data_name="b1")
+
+    # Now we have to prepare the call arguments, i.e. adding the strides
+    itemsize = res_args["b1"].itemsize
+    res_args.update(
+        {
+            "__b1_stride_0": res_args["b1"].strides[0] // itemsize,
+            "__b1_stride_1": res_args["b1"].strides[1] // itemsize,
+            "__stride_0": res_args["a1"].strides[0] // itemsize,
+            "__stride_1": res_args["a1"].strides[1] // itemsize,
+        }
+    )
+    ref(**ref_args)
+    sdfg_level1(**res_args)
+    assert np.allclose(ref_args["b1"], res_args["b1"])
