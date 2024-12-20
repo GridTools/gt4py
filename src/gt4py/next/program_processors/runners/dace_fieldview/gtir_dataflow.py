@@ -885,6 +885,52 @@ class LambdaToDataflow(eve.NodeVisitor):
             dc_node=neighbors_node, gt_dtype=itir_ts.ListType(node.type.element_type, offset_type)
         )
 
+    def _visit_list_get(self, node: gtir.FunCall) -> ValueExpr:
+        assert len(node.args) == 2
+        index_arg = self.visit(node.args[0])
+        list_arg = self.visit(node.args[1])
+        assert isinstance(list_arg, ValueExpr)
+        assert isinstance(list_arg.gt_dtype, itir_ts.ListType)
+        assert isinstance(list_arg.gt_dtype.element_type, ts.ScalarType)
+
+        result_dtype = dace_utils.as_dace_type(list_arg.gt_dtype.element_type)
+        result, _ = self.sdfg.add_scalar(self.sdfg.temp_data_name(), result_dtype, transient=True)
+        result_node = self.state.add_access(result)
+
+        if isinstance(index_arg, SymbolExpr):
+            assert index_arg.dc_dtype in dace.dtypes.INTEGER_TYPES
+            self._add_edge(
+                list_arg.dc_node,
+                None,
+                result_node,
+                None,
+                dace.Memlet(data=list_arg.dc_node.data, subset=index_arg.value),
+            )
+        else:
+            assert isinstance(index_arg, ValueExpr)
+            tasklet_node = self._add_tasklet(
+                "list_get", inputs={"index", "list"}, outputs={"value"}, code="value = list[index]"
+            )
+            self._add_edge(
+                index_arg.dc_node,
+                None,
+                tasklet_node,
+                "index",
+                dace.Memlet(data=index_arg.dc_node.data, subset="0"),
+            )
+            self._add_edge(
+                list_arg.dc_node,
+                None,
+                tasklet_node,
+                "list",
+                self.sdfg.make_array_memlet(list_arg.dc_node.data),
+            )
+            self._add_edge(
+                tasklet_node, "value", result_node, None, dace.Memlet(data=result, subset="0")
+            )
+
+        return ValueExpr(dc_node=result_node, gt_dtype=list_arg.gt_dtype.element_type)
+
     def _visit_map(self, node: gtir.FunCall) -> ValueExpr:
         """
         A map node defines an operation to be mapped on all elements of input arguments.
@@ -1515,6 +1561,9 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         elif cpm.is_call_to(node, "neighbors"):
             return self._visit_neighbors(node)
+
+        elif cpm.is_call_to(node, "list_get"):
+            return self._visit_list_get(node)
 
         elif cpm.is_call_to(node, "make_tuple"):
             return self._visit_make_tuple(node)
