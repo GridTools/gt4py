@@ -482,7 +482,14 @@ def _make_strides_propagation_shared_symbols_sdfg() -> tuple[dace.SDFG, dace_nod
 
 
 def test_strides_propagation_shared_symbols_sdfg():
-    """
+    """Tests what happens if symbols are (unintentionally) shred between descriptor.
+
+    This test looks rather artificial, but it is actually quite likely. Because
+    transients will most likely have the same shape and if the strides are not
+    set explicitly, which is the case, the strides will also be related to their
+    shape. This test explores the situation, where we can, for whatever reason,
+    only propagate the strides of one such data descriptor.
+
     Note:
         If `ignore_symbol_mapping` is `False` then this test will fail.
         This is because the `symbol_mapping` of the NestedSDFG will act on the
@@ -514,7 +521,10 @@ def test_strides_propagation_shared_symbols_sdfg():
     desc_b1.set_shape((10, 10), (stride_b1_sym0, stride_b1_sym1))
 
     # Now we propagate the data into it.
-    gtx_transformations.gt_propagate_strides_of(sdfg=sdfg_level1, data_name="b1")
+    gtx_transformations.gt_propagate_strides_of(
+        sdfg=sdfg_level1,
+        data_name="b1",
+    )
 
     # Now we have to prepare the call arguments, i.e. adding the strides
     itemsize = res_args["b1"].itemsize
