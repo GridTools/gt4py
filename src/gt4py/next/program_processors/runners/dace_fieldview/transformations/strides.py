@@ -460,7 +460,7 @@ def _gt_map_strides_into_nested_sdfg(
     inner_data: str,
     outer_subset: dace.subsets.Subset,
     outer_desc: dace_data.Data,
-    ignore_symbol_mapping: bool = True,
+    ignore_symbol_mapping: bool,
 ) -> None:
     """Modify the strides of `inner_data` inside `nsdfg_node` to match `outer_desc`.
 
