@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
 
   ## COMMENTED OUT: only for testing CI action changes
-  # pull_request:
-  #   branches:
-  #   - main
+  pull_request:
+    branches:
+    - main
   ## END
 
 jobs:
@@ -105,7 +105,9 @@ jobs:
         NUM_PROCESSES: auto
         ENV_REQUIREMENTS_FILE: ${{ matrix.requirements-file }}
       run: |
-        tox run --skip-missing-interpreters -m test-${{ matrix.tox-module-factor }}-cpu
+        pyversion=${{ matrix.python-version }}
+        pyversion_no_dot=${pyversion//./}
+        tox run -x testenv.base_python=py${pyversion_no_dot} -m test-${{ matrix.tox-module-factor }}-cpu
     - name: Notify slack
       if: ${{ failure() }}
       env:
