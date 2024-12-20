@@ -664,10 +664,6 @@ class LambdaToDataflow(eve.NodeVisitor):
                     nsdfg.add_datadesc(inner_data, inner_desc)
                     input_memlets[inner_data] = (arg_node, arg_subset)
 
-                if arg_subset:
-                    # symbols used in memlet subset are not automatically mapped to the parent SDFG
-                    nsdfg_symbol_mapping.update({sym: sym for sym in arg_subset.free_symbols})
-
                 inner_node = state.add_access(inner_data)
                 if isinstance(arg, IteratorExpr):
                     return IteratorExpr(inner_node, arg.gt_dtype, arg.field_domain, arg.indices)
@@ -750,7 +746,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             self.sdfg,
             inputs=set(input_memlets.keys()),
             outputs=outputs,
-            symbol_mapping=nsdfg_symbol_mapping,
+            symbol_mapping=nsdfg_symbol_mapping | {str(sym): sym for sym in nsdfg.free_symbols},
         )
 
         for inner, (src_node, src_subset) in input_memlets.items():
