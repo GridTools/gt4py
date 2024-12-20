@@ -436,8 +436,10 @@ class NdArrayField(
 
     def __copy__(self) -> NdArrayField:
         # Note: `copy` copies the data, following NumPy behavior
-        allocation_ns = self._allocation_ns or _allocators.get_array_allocation_namespace(
-            self.array_ns
+        allocation_ns = (
+            self._allocation_ns
+            if self._allocation_ns is not None
+            else _allocators.get_array_allocation_namespace(self.array_ns)
         )
         ndarray_copy = allocation_ns.asarray(
             self.ndarray,

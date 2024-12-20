@@ -77,10 +77,8 @@ def empty(
         >>> b.shape
         (3, 3)
     """
-    gtarray_namespace = next_allocators.get_array_allocation_namespace(allocator)
-    buffer = gtarray_namespace.empty(
-        domain, device=device, dtype=dtype, aligned_index=aligned_index
-    )
+    gtarray_namespace = next_allocators.get_array_allocation_namespace(allocator, device)
+    buffer = gtarray_namespace.empty(domain, dtype=dtype, aligned_index=aligned_index)
     res = common._field(buffer, domain=domain, allocation_ns=gtarray_namespace)
     assert isinstance(res, common.MutableField)
     assert isinstance(res, nd_array_field.NdArrayField)
@@ -107,10 +105,8 @@ def zeros(
         >>> gtx.zeros({IDim: range(3, 10)}, allocator=gtx.itir_python).ndarray
         array([0., 0., 0., 0., 0., 0., 0.])
     """
-    gtarray_namespace = next_allocators.get_array_allocation_namespace(allocator)
-    buffer = gtarray_namespace.zeros(
-        domain, device=device, dtype=dtype, aligned_index=aligned_index
-    )
+    gtarray_namespace = next_allocators.get_array_allocation_namespace(allocator, device)
+    buffer = gtarray_namespace.zeros(domain, dtype=dtype, aligned_index=aligned_index)
     res = common._field(buffer, domain=domain, allocation_ns=gtarray_namespace)
     assert isinstance(res, common.MutableField)
     assert isinstance(res, nd_array_field.NdArrayField)
@@ -137,8 +133,8 @@ def ones(
         >>> gtx.ones({IDim: range(3, 10)}, allocator=gtx.itir_python).ndarray
         array([1., 1., 1., 1., 1., 1., 1.])
     """
-    gtarray_namespace = next_allocators.get_array_allocation_namespace(allocator)
-    buffer = gtarray_namespace.ones(domain, device=device, dtype=dtype, aligned_index=aligned_index)
+    gtarray_namespace = next_allocators.get_array_allocation_namespace(allocator, device)
+    buffer = gtarray_namespace.ones(domain, dtype=dtype, aligned_index=aligned_index)
     res = common._field(buffer, domain=domain, allocation_ns=gtarray_namespace)
     assert isinstance(res, common.MutableField)
     assert isinstance(res, nd_array_field.NdArrayField)
@@ -171,11 +167,10 @@ def full(
         >>> gtx.full({IDim: 3}, 5, allocator=gtx.itir_python).ndarray
         array([5, 5, 5])
     """
-    gtarray_namespace = next_allocators.get_array_allocation_namespace(allocator)
+    gtarray_namespace = next_allocators.get_array_allocation_namespace(allocator, device)
     buffer = gtarray_namespace.full(
         domain,
         fill_value,
-        device=device,
         dtype=dtype if dtype is not None else core_defs.dtype(type(fill_value)),
         aligned_index=aligned_index,
     )
@@ -284,12 +279,11 @@ def as_field(
     if (allocator is None) and (device is None) and xtyping.supports_dlpack(data):
         device = core_defs.Device(*data.__dlpack_device__())
 
-    gtarray_namespace = next_allocators.get_array_allocation_namespace(allocator)
+    gtarray_namespace = next_allocators.get_array_allocation_namespace(allocator, device)
     buffer = gtarray_namespace.asarray(
         data,
         domain=actual_domain,
         dtype=dtype,
-        device=device,
         copy=True,  # TODO(havogt) add support for zero-copy construction
         aligned_index=aligned_index,
     )
@@ -367,12 +361,11 @@ def as_connectivity(
     if (allocator is None) and (device is None) and xtyping.supports_dlpack(data):
         device = core_defs.Device(*data.__dlpack_device__())
 
-    gtarray_namespace = next_allocators.get_array_allocation_namespace(allocator)
+    gtarray_namespace = next_allocators.get_array_allocation_namespace(allocator, device)
     buffer = gtarray_namespace.asarray(
         data,
         domain=actual_domain,
         dtype=dtype,
-        device=device,
         copy=True,  # TODO(havogt) add support for zero-copy construction
     )
     connectivity_field = common._connectivity(
