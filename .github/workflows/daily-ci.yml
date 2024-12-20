@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
 
   ## COMMENTED OUT: only for testing CI action changes
-  # pull_request:
-  #   branches:
-  #   - main
+  pull_request:
+    branches:
+    - main
   ## END
 
 jobs:
