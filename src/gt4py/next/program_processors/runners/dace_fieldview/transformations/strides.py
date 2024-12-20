@@ -485,6 +485,8 @@ def _gt_map_strides_into_nested_sdfg(
         - Handle explicit dimensions of size 1.
         - What should we do if the stride symbol is used somewhere else, creating an
             alias is probably not the right thing?
+        - Handle the case if the outer stride symbol is already used in another
+            context inside the Neste SDFG.
     """
     # We need to compute the new strides. In the following we assume that the
     #  relative order of the dimensions does not change, but we support the case
