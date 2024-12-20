@@ -107,7 +107,7 @@ jobs:
       run: |
         pyversion=${{ matrix.python-version }}
         pyversion_no_dot=${pyversion//./}
-        tox run -e ${pyversion_no_dot} -m test-${{ matrix.tox-module-factor }}-cpu
+        tox run -x testenv.base_python=py${pyversion_no_dot} -m test-${{ matrix.tox-module-factor }}-cpu
     - name: Notify slack
       if: ${{ failure() }}
       env:
