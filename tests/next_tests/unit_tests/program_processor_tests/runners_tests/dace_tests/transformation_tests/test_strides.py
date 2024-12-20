@@ -280,7 +280,7 @@ def test_strides_propagation_ignore_symbol_mapping():
             nsdfg = sdfg.parent_nsdfg_node
             if nsdfg is not None:
                 assert original_stride in nsdfg.symbol_mapping
-                assert str(nsdfg.symbol_mapping[original_stride]) == exp_stride
+                assert str(nsdfg.symbol_mapping[original_stride]) == original_stride
 
     # Now we also propagate `c` thus now all data descriptors have the same stride
     gtx_transformations.gt_propagate_strides_of(sdfg_level1, "c1", ignore_symbol_mapping=True)
@@ -296,8 +296,9 @@ def test_strides_propagation_ignore_symbol_mapping():
 
             nsdfg = sdfg.parent_nsdfg_node
             if nsdfg is not None:
+                # The symbol mapping must should not be updated.
                 assert original_stride in nsdfg.symbol_mapping
-                assert str(nsdfg.symbol_mapping[original_stride]) == exp_stride
+                assert str(nsdfg.symbol_mapping[original_stride]) == original_stride
 
 
 def _make_strides_propagation_dependent_symbol_nsdfg() -> dace.SDFG:

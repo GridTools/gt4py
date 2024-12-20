@@ -223,7 +223,7 @@ def gt_map_strides_to_dst_nested_sdfg(
     state: dace.SDFGState,
     edge: dace.sdfg.graph.Edge,
     outer_node: dace.nodes.AccessNode,
-    ignore_symbol_mapping: bool = False,
+    ignore_symbol_mapping: bool = True,
     processed_nsdfgs: Optional[set[PropagatedStrideRecord]] = None,
 ) -> None:
     """Propagates the strides of `outer_node` along `edge` in the dataflow direction.
@@ -460,7 +460,7 @@ def _gt_map_strides_into_nested_sdfg(
     inner_data: str,
     outer_subset: dace.subsets.Subset,
     outer_desc: dace_data.Data,
-    ignore_symbol_mapping: bool = False,
+    ignore_symbol_mapping: bool = True,
 ) -> None:
     """Modify the strides of `inner_data` inside `nsdfg_node` to match `outer_desc`.
 
@@ -479,9 +479,12 @@ def _gt_map_strides_into_nested_sdfg(
         ignore_symbol_mapping: If possible the function will perform the renaming
             through the `symbol_mapping` of the nested SDFG. If `True` then
             the function will always perform the renaming.
+            Note that setting this value to `False` might have negative side effects.
 
     Todo:
         - Handle explicit dimensions of size 1.
+        - What should we do if the stride symbol is used somewhere else, creating an
+            alias is probably not the right thing?
     """
     # We need to compute the new strides. In the following we assume that the
     #  relative order of the dimensions does not change, but we support the case
@@ -526,7 +529,9 @@ def _gt_map_strides_into_nested_sdfg(
     #  The first is to create an alias in the `symbol_mapping`, however,
     #  this is only possible if the current strides are singular symbols,
     #  like `__a_strides_1`, but not expressions such as `horizontal_end - horizontal_start`
-    #  or literal values.
+    #  or literal values. Furthermore, this would change the meaning of the
+    #  old stride symbol in any context and not only in the one of the stride
+    #  of a single and isolated data descriptor.
     #  The second way would be to replace `strides` attribute of the
     #  inner data descriptor. In case the new stride consists of expressions
     #  such as `value1 - value2` we have to make them available inside the
@@ -579,11 +584,6 @@ def _gt_map_strides_into_nested_sdfg(
             assert sym.name in sdfg.symbols, f"Expected that '{sym}' is defined in the parent SDFG."
             nsdfg_node.sdfg.add_symbol(sym.name, sdfg.symbols[sym.name])
             nsdfg_node.symbol_mapping[sym.name] = sym
-
-        # Now create aliases for the old symbols that were used as strides.
-        for old_sym, new_sym in zip(inner_strides_init, new_strides):
-            if dace.symbolic.issymbolic(old_sym) and old_sym.is_symbol:
-                nsdfg_node.symbol_mapping[str(old_sym)] = dace.symbolic.pystr_to_symbolic(new_sym)
 
 
 def _gt_find_toplevel_data_accesses(
