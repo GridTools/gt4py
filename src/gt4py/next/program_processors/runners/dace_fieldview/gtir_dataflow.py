@@ -196,6 +196,7 @@ class EmptyInputEdge(DataflowInputEdge):
     node: dace.nodes.Tasklet
 
     def connect(self, map_entry: Optional[dace.nodes.MapEntry]) -> None:
+        # cannot create empty edge from MapEntry node, if this is not present
         if map_entry is not None:
             self.state.add_nedge(map_entry, self.node, dace.Memlet())
 
@@ -564,7 +565,7 @@ class LambdaToDataflow(eve.NodeVisitor):
     def _visit_if(self, node: gtir.FunCall) -> ValueExpr | tuple[ValueExpr | tuple[Any, ...], ...]:
         assert len(node.args) == 3
 
-        # TODO(edopao): enable once DaCe supports it in next release
+        # TODO(edopao): enable once supported in next DaCe release
         use_conditional_block: Final[bool] = False
 
         condition_value = self.visit(node.args[0])
@@ -690,6 +691,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                 lambda_args.append(inner_arg)
                 lambda_params.append(im.sym(p))
 
+            # visit each branch of the if-statement as it was a Lambda node
             lambda_node = gtir.Lambda(params=lambda_params, expr=expr)
             return visit_lambda(nsdfg, state, self.subgraph_builder, lambda_node, lambda_args)
 

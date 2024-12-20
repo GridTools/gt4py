@@ -30,7 +30,7 @@ def get_map_variable(dim: gtx_common.Dimension) -> str:
 def make_symbol_tuple(tuple_name: str, tuple_type: ts.TupleType) -> tuple[gtir.Sym, ...]:
     """
     Creates a tuple representation of the symbols corresponding to the tuple fields.
-    The constructed tuple presrves the nested nature of the type, is any.
+    The constructed tuple preserves the nested nature of the type, if any.
 
     Examples
     --------
@@ -53,7 +53,7 @@ def make_symbol_tuple(tuple_name: str, tuple_type: ts.TupleType) -> tuple[gtir.S
 
 def flatten_tuple_fields(tuple_name: str, tuple_type: ts.TupleType) -> list[gtir.Sym]:
     """
-    Creates a list of names with the corresponding data type for all elements of the given tuple.
+    Creates a list of symbols, annotated with the data type, for all elements of the given tuple.
 
     Examples
     --------
