@@ -144,6 +144,21 @@ build_py38_image_x86_64:
     <<: *py38
 
 
+
+# TODO(edopao): remove santis config once available in remote CSCS GitLab config
+.container-runner-santis-alps:
+  extends: .f7t-container-runner
+  variables:
+    FIRECREST_SYSTEM: 'santis'
+.container-runner-santis-gh200:
+  extends: .container-runner-santis-alps
+  variables:
+    ARCH: 'aarch64'
+    USE_CE: 'YES'
+    SLURM_MPI_TYPE: pmi2
+    NVIDIA_VISIBLE_DEVICES: 'all'
+    NVIDIA_DRIVER_CAPABILITIES: 'compute,utility'
+
 .test_helper:
   stage: test
   image: $CSCS_REGISTRY_PATH/public/$ARCH/gt4py/gt4py-ci:$CI_COMMIT_SHA-$PYVERSION
@@ -169,7 +184,7 @@ build_py38_image_x86_64:
       VARIANT: [-nomesh, -atlas]
       SUBVARIANT: [-cuda11x, -cpu]
 .test_helper_aarch64:
-  extends: [.container-runner-daint-gh200, .test_helper]
+  extends: [.container-runner-santis-gh200, .test_helper]
   parallel:
     matrix:
     - SUBPACKAGE: [cartesian, storage]
