@@ -326,7 +326,7 @@ def is_arithmetic(symbol_type: ts.TypeSpec) -> bool:
 
 def arithmetic_bounds(arithmetic_type: ts.ScalarType) -> tuple[np.number, np.number]:
     assert is_arithmetic(arithmetic_type)
-    bounds = {  # type: ignore[return-value] # why resolved to `tuple[object, object]`?
+    return {  # type: ignore[return-value] # why resolved to `tuple[object, object]`?
         ts.ScalarKind.FLOAT32: (np.finfo(np.float32).min, np.finfo(np.float32).max),
         ts.ScalarKind.FLOAT64: (np.finfo(np.float64).min, np.finfo(np.float64).max),
         ts.ScalarKind.INT8: (np.iinfo(np.int8).min, np.iinfo(np.int8).max),
@@ -337,8 +337,7 @@ def arithmetic_bounds(arithmetic_type: ts.ScalarType) -> tuple[np.number, np.num
         ts.ScalarKind.UINT32: (np.iinfo(np.uint32).min, np.iinfo(np.uint32).max),
         ts.ScalarKind.INT64: (np.iinfo(np.int64).min, np.iinfo(np.int64).max),
         ts.ScalarKind.UINT64: (np.iinfo(np.uint64).min, np.iinfo(np.uint64).max),
-    }
-    return bounds[arithmetic_type.kind]
+    }[arithmetic_type.kind]
 
 
 def is_type_or_tuple_of_type(type_: ts.TypeSpec, expected_type: type | tuple) -> bool:

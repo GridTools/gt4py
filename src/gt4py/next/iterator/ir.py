@@ -16,6 +16,7 @@ from gt4py.eve.utils import noninstantiable
 from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts
 
+
 DimensionKind = common.DimensionKind
 
 

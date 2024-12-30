@@ -423,7 +423,6 @@ def verify(
     assert out_comp is not None
     out_comp_ndarray = field_utils.asnumpy(out_comp)
     ref_ndarray = field_utils.asnumpy(ref)
-
     assert comparison(ref_ndarray, out_comp_ndarray), (
         f"Verification failed:\n"
         f"\tcomparison={comparison.__name__}(ref, out)\n"

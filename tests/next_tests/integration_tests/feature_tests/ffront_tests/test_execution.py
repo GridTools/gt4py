@@ -9,7 +9,6 @@
 from functools import reduce
 import numpy as np
 import pytest
-
 import gt4py.next as gtx
 from gt4py.next import (
     astype,

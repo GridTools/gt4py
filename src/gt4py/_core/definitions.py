@@ -144,7 +144,7 @@ def is_valid_tensor_shape(value: Sequence[IntegralScalar]) -> TypeGuard[TensorSh
 
 
 # -- Data type descriptors --
-class DTypeKind(eve.StrEnum):\
+class DTypeKind(eve.StrEnum):
     """
     Kind of a specific data type.
 
