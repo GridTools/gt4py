@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
-from gt4py.next.iterator import embedded, ir, builtins
+from gt4py.next.iterator import builtins, embedded, ir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 
 

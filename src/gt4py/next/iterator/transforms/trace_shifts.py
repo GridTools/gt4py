@@ -13,7 +13,7 @@ from typing import Any, Final, Iterable, Literal, Optional
 
 from gt4py import eve
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
-from gt4py.next.iterator import ir, builtins
+from gt4py.next.iterator import builtins, ir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
 

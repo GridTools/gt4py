@@ -14,8 +14,8 @@ from gt4py.eve.concepts import SourceLocation
 from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from gt4py.eve.utils import noninstantiable
 from gt4py.next import common
-from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator.builtins import BUILTINS
+from gt4py.next.type_system import type_specifications as ts
 
 
 DimensionKind = common.DimensionKind

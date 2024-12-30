@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from gt4py import eve
-from gt4py.next.iterator import ir, builtins
+from gt4py.next.iterator import builtins, ir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.type_system import type_specifications as ts
 

@@ -436,7 +436,6 @@ BINARY_MATH_COMPARISON_BUILTINS = {"eq", "less", "greater", "greater_equal", "le
 BINARY_LOGICAL_BUILTINS = {"and_", "or_", "xor_"}
 
 
-
 #: builtin / dtype used to construct integer indices, like domain bounds
 INTEGER_INDEX_BUILTIN = "int32"
 INTEGER_BUILTINS = {
@@ -453,12 +452,12 @@ FLOATING_POINT_BUILTINS = {"float32", "float64"}
 TYPEBUILTINS = {*INTEGER_BUILTINS, *FLOATING_POINT_BUILTINS, "bool"}
 
 MATH_BUILTINS = {
-    * UNARY_MATH_NUMBER_BUILTINS,
-    * UNARY_MATH_FP_BUILTINS,
-    * UNARY_MATH_FP_PREDICATE_BUILTINS,
-    * BINARY_MATH_NUMBER_BUILTINS,
+    *UNARY_MATH_NUMBER_BUILTINS,
+    *UNARY_MATH_FP_BUILTINS,
+    *UNARY_MATH_FP_PREDICATE_BUILTINS,
+    *BINARY_MATH_NUMBER_BUILTINS,
     "power",
-    * TYPEBUILTINS,
+    *TYPEBUILTINS,
 }
 
 ARITHMETIC_BUILTINS = {
@@ -473,7 +472,7 @@ ARITHMETIC_BUILTINS = {
 }
 
 BUILTINS = {
-    "as_fieldop",    # `as_fieldop(stencil, domain)` creates field_operator from stencil (domain is optional, but for now required for embedded execution)
+    "as_fieldop",  # `as_fieldop(stencil, domain)` creates field_operator from stencil (domain is optional, but for now required for embedded execution)
     "can_deref",
     "cartesian_domain",
     "cast_",
