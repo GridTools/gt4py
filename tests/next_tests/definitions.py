@@ -113,7 +113,6 @@ USES_MAX_OVER = "uses_max_over"
 USES_MESH_WITH_SKIP_VALUES = "uses_mesh_with_skip_values"
 USES_SCALAR_IN_DOMAIN_AND_FO = "uses_scalar_in_domain_and_fo"
 CHECKS_SPECIFIC_ERROR = "checks_specific_error"
-USES_HALF_PRECISION = "uses_half_precision"
 USES_INDEX_BUILTIN = "uses_index_builtin"
 
 # Skip messages (available format keys: 'marker', 'backend')

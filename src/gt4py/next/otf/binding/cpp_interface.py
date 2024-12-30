@@ -38,10 +38,6 @@ def render_scalar_type(scalar_type: ts.ScalarType) -> str:
             return "std::int64_t"
         case ts.ScalarKind.UINT64:
             return "std::uint64_t"
-        case ts.ScalarKind.FLOAT16:
-            return "std::float16_t"
-        case ts.ScalarKind.BFLOAT16:
-            return "std::bfloat16_t"
         case ts.ScalarKind.FLOAT32:
             return "float"
         case ts.ScalarKind.FLOAT64:

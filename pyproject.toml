@@ -86,7 +86,6 @@ jax-cuda12 = ['jax[cuda12_pip]>=0.4.18; python_version>="3.10"']
 performance = ['scipy>=1.9.2']
 rocm-43 = ['cupy-rocm-4-3']
 testing = ['hypothesis>=6.0.0', 'pytest>=7.0']
-half-precision = ['ml_dtypes', 'jax']
 
 [project.scripts]
 gtpyc = 'gt4py.cartesian.cli:gtpyc'

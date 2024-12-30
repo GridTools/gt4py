@@ -81,8 +81,6 @@ class ScalarKind(IntEnum):
     UINT32 = 7
     INT64 = 8
     UINT64 = 9
-    FLOAT16 = 10
-    BFLOAT16 = 11
     FLOAT32 = 12
     FLOAT64 = 13
     STRING = 14

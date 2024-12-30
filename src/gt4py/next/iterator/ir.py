@@ -15,10 +15,6 @@ from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from gt4py.eve.utils import noninstantiable
 from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts
-try:
-    import ml_dtypes
-except ModuleNotFoundError:
-    ml_dtypes = None
 
 DimensionKind = common.DimensionKind
 
@@ -158,9 +154,7 @@ INTEGER_BUILTINS = {
     "int64",
     "uint64",
 }  # Todo: should we distinguish int and uint?
-FLOATING_POINT_BUILTINS = {"float16", "float32", "float64"}
-if ml_dtypes.bfloat16:
-    FLOATING_POINT_BUILTINS.add("bfloat16")
+FLOATING_POINT_BUILTINS = {"float32", "float64"}
 TYPEBUILTINS = {*INTEGER_BUILTINS, *FLOATING_POINT_BUILTINS, "bool"}
 
 BUILTINS = {
