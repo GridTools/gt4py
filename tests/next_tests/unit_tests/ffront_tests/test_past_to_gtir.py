@@ -17,7 +17,7 @@ from gt4py.eve.pattern_matching import ObjectPattern as P
 from gt4py.next import errors
 from gt4py.next.ffront.func_to_past import ProgramParser
 from gt4py.next.ffront.past_to_itir import ProgramLowering
-from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_specifications as ts
 
@@ -108,14 +108,14 @@ def test_copy_restrict_lowering(copy_restrict_program_def, gtir_identity_fundef)
                             itir.Literal,
                             value="1",
                             type=ts.ScalarType(
-                                kind=getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())
+                                kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper())
                             ),
                         ),
                         P(
                             itir.Literal,
                             value="2",
                             type=ts.ScalarType(
-                                kind=getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())
+                                kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper())
                             ),
                         ),
                     ],

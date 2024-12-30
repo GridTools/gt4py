@@ -173,7 +173,7 @@ def apply_to_primitive_constituents(
     ...     with_path_arg=True,
     ...     tuple_constructor=lambda *elements: dict(elements),
     ... )
-    {(0,): ScalarType(kind=<ScalarKind.INT64: 64>, shape=None), (1,): ScalarType(kind=<ScalarKind.INT64: 64>, shape=None)}
+    {(0,): ScalarType(kind=<ScalarKind.INT64: 8>, shape=None), (1,): ScalarType(kind=<ScalarKind.INT64: 8>, shape=None)}
     """
     if isinstance(symbol_types[0], ts.TupleType):
         assert all(isinstance(symbol_type, ts.TupleType) for symbol_type in symbol_types)

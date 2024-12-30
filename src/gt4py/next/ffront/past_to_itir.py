@@ -24,7 +24,7 @@ from gt4py.next.ffront import (
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.stages import AOT_PRG
-from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.otf import stages, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
@@ -222,7 +222,7 @@ class ProgramLowering(
                         itir.Sym(
                             id=_size_arg_from_field(param.id, dim_idx),
                             type=ts.ScalarType(
-                                kind=getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())
+                                kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper())
                             ),
                         )
                     )
@@ -359,7 +359,7 @@ class ProgramLowering(
             else:
                 lower = self._visit_slice_bound(
                     slices[dim_i].lower if slices else None,
-                    im.literal("0", itir.INTEGER_INDEX_BUILTIN),
+                    im.literal("0", builtins.INTEGER_INDEX_BUILTIN),
                     dim_size,
                 )
                 upper = self._visit_slice_bound(

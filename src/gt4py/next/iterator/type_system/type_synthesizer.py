@@ -14,7 +14,7 @@ import inspect
 
 from gt4py.eve.extended_typing import Callable, Iterable, Optional, Union
 from gt4py.next import common
-from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator import builtins
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.utils import tree_map
@@ -81,7 +81,7 @@ def _register_builtin_type_synthesizer(
 
 
 @_register_builtin_type_synthesizer(
-    fun_names=itir.UNARY_MATH_NUMBER_BUILTINS | itir.UNARY_MATH_FP_BUILTINS
+    fun_names=builtins.UNARY_MATH_NUMBER_BUILTINS | builtins.UNARY_MATH_FP_BUILTINS
 )
 def _(val: ts.ScalarType) -> ts.ScalarType:
     return val
@@ -92,21 +92,21 @@ def power(base: ts.ScalarType, exponent: ts.ScalarType) -> ts.ScalarType:
     return base
 
 
-@_register_builtin_type_synthesizer(fun_names=itir.BINARY_MATH_NUMBER_BUILTINS)
+@_register_builtin_type_synthesizer(fun_names=builtins.BINARY_MATH_NUMBER_ADDITIONAL_BUILTINS)
 def _(lhs: ts.ScalarType, rhs: ts.ScalarType) -> ts.ScalarType:
     assert lhs == rhs
     return lhs
 
 
 @_register_builtin_type_synthesizer(
-    fun_names=itir.UNARY_MATH_FP_PREDICATE_BUILTINS | itir.UNARY_LOGICAL_BUILTINS
+    fun_names=builtins.UNARY_MATH_FP_PREDICATE_BUILTINS | builtins.UNARY_LOGICAL_BUILTINS
 )
 def _(arg: ts.ScalarType) -> ts.ScalarType:
     return ts.ScalarType(kind=ts.ScalarKind.BOOL)
 
 
 @_register_builtin_type_synthesizer(
-    fun_names=itir.BINARY_MATH_COMPARISON_BUILTINS | itir.BINARY_LOGICAL_BUILTINS
+    fun_names=builtins.BINARY_MATH_COMPARISON_BUILTINS | builtins.BINARY_LOGICAL_BUILTINS
 )
 def _(lhs: ts.ScalarType, rhs: ts.ScalarType) -> ts.ScalarType | ts.TupleType:
     return ts.ScalarType(kind=ts.ScalarKind.BOOL)
@@ -193,7 +193,7 @@ def make_tuple(*args: ts.DataType) -> ts.TupleType:
 def index(arg: ts.DimensionType) -> ts.FieldType:
     return ts.FieldType(
         dims=[arg.dim],
-        dtype=ts.ScalarType(kind=getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())),
+        dtype=ts.ScalarType(kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper())),
     )
 
 
