@@ -63,6 +63,7 @@ def pytype_to_cpptype(t: ts.ScalarType | str) -> Optional[str]:
             "int64": "std::int64_t",
             "uint64": "std::uint64_t",
             "bool": "bool",
+            "string": "string",
             "axis_literal": None,  # TODO: domain?
         }[t]
     except KeyError:
