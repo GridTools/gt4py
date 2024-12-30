@@ -21,7 +21,7 @@ from gt4py.next.iterator.transforms.cse import (
 
 
 @pytest.fixture
-def offset_provider(request):
+def offset_provider_type(request):
     return {"I": common.Dimension("I", kind=common.DimensionKind.HORIZONTAL)}
 
 
@@ -37,7 +37,7 @@ def test_trivial():
         ),
         args=[common],
     )
-    actual = CSE.apply(testee, is_local_view=True)
+    actual = CSE.apply(testee, within_stencil=True)
     assert actual == expected
 
 
@@ -45,7 +45,7 @@ def test_lambda_capture():
     common = ir.FunCall(fun=ir.SymRef(id="plus"), args=[ir.SymRef(id="x"), ir.SymRef(id="y")])
     testee = ir.FunCall(fun=ir.Lambda(params=[ir.Sym(id="x")], expr=common), args=[common])
     expected = testee
-    actual = CSE.apply(testee, is_local_view=True)
+    actual = CSE.apply(testee, within_stencil=True)
     assert actual == expected
 
 
@@ -53,7 +53,7 @@ def test_lambda_no_capture():
     common = im.plus("x", "y")
     testee = im.call(im.lambda_("z")(im.plus("x", "y")))(im.plus("x", "y"))
     expected = im.let("_cs_1", common)("_cs_1")
-    actual = CSE.apply(testee, is_local_view=True)
+    actual = CSE.apply(testee, within_stencil=True)
     assert actual == expected
 
 
@@ -65,7 +65,7 @@ def test_lambda_nested_capture():
     testee = im.call(im.lambda_("x", "y")(common_expr()))(common_expr(), common_expr())
     # (λ(_cs_1) → _cs_1 + _cs_1)(x + y)
     expected = im.let("_cs_1", common_expr())(im.plus("_cs_1", "_cs_1"))
-    actual = CSE.apply(testee, is_local_view=True)
+    actual = CSE.apply(testee, within_stencil=True)
     assert actual == expected
 
 
@@ -79,7 +79,7 @@ def test_lambda_nested_capture_scoped():
     expected = im.lambda_("x")(
         im.let("_cs_1", common_expr())(im.plus("z", im.plus("_cs_1", "_cs_1")))
     )
-    actual = CSE.apply(testee, is_local_view=True)
+    actual = CSE.apply(testee, within_stencil=True)
     assert actual == expected
 
 
@@ -93,7 +93,7 @@ def test_lambda_redef():
     )
     # (λ(_cs_1) → _cs_1(2) + _cs_1(3))(λ(a) → a + 1)
     expected = im.let("_cs_1", common_expr())(im.plus(im.call("_cs_1")(2), im.call("_cs_1")(3)))
-    actual = CSE.apply(testee, is_local_view=True)
+    actual = CSE.apply(testee, within_stencil=True)
     assert actual == expected
 
 
@@ -109,7 +109,7 @@ def test_lambda_redef_same_arg():
     expected = im.let("_cs_1", common_expr())(
         im.let("_cs_2", im.call("_cs_1")(2))(im.plus("_cs_2", "_cs_2"))
     )
-    actual = CSE.apply(testee, is_local_view=True)
+    actual = CSE.apply(testee, within_stencil=True)
     assert actual == expected
 
 
@@ -133,11 +133,11 @@ def test_lambda_redef_same_arg_scope():
             )
         )
     )
-    actual = CSE.apply(testee, is_local_view=True)
+    actual = CSE.apply(testee, within_stencil=True)
     assert actual == expected
 
 
-def test_if_can_deref_no_extraction(offset_provider):
+def test_if_can_deref_no_extraction(offset_provider_type):
     # Test that a subexpression only occurring in one branch of an `if_` is not moved outside the
     # if statement. A case using `can_deref` is used here as it is common.
 
@@ -157,11 +157,11 @@ def test_if_can_deref_no_extraction(offset_provider):
         )
     )
 
-    actual = CSE.apply(testee, offset_provider=offset_provider, is_local_view=True)
+    actual = CSE.apply(testee, offset_provider_type=offset_provider_type, within_stencil=True)
     assert actual == expected
 
 
-def test_if_can_deref_eligible_extraction(offset_provider):
+def test_if_can_deref_eligible_extraction(offset_provider_type):
     # Test that a subexpression only occurring in both branches of an `if_` is moved outside the
     # if statement. A case using `can_deref` is used here as it is common.
 
@@ -178,11 +178,11 @@ def test_if_can_deref_eligible_extraction(offset_provider):
         )
     )
 
-    actual = CSE.apply(testee, offset_provider=offset_provider, is_local_view=True)
+    actual = CSE.apply(testee, offset_provider_type=offset_provider_type, within_stencil=True)
     assert actual == expected
 
 
-def test_if_eligible_extraction(offset_provider):
+def test_if_eligible_extraction(offset_provider_type):
     # Test that a subexpression only occurring in the condition of an `if_` is moved outside the
     # if statement.
 
@@ -191,7 +191,7 @@ def test_if_eligible_extraction(offset_provider):
     # (λ(_cs_1) → if _cs_1 ∧ _cs_1 then c else d)(a ∧ b)
     expected = im.let("_cs_1", im.and_("a", "b"))(im.if_(im.and_("_cs_1", "_cs_1"), "c", "d"))
 
-    actual = CSE.apply(testee, offset_provider=offset_provider, is_local_view=True)
+    actual = CSE.apply(testee, offset_provider_type=offset_provider_type, within_stencil=True)
     assert actual == expected
 
 
@@ -268,7 +268,7 @@ def test_no_extraction_outside_asfieldop():
         identity_fieldop(im.ref("a", field_type)), identity_fieldop(im.ref("b", field_type))
     )
 
-    actual = CSE.apply(testee, is_local_view=False)
+    actual = CSE.apply(testee, within_stencil=False)
     assert actual == testee
 
 
@@ -289,5 +289,5 @@ def test_field_extraction_outside_asfieldop():
     # )
     expected = im.let("_cs_1", identity_fieldop(field))(plus_fieldop("_cs_1", "_cs_1"))
 
-    actual = CSE.apply(testee, is_local_view=False)
+    actual = CSE.apply(testee, within_stencil=False)
     assert actual == expected

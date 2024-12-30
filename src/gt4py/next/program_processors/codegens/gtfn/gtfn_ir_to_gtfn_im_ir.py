@@ -12,7 +12,6 @@ from typing import Any, Dict, Iterable, Iterator, List, Optional, TypeGuard, Uni
 import gt4py.eve as eve
 from gt4py.eve import NodeTranslator, concepts
 from gt4py.eve.utils import UIDGenerator
-from gt4py.next import common
 from gt4py.next.program_processors.codegens.gtfn import gtfn_ir, gtfn_ir_common
 from gt4py.next.program_processors.codegens.gtfn.gtfn_im_ir import (
     AssignStmt,
@@ -84,52 +83,7 @@ def _is_reduce(node: gtfn_ir.FunCall) -> TypeGuard[gtfn_ir.FunCall]:
     )
 
 
-def _get_connectivity(
-    applied_reduce_node: gtfn_ir.FunCall,
-    offset_provider: dict[str, common.Dimension | common.Connectivity],
-) -> common.Connectivity:
-    """Return single connectivity that is compatible with the arguments of the reduce."""
-    if not _is_reduce(applied_reduce_node):
-        raise ValueError("Expected a call to a 'reduce' object, i.e. 'reduce(...)(...)'.")
-
-    connectivities: list[common.Connectivity] = []
-    for o in _get_partial_offset_tags(applied_reduce_node.args):
-        conn = offset_provider[o]
-        assert isinstance(conn, common.Connectivity)
-        connectivities.append(conn)
-
-    if not connectivities:
-        raise RuntimeError("Couldn't detect partial shift in any arguments of 'reduce'.")
-
-    if len({(c.max_neighbors, c.has_skip_values) for c in connectivities}) != 1:
-        # The condition for this check is required but not sufficient: the actual neighbor tables could still be incompatible.
-        raise RuntimeError("Arguments to 'reduce' have incompatible partial shifts.")
-    return connectivities[0]
-
-
 # TODO: end of code clone
-
-
-def _make_dense_acess(
-    shift_call: gtfn_ir.FunCall, nbh_iter: gtfn_ir_common.SymRef
-) -> gtfn_ir.FunCall:
-    return gtfn_ir.FunCall(
-        fun=gtfn_ir_common.SymRef(id="deref"),
-        args=[
-            gtfn_ir.FunCall(
-                fun=gtfn_ir_common.SymRef(id="shift"), args=[*shift_call.args, nbh_iter]
-            )
-        ],
-    )
-
-
-def _make_sparse_acess(
-    field_ref: gtfn_ir_common.SymRef, nbh_iter: gtfn_ir_common.SymRef
-) -> gtfn_ir.FunCall:
-    return gtfn_ir.FunCall(
-        fun=gtfn_ir_common.SymRef(id="tuple_get"),
-        args=[nbh_iter, gtfn_ir.FunCall(fun=gtfn_ir_common.SymRef(id="deref"), args=[field_ref])],
-    )
 
 
 class PlugInCurrentIdx(NodeTranslator):
@@ -225,32 +179,6 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             )
             self.imp_list_ir.append(AssignStmt(lhs=gtfn_ir_common.SymRef(id=red_idx), rhs=rhs))
 
-    def handle_Reduction(self, node: gtfn_ir.FunCall, **kwargs: Any) -> gtfn_ir_common.SymRef:
-        offset_provider = kwargs["offset_provider"]
-        assert offset_provider is not None
-
-        connectivity = _get_connectivity(node, offset_provider)
-
-        args = node.args
-        # do the following transformations to the node arguments
-        # dense fields: shift(dense_f, X2Y) -> deref(shift(dense_f, X2Y, nbh_iterator)
-        # sparse_fields: sparse_f -> tuple_get(nbh_iterator, deref(sparse_f)))
-        new_args = []
-        nbh_iter = gtfn_ir_common.SymRef(id="nbh_iter")
-        for arg in args:
-            if isinstance(arg, gtfn_ir.FunCall) and arg.fun.id == "shift":  # type: ignore
-                new_args.append(_make_dense_acess(arg, nbh_iter))
-            if isinstance(arg, gtfn_ir_common.SymRef):
-                new_args.append(_make_sparse_acess(arg, nbh_iter))
-
-        red_idx = self.uids.sequential_id(prefix="red")
-        if isinstance(node.fun.args[0], gtfn_ir.Lambda):  # type: ignore
-            self._expand_lambda(node, new_args, red_idx, connectivity.max_neighbors, **kwargs)
-        elif isinstance(node.fun.args[0], gtfn_ir_common.SymRef):  # type: ignore
-            self._expand_symref(node, new_args, red_idx, connectivity.max_neighbors, **kwargs)
-
-        return gtfn_ir_common.SymRef(id=red_idx)
-
     def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs: Any) -> gtfn_ir_common.Expr:
         if any(isinstance(arg, gtfn_ir.Lambda) for arg in node.args):
             # do not try to lower constructs that take lambdas as argument to something more readable
@@ -278,7 +206,9 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             self.imp_list_ir.append(InitStmt(lhs=gtfn_ir_common.Sym(id=f"{lam_idx}"), rhs=expr))
             return gtfn_ir_common.SymRef(id=f"{lam_idx}")
         if _is_reduce(node):
-            return self.handle_Reduction(node, **kwargs)
+            raise AssertionError(
+                "Not implemented. The code-path was removed as it was not actively used and tested."
+            )
         if isinstance(node.fun, gtfn_ir_common.SymRef) and node.fun.id == "make_tuple":
             tupl_id = self.uids.sequential_id(prefix="tupl")
             tuple_fun = self.commit_args(node, tupl_id, "make_tuple", **kwargs)

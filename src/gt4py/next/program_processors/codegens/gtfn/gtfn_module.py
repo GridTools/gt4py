@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import functools
-from typing import Any, Callable, Final, Optional
+from typing import Any, Final, Optional
 
 import factory
 import numpy as np
@@ -20,7 +20,7 @@ from gt4py.eve import codegen
 from gt4py.next import common
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.transforms import LiftMode, fencil_to_program, pass_manager
+from gt4py.next.iterator.transforms import pass_manager
 from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
 from gt4py.next.program_processors.codegens.gtfn.codegen import GTFNCodegen, GTFNIMCodegen
@@ -51,12 +51,8 @@ class GTFNTranslationStep(
     # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
     enable_itir_transforms: bool = True
     use_imperative_backend: bool = False
-    lift_mode: Optional[LiftMode] = None
     device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
     symbolic_domain_sizes: Optional[dict[str, str]] = None
-    temporary_extraction_heuristics: Optional[
-        Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
-    ] = None
 
     def _default_language_settings(self) -> languages.LanguageWithHeaderFilesSettings:
         match self.device_type:
@@ -81,9 +77,9 @@ class GTFNTranslationStep(
 
     def _process_regular_arguments(
         self,
-        program: itir.FencilDefinition | itir.Program,
+        program: itir.Program,
         arg_types: tuple[ts.TypeSpec, ...],
-        offset_provider: common.OffsetProvider,
+        offset_provider_type: common.OffsetProviderType,
     ) -> tuple[list[interface.Parameter], list[str]]:
         parameters: list[interface.Parameter] = []
         arg_exprs: list[str] = []
@@ -105,22 +101,22 @@ class GTFNTranslationStep(
                     ):
                         # translate sparse dimensions to tuple dtype
                         dim_name = dim.value
-                        connectivity = offset_provider[dim_name]
-                        assert isinstance(connectivity, common.Connectivity)
+                        connectivity = offset_provider_type[dim_name]
+                        assert isinstance(connectivity, common.NeighborConnectivityType)
                         size = connectivity.max_neighbors
                         arg = f"gridtools::sid::dimension_to_tuple_like<generated::{dim_name}_t, {size}>({arg})"
             arg_exprs.append(arg)
         return parameters, arg_exprs
 
     def _process_connectivity_args(
-        self, offset_provider: dict[str, common.Connectivity | common.Dimension]
+        self, offset_provider_type: common.OffsetProviderType
     ) -> tuple[list[interface.Parameter], list[str]]:
         parameters: list[interface.Parameter] = []
         arg_exprs: list[str] = []
 
-        for name, connectivity in offset_provider.items():
-            if isinstance(connectivity, common.Connectivity):
-                if connectivity.index_type not in [np.int32, np.int64]:
+        for name, connectivity_type in offset_provider_type.items():
+            if isinstance(connectivity_type, common.NeighborConnectivityType):
+                if connectivity_type.dtype.scalar_type not in [np.int32, np.int64]:
                     raise ValueError(
                         "Neighbor table indices must be of type 'np.int32' or 'np.int64'."
                     )
@@ -130,15 +126,8 @@ class GTFNTranslationStep(
                     interface.Parameter(
                         name=GENERATED_CONNECTIVITY_PARAM_PREFIX + name.lower(),
                         type_=ts.FieldType(
-                            dims=[
-                                connectivity.origin_axis,
-                                common.Dimension(
-                                    name, kind=common.DimensionKind.LOCAL
-                                ),  # TODO(havogt): we should not use the name of the offset as the name of the local dimension
-                            ],
-                            dtype=ts.ScalarType(
-                                type_translation.get_scalar_kind(connectivity.index_type)
-                            ),
+                            dims=list(connectivity_type.domain),
+                            dtype=type_translation.from_dtype(connectivity_type.dtype),
                         ),
                     )
                 )
@@ -146,41 +135,35 @@ class GTFNTranslationStep(
                 # connectivity argument expression
                 nbtbl = (
                     f"gridtools::fn::sid_neighbor_table::as_neighbor_table<"
-                    f"generated::{connectivity.origin_axis.value}_t, "
-                    f"generated::{name}_t, {connectivity.max_neighbors}"
+                    f"generated::{connectivity_type.source_dim.value}_t, "
+                    f"generated::{name}_t, {connectivity_type.max_neighbors}"
                     f">(std::forward<decltype({GENERATED_CONNECTIVITY_PARAM_PREFIX}{name.lower()})>({GENERATED_CONNECTIVITY_PARAM_PREFIX}{name.lower()}))"
                 )
                 arg_exprs.append(
                     f"gridtools::hymap::keys<generated::{name}_t>::make_values({nbtbl})"
                 )
-            elif isinstance(connectivity, common.Dimension):
+            elif isinstance(connectivity_type, common.Dimension):
                 pass
             else:
                 raise AssertionError(
-                    f"Expected offset provider '{name}' to be a 'Connectivity' or 'Dimension', "
-                    f"got '{type(connectivity).__name__}'."
+                    f"Expected offset provider type '{name}' to be a 'NeighborConnectivityType' or 'Dimension', "
+                    f"got '{type(connectivity_type).__name__}'."
                 )
 
         return parameters, arg_exprs
 
     def _preprocess_program(
         self,
-        program: itir.FencilDefinition | itir.Program,
-        offset_provider: dict[str, common.Connectivity | common.Dimension],
+        program: itir.Program,
+        offset_provider: common.OffsetProvider,
     ) -> itir.Program:
-        if isinstance(program, itir.FencilDefinition) and not self.enable_itir_transforms:
-            return fencil_to_program.FencilToProgram().apply(
-                program
-            )  # FIXME[#1582](tehrengruber): should be removed after refactoring to combined IR
-
         apply_common_transforms = functools.partial(
             pass_manager.apply_common_transforms,
-            lift_mode=self.lift_mode,
+            extract_temporaries=True,
             offset_provider=offset_provider,
             # sid::composite (via hymap) supports assigning from tuple with more elements to tuple with fewer elements
             unconditionally_collapse_tuples=True,
             symbolic_domain_sizes=self.symbolic_domain_sizes,
-            temporary_extraction_heuristics=self.temporary_extraction_heuristics,
         )
 
         new_program = apply_common_transforms(
@@ -199,13 +182,20 @@ class GTFNTranslationStep(
 
     def generate_stencil_source(
         self,
-        program: itir.FencilDefinition | itir.Program,
-        offset_provider: dict[str, common.Connectivity | common.Dimension],
+        program: itir.Program,
+        offset_provider: common.OffsetProvider,
         column_axis: Optional[common.Dimension],
     ) -> str:
-        new_program = self._preprocess_program(program, offset_provider)
+        if self.enable_itir_transforms:
+            new_program = self._preprocess_program(program, offset_provider)
+        else:
+            assert isinstance(program, itir.Program)
+            new_program = program
+
         gtfn_ir = GTFN_lowering.apply(
-            new_program, offset_provider=offset_provider, column_axis=column_axis
+            new_program,
+            offset_provider_type=common.offset_provider_to_type(offset_provider),
+            column_axis=column_axis,
         )
 
         if self.use_imperative_backend:
@@ -220,18 +210,18 @@ class GTFNTranslationStep(
         self, inp: stages.CompilableProgram
     ) -> stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings]:
         """Generate GTFN C++ code from the ITIR definition."""
-        program: itir.FencilDefinition | itir.Program = inp.data
+        program: itir.Program = inp.data
 
         # handle regular parameters and arguments of the program (i.e. what the user defined in
         #  the program)
         regular_parameters, regular_args_expr = self._process_regular_arguments(
-            program, inp.args.args, inp.args.offset_provider
+            program, inp.args.args, inp.args.offset_provider_type
         )
 
         # handle connectivity parameters and arguments (i.e. what the user provided in the offset
         #  provider)
         connectivity_parameters, connectivity_args_expr = self._process_connectivity_args(
-            inp.args.offset_provider
+            inp.args.offset_provider_type
         )
 
         # combine into a format that is aligned with what the backend expects

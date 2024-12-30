@@ -7,11 +7,10 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from gt4py.next.iterator.transforms.pass_manager import (
-    ITIRTransform,
-    LiftMode,
+    GTIRTransform,
     apply_common_transforms,
     apply_fieldview_transforms,
 )
 
 
-__all__ = ["apply_common_transforms", "apply_fieldview_transforms", "LiftMode", "ITIRTransform"]
+__all__ = ["GTIRTransform", "apply_common_transforms", "apply_fieldview_transforms"]

@@ -24,11 +24,12 @@ from . import util
 
 def _get_trivial_gpu_promotable(
     tasklet_code: str,
+    trivial_map_range: str = "0",
 ) -> tuple[dace.SDFG, dace_nodes.MapEntry, dace_nodes.MapEntry]:
-    """Returns an SDFG that is suitable to test the `TrivialGPUMapPromoter` promoter.
+    """Returns an SDFG that is suitable to test the `TrivialGPUMapElimination` promoter.
 
     The first map is a trivial map (`Map[__trival_gpu_it=0]`) containing a Tasklet,
-    that does not have an output, but writes a scalar value into `tmp` (output
+    that does not have an input, but writes a scalar value into `tmp` (output
     connector `__out`), the body of this Tasklet can be controlled through the
     `tasklet_code` argument.
     The second map (`Map[__i0=0:N]`) contains a Tasklet that computes the sum of its
@@ -41,6 +42,7 @@ def _get_trivial_gpu_promotable(
 
     Args:
         tasklet_code: The body of the Tasklet inside the trivial map.
+        trivial_map_range: Range of the trivial map, defaults to `"0"`.
     """
     sdfg = dace.SDFG(util.unique_name("gpu_promotable_sdfg"))
     state = sdfg.add_state("state", is_start_block=True)
@@ -57,11 +59,11 @@ def _get_trivial_gpu_promotable(
 
     _, trivial_map_entry, _ = state.add_mapped_tasklet(
         "trivail_top_tasklet",
-        map_ranges={"__trivial_gpu_it": "0"},
+        map_ranges={"__trivial_gpu_it": trivial_map_range},
         inputs={},
         code=tasklet_code,
         outputs={"__out": dace.Memlet("tmp[0]")},
-        output_nodes={"tmp": tmp},
+        output_nodes={tmp},
         external_edges=True,
         schedule=schedule,
     )
@@ -74,15 +76,15 @@ def _get_trivial_gpu_promotable(
         },
         code="__out = __in0 + __in1",
         outputs={"__out": dace.Memlet("b[__i0]")},
-        input_nodes={"a": a, "tmp": tmp},
-        output_nodes={"b": b},
+        input_nodes={a, tmp},
+        output_nodes={b},
         external_edges=True,
         schedule=schedule,
     )
     return sdfg, trivial_map_entry, second_map_entry
 
 
-def test_trivial_gpu_map_promoter():
+def test_trivial_gpu_map_promoter_1():
     """Tests if the GPU map promoter works.
 
     By using a body such as `__out = 3.0`, the transformation will apply.
@@ -92,15 +94,15 @@ def test_trivial_gpu_map_promoter():
     org_second_map_ranges = copy.deepcopy(second_map_entry.map.range)
 
     nb_runs = sdfg.apply_transformations_once_everywhere(
-        gtx_dace_fieldview_gpu_utils.TrivialGPUMapPromoter(),
+        gtx_dace_fieldview_gpu_utils.TrivialGPUMapElimination(do_not_fuse=True),
         validate=True,
         validate_all=True,
     )
     assert (
         nb_runs == 1
-    ), f"Expected that 'TrivialGPUMapPromoter' applies once but it applied {nb_runs}."
+    ), f"Expected that 'TrivialGPUMapElimination' applies once but it applied {nb_runs}."
     trivial_map_params = trivial_map_entry.map.params
-    trivial_map_ranges = trivial_map_ranges.map.range
+    trivial_map_ranges = trivial_map_entry.map.range
     second_map_params = second_map_entry.map.params
     second_map_ranges = second_map_entry.map.range
 
@@ -119,32 +121,82 @@ def test_trivial_gpu_map_promoter():
     assert sdfg.is_valid()
 
 
-def test_trivial_gpu_map_promoter():
+def test_trivial_gpu_map_promoter_2():
     """Test if the GPU promoter does not fuse a special trivial map.
 
     By using a body such as `__out = __trivial_gpu_it` inside the
-    Tasklet's body, the map parameter is now used, and thus can not be fused.
+    Tasklet's body, the map parameter must now be replaced inside
+    the Tasklet's body.
     """
     sdfg, trivial_map_entry, second_map_entry = _get_trivial_gpu_promotable(
-        "__out = __trivial_gpu_it"
+        tasklet_code="__out = __trivial_gpu_it",
+        trivial_map_range="2",
     )
-    org_trivial_map_params = list(trivial_map_entry.map.params)
-    org_second_map_params = list(second_map_entry.map.params)
+    state: dace.SDFGStae = sdfg.nodes()[0]
+    trivial_tasklet: dace_nodes.Tasklet = next(
+        iter(
+            out_edge.dst
+            for out_edge in state.out_edges(trivial_map_entry)
+            if isinstance(out_edge.dst, dace_nodes.Tasklet)
+        )
+    )
 
     nb_runs = sdfg.apply_transformations_once_everywhere(
-        gtx_dace_fieldview_gpu_utils.TrivialGPUMapPromoter(),
+        gtx_dace_fieldview_gpu_utils.TrivialGPUMapElimination(do_not_fuse=True),
         validate=True,
         validate_all=True,
     )
-    assert (
-        nb_runs == 0
-    ), f"Expected that 'TrivialGPUMapPromoter' does not apply but it applied {nb_runs}."
-    trivial_map_params = trivial_map_entry.map.params
-    second_map_params = second_map_entry.map.params
-    assert (
-        trivial_map_params == org_trivial_map_params
-    ), f"Expected the trivial map to have parameters '{org_trivial_map_params}', but it had '{trivial_map_params}'."
-    assert (
-        second_map_params == org_second_map_params
-    ), f"Expected the trivial map to have parameters '{org_trivial_map_params}', but it had '{trivial_map_params}'."
-    assert sdfg.is_valid()
+    assert nb_runs == 1
+
+    expected_trivial_code = "__out = 2"
+    assert trivial_tasklet.code == expected_trivial_code
+
+
+def test_set_gpu_properties():
+    """Tests the `gtx_dace_fieldview_gpu_utils.gt_set_gpu_blocksize()`."""
+    sdfg = dace.SDFG("gpu_properties_test")
+    state = sdfg.add_state(is_start_block=True)
+
+    map_entries: dict[int, dace_nodes.MapEntry] = {}
+    for dim in [1, 2, 3]:
+        shape = (10,) * dim
+        sdfg.add_array(
+            f"A_{dim}", shape=shape, dtype=dace.float64, storage=dace.StorageType.GPU_Global
+        )
+        sdfg.add_array(
+            f"B_{dim}", shape=shape, dtype=dace.float64, storage=dace.StorageType.GPU_Global
+        )
+        _, me, _ = state.add_mapped_tasklet(
+            f"map_{dim}",
+            map_ranges={f"__i{i}": f"0:{s}" for i, s in enumerate(shape)},
+            inputs={"__in": dace.Memlet(f"A_{dim}[{','.join(f'__i{i}' for i in range(dim))}]")},
+            code="__out = math.cos(__in)",
+            outputs={"__out": dace.Memlet(f"B_{dim}[{','.join(f'__i{i}' for i in range(dim))}]")},
+            external_edges=True,
+        )
+        map_entries[dim] = me
+
+    sdfg.apply_gpu_transformations()
+    sdfg.validate()
+
+    gtx_dace_fieldview_gpu_utils.gt_set_gpu_blocksize(
+        sdfg=sdfg,
+        block_size=(10, "11", 12),
+        launch_factor_2d=2,
+        block_size_2d=(2, 2, 2),
+        launch_bounds_3d=200,
+    )
+
+    map1, map2, map3 = (map_entries[d].map for d in [1, 2, 3])
+
+    assert len(map1.params) == 1
+    assert map1.gpu_block_size == [10, 1, 1]
+    assert map1.gpu_launch_bounds == "0"
+
+    assert len(map2.params) == 2
+    assert map2.gpu_block_size == [2, 2, 1]
+    assert map2.gpu_launch_bounds == "8"
+
+    assert len(map3.params) == 3
+    assert map3.gpu_block_size == [10, 11, 12]
+    assert map3.gpu_launch_bounds == "200"

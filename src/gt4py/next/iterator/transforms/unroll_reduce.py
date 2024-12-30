@@ -30,7 +30,14 @@ def _is_neighbors_or_lifted_and_neighbors(arg: itir.Expr) -> TypeGuard[itir.FunC
 
 
 def _get_neighbors_args(reduce_args: Iterable[itir.Expr]) -> Iterator[itir.FunCall]:
-    return filter(_is_neighbors_or_lifted_and_neighbors, reduce_args)
+    flat_reduce_args: list[itir.Expr] = []
+    for arg in reduce_args:
+        if cpm.is_call_to(arg, "if_"):
+            flat_reduce_args.extend(_get_neighbors_args(arg.args[1:3]))
+        else:
+            flat_reduce_args.append(arg)
+
+    return filter(_is_neighbors_or_lifted_and_neighbors, flat_reduce_args)
 
 
 def _is_list_of_funcalls(lst: list) -> TypeGuard[list[itir.FunCall]]:
@@ -57,16 +64,16 @@ def _get_partial_offset_tags(reduce_args: Iterable[itir.Expr]) -> Iterable[str]:
 
 def _get_connectivity(
     applied_reduce_node: itir.FunCall,
-    offset_provider: dict[str, common.Dimension | common.Connectivity],
-) -> common.Connectivity:
+    offset_provider_type: common.OffsetProviderType,
+) -> common.NeighborConnectivityType:
     """Return single connectivity that is compatible with the arguments of the reduce."""
     if not cpm.is_applied_reduce(applied_reduce_node):
         raise ValueError("Expected a call to a 'reduce' object, i.e. 'reduce(...)(...)'.")
 
-    connectivities: list[common.Connectivity] = []
+    connectivities: list[common.NeighborConnectivityType] = []
     for o in _get_partial_offset_tags(applied_reduce_node.args):
-        conn = offset_provider[o]
-        assert isinstance(conn, common.Connectivity)
+        conn = offset_provider_type[o]
+        assert isinstance(conn, common.NeighborConnectivityType)
         connectivities.append(conn)
 
     if not connectivities:
@@ -113,15 +120,15 @@ class UnrollReduce(PreserveLocationVisitor, NodeTranslator):
     uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=UIDGenerator)
 
     @classmethod
-    def apply(cls, node: itir.Node, **kwargs) -> itir.Node:
-        return cls().visit(node, **kwargs)
+    def apply(cls, node: itir.Node, offset_provider_type: common.OffsetProviderType) -> itir.Node:
+        return cls().visit(node, offset_provider_type=offset_provider_type)
 
-    def _visit_reduce(self, node: itir.FunCall, **kwargs) -> itir.Expr:
-        offset_provider = kwargs["offset_provider"]
-        assert offset_provider is not None
-        connectivity = _get_connectivity(node, offset_provider)
-        max_neighbors = connectivity.max_neighbors
-        has_skip_values = connectivity.has_skip_values
+    def _visit_reduce(
+        self, node: itir.FunCall, offset_provider_type: common.OffsetProviderType
+    ) -> itir.Expr:
+        connectivity_type = _get_connectivity(node, offset_provider_type)
+        max_neighbors = connectivity_type.max_neighbors
+        has_skip_values = connectivity_type.has_skip_values
 
         acc = itir.SymRef(id=self.uids.sequential_id(prefix="_acc"))
         offset = itir.SymRef(id=self.uids.sequential_id(prefix="_i"))

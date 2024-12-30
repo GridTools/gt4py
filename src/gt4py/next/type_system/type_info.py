@@ -483,7 +483,9 @@ def is_concretizable(symbol_type: ts.TypeSpec, to_type: ts.TypeSpec) -> bool:
 
     """
     if isinstance(symbol_type, ts.DeferredType) and (
-        symbol_type.constraint is None or issubclass(type_class(to_type), symbol_type.constraint)
+        symbol_type.constraint is None
+        or (isinstance(to_type, ts.DeferredType) and to_type.constraint is None)
+        or issubclass(type_class(to_type), symbol_type.constraint)
     ):
         return True
     elif is_concrete(symbol_type):

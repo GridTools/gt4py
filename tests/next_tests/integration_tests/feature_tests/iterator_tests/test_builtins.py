@@ -18,6 +18,7 @@ import gt4py.next as gtx
 from gt4py.next.iterator import builtins as it_builtins
 from gt4py.next.iterator.builtins import (
     and_,
+    as_fieldop,
     bool,
     can_deref,
     cartesian_domain,
@@ -46,7 +47,7 @@ from gt4py.next.iterator.builtins import (
     shift,
     xor_,
 )
-from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
+from gt4py.next.iterator.runtime import fendef, fundef, offset, set_at
 from gt4py.next.program_processors.runners.gtfn import run_gtfn
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
@@ -87,7 +88,9 @@ def fencil(builtin, out, *inps, processor, as_column=False):
 
         @fendef(offset_provider={}, column_axis=column_axis)
         def fenimpl(size, arg0, out):
-            closure(cartesian_domain(named_range(IDim, 0, size)), dispatch, out, [arg0])
+            domain = cartesian_domain(named_range(IDim, 0, size))
+
+            set_at(as_fieldop(dispatch, domain)(arg0), domain, out)
 
     elif len(inps) == 2:
 
@@ -102,7 +105,9 @@ def fencil(builtin, out, *inps, processor, as_column=False):
 
         @fendef(offset_provider={}, column_axis=column_axis)
         def fenimpl(size, arg0, arg1, out):
-            closure(cartesian_domain(named_range(IDim, 0, size)), dispatch, out, [arg0, arg1])
+            domain = cartesian_domain(named_range(IDim, 0, size))
+
+            set_at(as_fieldop(dispatch, domain)(arg0, arg1), domain, out)
 
     elif len(inps) == 3:
 
@@ -117,7 +122,9 @@ def fencil(builtin, out, *inps, processor, as_column=False):
 
         @fendef(offset_provider={}, column_axis=column_axis)
         def fenimpl(size, arg0, arg1, arg2, out):
-            closure(cartesian_domain(named_range(IDim, 0, size)), dispatch, out, [arg0, arg1, arg2])
+            domain = cartesian_domain(named_range(IDim, 0, size))
+
+            set_at(as_fieldop(dispatch, domain)(arg0, arg1, arg2), domain, out)
 
     else:
         raise AssertionError("Add overload.")
@@ -241,11 +248,14 @@ def test_can_deref(program_processor, stencil):
     program_processor, validate = program_processor
 
     Node = gtx.Dimension("Node")
+    NeighDim = gtx.Dimension("Neighbor", kind=gtx.DimensionKind.LOCAL)
 
     inp = gtx.as_field([Node], np.ones((1,), dtype=np.int32))
     out = gtx.as_field([Node], np.asarray([0], dtype=inp.dtype))
 
-    no_neighbor_tbl = gtx.NeighborTableOffsetProvider(np.array([[-1]]), Node, Node, 1)
+    no_neighbor_tbl = gtx.as_connectivity(
+        domain={Node: 1, NeighDim: 1}, codomain=Node, data=np.array([[-1]]), skip_value=-1
+    )
     run_processor(
         stencil[{Node: range(1)}],
         program_processor,
@@ -257,7 +267,9 @@ def test_can_deref(program_processor, stencil):
     if validate:
         assert np.allclose(out.asnumpy(), -1.0)
 
-    a_neighbor_tbl = gtx.NeighborTableOffsetProvider(np.array([[0]]), Node, Node, 1)
+    a_neighbor_tbl = gtx.as_connectivity(
+        domain={Node: 1, NeighDim: 1}, codomain=Node, data=np.array([[0]]), skip_value=-1
+    )
     run_processor(
         stencil[{Node: range(1)}],
         program_processor,
@@ -268,37 +280,6 @@ def test_can_deref(program_processor, stencil):
 
     if validate:
         assert np.allclose(out.asnumpy(), 1.0)
-
-
-# def test_can_deref_lifted(program_processor):
-#     program_processor, validate = program_processor
-
-#     Neighbor = offset("Neighbor")
-#     Node = gtx.Dimension("Node")
-
-#     @fundef
-#     def _can_deref(inp):
-#         shifted = shift(Neighbor, 0)(inp)
-#         return if_(can_deref(shifted), 1, -1)
-
-#     inp = gtx.as_field([Node], np.zeros((1,)))
-#     out = gtx.as_field([Node], np.asarray([0]))
-
-#     no_neighbor_tbl = gtx.NeighborTableOffsetProvider(np.array([[None]]), Node, Node, 1)
-#     _can_deref[{Node: range(1)}](
-#         inp, out=out, offset_provider={"Neighbor": no_neighbor_tbl}, program_processor=program_processor
-#     )
-
-#     if validate:
-#         assert np.allclose(np.asarray(out), -1.0)
-
-#     a_neighbor_tbl = gtx.NeighborTableOffsetProvider(np.array([[0]]), Node, Node, 1)
-#     _can_deref[{Node: range(1)}](
-#         inp, out=out, offset_provider={"Neighbor": a_neighbor_tbl}, program_processor=program_processor
-#     )
-
-#     if validate:
-#         assert np.allclose(np.asarray(out), 1.0)
 
 
 @pytest.mark.parametrize(

@@ -63,6 +63,7 @@ class DimensionType(TypeSpec):
 
 @dataclass(frozen=True)
 class OffsetType(TypeSpec):
+    # TODO(havogt): replace by ConnectivityType
     source: func_common.Dimension
     target: tuple[func_common.Dimension] | tuple[func_common.Dimension, func_common.Dimension]
 

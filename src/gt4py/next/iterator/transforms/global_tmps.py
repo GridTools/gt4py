@@ -74,7 +74,7 @@ def _transform_by_pattern(
         #    or a tuple thereof)
         #  - one `SetAt` statement that materializes the expression into the temporary
         for tmp_sym, tmp_expr in extracted_fields.items():
-            domain = tmp_expr.annex.domain
+            domain: infer_domain.DomainAccess = tmp_expr.annex.domain
 
             # TODO(tehrengruber): Implement. This happens when the expression is a combination
             #  of an `if_` call with a tuple, e.g., `if_(cond, {a, b}, {c, d})`. As long as we are
@@ -175,7 +175,10 @@ def _transform_stmt(
 
 
 def create_global_tmps(
-    program: itir.Program, offset_provider: common.OffsetProvider
+    program: itir.Program,
+    offset_provider: common.OffsetProvider,
+    *,
+    uids: Optional[eve_utils.UIDGenerator] = None,
 ) -> itir.Program:
     """
     Given an `itir.Program` create temporaries for intermediate values.
@@ -183,10 +186,13 @@ def create_global_tmps(
     This pass looks at all `as_fieldop` calls and transforms field-typed subexpressions of its
     arguments into temporaries.
     """
-    program = infer_domain.infer_program(program, offset_provider)
-    program = type_inference.infer(program, offset_provider=offset_provider)
+    program = infer_domain.infer_program(program, offset_provider=offset_provider)
+    program = type_inference.infer(
+        program, offset_provider_type=common.offset_provider_to_type(offset_provider)
+    )
 
-    uids = eve_utils.UIDGenerator(prefix="__tmp")
+    if not uids:
+        uids = eve_utils.UIDGenerator(prefix="__tmp")
     declarations = program.declarations.copy()
     new_body = []
 

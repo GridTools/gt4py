@@ -90,7 +90,7 @@ class BackendChoice(click.Choice):
             ", ".join(backend.languages["bindings"]) if backend and backend.languages else "?"
             for backend in backends
         ]
-        enabled = [backend is not None and "Yes" or "No" for backend in backends]
+        enabled = [(backend is not None and "Yes") or "No" for backend in backends]
         data = zip(names, comp_langs, binding_langs, enabled)
         return tabulate.tabulate(data, headers=headers)
 

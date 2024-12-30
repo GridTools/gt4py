@@ -49,6 +49,8 @@ c2e_arr = np.array(
     dtype=np.dtype(itir.INTEGER_INDEX_BUILTIN),
 )
 
+c2e_conn = gtx.as_connectivity(domain={Cell: 9, C2EDim: 4}, codomain=Edge, data=c2e_arr)
+
 v2v_arr = np.array(
     [
         [1, 3, 2, 6],
@@ -63,6 +65,8 @@ v2v_arr = np.array(
     ],
     dtype=np.dtype(itir.INTEGER_INDEX_BUILTIN),
 )
+
+v2v_conn = gtx.as_connectivity(domain={Vertex: 9, V2VDim: 4}, codomain=Vertex, data=v2v_arr)
 
 e2v_arr = np.array(
     [
@@ -88,6 +92,7 @@ e2v_arr = np.array(
     dtype=np.dtype(itir.INTEGER_INDEX_BUILTIN),
 )
 
+e2v_conn = gtx.as_connectivity(domain={Edge: 18, E2VDim: 2}, codomain=Vertex, data=e2v_arr)
 
 # order east, north, west, south (counter-clock wise)
 v2e_arr = np.array(
@@ -104,3 +109,5 @@ v2e_arr = np.array(
     ],
     dtype=np.dtype(itir.INTEGER_INDEX_BUILTIN),
 )
+
+v2e_conn = gtx.as_connectivity(domain={Vertex: 9, V2EDim: 4}, codomain=Edge, data=v2e_arr)
