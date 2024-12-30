@@ -40,7 +40,7 @@ TYPE_BUILTINS = [
     float32,
     float64,
     *PYTHON_TYPE_BUILTINS,
-]  # TODO(tehrengruber): validate matches itir type builtins?
+]  # TODO(tehrengruber): validate matches iterator.builtins.TYPE_BUILTINS?
 
 TYPE_BUILTIN_NAMES = [t.__name__ for t in TYPE_BUILTINS]
 

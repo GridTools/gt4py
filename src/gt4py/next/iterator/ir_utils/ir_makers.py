@@ -335,7 +335,7 @@ def literal_from_value(val: core_defs.Scalar) -> itir.Literal:
     assert isinstance(type_spec, ts.ScalarType)
 
     typename = type_spec.kind.name.lower()
-    assert typename in builtins.TYPEBUILTINS
+    assert typename in builtins.TYPE_BUILTINS
 
     return literal(str(val), typename)
 

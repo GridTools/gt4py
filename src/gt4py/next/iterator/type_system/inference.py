@@ -580,7 +580,7 @@ class ITIRTypeInference(eve.NodeTranslator):
             self.visit(value, ctx=ctx)  # ensure types in value are also inferred
             assert (
                 isinstance(type_constructor, itir.SymRef)
-                and type_constructor.id in builtins.TYPEBUILTINS
+                and type_constructor.id in builtins.TYPE_BUILTINS
             )
             return ts.ScalarType(kind=getattr(ts.ScalarKind, type_constructor.id.upper()))
 

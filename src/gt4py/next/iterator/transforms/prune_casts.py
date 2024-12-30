@@ -31,7 +31,7 @@ class PruneCasts(eve.NodeTranslator):
             assert (
                 value.type
                 and isinstance(type_constructor, ir.SymRef)
-                and (type_constructor.id in builtins.TYPEBUILTINS)
+                and (type_constructor.id in builtins.TYPE_BUILTINS)
             )
             dtype = ts.ScalarType(kind=getattr(ts.ScalarKind, type_constructor.id.upper()))
 

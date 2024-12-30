@@ -107,7 +107,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
             case "bool":
                 return node.value.lower()
             case _:
-                # TODO: we should probably shouldn't just allow anything here. revisit.
+                # TODO(tehrengruber): we should probably shouldn't just allow anything here. Revisit.
                 return node.value
 
     IntegralConstant = as_fmt("{value}_c")

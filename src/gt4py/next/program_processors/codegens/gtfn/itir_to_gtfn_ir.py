@@ -64,7 +64,7 @@ def pytype_to_cpptype(t: ts.ScalarType | str) -> Optional[str]:
             "uint64": "std::uint64_t",
             "bool": "bool",
             "string": "string",
-            "axis_literal": None,  # TODO: domain?
+            "axis_literal": None,  # TODO(tehrengruber): domain?
         }[t]
     except KeyError:
         raise TypeError(f"Unsupported type '{t}'.") from None

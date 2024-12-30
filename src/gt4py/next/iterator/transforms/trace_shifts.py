@@ -278,7 +278,7 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
     def visit_SymRef(self, node: ir.SymRef, *, ctx: dict[str, Any]) -> Any:
         if node.id in ctx:
             return ctx[node.id]
-        elif node.id in builtins.TYPEBUILTINS:
+        elif node.id in builtins.TYPE_BUILTINS:
             return Sentinel.TYPE
         elif node.id in (builtins.ARITHMETIC_BUILTINS | {"list_get", "make_const_list", "cast_"}):
             return _combine

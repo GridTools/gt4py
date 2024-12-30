@@ -384,7 +384,7 @@ def _infer_expr(
         return _infer_if(expr, domain, **kwargs)
     elif (
         cpm.is_call_to(expr, builtins.ARITHMETIC_BUILTINS)
-        or cpm.is_call_to(expr, builtins.TYPEBUILTINS)
+        or cpm.is_call_to(expr, builtins.TYPE_BUILTINS)
         or cpm.is_call_to(expr, ("cast_", "index", "unstructured_domain", "cartesian_domain"))
     ):
         return expr, {}
