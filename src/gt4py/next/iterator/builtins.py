@@ -492,6 +492,7 @@ BUILTINS = {
     "tuple_get",
     "unstructured_domain",
     *ARITHMETIC_BUILTINS,
+    *TYPEBUILTINS,
 }
 
 __all__ = [*BUILTINS]
