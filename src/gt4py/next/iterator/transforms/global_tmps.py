@@ -95,7 +95,7 @@ def _transform_by_pattern(
             assert isinstance(tmp_expr.type, ts.TypeSpec)
             tmp_names: str | tuple[str | tuple, ...] = type_info.type_tree_map(
                 result_collection_constructor=lambda *elements: tuple(elements)
-            )(lambda x: uids.sequential_id)(tmp_expr.type)
+            )(lambda x: uids.sequential_id())(tmp_expr.type)
 
             tmp_dtypes: ts.ScalarType | tuple[ts.ScalarType | tuple, ...] = type_info.type_tree_map(
                 result_collection_constructor=lambda *elements: tuple(elements)
