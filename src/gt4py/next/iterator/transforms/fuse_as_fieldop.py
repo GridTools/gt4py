@@ -139,7 +139,7 @@ def fuse_as_fieldop(
             # just a safety check if typing information is available
             if arg.type and not isinstance(arg.type, ts.DeferredType):
                 assert isinstance(arg.type, ts.TypeSpec)
-                dtype = type_info.apply_to_primitive_constituents(type_info.extract_dtype, arg.type)
+                dtype = type_info.type_tree_map(type_info.extract_dtype)(arg.type)
                 assert not isinstance(dtype, it_ts.ListType)
             new_param: str
             if isinstance(
@@ -233,7 +233,7 @@ class FuseAsFieldOp(eve.NodeTranslator):
             eligible_args = []
             for arg, arg_shifts in zip(args, shifts, strict=True):
                 assert isinstance(arg.type, ts.TypeSpec)
-                dtype = type_info.apply_to_primitive_constituents(type_info.extract_dtype, arg.type)
+                dtype = type_info.type_tree_map(type_info.extract_dtype)(arg.type)
                 # TODO(tehrengruber): make this configurable
                 eligible_args.append(
                     _is_tuple_expr_of_literals(arg)
