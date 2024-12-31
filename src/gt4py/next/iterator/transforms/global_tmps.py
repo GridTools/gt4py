@@ -47,7 +47,6 @@ def _transform_if(
     return None
 
 
-
 def _transform_by_pattern(
     stmt: itir.Stmt,
     predicate: Callable[[itir.Expr, int], bool],

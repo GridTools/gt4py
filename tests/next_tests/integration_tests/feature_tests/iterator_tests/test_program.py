@@ -1,6 +1,5 @@
 # GT4Py - GridTools Framework
 #
-
 # Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
@@ -29,6 +28,7 @@ from next_tests.unit_tests.conftest import program_processor, run_processor
 I = gtx.Dimension("I")
 Ioff = gtx.FieldOffset("Ioff", source=I, target=(I,))
 
+
 @fundef
 def copy_stencil(inp):
     return deref(inp)
@@ -53,6 +53,7 @@ def test_prog(program_processor):
     run_processor(copy_program, program_processor, inp, out, isize, offset_provider={})
     if validate:
         assert np.allclose(inp.asnumpy(), out.asnumpy())
+
 
 @fendef
 def index_program_simple(out, size):

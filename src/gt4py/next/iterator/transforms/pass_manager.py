@@ -52,7 +52,6 @@ def apply_common_transforms(
     #: A dictionary mapping axes names to their length. See :func:`infer_domain.infer_expr` for
     #: more details.
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
-
     offset_provider_type: Optional[common.OffsetProviderType] = None,
 ) -> itir.Program:
     # TODO(havogt): if the runtime `offset_provider` is not passed, we cannot run global_tmps

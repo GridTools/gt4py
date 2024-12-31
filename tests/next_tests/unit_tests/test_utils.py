@@ -33,7 +33,7 @@ def test_apply_to_primitive_constituents():
     )(tuple_type)
 
     prim = type_info.apply_to_primitive_constituents(
-         lambda primitive_type: ts.FieldType(dims=[], dtype=primitive_type), tuple_type
+        lambda primitive_type: ts.FieldType(dims=[], dtype=primitive_type), tuple_type
     )
 
     assert tree == prim

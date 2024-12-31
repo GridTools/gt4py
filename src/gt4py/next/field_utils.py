@@ -8,9 +8,6 @@
 
 from types import ModuleType
 
-from types import ModuleType
-from typing import Callable
-
 import numpy as np
 
 from gt4py._core import definitions as core_defs
@@ -59,7 +56,6 @@ def field_from_typespec(
         return res
 
     return impl(type_)
-
 
 
 def get_array_ns(

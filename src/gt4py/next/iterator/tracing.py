@@ -212,10 +212,6 @@ class TracerContext:
     def add_stmt(cls, stmt):
         cls.body.append(stmt)
 
-    @classmethod
-    def add_stmt(cls, stmt):
-        cls.body.append(stmt)
-
     def __enter__(self):
         iterator.builtins.builtin_dispatch.push_key(TRACING)
 
@@ -249,11 +245,6 @@ def if_stmt(
     TracerContext.add_stmt(
         itir.IfStmt(cond=cond, true_branch=true_branch, false_branch=false_branch)
     )
-
-
-@iterator.runtime.set_at.register(TRACING)
-def set_at(expr, domain, target):
-    TracerContext.add_stmt(itir.SetAt(expr=expr, domain=domain, target=target))
 
 
 def _contains_tuple_dtype_field(arg):
@@ -300,7 +291,6 @@ def _make_program_params(fun, args) -> list[Sym]:
 
         params.append(Sym(id=param_name, type=arg_type))
     return params
-
 
 
 def trace_fencil_definition(fun: typing.Callable, args: typing.Iterable) -> itir.Program:

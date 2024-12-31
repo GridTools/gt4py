@@ -22,7 +22,6 @@ from gt4py.next.iterator.builtins import BackendNotSelectedError, builtin_dispat
 from gt4py.next.program_processors import program_formatter
 
 
-
 if TYPE_CHECKING:
     # TODO(tehrengruber): remove cirular dependency and import unconditionally
     from gt4py.next import backend as next_backend

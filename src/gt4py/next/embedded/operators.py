@@ -17,7 +17,6 @@ from gt4py.next.field_utils import get_array_ns
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
-
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
 

@@ -19,6 +19,7 @@ from gt4py.next.type_system import type_specifications as ts
 
 DimensionKind = common.DimensionKind
 
+
 @noninstantiable
 class Node(eve.Node):
     location: Optional[SourceLocation] = eve.field(default=None, repr=False, compare=False)
@@ -171,6 +172,7 @@ BUILTINS = {
     *ARITHMETIC_BUILTINS,
     *TYPEBUILTINS,
 }
+
 
 class Stmt(Node): ...
 
