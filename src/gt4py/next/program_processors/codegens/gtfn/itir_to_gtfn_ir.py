@@ -307,32 +307,6 @@ def _process_elements(
     return result
 
 
-class _CannonicalizeUnstructuredDomain(eve.NodeTranslator):
-    def visit_FunCall(self, node: itir.FunCall) -> itir.FunCall:
-        if node.fun == itir.SymRef(id="unstructured_domain"):
-            # for no good reason, the domain arguments for unstructured need to be in order (horizontal, vertical)
-            assert isinstance(node.args[0], itir.FunCall)
-            first_axis_literal = node.args[0].args[0]
-            assert isinstance(first_axis_literal, itir.AxisLiteral)
-            if first_axis_literal.kind == itir.DimensionKind.VERTICAL:
-                assert len(node.args) == 2
-                assert isinstance(node.args[1], itir.FunCall)
-                assert isinstance(node.args[1].args[0], itir.AxisLiteral)
-                assert node.args[1].args[0].kind == itir.DimensionKind.HORIZONTAL
-                return itir.FunCall(fun=node.fun, args=[node.args[1], node.args[0]])
-        return node
-
-    @classmethod
-    def apply(
-        cls,
-        node: itir.Program,
-    ) -> itir.Program:
-        if not isinstance(node, itir.Program):
-            raise TypeError(f"Expected a 'Program', got '{type(node).__name__}'.")
-
-        return cls().visit(node)
-
-
 @dataclasses.dataclass(frozen=True)
 class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     _binary_op_map: ClassVar[dict[str, str]] = {

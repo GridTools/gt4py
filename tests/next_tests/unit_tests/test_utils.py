@@ -6,7 +6,6 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-
 import pytest
 
 from gt4py.next import utils
@@ -43,10 +42,10 @@ def test_tree_map_default():
     expected_result = ((2, 3), 4)
 
     @utils.tree_map
-    def testee1(x):
+    def testee(x):
         return x + 1
 
-    assert testee1(((1, 2), 3)) == expected_result
+    assert testee(((1, 2), 3)) == expected_result
     assert utils.tree_map(lambda x: x + 1)(((1, 2), 3)) == expected_result
     assert utils.tree_map(lambda x: x + 1, ((1, 2), 3)) == expected_result
 

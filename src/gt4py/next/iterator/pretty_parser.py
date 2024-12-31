@@ -34,10 +34,6 @@ GRAMMAR = """
     AXIS_LITERAL: CNAME ("ᵥ" | "ₕ")
     _literal: INT_LITERAL | FLOAT_LITERAL | OFFSET_LITERAL | AXIS_LITERAL
     ID_NAME: CNAME
-<<<<<<< HEAD
-    AXIS_NAME: CNAME ("ᵥ" | "ₕ")
-=======
->>>>>>> main
 
     ?prec0: prec1
         | "λ(" ( SYM "," )* SYM? ")" "→" prec0 -> lam
