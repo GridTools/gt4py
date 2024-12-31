@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import numpy as np
 import pytest
@@ -81,7 +75,7 @@ def test_default_backend_is_respected_program(cartesian_case):
 def test_missing_arg_field_operator(cartesian_case):
     """Test that calling a field_operator without required args raises an error."""
 
-    @gtx.field_operator(backend=cartesian_case.executor)
+    @gtx.field_operator(backend=cartesian_case.backend)
     def copy(a: IField) -> IField:
         return a
 
@@ -97,7 +91,7 @@ def test_missing_arg_field_operator(cartesian_case):
 def test_missing_arg_scan_operator(cartesian_case):
     """Test that calling a scan_operator without required args raises an error."""
 
-    @gtx.scan_operator(backend=cartesian_case.executor, axis=KDim, init=0.0, forward=True)
+    @gtx.scan_operator(backend=cartesian_case.backend, axis=KDim, init=0.0, forward=True)
     def sum(state: float, a: float) -> float:
         return state + a
 
@@ -122,7 +116,7 @@ def test_missing_arg_program(cartesian_case):
 
     with pytest.raises(errors.DSLError, match="Invalid call"):
 
-        @gtx.program(backend=cartesian_case.executor)
+        @gtx.program(backend=cartesian_case.backend)
         def copy_program(a: IField, b: IField) -> IField:
             copy(a)
 
@@ -130,7 +124,7 @@ def test_missing_arg_program(cartesian_case):
 
     with pytest.raises(TypeError, match="'offset_provider'"):
 
-        @gtx.program(backend=cartesian_case.executor)
+        @gtx.program(backend=cartesian_case.backend)
         def copy_program(a: IField, b: IField) -> IField:
             copy(a, out=b)
 

@@ -11,7 +11,7 @@ classifiers = [
   'Environment :: Console',
   'Environment :: GPU :: NVIDIA CUDA',
   'Intended Audience :: Science/Research',
-  'License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)',
+  'License :: OSI Approved :: BSD License',
   'Operating System :: POSIX',
   'Programming Language :: Python',
   'Programming Language :: Python :: 3.8',
@@ -34,9 +34,11 @@ dependencies = [
   'cytoolz>=0.12.1',
   'deepdiff>=5.6.0',
   'devtools>=0.6',
+  'diskcache>=5.6.3',
   'factory-boy>=3.3.0',
+  'filelock>=3.16.1',
   'frozendict>=2.3',
-  'gridtools-cpp>=2.3.2,==2.*',
+  'gridtools-cpp>=2.3.8,==2.*',
   "importlib-resources>=5.0;python_version<'3.9'",
   'jinja2>=3.0.0',
   'lark>=1.1.2',
@@ -62,7 +64,7 @@ keywords = [
   'portable',
   'hpc'
 ]
-license = {text = 'GPL-3.0-or-later'}
+license = {file = 'LICENSE.txt'}
 name = 'gt4py'
 readme = 'README.md'
 requires-python = '>=3.8'
@@ -75,12 +77,12 @@ all-cuda12 = ['gt4py[cuda12,dace,formatting,jax-cuda12,performance,testing]']
 # Other extras
 cuda11 = ['cupy-cuda11x>=12.0']
 cuda12 = ['cupy-cuda12x>=12.0']
-dace = ['dace>=0.15.1,<0.16', 'sympy>=1.9']
+dace = ['dace>=1.0.0,<1.1.0']  # v1.x will contain breaking changes, see https://github.com/spcl/dace/milestone/4
 formatting = ['clang-format>=9.0']
 gpu = ['cupy>=12.0']
-jax-cpu = ['jax[cpu]>=0.4.13']
-jax-cuda11 = ['jax[cuda11_pip]>=0.4.13']
-jax-cuda12 = ['jax[cuda12_pip]>=0.4.13']
+jax-cpu = ['jax[cpu]>=0.4.18; python_version>="3.10"']
+jax-cuda11 = ['jax[cuda11_pip]>=0.4.18; python_version>="3.10"']
+jax-cuda12 = ['jax[cuda12_pip]>=0.4.18; python_version>="3.10"']
 performance = ['scipy>=1.9.2']
 rocm-43 = ['cupy-rocm-4-3']
 testing = ['hypothesis>=6.0.0', 'pytest>=7.0']
@@ -99,7 +101,7 @@ Source = 'https://github.com/GridTools/gt4py'
 allow_dirty = false
 commit = false
 commit_args = ''
-current_version = '1.0.3'
+current_version = "1.0.4"
 ignore_missing_version = false
 message = 'Bump version: {current_version} → {new_version}'
 parse = '(?P<major>\d+)\.(?P<minor>\d+)(\.(?P<patch>\d+))?'
@@ -234,6 +236,7 @@ module = 'gt4py.next.iterator.runtime'
 
 [tool.pytest.ini_options]
 markers = [
+  'all: special marker that skips all tests',
   'requires_atlas: tests that require `atlas4py` bindings package',
   'requires_dace: tests that require `dace` package',
   'requires_gpu: tests that require a NVidia GPU (`cupy` and `cudatoolkit` are required)',
@@ -243,10 +246,8 @@ markers = [
   'uses_floordiv: tests that require backend support for floor division',
   'uses_if_stmts: tests that require backend support for if-statements',
   'uses_index_fields: tests that require backend support for index fields',
-  'uses_lift_expressions: tests that require backend support for lift expressions',
   'uses_negative_modulo: tests that require backend support for modulo on negative numbers',
   'uses_origin: tests that require backend support for domain origin',
-  'uses_reduction_over_lift_expressions: tests that require backend support for reduction over lift expressions',
   'uses_reduction_with_only_sparse_fields: tests that require backend support for with sparse fields',
   'uses_scan: tests that uses scan',
   'uses_scan_in_field_operator: tests that require backend support for scan in field operator',
@@ -293,7 +294,6 @@ docstring-code-format = true
 ignore = [
   'E501'  # [line-too-long]
 ]
-ignore-init-module-imports = true
 select = ['E', 'F', 'I', 'B', 'A', 'T10', 'ERA', 'NPY', 'RUF']
 typing-modules = ['gt4py.eve.extended_typing']
 unfixable = []

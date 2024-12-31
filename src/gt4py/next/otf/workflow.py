@@ -1,22 +1,18 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
+import abc
 import dataclasses
 import functools
 import typing
+from collections.abc import MutableMapping
 from typing import Any, Callable, Generic, Protocol, TypeVar
 
 from typing_extensions import Self
@@ -29,6 +25,8 @@ EndT_co = TypeVar("EndT_co", covariant=True)
 NewEndT = TypeVar("NewEndT")
 IntermediateT = TypeVar("IntermediateT")
 HashT = TypeVar("HashT")
+DataT = TypeVar("DataT")
+ArgT = TypeVar("ArgT")
 
 
 def make_step(function: Workflow[StartT, EndT]) -> ChainableWorkflowMixin[StartT, EndT]:
@@ -159,6 +157,23 @@ class NamedStepSequence(
 
 
 @dataclasses.dataclass(frozen=True)
+class MultiWorkflow(
+    ChainableWorkflowMixin[StartT, EndT], ReplaceEnabledWorkflowMixin[StartT, EndT]
+):
+    """A flexible workflow, where the sequence of steps depends on the input type."""
+
+    def __call__(self, inp: StartT) -> EndT:
+        step_result: Any = inp
+        for step_name in self.step_order(inp):
+            step_result = getattr(self, step_name)(step_result)
+        return step_result
+
+    @abc.abstractmethod
+    def step_order(self, inp: StartT) -> list[str]:
+        pass
+
+
+@dataclasses.dataclass(frozen=True)
 class StepSequence(ChainableWorkflowMixin[StartT, EndT]):
     """
     Composable workflow of single input callables.
@@ -239,16 +254,15 @@ class CachedStep(
 
     step: Workflow[StartT, EndT]
     hash_function: Callable[[StartT], HashT] = dataclasses.field(default=hash)  # type: ignore[assignment]
-
-    _cache: dict[HashT, EndT] = dataclasses.field(repr=False, init=False, default_factory=dict)
+    cache: MutableMapping[HashT, EndT] = dataclasses.field(repr=False, default_factory=dict)
 
     def __call__(self, inp: StartT) -> EndT:
         """Run the step only if the input is not cached, else return from cache."""
         hash_ = self.hash_function(inp)
         try:
-            result = self._cache[hash_]
+            result = self.cache[hash_]
         except KeyError:
-            result = self._cache[hash_] = self.step(inp)
+            result = self.cache[hash_] = self.step(inp)
         return result
 
 

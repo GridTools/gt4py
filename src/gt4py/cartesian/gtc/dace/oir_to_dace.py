@@ -1,16 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Dict
@@ -21,7 +17,7 @@ import dace.subsets
 
 import gt4py.cartesian.gtc.oir as oir
 from gt4py import eve
-from gt4py.cartesian.gtc import daceir as dcir
+from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.dace.nodes import StencilComputation
 from gt4py.cartesian.gtc.dace.symbol_utils import data_type_to_dace_typeclass
 from gt4py.cartesian.gtc.dace.utils import compute_dcir_access_infos, make_dace_subset
@@ -43,7 +39,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
 
         def __init__(self, stencil: oir.Stencil):
             self.sdfg = dace.SDFG(stencil.name)
-            self.last_state = self.sdfg.add_state(is_start_state=True)
+            self.last_state = self.sdfg.add_state(is_start_block=True)
             self.decls = {decl.name: decl for decl in stencil.params + stencil.declarations}
             self.block_extents = compute_horizontal_block_extents(stencil)
 
@@ -98,7 +94,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
             )
 
     def visit_VerticalLoop(
-        self, node: oir.VerticalLoop, *, ctx: "OirSDFGBuilder.SDFGContext", **kwargs
+        self, node: oir.VerticalLoop, *, ctx: OirSDFGBuilder.SDFGContext, **kwargs
     ):
         declarations = {
             acc.name: ctx.decls[acc.name]
@@ -127,6 +123,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
             state.add_edge(
                 access_node, None, library_node, "__in_" + field, dace.Memlet(field, subset=subset)
             )
+
         for field in access_collection.write_fields():
             access_node = state.add_access(field, debuginfo=dace.DebugInfo(0))
             library_node.add_out_connector("__out_" + field)
@@ -134,8 +131,6 @@ class OirSDFGBuilder(eve.NodeVisitor):
             state.add_edge(
                 library_node, "__out_" + field, access_node, None, dace.Memlet(field, subset=subset)
             )
-
-        return
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs):
         ctx = OirSDFGBuilder.SDFGContext(stencil=node)

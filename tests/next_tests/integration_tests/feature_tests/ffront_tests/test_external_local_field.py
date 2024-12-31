@@ -1,16 +1,11 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 import numpy as np
 import pytest
 
@@ -38,11 +33,11 @@ def test_external_local_field(unstructured_case):
         )  # multiplication with shifted `ones` because reduction of only non-shifted field with local dimension is not supported
 
     inp = unstructured_case.as_field(
-        [Vertex, V2EDim], unstructured_case.offset_provider["V2E"].table
+        [Vertex, V2EDim], unstructured_case.offset_provider["V2E"].ndarray
     )
     ones = cases.allocate(unstructured_case, testee, "ones").strategy(cases.ConstInitializer(1))()
 
-    v2e_table = unstructured_case.offset_provider["V2E"].table
+    v2e_table = unstructured_case.offset_provider["V2E"].ndarray
     cases.verify(
         unstructured_case,
         testee,
@@ -62,7 +57,7 @@ def test_external_local_field_only(unstructured_case):
         return neighbor_sum(inp, axis=V2EDim)
 
     inp = unstructured_case.as_field(
-        [Vertex, V2EDim], unstructured_case.offset_provider["V2E"].table
+        [Vertex, V2EDim], unstructured_case.offset_provider["V2E"].ndarray
     )
 
     cases.verify(
@@ -70,7 +65,7 @@ def test_external_local_field_only(unstructured_case):
         testee,
         inp,
         out=cases.allocate(unstructured_case, testee, cases.RETURN)(),
-        ref=np.sum(unstructured_case.offset_provider["V2E"].table, axis=1),
+        ref=np.sum(unstructured_case.offset_provider["V2E"].ndarray, axis=1),
     )
 
 
@@ -81,7 +76,7 @@ def test_write_local_field(unstructured_case):
         return inp(V2E)
 
     out = unstructured_case.as_field(
-        [Vertex, V2EDim], np.zeros_like(unstructured_case.offset_provider["V2E"].table)
+        [Vertex, V2EDim], np.zeros_like(unstructured_case.offset_provider["V2E"].ndarray)
     )
     inp = cases.allocate(unstructured_case, testee, "inp")()
     cases.verify(
@@ -89,5 +84,5 @@ def test_write_local_field(unstructured_case):
         testee,
         inp,
         out=out,
-        ref=inp.asnumpy()[unstructured_case.offset_provider["V2E"].table],
+        ref=inp.asnumpy()[unstructured_case.offset_provider["V2E"].ndarray],
     )

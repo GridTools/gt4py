@@ -1,26 +1,17 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import numpy as np
 import pytest
 
 from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
-from gt4py.next import allocators as next_allocators, common, float32
-from gt4py.next.program_processors.runners import roundtrip
-
-from next_tests.integration_tests import cases
+from gt4py.next import allocators as next_allocators, common
 
 
 I = gtx.Dimension("I")
@@ -160,3 +151,12 @@ def test_field_wrong_origin():
 @pytest.mark.xfail(reason="aligned_index not supported yet")
 def test_aligned_index():
     gtx.as_field([I], np.random.rand(sizes[I]).astype(gtx.float32), aligned_index=[I, 0])
+
+
+@pytest.mark.parametrize(
+    "data, skip_value",
+    [([0, 1, 2], None), ([0, 1, common._DEFAULT_SKIP_VALUE], common._DEFAULT_SKIP_VALUE)],
+)
+def test_as_connectivity(nd_array_implementation, data, skip_value):
+    testee = gtx.as_connectivity([I], J, nd_array_implementation.array(data))
+    assert testee.skip_value is skip_value

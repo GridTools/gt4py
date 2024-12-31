@@ -1,16 +1,11 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 import math
 import operator
 from typing import Callable, Iterable, Optional
@@ -20,7 +15,7 @@ import pytest
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
-from gt4py.next.common import Dimension, Domain, UnitRange, NamedRange, NamedIndex
+from gt4py.next.common import Dimension, Domain, NamedIndex, NamedRange, UnitRange
 from gt4py.next.embedded import exceptions as embedded_exceptions, nd_array_field
 from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
 from gt4py.next.ffront import fbuiltins
@@ -31,19 +26,6 @@ from next_tests.integration_tests.feature_tests.math_builtin_test_data import ma
 D0 = Dimension("D0")
 D1 = Dimension("D1")
 D2 = Dimension("D2")
-
-
-def nd_array_implementation_params():
-    for xp in nd_array_field._nd_array_implementations:
-        if hasattr(nd_array_field, "cp") and xp == nd_array_field.cp:
-            yield pytest.param(xp, id=xp.__name__, marks=pytest.mark.requires_gpu)
-        else:
-            yield pytest.param(xp, id=xp.__name__)
-
-
-@pytest.fixture(params=nd_array_implementation_params())
-def nd_array_implementation(request):
-    yield request.param
 
 
 @pytest.fixture(
@@ -267,6 +249,16 @@ def test_binary_operations_with_intersection(binary_arithmetic_op, dims, expecte
 
     assert op_result.ndarray.shape == (5, 5)
     assert np.allclose(op_result.ndarray, expected_result)
+
+
+def test_as_scalar(nd_array_implementation):
+    testee = common._field(
+        nd_array_implementation.asarray(42.0, dtype=np.float32), domain=common.Domain()
+    )
+
+    result = testee.as_scalar()
+    assert result == 42.0
+    assert isinstance(result, np.float32)
 
 
 def product_nd_array_implementation_params():

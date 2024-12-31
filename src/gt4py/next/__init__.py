@@ -1,16 +1,11 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 """
 GT4Py-NEXT - Performance portable and composable weather & climate stencils.
 
@@ -23,8 +18,9 @@ to create a streamlined user experience. `from module import *` can be used but 
 module in question is a submodule, defines `__all__` and exports many public API objects.
 """
 
-from . import common, ffront, iterator, program_processors, type_inference
+from . import common, ffront, iterator, program_processors
 from .common import (
+    Connectivity,
     Dimension,
     DimensionKind,
     Dims,
@@ -44,8 +40,7 @@ from .ffront.decorator import field_operator, program, scan_operator
 from .ffront.fbuiltins import *  # noqa: F403 [undefined-local-with-import-star]  explicitly reexport all from fbuiltins.__all__
 from .ffront.fbuiltins import FieldOffset
 from .iterator.embedded import (
-    NeighborTableOffsetProvider,
-    StridedNeighborOffsetProvider,
+    NeighborTableOffsetProvider,  # TODO(havogt): deprecated
     index_field,
     np_as_located_field,
 )
@@ -62,11 +57,11 @@ __all__ = [
     "ffront",
     "iterator",
     "program_processors",
-    "type_inference",
     # from common
     "Dimension",
     "DimensionKind",
     "Field",
+    "Connectivity",
     "GridType",
     "domain",
     "Domain",
@@ -81,7 +76,6 @@ __all__ = [
     "as_connectivity",
     # from iterator
     "NeighborTableOffsetProvider",
-    "StridedNeighborOffsetProvider",
     "index_field",
     "np_as_located_field",
     # from ffront

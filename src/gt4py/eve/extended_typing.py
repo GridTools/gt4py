@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """
 Typing definitions working across different Python versions (via `typing_extensions`).
@@ -20,12 +14,8 @@ Definitions in 'typing_extensions' take priority over those in 'typing'.
 
 from __future__ import annotations
 
-import abc as _abc
 import array as _array
-import collections.abc as _collections_abc
-import ctypes as _ctypes
 import dataclasses as _dataclasses
-import enum as _enum
 import functools as _functools
 import inspect as _inspect
 import mmap as _mmap
@@ -34,7 +24,7 @@ import sys as _sys
 import types as _types
 import typing as _typing
 from typing import *  # noqa: F403 [undefined-local-with-import-star]
-from typing import overload  # Only needed to avoid false flake8 errors
+from typing import overload
 
 import numpy.typing as npt
 import typing_extensions as _typing_extensions
@@ -43,22 +33,22 @@ from typing_extensions import *  # type: ignore[assignment,no-redef]  # noqa: F4
 
 if _sys.version_info >= (3, 9):
     # Standard library already supports PEP 585 (Type Hinting Generics In Standard Collections)
-    from builtins import (  # type: ignore[assignment]  # isort:skip
-        tuple as Tuple,
-        list as List,
+    from builtins import (  # type: ignore[assignment]
         dict as Dict,
-        set as Set,
         frozenset as FrozenSet,
+        list as List,
+        set as Set,
+        tuple as Tuple,
         type as Type,
     )
-    from collections import (  # isort:skip
+    from collections import (
         ChainMap as ChainMap,
         Counter as Counter,
         OrderedDict as OrderedDict,
         defaultdict as defaultdict,
         deque as deque,
     )
-    from collections.abc import (  # isort:skip
+    from collections.abc import (
         AsyncGenerator as AsyncGenerator,
         AsyncIterable as AsyncIterable,
         AsyncIterator as AsyncIterator,
@@ -80,14 +70,14 @@ if _sys.version_info >= (3, 9):
         MutableSet as MutableSet,
         Reversible as Reversible,
         Sequence as Sequence,
+        Set as AbstractSet,
+        ValuesView as ValuesView,
     )
-    from collections.abc import Set as AbstractSet  # isort:skip
-    from collections.abc import ValuesView as ValuesView  # isort:skip
-    from contextlib import (  # isort:skip
+    from contextlib import (
         AbstractAsyncContextManager as AsyncContextManager,
+        AbstractContextManager as ContextManager,
     )
-    from contextlib import AbstractContextManager as ContextManager  # isort:skip
-    from re import Match as Match, Pattern as Pattern  # isort:skip
+    from re import Match as Match, Pattern as Pattern
 
 
 # These fallbacks are useful for public symbols not exported by default.
@@ -667,7 +657,10 @@ def infer_type(
                     arg_types.append(annotations.get(p.name, None) or Any)
                 elif p.kind == _inspect.Parameter.KEYWORD_ONLY:
                     kwonly_arg_types[p.name] = annotations.get(p.name, None) or Any
-                elif p.kind in (_inspect.Parameter.VAR_POSITIONAL, _inspect.Parameter.VAR_KEYWORD):
+                elif p.kind in (
+                    _inspect.Parameter.VAR_POSITIONAL,
+                    _inspect.Parameter.VAR_KEYWORD,
+                ):
                     raise TypeError("Variadic callables are not supported")
 
             result: Any = Callable[arg_types, return_type]

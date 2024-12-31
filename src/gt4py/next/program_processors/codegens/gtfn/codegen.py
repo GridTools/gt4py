@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from typing import Any, Collection, Final, Union
 
@@ -138,6 +132,8 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         "::gridtools::sid::composite::keys<${','.join(f'::gridtools::integral_constant<int,{i}>' for i in range(len(values)))}>::make_values(${','.join(values)})"
     )
 
+    SidFromScalar = as_fmt("gridtools::stencil::global_parameter({arg})")
+
     def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs: Any) -> str:
         if (
             isinstance(node.fun, gtfn_ir_common.SymRef)
@@ -168,6 +164,16 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     )
     ScanExecution = as_fmt(
         "{backend}.vertical_executor({axis})().{'.'.join('arg(' + a + ')' for a in args)}.{'.'.join(scans)}.execute();"
+    )
+
+    IfStmt = as_mako(
+        """
+          if (${cond}) {
+            ${'\\n'.join(true_branch)}
+          } else {
+            ${'\\n'.join(false_branch)}
+          }
+        """
     )
 
     ScanPassDefinition = as_mako(
@@ -253,7 +259,8 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     #include <functional>
     #include <gridtools/fn/${grid_type_str}.hpp>
     #include <gridtools/fn/sid_neighbor_table.hpp>
-
+    #include <gridtools/stencil/global_parameter.hpp>
+    
     namespace generated{
 
     namespace gtfn = ::gridtools::fn;

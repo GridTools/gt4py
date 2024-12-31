@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from typing import Any, Optional, TypeVar, cast
 
@@ -474,6 +468,15 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             return new_node
         return node
 
+    def visit_Attribute(self, node: foast.Attribute, **kwargs: Any) -> foast.Attribute:
+        new_value = self.visit(node.value, **kwargs)
+        return foast.Attribute(
+            value=new_value,
+            attr=node.attr,
+            location=node.location,
+            type=getattr(new_value.type, node.attr),
+        )
+
     def visit_Subscript(self, node: foast.Subscript, **kwargs: Any) -> foast.Subscript:
         new_value = self.visit(node.value, **kwargs)
         new_type: Optional[ts.TypeSpec] = None
@@ -586,6 +589,18 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def _deduce_binop_type(
         self, node: foast.BinOp, *, left: foast.Expr, right: foast.Expr, **kwargs: Any
     ) -> Optional[ts.TypeSpec]:
+        # e.g. `IDim+1`
+        if (
+            isinstance(left.type, ts.DimensionType)
+            and isinstance(right.type, ts.ScalarType)
+            and type_info.is_integral(right.type)
+        ):
+            return ts.OffsetType(source=left.type.dim, target=(left.type.dim,))
+        if isinstance(left.type, ts.OffsetType):
+            raise errors.DSLError(
+                node.location, f"Type '{left.type}' can not be used in operator '{node.op}'."
+            )
+
         logical_ops = {
             dialect_ast_enums.BinaryOperator.BIT_AND,
             dialect_ast_enums.BinaryOperator.BIT_OR,
@@ -833,17 +848,13 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 f"Invalid call to 'astype': second argument must be a scalar type, got '{new_type}'.",
             )
 
-        # return_type = type_info.apply_to_primitive_constituents(
-        #     value.type,
-        #     lambda primitive_type: with_altered_scalar_kind(
-        #         primitive_type, getattr(ts.ScalarKind, new_type.id.upper())
-        #     ),
-        # )
+
         return_type = type_info.type_tree_map(
             lambda primitive_type: with_altered_scalar_kind(
                 primitive_type, getattr(ts.ScalarKind, new_type.id.upper())
             )
         )(value.type)
+
         assert isinstance(return_type, (ts.TupleType, ts.ScalarType, ts.FieldType))
 
         return foast.Call(

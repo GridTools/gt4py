@@ -1,20 +1,15 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from gt4py.next.iterator import ir
-from gt4py.next.iterator.pretty_printer import PrettyPrinter, pformat
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.pretty_printer import PrettyPrinter, pformat
+from gt4py.next.type_system import type_specifications as ts
 
 
 def test_hmerge():
@@ -238,7 +233,7 @@ def test_named_range_horizontal():
         fun=ir.SymRef(id="named_range"),
         args=[ir.AxisLiteral(value="IDim"), ir.SymRef(id="x"), ir.SymRef(id="y")],
     )
-    expected = "IDimₕ: [x, y)"
+    expected = "IDimₕ: [x, y["
     actual = pformat(testee)
     assert actual == expected
 
@@ -310,20 +305,10 @@ def test_function_definition():
 
 
 def test_temporary():
-    testee = ir.Temporary(id="t", domain=ir.SymRef(id="domain"), dtype="float64")
-    expected = "t = temporary(domain=domain, dtype=float64);"
-    actual = pformat(testee)
-    assert actual == expected
-
-
-def test_stencil_closure():
-    testee = ir.StencilClosure(
-        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
-        stencil=ir.SymRef(id="deref"),
-        output=ir.SymRef(id="y"),
-        inputs=[ir.SymRef(id="x")],
+    testee = ir.Temporary(
+        id="t", domain=ir.SymRef(id="domain"), dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     )
-    expected = "y ← (deref)(x) @ cartesian_domain();"
+    expected = "t = temporary(domain=domain, dtype=float64);"
     actual = pformat(testee)
     assert actual == expected
 
@@ -339,28 +324,6 @@ def test_set_at():
     assert actual == expected
 
 
-# TODO(havogt): remove after refactoring.
-def test_fencil_definition():
-    testee = ir.FencilDefinition(
-        id="f",
-        function_definitions=[
-            ir.FunctionDefinition(id="g", params=[ir.Sym(id="x")], expr=ir.SymRef(id="x"))
-        ],
-        params=[ir.Sym(id="d"), ir.Sym(id="x"), ir.Sym(id="y")],
-        closures=[
-            ir.StencilClosure(
-                domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
-                stencil=ir.SymRef(id="deref"),
-                output=ir.SymRef(id="y"),
-                inputs=[ir.SymRef(id="x")],
-            )
-        ],
-    )
-    actual = pformat(testee)
-    expected = "f(d, x, y) {\n  g = λ(x) → x;\n  y ← (deref)(x) @ cartesian_domain();\n}"
-    assert actual == expected
-
-
 def test_program():
     testee = ir.Program(
         id="f",
@@ -372,7 +335,7 @@ def test_program():
             ir.Temporary(
                 id="tmp",
                 domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
-                dtype="float64",
+                dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
             ),
         ],
         body=[

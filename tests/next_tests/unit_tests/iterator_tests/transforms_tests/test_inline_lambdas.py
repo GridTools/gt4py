@@ -1,19 +1,14 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import pytest
 
+from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
 
@@ -45,6 +40,21 @@ test_data = [
         ),
         im.multiplies_(im.plus(2, 1), im.plus("x", "x")),
     ),
+    (
+        # ensure opcount preserving option works whether `itir.SymRef` has a type or not
+        "typed_ref",
+        im.let("a", im.call("opaque")())(
+            im.plus(im.ref("a", ts.ScalarType(kind=ts.ScalarKind.FLOAT32)), im.ref("a", None))
+        ),
+        {
+            True: im.let("a", im.call("opaque")())(
+                im.plus(  # stays as is
+                    im.ref("a", ts.ScalarType(kind=ts.ScalarKind.FLOAT32)), im.ref("a", None)
+                )
+            ),
+            False: im.plus(im.call("opaque")(), im.call("opaque")()),
+        },
+    ),
 ]
 
 
@@ -74,3 +84,10 @@ def test_inline_lambda_args():
     )
     inlined = InlineLambdas.apply(testee, opcount_preserving=True, force_inline_lambda_args=True)
     assert inlined == expected
+
+
+def test_type_preservation():
+    testee = im.let("a", "b")("a")
+    testee.type = testee.annex.type = ts.ScalarType(kind=ts.ScalarKind.FLOAT32)
+    inlined = InlineLambdas.apply(testee)
+    assert inlined.type == inlined.annex.type == ts.ScalarType(kind=ts.ScalarKind.FLOAT32)

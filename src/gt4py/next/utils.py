@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import functools
 from typing import Any, Callable, ClassVar, Optional, ParamSpec, TypeGuard, TypeVar, cast, overload
@@ -62,7 +56,11 @@ def is_tuple_of(v: Any, t: type[_T]) -> TypeGuard[tuple[_T, ...]]:
 
 
 # TODO(havogt): remove flatten duplications in the whole codebase
-def flatten_nested_tuple(value: tuple[_T | tuple, ...]) -> tuple[_T, ...]:
+def flatten_nested_tuple(
+    value: tuple[
+        _T | tuple, ...
+    ],  # `_T` omitted on purpose as type of `value`, to properly deduce `_T` on the user-side
+) -> tuple[_T, ...]:
     if isinstance(value, tuple):
         return sum((flatten_nested_tuple(v) for v in value), start=())  # type: ignore[arg-type] # cannot properly express nesting
     else:
@@ -70,7 +68,12 @@ def flatten_nested_tuple(value: tuple[_T | tuple, ...]) -> tuple[_T, ...]:
 
 
 @overload
-def tree_map(fun: Callable[_P, _R], /) -> Callable[..., _R | tuple[_R | tuple, ...]]: ...
+def tree_map(
+    fun: Callable[_P, _R],
+    *,
+    collection_type: type | tuple[type, ...] = tuple,
+    result_collection_constructor: Optional[type | Callable] = None,
+) -> Callable[..., _R | tuple[_R | tuple, ...]]: ...
 
 
 @overload
@@ -84,7 +87,7 @@ def tree_map(
 def tree_map(
     *args: Callable[_P, _R],
     collection_type: type | tuple[type, ...] = tuple,
-    result_collection_constructor: Optional[type] = None,  # Todo: check name with Enrique
+    result_collection_constructor: Optional[type | Callable] = None,
 ) -> (
     Callable[..., _R | tuple[_R | tuple, ...]]
     | Callable[[Callable[_P, _R]], Callable[..., _R | tuple[_R | tuple, ...]]]
@@ -92,10 +95,10 @@ def tree_map(
     | tuple[_R | tuple, ...]
 ):
     """
-    Apply `fun` to each entry of (possibly nested) collections (by default `tuple`s).
+    Apply `args[0]` to each entry of (possibly nested) collections (by default `tuple`s).
 
     Args:
-        fun: Function to apply to each entry of the collection.
+        args[0]: Function to apply to each entry of the collection.
         collection_type: Type of the collection to be traversed. Can be a single type or a tuple of types.
         result_collection_constructor: Constructor of the collection to be returned. If `None` the same type as `collection_type` is used.
 
@@ -112,12 +115,15 @@ def tree_map(
         >>> tree_map(collection_type=list)(lambda x: x + 1)([[1, 2], 3])
         [[2, 3], 4]
 
-        >>> tree_map(collection_type=list)(lambda x: x + 1, [[1, 2], 3])
-        [[2, 3], 4]
-
         >>> tree_map(collection_type=list, result_collection_constructor=tuple)(lambda x: x + 1)(
         ...     [[1, 2], 3]
         ... )
+        ((2, 3), 4)
+
+        >>> @tree_map
+        ... def impl(x):
+        ...     return x + 1
+        >>> impl(((1, 2), 3))
         ((2, 3), 4)
     """
 

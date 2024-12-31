@@ -1,184 +1,171 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
 import dataclasses
+import typing
 from typing import Any, Generic
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import allocators as next_allocators
 from gt4py.next.ffront import (
-    foast_to_itir,
+    foast_to_gtir,
     foast_to_past,
     func_to_foast,
     func_to_past,
     past_process_args,
     past_to_itir,
-    stages as ffront_stages,
+    signature,
 )
 from gt4py.next.ffront.past_passes import linters as past_linters
+from gt4py.next.ffront.stages import (
+    AOT_DSL_FOP,
+    AOT_DSL_PRG,
+    AOT_FOP,
+    AOT_PRG,
+    DSL_FOP,
+    DSL_PRG,
+    FOP,
+    PRG,
+)
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import stages, workflow
-from gt4py.next.program_processors import processor_interface as ppi
+from gt4py.next.otf import arguments, stages, toolchain, workflow
+
+
+ARGS: typing.TypeAlias = arguments.JITArgs
+CARG: typing.TypeAlias = arguments.CompileTimeArgs
+IT_PRG: typing.TypeAlias = itir.Program
+
+
+INPUT_DATA: typing.TypeAlias = DSL_FOP | FOP | DSL_PRG | PRG | IT_PRG
+INPUT_PAIR: typing.TypeAlias = toolchain.CompilableProgram[INPUT_DATA, ARGS | CARG]
 
 
 @dataclasses.dataclass(frozen=True)
-class FopArgsInjector(workflow.Workflow):
-    args: tuple[Any, ...] = dataclasses.field(default_factory=tuple)
-    kwargs: dict[str, Any] = dataclasses.field(default_factory=dict)
-    from_fieldop: Any = None
+class Transforms(workflow.MultiWorkflow[INPUT_PAIR, stages.CompilableProgram]):
+    """
+    Modular workflow for transformations with access to intermediates.
 
-    def __call__(self, inp: ffront_stages.FoastOperatorDefinition) -> ffront_stages.FoastClosure:
-        return ffront_stages.FoastClosure(
-            foast_op_def=inp,
-            args=self.args,
-            kwargs=self.kwargs,
-            closure_vars={inp.foast_node.id: self.from_fieldop},
-        )
+    The set and order of transformation steps depends on the input type.
+    Thus this workflow can be applied to DSL field operator and program definitions,
+    as well as their AST representations. Even to Iterator IR programs, although in that
+    case it will be a no-op.
 
+    The input to the workflow as well as each step must be a `CompilableProgram`. The arguments
+    inside the `CompilableProgram` passed to the whole workflow may be concrete (`JITArgs`)
+    or compile-time (`CompileTimeArgs`). The individual steps (apart from `.aotify_args`)
+    require compile-time arguments. Some of the steps can work with an empty `CompileTimeArgs` instance.
+    """
 
-@dataclasses.dataclass(frozen=True)
-class FieldopTransformWorkflow(workflow.NamedStepSequence):
-    """Modular workflow for transformations with access to intermediates."""
+    aotify_args: workflow.Workflow[
+        toolchain.CompilableProgram[INPUT_DATA, ARGS], toolchain.CompilableProgram[INPUT_DATA, CARG]
+    ] = dataclasses.field(default_factory=arguments.adapted_jit_to_aot_args_factory)
 
-    func_to_foast: workflow.SkippableStep[
-        ffront_stages.FieldOperatorDefinition | ffront_stages.FoastOperatorDefinition,
-        ffront_stages.FoastOperatorDefinition,
-    ] = dataclasses.field(
-        default_factory=lambda: func_to_foast.OptionalFuncToFoastFactory(cached=True)
-    )
-    foast_inject_args: workflow.Workflow[
-        ffront_stages.FoastOperatorDefinition, ffront_stages.FoastClosure
-    ] = dataclasses.field(default_factory=FopArgsInjector)
-    foast_to_past_closure: workflow.Workflow[
-        ffront_stages.FoastClosure, ffront_stages.PastClosure
-    ] = dataclasses.field(
-        default_factory=lambda: foast_to_past.FoastToPastClosure(
-            foast_to_past=workflow.CachedStep(
-                foast_to_past.foast_to_past, hash_function=ffront_stages.fingerprint_stage
-            )
-        )
-    )
-    past_transform_args: workflow.Workflow[ffront_stages.PastClosure, ffront_stages.PastClosure] = (
-        dataclasses.field(default=past_process_args.past_process_args)
-    )
-    past_to_itir: workflow.Workflow[ffront_stages.PastClosure, stages.ProgramCall] = (
-        dataclasses.field(default_factory=past_to_itir.PastToItirFactory)
+    func_to_foast: workflow.Workflow[AOT_DSL_FOP, AOT_FOP] = dataclasses.field(
+        default_factory=func_to_foast.adapted_func_to_foast_factory
     )
 
-    foast_to_itir: workflow.Workflow[ffront_stages.FoastOperatorDefinition, itir.Expr] = (
-        dataclasses.field(
-            default_factory=lambda: workflow.CachedStep(
-                step=foast_to_itir.foast_to_itir, hash_function=ffront_stages.fingerprint_stage
-            )
-        )
+    func_to_past: workflow.Workflow[AOT_DSL_PRG, AOT_PRG] = dataclasses.field(
+        default_factory=func_to_past.adapted_func_to_past_factory
     )
 
-    @property
-    def step_order(self) -> list[str]:
-        return [
-            "func_to_foast",
-            "foast_inject_args",
-            "foast_to_past_closure",
-            "past_transform_args",
-            "past_to_itir",
-        ]
-
-
-DEFAULT_FIELDOP_TRANSFORMS = FieldopTransformWorkflow()
-
-
-@dataclasses.dataclass(frozen=True)
-class ProgArgsInjector(workflow.Workflow):
-    args: tuple[Any, ...] = dataclasses.field(default_factory=tuple)
-    kwargs: dict[str, Any] = dataclasses.field(default_factory=dict)
-
-    def __call__(self, inp: ffront_stages.PastProgramDefinition) -> ffront_stages.PastClosure:
-        return ffront_stages.PastClosure(
-            past_node=inp.past_node,
-            closure_vars=inp.closure_vars,
-            grid_type=inp.grid_type,
-            args=self.args,
-            kwargs=self.kwargs,
-        )
-
-
-@dataclasses.dataclass(frozen=True)
-class ProgramTransformWorkflow(workflow.NamedStepSequence):
-    """Modular workflow for transformations with access to intermediates."""
-
-    func_to_past: workflow.SkippableStep[
-        ffront_stages.ProgramDefinition | ffront_stages.PastProgramDefinition,
-        ffront_stages.PastProgramDefinition,
-    ] = dataclasses.field(
-        default_factory=lambda: func_to_past.OptionalFuncToPastFactory(cached=True)
-    )
-    past_lint: workflow.Workflow[
-        ffront_stages.PastProgramDefinition, ffront_stages.PastProgramDefinition
-    ] = dataclasses.field(default_factory=past_linters.LinterFactory)
-    past_inject_args: workflow.Workflow[
-        ffront_stages.PastProgramDefinition, ffront_stages.PastClosure
-    ] = dataclasses.field(default_factory=ProgArgsInjector)
-    past_transform_args: workflow.Workflow[ffront_stages.PastClosure, ffront_stages.PastClosure] = (
-        dataclasses.field(default=past_process_args.past_process_args)
-    )
-    past_to_itir: workflow.Workflow[ffront_stages.PastClosure, stages.ProgramCall] = (
-        dataclasses.field(default_factory=past_to_itir.PastToItirFactory)
+    foast_to_itir: workflow.Workflow[AOT_FOP, itir.Expr] = dataclasses.field(
+        default_factory=foast_to_gtir.adapted_foast_to_gtir_factory
     )
 
+    field_view_op_to_prog: workflow.Workflow[AOT_FOP, AOT_PRG] = dataclasses.field(
+        default_factory=foast_to_past.operator_to_program_factory
+    )
 
-DEFAULT_PROG_TRANSFORMS = ProgramTransformWorkflow()
+    past_lint: workflow.Workflow[AOT_PRG, AOT_PRG] = dataclasses.field(
+        default_factory=past_linters.adapted_linter_factory
+    )
+
+    field_view_prog_args_transform: workflow.Workflow[AOT_PRG, AOT_PRG] = dataclasses.field(
+        default_factory=past_process_args.transform_program_args_factory
+    )
+
+    past_to_itir: workflow.Workflow[AOT_PRG, stages.CompilableProgram] = dataclasses.field(
+        default_factory=past_to_itir.past_to_gtir_factory
+    )
+
+    def step_order(self, inp: INPUT_PAIR) -> list[str]:
+        steps: list[str] = []
+        if isinstance(inp.args, ARGS):
+            steps.append("aotify_args")
+        match inp.data:
+            case DSL_FOP():
+                steps.extend(
+                    [
+                        "func_to_foast",
+                        "field_view_op_to_prog",
+                        "past_lint",
+                        "field_view_prog_args_transform",
+                        "past_to_itir",
+                    ]
+                )
+            case FOP():
+                steps.extend(
+                    [
+                        "field_view_op_to_prog",
+                        "past_lint",
+                        "field_view_prog_args_transform",
+                        "past_to_itir",
+                    ]
+                )
+            case DSL_PRG():
+                steps.extend(
+                    ["func_to_past", "past_lint", "field_view_prog_args_transform", "past_to_itir"]
+                )
+            case PRG():
+                steps.extend(["past_lint", "field_view_prog_args_transform", "past_to_itir"])
+            case itir.Program():
+                pass
+            case _:
+                raise ValueError("Unexpected input.")
+        return steps
 
 
+DEFAULT_TRANSFORMS: Transforms = Transforms()
+
+
+# TODO(tehrengruber): Rename class and `executor` & `transforms` attribute. Maybe:
+#  `Backend` -> `Toolchain`
+#  `transforms` -> `frontend_transforms`
+#  `executor` -> `backend_transforms`
 @dataclasses.dataclass(frozen=True)
 class Backend(Generic[core_defs.DeviceTypeT]):
-    executor: ppi.ProgramExecutor
+    name: str
+    executor: workflow.Workflow[stages.CompilableProgram, stages.CompiledProgram]
     allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
-    transforms_fop: FieldopTransformWorkflow = DEFAULT_FIELDOP_TRANSFORMS
-    transforms_prog: ProgramTransformWorkflow = DEFAULT_PROG_TRANSFORMS
+    transforms: workflow.Workflow[INPUT_PAIR, stages.CompilableProgram]
 
     def __call__(
         self,
-        program: ffront_stages.ProgramDefinition | ffront_stages.FieldOperatorDefinition,
-        *args: tuple[Any],
-        **kwargs: dict[str, Any],
+        program: INPUT_DATA,
+        *args: Any,
+        **kwargs: Any,
     ) -> None:
-        if isinstance(
-            program, (ffront_stages.FieldOperatorDefinition, ffront_stages.FoastOperatorDefinition)
-        ):
-            offset_provider = kwargs.pop("offset_provider")
-            from_fieldop = kwargs.pop("from_fieldop")
-            transforms_fop = self.transforms_fop.replace(
-                foast_inject_args=FopArgsInjector(
-                    args=args, kwargs=kwargs, from_fieldop=from_fieldop
-                )
-            )
-            program_call = transforms_fop(program)
-            program_call = dataclasses.replace(
-                program_call, kwargs=program_call.kwargs | {"offset_provider": offset_provider}
-            )
-        else:
-            transforms_prog = self.transforms_prog.replace(
-                past_inject_args=ProgArgsInjector(args=args, kwargs=kwargs)
-            )
-            program_call = transforms_prog(program)
-        self.executor(program_call.program, *program_call.args, **program_call.kwargs)
+        if not isinstance(program, IT_PRG):
+            args, kwargs = signature.convert_to_positional(program, *args, **kwargs)
+        self.jit(program, *args, **kwargs)(*args, **kwargs)
 
-    @property
-    def __name__(self) -> str:
-        return getattr(self.executor, "__name__", None) or repr(self)
+    def jit(self, program: INPUT_DATA, *args: Any, **kwargs: Any) -> stages.CompiledProgram:
+        if not isinstance(program, IT_PRG):
+            args, kwargs = signature.convert_to_positional(program, *args, **kwargs)
+        aot_args = arguments.CompileTimeArgs.from_concrete_no_size(*args, **kwargs)
+        return self.compile(program, aot_args)
+
+    def compile(self, program: INPUT_DATA, compile_time_args: CARG) -> stages.CompiledProgram:
+        return self.executor(
+            self.transforms(toolchain.CompilableProgram(data=program, args=compile_time_args))
+        )
 
     @property
     def __gt_allocator__(

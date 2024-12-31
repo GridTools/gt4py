@@ -1,20 +1,15 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from gt4py.next.iterator import ir
-from gt4py.next.iterator.pretty_parser import pparse
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.pretty_parser import pparse
+from gt4py.next.type_system import type_specifications as ts
 
 
 def test_symref():
@@ -132,7 +127,7 @@ def test_make_tuple():
 
 
 def test_named_range_horizontal():
-    testee = "IDimₕ: [x, y)"
+    testee = "IDimₕ: [x, y["
     expected = ir.FunCall(
         fun=ir.SymRef(id="named_range"),
         args=[ir.AxisLiteral(value="IDim"), ir.SymRef(id="x"), ir.SymRef(id="y")],
@@ -142,7 +137,7 @@ def test_named_range_horizontal():
 
 
 def test_named_range_vertical():
-    testee = "IDimᵥ: [x, y)"
+    testee = "IDimᵥ: [x, y["
     expected = ir.FunCall(
         fun=ir.SymRef(id="named_range"),
         args=[
@@ -207,19 +202,8 @@ def test_function_definition():
 
 def test_temporary():
     testee = "t = temporary(domain=domain, dtype=float64);"
-    expected = ir.Temporary(id="t", domain=ir.SymRef(id="domain"), dtype=ir.SymRef(id="float64"))
-    actual = pparse(testee)
-    assert actual == expected
-
-
-def test_stencil_closure():
-    testee = "y ← (deref)(x) @ cartesian_domain();"
-    expected = ir.StencilClosure(
-        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
-        stencil=ir.SymRef(id="deref"),
-        output=ir.SymRef(id="y"),
-        inputs=[ir.SymRef(id="x")],
-    )
+    float64_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    expected = ir.Temporary(id="t", domain=ir.SymRef(id="domain"), dtype=float64_type)
     actual = pparse(testee)
     assert actual == expected
 
@@ -235,23 +219,32 @@ def test_set_at():
     assert actual == expected
 
 
-# TODO(havogt): remove after refactoring to GTIR
-def test_fencil_definition():
-    testee = "f(d, x, y) {\n  g = λ(x) → x;\n  y ← (deref)(x) @ cartesian_domain();\n}"
-    expected = ir.FencilDefinition(
-        id="f",
-        function_definitions=[
-            ir.FunctionDefinition(id="g", params=[ir.Sym(id="x")], expr=ir.SymRef(id="x"))
+def test_if_stmt():
+    testee = """if (cond) { 
+      y @ cartesian_domain() ← x;
+      if (cond) {
+        y @ cartesian_domain() ← x;
+      } else {
+      }
+    } else {
+      y @ cartesian_domain() ← x;
+    }"""
+    stmt = ir.SetAt(
+        expr=im.ref("x"),
+        domain=im.domain("cartesian_domain", {}),
+        target=im.ref("y"),
+    )
+    expected = ir.IfStmt(
+        cond=im.ref("cond"),
+        true_branch=[
+            stmt,
+            ir.IfStmt(
+                cond=im.ref("cond"),
+                true_branch=[stmt],
+                false_branch=[],
+            ),
         ],
-        params=[ir.Sym(id="d"), ir.Sym(id="x"), ir.Sym(id="y")],
-        closures=[
-            ir.StencilClosure(
-                domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
-                stencil=ir.SymRef(id="deref"),
-                output=ir.SymRef(id="y"),
-                inputs=[ir.SymRef(id="x")],
-            )
-        ],
+        false_branch=[stmt],
     )
     actual = pparse(testee)
     assert actual == expected
@@ -269,7 +262,7 @@ def test_program():
             ir.Temporary(
                 id="tmp",
                 domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
-                dtype=ir.SymRef(id="float64"),
+                dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
             ),
         ],
         body=[

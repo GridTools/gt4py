@@ -1,22 +1,26 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import functools
 import types
-import typing
 from collections.abc import Callable, Iterator
-from typing import Any, Generic, Protocol, Type, TypeGuard, TypeVar, cast
+from typing import (
+    Any,
+    Generic,
+    Literal,
+    Protocol,
+    Sequence,
+    Type,
+    TypeGuard,
+    TypeVar,
+    cast,
+    overload,
+)
 
 import numpy as np
 
@@ -88,15 +92,15 @@ def type_class(symbol_type: ts.TypeSpec) -> Type[ts.TypeSpec]:
     )
 
 
-@typing.overload
+@overload
 def primitive_constituents(
-    symbol_type: ts.TypeSpec, with_path_arg: typing.Literal[False] = False
+    symbol_type: ts.TypeSpec, with_path_arg: Literal[False] = False
 ) -> XIterable[ts.TypeSpec]: ...
 
 
-@typing.overload
+@overload
 def primitive_constituents(
-    symbol_type: ts.TypeSpec, with_path_arg: typing.Literal[True]
+    symbol_type: ts.TypeSpec, with_path_arg: Literal[True]
 ) -> XIterable[tuple[ts.TypeSpec, tuple[int, ...]]]: ...
 
 
@@ -143,14 +147,12 @@ class TupleConstructorType(Protocol, Generic[_R]):
     def __call__(self, *args: Any) -> _R: ...
 
 
-# TODO(havogt): the complicated typing is a hint that this function needs refactoring
 def apply_to_primitive_constituents(
-    symbol_type: ts.TypeSpec,
-    fun: (Callable[[ts.TypeSpec], _T] | Callable[[ts.TypeSpec, tuple[int, ...]], _T]),
-    _path: tuple[int, ...] = (),
-    *,
+    fun: Callable[..., _T],
+    *symbol_types: ts.TypeSpec,
     with_path_arg: bool = False,
     tuple_constructor: TupleConstructorType[_R] = lambda *elements: ts.TupleType(types=[*elements]),  # type: ignore[assignment] # probably related to https://github.com/python/mypy/issues/10854
+    _path: tuple[int, ...] = (),
 ) -> _T | _R:
     """
     Apply function to all primitive constituents of a type.
@@ -159,28 +161,40 @@ def apply_to_primitive_constituents(
     >>> tuple_type = ts.TupleType(types=[int_type, int_type])
     >>> print(
     ...     apply_to_primitive_constituents(
-    ...         tuple_type, lambda primitive_type: ts.FieldType(dims=[], dtype=primitive_type)
+    ...         lambda primitive_type: ts.FieldType(dims=[], dtype=primitive_type),
+    ...         tuple_type,
     ...     )
     ... )
     tuple[Field[[], int64], Field[[], int64]]
+
+    >>> apply_to_primitive_constituents(
+    ...     lambda primitive_type, path: (path, primitive_type),
+    ...     tuple_type,
+    ...     with_path_arg=True,
+    ...     tuple_constructor=lambda *elements: dict(elements),
+    ... )
+    {(0,): ScalarType(kind=<ScalarKind.INT64: 64>, shape=None), (1,): ScalarType(kind=<ScalarKind.INT64: 64>, shape=None)}
     """
-    if isinstance(symbol_type, ts.TupleType):
+    if isinstance(symbol_types[0], ts.TupleType):
+        assert all(isinstance(symbol_type, ts.TupleType) for symbol_type in symbol_types)
         return tuple_constructor(
             *[
                 apply_to_primitive_constituents(
-                    el,
                     fun,
+                    *el_types,
                     _path=(*_path, i),
                     with_path_arg=with_path_arg,
                     tuple_constructor=tuple_constructor,
                 )
-                for i, el in enumerate(symbol_type.types)
+                for i, el_types in enumerate(
+                    zip(*(symbol_type.types for symbol_type in symbol_types))  # type: ignore[attr-defined]  # ensured by assert above
+                )
             ]
         )
     if with_path_arg:
-        return fun(symbol_type, _path)  # type: ignore[call-arg] # mypy not aware of `with_path_arg`
+        return fun(*symbol_types, path=_path)
     else:
-        return fun(symbol_type)  # type: ignore[call-arg] # mypy not aware of `with_path_arg`
+        return fun(*symbol_types)
 
 
 type_tree_map = utils.tree_map(
@@ -450,7 +464,9 @@ def is_concretizable(symbol_type: ts.TypeSpec, to_type: ts.TypeSpec) -> bool:
 
     """
     if isinstance(symbol_type, ts.DeferredType) and (
-        symbol_type.constraint is None or issubclass(type_class(to_type), symbol_type.constraint)
+        symbol_type.constraint is None
+        or (isinstance(to_type, ts.DeferredType) and to_type.constraint is None)
+        or issubclass(type_class(to_type), symbol_type.constraint)
     ):
         return True
     elif is_concrete(symbol_type):
@@ -458,7 +474,9 @@ def is_concretizable(symbol_type: ts.TypeSpec, to_type: ts.TypeSpec) -> bool:
     return False
 
 
-def promote(*types: ts.FieldType | ts.ScalarType) -> ts.FieldType | ts.ScalarType:
+def promote(
+    *types: ts.FieldType | ts.ScalarType, always_field: bool = False
+) -> ts.FieldType | ts.ScalarType:
     """
     Promote a set of field or scalar types to a common type.
 
@@ -481,7 +499,7 @@ def promote(*types: ts.FieldType | ts.ScalarType) -> ts.FieldType | ts.ScalarTyp
      ...
     ValueError: Dimensions can not be promoted. Could not determine order of the following dimensions: J, K.
     """
-    if all(isinstance(type_, ts.ScalarType) for type_ in types):
+    if not always_field and all(isinstance(type_, ts.ScalarType) for type_ in types):
         if not all(type_ == types[0] for type_ in types):
             raise ValueError("Could not promote scalars of different dtype (not implemented).")
         if not all(type_.shape is None for type_ in types):  # type: ignore[union-attr]
@@ -499,7 +517,7 @@ def promote(*types: ts.FieldType | ts.ScalarType) -> ts.FieldType | ts.ScalarTyp
 def return_type(
     callable_type: ts.CallableType,
     *,
-    with_args: list[ts.TypeSpec],
+    with_args: Sequence[ts.TypeSpec],
     with_kwargs: dict[str, ts.TypeSpec],
 ) -> ts.TypeSpec:
     raise NotImplementedError(
@@ -509,17 +527,28 @@ def return_type(
 
 @return_type.register
 def return_type_func(
-    func_type: ts.FunctionType, *, with_args: list[ts.TypeSpec], with_kwargs: dict[str, ts.TypeSpec]
+    func_type: ts.FunctionType,
+    *,
+    with_args: Sequence[ts.TypeSpec],
+    with_kwargs: dict[str, ts.TypeSpec],
 ) -> ts.TypeSpec:
     return func_type.returns
 
 
 @return_type.register
 def return_type_field(
-    field_type: ts.FieldType, *, with_args: list[ts.TypeSpec], with_kwargs: dict[str, ts.TypeSpec]
+    field_type: ts.FieldType,
+    *,
+    with_args: Sequence[ts.TypeSpec],
+    with_kwargs: dict[str, ts.TypeSpec],
 ) -> ts.FieldType:
     try:
-        accepts_args(field_type, with_args=with_args, with_kwargs=with_kwargs, raise_exception=True)
+        accepts_args(
+            field_type,
+            with_args=with_args,
+            with_kwargs=with_kwargs,
+            raise_exception=True,
+        )
     except ValueError as ex:
         raise ValueError("Could not deduce return type of invalid remap operation.") from ex
 
@@ -545,7 +574,7 @@ UNDEFINED_ARG = types.new_class("UNDEFINED_ARG")
 @functools.singledispatch
 def canonicalize_arguments(
     func_type: ts.CallableType,
-    args: tuple | list,
+    args: Sequence,
     kwargs: dict,
     *,
     ignore_errors: bool = False,
@@ -557,7 +586,7 @@ def canonicalize_arguments(
 @canonicalize_arguments.register
 def canonicalize_function_arguments(
     func_type: ts.FunctionType,
-    args: tuple | list,
+    args: Sequence,
     kwargs: dict,
     *,
     ignore_errors: bool = False,
@@ -594,7 +623,7 @@ def canonicalize_function_arguments(
 
 
 def structural_function_signature_incompatibilities(
-    func_type: ts.FunctionType, args: list, kwargs: dict[str, Any]
+    func_type: ts.FunctionType, args: Sequence, kwargs: dict[str, Any]
 ) -> Iterator[str]:
     """
     Return structural incompatibilities for a call to ``func_type`` with given arguments.
@@ -630,7 +659,8 @@ def structural_function_signature_incompatibilities(
 
     missing_positional_args = []
     for i, arg_type in zip(
-        range(len(func_type.pos_only_args), num_pos_params), func_type.pos_or_kw_args.keys()
+        range(len(func_type.pos_only_args), num_pos_params),
+        func_type.pos_or_kw_args.keys(),
     ):
         if args[i] is UNDEFINED_ARG:
             missing_positional_args.append(f"'{arg_type}'")
@@ -648,7 +678,7 @@ def structural_function_signature_incompatibilities(
 
 @functools.singledispatch
 def function_signature_incompatibilities(
-    func_type: ts.CallableType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
+    func_type: ts.CallableType, args: Sequence[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
 ) -> Iterator[str]:
     """
     Return incompatibilities for a call to ``func_type`` with given arguments.
@@ -661,7 +691,7 @@ def function_signature_incompatibilities(
 @function_signature_incompatibilities.register
 def function_signature_incompatibilities_func(
     func_type: ts.FunctionType,
-    args: list[ts.TypeSpec],
+    args: Sequence[ts.TypeSpec],
     kwargs: dict[str, ts.TypeSpec],
     *,
     skip_canonicalization: bool = False,
@@ -680,7 +710,7 @@ def function_signature_incompatibilities_func(
     num_pos_params = len(func_type.pos_only_args) + len(func_type.pos_or_kw_args)
     assert len(args) >= num_pos_params
     for i, (a_arg, b_arg) in enumerate(
-        zip(func_type.pos_only_args + list(func_type.pos_or_kw_args.values()), args)
+        zip(list(func_type.pos_only_args) + list(func_type.pos_or_kw_args.values()), args)
     ):
         if (
             b_arg is not UNDEFINED_ARG
@@ -702,22 +732,27 @@ def function_signature_incompatibilities_func(
 
 @function_signature_incompatibilities.register
 def function_signature_incompatibilities_field(
-    field_type: ts.FieldType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
+    field_type: ts.FieldType,
+    args: list[ts.TypeSpec],
+    kwargs: dict[str, ts.TypeSpec],
 ) -> Iterator[str]:
-    if len(args) != 1:
-        yield f"Function takes 1 argument, but {len(args)} were given."
+    if len(args) < 1:
+        yield f"Function takes at least 1 argument, but {len(args)} were given."
         return
-
-    if not isinstance(args[0], ts.OffsetType):
-        yield f"Expected first argument to be of type '{ts.OffsetType}', got '{args[0]}'."
-        return
+    for arg in args:
+        if not isinstance(arg, ts.OffsetType):
+            yield f"Expected arguments to be of type '{ts.OffsetType}', got '{arg}'."
+            return
+        if len(args) > 1 and len(arg.target) > 1:
+            yield f"Function takes only 1 argument in unstructured case, but {len(args)} were given."
+            return
 
     if kwargs:
         yield f"Got unexpected keyword argument(s) '{', '.join(kwargs.keys())}'."
         return
 
-    source_dim = args[0].source
-    target_dims = args[0].target
+    source_dim = args[0].source  # type: ignore[attr-defined] # ensured by loop above
+    target_dims = args[0].target  # type: ignore[attr-defined] # ensured by loop above
     # TODO: This code does not handle ellipses for dimensions. Fix it.
     assert field_type.dims is not ...
     if field_type.dims and source_dim not in field_type.dims:
@@ -732,7 +767,7 @@ def function_signature_incompatibilities_field(
 def accepts_args(
     callable_type: ts.CallableType,
     *,
-    with_args: list[ts.TypeSpec],
+    with_args: Sequence[ts.TypeSpec],
     with_kwargs: dict[str, ts.TypeSpec],
     raise_exception: bool = False,
 ) -> bool:

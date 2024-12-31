@@ -4,9 +4,11 @@ on:
   push:
     branches:
     - main
+    - gtir  # TODO(tehrengruber): remove after GTIR refactoring #1582
   pull_request:
     branches:
     - main
+    - gtir  # TODO(tehrengruber): remove after GTIR refactoring #1582
     paths-ignore:  # Skip if only gt4py.next and irrelevant doc files have been updated
     - "src/gt4py/next/**"
     - "tests/next_tests/**"
@@ -24,9 +26,9 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.8", "3.9", "3.10", "3.11"]
-        backends: [internal-cpu, dace-cpu]
+        tox-factor: [internal, dace]
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     - name: Install boost
       shell: bash
       run: |
@@ -38,7 +40,7 @@ jobs:
         mv boost_1_76_0/boost boost/include/
         echo "BOOST_ROOT=${PWD}/boost" >> $GITHUB_ENV
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
@@ -57,4 +59,4 @@ jobs:
       run: |
         pyversion=${{ matrix.python-version }}
         pyversion_no_dot=${pyversion//./}
-        tox run -e cartesian-py${pyversion_no_dot}-${{ matrix.backends }}
+        tox run -e cartesian-py${pyversion_no_dot}-${{ matrix.tox-factor }}-cpu

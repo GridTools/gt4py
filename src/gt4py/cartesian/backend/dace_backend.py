@@ -1,16 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+from __future__ import annotations
 
 import copy
 import os
@@ -22,7 +18,6 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type
 import dace
 import dace.data
 from dace.sdfg.utils import inline_sdfgs
-from dace.serialize import dumps
 
 from gt4py import storage as gt_storage
 from gt4py.cartesian import config as gt_config
@@ -48,7 +43,6 @@ from gt4py.cartesian.gtc.dace.utils import array_dimensions, replace_strides
 from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
 from gt4py.cartesian.gtc.passes.gtir_k_boundary import compute_k_boundary
 from gt4py.cartesian.gtc.passes.gtir_pipeline import GtirPipeline
-from gt4py.cartesian.gtc.passes.oir_optimizations.inlining import MaskInlining
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_fields_extents
 from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline
 from gt4py.cartesian.utils import shash
@@ -61,22 +55,18 @@ if TYPE_CHECKING:
     from gt4py.cartesian.stencil_object import StencilObject
 
 
-def _serialize_sdfg(sdfg: dace.SDFG):
-    return dumps(sdfg)
-
-
 def _specialize_transient_strides(sdfg: dace.SDFG, layout_map):
-    repldict = replace_strides(
+    replacement_dictionary = replace_strides(
         [array for array in sdfg.arrays.values() if array.transient], layout_map
     )
-    sdfg.replace_dict(repldict)
+    sdfg.replace_dict(replacement_dictionary)
     for state in sdfg.nodes():
         for node in state.nodes():
             if isinstance(node, dace.nodes.NestedSDFG):
-                for k, v in repldict.items():
+                for k, v in replacement_dictionary.items():
                     if k in node.symbol_mapping:
                         node.symbol_mapping[k] = v
-    for k in repldict.keys():
+    for k in replacement_dictionary.keys():
         if k in sdfg.symbols:
             sdfg.remove_symbol(k)
 
@@ -130,7 +120,7 @@ def _set_expansion_orders(sdfg: dace.SDFG):
 
 
 def _set_tile_sizes(sdfg: dace.SDFG):
-    import gt4py.cartesian.gtc.daceir as dcir  # avoid circular import
+    import gt4py.cartesian.gtc.dace.daceir as dcir  # avoid circular import
 
     for node, _ in filter(
         lambda n: isinstance(n[0], StencilComputation), sdfg.all_nodes_recursive()
@@ -153,7 +143,7 @@ def _to_device(sdfg: dace.SDFG, device: str) -> None:
                 node.device = dace.DeviceType.GPU
 
 
-def _pre_expand_trafos(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map):
+def _pre_expand_transformations(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map):
     args_data = make_args_data_from_gtir(gtir_pipeline)
 
     # stencils without effect
@@ -174,7 +164,7 @@ def _pre_expand_trafos(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map)
     return sdfg
 
 
-def _post_expand_trafos(sdfg: dace.SDFG):
+def _post_expand_transformations(sdfg: dace.SDFG):
     # DaCe "standard" clean-up transformations
     sdfg.simplify(validate=False)
 
@@ -309,7 +299,7 @@ def freeze_origin_domain_sdfg(inner_sdfg, arg_names, field_info, *, origin, doma
         for node in states[0].nodes():
             state.remove_node(node)
 
-    # make sure that symbols are passed throught o inner sdfg
+    # make sure that symbols are passed through to inner sdfg
     for symbol in nsdfg.sdfg.free_symbols:
         if symbol not in wrapper_sdfg.symbols:
             wrapper_sdfg.add_symbol(symbol, nsdfg.sdfg.symbols[symbol])
@@ -359,13 +349,13 @@ class SDFGManager:
             except FileNotFoundError:
                 base_oir = GTIRToOIR().visit(self.builder.gtir)
                 oir_pipeline = self.builder.options.backend_opts.get(
-                    "oir_pipeline", DefaultPipeline(skip=[MaskInlining])
+                    "oir_pipeline", DefaultPipeline()
                 )
                 oir_node = oir_pipeline.run(base_oir)
                 sdfg = OirSDFGBuilder().visit(oir_node)
 
                 _to_device(sdfg, self.builder.backend.storage_info["device"])
-                _pre_expand_trafos(
+                _pre_expand_transformations(
                     self.builder.gtir_pipeline,
                     sdfg,
                     self.builder.backend.storage_info["layout_map"],
@@ -381,7 +371,7 @@ class SDFGManager:
     def _expanded_sdfg(self):
         sdfg = self._unexpanded_sdfg()
         sdfg.expand_library_nodes()
-        _post_expand_trafos(sdfg)
+        _post_expand_transformations(sdfg)
         return sdfg
 
     def expanded_sdfg(self):
@@ -538,7 +528,7 @@ class DaCeComputationCodegen:
         return generated_code
 
     @classmethod
-    def apply(cls, stencil_ir: gtir.Stencil, builder: "StencilBuilder", sdfg: dace.SDFG):
+    def apply(cls, stencil_ir: gtir.Stencil, builder: StencilBuilder, sdfg: dace.SDFG):
         self = cls()
         with dace.config.temporary_config():
             # To prevent conflict with 3rd party usage of DaCe config always make sure that any
@@ -772,7 +762,7 @@ class BaseDaceBackend(BaseGTBackend, CLIBackendMixin):
     GT_BACKEND_T = "dace"
     PYEXT_GENERATOR_CLASS = DaCeExtGenerator  # type: ignore
 
-    def generate(self) -> Type["StencilObject"]:
+    def generate(self) -> Type[StencilObject]:
         self.check_options(self.builder.options)
 
         pyext_module_name: Optional[str]

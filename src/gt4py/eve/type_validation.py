@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """Generic interface and implementations of run-time type validation for arbitrary values."""
 
@@ -317,7 +311,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
                 #          ...
                 #
                 # Since this can be an arbitrary type (not something regular like a collection) there is
-                # no way to check if the type parameter is verifed in the actual instance.
+                # no way to check if the type parameter is verified in the actual instance.
                 # The only check can be done at run-time is to verify that the value is an instance of
                 # the original type, completely ignoring the annotation. Ideally, the static type checker
                 # can do a better job to try figure out if the type parameter is ok ...

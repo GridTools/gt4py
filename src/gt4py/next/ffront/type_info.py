@@ -1,19 +1,13 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from functools import reduce
-from typing import Iterator, cast
+from typing import Iterator, Sequence, cast
 
 import gt4py.next.ffront.type_specifications as ts_ffront
 import gt4py.next.type_system.type_specifications as ts
@@ -36,8 +30,6 @@ def promote_scalars_to_zero_dim_field(type_: ts.TypeSpec) -> ts.TypeSpec:
         if isinstance(type_el, ts.ScalarType):
             return ts.FieldType(dims=[], dtype=type_el)
         return type_el
-
-    # return  type_info.apply_to_primitive_constituents(type_, promote_el)
 
     return type_info.type_tree_map(promote_el)(type_)
 
@@ -71,11 +63,15 @@ def promote_zero_dims(
                     raise ValueError(f"'{arg_el}' is not compatible with '{param_el}'.")
             return arg_el
 
-        return type_info.apply_to_primitive_constituents(arg, _as_field, with_path_arg=True)
+        return type_info.apply_to_primitive_constituents(_as_field, arg, with_path_arg=True)
 
     new_args = [*args]
     for i, (param, arg) in enumerate(
-        zip(function_type.pos_only_args + list(function_type.pos_or_kw_args.values()), args)
+        zip(
+            list(function_type.pos_only_args) + list(function_type.pos_or_kw_args.values()),
+            args,
+            strict=True,
+        )
     ):
         new_args[i] = promote_arg(param, arg)
     new_kwargs = {**kwargs}
@@ -139,7 +135,7 @@ def canonicalize_scanop_arguments(
 @type_info.function_signature_incompatibilities.register
 def function_signature_incompatibilities_fieldop(
     fieldop_type: ts_ffront.FieldOperatorType,
-    args: list[ts.TypeSpec],
+    args: Sequence[ts.TypeSpec],
     kwargs: dict[str, ts.TypeSpec],
 ) -> Iterator[str]:
     args, kwargs = type_info.canonicalize_arguments(
@@ -194,7 +190,7 @@ def _scan_param_promotion(param: ts.TypeSpec, arg: ts.TypeSpec) -> ts.FieldType 
             # TODO: we want some generic field type here, but our type system does not support it yet.
             return ts.FieldType(dims=[common.Dimension("...")], dtype=dtype)
 
-    res = type_info.apply_to_primitive_constituents(param, _as_field, with_path_arg=True)
+    res = type_info.apply_to_primitive_constituents(_as_field, param, with_path_arg=True)
     assert isinstance(res, (ts.FieldType, ts.TupleType))
     return res
 
@@ -310,15 +306,6 @@ def return_type_scanop(
         #  field
         [callable_type.axis],
     )
-
-    # return type_info.apply_to_primitive_constituents(
-    #     carry_dtype, lambda arg: ts.FieldType(dims=promoted_dims, dtype=cast(ts.ScalarType, arg))
-    # )
-    # @utils.tree_map(collection_type=ts.TupleType, result_collection_constructor=lambda x: ts.TupleType(types=[*x]))
-    # def tmp(x):
-    #     return ts.FieldType(dims=promoted_dims, dtype=x)
-
-    # return  tmp(carry_dtype)
 
     return type_info.type_tree_map(
         lambda arg: ts.FieldType(dims=promoted_dims, dtype=cast(ts.ScalarType, arg))

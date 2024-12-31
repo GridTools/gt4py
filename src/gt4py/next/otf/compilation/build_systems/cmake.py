@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -28,7 +22,9 @@ from gt4py.next.otf.compilation.build_systems import cmake_lists
 @dataclasses.dataclass
 class CMakeFactory(
     compiler.BuildSystemProjectGenerator[
-        languages.Cpp | languages.Cuda, languages.LanguageWithHeaderFilesSettings, languages.Python
+        languages.CPP | languages.CUDA | languages.HIP,
+        languages.LanguageWithHeaderFilesSettings,
+        languages.Python,
     ]
 ):
     """Create a CMakeProject from a ``CompilableSource`` stage object with given CMake settings."""
@@ -40,7 +36,7 @@ class CMakeFactory(
     def __call__(
         self,
         source: stages.CompilableSource[
-            languages.Cpp | languages.Cuda,
+            languages.CPP | languages.CUDA | languages.HIP,
             languages.LanguageWithHeaderFilesSettings,
             languages.Python,
         ],
@@ -54,8 +50,8 @@ class CMakeFactory(
         header_name = f"{name}.{source.program_source.language_settings.header_extension}"
         bindings_name = f"{name}_bindings.{source.program_source.language_settings.file_extension}"
         cmake_languages = [cmake_lists.Language(name="CXX")]
-        if source.program_source.language is languages.Cuda:
-            cmake_languages = [*cmake_languages, cmake_lists.Language(name="CUDA")]
+        if (src_lang := source.program_source.language) in [languages.CUDA, languages.HIP]:
+            cmake_languages = [*cmake_languages, cmake_lists.Language(name=src_lang.__name__)]
         cmake_lists_src = cmake_lists.generate_cmakelists_source(
             name, source.library_deps, [header_name, bindings_name], languages=cmake_languages
         )
@@ -76,7 +72,7 @@ class CMakeFactory(
 @dataclasses.dataclass
 class CMakeProject(
     stages.BuildSystemProject[
-        languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python
+        languages.CPP, languages.LanguageWithHeaderFilesSettings, languages.Python
     ]
 ):
     """

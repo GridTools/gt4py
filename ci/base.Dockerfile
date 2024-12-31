@@ -1,4 +1,6 @@
-FROM docker.io/nvidia/cuda:11.2.2-devel-ubuntu20.04
+ARG CUDA_VERSION=12.6.2
+ARG UBUNTU_VERSION=22.04
+FROM docker.io/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION}
 ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
 
@@ -21,19 +23,19 @@ RUN apt-get update -qq && apt-get install -qq -y --no-install-recommends \
     tk-dev \
     libffi-dev \
     liblzma-dev \
-    python-openssl \
+    $( [ "${UBUNTU_VERSION}" = "20.04" ] && echo "python-openssl" || echo "python3-openssl" ) \
     libreadline-dev \
     git \
     rustc \
     htop && \
     rm -rf /var/lib/apt/lists/*
 
-RUN wget --quiet https://boostorg.jfrog.io/artifactory/main/release/1.72.0/source/boost_1_72_0.tar.gz && \
-    echo c66e88d5786f2ca4dbebb14e06b566fb642a1a6947ad8cc9091f9f445134143f boost_1_72_0.tar.gz > boost_hash.txt && \
+RUN wget --quiet https://archives.boost.io/release/1.85.0/source/boost_1_85_0.tar.gz && \
+    echo be0d91732d5b0cc6fbb275c7939974457e79b54d6f07ce2e3dfdd68bef883b0b boost_1_85_0.tar.gz > boost_hash.txt && \
     sha256sum -c boost_hash.txt && \
-    tar xzf boost_1_72_0.tar.gz && \
-    mv boost_1_72_0/boost /usr/local/include/ && \
-    rm boost_1_72_0.tar.gz boost_hash.txt
+    tar xzf boost_1_85_0.tar.gz && \
+    mv boost_1_85_0/boost /usr/local/include/ && \
+    rm boost_1_85_0.tar.gz boost_hash.txt
 
 ENV BOOST_ROOT /usr/local/
 ENV CUDA_HOME /usr/local/cuda
@@ -53,5 +55,6 @@ RUN pyenv update && \
 
 ENV PATH="/root/.pyenv/shims:${PATH}"
 
-
-RUN pip install --upgrade pip setuptools wheel tox cupy-cuda11x==12.3.0
+ARG CUPY_PACKAGE=cupy-cuda12x
+ARG CUPY_VERSION=13.3.0
+RUN pip install --upgrade pip setuptools wheel tox ${CUPY_PACKAGE}==${CUPY_VERSION}

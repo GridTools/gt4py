@@ -1,16 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+from types import ModuleType
 
 from types import ModuleType
 from typing import Callable
@@ -28,8 +24,31 @@ def asnumpy(field: common.Field | np.ndarray) -> np.ndarray:
 
 
 def field_from_typespec(
-    domain: common.Domain, xp: ModuleType
-) -> Callable[..., common.MutableField | tuple[common.MutableField | tuple, ...]]:
+    type_: ts.TupleType | ts.ScalarType, domain: common.Domain, xp: ModuleType
+) -> common.MutableField | tuple[common.MutableField | tuple, ...]:
+    """
+    Allocate a field or (arbitrarily nested) tuple(s) of fields.
+
+    The tuple structure and dtype is taken from a type_specifications.DataType,
+    which is either ScalarType or TupleType of ScalarType (possibly nested).
+
+    >>> field_from_typespec(
+    ...     ts.ScalarType(kind=ts.ScalarKind.INT32), common.domain({common.Dimension("I"): 1}), np
+    ... )  # doctest: +ELLIPSIS
+    NumPyArrayField(... dtype=int32...)
+    >>> field_from_typespec(
+    ...     ts.TupleType(
+    ...         types=[
+    ...             ts.ScalarType(kind=ts.ScalarKind.INT32),
+    ...             ts.ScalarType(kind=ts.ScalarKind.FLOAT32),
+    ...         ]
+    ...     ),
+    ...     common.domain({common.Dimension("I"): 1}),
+    ...     np,
+    ... )  # doctest: +ELLIPSIS
+    (NumPyArrayField(... dtype=int32...), NumPyArrayField(... dtype=float32...))
+    """
+
     @utils.tree_map(collection_type=ts.TupleType, result_collection_constructor=tuple)
     def impl(type_: ts.ScalarType) -> common.MutableField:
         res = common._field(
@@ -39,7 +58,8 @@ def field_from_typespec(
         assert isinstance(res, common.MutableField)
         return res
 
-    return impl
+    return impl(type_)
+
 
 
 def get_array_ns(

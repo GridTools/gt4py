@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import os
 
@@ -27,6 +21,8 @@ def env_var():
     yield env_var_name
     if saved is not None:
         os.environ[env_var_name] = saved
+    else:
+        _ = os.environ.pop(env_var_name, None)
 
 
 @pytest.mark.parametrize("value", ["False", "false", "0", "off"])
@@ -48,5 +44,5 @@ def test_env_flag_to_bool_invalid(env_var):
 
 
 def test_env_flag_to_bool_unset(env_var):
-    del os.environ[env_var]
+    _ = os.environ.pop(env_var, None)
     assert config.env_flag_to_bool(env_var, default=False) is False

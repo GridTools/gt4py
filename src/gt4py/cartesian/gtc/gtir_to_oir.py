@@ -1,23 +1,17 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from dataclasses import dataclass, field
-from typing import Any, List, Optional, Set, Union
+from typing import Any, List, Set, Union
 
 from gt4py import eve
-from gt4py.cartesian.gtc import common, gtir, oir, utils
-from gt4py.cartesian.gtc.common import CartesianOffset, DataType, LogicalOperator, UnaryOperator
+from gt4py.cartesian.gtc import gtir, oir, utils
+from gt4py.cartesian.gtc.common import CartesianOffset, DataType, UnaryOperator
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_fields_extents
 
 
@@ -123,61 +117,41 @@ class GTIRToOIR(eve.NodeTranslator):
             loc=node.loc,
         )
 
-    # --- Stmts ---
-    def visit_ParAssignStmt(
-        self, node: gtir.ParAssignStmt, *, mask: Optional[oir.Expr] = None, **kwargs: Any
-    ) -> Union[oir.AssignStmt, oir.MaskStmt]:
-        stmt: Union[oir.AssignStmt, oir.MaskStmt] = oir.AssignStmt(
-            left=self.visit(node.left), right=self.visit(node.right)
-        )
-        if mask is not None:
-            # Wrap inside MaskStmt
-            stmt = oir.MaskStmt(body=[stmt], mask=mask, loc=node.loc)
-        return stmt
+    # --- Statements ---
+    def visit_ParAssignStmt(self, node: gtir.ParAssignStmt, **kwargs: Any) -> oir.AssignStmt:
+        return oir.AssignStmt(left=self.visit(node.left), right=self.visit(node.right))
 
     def visit_HorizontalRestriction(
         self, node: gtir.HorizontalRestriction, **kwargs: Any
     ) -> oir.HorizontalRestriction:
-        body_stmts = []
-        for stmt in node.body:
-            stmt_or_stmts = self.visit(stmt, **kwargs)
-            stmts = utils.flatten_list(
-                [stmt_or_stmts] if isinstance(stmt_or_stmts, oir.Stmt) else stmt_or_stmts
-            )
-            body_stmts.extend(stmts)
+        body = []
+        for statement in node.body:
+            oir_statement = self.visit(statement, **kwargs)
+            body.extend(utils.flatten_list(utils.listify(oir_statement)))
 
-        return oir.HorizontalRestriction(mask=node.mask, body=body_stmts)
+        return oir.HorizontalRestriction(mask=node.mask, body=body)
 
-    def visit_While(
-        self, node: gtir.While, *, mask: Optional[oir.Expr] = None, **kwargs: Any
-    ) -> Union[oir.While, oir.MaskStmt]:
-        body_stmts: List[oir.Stmt] = []
-        for st in node.body:
-            st_or_sts = self.visit(st, **kwargs)
-            sts = utils.flatten_list([st_or_sts] if isinstance(st_or_sts, oir.Stmt) else st_or_sts)
-            body_stmts.extend(sts)
+    def visit_While(self, node: gtir.While, **kwargs: Any) -> oir.While:
+        body: List[oir.Stmt] = []
+        for statement in node.body:
+            oir_statement = self.visit(statement, **kwargs)
+            body.extend(utils.flatten_list(utils.listify(oir_statement)))
 
-        cond: oir.Expr = self.visit(node.cond)
-        if mask:
-            cond = oir.BinaryOp(op=common.LogicalOperator.AND, left=mask, right=cond)
-        stmt: Union[oir.While, oir.MaskStmt] = oir.While(cond=cond, body=body_stmts, loc=node.loc)
-        if mask is not None:
-            stmt = oir.MaskStmt(body=[stmt], mask=mask, loc=node.loc)
-        return stmt
+        condition: oir.Expr = self.visit(node.cond)
+        return oir.While(cond=condition, body=body, loc=node.loc)
 
     def visit_FieldIfStmt(
         self,
         node: gtir.FieldIfStmt,
         *,
-        mask: Optional[oir.Expr] = None,
         ctx: Context,
         **kwargs: Any,
-    ) -> List[oir.Stmt]:
+    ) -> List[Union[oir.AssignStmt, oir.MaskStmt]]:
         mask_field_decl = oir.Temporary(
             name=f"mask_{id(node)}", dtype=DataType.BOOL, dimensions=(True, True, True)
         )
         ctx.temp_fields.append(mask_field_decl)
-        stmts: List[oir.Stmt] = [
+        statements: List[Union[oir.AssignStmt, oir.MaskStmt]] = [
             oir.AssignStmt(
                 left=oir.FieldAccess(
                     name=mask_field_decl.name,
@@ -189,31 +163,26 @@ class GTIRToOIR(eve.NodeTranslator):
             )
         ]
 
-        current_mask = oir.FieldAccess(
+        condition = oir.FieldAccess(
             name=mask_field_decl.name,
             offset=CartesianOffset.zero(),
             dtype=mask_field_decl.dtype,
             loc=node.loc,
         )
 
-        combined_mask: oir.Expr = current_mask
-        if mask:
-            combined_mask = oir.BinaryOp(
-                op=LogicalOperator.AND, left=mask, right=combined_mask, loc=node.loc
-            )
-        stmts.extend(self.visit(node.true_branch.body, mask=combined_mask, ctx=ctx, **kwargs))
+        body = utils.flatten_list(
+            [self.visit(statement, ctx=ctx, **kwargs) for statement in node.true_branch.body]
+        )
+        statements.append(oir.MaskStmt(body=body, mask=condition, loc=node.loc))
 
         if node.false_branch:
-            combined_mask_not: oir.Expr = oir.UnaryOp(op=UnaryOperator.NOT, expr=current_mask)
-            if mask:
-                combined_mask_not = oir.BinaryOp(
-                    op=LogicalOperator.AND, left=mask, right=combined_mask_not, loc=node.loc
-                )
-            stmts.extend(
-                self.visit(node.false_branch.body, mask=combined_mask_not, ctx=ctx, **kwargs)
+            negated_condition = oir.UnaryOp(op=UnaryOperator.NOT, expr=condition, loc=node.loc)
+            body = utils.flatten_list(
+                [self.visit(statement, ctx=ctx, **kwargs) for statement in node.false_branch.body]
             )
+            statements.append(oir.MaskStmt(body=body, mask=negated_condition, loc=node.loc))
 
-        return stmts
+        return statements
 
     # For now we represent ScalarIf (and FieldIf) both as masks on the HorizontalExecution.
     # This is not meant to be set in stone...
@@ -221,25 +190,23 @@ class GTIRToOIR(eve.NodeTranslator):
         self,
         node: gtir.ScalarIfStmt,
         *,
-        mask: Optional[oir.Expr] = None,
         ctx: Context,
         **kwargs: Any,
-    ) -> List[oir.Stmt]:
-        current_mask = self.visit(node.cond)
-        combined_mask = current_mask
-        if mask:
-            combined_mask = oir.BinaryOp(
-                op=LogicalOperator.AND, left=mask, right=current_mask, loc=node.loc
-            )
+    ) -> List[oir.MaskStmt]:
+        condition = self.visit(node.cond)
+        body = utils.flatten_list(
+            [self.visit(statement, ctx=ctx, **kwargs) for statement in node.true_branch.body]
+        )
+        statements = [oir.MaskStmt(body=body, mask=condition, loc=node.loc)]
 
-        stmts = self.visit(node.true_branch.body, mask=combined_mask, ctx=ctx, **kwargs)
         if node.false_branch:
-            combined_mask = oir.UnaryOp(op=UnaryOperator.NOT, expr=current_mask, loc=node.loc)
-            if mask:
-                combined_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=combined_mask)
-            stmts.extend(self.visit(node.false_branch.body, mask=combined_mask, ctx=ctx, **kwargs))
+            negated_condition = oir.UnaryOp(op=UnaryOperator.NOT, expr=condition, loc=node.loc)
+            body = utils.flatten_list(
+                [self.visit(statement, ctx=ctx, **kwargs) for statement in node.false_branch.body]
+            )
+            statements.append(oir.MaskStmt(body=body, mask=negated_condition, loc=node.loc))
 
-        return stmts
+        return statements
 
     # --- Misc ---
     def visit_Interval(self, node: gtir.Interval) -> oir.Interval:
@@ -247,12 +214,13 @@ class GTIRToOIR(eve.NodeTranslator):
 
     # --- Control flow ---
     def visit_VerticalLoop(self, node: gtir.VerticalLoop, *, ctx: Context) -> oir.VerticalLoop:
-        horiz_execs: List[oir.HorizontalExecution] = []
-        for stmt in node.body:
+        horizontal_executions: List[oir.HorizontalExecution] = []
+        for statement in node.body:
             ctx.reset_local_scalars()
-            ret = self.visit(stmt, ctx=ctx)
-            stmts = utils.flatten_list([ret] if isinstance(ret, oir.Stmt) else ret)
-            horiz_execs.append(oir.HorizontalExecution(body=stmts, declarations=ctx.local_scalars))
+            body = utils.flatten_list(utils.listify(self.visit(statement, ctx=ctx)))
+            horizontal_executions.append(
+                oir.HorizontalExecution(body=body, declarations=ctx.local_scalars)
+            )
 
         ctx.temp_fields += [
             oir.Temporary(
@@ -269,7 +237,7 @@ class GTIRToOIR(eve.NodeTranslator):
             sections=[
                 oir.VerticalLoopSection(
                     interval=self.visit(node.interval),
-                    horizontal_executions=horiz_execs,
+                    horizontal_executions=horizontal_executions,
                     loc=node.loc,
                 )
             ],

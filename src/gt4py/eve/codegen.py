@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """Tools for source code generation."""
 
@@ -353,7 +347,7 @@ TemplateT = TypeVar("TemplateT", bound="Template")
 class Template(Protocol):
     """Protocol (abstract base class) defining the Template interface.
 
-    Direct subclassess of this base class only need to implement the
+    Direct subclasses of this base class only need to implement the
     abstract methods to adapt different template engines to this
     interface.
 
@@ -660,8 +654,8 @@ class TemplatedGenerator(NodeVisitor):
 
         Args:
             root: An IR node.
-            node_templates (optiona): see :class:`NodeDumper`.
-            dump_function (optiona): see :class:`NodeDumper`.
+            node_templates (optional): see :class:`NodeDumper`.
+            dump_function (optional): see :class:`NodeDumper`.
             ``**kwargs`` (optional): custom extra parameters forwarded to `visit_NODE_TYPE_NAME()`.
 
         Returns:

@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -70,7 +64,7 @@ class Compiler(
     def __call__(
         self,
         inp: stages.CompilableSource[SourceLanguageType, LanguageSettingsType, languages.Python],
-    ) -> stages.CompiledProgram:
+    ) -> stages.ExtendedCompiledProgram:
         src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
 
         data = build_data.read_data(src_dir)
@@ -85,9 +79,16 @@ class Compiler(
                 f"On-the-fly compilation unsuccessful for '{inp.program_source.entry_point.name}'."
             )
 
-        return getattr(
+        compiled_prog = getattr(
             importer.import_from_path(src_dir / new_data.module), new_data.entry_point_name
         )
+
+        @dataclasses.dataclass(frozen=True)
+        class Wrapper(stages.ExtendedCompiledProgram):
+            implicit_domain: bool = inp.program_source.implicit_domain
+            __call__: stages.CompiledProgram = compiled_prog
+
+        return Wrapper()
 
 
 class CompilerFactory(factory.Factory):

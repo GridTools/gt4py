@@ -1,16 +1,11 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 import builtins
 import dataclasses
 import math
@@ -20,10 +15,10 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-import gt4py.next.program_processors.processor_interface as ppi
 from gt4py.next.iterator import builtins as it_builtins
 from gt4py.next.iterator.builtins import (
     and_,
+    as_fieldop,
     bool,
     can_deref,
     cartesian_domain,
@@ -52,7 +47,7 @@ from gt4py.next.iterator.builtins import (
     shift,
     xor_,
 )
-from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
+from gt4py.next.iterator.runtime import fendef, fundef, offset, set_at
 from gt4py.next.program_processors.runners.gtfn import run_gtfn
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
@@ -93,7 +88,9 @@ def fencil(builtin, out, *inps, processor, as_column=False):
 
         @fendef(offset_provider={}, column_axis=column_axis)
         def fenimpl(size, arg0, out):
-            closure(cartesian_domain(named_range(IDim, 0, size)), dispatch, out, [arg0])
+            domain = cartesian_domain(named_range(IDim, 0, size))
+
+            set_at(as_fieldop(dispatch, domain)(arg0), domain, out)
 
     elif len(inps) == 2:
 
@@ -108,7 +105,9 @@ def fencil(builtin, out, *inps, processor, as_column=False):
 
         @fendef(offset_provider={}, column_axis=column_axis)
         def fenimpl(size, arg0, arg1, out):
-            closure(cartesian_domain(named_range(IDim, 0, size)), dispatch, out, [arg0, arg1])
+            domain = cartesian_domain(named_range(IDim, 0, size))
+
+            set_at(as_fieldop(dispatch, domain)(arg0, arg1), domain, out)
 
     elif len(inps) == 3:
 
@@ -123,7 +122,9 @@ def fencil(builtin, out, *inps, processor, as_column=False):
 
         @fendef(offset_provider={}, column_axis=column_axis)
         def fenimpl(size, arg0, arg1, arg2, out):
-            closure(cartesian_domain(named_range(IDim, 0, size)), dispatch, out, [arg0, arg1, arg2])
+            domain = cartesian_domain(named_range(IDim, 0, size))
+
+            set_at(as_fieldop(dispatch, domain)(arg0, arg1, arg2), domain, out)
 
     else:
         raise AssertionError("Add overload.")
@@ -184,13 +185,13 @@ def test_arithmetic_and_logical_functors_gtfn(builtin, inputs, expected):
     inps = field_maker(*array_maker(*inputs))
     out = field_maker((np.zeros_like(*array_maker(expected))))[0]
 
-    gtfn_executor = run_gtfn.executor
     gtfn_without_transforms = dataclasses.replace(
-        gtfn_executor,
-        otf_workflow=gtfn_executor.otf_workflow.replace(
-            translation=gtfn_executor.otf_workflow.translation.replace(enable_itir_transforms=False)
-        ),
-    )  # avoid inlining the function
+        run_gtfn,
+        executor=run_gtfn.executor.replace(
+            translation=run_gtfn.executor.translation.replace(enable_itir_transforms=False),
+        ),  # avoid inlining the function
+    )
+
     fencil(builtin, out, *inps, processor=gtfn_without_transforms)
 
     assert np.allclose(out.asnumpy(), expected)
@@ -200,7 +201,6 @@ def test_arithmetic_and_logical_functors_gtfn(builtin, inputs, expected):
 @pytest.mark.parametrize("builtin_name, inputs", math_builtin_test_data())
 def test_math_function_builtins(program_processor, builtin_name, inputs, as_column):
     program_processor, validate = program_processor
-    # validate = ppi.is_program_backend(program_processor)
 
     if builtin_name == "gamma":
         # numpy has no gamma function
@@ -248,11 +248,14 @@ def test_can_deref(program_processor, stencil):
     program_processor, validate = program_processor
 
     Node = gtx.Dimension("Node")
+    NeighDim = gtx.Dimension("Neighbor", kind=gtx.DimensionKind.LOCAL)
 
     inp = gtx.as_field([Node], np.ones((1,), dtype=np.int32))
     out = gtx.as_field([Node], np.asarray([0], dtype=inp.dtype))
 
-    no_neighbor_tbl = gtx.NeighborTableOffsetProvider(np.array([[-1]]), Node, Node, 1)
+    no_neighbor_tbl = gtx.as_connectivity(
+        domain={Node: 1, NeighDim: 1}, codomain=Node, data=np.array([[-1]]), skip_value=-1
+    )
     run_processor(
         stencil[{Node: range(1)}],
         program_processor,
@@ -264,7 +267,9 @@ def test_can_deref(program_processor, stencil):
     if validate:
         assert np.allclose(out.asnumpy(), -1.0)
 
-    a_neighbor_tbl = gtx.NeighborTableOffsetProvider(np.array([[0]]), Node, Node, 1)
+    a_neighbor_tbl = gtx.as_connectivity(
+        domain={Node: 1, NeighDim: 1}, codomain=Node, data=np.array([[0]]), skip_value=-1
+    )
     run_processor(
         stencil[{Node: range(1)}],
         program_processor,
@@ -275,37 +280,6 @@ def test_can_deref(program_processor, stencil):
 
     if validate:
         assert np.allclose(out.asnumpy(), 1.0)
-
-
-# def test_can_deref_lifted(program_processor):
-#     program_processor, validate = program_processor
-
-#     Neighbor = offset("Neighbor")
-#     Node = gtx.Dimension("Node")
-
-#     @fundef
-#     def _can_deref(inp):
-#         shifted = shift(Neighbor, 0)(inp)
-#         return if_(can_deref(shifted), 1, -1)
-
-#     inp = gtx.as_field([Node], np.zeros((1,)))
-#     out = gtx.as_field([Node], np.asarray([0]))
-
-#     no_neighbor_tbl = gtx.NeighborTableOffsetProvider(np.array([[None]]), Node, Node, 1)
-#     _can_deref[{Node: range(1)}](
-#         inp, out=out, offset_provider={"Neighbor": no_neighbor_tbl}, program_processor=program_processor
-#     )
-
-#     if validate:
-#         assert np.allclose(np.asarray(out), -1.0)
-
-#     a_neighbor_tbl = gtx.NeighborTableOffsetProvider(np.array([[0]]), Node, Node, 1)
-#     _can_deref[{Node: range(1)}](
-#         inp, out=out, offset_provider={"Neighbor": a_neighbor_tbl}, program_processor=program_processor
-#     )
-
-#     if validate:
-#         assert np.allclose(np.asarray(out), 1.0)
 
 
 @pytest.mark.parametrize(
@@ -339,7 +313,6 @@ def test_cast(program_processor, as_column, input_value, dtype, np_dtype):
         out=out,
         offset_provider={},
         column_axis=column_axis,
-        debug=True,
     )
 
     if validate:

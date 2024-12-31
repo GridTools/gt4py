@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """Data Model class creation and other utils.
 
@@ -30,7 +24,7 @@ import attrs
 
 
 try:
-    # For perfomance reasons, try to use cytoolz when possible (using cython)
+    # For performance reasons, try to use cytoolz when possible (using cython)
     import cytoolz as toolz
 except ModuleNotFoundError:
     # Fall back to pure Python toolz
@@ -261,7 +255,7 @@ def datamodel(
     cls: Literal[None] = None,
     /,
     *,
-    repr: bool = _REPR_DEFAULT,  # noqa: A002 [builtin-argument-shadowing]
+    repr: bool = _REPR_DEFAULT,
     eq: bool = _EQ_DEFAULT,
     order: bool = _ORDER_DEFAULT,
     unsafe_hash: bool = _UNSAFE_HASH_DEFAULT,
@@ -276,11 +270,11 @@ def datamodel(
 
 
 @overload
-def datamodel(  # redefinion of unused symbol
+def datamodel(  # redefinition of unused symbol
     cls: Type[_T],
     /,
     *,
-    repr: bool = _REPR_DEFAULT,  # noqa: A002 [builtin-argument-shadowing]
+    repr: bool = _REPR_DEFAULT,
     eq: bool = _EQ_DEFAULT,
     order: bool = _ORDER_DEFAULT,
     unsafe_hash: bool = _UNSAFE_HASH_DEFAULT,
@@ -295,7 +289,7 @@ def datamodel(  # redefinion of unused symbol
 
 
 # TODO(egparedes): Use @dataclass_transform(eq_default=True, field_specifiers=("field",))
-def datamodel(  # redefinion of unused symbol
+def datamodel(  # redefinition of unused symbol
     cls: Optional[Type[_T]] = None,
     /,
     *,
@@ -373,7 +367,7 @@ def datamodel(  # redefinion of unused symbol
     }
 
     if cls is None:  # called as: @datamodel()
-        return functools.partial(_make_datamodel, **datamodel_options)
+        return functools.partial(_make_datamodel, **datamodel_options)  # type: ignore[arg-type, return-value]
     else:  # called as: @datamodel
         return _make_datamodel(
             cls,
@@ -873,7 +867,7 @@ def _substitute_typevars(
 
 def _make_counting_attr_from_attribute(
     field_attrib: Attribute, *, include_type: bool = False, **kwargs: Any
-) -> Any:  # attr.s lies a bit in some typing definitons
+) -> Any:  # attr.s lies a bit in some typing definitions
     args = [
         "default",
         "validator",
@@ -971,7 +965,7 @@ def _make_type_converter(type_annotation: TypeAnnotation, name: str) -> TypeConv
                 return value if isinstance(value, type_annotation) else type_annotation(value)
             except Exception as error:
                 raise TypeError(
-                    f"Error during coertion of given value '{value}' for field '{name}'."
+                    f"Error during coercion of given value '{value}' for field '{name}'."
                 ) from error
 
         return _type_converter
@@ -1002,7 +996,7 @@ def _make_type_converter(type_annotation: TypeAnnotation, name: str) -> TypeConv
         return _make_type_converter(origin_type, name)
 
     raise exceptions.EveTypeError(
-        f"Automatic type coertion for {type_annotation} types is not supported."
+        f"Automatic type coercion for {type_annotation} types is not supported."
     )
 
 
@@ -1091,7 +1085,7 @@ def _make_datamodel(
                     )
 
         else:
-            # Create field converter if automatic coertion is enabled
+            # Create field converter if automatic coercion is enabled
             converter: TypeConverter = cast(
                 TypeConverter,
                 _make_type_converter(type_hint, qualified_field_name) if coerce_field else None,
@@ -1105,7 +1099,7 @@ def _make_datamodel(
                 if isinstance(attr_value_in_cls, _KNOWN_MUTABLE_TYPES):
                     warnings.warn(
                         f"'{attr_value_in_cls.__class__.__name__}' value used as default in '{cls.__name__}.{key}'.\n"
-                        "Mutable types should not defbe normally used as field defaults (use 'default_factory' instead).",
+                        "Mutable types should not be used as field defaults (use 'default_factory' instead).",
                         stacklevel=_stacklevel_offset + 2,
                     )
                 setattr(

@@ -120,7 +120,7 @@ Parses from Python AST into PAST.
 Lowers from PAST to Iterator IR.
 
 **Field operator out argument slicing**
-The lowering contains some complex logic to emulate slicing of fields in order to restrict the output domain of a field operator call. This contradics guiding principle (3) and should be removed in the future. The concept of specifying the domain for Field operators was not investigated during the frontend design as we concentrated on the beautified iterator dialect where the output domain is explicitly given when lifting a local operator to a field operator. The alternative to also explicitly specify the domain for calls to field operators was rejected as it:
+The lowering contains some complex logic to emulate slicing of fields in order to restrict the output domain of a field operator call. This contradicts guiding principle (3) and should be removed in the future. The concept of specifying the domain for Field operators was not investigated during the frontend design as we concentrated on the beautified iterator dialect where the output domain is explicitly given when lifting a local operator to a field operator. The alternative to also explicitly specify the domain for calls to field operators was rejected as it:
 
 - would require introducing significantly more syntax in order to specify domains, which was not only infeasible to implement in time, but there also didn't exist an accepted syntax to do so.
 - no intuitive syntax was found to do this

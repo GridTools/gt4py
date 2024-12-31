@@ -1,29 +1,28 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from dataclasses import dataclass
-from typing import Iterator, Optional
+from typing import Iterator, Optional, Sequence, Union
 
 from gt4py.eve.type_definitions import IntEnum
+from gt4py.eve.utils import content_hash
 from gt4py.next import common as func_common
 
 
-class TypeSpec:
-    pass
-
-
 @dataclass(frozen=True)
+class TypeSpec:
+    def __hash__(self) -> int:
+        return hash(content_hash(self))
+
+    def __init_subclass__(cls) -> None:
+        cls.__hash__ = TypeSpec.__hash__  # type: ignore[method-assign]
+
+
 class DataType(TypeSpec):
     """
     A base type for all types that represent data storage.
@@ -64,6 +63,7 @@ class DimensionType(TypeSpec):
 
 @dataclass(frozen=True)
 class OffsetType(TypeSpec):
+    # TODO(havogt): replace by ConnectivityType
     source: func_common.Dimension
     target: tuple[func_common.Dimension] | tuple[func_common.Dimension, func_common.Dimension]
 
@@ -118,10 +118,10 @@ class FieldType(DataType, CallableType):
 
 @dataclass(frozen=True)
 class FunctionType(TypeSpec, CallableType):
-    pos_only_args: list[DataType | DeferredType]
-    pos_or_kw_args: dict[str, DataType | DeferredType]
-    kw_only_args: dict[str, DataType | DeferredType]
-    returns: DataType | DeferredType | VoidType
+    pos_only_args: Sequence[TypeSpec]
+    pos_or_kw_args: dict[str, TypeSpec]
+    kw_only_args: dict[str, TypeSpec]
+    returns: Union[TypeSpec]
 
     def __str__(self) -> str:
         arg_strs = [str(arg) for arg in self.pos_only_args]

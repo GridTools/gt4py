@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import numpy as np
 import pytest
@@ -44,9 +38,13 @@ from next_tests.toy_connectivity import (
     V2VDim,
     Vertex,
     c2e_arr,
+    c2e_conn,
     e2v_arr,
+    e2v_conn,
     v2e_arr,
+    v2e_conn,
     v2v_arr,
+    v2v_conn,
 )
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
@@ -95,7 +93,7 @@ def test_sum_edges_to_vertices(program_processor, stencil):
         program_processor,
         inp,
         out=out,
-        offset_provider={"V2E": gtx.NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)},
+        offset_provider={"V2E": v2e_conn},
     )
     if validate:
         assert np.allclose(out.asnumpy(), ref)
@@ -117,7 +115,7 @@ def test_map_neighbors(program_processor):
         program_processor,
         inp,
         out=out,
-        offset_provider={"V2E": gtx.NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)},
+        offset_provider={"V2E": v2e_conn},
     )
     if validate:
         assert np.allclose(out.asnumpy(), ref)
@@ -140,7 +138,7 @@ def test_map_make_const_list(program_processor):
         program_processor,
         inp,
         out=out,
-        offset_provider={"V2E": gtx.NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)},
+        offset_provider={"V2E": v2e_conn},
     )
     if validate:
         assert np.allclose(out.asnumpy(), ref)
@@ -163,8 +161,8 @@ def test_first_vertex_neigh_of_first_edge_neigh_of_cells_fencil(program_processo
         inp,
         out=out,
         offset_provider={
-            "E2V": gtx.NeighborTableOffsetProvider(e2v_arr, Edge, Vertex, 2),
-            "C2E": gtx.NeighborTableOffsetProvider(c2e_arr, Cell, Edge, 4),
+            "E2V": e2v_conn,
+            "C2E": c2e_conn,
         },
     )
     if validate:
@@ -191,7 +189,7 @@ def test_sparse_input_field(program_processor):
         non_sparse,
         inp,
         out=out,
-        offset_provider={"V2E": gtx.NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)},
+        offset_provider={"V2E": v2e_conn},
     )
 
     if validate:
@@ -214,8 +212,8 @@ def test_sparse_input_field_v2v(program_processor):
         inp,
         out=out,
         offset_provider={
-            "V2V": gtx.NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4),
-            "V2E": gtx.NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4),
+            "V2V": v2v_conn,
+            "V2E": v2e_conn,
         },
     )
 
@@ -241,7 +239,7 @@ def test_slice_sparse(program_processor):
         program_processor,
         inp,
         out=out,
-        offset_provider={"V2V": gtx.NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)},
+        offset_provider={"V2V": v2v_conn},
     )
 
     if validate:
@@ -265,7 +263,7 @@ def test_slice_twice_sparse(program_processor):
         program_processor,
         inp,
         out=out,
-        offset_provider={"V2V": gtx.NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)},
+        offset_provider={"V2V": v2v_conn},
     )
 
     if validate:
@@ -290,7 +288,7 @@ def test_shift_sliced_sparse(program_processor):
         program_processor,
         inp,
         out=out,
-        offset_provider={"V2V": gtx.NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)},
+        offset_provider={"V2V": v2v_conn},
     )
 
     if validate:
@@ -315,7 +313,7 @@ def test_slice_shifted_sparse(program_processor):
         program_processor,
         inp,
         out=out,
-        offset_provider={"V2V": gtx.NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)},
+        offset_provider={"V2V": v2v_conn},
     )
 
     if validate:
@@ -343,7 +341,7 @@ def test_lift(program_processor):
         program_processor,
         inp,
         out=out,
-        offset_provider={"V2V": gtx.NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)},
+        offset_provider={"V2V": v2v_conn},
     )
     if validate:
         assert np.allclose(out.asnumpy(), ref)
@@ -366,7 +364,7 @@ def test_shift_sparse_input_field(program_processor):
         program_processor,
         inp,
         out=out,
-        offset_provider={"V2V": gtx.NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)},
+        offset_provider={"V2V": v2v_conn},
     )
 
     if validate:
@@ -389,7 +387,6 @@ def test_shift_sparse_input_field2(program_processor):
     if program_processor in [
         gtfn.run_gtfn,
         gtfn.run_gtfn_imperative,
-        gtfn.run_gtfn_with_temporaries,
     ]:
         pytest.xfail(
             "Bug in bindings/compilation/caching: only the first program seems to be compiled."
@@ -400,8 +397,8 @@ def test_shift_sparse_input_field2(program_processor):
     out2 = gtx.as_field([Vertex], np.zeros([9], dtype=inp.dtype))
 
     offset_provider = {
-        "E2V": gtx.NeighborTableOffsetProvider(e2v_arr, Edge, Vertex, 2),
-        "V2E": gtx.NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4),
+        "E2V": e2v_conn,
+        "V2E": v2e_conn,
     }
 
     domain = {Vertex: range(0, 9)}
@@ -455,7 +452,7 @@ def test_sparse_shifted_stencil_reduce(program_processor):
         program_processor,
         inp,
         out=out,
-        offset_provider={"V2V": gtx.NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)},
+        offset_provider={"V2V": v2v_conn},
     )
 
     if validate:

@@ -2,6 +2,34 @@
 
 Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
+## [1.0.4] - 2024-09-20
+
+### License
+
+GT4Py is now licensed under the BSD license. SPDX-License-Identifier: BSD-3-Clause
+
+### Cartesian
+
+- Introduced a `GlobalTable` which is a data dimensions only Field. Access is provided via `.A` which also becomes a way to access data dimensions on regular Field.
+- Added an error message if a non existing backend is selected.
+- Allow setting compiler optimization level and flags on a per stencil basis
+- Added `GT4PY_EXTRA_COMPILE_ARGS`, `GT4PY_EXTRA_LINK_ARGS` and `DACE_DEFAULT_BLOCK_SIZE` environment variables
+- Fixes for the DaCe backend
+- Various style modernizations
+
+#### Deprecation
+
+- The `cuda` backend is deprecated (enable by setting environment variable `GT4PY_GTC_CUDA_USE=1`), use `gt:gpu` or `dace:gpu` instead.
+
+### Development
+
+- Replaced flake8, black with ruff
+- Added CI plan with GH200 GPUs
+
+### Next
+
+See commit history.
+
 ## [1.0.3] - 2024-02-07
 
 ### General
