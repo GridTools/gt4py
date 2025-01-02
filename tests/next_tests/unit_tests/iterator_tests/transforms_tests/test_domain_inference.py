@@ -250,6 +250,25 @@ def test_shift_x_y_two_inputs(offset_provider):
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
 
+def test_shift_x_y_two_inputs(offset_provider):
+    stencil = im.lambda_("arg0", "arg1")(
+        im.plus(
+            im.deref(im.shift("Ioff", -1)("arg0")),
+            im.deref(im.shift("Joff", 1)("arg1")),
+        )
+    )
+    domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11), JDim: (0, 7)})
+    expected_domains = {
+        "in_field1": {IDim: (-1, 10), JDim: (0, 7)},
+        "in_field2": {IDim: (0, 11), JDim: (1, 8)},
+    }
+    testee, expected = setup_test_as_fieldop(
+        stencil,
+        domain,
+    )
+    run_test_expr(testee, expected, domain, expected_domains, offset_provider)
+
+
 def test_shift_x_y_two_inputs_literal(offset_provider):
     stencil = im.lambda_("arg0", "arg1")(
         im.plus(
@@ -1093,3 +1112,31 @@ def test_never_accessed_domain_tuple(offset_provider):
         "in_field2": infer_domain.DomainAccessDescriptor.NEVER,
     }
     run_test_expr(testee, testee, domain, expected_domains, offset_provider)
+
+
+from gt4py.next.iterator.type_system import inference
+
+
+def test_scalar_used_in_fo_on_different_domain(unstructured_offset_provider):
+    # TODO: test for K only field used in Vertex, K and Edge, K field operator
+    testee = im.let("alpha", 1)(
+        im.op_as_fieldop("plus")(
+            im.op_as_fieldop("multiplies")("alpha", im.ref("edge_field")),
+            im.as_fieldop(im.lambda_("it")(im.deref(im.shift("E2V", 0)("it"))))(
+                im.op_as_fieldop("multiplies")("alpha", im.ref("vertex_field"))
+            ),
+        )
+    )
+    testee = inference.infer(
+        testee,
+        allow_undeclared_symbols=True,
+        offset_provider_type=common.offset_provider_to_type(unstructured_offset_provider),
+    )
+
+    domain = im.domain(common.GridType.CARTESIAN, {Edge: (0, 11), KDim: (0, 7)})
+
+    actual_call, actual_domains = infer_domain.infer_expr(
+        testee,
+        domain_utils.SymbolicDomain.from_expr(domain),
+        offset_provider=unstructured_offset_provider,
+    )

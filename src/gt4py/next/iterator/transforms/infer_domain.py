@@ -22,6 +22,7 @@ from gt4py.next.iterator.ir_utils import (
     ir_makers as im,
 )
 from gt4py.next.iterator.transforms import trace_shifts
+from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.utils import flatten_nested_tuple, tree_map
 
 
@@ -160,6 +161,7 @@ def _merge_domains(
 def _extract_accessed_domains(
     stencil: itir.Expr,
     input_ids: list[str],
+    input_types: list[Optional[ts.TypeSpec]],
     target_domain: NonTupleDomainAccess,
     offset_provider: common.OffsetProvider,
     symbolic_domain_sizes: Optional[dict[str, str]],
@@ -168,11 +170,17 @@ def _extract_accessed_domains(
 
     shifts_results = trace_shifts.trace_stencil(stencil, num_args=len(input_ids))
 
-    for in_field_id, shifts_list in zip(input_ids, shifts_results, strict=True):
+    for input_id, input_type, shifts_list in zip(
+        input_ids, input_types, shifts_results, strict=True
+    ):
+        if isinstance(
+            input_type, ts.ScalarType
+        ):  # TODO: only do loop body when field instead (requires complete type information)
+            continue
         # TODO(tehrengruber): Dynamic shifts are not supported by `SymbolicDomain.translate`. Use
         #  special `UNKNOWN` marker for them until we have implemented a proper solution.
         if any(s == trace_shifts.Sentinel.VALUE for shift in shifts_list for s in shift):
-            accessed_domains[in_field_id] = DomainAccessDescriptor.UNKNOWN
+            accessed_domains[input_id] = DomainAccessDescriptor.UNKNOWN
             continue
 
         new_domains = [
@@ -183,8 +191,8 @@ def _extract_accessed_domains(
             else target_domain
             for shift in shifts_list
         ]
-        accessed_domains[in_field_id] = _domain_union(
-            accessed_domains.get(in_field_id, DomainAccessDescriptor.NEVER), *new_domains
+        accessed_domains[input_id] = _domain_union(
+            accessed_domains.get(input_id, DomainAccessDescriptor.NEVER), *new_domains
         )
 
     return accessed_domains
@@ -214,30 +222,36 @@ def _infer_as_fieldop(
     assert not isinstance(stencil, itir.Lambda) or len(stencil.params) == len(applied_fieldop.args)
 
     input_ids: list[str] = []
+    input_types: list[Optional[ts.TypeSpec]] = []
 
     # Assign ids for all inputs to `as_fieldop`. `SymRef`s stay as is, nested `as_fieldop` get a
     # temporary id.
     tmp_uid_gen = eve_utils.UIDGenerator(prefix="__dom_inf")
-    for in_field in inputs:
-        if isinstance(in_field, itir.FunCall) or isinstance(in_field, itir.Literal):
+    for input in inputs:
+        if isinstance(input, itir.FunCall) or isinstance(input, itir.Literal):
             id_ = tmp_uid_gen.sequential_id()
-        elif isinstance(in_field, itir.SymRef):
-            id_ = in_field.id
+        elif isinstance(input, itir.SymRef):
+            id_ = input.id
         else:
-            raise ValueError(f"Unsupported expression of type '{type(in_field)}'.")
+            raise ValueError(f"Unsupported expression of type '{type(input)}'.")
         input_ids.append(id_)
+        input_types.append(input.type)
 
     inputs_accessed_domains: dict[str, NonTupleDomainAccess] = _extract_accessed_domains(
-        stencil, input_ids, target_domain, offset_provider, symbolic_domain_sizes
+        stencil, input_ids, input_types, target_domain, offset_provider, symbolic_domain_sizes
     )
 
     # Recursively infer domain of inputs and update domain arg of nested `as_fieldop`s
     accessed_domains: AccessedDomains = {}
     transformed_inputs: list[itir.Expr] = []
-    for in_field_id, in_field in zip(input_ids, inputs):
+    for input_id, input_type, input in zip(input_ids, input_types, inputs):
+        if isinstance(
+            input_type, ts.ScalarType
+        ):  # TODO: only do loop body when field instead (requires complete type information)
+            continue
         transformed_input, accessed_domains_tmp = infer_expr(
-            in_field,
-            inputs_accessed_domains[in_field_id],
+            input,
+            inputs_accessed_domains[input_id],
             offset_provider=offset_provider,
             symbolic_domain_sizes=symbolic_domain_sizes,
             allow_uninferred=allow_uninferred,
@@ -278,15 +292,20 @@ def _infer_let(
 
     transformed_calls_args: list[itir.Expr] = []
     for param, arg in zip(let_expr.fun.params, let_expr.args, strict=True):
-        transformed_calls_arg, accessed_domains_arg = infer_expr(
-            arg,
-            accessed_domains_let_args.get(
-                param.id,
-                DomainAccessDescriptor.NEVER,
-            ),
-            **kwargs,
-        )
-        accessed_domains_outer = _merge_domains(accessed_domains_outer, accessed_domains_arg)
+        if isinstance(
+            arg.type, ts.ScalarType
+        ):  # TODO: only do loop body when field instead (requires complete type information)
+            transformed_calls_arg = arg
+        else:
+            transformed_calls_arg, accessed_domains_arg = infer_expr(
+                arg,
+                accessed_domains_let_args.get(
+                    param.id,
+                    DomainAccessDescriptor.NEVER,
+                ),
+                **kwargs,
+            )
+            accessed_domains_outer = _merge_domains(accessed_domains_outer, accessed_domains_arg)
         transformed_calls_args.append(transformed_calls_arg)
 
     transformed_call = im.let(
