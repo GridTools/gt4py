@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     # TODO(tehrengruber): remove cirular dependency and import unconditionally
     from gt4py.next import backend as next_backend
 
-__all__ = ["offset", "fundef", "fendef", "set_at", "if_stmt"]
+__all__ = ["fendef", "fundef", "if_stmt", "offset", "set_at"]
 
 
 @dataclass(frozen=True)

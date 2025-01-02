@@ -35,7 +35,13 @@ from .simplify import (
     gt_simplify,
     gt_substitute_compiletime_symbols,
 )
-from .strides import gt_change_transient_strides
+from .strides import (
+    gt_change_transient_strides,
+    gt_map_strides_to_dst_nested_sdfg,
+    gt_map_strides_to_src_nested_sdfg,
+    gt_propagate_strides_from_access_node,
+    gt_propagate_strides_of,
+)
 from .util import gt_find_constant_arguments, gt_make_transients_persistent
 
 
@@ -43,25 +49,29 @@ __all__ = [
     "GT_SIMPLIFY_DEFAULT_SKIP_SET",
     "GPUSetBlockSize",
     "GT4PyGlobalSelfCopyElimination",
-    "GT4PyMoveTaskletIntoMap",
     "GT4PyMapBufferElimination",
+    "GT4PyMoveTaskletIntoMap",
     "LoopBlocking",
-    "MapIterationOrder",
     "MapFusionParallel",
     "MapFusionSerial",
+    "MapIterationOrder",
     "SerialMapPromoter",
     "SerialMapPromoterGPU",
     "gt_auto_optimize",
     "gt_change_transient_strides",
     "gt_create_local_double_buffering",
+    "gt_find_constant_arguments",
+    "gt_gpu_transform_non_standard_memlet",
     "gt_gpu_transformation",
     "gt_inline_nested_sdfg",
-    "gt_set_iteration_order",
-    "gt_set_gpu_blocksize",
-    "gt_simplify",
     "gt_make_transients_persistent",
+    "gt_map_strides_to_dst_nested_sdfg",
+    "gt_map_strides_to_src_nested_sdfg",
+    "gt_propagate_strides_from_access_node",
+    "gt_propagate_strides_of",
     "gt_reduce_distributed_buffering",
-    "gt_find_constant_arguments",
+    "gt_set_gpu_blocksize",
+    "gt_set_iteration_order",
+    "gt_simplify",
     "gt_substitute_compiletime_symbols",
-    "gt_gpu_transform_non_standard_memlet",
 ]
