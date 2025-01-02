@@ -256,6 +256,32 @@ def test_if_make_tuple_reorder_cps():
     assert actual == expected
 
 
+def test_nested_if_make_tuple_reorder_cps():
+    testee = im.let(
+        ("t1", im.if_(True, im.make_tuple(1, 2), im.make_tuple(3, 4))),
+        ("t2", im.if_(False, im.make_tuple(5, 6), im.make_tuple(7, 8))),
+    )(
+        im.make_tuple(
+            im.tuple_get(1, "t1"),
+            im.tuple_get(0, "t1"),
+            im.tuple_get(1, "t2"),
+            im.tuple_get(0, "t2"),
+        )
+    )
+    expected = im.if_(
+        True,
+        im.if_(False, im.make_tuple(2, 1, 6, 5), im.make_tuple(2, 1, 8, 7)),
+        im.if_(False, im.make_tuple(4, 3, 6, 5), im.make_tuple(4, 3, 8, 7)),
+    )
+    actual = CollapseTuple.apply(
+        testee,
+        flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
+        allow_undeclared_symbols=True,
+        within_stencil=False,
+    )
+    assert actual == expected
+
+
 def test_if_make_tuple_reorder_cps_nested():
     testee = im.let("t", im.if_(True, im.make_tuple(1, 2), im.make_tuple(3, 4)))(
         im.let("c", im.tuple_get(0, "t"))(

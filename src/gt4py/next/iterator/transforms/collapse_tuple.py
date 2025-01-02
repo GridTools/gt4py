@@ -65,6 +65,8 @@ def _is_trivial_or_tuple_thereof_expr(node: ir.Node) -> bool:
         return all(_is_trivial_or_tuple_thereof_expr(arg) for arg in node.args)
     if cpm.is_call_to(node, "tuple_get"):
         return _is_trivial_or_tuple_thereof_expr(node.args[1])
+    if cpm.is_call_to(node, "if_"):
+        return all(_is_trivial_or_tuple_thereof_expr(arg) for arg in node.args[1:])
     if isinstance(node, (ir.SymRef, ir.Literal)):
         return True
     if cpm.is_let(node):
@@ -227,7 +229,9 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 method = getattr(self, f"transform_{transformation.name.lower()}")
                 result = method(node, **kwargs)
                 if result is not None:
-                    assert result is not node
+                    assert (
+                        result is not node
+                    )  # transformation should have returned None, since nothing changed
                     itir_type_inference.reinfer(result)
                     return result
         return None
@@ -360,68 +364,73 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
     def transform_propagate_to_if_on_tuples_cps(
         self, node: ir.FunCall, **kwargs
     ) -> Optional[ir.Node]:
-        if not cpm.is_call_to(node, "if_"):
-            for i, arg in enumerate(node.args):
-                if cpm.is_call_to(arg, "if_"):
-                    itir_type_inference.reinfer(arg)
-                    if not any(isinstance(branch.type, ts.TupleType) for branch in arg.args[1:]):
-                        continue
+        if cpm.is_call_to(node, "if_"):
+            return None
 
-                    cond, true_branch, false_branch = arg.args
-                    tuple_type: ts.TupleType = true_branch.type  # type: ignore[assignment]  # type ensured above
-                    tuple_len = len(tuple_type.types)
-                    itir_type_inference.reinfer(node)
-                    assert node.type
+        for i, arg in enumerate(node.args):
+            if cpm.is_call_to(arg, "if_"):
+                itir_type_inference.reinfer(arg)
+                if not any(isinstance(branch.type, ts.TupleType) for branch in arg.args[1:]):
+                    continue
 
-                    # transform function into continuation-passing-style
-                    f_type = ts.FunctionType(
-                        pos_only_args=tuple_type.types,
-                        pos_or_kw_args={},
-                        kw_only_args={},
-                        returns=node.type,
-                    )
-                    f_params = [
-                        im.sym(self.uids.sequential_id(prefix="__ct_el_cps"), type_)
-                        for type_ in tuple_type.types
-                    ]
-                    f_args = [im.ref(param.id, param.type) for param in f_params]
-                    f_body = _with_altered_arg(node, i, im.make_tuple(*f_args))
-                    # simplify, e.g., inline trivial make_tuple args
-                    new_f_body = self.fp_transform(f_body, **kwargs)
-                    # if the function did not simplify there is nothing to gain. Skip
-                    # transformation.
-                    if new_f_body is f_body:
-                        continue
-                    # if the function is not trivial the transformation would still work, but
-                    # inlining would result in a larger tree again and we didn't didn't gain
-                    # anything compared to regular `propagate_to_if_on_tuples`. Not inling also
-                    # works, but we don't want bound lambda functions in our tree (at least right
-                    # now).
-                    if not _is_trivial_or_tuple_thereof_expr(new_f_body):
-                        continue
-                    f = im.lambda_(*f_params)(new_f_body)
+                cond, true_branch, false_branch = arg.args
+                tuple_type: ts.TupleType = true_branch.type  # type: ignore[assignment]  # type ensured above
+                tuple_len = len(tuple_type.types)
 
-                    tuple_var = self.uids.sequential_id(prefix="__ct_tuple_cps")
-                    f_var = self.uids.sequential_id(prefix="__ct_cont")
-                    new_branches = []
-                    for branch in arg.args[1:]:
-                        new_branch = im.let(tuple_var, branch)(
-                            im.call(im.ref(f_var, f_type))(
-                                *(
-                                    im.tuple_get(i, im.ref(tuple_var, branch.type))
-                                    for i in range(tuple_len)
-                                )
+                # transform function into continuation-passing-style
+                itir_type_inference.reinfer(node)
+                assert node.type
+                f_type = ts.FunctionType(
+                    pos_only_args=tuple_type.types,
+                    pos_or_kw_args={},
+                    kw_only_args={},
+                    returns=node.type,
+                )
+                f_params = [
+                    im.sym(self.uids.sequential_id(prefix="__ct_el_cps"), type_)
+                    for type_ in tuple_type.types
+                ]
+                f_args = [im.ref(param.id, param.type) for param in f_params]
+                f_body = _with_altered_arg(node, i, im.make_tuple(*f_args))
+                # simplify, e.g., inline trivial make_tuple args
+                new_f_body = self.fp_transform(f_body, **kwargs)
+                # if the function did not simplify there is nothing to gain. Skip
+                # transformation.
+                if new_f_body is f_body:
+                    continue
+                # if the function is not trivial the transformation would still work, but
+                # inlining would result in a larger tree again and we didn't didn't gain
+                # anything compared to regular `propagate_to_if_on_tuples`. Not inling also
+                # works, but we don't want bound lambda functions in our tree (at least right
+                # now).
+                # TODO(tehrengruber): `if_` of trivial expression is also considered fine. This
+                #  will duplicate the condition and unnecessarily increase the size of the tree.
+                if not _is_trivial_or_tuple_thereof_expr(new_f_body):
+                    continue
+                f = im.lambda_(*f_params)(new_f_body)
+
+                tuple_var = self.uids.sequential_id(prefix="__ct_tuple_cps")
+                f_var = self.uids.sequential_id(prefix="__ct_cont")
+                new_branches = []
+                for branch in arg.args[1:]:
+                    new_branch = im.let(tuple_var, branch)(
+                        im.call(im.ref(f_var, f_type))(
+                            *(
+                                im.tuple_get(i, im.ref(tuple_var, branch.type))
+                                for i in range(tuple_len)
                             )
                         )
-                        new_branches.append(self.fp_transform(new_branch, **kwargs))
-
-                    new_node = im.let(f_var, f)(im.if_(cond, *new_branches))
-                    new_node = inline_lambda(new_node, eligible_params=[True])
-                    assert cpm.is_call_to(new_node, "if_")
-                    new_node = im.if_(
-                        cond, *(self.fp_transform(branch, **kwargs) for branch in new_node.args[1:])
                     )
-                    return new_node
+                    new_branches.append(self.fp_transform(new_branch, **kwargs))
+
+                new_node = im.let(f_var, f)(im.if_(cond, *new_branches))
+                new_node = inline_lambda(new_node, eligible_params=[True])
+                assert cpm.is_call_to(new_node, "if_")
+                new_node = im.if_(
+                    cond, *(self.fp_transform(branch, **kwargs) for branch in new_node.args[1:])
+                )
+                return new_node
+
         return None
 
     def transform_propagate_nested_let(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
