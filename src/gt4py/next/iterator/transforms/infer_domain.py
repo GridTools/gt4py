@@ -248,17 +248,18 @@ def _infer_as_fieldop(
         if isinstance(
             input_type, ts.ScalarType
         ):  # TODO: only do loop body when field instead (requires complete type information)
-            continue
-        transformed_input, accessed_domains_tmp = infer_expr(
-            input,
-            inputs_accessed_domains[input_id],
-            offset_provider=offset_provider,
-            symbolic_domain_sizes=symbolic_domain_sizes,
-            allow_uninferred=allow_uninferred,
-        )
-        transformed_inputs.append(transformed_input)
+            transformed_inputs.append(input)
+        else:
+            transformed_input, accessed_domains_tmp = infer_expr(
+                input,
+                inputs_accessed_domains[input_id],
+                offset_provider=offset_provider,
+                symbolic_domain_sizes=symbolic_domain_sizes,
+                allow_uninferred=allow_uninferred,
+            )
+            transformed_inputs.append(transformed_input)
 
-        accessed_domains = _merge_domains(accessed_domains, accessed_domains_tmp)
+            accessed_domains = _merge_domains(accessed_domains, accessed_domains_tmp)
 
     if not isinstance(target_domain, DomainAccessDescriptor):
         target_domain_expr = domain_utils.SymbolicDomain.as_expr(target_domain)
