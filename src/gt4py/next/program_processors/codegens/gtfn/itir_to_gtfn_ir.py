@@ -108,7 +108,7 @@ def _get_gridtype(body: list[itir.Stmt]) -> common.GridType:
     grid_types = {_extract_grid_type(d) for d in domains}
     if len(grid_types) != 1:
         raise ValueError(
-            f"Found 'StencilClosures' with more than one 'GridType': '{grid_types}'. This is currently not supported."
+            f"Found 'set_at' with more than one 'GridType': '{grid_types}'. This is currently not supported."
         )
     return grid_types.pop()
 
@@ -198,6 +198,9 @@ def _collect_offset_definitions(
                         "Mapping an offset to a horizontal dimension in unstructured is not allowed."
                     )
                 # create alias from vertical offset to vertical dimension
+                offset_definitions[dim.value] = TagDefinition(
+                    name=Sym(id=dim.value), alias=_vertical_dimension
+                )
                 offset_definitions[offset_name] = TagDefinition(
                     name=Sym(id=offset_name), alias=SymRef(id=dim.value)
                 )

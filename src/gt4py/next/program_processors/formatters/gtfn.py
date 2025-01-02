@@ -15,7 +15,7 @@ from gt4py.next.program_processors.runners import gtfn
 
 
 @program_formatter.program_formatter
-def format_cpp(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> str:
+def format_cpp(program: itir.Program, *args: Any, **kwargs: Any) -> str:
     # TODO(tehrengruber): This is a little ugly. Revisit.
     gtfn_translation = gtfn.GTFNBackendFactory().executor.translation
     assert isinstance(gtfn_translation, GTFNTranslationStep)

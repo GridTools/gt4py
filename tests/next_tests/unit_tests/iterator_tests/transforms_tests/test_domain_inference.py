@@ -8,21 +8,24 @@
 
 # TODO(SF-N): test scan operator
 
-import pytest
+from typing import Iterable, Literal, Optional, Union
+
 import numpy as np
-from typing import Iterable, Optional, Literal, Union
+import pytest
 
 from gt4py import eve
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
-from gt4py.next import constructors
-from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.transforms import infer_domain
-from gt4py.next.iterator.ir_utils import domain_utils
+from gt4py.next import common, constructors, utils
 from gt4py.next.common import Dimension
-from gt4py.next import common
-from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator.ir_utils import (
+    common_pattern_matcher as cpm,
+    domain_utils,
+    ir_makers as im,
+)
+from gt4py.next.iterator.transforms import infer_domain
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
-from gt4py.next import utils
+from gt4py.next.type_system import type_specifications as ts
+
 
 float_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
 IDim = common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)
@@ -125,8 +128,8 @@ def constant_fold_domain_exprs(arg: itir.Node) -> itir.Node:
 
 
 def constant_fold_accessed_domains(
-    domains: infer_domain.ACCESSED_DOMAINS,
-) -> infer_domain.ACCESSED_DOMAINS:
+    domains: infer_domain.AccessedDomains,
+) -> infer_domain.AccessedDomains:
     def fold_domain(
         domain: domain_utils.SymbolicDomain | Literal[infer_domain.DomainAccessDescriptor.NEVER],
     ):

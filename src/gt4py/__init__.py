@@ -27,6 +27,6 @@ __all__ = [
 
 
 if _sys.version_info >= (3, 10):
-    from . import next
+    from . import next  # noqa: A004 shadowing a Python builtin
 
     __all__ += ["next"]

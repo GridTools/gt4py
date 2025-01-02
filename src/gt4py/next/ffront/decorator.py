@@ -34,7 +34,6 @@ from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
     field_operator_ast as foast,
     foast_to_gtir,
-    foast_to_itir,
     past_process_args,
     signature,
     stages as ffront_stages,
@@ -186,7 +185,7 @@ class Program:
         return transform_utils._get_closure_vars_recursively(self.past_stage.closure_vars)
 
     @functools.cached_property
-    def itir(self) -> itir.FencilDefinition:
+    def gtir(self) -> itir.Program:
         no_args_past = toolchain.CompilableProgram(
             data=ffront_stages.PastProgramDefinition(
                 past_node=self.past_stage.past_node,
@@ -230,7 +229,7 @@ class Program:
         if self.backend is None:
             warnings.warn(
                 UserWarning(
-                    f"Field View Program '{self.definition_stage.definition.__name__}': Using Python execution, consider selecting a perfomance backend."
+                    f"Field View Program '{self.definition_stage.definition.__name__}': Using Python execution, consider selecting a performance backend."
                 ),
                 stacklevel=2,
             )
@@ -561,7 +560,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     #  a different backend than the one of the program that calls this field operator. Just use
     #  the hard-coded lowering until this is cleaned up.
     def __gt_itir__(self) -> itir.FunctionDefinition:
-        return foast_to_itir.foast_to_itir(self.foast_stage)
+        return foast_to_gtir.foast_to_gtir(self.foast_stage)
 
     # FIXME[#1582](tehrengruber): remove after refactoring to GTIR
     def __gt_gtir__(self) -> itir.FunctionDefinition:

@@ -18,6 +18,7 @@ import gt4py.next as gtx
 from gt4py.next.iterator import builtins as it_builtins
 from gt4py.next.iterator.builtins import (
     and_,
+    as_fieldop,
     bool,
     can_deref,
     cartesian_domain,
@@ -45,9 +46,8 @@ from gt4py.next.iterator.builtins import (
     plus,
     shift,
     xor_,
-    as_fieldop,
 )
-from gt4py.next.iterator.runtime import set_at, closure, fendef, fundef, offset
+from gt4py.next.iterator.runtime import fendef, fundef, offset, set_at
 from gt4py.next.program_processors.runners.gtfn import run_gtfn
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data

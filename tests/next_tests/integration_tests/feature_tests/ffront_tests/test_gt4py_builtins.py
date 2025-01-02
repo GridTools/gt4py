@@ -29,6 +29,7 @@ from next_tests.integration_tests.cases import (
     Vertex,
     cartesian_case,
     unstructured_case,
+    unstructured_case_3d,
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     exec_alloc_descriptor,
@@ -105,10 +106,10 @@ def reduction_ke_field(
 @pytest.mark.parametrize(
     "fop", [reduction_e_field, reduction_ek_field, reduction_ke_field], ids=lambda fop: fop.__name__
 )
-def test_neighbor_sum(unstructured_case, fop):
-    v2e_table = unstructured_case.offset_provider["V2E"].ndarray
+def test_neighbor_sum(unstructured_case_3d, fop):
+    v2e_table = unstructured_case_3d.offset_provider["V2E"].ndarray
 
-    edge_f = cases.allocate(unstructured_case, fop, "edge_f")()
+    edge_f = cases.allocate(unstructured_case_3d, fop, "edge_f")()
 
     local_dim_idx = edge_f.domain.dims.index(Edge) + 1
     adv_indexing = tuple(
@@ -131,10 +132,10 @@ def test_neighbor_sum(unstructured_case, fop):
         where=broadcasted_table != common._DEFAULT_SKIP_VALUE,
     )
     cases.verify(
-        unstructured_case,
+        unstructured_case_3d,
         fop,
         edge_f,
-        out=cases.allocate(unstructured_case, fop, cases.RETURN)(),
+        out=cases.allocate(unstructured_case_3d, fop, cases.RETURN)(),
         ref=ref,
     )
 
@@ -463,11 +464,13 @@ def test_conditional_shifted(cartesian_case):
     )
 
 
-def test_promotion(unstructured_case):
+def test_promotion(unstructured_case_3d):
     @gtx.field_operator
     def promotion(
         inp1: gtx.Field[[Edge, KDim], float64], inp2: gtx.Field[[KDim], float64]
     ) -> gtx.Field[[Edge, KDim], float64]:
         return inp1 / inp2
 
-    cases.verify_with_default_data(unstructured_case, promotion, ref=lambda inp1, inp2: inp1 / inp2)
+    cases.verify_with_default_data(
+        unstructured_case_3d, promotion, ref=lambda inp1, inp2: inp1 / inp2
+    )

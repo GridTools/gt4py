@@ -365,7 +365,7 @@ class ITIRTypeInference(eve.NodeTranslator):
 
         Preconditions:
 
-        All parameters in :class:`itir.Program` and :class:`itir.FencilDefinition` must have a type
+        All parameters in :class:`itir.Program` must have a type
         defined, as they are the starting point for type propagation.
 
         Design decisions:
@@ -414,9 +414,9 @@ class ITIRTypeInference(eve.NodeTranslator):
         #   parts of a program.
         node = SanitizeTypes().visit(node)
 
-        if isinstance(node, (itir.FencilDefinition, itir.Program)):
+        if isinstance(node, itir.Program):
             assert all(isinstance(param.type, ts.DataType) for param in node.params), (
-                "All parameters in 'itir.Program' and 'itir.FencilDefinition' must have a type "
+                "All parameters in 'itir.Program' must have a type "
                 "defined, as they are the starting point for type propagation.",
             )
 
@@ -493,20 +493,6 @@ class ITIRTypeInference(eve.NodeTranslator):
                 )
         return result
 
-    # TODO(tehrengruber): Remove after new ITIR format with apply_stencil is used everywhere
-    def visit_FencilDefinition(self, node: itir.FencilDefinition, *, ctx) -> it_ts.FencilType:
-        params: dict[str, ts.DataType] = {}
-        for param in node.params:
-            assert isinstance(param.type, ts.DataType)
-            params[param.id] = param.type
-
-        function_definitions: dict[str, type_synthesizer.TypeSynthesizer] = {}
-        for fun_def in node.function_definitions:
-            function_definitions[fun_def.id] = self.visit(fun_def, ctx=ctx | function_definitions)
-
-        closures = self.visit(node.closures, ctx=ctx | params | function_definitions)
-        return it_ts.FencilType(params=params, closures=closures)
-
     def visit_Program(self, node: itir.Program, *, ctx) -> it_ts.ProgramType:
         params: dict[str, ts.DataType] = {}
         for param in node.params:
@@ -564,37 +550,6 @@ class ITIRTypeInference(eve.NodeTranslator):
                     set(expr_type.dims).issubset(set(target_type.dims))
                     and target_type.dtype == expr_type.dtype
                 )
-
-    # TODO(tehrengruber): Remove after new ITIR format with apply_stencil is used everywhere
-    def visit_StencilClosure(self, node: itir.StencilClosure, *, ctx) -> it_ts.StencilClosureType:
-        domain: it_ts.DomainType = self.visit(node.domain, ctx=ctx)
-        inputs: list[ts.FieldType] = self.visit(node.inputs, ctx=ctx)
-        output: ts.FieldType = self.visit(node.output, ctx=ctx)
-
-        assert isinstance(domain, it_ts.DomainType)
-        for output_el in type_info.primitive_constituents(output):
-            assert isinstance(output_el, ts.FieldType)
-
-        stencil_type_synthesizer = self.visit(node.stencil, ctx=ctx)
-        stencil_args = [
-            type_synthesizer._convert_as_fieldop_input_to_iterator(domain, input_)
-            for input_ in inputs
-        ]
-        stencil_returns = stencil_type_synthesizer(
-            *stencil_args, offset_provider_type=self.offset_provider_type
-        )
-
-        return it_ts.StencilClosureType(
-            domain=domain,
-            stencil=ts.FunctionType(
-                pos_only_args=stencil_args,
-                pos_or_kw_args={},
-                kw_only_args={},
-                returns=stencil_returns,
-            ),
-            output=output,
-            inputs=inputs,
-        )
 
     def visit_AxisLiteral(self, node: itir.AxisLiteral, **kwargs) -> ts.DimensionType:
         return ts.DimensionType(dim=common.Dimension(value=node.value, kind=node.kind))

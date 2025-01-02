@@ -376,7 +376,7 @@ def extract_subexpression(
     return _NodeReplacer(expr_map).visit(node), extracted, ignored_children
 
 
-ProgramOrExpr = TypeVar("ProgramOrExpr", bound=itir.Program | itir.FencilDefinition | itir.Expr)
+ProgramOrExpr = TypeVar("ProgramOrExpr", bound=itir.Program | itir.Expr)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -413,7 +413,7 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
         within_stencil: bool | None = None,
         offset_provider_type: common.OffsetProviderType | None = None,
     ) -> ProgramOrExpr:
-        is_program = isinstance(node, (itir.Program, itir.FencilDefinition))
+        is_program = isinstance(node, itir.Program)
         if is_program:
             assert within_stencil is None
             within_stencil = False
