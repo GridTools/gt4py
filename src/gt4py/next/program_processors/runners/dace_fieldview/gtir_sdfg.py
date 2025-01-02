@@ -602,7 +602,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         node: gtir.Lambda,
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
-        args: list[gtir_builtin_translators.FieldopResult],
+        args: Sequence[gtir_builtin_translators.FieldopResult],
     ) -> gtir_builtin_translators.FieldopResult:
         """
         Translates a `Lambda` node to a nested SDFG in the current state.
@@ -679,7 +679,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             self.offset_provider_type, lambda_symbols, lambda_field_offsets
         )
         nsdfg = dace.SDFG(name=self.unique_nsdfg_name(sdfg, "lambda"))
-        nstate = nsdfg.add_state("lambda")
+        nsdfg.debuginfo = dace_utils.debug_info(node, default=sdfg.debuginfo)
 
         # add sdfg storage for the symbols that need to be passed as input parameters
         lambda_params = [
@@ -690,6 +690,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             nsdfg, node_params=lambda_params, symbolic_arguments=lambda_domain_symbols
         )
 
+        nstate = nsdfg.add_state("lambda")
         lambda_result = lambda_translator.visit(
             node.expr,
             sdfg=nsdfg,
