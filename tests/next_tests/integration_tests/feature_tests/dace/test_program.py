@@ -26,7 +26,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 try:
     import dace
 
-    from gt4py.next.program_processors.runners.dace import gtir_cpu, gtir_gpu
+    from gt4py.next.program_processors.runners import dace as dace_backends
 except ImportError:
     from types import ModuleType
     from typing import Optional
@@ -34,14 +34,15 @@ except ImportError:
     from gt4py.next import backend as next_backend
 
     dace: Optional[ModuleType] = None
-    gtir_cpu: Optional[next_backend.Backend] = None
-    gtir_gpu: Optional[next_backend.Backend] = None
+    dace_backends: Optional[ModuleType] = None
 
 
 @pytest.fixture(
     params=[
-        pytest.param(gtir_cpu, marks=pytest.mark.requires_dace),
-        pytest.param(gtir_gpu, marks=(pytest.mark.requires_gpu, pytest.mark.requires_dace)),
+        pytest.param(dace_backends.run_dace_cpu, marks=pytest.mark.requires_dace),
+        pytest.param(
+            dace_backends.run_dace_gpu, marks=(pytest.mark.requires_gpu, pytest.mark.requires_dace)
+        ),
     ]
 )
 def gtir_dace_backend(request):
@@ -87,11 +88,13 @@ def unstructured(request, gtir_dace_backend, mesh_descriptor):  # noqa: F811
 
 @pytest.mark.skipif(dace is None, reason="DaCe not found")
 def test_halo_exchange_helper_attrs(unstructured):
+    local_int = gtx.int
+
     @gtx.field_operator(backend=unstructured.backend)
     def testee_op(
         a: gtx.Field[[Vertex, KDim], gtx.int],
     ) -> gtx.Field[[Vertex, KDim], gtx.int]:
-        return a + 10
+        return a + local_int(10)
 
     @gtx.program(backend=unstructured.backend)
     def testee_prog(
@@ -104,7 +107,7 @@ def test_halo_exchange_helper_attrs(unstructured):
 
     dace_storage_type = (
         dace.StorageType.GPU_Global
-        if unstructured.backend == gtir_gpu
+        if unstructured.backend == dace_backends.run_dace_gpu
         else dace.StorageType.Default
     )
 
@@ -122,7 +125,6 @@ def test_halo_exchange_helper_attrs(unstructured):
     # if simplify=True, DaCe might inline the nested SDFG coming from Program.__sdfg__,
     # effectively erasing the attributes we want to test for here
     sdfg = testee_dace.to_sdfg(simplify=False)
-    sdfg.view()
 
     testee = next(
         subgraph for subgraph in sdfg.all_sdfgs_recursive() if subgraph.name == "testee_prog"
