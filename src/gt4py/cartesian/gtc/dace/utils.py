@@ -348,27 +348,151 @@ def compute_dcir_access_infos(
     return ctx.access_infos
 
 
-class TaskletAccessInfoCollector:
+class TaskletAccessInfoCollector(eve.NodeVisitor):
     @dataclass
     class Context:
-        # TODO: if this never changes, consider moving to the parent class
         axes: Dict[str, List[dcir.Axis]]
-        # TODO: re-evaluate if that context object is the easiest to get
-        #       access_infos out of the thing at the end
         access_infos: Dict[str, dcir.FieldAccessInfo] = field(default_factory=dict)
 
-    # For implementation,
-    # see notes in cartesian/gtc/dace/expansion.py / visit_CodeBlock()
+    def __init__(self, collect_read: bool, collect_write: bool, *, horizontal_extent, k_interval, grid_subset):
+        self.collect_read: bool = collect_read
+        self.collect_write: bool = collect_write
+
+        self.ij_grid = dcir.GridSubset.from_gt4py_extent(horizontal_extent)
+        self.he_grid = self.ij_grid.set_interval(dcir.Axis.K, k_interval)
+        self.grid_subset = grid_subset
+
+    def visit_CodeBlock(
+        self,
+        node: oir.CodeBlock,
+        *,
+        ctx: Context,
+        **kwargs,
+    ) -> Dict[str, dcir.FieldAccessInfo]:
+        inner_ctx = self.Context(axes=ctx.axes)
+        inner_infos = inner_ctx.access_infos
+
+        self.visit(
+            node.body,
+            ctx=inner_ctx,
+            **kwargs,
+        )
+
+        if self.grid_subset is not None:
+            for axis in self.ij_grid.axes():
+                if axis in self.grid_subset.intervals:
+                    self.ij_grid = self.ij_grid.set_interval(axis, self.grid_subset.intervals[axis])
+
+        inner_infos = {name: info.apply_iteration(self.ij_grid) for name, info in inner_infos.items()}
+
+        ctx.access_infos.update(
+            {
+                name: info.union(ctx.access_infos.get(name, info))
+                for name, info in inner_infos.items()
+            }
+        )
+
+        return ctx.access_infos
+
+    def visit_AssignStmt(self, node: oir.AssignStmt, **kwargs):
+        self.visit(node.right, is_write=False, **kwargs)
+        self.visit(node.left, is_write=True, **kwargs)
+
+    def visit_MaskStmt(self, node: oir.MaskStmt, *, is_conditional=False, **kwargs):
+        self.visit(node.mask, is_conditional=is_conditional, **kwargs)
+        self.visit(node.body, is_conditional=True, **kwargs)
+
+    def visit_While(self, node: oir.While, *, is_conditional=False, **kwargs):
+        self.visit(node.cond, is_conditional=is_conditional, **kwargs)
+        self.visit(node.body, is_conditional=True, **kwargs)
+
+    @staticmethod
+    def _global_grid_subset(
+        he_grid: dcir.GridSubset, offset: List[Optional[int]]
+    ):
+        res: Dict[
+            dcir.Axis, Union[dcir.DomainInterval, dcir.TileInterval, dcir.IndexWithExtent]
+        ] = {}
+
+        if dcir.Axis.K in he_grid.intervals:
+            off = offset[dcir.Axis.K.to_idx()] or 0
+            he_grid_k_interval = he_grid.intervals[dcir.Axis.K]
+            assert not isinstance(he_grid_k_interval, dcir.TileInterval)
+            res[dcir.Axis.K] = he_grid_k_interval.shifted(off)
+        for axis in dcir.Axis.dims_horizontal():
+            iteration_interval = he_grid.intervals[axis]
+            mask_interval = res.get(axis, iteration_interval)
+            res[axis] = dcir.DomainInterval.intersection(
+                axis, iteration_interval, mask_interval
+            ).shifted(offset[axis.to_idx()])
+        return dcir.GridSubset(intervals=res)
+
+    def _make_access_info(
+        self,
+        offset_node: Union[CartesianOffset, oir.VariableKOffset],
+        axes,
+    ) -> dcir.FieldAccessInfo:
+        # Check we have expression offsets in K
+        offset = [offset_node.to_dict()[k] for k in "ijk"]
+        variable_offset_axes = [dcir.Axis.K] if isinstance(offset_node, oir.VariableKOffset) else []
+
+        global_subset = self._global_grid_subset(self.he_grid, offset)
+        intervals = {}
+        for axis in axes:
+            if axis in variable_offset_axes:
+                intervals[axis] = dcir.IndexWithExtent(
+                    axis=axis, value=axis.iteration_symbol(), extent=(0, 0)
+                )
+            else:
+                intervals[axis] = dcir.IndexWithExtent(
+                    axis=axis,
+                    value=axis.iteration_symbol(),
+                    extent=(offset[axis.to_idx()], offset[axis.to_idx()]),
+                )
+
+        return dcir.FieldAccessInfo(
+            grid_subset=dcir.GridSubset(intervals=intervals),
+            global_grid_subset=global_subset,
+            dynamic_access=False,
+            variable_offset_axes=variable_offset_axes,
+        )
+
+    def visit_FieldAccess(
+        self,
+        node: oir.FieldAccess,
+        *,
+        is_write: bool = False,
+        ctx: AccessInfoCollector.Context,
+        **kwargs,
+    ):
+        self.visit(
+            node.offset,
+            ctx=ctx,
+            is_write=False,
+            **kwargs,
+        )
+
+        if (is_write and not self.collect_write) or (not is_write and not self.collect_read):
+            return
+
+        access_info = self._make_access_info(
+            node.offset,
+            axes=ctx.axes[node.name],
+        )
+        ctx.access_infos[node.name] = access_info.union(
+            ctx.access_infos.get(node.name, access_info)
+        )
 
 
 def compute_tasklet_access_infos(
     node: oir.CodeBlock,
     *,
-    declarations: List[oir.FieldDecl],
-    block_extents,
     collect_read: bool = True,
     collect_write: bool = True,
-    **kwargs: Any,
+    declarations: List[oir.FieldDecl],
+    horizontal_extent,
+    k_interval,
+    grid_subset,
 ) -> dace.properties.DictProperty:
     axes = {
         name: axes_list_from_flags(declaration.dimensions)
@@ -376,8 +500,8 @@ def compute_tasklet_access_infos(
         if isinstance(declaration, oir.FieldDecl)
     }
     ctx = TaskletAccessInfoCollector.Context(axes=axes, access_infos=dict())
-    TaskletAccessInfoCollector(collect_read=collect_read, collect_write=collect_write).visit(
-        node, block_extents=block_extents, ctx=ctx, **kwargs
+    TaskletAccessInfoCollector(collect_read=collect_read, collect_write=collect_write, horizontal_extent=horizontal_extent, k_interval=k_interval, grid_subset=grid_subset).visit(
+        node, ctx=ctx, horizontal_extent=horizontal_extent, k_interval=k_interval
     )
 
     return ctx.access_infos
