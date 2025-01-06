@@ -41,15 +41,12 @@ def test_sdfgConvertible_laplap(cartesian_case):  # noqa: F811
     if not cartesian_case.backend or "dace" not in cartesian_case.backend.name:
         pytest.skip("DaCe-related test: Test SDFGConvertible interface for GT4Py programs")
 
-    allocator, backend = cartesian_case.allocator, cartesian_case.backend
-
-    if gtx_allocators.is_field_allocator_for(allocator, gtx_allocators.CUPY_DEVICE):
-        import cupy as xp
-    else:
-        import numpy as xp
+    backend = cartesian_case.backend
 
     in_field = cases.allocate(cartesian_case, laplap_program, "in_field")()
     out_field = cases.allocate(cartesian_case, laplap_program, "out_field")()
+
+    xp = in_field.array_ns
 
     # Test DaCe closure support
     @dace.program
@@ -113,14 +110,6 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
         data=xp.asarray([[0, 1], [1, 2], [2, 0]]),
         allocator=allocator,
     )
-    e2v_ndarray_copy = (
-        e2v.ndarray.copy()
-    )  # otherwise DaCe complains about the gt4py custom allocated view
-    # This is a low level interface to call the compiled SDFG.
-    # It is not supposed to be used in user code.
-    # The high level interface should be provided by a DaCe Orchestrator,
-    # i.e. decorator that hides the low level operations.
-    # This test checks only that the SDFGConvertible interface works correctly.
 
     testee2 = testee.with_backend(backend).with_connectivities({"E2V": e2v})
 
