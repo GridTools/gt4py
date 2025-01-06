@@ -91,7 +91,7 @@ def test_halo_exchange_helper_attrs(unstructured):
     def testee_op(
         a: gtx.Field[[Vertex, KDim], gtx.int],
     ) -> gtx.Field[[Vertex, KDim], gtx.int]:
-        return a
+        return a + 10
 
     @gtx.program(backend=unstructured.backend)
     def testee_prog(
