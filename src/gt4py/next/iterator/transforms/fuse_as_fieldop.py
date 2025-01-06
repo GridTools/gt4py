@@ -310,6 +310,7 @@ class FuseAsFieldOp(eve.NodeTranslator):
             node = self.generic_visit(node, **kwargs)
 
         if cpm.is_call_to(node, "make_tuple"):
+            # TODO(tehrengruber): x, y = alpha * y, x is not fused
             as_fieldop_args = [arg for arg in node.args if cpm.is_applied_as_fieldop(arg)]
             distinct_domains = set(arg.fun.args[1] for arg in as_fieldop_args)  # type: ignore[attr-defined]  # ensured by cpm.is_applied_as_fieldop
             if len(distinct_domains) != len(as_fieldop_args):
