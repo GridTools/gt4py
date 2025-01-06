@@ -30,13 +30,9 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Install C++ libraries
-      if: ${{ matrix.os == 'ubuntu-latest' }}
       shell: bash
       run: |
         sudo apt install libboost-dev
-        echo "BOOST_ROOT=/usr/include" >> $GITHUB_ENV
-    - name: Setup tmate session
-      uses: mxschmitt/action-tmate@v3
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
