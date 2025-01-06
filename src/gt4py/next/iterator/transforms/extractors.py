@@ -20,6 +20,9 @@ class SymbolNameSetExtractor(eve.NodeVisitor):
             input_fields |= self.visit(child)
         return input_fields
 
+    def visit_Node(self, node: itir.Node) -> set[str]:
+        return set()
+
     @classmethod
     def only_fields(cls, program: itir.Program) -> set[str]:
         field_param_names = [
