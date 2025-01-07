@@ -209,6 +209,10 @@ def _collect_offset_definitions(
         ):
             assert grid_type == common.GridType.UNSTRUCTURED
             offset_definitions[offset_name] = TagDefinition(name=Sym(id=offset_name))
+            if offset_name != connectivity_type.neighbor_dim.value:
+                offset_definitions[connectivity_type.neighbor_dim.value] = TagDefinition(
+                    name=Sym(id=connectivity_type.neighbor_dim.value)
+                )
 
             for dim in [connectivity_type.source_dim, connectivity_type.codomain]:
                 if dim.kind != common.DimensionKind.HORIZONTAL:
