@@ -330,6 +330,7 @@ def lift_stencil(inp):
     return deref(shift(V2V, 2)(lift(deref_stencil)(inp)))
 
 
+@pytest.mark.uses_lift
 def test_lift(program_processor):
     program_processor, validate = program_processor
     inp = vertex_index_field()
