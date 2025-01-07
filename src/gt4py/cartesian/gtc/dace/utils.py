@@ -364,47 +364,50 @@ class TaskletAccessInfoCollector(eve.NodeVisitor):
 
     def visit_CodeBlock(
         self,
-        node: oir.CodeBlock,
-        *,
-        ctx: Context,
-        **kwargs,
+        _node: oir.CodeBlock,
+        **_kwargs,
     ) -> Dict[str, dcir.FieldAccessInfo]:
-        inner_ctx = self.Context(axes=ctx.axes)
-        inner_infos = inner_ctx.access_infos
-
-        self.visit(
-            node.body,
-            ctx=inner_ctx,
-            **kwargs,
-        )
-
-        if self.grid_subset is not None:
-            for axis in self.ij_grid.axes():
-                if axis in self.grid_subset.intervals:
-                    self.ij_grid = self.ij_grid.set_interval(axis, self.grid_subset.intervals[axis])
-
-        inner_infos = {name: info.apply_iteration(self.ij_grid) for name, info in inner_infos.items()}
-
-        ctx.access_infos.update(
-            {
-                name: info.union(ctx.access_infos.get(name, info))
-                for name, info in inner_infos.items()
-            }
-        )
-
-        return ctx.access_infos
+        raise RuntimeError("We shouldn't reach cod blocks anymore")
+        # inner_ctx = self.Context(axes=ctx.axes)
+        # inner_infos = inner_ctx.access_infos
+        #
+        # self.visit(
+        #     node.body,
+        #     ctx=inner_ctx,
+        #     **kwargs,
+        # )
+        #
+        # if self.grid_subset is not None:
+        #     for axis in self.ij_grid.axes():
+        #         if axis in self.grid_subset.intervals:
+        #             self.ij_grid = self.ij_grid.set_interval(axis, self.grid_subset.intervals[axis])
+        #
+        # inner_infos = {name: info.apply_iteration(self.ij_grid) for name, info in inner_infos.items()}
+        #
+        # ctx.access_infos.update(
+        #     {
+        #         name: info.union(ctx.access_infos.get(name, info))
+        #         for name, info in inner_infos.items()
+        #     }
+        # )
+        #
+        # return ctx.access_infos
 
     def visit_AssignStmt(self, node: oir.AssignStmt, **kwargs):
         self.visit(node.right, is_write=False, **kwargs)
         self.visit(node.left, is_write=True, **kwargs)
 
-    def visit_MaskStmt(self, node: oir.MaskStmt, *, is_conditional=False, **kwargs):
-        self.visit(node.mask, is_conditional=is_conditional, **kwargs)
-        self.visit(node.body, is_conditional=True, **kwargs)
+    def visit_MaskStmt(self, _node: oir.MaskStmt, **_kwargs):
+        # skip mask statements
+        return
+        # self.visit(node.mask, is_conditional=is_conditional, **kwargs)
+        # self.visit(node.body, is_conditional=True, **kwargs)
 
-    def visit_While(self, node: oir.While, *, is_conditional=False, **kwargs):
-        self.visit(node.cond, is_conditional=is_conditional, **kwargs)
-        self.visit(node.body, is_conditional=True, **kwargs)
+    def visit_While(self, _node: oir.While, **_kwargs):
+        # skip while loops
+        return
+        # self.visit(node.cond, is_conditional=is_conditional, **kwargs)
+        # self.visit(node.body, is_conditional=True, **kwargs)
 
     @staticmethod
     def _global_grid_subset(
@@ -462,7 +465,7 @@ class TaskletAccessInfoCollector(eve.NodeVisitor):
         node: oir.FieldAccess,
         *,
         is_write: bool = False,
-        ctx: AccessInfoCollector.Context,
+        ctx: TaskletAccessInfoCollector.Context,
         **kwargs,
     ):
         self.visit(
@@ -485,7 +488,7 @@ class TaskletAccessInfoCollector(eve.NodeVisitor):
 
 
 def compute_tasklet_access_infos(
-    node: oir.CodeBlock,
+    node: Union[oir.CodeBlock, oir.MaskStmt, oir.While],
     *,
     collect_read: bool = True,
     collect_write: bool = True,
@@ -500,9 +503,19 @@ def compute_tasklet_access_infos(
         if isinstance(declaration, oir.FieldDecl)
     }
     ctx = TaskletAccessInfoCollector.Context(axes=axes, access_infos=dict())
-    TaskletAccessInfoCollector(collect_read=collect_read, collect_write=collect_write, horizontal_extent=horizontal_extent, k_interval=k_interval, grid_subset=grid_subset).visit(
-        node, ctx=ctx, horizontal_extent=horizontal_extent, k_interval=k_interval
+    collector = TaskletAccessInfoCollector(
+        collect_read=collect_read,
+        collect_write=collect_write,
+        horizontal_extent=horizontal_extent,
+        k_interval=k_interval,
+        grid_subset=grid_subset
     )
+    if isinstance(node, oir.CodeBlock):
+        collector.visit(node.body, ctx=ctx)
+    elif isinstance(node, oir.MaskStmt):
+        collector.visit(node.mask, ctx=ctx)
+    elif isinstance(node, oir.While):
+        collector.visit(node.cond, ctx=ctx)
 
     return ctx.access_infos
 

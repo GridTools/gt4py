@@ -80,13 +80,14 @@ def _mapped_access_iterator(node: oir.CodeBlock, access_type: AccessType):
 
 
 def _get_tasklet_inout_memlets(
-    node: oir.CodeBlock,
+    node: Union[oir.CodeBlock, oir.MaskStmt, oir.While],
     access_type: AccessType,
     *,
     global_ctx: DaCeIRBuilder.GlobalContext,
     horizontal_extent,
     k_interval,
     grid_subset,
+    dcir_statements: Optional[List[dcir.Stmt]] = None
 ) -> List[dcir.Memlet]:
     access_infos = compute_tasklet_access_infos(
         node,
@@ -100,6 +101,27 @@ def _get_tasklet_inout_memlets(
 
     memlets: List[dcir.Memlet] = []
     for name, offset, tasklet_symbol in _mapped_access_iterator(node, access_type):
+        if name not in access_infos:
+            continue
+
+        # avoid adding extra inputs/outputs to the tasklet
+        if dcir_statements is not None:
+            # find `tasklet_symbol` in dcir_statements because we can't know (from the oir statements)
+            # where the tasklet boundaries will be. Consider
+            # with computation(PARALLEL), interval(...):
+            #   statement1
+            #   if condition:
+            #     statement2
+            #   statement3
+            # -> even if we ignore the `if` statement, statements 1 & 3 will end up in the same block
+            #    but aren't in the same tasklet.
+            names = []
+            for statement in dcir_statements:
+                for access in statement.walk_values().if_isinstance(dcir.ScalarAccess, dcir.IndexAccess):
+                    names.append(access.name)
+            if tasklet_symbol not in names:
+                continue
+
         access_info = access_infos[name]
         if not access_info.variable_offset_axes:
             offset_dict = offset.to_dict()
@@ -433,11 +455,8 @@ class DaCeIRBuilder(eve.NodeTranslator):
         **kwargs: Any,
     ) -> dcir.Tasklet:
         condition_expression = node.mask if isinstance(node, oir.MaskStmt) else node.cond
-        tmp_name = (
-            f"if_expression_{id(node)}"
-            if isinstance(node, oir.MaskStmt)
-            else f"while_expression_{id(node)}"
-        )
+        prefix = "if" if isinstance(node, oir.MaskStmt) else "while"
+        tmp_name = f"{prefix}_expression_{id(node)}"
 
         statement = dcir.AssignStmt(
             # Visiting order matters because targets must not contain the target symbols from the left visit
@@ -702,6 +721,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
                     horizontal_extent=horizontal_extent,
                     k_interval=k_interval,
                     grid_subset=iteration_ctx.grid_subset,
+                    dcir_statements=current_block,
                 )
                 write_memlets: List[dcir.Memlet] = _get_tasklet_inout_memlets(
                     node,
@@ -710,6 +730,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
                     horizontal_extent=horizontal_extent,
                     k_interval=k_interval,
                     grid_subset=iteration_ctx.grid_subset,
+                    dcir_statements=current_block,
                 )
 
                 # generate our own read/write memlets here
