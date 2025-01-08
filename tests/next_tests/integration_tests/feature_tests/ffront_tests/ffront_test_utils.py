@@ -7,14 +7,14 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import types
-from typing import Any, Protocol, TypeVar
+from typing import Protocol, TypeVar
 
 import numpy as np
 import pytest
 
 import gt4py.next as gtx
 from gt4py._core import definitions as core_defs
-from gt4py.next import backend as next_backend, common, allocators as next_allocators
+from gt4py.next import _allocators as next_allocators, backend as next_backend, common
 from gt4py.next.ffront import decorator
 
 import next_tests
@@ -56,6 +56,9 @@ no_backend = NoBackend(
         next_tests.definitions.EmbeddedIds.NUMPY_EXECUTION,
         pytest.param(
             next_tests.definitions.EmbeddedIds.CUPY_EXECUTION, marks=pytest.mark.requires_gpu
+        ),
+        pytest.param(
+            next_tests.definitions.EmbeddedIds.JAX_EXECUTION, marks=pytest.mark.requires_jax
         ),
         pytest.param(
             next_tests.definitions.OptionalProgramBackendId.DACE_CPU,

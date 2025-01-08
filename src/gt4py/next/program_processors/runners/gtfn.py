@@ -17,7 +17,7 @@ import factory
 import filelock
 
 import gt4py._core.definitions as core_defs
-import gt4py.next.allocators as next_allocators
+import gt4py.next._allocators as next_allocators
 from gt4py.eve import utils
 from gt4py.eve.utils import content_hash
 from gt4py.next import backend, common, config

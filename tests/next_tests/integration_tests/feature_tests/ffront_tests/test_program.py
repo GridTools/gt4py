@@ -53,6 +53,7 @@ def test_identity_fo_execution(cartesian_case, identity_def):
 
 
 @pytest.mark.uses_cartesian_shift
+@pytest.mark.slices_out_argument
 def test_shift_by_one_execution(cartesian_case):
     @gtx.field_operator
     def shift_by_one(in_field: cases.IFloatField) -> cases.IFloatField:
@@ -95,6 +96,7 @@ def test_double_copy_execution(cartesian_case, double_copy_program_def):
     )
 
 
+@pytest.mark.slices_out_argument
 def test_copy_restricted_execution(cartesian_case, copy_restrict_program_def):
     copy_restrict_program = gtx.program(copy_restrict_program_def, backend=cartesian_case.backend)
 
@@ -154,6 +156,7 @@ def test_tuple_program_return_constructed_inside(cartesian_case):
     assert np.allclose((a.asnumpy(), b.asnumpy()), (out_a.asnumpy(), out_b.asnumpy()))
 
 
+@pytest.mark.slices_out_argument
 def test_tuple_program_return_constructed_inside_with_slicing(cartesian_case):
     @gtx.field_operator
     def pack_tuple(

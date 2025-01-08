@@ -14,7 +14,7 @@ from typing import Optional, cast
 import gt4py._core.definitions as core_defs
 import gt4py.eve as eve
 import gt4py.eve.extended_typing as xtyping
-import gt4py.next.allocators as next_allocators
+import gt4py.next._allocators as next_allocators
 import gt4py.next.common as common
 import gt4py.next.embedded.nd_array_field as nd_array_field
 import gt4py.storage.cartesian.utils as storage_utils
@@ -26,9 +26,12 @@ def empty(
     dtype: core_defs.DTypeLike = core_defs.Float64DType(()),  # noqa: B008 [function-call-in-default-argument]
     *,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
-    allocator: Optional[next_allocators.FieldBufferAllocationUtil] = None,
+    allocator: Optional[
+        next_allocators.FieldBufferAllocationUtil | core_defs.ArrayApiNamespace
+    ] = None,  # TODO make sure numpy/cupy etc namespaces are accepted by mypy (maybe we have to allow Any)
     device: Optional[core_defs.Device] = None,
 ) -> nd_array_field.NdArrayField:
+    # TODO: update doc
     """Create a `Field` of uninitialized (undefined) values using the given (or device-default) allocator.
 
     This function supports partial binding of arguments, see :class:`eve.utils.partial` for details.
@@ -74,13 +77,9 @@ def empty(
         >>> b.shape
         (3, 3)
     """
-    dtype = core_defs.dtype(dtype)
-    if allocator is None and device is None:
-        device = core_defs.Device(core_defs.DeviceType.CPU, device_id=0)
-    buffer = next_allocators.allocate(
-        domain, dtype, aligned_index=aligned_index, allocator=allocator, device=device
-    )
-    res = common._field(buffer.ndarray, domain=domain)
+    gtarray_namespace = next_allocators.get_array_allocation_namespace(allocator, device)
+    buffer = gtarray_namespace.empty(domain, dtype=dtype, aligned_index=aligned_index)
+    res = common._field(buffer, domain=domain, allocation_ns=gtarray_namespace)
     assert isinstance(res, common.MutableField)
     assert isinstance(res, nd_array_field.NdArrayField)
     return res
@@ -106,11 +105,12 @@ def zeros(
         >>> gtx.zeros({IDim: range(3, 10)}, allocator=gtx.itir_python).ndarray
         array([0., 0., 0., 0., 0., 0., 0.])
     """
-    field = empty(
-        domain=domain, dtype=dtype, aligned_index=aligned_index, allocator=allocator, device=device
-    )
-    field[...] = field.dtype.scalar_type(0)
-    return field
+    gtarray_namespace = next_allocators.get_array_allocation_namespace(allocator, device)
+    buffer = gtarray_namespace.zeros(domain, dtype=dtype, aligned_index=aligned_index)
+    res = common._field(buffer, domain=domain, allocation_ns=gtarray_namespace)
+    assert isinstance(res, common.MutableField)
+    assert isinstance(res, nd_array_field.NdArrayField)
+    return res
 
 
 @eve.utils.with_fluid_partial
@@ -133,11 +133,12 @@ def ones(
         >>> gtx.ones({IDim: range(3, 10)}, allocator=gtx.itir_python).ndarray
         array([1., 1., 1., 1., 1., 1., 1.])
     """
-    field = empty(
-        domain=domain, dtype=dtype, aligned_index=aligned_index, allocator=allocator, device=device
-    )
-    field[...] = field.dtype.scalar_type(1)
-    return field
+    gtarray_namespace = next_allocators.get_array_allocation_namespace(allocator, device)
+    buffer = gtarray_namespace.ones(domain, dtype=dtype, aligned_index=aligned_index)
+    res = common._field(buffer, domain=domain, allocation_ns=gtarray_namespace)
+    assert isinstance(res, common.MutableField)
+    assert isinstance(res, nd_array_field.NdArrayField)
+    return res
 
 
 @eve.utils.with_fluid_partial
@@ -166,15 +167,53 @@ def full(
         >>> gtx.full({IDim: 3}, 5, allocator=gtx.itir_python).ndarray
         array([5, 5, 5])
     """
-    field = empty(
-        domain=domain,
+    gtarray_namespace = next_allocators.get_array_allocation_namespace(allocator, device)
+    buffer = gtarray_namespace.full(
+        domain,
+        fill_value,
         dtype=dtype if dtype is not None else core_defs.dtype(type(fill_value)),
         aligned_index=aligned_index,
-        allocator=allocator,
-        device=device,
     )
-    field[...] = field.dtype.scalar_type(fill_value)
-    return field
+    res = common._field(buffer, domain=domain, allocation_ns=gtarray_namespace)
+    assert isinstance(res, common.MutableField)
+    assert isinstance(res, nd_array_field.NdArrayField)
+    return res
+
+
+def _actual_domain(
+    dims_or_domain: common.DomainLike | Sequence[common.Dimension],
+    shape: Sequence[int],
+    origin: Optional[Mapping[common.Dimension, int]] = None,
+) -> common.Domain:
+    if isinstance(dims_or_domain, Sequence) and all(
+        isinstance(dim, common.Dimension) for dim in dims_or_domain
+    ):
+        dims = cast(Sequence[common.Dimension], dims_or_domain)
+        if len(dims) != len(shape):
+            raise ValueError(
+                f"Cannot construct 'Field' from array of shape '{shape}' and domain '{dims}'."
+            )
+        if origin:
+            domain_dims = set(dims)
+            if unknown_dims := set(origin.keys()) - domain_dims:
+                raise ValueError(f"Origin keys {unknown_dims} not in domain {dims}.")
+        else:
+            origin = {}
+        return common.domain(
+            [
+                (d, (-(start_offset := origin.get(d, 0)), s - start_offset))
+                for d, s in zip(dims, shape)
+            ]
+        )
+    else:
+        domain = common.domain(cast(common.DomainLike, dims_or_domain))
+        if origin:
+            raise ValueError(f"Cannot specify origin for domain {domain}")
+        if domain.shape != shape:
+            raise ValueError(
+                f"Cannot construct 'Field' from array of shape '{shape}' and domain '{domain}'."
+            )
+        return domain
 
 
 @eve.utils.with_fluid_partial
@@ -187,7 +226,7 @@ def as_field(
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
     allocator: Optional[next_allocators.FieldBufferAllocatorProtocol] = None,
     device: Optional[core_defs.Device] = None,
-    # TODO: copy=False
+    # TODO(havogt): copy=False
 ) -> nd_array_field.NdArrayField:
     """Create a Field from an array-like object using the given (or device-default) allocator.
 
@@ -232,53 +271,25 @@ def as_field(
         >>> gtx.as_field({IDim: range(-1, 2)}, xdata).domain.ranges[0]
         UnitRange(-1, 2)
     """
-    if isinstance(domain, Sequence) and all(isinstance(dim, common.Dimension) for dim in domain):
-        domain = cast(Sequence[common.Dimension], domain)
-        if len(domain) != data.ndim:
-            raise ValueError(
-                f"Cannot construct 'Field' from array of shape '{data.shape}' and domain '{domain}'."
-            )
-        if origin:
-            domain_dims = set(domain)
-            if unknown_dims := set(origin.keys()) - domain_dims:
-                raise ValueError(f"Origin keys {unknown_dims} not in domain {domain}.")
-        else:
-            origin = {}
-        actual_domain = common.domain(
-            [
-                (d, (-(start_offset := origin.get(d, 0)), s - start_offset))
-                for d, s in zip(domain, data.shape)
-            ]
-        )
-    else:
-        if origin:
-            raise ValueError(f"Cannot specify origin for domain {domain}")
-        actual_domain = common.domain(cast(common.DomainLike, domain))
+    actual_domain = _actual_domain(dims_or_domain=domain, shape=data.shape, origin=origin)
 
     # TODO(egparedes): allow zero-copy construction (no reallocation) if buffer has
     #   already the correct layout and device.
-    shape = storage_utils.asarray(data).shape
-    if shape != actual_domain.shape:
-        raise ValueError(f"Cannot construct 'Field' from array of shape '{shape}'.")
-    if dtype is None:
-        dtype = storage_utils.asarray(data).dtype
-    dtype = core_defs.dtype(dtype)
-    assert dtype.tensor_shape == ()  # TODO
 
     if (allocator is None) and (device is None) and xtyping.supports_dlpack(data):
         device = core_defs.Device(*data.__dlpack_device__())
 
-    field = empty(
+    gtarray_namespace = next_allocators.get_array_allocation_namespace(allocator, device)
+    buffer = gtarray_namespace.asarray(
+        data,
         domain=actual_domain,
         dtype=dtype,
+        copy=True,  # TODO(havogt) add support for zero-copy construction
         aligned_index=aligned_index,
-        allocator=allocator,
-        device=device,
     )
+    res = common._field(buffer, domain=actual_domain, allocation_ns=gtarray_namespace)
 
-    field[...] = field.array_ns.asarray(data)
-
-    return field
+    return res  # type: ignore[return-value] # it is an NDArrayField
 
 
 @eve.utils.with_fluid_partial
@@ -349,12 +360,22 @@ def as_connectivity(
 
     if (allocator is None) and (device is None) and xtyping.supports_dlpack(data):
         device = core_defs.Device(*data.__dlpack_device__())
-    buffer = next_allocators.allocate(actual_domain, dtype, allocator=allocator, device=device)
-    # TODO(havogt): consider adding MutableNDArrayObject
-    buffer.ndarray[...] = storage_utils.asarray(data)  # type: ignore[index]
-    connectivity_field = common._connectivity(
-        buffer.ndarray, codomain=codomain, domain=actual_domain, skip_value=skip_value
+
+    gtarray_namespace = next_allocators.get_array_allocation_namespace(allocator, device)
+    buffer = gtarray_namespace.asarray(
+        data,
+        domain=actual_domain,
+        dtype=dtype,
+        copy=True,  # TODO(havogt) add support for zero-copy construction
     )
+    connectivity_field = common._connectivity(
+        buffer,
+        codomain=codomain,
+        domain=actual_domain,
+        skip_value=skip_value,
+        allocation_ns=gtarray_namespace,
+    )
+
     assert isinstance(connectivity_field, nd_array_field.NdArrayConnectivityField)
 
     return connectivity_field

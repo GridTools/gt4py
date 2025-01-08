@@ -6,11 +6,13 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from typing import Optional
+
 import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import allocators as gtx_allocators, common as gtx_common
+from gt4py.next import _allocators as gtx_allocators, common as gtx_common
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import cartesian_case, unstructured_case
