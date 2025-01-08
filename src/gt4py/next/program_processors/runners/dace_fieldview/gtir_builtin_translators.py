@@ -220,21 +220,12 @@ def _parse_fieldop_arg(
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
     domain: FieldopDomain,
-) -> (
-    gtir_dataflow.IteratorExpr
-    | gtir_dataflow.MemletExpr
-    | tuple[
-        gtir_dataflow.IteratorExpr | gtir_dataflow.MemletExpr | tuple[Any, ...],
-        ...,
-    ]
-):
+) -> gtir_dataflow.MemletExpr | tuple[gtir_dataflow.MemletExpr | tuple[Any, ...], ...]:
     """Helper method to visit an expression passed as argument to a field operator."""
 
-    arg = sdfg_builder.visit(node, sdfg=sdfg, head_state=state)
-
-    def get_arg_value(
+    def _parse_fieldop_arg_impl(
         arg: FieldopData,
-    ) -> gtir_dataflow.IteratorExpr | gtir_dataflow.MemletExpr:
+    ) -> gtir_dataflow.MemletExpr:
         arg_expr = arg.get_local_view(domain)
         if isinstance(arg_expr, gtir_dataflow.MemletExpr):
             return arg_expr
@@ -243,11 +234,13 @@ def _parse_fieldop_arg(
             arg_expr.field, arg_expr.gt_dtype, arg_expr.get_memlet_subset(sdfg)
         )
 
+    arg = sdfg_builder.visit(node, sdfg=sdfg, head_state=state)
+
     if isinstance(arg, FieldopData):
-        return get_arg_value(arg)
+        return _parse_fieldop_arg_impl(arg)
     else:
         # handle tuples of fields
-        return gtx_utils.tree_map(lambda x: get_arg_value(x))(arg)
+        return gtx_utils.tree_map(lambda x: _parse_fieldop_arg_impl(x))(arg)
 
 
 def _get_field_layout(
@@ -305,25 +298,10 @@ def _create_field_operator(
         The field data descriptor, which includes the field access node in the given `state`
         and the field domain offset.
     """
-    domain_dims, domain_offset, domain_shape = _get_field_layout(domain)
-    domain_indices = _get_domain_indices(domain_dims, domain_offset)
-    domain_subset = dace_subsets.Range.from_indices(domain_indices)
 
-    # create map range corresponding to the field operator domain
-    me, mx = sdfg_builder.add_map(
-        "fieldop",
-        state,
-        ndrange={
-            dace_gtir_utils.get_map_variable(dim): f"{lower_bound}:{upper_bound}"
-            for dim, lower_bound, upper_bound in domain
-        },
-    )
-
-    # here we setup the edges passing through the map entry node
-    for edge in input_edges:
-        edge.connect(me)
-
-    def create_field(output_edge: gtir_dataflow.DataflowOutputEdge, sym: gtir.Sym) -> FieldopData:
+    def _create_field_operator_impl(
+        output_edge: gtir_dataflow.DataflowOutputEdge, mx: dace.nodes.MapExit, sym: gtir.Sym
+    ) -> FieldopData:
         assert isinstance(sym.type, ts.FieldType)
         dataflow_output_desc = output_edge.result.dc_node.desc(sdfg)
         if isinstance(output_edge.result.gt_dtype, ts.ScalarType):
@@ -360,14 +338,32 @@ def _create_field_operator(
             offset=(field_offset if set(field_offset) != {0} else None),
         )
 
+    domain_dims, domain_offset, domain_shape = _get_field_layout(domain)
+    domain_indices = _get_domain_indices(domain_dims, domain_offset)
+    domain_subset = dace_subsets.Range.from_indices(domain_indices)
+
+    # create map range corresponding to the field operator domain
+    me, mx = sdfg_builder.add_map(
+        "fieldop",
+        state,
+        ndrange={
+            dace_gtir_utils.get_map_variable(dim): f"{lower_bound}:{upper_bound}"
+            for dim, lower_bound, upper_bound in domain
+        },
+    )
+
+    # here we setup the edges passing through the map entry node
+    for edge in input_edges:
+        edge.connect(me)
+
     if isinstance(output_edges, gtir_dataflow.DataflowOutputEdge):
         assert isinstance(node_type, ts.FieldType)
-        return create_field(output_edges, im.sym("x", node_type))
+        return _create_field_operator_impl(output_edges, mx, im.sym("x", node_type))
     else:
         # handle tuples of fields
         assert isinstance(node_type, ts.TupleType)
-        return gtx_utils.tree_map(create_field)(
-            output_edges, dace_gtir_utils.make_symbol_tuple("x", node_type)
+        return gtx_utils.tree_map(_create_field_operator_impl)(
+            output_edges, mx, dace_gtir_utils.make_symbol_tuple("x", node_type)
         )
 
 
