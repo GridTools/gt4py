@@ -254,7 +254,6 @@ markers = [
   'uses_scan_without_field_args: tests that require calls to scan that do not have any fields as arguments',
   'uses_scan_nested: tests that use nested scans',
   'uses_scan_requiring_projector: tests need a projector implementation in gtfn',
-  'uses_scan_1d_field: tests scan on a 1D vertical field',
   'uses_sparse_fields: tests that require backend support for sparse fields',
   'uses_sparse_fields_as_output: tests that require backend support for writing sparse fields',
   'uses_strided_neighbor_offset: tests that require backend support for strided neighbor offset',
