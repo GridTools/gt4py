@@ -30,7 +30,6 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
         node: Union[dcir.VariableKOffset, common.CartesianOffset],
         *,
         access_info: dcir.FieldAccessInfo,
-        decl: dcir.FieldDecl,
         **kwargs: Any,
     ) -> str:
         int_sizes: List[Optional[int]] = []
@@ -38,7 +37,7 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
             memlet_shape = access_info.shape
             if (
                 str(memlet_shape[i]).isnumeric()
-                and axis not in decl.access_info.variable_offset_axes
+                and axis not in access_info.variable_offset_axes
             ):
                 int_sizes.append(int(memlet_shape[i]))
             else:
@@ -62,7 +61,6 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
         res = dace.subsets.Range([r for i, r in enumerate(ranges.ranges) if int_sizes[i] != 1])
         return str(res)
 
-    # where does explicit come from?
     def visit_CartesianOffset(self, node: common.CartesianOffset, explicit=False, **kwargs: Any) -> str:
         # If called from the explicit pass we need to be add manually the relative indexing
         if explicit:
@@ -123,7 +121,6 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
                 index_strs.append(
                     self.visit(
                         node.offset,
-                        decl=symtable[memlet.field],
                         access_info=memlet.access_info,
                         symtable=symtable,
                         in_idx=True,
