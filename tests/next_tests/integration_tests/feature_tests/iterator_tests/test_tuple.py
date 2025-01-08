@@ -219,7 +219,6 @@ def tuple_input(inp):
 
 
 @pytest.mark.uses_tuple_args
-@pytest.mark.uses_tuple_fields_with_different_size
 @pytest.mark.uses_tuple_iterator
 def test_tuple_field_input(program_processor):
     program_processor, validate = program_processor

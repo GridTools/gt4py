@@ -72,17 +72,8 @@ def _get_shape_args(
     for name, value in args.items():
         for sym, size in zip(arrays[name].shape, value.shape, strict=True):
             if isinstance(sym, dace.symbol):
-                if sym.name not in shape_args:
-                    shape_args[sym.name] = size
-                elif shape_args[sym.name] != size:
-                    # The same shape symbol is used by all fields of a tuple, because the current assumption is that all fields
-                    # in a tuple have the same dimensions and sizes. Therefore, this if-branch only exists to ensure that array
-                    # size (i.e. the value assigned to the shape symbol) is the same for all fields in a tuple.
-                    # TODO(edopao): change to `assert sym.name not in shape_args` to ensure that shape symbols are unique,
-                    # once the assumption on tuples is removed.
-                    raise ValueError(
-                        f"Expected array size {sym.name} for arg {name} to be {shape_args[sym.name]}, got {size}."
-                    )
+                assert sym.name not in shape_args
+                shape_args[sym.name] = size
             elif sym != size:
                 raise ValueError(
                     f"Expected shape {arrays[name].shape} for arg {name}, got {value.shape}."
@@ -102,15 +93,8 @@ def _get_stride_args(
                     f"Stride ({stride_size} bytes) for argument '{sym}' must be a multiple of item size ({value.itemsize} bytes)."
                 )
             if isinstance(sym, dace.symbol):
-                if sym.name not in stride_args:
-                    stride_args[str(sym)] = stride
-                elif stride_args[sym.name] != stride:
-                    # See above comment in `_get_shape_args`, same for stride symbols of fields in a tuple.
-                    # TODO(edopao): change to `assert sym.name not in stride_args` to ensure that stride symbols are unique,
-                    # once the assumption on tuples is removed.
-                    raise ValueError(
-                        f"Expected array stride {sym.name} for arg {name} to be {stride_args[sym.name]}, got {stride}."
-                    )
+                assert sym.name not in stride_args
+                stride_args[sym.name] = stride
             elif sym != stride:
                 raise ValueError(
                     f"Expected stride {arrays[name].strides} for arg {name}, got {value.strides}."
