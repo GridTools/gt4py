@@ -355,9 +355,9 @@ def _create_field_operator(
     else:
         # handle tuples of fields
         assert isinstance(node_type, ts.TupleType)
-        return gtx_utils.tree_map(_create_field_operator_impl)(
-            output_edges, mx, dace_gtir_utils.make_symbol_tuple("x", node_type)
-        )
+        return gtx_utils.tree_map(
+            lambda output_edge, sym: _create_field_operator_impl(output_edge, mx, sym)
+        )(output_edges, dace_gtir_utils.make_symbol_tuple("x", node_type))
 
 
 def extract_domain(node: gtir.Node) -> FieldopDomain:
