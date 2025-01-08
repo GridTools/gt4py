@@ -500,6 +500,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
             memlets=read_memlets,
             global_context=global_ctx,
             symbol_collector=symbol_collector,
+            **kwargs
         )
         tasklet = self._fix_scalar_access_read_after_write(tasklet)
         return tasklet
@@ -639,6 +640,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
         memlets: List[dcir.Memlet],
         global_context: DaCeIRBuilder.GlobalContext,
         symbol_collector: DaCeIRBuilder.SymbolCollector,
+        **kwargs: Any,
     ) -> None:
         for memlet in memlets:
             """
@@ -664,8 +666,34 @@ class DaCeIRBuilder(eve.NodeTranslator):
                 reshape_memlet = False
                 for access_node in tasklet.walk_values().if_isinstance(dcir.IndexAccess):
                     if access_node.data_index and access_node.name == memlet.connector:
-                        access_node.data_index = memlet_data_index + access_node.data_index
-                        assert len(access_node.data_index) == array_ndims
+                        # Order matters!
+                        # Resolve first the cartesian dimensions packed in memlet_data_index
+                        access_node.explicit_indices = []
+                        for data_index in memlet_data_index:
+                            access_node.explicit_indices.append(
+                                self.visit(
+                                    data_index,
+                                    symbol_collector=symbol_collector,
+                                    global_ctx=global_context,
+                                    **kwargs,
+                                )
+                            )
+                        # Separate between case where K is offset or absolute and
+                        # where it's a regular offset (should be dealt with the above memlet_data_index)
+                        if access_node.offset:
+                            access_node.explicit_indices.append(access_node.offset)
+                        # Add any remaining data dimensions indexing
+                        for data_index in access_node.data_index:
+                            access_node.explicit_indices.append(
+                                self.visit(
+                                    data_index,
+                                    symbol_collector=symbol_collector,
+                                    global_ctx=global_context,
+                                    is_target=False,
+                                    **kwargs,
+                                )
+                            )
+                        assert len(access_node.explicit_indices) == array_ndims
                         reshape_memlet = True
                 if reshape_memlet:
                     # ensure that memlet symbols used for array indexing are defined in context
@@ -755,6 +783,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
                     memlets=[*read_memlets, *write_memlets],
                     global_context=global_ctx,
                     symbol_collector=symbol_collector,
+                    **kwargs,
                 )
                 tasklet = self._fix_scalar_access_read_after_write(tasklet)
 

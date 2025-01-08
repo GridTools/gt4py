@@ -59,20 +59,30 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
             data_dims=(),  # data_index added in visit_IndexAccess
         )
         ranges.offset(sym_offsets, negative=False)
-        return dace.subsets.Range([r for i, r in enumerate(ranges.ranges) if int_sizes[i] != 1])
-        # return str(res)
+        res = dace.subsets.Range([r for i, r in enumerate(ranges.ranges) if int_sizes[i] != 1])
+        return str(res)
 
-    def visit_CartesianOffset(self, node: common.CartesianOffset, **kwargs: Any) -> str:
-        return self._visit_offset(node, **kwargs)
+    # where does explicit come from?
+    def visit_CartesianOffset(self, node: common.CartesianOffset, explicit=False, **kwargs: Any) -> str:
+        # If called from the explicit pass we need to be add manually the relative indexing
+        if explicit:
+            return f"__k+{self.visit(node.k, **kwargs)}"
+        else:
+            return self._visit_offset(node, **kwargs)
 
-    def visit_VariableKOffset(self, node: dcir.VariableKOffset, **kwargs: Any) -> str:
-        return self._visit_offset(node, **kwargs)
+    def visit_VariableKOffset(self, node: common.VariableKOffset, explicit=False, **kwargs: Any) -> str:
+        # If called from the explicit pass we need to be add manually the relative indexing
+        if explicit:
+            return f"__k+{self.visit(node.k, **kwargs)}"
+        else:
+            return self._visit_offset(node, **kwargs)
 
     def visit_IndexAccess(
         self,
         node: dcir.IndexAccess,
         *,
         is_target: bool,
+        sdfg_ctx,
         symtable: ChainMap[eve.SymbolRef, dcir.Decl],
         **kwargs: Any,
     ) -> str:
@@ -91,23 +101,43 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
             ) from None
 
         index_strs = []
-        if node.offset is not None: # and node.offset != common.CartesianOffset.zero():
-            ranges = self.visit(
-                node.offset,
-                decl=symtable[memlet.field],
-                access_info=memlet.access_info,
-                symtable=symtable,
-                in_idx=True,
-                is_target=False,
-                **kwargs,
+        if node.explicit_indices:
+            # Full array access with every dimensions accessed in full
+            # everything was packed in `explicit_indices` in `DaCeIRBuilder.visit_HorizontalExecution`
+            # along the `reshape_memlet=True` code path
+            assert len(node.explicit_indices) == len(sdfg_ctx.sdfg.arrays[memlet.field].shape)
+            for idx in node.explicit_indices:
+                index_strs.append(
+                    self.visit(
+                        idx,
+                        symtable=symtable,
+                        in_idx=True,
+                        explicit=True,
+                        **kwargs,
+                    )
+                )
+        else:
+            # Grid-point access, I & J are unitary, K can be offseted with variable
+            # Resolve K offset (also resolves I & J)
+            if node.offset is not None:
+                index_strs.append(
+                    self.visit(
+                        node.offset,
+                        decl=symtable[memlet.field],
+                        access_info=memlet.access_info,
+                        symtable=symtable,
+                        in_idx=True,
+                        **kwargs,
+                    )
+                )
+            # Add any data dimensions
+            index_strs.extend(
+                self.visit(idx, symtable=symtable, in_idx=True, **kwargs)
+                for idx in node.data_index
             )
-            if len(ranges) > 0:
-                index_strs.append(str(ranges))
-        index_strs.extend(
-            self.visit(idx, symtable=symtable, in_idx=True, **kwargs) for idx in node.data_index
-        )
-
-        return f"{node.name}[{','.join(index_strs)}]" if len(index_strs) > 0 else node.name
+        # filter empty strings
+        non_empty_indices = list(filter(None, index_strs))
+        return f"{node.name}[{','.join(non_empty_indices)}]" if len(non_empty_indices) > 0 else node.name
 
     def visit_AssignStmt(self, node: dcir.AssignStmt, **kwargs: Any) -> str:
         # Visiting order matters because targets must not contain the target symbols from the left visit

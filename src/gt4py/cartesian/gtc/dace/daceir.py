@@ -745,8 +745,20 @@ class VariableKOffset(common.VariableKOffset[Expr]):
 
 
 class IndexAccess(common.FieldAccess, Expr):
-    offset: Optional[Union[common.CartesianOffset, VariableKOffset]]
+    offset: Optional[
+        Union[
+            common.CartesianOffset,
+            VariableKOffset,
+            Literal,
+            ScalarAccess,  # For field index
+        ]
+    ]
     is_target: bool
+
+    # Use to access as a full field with explicit indices
+    explicit_indices: Optional[
+        List[Union[VariableKOffset, Literal, ScalarAccess]]
+    ] = None
 
 
 class AssignStmt(common.AssignStmt[Union[IndexAccess, ScalarAccess], Expr], Stmt):
