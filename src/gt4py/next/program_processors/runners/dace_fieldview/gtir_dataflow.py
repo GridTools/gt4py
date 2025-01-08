@@ -387,9 +387,9 @@ class LambdaToDataflow(eve.NodeVisitor):
         name: str,
         map_ranges: Dict[str, str | dace.subsets.Subset]
         | List[Tuple[str, str | dace.subsets.Subset]],
-        inputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
+        inputs: Dict[str, dace.Memlet],
         code: str,
-        outputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
+        outputs: Dict[str, dace.Memlet],
         **kwargs: Any,
     ) -> tuple[dace.nodes.Tasklet, dace.nodes.MapEntry, dace.nodes.MapExit]:
         """
@@ -603,24 +603,20 @@ class LambdaToDataflow(eve.NodeVisitor):
             nsdfg.add_edge(entry_state, fstate, dace.InterstateEdge(condition="not (__cond)"))
 
         nsdfg_symbol_mapping = {}
-        input_memlets: dict[str, tuple[dace.nodes.AccessNode, Optional[dace_subsets.Range]]] = {}
+        input_memlets: dict[str, MemletExpr | ValueExpr] = {}
 
         if isinstance(condition_value, SymbolExpr):
             nsdfg.add_symbol("__cond", dace.dtypes.bool)
             nsdfg_symbol_mapping["__cond"] = condition_value.value
         else:
             nsdfg.add_scalar("__cond", dace.dtypes.bool)
-            if isinstance(condition_value, ValueExpr):
-                input_memlets["__cond"] = (
-                    condition_value.dc_node,
-                    dace_subsets.Range.from_string("0"),
-                )
-            else:
-                assert isinstance(condition_value, MemletExpr)
-                input_memlets["__cond"] = (condition_value.dc_node, condition_value.subset)
+            if isinstance(condition_value, MemletExpr):
                 nsdfg_symbol_mapping.update(
                     {sym: sym for sym in condition_value.subset.free_symbols}
                 )
+            else:
+                assert isinstance(condition_value, ValueExpr)
+            input_memlets["__cond"] = condition_value
 
         def visit_branch(
             state: dace.SDFGState, expr: gtir.Expr
@@ -631,21 +627,20 @@ class LambdaToDataflow(eve.NodeVisitor):
             assert state in nsdfg.states()
 
             def visit_arg(arg: IteratorExpr | DataExpr) -> IteratorExpr | ValueExpr:
-                if isinstance(arg, IteratorExpr):
-                    arg_node = arg.field
-                    arg_desc = arg_node.desc(self.sdfg)
-                    arg_subset = dace_subsets.Range.from_array(arg_desc)
-
-                else:
-                    assert isinstance(arg, (MemletExpr, ValueExpr))
+                if isinstance(arg, (MemletExpr, ValueExpr)):
+                    arg_expr = arg
                     arg_node = arg.dc_node
+                    arg_desc = arg_node.desc(self.sdfg)
                     if isinstance(arg, MemletExpr):
                         assert set(arg.subset.size()) == {1}
-                        arg_desc = dace.data.Scalar(arg_node.desc(self.sdfg).dtype)
-                        arg_subset = arg.subset
-                    else:
-                        arg_desc = arg_node.desc(self.sdfg)
-                        arg_subset = None
+                        arg_desc = dace.data.Scalar(arg_desc.dtype)
+                else:
+                    assert isinstance(arg, IteratorExpr)
+                    arg_node = arg.field
+                    arg_desc = arg_node.desc(self.sdfg)
+                    arg_expr = MemletExpr(
+                        arg_node, arg.gt_dtype, dace_subsets.Range.from_array(arg_desc)
+                    )
 
                 arg_data = arg_node.data
                 # SDFG data containers with name prefix '__tmp' are expected to be transients
@@ -662,7 +657,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                     inner_desc = arg_desc.clone()
                     inner_desc.transient = False
                     nsdfg.add_datadesc(inner_data, inner_desc)
-                    input_memlets[inner_data] = (arg_node, arg_subset)
+                    input_memlets[inner_data] = arg_expr
 
                 inner_node = state.add_access(inner_data)
                 if isinstance(arg, IteratorExpr):
@@ -749,13 +744,17 @@ class LambdaToDataflow(eve.NodeVisitor):
             symbol_mapping=nsdfg_symbol_mapping | {str(sym): sym for sym in nsdfg.free_symbols},
         )
 
-        for inner, (src_node, src_subset) in input_memlets.items():
-            if src_subset is None:
-                self._add_edge(
-                    src_node, None, nsdfg_node, inner, self.sdfg.make_array_memlet(src_node.data)
-                )
+        for inner, input_expr in input_memlets.items():
+            if isinstance(input_expr, MemletExpr):
+                self._add_input_data_edge(input_expr.dc_node, input_expr.subset, nsdfg_node, inner)
             else:
-                self._add_input_data_edge(src_node, src_subset, nsdfg_node, inner)
+                self._add_edge(
+                    input_expr.dc_node,
+                    None,
+                    nsdfg_node,
+                    inner,
+                    self.sdfg.make_array_memlet(input_expr.dc_node.data),
+                )
 
         def connect_output(inner_value: ValueExpr) -> ValueExpr:
             inner_data = inner_value.dc_node.data
