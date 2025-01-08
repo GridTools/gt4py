@@ -362,52 +362,18 @@ class TaskletAccessInfoCollector(eve.NodeVisitor):
         self.he_grid = self.ij_grid.set_interval(dcir.Axis.K, k_interval)
         self.grid_subset = grid_subset
 
-    def visit_CodeBlock(
-        self,
-        _node: oir.CodeBlock,
-        **_kwargs,
-    ) -> Dict[str, dcir.FieldAccessInfo]:
+    def visit_CodeBlock(self, _node: oir.CodeBlock, **_kwargs):
         raise RuntimeError("We shouldn't reach cod blocks anymore")
-        # inner_ctx = self.Context(axes=ctx.axes)
-        # inner_infos = inner_ctx.access_infos
-        #
-        # self.visit(
-        #     node.body,
-        #     ctx=inner_ctx,
-        #     **kwargs,
-        # )
-        #
-        # if self.grid_subset is not None:
-        #     for axis in self.ij_grid.axes():
-        #         if axis in self.grid_subset.intervals:
-        #             self.ij_grid = self.ij_grid.set_interval(axis, self.grid_subset.intervals[axis])
-        #
-        # inner_infos = {name: info.apply_iteration(self.ij_grid) for name, info in inner_infos.items()}
-        #
-        # ctx.access_infos.update(
-        #     {
-        #         name: info.union(ctx.access_infos.get(name, info))
-        #         for name, info in inner_infos.items()
-        #     }
-        # )
-        #
-        # return ctx.access_infos
 
     def visit_AssignStmt(self, node: oir.AssignStmt, **kwargs):
         self.visit(node.right, is_write=False, **kwargs)
         self.visit(node.left, is_write=True, **kwargs)
 
     def visit_MaskStmt(self, _node: oir.MaskStmt, **_kwargs):
-        # skip mask statements
-        return
-        # self.visit(node.mask, is_conditional=is_conditional, **kwargs)
-        # self.visit(node.body, is_conditional=True, **kwargs)
+        return # skip mask statements
 
     def visit_While(self, _node: oir.While, **_kwargs):
-        # skip while loops
-        return
-        # self.visit(node.cond, is_conditional=is_conditional, **kwargs)
-        # self.visit(node.body, is_conditional=True, **kwargs)
+        return # skip while loops
 
     @staticmethod
     def _global_grid_subset(
@@ -464,16 +430,11 @@ class TaskletAccessInfoCollector(eve.NodeVisitor):
         self,
         node: oir.FieldAccess,
         *,
-        is_write: bool = False,
+        is_write: bool,
         ctx: TaskletAccessInfoCollector.Context,
         **kwargs,
     ):
-        self.visit(
-            node.offset,
-            ctx=ctx,
-            is_write=False,
-            **kwargs,
-        )
+        self.visit(node.offset, ctx=ctx, is_write=False, **kwargs)
 
         if (is_write and not self.collect_write) or (not is_write and not self.collect_read):
             return
@@ -513,9 +474,9 @@ def compute_tasklet_access_infos(
     if isinstance(node, oir.CodeBlock):
         collector.visit(node.body, ctx=ctx)
     elif isinstance(node, oir.MaskStmt):
-        collector.visit(node.mask, ctx=ctx)
+        collector.visit(node.mask, ctx=ctx, is_write=False)
     elif isinstance(node, oir.While):
-        collector.visit(node.cond, ctx=ctx)
+        collector.visit(node.cond, ctx=ctx, is_write=False)
 
     return ctx.access_infos
 
