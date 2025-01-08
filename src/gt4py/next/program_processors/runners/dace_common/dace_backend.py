@@ -7,13 +7,13 @@
 # SPDX-License-Identifier: BSD-3-Clause
 import warnings
 from collections.abc import Mapping, Sequence
-from typing import Any, Iterable
+from typing import Any
 
 import dace
 import numpy as np
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common as gtx_common, utils as gtx_utils
+from gt4py.next import common as gtx_common
 
 from . import utility as dace_utils
 
@@ -46,10 +46,9 @@ def _convert_arg(arg: Any, sdfg_param: str) -> Any:
 
 def _get_args(sdfg: dace.SDFG, args: Sequence[Any]) -> dict[str, Any]:
     sdfg_params: Sequence[str] = sdfg.arg_names
-    flat_args: Iterable[Any] = gtx_utils.flatten_nested_tuple(tuple(args))
     return {
         sdfg_param: _convert_arg(arg, sdfg_param)
-        for sdfg_param, arg in zip(sdfg_params, flat_args, strict=True)
+        for sdfg_param, arg in zip(sdfg_params, args, strict=True)
     }
 
 

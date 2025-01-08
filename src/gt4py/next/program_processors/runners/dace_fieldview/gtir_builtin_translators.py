@@ -467,6 +467,7 @@ def translate_as_fieldop(
     """
     assert isinstance(node, gtir.FunCall)
     assert cpm.is_call_to(node.fun, "as_fieldop")
+    assert isinstance(node.type, (ts.FieldType, ts.TupleType))
 
     fun_node = node.fun
     assert len(fun_node.args) == 2
@@ -475,11 +476,11 @@ def translate_as_fieldop(
     if cpm.is_call_to(fieldop_expr, "scan"):
         return translate_scan(node, sdfg, state, sdfg_builder)
 
-    assert isinstance(node.type, ts.FieldType)
     if cpm.is_ref_to(fieldop_expr, "deref"):
         # Special usage of 'deref' as argument to fieldop expression, to pass a scalar
         # value to 'as_fieldop' function. It results in broadcasting the scalar value
         # over the field domain.
+        assert isinstance(node.type, ts.FieldType)
         stencil_expr = im.lambda_("a")(im.deref("a"))
         stencil_expr.expr.type = node.type.dtype
     elif isinstance(fieldop_expr, gtir.Lambda):
@@ -498,13 +499,12 @@ def translate_as_fieldop(
     fieldop_args = [_parse_fieldop_arg(arg, sdfg, state, sdfg_builder, domain) for arg in node.args]
 
     # represent the field operator as a mapped tasklet graph, which will range over the field domain
-    input_edges, output_edge = gtir_dataflow.visit_lambda(
+    input_edges, output_edges = gtir_dataflow.visit_lambda(
         sdfg, state, sdfg_builder, stencil_expr, fieldop_args
     )
-    assert isinstance(output_edge, gtir_dataflow.DataflowOutputEdge)
 
     return _create_field_operator(
-        sdfg, state, domain, node.type, sdfg_builder, input_edges, output_edge
+        sdfg, state, domain, node.type, sdfg_builder, input_edges, output_edges
     )
 
 

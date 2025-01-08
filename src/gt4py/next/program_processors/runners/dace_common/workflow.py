@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import ctypes
 import dataclasses
-from typing import Any
+from typing import Any, Sequence
 
 import dace
 import factory
@@ -112,11 +112,12 @@ def convert_args(
     ) -> None:
         if out is not None:
             args = (*args, out)
-        if len(sdfg.arg_names) > len(args):
-            args = (*args, *arguments.iter_size_args(args))
+        flat_args: Sequence[Any] = gtx_utils.flatten_nested_tuple(tuple(args))
+        if len(sdfg.arg_names) > len(flat_args):
+            flat_args = (*flat_args, *arguments.iter_size_args(args))
 
         if sdfg_program._lastargs:
-            kwargs = dict(zip(sdfg.arg_names, gtx_utils.flatten_nested_tuple(args), strict=True))
+            kwargs = dict(zip(sdfg.arg_names, flat_args, strict=True))
             kwargs.update(dace_backend.get_sdfg_conn_args(sdfg, offset_provider, on_gpu))
 
             use_fast_call = True
@@ -151,7 +152,7 @@ def convert_args(
         sdfg_args = dace_backend.get_sdfg_args(
             sdfg,
             offset_provider,
-            *args,
+            *flat_args,
             check_args=False,
             on_gpu=on_gpu,
             use_field_canonical_representation=use_field_canonical_representation,
