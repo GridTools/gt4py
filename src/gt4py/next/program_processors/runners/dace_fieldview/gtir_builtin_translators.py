@@ -220,27 +220,20 @@ def _parse_fieldop_arg(
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
     domain: FieldopDomain,
-) -> gtir_dataflow.MemletExpr | tuple[gtir_dataflow.MemletExpr | tuple[Any, ...], ...]:
+) -> (
+    gtir_dataflow.IteratorExpr
+    | gtir_dataflow.MemletExpr
+    | tuple[gtir_dataflow.IteratorExpr | gtir_dataflow.MemletExpr | tuple[Any, ...], ...]
+):
     """Helper method to visit an expression passed as argument to a field operator."""
-
-    def _parse_fieldop_arg_impl(
-        arg: FieldopData,
-    ) -> gtir_dataflow.MemletExpr:
-        arg_expr = arg.get_local_view(domain)
-        if isinstance(arg_expr, gtir_dataflow.MemletExpr):
-            return arg_expr
-        # In case of scan field operator, the arguments to the vertical stencil are passed by value.
-        return gtir_dataflow.MemletExpr(
-            arg_expr.field, arg_expr.gt_dtype, arg_expr.get_memlet_subset(sdfg)
-        )
 
     arg = sdfg_builder.visit(node, sdfg=sdfg, head_state=state)
 
     if isinstance(arg, FieldopData):
-        return _parse_fieldop_arg_impl(arg)
+        return arg.get_local_view(domain)
     else:
         # handle tuples of fields
-        return gtx_utils.tree_map(lambda x: _parse_fieldop_arg_impl(x))(arg)
+        return gtx_utils.tree_map(lambda x: x.get_local_view(domain))(arg)
 
 
 def _get_field_layout(
