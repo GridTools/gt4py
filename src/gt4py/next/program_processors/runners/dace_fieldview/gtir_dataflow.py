@@ -466,7 +466,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             ),
         )
 
-    def _visit_deref(self, node: gtir.FunCall) -> DataExpr:
+    def _visit_deref(self, node: gtir.FunCall) -> DataExpr | tuple[DataExpr | tuple[Any, ...], ...]:
         """
         Visit a `deref` node, which represents dereferencing of an iterator.
         The iterator is the argument of this node.
@@ -481,21 +481,32 @@ class LambdaToDataflow(eve.NodeVisitor):
         memlet; otherwise dereferencing is a runtime operation represented in
         the SDFG as a tasklet node.
         """
-        # format used for field index tasklet connector
-        IndexConnectorFmt: Final = "__index_{dim}"
-
         assert len(node.args) == 1
         arg_expr = self.visit(node.args[0])
 
+        if isinstance(arg_expr, tuple):
+            assert isinstance(node.type, ts.TupleType)
+            symbol_tuple = dace_gtir_utils.make_symbol_tuple("x", node.type)
+            return gtx_utils.tree_map(lambda f, fsym: self._visit_deref_field(f, fsym.type))(
+                arg_expr, symbol_tuple
+            )
+        else:
+            assert isinstance(node.type, (ts.FieldType, ts.ScalarType, itir_ts.ListType))
+            return self._visit_deref_field(arg_expr, node.type)
+
+    def _visit_deref_field(self, arg_expr: DataExpr, node_type: ts.DataType) -> DataExpr:
+        # format used for field index tasklet connector
+        IndexConnectorFmt: Final = "__index_{dim}"
+
+        # dereferencing a scalar or a literal node results in the node itself
         if not isinstance(arg_expr, IteratorExpr):
-            # dereferencing a scalar or a literal node results in the node itself
             return arg_expr
 
         field_desc = arg_expr.field.desc(self.sdfg)
         if isinstance(field_desc, dace.data.Scalar):
             # deref a zero-dimensional field
             assert len(arg_expr.field_domain) == 0
-            assert isinstance(node.type, ts.ScalarType)
+            assert isinstance(node_type, ts.ScalarType)
             return MemletExpr(arg_expr.field, arg_expr.gt_dtype, subset="0")
 
         # default case: deref a field with one or more dimensions
@@ -1271,7 +1282,6 @@ class LambdaToDataflow(eve.NodeVisitor):
         else:
             it = self.visit(iterator)
 
-        assert isinstance(it, IteratorExpr)
         return offset_provider_arg, offset_value_arg, it
 
     def _make_cartesian_shift(
@@ -1420,7 +1430,9 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         return IteratorExpr(it.field, it.gt_dtype, it.field_domain, shifted_indices)
 
-    def _visit_shift(self, node: gtir.FunCall) -> IteratorExpr:
+    def _visit_shift(
+        self, node: gtir.FunCall
+    ) -> IteratorExpr | tuple[IteratorExpr | tuple[Any, ...], ...]:
         # convert builtin-index type to dace type
         IndexDType: Final = dace_utils.as_dace_type(
             ts.ScalarType(kind=getattr(ts.ScalarKind, gtir.INTEGER_INDEX_BUILTIN.upper()))
@@ -1446,19 +1458,25 @@ class LambdaToDataflow(eve.NodeVisitor):
             else self.visit(offset_value_arg)
         )
 
-        if isinstance(offset_provider_type, gtx_common.Dimension):
-            return self._make_cartesian_shift(it, offset_provider_type, offset_expr)
-        else:
-            # initially, the storage for the connectivity tables is created as transient;
-            # when the tables are used, the storage is changed to non-transient,
-            # so the corresponding arrays are supposed to be allocated by the SDFG caller
-            offset_table = dace_utils.connectivity_identifier(offset)
-            self.sdfg.arrays[offset_table].transient = False
-            offset_table_node = self.state.add_access(offset_table)
+        def shift_field_iterator(field_iterator: IteratorExpr) -> IteratorExpr:
+            if isinstance(offset_provider_type, gtx_common.Dimension):
+                return self._make_cartesian_shift(field_iterator, offset_provider_type, offset_expr)
+            else:
+                # initially, the storage for the connectivity tables is created as transient;
+                # when the tables are used, the storage is changed to non-transient,
+                # so the corresponding arrays are supposed to be allocated by the SDFG caller
+                offset_table = dace_utils.connectivity_identifier(offset)
+                self.sdfg.arrays[offset_table].transient = False
+                offset_table_node = self.state.add_access(offset_table)
 
-            return self._make_unstructured_shift(
-                it, offset_provider_type, offset_table_node, offset_expr
-            )
+                return self._make_unstructured_shift(
+                    field_iterator, offset_provider_type, offset_table_node, offset_expr
+                )
+
+        if isinstance(it, tuple):
+            return gtx_utils.tree_map(shift_field_iterator)(it)
+        else:
+            return shift_field_iterator(it)
 
     def _visit_generic_builtin(self, node: gtir.FunCall) -> ValueExpr:
         """

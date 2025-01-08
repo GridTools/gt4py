@@ -219,7 +219,8 @@ def tuple_input(inp):
 
 
 @pytest.mark.uses_tuple_args
-@pytest.mark.uses_tuple_deref
+@pytest.mark.uses_tuple_fields_with_different_size
+@pytest.mark.uses_tuple_iterator
 def test_tuple_field_input(program_processor):
     program_processor, validate = program_processor
 
@@ -273,7 +274,7 @@ def tuple_tuple_input(inp):
 
 
 @pytest.mark.uses_tuple_args
-@pytest.mark.uses_tuple_deref
+@pytest.mark.uses_tuple_iterator
 def test_tuple_of_tuple_of_field_input(program_processor):
     program_processor, validate = program_processor
 
@@ -350,7 +351,7 @@ def test_scalar_tuple_args(program_processor):
 
 
 @pytest.mark.uses_tuple_args
-@pytest.mark.uses_tuple_deref
+@pytest.mark.uses_tuple_iterator
 def test_mixed_field_scalar_tuple_arg(program_processor):
     @fundef
     def stencil(inp):
