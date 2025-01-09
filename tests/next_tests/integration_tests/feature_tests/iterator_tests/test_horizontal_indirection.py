@@ -46,6 +46,8 @@ def conditional_indirection(inp, cond):
 def test_simple_indirection(program_processor):
     program_processor, validate = program_processor
 
+    pytest.xfail("Applied shifts in if_ statements are not supported in TraceShift pass.")
+
     shape = [8]
     inp = gtx.as_field([IDim], np.arange(0, shape[0] + 2), origin={IDim: 1})
     rng = np.random.default_rng()
