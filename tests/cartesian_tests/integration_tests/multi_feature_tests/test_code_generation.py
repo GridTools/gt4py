@@ -698,7 +698,7 @@ def test_K_offset_write_conditional(backend):
     # End of iteration state
     # - A[...] = A[40, 2.0, 2.0, -1]
     # - B[...] = A[1, 1, -1, 42]
-    # ITERATION k = 1 of [3:1]
+    # ITERATION k = 1 of [2:1]
     # if condition
     # - A[1] == 2.0 && B[1] == 1 => True
     # - A[0] = 2.0
