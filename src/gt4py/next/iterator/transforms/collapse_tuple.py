@@ -65,6 +65,8 @@ def _is_trivial_or_tuple_thereof_expr(node: ir.Node) -> bool:
         return all(_is_trivial_or_tuple_thereof_expr(arg) for arg in node.args)
     if cpm.is_call_to(node, "tuple_get"):
         return _is_trivial_or_tuple_thereof_expr(node.args[1])
+    # This will duplicate the condition and increase the size of the tree, but this is probably
+    # acceptable.
     if cpm.is_call_to(node, "if_"):
         return all(_is_trivial_or_tuple_thereof_expr(arg) for arg in node.args[1:])
     if isinstance(node, (ir.SymRef, ir.Literal)):
@@ -365,6 +367,27 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
     def transform_propagate_to_if_on_tuples_cps(
         self, node: ir.FunCall, **kwargs
     ) -> Optional[ir.Node]:
+        # The basic idea of this transformation is to remove tuples across if-stmts by rewriting
+        # the expression in continuation passing style, e.g. something like a tuple reordering
+        # ```
+        # let t = if True then {1, 2} else {3, 4} in
+        #   {t[1], t[0]})
+        # end
+        # ```
+        # is rewritten into:
+        # ```
+        # let cont = λ(el0, el1) → {el1, el0} in
+        #  if True then cont(1, 2) else cont(3, 4)
+        # end
+        # ```
+        # Note how the `make_tuple` call argument of the `if` disappears. Since lambda functions
+        # are currently inlined (due to limitations of the domain inference) we will only
+        # gain something compared `PROPAGATE_TO_IF_ON_TUPLES` if the continuation `cont` is trivial,
+        # e.g. a `make_tuple` call like in the example. In that case we can inline the trivial
+        # continuation and end up with an only moderately larger tree, e.g.
+        # `if True then {2, 1} else {4, 3}`. The examples in the comments below all refer to this
+        # tuple reordering example here.
+
         if cpm.is_call_to(node, "if_"):
             return None
 
@@ -374,14 +397,14 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 if not any(isinstance(branch.type, ts.TupleType) for branch in arg.args[1:]):
                     continue
 
-                cond, true_branch, false_branch = arg.args
+                cond, true_branch, false_branch = arg.args  # e.g. `True`, `{1, 2}`, `{3, 4}`
                 tuple_type: ts.TupleType = true_branch.type  # type: ignore[assignment]  # type ensured above
                 tuple_len = len(tuple_type.types)
 
-                # transform function into continuation-passing-style
+                # build and simplify continuation, e.g. λ(el0, el1) → {el1, el0}
                 itir_type_inference.reinfer(node)
                 assert node.type
-                f_type = ts.FunctionType(
+                f_type = ts.FunctionType(  # type of continuation in order to keep full type info
                     pos_only_args=tuple_type.types,
                     pos_or_kw_args={},
                     kw_only_args={},
@@ -395,27 +418,25 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 f_body = _with_altered_arg(node, i, im.make_tuple(*f_args))
                 # simplify, e.g., inline trivial make_tuple args
                 new_f_body = self.fp_transform(f_body, **kwargs)
-                # if the function did not simplify there is nothing to gain. Skip
-                # transformation.
+                # if the continuation did not simplify there is nothing to gain. Skip
+                # transformation of this argument.
                 if new_f_body is f_body:
                     continue
-                # if the function is not trivial the transformation would still work, but
-                # inlining would result in a larger tree again and we didn't didn't gain
-                # anything compared to regular `propagate_to_if_on_tuples`. Not inling also
-                # works, but we don't want bound lambda functions in our tree (at least right
-                # now).
-                # TODO(tehrengruber): `if_` of trivial expression is also considered fine. This
-                #  will duplicate the condition and unnecessarily increase the size of the tree.
+                # if the function is not trivial the transformation we would get a larger tree
+                # after inlining so we skip transformation this argument.
                 if not _is_trivial_or_tuple_thereof_expr(new_f_body):
                     continue
                 f = im.lambda_(*f_params)(new_f_body)
 
+                # this is the symbol refering to the tuple value inside the two branches of the
+                # if, e.g. a symbol refering to `{1, 2}` and `{3, 4}` respectively
                 tuple_var = self.uids.sequential_id(prefix="__ct_tuple_cps")
+                # this is the symbol refering to our continuation, e.g. `cont` in our example.
                 f_var = self.uids.sequential_id(prefix="__ct_cont")
                 new_branches = []
                 for branch in arg.args[1:]:
                     new_branch = im.let(tuple_var, branch)(
-                        im.call(im.ref(f_var, f_type))(
+                        im.call(im.ref(f_var, f_type))(  # call to the continuation
                             *(
                                 im.tuple_get(i, im.ref(tuple_var, branch.type))
                                 for i in range(tuple_len)
@@ -424,6 +445,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
                     )
                     new_branches.append(self.fp_transform(new_branch, **kwargs))
 
+                # assemble everything together
                 new_node = im.let(f_var, f)(im.if_(cond, *new_branches))
                 new_node = inline_lambda(new_node, eligible_params=[True])
                 assert cpm.is_call_to(new_node, "if_")
