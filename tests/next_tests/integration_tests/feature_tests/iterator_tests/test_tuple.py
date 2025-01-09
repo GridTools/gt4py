@@ -321,6 +321,7 @@ def test_field_of_2_extra_dim_input(program_processor):
 
 
 @pytest.mark.uses_tuple_args
+@pytest.mark.uses_tuple_iterator
 def test_scalar_tuple_args(program_processor):
     @fundef
     def stencil(inp):
