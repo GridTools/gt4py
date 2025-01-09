@@ -220,39 +220,35 @@ def _parse_fieldop_arg(
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
     domain: FieldopDomain,
-    by_value: bool = False,
+    use_full_shape: bool = False,
 ) -> (
     gtir_dataflow.IteratorExpr
     | gtir_dataflow.MemletExpr
-    | gtir_dataflow.ValueExpr
     | tuple[
-        gtir_dataflow.IteratorExpr
-        | gtir_dataflow.MemletExpr
-        | gtir_dataflow.ValueExpr
-        | tuple[Any, ...],
+        gtir_dataflow.IteratorExpr | gtir_dataflow.MemletExpr | tuple[Any, ...],
         ...,
     ]
 ):
     """Helper method to visit an expression passed as argument to a field operator."""
 
-    arg = sdfg_builder.visit(node, sdfg=sdfg, head_state=state)
-
-    def get_arg_value(
+    def _parse_fieldop_arg_impl(
         arg: FieldopData,
     ) -> gtir_dataflow.IteratorExpr | gtir_dataflow.MemletExpr:
         arg_expr = arg.get_local_view(domain)
-        if not by_value or isinstance(arg_expr, gtir_dataflow.MemletExpr):
+        if not use_full_shape or isinstance(arg_expr, gtir_dataflow.MemletExpr):
             return arg_expr
         # In case of scan field operator, the arguments to the vertical stencil are passed by value.
         return gtir_dataflow.MemletExpr(
             arg_expr.field, arg_expr.gt_dtype, arg_expr.get_memlet_subset(sdfg)
         )
 
+    arg = sdfg_builder.visit(node, sdfg=sdfg, head_state=state)
+
     if isinstance(arg, FieldopData):
-        return get_arg_value(arg)
+        return _parse_fieldop_arg_impl(arg)
     else:
         # handle tuples of fields
-        return gtx_utils.tree_map(lambda x: get_arg_value(x))(arg)
+        return gtx_utils.tree_map(lambda x: _parse_fieldop_arg_impl(x))(arg)
 
 
 def _get_field_layout(
@@ -499,7 +495,7 @@ def translate_as_fieldop(
     fieldop_args = [_parse_fieldop_arg(arg, sdfg, state, sdfg_builder, domain) for arg in node.args]
 
     # represent the field operator as a mapped tasklet graph, which will range over the field domain
-    input_edges, output_edges = gtir_dataflow.visit_lambda(
+    input_edges, output_edges = gtir_dataflow.apply(
         sdfg, state, sdfg_builder, stencil_expr, fieldop_args
     )
 
@@ -991,13 +987,13 @@ def translate_scan(
     stencil_builder = sdfg_builder.nested_context(nsdfg, lambda_symbols, lambda_field_offsets)
     stencil_args = [
         _parse_fieldop_arg(
-            im.ref(p.id), nsdfg, compute_state, stencil_builder, domain, by_value=True
+            im.ref(p.id), nsdfg, compute_state, stencil_builder, domain, use_full_shape=True
         )
         for p in stencil_expr.params
     ]
 
     # generate the dataflow representing the scan field operator
-    input_edges, result = gtir_dataflow.visit_lambda(
+    input_edges, result = gtir_dataflow.apply(
         nsdfg, compute_state, stencil_builder, stencil_expr, args=stencil_args
     )
 
