@@ -565,6 +565,92 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         return self._construct_tasklet_result(field_desc.dtype, deref_node, "val")
 
+    def _visit_if_branch(
+        self,
+        if_sdfg: dace.SDFG,
+        if_branch_state: dace.SDFGState,
+        expr: gtir.Expr,
+        if_sdfg_input_memlets: dict[str, MemletExpr | ValueExpr],
+    ) -> tuple[
+        list[DataflowInputEdge],
+        DataflowOutputEdge | tuple[DataflowOutputEdge | tuple[Any, ...], ...],
+    ]:
+        """
+        Helper method to visit an if branch expression and lower it to a dtaflow inside the given nested SDFG and state.
+
+        Args:
+            if_sdfg: The nested SDFG where the if expression is lowered.
+            if_branch_state: The state inside the nested SDFG where the if branch is lowered.
+            expr: The if branch expression to lower.
+            if_sdfg_input_memlets: The memlets that provide input data to the nested SDFG, will be update inside this function.
+
+        Returns:
+            A tuple containing:
+                - the list of input edges for the parent dataflow
+                - the output data, in the form of a single data edge or a tuple of data edges.
+        """
+        assert if_branch_state in if_sdfg.states()
+
+        def visit_arg(arg: IteratorExpr | DataExpr) -> IteratorExpr | ValueExpr:
+            if isinstance(arg, (MemletExpr, ValueExpr)):
+                arg_expr = arg
+                arg_node = arg.dc_node
+                arg_desc = arg_node.desc(self.sdfg)
+                if isinstance(arg, MemletExpr):
+                    assert set(arg.subset.size()) == {1}
+                    arg_desc = dace.data.Scalar(arg_desc.dtype)
+            else:
+                assert isinstance(arg, IteratorExpr)
+                arg_node = arg.field
+                arg_desc = arg_node.desc(self.sdfg)
+                arg_expr = MemletExpr(
+                    arg_node, arg.gt_dtype, dace_subsets.Range.from_array(arg_desc)
+                )
+
+            arg_data = arg_node.data
+            # SDFG data containers with name prefix '__tmp' are expected to be transients
+            inner_data = (
+                arg_data.replace("__tmp", "__input", 1)
+                if arg_data.startswith("__tmp")
+                else arg_data
+            )
+
+            try:
+                inner_desc = if_sdfg.data(inner_data)
+                assert not inner_desc.transient
+            except KeyError:
+                inner_desc = arg_desc.clone()
+                inner_desc.transient = False
+                if_sdfg.add_datadesc(inner_data, inner_desc)
+                if_sdfg_input_memlets[inner_data] = arg_expr
+
+            inner_node = if_branch_state.add_access(inner_data)
+            if isinstance(arg, IteratorExpr):
+                return IteratorExpr(inner_node, arg.gt_dtype, arg.field_domain, arg.indices)
+            else:
+                assert isinstance(inner_desc, dace.data.Scalar)
+                return ValueExpr(inner_node, arg.gt_dtype)
+
+        lambda_params = []
+        lambda_args: list[
+            IteratorExpr
+            | MemletExpr
+            | ValueExpr
+            | tuple[IteratorExpr | MemletExpr | ValueExpr | tuple[Any, ...], ...]
+        ] = []
+        for p in symbol_ref_utils.collect_symbol_refs(expr, self.symbol_map.keys()):
+            arg = self.symbol_map[p]
+            if isinstance(arg, tuple):
+                inner_arg = gtx_utils.tree_map(visit_arg)(arg)
+            else:
+                inner_arg = visit_arg(arg)
+            lambda_args.append(inner_arg)
+            lambda_params.append(im.sym(p))
+
+        # visit each branch of the if-statement as it was a Lambda node
+        lambda_node = gtir.Lambda(params=lambda_params, expr=expr)
+        return apply(if_sdfg, if_branch_state, self.subgraph_builder, lambda_node, lambda_args)
+
     def _visit_if(self, node: gtir.FunCall) -> ValueExpr | tuple[ValueExpr | tuple[Any, ...], ...]:
         assert len(node.args) == 3
 
@@ -621,76 +707,8 @@ class LambdaToDataflow(eve.NodeVisitor):
                 assert isinstance(condition_value, ValueExpr)
             input_memlets["__cond"] = condition_value
 
-        def construct_if_branch(
-            state: dace.SDFGState, expr: gtir.Expr
-        ) -> tuple[
-            list[DataflowInputEdge],
-            DataflowOutputEdge | tuple[DataflowOutputEdge | tuple[Any, ...], ...],
-        ]:
-            assert state in nsdfg.states()
-
-            def visit_arg(arg: IteratorExpr | DataExpr) -> IteratorExpr | ValueExpr:
-                if isinstance(arg, (MemletExpr, ValueExpr)):
-                    arg_expr = arg
-                    arg_node = arg.dc_node
-                    arg_desc = arg_node.desc(self.sdfg)
-                    if isinstance(arg, MemletExpr):
-                        assert set(arg.subset.size()) == {1}
-                        arg_desc = dace.data.Scalar(arg_desc.dtype)
-                else:
-                    assert isinstance(arg, IteratorExpr)
-                    arg_node = arg.field
-                    arg_desc = arg_node.desc(self.sdfg)
-                    arg_expr = MemletExpr(
-                        arg_node, arg.gt_dtype, dace_subsets.Range.from_array(arg_desc)
-                    )
-
-                arg_data = arg_node.data
-                # SDFG data containers with name prefix '__tmp' are expected to be transients
-                inner_data = (
-                    arg_data.replace("__tmp", "__input", 1)
-                    if arg_data.startswith("__tmp")
-                    else arg_data
-                )
-
-                try:
-                    inner_desc = nsdfg.data(inner_data)
-                    assert not inner_desc.transient
-                except KeyError:
-                    inner_desc = arg_desc.clone()
-                    inner_desc.transient = False
-                    nsdfg.add_datadesc(inner_data, inner_desc)
-                    input_memlets[inner_data] = arg_expr
-
-                inner_node = state.add_access(inner_data)
-                if isinstance(arg, IteratorExpr):
-                    return IteratorExpr(inner_node, arg.gt_dtype, arg.field_domain, arg.indices)
-                else:
-                    assert isinstance(inner_desc, dace.data.Scalar)
-                    return ValueExpr(inner_node, arg.gt_dtype)
-
-            lambda_params = []
-            lambda_args: list[
-                IteratorExpr
-                | MemletExpr
-                | ValueExpr
-                | tuple[IteratorExpr | MemletExpr | ValueExpr | tuple[Any, ...], ...]
-            ] = []
-            for p in symbol_ref_utils.collect_symbol_refs(expr, self.symbol_map.keys()):
-                arg = self.symbol_map[p]
-                if isinstance(arg, tuple):
-                    inner_arg = gtx_utils.tree_map(visit_arg)(arg)
-                else:
-                    inner_arg = visit_arg(arg)
-                lambda_args.append(inner_arg)
-                lambda_params.append(im.sym(p))
-
-            # visit each branch of the if-statement as it was a Lambda node
-            lambda_node = gtir.Lambda(params=lambda_params, expr=expr)
-            return visit_lambda(nsdfg, state, self.subgraph_builder, lambda_node, lambda_args)
-
-        for state, arg in zip([tstate, fstate], node.args[1:3]):
-            in_edges, out_edge = construct_if_branch(state, arg)
+        for if_branch_state, arg in zip([tstate, fstate], node.args[1:3]):
+            in_edges, out_edge = self._visit_if_branch(nsdfg, if_branch_state, arg, input_memlets)
             for edge in in_edges:
                 edge.connect(map_entry=None)
 
@@ -718,21 +736,25 @@ class LambdaToDataflow(eve.NodeVisitor):
                 assert isinstance(node.type, ts.TupleType)
                 out_symbol = dace_gtir_utils.make_symbol_tuple("__output", node.type)
                 outer_value = gtx_utils.tree_map(
-                    lambda x, y, output_state=state: construct_output(output_state, x, y)
+                    lambda x, y, output_state=if_branch_state: construct_output(output_state, x, y)
                 )(out_edge, out_symbol)
             else:
                 assert isinstance(node.type, ts.FieldType | ts.ScalarType)
-                outer_value = construct_output(state, out_edge, im.sym("__output", node.type))
+                outer_value = construct_output(
+                    if_branch_state, out_edge, im.sym("__output", node.type)
+                )
 
             # in case tuples are passed as argument, isolated non-transient nodes might be left in the state,
             # because not all tuple fields are necessarily used in the lambda scope
-            for data_node in state.data_nodes():
+            for data_node in if_branch_state.data_nodes():
                 data_desc = data_node.desc(nsdfg)
-                if (not data_desc.transient) and (state.degree(data_node) == 0):
+                if (not data_desc.transient) and (if_branch_state.degree(data_node) == 0):
                     # isolated node, connect it to a transient to avoid SDFG validation errors
                     temp, temp_desc = nsdfg.add_temp_transient_like(data_desc)
-                    temp_node = state.add_access(temp)
-                    state.add_nedge(data_node, temp_node, dace.Memlet.from_array(temp, temp_desc))
+                    temp_node = if_branch_state.add_access(temp)
+                    if_branch_state.add_nedge(
+                        data_node, temp_node, dace.Memlet.from_array(temp, temp_desc)
+                    )
 
         else:
             result = outer_value
@@ -894,6 +916,9 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert isinstance(list_arg, ValueExpr)
         assert isinstance(list_arg.gt_dtype, itir_ts.ListType)
         assert isinstance(list_arg.gt_dtype.element_type, ts.ScalarType)
+
+        list_desc = list_arg.dc_node.desc(self.sdfg)
+        assert len(list_desc.shape) == 1
 
         result_dtype = dace_utils.as_dace_type(list_arg.gt_dtype.element_type)
         result, _ = self.sdfg.add_scalar(self.sdfg.temp_data_name(), result_dtype, transient=True)
@@ -1597,9 +1622,11 @@ class LambdaToDataflow(eve.NodeVisitor):
     ) -> DataflowOutputEdge | tuple[DataflowOutputEdge | tuple[Any, ...], ...]:
         result = self.visit(node.expr)
 
-        def make_output_edge(
-            output_expr: ValueExpr | MemletExpr | SymbolExpr,
+        def _visit_Lambda_impl(
+            output_expr: DataflowOutputEdge | ValueExpr | MemletExpr | SymbolExpr,
         ) -> DataflowOutputEdge:
+            if isinstance(output_expr, DataflowOutputEdge):
+                return output_expr
             if isinstance(output_expr, ValueExpr):
                 return DataflowOutputEdge(self.state, output_expr)
 
@@ -1623,17 +1650,10 @@ class LambdaToDataflow(eve.NodeVisitor):
             output_expr = self._construct_tasklet_result(output_dtype, tasklet_node, "__out")
             return DataflowOutputEdge(self.state, output_expr)
 
-        def parse_result(
-            r: DataflowOutputEdge | ValueExpr | MemletExpr | SymbolExpr,
-        ) -> DataflowOutputEdge:
-            if isinstance(r, DataflowOutputEdge):
-                return r
-            return make_output_edge(r)
-
         return (
-            gtx_utils.tree_map(parse_result)(result)
+            gtx_utils.tree_map(_visit_Lambda_impl)(result)
             if isinstance(result, tuple)
-            else parse_result(result)
+            else _visit_Lambda_impl(result)
         )
 
     def visit_Literal(self, node: gtir.Literal) -> SymbolExpr:
@@ -1689,7 +1709,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             return self.visit(node)
 
 
-def visit_lambda(
+def apply(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.DataflowBuilder,
