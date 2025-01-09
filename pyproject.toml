@@ -14,8 +14,6 @@ classifiers = [
   'License :: OSI Approved :: BSD License',
   'Operating System :: POSIX',
   'Programming Language :: Python',
-  'Programming Language :: Python :: 3.8',
-  'Programming Language :: Python :: 3.9',
   'Programming Language :: Python :: 3.10',
   'Programming Language :: Python :: 3.11',
   'Programming Language :: Python :: Implementation :: CPython',
@@ -24,7 +22,6 @@ classifiers = [
   'Topic :: Scientific/Engineering :: Physics'
 ]
 dependencies = [
-  "astunparse>=1.6.3;python_version<'3.9'",
   'attrs>=21.3',
   'black>=22.3',
   'boltons>=20.1',
@@ -39,7 +36,6 @@ dependencies = [
   'filelock>=3.16.1',
   'frozendict>=2.3',
   'gridtools-cpp>=2.3.8,==2.*',
-  "importlib-resources>=5.0;python_version<'3.9'",
   'jinja2>=3.0.0',
   'lark>=1.1.2',
   'mako>=1.1',
@@ -67,7 +63,7 @@ keywords = [
 license = {file = 'LICENSE.txt'}
 name = 'gt4py'
 readme = 'README.md'
-requires-python = '>=3.8'
+requires-python = '>=3.10'
 
 [project.optional-dependencies]
 # Bundles
@@ -80,9 +76,9 @@ cuda12 = ['cupy-cuda12x>=12.0']
 dace = ['dace>=1.0.0,<1.1.0']  # v1.x will contain breaking changes, see https://github.com/spcl/dace/milestone/4
 formatting = ['clang-format>=9.0']
 gpu = ['cupy>=12.0']
-jax-cpu = ['jax[cpu]>=0.4.18; python_version>="3.10"']
-jax-cuda11 = ['jax[cuda11_pip]>=0.4.18; python_version>="3.10"']
-jax-cuda12 = ['jax[cuda12_pip]>=0.4.18; python_version>="3.10"']
+jax-cpu = ['jax[cpu]>=0.4.18']
+jax-cuda11 = ['jax[cuda11_pip]>=0.4.18']
+jax-cuda12 = ['jax[cuda12_pip]>=0.4.18']
 performance = ['scipy>=1.9.2']
 rocm-43 = ['cupy-rocm-4-3']
 testing = ['hypothesis>=6.0.0', 'pytest>=7.0']
@@ -275,7 +271,7 @@ line-length = 100  # It should be the same as in `tool.black.line-length` above
 respect-gitignore = true
 show-fixes = true
 # show-source = true
-target-version = 'py38'
+target-version = 'py310'
 
 [tool.ruff.format]
 docstring-code-format = true
