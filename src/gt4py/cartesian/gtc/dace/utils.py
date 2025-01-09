@@ -375,14 +375,30 @@ class TaskletAccessInfoCollector(eve.NodeVisitor):
     def visit_While(self, _node: oir.While, **_kwargs):
         return # skip while loops
 
+    def visit_HorizontalRestriction(self, node: oir.HorizontalRestriction, **kwargs):
+        self.visit(node.mask, **kwargs)
+        self.visit(node.body, region=node.mask, **kwargs)
+
     @staticmethod
     def _global_grid_subset(
-        he_grid: dcir.GridSubset, offset: List[Optional[int]]
+        region: common.HorizontalMask, he_grid: dcir.GridSubset, offset: List[Optional[int]]
     ):
         res: Dict[
             dcir.Axis, Union[dcir.DomainInterval, dcir.TileInterval, dcir.IndexWithExtent]
         ] = {}
-
+        if region is not None:
+            for axis, oir_interval in zip(dcir.Axis.dims_horizontal(), region.intervals):
+                he_grid_interval = he_grid.intervals[axis]
+                assert isinstance(he_grid_interval, dcir.DomainInterval)
+                start = (
+                    oir_interval.start if oir_interval.start is not None else he_grid_interval.start
+                )
+                end = oir_interval.end if oir_interval.end is not None else he_grid_interval.end
+                dcir_interval = dcir.DomainInterval(
+                    start=dcir.AxisBound.from_common(axis, start),
+                    end=dcir.AxisBound.from_common(axis, end),
+                )
+                res[axis] = dcir.DomainInterval.union(dcir_interval, res.get(axis, dcir_interval))
         if dcir.Axis.K in he_grid.intervals:
             off = offset[dcir.Axis.K.to_idx()] or 0
             he_grid_k_interval = he_grid.intervals[dcir.Axis.K]
@@ -400,12 +416,13 @@ class TaskletAccessInfoCollector(eve.NodeVisitor):
         self,
         offset_node: Union[CartesianOffset, oir.VariableKOffset],
         axes,
+        region,
     ) -> dcir.FieldAccessInfo:
         # Check we have expression offsets in K
         offset = [offset_node.to_dict()[k] for k in "ijk"]
         variable_offset_axes = [dcir.Axis.K] if isinstance(offset_node, oir.VariableKOffset) else []
 
-        global_subset = self._global_grid_subset(self.he_grid, offset)
+        global_subset = self._global_grid_subset(region, self.he_grid, offset)
         intervals = {}
         for axis in axes:
             if axis in variable_offset_axes:
@@ -431,10 +448,11 @@ class TaskletAccessInfoCollector(eve.NodeVisitor):
         node: oir.FieldAccess,
         *,
         is_write: bool,
+        region=None,
         ctx: TaskletAccessInfoCollector.Context,
         **kwargs,
     ):
-        self.visit(node.offset, ctx=ctx, is_write=False, **kwargs)
+        self.visit(node.offset, ctx=ctx, is_write=False, region=region, **kwargs)
 
         if (is_write and not self.collect_write) or (not is_write and not self.collect_read):
             return
@@ -442,6 +460,7 @@ class TaskletAccessInfoCollector(eve.NodeVisitor):
         access_info = self._make_access_info(
             node.offset,
             axes=ctx.axes[node.name],
+            region=region,
         )
         ctx.access_infos[node.name] = access_info.union(
             ctx.access_infos.get(node.name, access_info)
