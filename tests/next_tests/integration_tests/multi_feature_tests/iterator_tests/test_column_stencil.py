@@ -122,19 +122,19 @@ def k_level_condition_upper_tuple(k_idx, k_level):
 @pytest.mark.parametrize(
     "fun, k_level, inp_function, ref_function",
     [
-        (
+        pytest.param(
             k_level_condition_lower,
             lambda inp: 0,
             lambda k_size: gtx.as_field([KDim], np.arange(k_size, dtype=np.int32)),
             lambda inp: np.concatenate([[0], inp[:-1]]),
         ),
-        (
+        pytest.param(
             k_level_condition_upper,
             lambda inp: inp.shape[0] - 1,
             lambda k_size: gtx.as_field([KDim], np.arange(k_size, dtype=np.int32)),
             lambda inp: np.concatenate([inp[1:], [0]]),
         ),
-        (
+        pytest.param(
             k_level_condition_upper_tuple,
             lambda inp: inp[0].shape[0] - 1,
             lambda k_size: (
@@ -142,11 +142,11 @@ def k_level_condition_upper_tuple(k_idx, k_level):
                 gtx.as_field([KDim], np.arange(k_size, dtype=np.int32)),
             ),
             lambda inp: np.concatenate([(inp[0][1:] + inp[1][1:]), [0]]),
+            marks=pytest.mark.uses_tuple_iterator,
         ),
     ],
 )
 @pytest.mark.uses_tuple_args
-@pytest.mark.uses_tuple_iterator
 def test_k_level_condition(program_processor, fun, k_level, inp_function, ref_function):
     program_processor, validate = program_processor
 
