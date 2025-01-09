@@ -360,7 +360,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         self,
         sdfg: dace.SDFG,
         node_params: Sequence[gtir.Sym],
-        symbolic_arguments: Optional[set[str]],
+        symbolic_arguments: set[str],
     ) -> list[str]:
         """
         Helper function to add storage for node parameters and connectivity tables.
@@ -370,9 +370,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         except when they are listed in 'symbolic_arguments', in which case they
         will be represented in the SDFG as DaCe symbols.
         """
-        if symbolic_arguments is None:
-            symbolic_arguments = set()
-
         # add non-transient arrays and/or SDFG symbols for the program arguments
         sdfg_args = []
         for param in node_params:
