@@ -144,9 +144,11 @@ class DataflowInputEdge(Protocol):
     This protocol represents an open connection into the dataflow.
 
     It provides the `connect` method to setup an input edge from an external data source.
-    Since the dataflow represents a stencil, we instantiate the dataflow inside a map scope
-    and connect its inputs and outputs to external data nodes by means of memlets that
-    traverse the map entry and exit nodes.
+    The most common case is that the dataflow represents a stencil, which is instantied
+    inside a map scope and whose inputs and outputs are connected to external data nodes
+    by means of memlets that traverse the map entry and exit nodes.
+    The dataflow can also be instatiated without a map, in which case the `map_entry`
+    argument is set to `None`.
     """
 
     @abc.abstractmethod
@@ -195,7 +197,7 @@ class EmptyInputEdge(DataflowInputEdge):
     node: dace.nodes.Tasklet
 
     def connect(self, map_entry: Optional[dace.nodes.MapEntry]) -> None:
-        # cannot create empty edge from MapEntry node, if this is not present
+        # the empty edge is not created if the dataflow is instatiated without a map
         if map_entry is not None:
             self.state.add_nedge(map_entry, self.node, dace.Memlet())
 
@@ -206,10 +208,12 @@ class DataflowOutputEdge:
     Allows to setup an output memlet through a map exit node.
 
     The result of a dataflow subgraph needs to be written to an external data node.
-    Since the dataflow represents a stencil and the dataflow is computed over
-    a field domain, the dataflow is instatiated inside a map scope. The `connect`
-    method creates a memlet that writes the dataflow result to the external array
-    passing through the map exit node.
+    The most common case is that the dataflow represents a stencil and the dataflow
+    is computed over a field domain, therefore the dataflow is instatiated inside
+    a map scope. The `connect` method creates a memlet that writes the dataflow
+    result to the external array passing through the `map_exit` node.
+    The dataflow can also be instatiated without a map, in which case the `map_exit`
+    argument is set to `None`.
     """
 
     state: dace.SDFGState
@@ -575,7 +579,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         DataflowOutputEdge | tuple[DataflowOutputEdge | tuple[Any, ...], ...],
     ]:
         """
-        Helper method to visit an if branch expression and lower it to a dtaflow inside the given nested SDFG and state.
+        Helper method to visit an if-branch expression and lower it to a dtaflow inside the given nested SDFG and state.
 
         Args:
             if_sdfg: The nested SDFG where the if expression is lowered.
@@ -646,16 +650,22 @@ class LambdaToDataflow(eve.NodeVisitor):
             lambda_args.append(inner_arg)
             lambda_params.append(im.sym(p))
 
-        # visit each branch of the if-statement as it was a Lambda node
+        # visit each branch of the if-statement as if it was a Lambda node
         lambda_node = gtir.Lambda(params=lambda_params, expr=expr)
         return apply(if_sdfg, if_branch_state, self.subgraph_builder, lambda_node, lambda_args)
 
     def _visit_if(self, node: gtir.FunCall) -> ValueExpr | tuple[ValueExpr | tuple[Any, ...], ...]:
+        """
+        Lowers an if-expression with exclusive branch execution into a nested SDFG, in which
+        each branch is lowered into a dataflow in a separate state and the if-condition is represented
+        as the inter-state edge condtion.
+        """
         assert len(node.args) == 3
 
         # TODO(edopao): enable once supported in next DaCe release
         use_conditional_block: Final[bool] = False
 
+        # evaluate the if-condition that will write to a boolean scalar node
         condition_value = self.visit(node.args[0])
         assert (
             (
@@ -669,6 +679,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         nsdfg = dace.SDFG(self.unique_nsdfg_name(prefix="if_stmt"))
         nsdfg.debuginfo = dace_utils.debug_info(node, default=self.sdfg.debuginfo)
 
+        # create states inside the nested SDFG for the if-branches
         if use_conditional_block:
             if_region = dace.sdfg.state.ConditionalBlock("if")
             nsdfg.add_node(if_region)
@@ -693,6 +704,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         nsdfg_symbol_mapping = {}
         input_memlets: dict[str, MemletExpr | ValueExpr] = {}
 
+        # define scalar or symbol for the condition value inside the nested SDFG
         if isinstance(condition_value, SymbolExpr):
             nsdfg.add_symbol("__cond", dace.dtypes.bool)
             nsdfg_symbol_mapping["__cond"] = condition_value.value
@@ -707,18 +719,23 @@ class LambdaToDataflow(eve.NodeVisitor):
             input_memlets["__cond"] = condition_value
 
         for if_branch_state, arg in zip([tstate, fstate], node.args[1:3]):
+            # visit each if-branch in the corresponding state of the nested SDFG
             in_edges, out_edge = self._visit_if_branch(nsdfg, if_branch_state, arg, input_memlets)
             for edge in in_edges:
                 edge.connect(map_entry=None)
 
+            # the result of each branch needs to be moved to the parent SDFG
             def construct_output(
                 output_state: dace.SDFGState, edge: DataflowOutputEdge, sym: gtir.Sym
             ) -> ValueExpr:
+                # the output data node has the same name as the nested SDFG output connector
                 output_data = str(sym.id)
                 try:
                     output_desc = nsdfg.data(output_data)
                     assert not output_desc.transient
                 except KeyError:
+                    # if the result is currently written to a transient node, inside the nested SDFG,
+                    # we need to allocate a non-transient data node
                     result_desc = edge.result.dc_node.desc(nsdfg)
                     output_desc = result_desc.clone()
                     output_desc.transient = False
@@ -781,6 +798,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                 )
 
         def connect_output(inner_value: ValueExpr) -> ValueExpr:
+            # each output connector of the nested SDFG writes to a transient node in the parent SDFG
             inner_data = inner_value.dc_node.data
             inner_desc = inner_value.dc_node.desc(nsdfg)
             assert not inner_desc.transient
