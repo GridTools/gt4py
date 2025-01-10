@@ -27,7 +27,10 @@ from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda
-from gt4py.next.iterator.type_system import inference as itir_type_inference
+from gt4py.next.iterator.type_system import (
+    inference as itir_type_inference,
+    type_specifications as itir_ts,
+)
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
@@ -447,6 +450,10 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
             # note: what is extracted is sketched in the docstring above. keep it updated.
             if num_occurences > 1:
                 if within_stencil:
+                    # TODO(tehrengruber): Lists must not be extracted to avoid errors in partial
+                    #  shift detection of UnrollReduce pass. Solve there.
+                    if isinstance(subexpr.type, itir_ts.ListType):
+                        return False
                     return True
                 # condition is only necessary since typing on lambdas is not preserved during
                 #  the transformation
