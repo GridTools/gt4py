@@ -170,6 +170,46 @@ def test_make_tuple_fusion_trivial():
     assert actual_simplified == expected
 
 
+def test_make_tuple_fusion_symref():
+    d = im.domain("cartesian_domain", {IDim: (0, 1)})
+    testee = im.make_tuple(
+        im.as_fieldop("deref", d)(im.ref("a", field_type)),
+        im.ref("b", field_type),
+    )
+    expected = im.as_fieldop(
+        im.lambda_("a", "b")(im.make_tuple(im.deref("a"), im.deref("b"))),
+        d,
+    )(im.ref("a", field_type), im.ref("b", field_type))
+    actual = fuse_as_fieldop.FuseAsFieldOp.apply(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True
+    )
+    # simplify to remove unnecessary make_tuple call
+    actual_simplified = collapse_tuple.CollapseTuple.apply(
+        actual, within_stencil=False, allow_undeclared_symbols=True
+    )
+    assert actual_simplified == expected
+
+
+def test_make_tuple_fusion_symref2():
+    d = im.domain("cartesian_domain", {IDim: (0, 1)})
+    testee = im.make_tuple(
+        im.as_fieldop("deref", d)(im.ref("a", field_type)),
+        im.ref("a", field_type),
+    )
+    expected = im.as_fieldop(
+        im.lambda_("a")(im.make_tuple(im.deref("a"), im.deref("a"))),
+        d,
+    )(im.ref("a", field_type))
+    actual = fuse_as_fieldop.FuseAsFieldOp.apply(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True
+    )
+    # simplify to remove unnecessary make_tuple call
+    actual_simplified = collapse_tuple.CollapseTuple.apply(
+        actual, within_stencil=False, allow_undeclared_symbols=True
+    )
+    assert actual_simplified == expected
+
+
 def test_make_tuple_fusion_different_domains():
     d1 = im.domain("cartesian_domain", {IDim: (0, 1)})
     d2 = im.domain("cartesian_domain", {JDim: (0, 1)})

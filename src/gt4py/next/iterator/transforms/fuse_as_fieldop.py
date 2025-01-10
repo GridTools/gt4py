@@ -54,7 +54,6 @@ def _canonicalize_as_fieldop(expr: itir.FunCall) -> itir.FunCall:
     if cpm.is_ref_to(stencil, "deref"):
         stencil = im.lambda_("arg")(im.deref("arg"))
         new_expr = im.as_fieldop(stencil, domain)(*expr.args)
-        type_inference.copy_type(from_=expr, to=new_expr, allow_untyped=True)
 
         return new_expr
 
@@ -153,9 +152,7 @@ def fuse_as_fieldop(
                 pass
             elif cpm.is_call_to(arg, "if_"):
                 # TODO(tehrengruber): revisit if we want to inline if_
-                type_ = arg.type
                 arg = im.op_as_fieldop("if_")(*arg.args)
-                arg.type = type_
             elif _is_tuple_expr_of_literals(arg):
                 arg = im.op_as_fieldop(im.lambda_()(arg))()
             else:
@@ -167,11 +164,12 @@ def fuse_as_fieldop(
 
             new_args = _merge_arguments(new_args, extracted_args)
         else:
-            # just a safety check if typing information is available
-            if arg.type and not isinstance(arg.type, ts.DeferredType):
-                assert isinstance(arg.type, ts.TypeSpec)
-                dtype = type_info.apply_to_primitive_constituents(type_info.extract_dtype, arg.type)
-                assert not isinstance(dtype, it_ts.ListType)
+            # just a safety check
+            type_inference.reinfer(arg)
+            assert isinstance(arg.type, ts.TypeSpec)
+            dtype = type_info.apply_to_primitive_constituents(type_info.extract_dtype, arg.type)
+            assert not isinstance(dtype, it_ts.ListType)
+
             new_param: str
             if isinstance(
                 arg, itir.SymRef
@@ -200,7 +198,6 @@ def fuse_as_fieldop(
 
     new_node = im.as_fieldop(new_stencil, domain)(*new_args.values())
 
-    type_inference.copy_type(from_=expr, to=new_node, allow_untyped=True)
     return new_node
 
 
@@ -219,6 +216,7 @@ def _arg_inline_predicate(node: itir.Expr, shifts):
         if len(shifts) == 0:
             return True
         # applied fieldop with list return type must always be inlined as no backend supports this
+        type_inference.reinfer(node)
         assert isinstance(node.type, ts.TypeSpec)
         dtype = type_info.apply_to_primitive_constituents(type_info.extract_dtype, node.type)
         if isinstance(dtype, it_ts.ListType):
@@ -294,6 +292,7 @@ class FuseAsFieldOp(eve.NodeTranslator):
         # TODO(tehrengruber): Write test-case. E.g. Adding two sparse fields. Sara observed this
         #  with a cast to a sparse field, but this is likely already covered.
         if cpm.is_let(node):
+            type_inference.reinfer(node)
             eligible_args = [
                 isinstance(arg.type, ts.FieldType) and isinstance(arg.type.dtype, it_ts.ListType)
                 for arg in node.args
@@ -303,13 +302,12 @@ class FuseAsFieldOp(eve.NodeTranslator):
                 return self.visit(node)
 
         if cpm.is_applied_as_fieldop(node):  # don't descend in stencil
-            old_node = node
             node = im.as_fieldop(*node.fun.args)(*self.generic_visit(node.args))  # type: ignore[attr-defined]  # ensured by cpm.is_applied_as_fieldop
-            type_inference.copy_type(from_=old_node, to=node)
         elif kwargs.get("recurse", True):
             node = self.generic_visit(node, **kwargs)
 
         if cpm.is_call_to(node, "make_tuple"):
+            # TODO(tehrengruber): x, y = alpha * y, x is not fused
             as_fieldop_args = [arg for arg in node.args if cpm.is_applied_as_fieldop(arg)]
             distinct_domains = set(arg.fun.args[1] for arg in as_fieldop_args)  # type: ignore[attr-defined]  # ensured by cpm.is_applied_as_fieldop
             if len(distinct_domains) != len(as_fieldop_args):
@@ -317,7 +315,6 @@ class FuseAsFieldOp(eve.NodeTranslator):
                 as_fieldop_args_by_domain: dict[itir.Expr, list[tuple[int, itir.Expr]]] = {}
                 for i, arg in enumerate(node.args):
                     if cpm.is_applied_as_fieldop(arg):
-                        assert arg.type
                         _, domain = arg.fun.args  # type: ignore[attr-defined]  # ensured by cpm.is_applied_as_fieldop
                         as_fieldop_args_by_domain.setdefault(domain, [])
                         as_fieldop_args_by_domain[domain].append((i, arg))
@@ -330,9 +327,7 @@ class FuseAsFieldOp(eve.NodeTranslator):
                         fused_args = im.op_as_fieldop(lambda *args: im.make_tuple(*args), domain)(
                             *(arg for _, arg in inner_as_fieldop_args)
                         )
-                        fused_args.type = ts.TupleType(
-                            types=[arg.type for _, arg in inner_as_fieldop_args]  # type: ignore[misc]  # has type is ensured on list creation
-                        )
+                        type_inference.reinfer(arg)
                         # don't recurse into nested args, but only consider newly created `as_fieldop`
                         let_vars[var] = self.visit(fused_args, **{**kwargs, "recurse": False})
                         for outer_tuple_idx, (inner_tuple_idx, _) in enumerate(
