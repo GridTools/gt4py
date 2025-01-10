@@ -429,9 +429,9 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
         return cls().visit(node, within_stencil=within_stencil)
 
     def generic_visit(self, node, **kwargs):
-        if cpm.is_call_to("as_fieldop", node):
+        if cpm.is_call_to(node, "as_fieldop"):
             assert not kwargs.get("within_stencil")
-        within_stencil = cpm.is_call_to("as_fieldop", node) or kwargs.get("within_stencil")
+        within_stencil = cpm.is_call_to(node, "as_fieldop") or kwargs.get("within_stencil")
 
         return super().generic_visit(node, **(kwargs | {"within_stencil": within_stencil}))
 
@@ -443,7 +443,7 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
 
         def predicate(subexpr: itir.Expr, num_occurences: int):
             # note: be careful here with the syntatic context: the expression might be in local
-            #  view, even though the syntactic context `node` is in field view.
+            #  view, even though the syntactic context of `node` is in field view.
             # note: what is extracted is sketched in the docstring above. keep it updated.
             if num_occurences > 1:
                 if within_stencil:
