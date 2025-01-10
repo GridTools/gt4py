@@ -1424,10 +1424,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         """Implements shift in unstructured domain by means of a neighbor table."""
         assert any(dim == connectivity.codomain for dim, _ in it.field_domain)
         neighbor_dim = connectivity.codomain
-        assert neighbor_dim not in it.indices
-
         origin_dim = connectivity.source_dim
-        assert origin_dim in it.indices
         origin_index = it.indices[origin_dim]
         assert isinstance(origin_index, SymbolExpr)
 
