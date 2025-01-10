@@ -347,7 +347,13 @@ class DaCeIRBuilder(eve.NodeTranslator):
                         symbol_collector.add_symbol(axis.domain_symbol())
 
         return dcir.HorizontalRestriction(
-            mask=node.mask, body=self.visit(node.body, symbol_collector=symbol_collector, **kwargs)
+            mask=node.mask,
+            body=self.visit(
+                node.body,
+                symbol_collector=symbol_collector,
+                inside_horizontal_region=True,
+                **kwargs,
+            ),
         )
 
     def visit_VariableKOffset(
@@ -522,8 +528,36 @@ class DaCeIRBuilder(eve.NodeTranslator):
         symbol_collector: DaCeIRBuilder.SymbolCollector,
         horizontal_extent,
         k_interval,
+        inside_horizontal_region: bool = False,
         **kwargs: Any,
-    ) -> dcir.Condition:
+    ) -> Union[dcir.MaskStmt, dcir.Condition]:
+        if inside_horizontal_region:
+            # inside horizontal regions, we use old-style mask statements that
+            # might translate to if statements inside the tasklet
+            return dcir.MaskStmt(
+                mask=self.visit(
+                    node.mask,
+                    is_target=False,
+                    global_ctx=global_ctx,
+                    iteration_ctx=iteration_ctx,
+                    symbol_collector=symbol_collector,
+                    horizontal_extent=horizontal_extent,
+                    k_interval=k_interval,
+                    inside_horizontal_region=inside_horizontal_region,
+                    **kwargs,
+                ),
+                body=self.visit(
+                    node.body,
+                    global_ctx=global_ctx,
+                    iteration_ctx=iteration_ctx,
+                    symbol_collector=symbol_collector,
+                    horizontal_extent=horizontal_extent,
+                    k_interval=k_interval,
+                    inside_horizontal_region=inside_horizontal_region,
+                    **kwargs,
+                ),
+            )
+
         code_block = oir.CodeBlock(body=node.body, loc=node.loc, label=f"condition_{id(node)}")
         return dcir.Condition(
             condition=self._condition_tasklet(
@@ -554,8 +588,36 @@ class DaCeIRBuilder(eve.NodeTranslator):
         symbol_collector: DaCeIRBuilder.SymbolCollector,
         horizontal_extent,
         k_interval,
+        inside_horizontal_region: bool = False,
         **kwargs: Any,
-    ) -> dcir.WhileLoop:
+    ) -> Union[dcir.While, dcir.WhileLoop]:
+        if inside_horizontal_region:
+            # inside horizontal regions, we use old-style while statements that
+            # might translate to while statements inside the tasklet
+            return dcir.While(
+                cond=self.visit(
+                    node.cond,
+                    is_target=False,
+                    global_ctx=global_ctx,
+                    iteration_ctx=iteration_ctx,
+                    symbol_collector=symbol_collector,
+                    horizontal_extent=horizontal_extent,
+                    k_interval=k_interval,
+                    inside_horizontal_region=inside_horizontal_region,
+                    **kwargs,
+                ),
+                body=self.visit(
+                    node.body,
+                    global_ctx=global_ctx,
+                    iteration_ctx=iteration_ctx,
+                    symbol_collector=symbol_collector,
+                    horizontal_extent=horizontal_extent,
+                    k_interval=k_interval,
+                    inside_horizontal_region=inside_horizontal_region,
+                    **kwargs,
+                ),
+            )
+
         code_block = oir.CodeBlock(body=node.body, loc=node.loc, label=f"while_{id(node)}")
         return dcir.WhileLoop(
             condition=self._condition_tasklet(

@@ -763,6 +763,16 @@ class AssignStmt(common.AssignStmt[Union[IndexAccess, ScalarAccess], Expr], Stmt
     _dtype_validation = common.assign_stmt_dtype_validation(strict=True)
 
 
+class MaskStmt(Stmt):
+    mask: Expr
+    body: List[Stmt]
+
+    @datamodels.validator("mask")
+    def mask_is_boolean_field_expr(self, attribute: datamodels.Attribute, v: Expr) -> None:
+        if v.dtype != common.DataType.BOOL:
+            raise ValueError("Mask must be a boolean expression.")
+
+
 class HorizontalRestriction(common.HorizontalRestriction[Stmt], Stmt):
     pass
 
@@ -785,6 +795,10 @@ class Cast(common.Cast[Expr], Expr):
 
 class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
     _dtype_propagation = common.native_func_call_dtype_propagation(strict=True)
+
+
+class While(common.While[Stmt, Expr], Stmt):
+    pass
 
 
 class ScalarDecl(Decl):
@@ -876,7 +890,7 @@ class Tasklet(ComputationNode, IterationNode, eve.SymbolTableTrait):
 class DomainMap(ComputationNode, IterationNode):
     index_ranges: List[Range]
     schedule: MapSchedule
-    computations: List[Union[DomainMap, NestedSDFG]]
+    computations: List[Union[DomainMap, NestedSDFG, Tasklet]]
 
 
 class ComputationState(IterationNode):

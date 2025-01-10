@@ -370,14 +370,16 @@ class TaskletAccessInfoCollector(eve.NodeVisitor):
         self.visit(node.right, is_write=False, **kwargs)
         self.visit(node.left, is_write=True, **kwargs)
 
-    def visit_MaskStmt(self, _node: oir.MaskStmt, **_kwargs):
-        return  # skip mask statements
+    def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs):
+        self.visit(node.mask, is_write=False, **kwargs)
+        self.visit(node.body, **kwargs)
 
-    def visit_While(self, _node: oir.While, **_kwargs):
-        return  # skip while loops
+    def visit_While(self, node: oir.While, **kwargs):
+        self.visit(node.cond, is_write=False, **kwargs)
+        self.visit(node.body, **kwargs)
 
     def visit_HorizontalRestriction(self, node: oir.HorizontalRestriction, **kwargs):
-        self.visit(node.mask, **kwargs)
+        self.visit(node.mask, is_write=False, **kwargs)
         self.visit(node.body, region=node.mask, **kwargs)
 
     @staticmethod

@@ -245,18 +245,30 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
     def visit_Tasklet(self, node: dcir.Tasklet, **kwargs: Any) -> str:
         return "\n".join(self.visit(node.decls, **kwargs) + self.visit(node.stmts, **kwargs))
 
-    def visit_HorizontalRestriction(self, node: dcir.HorizontalRestriction, **kwargs: Any) -> str:
-        condition = node.mask
+    def _visit_conditional(
+        self,
+        cond: Optional[Union[dcir.Expr, common.HorizontalMask]],
+        body: List[dcir.Stmt],
+        keyword: str,
+        **kwargs: Any,
+    ) -> str:
         mask_str = ""
         indent = ""
-        if condition is not None and (cond_str := self.visit(condition, is_target=False, **kwargs)):
-            mask_str = f"if {cond_str}:"
+        if cond is not None and (cond_str := self.visit(cond, is_target=False, **kwargs)):
+            mask_str = f"{keyword} {cond_str}:"
             indent = " " * 4
-        body_code = [
-            line for block in self.visit(node.body, **kwargs) for line in block.split("\n")
-        ]
+        body_code = [line for block in self.visit(body, **kwargs) for line in block.split("\n")]
         body_code = [indent + b for b in body_code]
         return "\n".join([mask_str, *body_code])
+
+    def visit_MaskStmt(self, node: dcir.MaskStmt, **kwargs: Any) -> str:
+        return self._visit_conditional(cond=node.mask, body=node.body, keyword="if", **kwargs)
+
+    def visit_HorizontalRestriction(self, node: dcir.HorizontalRestriction, **kwargs: Any) -> str:
+        return self._visit_conditional(cond=node.mask, body=node.body, keyword="if", **kwargs)
+
+    def visit_While(self, node: dcir.While, **kwargs: Any) -> Any:
+        return self._visit_conditional(cond=node.cond, body=node.body, keyword="while", **kwargs)
 
     def visit_HorizontalMask(self, node: common.HorizontalMask, **kwargs: Any) -> str:
         clauses: List[str] = []
