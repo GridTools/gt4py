@@ -169,6 +169,7 @@ def test_make_tuple_fusion_trivial():
     )
     assert actual_simplified == expected
 
+
 def test_make_tuple_fusion_symref():
     d = im.domain("cartesian_domain", {IDim: (0, 1)})
     testee = im.make_tuple(
