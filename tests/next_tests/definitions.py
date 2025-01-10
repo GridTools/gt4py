@@ -104,6 +104,7 @@ USES_SCAN_IN_STENCIL = "uses_scan_in_stencil"
 USES_SCAN_WITHOUT_FIELD_ARGS = "uses_scan_without_field_args"
 USES_SCAN_NESTED = "uses_scan_nested"
 USES_SCAN_REQUIRING_PROJECTOR = "uses_scan_requiring_projector"
+USES_SCAN_1D_FIELD = "uses_scan_1d_field"
 USES_SPARSE_FIELDS = "uses_sparse_fields"
 USES_SPARSE_FIELDS_AS_OUTPUT = "uses_sparse_fields_as_output"
 USES_REDUCTION_WITH_ONLY_SPARSE_FIELDS = "uses_reduction_with_only_sparse_fields"
@@ -183,9 +184,17 @@ BACKEND_SKIP_TEST_MATRIX = {
     EmbeddedIds.NUMPY_EXECUTION: EMBEDDED_SKIP_LIST,
     EmbeddedIds.CUPY_EXECUTION: EMBEDDED_SKIP_LIST,
     OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST,
-    OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST,
+    OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST
+    + [
+        # dace issue https://github.com/spcl/dace/issues/1773
+        (USES_SCAN_1D_FIELD, XFAIL, UNSUPPORTED_MESSAGE),
+    ],
     OptionalProgramBackendId.DACE_CPU_NO_OPT: DACE_SKIP_TEST_LIST,
-    OptionalProgramBackendId.DACE_GPU_NO_OPT: DACE_SKIP_TEST_LIST,
+    OptionalProgramBackendId.DACE_GPU_NO_OPT: DACE_SKIP_TEST_LIST
+    + [
+        # dace issue https://github.com/spcl/dace/issues/1773
+        (USES_SCAN_1D_FIELD, XFAIL, UNSUPPORTED_MESSAGE),
+    ],
     ProgramBackendId.GTFN_CPU: GTFN_SKIP_TEST_LIST
     + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
     ProgramBackendId.GTFN_CPU_IMPERATIVE: GTFN_SKIP_TEST_LIST
