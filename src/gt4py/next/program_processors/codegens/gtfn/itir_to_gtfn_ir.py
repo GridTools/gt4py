@@ -705,7 +705,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         def dtype_to_cpp(x: ts.DataType) -> str:
             if isinstance(x, ts.TupleType):
                 assert all(isinstance(i, ts.ScalarType) for i in x.types)
-                return "::gridtools::tuple<" + ", ".join(dtype_to_cpp(i) for i in x.types) + ">"
+                return "::gridtools::tuple<" + ", ".join(dtype_to_cpp(i) for i in x.types) + ">"  # type: ignore[arg-type] # ensured by assert
             assert isinstance(x, ts.ScalarType)
             res = pytype_to_cpptype(x)
             assert isinstance(res, str)
