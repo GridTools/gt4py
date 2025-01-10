@@ -395,7 +395,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
             return None
 
         # The first argument that is eligible also transforms all remaining args (They will be
-        # part of the continuation and recursively transformed).
+        # part of the continuation which is recursively transformed).
         for i, arg in enumerate(node.args):
             if cpm.is_call_to(arg, "if_"):
                 itir_type_inference.reinfer(arg)
