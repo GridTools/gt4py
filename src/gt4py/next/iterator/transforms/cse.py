@@ -449,16 +449,15 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
             #  view, even though the syntactic context of `node` is in field view.
             # note: what is extracted is sketched in the docstring above. keep it updated.
             if num_occurences > 1:
+                if within_stencil:
+                    # TODO(tehrengruber): Lists must not be extracted to avoid errors in partial
+                    #  shift detection of UnrollReduce pass. Solve there. See #1795.
+                    if isinstance(subexpr.type, itir_ts.ListType):
+                        return False
+                    return True
                 # condition is only necessary since typing on lambdas is not preserved during
                 #  the transformation
-                if not isinstance(subexpr, itir.Lambda):
-                    if within_stencil:
-                        # TODO(tehrengruber): Lists must not be extracted to avoid errors in partial
-                        #  shift detection of UnrollReduce pass. Solve there. See #1795.
-                        if isinstance(subexpr.type, itir_ts.ListType):
-                            return False
-                        return True
-
+                elif not isinstance(subexpr, itir.Lambda):
                     # only extract fields outside of `as_fieldop`
                     # `as_fieldop(...)(field_expr, field_expr)`
                     # -> `(λ(_cs_1) → as_fieldop(...)(_cs_1, _cs_1))(field_expr)`
