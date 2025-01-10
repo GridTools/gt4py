@@ -266,8 +266,7 @@ class AccessInfoCollector(eve.NodeVisitor):
         return dcir.FieldAccessInfo(
             grid_subset=grid_subset,
             global_grid_subset=global_subset,
-            # dynamic_access=len(variable_offset_axes) > 0 or is_conditional or region is not None,
-            dynamic_access=False, # len(variable_offset_axes) > 0,
+            dynamic_access=False,
             variable_offset_axes=variable_offset_axes,
         )
 
@@ -354,7 +353,9 @@ class TaskletAccessInfoCollector(eve.NodeVisitor):
         axes: Dict[str, List[dcir.Axis]]
         access_infos: Dict[str, dcir.FieldAccessInfo] = field(default_factory=dict)
 
-    def __init__(self, collect_read: bool, collect_write: bool, *, horizontal_extent, k_interval, grid_subset):
+    def __init__(
+        self, collect_read: bool, collect_write: bool, *, horizontal_extent, k_interval, grid_subset
+    ):
         self.collect_read: bool = collect_read
         self.collect_write: bool = collect_write
 
@@ -370,10 +371,10 @@ class TaskletAccessInfoCollector(eve.NodeVisitor):
         self.visit(node.left, is_write=True, **kwargs)
 
     def visit_MaskStmt(self, _node: oir.MaskStmt, **_kwargs):
-        return # skip mask statements
+        return  # skip mask statements
 
     def visit_While(self, _node: oir.While, **_kwargs):
-        return # skip while loops
+        return  # skip while loops
 
     def visit_HorizontalRestriction(self, node: oir.HorizontalRestriction, **kwargs):
         self.visit(node.mask, **kwargs)
@@ -472,7 +473,7 @@ def compute_tasklet_access_infos(
     *,
     collect_read: bool = True,
     collect_write: bool = True,
-    declarations: List[oir.FieldDecl],
+    declarations: Dict[str, oir.Decl],
     horizontal_extent,
     k_interval,
     grid_subset,
@@ -488,7 +489,7 @@ def compute_tasklet_access_infos(
         collect_write=collect_write,
         horizontal_extent=horizontal_extent,
         k_interval=k_interval,
-        grid_subset=grid_subset
+        grid_subset=grid_subset,
     )
     if isinstance(node, oir.CodeBlock):
         collector.visit(node.body, ctx=ctx)

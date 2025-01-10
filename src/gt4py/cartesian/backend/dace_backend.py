@@ -62,7 +62,7 @@ def _simplify(
     validate: bool = True,
     validate_all: bool = False,
     verbose: bool = False,
-    skip: Optional[List[str]] = None
+    skip: Optional[List[str]] = None,
 ):
     """Simplifies `sdfg` inline and allows skipping transformations."""
 
@@ -72,6 +72,7 @@ def _simplify(
         verbose=verbose,
         skip=[] if skip is None else skip,
     ).apply_pass(sdfg, {})
+
 
 def _specialize_transient_strides(sdfg: dace.SDFG, layout_map):
     replacement_dictionary = replace_strides(

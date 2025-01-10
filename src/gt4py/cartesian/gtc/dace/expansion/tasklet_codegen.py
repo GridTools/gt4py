@@ -27,7 +27,7 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
 
     def _visit_offset(
         self,
-        node: Union[dcir.VariableKOffset, common.CartesianOffset],
+        node: Union[common.VariableKOffset, common.CartesianOffset],
         *,
         access_info: dcir.FieldAccessInfo,
         **kwargs: Any,
@@ -35,10 +35,7 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
         int_sizes: List[Optional[int]] = []
         for i, axis in enumerate(access_info.axes()):
             memlet_shape = access_info.shape
-            if (
-                str(memlet_shape[i]).isnumeric()
-                and axis not in access_info.variable_offset_axes
-            ):
+            if str(memlet_shape[i]).isnumeric() and axis not in access_info.variable_offset_axes:
                 int_sizes.append(int(memlet_shape[i]))
             else:
                 int_sizes.append(None)
@@ -61,14 +58,18 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
         res = dace.subsets.Range([r for i, r in enumerate(ranges.ranges) if int_sizes[i] != 1])
         return str(res)
 
-    def visit_CartesianOffset(self, node: common.CartesianOffset, explicit=False, **kwargs: Any) -> str:
+    def visit_CartesianOffset(
+        self, node: common.CartesianOffset, explicit=False, **kwargs: Any
+    ) -> str:
         # If called from the explicit pass we need to be add manually the relative indexing
         if explicit:
             return f"__k+{self.visit(node.k, **kwargs)}"
         else:
             return self._visit_offset(node, **kwargs)
 
-    def visit_VariableKOffset(self, node: common.VariableKOffset, explicit=False, **kwargs: Any) -> str:
+    def visit_VariableKOffset(
+        self, node: common.VariableKOffset, explicit=False, **kwargs: Any
+    ) -> str:
         # If called from the explicit pass we need to be add manually the relative indexing
         if explicit:
             return f"__k+{self.visit(node.k, **kwargs)}"
@@ -98,7 +99,7 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
                 "Memlet connector and tasklet variable mismatch, DaCe IR error."
             ) from None
 
-        index_strs = []
+        index_strs: List[str] = []
         if node.explicit_indices:
             # Full array access with every dimensions accessed in full
             # everything was packed in `explicit_indices` in `DaCeIRBuilder.visit_HorizontalExecution`
@@ -129,12 +130,15 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
                 )
             # Add any data dimensions
             index_strs.extend(
-                self.visit(idx, symtable=symtable, in_idx=True, **kwargs)
-                for idx in node.data_index
+                self.visit(idx, symtable=symtable, in_idx=True, **kwargs) for idx in node.data_index
             )
         # filter empty strings
         non_empty_indices = list(filter(None, index_strs))
-        return f"{node.name}[{','.join(non_empty_indices)}]" if len(non_empty_indices) > 0 else node.name
+        return (
+            f"{node.name}[{','.join(non_empty_indices)}]"
+            if len(non_empty_indices) > 0
+            else node.name
+        )
 
     def visit_AssignStmt(self, node: dcir.AssignStmt, **kwargs: Any) -> str:
         # Visiting order matters because targets must not contain the target symbols from the left visit

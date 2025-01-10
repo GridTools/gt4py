@@ -40,11 +40,15 @@ from .utils import remove_horizontal_region
 if TYPE_CHECKING:
     from gt4py.cartesian.gtc.dace.nodes import StencilComputation
 
+
 class AccessType(Enum):
     READ = 0
     WRITE = 1
 
-def _field_access_iterator(code_block: oir.CodeBlock, access_type: AccessType):
+
+def _field_access_iterator(
+    code_block: Union[oir.CodeBlock, oir.MaskStmt, oir.While], access_type: AccessType
+):
     # write access is straight forward
     # read access is slightly more complicated (see below)
     if access_type == AccessType.WRITE:
@@ -64,7 +68,10 @@ def _field_access_iterator(code_block: oir.CodeBlock, access_type: AccessType):
 
     return _iterator()
 
-def _mapped_access_iterator(node: oir.CodeBlock, access_type: AccessType):
+
+def _mapped_access_iterator(
+    node: Union[oir.CodeBlock, oir.MaskStmt, oir.While], access_type: AccessType
+):
     iterator = _field_access_iterator(node, access_type)
     write_access = access_type == AccessType.WRITE
 
@@ -87,7 +94,7 @@ def _get_tasklet_inout_memlets(
     horizontal_extent,
     k_interval,
     grid_subset,
-    dcir_statements: Optional[List[dcir.Stmt]] = None
+    dcir_statements: Optional[List[dcir.Stmt]] = None,
 ) -> List[dcir.Memlet]:
     access_infos = compute_tasklet_access_infos(
         node,
@@ -117,7 +124,9 @@ def _get_tasklet_inout_memlets(
             #    but aren't in the same tasklet.
             names = []
             for statement in dcir_statements:
-                for access in statement.walk_values().if_isinstance(dcir.ScalarAccess, dcir.IndexAccess):
+                for access in statement.walk_values().if_isinstance(
+                    dcir.ScalarAccess, dcir.IndexAccess
+                ):
                     names.append(access.name)
             if tasklet_symbol not in names:
                 continue
@@ -451,7 +460,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
         symbol_collector: DaCeIRBuilder.SymbolCollector,
         horizontal_extent,
         k_interval,
-        iteration_ctx:  DaCeIRBuilder.IterationContext,
+        iteration_ctx: DaCeIRBuilder.IterationContext,
         **kwargs: Any,
     ) -> dcir.Tasklet:
         condition_expression = node.mask if isinstance(node, oir.MaskStmt) else node.cond
@@ -500,7 +509,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
             memlets=read_memlets,
             global_context=global_ctx,
             symbol_collector=symbol_collector,
-            **kwargs
+            **kwargs,
         )
         tasklet = self._fix_scalar_access_read_after_write(tasklet)
         return tasklet

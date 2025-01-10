@@ -527,7 +527,7 @@ class FieldAccessInfo(eve.Node):
 
     @property
     def is_dynamic(self) -> bool:
-        return self.dynamic_access # or len(self.variable_offset_axes) > 0
+        return self.dynamic_access
 
     def axes(self):
         yield from self.grid_subset.axes()
@@ -756,9 +756,7 @@ class IndexAccess(common.FieldAccess, Expr):
     is_target: bool
 
     # Use to access as a full field with explicit indices
-    explicit_indices: Optional[
-        List[Union[VariableKOffset, Literal, ScalarAccess]]
-    ] = None
+    explicit_indices: Optional[List[Union[VariableKOffset, Literal, ScalarAccess]]] = None
 
 
 class AssignStmt(common.AssignStmt[Union[IndexAccess, ScalarAccess], Expr], Stmt):
