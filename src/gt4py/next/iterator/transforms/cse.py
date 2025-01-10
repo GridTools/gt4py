@@ -27,9 +27,7 @@ from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda
-from gt4py.next.iterator.type_system import (
-    inference as itir_type_inference,
-)
+from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
