@@ -23,7 +23,6 @@ from gt4py.next.iterator.ir_utils import (
     domain_utils,
     ir_makers as im,
 )
-from gt4py.next.iterator.type_system import type_specifications as itir_ts
 from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_dataflow,
@@ -120,7 +119,7 @@ class FieldopData:
                 )
 
             elif len(local_dims) == 1:
-                field_dtype = itir_ts.ListType(
+                field_dtype = ts.ListType(
                     element_type=self.gt_type.dtype, offset_type=local_dims[0]
                 )
                 field_domain = [
@@ -299,15 +298,14 @@ def _create_field_operator(
         dataflow_output_desc = output_edge.result.dc_node.desc(sdfg)
         if isinstance(output_edge.result.gt_dtype, ts.ScalarType):
             assert output_edge.result.gt_dtype == sym.type.dtype
-            assert dataflow_output_desc.dtype == dace_utils.as_dace_type(sym.type.dtype)
             field_dtype = output_edge.result.gt_dtype
             field_dims, field_shape, field_offset = (domain_dims, domain_shape, domain_offset)
             assert isinstance(dataflow_output_desc, dace.data.Scalar)
             field_subset = domain_subset
         else:
-            assert isinstance(sym.type.dtype, itir_ts.ListType)
-            assert output_edge.result.gt_dtype.element_type == sym.type.dtype.element_type
+            assert isinstance(sym.type.dtype, ts.ListType)
             assert isinstance(output_edge.result.gt_dtype.element_type, ts.ScalarType)
+            assert output_edge.result.gt_dtype.element_type == sym.type.dtype.element_type
             field_dtype = output_edge.result.gt_dtype.element_type
             assert isinstance(dataflow_output_desc, dace.data.Array)
             assert len(dataflow_output_desc.shape) == 1
@@ -319,6 +317,7 @@ def _create_field_operator(
             field_subset = domain_subset + dace_subsets.Range.from_array(dataflow_output_desc)
 
         # allocate local temporary storage
+        assert dataflow_output_desc.dtype == dace_utils.as_dace_type(field_dtype)
         field_name, _ = sdfg.add_temp_transient(field_shape, dataflow_output_desc.dtype)
         field_node = state.add_access(field_name)
 
