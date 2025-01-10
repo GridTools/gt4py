@@ -23,7 +23,6 @@ from gt4py.next.iterator.ir_utils import (
     domain_utils,
     ir_makers as im,
 )
-from gt4py.next.iterator.type_system import type_specifications as itir_ts
 from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
 from gt4py.next.program_processors.runners.dace_fieldview import (
     gtir_dataflow,
@@ -119,7 +118,7 @@ class FieldopData:
                 )
 
             elif len(local_dims) == 1:
-                field_dtype = itir_ts.ListType(
+                field_dtype = ts.ListType(
                     element_type=self.gt_type.dtype, offset_type=local_dims[0]
                 )
                 field_domain = [
@@ -267,10 +266,11 @@ def _create_field_operator(
     if isinstance(output_edge.result.gt_dtype, ts.ScalarType):
         assert output_edge.result.gt_dtype == node_type.dtype
         assert isinstance(dataflow_output_desc, dace.data.Scalar)
+        assert isinstance(node_type.dtype, ts.ScalarType)
         assert dataflow_output_desc.dtype == dace_utils.as_dace_type(node_type.dtype)
         field_dtype = output_edge.result.gt_dtype
     else:
-        assert isinstance(node_type.dtype, itir_ts.ListType)
+        assert isinstance(node_type.dtype, ts.ListType)
         assert output_edge.result.gt_dtype.element_type == node_type.dtype.element_type
         assert isinstance(dataflow_output_desc, dace.data.Array)
         assert isinstance(output_edge.result.gt_dtype.element_type, ts.ScalarType)
