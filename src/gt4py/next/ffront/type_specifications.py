@@ -6,23 +6,19 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from dataclasses import dataclass
 
 import gt4py.next.type_system.type_specifications as ts
-from gt4py.next import common as func_common
+from gt4py.next import common
 
 
-@dataclass(frozen=True)
 class ProgramType(ts.TypeSpec, ts.CallableType):
     definition: ts.FunctionType
 
 
-@dataclass(frozen=True)
 class FieldOperatorType(ts.TypeSpec, ts.CallableType):
     definition: ts.FunctionType
 
 
-@dataclass(frozen=True)
 class ScanOperatorType(ts.TypeSpec, ts.CallableType):
-    axis: func_common.Dimension
+    axis: common.Dimension
     definition: ts.FunctionType
