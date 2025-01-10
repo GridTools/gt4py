@@ -42,6 +42,7 @@ def make_symbol_tuple(tuple_name: str, tuple_type: ts.TupleType) -> tuple[gtir.S
     ...     (im.sym("a_1_0", fty), im.sym("a_1_1", sty)),
     ... )
     """
+    assert all(isinstance(t, ts.DataType) for t in tuple_type.types)
     fields = [(f"{tuple_name}_{i}", field_type) for i, field_type in enumerate(tuple_type.types)]
     return tuple(
         make_symbol_tuple(field_name, field_type)  # type: ignore[misc]

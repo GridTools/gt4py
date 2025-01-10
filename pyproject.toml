@@ -14,8 +14,6 @@ classifiers = [
   'License :: OSI Approved :: BSD License',
   'Operating System :: POSIX',
   'Programming Language :: Python',
-  'Programming Language :: Python :: 3.8',
-  'Programming Language :: Python :: 3.9',
   'Programming Language :: Python :: 3.10',
   'Programming Language :: Python :: 3.11',
   'Programming Language :: Python :: Implementation :: CPython',
@@ -24,7 +22,6 @@ classifiers = [
   'Topic :: Scientific/Engineering :: Physics'
 ]
 dependencies = [
-  "astunparse>=1.6.3;python_version<'3.9'",
   'attrs>=21.3',
   'black>=22.3',
   'boltons>=20.1',
@@ -39,7 +36,6 @@ dependencies = [
   'filelock>=3.16.1',
   'frozendict>=2.3',
   'gridtools-cpp>=2.3.8,==2.*',
-  "importlib-resources>=5.0;python_version<'3.9'",
   'jinja2>=3.0.0',
   'lark>=1.1.2',
   'mako>=1.1',
@@ -67,7 +63,7 @@ keywords = [
 license = {file = 'LICENSE.txt'}
 name = 'gt4py'
 readme = 'README.md'
-requires-python = '>=3.8'
+requires-python = '>=3.10'
 
 [project.optional-dependencies]
 # Bundles
@@ -80,9 +76,9 @@ cuda12 = ['cupy-cuda12x>=12.0']
 dace = ['dace>=1.0.0,<1.1.0']  # v1.x will contain breaking changes, see https://github.com/spcl/dace/milestone/4
 formatting = ['clang-format>=9.0']
 gpu = ['cupy>=12.0']
-jax-cpu = ['jax[cpu]>=0.4.18; python_version>="3.10"']
-jax-cuda11 = ['jax[cuda11_pip]>=0.4.18; python_version>="3.10"']
-jax-cuda12 = ['jax[cuda12_pip]>=0.4.18; python_version>="3.10"']
+jax-cpu = ['jax[cpu]>=0.4.18']
+jax-cuda11 = ['jax[cuda11_pip]>=0.4.18']
+jax-cuda12 = ['jax[cuda12_pip]>=0.4.18']
 performance = ['scipy>=1.9.2']
 rocm-43 = ['cupy-rocm-4-3']
 testing = ['hypothesis>=6.0.0', 'pytest>=7.0']
@@ -239,32 +235,7 @@ markers = [
   'all: special marker that skips all tests',
   'requires_atlas: tests that require `atlas4py` bindings package',
   'requires_dace: tests that require `dace` package',
-  'requires_gpu: tests that require a NVidia GPU (`cupy` and `cudatoolkit` are required)',
-  'uses_applied_shifts: tests that require backend support for applied-shifts',
-  'uses_constant_fields: tests that require backend support for constant fields',
-  'uses_dynamic_offsets: tests that require backend support for dynamic offsets',
-  'uses_floordiv: tests that require backend support for floor division',
-  'uses_if_stmts: tests that require backend support for if-statements',
-  'uses_index_fields: tests that require backend support for index fields',
-  'uses_negative_modulo: tests that require backend support for modulo on negative numbers',
-  'uses_origin: tests that require backend support for domain origin',
-  'uses_reduction_with_only_sparse_fields: tests that require backend support for with sparse fields',
-  'uses_scan: tests that uses scan',
-  'uses_scan_in_field_operator: tests that require backend support for scan in field operator',
-  'uses_scan_without_field_args: tests that require calls to scan that do not have any fields as arguments',
-  'uses_scan_nested: tests that use nested scans',
-  'uses_scan_requiring_projector: tests need a projector implementation in gtfn',
-  'uses_sparse_fields: tests that require backend support for sparse fields',
-  'uses_sparse_fields_as_output: tests that require backend support for writing sparse fields',
-  'uses_strided_neighbor_offset: tests that require backend support for strided neighbor offset',
-  'uses_tuple_args: tests that require backend support for tuple arguments',
-  'uses_tuple_returns: tests that require backend support for tuple results',
-  'uses_zero_dimensional_fields: tests that require backend support for zero-dimensional fields',
-  'uses_cartesian_shift: tests that use a Cartesian connectivity',
-  'uses_unstructured_shift: tests that use a unstructured connectivity',
-  'uses_max_over: tests that use the max_over builtin',
-  'uses_mesh_with_skip_values: tests that use a mesh with skip values',
-  'checks_specific_error: tests that rely on the backend to produce a specific error message'
+  'requires_gpu: tests that require a NVidia GPU (`cupy` and `cudatoolkit` are required)'
 ]
 norecursedirs = ['dist', 'build', 'cpp_backend_tests/build*', '_local/*', '.*']
 testpaths = 'tests'
@@ -275,7 +246,7 @@ line-length = 100  # It should be the same as in `tool.black.line-length` above
 respect-gitignore = true
 show-fixes = true
 # show-source = true
-target-version = 'py38'
+target-version = 'py310'
 
 [tool.ruff.format]
 docstring-code-format = true
@@ -292,7 +263,8 @@ docstring-code-format = true
 # NPY: NumPy-specific rules
 # RUF: Ruff-specific rules
 ignore = [
-  'E501'  # [line-too-long]
+  'E501',  # [line-too-long]
+  'B905'  # [zip-without-explicit-strict]  # TODO(egparedes): Reevaluate this rule
 ]
 select = ['E', 'F', 'I', 'B', 'A', 'T10', 'ERA', 'NPY', 'RUF']
 typing-modules = ['gt4py.eve.extended_typing']
