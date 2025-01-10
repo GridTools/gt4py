@@ -264,6 +264,27 @@ def test_no_extraction_outside_asfieldop():
     assert actual == testee
 
 
+def test_field_extraction_outside_asfieldop():
+    plus_fieldop = im.as_fieldop(
+        im.lambda_("x", "y")(im.plus(im.deref("x"), im.deref("y"))), im.call("cartesian_domain")()
+    )
+    identity_fieldop = im.as_fieldop(im.lambda_("x")(im.deref("x")), im.call("cartesian_domain")())
+
+    # as_fieldop(λ(x, y) → ·x + ·y, cartesian_domain())(
+    #   as_fieldop(λ(x) → ·x, cartesian_domain())(a), as_fieldop(λ(x) → ·x, cartesian_domain())(a)
+    # )
+    field = im.ref("a", ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32)))
+    testee = plus_fieldop(identity_fieldop(field), identity_fieldop(field))
+
+    # (λ(_cs_1) → as_fieldop(λ(x, y) → ·x + ·y, cartesian_domain())(_cs_1, _cs_1))(
+    #   as_fieldop(λ(x) → ·x, cartesian_domain())(a)
+    # )
+    expected = im.let("_cs_1", identity_fieldop(field))(plus_fieldop("_cs_1", "_cs_1"))
+
+    actual = CSE.apply(testee, within_stencil=False)
+    assert actual == expected
+
+
 def test_scalar_extraction_inside_as_fieldop():
     common = im.plus(1, 2)
 
