@@ -52,7 +52,7 @@ def _is_trivial_or_tuple_thereof_expr(node: ir.Node) -> bool:
     """
     Return `true` if the expr is a trivial expression (`SymRef` or `Literal`) or tuple thereof.
 
-    Let forms with trivial body and args as well as if call with trivial branches are also
+    Let forms with trivial body and args as well as `if` calls with trivial branches are also
     considered trivial.
 
     >>> _is_trivial_or_tuple_thereof_expr(im.make_tuple("a", "b"))
