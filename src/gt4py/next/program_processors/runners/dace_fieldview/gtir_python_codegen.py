@@ -73,18 +73,12 @@ MATH_BUILTINS_MAPPING = {
 }
 
 
-def builtin_cast(*args: Any) -> str:
-    val, target_type = args
+def builtin_cast(val: str, target_type: str) -> str:
     assert target_type in gtir.TYPEBUILTINS
     return MATH_BUILTINS_MAPPING[target_type].format(val)
 
 
-def builtin_if(*args: Any) -> str:
-    cond, true_val, false_val = args
-    return f"{true_val} if {cond} else {false_val}"
-
-
-def make_const_list(arg: str) -> str:
+def builtin_const_list(arg: str) -> str:
     """
     Takes a single scalar argument and broadcasts this value on the local dimension
     of map expression. In a dataflow, we represent it as a tasklet that writes
@@ -93,10 +87,19 @@ def make_const_list(arg: str) -> str:
     return arg
 
 
-GENERAL_BUILTIN_MAPPING: dict[str, Callable[[Any], str]] = {
+def builtin_if(cond: str, true_val: str, false_val: str) -> str:
+    return f"{true_val} if {cond} else {false_val}"
+
+
+def builtin_tuple_get(index: str, tuple_name: str) -> str:
+    return f"{tuple_name}_{index}"
+
+
+GENERAL_BUILTIN_MAPPING: dict[str, Callable[..., str]] = {
     "cast_": builtin_cast,
     "if_": builtin_if,
-    "make_const_list": make_const_list,
+    "make_const_list": builtin_const_list,
+    "tuple_get": builtin_tuple_get,
 }
 
 

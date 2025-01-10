@@ -792,11 +792,11 @@ def translate_scalar_expr(
         visit_expr = True
         if isinstance(arg_expr, gtir.SymRef):
             try:
-                # check if symbol is defined in the GT4Py program, returns `None` if undefined
+                # check if symbol is defined in the GT4Py program, throws `KeyError` exception if undefined
                 sdfg_builder.get_symbol_type(arg_expr.id)
             except KeyError:
-                # this is the case of non-variable argument, e.g. target type such as `float64`,
-                # used in a casting expression like `cast_(variable, float64)`
+                # all `SymRef` should refer to symbols defined in the program, except in case of non-variable argument,
+                # e.g. the type name `float64` used in casting expressions like `cast_(variable, float64)`
                 visit_expr = False
 
         if visit_expr:
