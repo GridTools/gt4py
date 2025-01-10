@@ -298,6 +298,7 @@ def test_call_bound_program_with_already_bound_arg(cartesian_case, bound_args_te
     )
 
 
+@pytest.mark.uses_arg_with_non_zero_domain_start
 def test_direct_fo_call_with_domain_arg(cartesian_case):
     @field_operator
     def testee(inp: IField) -> IField:

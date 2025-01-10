@@ -112,6 +112,7 @@ USES_UNSTRUCTURED_SHIFT = "uses_unstructured_shift"
 USES_MAX_OVER = "uses_max_over"
 USES_MESH_WITH_SKIP_VALUES = "uses_mesh_with_skip_values"
 USES_SCALAR_IN_DOMAIN_AND_FO = "uses_scalar_in_domain_and_fo"
+USES_ARG_WITH_NON_ZERO_DOMAIN_START = "uses_arg_with_non_zero_domain_start"
 CHECKS_SPECIFIC_ERROR = "checks_specific_error"
 
 # Skip messages (available format keys: 'marker', 'backend')
@@ -137,6 +138,7 @@ DACE_SKIP_TEST_LIST = DOMAIN_INFERENCE_SKIP_LIST + [
     (USES_ORIGIN, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_SCAN, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_ARG_WITH_NON_ZERO_DOMAIN_START, XFAIL, UNSUPPORTED_MESSAGE),
 ]
 EMBEDDED_SKIP_LIST = [
     (USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE),
