@@ -451,7 +451,7 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
             if num_occurences > 1:
                 if within_stencil:
                     # TODO(tehrengruber): Lists must not be extracted to avoid errors in partial
-                    #  shift detection of UnrollReduce pass. Solve there.
+                    #  shift detection of UnrollReduce pass. Solve there. See #1795.
                     if isinstance(subexpr.type, itir_ts.ListType):
                         return False
                     return True
