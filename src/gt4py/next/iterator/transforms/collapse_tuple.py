@@ -50,7 +50,10 @@ def _is_trivial_make_tuple_call(node: ir.Expr):
 
 def _is_trivial_or_tuple_thereof_expr(node: ir.Node) -> bool:
     """
-    Return `true` if the expr is a trivial expression or tuple thereof.
+    Return `true` if the expr is a trivial expression (`SymRef` or `Literal`) or tuple thereof.
+
+    Let forms with trivial body and args as well as if call with trivial branches are also
+    considered trivial.
 
     >>> _is_trivial_or_tuple_thereof_expr(im.make_tuple("a", "b"))
     True
@@ -61,6 +64,8 @@ def _is_trivial_or_tuple_thereof_expr(node: ir.Node) -> bool:
     ... )
     True
     """
+    if isinstance(node, (ir.SymRef, ir.Literal)):
+        return True
     if cpm.is_call_to(node, "make_tuple"):
         return all(_is_trivial_or_tuple_thereof_expr(arg) for arg in node.args)
     if cpm.is_call_to(node, "tuple_get"):
@@ -69,8 +74,6 @@ def _is_trivial_or_tuple_thereof_expr(node: ir.Node) -> bool:
     # acceptable.
     if cpm.is_call_to(node, "if_"):
         return all(_is_trivial_or_tuple_thereof_expr(arg) for arg in node.args[1:])
-    if isinstance(node, (ir.SymRef, ir.Literal)):
-        return True
     if cpm.is_let(node):
         return _is_trivial_or_tuple_thereof_expr(node.fun.expr) and all(  # type: ignore[attr-defined]  # ensured by is_let
             _is_trivial_or_tuple_thereof_expr(arg) for arg in node.args
@@ -391,6 +394,8 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         if cpm.is_call_to(node, "if_"):
             return None
 
+        # The first argument that is eligible also transforms all remaining args (They will be
+        # part of the continuation and recursively transformed).
         for i, arg in enumerate(node.args):
             if cpm.is_call_to(arg, "if_"):
                 itir_type_inference.reinfer(arg)

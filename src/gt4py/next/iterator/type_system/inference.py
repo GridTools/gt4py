@@ -448,7 +448,8 @@ class ITIRTypeInference(eve.NodeTranslator):
         Contrary to the regular inference, this method does not descend into already typed sub-nodes
         and can be used as a lightweight way to restore type information during a pass.
 
-        Note that this function is stateful, which is usually desired, and more performant.
+        Note that this function alters the input node, which is usually desired, and more
+        performant.
 
         Arguments:
             node: The :class:`itir.Node` to infer the types of.

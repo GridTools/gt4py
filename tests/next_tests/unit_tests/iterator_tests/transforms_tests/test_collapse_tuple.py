@@ -9,7 +9,7 @@
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 from gt4py.next.type_system import type_specifications as ts
-from tests.next_tests.unit_tests.iterator_tests.test_type_inference import int_type
+from next_tests.unit_tests.iterator_tests.test_type_inference import int_type
 
 
 def test_simple_make_tuple_tuple_get():
