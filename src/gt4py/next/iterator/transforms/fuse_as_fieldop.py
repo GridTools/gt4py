@@ -13,7 +13,11 @@ from gt4py import eve
 from gt4py.eve import utils as eve_utils
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
+from gt4py.next.iterator.ir_utils import (
+    common_pattern_matcher as cpm,
+    domain_utils,
+    ir_makers as im,
+)
 from gt4py.next.iterator.transforms import (
     inline_center_deref_lift_vars,
     inline_lambdas,
@@ -262,6 +266,8 @@ class FuseAsFieldOp(eve.NodeTranslator):
     as_fieldop(λ(inp1, inp2, inp3) → ·inp1 × ·inp2 + ·inp3, c⟨ IDimₕ: [0, 1[ ⟩)(inp1, inp2, inp3)
     """  # noqa: RUF002  # ignore ambiguous multiplication character
 
+    PRESERVED_ANNEX_ATTRS = ("domain",)
+
     uids: eve_utils.UIDGenerator
 
     @classmethod
@@ -292,7 +298,8 @@ class FuseAsFieldOp(eve.NodeTranslator):
         # TODO(tehrengruber): Write test-case. E.g. Adding two sparse fields. Sara observed this
         #  with a cast to a sparse field, but this is likely already covered.
         if cpm.is_let(node):
-            type_inference.reinfer(node)
+            for arg in node.args:
+                type_inference.reinfer(arg)
             eligible_args = [
                 isinstance(arg.type, ts.FieldType) and isinstance(arg.type.dtype, it_ts.ListType)
                 for arg in node.args
@@ -307,35 +314,37 @@ class FuseAsFieldOp(eve.NodeTranslator):
             node = self.generic_visit(node, **kwargs)
 
         if cpm.is_call_to(node, "make_tuple"):
-            # TODO(tehrengruber): x, y = alpha * y, x is not fused
-            as_fieldop_args = [arg for arg in node.args if cpm.is_applied_as_fieldop(arg)]
-            distinct_domains = set(arg.fun.args[1] for arg in as_fieldop_args)  # type: ignore[attr-defined]  # ensured by cpm.is_applied_as_fieldop
-            if len(distinct_domains) != len(as_fieldop_args):
+            for arg in node.args:
+                type_inference.reinfer(arg)
+                assert hasattr(arg.annex, "domain") and isinstance(
+                    arg.annex.domain, domain_utils.SymbolicDomain
+                )
+            field_args = [arg for arg in node.args if isinstance(arg.type, ts.FieldType)]
+            distinct_domains = set(arg.annex.domain.as_expr() for arg in field_args)
+            if len(distinct_domains) != len(field_args):
                 new_els: list[itir.Expr | None] = [None for _ in node.args]
-                as_fieldop_args_by_domain: dict[itir.Expr, list[tuple[int, itir.Expr]]] = {}
+                field_args_by_domain: dict[itir.Expr, list[tuple[int, itir.Expr]]] = {}
                 for i, arg in enumerate(node.args):
-                    if cpm.is_applied_as_fieldop(arg):
-                        _, domain = arg.fun.args  # type: ignore[attr-defined]  # ensured by cpm.is_applied_as_fieldop
-                        as_fieldop_args_by_domain.setdefault(domain, [])
-                        as_fieldop_args_by_domain[domain].append((i, arg))
+                    if isinstance(arg.type, ts.FieldType):
+                        domain = arg.annex.domain.as_expr()
+                        field_args_by_domain.setdefault(domain, [])
+                        field_args_by_domain[domain].append((i, arg))
                     else:
                         new_els[i] = arg  # keep as is
                 let_vars = {}
-                for domain, inner_as_fieldop_args in as_fieldop_args_by_domain.items():
-                    if len(inner_as_fieldop_args) > 1:
+                for domain, inner_field_args in field_args_by_domain.items():
+                    if len(inner_field_args) > 1:
                         var = self.uids.sequential_id(prefix="__fasfop")
                         fused_args = im.op_as_fieldop(lambda *args: im.make_tuple(*args), domain)(
-                            *(arg for _, arg in inner_as_fieldop_args)
+                            *(arg for _, arg in inner_field_args)
                         )
                         type_inference.reinfer(arg)
                         # don't recurse into nested args, but only consider newly created `as_fieldop`
                         let_vars[var] = self.visit(fused_args, **{**kwargs, "recurse": False})
-                        for outer_tuple_idx, (inner_tuple_idx, _) in enumerate(
-                            inner_as_fieldop_args
-                        ):
+                        for outer_tuple_idx, (inner_tuple_idx, _) in enumerate(inner_field_args):
                             new_els[inner_tuple_idx] = im.tuple_get(outer_tuple_idx, var)
                     else:
-                        i, arg = inner_as_fieldop_args[0]
+                        i, arg = inner_field_args[0]
                         new_els[i] = arg
                 assert not any(el is None for el in new_els)
                 assert let_vars

@@ -5,6 +5,7 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
+import copy
 from typing import Callable, Optional
 
 from gt4py import next as gtx
@@ -17,6 +18,12 @@ from gt4py.next.type_system import type_specifications as ts
 IDim = gtx.Dimension("IDim")
 JDim = gtx.Dimension("JDim")
 field_type = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
+
+
+def _with_domain_annex(node: itir.Expr, domain: itir.Expr):
+    node = copy.deepcopy(node)
+    node.annex.domain = domain
+    return node
 
 
 def test_trivial():
@@ -174,7 +181,7 @@ def test_make_tuple_fusion_symref():
     d = im.domain("cartesian_domain", {IDim: (0, 1)})
     testee = im.make_tuple(
         im.as_fieldop("deref", d)(im.ref("a", field_type)),
-        im.ref("b", field_type),
+        _with_domain_annex(im.ref("b", field_type), d),
     )
     expected = im.as_fieldop(
         im.lambda_("a", "b")(im.make_tuple(im.deref("a"), im.deref("b"))),
@@ -194,7 +201,7 @@ def test_make_tuple_fusion_symref2():
     d = im.domain("cartesian_domain", {IDim: (0, 1)})
     testee = im.make_tuple(
         im.as_fieldop("deref", d)(im.ref("a", field_type)),
-        im.ref("a", field_type),
+        _with_domain_annex(im.ref("a", field_type), d),
     )
     expected = im.as_fieldop(
         im.lambda_("a")(im.make_tuple(im.deref("a"), im.deref("a"))),
