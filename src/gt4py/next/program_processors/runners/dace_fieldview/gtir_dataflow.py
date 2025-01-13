@@ -1668,7 +1668,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         return (
             gtx_utils.tree_map(_visit_Lambda_impl)(result)
-            if isinstance(node.type, ts.TupleType)
+            if isinstance(result, tuple)
             else _visit_Lambda_impl(result)
         )
 
