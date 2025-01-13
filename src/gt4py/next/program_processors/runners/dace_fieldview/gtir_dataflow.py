@@ -605,7 +605,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                 arg_node = arg.dc_node
                 arg_desc = arg_node.desc(self.sdfg)
                 if isinstance(arg, MemletExpr):
-                    assert arg.subset.sum_elements() == 1
+                    assert arg.subset.num_elements() == 1
                     arg_desc = dace.data.Scalar(arg_desc.dtype)
             elif isinstance(arg, IteratorExpr):
                 arg_node = arg.field
