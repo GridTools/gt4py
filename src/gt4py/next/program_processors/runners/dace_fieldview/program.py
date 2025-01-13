@@ -236,6 +236,7 @@ def _crosscheck_dace_parsing(dace_parsed_args: list[Any], gt4py_program_args: li
                 assert gt4py_program_arg.kind == ts.ScalarKind.STRING
             case dace.data.Array():
                 assert isinstance(gt4py_program_arg, ts.FieldType)
+                assert isinstance(gt4py_program_arg.dtype, ts.ScalarType)
                 assert len(dace_parsed_arg.shape) == len(gt4py_program_arg.dims)
                 assert dace_parsed_arg.dtype == dace_utils.as_dace_type(gt4py_program_arg.dtype)
             case dace.data.Structure() | dict() | collections.OrderedDict():
