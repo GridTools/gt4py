@@ -114,6 +114,7 @@ def convert_args(
             args = (*args, out)
         flat_args: Sequence[Any] = gtx_utils.flatten_nested_tuple(tuple(args))
         if len(sdfg.arg_names) > len(flat_args):
+            # The Ahead-of-Time (AOT) workflow for FieldView programs requires domain size arguments.
             flat_args = (*flat_args, *arguments.iter_size_args(args))
 
         if sdfg_program._lastargs:
