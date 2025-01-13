@@ -1084,11 +1084,7 @@ def translate_scan(
             compute_state.add_nedge(data_node, temp_node, dace.Memlet.from_array(temp, temp_desc))
 
     # build the mapping of symbols from nested SDFG to parent SDFG
-    nsdfg_symbols_mapping: dict[str, dace.symbolic.SymExpr] = {}
-    for dim, _, _ in domain:
-        if dim != scan_dim:
-            dim_map_variable = dace_gtir_utils.get_map_variable(dim)
-            nsdfg_symbols_mapping[dim_map_variable] = dim_map_variable
+    nsdfg_symbols_mapping = {str(sym): sym for sym in nsdfg.free_symbols}
     for inner, arg in lambda_flat_args.items():
         inner_desc = nsdfg.data(inner)
         outer_desc = arg.dc_node.desc(sdfg)
