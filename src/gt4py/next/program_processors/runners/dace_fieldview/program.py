@@ -194,7 +194,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
                     conn = self.connectivities[name]
                     assert common.is_neighbor_table(conn)
                     self.connectivity_tables_data_descriptors[conn_id] = dace.data.Array(
-                        dtype=dace.int64 if conn.dtype == np.int64 else dace.int32,
+                        dtype=dace.dtypes.dtype_to_typeclass(conn.dtype.dtype.type),
                         shape=[
                             symbols[dace_utils.field_size_symbol_name(conn_id, 0)],
                             symbols[dace_utils.field_size_symbol_name(conn_id, 1)],
