@@ -440,8 +440,8 @@ def content_hash(*args: Any, hash_algorithm: str | xtyping.HashlibAlgorithm | No
     return result
 
 
-ddiff = deepdiff.DeepDiff
-"""Shortcut for deepdiff.DeepDiff.
+ddiff = deepdiff.diff.DeepDiff
+"""Shortcut for deepdiff.diff.DeepDiff.
 
 Check https://zepworks.com/deepdiff/current/diff.html for more info.
 """
@@ -458,13 +458,13 @@ def dhash(obj: Any, **kwargs: Any) -> str:
 def pprint_ddiff(
     old: Any, new: Any, *, pprint_opts: Optional[Dict[str, Any]] = None, **kwargs: Any
 ) -> None:
-    """Pretty printing of deepdiff.DeepDiff objects.
+    """Pretty printing of deepdiff.diff.DeepDiff objects.
 
     Keyword Arguments:
         pprint_opts: kwargs dict with options for pprint.pprint.
     """
     pprint_opts = pprint_opts or {"indent": 2}
-    pprint.pprint(deepdiff.DeepDiff(old, new, **kwargs), **pprint_opts)
+    pprint.pprint(deepdiff.diff.DeepDiff(old, new, **kwargs), **pprint_opts)
 
 
 AnyWordsIterable = Union[str, Iterable[str]]

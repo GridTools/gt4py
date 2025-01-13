@@ -15,7 +15,7 @@ jobs:
   daily-ci:
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11"]
+        python-version: ["3.10", "3.11"]
         tox-module-factor: ["cartesian", "eve", "next", "storage"]
         os: ["ubuntu-latest"]
         requirements-file: ["requirements-dev.txt", "min-requirements-test.txt", "min-extra-requirements-test.txt"]
