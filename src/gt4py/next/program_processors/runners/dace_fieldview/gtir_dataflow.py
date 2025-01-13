@@ -701,21 +701,13 @@ class LambdaToDataflow(eve.NodeVisitor):
             fstate = nsdfg.add_state("false_branch")
             nsdfg.add_edge(entry_state, fstate, dace.InterstateEdge(condition="not (__cond)"))
 
-        nsdfg_symbol_mapping = {}
         input_memlets: dict[str, MemletExpr | ValueExpr] = {}
 
         # define scalar or symbol for the condition value inside the nested SDFG
         if isinstance(condition_value, SymbolExpr):
             nsdfg.add_symbol("__cond", dace.dtypes.bool)
-            nsdfg_symbol_mapping["__cond"] = condition_value.value
         else:
             nsdfg.add_scalar("__cond", dace.dtypes.bool)
-            if isinstance(condition_value, MemletExpr):
-                nsdfg_symbol_mapping.update(
-                    {sym: sym for sym in condition_value.subset.free_symbols}
-                )
-            else:
-                assert isinstance(condition_value, ValueExpr)
             input_memlets["__cond"] = condition_value
 
         for if_branch_state, arg in zip([tstate, fstate], node.args[1:3]):
@@ -775,6 +767,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         else:
             result = outer_value
 
+        nsdfg_symbol_mapping = {str(sym): sym for sym in nsdfg.free_symbols}
         outputs = {outval.dc_node.data for outval in gtx_utils.flatten_nested_tuple((result,))}
 
         nsdfg_node = self.state.add_nested_sdfg(
@@ -782,7 +775,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             self.sdfg,
             inputs=set(input_memlets.keys()),
             outputs=outputs,
-            symbol_mapping=nsdfg_symbol_mapping | {str(sym): sym for sym in nsdfg.free_symbols},
+            symbol_mapping=nsdfg_symbol_mapping,
         )
 
         for inner, input_expr in input_memlets.items():

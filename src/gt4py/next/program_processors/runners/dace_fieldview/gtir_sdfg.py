@@ -681,15 +681,24 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         }
 
         input_memlets = {}
-        nsdfg_symbols_mapping: dict[str, dace.symbolic.SymExpr] = {}
+        nsdfg_symbols_mapping = {str(sym): sym for sym in nsdfg.free_symbols}
         for nsdfg_dataname, nsdfg_datadesc in nsdfg.arrays.items():
             if nsdfg_datadesc.transient:
                 continue
-            datadesc: Optional[dace.dtypes.Data] = None
+
             if nsdfg_dataname in lambda_arg_nodes:
                 src_node = lambda_arg_nodes[nsdfg_dataname].dc_node
                 dataname = src_node.data
                 datadesc = src_node.desc(sdfg)
+                nsdfg_symbols_mapping |= {
+                    str(nested_symbol): parent_symbol
+                    for nested_symbol, parent_symbol in zip(
+                        [*nsdfg_datadesc.shape, *nsdfg_datadesc.strides],
+                        [*datadesc.shape, *datadesc.strides],
+                        strict=True,
+                    )
+                    if isinstance(nested_symbol, dace.symbol)
+                }
             else:
                 dataname = nsdfg_dataname
                 datadesc = sdfg.arrays[nsdfg_dataname]
@@ -699,16 +708,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 datadesc.transient = False
 
             input_memlets[nsdfg_dataname] = sdfg.make_array_memlet(dataname)
-
-            nsdfg_symbols_mapping |= {
-                str(nested_symbol): parent_symbol
-                for nested_symbol, parent_symbol in zip(
-                    [*nsdfg_datadesc.shape, *nsdfg_datadesc.strides],
-                    [*datadesc.shape, *datadesc.strides],
-                    strict=True,
-                )
-                if isinstance(nested_symbol, dace.symbol)
-            }
 
         # Process lambda outputs
         #
