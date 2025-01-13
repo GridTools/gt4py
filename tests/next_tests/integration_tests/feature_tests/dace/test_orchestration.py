@@ -139,8 +139,8 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
         rows=3,
         cols=2,
         connectivity_E2V=e2v,
-        __connectivity_E2V_stride_0=2,
-        __connectivity_E2V_stride_1=1,
+        __connectivity_E2V_stride_0=e2v.ndarray.strides[0] // e2v.ndarray.itemsize,
+        __connectivity_E2V_stride_1=e2v.ndarray.strides[1] // e2v.ndarray.itemsize,
     )
 
     e2v_np = e2v.asnumpy()
@@ -162,8 +162,8 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
             rows=3,
             cols=2,
             connectivity_E2V=e2v,
-            __connectivity_E2V_stride_0=2,
-            __connectivity_E2V_stride_1=1,
+            __connectivity_E2V_stride_0=e2v.ndarray.strides[0] // e2v.ndarray.itemsize,
+            __connectivity_E2V_stride_1=e2v.ndarray.strides[1] // e2v.ndarray.itemsize,
         )
 
     e2v_np = e2v.asnumpy()
