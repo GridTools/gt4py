@@ -221,7 +221,7 @@ def _crosscheck_dace_parsing(dace_parsed_args: list[Any], gt4py_program_args: li
     ):
         match dace_parsed_arg:
             case dace.data.Scalar():
-                assert dace_parsed_arg.type == dace_utils.as_dace_type(gt4py_program_arg)
+                assert dace_parsed_arg.dtype == dace_utils.as_dace_type(gt4py_program_arg)
             case bool() | np.bool_():
                 assert isinstance(gt4py_program_arg, ts.ScalarType)
                 assert gt4py_program_arg.kind == ts.ScalarKind.BOOL
