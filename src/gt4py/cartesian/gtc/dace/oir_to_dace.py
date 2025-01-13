@@ -93,9 +93,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
                 global_access_info, local_access_info, self.decls[field].data_dims
             )
 
-    def visit_VerticalLoop(
-        self, node: oir.VerticalLoop, *, ctx: OirSDFGBuilder.SDFGContext, **kwargs
-    ):
+    def visit_VerticalLoop(self, node: oir.VerticalLoop, *, ctx: OirSDFGBuilder.SDFGContext):
         declarations = {
             acc.name: ctx.decls[acc.name]
             for acc in node.walk_values().if_isinstance(oir.FieldAccess, oir.ScalarAccess)
@@ -132,7 +130,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
                 library_node, "__out_" + field, access_node, None, dace.Memlet(field, subset=subset)
             )
 
-    def visit_Stencil(self, node: oir.Stencil, **kwargs):
+    def visit_Stencil(self, node: oir.Stencil):
         ctx = OirSDFGBuilder.SDFGContext(stencil=node)
         for param in node.params:
             if isinstance(param, oir.FieldDecl):
