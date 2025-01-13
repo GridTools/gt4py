@@ -12,6 +12,7 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next import allocators as gtx_allocators, common as gtx_common
 
+from gt4py._core import definitions as core_defs
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import cartesian_case, unstructured_case  # noqa: F401
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
@@ -127,11 +128,16 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
     offset_provider = OffsetProvider_t.dtype._typeclass.as_ctypes()(E2V=e2v.data_ptr())
 
     SDFG = sdfg.to_sdfg(connectivities=connectivities)
-
     cSDFG = SDFG.compile()
 
     a = gtx.as_field([Vertex], xp.asarray([0.0, 1.0, 2.0]), allocator=allocator)
     out = gtx.zeros({Edge: 3}, allocator=allocator)
+
+    def get_stride_from_numpy_to_dace(arg: core_defs.NDArrayObject, axis: int) -> int:
+        # NumPy strides: number of bytes to jump
+        # DaCe strides: number of elements to jump
+        return arg.strides[axis] // arg.itemsize
+
     cSDFG(
         a,
         out,
@@ -139,8 +145,8 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
         rows=3,
         cols=2,
         connectivity_E2V=e2v,
-        __connectivity_E2V_stride_0=e2v.ndarray.strides[0] // e2v.ndarray.itemsize,
-        __connectivity_E2V_stride_1=e2v.ndarray.strides[1] // e2v.ndarray.itemsize,
+        __connectivity_E2V_stride_0=get_stride_from_numpy_to_dace(e2v.ndarray, 0),
+        __connectivity_E2V_stride_1=get_stride_from_numpy_to_dace(e2v.ndarray, 1),
     )
 
     e2v_np = e2v.asnumpy()
@@ -162,8 +168,8 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
             rows=3,
             cols=2,
             connectivity_E2V=e2v,
-            __connectivity_E2V_stride_0=e2v.ndarray.strides[0] // e2v.ndarray.itemsize,
-            __connectivity_E2V_stride_1=e2v.ndarray.strides[1] // e2v.ndarray.itemsize,
+            __connectivity_E2V_stride_0=get_stride_from_numpy_to_dace(e2v.ndarray, 0),
+            __connectivity_E2V_stride_1=get_stride_from_numpy_to_dace(e2v.ndarray, 1),
         )
 
     e2v_np = e2v.asnumpy()
