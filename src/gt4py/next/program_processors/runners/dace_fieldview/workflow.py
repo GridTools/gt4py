@@ -47,13 +47,13 @@ class DaCeTranslator(
         self,
         ir: itir.Program,
         offset_provider: common.OffsetProvider,
-        column_axis: Optional[common.Dimension],
+        column_dim: Optional[common.Dimension],
         auto_opt: bool,
         on_gpu: bool,
     ) -> dace.SDFG:
         ir = itir_transforms.apply_fieldview_transforms(ir, offset_provider=offset_provider)
         sdfg = gtir_sdfg.build_sdfg_from_gtir(
-            ir, offset_provider_type=common.offset_provider_to_type(offset_provider)
+            ir, common.offset_provider_to_type(offset_provider), column_dim
         )
 
         if auto_opt:
