@@ -401,7 +401,9 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 itir_type_inference.reinfer(arg)
 
                 cond, true_branch, false_branch = arg.args  # e.g. `True`, `{1, 2}`, `{3, 4}`
-                if not any(isinstance(branch.type, ts.TupleType) for branch in [true_branch, false_branch]):
+                if not any(
+                    isinstance(branch.type, ts.TupleType) for branch in [true_branch, false_branch]
+                ):
                     continue
                 tuple_type: ts.TupleType = true_branch.type  # type: ignore[assignment]  # type ensured above
                 tuple_len = len(tuple_type.types)
