@@ -22,6 +22,10 @@ from gt4py.next.type_system import type_specifications as ts
 FIELD_SYMBOL_RE: Final[re.Pattern] = re.compile(r"__.+_(size|stride)_\d+")
 
 
+# arrays for connectivity tables use the following prefix
+CONNECTIVITY_INDENTIFIER_PREFIX: Final[str] = "connectivity_"
+
+
 def as_dace_type(type_: ts.ScalarType) -> dace.typeclass:
     """Converts GT4Py scalar type to corresponding DaCe type."""
     if type_.kind == ts.ScalarKind.BOOL:
@@ -48,7 +52,14 @@ def as_itir_type(dtype: dace.typeclass) -> ts.ScalarType:
 
 
 def connectivity_identifier(name: str) -> str:
-    return f"connectivity_{name}"
+    return f"{CONNECTIVITY_INDENTIFIER_PREFIX}{name}"
+
+
+def is_connectivity(name: str, datadesc: dace.data.Data) -> bool:
+    is_array = isinstance(datadesc, dace.data.Array) and (
+        not isinstance(datadesc, (dace.data.ArrayReference, dace.data.ArrayView))
+    )
+    return is_array and name.startswith(CONNECTIVITY_INDENTIFIER_PREFIX)
 
 
 def field_symbol_name(field_name: str, axis: int, sym: Literal["size", "stride"]) -> str:

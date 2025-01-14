@@ -491,6 +491,16 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             head_state._debuginfo = dace_utils.debug_info(stmt, default=sdfg.debuginfo)
             head_state = self.visit(stmt, sdfg=sdfg, state=head_state)
 
+        # remove unused connectivity tables (by design, arrays are marked as non-transient when they are used)
+        for nsdfg in sdfg.all_sdfgs_recursive():
+            unused_connectivities = [
+                data
+                for data, datadesc in nsdfg.arrays.items()
+                if dace_utils.is_connectivity(data, datadesc) and datadesc.transient
+            ]
+            for data in unused_connectivities:
+                nsdfg.arrays.pop(data)
+
         # Create the call signature for the SDFG.
         #  Only the arguments required by the GT4Py program, i.e. `node.params`, are added
         #  as positional arguments. The implicit arguments, such as the offset providers or
