@@ -70,11 +70,11 @@ def flatten_tuple_fields(tuple_name: str, tuple_type: ts.TupleType) -> list[gtir
     return list(gtx_utils.flatten_nested_tuple(symbol_tuple))
 
 
-def replace_invalid_symbols(sdfg: dace.SDFG, ir: gtir.Program) -> gtir.Program:
+def replace_invalid_symbols(ir: gtir.Program) -> gtir.Program:
     """
     Ensure that all symbols used in the program IR are valid strings (e.g. no unicode-strings).
 
-    If any invalid symbol present, this funtion returns a copy of the input IR where
+    If any invalid symbol present, this function returns a copy of the input IR where
     the invalid symbols have been replaced with new names. If all symbols are valid,
     the input IR is returned without copying it.
     """
@@ -96,12 +96,17 @@ def replace_invalid_symbols(sdfg: dace.SDFG, ir: gtir.Program) -> gtir.Program:
     if not all(dace.dtypes.validate_name(str(sym.id)) for sym in ir.params):
         raise ValueError("Invalid symbol in program parameters.")
 
+    ir_sym_ids = {str(sym.id) for sym in eve.walk_values(ir).if_isinstance(gtir.Sym).to_set()}
+    ir_ssa_uuid = eve.utils.UIDGenerator(prefix="gtir_tmp")
+
     invalid_symbols_mapping = {
-        sym_id: sdfg.temp_data_name()
-        for sym in eve.walk_values(ir).if_isinstance(gtir.Sym).to_set()
-        if not dace.dtypes.validate_name(sym_id := str(sym.id))
+        sym_id: ir_ssa_uuid.sequential_id()
+        for sym_id in ir_sym_ids
+        if not dace.dtypes.validate_name(sym_id)
     }
-    if len(invalid_symbols_mapping) != 0:
-        return ReplaceSymbols().visit(ir, symtable=invalid_symbols_mapping)
-    else:
+    if len(invalid_symbols_mapping) == 0:
         return ir
+
+    # assert that the new symbol names are not used in the IR
+    assert ir_sym_ids.isdisjoint(invalid_symbols_mapping.values())
+    return ReplaceSymbols().visit(ir, symtable=invalid_symbols_mapping)

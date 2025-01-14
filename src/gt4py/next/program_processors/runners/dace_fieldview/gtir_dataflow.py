@@ -289,6 +289,17 @@ def get_reduce_params(node: gtir.FunCall) -> tuple[str, SymbolExpr, SymbolExpr]:
     return op_name, reduce_init, reduce_identity
 
 
+def get_tuple_type(
+    data: tuple[IteratorExpr | MemletExpr | ValueExpr | tuple[Any, ...], ...],
+) -> ts.TupleType:
+    """
+    Compute the `ts.TupleType` corresponding to the tuple structure of input data expressions.
+    """
+    return ts.TupleType(
+        types=[get_tuple_type(d) if isinstance(d, tuple) else d.gt_dtype for d in data]
+    )
+
+
 @dataclasses.dataclass(frozen=True)
 class LambdaToDataflow(eve.NodeVisitor):
     """
@@ -595,6 +606,8 @@ class LambdaToDataflow(eve.NodeVisitor):
             if isinstance(arg, MemletExpr):
                 assert arg.subset.num_elements() == 1
                 arg_desc = dace.data.Scalar(arg_desc.dtype)
+            else:
+                assert isinstance(arg_desc, dace.data.Scalar)
         elif isinstance(arg, IteratorExpr):
             arg_node = arg.field
             arg_desc = arg_node.desc(self.sdfg)
@@ -615,7 +628,6 @@ class LambdaToDataflow(eve.NodeVisitor):
         if isinstance(arg, IteratorExpr):
             return IteratorExpr(inner_node, arg.gt_dtype, arg.field_domain, arg.indices)
         else:
-            assert isinstance(inner_desc, dace.data.Scalar)
             return ValueExpr(inner_node, arg.gt_dtype)
 
     def _visit_if_branch(
@@ -646,12 +658,18 @@ class LambdaToDataflow(eve.NodeVisitor):
         """
         assert if_branch_state in if_sdfg.states()
 
-        lambda_args: list[IteratorExpr | ValueExpr] = []
-        lambda_params: list[gtir.Sym] = []
+        lambda_args = []
+        lambda_params = []
         for pname in symbol_ref_utils.collect_symbol_refs(expr, self.symbol_map.keys()):
             arg = self.symbol_map[pname]
             if isinstance(arg, tuple):
-                raise NotImplementedError("Tuple arguments not supported.")
+                ptype = get_tuple_type(arg)  # type: ignore[arg-type]
+                input_sym = dace_gtir_utils.make_symbol_tuple(pname, ptype)
+                inner_arg = gtx_utils.tree_map(
+                    lambda tsym, targ: self._visit_if_branch_arg(
+                        if_sdfg, if_branch_state, tsym.id, targ, if_sdfg_input_memlets
+                    )
+                )(input_sym, arg)
             else:
                 inner_arg = self._visit_if_branch_arg(
                     if_sdfg, if_branch_state, pname, arg, if_sdfg_input_memlets
@@ -661,9 +679,18 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         # visit each branch of the if-statement as if it was a Lambda node
         lambda_node = gtir.Lambda(params=lambda_params, expr=expr)
-        return translate_lambda_to_dataflow(
+        input_edges, output_edges = translate_lambda_to_dataflow(
             if_sdfg, if_branch_state, self.subgraph_builder, lambda_node, args=lambda_args
         )
+
+        for data_node in if_branch_state.data_nodes():
+            # In case tuple arguments, isolated non-transient nodes might be left in the state,
+            # because not all tuple fields are necessarily used in the lambda scope
+            if if_branch_state.degree(data_node) == 0:
+                assert not data_node.desc(if_sdfg).transient
+                if_branch_state.remove_node(data_node)
+
+        return input_edges, output_edges
 
     def _visit_if(self, node: gtir.FunCall) -> ValueExpr | tuple[ValueExpr | tuple[Any, ...], ...]:
         """
