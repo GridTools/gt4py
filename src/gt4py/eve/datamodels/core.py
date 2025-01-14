@@ -16,6 +16,7 @@ from __future__ import annotations
 import dataclasses
 import functools
 import sys
+import types
 import typing
 import warnings
 
@@ -1254,8 +1255,11 @@ def _make_concrete_with_cache(
     if not is_generic_datamodel_class(datamodel_cls):
         raise TypeError(f"'{datamodel_cls.__name__}' is not a generic model class.")
     for t in type_args:
+        _accepted_types: tuple[type, ...] = (type, type(None), xtyping.StdGenericAliasType)
+        if sys.version_info >= (3, 10):
+            _accepted_types = (*_accepted_types, types.UnionType)
         if not (
-            isinstance(t, (type, type(None), xtyping.StdGenericAliasType))
+            isinstance(t, _accepted_types)
             or (getattr(type(t), "__module__", None) in ("typing", "typing_extensions"))
         ):
             raise TypeError(

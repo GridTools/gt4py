@@ -48,8 +48,8 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
 int_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
 float64_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
-float64_list_type = it_ts.ListType(element_type=float64_type)
-int_list_type = it_ts.ListType(element_type=int_type)
+float64_list_type = ts.ListType(element_type=float64_type)
+int_list_type = ts.ListType(element_type=int_type)
 
 float_i_field = ts.FieldType(dims=[IDim], dtype=float64_type)
 float_vertex_k_field = ts.FieldType(dims=[Vertex, KDim], dtype=float64_type)
@@ -79,8 +79,8 @@ def expression_test_cases():
         (im.deref(im.ref("it", it_on_e_of_e_type)), it_on_e_of_e_type.element_type),
         (im.call("can_deref")(im.ref("it", it_on_e_of_e_type)), bool_type),
         (im.if_(True, 1, 2), int_type),
-        (im.call("make_const_list")(True), it_ts.ListType(element_type=bool_type)),
-        (im.call("list_get")(0, im.ref("l", it_ts.ListType(element_type=bool_type))), bool_type),
+        (im.call("make_const_list")(True), ts.ListType(element_type=bool_type)),
+        (im.call("list_get")(0, im.ref("l", ts.ListType(element_type=bool_type))), bool_type),
         (
             im.call("named_range")(
                 itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL), 0, 1
@@ -116,7 +116,7 @@ def expression_test_cases():
         # neighbors
         (
             im.neighbors("E2V", im.ref("a", it_on_e_of_e_type)),
-            it_ts.ListType(element_type=it_on_e_of_e_type.element_type),
+            ts.ListType(element_type=it_on_e_of_e_type.element_type),
         ),
         # cast
         (im.call("cast_")(1, "int32"), int_type),
