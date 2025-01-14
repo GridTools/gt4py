@@ -560,6 +560,7 @@ class ITIRTypeInference(eve.NodeTranslator):
     def visit_OffsetLiteral(
         self, node: itir.OffsetLiteral, **kwargs
     ) -> it_ts.OffsetLiteralType | ts.DeferredType:
+        # `self.dimensions` not available in re-inference mode. Skip since we don't care anyway.
         if self.reinfer:
             return ts.DeferredType(constraint=it_ts.OffsetLiteralType)
 

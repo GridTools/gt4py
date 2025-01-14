@@ -399,10 +399,10 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         for i, arg in enumerate(node.args):
             if cpm.is_call_to(arg, "if_"):
                 itir_type_inference.reinfer(arg)
-                if not any(isinstance(branch.type, ts.TupleType) for branch in arg.args[1:]):
-                    continue
 
                 cond, true_branch, false_branch = arg.args  # e.g. `True`, `{1, 2}`, `{3, 4}`
+                if not any(isinstance(branch.type, ts.TupleType) for branch in [true_branch, false_branch]):
+                    continue
                 tuple_type: ts.TupleType = true_branch.type  # type: ignore[assignment]  # type ensured above
                 tuple_len = len(tuple_type.types)
 
@@ -427,7 +427,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 # transformation of this argument.
                 if new_f_body is f_body:
                     continue
-                # if the function is not trivial the transformation we would get a larger tree
+                # if the function is not trivial the transformation we would create a larger tree
                 # after inlining so we skip transformation this argument.
                 if not _is_trivial_or_tuple_thereof_expr(new_f_body):
                     continue
@@ -439,7 +439,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 # this is the symbol refering to our continuation, e.g. `cont` in our example.
                 f_var = self.uids.sequential_id(prefix="__ct_cont")
                 new_branches = []
-                for branch in arg.args[1:]:
+                for branch in [true_branch, false_branch]:
                     new_branch = im.let(tuple_var, branch)(
                         im.call(im.ref(f_var, f_type))(  # call to the continuation
                             *(
