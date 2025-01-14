@@ -583,6 +583,11 @@ def test_K_offset_write(backend):
     if backend == "cuda":
         pytest.skip("cuda K-offset write generates bad code")
 
+    if backend == "dace:gpu":
+        pytest.skip(
+            f"{backend} backend is not capable of K offset write, bug remains unsolved: https://github.com/GridTools/gt4py/issues/1684"
+        )
+
     arraylib = get_array_library(backend)
     array_shape = (1, 1, 4)
     K_values = arraylib.arange(start=40, stop=44)
