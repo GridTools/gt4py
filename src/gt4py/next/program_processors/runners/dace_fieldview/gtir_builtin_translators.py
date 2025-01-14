@@ -596,8 +596,7 @@ def translate_index(
     dim, _, _ = domain[0]
     dim_index = dace_gtir_utils.get_map_variable(dim)
 
-    index_data = sdfg.temp_data_name()
-    sdfg.add_scalar(index_data, INDEX_DTYPE, transient=True)
+    index_data, _ = sdfg_builder.add_temp_scalar(sdfg, INDEX_DTYPE)
     index_node = state.add_access(index_data)
     index_value = gtir_dataflow.ValueExpr(
         dc_node=index_node,
@@ -813,12 +812,7 @@ def translate_scalar_expr(
             dace.Memlet(data=arg_node.data, subset="0"),
         )
     # finally, create temporary for the result value
-    temp_name, _ = sdfg.add_scalar(
-        sdfg.temp_data_name(),
-        dace_utils.as_dace_type(node.type),
-        find_new_name=True,
-        transient=True,
-    )
+    temp_name, _ = sdfg_builder.add_temp_scalar(sdfg, dace_utils.as_dace_type(node.type))
     temp_node = state.add_access(temp_name)
     state.add_edge(
         tasklet_node,

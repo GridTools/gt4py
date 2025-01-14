@@ -452,8 +452,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             # in order to allow for composition of array shape in external memlets.
             temp_name, _ = self.sdfg.add_temp_transient((1,), dc_dtype)
         else:
-            temp_name = self.sdfg.temp_data_name()
-            self.sdfg.add_scalar(temp_name, dc_dtype, transient=True)
+            temp_name, _ = self.subgraph_builder.add_temp_scalar(self.sdfg, dc_dtype)
 
         temp_node = self.state.add_access(temp_name)
         self._add_edge(
@@ -775,23 +774,16 @@ class LambdaToDataflow(eve.NodeVisitor):
                 outer_value = visit_if_branch_result(
                     if_branch_state, out_edge, im.sym("__output", node.type)
                 )
-
-            # in case tuples are passed as argument, isolated non-transient nodes might be left in the state,
-            # because not all tuple fields are necessarily used in the lambda scope
+            # Isolated access node will make validation fail.
+            # Isolated access nodes can be found in `make_tuple` expressions that
+            # construct tuples from input arguments.
             for data_node in if_branch_state.data_nodes():
-                data_desc = data_node.desc(nsdfg)
-                if (not data_desc.transient) and (if_branch_state.degree(data_node) == 0):
-                    # isolated node, connect it to a transient to avoid SDFG validation errors
-                    temp, temp_desc = nsdfg.add_temp_transient_like(data_desc)
-                    temp_node = if_branch_state.add_access(temp)
-                    if_branch_state.add_nedge(
-                        data_node, temp_node, dace.Memlet.from_array(temp, temp_desc)
-                    )
-
+                if if_branch_state.degree(data_node) == 0:
+                    assert not data_node.desc(nsdfg).transient
+                    nsdfg.remove_node(data_node)
         else:
             result = outer_value
 
-        nsdfg_symbol_mapping = {str(sym): sym for sym in nsdfg.free_symbols}
         outputs = {outval.dc_node.data for outval in gtx_utils.flatten_nested_tuple((result,))}
 
         nsdfg_node = self.state.add_nested_sdfg(
@@ -799,7 +791,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             self.sdfg,
             inputs=set(input_memlets.keys()),
             outputs=outputs,
-            symbol_mapping=nsdfg_symbol_mapping,
+            symbol_mapping=None,  # implicitly map all free symbols to the symbols available in parent SDFG
         )
 
         for inner, input_expr in input_memlets.items():
@@ -939,7 +931,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert len(list_desc.shape) == 1
 
         result_dtype = dace_utils.as_dace_type(list_arg.gt_dtype.element_type)
-        result, _ = self.sdfg.add_scalar(self.sdfg.temp_data_name(), result_dtype, transient=True)
+        result, _ = self.subgraph_builder.add_temp_scalar(self.sdfg, result_dtype)
         result_node = self.state.add_access(result)
 
         if isinstance(index_arg, SymbolExpr):
@@ -1255,8 +1247,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         op_name, reduce_init, reduce_identity = get_reduce_params(node)
         reduce_wcr = "lambda x, y: " + gtir_python_codegen.format_builtin(op_name, "x", "y")
 
-        result = self.sdfg.temp_data_name()
-        self.sdfg.add_scalar(result, reduce_identity.dc_dtype, transient=True)
+        result, _ = self.subgraph_builder.add_temp_scalar(self.sdfg, reduce_identity.dc_dtype)
         result_node = self.state.add_access(result)
 
         input_expr = self.visit(node.args[0])

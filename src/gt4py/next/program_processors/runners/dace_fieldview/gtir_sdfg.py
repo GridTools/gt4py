@@ -53,6 +53,13 @@ class DataflowBuilder(Protocol):
     @abc.abstractmethod
     def unique_tasklet_name(self, name: str) -> str: ...
 
+    def add_temp_scalar(
+        self, sdfg: dace.SDFG, dtype: dace.dtypes.typeclass
+    ) -> tuple[str, dace.data.Scalar]:
+        """Add a temporary scalar to the SDFG."""
+        temp_name = sdfg.temp_data_name()
+        return sdfg.add_scalar(temp_name, dtype, transient=True)
+
     def add_map(
         self,
         name: str,
