@@ -252,6 +252,7 @@ markers = [
   'uses_reduction_with_only_sparse_fields: tests that require backend support for with sparse fields',
   'uses_scalar_in_domain_and_fo',
   'uses_scan: tests that uses scan',
+  'uses_scan_1d_field: that that uses scan on 1D vertical field',
   'uses_scan_in_field_operator: tests that require backend support for scan in field operator',
   'uses_scan_in_stencil: tests that require backend support for scan in stencil',
   'uses_scan_without_field_args: tests that require calls to scan that do not have any fields as arguments',
