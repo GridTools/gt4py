@@ -46,7 +46,6 @@
 ##     result.append(str(make_min_req(r)))
 ## print("\n".join(sorted(result)))
 ##]]]
-astunparse==1.6.3; python_version < "3.9"
 attrs==21.3
 black==22.3
 boltons==20.1
@@ -67,7 +66,6 @@ filelock==3.16.1
 frozendict==2.3
 gridtools-cpp==2.3.8
 hypothesis==6.0.0
-importlib-resources==5.0; python_version < "3.9"
 jinja2==3.0.0
 jupytext==1.14
 lark==1.1.2

@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import builtins
 import collections.abc
-import dataclasses
 import functools
 import types
 import typing
@@ -99,7 +98,7 @@ def from_type_hint(
                 raise ValueError(f"Unbound tuples '{type_hint}' are not allowed.")
             tuple_types = [recursive_make_symbol(arg) for arg in args]
             assert all(isinstance(elem, ts.DataType) for elem in tuple_types)
-            return ts.TupleType(types=tuple_types)  # type: ignore[arg-type] # checked in assert
+            return ts.TupleType(types=tuple_types)
 
         case common.Field:
             if (n_args := len(args)) != 2:
@@ -162,7 +161,6 @@ def from_type_hint(
     raise ValueError(f"'{type_hint}' type is not supported.")
 
 
-@dataclasses.dataclass(frozen=True)
 class UnknownPythonObject(ts.TypeSpec):
     _object: Any
 
@@ -211,9 +209,9 @@ def from_value(value: Any) -> ts.TypeSpec:
         # not needed anymore.
         elems = [from_value(el) for el in value]
         assert all(isinstance(elem, ts.DataType) for elem in elems)
-        return ts.TupleType(types=elems)  # type: ignore[arg-type] # checked in assert
+        return ts.TupleType(types=elems)
     elif isinstance(value, types.ModuleType):
-        return UnknownPythonObject(_object=value)
+        return UnknownPythonObject(value)
     else:
         type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
         symbol_type = from_type_hint(type_)
