@@ -141,7 +141,8 @@ class IteratorExpr:
 
 class DataflowInputEdge(Protocol):
     """
-    This protocol represents an open connection into the dataflow.
+    This protocol describes how to concretize a data edge to read data from a source node
+    into the dataflow.
 
     It provides the `connect` method to setup an input edge from an external data source.
     The most common case is that the dataflow represents a stencil, which is instantied
@@ -197,9 +198,11 @@ class EmptyInputEdge(DataflowInputEdge):
     node: dace.nodes.Tasklet
 
     def connect(self, map_entry: Optional[dace.nodes.MapEntry]) -> None:
-        # the empty edge is not created if the dataflow is instatiated without a map
-        if map_entry is not None:
-            self.state.add_nedge(map_entry, self.node, dace.Memlet())
+        if map_entry is None:
+            # outside of a map scope it is possible to instantiate a tasklet node
+            # without input connectors
+            return
+        self.state.add_nedge(map_entry, self.node, dace.Memlet())
 
 
 @dataclasses.dataclass(frozen=True)
@@ -311,7 +314,7 @@ class LambdaToDataflow(eve.NodeVisitor):
     symbol_map: dict[
         str,
         IteratorExpr | DataExpr | tuple[IteratorExpr | DataExpr | tuple[Any, ...], ...],
-    ] = dataclasses.field(default_factory=lambda: {})
+    ] = dataclasses.field(default_factory=dict)
 
     def _add_input_data_edge(
         self,
@@ -449,8 +452,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             # in order to allow for composition of array shape in external memlets.
             temp_name, _ = self.sdfg.add_temp_transient((1,), dc_dtype)
         else:
-            temp_name = self.sdfg.temp_data_name()
-            self.sdfg.add_scalar(temp_name, dc_dtype, transient=True)
+            temp_name, _ = self.subgraph_builder.add_temp_scalar(self.sdfg, dc_dtype)
 
         temp_node = self.state.add_access(temp_name)
         self._add_edge(
@@ -579,7 +581,9 @@ class LambdaToDataflow(eve.NodeVisitor):
         DataflowOutputEdge | tuple[DataflowOutputEdge | tuple[Any, ...], ...],
     ]:
         """
-        Helper method to visit an if-branch expression and lower it to a dtaflow inside the given nested SDFG and state.
+        Helper method to visit an if-branch expression and lower it to a dataflow inside the given nested SDFG and state.
+
+        This function is called by `_visit_if()` for each if-branch.
 
         Args:
             if_sdfg: The nested SDFG where the if expression is lowered.
@@ -600,22 +604,21 @@ class LambdaToDataflow(eve.NodeVisitor):
                 arg_node = arg.dc_node
                 arg_desc = arg_node.desc(self.sdfg)
                 if isinstance(arg, MemletExpr):
-                    assert set(arg.subset.size()) == {1}
+                    assert arg.subset.num_elements() == 1
                     arg_desc = dace.data.Scalar(arg_desc.dtype)
-            else:
-                assert isinstance(arg, IteratorExpr)
+            elif isinstance(arg, IteratorExpr):
                 arg_node = arg.field
                 arg_desc = arg_node.desc(self.sdfg)
                 arg_expr = MemletExpr(
                     arg_node, arg.gt_dtype, dace_subsets.Range.from_array(arg_desc)
                 )
+            else:
+                raise TypeError(f"Unexpected {arg} as input argument.")
 
             arg_data = arg_node.data
             # SDFG data containers with name prefix '__tmp' are expected to be transients
             inner_data = (
-                arg_data.replace("__tmp", "__input", 1)
-                if arg_data.startswith("__tmp")
-                else arg_data
+                arg_data.replace("__tmp", "__gtir", 1) if arg_data.startswith("__tmp") else arg_data
             )
 
             try:
@@ -634,13 +637,13 @@ class LambdaToDataflow(eve.NodeVisitor):
                 assert isinstance(inner_desc, dace.data.Scalar)
                 return ValueExpr(inner_node, arg.gt_dtype)
 
-        lambda_params = []
         lambda_args: list[
             IteratorExpr
             | MemletExpr
             | ValueExpr
             | tuple[IteratorExpr | MemletExpr | ValueExpr | tuple[Any, ...], ...]
         ] = []
+        lambda_params: list[gtir.Sym] = []
         for p in symbol_ref_utils.collect_symbol_refs(expr, self.symbol_map.keys()):
             arg = self.symbol_map[p]
             if isinstance(arg, tuple):
@@ -652,7 +655,9 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         # visit each branch of the if-statement as if it was a Lambda node
         lambda_node = gtir.Lambda(params=lambda_params, expr=expr)
-        return apply(if_sdfg, if_branch_state, self.subgraph_builder, lambda_node, lambda_args)
+        return translate_lambda_to_dataflow(
+            if_sdfg, if_branch_state, self.subgraph_builder, lambda_node, lambda_args
+        )
 
     def _visit_if(self, node: gtir.FunCall) -> ValueExpr | tuple[ValueExpr | tuple[Any, ...], ...]:
         """
@@ -660,6 +665,48 @@ class LambdaToDataflow(eve.NodeVisitor):
         each branch is lowered into a dataflow in a separate state and the if-condition is represented
         as the inter-state edge condtion.
         """
+
+        def visit_if_branch_result(
+            state: dace.SDFGState, edge: DataflowOutputEdge, sym: gtir.Sym
+        ) -> ValueExpr:
+            # Inner function to create an output connector on the nested SDFG that
+            # will write the result to the parent SDFG. The result data node
+            # inside the nested SDFG must have the same name as the output connector.
+            output_data = str(sym.id)
+            try:
+                output_desc = nsdfg.data(output_data)
+                assert not output_desc.transient
+            except KeyError:
+                # if the result is currently written to a transient node, inside the nested SDFG,
+                # we need to allocate a non-transient data node
+                result_desc = edge.result.dc_node.desc(nsdfg)
+                output_desc = result_desc.clone()
+                output_desc.transient = False
+                output_data = nsdfg.add_datadesc(output_data, output_desc, find_new_name=True)
+            output_node = state.add_access(output_data)
+            state.add_nedge(
+                edge.result.dc_node,
+                output_node,
+                dace.Memlet.from_array(output_data, output_desc),
+            )
+            return ValueExpr(output_node, edge.result.gt_dtype)
+
+        def write_output_of_nested_sdfg_to_temporary(inner_value: ValueExpr) -> ValueExpr:
+            # Each output connector of the nested SDFG writes to a transient node in the parent SDFG
+            inner_data = inner_value.dc_node.data
+            inner_desc = inner_value.dc_node.desc(nsdfg)
+            assert not inner_desc.transient
+            output, output_desc = self.sdfg.add_temp_transient_like(inner_desc)
+            output_node = self.state.add_access(output)
+            self.state.add_edge(
+                nsdfg_node,
+                inner_data,
+                output_node,
+                None,
+                dace.Memlet.from_array(output, output_desc),
+            )
+            return ValueExpr(output_node, inner_value.gt_dtype)
+
         assert len(node.args) == 3
 
         # TODO(edopao): enable once supported in next DaCe release
@@ -673,7 +720,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                 and condition_value.gt_dtype.kind == ts.ScalarKind.BOOL
             )
             if isinstance(condition_value, (MemletExpr, ValueExpr))
-            else (condition_value.dc_dtype == dace.dtypes.bool)
+            else (condition_value.dc_dtype == dace.dtypes.bool_)
         )
 
         nsdfg = dace.SDFG(self.unique_nsdfg_name(prefix="if_stmt"))
@@ -716,58 +763,27 @@ class LambdaToDataflow(eve.NodeVisitor):
             for edge in in_edges:
                 edge.connect(map_entry=None)
 
-            # the result of each branch needs to be moved to the parent SDFG
-            def construct_output(
-                output_state: dace.SDFGState, edge: DataflowOutputEdge, sym: gtir.Sym
-            ) -> ValueExpr:
-                # the output data node has the same name as the nested SDFG output connector
-                output_data = str(sym.id)
-                try:
-                    output_desc = nsdfg.data(output_data)
-                    assert not output_desc.transient
-                except KeyError:
-                    # if the result is currently written to a transient node, inside the nested SDFG,
-                    # we need to allocate a non-transient data node
-                    result_desc = edge.result.dc_node.desc(nsdfg)
-                    output_desc = result_desc.clone()
-                    output_desc.transient = False
-                    output_data = nsdfg.add_datadesc(output_data, output_desc, find_new_name=True)
-                output_node = output_state.add_access(output_data)
-                output_state.add_nedge(
-                    edge.result.dc_node,
-                    output_node,
-                    dace.Memlet.from_array(output_data, output_desc),
-                )
-                return ValueExpr(output_node, edge.result.gt_dtype)
-
             if isinstance(out_edge, tuple):
                 assert isinstance(node.type, ts.TupleType)
                 out_symbol = dace_gtir_utils.make_symbol_tuple("__output", node.type)
                 outer_value = gtx_utils.tree_map(
-                    lambda x, y, output_state=if_branch_state: construct_output(output_state, x, y)
+                    lambda x, y, state=if_branch_state: visit_if_branch_result(state, x, y)
                 )(out_edge, out_symbol)
             else:
                 assert isinstance(node.type, ts.FieldType | ts.ScalarType)
-                outer_value = construct_output(
+                outer_value = visit_if_branch_result(
                     if_branch_state, out_edge, im.sym("__output", node.type)
                 )
-
-            # in case tuples are passed as argument, isolated non-transient nodes might be left in the state,
-            # because not all tuple fields are necessarily used in the lambda scope
+            # Isolated access node will make validation fail.
+            # Isolated access nodes can be found in `make_tuple` expressions that
+            # construct tuples from input arguments.
             for data_node in if_branch_state.data_nodes():
-                data_desc = data_node.desc(nsdfg)
-                if (not data_desc.transient) and (if_branch_state.degree(data_node) == 0):
-                    # isolated node, connect it to a transient to avoid SDFG validation errors
-                    temp, temp_desc = nsdfg.add_temp_transient_like(data_desc)
-                    temp_node = if_branch_state.add_access(temp)
-                    if_branch_state.add_nedge(
-                        data_node, temp_node, dace.Memlet.from_array(temp, temp_desc)
-                    )
-
+                if if_branch_state.degree(data_node) == 0:
+                    assert not data_node.desc(nsdfg).transient
+                    nsdfg.remove_node(data_node)
         else:
             result = outer_value
 
-        nsdfg_symbol_mapping = {str(sym): sym for sym in nsdfg.free_symbols}
         outputs = {outval.dc_node.data for outval in gtx_utils.flatten_nested_tuple((result,))}
 
         nsdfg_node = self.state.add_nested_sdfg(
@@ -775,7 +791,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             self.sdfg,
             inputs=set(input_memlets.keys()),
             outputs=outputs,
-            symbol_mapping=nsdfg_symbol_mapping,
+            symbol_mapping=None,  # implicitly map all free symbols to the symbols available in parent SDFG
         )
 
         for inner, input_expr in input_memlets.items():
@@ -790,26 +806,10 @@ class LambdaToDataflow(eve.NodeVisitor):
                     self.sdfg.make_array_memlet(input_expr.dc_node.data),
                 )
 
-        def connect_output(inner_value: ValueExpr) -> ValueExpr:
-            # each output connector of the nested SDFG writes to a transient node in the parent SDFG
-            inner_data = inner_value.dc_node.data
-            inner_desc = inner_value.dc_node.desc(nsdfg)
-            assert not inner_desc.transient
-            output, output_desc = self.sdfg.add_temp_transient_like(inner_desc)
-            output_node = self.state.add_access(output)
-            self.state.add_edge(
-                nsdfg_node,
-                inner_data,
-                output_node,
-                None,
-                dace.Memlet.from_array(output, output_desc),
-            )
-            return ValueExpr(output_node, inner_value.gt_dtype)
-
         return (
-            gtx_utils.tree_map(connect_output)(result)
+            gtx_utils.tree_map(write_output_of_nested_sdfg_to_temporary)(result)
             if isinstance(result, tuple)
-            else connect_output(result)
+            else write_output_of_nested_sdfg_to_temporary(result)
         )
 
     def _visit_neighbors(self, node: gtir.FunCall) -> ValueExpr:
@@ -931,7 +931,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert len(list_desc.shape) == 1
 
         result_dtype = dace_utils.as_dace_type(list_arg.gt_dtype.element_type)
-        result, _ = self.sdfg.add_scalar(self.sdfg.temp_data_name(), result_dtype, transient=True)
+        result, _ = self.subgraph_builder.add_temp_scalar(self.sdfg, result_dtype)
         result_node = self.state.add_access(result)
 
         if isinstance(index_arg, SymbolExpr):
@@ -943,8 +943,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                 None,
                 dace.Memlet(data=list_arg.dc_node.data, subset=index_arg.value),
             )
-        else:
-            assert isinstance(index_arg, ValueExpr)
+        elif isinstance(index_arg, ValueExpr):
             tasklet_node = self._add_tasklet(
                 "list_get", inputs={"index", "list"}, outputs={"value"}, code="value = list[index]"
             )
@@ -965,6 +964,8 @@ class LambdaToDataflow(eve.NodeVisitor):
             self._add_edge(
                 tasklet_node, "value", result_node, None, dace.Memlet(data=result, subset="0")
             )
+        else:
+            raise TypeError(f"Unexpected value {index_arg} as index argument.")
 
         return ValueExpr(dc_node=result_node, gt_dtype=list_arg.gt_dtype.element_type)
 
@@ -1246,8 +1247,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         op_name, reduce_init, reduce_identity = get_reduce_params(node)
         reduce_wcr = "lambda x, y: " + gtir_python_codegen.format_builtin(op_name, "x", "y")
 
-        result = self.sdfg.temp_data_name()
-        self.sdfg.add_scalar(result, reduce_identity.dc_dtype, transient=True)
+        result, _ = self.subgraph_builder.add_temp_scalar(self.sdfg, reduce_identity.dc_dtype)
         result_node = self.state.add_access(result)
 
         input_expr = self.visit(node.args[0])
@@ -1627,8 +1627,6 @@ class LambdaToDataflow(eve.NodeVisitor):
     def visit_Lambda(
         self, node: gtir.Lambda
     ) -> DataflowOutputEdge | tuple[DataflowOutputEdge | tuple[Any, ...], ...]:
-        result = self.visit(node.expr)
-
         def _visit_Lambda_impl(
             output_expr: DataflowOutputEdge | ValueExpr | MemletExpr | SymbolExpr,
         ) -> DataflowOutputEdge:
@@ -1656,6 +1654,8 @@ class LambdaToDataflow(eve.NodeVisitor):
 
             output_expr = self._construct_tasklet_result(output_dtype, tasklet_node, "__out")
             return DataflowOutputEdge(self.state, output_expr)
+
+        result = self.visit(node.expr)
 
         return (
             gtx_utils.tree_map(_visit_Lambda_impl)(result)
@@ -1716,7 +1716,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             return self.visit(node)
 
 
-def apply(
+def translate_lambda_to_dataflow(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.DataflowBuilder,

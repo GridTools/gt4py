@@ -54,6 +54,13 @@ class DataflowBuilder(Protocol):
     @abc.abstractmethod
     def unique_tasklet_name(self, name: str) -> str: ...
 
+    def add_temp_scalar(
+        self, sdfg: dace.SDFG, dtype: dace.dtypes.typeclass
+    ) -> tuple[str, dace.data.Scalar]:
+        """Add a temporary scalar to the SDFG."""
+        temp_name = sdfg.temp_data_name()
+        return sdfg.add_scalar(temp_name, dtype, transient=True)
+
     def add_map(
         self,
         name: str,
@@ -181,9 +188,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
     offset_provider_type: gtx_common.OffsetProviderType
     column_dim: Optional[gtx_common.Dimension]
-    global_symbols: dict[str, ts.DataType] = dataclasses.field(default_factory=lambda: {})
+    global_symbols: dict[str, ts.DataType] = dataclasses.field(default_factory=dict)
     field_offsets: dict[str, Optional[list[dace.symbolic.SymExpr]]] = dataclasses.field(
-        default_factory=lambda: {}
+        default_factory=dict
     )
     map_uids: eve.utils.UIDGenerator = dataclasses.field(
         init=False, repr=False, default_factory=lambda: eve.utils.UIDGenerator(prefix="map")
