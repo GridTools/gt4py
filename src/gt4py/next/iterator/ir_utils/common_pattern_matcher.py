@@ -76,6 +76,7 @@ def is_call_to(node: itir.Node, fun: str | Iterable[str]) -> TypeGuard[itir.FunC
     >>> is_call_to(node, ("plus", "minus"))
     True
     """
+    assert isinstance(node, itir.Node)  # to avoid accidentally passing the fun as first argument
     if isinstance(fun, (list, tuple, set, Iterable)) and not isinstance(fun, str):
         return any((is_call_to(node, f) for f in fun))
     return (
