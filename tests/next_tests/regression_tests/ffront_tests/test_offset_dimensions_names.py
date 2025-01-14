@@ -19,7 +19,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests import ffront_test_
 V = gtx.Dimension("V")
 E = gtx.Dimension("E")
 Neigh = gtx.Dimension("Neigh", kind=common.DimensionKind.LOCAL)
-Off = gtx.FieldOffset("Off", source=E, target=[V, Neigh])
+Off = gtx.FieldOffset("Off", source=E, target=(V, Neigh))
 
 
 @pytest.fixture
