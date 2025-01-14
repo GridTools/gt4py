@@ -344,8 +344,8 @@ def _create_field_operator(
     Helper method to build the output of a field operator, which can consist of
     a single field or a tuple of fields.
 
-    A tuple of fields is returned when one stencil computes the same local point
-    on multiple fields: for each field, this method will call `_create_field_operator_impl()`.
+    A tuple of fields is returned when one stencil computes a grid point on multiple
+    fields: for each field, this method will call `_create_field_operator_impl()`.
 
     Args:
         sdfg: The SDFG that represents the scope of the field data.
