@@ -82,14 +82,26 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         def pop_loop(self) -> None:
             self._pop_last("loop_after")
 
-        def add_condition(self, *, condition_name: str) -> None:
+        def add_condition(self, node: dcir.Condition) -> None:
             """Inserts a condition state after the current self.state.
             The condition state is connected to a true_state and a false_state based on
-            a temporary local variable identified by `node.mask_name`. Both states then merge
+            a temporary local variable identified by `condition_name`. Both states then merge
             into a merge_state.
             self.state is set to true_state and merge_state / false_state are pushed to
             the stack of states; to be popped with `pop_condition_{false, after}()`.
             """
+            # get condition_name out of node.condition
+            # yell we find something unexpected
+            assert isinstance(node.condition, dcir.Tasklet)
+            assert len(node.condition.stmts) == 1
+            assert isinstance(node.condition.stmts[0], dcir.AssignStmt)
+            assert isinstance(node.condition.stmts[0].left, dcir.ScalarAccess)
+            if node.condition.stmts[0].left.original_name is None:
+                raise ValueError(
+                    f"Original node name not found for {node.condition.stmts[0].left.name}. DaCe IR error."
+                )
+            condition_name = node.condition.stmts[0].left.original_name
+
             merge_state = self.sdfg.add_state("condition_after")
             for edge in self.sdfg.out_edges(self.state):
                 self.sdfg.remove_edge(edge)
@@ -137,8 +149,20 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         def pop_condition_after(self) -> None:
             self._pop_last("condition_after")
 
-        def add_while(self, *, condition_name: str) -> None:
+        def add_while(self, node: dcir.WhileLoop) -> None:
             """Inserts a while loop after the current state."""
+            # get condition_name out of node.condition
+            # yell we find something unexpected
+            assert isinstance(node.condition, dcir.Tasklet)
+            assert len(node.condition.stmts) == 1
+            assert isinstance(node.condition.stmts[0], dcir.AssignStmt)
+            assert isinstance(node.condition.stmts[0].left, dcir.ScalarAccess)
+            if node.condition.stmts[0].left.original_name is None:
+                raise ValueError(
+                    f"Original node name not found for {node.condition.stmts[0].left.name}. DaCe IR error."
+                )
+            condition_name = node.condition.stmts[0].left.original_name
+
             after_state = self.sdfg.add_state("while_after")
             for edge in self.sdfg.out_edges(self.state):
                 self.sdfg.remove_edge(edge)
@@ -250,18 +274,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         symtable: ChainMap[eve.SymbolRef, dcir.Decl],
         **kwargs: Any,
     ) -> None:
-        # get condition_name out of node.condition
-        # yell we find something unexpected
-        assert isinstance(node.condition, dcir.Tasklet)
-        assert len(node.condition.stmts) == 1
-        assert isinstance(node.condition.stmts[0], dcir.AssignStmt)
-        assert isinstance(node.condition.stmts[0].left, dcir.ScalarAccess)
-        if node.condition.stmts[0].left.original_name is None:
-            raise ValueError(
-                f"Original node name not found for {node.condition.stmts[0].left.name}. DaCe IR error."
-            )
-
-        sdfg_ctx.add_while(condition_name=node.condition.stmts[0].left.original_name)
+        sdfg_ctx.add_while(node)
         assert sdfg_ctx.state.label.startswith("while_init")
 
         read_acc_and_conn: Dict[Optional[str], Tuple[dace.nodes.Node, Optional[str]]] = {}
@@ -303,18 +316,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         symtable: ChainMap[eve.SymbolRef, dcir.Decl],
         **kwargs: Any,
     ) -> None:
-        # get condition_name out of node.condition
-        # yell we find something unexpected
-        assert isinstance(node.condition, dcir.Tasklet)
-        assert len(node.condition.stmts) == 1
-        assert isinstance(node.condition.stmts[0], dcir.AssignStmt)
-        assert isinstance(node.condition.stmts[0].left, dcir.ScalarAccess)
-        if node.condition.stmts[0].left.original_name is None:
-            raise ValueError(
-                f"Original node name not found for {node.condition.stmts[0].left.name}. DaCe IR error."
-            )
-
-        sdfg_ctx.add_condition(condition_name=node.condition.stmts[0].left.original_name)
+        sdfg_ctx.add_condition(node)
         assert sdfg_ctx.state.label.startswith("condition_init")
 
         read_acc_and_conn: Dict[Optional[str], Tuple[dace.nodes.Node, Optional[str]]] = {}
