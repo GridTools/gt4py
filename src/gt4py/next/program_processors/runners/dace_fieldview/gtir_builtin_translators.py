@@ -160,7 +160,7 @@ INDEX_DTYPE: Final[dace.typeclass] = dace.dtype_to_typeclass(gtx_fbuiltins.Index
 
 def get_tuple_type(data: tuple[FieldopResult, ...]) -> ts.TupleType:
     """
-    Compute the `ts.TupleType` corresponding to the structure of a tuple of `FieldopResult`.
+    Compute the `ts.TupleType` corresponding to the tuple structure of `FieldopResult`.
     """
     return ts.TupleType(
         types=[get_tuple_type(d) if isinstance(d, tuple) else d.gt_type for d in data]
@@ -358,9 +358,10 @@ def _create_field_operator(
 ) -> FieldopResult:
     """
     Helper method to build the output of a field operator, which can consist of
-    a single field or, in case of scan, a tuple of fields.
-    The scan field operator typically computes multiple fields for each K-level:
-    for each field, this method will call `_create_field_operator_impl()`.
+    a single field or a tuple of fields.
+
+    A tuple of fields is returned when one stencil computes the same local point
+    on multiple fields: for each field, this method will call `_create_field_operator_impl()`.
 
     Args:
         sdfg: The SDFG that represents the scope of the field data.
