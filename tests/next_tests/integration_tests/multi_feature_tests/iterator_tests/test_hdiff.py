@@ -61,6 +61,7 @@ def hdiff(inp, coeff, out, x, y):
     set_at(as_fieldop(hdiff_sten, domain)(inp, coeff), domain, out)
 
 
+@pytest.mark.uses_lift
 @pytest.mark.uses_origin
 def test_hdiff(hdiff_reference, program_processor):
     program_processor, validate = program_processor
