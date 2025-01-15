@@ -280,12 +280,14 @@ def _get_field_layout(
 
 
 def _create_field_operator_impl(
+    sdfg_builder: gtir_sdfg.SDFGBuilder,
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     domain: FieldopDomain,
     output_edge: gtir_dataflow.DataflowOutputEdge,
     output_type: ts.FieldType,
     map_exit: dace.nodes.MapExit,
+    scan_dim: Optional[gtx_common.Dimension] = None,
 ) -> FieldopData:
     """
     Helper method to allocate a temporary array that stores one field computed by a field operator.
@@ -293,12 +295,14 @@ def _create_field_operator_impl(
     This method is called by `_create_field_operator()`.
 
     Args:
+        sdfg_builder: The object used to build the map scope in the provided SDFG.
         sdfg: The SDFG that represents the scope of the field data.
         state: The SDFG state where to create an access node to the field data.
         domain: The domain of the field operator that computes the field.
         output_edge: The dataflow write edge representing the output data.
         output_type: The GT4Py field type descriptor.
         map_exit: The `MapExit` node of the field operator map scope.
+        scan_dim: Column dimension used in scan field operators.
 
     Returns:
         The field data descriptor, which includes the field access node in the given `state`
@@ -310,12 +314,28 @@ def _create_field_operator_impl(
     domain_indices = _get_domain_indices(domain_dims, domain_offset)
     domain_subset = dace_subsets.Range.from_indices(domain_indices)
 
+    scan_dim_index: Optional[int] = None
+    if scan_dim is not None:
+        scan_dim_index = domain_dims.index(scan_dim)
+
     if isinstance(output_edge.result.gt_dtype, ts.ScalarType):
         assert output_edge.result.gt_dtype == output_type.dtype
         field_dtype = output_edge.result.gt_dtype
         field_dims, field_shape, field_offset = (domain_dims, domain_shape, domain_offset)
-        assert isinstance(dataflow_output_desc, dace.data.Scalar)
-        field_subset = domain_subset
+        if scan_dim is not None:
+            # the scan field operator produces a 1D vertical field
+            assert isinstance(dataflow_output_desc, dace.data.Array)
+            assert len(dataflow_output_desc.shape) == 1
+            # the vertical dimension should not belong to the field operator domain
+            # but we need to write it to the output field
+            field_subset = (
+                dace_subsets.Range(domain_subset[:scan_dim_index])
+                + dace_subsets.Range.from_array(dataflow_output_desc)
+                + dace_subsets.Range(domain_subset[scan_dim_index:])
+            )
+        else:
+            assert isinstance(dataflow_output_desc, dace.data.Scalar)
+            field_subset = domain_subset
     else:
         assert isinstance(output_type.dtype, ts.ListType)
         assert isinstance(output_edge.result.gt_dtype.element_type, ts.ScalarType)
@@ -332,8 +352,15 @@ def _create_field_operator_impl(
 
     # allocate local temporary storage
     assert dataflow_output_desc.dtype == dace_utils.as_dace_type(field_dtype)
-    field_name, _ = sdfg.add_temp_transient(field_shape, dataflow_output_desc.dtype)
+    field_name, field_desc = sdfg.add_temp_transient(field_shape, dataflow_output_desc.dtype)
     field_node = state.add_access(field_name)
+
+    if scan_dim is not None:
+        # By default, we leave `strides=None` which corresponds to use DaCe default memory layout
+        # for transient arrays. However, for scan field operators we need to ensure that the same
+        # stride is used for the vertical dimension in inner and outer array.
+        scan_output_stride = field_desc.strides[scan_dim_index]
+        dataflow_output_desc.strides = (scan_output_stride,)
 
     # and here the edge writing the dataflow result data through the map exit node
     output_edge.connect(map_exit, field_node, field_subset)
@@ -377,7 +404,7 @@ def _create_field_operator(
         The descriptor of the field operator result, which can be either a single field
         or a tuple fields.
     """
-    domain_dims, domain_offset, domain_shape = _get_field_layout(domain)
+    domain_dims, domain_offset, _ = _get_field_layout(domain)
     domain_indices = _get_domain_indices(domain_dims, domain_offset)
     domain_subset = dace_subsets.Range.from_indices(domain_indices)
 
@@ -392,10 +419,10 @@ def _create_field_operator(
     # now check, after removal of the vertical dimension, whether the domain is empty
     if len(domain_subset) == 0:
         # no need to create a map scope, the field operator domain is empty
-        me, mx = (None, None)
+        map_entry, map_exit = (None, None)
     else:
         # create map range corresponding to the field operator domain
-        me, mx = sdfg_builder.add_map(
+        map_entry, map_exit = sdfg_builder.add_map(
             "fieldop",
             state,
             ndrange={
@@ -407,75 +434,21 @@ def _create_field_operator(
 
     # here we setup the edges passing through the map entry node
     for edge in input_edges:
-        edge.connect(me)
-
-    def _create_field_operator_impl(
-        output_edge: gtir_dataflow.DataflowOutputEdge, sym: gtir.Sym
-    ) -> FieldopData:
-        assert isinstance(sym.type, ts.FieldType)
-        dataflow_output_desc = output_edge.result.dc_node.desc(sdfg)
-        if isinstance(output_edge.result.gt_dtype, ts.ScalarType):
-            assert output_edge.result.gt_dtype == sym.type.dtype
-            field_dtype = output_edge.result.gt_dtype
-            field_dims, field_shape, field_offset = (domain_dims, domain_shape, domain_offset)
-            if scan_dim is not None:
-                # the scan field operator produces a 1D vertical field
-                assert isinstance(dataflow_output_desc, dace.data.Array)
-                assert len(dataflow_output_desc.shape) == 1
-                # the vertical dimension should not belong to the field operator domain
-                # but we need to write it to the output field
-                field_subset = (
-                    dace_subsets.Range(domain_subset[:scan_dim_index])
-                    + dace_subsets.Range.from_array(dataflow_output_desc)
-                    + dace_subsets.Range(domain_subset[scan_dim_index:])
-                )
-            else:
-                assert isinstance(dataflow_output_desc, dace.data.Scalar)
-                field_subset = domain_subset
-        else:
-            assert isinstance(sym.type.dtype, ts.ListType)
-            assert isinstance(output_edge.result.gt_dtype.element_type, ts.ScalarType)
-            assert output_edge.result.gt_dtype.element_type == sym.type.dtype.element_type
-            field_dtype = output_edge.result.gt_dtype.element_type
-            assert isinstance(dataflow_output_desc, dace.data.Array)
-            assert len(dataflow_output_desc.shape) == 1
-            # extend the array with the local dimensions added by the field operator (e.g. `neighbors`)
-            assert output_edge.result.gt_dtype.offset_type is not None
-            field_dims = [*domain_dims, output_edge.result.gt_dtype.offset_type]
-            field_shape = [*domain_shape, dataflow_output_desc.shape[0]]
-            field_offset = [*domain_offset, dataflow_output_desc.offset[0]]
-            field_subset = domain_subset + dace_subsets.Range.from_array(dataflow_output_desc)
-
-        # allocate local temporary storage
-        assert dataflow_output_desc.dtype == dace_utils.as_dace_type(field_dtype)
-        field_name, field_desc = sdfg.add_temp_transient(field_shape, dataflow_output_desc.dtype)
-        field_node = state.add_access(field_name)
-
-        if scan_dim is not None:
-            # By default, we leave `strides=None` which corresponds to use DaCe default memory layout
-            # for transient arrays. However, for scan field operators we need to ensure that the same
-            # stride is used for the vertical dimension in inner and outer array.
-            scan_output_stride = field_desc.strides[scan_dim_index]
-            dataflow_output_desc.strides = (scan_output_stride,)
-
-        # and here the edge writing the dataflow result data through the map exit node
-        output_edge.connect(mx, field_node, field_subset)
-
-        return FieldopData(
-            field_node,
-            ts.FieldType(field_dims, field_dtype),
-            offset=(field_offset if set(field_offset) != {0} else None),
-        )
+        edge.connect(map_entry)
 
     if isinstance(node_type, ts.FieldType):
         assert isinstance(output_edges, gtir_dataflow.DataflowOutputEdge)
-        return _create_field_operator_impl(output_edges, im.sym("x", node_type))
+        return _create_field_operator_impl(
+            sdfg_builder, sdfg, state, domain, output_edges, node_type, map_exit
+        )
     else:
         # handle tuples of fields
-        tuple_syms = dace_gtir_utils.make_symbol_tuple("x", node_type)
+        output_symbol_tree = dace_gtir_utils.make_symbol_tree("x", node_type)
         return gtx_utils.tree_map(
-            lambda output_edge, sym: _create_field_operator_impl(output_edge, sym)
-        )(output_edges, tuple_syms)
+            lambda output_edge, output_sym: _create_field_operator_impl(
+                sdfg_builder, sdfg, state, domain, output_edge, output_sym.type, map_exit
+            )
+        )(output_edges, output_symbol_tree)
 
 
 def extract_domain(node: gtir.Node) -> FieldopDomain:
@@ -630,7 +603,7 @@ def translate_if(
 
     def construct_output(inner_data: FieldopData) -> FieldopData:
         inner_desc = inner_data.dc_node.desc(sdfg)
-        outer, _ = sdfg.add_temp_transient_like(inner_desc)
+        outer, _ = sdfg_builder.add_temp_array_like(sdfg, inner_desc)
         outer_node = state.add_access(outer)
 
         return inner_data.make_copy(outer_node)
@@ -741,10 +714,10 @@ def _get_data_nodes(
         return sdfg_builder.make_field(data_node, data_type)
 
     elif isinstance(data_type, ts.TupleType):
-        tuple_syms = dace_gtir_utils.make_symbol_tuple(data_name, data_type)
+        symbol_tree = dace_gtir_utils.make_symbol_tree(data_name, data_type)
         return gtx_utils.tree_map(
             lambda sym: _get_data_nodes(sdfg, state, sdfg_builder, sym.id, sym.type)
-        )(tuple_syms)
+        )(symbol_tree)
 
     else:
         raise NotImplementedError(f"Symbol type {type(data_type)} not supported.")
@@ -1064,7 +1037,7 @@ def translate_scan(
 
     # now initialize the scan carry
     scan_carry_input = (
-        dace_gtir_utils.make_symbol_tuple(scan_carry, scan_carry_type)
+        dace_gtir_utils.make_symbol_tree(scan_carry, scan_carry_type)
         if isinstance(scan_carry_type, ts.TupleType)
         else im.sym(scan_carry, scan_carry_type)
     )

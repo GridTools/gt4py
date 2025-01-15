@@ -27,24 +27,24 @@ def get_map_variable(dim: gtx_common.Dimension) -> str:
     return f"i_{dim.value}_gtx_{dim.kind}{suffix}"
 
 
-def make_symbol_tuple(tuple_name: str, tuple_type: ts.TupleType) -> tuple[gtir.Sym, ...]:
+def make_symbol_tree(tuple_name: str, tuple_type: ts.TupleType) -> tuple[gtir.Sym, ...]:
     """
-    Creates a tuple representation of the symbols corresponding to the tuple fields.
-    The constructed tuple preserves the nested nature of the type, if any.
+    Creates a tree representation of the symbols corresponding to the tuple fields.
+    The constructed tree preserves the nested nature of the tuple type, if any.
 
     Examples
     --------
     >>> sty = ts.ScalarType(kind=ts.ScalarKind.INT32)
     >>> fty = ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
     >>> t = ts.TupleType(types=[sty, ts.TupleType(types=[fty, sty])])
-    >>> assert make_symbol_tuple("a", t) == (
+    >>> assert make_symbol_tree("a", t) == (
     ...     im.sym("a_0", sty),
     ...     (im.sym("a_1_0", fty), im.sym("a_1_1", sty)),
     ... )
     """
     fields = [(f"{tuple_name}_{i}", field_type) for i, field_type in enumerate(tuple_type.types)]
     return tuple(
-        make_symbol_tuple(field_name, field_type)  # type: ignore[misc]
+        make_symbol_tree(field_name, field_type)  # type: ignore[misc]
         if isinstance(field_type, ts.TupleType)
         else im.sym(field_name, field_type)
         for field_name, field_type in fields
@@ -66,8 +66,8 @@ def flatten_tuple_fields(tuple_name: str, tuple_type: ts.TupleType) -> list[gtir
     ...     im.sym("a_1_1", sty),
     ... ]
     """
-    symbol_tuple = make_symbol_tuple(tuple_name, tuple_type)
-    return list(gtx_utils.flatten_nested_tuple(symbol_tuple))
+    symbol_tree = make_symbol_tree(tuple_name, tuple_type)
+    return list(gtx_utils.flatten_nested_tuple(symbol_tree))
 
 
 def replace_invalid_symbols(ir: gtir.Program) -> gtir.Program:
