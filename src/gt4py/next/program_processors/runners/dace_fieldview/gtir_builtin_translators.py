@@ -223,10 +223,7 @@ def _parse_fieldop_arg(
 ) -> (
     gtir_dataflow.IteratorExpr
     | gtir_dataflow.MemletExpr
-    | tuple[
-        gtir_dataflow.IteratorExpr | gtir_dataflow.MemletExpr | tuple[Any, ...],
-        ...,
-    ]
+    | tuple[gtir_dataflow.IteratorExpr | gtir_dataflow.MemletExpr | tuple[Any, ...], ...]
 ):
     """Helper method to visit an expression passed as argument to a field operator."""
 
@@ -331,7 +328,7 @@ def _create_field_operator_impl(
             field_subset = (
                 dace_subsets.Range(domain_subset[:scan_dim_index])
                 + dace_subsets.Range.from_array(dataflow_output_desc)
-                + dace_subsets.Range(domain_subset[scan_dim_index:])
+                + dace_subsets.Range(domain_subset[scan_dim_index + 1 :])
             )
         else:
             assert isinstance(dataflow_output_desc, dace.data.Scalar)
@@ -352,7 +349,9 @@ def _create_field_operator_impl(
 
     # allocate local temporary storage
     assert dataflow_output_desc.dtype == dace_utils.as_dace_type(field_dtype)
-    field_name, field_desc = sdfg.add_temp_transient(field_shape, dataflow_output_desc.dtype)
+    field_name, field_desc = sdfg_builder.add_temp_array(
+        sdfg, field_shape, dataflow_output_desc.dtype
+    )
     field_node = state.add_access(field_name)
 
     if scan_dim is not None:
@@ -439,14 +438,14 @@ def _create_field_operator(
     if isinstance(node_type, ts.FieldType):
         assert isinstance(output_edges, gtir_dataflow.DataflowOutputEdge)
         return _create_field_operator_impl(
-            sdfg_builder, sdfg, state, domain, output_edges, node_type, map_exit
+            sdfg_builder, sdfg, state, domain, output_edges, node_type, map_exit, scan_dim
         )
     else:
         # handle tuples of fields
         output_symbol_tree = dace_gtir_utils.make_symbol_tree("x", node_type)
         return gtx_utils.tree_map(
             lambda output_edge, output_sym: _create_field_operator_impl(
-                sdfg_builder, sdfg, state, domain, output_edge, output_sym.type, map_exit
+                sdfg_builder, sdfg, state, domain, output_edge, output_sym.type, map_exit, scan_dim
             )
         )(output_edges, output_symbol_tree)
 
@@ -918,7 +917,7 @@ def translate_scan(
     ]
     assert len(scan_domain) == 1
     scan_dim, scan_lower_bound, scan_upper_bound = scan_domain[0]
-    assert sdfg_builder.is_column_dimension(scan_dim)
+    assert sdfg_builder.is_column_axis(scan_dim)
 
     # parse scan parameters
     assert len(scan_expr.args) == 3

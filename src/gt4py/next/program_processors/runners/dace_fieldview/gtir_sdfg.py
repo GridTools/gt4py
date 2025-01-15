@@ -132,8 +132,8 @@ class SDFGBuilder(DataflowBuilder, Protocol):
         ...
 
     @abc.abstractmethod
-    def is_column_dimension(self, dim: gtx_common.Dimension) -> bool:
-        """Check if the given dimension is the column dimension."""
+    def is_column_axis(self, dim: gtx_common.Dimension) -> bool:
+        """Check if the given dimension is the column axis."""
         ...
 
     @abc.abstractmethod
@@ -199,7 +199,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     """
 
     offset_provider_type: gtx_common.OffsetProviderType
-    column_dim: Optional[gtx_common.Dimension]
+    column_axis: Optional[gtx_common.Dimension]
     global_symbols: dict[str, ts.DataType] = dataclasses.field(default_factory=dict)
     field_offsets: dict[str, Optional[list[dace.symbolic.SymExpr]]] = dataclasses.field(
         default_factory=dict
@@ -226,9 +226,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     def get_symbol_type(self, symbol_name: str) -> ts.DataType:
         return self.global_symbols[symbol_name]
 
-    def is_column_dimension(self, dim: gtx_common.Dimension) -> bool:
-        assert self.column_dim
-        return dim == self.column_dim
+    def is_column_axis(self, dim: gtx_common.Dimension) -> bool:
+        assert self.column_axis
+        return dim == self.column_axis
 
     def nested_context(
         self,
@@ -237,7 +237,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         field_offsets: dict[str, Optional[list[dace.symbolic.SymExpr]]],
     ) -> SDFGBuilder:
         nsdfg_builder = GTIRToSDFG(
-            self.offset_provider_type, self.column_dim, global_symbols, field_offsets
+            self.offset_provider_type, self.column_axis, global_symbols, field_offsets
         )
         nsdfg_params = [
             gtir.Sym(id=p_name, type=p_type) for p_name, p_type in global_symbols.items()
@@ -714,7 +714,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         # lower let-statement lambda node as a nested SDFG
         lambda_translator = GTIRToSDFG(
-            self.offset_provider_type, self.column_dim, lambda_symbols, lambda_field_offsets
+            self.offset_provider_type, self.column_axis, lambda_symbols, lambda_field_offsets
         )
         nsdfg = dace.SDFG(name=self.unique_nsdfg_name(sdfg, "lambda"))
         nsdfg.debuginfo = dace_utils.debug_info(node, default=sdfg.debuginfo)
@@ -890,7 +890,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 def build_sdfg_from_gtir(
     ir: gtir.Program,
     offset_provider_type: gtx_common.OffsetProviderType,
-    column_dim: Optional[gtx_common.Dimension] = None,
+    column_axis: Optional[gtx_common.Dimension] = None,
 ) -> dace.SDFG:
     """
     Receives a GTIR program and lowers it to a DaCe SDFG.
@@ -901,7 +901,7 @@ def build_sdfg_from_gtir(
     Args:
         ir: The GTIR program node to be lowered to SDFG
         offset_provider_type: The definitions of offset providers used by the program node
-        column_dim: Vertical dimension used for scan expressions.
+        column_axis: Vertical dimension used for column scan expressions.
 
     Returns:
         An SDFG in the DaCe canonical form (simplified)
@@ -916,7 +916,7 @@ def build_sdfg_from_gtir(
     # Here we find new names for invalid symbols present in the IR.
     ir = dace_gtir_utils.replace_invalid_symbols(ir)
 
-    sdfg_genenerator = GTIRToSDFG(offset_provider_type, column_dim)
+    sdfg_genenerator = GTIRToSDFG(offset_provider_type, column_axis)
     sdfg = sdfg_genenerator.visit(ir)
     assert isinstance(sdfg, dace.SDFG)
 
