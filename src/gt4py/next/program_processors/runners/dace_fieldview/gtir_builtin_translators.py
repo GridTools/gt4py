@@ -380,12 +380,12 @@ def _create_field_operator(
         return _create_field_operator_impl(sdfg, state, domain, output_edges, node_type, map_exit)
     else:
         # handle tuples of fields
-        tuple_syms = dace_gtir_utils.make_symbol_tuple("x", node_type)
+        output_sym_tree = dace_gtir_utils.make_symbol_tree("x", node_type)
         return gtx_utils.tree_map(
             lambda output_edge, output_sym: _create_field_operator_impl(
                 sdfg, state, domain, output_edge, output_sym.type, map_exit
             )
-        )(output_edges, tuple_syms)
+        )(output_edges, output_sym_tree)
 
 
 def extract_domain(node: gtir.Node) -> FieldopDomain:
@@ -648,10 +648,10 @@ def _get_data_nodes(
         return sdfg_builder.make_field(data_node, data_type)
 
     elif isinstance(data_type, ts.TupleType):
-        tuple_syms = dace_gtir_utils.make_symbol_tuple(data_name, data_type)
+        sym_tree = dace_gtir_utils.make_symbol_tree(data_name, data_type)
         return gtx_utils.tree_map(
             lambda sym: _get_data_nodes(sdfg, state, sdfg_builder, sym.id, sym.type)
-        )(tuple_syms)
+        )(sym_tree)
 
     else:
         raise NotImplementedError(f"Symbol type {type(data_type)} not supported.")
