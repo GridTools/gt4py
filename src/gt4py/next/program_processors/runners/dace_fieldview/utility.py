@@ -37,7 +37,7 @@ def make_symbol_tree(tuple_name: str, tuple_type: ts.TupleType) -> tuple[gtir.Sy
     >>> sty = ts.ScalarType(kind=ts.ScalarKind.INT32)
     >>> fty = ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
     >>> t = ts.TupleType(types=[sty, ts.TupleType(types=[fty, sty])])
-    >>> assert make_symbol_tuple("a", t) == (
+    >>> assert make_symbol_tree("a", t) == (
     ...     im.sym("a_0", sty),
     ...     (im.sym("a_1_0", fty), im.sym("a_1_1", sty)),
     ... )
