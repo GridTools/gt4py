@@ -279,6 +279,7 @@ def _create_field_operator_impl(
     This method is called by `_create_field_operator()`.
 
     Args:
+        sdfg_builder: The object used to build the map scope in the provided SDFG.
         sdfg: The SDFG that represents the scope of the field data.
         state: The SDFG state where to create an access node to the field data.
         domain: The domain of the field operator that computes the field.
