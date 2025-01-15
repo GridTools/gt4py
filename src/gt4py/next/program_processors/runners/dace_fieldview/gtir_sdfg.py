@@ -53,6 +53,25 @@ class DataflowBuilder(Protocol):
     @abc.abstractmethod
     def unique_tasklet_name(self, name: str) -> str: ...
 
+    def add_temp_array(
+        self, sdfg: dace.SDFG, shape: Sequence[Any], dtype: dace.dtypes.typeclass
+    ) -> tuple[str, dace.data.Scalar]:
+        """Add a temporary array to the SDFG."""
+        return sdfg.add_temp_transient(shape, dtype)
+
+    def add_temp_array_like(
+        self, sdfg: dace.SDFG, datadesc: dace.data.Array
+    ) -> tuple[str, dace.data.Scalar]:
+        """Add a temporary array to the SDFG."""
+        return sdfg.add_temp_transient_like(datadesc)
+
+    def add_temp_scalar(
+        self, sdfg: dace.SDFG, dtype: dace.dtypes.typeclass
+    ) -> tuple[str, dace.data.Scalar]:
+        """Add a temporary scalar to the SDFG."""
+        temp_name = sdfg.temp_data_name()
+        return sdfg.add_scalar(temp_name, dtype, transient=True)
+
     def add_map(
         self,
         name: str,
@@ -86,9 +105,9 @@ class DataflowBuilder(Protocol):
         state: dace.SDFGState,
         map_ranges: Dict[str, str | dace.subsets.Subset]
         | List[Tuple[str, str | dace.subsets.Subset]],
-        inputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
+        inputs: Dict[str, dace.Memlet],
         code: str,
-        outputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
+        outputs: Dict[str, dace.Memlet],
         **kwargs: Any,
     ) -> tuple[dace.nodes.Tasklet, dace.nodes.MapEntry, dace.nodes.MapExit]:
         """Wrapper of `dace.SDFGState.add_mapped_tasklet` that assigns unique name."""
@@ -149,15 +168,6 @@ def _collect_symbols_in_domain_expressions(
     )
 
 
-def _get_tuple_type(data: tuple[gtir_builtin_translators.FieldopResult, ...]) -> ts.TupleType:
-    """
-    Compute the `ts.TupleType` corresponding to the structure of a tuple of data nodes.
-    """
-    return ts.TupleType(
-        types=[_get_tuple_type(d) if isinstance(d, tuple) else d.gt_type for d in data]
-    )
-
-
 @dataclasses.dataclass(frozen=True)
 class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     """Provides translation capability from a GTIR program to a DaCe SDFG.
@@ -173,9 +183,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     """
 
     offset_provider_type: gtx_common.OffsetProviderType
-    global_symbols: dict[str, ts.DataType] = dataclasses.field(default_factory=lambda: {})
+    global_symbols: dict[str, ts.DataType] = dataclasses.field(default_factory=dict)
     field_offsets: dict[str, Optional[list[dace.symbolic.SymExpr]]] = dataclasses.field(
-        default_factory=lambda: {}
+        default_factory=dict
     )
     map_uids: eve.utils.UIDGenerator = dataclasses.field(
         init=False, repr=False, default_factory=lambda: eve.utils.UIDGenerator(prefix="map")
@@ -246,7 +256,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         name: str,
         gt_type: ts.DataType,
         transient: bool = True,
-        tuple_name: Optional[str] = None,
     ) -> list[tuple[str, ts.DataType]]:
         """
         Add storage in the SDFG for a given GT4Py data symbol.
@@ -266,7 +275,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             name: Symbol Name to be allocated.
             gt_type: GT4Py symbol type.
             transient: True when the data symbol has to be allocated as internal storage.
-            tuple_name: Must be set for tuple fields in order to use the same array shape and strides symbols.
 
         Returns:
             List of tuples '(data_name, gt_type)' where 'data_name' is the name of
@@ -277,11 +285,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         """
         if isinstance(gt_type, ts.TupleType):
             tuple_fields = []
-            for tname, ttype in dace_gtir_utils.get_tuple_fields(name, gt_type, flatten=True):
+            for sym in dace_gtir_utils.flatten_tuple_fields(name, gt_type):
+                assert isinstance(sym.type, ts.DataType)
                 tuple_fields.extend(
-                    self._add_storage(
-                        sdfg, symbolic_arguments, tname, ttype, transient, tuple_name=name
-                    )
+                    self._add_storage(sdfg, symbolic_arguments, sym.id, sym.type, transient)
                 )
             return tuple_fields
 
@@ -293,16 +300,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             # ListType not supported: concept is represented as Field with local Dimension
             assert isinstance(gt_type.dtype, ts.ScalarType)
             dc_dtype = dace_utils.as_dace_type(gt_type.dtype)
-            if tuple_name is None:
-                # Use symbolic shape, which allows to invoke the program with fields of different size;
-                # and symbolic strides, which enables decoupling the memory layout from generated code.
-                sym_shape, sym_strides = self._make_array_shape_and_strides(name, gt_type.dims)
-            else:
-                # All fields in a tuple must have the same dims and sizes,
-                # therefore we use the same shape and strides symbols based on 'tuple_name'.
-                sym_shape, sym_strides = self._make_array_shape_and_strides(
-                    tuple_name, gt_type.dims
-                )
+            # Use symbolic shape, which allows to invoke the program with fields of different size;
+            # and symbolic strides, which enables decoupling the memory layout from generated code.
+            sym_shape, sym_strides = self._make_array_shape_and_strides(name, gt_type.dims)
             sdfg.add_array(name, sym_shape, dc_dtype, strides=sym_strides, transient=transient)
             return [(name, gt_type)]
 
@@ -367,7 +367,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             if desc.transient or not use_temp:
                 return field
             else:
-                temp, _ = sdfg.add_temp_transient_like(desc)
+                temp, _ = self.add_temp_array_like(sdfg, desc)
                 temp_node = head_state.add_access(temp)
                 head_state.add_nedge(
                     field.dc_node, temp_node, sdfg.make_array_memlet(field.dc_node.data)
@@ -438,13 +438,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         assert len(self.field_offsets) == 0
 
         sdfg = dace.SDFG(node.id)
-        sdfg.debuginfo = dace_utils.debug_info(node, default=sdfg.debuginfo)
-
-        # DaCe requires C-compatible strings for the names of data containers,
-        # such as arrays and scalars. GT4Py uses a unicode symbols ('ᐞ') as name
-        # separator in the SSA pass, which generates invalid symbols for DaCe.
-        # Here we find new names for invalid symbols present in the IR.
-        node = dace_gtir_utils.replace_invalid_symbols(sdfg, node)
+        sdfg.debuginfo = dace_utils.debug_info(node)
 
         # start block of the stateful graph
         entry_state = sdfg.add_state("program_entry", is_start_block=True)
@@ -633,24 +627,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             (str(param.id), arg) for param, arg in zip(node.params, args, strict=True)
         ]
 
-        def flatten_tuples(
-            name: str,
-            arg: gtir_builtin_translators.FieldopResult,
-        ) -> list[tuple[str, gtir_builtin_translators.FieldopData]]:
-            if isinstance(arg, tuple):
-                tuple_type = _get_tuple_type(arg)
-                tuple_field_names = [
-                    arg_name for arg_name, _ in dace_gtir_utils.get_tuple_fields(name, tuple_type)
-                ]
-                tuple_args = zip(tuple_field_names, arg, strict=True)
-                return list(
-                    itertools.chain(*[flatten_tuples(fname, farg) for fname, farg in tuple_args])
-                )
-            else:
-                return [(name, arg)]
-
         lambda_arg_nodes = dict(
-            itertools.chain(*[flatten_tuples(pname, arg) for pname, arg in lambda_args_mapping])
+            itertools.chain(
+                *[
+                    gtir_builtin_translators.flatten_tuples(pname, arg)
+                    for pname, arg in lambda_args_mapping
+                ]
+            )
         )
 
         # inherit symbols from parent scope but eventually override with local symbols
@@ -658,7 +641,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             sym: self.global_symbols[sym]
             for sym in symbol_ref_utils.collect_symbol_refs(node.expr, self.global_symbols.keys())
         } | {
-            pname: _get_tuple_type(arg) if isinstance(arg, tuple) else arg.gt_type
+            pname: gtir_builtin_translators.get_tuple_type(arg)
+            if isinstance(arg, tuple)
+            else arg.gt_type
             for pname, arg in lambda_args_mapping
         }
 
@@ -673,12 +658,12 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 elif field_domain_offset := self.field_offsets.get(p_name, None):
                     return {p_name: field_domain_offset}
             elif isinstance(p_type, ts.TupleType):
-                p_fields = dace_gtir_utils.get_tuple_fields(p_name, p_type, flatten=True)
+                tsyms = dace_gtir_utils.flatten_tuple_fields(p_name, p_type)
                 return functools.reduce(
-                    lambda field_offsets, field: (
-                        field_offsets | get_field_domain_offset(field[0], field[1])
+                    lambda field_offsets, sym: (
+                        field_offsets | get_field_domain_offset(sym.id, sym.type)  # type: ignore[arg-type]
                     ),
-                    p_fields,
+                    tsyms,
                     {},
                 )
             return {}
@@ -722,15 +707,24 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         }
 
         input_memlets = {}
-        nsdfg_symbols_mapping: dict[str, dace.symbolic.SymExpr] = {}
+        nsdfg_symbols_mapping = {str(sym): sym for sym in nsdfg.free_symbols}
         for nsdfg_dataname, nsdfg_datadesc in nsdfg.arrays.items():
             if nsdfg_datadesc.transient:
                 continue
-            datadesc: Optional[dace.dtypes.Data] = None
+
             if nsdfg_dataname in lambda_arg_nodes:
                 src_node = lambda_arg_nodes[nsdfg_dataname].dc_node
                 dataname = src_node.data
                 datadesc = src_node.desc(sdfg)
+                nsdfg_symbols_mapping |= {
+                    str(nested_symbol): parent_symbol
+                    for nested_symbol, parent_symbol in zip(
+                        [*nsdfg_datadesc.shape, *nsdfg_datadesc.strides],
+                        [*datadesc.shape, *datadesc.strides],
+                        strict=True,
+                    )
+                    if isinstance(nested_symbol, dace.symbol)
+                }
             else:
                 dataname = nsdfg_dataname
                 datadesc = sdfg.arrays[nsdfg_dataname]
@@ -740,16 +734,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 datadesc.transient = False
 
             input_memlets[nsdfg_dataname] = sdfg.make_array_memlet(dataname)
-
-            nsdfg_symbols_mapping |= {
-                str(nested_symbol): parent_symbol
-                for nested_symbol, parent_symbol in zip(
-                    [*nsdfg_datadesc.shape, *nsdfg_datadesc.strides],
-                    [*datadesc.shape, *datadesc.strides],
-                    strict=True,
-                )
-                if isinstance(nested_symbol, dace.symbol)
-            }
 
         # Process lambda outputs
         #
@@ -817,7 +801,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 # that is externally allocated, as required by the SDFG IR. An output edge will write the result
                 # from the nested-SDFG to a new intermediate data container allocated in the parent SDFG.
                 inner_desc.transient = False
-                outer, outer_desc = sdfg.add_temp_transient_like(inner_desc)
+                outer, outer_desc = self.add_temp_array_like(sdfg, inner_desc)
                 # We cannot use a copy of the inner data descriptor directly, we have to apply the symbol mapping.
                 dace.symbolic.safe_replace(
                     nsdfg_symbols_mapping,
@@ -884,6 +868,13 @@ def build_sdfg_from_gtir(
 
     ir = gtir_type_inference.infer(ir, offset_provider_type=offset_provider_type)
     ir = ir_prune_casts.PruneCasts().visit(ir)
+
+    # DaCe requires C-compatible strings for the names of data containers,
+    # such as arrays and scalars. GT4Py uses a unicode symbols ('ᐞ') as name
+    # separator in the SSA pass, which generates invalid symbols for DaCe.
+    # Here we find new names for invalid symbols present in the IR.
+    ir = dace_gtir_utils.replace_invalid_symbols(ir)
+
     sdfg_genenerator = GTIRToSDFG(offset_provider_type)
     sdfg = sdfg_genenerator.visit(ir)
     assert isinstance(sdfg, dace.SDFG)

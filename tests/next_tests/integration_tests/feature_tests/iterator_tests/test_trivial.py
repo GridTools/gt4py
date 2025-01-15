@@ -38,6 +38,7 @@ def baz(baz_inp):
     return deref(lift(bar)(baz_inp))
 
 
+@pytest.mark.uses_lift
 def test_trivial(program_processor):
     program_processor, validate = program_processor
 
@@ -66,6 +67,7 @@ def stencil_shifted_arg_to_lift(inp):
     return deref(lift(deref)(shift(I, -1)(inp)))
 
 
+@pytest.mark.uses_lift
 def test_shifted_arg_to_lift(program_processor):
     program_processor, validate = program_processor
 
