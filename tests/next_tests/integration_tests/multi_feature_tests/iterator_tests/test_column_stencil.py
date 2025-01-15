@@ -122,19 +122,19 @@ def k_level_condition_upper_tuple(k_idx, k_level):
 @pytest.mark.parametrize(
     "fun, k_level, inp_function, ref_function",
     [
-        (
+        pytest.param(
             k_level_condition_lower,
             lambda inp: 0,
             lambda k_size: gtx.as_field([KDim], np.arange(k_size, dtype=np.int32)),
             lambda inp: np.concatenate([[0], inp[:-1]]),
         ),
-        (
+        pytest.param(
             k_level_condition_upper,
             lambda inp: inp.shape[0] - 1,
             lambda k_size: gtx.as_field([KDim], np.arange(k_size, dtype=np.int32)),
             lambda inp: np.concatenate([inp[1:], [0]]),
         ),
-        (
+        pytest.param(
             k_level_condition_upper_tuple,
             lambda inp: inp[0].shape[0] - 1,
             lambda k_size: (
@@ -142,6 +142,7 @@ def k_level_condition_upper_tuple(k_idx, k_level):
                 gtx.as_field([KDim], np.arange(k_size, dtype=np.int32)),
             ),
             lambda inp: np.concatenate([(inp[0][1:] + inp[1][1:]), [0]]),
+            marks=pytest.mark.uses_tuple_iterator,
         ),
     ],
 )
@@ -184,6 +185,7 @@ def ksum_fencil(i_size, k_start, k_end, inp, out):
     "kstart, reference",
     [(0, np.asarray([[0, 1, 3, 6, 10, 15, 21]])), (2, np.asarray([[0, 0, 2, 5, 9, 14, 20]]))],
 )
+@pytest.mark.uses_scan
 def test_ksum_scan(program_processor, kstart, reference):
     program_processor, validate = program_processor
     shape = [1, 7]
@@ -211,6 +213,7 @@ def ksum_back_fencil(i_size, k_size, inp, out):
     set_at(as_fieldop(scan(ksum, False, 0.0), domain)(inp), domain, out)
 
 
+@pytest.mark.uses_scan
 def test_ksum_back_scan(program_processor):
     program_processor, validate = program_processor
     shape = [1, 7]
