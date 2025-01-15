@@ -674,20 +674,20 @@ class LambdaToDataflow(eve.NodeVisitor):
             arg = self.symbol_map[pname]
             if isinstance(arg, tuple):
                 ptype = get_tuple_type(arg)  # type: ignore[arg-type]
-                psym = im.sym(pname, ptype)
-                psym_tree = dace_gtir_utils.make_symbol_tree(pname, ptype)
+                psymbol = im.sym(pname, ptype)
+                psymbol_tree = dace_gtir_utils.make_symbol_tree(pname, ptype)
                 inner_arg = gtx_utils.tree_map(
                     lambda tsym, targ: self._visit_if_branch_arg(
                         if_sdfg, if_branch_state, tsym.id, targ, if_sdfg_input_memlets
                     )
-                )(psym_tree, arg)
+                )(psymbol_tree, arg)
             else:
-                psym = im.sym(pname, arg.gt_dtype)  # type: ignore[union-attr]
+                psymbol = im.sym(pname, arg.gt_dtype)  # type: ignore[union-attr]
                 inner_arg = self._visit_if_branch_arg(
                     if_sdfg, if_branch_state, pname, arg, if_sdfg_input_memlets
                 )
             lambda_args.append(inner_arg)
-            lambda_params.append(psym)
+            lambda_params.append(psymbol)
 
         # visit each branch of the if-statement as if it was a Lambda node
         lambda_node = gtir.Lambda(params=lambda_params, expr=expr)
@@ -810,10 +810,10 @@ class LambdaToDataflow(eve.NodeVisitor):
 
             if isinstance(out_edge, tuple):
                 assert isinstance(node.type, ts.TupleType)
-                out_sym_tree = dace_gtir_utils.make_symbol_tree("__output", node.type)
+                out_symbol_tree = dace_gtir_utils.make_symbol_tree("__output", node.type)
                 outer_value = gtx_utils.tree_map(
                     lambda x, y, state=if_branch_state: visit_if_branch_result(state, x, y)
-                )(out_edge, out_sym_tree)
+                )(out_edge, out_symbol_tree)
             else:
                 assert isinstance(node.type, ts.FieldType | ts.ScalarType)
                 outer_value = visit_if_branch_result(
