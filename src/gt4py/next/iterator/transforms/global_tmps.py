@@ -113,12 +113,12 @@ def _transform_by_pattern(
                 tmp_expr.type,
                 tuple_constructor=lambda *elements: tuple(elements),
             )
-            tmp_dtypes: ts.ScalarType | tuple[ts.ScalarType | tuple, ...] = (
-                type_info.apply_to_primitive_constituents(
-                    type_info.extract_dtype,
-                    tmp_expr.type,
-                    tuple_constructor=lambda *elements: tuple(elements),
-                )
+            tmp_dtypes: (
+                ts.ScalarType | ts.ListType | tuple[ts.ScalarType | ts.ListType | tuple, ...]
+            ) = type_info.apply_to_primitive_constituents(
+                type_info.extract_dtype,
+                tmp_expr.type,
+                tuple_constructor=lambda *elements: tuple(elements),
             )
 
             # allocate temporary for all tuple elements

@@ -140,6 +140,7 @@ def apply_common_transforms(
             ir,
             ignore_tuple_size=True,
             uids=collapse_tuple_uids,
+            flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
             offset_provider_type=offset_provider_type,
         )  # type: ignore[assignment]  # always an itir.Program
 

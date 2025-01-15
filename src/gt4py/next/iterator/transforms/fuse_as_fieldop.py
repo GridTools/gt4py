@@ -25,10 +25,7 @@ from gt4py.next.iterator.transforms import (
     merge_let,
     trace_shifts,
 )
-from gt4py.next.iterator.type_system import (
-    inference as type_inference,
-    type_specifications as it_ts,
-)
+from gt4py.next.iterator.type_system import inference as type_inference
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
@@ -189,12 +186,12 @@ def fuse_as_fieldop(
 
             new_args = _merge_arguments(new_args, extracted_args)
         else:
-            # just a safety check
+            # just a safety check if typing information is available
             type_inference.reinfer(arg)
-            assert isinstance(arg.type, ts.TypeSpec)
-            dtype = type_info.apply_to_primitive_constituents(type_info.extract_dtype, arg.type)
-            assert not isinstance(dtype, it_ts.ListType)
-
+            if arg.type and not isinstance(arg.type, ts.DeferredType):
+                assert isinstance(arg.type, ts.TypeSpec)
+                dtype = type_info.apply_to_primitive_constituents(type_info.extract_dtype, arg.type)
+                assert not isinstance(dtype, ts.ListType)
             new_param: str
             if isinstance(
                 arg, itir.SymRef
@@ -244,7 +241,7 @@ def _arg_inline_predicate(node: itir.Expr, shifts):
         type_inference.reinfer(node)
         assert isinstance(node.type, ts.TypeSpec)
         dtype = type_info.apply_to_primitive_constituents(type_info.extract_dtype, node.type)
-        if isinstance(dtype, it_ts.ListType):
+        if isinstance(dtype, ts.ListType):
             return True
         # only accessed at the center location
         if shifts in [set(), {()}]:
@@ -349,7 +346,7 @@ class FuseAsFieldOp(eve.NodeTranslator):
             for arg in node.args:
                 type_inference.reinfer(arg)
             eligible_args = [
-                isinstance(arg.type, ts.FieldType) and isinstance(arg.type.dtype, it_ts.ListType)
+                isinstance(arg.type, ts.FieldType) and isinstance(arg.type.dtype, ts.ListType)
                 for arg in node.args
             ]
             if any(eligible_args):
