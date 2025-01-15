@@ -139,7 +139,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
     ignore_tuple_size: bool
     flags: Flag = Flag.all()  # noqa: RUF009 [function-call-in-dataclass-default-argument]
 
-    PRESERVED_ANNEX_ATTRS = ("type",)
+    PRESERVED_ANNEX_ATTRS = ("type", "domain")
 
     @classmethod
     def apply(

@@ -13,7 +13,11 @@ from gt4py import eve
 from gt4py.eve import utils as eve_utils
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
+from gt4py.next.iterator.ir_utils import (
+    common_pattern_matcher as cpm,
+    domain_utils,
+    ir_makers as im,
+)
 from gt4py.next.iterator.transforms import (
     inline_center_deref_lift_vars,
     inline_lambdas,
@@ -109,6 +113,27 @@ def _inline_as_fieldop_arg(
 
 
 def _unwrap_scan(stencil: itir.Lambda | itir.FunCall):
+    """
+    If given a scan, extract stencil part of its scan pass and a back-transformation into a scan.
+
+    If a regular stencil is given the stencil is left as-is and the back-transformation is the
+    identity function. This function allows treating a scan stencil like a regular stencil during
+    a transformation avoiding the complexity introduced by the different IR format.
+
+    >>> scan = im.call("scan")(
+    ...     im.lambda_("state", "arg")(im.plus("state", im.deref("arg"))), True, 0.0
+    ... )
+    >>> stencil, back_trafo = _unwrap_scan(scan)
+    >>> str(stencil)
+    'λ(arg) → state + ·arg'
+    >>> assert back_trafo(stencil) == scan
+
+    In case a regular stencil is given it is returned as-is:
+
+    >>> deref_stencil = im.lambda_("it")(im.deref("it"))
+    >>> stencil, back_trafo = _unwrap_scan(deref_stencil)
+    >>> assert stencil == deref_stencil
+    """
     if cpm.is_call_to(stencil, "scan"):
         scan_pass, direction, init = stencil.args
         assert isinstance(scan_pass, itir.Lambda)
@@ -234,6 +259,14 @@ def _arg_inline_predicate(node: itir.Expr, shifts):
     return False
 
 
+def _make_tuple_element_inline_predicate(node: itir.Expr):
+    if cpm.is_applied_as_fieldop(node):  # field, or tuple of fields
+        return True
+    if isinstance(node.type, ts.FieldType) and isinstance(node, itir.SymRef):
+        return True
+    return False
+
+
 @dataclasses.dataclass
 class FuseAsFieldOp(eve.NodeTranslator):
     """
@@ -262,6 +295,8 @@ class FuseAsFieldOp(eve.NodeTranslator):
     as_fieldop(λ(inp1, inp2, inp3) → ·inp1 × ·inp2 + ·inp3, c⟨ IDimₕ: [0, 1[ ⟩)(inp1, inp2, inp3)
     """  # noqa: RUF002  # ignore ambiguous multiplication character
 
+    PRESERVED_ANNEX_ATTRS = ("domain",)
+
     uids: eve_utils.UIDGenerator
 
     @classmethod
@@ -272,6 +307,7 @@ class FuseAsFieldOp(eve.NodeTranslator):
         offset_provider_type: common.OffsetProviderType,
         uids: Optional[eve_utils.UIDGenerator] = None,
         allow_undeclared_symbols=False,
+        within_set_at_expr: Optional[bool] = None,
     ):
         node = type_inference.infer(
             node,
@@ -279,10 +315,28 @@ class FuseAsFieldOp(eve.NodeTranslator):
             allow_undeclared_symbols=allow_undeclared_symbols,
         )
 
+        if within_set_at_expr is None:
+            within_set_at_expr = not isinstance(node, itir.Program)
+
         if not uids:
             uids = eve_utils.UIDGenerator()
 
-        return cls(uids=uids).visit(node)
+        return cls(uids=uids).visit(node, within_set_at_expr=within_set_at_expr)
+
+    def visit(self, node, **kwargs):
+        if not kwargs.get("within_set_at_expr"):
+            return node
+        new_node = super().visit(node, **kwargs)
+        if isinstance(node, itir.Expr) and hasattr(node.annex, "domain"):
+            new_node.annex.domain = node.annex.domain
+        return new_node
+
+    def visit_SetAt(self, node: itir.SetAt, **kwargs):
+        return itir.SetAt(
+            expr=self.visit(node.expr, **kwargs | {"within_set_at_expr": True}),
+            domain=node.domain,
+            target=node.target,
+        )
 
     def visit_FunCall(self, node: itir.FunCall, **kwargs):
         # inline all fields with list dtype. This needs to happen before the children are visited
@@ -292,55 +346,79 @@ class FuseAsFieldOp(eve.NodeTranslator):
         # TODO(tehrengruber): Write test-case. E.g. Adding two sparse fields. Sara observed this
         #  with a cast to a sparse field, but this is likely already covered.
         if cpm.is_let(node):
-            type_inference.reinfer(node)
+            for arg in node.args:
+                type_inference.reinfer(arg)
             eligible_args = [
                 isinstance(arg.type, ts.FieldType) and isinstance(arg.type.dtype, it_ts.ListType)
                 for arg in node.args
             ]
             if any(eligible_args):
                 node = inline_lambdas.inline_lambda(node, eligible_params=eligible_args)
-                return self.visit(node)
+                return self.visit(node, **kwargs)
 
         if cpm.is_applied_as_fieldop(node):  # don't descend in stencil
-            node = im.as_fieldop(*node.fun.args)(*self.generic_visit(node.args))  # type: ignore[attr-defined]  # ensured by cpm.is_applied_as_fieldop
+            node = im.as_fieldop(*node.fun.args)(*self.generic_visit(node.args, **kwargs))  # type: ignore[attr-defined]  # ensured by cpm.is_applied_as_fieldop
         elif kwargs.get("recurse", True):
             node = self.generic_visit(node, **kwargs)
 
         if cpm.is_call_to(node, "make_tuple"):
-            # TODO(tehrengruber): x, y = alpha * y, x is not fused
-            as_fieldop_args = [arg for arg in node.args if cpm.is_applied_as_fieldop(arg)]
-            distinct_domains = set(arg.fun.args[1] for arg in as_fieldop_args)  # type: ignore[attr-defined]  # ensured by cpm.is_applied_as_fieldop
-            if len(distinct_domains) != len(as_fieldop_args):
+            for arg in node.args:
+                type_inference.reinfer(arg)
+                assert not isinstance(arg.type, ts.FieldType) or (
+                    hasattr(arg.annex, "domain")
+                    and isinstance(arg.annex.domain, domain_utils.SymbolicDomain)
+                )
+
+            eligible_args = [_make_tuple_element_inline_predicate(arg) for arg in node.args]
+            field_args = [arg for i, arg in enumerate(node.args) if eligible_args[i]]
+            distinct_domains = set(arg.annex.domain.as_expr() for arg in field_args)
+            if len(distinct_domains) != len(field_args):
                 new_els: list[itir.Expr | None] = [None for _ in node.args]
-                as_fieldop_args_by_domain: dict[itir.Expr, list[tuple[int, itir.Expr]]] = {}
+                field_args_by_domain: dict[itir.FunCall, list[tuple[int, itir.Expr]]] = {}
                 for i, arg in enumerate(node.args):
-                    if cpm.is_applied_as_fieldop(arg):
-                        _, domain = arg.fun.args  # type: ignore[attr-defined]  # ensured by cpm.is_applied_as_fieldop
-                        as_fieldop_args_by_domain.setdefault(domain, [])
-                        as_fieldop_args_by_domain[domain].append((i, arg))
+                    if eligible_args[i]:
+                        assert isinstance(arg.annex.domain, domain_utils.SymbolicDomain)
+                        domain = arg.annex.domain.as_expr()
+                        field_args_by_domain.setdefault(domain, [])
+                        field_args_by_domain[domain].append((i, arg))
                     else:
                         new_els[i] = arg  # keep as is
-                let_vars = {}
-                for domain, inner_as_fieldop_args in as_fieldop_args_by_domain.items():
-                    if len(inner_as_fieldop_args) > 1:
-                        var = self.uids.sequential_id(prefix="__fasfop")
-                        fused_args = im.op_as_fieldop(lambda *args: im.make_tuple(*args), domain)(
-                            *(arg for _, arg in inner_as_fieldop_args)
-                        )
-                        type_inference.reinfer(arg)
-                        # don't recurse into nested args, but only consider newly created `as_fieldop`
-                        let_vars[var] = self.visit(fused_args, **{**kwargs, "recurse": False})
-                        for outer_tuple_idx, (inner_tuple_idx, _) in enumerate(
-                            inner_as_fieldop_args
-                        ):
-                            new_els[inner_tuple_idx] = im.tuple_get(outer_tuple_idx, var)
-                    else:
-                        i, arg = inner_as_fieldop_args[0]
-                        new_els[i] = arg
-                assert not any(el is None for el in new_els)
-                assert let_vars
-                new_node = im.let(*let_vars.items())(im.make_tuple(*new_els))
-                new_node = inline_lambdas.inline_lambda(new_node, opcount_preserving=True)
+
+                if len(field_args_by_domain) == 1 and len(
+                    next(iter(field_args_by_domain.values()))
+                ) == len(node.args):
+                    # if we only have a single domain covering all args we don't need to create an
+                    # unnecessary let
+                    ((domain, inner_field_args),) = field_args_by_domain.items()
+                    new_node = im.op_as_fieldop(lambda *args: im.make_tuple(*args), domain)(
+                        *(arg for _, arg in inner_field_args)
+                    )
+                    new_node = self.visit(new_node, **{**kwargs, "recurse": False})
+                else:
+                    let_vars = {}
+                    for domain, inner_field_args in field_args_by_domain.items():
+                        if len(inner_field_args) > 1:
+                            var = self.uids.sequential_id(prefix="__fasfop")
+                            fused_args = im.op_as_fieldop(
+                                lambda *args: im.make_tuple(*args), domain
+                            )(*(arg for _, arg in inner_field_args))
+                            type_inference.reinfer(arg)
+                            # don't recurse into nested args, but only consider newly created `as_fieldop`
+                            # note: this will always inline as long as we inline center accessed
+                            let_vars[var] = self.visit(fused_args, **{**kwargs, "recurse": False})
+                            for outer_tuple_idx, (inner_tuple_idx, _) in enumerate(
+                                inner_field_args
+                            ):
+                                new_el = im.tuple_get(outer_tuple_idx, var)
+                                new_el.annex.domain = domain_utils.SymbolicDomain.from_expr(domain)
+                                new_els[inner_tuple_idx] = new_el
+                        else:
+                            i, arg = inner_field_args[0]
+                            new_els[i] = arg
+                    assert not any(el is None for el in new_els)
+                    assert let_vars
+                    new_node = im.let(*let_vars.items())(im.make_tuple(*new_els))
+                    new_node = inline_lambdas.inline_lambda(new_node, opcount_preserving=True)
                 return new_node
 
         if cpm.is_call_to(node.fun, "as_fieldop"):

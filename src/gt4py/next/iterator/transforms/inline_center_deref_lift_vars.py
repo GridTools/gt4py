@@ -48,7 +48,7 @@ class InlineCenterDerefLiftVars(eve.NodeTranslator):
     Note: This pass uses and preserves the `recorded_shifts` annex.
     """
 
-    PRESERVED_ANNEX_ATTRS: ClassVar[tuple[str, ...]] = ("recorded_shifts",)
+    PRESERVED_ANNEX_ATTRS: ClassVar[tuple[str, ...]] = ("domain", "recorded_shifts")
 
     uids: eve_utils.UIDGenerator
 

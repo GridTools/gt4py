@@ -5,11 +5,12 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
+import copy
 from typing import Callable, Optional
 
 from gt4py import next as gtx
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.ir_utils import ir_makers as im, domain_utils
 from gt4py.next.iterator.transforms import fuse_as_fieldop, collapse_tuple
 from gt4py.next.type_system import type_specifications as ts
 
@@ -17,6 +18,12 @@ from gt4py.next.type_system import type_specifications as ts
 IDim = gtx.Dimension("IDim")
 JDim = gtx.Dimension("JDim")
 field_type = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
+
+
+def _with_domain_annex(node: itir.Expr, domain: itir.Expr):
+    node = copy.deepcopy(node)
+    node.annex.domain = domain_utils.SymbolicDomain.from_expr(domain)
+    return node
 
 
 def test_trivial():
@@ -174,7 +181,7 @@ def test_make_tuple_fusion_symref():
     d = im.domain("cartesian_domain", {IDim: (0, 1)})
     testee = im.make_tuple(
         im.as_fieldop("deref", d)(im.ref("a", field_type)),
-        im.ref("b", field_type),
+        _with_domain_annex(im.ref("b", field_type), d),
     )
     expected = im.as_fieldop(
         im.lambda_("a", "b")(im.make_tuple(im.deref("a"), im.deref("b"))),
@@ -190,16 +197,41 @@ def test_make_tuple_fusion_symref():
     assert actual_simplified == expected
 
 
-def test_make_tuple_fusion_symref2():
+def test_make_tuple_fusion_symref_same_ref():
     d = im.domain("cartesian_domain", {IDim: (0, 1)})
     testee = im.make_tuple(
         im.as_fieldop("deref", d)(im.ref("a", field_type)),
-        im.ref("a", field_type),
+        _with_domain_annex(im.ref("a", field_type), d),
     )
     expected = im.as_fieldop(
         im.lambda_("a")(im.make_tuple(im.deref("a"), im.deref("a"))),
         d,
     )(im.ref("a", field_type))
+    actual = fuse_as_fieldop.FuseAsFieldOp.apply(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True
+    )
+    # simplify to remove unnecessary make_tuple call
+    actual_simplified = collapse_tuple.CollapseTuple.apply(
+        actual, within_stencil=False, allow_undeclared_symbols=True
+    )
+    assert actual_simplified == expected
+
+
+def test_make_tuple_nested():
+    d = im.domain("cartesian_domain", {IDim: (0, 1)})
+    testee = im.make_tuple(
+        _with_domain_annex(im.ref("a", field_type), d),
+        im.make_tuple(
+            _with_domain_annex(im.ref("b", field_type), d),
+            _with_domain_annex(im.ref("c", field_type), d),
+        ),
+    )
+    expected = im.as_fieldop(
+        im.lambda_("a", "b", "c")(
+            im.make_tuple(im.deref("a"), im.make_tuple(im.deref("b"), im.deref("c")))
+        ),
+        d,
+    )(im.ref("a", field_type), im.ref("b", field_type), im.ref("c", field_type))
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
         testee, offset_provider_type={}, allow_undeclared_symbols=True
     )

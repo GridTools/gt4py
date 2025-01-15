@@ -8,7 +8,7 @@
 
 import dataclasses
 import enum
-from typing import Callable, Optional
+from typing import Callable, ClassVar, Optional
 
 import gt4py.eve as eve
 from gt4py.eve import NodeTranslator, traits
@@ -111,6 +111,8 @@ class InlineLifts(
     Optionally a predicate function can be passed which can enable or disable inlining of specific
     function nodes.
     """
+
+    PRESERVED_ANNEX_ATTRS: ClassVar[tuple[str, ...]] = ("domain",)
 
     class Flag(enum.IntEnum):
         #: `shift(...)(lift(f)(args...))` -> `lift(f)(shift(...)(args)...)`
