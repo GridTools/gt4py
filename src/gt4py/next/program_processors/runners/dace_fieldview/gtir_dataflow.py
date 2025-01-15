@@ -116,6 +116,9 @@ class IteratorExpr:
     field_domain: list[tuple[gtx_common.Dimension, dace.symbolic.SymExpr]]
     indices: dict[gtx_common.Dimension, DataExpr]
 
+    def get_field_type(self) -> ts.FieldType:
+        return ts.FieldType([dim for dim, _ in self.field_domain], self.gt_dtype)
+
     def get_memlet_subset(self, sdfg: dace.SDFG) -> dace_subsets.Range:
         if not all(isinstance(self.indices[dim], SymbolExpr) for dim, _ in self.field_domain):
             raise ValueError(f"Cannot deref iterator {self}.")
@@ -296,7 +299,14 @@ def get_tuple_type(
     Compute the `ts.TupleType` corresponding to the tuple structure of input data expressions.
     """
     return ts.TupleType(
-        types=[get_tuple_type(d) if isinstance(d, tuple) else d.gt_dtype for d in data]
+        types=[
+            get_tuple_type(d)
+            if isinstance(d, tuple)
+            else d.get_field_type()
+            if isinstance(d, IteratorExpr)
+            else d.gt_dtype
+            for d in data
+        ]
     )
 
 
@@ -664,18 +674,20 @@ class LambdaToDataflow(eve.NodeVisitor):
             arg = self.symbol_map[pname]
             if isinstance(arg, tuple):
                 ptype = get_tuple_type(arg)  # type: ignore[arg-type]
-                input_sym = dace_gtir_utils.make_symbol_tuple(pname, ptype)
+                psym = im.sym(pname, ptype)
+                psym_tree = dace_gtir_utils.make_symbol_tree(pname, ptype)
                 inner_arg = gtx_utils.tree_map(
                     lambda tsym, targ: self._visit_if_branch_arg(
                         if_sdfg, if_branch_state, tsym.id, targ, if_sdfg_input_memlets
                     )
-                )(input_sym, arg)
+                )(psym_tree, arg)
             else:
+                psym = im.sym(pname, arg.gt_dtype)  # type: ignore[union-attr]
                 inner_arg = self._visit_if_branch_arg(
                     if_sdfg, if_branch_state, pname, arg, if_sdfg_input_memlets
                 )
             lambda_args.append(inner_arg)
-            lambda_params.append(im.sym(pname))
+            lambda_params.append(psym)
 
         # visit each branch of the if-statement as if it was a Lambda node
         lambda_node = gtir.Lambda(params=lambda_params, expr=expr)
@@ -798,10 +810,10 @@ class LambdaToDataflow(eve.NodeVisitor):
 
             if isinstance(out_edge, tuple):
                 assert isinstance(node.type, ts.TupleType)
-                out_symbol = dace_gtir_utils.make_symbol_tuple("__output", node.type)
+                out_sym_tree = dace_gtir_utils.make_symbol_tree("__output", node.type)
                 outer_value = gtx_utils.tree_map(
                     lambda x, y, state=if_branch_state: visit_if_branch_result(state, x, y)
-                )(out_edge, out_symbol)
+                )(out_edge, out_sym_tree)
             else:
                 assert isinstance(node.type, ts.FieldType | ts.ScalarType)
                 outer_value = visit_if_branch_result(

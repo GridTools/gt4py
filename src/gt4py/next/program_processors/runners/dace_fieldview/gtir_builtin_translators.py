@@ -472,10 +472,10 @@ def _create_field_operator(
         return _create_field_operator_impl(output_edges, im.sym("x", node_type))
     else:
         # handle tuples of fields
-        tuple_syms = dace_gtir_utils.make_symbol_tuple("x", node_type)
+        output_sym_tree = dace_gtir_utils.make_symbol_tree("x", node_type)
         return gtx_utils.tree_map(
             lambda output_edge, sym: _create_field_operator_impl(output_edge, sym)
-        )(output_edges, tuple_syms)
+        )(output_edges, output_sym_tree)
 
 
 def extract_domain(node: gtir.Node) -> FieldopDomain:
@@ -741,10 +741,10 @@ def _get_data_nodes(
         return sdfg_builder.make_field(data_node, data_type)
 
     elif isinstance(data_type, ts.TupleType):
-        tuple_syms = dace_gtir_utils.make_symbol_tuple(data_name, data_type)
+        sym_tree = dace_gtir_utils.make_symbol_tree(data_name, data_type)
         return gtx_utils.tree_map(
             lambda sym: _get_data_nodes(sdfg, state, sdfg_builder, sym.id, sym.type)
-        )(tuple_syms)
+        )(sym_tree)
 
     else:
         raise NotImplementedError(f"Symbol type {type(data_type)} not supported.")
@@ -1064,7 +1064,7 @@ def translate_scan(
 
     # now initialize the scan carry
     scan_carry_input = (
-        dace_gtir_utils.make_symbol_tuple(scan_carry, scan_carry_type)
+        dace_gtir_utils.make_symbol_tree(scan_carry, scan_carry_type)
         if isinstance(scan_carry_type, ts.TupleType)
         else im.sym(scan_carry, scan_carry_type)
     )
