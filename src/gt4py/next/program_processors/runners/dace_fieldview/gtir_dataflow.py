@@ -401,7 +401,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                 view_shape = tuple(desc.shape[i] for i in local_dim_indices)
                 view_strides = tuple(desc.strides[i] for i in local_dim_indices)
             view, _ = self.sdfg.add_view(
-                f"{field.dc_node.data}_view",
+                f"view_{field.dc_node.data}",
                 view_shape,
                 desc.dtype,
                 strides=view_strides,
