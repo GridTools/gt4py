@@ -9,7 +9,7 @@
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 from gt4py.next.type_system import type_specifications as ts
-from tests.next_tests.unit_tests.iterator_tests.test_type_inference import int_type
+from next_tests.unit_tests.iterator_tests.test_type_inference import int_type
 
 
 def test_simple_make_tuple_tuple_get():
@@ -247,6 +247,32 @@ def test_if_make_tuple_reorder_cps():
         im.make_tuple(im.tuple_get(1, "t"), im.tuple_get(0, "t"))
     )
     expected = im.if_(True, im.make_tuple(2, 1), im.make_tuple(4, 3))
+    actual = CollapseTuple.apply(
+        testee,
+        flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
+        allow_undeclared_symbols=True,
+        within_stencil=False,
+    )
+    assert actual == expected
+
+
+def test_nested_if_make_tuple_reorder_cps():
+    testee = im.let(
+        ("t1", im.if_(True, im.make_tuple(1, 2), im.make_tuple(3, 4))),
+        ("t2", im.if_(False, im.make_tuple(5, 6), im.make_tuple(7, 8))),
+    )(
+        im.make_tuple(
+            im.tuple_get(1, "t1"),
+            im.tuple_get(0, "t1"),
+            im.tuple_get(1, "t2"),
+            im.tuple_get(0, "t2"),
+        )
+    )
+    expected = im.if_(
+        True,
+        im.if_(False, im.make_tuple(2, 1, 6, 5), im.make_tuple(2, 1, 8, 7)),
+        im.if_(False, im.make_tuple(4, 3, 6, 5), im.make_tuple(4, 3, 8, 7)),
+    )
     actual = CollapseTuple.apply(
         testee,
         flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
