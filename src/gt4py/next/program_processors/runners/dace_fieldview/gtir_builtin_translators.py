@@ -265,6 +265,7 @@ def _get_field_layout(
 
 
 def _create_field_operator_impl(
+    sdfg_builder: gtir_sdfg.SDFGBuilder,
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     domain: FieldopDomain,
@@ -317,7 +318,7 @@ def _create_field_operator_impl(
 
     # allocate local temporary storage
     assert dataflow_output_desc.dtype == dace_utils.as_dace_type(field_dtype)
-    field_name, _ = sdfg.add_temp_transient(field_shape, dataflow_output_desc.dtype)
+    field_name, _ = sdfg_builder.add_temp_array(sdfg, field_shape, dataflow_output_desc.dtype)
     field_node = state.add_access(field_name)
 
     # and here the edge writing the dataflow result data through the map exit node
@@ -377,13 +378,15 @@ def _create_field_operator(
 
     if isinstance(node_type, ts.FieldType):
         assert isinstance(output_edges, gtir_dataflow.DataflowOutputEdge)
-        return _create_field_operator_impl(sdfg, state, domain, output_edges, node_type, map_exit)
+        return _create_field_operator_impl(
+            sdfg_builder, sdfg, state, domain, output_edges, node_type, map_exit
+        )
     else:
         # handle tuples of fields
         output_symbol_tree = dace_gtir_utils.make_symbol_tree("x", node_type)
         return gtx_utils.tree_map(
             lambda output_edge, output_sym: _create_field_operator_impl(
-                sdfg, state, domain, output_edge, output_sym.type, map_exit
+                sdfg_builder, sdfg, state, domain, output_edge, output_sym.type, map_exit
             )
         )(output_edges, output_symbol_tree)
 
@@ -537,7 +540,7 @@ def translate_if(
 
     def construct_output(inner_data: FieldopData) -> FieldopData:
         inner_desc = inner_data.dc_node.desc(sdfg)
-        outer, _ = sdfg.add_temp_transient_like(inner_desc)
+        outer, _ = sdfg_builder.add_temp_array_like(sdfg, inner_desc)
         outer_node = state.add_access(outer)
 
         return inner_data.make_copy(outer_node)

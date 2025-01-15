@@ -471,7 +471,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             # In some cases, such as result data with list-type annotation, we want
             # that output data is represented as an array (single-element 1D array)
             # in order to allow for composition of array shape in external memlets.
-            temp_name, _ = self.sdfg.add_temp_transient((1,), dc_dtype)
+            temp_name, _ = self.subgraph_builder.add_temp_array(self.sdfg, (1,), dc_dtype)
         else:
             temp_name, _ = self.subgraph_builder.add_temp_scalar(self.sdfg, dc_dtype)
 
@@ -741,7 +741,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             inner_data = inner_value.dc_node.data
             inner_desc = inner_value.dc_node.desc(nsdfg)
             assert not inner_desc.transient
-            output, output_desc = self.sdfg.add_temp_transient_like(inner_desc)
+            output, output_desc = self.subgraph_builder.add_temp_array_like(self.sdfg, inner_desc)
             output_node = self.state.add_access(output)
             self.state.add_edge(
                 nsdfg_node,
@@ -917,8 +917,8 @@ class LambdaToDataflow(eve.NodeVisitor):
             )
         )
 
-        neighbors_temp, _ = self.sdfg.add_temp_transient(
-            (offset_provider.max_neighbors,), field_desc.dtype
+        neighbors_temp, _ = self.subgraph_builder.add_temp_array(
+            self.sdfg, (offset_provider.max_neighbors,), field_desc.dtype
         )
         neighbors_node = self.state.add_access(neighbors_temp)
         offset_type = gtx_common.Dimension(offset, gtx_common.DimensionKind.LOCAL)
@@ -1105,7 +1105,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                 )
             input_nodes[input_node.data] = input_node
 
-        result, _ = self.sdfg.add_temp_transient((local_size,), dc_dtype)
+        result, _ = self.subgraph_builder.add_temp_array(self.sdfg, (local_size,), dc_dtype)
         result_node = self.state.add_access(result)
 
         if offset_provider_type.has_skip_values:
