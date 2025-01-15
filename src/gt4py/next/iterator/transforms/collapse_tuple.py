@@ -192,9 +192,11 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 allow_undeclared_symbols=allow_undeclared_symbols,
             )
 
-        new_node = cls(ignore_tuple_size=ignore_tuple_size, flags=flags, uids=uids).visit(
-            node, within_stencil=within_stencil
-        )
+        new_node = cls(
+            ignore_tuple_size=ignore_tuple_size,
+            flags=flags,
+            uids=uids,
+        ).visit(node, within_stencil=within_stencil)
 
         # inline to remove left-overs from LETIFY_MAKE_TUPLE_ELEMENTS. this is important
         # as otherwise two equal expressions containing a tuple will not be equal anymore
