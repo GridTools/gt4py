@@ -290,6 +290,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 # represent zero-dimensional fields as scalar arguments
                 return self._add_storage(sdfg, symbolic_arguments, name, gt_type.dtype, transient)
             # handle default case: field with one or more dimensions
+            # ListType not supported: concept is represented as Field with local Dimension
             assert isinstance(gt_type.dtype, ts.ScalarType)
             dc_dtype = dace_utils.as_dace_type(gt_type.dtype)
             if tuple_name is None:

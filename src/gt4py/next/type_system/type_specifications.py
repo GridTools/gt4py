@@ -82,7 +82,7 @@ class ScalarType(DataType):
 class ListType(DataType):
     """Represents a neighbor list in the ITIR representation.
 
-    Note: not used in the frontend.
+    Note: not used in the frontend. The concept is represented as Field with local Dimension.
     """
 
     element_type: DataType
