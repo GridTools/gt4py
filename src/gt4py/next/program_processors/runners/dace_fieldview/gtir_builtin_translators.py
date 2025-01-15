@@ -280,6 +280,7 @@ def _get_field_layout(
 
 
 def _create_field_operator_impl(
+    sdfg_builder: gtir_sdfg.SDFGBuilder,
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     domain: FieldopDomain,
@@ -293,6 +294,7 @@ def _create_field_operator_impl(
     This method is called by `_create_field_operator()`.
 
     Args:
+        sdfg_builder: The object used to build the map scope in the provided SDFG.
         sdfg: The SDFG that represents the scope of the field data.
         state: The SDFG state where to create an access node to the field data.
         domain: The domain of the field operator that computes the field.
@@ -332,7 +334,7 @@ def _create_field_operator_impl(
 
     # allocate local temporary storage
     assert dataflow_output_desc.dtype == dace_utils.as_dace_type(field_dtype)
-    field_name, _ = sdfg.add_temp_transient(field_shape, dataflow_output_desc.dtype)
+    field_name, _ = sdfg_builder.add_temp_array(sdfg, field_shape, dataflow_output_desc.dtype)
     field_node = state.add_access(field_name)
 
     # and here the edge writing the dataflow result data through the map exit node
@@ -472,10 +474,12 @@ def _create_field_operator(
         return _create_field_operator_impl(output_edges, im.sym("x", node_type))
     else:
         # handle tuples of fields
-        output_sym_tree = dace_gtir_utils.make_symbol_tree("x", node_type)
+        output_symbol_tree = dace_gtir_utils.make_symbol_tree("x", node_type)
         return gtx_utils.tree_map(
-            lambda output_edge, sym: _create_field_operator_impl(output_edge, sym)
-        )(output_edges, output_sym_tree)
+            lambda output_edge, output_symbol: _create_field_operator_impl(
+                output_edge, output_symbol
+            )
+        )(output_edges, output_symbol_tree)
 
 
 def extract_domain(node: gtir.Node) -> FieldopDomain:
@@ -630,7 +634,7 @@ def translate_if(
 
     def construct_output(inner_data: FieldopData) -> FieldopData:
         inner_desc = inner_data.dc_node.desc(sdfg)
-        outer, _ = sdfg.add_temp_transient_like(inner_desc)
+        outer, _ = sdfg_builder.add_temp_array_like(sdfg, inner_desc)
         outer_node = state.add_access(outer)
 
         return inner_data.make_copy(outer_node)
@@ -741,10 +745,10 @@ def _get_data_nodes(
         return sdfg_builder.make_field(data_node, data_type)
 
     elif isinstance(data_type, ts.TupleType):
-        sym_tree = dace_gtir_utils.make_symbol_tree(data_name, data_type)
+        symbol_tree = dace_gtir_utils.make_symbol_tree(data_name, data_type)
         return gtx_utils.tree_map(
             lambda sym: _get_data_nodes(sdfg, state, sdfg_builder, sym.id, sym.type)
-        )(sym_tree)
+        )(symbol_tree)
 
     else:
         raise NotImplementedError(f"Symbol type {type(data_type)} not supported.")

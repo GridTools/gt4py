@@ -54,6 +54,18 @@ class DataflowBuilder(Protocol):
     @abc.abstractmethod
     def unique_tasklet_name(self, name: str) -> str: ...
 
+    def add_temp_array(
+        self, sdfg: dace.SDFG, shape: Sequence[Any], dtype: dace.dtypes.typeclass
+    ) -> tuple[str, dace.data.Scalar]:
+        """Add a temporary array to the SDFG."""
+        return sdfg.add_temp_transient(shape, dtype)
+
+    def add_temp_array_like(
+        self, sdfg: dace.SDFG, datadesc: dace.data.Array
+    ) -> tuple[str, dace.data.Scalar]:
+        """Add a temporary array to the SDFG."""
+        return sdfg.add_temp_transient_like(datadesc)
+
     def add_temp_scalar(
         self, sdfg: dace.SDFG, dtype: dace.dtypes.typeclass
     ) -> tuple[str, dace.data.Scalar]:
@@ -391,7 +403,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             if desc.transient or not use_temp:
                 return field
             else:
-                temp, _ = sdfg.add_temp_transient_like(desc)
+                temp, _ = self.add_temp_array_like(sdfg, desc)
                 temp_node = head_state.add_access(temp)
                 head_state.add_nedge(
                     field.dc_node, temp_node, sdfg.make_array_memlet(field.dc_node.data)
@@ -826,7 +838,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 # that is externally allocated, as required by the SDFG IR. An output edge will write the result
                 # from the nested-SDFG to a new intermediate data container allocated in the parent SDFG.
                 inner_desc.transient = False
-                outer, outer_desc = sdfg.add_temp_transient_like(inner_desc)
+                outer, outer_desc = self.add_temp_array_like(sdfg, inner_desc)
                 # We cannot use a copy of the inner data descriptor directly, we have to apply the symbol mapping.
                 dace.symbolic.safe_replace(
                     nsdfg_symbols_mapping,
