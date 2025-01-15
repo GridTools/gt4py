@@ -54,7 +54,7 @@ The following rules especially affects transformations and how they operate:
 #### Global Memory
 
 Global memory has to adhere to the same rules as transient memory.
-However, the following rules takes precedence, i.e. if this rule is fulfilled then rules 6 to 10 may be violated.
+However, the following rule takes precedence, i.e. if this rule is fulfilled then rules 6 to 10 may be violated.
 
 3. The same global memory is allowed to be used as input and output at the same time, either in the SDFG or in a state, if and only if the output depends _elementwise_ on the input.
 
