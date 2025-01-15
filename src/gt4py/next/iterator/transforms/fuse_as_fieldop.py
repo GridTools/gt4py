@@ -321,8 +321,6 @@ class FuseAsFieldOp(eve.NodeTranslator):
         return cls(uids=uids).visit(node, within_set_at_expr=within_set_at_expr)
 
     def visit(self, node, **kwargs):
-        if not kwargs.get("within_set_at_expr"):
-            return node
         new_node = super().visit(node, **kwargs)
         if isinstance(node, itir.Expr) and hasattr(node.annex, "domain"):
             new_node.annex.domain = node.annex.domain
@@ -336,6 +334,9 @@ class FuseAsFieldOp(eve.NodeTranslator):
         )
 
     def visit_FunCall(self, node: itir.FunCall, **kwargs):
+        if not kwargs.get("within_set_at_expr"):
+            return node
+
         # inline all fields with list dtype. This needs to happen before the children are visited
         # such that the `as_fieldop` can be fused.
         # TODO(tehrengruber): what should we do in case the field with list dtype is a let itself?
