@@ -311,10 +311,6 @@ def _create_field_operator_impl(
     domain_indices = _get_domain_indices(domain_dims, domain_offset)
     domain_subset = dace_subsets.Range.from_indices(domain_indices)
 
-    scan_dim_index: Optional[int] = None
-    if scan_dim is not None:
-        scan_dim_index = domain_dims.index(scan_dim)
-
     if isinstance(output_edge.result.gt_dtype, ts.ScalarType):
         assert output_edge.result.gt_dtype == output_type.dtype
         field_dtype = output_edge.result.gt_dtype
@@ -325,6 +321,7 @@ def _create_field_operator_impl(
             assert len(dataflow_output_desc.shape) == 1
             # the vertical dimension should not belong to the field operator domain
             # but we need to write it to the output field
+            scan_dim_index = domain_dims.index(scan_dim)
             field_subset = (
                 dace_subsets.Range(domain_subset[:scan_dim_index])
                 + dace_subsets.Range.from_array(dataflow_output_desc)
