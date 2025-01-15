@@ -887,17 +887,10 @@ def build_sdfg_from_gtir(
         for sym in flat_symbols:
             if isinstance(sym.type, ts.FieldType):
                 pname = str(sym.id)
-                field_origin = [
+                field_offsets[pname] = [
                     dace.symbolic.SymExpr(dace_utils.range_start_symbol(sym.id, i))
                     for i in range(len(sym.type.dims))
                 ]
-                field_offsets[pname] = field_origin
-                global_symbols |= {
-                    field_origin_symbol: ts.ScalarType(
-                        kind=getattr(ts.ScalarKind, gtir.INTEGER_INDEX_BUILTIN.upper())
-                    )
-                    for field_origin_symbol in field_origin
-                }
 
     sdfg_genenerator = GTIRToSDFG(offset_provider_type, global_symbols, field_offsets)
     sdfg = sdfg_genenerator.visit(ir)
