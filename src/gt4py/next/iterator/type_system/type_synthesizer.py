@@ -94,6 +94,10 @@ def power(base: ts.ScalarType, exponent: ts.ScalarType) -> ts.ScalarType:
 
 @_register_builtin_type_synthesizer(fun_names=itir.BINARY_MATH_NUMBER_BUILTINS)
 def _(lhs: ts.ScalarType, rhs: ts.ScalarType) -> ts.ScalarType:
+    if isinstance(lhs, ts.DeferredType):
+        return rhs
+    if isinstance(rhs, ts.DeferredType):
+        return lhs
     assert lhs == rhs
     return lhs
 
