@@ -7,6 +7,7 @@ tags: [backend, dace, optimization]
 - **Status**: valid
 - **Authors**: Philip Müller (@philip-paul-mueller)
 - **Created**: 2024-08-27
+- **Updated**: 2025-01-15
 
 In the context of the implementation of the new DaCe fieldview we decided about a particular form of the SDFG.
 Their main intent is to reduce the complexity of the GT4Py specific transformations.
@@ -21,6 +22,12 @@ In the pipeline we distinguish between:
 - Interstate optimization: optimization between states, these are transformations that are _intended_ to _reduce_ the number of states.
 
 The current (GT4Py) pipeline mainly focus on intrastate optimization and relays on DaCe, especially its simplify pass, for interstate optimizations.
+
+## Changelog
+
+#### 2025-01-15:
+
+- Made the rules more clearer, especially made a restriction on global memory more explicit.
 
 ## Decision
 
@@ -38,20 +45,24 @@ The following rules especially affects transformations and how they operate:
    - [Note 2]: It is allowed for an _intrastate_ transformation to act in a way that allows state fusion by later intrastate transformations.
    - [Note 3]: The DaCe simplification pass violates this rule, for that reason this pass must always be called on its own, see also rule 2.
 
-2. It is invalid to call the simplification pass directly, i.e. the usage of `SDFG.simplify()` is not allowed. The only valid way to call _simplify()_ is to call the `gt_simplify()` function provided by GT4Py.
+2. It is invalid to call DaCe's simplification pass directly, i.e. the usage of `SDFG.simplify()` is not allowed. The only valid way to call _simplify()_ is to call the `gt_simplify()` function provided by GT4Py.
+
    - [Rationale]: It was observed that some sub-passes in _simplify()_ have a negative impact and that additional passes might be needed in the future.
      By using a single function later modifications to _simplify()_ are easy.
    - [Note]: One issue is that the remove redundant array transformation is not able to handle all cases.
 
 #### Global Memory
 
-The only restriction we impose on global memory is:
+Global memory has to adhere to the same rules as transient memory.
+However, the following rules takes precedence, i.e. if this rule is fulfilled then rules 6 to 10 may be violated.
 
-3. The same global memory is allowed to be used as input and output at the same time, if and only if the output depends _elementwise_ on the input.
+3. The same global memory is allowed to be used as input and output at the same time, either in the SDFG or in a state, if and only if the output depends _elementwise_ on the input.
+
    - [Rationale 1]: This allows the removal of double buffering, that DaCe may not remove. See also rule 2.
    - [Rationale 2]: This formulation allows writing expressions such as `a += 1`, with only memory for `a`.
      Phrased more technically, using global memory for input and output is allowed if and only if the two computations `tmp = computation(global_memory); global_memory = tmp;` and `global_memory = computation(global_memory);` are equivalent.
-   - [Note]: In the long term this rule will be changed to: Global memory (an array) is either used as input (only read from) or as output (only written to) but never for both.
+   - [Note 1]: This rule also forbids expressions such as `A[0:10] = A[1:11]`, where `A` refers to a global memory.
+   - [Note 2]: In the long term this rule will be changed to: Global memory (an array) is either used as input (only read from) or as output (only written to) but never for both.
 
 #### State Machine
 
@@ -63,6 +74,7 @@ For the SDFG state machine we assume that:
    - [Note]: Running _simplify()_ might actually result in the violation of this rule, see note of rule 9.
 
 5. The state graph does not contain any cycles, i.e. the implementation of a for/while loop using states is not allowed, the new loop construct or serial maps must be used in that case.
+
    - [Rationale]: This is a simplification that makes it much simpler to define what "later in the computation" means, as we will never have a cycle.
    - [Note]: Currently the code generator does not support the `LoopRegion` construct and it is transformed to a state machine.
 
@@ -93,7 +105,7 @@ It is important to note that these rules only have to be met after _simplify()_ 
 8. No two access nodes in a state can refer to the same array.
 
    - [Rationale]: Together with rule 5 this guarantees SSA style.
-   - [Note]: An SDFG can still be constructed using different access node for the same underlying data; _simplify()_ will combine them.
+   - [Note]: An SDFG can still be constructed using different access node for the same underlying data in the same state; _simplify()_ will combine them.
 
 9. Every access node that reads from an array (having an outgoing edge) that was not written to in the same state must be a source node.
 
@@ -103,6 +115,7 @@ It is important to note that these rules only have to be met after _simplify()_ 
      Excess interstate transients, that will be kept alive that way, will be removed by later calls to _simplify()_.
 
 10. Every AccessNode within a map scope must refer to a data descriptor whose lifetime must be `dace.dtypes.AllocationLifetime.Scope` and its storage class should either be `dace.dtypes.StorageType.Default` or _preferably_ `dace.dtypes.StorageType.Register`.
+
     - [Rationale 1]: This makes optimizations operating inside maps/kernels simpler, as it guarantees that the AccessNode does not propagate outside.
     - [Rationale 2]: The storage type avoids the need to dynamically allocate memory inside a kernel.
 
@@ -120,6 +133,7 @@ For maps we assume the following:
     - [Rationale]: Without this rule it is very hard to tell which map variable does what, this way we can transmit information from GT4Py to DaCe, see also rule 12.
 
 12. Two map ranges, i.e. the pair map/iteration variable and range, can only be fused if they have the same name _and_ cover the same range.
+
     - [Rationale 1]: Because of rule 11, we will only fuse maps that actually makes sense to fuse.
     - [Rationale 2]: This allows fusing maps without renaming the map variables.
     - [Note]: This rule might be dropped in the future.
