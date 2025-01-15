@@ -27,7 +27,7 @@ The current (GT4Py) pipeline mainly focus on intrastate optimization and relays 
 
 #### 2025-01-15:
 
-- Made the rules more clearer, especially made a restriction on global memory more explicit.
+- Made the rules clearer. Specifically, made a restriction on global memory more explicit.
 
 ## Decision
 
