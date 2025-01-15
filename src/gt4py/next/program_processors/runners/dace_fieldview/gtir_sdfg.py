@@ -508,9 +508,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             unused_connectivities = [
                 data
                 for data, datadesc in nsdfg.arrays.items()
-                if dace_utils.is_connectivity(data, datadesc) and datadesc.transient
+                if dace_utils.is_connectivity_identifier(data, self.offset_provider_type)
+                and datadesc.transient
             ]
             for data in unused_connectivities:
+                assert isinstance(nsdfg.arrays[data], dace.data.Array)
                 nsdfg.arrays.pop(data)
 
         # Create the call signature for the SDFG.
