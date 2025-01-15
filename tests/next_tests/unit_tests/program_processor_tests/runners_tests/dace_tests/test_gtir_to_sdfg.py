@@ -256,7 +256,16 @@ def test_gtir_tuple_args():
 
     x_fields = (a, a, b)
 
-    sdfg(*x_fields, c, **FSYMBOLS)
+    tuple_symbols = {
+        "__x_0_size_0": N,
+        "__x_0_stride_0": 1,
+        "__x_1_0_size_0": N,
+        "__x_1_0_stride_0": 1,
+        "__x_1_1_size_0": N,
+        "__x_1_1_stride_0": 1,
+    }
+
+    sdfg(*x_fields, c, **FSYMBOLS, **tuple_symbols)
     assert np.allclose(c, a * 2 + b)
 
 
@@ -418,7 +427,16 @@ def test_gtir_tuple_return():
 
     z_fields = (np.empty_like(a), np.empty_like(a), np.empty_like(a))
 
-    sdfg(a, b, *z_fields, **FSYMBOLS)
+    tuple_symbols = {
+        "__z_0_0_size_0": N,
+        "__z_0_0_stride_0": 1,
+        "__z_0_1_size_0": N,
+        "__z_0_1_stride_0": 1,
+        "__z_1_size_0": N,
+        "__z_1_stride_0": 1,
+    }
+
+    sdfg(a, b, *z_fields, **FSYMBOLS, **tuple_symbols)
     assert np.allclose(z_fields[0], a + b)
     assert np.allclose(z_fields[1], a)
     assert np.allclose(z_fields[2], b)
@@ -673,9 +691,16 @@ def test_gtir_cond_with_tuple_return():
 
     sdfg = dace_backend.build_sdfg_from_gtir(testee, CARTESIAN_OFFSETS)
 
+    tuple_symbols = {
+        "__z_0_size_0": N,
+        "__z_0_stride_0": 1,
+        "__z_1_size_0": N,
+        "__z_1_stride_0": 1,
+    }
+
     for s in [False, True]:
         z_fields = (np.empty_like(a), np.empty_like(a))
-        sdfg(a, b, c, *z_fields, pred=np.bool_(s), **FSYMBOLS)
+        sdfg(a, b, c, *z_fields, pred=np.bool_(s), **FSYMBOLS, **tuple_symbols)
         assert np.allclose(z_fields[0], a if s else b)
         assert np.allclose(z_fields[1], b if s else a)
 
@@ -1846,7 +1871,14 @@ def test_gtir_let_lambda_with_tuple1():
     a_ref = np.concatenate((z_fields[0][:1], a[1 : N - 1], z_fields[0][N - 1 :]))
     b_ref = np.concatenate((z_fields[1][:1], b[1 : N - 1], z_fields[1][N - 1 :]))
 
-    sdfg(a, b, *z_fields, **FSYMBOLS)
+    tuple_symbols = {
+        "__z_0_size_0": N,
+        "__z_0_stride_0": 1,
+        "__z_1_size_0": N,
+        "__z_1_stride_0": 1,
+    }
+
+    sdfg(a, b, *z_fields, **FSYMBOLS, **tuple_symbols)
     assert np.allclose(z_fields[0], a_ref)
     assert np.allclose(z_fields[1], b_ref)
 
@@ -1886,7 +1918,16 @@ def test_gtir_let_lambda_with_tuple2():
 
     z_fields = (np.empty_like(a), np.empty_like(a), np.empty_like(a))
 
-    sdfg(a, b, *z_fields, **FSYMBOLS)
+    tuple_symbols = {
+        "__z_0_size_0": N,
+        "__z_0_stride_0": 1,
+        "__z_1_size_0": N,
+        "__z_1_stride_0": 1,
+        "__z_2_size_0": N,
+        "__z_2_stride_0": 1,
+    }
+
+    sdfg(a, b, *z_fields, **FSYMBOLS, **tuple_symbols)
     assert np.allclose(z_fields[0], a + b)
     assert np.allclose(z_fields[1], val)
     assert np.allclose(z_fields[2], b)
@@ -1938,8 +1979,17 @@ def test_gtir_if_scalars():
 
     sdfg = dace_backend.build_sdfg_from_gtir(testee, {})
 
+    tuple_symbols = {
+        "__x_0_size_0": N,
+        "__x_0_stride_0": 1,
+        "__x_1_0_size_0": N,
+        "__x_1_0_stride_0": 1,
+        "__x_1_1_size_0": N,
+        "__x_1_1_stride_0": 1,
+    }
+
     for s in [False, True]:
-        sdfg(x_0=a, x_1_0=d1, x_1_1=d2, z=b, pred=np.bool_(s), **FSYMBOLS)
+        sdfg(x_0=a, x_1_0=d1, x_1_1=d2, z=b, pred=np.bool_(s), **FSYMBOLS, **tuple_symbols)
         assert np.allclose(b, (a + d1 if s else a + d2))
 
 
