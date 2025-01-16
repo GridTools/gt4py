@@ -346,12 +346,12 @@ class FuseAsFieldOp(eve.NodeTranslator):
         if cpm.is_let(node):
             for arg in node.args:
                 type_inference.reinfer(arg)
-            eligible_args = [
+            eligible_els = [
                 isinstance(arg.type, ts.FieldType) and isinstance(arg.type.dtype, ts.ListType)
                 for arg in node.args
             ]
-            if any(eligible_args):
-                node = inline_lambdas.inline_lambda(node, eligible_params=eligible_args)
+            if any(eligible_els):
+                node = inline_lambdas.inline_lambda(node, eligible_params=eligible_els)
                 return self.visit(node, **kwargs)
 
         if cpm.is_applied_as_fieldop(node):  # don't descend in stencil
@@ -367,14 +367,14 @@ class FuseAsFieldOp(eve.NodeTranslator):
                     and isinstance(arg.annex.domain, domain_utils.SymbolicDomain)
                 )
 
-            eligible_args = [_make_tuple_element_inline_predicate(arg) for arg in node.args]
-            field_args = [arg for i, arg in enumerate(node.args) if eligible_args[i]]
+            eligible_els = [_make_tuple_element_inline_predicate(arg) for arg in node.args]
+            field_args = [arg for i, arg in enumerate(node.args) if eligible_els[i]]
             distinct_domains = set(arg.annex.domain.as_expr() for arg in field_args)
             if len(distinct_domains) != len(field_args):
                 new_els: list[itir.Expr | None] = [None for _ in node.args]
                 field_args_by_domain: dict[itir.FunCall, list[tuple[int, itir.Expr]]] = {}
                 for i, arg in enumerate(node.args):
-                    if eligible_args[i]:
+                    if eligible_els[i]:
                         assert isinstance(arg.annex.domain, domain_utils.SymbolicDomain)
                         domain = arg.annex.domain.as_expr()
                         field_args_by_domain.setdefault(domain, [])
@@ -382,9 +382,7 @@ class FuseAsFieldOp(eve.NodeTranslator):
                     else:
                         new_els[i] = arg  # keep as is
 
-                if len(field_args_by_domain) == 1 and len(
-                    next(iter(field_args_by_domain.values()))
-                ) == len(node.args):
+                if len(field_args_by_domain) == 1 and all(eligible_els):
                     # if we only have a single domain covering all args we don't need to create an
                     # unnecessary let
                     ((domain, inner_field_args),) = field_args_by_domain.items()
@@ -402,7 +400,7 @@ class FuseAsFieldOp(eve.NodeTranslator):
                             )(*(arg for _, arg in inner_field_args))
                             type_inference.reinfer(arg)
                             # don't recurse into nested args, but only consider newly created `as_fieldop`
-                            # note: this will always inline as long as we inline center accessed
+                            # note: this will always inline (as we inline center accessed)
                             let_vars[var] = self.visit(fused_args, **{**kwargs, "recurse": False})
                             for outer_tuple_idx, (inner_tuple_idx, _) in enumerate(
                                 inner_field_args
@@ -436,13 +434,13 @@ class FuseAsFieldOp(eve.NodeTranslator):
             args: list[itir.Expr] = node.args
             shifts = trace_shifts.trace_stencil(stencil, num_args=len(args))
 
-            eligible_args = [
+            eligible_els = [
                 _arg_inline_predicate(arg, arg_shifts)
                 for arg, arg_shifts in zip(args, shifts, strict=True)
             ]
-            if any(eligible_args):
+            if any(eligible_els):
                 return self.visit(
-                    fuse_as_fieldop(node, eligible_args, uids=self.uids),
+                    fuse_as_fieldop(node, eligible_els, uids=self.uids),
                     **{**kwargs, "recurse": False},
                 )
         return node
