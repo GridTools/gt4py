@@ -834,17 +834,12 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         outputs = {outval.dc_node.data for outval in gtx_utils.flatten_nested_tuple((result,))}
 
-        nsdfg_symbols_mapping = (
-            ({str(sym): sym for sym in nsdfg.free_symbols} | {"__cond": condition_value.value})
-            if isinstance(condition_value, SymbolExpr)
-            else None
-        )
         nsdfg_node = self.state.add_nested_sdfg(
             nsdfg,
             self.sdfg,
             inputs=set(input_memlets.keys()),
             outputs=outputs,
-            symbol_mapping=nsdfg_symbols_mapping,
+            symbol_mapping=None,  # implicitly map all free symbols to the symbols available in parent SDFG
         )
 
         for inner, input_expr in input_memlets.items():

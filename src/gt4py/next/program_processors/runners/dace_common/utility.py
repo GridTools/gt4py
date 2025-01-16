@@ -24,7 +24,7 @@ CONNECTIVITY_INDENTIFIER_RE: Final[re.Pattern] = re.compile(r"^connectivity_(.+)
 
 
 # regex to match the symbols for field shape and strides
-FIELD_SYMBOL_RE: Final[re.Pattern] = re.compile(r"^__.+_((\d+_range_[01])|((size|stride)_\d+))$")
+FIELD_SYMBOL_RE: Final[re.Pattern] = re.compile(r"^__.+_(range_[01]|((size|stride)_\d+))$")
 
 
 def as_dace_type(type_: ts.ScalarType) -> dace.typeclass:
@@ -75,20 +75,6 @@ def field_size_symbol_name(field_name: str, axis: int) -> str:
 
 def field_stride_symbol_name(field_name: str, axis: int) -> str:
     return field_symbol_name(field_name, axis, "stride")
-
-
-def range_start_symbol(field_name: str, axis: int) -> str:
-    return f"__{field_name}_{axis}_range_0"
-
-
-def range_stop_symbol(field_name: str, axis: int) -> str:
-    return f"__{field_name}_{axis}_range_1"
-
-
-def get_symbolic_shape(field_name: str, axis: int) -> dace.symbolic.SymExpr:
-    return dace.symbolic.SymExpr(
-        "{} - {}".format(range_stop_symbol(field_name, axis), range_start_symbol(field_name, axis))
-    )
 
 
 def is_field_symbol(name: str) -> bool:
