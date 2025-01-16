@@ -694,6 +694,8 @@ class DistributedBufferRelocator(dace_transformation.Pass):
         #  a node that refers to the global data, we remove it from
         #  `access_to_global_data_in_this_state`, if that list is empty at the end
         #  then it is not used in another component.
+        # TODO(phimuell): Refine this case by also taking into account empty
+        #   Memlets, that induce a deterministic order.
         to_process: list[dace_nodes.Node] = [def_location_of_intermediate]
         seen: set[dace_nodes.Node] = set()
         while len(to_process) != 0:
