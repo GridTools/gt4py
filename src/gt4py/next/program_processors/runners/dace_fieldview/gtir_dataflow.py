@@ -797,10 +797,13 @@ class LambdaToDataflow(eve.NodeVisitor):
             nsdfg.add_edge(entry_state, fstate, dace.InterstateEdge(condition="not (__cond)"))
 
         input_memlets: dict[str, MemletExpr | ValueExpr] = {}
+        # by default, map all free symbols to the symbols available in parent SDFG
+        nsdfg_symbols_mapping: Optional[dict[str, dace.symbol]] = None
 
         # define scalar or symbol for the condition value inside the nested SDFG
         if isinstance(condition_value, SymbolExpr):
             nsdfg.add_symbol("__cond", dace.dtypes.bool)
+            nsdfg_symbols_mapping = {"__cond": condition_value.value}
         else:
             nsdfg.add_scalar("__cond", dace.dtypes.bool)
             input_memlets["__cond"] = condition_value
@@ -834,11 +837,10 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         outputs = {outval.dc_node.data for outval in gtx_utils.flatten_nested_tuple((result,))}
 
-        nsdfg_symbols_mapping = (
-            ({str(sym): sym for sym in nsdfg.free_symbols} | {"__cond": condition_value.value})
-            if isinstance(condition_value, SymbolExpr)
-            else None
-        )
+        if nsdfg_symbols_mapping is not None:
+            nsdfg_symbols_mapping = {
+                str(sym): sym for sym in nsdfg.free_symbols
+            } | nsdfg_symbols_mapping
         nsdfg_node = self.state.add_nested_sdfg(
             nsdfg,
             self.sdfg,

@@ -910,6 +910,7 @@ def build_sdfg_from_gtir(
             if isinstance(sym.type, ts.FieldType):
                 pname = str(sym.id)
                 field_offsets[pname] = dace_utils.get_symbolic_origin(pname, sym.type)
+    
     sdfg_genenerator = GTIRToSDFG(offset_provider_type, global_symbols, field_offsets)
     sdfg = sdfg_genenerator.visit(ir)
     assert isinstance(sdfg, dace.SDFG)
