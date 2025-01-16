@@ -339,13 +339,37 @@ def test_chained_fusion():
     )
     assert actual == expected
 
+def test_inline_as_fieldop_with_list_dtype():
+    list_field_type = ts.FieldType(dims=[IDim], dtype=ts.ListType(element_type=ts.ScalarType(kind=ts.ScalarKind.INT32)))
+    d = im.domain("cartesian_domain", {IDim: (0, 1)})
+    testee = im.as_fieldop(im.lambda_("inp")(im.call("reduce")(im.deref("inp"), 0)), d)(
+        im.as_fieldop("deref")(im.ref("inp", list_field_type))
+    )
+    expected = im.as_fieldop(im.lambda_("inp")(im.call("reduce")(im.deref("inp"), 0)), d)(
+        im.ref("inp", list_field_type)
+    )
+    actual = fuse_as_fieldop.FuseAsFieldOp.apply(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True
+    )
+    assert actual == expected
+
 
 def test_inline_into_scan():
     d = im.domain("cartesian_domain", {IDim: (0, 1)})
-    scan = im.call("scan")(im.lambda_("state", "a")(im.plus("state", im.deref("a"))), True, 0.0)
+    scan = im.call("scan")(im.lambda_("state", "a")(im.plus("state", im.deref("a"))), True, 0)
     testee = im.as_fieldop(scan, d)(im.as_fieldop("deref")(im.ref("a", field_type)))
     expected = im.as_fieldop(scan, d)(im.ref("a", field_type))
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
         testee, offset_provider_type={}, allow_undeclared_symbols=True
     )
     assert actual == expected
+
+def test_no_inline_into_scan():
+    d = im.domain("cartesian_domain", {IDim: (0, 1)})
+    scan_stencil = im.call("scan")(im.lambda_("state", "a")(im.plus("state", im.deref("a"))), True, 0)
+    scan = im.as_fieldop(scan_stencil, d)(im.ref("a", field_type))
+    testee = im.as_fieldop(im.lambda_("arg")(im.deref("arg")), d)(scan)
+    actual = fuse_as_fieldop.FuseAsFieldOp.apply(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True
+    )
+    assert actual == testee

@@ -226,7 +226,7 @@ def fuse_as_fieldop(
 def _arg_inline_predicate(node: itir.Expr, shifts):
     if _is_tuple_expr_of_literals(node):
         return True
-    # TODO(tehrengruber): write test case ensuring scan is not tried to be inlined (e.g. test_call_scan_operator_from_field_operator)
+
     if (
         is_applied_fieldop := cpm.is_applied_as_fieldop(node)
         and not cpm.is_call_to(node.fun.args[0], "scan")  # type: ignore[attr-defined]  # ensured by cpm.is_applied_as_fieldop
@@ -341,8 +341,6 @@ class FuseAsFieldOp(eve.NodeTranslator):
         # such that the `as_fieldop` can be fused.
         # TODO(tehrengruber): what should we do in case the field with list dtype is a let itself?
         #  This could duplicate other expressions which we did not intend to duplicate.
-        # TODO(tehrengruber): Write test-case. E.g. Adding two sparse fields. Sara observed this
-        #  with a cast to a sparse field, but this is likely already covered.
         if cpm.is_let(node):
             for arg in node.args:
                 type_inference.reinfer(arg)
