@@ -26,17 +26,9 @@ def offset_provider_type(request):
 
 
 def test_trivial():
-    common = ir.FunCall(fun=ir.SymRef(id="plus"), args=[ir.SymRef(id="x"), ir.SymRef(id="y")])
-    testee = ir.FunCall(fun=ir.SymRef(id="plus"), args=[common, common])
-    expected = ir.FunCall(
-        fun=ir.Lambda(
-            params=[ir.Sym(id="_cs_1")],
-            expr=ir.FunCall(
-                fun=ir.SymRef(id="plus"), args=[ir.SymRef(id="_cs_1"), ir.SymRef(id="_cs_1")]
-            ),
-        ),
-        args=[common],
-    )
+    common = im.plus("x", "y")
+    testee = im.plus(common, common)
+    expected = im.let("_cs_1", common)(im.plus("_cs_1", "_cs_1"))
     actual = CSE.apply(testee, within_stencil=True)
     assert actual == expected
 
@@ -288,6 +280,16 @@ def test_field_extraction_outside_asfieldop():
     #   as_fieldop(λ(x) → ·x, cartesian_domain())(a)
     # )
     expected = im.let("_cs_1", identity_fieldop(field))(plus_fieldop("_cs_1", "_cs_1"))
+
+    actual = CSE.apply(testee, within_stencil=False)
+    assert actual == expected
+
+
+def test_scalar_extraction_inside_as_fieldop():
+    common = im.plus(1, 2)
+
+    testee = im.as_fieldop(im.lambda_()(im.plus(common, common)))()
+    expected = im.as_fieldop(im.lambda_()(im.let("_cs_1", common)(im.plus("_cs_1", "_cs_1"))))()
 
     actual = CSE.apply(testee, within_stencil=False)
     assert actual == expected
