@@ -113,8 +113,8 @@ psutil==6.1.0             # via -c constraints.txt, -r requirements-dev.in, ipyk
 ptyprocess==0.7.0         # via -c constraints.txt, pexpect
 pure-eval==0.2.3          # via -c constraints.txt, stack-data
 pybind11==2.13.6          # via -c constraints.txt, gt4py (pyproject.toml)
-pydantic==2.9.2           # via -c constraints.txt, bump-my-version, pydantic-settings
-pydantic-core==2.23.4     # via -c constraints.txt, pydantic
+pydantic==2.10.0          # via -c constraints.txt, bump-my-version, pydantic-settings
+pydantic-core==2.27.0     # via -c constraints.txt, pydantic
 pydantic-settings==2.6.1  # via -c constraints.txt, bump-my-version
 pydot==3.0.2              # via -c constraints.txt, tach
 pygments==2.18.0          # via -c constraints.txt, -r requirements-dev.in, devtools, ipython, nbmake, rich, sphinx
