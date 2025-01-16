@@ -233,3 +233,57 @@ def test_distributed_buffer_global_memory_data_no_rance():
     res = gtx_transformations.gt_reduce_distributed_buffering(sdfg)
     assert res[sdfg]["DistributedBufferRelocator"][state2] == {"t"}
     assert state2.number_of_nodes() == 0
+
+
+def _make_distributed_buffer_global_memory_data_no_rance2() -> tuple[dace.SDFG, dace.SDFGState]:
+    sdfg = dace.SDFG(util.unique_name("distributed_buffer_global_memory_data_no_rance2_sdfg"))
+    arr_names = ["a", "t"]
+    for name in arr_names:
+        sdfg.add_array(
+            name=name,
+            shape=(10, 10),
+            dtype=dace.float64,
+            transient=False,
+        )
+    sdfg.arrays["t"].transient = True
+
+    state1 = sdfg.add_state(is_start_block=True)
+    state2 = sdfg.add_state_after(state1)
+
+    a_state1 = state1.add_access("a")
+    state1.add_mapped_tasklet(
+        "computation1",
+        map_ranges={"__i0": "0:10", "__i1": "0:10"},
+        inputs={"__in": dace.Memlet("a[__i0, __i1]")},
+        code="__out = __in + 10",
+        outputs={"__out": dace.Memlet("a[__i0, __i1]")},
+        output_nodes={a_state1},
+        external_edges=True,
+    )
+    state1.add_mapped_tasklet(
+        "computation2",
+        map_ranges={"__i0": "0:10", "__i1": "0:10"},
+        inputs={"__in": dace.Memlet("a[__i0, __i1]")},
+        code="__out = __in + 10",
+        outputs={"__out": dace.Memlet("t[__i0, __i1]")},
+        input_nodes={a_state1},
+        external_edges=True,
+    )
+
+    state2.add_nedge(state2.add_access("t"), state2.add_access("a"), dace.Memlet("t[0:10, 0:10]"))
+    sdfg.validate()
+
+    return sdfg, state2
+
+
+def test_distributed_buffer_global_memory_data_no_rance2():
+    """Transformation applies if there is no data race.
+
+    These dependency is fine, because the access nodes are in a clear serial order.
+    """
+    sdfg, state2 = _make_distributed_buffer_global_memory_data_no_rance2()
+    assert state2.number_of_nodes() == 2
+
+    res = gtx_transformations.gt_reduce_distributed_buffering(sdfg)
+    assert res[sdfg]["DistributedBufferRelocator"][state2] == {"t"}
+    assert state2.number_of_nodes() == 0
