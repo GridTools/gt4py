@@ -139,11 +139,27 @@ class SDFGBuilder(DataflowBuilder, Protocol):
     @abc.abstractmethod
     def nested_context(
         self,
+        expr: gtir.Expr,
         sdfg: dace.SDFG,
         global_symbols: dict[str, ts.DataType],
         field_offsets: dict[str, Optional[list[dace.symbolic.SymExpr]]],
     ) -> SDFGBuilder:
-        """Create a new empty context, useful to build a nested SDFG."""
+        """
+        Create a new context for lowering of an expression in a nested SDFG.
+
+        This method will setup the global symbols, that correspond to the parameters
+        of the expression to be lowered, as well as the set of symbolic arguments,
+        that is scalar values used in internal domain expressions.
+
+        Args:
+            expr: The GTIR expresson to be lowered.
+            sdfg: The SDFG where to lower the expression.
+            global_symbols: Mapping from symbol name to GTIR data type.
+            field_offsets: Mapping from symbol name to field origin, `None` if field origin is 0 in all dimensions.
+
+        Returns:
+            A visitor object implementing the `SDFGBuilder` protocol.
+        """
         ...
 
     @abc.abstractmethod
@@ -232,6 +248,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
     def nested_context(
         self,
+        expr: gtir.Expr,
         sdfg: dace.SDFG,
         global_symbols: dict[str, ts.DataType],
         field_offsets: dict[str, Optional[list[dace.symbolic.SymExpr]]],
@@ -242,7 +259,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         nsdfg_params = [
             gtir.Sym(id=p_name, type=p_type) for p_name, p_type in global_symbols.items()
         ]
-        nsdfg_builder._add_sdfg_params(sdfg, node_params=nsdfg_params, symbolic_arguments=None)
+        domain_symbols = _collect_symbols_in_domain_expressions(expr, nsdfg_params)
+        nsdfg_builder._add_sdfg_params(
+            sdfg, node_params=nsdfg_params, symbolic_arguments=domain_symbols
+        )
         return nsdfg_builder
 
     def unique_nsdfg_name(self, sdfg: dace.SDFG, prefix: str) -> str:
@@ -417,7 +437,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         self,
         sdfg: dace.SDFG,
         node_params: Sequence[gtir.Sym],
-        symbolic_arguments: Optional[set[str]],
+        symbolic_arguments: set[str],
     ) -> list[str]:
         """
         Helper function to add storage for node parameters and connectivity tables.
@@ -427,8 +447,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         except when they are listed in 'symbolic_arguments', in which case they
         will be represented in the SDFG as DaCe symbols.
         """
-        if symbolic_arguments is None:
-            symbolic_arguments = set()
 
         # add non-transient arrays and/or SDFG symbols for the program arguments
         sdfg_args = []
@@ -713,19 +731,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             lambda_field_offsets |= get_field_domain_offset(p_name, p_type)
 
         # lower let-statement lambda node as a nested SDFG
-        lambda_translator = GTIRToSDFG(
-            self.offset_provider_type, self.column_axis, lambda_symbols, lambda_field_offsets
-        )
         nsdfg = dace.SDFG(name=self.unique_nsdfg_name(sdfg, "lambda"))
         nsdfg.debuginfo = dace_utils.debug_info(node, default=sdfg.debuginfo)
-
-        # add sdfg storage for the symbols that need to be passed as input parameters
-        lambda_params = [
-            gtir.Sym(id=p_name, type=p_type) for p_name, p_type in lambda_symbols.items()
-        ]
-        lambda_domain_symbols = _collect_symbols_in_domain_expressions(node.expr, lambda_params)
-        lambda_translator._add_sdfg_params(
-            nsdfg, node_params=lambda_params, symbolic_arguments=lambda_domain_symbols
+        lambda_translator = self.nested_context(
+            node.expr, nsdfg, lambda_symbols, lambda_field_offsets
         )
 
         nstate = nsdfg.add_state("lambda")
