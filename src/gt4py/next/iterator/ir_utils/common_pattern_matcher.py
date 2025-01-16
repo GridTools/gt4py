@@ -67,9 +67,9 @@ def is_call_to(node: Any, fun: str | Iterable[str]) -> TypeGuard[itir.FunCall]:
     """
     Match call expression to a given function.
 
-    If the `node` argument is not an `itir.Node` the function just returns `False`. This is useful
-    in visitors, where sometimes we pass a list of nodes or a leaf attribute which can be
-    anything.
+    If the `node` argument is not an `itir.Node` the function does not error, but just returns
+    `False`. This is useful in visitors, where sometimes we pass a list of nodes or a leaf
+    attribute which can be anything.
 
     >>> from gt4py.next.iterator.ir_utils import ir_makers as im
     >>> node = im.call("plus")(1, 2)
