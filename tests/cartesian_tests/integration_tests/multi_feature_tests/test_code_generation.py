@@ -583,7 +583,7 @@ def test_K_offset_write(backend):
     if backend == "cuda":
         pytest.skip("cuda K-offset write generates bad code")
 
-    if backend == "dace:gpu":
+    if backend in ["gt:gpu", "dace:gpu"]:
         pytest.skip(
             f"{backend} backend is not capable of K offset write, bug remains unsolved: https://github.com/GridTools/gt4py/issues/1684"
         )

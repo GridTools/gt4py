@@ -244,6 +244,7 @@ def _can_deref_lifted(inp):
 
 
 @pytest.mark.parametrize("stencil", [_can_deref, _can_deref_lifted])
+@pytest.mark.uses_can_deref
 def test_can_deref(program_processor, stencil):
     program_processor, validate = program_processor
 
