@@ -57,7 +57,8 @@ class DaCeTranslator(
             ir = itir_transforms.apply_fieldview_transforms(ir, offset_provider=offset_provider)
         sdfg = gtir_sdfg.build_sdfg_from_gtir(
             ir,
-            offset_provider_type=common.offset_provider_to_type(offset_provider),
+            common.offset_provider_to_type(offset_provider),
+            column_axis,
             disable_field_origin_on_program_arguments=self.disable_field_origin_on_program_arguments,
         )
 

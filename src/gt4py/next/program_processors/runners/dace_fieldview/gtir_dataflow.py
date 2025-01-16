@@ -697,8 +697,8 @@ class LambdaToDataflow(eve.NodeVisitor):
         )
 
         for data_node in if_branch_state.data_nodes():
-            # In case tuple arguments, isolated non-transient nodes might be left in the state,
-            # because not all tuple fields are necessarily used in the lambda scope
+            # In case of tuple arguments, isolated access nodes might be left in the state,
+            # because not all tuple fields are necessarily used inside the lambda scope
             if if_branch_state.degree(data_node) == 0:
                 assert not data_node.desc(if_sdfg).transient
                 if_branch_state.remove_node(data_node)
