@@ -223,7 +223,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         return f"{self.tasklet_uids.sequential_id()}_{name}"
 
     def _make_array_shape_and_strides(
-        self, name: str, dims: Sequence[gtx_common.Dimension]
+        self, name: str, dims: Sequence[gtx_common.Dimension], use_domain_range: bool
     ) -> tuple[list[dace.symbolic.SymExpr], list[dace.symbolic.SymExpr]]:
         """
         Parse field dimensions and allocate symbols for array shape and strides.
@@ -239,10 +239,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         for i, dim in enumerate(dims):
             if dim.kind == gtx_common.DimensionKind.LOCAL:
                 shape.append(dace.symbolic.SymExpr(neighbor_table_types[dim.value].max_neighbors))
-            elif dace_utils.is_connectivity_identifier(name, self.offset_provider_type):
+            elif (
+                dace_utils.is_connectivity_identifier(name, self.offset_provider_type)
+                or not use_domain_range
+            ):
                 shape.append(dace.symbolic.SymExpr(dace_utils.field_size_symbol_name(name, i)))
             else:
-                shape.append(dace_utils.get_symbolic_shape(name, i))
+                shape.append(dace_utils.get_symbolic_range(name, i))
         strides = [
             dace.symbolic.SymExpr(dace_utils.field_stride_symbol_name(name, i))
             for i in range(len(dims))
@@ -256,6 +259,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         name: str,
         gt_type: ts.DataType,
         transient: bool = True,
+        use_domain_range: bool = False,
     ) -> list[tuple[str, ts.DataType]]:
         """
         Add storage in the SDFG for a given GT4Py data symbol.
@@ -275,6 +279,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             name: Symbol Name to be allocated.
             gt_type: GT4Py symbol type.
             transient: True when the data symbol has to be allocated as internal storage.
+            use_domain_range: When True, use symbolic range start and stop symbols; otherwise size symbols.
 
         Returns:
             List of tuples '(data_name, gt_type)' where 'data_name' is the name of
@@ -288,21 +293,27 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             for sym in dace_gtir_utils.flatten_tuple_fields(name, gt_type):
                 assert isinstance(sym.type, ts.DataType)
                 tuple_fields.extend(
-                    self._add_storage(sdfg, symbolic_arguments, sym.id, sym.type, transient)
+                    self._add_storage(
+                        sdfg, symbolic_arguments, sym.id, sym.type, transient, use_domain_range
+                    )
                 )
             return tuple_fields
 
         elif isinstance(gt_type, ts.FieldType):
             if len(gt_type.dims) == 0:
                 # represent zero-dimensional fields as scalar arguments
-                return self._add_storage(sdfg, symbolic_arguments, name, gt_type.dtype, transient)
+                return self._add_storage(
+                    sdfg, symbolic_arguments, name, gt_type.dtype, transient, use_domain_range
+                )
             # handle default case: field with one or more dimensions
             # ListType not supported: concept is represented as Field with local Dimension
             assert isinstance(gt_type.dtype, ts.ScalarType)
             dc_dtype = dace_utils.as_dace_type(gt_type.dtype)
             # Use symbolic shape, which allows to invoke the program with fields of different size;
             # and symbolic strides, which enables decoupling the memory layout from generated code.
-            sym_shape, sym_strides = self._make_array_shape_and_strides(name, gt_type.dims)
+            sym_shape, sym_strides = self._make_array_shape_and_strides(
+                name, gt_type.dims, use_domain_range
+            )
             sdfg.add_array(name, sym_shape, dc_dtype, strides=sym_strides, transient=transient)
             return [(name, gt_type)]
 
@@ -382,6 +393,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         sdfg: dace.SDFG,
         node_params: Sequence[gtir.Sym],
         symbolic_arguments: set[str],
+        is_program_argument: bool,
     ) -> list[str]:
         """
         Helper function to add storage for node parameters and connectivity tables.
@@ -397,7 +409,12 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             pname = str(param.id)
             assert isinstance(param.type, (ts.DataType))
             sdfg_args += self._add_storage(
-                sdfg, symbolic_arguments, pname, param.type, transient=False
+                sdfg,
+                symbolic_arguments,
+                pname,
+                param.type,
+                transient=False,
+                use_domain_range=is_program_argument,
             )
 
         # add SDFG storage for connectivity tables
@@ -447,7 +464,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             head_state = entry_state
 
         domain_symbols = _collect_symbols_in_domain_expressions(node, node.params)
-        sdfg_arg_names = self._add_sdfg_params(sdfg, node.params, symbolic_arguments=domain_symbols)
+        sdfg_arg_names = self._add_sdfg_params(
+            sdfg, node.params, symbolic_arguments=domain_symbols, is_program_argument=True
+        )
 
         # visit one statement at a time and expand the SDFG from the current head state
         for i, stmt in enumerate(node.body):
@@ -680,7 +699,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         ]
         lambda_domain_symbols = _collect_symbols_in_domain_expressions(node.expr, lambda_params)
         lambda_translator._add_sdfg_params(
-            nsdfg, node_params=lambda_params, symbolic_arguments=lambda_domain_symbols
+            nsdfg,
+            node_params=lambda_params,
+            symbolic_arguments=lambda_domain_symbols,
+            is_program_argument=False,
         )
 
         nstate = nsdfg.add_state("lambda")
@@ -887,11 +909,7 @@ def build_sdfg_from_gtir(
         for sym in flat_symbols:
             if isinstance(sym.type, ts.FieldType):
                 pname = str(sym.id)
-                field_offsets[pname] = [
-                    dace.symbolic.SymExpr(dace_utils.range_start_symbol(sym.id, i))
-                    for i in range(len(sym.type.dims))
-                ]
-
+                field_offsets[pname] = dace_utils.get_symbolic_origin(pname, sym.type)
     sdfg_genenerator = GTIRToSDFG(offset_provider_type, global_symbols, field_offsets)
     sdfg = sdfg_genenerator.visit(ir)
     assert isinstance(sdfg, dace.SDFG)
@@ -900,23 +918,38 @@ def build_sdfg_from_gtir(
         # collect symbols used as range start for all program arguments
         range_start_symbols: dict[str, dace.symbolic.SymExpr] = {}
         for p in ir.params:
-            if isinstance(p.type, ts.FieldType):
-                dataname = str(p.id)
+            if isinstance(p.type, ts.TupleType):
+                psymbols = [
+                    sym
+                    for sym in dace_gtir_utils.flatten_tuple_fields(p.id, p.type)
+                    if isinstance(sym.type, ts.FieldType)
+                ]
+            elif isinstance(p.type, ts.FieldType):
+                psymbols = [p]
+            else:
+                psymbols = []
+            for psymbol in psymbols:
+                assert isinstance(psymbol.type, ts.FieldType)
+                if len(psymbol.type.dims) == 0:
+                    # zero-dimensional field
+                    continue
+                dataname = str(psymbol.id)
                 datadesc = sdfg.data(dataname)
                 assert (
                     isinstance(datadesc, dace.data.Array)
-                    and len(datadesc.shape) == len(p.type.dims)
+                    and len(datadesc.shape) == len(psymbol.type.dims)
                     and not datadesc.transient
                 )
                 # we redefine the array shape assuming that the range always starts from 0
                 new_shape = [
                     dace.symbolic.SymExpr(dace_utils.range_stop_symbol(dataname, i))
-                    for i in range(len(p.type.dims))
+                    for i in range(len(psymbol.type.dims))
                 ]
                 datadesc.set_shape(new_shape, datadesc.strides)
                 # set all range start symbols to constant value 0
                 range_start_symbols |= {
-                    dace_utils.range_start_symbol(dataname, i): 0 for i in range(len(p.type.dims))
+                    dace_utils.range_start_symbol(dataname, i): 0
+                    for i in range(len(psymbol.type.dims))
                 }
         # we set all range start symbols to 0 in the top-level SDFG and proagate them to nested SDFGs
         gt_substitute_compiletime_symbols(sdfg, range_start_symbols, validate=True)
