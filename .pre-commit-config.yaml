@@ -1,10 +1,6 @@
-# -----------------------------------------------------------------------
-# This file contains 'cog' snippets (https://nedbatchelder.com/code/cog/) 
-# to keep version numbers in sync with 'constraints.txt'
-# -----------------------------------------------------------------------
-
 default_language_version:
   python: python3.10
+minimum_pre_commit_version: 3.8.0
 repos:
 # - repo: meta
 #   hooks:
@@ -45,13 +41,7 @@ repos:
   - id: check-yaml
 
 - repo: https://github.com/astral-sh/ruff-pre-commit
-  ##[[[cog
-  ## import re
-  ## version = re.search('ruff==([0-9\.]*)', open("constraints.txt").read())[1]
-  ## print(f"rev: v{version}")
-  ##]]]
-  rev: v0.8.6
-  ##[[[end]]]
+  rev: v0.9.1
   hooks:
     # Run the linter.
     # TODO: include tests here
@@ -62,9 +52,33 @@ repos:
   - id: ruff-format
 
 - repo: https://github.com/gauge-sh/tach-pre-commit
-  rev: v0.10.7
+  rev: v0.20.0
   hooks:
   - id: tach
+
+- repo: local
+  hooks:
+  - id: reqsync
+    name: sync requirements
+    additional_dependencies:
+    - yamlpath==3.8.2
+    entry: |
+      yaml-set --mustexist --change="repos[.repo%https://github.com/astral-sh/ruff-pre-commit].rev" --check="v0.9.4" .pre-commit-config.yaml
+    language: python
+    types_or: [python, pyi]
+    pass_filenames: false
+    require_serial: true
+
+- repo: local
+  hooks:
+  - id: mypy-local
+    name: mypy static type checker
+    entry: mypy --no-install-types src
+    language: system
+    types_or: [python, pyi]
+    pass_filenames: false
+    require_serial: true
+    stages: [pre-commit]
 
 - repo: https://github.com/pre-commit/mirrors-mypy
   ##[[[cog
@@ -74,22 +88,10 @@ repos:
   ##]]]
   #========= FROM constraints.txt: v1.14.1 =========
   ##[[[end]]]
-  rev: v1.14.1  # MUST match version ^^^^ in constraints.txt (if the mirror is up-to-date)
+  rev: v1.14.1   # MUST match version ^^^^ in constraints.txt (if the mirror is up-to-date)
   hooks:
   - id: mypy
-    additional_dependencies:  # versions from constraints.txt
-    ##[[[cog
-    ## import re, sys
-    ## if sys.version_info >= (3, 11):
-    ##    import tomllib
-    ## else:
-    ##    import tomli as tomllib
-    ## constraints = open("constraints.txt").read()
-    ## project = tomllib.loads(open("pyproject.toml").read())
-    ## packages = [re.match('^([\w-][\w\d-]*)', r)[1] for r in project["project"]["dependencies"] if r.strip()]
-    ## for pkg in packages:
-    ##     print(f"- {pkg}==" + str(re.search(f'\n{pkg}==([0-9\.]*)', constraints)[1]))
-    ##]]]
+    additional_dependencies:
     - attrs==24.3.0
     - black==24.10.0
     - boltons==24.1.0
@@ -116,7 +118,6 @@ repos:
     - tabulate==0.9.0
     - typing-extensions==4.12.2
     - xxhash==3.0.0
-    ##[[[end]]]
     - types-tabulate
     - types-typed-ast
     args: [--no-install-types]
