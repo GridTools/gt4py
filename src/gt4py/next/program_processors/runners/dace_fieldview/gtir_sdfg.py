@@ -913,6 +913,53 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         return gtir_builtin_translators.translate_symbol_ref(node, sdfg, head_state, self)
 
 
+def _remove_field_origin_symbols(ir: gtir.Program, sdfg: dace.SDFG) -> None:
+    """
+    Helper function to remove the origin symbols used in program field arguments.
+    It will set the start symbol of field domain range to constant value 0,
+    thus removing the corresponding free symbol. These values are also propagated
+    to all nested SDFGs.
+    """
+
+    # collect symbols used as range start for all program arguments
+    range_start_symbols: dict[str, dace.symbolic.SymExpr] = {}
+    for p in ir.params:
+        if isinstance(p.type, ts.TupleType):
+            psymbols = [
+                sym
+                for sym in dace_gtir_utils.flatten_tuple_fields(p.id, p.type)
+                if isinstance(sym.type, ts.FieldType)
+            ]
+        elif isinstance(p.type, ts.FieldType):
+            psymbols = [p]
+        else:
+            psymbols = []
+        for psymbol in psymbols:
+            assert isinstance(psymbol.type, ts.FieldType)
+            if len(psymbol.type.dims) == 0:
+                # zero-dimensional field
+                continue
+            dataname = str(psymbol.id)
+            datadesc = sdfg.data(dataname)
+            assert (
+                isinstance(datadesc, dace.data.Array)
+                and len(datadesc.shape) == len(psymbol.type.dims)
+                and not datadesc.transient
+            )
+            # we redefine the array shape assuming that the range always starts from 0
+            new_shape = [
+                dace.symbolic.SymExpr(dace_utils.range_stop_symbol(dataname, i))
+                for i in range(len(psymbol.type.dims))
+            ]
+            datadesc.set_shape(new_shape, datadesc.strides)
+            # set all range start symbols to constant value 0
+            range_start_symbols |= {
+                dace_utils.range_start_symbol(dataname, i): 0 for i in range(len(psymbol.type.dims))
+            }
+    # we set all range start symbols to 0 in the top-level SDFG and proagate them to nested SDFGs
+    gt_substitute_compiletime_symbols(sdfg, range_start_symbols, validate=True)
+
+
 def build_sdfg_from_gtir(
     ir: gtir.Program,
     offset_provider_type: gtx_common.OffsetProviderType,
@@ -970,43 +1017,6 @@ def build_sdfg_from_gtir(
     dace_sdfg_utils.inline_loop_blocks(sdfg)
 
     if disable_field_origin_on_program_arguments:
-        # collect symbols used as range start for all program arguments
-        range_start_symbols: dict[str, dace.symbolic.SymExpr] = {}
-        for p in ir.params:
-            if isinstance(p.type, ts.TupleType):
-                psymbols = [
-                    sym
-                    for sym in dace_gtir_utils.flatten_tuple_fields(p.id, p.type)
-                    if isinstance(sym.type, ts.FieldType)
-                ]
-            elif isinstance(p.type, ts.FieldType):
-                psymbols = [p]
-            else:
-                psymbols = []
-            for psymbol in psymbols:
-                assert isinstance(psymbol.type, ts.FieldType)
-                if len(psymbol.type.dims) == 0:
-                    # zero-dimensional field
-                    continue
-                dataname = str(psymbol.id)
-                datadesc = sdfg.data(dataname)
-                assert (
-                    isinstance(datadesc, dace.data.Array)
-                    and len(datadesc.shape) == len(psymbol.type.dims)
-                    and not datadesc.transient
-                )
-                # we redefine the array shape assuming that the range always starts from 0
-                new_shape = [
-                    dace.symbolic.SymExpr(dace_utils.range_stop_symbol(dataname, i))
-                    for i in range(len(psymbol.type.dims))
-                ]
-                datadesc.set_shape(new_shape, datadesc.strides)
-                # set all range start symbols to constant value 0
-                range_start_symbols |= {
-                    dace_utils.range_start_symbol(dataname, i): 0
-                    for i in range(len(psymbol.type.dims))
-                }
-        # we set all range start symbols to 0 in the top-level SDFG and proagate them to nested SDFGs
-        gt_substitute_compiletime_symbols(sdfg, range_start_symbols, validate=True)
+        _remove_field_origin_symbols(ir, sdfg)
 
     return sdfg
