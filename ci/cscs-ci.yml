@@ -51,7 +51,7 @@ stages:
     CUPY_VERSION: 13.3.0
     UBUNTU_VERSION: 22.04
 
-build_py311_baseimage_x86_64:
+.build_py311_baseimage_x86_64:
   extends: .build_baseimage_x86_64
   variables:
     <<: *py311
@@ -60,7 +60,7 @@ build_py311_baseimage_aarch64:
   variables:
     <<: *py311
 
-build_py310_baseimage_x86_64:
+.build_py310_baseimage_x86_64:
   extends: .build_baseimage_x86_64
   variables:
     <<: *py310
@@ -83,7 +83,7 @@ build_py310_baseimage_aarch64:
 .build_image_aarch64:
   extends: [.container-builder-cscs-gh200, .build_image]
 
-build_py311_image_x86_64:
+.build_py311_image_x86_64:
   extends: .build_image_x86_64
   needs: [build_py311_baseimage_x86_64]
   variables:
@@ -94,7 +94,7 @@ build_py311_image_aarch64:
   variables:
     <<: *py311
 
-build_py310_image_x86_64:
+.build_py310_image_x86_64:
   extends: .build_image_x86_64
   needs: [build_py310_baseimage_x86_64]
   variables:
@@ -149,7 +149,7 @@ build_py310_image_aarch64:
     # when high test parallelism is used.
     NUM_PROCESSES: 16
 
-test_py311_x86_64:
+.test_py311_x86_64:
   extends: [.test_helper_x86_64]
   needs: [build_py311_image_x86_64]
   variables:
@@ -160,7 +160,7 @@ test_py311_aarch64:
   variables:
     <<: *py311
 
-test_py310_x86_64:
+.test_py310_x86_64:
   extends: [.test_helper_x86_64]
   needs: [build_py310_image_x86_64]
   variables:
