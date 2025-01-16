@@ -697,6 +697,7 @@ class DistributedBufferRelocator(dace_transformation.Pass):
             )
             if dnode_degree > 1:
                 return True
+            # TODO(phimuell): Maybe AccessNodes with zero input degree should be ignored.
             accesses_to_global_data.add(dnode)
 
         # There is no reference to the global data, so no need to do more tests.
