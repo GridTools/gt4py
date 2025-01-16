@@ -401,18 +401,18 @@ class DistributedBufferRelocator(dace_transformation.Pass):
     It is advised that after this transformation simplify is run again.
 
     The relocation will not take place if it might create data race. A necessary
-    but not sufficient condition for a data race is if `dest_storage`  is present
+    but not sufficient condition for a data race is if `dest_storage` is present
     in the state where `temp_storage` is defined. In addition at least one of the
     following conditions has to be met:
-    - `dest_storage`, that exists in the state is not connected to the
-        `temp_storage` access node.
-    - There is a `dest_storage` access node, but it has an output degree larger
+    - There are accesses to `dest_storage` that are not predecessor to the node where
+        the data is stored inside `temp_storage`. This check will ignore empty Memlets.
+    - There is a `dest_storage` access node, that has an output degree larger
         than one.
 
     Note:
-        Essentially this transformation removes the double buffering of `dest_storage`.
-        Because we ensure that that `dest_storage` is non transient this is okay, as our
-        rule guarantees this.
+        - Essentially this transformation removes the double buffering of
+            `dest_storage`. Because we ensure that that `dest_storage` is non
+            transient this is okay, as our rule guarantees this.
 
     Todo:
         - Allow that `dest_storage` can also be transient.
@@ -593,22 +593,19 @@ class DistributedBufferRelocator(dace_transformation.Pass):
                 ):
                     break
                 # check if the global data is not used between the definition of
-                #  `dest_storage` and where its written back. We allow one exception,
-                #  if the global data is used in the state the distributed temporary
-                #  is defined is used only for reading then it is ignored. This is
-                #  allowed because of rule 3 of ADR0018.
-                glob_nodes_in_def_state = {
-                    dnode
-                    for dnode in def_state.data_nodes()
-                    if dnode.data == temp_storage_to_global[wb_node]
+                #  `dest_storage` and where its written back. However, we ignore
+                #  the state were `temp_storage` is defined. The checks if these
+                #  checks are performed by the `_check_read_write_dependency()`
+                #  function.
+                global_data_name = temp_storage_to_global[wb_node]
+                global_nodes_in_def_state = {
+                    dnode for dnode in def_state.data_nodes() if dnode.data == global_data_name
                 }
-                if any(def_state.in_degree(gdnode) != 0 for gdnode in glob_nodes_in_def_state):
-                    break
                 if gtx_transformations.util.is_accessed_downstream(
                     start_state=def_state,
                     sdfg=sdfg,
-                    data_to_look=temp_storage_to_global[wb_node],
-                    nodes_to_ignore=glob_nodes_in_def_state,
+                    data_to_look=global_data_name,
+                    nodes_to_ignore=global_nodes_in_def_state,
                     states_to_ignore={wb_state},
                 ):
                     break
@@ -685,31 +682,37 @@ class DistributedBufferRelocator(dace_transformation.Pass):
         # These are all access nodes that refers to the global data, that we want
         #  to move into the state `state_to_inspect`. We need them to do the
         #  second test.
-        access_to_global_data_in_this_state: set[dace_nodes.AccessNode] = set()
+        accesses_to_global_data: set[dace_nodes.AccessNode] = set()
 
-        # The first simple test is to look if global data is used and has more
-        #  than output edge. Further analysis can show that it could be handled
-        #  anyway. But we do not do it.
+        # In the first check we look for an access node, to the global data, that
+        #  has an output degree larger than one. However, for this we ignore all
+        #  empty Memlets. This is done because such Memlets are used to induce a
+        #  schedule or order in the dataflow graph.
+        #  As a byproduct, for the second test, we also collect all of these nodes.
         for dnode in state_to_inspect.data_nodes():
             if dnode.data != global_data_name:
                 continue
-            if state_to_inspect.out_degree(dnode) >= 2:
+            dnode_degree = sum(
+                (1 for oedge in state_to_inspect.out_edges(dnode) if not oedge.data.is_empty())
+            )
+            if dnode_degree > 1:
                 return True
-            access_to_global_data_in_this_state.add(dnode)
+            accesses_to_global_data.add(dnode)
 
         # There is no reference to the global data, so no need to do more tests.
-        if len(access_to_global_data_in_this_state) == 0:
+        if len(accesses_to_global_data) == 0:
             return False
 
-        # For the second test we look if `global_data_name` is referred to in
-        #  another data flow graph in this state, that is however, not connected
-        #  to the graph that contains `def_location_of_intermediate`. We will
-        #  do this by exploring the dataflow graph from that node and if we found
-        #  a node that refers to the global data, we remove it from
-        #  `access_to_global_data_in_this_state`. If that list is empty at the end
-        #  then it is not used in another component.
-        # TODO(phimuell): Refine this case by also taking into account empty
-        #   Memlets, that induce a deterministic order.
+        # For the second test we will explore the dataflow graph, in reverse order,
+        #  starting from the definition of the temporary node. If we find an access
+        #  to the global data we remove it from the `accesses_to_global_data` list.
+        #  If the list has not become empty, then we know that there is some sind
+        #  branch (or concurrent dataflow) in this state that accesses the global
+        #  data and we will have read-write conflicts.
+        #  It is however, important to realize that passing this check does not
+        #  imply that there are no read-write. We assume here that all accesses to
+        #  the global data that was made before the write back were constructed in
+        #  a correct way.
         to_process: list[dace_nodes.Node] = [def_location_of_intermediate]
         seen: set[dace_nodes.Node] = set()
         while len(to_process) != 0:
@@ -718,7 +721,9 @@ class DistributedBufferRelocator(dace_transformation.Pass):
 
             if isinstance(node, dace_nodes.AccessNode):
                 if node.data == global_data_name:
-                    access_to_global_data_in_this_state.discard(node)
+                    accesses_to_global_data.discard(node)
+                    if len(accesses_to_global_data) == 0:
+                        return False
 
             # Note that we only explore the ingoing edges, thus we will not necessarily
             #  explore the whole graph. However, this is fine, because we will see the
@@ -730,8 +735,7 @@ class DistributedBufferRelocator(dace_transformation.Pass):
                 iedge.src for iedge in state_to_inspect.in_edges(node) if iedge.src not in seen
             )
 
-        if len(access_to_global_data_in_this_state) == 0:
-            return False
+        assert len(accesses_to_global_data) > 0
         return True
 
 
