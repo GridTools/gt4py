@@ -728,8 +728,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     arg = lambda_arg_nodes[p_name]
                     assert isinstance(arg, gtir_builtin_translators.FieldopData)
                     return {p_name: arg.offset}
-                elif field_domain_offset := self.field_offsets.get(p_name, None):
-                    return {p_name: field_domain_offset}
+                elif len(p_type.dims) != 0:  # offset not needed for zero-dimensional fields
+                    field_offset = self.field_offsets[p_name]
+                    return {p_name: field_offset}
             elif isinstance(p_type, ts.TupleType):
                 tsyms = dace_gtir_utils.flatten_tuple_fields(p_name, p_type)
                 return functools.reduce(
