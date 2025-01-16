@@ -547,13 +547,14 @@ class DistributedBufferRelocator(dace_transformation.Pass):
             }
 
         for temp_storage in candidate_temp_storage:
+            temp_storage_node, temp_storage_state = temp_storage
             def_locations: list[AccessLocation] = []
-            for upstream_state in find_upstream_states(temp_storage[1]):
-                if temp_storage[0].data in access_sets[upstream_state][1]:
+            for upstream_state in find_upstream_states(temp_storage_state):
+                if temp_storage_node.data in access_sets[upstream_state][1]:
                     def_locations.extend(
                         (data_node, upstream_state)
                         for data_node in upstream_state.data_nodes()
-                        if data_node.data == temp_storage[0].data
+                        if data_node.data == temp_storage_node.data
                     )
             if len(def_locations) != 0:
                 result_candidates.append((temp_storage, def_locations))
@@ -576,15 +577,19 @@ class DistributedBufferRelocator(dace_transformation.Pass):
 
         result: list[tuple[AccessLocation, list[AccessLocation]]] = []
 
-        for wb_localation, def_locations in result_candidates:
+        for wb_location, def_locations in result_candidates:
+            # Get the state and the location where the temporary is written back
+            #  into the global data container.
+            wb_node, wb_state = wb_location
+
             for def_node, def_state in def_locations:
                 # Test if `temp_storage` is only accessed where it is defined and
                 #  where it is written back.
                 if gtx_transformations.util.is_accessed_downstream(
                     start_state=def_state,
                     sdfg=sdfg,
-                    data_to_look=wb_localation[0].data,
-                    nodes_to_ignore={def_node, wb_localation[0]},
+                    data_to_look=wb_node.data,
+                    nodes_to_ignore={def_node, wb_node},
                 ):
                     break
                 # check if the global data is not used between the definition of
@@ -595,22 +600,22 @@ class DistributedBufferRelocator(dace_transformation.Pass):
                 glob_nodes_in_def_state = {
                     dnode
                     for dnode in def_state.data_nodes()
-                    if dnode.data == temp_storage_to_global[wb_localation[0]]
+                    if dnode.data == temp_storage_to_global[wb_node]
                 }
                 if any(def_state.in_degree(gdnode) != 0 for gdnode in glob_nodes_in_def_state):
                     break
                 if gtx_transformations.util.is_accessed_downstream(
                     start_state=def_state,
                     sdfg=sdfg,
-                    data_to_look=temp_storage_to_global[wb_localation[0]],
+                    data_to_look=temp_storage_to_global[wb_node],
                     nodes_to_ignore=glob_nodes_in_def_state,
-                    states_to_ignore={wb_localation[1]},
+                    states_to_ignore={wb_state},
                 ):
                     break
-                if self._check_read_write_dependency(sdfg, wb_localation, def_locations):
+                if self._check_read_write_dependency(sdfg, wb_location, def_locations):
                     break
             else:
-                result.append((wb_localation, def_locations))
+                result.append((wb_location, def_locations))
 
         return result
 
@@ -629,8 +634,12 @@ class DistributedBufferRelocator(dace_transformation.Pass):
         Args:
             sdfg: The SDFG on which we operate.
             write_back_location: Where currently the write back occurs.
-            target_locations: List of the locations were we would like to perform
+            target_locations: List of the locations where we would like to perform
                 the write back instead.
+
+        Returns:
+            If a read-write dependency is detected then the function will return
+            `True` and if none was detected `False` will be returned.
         """
         for target_location in target_locations:
             if self._check_read_write_dependency_impl(sdfg, write_back_location, target_location):
@@ -651,21 +660,26 @@ class DistributedBufferRelocator(dace_transformation.Pass):
             target_locations: Location where the new write back should be performed.
 
         Todo:
-            Refine this checks later.
+            Refine these checks later.
+
+        Returns:
+            If a read-write dependency is detected then the function will return
+            `True` and if none was detected `False` will be returned.
         """
         assert write_back_location[0].data == target_location[0].data
 
-        write_back_state: dace.SDFGState = write_back_location[1]
-        write_back_node = write_back_location[0]
+        # Get the state and the location where the temporary is written back
+        #  into the global data container. Because `write_back_node` refers to
+        #  the temporary we must query the graph to find the global node.
+        write_back_node, write_back_state = write_back_location
         write_back_edge = next(iter(write_back_state.out_edges(write_back_node)))
         global_data_name = write_back_edge.dst.data
         assert not sdfg.arrays[global_data_name].transient
+        assert write_back_state.out_degree(write_back_node) == 1
+        assert write_back_state.in_degree(write_back_node) == 0
 
-        # This is the state in which we have to look for possible data races.
-        state_to_inspect: dace.SDFGState = target_location[1]
-
-        # This is the access not on which we will perform the write back.
-        def_location_of_intermediate: dace_nodes.AccessNode = target_location[0]
+        # Get the location and the state where the temporary is originally defined.
+        def_location_of_intermediate, state_to_inspect = target_location
         assert state_to_inspect.out_degree(def_location_of_intermediate) == 0
 
         # These are all access nodes that refers to the global data, that we want
@@ -674,8 +688,8 @@ class DistributedBufferRelocator(dace_transformation.Pass):
         access_to_global_data_in_this_state: set[dace_nodes.AccessNode] = set()
 
         # The first simple test is to look if global data is used and has more
-        #  than output edge. Further analysis could show that it could be handled.
-        #  But we do not do it.
+        #  than output edge. Further analysis can show that it could be handled
+        #  anyway. But we do not do it.
         for dnode in state_to_inspect.data_nodes():
             if dnode.data != global_data_name:
                 continue
@@ -692,7 +706,7 @@ class DistributedBufferRelocator(dace_transformation.Pass):
         #  to the graph that contains `def_location_of_intermediate`. We will
         #  do this by exploring the dataflow graph from that node and if we found
         #  a node that refers to the global data, we remove it from
-        #  `access_to_global_data_in_this_state`, if that list is empty at the end
+        #  `access_to_global_data_in_this_state`. If that list is empty at the end
         #  then it is not used in another component.
         # TODO(phimuell): Refine this case by also taking into account empty
         #   Memlets, that induce a deterministic order.
