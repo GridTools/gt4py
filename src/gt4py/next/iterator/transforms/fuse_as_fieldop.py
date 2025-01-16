@@ -123,7 +123,8 @@ def _unwrap_scan(stencil: itir.Lambda | itir.FunCall):
     >>> stencil, back_trafo = _unwrap_scan(scan)
     >>> str(stencil)
     'λ(arg) → state + ·arg'
-    >>> assert back_trafo(stencil) == scan
+    >>> str(back_trafo(stencil))
+    'scan(λ(state, arg) → (λ(arg) → state + ·arg)(arg), True, 0.0)'
 
     In case a regular stencil is given it is returned as-is:
 
