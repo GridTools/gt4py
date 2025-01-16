@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type
 import dace
 import dace.data
 from dace.sdfg.utils import inline_sdfgs
-from dace.transformation.passes.simplify import SimplifyPass
 
 from gt4py import storage as gt_storage
 from gt4py.cartesian import config as gt_config
@@ -54,24 +53,6 @@ from gt4py.eve.codegen import MakoTemplate as as_mako
 if TYPE_CHECKING:
     from gt4py.cartesian.stencil_builder import StencilBuilder
     from gt4py.cartesian.stencil_object import StencilObject
-
-
-def _simplify(
-    sdfg: dace.SDFG,
-    *,
-    validate: bool = True,
-    validate_all: bool = False,
-    verbose: bool = False,
-    skip: Optional[List[str]] = None,
-):
-    """Simplifies `sdfg` inline and allows skipping transformations."""
-
-    return SimplifyPass(
-        validate=validate,
-        validate_all=validate_all,
-        verbose=verbose,
-        skip=[] if skip is None else skip,
-    ).apply_pass(sdfg, {})
 
 
 def _specialize_transient_strides(sdfg: dace.SDFG, layout_map):
@@ -169,7 +150,7 @@ def _pre_expand_transformations(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, la
         sdfg.add_state(gtir_pipeline.gtir.name)
         return sdfg
 
-    _simplify(sdfg, validate=False, skip=["ScalarToSymbolPromotion"])
+    sdfg.simplify(validate=False)
 
     _set_expansion_orders(sdfg)
     _set_tile_sizes(sdfg)
@@ -179,7 +160,7 @@ def _pre_expand_transformations(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, la
 
 def _post_expand_transformations(sdfg: dace.SDFG):
     # DaCe "standard" clean-up transformations
-    _simplify(sdfg, validate=False, skip=["ScalarToSymbolPromotion"])
+    sdfg.simplify(validate=False)
 
     sdfg.apply_transformations_repeated(NoEmptyEdgeTrivialMapElimination, validate=False)
 
@@ -193,7 +174,7 @@ def _post_expand_transformations(sdfg: dace.SDFG):
             node.schedule = dace.ScheduleType.Sequential
 
     sdfg.apply_transformations_repeated(InlineThreadLocalTransients, validate=False)
-    _simplify(sdfg, validate=False, skip=["ScalarToSymbolPromotion"])
+    sdfg.simplify(validate=False)
     nest_sequential_map_scopes(sdfg)
     for sd in sdfg.all_sdfgs_recursive():
         sd.openmp_sections = False
