@@ -580,6 +580,7 @@ for math_builtin_name in builtins.ARITHMETIC_BUILTINS | builtins.TYPE_BUILTINS:
         "divides": operator.truediv,
         "mod": operator.mod,
         "floordiv": operator.floordiv,
+        "not_": operator.not_,
         "eq": operator.eq,
         "less": operator.lt,
         "greater": operator.gt,
@@ -588,7 +589,7 @@ for math_builtin_name in builtins.ARITHMETIC_BUILTINS | builtins.TYPE_BUILTINS:
         "not_eq": operator.ne,
         "and_": operator.and_,
         "or_": operator.or_,
-        "xor": operator.xor,
+        "xor_": operator.xor,
     }
     decorator = getattr(builtins, math_builtin_name).register(EMBEDDED)
     impl: Callable

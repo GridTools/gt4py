@@ -11,8 +11,8 @@ from typing import Any, Collection, Final, Union
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from gt4py.next import common
+from gt4py.next.otf import cpp_utils
 from gt4py.next.program_processors.codegens.gtfn import gtfn_im_ir, gtfn_ir, gtfn_ir_common
-from gt4py.next.program_processors.codegens.gtfn.itir_to_gtfn_ir import pytype_to_cpptype
 
 
 class GTFNCodegen(codegen.TemplatedGenerator):
@@ -98,8 +98,11 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         return value
 
     def visit_Literal(self, node: gtfn_ir.Literal, **kwargs: Any) -> str:
+        if node.type == "axis_literal":
+            return node.value
+
         # TODO(tehrengruber): isn't this wrong and int32 should be casted to an actual int32?
-        match pytype_to_cpptype(node.type):
+        match cpp_utils.pytype_to_cpptype(node.type):
             case "float":
                 return self.asfloat(node.value) + "f"
             case "double":
