@@ -346,8 +346,7 @@ def _create_field_operator(
     node_type: ts.FieldType | ts.TupleType,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
     input_edges: Iterable[gtir_dataflow.DataflowInputEdge],
-    output_edges: gtir_dataflow.DataflowOutputEdge
-    | tuple[gtir_dataflow.DataflowOutputEdge | tuple[Any, ...], ...],
+    output_tree: tuple[gtir_dataflow.DataflowOutputEdge | tuple[Any, ...], ...],
 ) -> FieldopResult:
     """
     Helper method to build the output of a field operator, which can consist of
@@ -363,7 +362,7 @@ def _create_field_operator(
         node_type: The GT4Py type of the IR node that produces this field.
         sdfg_builder: The object used to build the map scope in the provided SDFG.
         input_edges: List of edges to pass input data into the dataflow.
-        output_edges: Single edge or tuple of edges representing the dataflow output data.
+        output_tree: A tree representation of the dataflow output data.
 
     Returns:
         The descriptor of the field operator result, which can be either a single field
@@ -385,9 +384,12 @@ def _create_field_operator(
         edge.connect(map_entry)
 
     if isinstance(node_type, ts.FieldType):
-        assert isinstance(output_edges, gtir_dataflow.DataflowOutputEdge)
+        assert len(output_tree) == 1 and isinstance(
+            output_tree[0], gtir_dataflow.DataflowOutputEdge
+        )
+        output_edge = output_tree[0]
         return _create_field_operator_impl(
-            sdfg_builder, sdfg, state, domain, output_edges, node_type, map_exit
+            sdfg_builder, sdfg, state, domain, output_edge, node_type, map_exit
         )
     else:
         # handle tuples of fields
@@ -396,7 +398,7 @@ def _create_field_operator(
             lambda output_edge, output_sym: _create_field_operator_impl(
                 sdfg_builder, sdfg, state, domain, output_edge, output_sym.type, map_exit
             )
-        )(output_edges, output_symbol_tree)
+        )(output_tree, output_symbol_tree)
 
 
 def extract_domain(node: gtir.Node) -> FieldopDomain:
@@ -637,7 +639,7 @@ def translate_index(
     ]
     output_edge = gtir_dataflow.DataflowOutputEdge(state, index_value)
     return _create_field_operator(
-        sdfg, state, domain, node.type, sdfg_builder, input_edges, output_edge
+        sdfg, state, domain, node.type, sdfg_builder, input_edges, (output_edge,)
     )
 
 

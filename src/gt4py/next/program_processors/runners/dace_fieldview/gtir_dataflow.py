@@ -649,7 +649,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         if_sdfg_input_memlets: dict[str, MemletExpr | ValueExpr],
     ) -> tuple[
         list[DataflowInputEdge],
-        DataflowOutputEdge | tuple[DataflowOutputEdge | tuple[Any, ...], ...],
+        tuple[DataflowOutputEdge | tuple[Any, ...], ...],
     ]:
         """
         Helper method to visit an if-branch expression and lower it to a dataflow inside the given nested SDFG and state.
@@ -665,7 +665,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         Returns:
             A tuple containing:
                 - the list of input edges for the parent dataflow
-                - the output data, in the form of a single data edge or a tuple of data edges.
+                - the tree representation of output data, in the form of a tuple of data edges.
         """
         assert if_branch_state in if_sdfg.states()
 
@@ -692,7 +692,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         # visit each branch of the if-statement as if it was a Lambda node
         lambda_node = gtir.Lambda(params=lambda_params, expr=expr)
-        input_edges, output_edges = translate_lambda_to_dataflow(
+        input_edges, output_tree = translate_lambda_to_dataflow(
             if_sdfg, if_branch_state, self.subgraph_builder, lambda_node, args=lambda_args
         )
 
@@ -703,7 +703,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                 assert not data_node.desc(if_sdfg).transient
                 if_branch_state.remove_node(data_node)
 
-        return input_edges, output_edges
+        return input_edges, output_tree
 
     def _visit_if_branch_result(
         self, sdfg: dace.SDFG, state: dace.SDFGState, edge: DataflowOutputEdge, sym: gtir.Sym
@@ -807,20 +807,21 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         for nstate, arg in zip([tstate, fstate], node.args[1:3]):
             # visit each if-branch in the corresponding state of the nested SDFG
-            in_edges, out_edge = self._visit_if_branch(nsdfg, nstate, arg, input_memlets)
+            in_edges, output_tree = self._visit_if_branch(nsdfg, nstate, arg, input_memlets)
             for edge in in_edges:
                 edge.connect(map_entry=None)
 
-            if isinstance(out_edge, tuple):
-                assert isinstance(node.type, ts.TupleType)
+            if isinstance(node.type, ts.TupleType):
                 out_symbol_tree = dace_gtir_utils.make_symbol_tree("__output", node.type)
                 outer_value = gtx_utils.tree_map(
                     lambda x, y, nstate=nstate: self._visit_if_branch_result(nsdfg, nstate, x, y)
-                )(out_edge, out_symbol_tree)
+                )(output_tree, out_symbol_tree)
             else:
                 assert isinstance(node.type, ts.FieldType | ts.ScalarType)
+                assert len(output_tree) == 1 and isinstance(output_tree[0], DataflowOutputEdge)
+                output_edge = output_tree[0]
                 outer_value = self._visit_if_branch_result(
-                    nsdfg, nstate, out_edge, im.sym("__output", node.type)
+                    nsdfg, nstate, output_edge, im.sym("__output", node.type)
                 )
             # Isolated access node will make validation fail.
             # Isolated access nodes can be found in `make_tuple` expressions that
@@ -1777,7 +1778,7 @@ def translate_lambda_to_dataflow(
     ],
 ) -> tuple[
     list[DataflowInputEdge],
-    DataflowOutputEdge | tuple[DataflowOutputEdge | tuple[Any, ...], ...],
+    tuple[DataflowOutputEdge | tuple[Any, ...], ...],
 ]:
     """
     Entry point to visit a `Lambda` node and lower it to a dataflow graph,
@@ -1797,8 +1798,12 @@ def translate_lambda_to_dataflow(
     Returns:
         A tuple of two elements:
         - List of connections for data inputs to the dataflow.
-        - Output data connection.
+        - Tree representation of output data connections.
     """
     taskgen = LambdaToDataflow(sdfg, state, sdfg_builder)
-    output_edges = taskgen.visit_let(node, args)
-    return taskgen.input_edges, output_edges
+    lambda_output = taskgen.visit_let(node, args)
+
+    if isinstance(lambda_output, DataflowOutputEdge):
+        return taskgen.input_edges, (lambda_output,)
+    else:
+        return taskgen.input_edges, lambda_output
