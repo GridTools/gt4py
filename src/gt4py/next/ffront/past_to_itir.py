@@ -218,7 +218,7 @@ class ProgramLowering(
             if len(fields_dims) > 0:  # otherwise `param` has no constituent which is of `FieldType`
                 assert all(field_dims == fields_dims[0] for field_dims in fields_dims)
                 index_type = ts.ScalarType(
-                    kind=getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())
+                    kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper())
                 )
                 for dim_idx in range(len(fields_dims[0])):
                     size_params.append(
