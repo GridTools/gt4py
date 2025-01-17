@@ -84,6 +84,11 @@ def builtin_if(*args: Any) -> str:
     return f"{true_val} if {cond} else {false_val}"
 
 
+def builtin_tuple_get(*args: Any) -> str:
+    index, tuple_name = args
+    return f"{tuple_name}_{index}"
+
+
 def make_const_list(arg: str) -> str:
     """
     Takes a single scalar argument and broadcasts this value on the local dimension
@@ -97,6 +102,7 @@ GENERAL_BUILTIN_MAPPING: dict[str, Callable[[Any], str]] = {
     "cast_": builtin_cast,
     "if_": builtin_if,
     "make_const_list": make_const_list,
+    "tuple_get": builtin_tuple_get,
 }
 
 
