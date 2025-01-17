@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.otf import arguments, languages, stages
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
@@ -41,8 +41,8 @@ def program_example():
                 fun=itir.SymRef(id="named_range"),
                 args=[
                     itir.AxisLiteral(value="I"),
-                    im.literal("0", itir.INTEGER_INDEX_BUILTIN),
-                    im.literal("10", itir.INTEGER_INDEX_BUILTIN),
+                    im.literal("0", builtins.INTEGER_INDEX_BUILTIN),
+                    im.literal("10", builtins.INTEGER_INDEX_BUILTIN),
                 ],
             )
         ],

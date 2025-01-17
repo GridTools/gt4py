@@ -11,7 +11,7 @@ from typing import Callable, Optional, Union
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
-from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
@@ -29,7 +29,7 @@ def sym(sym_or_name: Union[str, itir.Sym], type_: str | ts.TypeSpec | None = Non
 
     >>> a = sym("a", "float32")
     >>> a.id, a.type
-    (SymbolName('a'), ScalarType(kind=<ScalarKind.FLOAT32: 1032>, shape=None))
+    (SymbolName('a'), ScalarType(kind=<ScalarKind.FLOAT32: 10>, shape=None))
     """
     if isinstance(sym_or_name, itir.Sym):
         assert not type_
@@ -53,7 +53,7 @@ def ref(
 
     >>> a = ref("a", "float32")
     >>> a.id, a.type
-    (SymbolRef('a'), ScalarType(kind=<ScalarKind.FLOAT32: 1032>, shape=None))
+    (SymbolRef('a'), ScalarType(kind=<ScalarKind.FLOAT32: 10>, shape=None))
     """
     if isinstance(ref_or_name, itir.SymRef):
         assert not type_
@@ -71,7 +71,7 @@ def ensure_expr(literal_or_expr: Union[str, core_defs.Scalar, itir.Expr]) -> iti
     SymRef(id=SymbolRef('a'))
 
     >>> ensure_expr(3)
-    Literal(value='3', type=ScalarType(kind=<ScalarKind.INT32: 32>, shape=None))
+    Literal(value='3', type=ScalarType(kind=<ScalarKind.INT32: 6>, shape=None))
 
     >>> ensure_expr(itir.OffsetLiteral(value="i"))
     OffsetLiteral(value='i')
@@ -134,7 +134,7 @@ class call:
     Examples
     --------
     >>> call("plus")(1, 1)
-    FunCall(fun=SymRef(id=SymbolRef('plus')), args=[Literal(value='1', type=ScalarType(kind=<ScalarKind.INT32: 32>, shape=None)), Literal(value='1', type=ScalarType(kind=<ScalarKind.INT32: 32>, shape=None))])
+    FunCall(fun=SymRef(id=SymbolRef('plus')), args=[Literal(value='1', type=ScalarType(kind=<ScalarKind.INT32: 6>, shape=None)), Literal(value='1', type=ScalarType(kind=<ScalarKind.INT32: 6>, shape=None))])
     """
 
     def __init__(self, expr):
@@ -238,7 +238,7 @@ def make_tuple(*args):
 
 def tuple_get(index: str | int, tuple_expr):
     """Create a tuple_get FunCall, shorthand for ``call("tuple_get")(index, tuple_expr)``."""
-    return call("tuple_get")(literal(str(index), itir.INTEGER_INDEX_BUILTIN), tuple_expr)
+    return call("tuple_get")(literal(str(index), builtins.INTEGER_INDEX_BUILTIN), tuple_expr)
 
 
 def if_(cond, true_val, false_val):
@@ -316,11 +316,11 @@ def literal_from_value(val: core_defs.Scalar) -> itir.Literal:
     Make a literal node from a value.
 
     >>> literal_from_value(1.0)
-    Literal(value='1.0', type=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None))
+    Literal(value='1.0', type=ScalarType(kind=<ScalarKind.FLOAT64: 11>, shape=None))
     >>> literal_from_value(1)
-    Literal(value='1', type=ScalarType(kind=<ScalarKind.INT32: 32>, shape=None))
+    Literal(value='1', type=ScalarType(kind=<ScalarKind.INT32: 6>, shape=None))
     >>> literal_from_value(2147483648)
-    Literal(value='2147483648', type=ScalarType(kind=<ScalarKind.INT64: 64>, shape=None))
+    Literal(value='2147483648', type=ScalarType(kind=<ScalarKind.INT64: 8>, shape=None))
     >>> literal_from_value(True)
     Literal(value='True', type=ScalarType(kind=<ScalarKind.BOOL: 1>, shape=None))
     """
@@ -335,7 +335,7 @@ def literal_from_value(val: core_defs.Scalar) -> itir.Literal:
     assert isinstance(type_spec, ts.ScalarType)
 
     typename = type_spec.kind.name.lower()
-    assert typename in itir.TYPEBUILTINS
+    assert typename in builtins.TYPE_BUILTINS
 
     return literal(str(val), typename)
 

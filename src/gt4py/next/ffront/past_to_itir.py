@@ -24,7 +24,7 @@ from gt4py.next.ffront import (
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.stages import AOT_PRG
-from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.otf import stages, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
@@ -218,7 +218,7 @@ class ProgramLowering(
             if len(fields_dims) > 0:  # otherwise `param` has no constituent which is of `FieldType`
                 assert all(field_dims == fields_dims[0] for field_dims in fields_dims)
                 index_type = ts.ScalarType(
-                    kind=getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())
+                    kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper())
                 )
                 for dim_idx in range(len(fields_dims[0])):
                     size_params.append(

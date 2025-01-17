@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from gt4py.next.iterator import ir
+from gt4py.next.iterator import ir, builtins
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.pretty_parser import pparse
 from gt4py.next.type_system import type_specifications as ts
@@ -111,7 +111,7 @@ def test_tuple_get():
     testee = "x[42]"
     expected = ir.FunCall(
         fun=ir.SymRef(id="tuple_get"),
-        args=[im.literal("42", ir.INTEGER_INDEX_BUILTIN), ir.SymRef(id="x")],
+        args=[im.literal("42", builtins.INTEGER_INDEX_BUILTIN), ir.SymRef(id="x")],
     )
     actual = pparse(testee)
     assert actual == expected

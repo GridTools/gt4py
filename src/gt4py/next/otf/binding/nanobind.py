@@ -14,7 +14,7 @@ from typing import Any, Sequence, TypeVar, Union
 
 import gt4py.eve as eve
 from gt4py.eve.codegen import JinjaTemplate as as_jinja, TemplatedGenerator
-from gt4py.next.otf import languages, stages, workflow
+from gt4py.next.otf import cpp_utils, languages, stages, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
 from gt4py.next.type_system import type_specifications as ts
 
@@ -88,13 +88,13 @@ def _type_string(type_: ts.TypeSpec) -> str:
         ndims = len(type_.dims)
         # cannot be ListType: the concept is represented as Field with local Dimension in this interface
         assert isinstance(type_.dtype, ts.ScalarType)
-        dtype = cpp_interface.render_scalar_type(type_.dtype)
+        dtype = cpp_utils.pytype_to_cpptype(type_.dtype)
         shape = f"nanobind::shape<{', '.join(['gridtools::nanobind::dynamic_size'] * ndims)}>"
         buffer_t = f"nanobind::ndarray<{dtype}, {shape}>"
         origin_t = f"std::tuple<{', '.join(['ptrdiff_t'] * ndims)}>"
         return f"std::pair<{buffer_t}, {origin_t}>"
     elif isinstance(type_, ts.ScalarType):
-        return cpp_interface.render_scalar_type(type_)
+        return cpp_utils.pytype_to_cpptype(type_)
     else:
         raise ValueError(f"Type '{type_}' is not supported in nanobind interfaces.")
 

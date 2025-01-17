@@ -9,7 +9,7 @@
 import numpy as np
 
 import gt4py.next as gtx
-from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator import builtins, ir as itir
 
 
 Vertex = gtx.Dimension("Vertex")
@@ -46,7 +46,7 @@ c2e_arr = np.array(
         [7, 17, 1, 16],
         [8, 15, 2, 17],
     ],
-    dtype=np.dtype(itir.INTEGER_INDEX_BUILTIN),
+    dtype=np.dtype(builtins.INTEGER_INDEX_BUILTIN),
 )
 
 c2e_conn = gtx.as_connectivity(domain={Cell: 9, C2EDim: 4}, codomain=Edge, data=c2e_arr)
@@ -63,7 +63,7 @@ v2v_arr = np.array(
         [8, 1, 6, 4],
         [6, 2, 7, 5],
     ],
-    dtype=np.dtype(itir.INTEGER_INDEX_BUILTIN),
+    dtype=np.dtype(builtins.INTEGER_INDEX_BUILTIN),
 )
 
 v2v_conn = gtx.as_connectivity(domain={Vertex: 9, V2VDim: 4}, codomain=Vertex, data=v2v_arr)
@@ -89,7 +89,7 @@ e2v_arr = np.array(
         [7, 1],
         [8, 2],
     ],
-    dtype=np.dtype(itir.INTEGER_INDEX_BUILTIN),
+    dtype=np.dtype(builtins.INTEGER_INDEX_BUILTIN),
 )
 
 e2v_conn = gtx.as_connectivity(domain={Edge: 18, E2VDim: 2}, codomain=Vertex, data=e2v_arr)
@@ -107,7 +107,7 @@ v2e_arr = np.array(
         [7, 13, 6, 16],
         [8, 14, 7, 17],
     ],
-    dtype=np.dtype(itir.INTEGER_INDEX_BUILTIN),
+    dtype=np.dtype(builtins.INTEGER_INDEX_BUILTIN),
 )
 
 v2e_conn = gtx.as_connectivity(domain={Vertex: 9, V2EDim: 4}, codomain=Edge, data=v2e_arr)

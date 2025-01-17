@@ -9,7 +9,7 @@
 from typing import Optional
 
 from gt4py.next import common
-from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import global_tmps, infer_domain
 from gt4py.next.iterator.type_system import inference as type_inference
@@ -19,7 +19,7 @@ from gt4py.next.type_system import type_specifications as ts
 IDim = common.Dimension(value="IDim")
 JDim = common.Dimension(value="JDim")
 KDim = common.Dimension(value="KDim", kind=common.DimensionKind.VERTICAL)
-index_type = ts.ScalarType(kind=getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper()))
+index_type = ts.ScalarType(kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper()))
 float_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
 i_field_type = ts.FieldType(dims=[IDim], dtype=float_type)
 index_field_type_factory = lambda dim: ts.FieldType(dims=[dim], dtype=index_type)

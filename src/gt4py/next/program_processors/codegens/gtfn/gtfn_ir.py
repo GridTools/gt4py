@@ -13,7 +13,7 @@ from typing import Callable, ClassVar, Optional, Union
 from gt4py.eve import Coerced, SymbolName, datamodels
 from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from gt4py.next import common
-from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator import builtins
 from gt4py.next.program_processors.codegens.gtfn.gtfn_im_ir import ImperativeFunctionDefinition
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_common import Expr, Node, Sym, SymRef
 
@@ -230,8 +230,8 @@ GTFN_BUILTINS = [
     "reduce",
     "index",
 ]
-ARITHMETIC_BUILTINS = itir.ARITHMETIC_BUILTINS
-TYPEBUILTINS = itir.TYPEBUILTINS
+ARITHMETIC_BUILTINS = builtins.ARITHMETIC_BUILTINS
+TYPEBUILTINS = builtins.TYPE_BUILTINS
 
 BUILTINS = {*GTFN_BUILTINS, *ARITHMETIC_BUILTINS, *TYPEBUILTINS}
 
