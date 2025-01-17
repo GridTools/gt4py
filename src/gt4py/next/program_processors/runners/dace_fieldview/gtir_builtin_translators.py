@@ -275,7 +275,8 @@ def _create_field_operator_impl(
     map_exit: dace.nodes.MapExit,
 ) -> FieldopData:
     """
-    Helper method to allocate a temporary array that stores one field computed by a field operator.
+    Helper method to allocate a temporary array that stores one field computed
+    by a field operator.
 
     This method is called by `_create_field_operator()`.
 
@@ -289,8 +290,8 @@ def _create_field_operator_impl(
         map_exit: The `MapExit` node of the field operator map scope.
 
     Returns:
-        The field data descriptor, which includes the field access node in the given `state`
-        and the field domain offset.
+        The field data descriptor, which includes the field access node in the
+        given `state` and the field domain offset.
     """
     dataflow_output_desc = output_edge.result.dc_node.desc(sdfg)
 
@@ -365,8 +366,8 @@ def _create_field_operator(
         output_tree: A tree representation of the dataflow output data.
 
     Returns:
-        The descriptor of the field operator result, which can be either a single field
-        or a tuple fields.
+        The descriptor of the field operator result, which can be either a single
+        field or a tuple fields.
     """
 
     # create map range corresponding to the field operator domain
