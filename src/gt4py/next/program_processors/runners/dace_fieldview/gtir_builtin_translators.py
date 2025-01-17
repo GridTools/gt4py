@@ -38,15 +38,15 @@ if TYPE_CHECKING:
 
 
 def _get_domain_indices(
-    dims: Sequence[gtx_common.Dimension], offsets: Optional[Sequence[dace.symbolic.SymExpr]] = None
+    dims: Sequence[gtx_common.Dimension], origin: Optional[Sequence[dace.symbolic.SymExpr]] = None
 ) -> dace_subsets.Indices:
     """
     Helper function to construct the list of indices for a field domain, applying
-    an optional offset in each dimension as start index.
+    an optional origin in each dimension as start index.
 
     Args:
         dims: The field dimensions.
-        offsets: The range start index in each dimension.
+        origin: The domain start index in each dimension.
 
     Returns:
         A list of indices for field access in dace arrays. As this list is returned
@@ -54,13 +54,13 @@ def _get_domain_indices(
         being used in memlet subset because ranges are better supported throughout DaCe.
     """
     index_variables = [dace.symbolic.SymExpr(dace_gtir_utils.get_map_variable(dim)) for dim in dims]
-    if offsets is None:
+    if origin is None:
         return dace_subsets.Indices(index_variables)
     else:
         return dace_subsets.Indices(
             [
-                index - offset if offset != 0 else index
-                for index, offset in zip(index_variables, offsets, strict=True)
+                index - start_index
+                for index, start_index in zip(index_variables, origin, strict=True)
             ]
         )
 
@@ -77,18 +77,18 @@ class FieldopData:
     Args:
         dc_node: DaCe access node to the data storage.
         gt_type: GT4Py type definition, which includes the field domain information.
-        offset: List of index offsets, in each dimension, when the dimension range
-            does not start from zero; assume zero offset, if not set.
+        origin: List of start indices, in each dimension, when the dimension range
+            does not start from zero; assume zero origin, if not set.
     """
 
     dc_node: dace.nodes.AccessNode
     gt_type: ts.FieldType | ts.ScalarType
-    offset: Optional[list[dace.symbolic.SymExpr]]
+    origin: Optional[list[dace.symbolic.SymExpr]]
 
     def make_copy(self, data_node: dace.nodes.AccessNode) -> FieldopData:
         """Create a copy of this data descriptor with a different access node."""
         assert data_node != self.dc_node
-        return FieldopData(data_node, self.gt_type, self.offset)
+        return FieldopData(data_node, self.gt_type, self.origin)
 
     def get_local_view(
         self, domain: FieldopDomain
@@ -106,8 +106,8 @@ class FieldopData:
                 dim: gtir_dataflow.SymbolExpr(index, INDEX_DTYPE)
                 for dim, index in zip(domain_dims, domain_indices)
             }
-            field_domain = [
-                (dim, dace.symbolic.SymExpr(0) if self.offset is None else self.offset[i])
+            field_origin = [
+                (dim, dace.symbolic.SymExpr(0) if self.origin is None else self.origin[i])
                 for i, dim in enumerate(self.gt_type.dims)
             ]
             local_dims = [
@@ -115,20 +115,20 @@ class FieldopData:
             ]
             if len(local_dims) == 0:
                 return gtir_dataflow.IteratorExpr(
-                    self.dc_node, self.gt_type.dtype, field_domain, it_indices
+                    self.dc_node, self.gt_type.dtype, field_origin, it_indices
                 )
 
             elif len(local_dims) == 1:
                 field_dtype = ts.ListType(
                     element_type=self.gt_type.dtype, offset_type=local_dims[0]
                 )
-                field_domain = [
-                    (dim, offset)
-                    for dim, offset in field_domain
+                field_origin = [
+                    (dim, start_index)
+                    for dim, start_index in field_origin
                     if dim.kind != gtx_common.DimensionKind.LOCAL
                 ]
                 return gtir_dataflow.IteratorExpr(
-                    self.dc_node, field_dtype, field_domain, it_indices
+                    self.dc_node, field_dtype, field_origin, it_indices
                 )
 
             else:
@@ -268,7 +268,7 @@ def _get_field_layout(
     Returns:
         A tuple of three lists containing:
             - the domain dimensions
-            - the domain offset in each dimension
+            - the domain origin, that is the start indices in all dimensions
             - the domain size in each dimension
     """
     domain_dims, domain_lbs, domain_ubs = zip(*domain)
@@ -301,18 +301,18 @@ def _create_field_operator_impl(
 
     Returns:
         The field data descriptor, which includes the field access node in the given `state`
-        and the field domain offset.
+        and the field domain origin.
     """
     dataflow_output_desc = output_edge.result.dc_node.desc(sdfg)
 
-    domain_dims, domain_offset, domain_shape = _get_field_layout(domain)
-    domain_indices = _get_domain_indices(domain_dims, domain_offset)
+    domain_dims, domain_origin, domain_shape = _get_field_layout(domain)
+    domain_indices = _get_domain_indices(domain_dims, domain_origin)
     domain_subset = dace_subsets.Range.from_indices(domain_indices)
 
     if isinstance(output_edge.result.gt_dtype, ts.ScalarType):
         assert output_edge.result.gt_dtype == output_type.dtype
         field_dtype = output_edge.result.gt_dtype
-        field_dims, field_shape, field_offset = (domain_dims, domain_shape, domain_offset)
+        field_dims, field_shape, field_origin = (domain_dims, domain_shape, domain_origin)
         assert isinstance(dataflow_output_desc, dace.data.Scalar)
         field_subset = domain_subset
     else:
@@ -326,7 +326,7 @@ def _create_field_operator_impl(
         assert output_edge.result.gt_dtype.offset_type is not None
         field_dims = [*domain_dims, output_edge.result.gt_dtype.offset_type]
         field_shape = [*domain_shape, dataflow_output_desc.shape[0]]
-        field_offset = [*domain_offset, dataflow_output_desc.offset[0]]
+        field_origin = [*domain_origin, dataflow_output_desc.offset[0]]
         field_subset = domain_subset + dace_subsets.Range.from_array(dataflow_output_desc)
 
     # allocate local temporary storage
@@ -340,7 +340,7 @@ def _create_field_operator_impl(
     return FieldopData(
         field_node,
         ts.FieldType(field_dims, field_dtype),
-        offset=(field_offset if set(field_offset) != {0} else None),
+        origin=(field_origin if set(field_origin) != {0} else None),
     )
 
 
@@ -359,14 +359,14 @@ def _create_scan_field_operator_impl(
     """
     dataflow_output_desc = output_edge.result.dc_node.desc(sdfg)
 
-    domain_dims, domain_offset, domain_shape = _get_field_layout(domain)
-    domain_indices = _get_domain_indices(domain_dims, domain_offset)
+    domain_dims, domain_origin, domain_shape = _get_field_layout(domain)
+    domain_indices = _get_domain_indices(domain_dims, domain_origin)
     domain_subset = dace_subsets.Range.from_indices(domain_indices)
 
     if isinstance(output_edge.result.gt_dtype, ts.ScalarType):
         assert output_edge.result.gt_dtype == output_type.dtype
         field_dtype = output_edge.result.gt_dtype
-        field_dims, field_shape, field_offset = (domain_dims, domain_shape, domain_offset)
+        field_dims, field_shape, field_origin = (domain_dims, domain_shape, domain_origin)
         # the scan field operator produces a 1D vertical field
         assert isinstance(dataflow_output_desc, dace.data.Array)
         assert len(dataflow_output_desc.shape) == 1
@@ -396,7 +396,7 @@ def _create_scan_field_operator_impl(
     return FieldopData(
         field_node,
         ts.FieldType(field_dims, field_dtype),
-        offset=(field_offset if set(field_offset) != {0} else None),
+        origin=(field_origin if set(field_origin) != {0} else None),
     )
 
 
@@ -731,6 +731,16 @@ def translate_index(
     )
 
 
+def _make_field(
+    data_node: dace.nodes.AccessNode, data_type: ts.FieldType | ts.ScalarType
+) -> FieldopData:
+    if isinstance(data_type, ts.FieldType):
+        domain_origin = dace_utils.get_symbolic_origin(data_node.data, data_type)
+    else:
+        domain_origin = None
+    return FieldopData(data_node, data_type, domain_origin)
+
+
 def _get_data_nodes(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
@@ -740,7 +750,7 @@ def _get_data_nodes(
 ) -> FieldopResult:
     if isinstance(data_type, ts.FieldType):
         data_node = state.add_access(data_name)
-        return sdfg_builder.make_field(data_node, data_type)
+        return _make_field(data_node, data_type)
 
     elif isinstance(data_type, ts.ScalarType):
         if data_name in sdfg.symbols:
@@ -749,7 +759,7 @@ def _get_data_nodes(
             )
         else:
             data_node = state.add_access(data_name)
-        return sdfg_builder.make_field(data_node, data_type)
+        return _make_field(data_node, data_type)
 
     elif isinstance(data_type, ts.TupleType):
         symbol_tree = dace_gtir_utils.make_symbol_tree(data_name, data_type)
@@ -805,7 +815,7 @@ def translate_literal(
     data_type = node.type
     data_node = _get_symbolic_value(sdfg, state, sdfg_builder, node.value, data_type)
 
-    return FieldopData(data_node, data_type, offset=None)
+    return FieldopData(data_node, data_type, origin=None)
 
 
 def translate_make_tuple(
@@ -927,7 +937,7 @@ def translate_scalar_expr(
         dace.Memlet(data=temp_name, subset="0"),
     )
 
-    return FieldopData(temp_node, node.type, offset=None)
+    return FieldopData(temp_node, node.type, origin=None)
 
 
 def translate_scan(
@@ -1008,11 +1018,39 @@ def translate_scan(
 
     # parse the dataflow input and output symbols
     lambda_flat_args: dict[str, FieldopData] = {}
-    lambda_field_offsets: dict[str, Optional[list[dace.symbolic.SymExpr]]] = {}
+    nsdfg_symbols_mapping: dict[str, dace.symbolic.SymExpr] = {}
     for param, arg in lambda_args_mapping.items():
         tuple_fields = flatten_tuples(param, arg)
-        lambda_field_offsets |= {tsym: tfield.offset for tsym, tfield in tuple_fields}
         lambda_flat_args |= dict(tuple_fields)
+        for tsym, tfield in tuple_fields:
+            if isinstance(tfield.gt_type, ts.FieldType):
+                nsdfg_symbols_mapping |= (
+                    {
+                        dace_utils.range_start_symbol(tsym, i): 0
+                        if arg.origin is None
+                        else arg.origin[i]
+                        for i in range(len(tfield.gt_type.dims))
+                    }
+                    | {
+                        dace_utils.range_stop_symbol(tsym, i): dace_utils.range_stop_symbol(
+                            arg.dc_node.data, i
+                        )
+                        for i, in enumerate(len(tfield.gt_type.dims))
+                    }
+                    | {
+                        dace_utils.field_stride_symbol_name(
+                            tsym, i
+                        ): dace_utils.field_stride_symbol_name(arg.dc_node.data, i)
+                        for i in range(len(tfield.gt_type.dims))
+                    }
+                )
+                if isinstance(tfield.gt_type.dtype, ts.ListType):
+                    local_dim_index = len(tfield.gt_type.dims)
+                    nsdfg_symbols_mapping |= {
+                        dace_utils.field_stride_symbol_name(
+                            tsym, local_dim_index
+                        ): 0
+                    }
     if isinstance(scan_carry_type, ts.TupleType):
         lambda_flat_outs = {
             str(sym.id): sym.type
@@ -1026,13 +1064,11 @@ def translate_scan(
     # the lambda expression, i.e. body of the scan, will be created inside a nested SDFG.
     nsdfg = dace.SDFG(sdfg_builder.unique_nsdfg_name(sdfg, "scan"))
     nsdfg.debuginfo = dace_utils.debug_info(node, default=sdfg.debuginfo)
-    lambda_translator = sdfg_builder.nested_context(
-        stencil_expr, nsdfg, lambda_symbols, lambda_field_offsets
-    )
+    lambda_translator = sdfg_builder.nested_context(stencil_expr, nsdfg, lambda_symbols)
 
     # extract the scan loop range
     scan_loop_var = dace_gtir_utils.get_map_variable(scan_dim)
-    _, scan_output_offset, scan_output_shape = _get_field_layout(scan_domain)
+    _, scan_output_origin, scan_output_shape = _get_field_layout(scan_domain)
 
     # create a loop region for lambda call over the scan dimension
     if scan_forward:
@@ -1131,7 +1167,7 @@ def translate_scan(
         )
 
         output_type = ts.FieldType(dims=[scan_dim], dtype=scan_result.gt_dtype)
-        return FieldopData(output_node, output_type, scan_output_offset)
+        return FieldopData(output_node, output_type, scan_output_origin)
 
     if isinstance(result, tuple):
         assert isinstance(scan_carry_input, tuple)
@@ -1152,28 +1188,17 @@ def translate_scan(
         ):
             compute_state.remove_node(data_node)
 
-    # build the mapping of symbols from nested SDFG to parent SDFG
-    nsdfg_symbols_mapping = {str(sym): sym for sym in nsdfg.free_symbols}
-    for inner, arg in lambda_flat_args.items():
-        inner_desc = nsdfg.data(inner)
-        outer_desc = arg.dc_node.desc(sdfg)
-        nsdfg_symbols_mapping |= {
-            str(nested_symbol): parent_symbol
-            for nested_symbol, parent_symbol in zip(
-                [*inner_desc.shape, *inner_desc.strides],
-                [*outer_desc.shape, *outer_desc.strides],
-                strict=True,
-            )
-            if isinstance(nested_symbol, dace.symbol)
-        }
-
     # the scan nested SDFG is ready, now we need to instantiate it inside the map implementing the field operator
+    nsdfg_symbols_mapping = {
+        str(sym): sym for sym in nsdfg.free_symbols
+    } | nsdfg_symbols_mapping
     nsdfg_node = state.add_nested_sdfg(
         nsdfg,
         sdfg,
         inputs=set(lambda_flat_args.keys()),
         outputs=set(lambda_flat_outs.keys()),
         symbol_mapping=nsdfg_symbols_mapping,
+        debuginfo=dace_utils.debug_info(node, default=sdfg.debuginfo),
     )
 
     input_edges = []
