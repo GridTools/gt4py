@@ -144,7 +144,6 @@ def _create_field_operator_impl(
         )
 
     # allocate local temporary storage
-    assert dataflow_output_desc.dtype == dace_utils.as_dace_type(field_dtype)
     field_name, field_desc = sdfg_builder.add_temp_array(
         sdfg, field_shape, dataflow_output_desc.dtype
     )
