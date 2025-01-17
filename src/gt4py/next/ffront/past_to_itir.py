@@ -365,7 +365,10 @@ class ProgramLowering(
                     dim_stop,
                 )
                 upper = self._visit_slice_bound(
-                    slices[dim_i].upper if slices else None, dim_stop, dim_start, dim_stop
+                    slices[dim_i].upper if slices else None,
+                    dim_stop,
+                    dim_start,
+                    dim_stop,
                 )
 
             if dim.kind == common.DimensionKind.LOCAL:

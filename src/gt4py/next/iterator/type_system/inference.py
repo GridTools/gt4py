@@ -275,8 +275,8 @@ def _get_dimensions_from_types(types) -> dict[str, common.Dimension]:
         if isinstance(obj, common.Dimension):
             yield obj
         elif isinstance(obj, ts.TypeSpec):
-            for field in dataclasses.fields(obj.__class__):
-                yield from _get_dimensions(getattr(obj, field.name))
+            for field in obj.__datamodel_fields__.keys():
+                yield from _get_dimensions(getattr(obj, field))
         elif isinstance(obj, collections.abc.Mapping):
             for el in obj.values():
                 yield from _get_dimensions(el)
@@ -292,7 +292,9 @@ def _type_synthesizer_from_function_type(fun_type: ts.FunctionType):
         assert type_info.accepts_args(fun_type, with_args=list(args), with_kwargs=kwargs)
         return fun_type.returns
 
-    return type_synthesizer
+    return ObservableTypeSynthesizer(
+        type_synthesizer=type_synthesizer, store_inferred_type_in_node=False
+    )
 
 
 class SanitizeTypes(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
@@ -312,6 +314,15 @@ class SanitizeTypes(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
 T = TypeVar("T", bound=itir.Node)
 
+_INITIAL_CONTEXT = {
+    name: ObservableTypeSynthesizer(
+        type_synthesizer=type_synthesizer.builtin_type_synthesizers[name],
+        # builtin functions are polymorphic
+        store_inferred_type_in_node=False,
+    )
+    for name in type_synthesizer.builtin_type_synthesizers.keys()
+}
+
 
 @dataclasses.dataclass
 class ITIRTypeInference(eve.NodeTranslator):
@@ -323,11 +334,13 @@ class ITIRTypeInference(eve.NodeTranslator):
 
     PRESERVED_ANNEX_ATTRS = ("domain",)
 
-    offset_provider_type: common.OffsetProviderType
+    offset_provider_type: Optional[common.OffsetProviderType]
     #: Mapping from a dimension name to the actual dimension instance.
-    dimensions: dict[str, common.Dimension]
+    dimensions: Optional[dict[str, common.Dimension]]
     #: Allow sym refs to symbols that have not been declared. Mostly used in testing.
     allow_undeclared_symbols: bool
+    #: Reinference-mode skipping already typed nodes.
+    reinfer: bool
 
     @classmethod
     def apply(
@@ -420,24 +433,45 @@ class ITIRTypeInference(eve.NodeTranslator):
                 )
             ),
             allow_undeclared_symbols=allow_undeclared_symbols,
+            reinfer=False,
         )
         if not inplace:
             node = copy.deepcopy(node)
-        instance.visit(
-            node,
-            ctx={
-                name: ObservableTypeSynthesizer(
-                    type_synthesizer=type_synthesizer.builtin_type_synthesizers[name],
-                    # builtin functions are polymorphic
-                    store_inferred_type_in_node=False,
-                )
-                for name in type_synthesizer.builtin_type_synthesizers.keys()
-            },
+        instance.visit(node, ctx=_INITIAL_CONTEXT)
+        return node
+
+    @classmethod
+    def apply_reinfer(cls, node: T) -> T:
+        """
+        Given a partially typed node infer the type of ``node`` and its sub-nodes.
+
+        Contrary to the regular inference, this method does not descend into already typed sub-nodes
+        and can be used as a lightweight way to restore type information during a pass.
+
+        Note that this function alters the input node, which is usually desired, and more
+        performant.
+
+        Arguments:
+            node: The :class:`itir.Node` to infer the types of.
+        """
+        if node.type:  # already inferred
+            return node
+
+        instance = cls(
+            offset_provider_type=None, dimensions=None, allow_undeclared_symbols=True, reinfer=True
         )
+        instance.visit(node, ctx=_INITIAL_CONTEXT)
         return node
 
     def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
+        # we found a node that is typed, do not descend into children
+        if self.reinfer and isinstance(node, itir.Node) and node.type:
+            if isinstance(node.type, ts.FunctionType):
+                return _type_synthesizer_from_function_type(node.type)
+            return node.type
+
         result = super().visit(node, **kwargs)
+
         if isinstance(node, itir.Node):
             if isinstance(result, ts.TypeSpec):
                 if node.type and not isinstance(node.type, ts.DeferredType):
@@ -479,7 +513,7 @@ class ITIRTypeInference(eve.NodeTranslator):
         assert domain.dims != "unknown"
         assert node.dtype
         return type_info.apply_to_primitive_constituents(
-            lambda dtype: ts.FieldType(dims=domain.dims, dtype=dtype),  # type: ignore[arg-type]  # ensured by domain.dims != "unknown" above
+            lambda dtype: ts.FieldType(dims=domain.dims, dtype=dtype),
             node.dtype,
         )
 
@@ -519,19 +553,23 @@ class ITIRTypeInference(eve.NodeTranslator):
                 )
 
     def visit_AxisLiteral(self, node: itir.AxisLiteral, **kwargs) -> ts.DimensionType:
-        assert (
-            node.value in self.dimensions
-        ), f"Dimension {node.value} not present in offset provider."
-        return ts.DimensionType(dim=self.dimensions[node.value])
+        return ts.DimensionType(dim=common.Dimension(value=node.value, kind=node.kind))
 
     # TODO: revisit what we want to do with OffsetLiterals as we already have an Offset type in
     #  the frontend.
-    def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs) -> it_ts.OffsetLiteralType:
+    def visit_OffsetLiteral(
+        self, node: itir.OffsetLiteral, **kwargs
+    ) -> it_ts.OffsetLiteralType | ts.DeferredType:
+        # `self.dimensions` not available in re-inference mode. Skip since we don't care anyway.
+        if self.reinfer:
+            return ts.DeferredType(constraint=it_ts.OffsetLiteralType)
+
         if _is_representable_as_int(node.value):
             return it_ts.OffsetLiteralType(
                 value=ts.ScalarType(kind=getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper()))
             )
         else:
+            assert isinstance(self.dimensions, dict)
             assert isinstance(node.value, str) and node.value in self.dimensions
             return it_ts.OffsetLiteralType(value=self.dimensions[node.value])
 
@@ -608,3 +646,5 @@ class ITIRTypeInference(eve.NodeTranslator):
 
 
 infer = ITIRTypeInference.apply
+
+reinfer = ITIRTypeInference.apply_reinfer

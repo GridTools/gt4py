@@ -149,6 +149,7 @@ def first_vertex_neigh_of_first_edge_neigh_of_cells(in_vertices):
     return deref(shift(E2V, 0)(shift(C2E, 0)(in_vertices)))
 
 
+@pytest.mark.uses_composite_shifts
 def test_first_vertex_neigh_of_first_edge_neigh_of_cells_fencil(program_processor):
     program_processor, validate = program_processor
     inp = vertex_index_field()
@@ -174,6 +175,7 @@ def sparse_stencil(non_sparse, inp):
     return reduce(lambda a, b, c: a + c, 0)(neighbors(V2E, non_sparse), deref(inp))
 
 
+@pytest.mark.uses_reduce_with_lambda
 def test_sparse_input_field(program_processor):
     program_processor, validate = program_processor
 
@@ -196,6 +198,7 @@ def test_sparse_input_field(program_processor):
         assert np.allclose(out.asnumpy(), ref)
 
 
+@pytest.mark.uses_reduce_with_lambda
 def test_sparse_input_field_v2v(program_processor):
     program_processor, validate = program_processor
 
@@ -330,6 +333,7 @@ def lift_stencil(inp):
     return deref(shift(V2V, 2)(lift(deref_stencil)(inp)))
 
 
+@pytest.mark.uses_lift
 def test_lift(program_processor):
     program_processor, validate = program_processor
     inp = vertex_index_field()

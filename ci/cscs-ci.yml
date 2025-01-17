@@ -9,13 +9,6 @@ include:
   PYVERSION_PREFIX: py310
   PYVERSION: 3.10.9
 
-.py39: &py39
-  PYVERSION_PREFIX: py39
-  PYVERSION: 3.9.1
-
-.py38: &py38
-  PYVERSION_PREFIX: py38
-  PYVERSION: 3.8.5
 
 stages:
 - baseimage
@@ -57,40 +50,24 @@ stages:
     CUPY_PACKAGE: cupy-cuda12x
     CUPY_VERSION: 13.3.0
     UBUNTU_VERSION: 22.04
-  # TODO: enable CI job when Todi is back in operational state
-  when: manual
 
-build_py311_baseimage_x86_64:
-  extends: .build_baseimage_x86_64
-  variables:
-    <<: *py311
+# build_py311_baseimage_x86_64:
+#   extends: .build_baseimage_x86_64
+#   variables:
+#     <<: *py311
 build_py311_baseimage_aarch64:
   extends: .build_baseimage_aarch64
   variables:
     <<: *py311
 
-build_py310_baseimage_x86_64:
-  extends: .build_baseimage_x86_64
-  variables:
-    <<: *py310
+# build_py310_baseimage_x86_64:
+#   extends: .build_baseimage_x86_64
+#   variables:
+#     <<: *py310
 build_py310_baseimage_aarch64:
   extends: .build_baseimage_aarch64
   variables:
     <<: *py310
-
-build_py39_baseimage_x86_64:
-  extends: .build_baseimage_x86_64
-  variables:
-    <<: *py39
-build_py39_baseimage_aarch64:
-  extends: .build_baseimage_aarch64
-  variables:
-    <<: *py39
-
-build_py38_baseimage_x86_64:
-  extends: .build_baseimage_x86_64
-  variables:
-    <<: *py38
 
 
 .build_image:
@@ -106,44 +83,27 @@ build_py38_baseimage_x86_64:
 .build_image_aarch64:
   extends: [.container-builder-cscs-gh200, .build_image]
 
-build_py311_image_x86_64:
-  extends: .build_image_x86_64
-  needs: [build_py311_baseimage_x86_64]
-  variables:
-    <<: *py311
+# build_py311_image_x86_64:
+#   extends: .build_image_x86_64
+#   needs: [build_py311_baseimage_x86_64]
+#   variables:
+#     <<: *py311
 build_py311_image_aarch64:
   extends: .build_image_aarch64
   needs: [build_py311_baseimage_aarch64]
   variables:
     <<: *py311
 
-build_py310_image_x86_64:
-  extends: .build_image_x86_64
-  needs: [build_py310_baseimage_x86_64]
-  variables:
-    <<: *py310
+# build_py310_image_x86_64:
+#   extends: .build_image_x86_64
+#   needs: [build_py310_baseimage_x86_64]
+#   variables:
+#     <<: *py310
 build_py310_image_aarch64:
   extends: .build_image_aarch64
   needs: [build_py310_baseimage_aarch64]
   variables:
     <<: *py310
-
-build_py39_image_x86_64:
-  extends: .build_image_x86_64
-  needs: [build_py39_baseimage_x86_64]
-  variables:
-    <<: *py39
-build_py39_image_aarch64:
-  extends: .build_image_aarch64
-  needs: [build_py39_baseimage_aarch64]
-  variables:
-    <<: *py39
-
-build_py38_image_x86_64:
-  extends: .build_image_x86_64
-  needs: [build_py38_baseimage_x86_64]
-  variables:
-    <<: *py38
 
 
 .test_helper:
@@ -171,7 +131,7 @@ build_py38_image_x86_64:
       VARIANT: [-nomesh, -atlas]
       SUBVARIANT: [-cuda11x, -cpu]
 .test_helper_aarch64:
-  extends: [.container-runner-todi-gh200, .test_helper]
+  extends: [.container-runner-daint-gh200, .test_helper]
   parallel:
     matrix:
     - SUBPACKAGE: [cartesian, storage]
@@ -189,41 +149,24 @@ build_py38_image_x86_64:
     # when high test parallelism is used.
     NUM_PROCESSES: 16
 
-test_py311_x86_64:
-  extends: [.test_helper_x86_64]
-  needs: [build_py311_image_x86_64]
-  variables:
-    <<: *py311
+# test_py311_x86_64:
+#   extends: [.test_helper_x86_64]
+#   needs: [build_py311_image_x86_64]
+#   variables:
+#     <<: *py311
 test_py311_aarch64:
   extends: [.test_helper_aarch64]
   needs: [build_py311_image_aarch64]
   variables:
     <<: *py311
 
-test_py310_x86_64:
-  extends: [.test_helper_x86_64]
-  needs: [build_py310_image_x86_64]
-  variables:
-    <<: *py310
+# test_py310_x86_64:
+#   extends: [.test_helper_x86_64]
+#   needs: [build_py310_image_x86_64]
+#   variables:
+#     <<: *py310
 test_py310_aarch64:
   extends: [.test_helper_aarch64]
   needs: [build_py310_image_aarch64]
   variables:
     <<: *py310
-
-test_py39_x86_64:
-  extends: [.test_helper_x86_64]
-  needs: [build_py39_image_x86_64]
-  variables:
-    <<: *py39
-test_py39_aarch64:
-  extends: [.test_helper_aarch64]
-  needs: [build_py39_image_aarch64]
-  variables:
-    <<: *py39
-
-test_py38_x86_64:
-  extends: [.test_helper_x86_64]
-  needs: [build_py38_image_x86_64]
-  variables:
-    <<: *py38

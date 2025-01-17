@@ -80,7 +80,9 @@ class Program:
 
     definition_stage: ffront_stages.ProgramDefinition
     backend: Optional[next_backend.Backend]
-    connectivities: Optional[common.OffsetProviderType] = None
+    connectivities: Optional[common.OffsetProvider] = (
+        None  # TODO(ricoh): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
+    )
 
     @classmethod
     def from_function(
@@ -304,7 +306,7 @@ class FrozenProgram:
 
 
 try:
-    from gt4py.next.program_processors.runners.dace_iterator import Program
+    from gt4py.next.program_processors.runners.dace_fieldview.program import Program
 except ImportError:
     pass
 

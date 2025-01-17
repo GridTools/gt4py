@@ -286,7 +286,7 @@ def test_in_field_arg_with_non_zero_domain_start(cartesian_case, copy_program_de
     )
     inp.ndarray[...] = 42
     out = cases.allocate(cartesian_case, copy_program, "out", sizes={IDim: 10})()
-    ref = out.asnumpy().copy()  # ensure we are not overwriting `out` outside the domain
+    ref = out.asnumpy().copy()  # ensure we are not writing to `out` outside the domain
     ref[1:9] = inp.asnumpy()
 
     cases.verify(cartesian_case, copy_program, inp, out=out, ref=ref)
