@@ -140,15 +140,16 @@ class SDFGBuilder(DataflowBuilder, Protocol):
         global_symbols: dict[str, ts.DataType],
     ) -> SDFGBuilder:
         """
-        Create a new context for lowering of an expression in a nested SDFG.
+        Create an SDFG context to translate a nested expression, indipendent
+        from the current context where the parent expression is being translated.
 
         This method will setup the global symbols, that correspond to the parameters
         of the expression to be lowered, as well as the set of symbolic arguments,
         that is scalar values used in internal domain expressions.
 
         Args:
-            expr: The GTIR expresson to be lowered.
-            sdfg: The SDFG where to lower the expression.
+            expr: The nested expresson to be lowered.
+            sdfg: The SDFG where to lower the nested expression.
             global_symbols: Mapping from symbol name to GTIR data type.
 
         Returns:
