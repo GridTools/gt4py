@@ -422,15 +422,16 @@ UNARY_MATH_FP_BUILTINS = {
     "trunc",
 }
 UNARY_MATH_FP_PREDICATE_BUILTINS = {"isfinite", "isinf", "isnan"}
-BINARY_MATH_NUMBER_BUILTINS = {"minimum", "maximum", "fmod"}
-BINARY_MATH_NUMBER_ADDITIONAL_BUILTINS = {
+BINARY_MATH_NUMBER_BUILTINS = {
     "plus",
     "minus",
     "multiplies",
     "divides",
     "mod",
     "floordiv",  # TODO see https://github.com/GridTools/gt4py/issues/1136
-    *BINARY_MATH_NUMBER_BUILTINS,
+    "minimum",
+    "maximum",
+    "fmod",
 }
 BINARY_MATH_COMPARISON_BUILTINS = {"eq", "less", "greater", "greater_equal", "less_equal", "not_eq"}
 BINARY_LOGICAL_BUILTINS = {"and_", "or_", "xor_"}
@@ -438,7 +439,7 @@ BINARY_LOGICAL_BUILTINS = {"and_", "or_", "xor_"}
 
 #: builtin / dtype used to construct integer indices, like domain bounds
 INTEGER_INDEX_BUILTIN = "int32"
-INTEGER_BUILTINS = {
+INTEGER_TYPE_BUILTINS = {
     "int8",
     "uint8",
     "int16",
@@ -447,25 +448,15 @@ INTEGER_BUILTINS = {
     "uint32",
     "int64",
     "uint64",
-}  # Todo: should we distinguish int and uint?
-FLOATING_POINT_BUILTINS = {"float32", "float64"}
-TYPE_BUILTINS = {*INTEGER_BUILTINS, *FLOATING_POINT_BUILTINS, "bool"}
-
-MATH_BUILTINS = {
-    *UNARY_MATH_NUMBER_BUILTINS,
-    *UNARY_MATH_FP_BUILTINS,
-    *UNARY_MATH_FP_PREDICATE_BUILTINS,
-    *BINARY_MATH_NUMBER_BUILTINS,
-    "power",
-    *TYPE_BUILTINS,
 }
+FLOATING_POINT_TYPE_BUILTINS = {"float32", "float64"}
+TYPE_BUILTINS = {*INTEGER_TYPE_BUILTINS, *FLOATING_POINT_TYPE_BUILTINS, "bool"}
 
 ARITHMETIC_BUILTINS = {
     *UNARY_MATH_NUMBER_BUILTINS,
     *UNARY_LOGICAL_BUILTINS,
     *UNARY_MATH_FP_BUILTINS,
     *UNARY_MATH_FP_PREDICATE_BUILTINS,
-    *BINARY_MATH_NUMBER_ADDITIONAL_BUILTINS,
     "power",
     *BINARY_MATH_COMPARISON_BUILTINS,
     *BINARY_LOGICAL_BUILTINS,

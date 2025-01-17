@@ -15,6 +15,7 @@ import copy
 import dataclasses
 import itertools
 import math
+import operator
 import sys
 import warnings
 
@@ -509,36 +510,6 @@ def named_range(tag: Tag | common.Dimension, start: int, end: int) -> NamedRange
     return (tag, range(start, end))
 
 
-@builtins.minus.register(EMBEDDED)
-def minus(first, second):
-    return first - second
-
-
-@builtins.plus.register(EMBEDDED)
-def plus(first, second):
-    return first + second
-
-
-@builtins.multiplies.register(EMBEDDED)
-def multiplies(first, second):
-    return first * second
-
-
-@builtins.divides.register(EMBEDDED)
-def divides(first, second):
-    return first / second
-
-
-@builtins.floordiv.register(EMBEDDED)
-def floordiv(first, second):
-    return first // second
-
-
-@builtins.mod.register(EMBEDDED)
-def mod(first, second):
-    return first % second
-
-
 @builtins.eq.register(EMBEDDED)
 def eq(first, second):
     return first == second
@@ -597,8 +568,28 @@ def promote_scalars(val: CompositeOfScalarOrField):
         )
 
 
-for math_builtin_name in builtins.MATH_BUILTINS:
-    python_builtins = {"int": int, "float": float, "bool": bool, "str": str}
+for math_builtin_name in builtins.ARITHMETIC_BUILTINS | builtins.TYPE_BUILTINS:
+    python_builtins: dict[str, Callable] = {
+        "int": int,
+        "float": float,
+        "bool": bool,
+        "str": str,
+        "plus": operator.add,
+        "minus": operator.sub,
+        "multiplies": operator.mul,
+        "divides": operator.truediv,
+        "mod": operator.mod,
+        "floordiv": operator.floordiv,
+        "eq": operator.eq,
+        "less": operator.lt,
+        "greater": operator.gt,
+        "greater_equal": operator.ge,
+        "less_equal": operator.le,
+        "not_eq": operator.ne,
+        "and_": operator.and_,
+        "or_": operator.or_,
+        "xor": operator.xor,
+    }
     decorator = getattr(builtins, math_builtin_name).register(EMBEDDED)
     impl: Callable
     if math_builtin_name == "gamma":

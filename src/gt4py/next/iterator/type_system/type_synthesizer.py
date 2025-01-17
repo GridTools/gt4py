@@ -92,7 +92,7 @@ def power(base: ts.ScalarType, exponent: ts.ScalarType) -> ts.ScalarType:
     return base
 
 
-@_register_builtin_type_synthesizer(fun_names=builtins.BINARY_MATH_NUMBER_ADDITIONAL_BUILTINS)
+@_register_builtin_type_synthesizer(fun_names=builtins.BINARY_MATH_NUMBER_BUILTINS)
 def _(lhs: ts.ScalarType, rhs: ts.ScalarType) -> ts.ScalarType:
     if isinstance(lhs, ts.DeferredType):
         return rhs
