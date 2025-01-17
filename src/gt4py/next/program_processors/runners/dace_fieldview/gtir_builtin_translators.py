@@ -304,13 +304,15 @@ def _create_field_operator_impl(
             raise TypeError(
                 f"Type mismatch, expected {output_type.dtype} got {output_edge.result.gt_dtype}."
             )
+        field_dtype = output_edge.result.gt_dtype
         assert isinstance(dataflow_output_desc, dace.data.Scalar)
     else:
         assert isinstance(output_type.dtype, ts.ListType)
         assert isinstance(output_edge.result.gt_dtype.element_type, ts.ScalarType)
-        if output_edge.result.gt_dtype.element_type != output_type.dtype.element_type:
+        field_dtype = output_edge.result.gt_dtype.element_type
+        if field_dtype != output_type.dtype.element_type:
             raise TypeError(
-                f"Type mismatch, expected {output_type.dtype.element_type} got {output_edge.result.gt_dtype.element_type}."
+                f"Type mismatch, expected {output_type.dtype.element_type} got {field_dtype}."
             )
         assert isinstance(dataflow_output_desc, dace.data.Array)
         assert len(dataflow_output_desc.shape) == 1
@@ -320,6 +322,7 @@ def _create_field_operator_impl(
         field_subset = field_subset + dace_subsets.Range.from_array(dataflow_output_desc)
 
     # allocate local temporary storage
+    assert dataflow_output_desc.dtype == dace_utils.as_dace_type(field_dtype)
     field_name, _ = sdfg_builder.add_temp_array(sdfg, field_shape, dataflow_output_desc.dtype)
     field_node = state.add_access(field_name)
 
