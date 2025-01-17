@@ -998,7 +998,7 @@ def test_domain(cartesian_case):
     a = cases.allocate(cartesian_case, program_domain, "a")()
     out = cases.allocate(cartesian_case, program_domain, "out")()
 
-    ref = out.asnumpy().copy()  # ensure we are not overwriting out outside of the domain
+    ref = out.asnumpy().copy()  # ensure we are not writing to out outside the domain
     ref[1:9] = a.asnumpy()[1:9] * 2
 
     cases.verify(cartesian_case, program_domain, a, out, inout=out, ref=ref)
