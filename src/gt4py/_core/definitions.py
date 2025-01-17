@@ -73,7 +73,7 @@ BOOL_TYPES: Final[Tuple[type, ...]] = cast(
 )
 
 
-IntScalar: TypeAlias = Union[int8, int16, int32, int64, int]
+IntScalar: TypeAlias = Union[int8, int16, int32, int64, np.longlong, int]
 IntT = TypeVar("IntT", bound=IntScalar)
 INT_TYPES: Final[Tuple[type, ...]] = cast(
     Tuple[type, ...],
