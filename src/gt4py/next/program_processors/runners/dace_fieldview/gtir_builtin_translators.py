@@ -111,31 +111,10 @@ class FieldopData:
                 (dim, dace.symbolic.SymExpr(0) if self.offset is None else self.offset[i])
                 for i, dim in enumerate(self.gt_type.dims)
             ]
-            local_dims = [
-                dim for dim in self.gt_type.dims if dim.kind == gtx_common.DimensionKind.LOCAL
-            ]
-            if len(local_dims) == 0:
-                return gtir_dataflow.IteratorExpr(
-                    self.dc_node, self.gt_type.dtype, field_domain, it_indices
-                )
-
-            elif len(local_dims) == 1:
-                field_dtype = ts.ListType(
-                    element_type=self.gt_type.dtype, offset_type=local_dims[0]
-                )
-                field_domain = [
-                    (dim, offset)
-                    for dim, offset in field_domain
-                    if dim.kind != gtx_common.DimensionKind.LOCAL
-                ]
-                return gtir_dataflow.IteratorExpr(
-                    self.dc_node, field_dtype, field_domain, it_indices
-                )
-
-            else:
-                raise ValueError(
-                    f"Unexpected data field {self.dc_node.data} with more than one local dimension."
-                )
+            assert all(dim != gtx_common.DimensionKind.LOCAL for dim in self.gt_type.dims)
+            return gtir_dataflow.IteratorExpr(
+                self.dc_node, self.gt_type.dtype, field_domain, it_indices
+            )
 
         raise NotImplementedError(f"Node type {type(self.gt_type)} not supported.")
 

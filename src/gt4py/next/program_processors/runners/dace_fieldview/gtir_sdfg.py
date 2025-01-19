@@ -234,11 +234,30 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     def make_field(
         self, data_node: dace.nodes.AccessNode, data_type: ts.FieldType | ts.ScalarType
     ) -> gtir_builtin_translators.FieldopData:
-        if isinstance(data_type, ts.FieldType):
-            domain_offset = self.field_offsets.get(data_node.data, None)
+        if isinstance(data_type, ts.ScalarType):
+            return gtir_builtin_translators.FieldopData(data_node, data_type, offset=None)
+        domain_offset = self.field_offsets.get(data_node.data, None)
+        local_dims = [dim for dim in data_type.dims if dim.kind == gtx_common.DimensionKind.LOCAL]
+        if len(local_dims) == 0:
+            # do nothing: the field domain consists of all global dimensions
+            field_type = data_type
+        elif len(local_dims) == 1:
+            local_dim = local_dims[0]
+            local_dim_index = data_type.dims.index(local_dim)
+            # the local dimension is converted into `ListType` data element
+            if not isinstance(data_type.dtype, ts.ScalarType):
+                raise ValueError(f"Invalid field type {data_type}.")
+            if local_dim_index != (len(data_type.dims) - 1):
+                raise ValueError(f"Invalid field domaoin with local dimension {data_type.dims}.")
+            if local_dim.value not in self.offset_provider_type:
+                raise ValueError(
+                    f"The provided local dimension {local_dim} does not match any offset provider type."
+                )
+            local_type = ts.ListType(element_type=data_type.dtype, offset_type=local_dim)
+            field_type = ts.FieldType(dims=data_type.dims[:local_dim_index], dtype=local_type)
         else:
-            domain_offset = None
-        return gtir_builtin_translators.FieldopData(data_node, data_type, domain_offset)
+            raise NotImplementedError("Fields with multiple local dimensions are not supported.")
+        return gtir_builtin_translators.FieldopData(data_node, field_type, domain_offset)
 
     def get_symbol_type(self, symbol_name: str) -> ts.DataType:
         return self.global_symbols[symbol_name]
