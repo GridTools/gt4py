@@ -521,7 +521,6 @@ class DaCeIRBuilder(eve.NodeTranslator):
         self,
         node: oir.VerticalLoopSection,
         *,
-        loop_order,
         iteration_ctx: DaCeIRBuilder.IterationContext,
         global_ctx: DaCeIRBuilder.GlobalContext,
         symbol_collector: DaCeIRBuilder.SymbolCollector,
@@ -545,7 +544,6 @@ class DaCeIRBuilder(eve.NodeTranslator):
             iteration_ctx=iteration_ctx,
             global_ctx=global_ctx,
             symbol_collector=symbol_collector,
-            loop_order=loop_order,
             k_interval=node.interval,
             **kwargs,
         )
@@ -838,7 +836,6 @@ class DaCeIRBuilder(eve.NodeTranslator):
         sections = flatten_list(
             self.generic_visit(
                 node.sections,
-                loop_order=node.loop_order,
                 global_ctx=global_ctx,
                 iteration_ctx=iteration_ctx,
                 symbol_collector=symbol_collector,
