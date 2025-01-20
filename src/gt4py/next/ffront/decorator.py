@@ -594,6 +594,10 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             if "out" not in kwargs:
                 raise errors.MissingArgumentError(None, "out", True)
             out = kwargs.pop("out")
+            if "domain" in kwargs:
+                domain = common.domain(kwargs.pop("domain"))
+                out = out[domain]
+
             args, kwargs = type_info.canonicalize_arguments(
                 self.foast_stage.foast_node.type, args, kwargs
             )

@@ -111,31 +111,10 @@ class FieldopData:
                 (dim, dace.symbolic.SymExpr(0) if self.origin is None else self.origin[i])
                 for i, dim in enumerate(self.gt_type.dims)
             ]
-            local_dims = [
-                dim for dim in self.gt_type.dims if dim.kind == gtx_common.DimensionKind.LOCAL
-            ]
-            if len(local_dims) == 0:
-                return gtir_dataflow.IteratorExpr(
-                    self.dc_node, self.gt_type.dtype, field_origin, it_indices
-                )
-
-            elif len(local_dims) == 1:
-                field_dtype = ts.ListType(
-                    element_type=self.gt_type.dtype, offset_type=local_dims[0]
-                )
-                field_origin = [
-                    (dim, start_index)
-                    for dim, start_index in field_origin
-                    if dim.kind != gtx_common.DimensionKind.LOCAL
-                ]
-                return gtir_dataflow.IteratorExpr(
-                    self.dc_node, field_dtype, field_origin, it_indices
-                )
-
-            else:
-                raise ValueError(
-                    f"Unexpected data field {self.dc_node.data} with more than one local dimension."
-                )
+            assert all(dim != gtx_common.DimensionKind.LOCAL for dim in self.gt_type.dims)
+            return gtir_dataflow.IteratorExpr(
+                self.dc_node, self.gt_type.dtype, field_origin, it_indices
+            )
 
         raise NotImplementedError(f"Node type {type(self.gt_type)} not supported.")
 
@@ -637,16 +616,6 @@ def translate_index(
     )
 
 
-def _make_field(
-    data_node: dace.nodes.AccessNode, data_type: ts.FieldType | ts.ScalarType
-) -> FieldopData:
-    if isinstance(data_type, ts.FieldType):
-        domain_origin = dace_utils.get_symbolic_origin(data_node.data, data_type)
-    else:
-        domain_origin = None
-    return FieldopData(data_node, data_type, domain_origin)
-
-
 def _get_data_nodes(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
@@ -656,7 +625,7 @@ def _get_data_nodes(
 ) -> FieldopResult:
     if isinstance(data_type, ts.FieldType):
         data_node = state.add_access(data_name)
-        return _make_field(data_node, data_type)
+        return sdfg_builder.make_field(data_node, data_type)
 
     elif isinstance(data_type, ts.ScalarType):
         if data_name in sdfg.symbols:
@@ -665,7 +634,7 @@ def _get_data_nodes(
             )
         else:
             data_node = state.add_access(data_name)
-        return _make_field(data_node, data_type)
+        return sdfg_builder.make_field(data_node, data_type)
 
     elif isinstance(data_type, ts.TupleType):
         symbol_tree = dace_gtir_utils.make_symbol_tree(data_name, data_type)
