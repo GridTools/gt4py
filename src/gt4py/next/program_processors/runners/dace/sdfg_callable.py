@@ -15,7 +15,7 @@ import numpy as np
 from gt4py._core import definitions as core_defs
 from gt4py.next import common as gtx_common
 
-from . import sdfg_callable_args
+from . import gtir_dace_utils
 
 
 try:
@@ -116,7 +116,7 @@ def get_sdfg_conn_args(
     connectivity_args = {}
     for offset, connectivity in offset_provider.items():
         if gtx_common.is_neighbor_table(connectivity):
-            param = sdfg_callable_args.connectivity_identifier(offset)
+            param = gtir_dace_utils.connectivity_identifier(offset)
             if param in sdfg.arrays:
                 connectivity_args[param] = _ensure_is_on_device(connectivity.ndarray, device)
 

@@ -13,7 +13,7 @@ from dace import properties as dace_properties, transformation as dace_transform
 from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next import common as gtx_common
-from gt4py.next.program_processors.runners.dace import utility as gtx_dace_fieldview_util
+from gt4py.next.program_processors.runners.dace import utils as gtx_dace_utils
 
 
 def gt_set_iteration_order(
@@ -107,7 +107,7 @@ class MapIterationOrder(dace_transformation.SingleStateTransformation):
             self.leading_dims = [
                 leading_dim
                 if isinstance(leading_dim, str)
-                else gtx_dace_fieldview_util.get_map_variable(leading_dim)
+                else gtx_dace_utils.get_map_variable(leading_dim)
                 for leading_dim in leading_dims
             ]
 

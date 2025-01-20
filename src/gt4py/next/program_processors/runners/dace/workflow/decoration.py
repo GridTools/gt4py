@@ -18,8 +18,8 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common, utils as gtx_utils
 from gt4py.next.otf import arguments, stages
 from gt4py.next.program_processors.runners.dace import (
+    gtir_dace_utils,
     sdfg_callable,
-    sdfg_callable_args,
     workflow as dace_worflow,
 )
 
@@ -73,7 +73,7 @@ def convert_args(
                         last_call_args[i] = actype(kwargs[arg_name])
                     else:
                         # shape and strides of arrays are supposed not to change, and can therefore be omitted
-                        assert sdfg_callable_args.is_field_symbol(
+                        assert gtir_dace_utils.is_field_symbol(
                             arg_name
                         ), f"argument '{arg_name}' not found."
 
