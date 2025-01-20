@@ -26,7 +26,7 @@ from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
-from gt4py.next.program_processors.runners import compiled_backend
+from gt4py.next.program_processors.runners import cached_backend
 
 
 # TODO(ricoh): Add support for the whole range of arguments that can be passed to a fencil.
@@ -197,7 +197,7 @@ class GTFNCompileWorkflowFactory(factory.Factory):
     )
 
 
-class GTFNBackendFactory(compiled_backend.CompiledBackendFactory):
+class GTFNBackendFactory(cached_backend.CachedBackendFactory):
     class Meta:
         model = backend.Backend
 
@@ -210,12 +210,6 @@ class GTFNBackendFactory(compiled_backend.CompiledBackendFactory):
             allocator=next_allocators.StandardGPUFieldBufferAllocator(),
             device_type=next_allocators.CUPY_DEVICE or core_defs.DeviceType.CUDA,
             name_device="gpu",
-        )
-        cached = factory.Trait(
-            executor=factory.LazyAttribute(
-                lambda o: workflow.CachedStep(o.otf_workflow, hash_function=o.hash_function)
-            ),
-            name_cached="_cached",
         )
         device_type = core_defs.DeviceType.CPU
         otf_workflow = factory.SubFactory(

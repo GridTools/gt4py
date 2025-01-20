@@ -13,12 +13,11 @@ import factory
 import gt4py.next.allocators as next_allocators
 from gt4py._core import definitions as core_defs
 from gt4py.next import backend
-from gt4py.next.otf import workflow
-from gt4py.next.program_processors.runners import compiled_backend
+from gt4py.next.program_processors.runners import cached_backend
 from gt4py.next.program_processors.runners.dace.workflow.factory import DaCeWorkflowFactory
 
 
-class DaCeFieldviewBackendFactory(compiled_backend.CompiledBackendFactory):
+class DaCeFieldviewBackendFactory(cached_backend.CachedBackendFactory):
     class Meta:
         model = backend.Backend
 
@@ -30,12 +29,6 @@ class DaCeFieldviewBackendFactory(compiled_backend.CompiledBackendFactory):
             allocator=next_allocators.StandardGPUFieldBufferAllocator(),
             device_type=next_allocators.CUPY_DEVICE or core_defs.DeviceType.CUDA,
             name_device="gpu",
-        )
-        cached = factory.Trait(
-            executor=factory.LazyAttribute(
-                lambda o: workflow.CachedStep(o.otf_workflow, hash_function=o.hash_function)
-            ),
-            name_cached="_cached",
         )
         device_type = core_defs.DeviceType.CPU
         otf_workflow = factory.SubFactory(

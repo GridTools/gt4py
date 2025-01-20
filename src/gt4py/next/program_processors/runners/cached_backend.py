@@ -12,7 +12,7 @@ import factory
 
 from gt4py.eve.utils import content_hash
 from gt4py.next import backend
-from gt4py.next.otf import stages
+from gt4py.next.otf import stages, workflow
 
 
 def _compilation_hash(otf_closure: stages.CompilableProgram) -> int:
@@ -33,9 +33,15 @@ def _compilation_hash(otf_closure: stages.CompilableProgram) -> int:
     )
 
 
-class CompiledBackendFactory(factory.Factory):
+class CachedBackendFactory(factory.Factory):
     class Meta:
         model = backend.Backend
 
     class Params:
+        cached = factory.Trait(
+            executor=factory.LazyAttribute(
+                lambda o: workflow.CachedStep(o.otf_workflow, hash_function=o.hash_function)
+            ),
+            name_cached="_cached",
+        )
         hash_function = _compilation_hash
