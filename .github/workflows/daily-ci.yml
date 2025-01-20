@@ -15,7 +15,7 @@ jobs:
   daily-ci:
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11"]
+        python-version: ["3.10", "3.11"]
         tox-module-factor: ["cartesian", "eve", "next", "storage"]
         os: ["ubuntu-latest"]
         requirements-file: ["requirements-dev.txt", "min-requirements-test.txt", "min-extra-requirements-test.txt"]
@@ -34,13 +34,6 @@ jobs:
       shell: bash
       run: |
         sudo apt install libboost-dev
-        wget https://boostorg.jfrog.io/artifactory/main/release/1.76.0/source/boost_1_76_0.tar.gz
-        echo 7bd7ddceec1a1dfdcbdb3e609b60d01739c38390a5f956385a12f3122049f0ca boost_1_76_0.tar.gz > boost_hash.txt
-        sha256sum -c boost_hash.txt
-        tar xzf boost_1_76_0.tar.gz
-        mkdir -p boost/include
-        mv boost_1_76_0/boost boost/include/
-        echo "BOOST_ROOT=${PWD}/boost" >> $GITHUB_ENV
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:

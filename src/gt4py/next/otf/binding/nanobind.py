@@ -86,6 +86,8 @@ def _type_string(type_: ts.TypeSpec) -> str:
         return f"std::tuple<{','.join(_type_string(t) for t in type_.types)}>"
     elif isinstance(type_, ts.FieldType):
         ndims = len(type_.dims)
+        # cannot be ListType: the concept is represented as Field with local Dimension in this interface
+        assert isinstance(type_.dtype, ts.ScalarType)
         dtype = cpp_interface.render_scalar_type(type_.dtype)
         shape = f"nanobind::shape<{', '.join(['gridtools::nanobind::dynamic_size'] * ndims)}>"
         buffer_t = f"nanobind::ndarray<{dtype}, {shape}>"

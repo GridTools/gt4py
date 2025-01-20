@@ -18,8 +18,13 @@ from gt4py.next.iterator import ir as gtir
 from gt4py.next.type_system import type_specifications as ts
 
 
+# arrays for connectivity tables use the following prefix
+CONNECTIVITY_INDENTIFIER_PREFIX: Final[str] = "connectivity_"
+CONNECTIVITY_INDENTIFIER_RE: Final[re.Pattern] = re.compile(r"^connectivity_(.+)$")
+
+
 # regex to match the symbols for field shape and strides
-FIELD_SYMBOL_RE: Final[re.Pattern] = re.compile(r"__.+_(size|stride)_\d+")
+FIELD_SYMBOL_RE: Final[re.Pattern] = re.compile(r"^__.+_((\d+_range_[01])|((size|stride)_\d+))$")
 
 
 def as_dace_type(type_: ts.ScalarType) -> dace.typeclass:
@@ -48,7 +53,16 @@ def as_itir_type(dtype: dace.typeclass) -> ts.ScalarType:
 
 
 def connectivity_identifier(name: str) -> str:
-    return f"connectivity_{name}"
+    return f"{CONNECTIVITY_INDENTIFIER_PREFIX}{name}"
+
+
+def is_connectivity_identifier(
+    name: str, offset_provider_type: gtx_common.OffsetProviderType
+) -> bool:
+    m = CONNECTIVITY_INDENTIFIER_RE.match(name)
+    if m is None:
+        return False
+    return m[1] in offset_provider_type
 
 
 def field_symbol_name(field_name: str, axis: int, sym: Literal["size", "stride"]) -> str:
