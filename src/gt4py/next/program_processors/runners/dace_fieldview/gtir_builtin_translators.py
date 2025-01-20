@@ -274,6 +274,7 @@ def _create_field_operator_impl(
     """
     dataflow_output_desc = output_edge.result.dc_node.desc(sdfg)
 
+    # the memory layout of the output field follows the field operator compute domain
     domain_dims, domain_offset, domain_shape = get_field_layout(domain)
     domain_indices = get_domain_indices(domain_dims, domain_offset)
     domain_subset = dace_subsets.Range.from_indices(domain_indices)
