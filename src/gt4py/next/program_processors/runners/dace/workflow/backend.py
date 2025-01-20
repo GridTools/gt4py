@@ -15,7 +15,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.eve.utils import content_hash
 from gt4py.next import backend
 from gt4py.next.otf import stages, workflow
-from gt4py.next.program_processors.runners.dace import workflow as dace_worflow
+from gt4py.next.program_processors.runners.dace.workflow.factory import DaCeWorkflowFactory
 
 
 def _compilation_hash(otf_closure: stages.CompilableProgram) -> int:
@@ -61,7 +61,7 @@ class DaCeFieldviewBackendFactory(factory.Factory):
         device_type = core_defs.DeviceType.CPU
         hash_function = _compilation_hash
         otf_workflow = factory.SubFactory(
-            dace_worflow.factory.DaCeWorkflowFactory,
+            DaCeWorkflowFactory,
             device_type=factory.SelfAttribute("..device_type"),
             auto_optimize=factory.SelfAttribute("..auto_optimize"),
         )

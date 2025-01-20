@@ -15,7 +15,13 @@ import factory
 from gt4py._core import definitions as core_defs
 from gt4py.next import config
 from gt4py.next.otf import recipes, stages
-from gt4py.next.program_processors.runners.dace import workflow as dace_worflow
+from gt4py.next.program_processors.runners.dace.workflow import decoration as decoration_step
+from gt4py.next.program_processors.runners.dace.workflow.compilation import (
+    DaCeCompilationStepFactory,
+)
+from gt4py.next.program_processors.runners.dace.workflow.translation import (
+    DaCeTranslationStepFactory,
+)
 
 
 def _no_bindings(inp: stages.ProgramSource) -> stages.CompilableSource:
@@ -34,19 +40,19 @@ class DaCeWorkflowFactory(factory.Factory):
         auto_optimize: bool = False
 
     translation = factory.SubFactory(
-        dace_worflow.translation.DaCeTranslationStepFactory,
+        DaCeTranslationStepFactory,
         device_type=factory.SelfAttribute("..device_type"),
         auto_optimize=factory.SelfAttribute("..auto_optimize"),
     )
     bindings = _no_bindings
     compilation = factory.SubFactory(
-        dace_worflow.compilation.DaCeCompilationStepFactory,
+        DaCeCompilationStepFactory,
         cache_lifetime=factory.LazyFunction(lambda: config.BUILD_CACHE_LIFETIME),
         cmake_build_type=factory.SelfAttribute("..cmake_build_type"),
     )
     decoration = factory.LazyAttribute(
         lambda o: functools.partial(
-            dace_worflow.decoration.convert_args,
+            decoration_step.convert_args,
             device=o.device_type,
         )
     )
