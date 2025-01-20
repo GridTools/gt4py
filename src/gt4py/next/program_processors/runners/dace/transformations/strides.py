@@ -12,9 +12,7 @@ import dace
 from dace import data as dace_data
 from dace.sdfg import nodes as dace_nodes
 
-from gt4py.next.program_processors.runners.dace_fieldview import (
-    transformations as gtx_transformations,
-)
+from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
 PropagatedStrideRecord: TypeAlias = tuple[str, dace_nodes.NestedSDFG]

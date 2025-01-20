@@ -18,9 +18,7 @@ from dace import (
 )
 from dace.sdfg import nodes as dace_nodes
 
-from gt4py.next.program_processors.runners.dace_fieldview import (
-    transformations as gtx_transformations,
-)
+from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
 def gt_create_local_double_buffering(

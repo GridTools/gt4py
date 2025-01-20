@@ -10,17 +10,107 @@ from __future__ import annotations
 
 import ctypes
 import dataclasses
-from typing import Any, Sequence
+import functools
+from typing import Any, Optional, Sequence
 
 import dace
 import factory
 from dace.codegen.compiled_sdfg import _array_interface_ptr as get_array_interface_ptr
 
+import gt4py.next.allocators as next_allocators
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, config, utils as gtx_utils
-from gt4py.next.otf import arguments, languages, stages, step_types, workflow
+from gt4py.next import allocators as gtx_allocators, backend, common, config, utils as gtx_utils
+from gt4py.next.iterator import ir as itir, transforms as itir_transforms
+from gt4py.next.otf import arguments, languages, recipes, stages, step_types, workflow
+from gt4py.next.otf.binding import interface
 from gt4py.next.otf.compilation import cache
-from gt4py.next.program_processors.runners.dace_common import dace_backend, utility as dace_utils
+from gt4py.next.otf.languages import LanguageSettings
+from gt4py.next.program_processors.runners.dace import (
+    gtir_sdfg,
+    sdfg_callable,
+    sdfg_callable_args,
+    transformations as gtx_transformations,
+)
+
+
+@dataclasses.dataclass(frozen=True)
+class DaCeTranslator(
+    workflow.ChainableWorkflowMixin[
+        stages.CompilableProgram, stages.ProgramSource[languages.SDFG, languages.LanguageSettings]
+    ],
+    step_types.TranslationStep[languages.SDFG, languages.LanguageSettings],
+):
+    device_type: core_defs.DeviceType
+    auto_optimize: bool
+    itir_transforms_off: bool = False
+
+    def _language_settings(self) -> languages.LanguageSettings:
+        return languages.LanguageSettings(
+            formatter_key="", formatter_style="", file_extension="sdfg"
+        )
+
+    def generate_sdfg(
+        self,
+        ir: itir.Program,
+        offset_provider: common.OffsetProvider,
+        column_axis: Optional[common.Dimension],
+        auto_opt: bool,
+        on_gpu: bool,
+    ) -> dace.SDFG:
+        if not self.itir_transforms_off:
+            ir = itir_transforms.apply_fieldview_transforms(ir, offset_provider=offset_provider)
+        sdfg = gtir_sdfg.build_sdfg_from_gtir(
+            ir, common.offset_provider_to_type(offset_provider), column_axis
+        )
+
+        if auto_opt:
+            gtx_transformations.gt_auto_optimize(sdfg, gpu=on_gpu)
+        elif on_gpu:
+            # We run simplify to bring the SDFG into a canonical form that the gpu transformations
+            # can handle. This is a workaround for an issue with scalar expressions that are
+            # promoted to symbolic expressions and computed on the host (CPU), but the intermediate
+            # result is written to a GPU global variable (https://github.com/spcl/dace/issues/1773).
+            gtx_transformations.gt_simplify(sdfg)
+            gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)
+
+        return sdfg
+
+    def __call__(
+        self, inp: stages.CompilableProgram
+    ) -> stages.ProgramSource[languages.SDFG, LanguageSettings]:
+        """Generate DaCe SDFG file from the GTIR definition."""
+        program: itir.Program = inp.data
+        assert isinstance(program, itir.Program)
+
+        sdfg = self.generate_sdfg(
+            program,
+            inp.args.offset_provider,  # TODO(havogt): should be offset_provider_type once the transformation don't require run-time info
+            inp.args.column_axis,
+            auto_opt=self.auto_optimize,
+            on_gpu=(self.device_type == gtx_allocators.CUPY_DEVICE),
+        )
+
+        param_types = tuple(
+            interface.Parameter(param, arg_type)
+            for param, arg_type in zip(sdfg.arg_names, inp.args.args)
+        )
+
+        module: stages.ProgramSource[languages.SDFG, languages.LanguageSettings] = (
+            stages.ProgramSource(
+                entry_point=interface.Function(program.id, param_types),
+                source_code=sdfg.to_json(),
+                library_deps=tuple(),
+                language=languages.SDFG,
+                language_settings=self._language_settings(),
+                implicit_domain=inp.data.implicit_domain,
+            )
+        )
+        return module
+
+
+class DaCeTranslationStepFactory(factory.Factory):
+    class Meta:
+        model = DaCeTranslator
 
 
 class CompiledDaceProgram(stages.ExtendedCompiledProgram):
@@ -97,7 +187,7 @@ class DaCeCompilationStepFactory(factory.Factory):
         model = DaCeCompiler
 
 
-def convert_args(
+def _convert_args(
     inp: CompiledDaceProgram,
     device: core_defs.DeviceType = core_defs.DeviceType.CPU,
     use_field_canonical_representation: bool = False,
@@ -122,7 +212,7 @@ def convert_args(
 
         if sdfg_program._lastargs:
             kwargs = dict(zip(sdfg.arg_names, flat_args, strict=True))
-            kwargs.update(dace_backend.get_sdfg_conn_args(sdfg, offset_provider, on_gpu))
+            kwargs.update(sdfg_callable.get_sdfg_conn_args(sdfg, offset_provider, on_gpu))
 
             use_fast_call = True
             last_call_args = sdfg_program._lastargs[0]
@@ -146,14 +236,14 @@ def convert_args(
                         last_call_args[i] = actype(kwargs[arg_name])
                     else:
                         # shape and strides of arrays are supposed not to change, and can therefore be omitted
-                        assert dace_utils.is_field_symbol(
+                        assert sdfg_callable_args.is_field_symbol(
                             arg_name
                         ), f"argument '{arg_name}' not found."
 
             if use_fast_call:
                 return inp.fast_call()
 
-        sdfg_args = dace_backend.get_sdfg_args(
+        sdfg_args = sdfg_callable.get_sdfg_args(
             sdfg,
             offset_provider,
             *flat_args,
@@ -167,3 +257,80 @@ def convert_args(
             return inp(**sdfg_args)
 
     return decorated_program
+
+
+def _no_bindings(inp: stages.ProgramSource) -> stages.CompilableSource:
+    return stages.CompilableSource(program_source=inp, binding_source=None)
+
+
+class DaCeWorkflowFactory(factory.Factory):
+    class Meta:
+        model = recipes.OTFCompileWorkflow
+
+    class Params:
+        device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
+        cmake_build_type: config.CMakeBuildType = factory.LazyFunction(
+            lambda: config.CMAKE_BUILD_TYPE
+        )
+        auto_optimize: bool = False
+
+    translation = factory.SubFactory(
+        DaCeTranslationStepFactory,
+        device_type=factory.SelfAttribute("..device_type"),
+        auto_optimize=factory.SelfAttribute("..auto_optimize"),
+    )
+    bindings = _no_bindings
+    compilation = factory.SubFactory(
+        DaCeCompilationStepFactory,
+        cache_lifetime=factory.LazyFunction(lambda: config.BUILD_CACHE_LIFETIME),
+        cmake_build_type=factory.SelfAttribute("..cmake_build_type"),
+    )
+    decoration = factory.LazyAttribute(
+        lambda o: functools.partial(
+            _convert_args,
+            device=o.device_type,
+        )
+    )
+
+
+class DaCeFieldviewBackendFactory(factory.Factory):
+    class Meta:
+        model = backend.Backend
+
+    class Params:
+        name_device = "cpu"
+        name_cached = ""
+        name_postfix = ""
+        gpu = factory.Trait(
+            allocator=next_allocators.StandardGPUFieldBufferAllocator(),
+            device_type=next_allocators.CUPY_DEVICE or core_defs.DeviceType.CUDA,
+            name_device="gpu",
+        )
+        cached = factory.Trait(
+            executor=factory.LazyAttribute(
+                lambda o: workflow.CachedStep(o.otf_workflow, hash_function=o.hash_function)
+            ),
+            name_cached="_cached",
+        )
+        device_type = core_defs.DeviceType.CPU
+        otf_workflow = factory.SubFactory(
+            DaCeWorkflowFactory,
+            device_type=factory.SelfAttribute("..device_type"),
+            auto_optimize=factory.SelfAttribute("..auto_optimize"),
+        )
+        auto_optimize = factory.Trait(name_postfix="_opt")
+
+    name = factory.LazyAttribute(
+        lambda o: f"run_dace_{o.name_device}{o.name_cached}{o.name_postfix}"
+    )
+
+    executor = factory.LazyAttribute(lambda o: o.otf_workflow)
+    allocator = next_allocators.StandardCPUFieldBufferAllocator()
+    transforms = backend.DEFAULT_TRANSFORMS
+
+
+run_dace_cpu = DaCeFieldviewBackendFactory(cached=True, auto_optimize=True)
+run_dace_cpu_noopt = DaCeFieldviewBackendFactory(cached=True, auto_optimize=False)
+
+run_dace_gpu = DaCeFieldviewBackendFactory(gpu=True, cached=True, auto_optimize=True)
+run_dace_gpu_noopt = DaCeFieldviewBackendFactory(gpu=True, cached=True, auto_optimize=False)

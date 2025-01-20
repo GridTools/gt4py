@@ -30,18 +30,18 @@ from dace import subsets as dace_subsets
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
-from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
-from gt4py.next.program_processors.runners.dace_fieldview import (
+from gt4py.next.program_processors.runners.dace import (
     gtir_builtin_translators as gtir_translators,
     gtir_dataflow,
     gtir_sdfg,
+    sdfg_callable_args,
     utility as dace_gtir_utils,
 )
 from gt4py.next.type_system import type_info as ti, type_specifications as ts
 
 
 if TYPE_CHECKING:
-    from gt4py.next.program_processors.runners.dace_fieldview import gtir_sdfg
+    from gt4py.next.program_processors.runners.dace import gtir_sdfg
 
 
 def _parse_scan_fieldop_arg(
@@ -317,7 +317,7 @@ def _lower_lambda_to_nested_sdfg(
 
     # the lambda expression, i.e. body of the scan, will be created inside a nested SDFG.
     nsdfg = dace.SDFG(sdfg_builder.unique_nsdfg_name(sdfg, "scan"))
-    nsdfg.debuginfo = dace_utils.debug_info(lambda_node, default=sdfg.debuginfo)
+    nsdfg.debuginfo = sdfg_callable_args.debug_info(lambda_node, default=sdfg.debuginfo)
     lambda_translator = sdfg_builder.setup_nested_context(
         lambda_node, nsdfg, lambda_symbols, lambda_field_offsets
     )

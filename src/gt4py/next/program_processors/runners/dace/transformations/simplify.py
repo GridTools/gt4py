@@ -27,9 +27,7 @@ from dace.transformation import (
     passes as dace_passes,
 )
 
-from gt4py.next.program_processors.runners.dace_fieldview import (
-    transformations as gtx_transformations,
-)
+from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
 GT_SIMPLIFY_DEFAULT_SKIP_SET: Final[set[str]] = {"ScalarToSymbolPromotion", "ConstantPropagation"}

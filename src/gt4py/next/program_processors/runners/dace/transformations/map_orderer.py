@@ -13,7 +13,7 @@ from dace import properties as dace_properties, transformation as dace_transform
 from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next import common as gtx_common
-from gt4py.next.program_processors.runners.dace_fieldview import utility as gtx_dace_fieldview_util
+from gt4py.next.program_processors.runners.dace import utility as gtx_dace_fieldview_util
 
 
 def gt_set_iteration_order(

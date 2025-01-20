@@ -31,9 +31,9 @@ from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.iterator.transforms import prune_casts as ir_prune_casts, symbol_ref_utils
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
-from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
-from gt4py.next.program_processors.runners.dace_fieldview import (
+from gt4py.next.program_processors.runners.dace import (
     gtir_builtin_translators,
+    sdfg_callable_args,
     utility as dace_gtir_utils,
 )
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
@@ -330,17 +330,19 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             Two lists of symbols, one for the shape and the other for the strides of the array.
         """
         dc_dtype = gtir_builtin_translators.INDEX_DTYPE
-        neighbor_table_types = dace_utils.filter_connectivity_types(self.offset_provider_type)
+        neighbor_table_types = sdfg_callable_args.filter_connectivity_types(
+            self.offset_provider_type
+        )
         shape = [
             (
                 neighbor_table_types[dim.value].max_neighbors
                 if dim.kind == gtx_common.DimensionKind.LOCAL
-                else dace.symbol(dace_utils.field_size_symbol_name(name, i), dc_dtype)
+                else dace.symbol(sdfg_callable_args.field_size_symbol_name(name, i), dc_dtype)
             )
             for i, dim in enumerate(dims)
         ]
         strides = [
-            dace.symbol(dace_utils.field_stride_symbol_name(name, i), dc_dtype)
+            dace.symbol(sdfg_callable_args.field_stride_symbol_name(name, i), dc_dtype)
             for i in range(len(dims))
         ]
         return shape, strides
@@ -395,7 +397,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             if not isinstance(gt_type.dtype, ts.ScalarType):
                 raise ValueError(f"Field type '{gt_type.dtype}' not supported.")
             # handle default case: field with one or more dimensions
-            dc_dtype = dace_utils.as_dace_type(gt_type.dtype)
+            dc_dtype = sdfg_callable_args.as_dace_type(gt_type.dtype)
             # Use symbolic shape, which allows to invoke the program with fields of different size;
             # and symbolic strides, which enables decoupling the memory layout from generated code.
             sym_shape, sym_strides = self._make_array_shape_and_strides(name, gt_type.dims)
@@ -403,8 +405,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             return [(name, gt_type)]
 
         elif isinstance(gt_type, ts.ScalarType):
-            dc_dtype = dace_utils.as_dace_type(gt_type)
-            if dace_utils.is_field_symbol(name) or name in symbolic_arguments:
+            dc_dtype = sdfg_callable_args.as_dace_type(gt_type)
+            if sdfg_callable_args.is_field_symbol(name) or name in symbolic_arguments:
                 if name in sdfg.symbols:
                     # Sometimes, when the field domain is implicitly derived from the
                     # field domain, the gt4py lowering adds the field size as a scalar
@@ -414,7 +416,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     # created by `_make_array_shape_and_strides()`, when allocating
                     # storage for field arguments. We assume that the scalar argument
                     # for field size, if present, always follows the field argument.
-                    assert dace_utils.is_field_symbol(name)
+                    assert sdfg_callable_args.is_field_symbol(name)
                     if sdfg.symbols[name].dtype != dc_dtype:
                         raise ValueError(
                             f"Type mismatch on argument {name}: got {dc_dtype}, expected {sdfg.symbols[name].dtype}."
@@ -499,7 +501,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             self.global_symbols[pname] = param.type
 
         # add SDFG storage for connectivity tables
-        for offset, connectivity_type in dace_utils.filter_connectivity_types(
+        for offset, connectivity_type in sdfg_callable_args.filter_connectivity_types(
             self.offset_provider_type
         ).items():
             scalar_type = tt.from_dtype(connectivity_type.dtype)
@@ -512,7 +514,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             # the connectivity tables that are not used. The remaining unused transient arrays
             # are removed by the dace simplify pass.
             self._add_storage(
-                sdfg, symbolic_arguments, dace_utils.connectivity_identifier(offset), gt_type
+                sdfg,
+                symbolic_arguments,
+                sdfg_callable_args.connectivity_identifier(offset),
+                gt_type,
             )
 
         # the list of all sdfg arguments (aka non-transient arrays) which include tuple-element fields
@@ -535,7 +540,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         assert len(self.field_offsets) == 0
 
         sdfg = dace.SDFG(node.id)
-        sdfg.debuginfo = dace_utils.debug_info(node)
+        sdfg.debuginfo = sdfg_callable_args.debug_info(node)
 
         # start block of the stateful graph
         entry_state = sdfg.add_state("program_entry", is_start_block=True)
@@ -558,7 +563,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         for i, stmt in enumerate(node.body):
             # include `debuginfo` only for `ir.Program` and `ir.Stmt` nodes: finer granularity would be too messy
             head_state = sdfg.add_state_after(head_state, f"stmt_{i}")
-            head_state._debuginfo = dace_utils.debug_info(stmt, default=sdfg.debuginfo)
+            head_state._debuginfo = sdfg_callable_args.debug_info(stmt, default=sdfg.debuginfo)
             head_state = self.visit(stmt, sdfg=sdfg, state=head_state)
 
         # remove unused connectivity tables (by design, arrays are marked as non-transient when they are used)
@@ -566,7 +571,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             unused_connectivities = [
                 data
                 for data, datadesc in nsdfg.arrays.items()
-                if dace_utils.is_connectivity_identifier(data, self.offset_provider_type)
+                if sdfg_callable_args.is_connectivity_identifier(data, self.offset_provider_type)
                 and datadesc.transient
             ]
             for data in unused_connectivities:
@@ -772,7 +777,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         # lower let-statement lambda node as a nested SDFG
         nsdfg = dace.SDFG(name=self.unique_nsdfg_name(sdfg, "lambda"))
-        nsdfg.debuginfo = dace_utils.debug_info(node, default=sdfg.debuginfo)
+        nsdfg.debuginfo = sdfg_callable_args.debug_info(node, default=sdfg.debuginfo)
         lambda_translator = self.setup_nested_context(
             node.expr, nsdfg, lambda_symbols, lambda_field_offsets
         )
@@ -790,8 +795,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         # we they are stored as non-transient array and scalar objects.
         #
         connectivity_arrays = {
-            dace_utils.connectivity_identifier(offset)
-            for offset in dace_utils.filter_connectivity_types(self.offset_provider_type)
+            sdfg_callable_args.connectivity_identifier(offset)
+            for offset in sdfg_callable_args.filter_connectivity_types(self.offset_provider_type)
         }
 
         input_memlets = {}
@@ -856,7 +861,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             inputs=set(input_memlets.keys()),
             outputs=lambda_outputs,
             symbol_mapping=nsdfg_symbols_mapping,
-            debuginfo=dace_utils.debug_info(node, default=sdfg.debuginfo),
+            debuginfo=sdfg_callable_args.debug_info(node, default=sdfg.debuginfo),
         )
 
         for connector, memlet in input_memlets.items():

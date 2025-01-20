@@ -32,10 +32,10 @@ from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms import symbol_ref_utils
-from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
-from gt4py.next.program_processors.runners.dace_fieldview import (
+from gt4py.next.program_processors.runners.dace import (
     gtir_python_codegen,
     gtir_sdfg,
+    sdfg_callable_args,
     utility as dace_gtir_utils,
 )
 from gt4py.next.type_system import type_info as ti, type_specifications as ts
@@ -274,7 +274,7 @@ DACE_REDUCTION_MAPPING: dict[str, dace.dtypes.ReductionType] = {
 
 def get_reduce_params(node: gtir.FunCall) -> tuple[str, SymbolExpr, SymbolExpr]:
     assert isinstance(node.type, ts.ScalarType)
-    dc_dtype = dace_utils.as_dace_type(node.type)
+    dc_dtype = sdfg_callable_args.as_dace_type(node.type)
 
     assert isinstance(node.fun, gtir.FunCall)
     assert len(node.fun.args) == 2
@@ -467,7 +467,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         src_connector: str,
         use_array: bool = False,
     ) -> ValueExpr:
-        data_type = dace_utils.as_itir_type(dc_dtype)
+        data_type = sdfg_callable_args.as_itir_type(dc_dtype)
         if use_array:
             # In some cases, such as result data with list-type annotation, we want
             # that output data is represented as an array (single-element 1D array)
@@ -772,7 +772,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         )
 
         nsdfg = dace.SDFG(self.unique_nsdfg_name(prefix="if_stmt"))
-        nsdfg.debuginfo = dace_utils.debug_info(node, default=self.sdfg.debuginfo)
+        nsdfg.debuginfo = sdfg_callable_args.debug_info(node, default=self.sdfg.debuginfo)
 
         # create states inside the nested SDFG for the if-branches
         if use_conditional_block:
@@ -880,7 +880,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert all(isinstance(index, SymbolExpr) for index in it.indices.values())
 
         field_desc = it.field.desc(self.sdfg)
-        connectivity = dace_utils.connectivity_identifier(offset)
+        connectivity = sdfg_callable_args.connectivity_identifier(offset)
         # initially, the storage for the connectivty tables is created as transient;
         # when the tables are used, the storage is changed to non-transient,
         # as the corresponding arrays are supposed to be allocated by the SDFG caller
@@ -979,7 +979,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         list_desc = list_arg.dc_node.desc(self.sdfg)
         assert len(list_desc.shape) == 1
 
-        result_dtype = dace_utils.as_dace_type(list_arg.gt_dtype.element_type)
+        result_dtype = sdfg_callable_args.as_dace_type(list_arg.gt_dtype.element_type)
         result, _ = self.subgraph_builder.add_temp_scalar(self.sdfg, result_dtype)
         result_node = self.state.add_access(result)
 
@@ -1039,7 +1039,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert len(node.fun.args) == 1  # the operation to be mapped on the arguments
 
         assert isinstance(node.type.element_type, ts.ScalarType)
-        dc_dtype = dace_utils.as_dace_type(node.type.element_type)
+        dc_dtype = sdfg_callable_args.as_dace_type(node.type.element_type)
 
         input_connectors = [f"__arg{i}" for i in range(len(node.args))]
         output_connector = "__out"
@@ -1115,7 +1115,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         if offset_provider_type.has_skip_values:
             # In case the `map_` input expressions contain skip values, we use
             # the connectivity-based offset provider as mask for map computation.
-            connectivity = dace_utils.connectivity_identifier(offset_type.value)
+            connectivity = sdfg_callable_args.connectivity_identifier(offset_type.value)
             connectivity_desc = self.sdfg.arrays[connectivity]
             connectivity_desc.transient = False
 
@@ -1194,7 +1194,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             and input_expr.gt_dtype.offset_type is not None
         )
         offset_type = input_expr.gt_dtype.offset_type
-        connectivity = dace_utils.connectivity_identifier(offset_type.value)
+        connectivity = sdfg_callable_args.connectivity_identifier(offset_type.value)
         connectivity_node = self.state.add_access(connectivity)
         connectivity_desc = connectivity_node.desc(self.sdfg)
         connectivity_desc.transient = False
@@ -1506,7 +1506,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
     def _visit_shift(self, node: gtir.FunCall) -> IteratorExpr:
         # convert builtin-index type to dace type
-        IndexDType: Final = dace_utils.as_dace_type(
+        IndexDType: Final = sdfg_callable_args.as_dace_type(
             ts.ScalarType(kind=getattr(ts.ScalarKind, gtir.INTEGER_INDEX_BUILTIN.upper()))
         )
 
@@ -1536,7 +1536,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             # initially, the storage for the connectivity tables is created as transient;
             # when the tables are used, the storage is changed to non-transient,
             # so the corresponding arrays are supposed to be allocated by the SDFG caller
-            offset_table = dace_utils.connectivity_identifier(offset)
+            offset_table = sdfg_callable_args.connectivity_identifier(offset)
             self.sdfg.arrays[offset_table].transient = False
             offset_table_node = self.state.add_access(offset_table)
 
@@ -1604,13 +1604,13 @@ class LambdaToDataflow(eve.NodeVisitor):
             # Therefore we handle `ListType` as a single-element array with shape (1,)
             # that will be accessed in a map expression on a local domain.
             assert isinstance(node.type.element_type, ts.ScalarType)
-            dc_dtype = dace_utils.as_dace_type(node.type.element_type)
+            dc_dtype = sdfg_callable_args.as_dace_type(node.type.element_type)
             # In order to ease the lowring of the parent expression on local dimension,
             # we represent the scalar value as a single-element 1D array.
             use_array = True
         else:
             assert isinstance(node.type, ts.ScalarType)
-            dc_dtype = dace_utils.as_dace_type(node.type)
+            dc_dtype = sdfg_callable_args.as_dace_type(node.type)
             use_array = False
 
         return self._construct_tasklet_result(dc_dtype, tasklet_node, "result", use_array=use_array)
@@ -1713,7 +1713,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         )
 
     def visit_Literal(self, node: gtir.Literal) -> SymbolExpr:
-        dc_dtype = dace_utils.as_dace_type(node.type)
+        dc_dtype = sdfg_callable_args.as_dace_type(node.type)
         return SymbolExpr(node.value, dc_dtype)
 
     def visit_SymRef(
