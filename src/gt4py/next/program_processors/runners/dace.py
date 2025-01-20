@@ -21,7 +21,6 @@ class DaCeFieldviewBackendFactory(cached_backend.CachedBackendFactory):
 
     class Params:
         name_device = "cpu"
-        name_cached = ""
         name_postfix = ""
         gpu = factory.Trait(
             allocator=next_allocators.StandardGPUFieldBufferAllocator(),
