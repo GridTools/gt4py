@@ -310,8 +310,7 @@ class GTFNTranslationStep(
 
     def _not_implemented_for_device_type(self) -> NotImplementedError:
         return NotImplementedError(
-            f"{self.__class__.__name__} is not implemented for "
-            f"device type {self.device_type.name}"
+            f"{self.__class__.__name__} is not implemented for device type {self.device_type.name}"
         )
 
 

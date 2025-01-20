@@ -350,9 +350,9 @@ def test_chained_access() -> None:
         if not isinstance(node, dace_nodes.MapEntry):
             continue
         if state.scope_dict()[node] is None:
-            assert (
-                outer_map is None
-            ), f"Found multiple outer maps, first '{outer_map}', second '{node}'."
+            assert outer_map is None, (
+                f"Found multiple outer maps, first '{outer_map}', second '{node}'."
+            )
             outer_map = node
     assert outer_map is not None, "Could not found the outer map."
     assert len(outer_map.map.params) == 2

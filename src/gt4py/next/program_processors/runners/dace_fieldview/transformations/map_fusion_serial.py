@@ -593,9 +593,9 @@ class MapFusionSerial(mfh.MapFusionHelper):
                         # TODO(phimuell): Is this restriction necessary, I am not sure.
                         return None
                     consumer_subsets.append(inner_consumer_edge.data.src_subset)
-            assert (
-                found_second_map
-            ), f"Found '{intermediate_node}' which looked like a pure node, but is not one."
+            assert found_second_map, (
+                f"Found '{intermediate_node}' which looked like a pure node, but is not one."
+            )
             assert len(consumer_subsets) != 0
 
             # The consumer still uses the original symbols of the second map, so we must rename them.

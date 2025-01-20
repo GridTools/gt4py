@@ -425,7 +425,7 @@ def test_nondace_raises(decorator):
     with pytest.raises(
         TypeError,
         match=re.escape(
-            "Only dace backends are supported in DaCe-orchestrated programs." ' (found "numpy")'
+            'Only dace backends are supported in DaCe-orchestrated programs. (found "numpy")'
         ),
     ):
         call_stencil()

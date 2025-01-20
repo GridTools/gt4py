@@ -56,9 +56,9 @@ def test_global_self_copy_elimination_only_pattern():
     assert count != 0
 
     assert sdfg.number_of_nodes() == 1
-    assert (
-        state.number_of_nodes() == 0
-    ), f"Expected that 0 access nodes remained, but {state.number_of_nodes()} were there."
+    assert state.number_of_nodes() == 0, (
+        f"Expected that 0 access nodes remained, but {state.number_of_nodes()} were there."
+    )
 
 
 def test_global_self_copy_elimination_g_downstream():
@@ -95,9 +95,9 @@ def test_global_self_copy_elimination_g_downstream():
     assert count != 0
 
     assert sdfg.number_of_nodes() == 2
-    assert (
-        state1.number_of_nodes() == 0
-    ), f"Expected that 0 access nodes remained, but {state.number_of_nodes()} were there."
+    assert state1.number_of_nodes() == 0, (
+        f"Expected that 0 access nodes remained, but {state.number_of_nodes()} were there."
+    )
     assert state2.number_of_nodes() == 5
     assert util.count_nodes(state2, dace_nodes.AccessNode) == 2
     assert util.count_nodes(state2, dace_nodes.MapEntry) == 1

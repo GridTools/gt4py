@@ -418,9 +418,9 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
             assert within_stencil is None
             within_stencil = False
         else:
-            assert (
-                within_stencil is not None
-            ), "The expression's context must be specified using `within_stencil`."
+            assert within_stencil is not None, (
+                "The expression's context must be specified using `within_stencil`."
+            )
 
         offset_provider_type = offset_provider_type or {}
         node = itir_type_inference.infer(

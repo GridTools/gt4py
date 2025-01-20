@@ -46,7 +46,9 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
         ...     return a
 
         >>> @gtx.program
-        ... def copy_program(a: gtx.Field[[IDim], gtx.float32], out: gtx.Field[[IDim], gtx.float32]):
+        ... def copy_program(
+        ...     a: gtx.Field[[IDim], gtx.float32], out: gtx.Field[[IDim], gtx.float32]
+        ... ):
         ...     copy(a, out=out)
 
         >>> compile_time_args = arguments.CompileTimeArgs(
@@ -460,9 +462,9 @@ class ProgramLowering(
 
             field_slice = None
             if isinstance(first_field, past.Subscript):
-                assert all(
-                    isinstance(field, past.Subscript) for field in flattened
-                ), "Incompatible field in tuple: either all fields or no field must be sliced."
+                assert all(isinstance(field, past.Subscript) for field in flattened), (
+                    "Incompatible field in tuple: either all fields or no field must be sliced."
+                )
                 assert all(
                     concepts.eq_nonlocated(
                         first_field.slice_,
