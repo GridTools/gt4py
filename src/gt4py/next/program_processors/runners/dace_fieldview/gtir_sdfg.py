@@ -140,7 +140,7 @@ class SDFGBuilder(DataflowBuilder, Protocol):
         ...
 
     @abc.abstractmethod
-    def nested_context(
+    def setup_nested_context(
         self,
         expr: gtir.Expr,
         sdfg: dace.SDFG,
@@ -288,7 +288,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         assert self.column_axis
         return dim == self.column_axis
 
-    def nested_context(
+    def setup_nested_context(
         self,
         expr: gtir.Expr,
         sdfg: dace.SDFG,
@@ -786,7 +786,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         # lower let-statement lambda node as a nested SDFG
         nsdfg = dace.SDFG(name=self.unique_nsdfg_name(sdfg, "lambda"))
         nsdfg.debuginfo = dace_utils.debug_info(node, default=sdfg.debuginfo)
-        lambda_translator = self.nested_context(node.expr, nsdfg, lambda_symbols)
+        lambda_translator = self.setup_nested_context(node.expr, nsdfg, lambda_symbols)
 
         nstate = nsdfg.add_state("lambda")
         lambda_result = lambda_translator.visit(

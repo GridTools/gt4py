@@ -8,11 +8,13 @@
 
 """Implements the lowering of scan field operator.
 
-This builtin translator implements the `PrimitiveTranslator` protocol as other translators
-in `gtir_builtin_translators` module. The scan translator was moved to a separate module
-because the parsing of input arguments as well as the construction of the map scope differ
-from a regular field operator, which requires slightly different helper methods. Besides,
-the function code is quite large, another reason to separate it from other translators.
+This builtin translator implements the `PrimitiveTranslator` protocol as other
+translators in `gtir_builtin_translators` module. This module implements the scan
+translator, separately from the `gtir_builtin_translators` module, because the
+parsing of input arguments as well as the construction of the map scope differ
+from a regular field operator, which requires slightly different helper methods.
+Besides, the function code is quite large, another reason to keep it separate
+from other translators.
 """
 
 from __future__ import annotations
@@ -39,7 +41,7 @@ if TYPE_CHECKING:
     from gt4py.next.program_processors.runners.dace_fieldview import gtir_sdfg
 
 
-def _parse_fieldop_arg(
+def _parse_scan_fieldop_arg(
     node: gtir.Expr,
     sdfg: dace.SDFG,
     state: dace.SDFGState,
@@ -76,7 +78,7 @@ def _parse_fieldop_arg(
         return gtx_utils.tree_map(lambda x: _parse_fieldop_arg_impl(x))(arg)
 
 
-def _create_field_operator_impl(
+def _create_scan_field_operator_impl(
     sdfg_builder: gtir_sdfg.SDFGBuilder,
     sdfg: dace.SDFG,
     state: dace.SDFGState,
@@ -89,28 +91,30 @@ def _create_field_operator_impl(
     Helper method to allocate a temporary array that stores one field computed
     by the scan field operator.
 
-    This method is called by `_create_field_operator()`.
+    This method is called by `_create_scan_field_operator()`.
 
-    Similar to `gtir_builtin_translators._create_scan_field_operator_impl()` but
+    Similar to `gtir_builtin_translators._create_field_operator_impl()` but
     for scan field operators. It differs in that the scan loop region produces
     a field along the vertical dimension, rather than a single point.
     Therefore, the memlet subset will write a slice into the result array, that
     corresponds to the full vertical shape for each horizontal grid point.
 
-    Refer to `gtir_builtin_translators._create_scan_field_operator_impl()` for
+    Refer to `gtir_builtin_translators._create_field_operator_impl()` for
     the description of function arguments and return values.
     """
     dataflow_output_desc = output_edge.result.dc_node.desc(sdfg)
     assert isinstance(dataflow_output_desc, dace.data.Array)
 
+    # the memory layout of the output field follows the field operator compute domain
     field_dims, field_origin, field_shape = gtir_translators.get_field_layout(domain)
     field_indices = gtir_translators.get_domain_indices(field_dims, field_origin)
     field_subset = dace_subsets.Range.from_indices(field_indices)
 
-    # the vertical dimension should not belong to the field operator domain
-    # but we need to write it to the output field
+    # the vertical dimension used as scan column is computed by the `LoopRegion`
+    # inside the map scope, therefore it is excluded from the map range
     scan_dim_index = [sdfg_builder.is_column_axis(dim) for dim in field_dims].index(True)
 
+    # the map scope writes the full-shape dimension corresponding to the scan column
     field_subset = (
         dace_subsets.Range(field_subset[:scan_dim_index])
         + dace_subsets.Range.from_string(f"0:{dataflow_output_desc.shape[0]}")
@@ -135,8 +139,9 @@ def _create_field_operator_impl(
                 f"Type mismatch, expected {output_type.dtype.element_type} got {field_dtype}."
             )
         # the scan field operator computes a list of scalar values for each column level
+        # 1st dim: column level, 2nd dim: list of scalar values (e.g. `neighbors`)
         assert len(dataflow_output_desc.shape) == 2
-        # extend the array with the local dimensions added by the field operator (e.g. `neighbors`)
+        # the lines below extend the array with the local dimension added by the field operator
         assert output_edge.result.gt_dtype.offset_type is not None
         field_shape = [*field_shape, dataflow_output_desc.shape[1]]
         field_subset = field_subset + dace_subsets.Range.from_string(
@@ -166,7 +171,7 @@ def _create_field_operator_impl(
     )
 
 
-def _create_field_operator(
+def _create_scan_field_operator(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     domain: gtir_translators.FieldopDomain,
@@ -185,18 +190,20 @@ def _create_field_operator(
     excluded from the map range. This because the vertical dimension is traversed
     by a loop region in a mapped nested SDFG.
 
-    Refer to `gtir_builtin_translators._create_scan_field_operator()` for the
+    Refer to `gtir_builtin_translators._create_field_operator()` for the
     description of function arguments and return values.
     """
     domain_dims, _, _ = gtir_translators.get_field_layout(domain)
 
+    # create a map scope to execute the `LoopRegion` over the horizontal domain
     if len(domain_dims) == 1:
         # We construct the scan field operator on the horizontal domain, while the
         # vertical dimension (the column axis) is computed by the loop region.
         # If the field operator computes only the column axis (a 1d scan field operator),
         # there is no horizontal domain, therefore the map scope is not needed.
-        # This case currently triggers a DaCe issue and produces wrong CUDA code,
-        # thus the corresponding test is disabled (see pytest marker `uses_scan_1d_field`).
+        # This case currently produces wrong CUDA code because of a DaCe issue
+        # (see https://github.com/GridTools/gt4py/issues/1136).
+        # The corresponding GT4Py tests are disabled (pytest marker `uses_scan_1d_field`).
         map_entry, map_exit = (None, None)
     else:
         # create map range corresponding to the field operator domain
@@ -216,15 +223,17 @@ def _create_field_operator(
 
     if isinstance(node_type, ts.FieldType):
         assert isinstance(output_tree, gtir_dataflow.DataflowOutputEdge)
-        return _create_field_operator_impl(
+        return _create_scan_field_operator_impl(
             sdfg_builder, sdfg, state, domain, output_tree, node_type, map_exit
         )
     else:
         # handle tuples of fields
+        # the symbol name 'x' in the call below is not used, we only need
+        # the tree structure of the `TupleType` definition to pass to `tree_map()`
         output_symbol_tree = dace_gtir_utils.make_symbol_tree("x", node_type)
         return gtx_utils.tree_map(
             lambda output_edge, output_sym: (
-                _create_field_operator_impl(
+                _create_scan_field_operator_impl(
                     sdfg_builder,
                     sdfg,
                     state,
@@ -266,19 +275,19 @@ def _lower_lambda_to_nested_sdfg(
     Helper method to lower the lambda node representing the scan stencil dataflow
     inside a separate SDFG.
 
-    In regular field operators, where the computation of a grid point is indipendent
+    In regular field operators, where the computation of a grid point is independent
     from other points, therefore the stencil can be lowered to a mapped tasklet
     dataflow, and the map range is defined on the full domain.
     The scan field operator has to carry an intermediate result while the stencil
     is applied on vertical levels, which is input to the computation of next level
     (an accumulator function, for example). Therefore, the points on the vertical
     dimension are computed inside a `LoopRegion` construct.
-    This function creates the `LoopRegion` inside a separate SDFG, which will be
+    This function creates the `LoopRegion` inside a nested SDFG, which will be
     mapped by the caller to the horizontal domain in the field operator context.
 
     Args:
-        lambda_node: The lambda representing the stencil expression.
-        sdfg: The SDFG context where the scan field operator is translated.
+        lambda_node: The lambda representing the stencil expression on the horizontal level.
+        sdfg: The SDFG where the scan field operator is translated.
         sdfg_builder: The SDFG builder object to access the field operator context.
         domain: The field operator domain, with all horizontal and vertical dimensions.
         init_data: The data produced in the field operator context that is used
@@ -302,7 +311,7 @@ def _lower_lambda_to_nested_sdfg(
     # the lambda expression, i.e. body of the scan, will be created inside a nested SDFG.
     nsdfg = dace.SDFG(sdfg_builder.unique_nsdfg_name(sdfg, "scan"))
     nsdfg.debuginfo = dace_utils.debug_info(lambda_node, default=sdfg.debuginfo)
-    lambda_translator = sdfg_builder.nested_context(lambda_node, nsdfg, lambda_symbols)
+    lambda_translator = sdfg_builder.setup_nested_context(lambda_node, nsdfg, lambda_symbols)
 
     # use the vertical dimension in the domain as scan dimension
     scan_domain = [
@@ -364,16 +373,16 @@ def _lower_lambda_to_nested_sdfg(
 
     # visit the list of arguments to be passed to the scan expression
     stencil_args = [
-        _parse_fieldop_arg(im.ref(p.id), nsdfg, compute_state, lambda_translator, domain)
+        _parse_scan_fieldop_arg(im.ref(p.id), nsdfg, compute_state, lambda_translator, domain)
         for p in lambda_node.params
     ]
 
-    # generate the dataflow representing the scan field operator
+    # generate the dataflow representing the stencil to be applied on the horizontal domain
     lambda_input_edges, lambda_result = gtir_dataflow.translate_lambda_to_dataflow(
         nsdfg, compute_state, lambda_translator, lambda_node, args=stencil_args
     )
 
-    # now initialize the scan carry
+    # connect the input data node for initialization of the scan carry value
     scan_carry_input = (
         dace_gtir_utils.make_symbol_tree(scan_carry_symbol.id, scan_carry_symbol.type)
         if isinstance(scan_carry_symbol.type, ts.TupleType)
@@ -441,7 +450,7 @@ def _lower_lambda_to_nested_sdfg(
         update_state.add_nedge(
             update_state.add_access(scan_result_data),
             update_state.add_access(lambda_output),
-            dace.Memlet(data=lambda_output, subset="0"),
+            dace.Memlet.from_array(scan_result_data, scan_result_desc),
         )
 
         output_type = ts.FieldType(dims=[scan_dim], dtype=scan_result.gt_dtype)
@@ -461,12 +470,12 @@ def _lower_lambda_to_nested_sdfg(
     # because not all tuple fields are necessarily accessed inside the lambda scope
     for data_node in compute_state.data_nodes():
         data_desc = data_node.desc(nsdfg)
-        if (compute_state.degree(data_node) == 0) and (
-            (not data_desc.transient)
-            or data_node.data.startswith(
-                scan_carry_symbol.id
-            )  # exceptional case where the carry variable is not used, not a scan indeed
-        ):
+        if compute_state.degree(data_node) == 0:
+            # By construction there should never be isolated transient nodes.
+            # Therefore, the assert below implements a sanity check, that allows
+            # the exceptional case (encountered in one GT4Py test) where the carry
+            # variable is not used, so not a scan indeed because no data dependency.
+            assert (not data_desc.transient) or data_node.data.startswith(scan_carry_symbol.id)
             compute_state.remove_node(data_node)
 
     return nsdfg, lambda_output
@@ -481,11 +490,11 @@ def _connect_nested_sdfg_output_to_temporaries(
 ) -> gtir_dataflow.DataflowOutputEdge:
     """
     Helper function to create the edges to write output data from the nested SDFG
-    to temporary arrays in the field operator context, denoted as outer context.
+    to temporary arrays in the parent SDFG, denoted as outer context.
 
     Args:
         sdfg: The SDFG representing the outer context, where the field operator is translated.
-        nsdfg: The SDFG when the scan `LoopRegion` is translated.
+        nsdfg: The SDFG where the scan `LoopRegion` is translated.
         nsdfg_node: The nested SDFG node in the outer context.
         outer_state: The state in outer context where the field operator is translated.
         inner_data: The data produced by the scan `LoopRegion` in the inner context.
@@ -515,6 +524,17 @@ def translate_scan(
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
 ) -> gtir_translators.FieldopResult:
+    """
+    Generates the dataflow subgraph for the `as_fieldop` builtin with a scan operator.
+
+    It differs from `translate_as_fieldop()` in that the horizontal domain is lowered
+    to a map scope while the vertical dimension where the scan column is computed
+    is lowered to a `LoopRegion`. The current design choice is to keep the map scope
+    on the outer level, and the `LoopRegion` inside. This choice follows the GTIR
+    representation where the `scan` operator is called inside the `as_fieldop` node.
+
+    Implements the `PrimitiveTranslator` protocol.
+    """
     assert isinstance(node, gtir.FunCall)
     assert cpm.is_call_to(node.fun, "as_fieldop")
     assert isinstance(node.type, (ts.FieldType, ts.TupleType))
@@ -610,10 +630,11 @@ def translate_scan(
                 [*outer_desc.shape, *outer_desc.strides],
                 strict=True,
             )
-            if isinstance(nested_symbol, dace.symbol)
+            if dace.symbolic.issymbolic(nested_symbol)
         }
 
     # the scan nested SDFG is ready: it is instantiated in the field operator context
+    # where the map scope over the horizontal domain lives
     nsdfg_node = state.add_nested_sdfg(
         nsdfg,
         sdfg,
@@ -640,6 +661,6 @@ def translate_scan(
     )(lambda_output)
 
     # we call a helper method to create a map scope that will compute the entire field
-    return _create_field_operator(
+    return _create_scan_field_operator(
         sdfg, state, domain, node.type, sdfg_builder, lambda_input_edges, lambda_output_tree
     )
