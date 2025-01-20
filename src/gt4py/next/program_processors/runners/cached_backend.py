@@ -38,6 +38,7 @@ class CachedBackendFactory(factory.Factory):
         model = backend.Backend
 
     class Params:
+        name_cached = ""
         cached = factory.Trait(
             executor=factory.LazyAttribute(
                 lambda o: workflow.CachedStep(o.otf_workflow, hash_function=o.hash_function)
