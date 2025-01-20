@@ -72,6 +72,7 @@ it_ijk_type = it_ts.IteratorType(
 def expression_test_cases():
     return (
         # itir expr, type
+        # TODO: write test for IDim < 10, concat_where
         (im.call("abs")(1), int_type),
         (im.call("power")(2.0, 2), float64_type),
         (im.plus(1, 2), int_type),
