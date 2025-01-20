@@ -16,6 +16,8 @@ from gt4py.next.type_system import type_specifications as ts
 
 
 class InlineScalar(eve.NodeTranslator):
+    PRESERVED_ANNEX_ATTRS = ("domain",)
+
     @classmethod
     def apply(cls, program: itir.Program, offset_provider_type: common.OffsetProviderType):
         program = itir_inference.infer(program, offset_provider_type=offset_provider_type)
