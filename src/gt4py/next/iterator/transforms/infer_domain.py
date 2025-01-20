@@ -466,9 +466,9 @@ def infer_program(
 
     See :func:`infer_expr` for more details.
     """
-    assert (
-        not program.function_definitions
-    ), "Domain propagation does not support function definitions."
+    assert not program.function_definitions, (
+        "Domain propagation does not support function definitions."
+    )
 
     return itir.Program(
         id=program.id,

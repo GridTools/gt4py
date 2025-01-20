@@ -70,7 +70,7 @@ class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         decl = symtable[node.name]
         if isinstance(decl, cuir.Temporary) and decl.data_dims:
             data_index_str = "+".join(
-                f"{index}*{int(np.prod(decl.data_dims[i + 1:], initial=1))}"
+                f"{index}*{int(np.prod(decl.data_dims[i + 1 :], initial=1))}"
                 for i, index in enumerate(data_index)
             )
             return f"{name}({offset})[{data_index_str}]"

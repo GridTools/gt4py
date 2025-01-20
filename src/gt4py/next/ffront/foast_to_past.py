@@ -77,7 +77,9 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
         ...     column_axis=None,
         ... )
 
-        >>> copy_program = op_to_prog(toolchain.CompilableProgram(copy.foast_stage, compile_time_args))
+        >>> copy_program = op_to_prog(
+        ...     toolchain.CompilableProgram(copy.foast_stage, compile_time_args)
+        ... )
 
         >>> print(copy_program.data.past_node.id)
         __field_operator_copy

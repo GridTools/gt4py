@@ -66,7 +66,7 @@ def setup_test_as_fieldop(
 ) -> tuple[itir.FunCall, itir.FunCall]:
     if refs is None:
         assert isinstance(stencil, itir.Lambda)
-        refs = [f"in_field{i+1}" for i in range(0, len(stencil.params))]
+        refs = [f"in_field{i + 1}" for i in range(0, len(stencil.params))]
 
     testee = im.as_fieldop(stencil)(*refs)
     expected = im.as_fieldop(stencil, domain)(*refs)
