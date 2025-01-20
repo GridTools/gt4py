@@ -354,26 +354,6 @@ def _lower_lambda_to_nested_sdfg(
     else:
         lambda_result_shape = get_scan_output_shape(init_data)
 
-    # create a loop region for lambda call over the scan dimension
-    if scan_forward:
-        scan_loop = dace.sdfg.state.LoopRegion(
-            label="scan",
-            condition_expr=f"{scan_loop_var} < {scan_upper_bound}",
-            loop_var=scan_loop_var,
-            initialize_expr=f"{scan_loop_var} = {scan_lower_bound}",
-            update_expr=f"{scan_loop_var} = {scan_loop_var} + 1",
-            inverted=False,
-        )
-    else:
-        scan_loop = dace.sdfg.state.LoopRegion(
-            label="scan",
-            condition_expr=f"{scan_loop_var} >= {scan_lower_bound}",
-            loop_var=scan_loop_var,
-            initialize_expr=f"{scan_loop_var} = {scan_upper_bound} - 1",
-            update_expr=f"{scan_loop_var} = {scan_loop_var} - 1",
-            inverted=False,
-        )
-
     # Create the body of the initialization state
     # This dataflow will write the initial value of the scan carry variable.
     init_state = nsdfg.add_state("scan_init", is_start_block=True)
@@ -401,11 +381,32 @@ def _lower_lambda_to_nested_sdfg(
     else:
         init_scan_carry(scan_carry_input)
 
-    # Create a `LoopRegion` which contains a 'compute' and an 'update' state
+    # Create a loop region over the vertical dimension corresponding to the scan column
+    if scan_forward:
+        scan_loop = dace.sdfg.state.LoopRegion(
+            label="scan",
+            condition_expr=f"{scan_loop_var} < {scan_upper_bound}",
+            loop_var=scan_loop_var,
+            initialize_expr=f"{scan_loop_var} = {scan_lower_bound}",
+            update_expr=f"{scan_loop_var} = {scan_loop_var} + 1",
+            inverted=False,
+        )
+    else:
+        scan_loop = dace.sdfg.state.LoopRegion(
+            label="scan",
+            condition_expr=f"{scan_loop_var} >= {scan_lower_bound}",
+            loop_var=scan_loop_var,
+            initialize_expr=f"{scan_loop_var} = {scan_upper_bound} - 1",
+            update_expr=f"{scan_loop_var} = {scan_loop_var} - 1",
+            inverted=False,
+        )
+    nsdfg.add_node(scan_loop)
+    nsdfg.add_edge(init_state, scan_loop, dace.InterstateEdge())
+
+    # Inside the loop region, create a 'compute' and an 'update' state.
     # The body of the 'compute' state implements the stencil expression for one vertical level.
     # The 'update' state writes the value computed by the stencil into the scan carry variable,
     # in order to make it available to the next vertical level.
-    nsdfg.add_node(scan_loop)
     compute_state = scan_loop.add_state("scan_compute")
     update_state = scan_loop.add_state_after(compute_state, "scan_update")
 
