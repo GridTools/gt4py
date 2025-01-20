@@ -17,7 +17,7 @@ from gt4py.next.program_processors.runners import cached_backend
 from gt4py.next.program_processors.runners.dace.workflow.factory import DaCeWorkflowFactory
 
 
-class DaCeFieldviewBackendFactory(cached_backend.CachedBackendFactory):
+class DaCeBackendFactory(cached_backend.CachedBackendFactory):
     class Meta:
         model = backend.Backend
 
@@ -47,8 +47,8 @@ class DaCeFieldviewBackendFactory(cached_backend.CachedBackendFactory):
     transforms = backend.DEFAULT_TRANSFORMS
 
 
-run_dace_cpu = DaCeFieldviewBackendFactory(cached=True, auto_optimize=True)
-run_dace_cpu_noopt = DaCeFieldviewBackendFactory(cached=True, auto_optimize=False)
+run_dace_cpu = DaCeBackendFactory(cached=True, auto_optimize=True)
+run_dace_cpu_noopt = DaCeBackendFactory(cached=True, auto_optimize=False)
 
-run_dace_gpu = DaCeFieldviewBackendFactory(gpu=True, cached=True, auto_optimize=True)
-run_dace_gpu_noopt = DaCeFieldviewBackendFactory(gpu=True, cached=True, auto_optimize=False)
+run_dace_gpu = DaCeBackendFactory(gpu=True, cached=True, auto_optimize=True)
+run_dace_gpu_noopt = DaCeBackendFactory(gpu=True, cached=True, auto_optimize=False)
