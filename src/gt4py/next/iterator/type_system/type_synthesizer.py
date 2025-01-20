@@ -211,13 +211,13 @@ def concat_where(
     domain: ts.DomainType,
     true_field: ts.FieldType | ts.TupleType,
     false_field: ts.FieldType | ts.TupleType,
-) -> ts.FieldType:
+) -> ts.FieldType | ts.TupleType:
     assert true_field == false_field
-    return true_field  # TODO: tuples?
+    return true_field
 
 
 @_register_builtin_type_synthesizer
-def neighbors(offset_literal: it_ts.OffsetLiteralType, it: it_ts.IteratorType) -> it_ts.ListType:
+def neighbors(offset_literal: it_ts.OffsetLiteralType, it: it_ts.IteratorType) -> ts.ListType:
     assert (
         isinstance(offset_literal, it_ts.OffsetLiteralType)
         and isinstance(offset_literal.value, common.Dimension)

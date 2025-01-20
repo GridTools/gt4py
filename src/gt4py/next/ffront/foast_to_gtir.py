@@ -224,7 +224,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     def visit_Symbol(self, node: foast.Symbol, **kwargs: Any) -> itir.Sym:
         return im.sym(node.id)
 
-    def visit_Name(self, node: foast.Name, **kwargs: Any) -> itir.SymRef:
+    def visit_Name(self, node: foast.Name, **kwargs: Any) -> itir.SymRef | itir.AxisLiteral:
         if isinstance(node.type, ts.DimensionType):
             return itir.AxisLiteral(value=node.type.dim.value, kind=node.type.dim.kind)
         return im.ref(node.id)
@@ -487,7 +487,7 @@ def _map(
     """
     # TODO double-check that this code is consistent with the changes in the original PR
     if all(
-        isinstance(t, ts.ScalarType, ts.DimensionType)
+        isinstance(t, (ts.ScalarType, ts.DimensionType))
         for arg_type in original_arg_types
         for t in type_info.primitive_constituents(arg_type)
     ):

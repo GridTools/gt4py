@@ -129,7 +129,7 @@ class BuiltInFunction(Generic[_R, _P]):
         )
 
 
-MaskT = TypeVar("MaskT", bound=common.Field)
+MaskT = TypeVar("MaskT", bound=Union[common.Field, common.Domain])
 FieldT = TypeVar("FieldT", bound=Union[common.Field, core_defs.Scalar, Tuple])
 
 
