@@ -274,7 +274,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             local_type = ts.ListType(element_type=data_type.dtype, offset_type=local_dim)
             field_type = ts.FieldType(dims=data_type.dims[:local_dim_index], dtype=local_type)
         else:
-            raise NotImplementedError("Fields with more than one local dimension are not supported.")
+            raise NotImplementedError(
+                "Fields with more than one local dimension are not supported."
+            )
         return gtir_builtin_translators.FieldopData(data_node, field_type, domain_offset)
 
     def get_symbol_type(self, symbol_name: str) -> ts.DataType:
