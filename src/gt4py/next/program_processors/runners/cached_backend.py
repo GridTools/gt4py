@@ -45,4 +45,3 @@ class CachedBackendFactory(factory.Factory):
             name_cached="_cached",
         )
         hash_function = _compilation_hash
-        otf_workflow = None
