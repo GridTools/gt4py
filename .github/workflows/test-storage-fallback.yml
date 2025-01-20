@@ -4,7 +4,6 @@ on:
   pull_request:
     branches:
     - main
-    - gtir  # TODO(tehrengruber): remove after GTIR refactoring #1582
     paths-ignore:  # Inverse of corresponding workflow
     - "src/gt4py/storage/**"
     - "src/gt4py/cartesian/backend/**"   # For DaCe storages
