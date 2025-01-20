@@ -402,27 +402,6 @@ def gamma(a):
     return res.item()
 
 
-@builtins.and_.register(EMBEDDED)
-def and_(a, b):
-    if isinstance(a, Column):
-        return np.logical_and(a, b)
-    return a and b
-
-
-@builtins.or_.register(EMBEDDED)
-def or_(a, b):
-    if isinstance(a, Column):
-        return np.logical_or(a, b)
-    return a or b
-
-
-@builtins.xor_.register(EMBEDDED)
-def xor_(a, b):
-    if isinstance(a, Column):
-        return np.logical_xor(a, b)
-    return a ^ b
-
-
 @builtins.tuple_get.register(EMBEDDED)
 def tuple_get(i, tup):
     if isinstance(tup, Column):
@@ -510,36 +489,6 @@ def named_range(tag: Tag | common.Dimension, start: int, end: int) -> NamedRange
     return (tag, range(start, end))
 
 
-@builtins.eq.register(EMBEDDED)
-def eq(first, second):
-    return first == second
-
-
-@builtins.greater.register(EMBEDDED)
-def greater(first, second):
-    return first > second
-
-
-@builtins.less.register(EMBEDDED)
-def less(first, second):
-    return first < second
-
-
-@builtins.less_equal.register(EMBEDDED)
-def less_equal(first, second):
-    return first <= second
-
-
-@builtins.greater_equal.register(EMBEDDED)
-def greater_equal(first, second):
-    return first >= second
-
-
-@builtins.not_eq.register(EMBEDDED)
-def not_eq(first, second):
-    return first != second
-
-
 CompositeOfScalarOrField: TypeAlias = Scalar | common.Field | tuple["CompositeOfScalarOrField", ...]
 
 
@@ -580,7 +529,6 @@ for math_builtin_name in builtins.ARITHMETIC_BUILTINS | builtins.TYPE_BUILTINS:
         "divides": operator.truediv,
         "mod": operator.mod,
         "floordiv": operator.floordiv,
-        "not_": operator.not_,
         "eq": operator.eq,
         "less": operator.lt,
         "greater": operator.gt,
@@ -593,7 +541,7 @@ for math_builtin_name in builtins.ARITHMETIC_BUILTINS | builtins.TYPE_BUILTINS:
     }
     decorator = getattr(builtins, math_builtin_name).register(EMBEDDED)
     impl: Callable
-    if math_builtin_name == "gamma":
+    if math_builtin_name in ["gamma", "not_"]:
         continue  # treated explicitly
     elif math_builtin_name in python_builtins:
         # TODO: Should potentially use numpy fixed size types to be consistent
