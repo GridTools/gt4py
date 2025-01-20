@@ -21,6 +21,12 @@ class InlineScalar(eve.NodeTranslator):
         program = itir_inference.infer(program, offset_provider_type=offset_provider_type)
         return cls().visit(program)
 
+    def generic_visit(self, node, **kwargs):
+        if cpm.is_call_to(node, "as_fieldop"):
+            return node
+
+        return super().generic_visit(node, **kwargs)
+
     def visit_Expr(self, node: itir.Expr):
         node = self.generic_visit(node)
 
