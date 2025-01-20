@@ -417,7 +417,6 @@ class DaCeIRBuilder(eve.NodeTranslator):
         global_ctx: DaCeIRBuilder.GlobalContext,
         iteration_ctx: DaCeIRBuilder.IterationContext,
         symbol_collector: DaCeIRBuilder.SymbolCollector,
-        loop_order,
         k_interval,
         **kwargs: Any,
     ):
@@ -723,7 +722,6 @@ class DaCeIRBuilder(eve.NodeTranslator):
         scope_nodes,
         item: Loop,
         *,
-        global_ctx: DaCeIRBuilder.GlobalContext,
         iteration_ctx: DaCeIRBuilder.IterationContext,
         symbol_collector: DaCeIRBuilder.SymbolCollector,
         **kwargs: Any,
