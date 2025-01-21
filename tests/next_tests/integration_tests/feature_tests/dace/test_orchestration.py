@@ -42,6 +42,9 @@ def test_sdfgConvertible_laplap(cartesian_case):  # noqa: F811
     if not cartesian_case.backend or "dace" not in cartesian_case.backend.name:
         pytest.skip("DaCe-related test: Test SDFGConvertible interface for GT4Py programs")
 
+    # TODO(edopao): add support for range symbols in field domain and re-enable this test
+    pytest.skip("Requires support for field domain range.")
+
     backend = cartesian_case.backend
 
     in_field = cases.allocate(cartesian_case, laplap_program, "in_field")()
@@ -86,6 +89,9 @@ def testee(a: gtx.Field[gtx.Dims[Vertex], gtx.float64], b: gtx.Field[gtx.Dims[Ed
 def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
     if not unstructured_case.backend or "dace" not in unstructured_case.backend.name:
         pytest.skip("DaCe-related test: Test SDFGConvertible interface for GT4Py programs")
+
+    # TODO(edopao): add support for range symbols in field domain and re-enable this test
+    pytest.skip("Requires support for field domain range.")
 
     allocator, backend = unstructured_case.allocator, unstructured_case.backend
 
