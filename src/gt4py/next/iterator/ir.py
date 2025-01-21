@@ -116,6 +116,7 @@ UNARY_MATH_FP_BUILTINS = {
     "floor",
     "ceil",
     "trunc",
+    "neg",
 }
 UNARY_MATH_FP_PREDICATE_BUILTINS = {"isfinite", "isinf", "isnan"}
 BINARY_MATH_NUMBER_BUILTINS = {
