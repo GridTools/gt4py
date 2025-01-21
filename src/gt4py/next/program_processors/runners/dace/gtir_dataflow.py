@@ -29,7 +29,7 @@ from dace import subsets as dace_subsets
 
 from gt4py import eve
 from gt4py.next import common as gtx_common, utils as gtx_utils
-from gt4py.next.iterator import ir as gtir
+from gt4py.next.iterator import builtins, ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms import symbol_ref_utils
 from gt4py.next.program_processors.runners.dace import (
@@ -1507,7 +1507,7 @@ class LambdaToDataflow(eve.NodeVisitor):
     def _visit_shift(self, node: gtir.FunCall) -> IteratorExpr:
         # convert builtin-index type to dace type
         IndexDType: Final = gtir_dace_utils.as_dace_type(
-            ts.ScalarType(kind=getattr(ts.ScalarKind, gtir.INTEGER_INDEX_BUILTIN.upper()))
+            ts.ScalarType(kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper()))
         )
 
         assert isinstance(node.fun, gtir.FunCall)

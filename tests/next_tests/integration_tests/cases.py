@@ -192,13 +192,13 @@ class UniqueInitializer(DataInitializer):
     data containers.
     """
 
-    start: int = 0
+    start: int = 1
 
     @property
     def scalar_value(self) -> ScalarValue:
         start = self.start
         self.start += 1
-        return np.int64(start)
+        return start
 
     def field(
         self,
