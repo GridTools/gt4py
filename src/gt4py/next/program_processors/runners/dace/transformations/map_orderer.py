@@ -107,7 +107,7 @@ class MapIterationOrder(dace_transformation.SingleStateTransformation):
             self.leading_dims = [
                 leading_dim
                 if isinstance(leading_dim, str)
-                else gtx_sdfg_utils.get_map_variable(leading_dim)
+                else gtir_sdfg_utils.get_map_variable(leading_dim)
                 for leading_dim in leading_dims
             ]
 
