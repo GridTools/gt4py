@@ -23,6 +23,7 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
+
     - uses: actions/checkout@v4
 
     - name: Install C++ libraries
@@ -41,9 +42,6 @@ jobs:
         enable-cache: true
         cache-dependency-glob: "uv.lock"
         python-version: ${{ matrix.python-version }}
-
-    # - name: Update requirements
-    #   run: uv lock --resolution=${{ matrix.dependencies-factor }} --prerelease=allow
 
     - name: Run CPU tests for '${{ matrix.module-factor }}' with '${{ matrix.dependencies-factor }}' resolution strategy
       env:
