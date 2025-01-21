@@ -23,22 +23,31 @@ class ConvertMinusToUnary(PreserveLocationVisitor, NodeTranslator):
     def visit(self, node: ir.Node):
         node = self.generic_visit(node)
 
-        # im.minus(1, im.ref("a")) -> im.plus(im.call("neg)(im.ref("a")), 1)
-        if cpm.is_call_to(node, "minus"):
-            if isinstance(node.args[1], (ir.SymRef, ir.FunCall)):
-                node = im.plus(im.call("neg")(node.args[1]), node.args[0])
+        # im.call("...")(im.minus(1, im.ref("a")), 1) -> im.call("...")(im.plus(im.call("neg)(im.ref("a")), 1), 1)
+        if isinstance(node, ir.FunCall) and len(node.args) > 0 and cpm.is_call_to(node.args[0], "minus"):
+            if cpm.is_call_to(node, ("minus", "plus", "multiplies", "divides")):
+                if isinstance(node.args[0].args[1], (ir.SymRef, ir.FunCall)):
+                    node = im.call(node.fun.id)(im.plus(im.call("neg")(node.args[0].args[1]), node.args[0].args[0]), node.args[1])
+                    node = self.visit(node)
+        # im.call("...")(1, im.minus(1, im.ref("a"))) -> im.call("...")(1, im.plus(im.call("neg)(im.ref("a")), 1))
+        elif isinstance(node, ir.FunCall) and len(node.args) > 1 and cpm.is_call_to(node.args[1], "minus"):
+            if cpm.is_call_to(node, ("minus", "plus", "multiplies", "divides")):
+                if isinstance(node.args[1].args[1], (ir.SymRef, ir.FunCall)):
+                    node = im.call(node.fun.id)(node.args[0], im.plus(im.call("neg")(node.args[1].args[1]), node.args[1].args[0]))
+                    node = self.visit(node)
         return node
 
 class ConvertUnaryToMinus(PreserveLocationVisitor, NodeTranslator):
 
     def visit(self, node: ir.Node):
 
-        if isinstance(node, ir.FunCall) and cpm.is_call_to(node.args[0], "neg"):
+        if isinstance(node, ir.FunCall) and len(node.args) > 0 and cpm.is_call_to(node.args[0], "neg"):
             manipulated_first_arg = False
-            if node.args[0].args[0].type:
-                zero = im.literal(str(0), node.args[0].args[0].type)
-            else:
-                zero = im.literal_from_value(0.0) # TODO: fix datatype
+            if  cpm.is_call_to(node, ("multiplies", "divides", "maximum", "minimum")):
+                if node.args[0].args[0].type:
+                    zero = im.literal(str(0), node.args[0].args[0].type)
+                else:
+                    zero = im.literal_from_value(0.0) # TODO: fix datatype
             if cpm.is_call_to(node, "minus"):
                 node = im.plus(node.args[1], node.args[0].args[0])
                 manipulated_first_arg = True
@@ -59,11 +68,12 @@ class ConvertUnaryToMinus(PreserveLocationVisitor, NodeTranslator):
                 manipulated_first_arg = True
             if manipulated_first_arg:
                 node = self.visit(node)
-        elif isinstance(node, ir.FunCall) and len(node.args) > 2 and cpm.is_call_to(node.args[1], "neg"):
-            if node.args[0].args[0].type:
-                zero = im.literal(str(0), node.args[0].args[0].type)
-            else:
-                zero = im.literal_from_value(0.0) # TODO: fix datatype
+        elif isinstance(node, ir.FunCall) and len(node.args) > 1 and cpm.is_call_to(node.args[1], "neg"):
+            if  cpm.is_call_to(node, ("multiplies", "divides", "maximum", "minimum")):
+                if node.args[0].args[0].type:
+                    zero = im.literal(str(0), node.args[0].args[0].type)
+                else:
+                    zero = im.literal_from_value(0.0) # TODO: fix datatype
             if cpm.is_call_to(node, "minus"):
                 node = im.plus(node.args[0], node.args[1].args[0])
             elif cpm.is_call_to(node, "plus"):

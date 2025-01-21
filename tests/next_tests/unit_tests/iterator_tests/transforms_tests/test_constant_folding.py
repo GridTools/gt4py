@@ -346,11 +346,6 @@ def test_constant_folding_complex_2():
     actual = ConstantFolding.apply(testee)
     assert actual == expected
 
-#sym + 1 + (maximum(sym, 1) + (sym + -1 + (sym + 3))) + -2
-#maximum(1, sym) + (3 × sym + 1)
-
-
-
 
 def test_constant_folding_complex_4():
     sym = im.ref("sym", "float32")
@@ -360,5 +355,8 @@ def test_constant_folding_complex_4():
     assert actual == expected
 
 
-
-
+def test_constant_folding_max():
+    testee = im.call("maximum")(0,0)
+    expected = im.literal_from_value(0)
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
