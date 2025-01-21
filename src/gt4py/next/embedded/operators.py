@@ -180,4 +180,4 @@ def _tuple_at(
         assert core_defs.is_scalar_type(res)
         return res
 
-    return impl(field)  # type: ignore[return-value]
+    return impl(field)

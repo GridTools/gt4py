@@ -108,7 +108,7 @@ Scalar: TypeAlias = (
     | np.bool_
 )
 if ml_dtypes:
-    Scalar = Scalar | ml_dtypes.bfloat16
+    Scalar: TypeAlias = Scalar | ml_dtypes.bfloat16
 
 
 class SparseTag(Tag): ...
