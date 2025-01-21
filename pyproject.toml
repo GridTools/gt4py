@@ -39,7 +39,7 @@ dependencies = [
   'jinja2>=3.0.0',
   'lark>=1.1.2',
   'mako>=1.1',
-  'nanobind>=1.4.0 ',
+  'nanobind@git+https://github.com/SF-N/nanobind.git@d1bc76320164865ecff02f616500d028ff4a7f5e',
   'ninja>=1.10',
   'numpy>=1.23.3',
   'packaging>=20.0',

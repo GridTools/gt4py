@@ -242,6 +242,8 @@ def is_floating_point(symbol_type: ts.TypeSpec) -> bool:
     """
 
     return isinstance(dtype := extract_dtype(symbol_type), ts.ScalarType) and dtype.kind in [
+        ts.ScalarKind.FLOAT16,
+        ts.ScalarKind.BFLOAT16,
         ts.ScalarKind.FLOAT32,
         ts.ScalarKind.FLOAT64,
     ]

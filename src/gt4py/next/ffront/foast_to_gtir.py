@@ -10,6 +10,11 @@
 import dataclasses
 from typing import Any, Callable, Optional
 
+
+try:
+    import ml_dtypes
+except ModuleNotFoundError:
+    ml_dtypes = None
 from gt4py import eve
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Never
@@ -445,7 +450,10 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
             raise FieldOperatorLoweringError(
                 f"Type cast only supports literal arguments, {node.type} not supported."
             )
-        val = target_type(val)
+        if ml_dtypes:
+            val = target_type(float(val))
+        else:
+            val = target_type(val)
 
         return im.literal(str(val), node_kind)
 
