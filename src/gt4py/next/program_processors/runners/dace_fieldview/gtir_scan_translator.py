@@ -15,6 +15,9 @@ parsing of input arguments as well as the construction of the map scope differ
 from a regular field operator, which requires slightly different helper methods.
 Besides, the function code is quite large, another reason to keep it separate
 from other translators.
+
+The current GTIR representation of the scan operator is based on iterator view.
+This is likely to change in the future, to enable GTIR optimizations for scan.
 """
 
 from __future__ import annotations
@@ -345,44 +348,9 @@ def _lower_lambda_to_nested_sdfg(
     else:
         lambda_result_shape = get_scan_output_shape(init_data)
 
-    # create a loop region for lambda call over the scan dimension
-    if scan_forward:
-        scan_loop = dace.sdfg.state.LoopRegion(
-            label="scan",
-            condition_expr=f"{scan_loop_var} < {scan_upper_bound}",
-            loop_var=scan_loop_var,
-            initialize_expr=f"{scan_loop_var} = {scan_lower_bound}",
-            update_expr=f"{scan_loop_var} = {scan_loop_var} + 1",
-            inverted=False,
-        )
-    else:
-        scan_loop = dace.sdfg.state.LoopRegion(
-            label="scan",
-            condition_expr=f"{scan_loop_var} >= {scan_lower_bound}",
-            loop_var=scan_loop_var,
-            initialize_expr=f"{scan_loop_var} = {scan_upper_bound} - 1",
-            update_expr=f"{scan_loop_var} = {scan_loop_var} - 1",
-            inverted=False,
-        )
-
-    nsdfg.add_node(scan_loop)
+    # Create the body of the initialization state
+    # This dataflow will write the initial value of the scan carry variable.
     init_state = nsdfg.add_state("scan_init", is_start_block=True)
-    nsdfg.add_edge(init_state, scan_loop, dace.InterstateEdge())
-    compute_state = scan_loop.add_state("scan_compute")
-    update_state = scan_loop.add_state_after(compute_state, "scan_update")
-
-    # visit the list of arguments to be passed to the scan expression
-    stencil_args = [
-        _parse_scan_fieldop_arg(im.ref(p.id), nsdfg, compute_state, lambda_translator, domain)
-        for p in lambda_node.params
-    ]
-
-    # generate the dataflow representing the stencil to be applied on the horizontal domain
-    lambda_input_edges, lambda_result = gtir_dataflow.translate_lambda_to_dataflow(
-        nsdfg, compute_state, lambda_translator, lambda_node, args=stencil_args
-    )
-
-    # connect the input data node for initialization of the scan carry value
     scan_carry_input = (
         dace_gtir_utils.make_symbol_tree(scan_carry_symbol.id, scan_carry_symbol.type)
         if isinstance(scan_carry_symbol.type, ts.TupleType)
@@ -407,28 +375,66 @@ def _lower_lambda_to_nested_sdfg(
     else:
         init_scan_carry(scan_carry_input)
 
+    # Create a loop region over the vertical dimension corresponding to the scan column
+    if scan_forward:
+        scan_loop = dace.sdfg.state.LoopRegion(
+            label="scan",
+            condition_expr=f"{scan_loop_var} < {scan_upper_bound}",
+            loop_var=scan_loop_var,
+            initialize_expr=f"{scan_loop_var} = {scan_lower_bound}",
+            update_expr=f"{scan_loop_var} = {scan_loop_var} + 1",
+            inverted=False,
+        )
+    else:
+        scan_loop = dace.sdfg.state.LoopRegion(
+            label="scan",
+            condition_expr=f"{scan_loop_var} >= {scan_lower_bound}",
+            loop_var=scan_loop_var,
+            initialize_expr=f"{scan_loop_var} = {scan_upper_bound} - 1",
+            update_expr=f"{scan_loop_var} = {scan_loop_var} - 1",
+            inverted=False,
+        )
+    nsdfg.add_node(scan_loop)
+    nsdfg.add_edge(init_state, scan_loop, dace.InterstateEdge())
+
+    # Inside the loop region, create a 'compute' and an 'update' state.
+    # The body of the 'compute' state implements the stencil expression for one vertical level.
+    # The 'update' state writes the value computed by the stencil into the scan carry variable,
+    # in order to make it available to the next vertical level.
+    compute_state = scan_loop.add_state("scan_compute")
+    update_state = scan_loop.add_state_after(compute_state, "scan_update")
+
+    # inside the 'compute' state, visit the list of arguments to be passed to the stencil
+    stencil_args = [
+        _parse_scan_fieldop_arg(im.ref(p.id), nsdfg, compute_state, lambda_translator, domain)
+        for p in lambda_node.params
+    ]
+    # stil inside the 'compute' state, generate the dataflow representing the stencil
+    # to be applied on the horizontal domain
+    lambda_input_edges, lambda_result = gtir_dataflow.translate_lambda_to_dataflow(
+        nsdfg, compute_state, lambda_translator, lambda_node, args=stencil_args
+    )
     # connect the dataflow input directly to the source data nodes, without passing through a map node;
     # the reason is that the map for horizontal domain is outside the scan loop region
     for edge in lambda_input_edges:
         edge.connect(map_entry=None)
-
-    # connect the dataflow result nodes to the carry variables
+    # connect the dataflow output nodes, called 'scan_result' below, to a global field called 'output'
     output_column_index = dace.symbolic.pystr_to_symbolic(scan_loop_var) - scan_lower_bound
 
     def connect_scan_output(
         scan_output_edge: gtir_dataflow.DataflowOutputEdge,
         scan_output_shape: list[dace.symbolic.SymExpr],
-        sym: gtir.Sym,
+        scan_carry_sym: gtir.Sym,
     ) -> gtir_translators.FieldopData:
         scan_result = scan_output_edge.result
         if isinstance(scan_result.gt_dtype, ts.ScalarType):
-            assert scan_result.gt_dtype == sym.type
+            assert scan_result.gt_dtype == scan_carry_sym.type
             # the scan field operator computes a column of scalar values
             assert len(scan_output_shape) == 1
             output_subset = dace_subsets.Range.from_string(str(output_column_index))
         else:
-            assert isinstance(sym.type, ts.ListType)
-            assert scan_result.gt_dtype.element_type == sym.type.element_type
+            assert isinstance(scan_carry_sym.type, ts.ListType)
+            assert scan_result.gt_dtype.element_type == scan_carry_sym.type.element_type
             # the scan field operator computes a list of scalar values for each column level
             assert len(scan_output_shape) == 2
             output_subset = dace_subsets.Range.from_string(
@@ -438,24 +444,30 @@ def _lower_lambda_to_nested_sdfg(
         scan_result_desc = scan_result.dc_node.desc(nsdfg)
 
         # `sym` represents the global output data, that is the nested-SDFG output connector
-        lambda_output = str(sym.id)
-        output = _scan_output_name(lambda_output)
+        scan_carry_data = str(scan_carry_sym.id)
+        output = _scan_output_name(scan_carry_data)
         nsdfg.add_array(output, scan_output_shape, scan_result_desc.dtype)
         output_node = compute_state.add_access(output)
 
+        # in the 'compute' state, we write the current vertical level data to the output field
+        # (the output field is mapped to an external array)
         compute_state.add_nedge(
             scan_result.dc_node, output_node, dace.Memlet(data=output, subset=output_subset)
         )
 
+        # in the 'update' state, the value of the current vertical level is written
+        # to the scan carry variable for the next loop iteration
         update_state.add_nedge(
             update_state.add_access(scan_result_data),
-            update_state.add_access(lambda_output),
+            update_state.add_access(scan_carry_data),
             dace.Memlet.from_array(scan_result_data, scan_result_desc),
         )
 
         output_type = ts.FieldType(dims=[scan_dim], dtype=scan_result.gt_dtype)
         return gtir_translators.FieldopData(output_node, output_type, origin=scan_lower_bound)
 
+    # write the stencil result (value on one vertical level) into a 1D field
+    # with full vertical shape representing one column
     if isinstance(scan_carry_input, tuple):
         assert isinstance(lambda_result_shape, tuple)
         lambda_output = gtx_utils.tree_map(connect_scan_output)(
@@ -528,10 +540,11 @@ def translate_scan(
     Generates the dataflow subgraph for the `as_fieldop` builtin with a scan operator.
 
     It differs from `translate_as_fieldop()` in that the horizontal domain is lowered
-    to a map scope while the vertical dimension where the scan column is computed
-    is lowered to a `LoopRegion`. The current design choice is to keep the map scope
-    on the outer level, and the `LoopRegion` inside. This choice follows the GTIR
-    representation where the `scan` operator is called inside the `as_fieldop` node.
+    to a map scope, while the scan column computation is lowered to a `LoopRegion`
+    on the vertical dimension, that is inside the horizontal map.
+    The current design choice is to keep the map scope on the outer level, and
+    the `LoopRegion` inside. This choice follows the GTIR representation where
+    the `scan` operator is called inside the `as_fieldop` node.
 
     Implements the `PrimitiveTranslator` protocol.
     """
