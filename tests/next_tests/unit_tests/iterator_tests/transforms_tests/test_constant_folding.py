@@ -360,3 +360,10 @@ def test_constant_folding_max():
     expected = im.literal_from_value(0)
     actual = ConstantFolding.apply(testee)
     assert actual == expected
+
+def test_constant_folding_plus_new():
+    sym = im.ref("sym")
+    testee = im.plus(im.minus(sym, im.literal_from_value(1)), im.literal_from_value(2))
+    expected = im.plus(sym, im.literal_from_value(1))
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected

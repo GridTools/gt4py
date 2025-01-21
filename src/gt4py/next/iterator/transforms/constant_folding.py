@@ -94,30 +94,26 @@ class ConvertUnaryToMinus(PreserveLocationVisitor, NodeTranslator):
 @dataclasses.dataclass(frozen=True)
 class ConstantFolding(PreserveLocationVisitor, NodeTranslator):
     class Flag(enum.Flag):
-        # literal + symref -> symref + literal
-        CANONICALIZE_SYMREF_LITERAL = enum.auto()
+        # e.g. `literal + symref` -> `symref + literal` and
+        # `literal + funcall` -> `funcall + literal` and
+        # `symref + funcall` -> `funcall + symref`
+        CANONICALIZE_FUNCALL_SYMREF_LITERAL = enum.auto()
 
-        # literal + funcall -> funcall + literal
-        CANONICALIZE_FUNCALL_LITERAL = enum.auto()
-
-        # `__out_size_1 + 1 + 1` -> `__out_size_1 + 2`
-        FOLD_FUNCALL_LITERAL = enum.auto()
-
-        # `maximum(1, __out_size_1)` -> `maximum(__out_size_1, 1)` and  `maximum(__out_size_1, maximum(__out_size_1, 1))` -> `maximum(maximum(__out_size_1, 1), __out_size_1)`
-        CANONICALIZE_MIN_MAX_FUNCALL_SYMREF_LITERAL = enum.auto()
-
-        # `maximum(maximum(__out_size_1, 1), __out_size_1)` -> `maximum(__out_size_1, 1)`
-        FOLD_MIN_MAX_FUNCALL_SYMREF_LITERAL = enum.auto()
-
-        # `minus(__out_size_1, literal) -> plus(__out_size_1,-literal)`
+        # `minus(symref, literal) -> plus(symref,-literal)`
         CANONICALIZE_MINUS_SYMREF_LITERAL = enum.auto()
 
-        # `maximum(plus(__out_size_1, 1), __out_size_1)` -> `plus(__out_size_1, 1)`
-        # and `maximum(plus(__out_size_1, 1), plus(__out_size_1, -1))` -> `plus(__out_size_1, 1)`
-        FOLD_MIN_MAX_PLUS_MINUS = enum.auto()
+        # `sym + 1 + 1` -> `sym + 2`
+        FOLD_FUNCALL_LITERAL = enum.auto()
 
-        #  `__out_size_1 + 0` -> `__out_size_1`
-        FOLD_SYMREF_PLUS_MINUS_ZERO = enum.auto()
+        # `maximum(maximum(sym, 1), sym)` -> `maximum(sym, 1)`
+        FOLD_MIN_MAX_FUNCALL_SYMREF_LITERAL = enum.auto()
+
+        # `maximum(plus(sym, 1), sym)` -> `plus(sym, 1)` and
+        # `maximum(plus(sym, 1), plus(sym, -1))` -> `plus(sym, 1)`
+        FOLD_MIN_MAX_PLUS= enum.auto()
+
+        #  `sym + 0` -> `sym`
+        FOLD_SYMREF_PLUS_ZERO = enum.auto()
 
         # `sym + 1 + (sym + 2)` -> `sym + sym + 2 + 1`
         CANONICALIZE_PLUS_SYMREF_LITERAL = enum.auto()
@@ -181,89 +177,73 @@ class ConstantFolding(PreserveLocationVisitor, NodeTranslator):
                     return result
         return None
 
-    def transform_canonicalize_symref_literal(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
-        # literal + symref -> symref + literal
-        if cpm.is_call_to(node, ("plus", "multiplies")):
-            if cpm.is_call_to(node, ("plus", "times")):
-                if isinstance(node.args[1], ir.SymRef) and isinstance(node.args[0], ir.Literal):
-                    return im.call(node.fun.id)(node.args[1], node.args[0])
-        return None
-
-    def transform_canonicalize_funcall_literal(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
-        # literal + funcall -> funcall + literal
-        if cpm.is_call_to(node, ("plus", "multiplies")):
-            if cpm.is_call_to(node, ("plus", "multiplies")):
-                if isinstance(node.args[1], ir.FunCall) and isinstance(node.args[0], ir.Literal):
-                    return im.call(node.fun.id)(node.args[1], node.args[0])
-        return None
-
-    def transform_fold_funcall_literal(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
-        # `__out_size_1 + 1 + 1` -> `__out_size_1 + 2`
-        if cpm.is_call_to(node, ("plus", "minus")):
-            if isinstance(node.args[0], ir.FunCall) and isinstance(
-                node.args[1], ir.Literal
-            ):
-                fun_call, literal = node.args
-                if cpm.is_call_to(fun_call, ("plus", "minus")):
-                    if isinstance(fun_call.args[0], (ir.SymRef, ir.FunCall)) and isinstance(
-                        fun_call.args[1], ir.Literal
-                    ):
-                        return self.visit(im.plus(
-                            fun_call.args[0],
-                            self.visit(im.call(node.fun.id)(fun_call.args[1], literal))))
-        return None
-
-    def transform_canonicalize_min_max_funcall_symref_literal(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
-        # `maximum(1, __out_size_1)` -> `maximum(__out_size_1, 1)` and  `maximum(__out_size_1, maximum(__out_size_1, 1))` -> `maximum(maximum(__out_size_1, 1), __out_size_1)`
-        if cpm.is_call_to(node, ("minimum", "maximum")):
-            if ((isinstance(node.args[0], ir.Literal) and isinstance(node.args[1], (ir.SymRef, ir.FunCall))) or
-                    (isinstance(node.args[0], ir.SymRef) and isinstance(node.args[1], ir.FunCall))):
+    def transform_canonicalize_funcall_symref_literal(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
+        # e.g. `literal + symref` -> `symref + literal` and
+        # `literal + funcall` -> `funcall + literal` and
+        # `symref + funcall` -> `funcall + symref`
+        if cpm.is_call_to(node, ("plus", "multiplies", "minimum", "maximum")):
+            if (isinstance(node.args[1], (ir.SymRef, ir.FunCall)) and isinstance(node.args[0], ir.Literal)
+                    or isinstance(node.args[1], ir.FunCall) and isinstance(node.args[0], ir.SymRef)):
                 return im.call(node.fun.id)(node.args[1], node.args[0])
         return None
 
 
-    def transform_fold_min_max_funcall_symref_literal(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
-        # `maximum(maximum(__out_size_1, 1), __out_size_1)` -> `maximum(__out_size_1, 1)`
-        if cpm.is_call_to(node, ("minimum", "maximum")):
-            if isinstance(node.args[0], ir.FunCall):
-                fun_call, arg1,  = node.args
-                if cpm.is_call_to(fun_call, ("maximum", "minimum")):
-                        if arg1 == fun_call.args[0]:
-                            return self.visit(im.call(fun_call.fun.id)(fun_call.args[1], arg1))
-                        if arg1 == fun_call.args[1]:
-                            return self.visit(im.call(fun_call.fun.id)(fun_call.args[0], arg1))
-        return None
-
     def transform_canonicalize_minus_symref_literal(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
-        # `minus(__out_size_1, literal) -> plus(__out_size_1,-literal)`
-        if cpm.is_call_to(node, "minus") and isinstance(node.args[0], (ir.SymRef, ir.FunCall)) and isinstance(node.args[1], ir.Literal):
+        # `minus(symref, literal) -> plus(symref,-literal)`
+        if (cpm.is_call_to(node, "minus") and
+                isinstance(node.args[0], (ir.SymRef, ir.FunCall)) and
+                isinstance(node.args[1], ir.Literal)):
             return self.visit(im.plus(node.args[0], im.minus(0, node.args[1])))
         return None
 
-    def transform_fold_min_max_plus_minus(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
-        if cpm.is_call_to(node, ("minimum", "maximum")):
-            arg0, arg1 = node.args
-            # `maximum(plus(__out_size_1, 1), __out_size_1)` -> `plus(__out_size_1, 1)`
-            if cpm.is_call_to(arg0, ("plus", "minus")) and isinstance(arg1, (ir.SymRef, ir.FunCall)):
-                if arg0.args[0] == arg1:
-                    return self.visit(im.call(arg0.fun.id)(arg0.args[0], im.call(node.fun.id)(0, arg0.args[1])))
-            # `maximum(plus(__out_size_1, 1), plus(__out_size_1, -1))` -> `plus(__out_size_1, 1)`
-            if cpm.is_call_to(arg0, ("plus", "minus")) and cpm.is_call_to(arg1, ("plus", "minus")):
-                if arg0.args[0] == arg1.args[0]:
-                    return self.visit(im.call(arg0.fun.id)(arg0.args[0], im.call(node.fun.id)(arg0.args[1], arg1.args[1])))
+
+    def transform_fold_funcall_literal(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
+        # `sym + 1 + 1` -> `sym + 2`
+        if cpm.is_call_to(node, "plus"):
+            if cpm.is_call_to(node.args[0], "plus") and isinstance( node.args[1], ir.Literal):
+                fun_call, literal = node.args
+                if isinstance(fun_call.args[0], (ir.SymRef, ir.FunCall)) and isinstance( fun_call.args[1], ir.Literal):
+                    return self.visit(im.plus(fun_call.args[0], im.plus(fun_call.args[1], literal)))
         return None
 
-    def transform_fold_symref_plus_minus_zero(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
-        # `__out_size_1 + 0` -> `__out_size_1`
-        if cpm.is_call_to(node, ("plus", "minus")) and isinstance(node.args[0], (ir.SymRef, ir.FunCall)) and isinstance(node.args[1], ir.Literal) and node.args[1].value.isdigit() and int(node.args[1].value) == 0:
+    def transform_fold_min_max_funcall_symref_literal(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
+        # `maximum(maximum(sym, 1), sym)` -> `maximum(sym, 1)`
+        if cpm.is_call_to(node, ("minimum", "maximum")):
+            if cpm.is_call_to(node.args[0],  ("maximum", "minimum")):
+                fun_call, arg1,  = node.args
+                if arg1 == fun_call.args[0]:
+                    return self.visit(im.call(fun_call.fun.id)(fun_call.args[1], arg1))
+                if arg1 == fun_call.args[1]:
+                    return self.visit(im.call(fun_call.fun.id)(fun_call.args[0], arg1))
+        return None
+
+
+    def transform_fold_min_max_plus(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
+        if cpm.is_call_to(node, ("minimum", "maximum")):
+            arg0, arg1 = node.args
+            # `maximum(plus(sym, 1), sym)` -> `plus(sym, 1)`
+            if cpm.is_call_to(arg0, "plus"):
+                if arg0.args[0] == arg1:
+                    return self.visit(im.plus(arg0.args[0], im.call(node.fun.id)(arg0.args[1], 0)))
+            # `maximum(plus(sym, 1), plus(sym, -1))` -> `plus(sym, 1)`
+            if cpm.is_call_to(arg0, "plus") and cpm.is_call_to(arg1, "plus"):
+                if arg0.args[0] == arg1.args[0]:
+                    return self.visit(im.plus(arg0.args[0], im.call(node.fun.id)(arg0.args[1], arg1.args[1])))
+        return None
+
+    def transform_fold_symref_plus_zero(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
+        # `sym + 0` -> `sym`
+        if (cpm.is_call_to(node, "plus") and isinstance(node.args[1], ir.Literal) and
+                node.args[1].value.isdigit() and int(node.args[1].value) == 0):
             return node.args[0]
         return None
 
     def transform_canonicalize_plus_symref_literal(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
         # `sym1 + 1 + (sym2 + 2)` -> `sym1 + sym2 + 2 + 1`
         if cpm.is_call_to(node, "plus"):
-            if cpm.is_call_to(node.args[0], "plus") and cpm.is_call_to(node.args[1], "plus") and isinstance(node.args[0].args[1], ir.Literal) and isinstance(node.args[1].args[1], ir.Literal):
-                return self.visit(im.plus(im.plus(node.args[0].args[0], node.args[1].args[0]),im.plus(node.args[0].args[1], node.args[1].args[1])))
+            if (cpm.is_call_to(node.args[0], "plus") and cpm.is_call_to(node.args[1], "plus") and
+                    isinstance(node.args[0].args[1], ir.Literal) and isinstance(node.args[1].args[1], ir.Literal)):
+                return self.visit(im.plus(im.plus(node.args[0].args[0], node.args[1].args[0]), im.plus(node.args[0].args[1], node.args[1].args[1])))
         return None
 
     def transform_fold_arithmetic_builtins(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
@@ -310,7 +290,7 @@ class ConstantFolding(PreserveLocationVisitor, NodeTranslator):
                 return node.args[2]
         return None
 
-        # # `maximum(maximum(__out_size_1, 1), maximum(1, __out_size_1))` -> `maximum(__out_size_1, 1)`
+        # # `maximum(maximum(sym, 1), maximum(1, sym))` -> `maximum(sym, 1)`
         # if cpm.is_call_to(new_node, ("minimum", "maximum")):
         #     if all(cpm.is_call_to(arg, "maximum") for arg in new_node.args) or all(
         #         cpm.is_call_to(arg, "minimum") for arg in new_node.args
@@ -320,7 +300,7 @@ class ConstantFolding(PreserveLocationVisitor, NodeTranslator):
         #             and new_node.args[0].args[1] == new_node.args[1].args[0]
         #         ):
         #             new_node = new_node.args[0]
-        # # `maximum(maximum(__out_size_1, 1), __out_size_1)` -> `maximum(__out_size_1, 1)`
+        # # `maximum(maximum(sym, 1), sym)` -> `maximum(sym, 1)`
         # if cpm.is_call_to(new_node, ("minimum", "maximum")):
         #     match = False
         #     if isinstance(new_node.args[0], ir.FunCall) and isinstance(
@@ -348,7 +328,7 @@ class ConstantFolding(PreserveLocationVisitor, NodeTranslator):
         #                 new_node = im.call(fun_call.fun.id)(fun_call.args[1], sym_lit)
         #             if sym_lit == fun_call.args[1]:
         #                 new_node = im.call(fun_call.fun.id)(sym_lit, fun_call.args[0])
-        # # `maximum(plus(__out_size_1, 1), minus(__out_size_1, 1))` -> `plus(__out_size_1, 1)`
+        # # `maximum(plus(sym, 1), minus(sym, 1))` -> `plus(sym, 1)`
         # if cpm.is_call_to(new_node, ("minimum", "maximum")):
         #     if all(cpm.is_call_to(arg, ("plus", "minus")) for arg in new_node.args):
         #         if new_node.args[0].args[0] == new_node.args[1].args[0]:
@@ -361,7 +341,7 @@ class ConstantFolding(PreserveLocationVisitor, NodeTranslator):
         #                     )
         #                 ),
         #             )
-        #     # `maximum(plus(__out_size_1, 1), __out_size_1)` -> `plus(__out_size_1, 1)`
+        #     # `maximum(plus(sym, 1), sym)` -> `plus(sym, 1)`
         #     match = False
         #     if isinstance(new_node.args[0], ir.FunCall) and isinstance(new_node.args[1], ir.SymRef):
         #         fun_call, sym_ref = new_node.args
