@@ -94,7 +94,7 @@ def test_hash_and_diskcache(program_example, tmp_path):
             *parameters, **{"offset_provider": {}}
         ),
     )
-    hash = gtfn.fingerprint_compilable_program(compilable_program)
+    hash = stages.fingerprint_compilable_program(compilable_program)
 
     with diskcache.Cache(tmp_path) as cache:
         cache[hash] = compilable_program
@@ -107,27 +107,27 @@ def test_hash_and_diskcache(program_example, tmp_path):
         del reopened_cache[hash]  # delete data
 
     # hash creation is deterministic
-    assert hash == gtfn.fingerprint_compilable_program(compilable_program)
-    assert hash == gtfn.fingerprint_compilable_program(compilable_program_from_cache)
+    assert hash == stages.fingerprint_compilable_program(compilable_program)
+    assert hash == stages.fingerprint_compilable_program(compilable_program_from_cache)
 
     # hash is different if program changes
     altered_program_id = copy.deepcopy(compilable_program)
     altered_program_id.data.id = "example2"
-    assert gtfn.fingerprint_compilable_program(
+    assert stages.fingerprint_compilable_program(
         compilable_program
-    ) != gtfn.fingerprint_compilable_program(altered_program_id)
+    ) != stages.fingerprint_compilable_program(altered_program_id)
 
     altered_program_offset_provider = copy.deepcopy(compilable_program)
     object.__setattr__(altered_program_offset_provider.args, "offset_provider", {"Koff": KDim})
-    assert gtfn.fingerprint_compilable_program(
+    assert stages.fingerprint_compilable_program(
         compilable_program
-    ) != gtfn.fingerprint_compilable_program(altered_program_offset_provider)
+    ) != stages.fingerprint_compilable_program(altered_program_offset_provider)
 
     altered_program_column_axis = copy.deepcopy(compilable_program)
     object.__setattr__(altered_program_column_axis.args, "column_axis", KDim)
-    assert gtfn.fingerprint_compilable_program(
+    assert stages.fingerprint_compilable_program(
         compilable_program
-    ) != gtfn.fingerprint_compilable_program(altered_program_column_axis)
+    ) != stages.fingerprint_compilable_program(altered_program_column_axis)
 
 
 def test_gtfn_file_cache(program_example):
@@ -146,7 +146,7 @@ def test_gtfn_file_cache(program_example):
         gpu=False, cached=True, otf_workflow__cached_translation=False
     ).executor.step.translation
 
-    cache_key = gtfn.fingerprint_compilable_program(compilable_program)
+    cache_key = stages.fingerprint_compilable_program(compilable_program)
 
     # ensure the actual cached step in the backend generates the cache item for the test
     if cache_key in (translation_cache := cached_gtfn_translation_step.cache):
