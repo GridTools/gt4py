@@ -17,6 +17,7 @@ from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.type_system import inference as itir_type_inference
+from gt4py.next.otf import cpp_utils
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import (
     Backend,
     BinaryExpr,
@@ -45,22 +46,6 @@ from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import (
 )
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_common import Expr, Node, Sym, SymRef
 from gt4py.next.type_system import type_info, type_specifications as ts
-
-
-def pytype_to_cpptype(t: ts.ScalarType | str) -> Optional[str]:
-    if isinstance(t, ts.ScalarType):
-        t = t.kind.name.lower()
-    try:
-        return {
-            "float32": "float",
-            "float64": "double",
-            "int32": "std::int32_t",
-            "int64": "std::int64_t",
-            "bool": "bool",
-            "axis_literal": None,  # TODO: domain?
-        }[t]
-    except KeyError:
-        raise TypeError(f"Unsupported type '{t}'.") from None
 
 
 _vertical_dimension = "gtfn::unstructured::dim::vertical"
@@ -707,7 +692,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 assert all(isinstance(i, ts.ScalarType) for i in x.types)
                 return "::gridtools::tuple<" + ", ".join(dtype_to_cpp(i) for i in x.types) + ">"  # type: ignore[arg-type] # ensured by assert
             assert isinstance(x, ts.ScalarType)
-            res = pytype_to_cpptype(x)
+            res = cpp_utils.pytype_to_cpptype(x)
             assert isinstance(res, str)
             return res
 
