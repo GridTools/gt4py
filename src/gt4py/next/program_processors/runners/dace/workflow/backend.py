@@ -14,7 +14,7 @@ import gt4py.next.allocators as next_allocators
 from gt4py._core import definitions as core_defs
 from gt4py.next import backend
 from gt4py.next.otf import stages, workflow
-from gt4py.next.program_processors.runners.dace_fieldview import workflow as dace_fieldview_workflow
+from gt4py.next.program_processors.runners.dace.workflow.factory import DaCeWorkflowFactory
 
 
 class DaCeBackendFactory(factory.Factory):
