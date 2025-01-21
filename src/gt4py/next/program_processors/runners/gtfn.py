@@ -18,15 +18,12 @@ import filelock
 
 import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
-from gt4py.eve import utils
 from gt4py.next import backend, common, config
-from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import arguments, recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
-from gt4py.next.program_processors.runners import cached_backend
 
 
 # TODO(ricoh): Add support for the whole range of arguments that can be passed to a fencil.
@@ -102,26 +99,6 @@ def extract_connectivity_args(
     return args
 
 
-def fingerprint_compilable_program(inp: stages.CompilableProgram) -> str:
-    """
-    Generates a unique hash string for a stencil source program representing
-    the program, sorted offset_provider, and column_axis.
-    """
-    program: itir.Program = inp.data
-    offset_provider: common.OffsetProvider = inp.args.offset_provider
-    column_axis: Optional[common.Dimension] = inp.args.column_axis
-
-    program_hash = utils.content_hash(
-        (
-            program,
-            sorted(offset_provider.items(), key=lambda el: el[0]),
-            column_axis,
-        )
-    )
-
-    return program_hash
-
-
 class FileCache(diskcache.Cache):
     """
     This class extends `diskcache.Cache` to ensure the cache is properly
@@ -171,7 +148,7 @@ class GTFNCompileWorkflowFactory(factory.Factory):
             translation=factory.LazyAttribute(
                 lambda o: workflow.CachedStep(
                     o.bare_translation,
-                    hash_function=fingerprint_compilable_program,
+                    hash_function=stages.fingerprint_compilable_program,
                     cache=FileCache(str(config.BUILD_CACHE_DIR / "gtfn_cache")),
                 )
             ),
@@ -197,12 +174,13 @@ class GTFNCompileWorkflowFactory(factory.Factory):
     )
 
 
-class GTFNBackendFactory(cached_backend.CachedBackendFactory):
+class GTFNBackendFactory(factory.Factory):
     class Meta:
         model = backend.Backend
 
     class Params:
         name_device = "cpu"
+        name_cached = ""
         name_temps = ""
         name_postfix = ""
         gpu = factory.Trait(
@@ -210,7 +188,14 @@ class GTFNBackendFactory(cached_backend.CachedBackendFactory):
             device_type=next_allocators.CUPY_DEVICE or core_defs.DeviceType.CUDA,
             name_device="gpu",
         )
+        cached = factory.Trait(
+            executor=factory.LazyAttribute(
+                lambda o: workflow.CachedStep(o.otf_workflow, hash_function=o.hash_function)
+            ),
+            name_cached="_cached",
+        )
         device_type = core_defs.DeviceType.CPU
+        hash_function = stages.compilation_hash
         otf_workflow = factory.SubFactory(
             GTFNCompileWorkflowFactory, device_type=factory.SelfAttribute("..device_type")
         )
