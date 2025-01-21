@@ -4,11 +4,9 @@ on:
   push:
     branches:
     - main
-    - gtir  # TODO(tehrengruber): remove after GTIR refactoring #1582
   pull_request:
     branches:
     - main
-    - gtir  # TODO(tehrengruber): remove after GTIR refactoring #1582
     paths:  # Run when gt4py.eve files (or package settings) are changed
     - "src/gt4py/eve/**"
     - "tests/eve_tests/**"
@@ -22,7 +20,7 @@ jobs:
   test-eve:
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11"]
+        python-version: ["3.10", "3.11"]
         os: ["ubuntu-latest"]
       fail-fast: false
 

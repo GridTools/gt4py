@@ -229,8 +229,8 @@ class LevelMarker(eve.StrEnum):
 
 @enum.unique
 class ExprKind(eve.IntEnum):
-    SCALAR: ExprKind = typing.cast("ExprKind", enum.auto())
-    FIELD: ExprKind = typing.cast("ExprKind", enum.auto())
+    SCALAR = typing.cast("ExprKind", enum.auto())
+    FIELD = typing.cast("ExprKind", enum.auto())
 
 
 class LocNode(eve.Node):
@@ -311,7 +311,7 @@ class CartesianOffset(eve.Node):
     k: int
 
     @classmethod
-    def zero(cls) -> "CartesianOffset":
+    def zero(cls) -> CartesianOffset:
         return cls(i=0, j=0, k=0)
 
     def to_dict(self) -> Dict[str, int]:

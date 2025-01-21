@@ -14,7 +14,7 @@ import inspect
 
 from gt4py.eve.extended_typing import Callable, Iterable, Optional, Union
 from gt4py.next import common
-from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator import builtins
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.utils import tree_map
@@ -35,20 +35,20 @@ class TypeSynthesizer:
      - isinstance checks to determine if an object is actually (meant to be) a type
        synthesizer and not just any callable.
      - writing simple type synthesizers without cluttering the signature with the additional
-       offset_provider argument that is only needed by some.
+       offset_provider_type argument that is only needed by some.
     """
 
     type_synthesizer: Callable[..., TypeOrTypeSynthesizer]
 
     def __post_init__(self):
-        if "offset_provider" not in inspect.signature(self.type_synthesizer).parameters:
+        if "offset_provider_type" not in inspect.signature(self.type_synthesizer).parameters:
             synthesizer = self.type_synthesizer
-            self.type_synthesizer = lambda *args, offset_provider: synthesizer(*args)
+            self.type_synthesizer = lambda *args, offset_provider_type: synthesizer(*args)
 
     def __call__(
-        self, *args: TypeOrTypeSynthesizer, offset_provider: common.OffsetProvider
+        self, *args: TypeOrTypeSynthesizer, offset_provider_type: common.OffsetProviderType
     ) -> TypeOrTypeSynthesizer:
-        return self.type_synthesizer(*args, offset_provider=offset_provider)
+        return self.type_synthesizer(*args, offset_provider_type=offset_provider_type)
 
 
 TypeOrTypeSynthesizer = Union[ts.TypeSpec, TypeSynthesizer]
@@ -81,7 +81,7 @@ def _register_builtin_type_synthesizer(
 
 
 @_register_builtin_type_synthesizer(
-    fun_names=itir.UNARY_MATH_NUMBER_BUILTINS | itir.UNARY_MATH_FP_BUILTINS
+    fun_names=builtins.UNARY_MATH_NUMBER_BUILTINS | builtins.UNARY_MATH_FP_BUILTINS
 )
 def _(val: ts.ScalarType) -> ts.ScalarType:
     return val
@@ -92,21 +92,25 @@ def power(base: ts.ScalarType, exponent: ts.ScalarType) -> ts.ScalarType:
     return base
 
 
-@_register_builtin_type_synthesizer(fun_names=itir.BINARY_MATH_NUMBER_BUILTINS)
+@_register_builtin_type_synthesizer(fun_names=builtins.BINARY_MATH_NUMBER_BUILTINS)
 def _(lhs: ts.ScalarType, rhs: ts.ScalarType) -> ts.ScalarType:
+    if isinstance(lhs, ts.DeferredType):
+        return rhs
+    if isinstance(rhs, ts.DeferredType):
+        return lhs
     assert lhs == rhs
     return lhs
 
 
 @_register_builtin_type_synthesizer(
-    fun_names=itir.UNARY_MATH_FP_PREDICATE_BUILTINS | itir.UNARY_LOGICAL_BUILTINS
+    fun_names=builtins.UNARY_MATH_FP_PREDICATE_BUILTINS | builtins.UNARY_LOGICAL_BUILTINS
 )
 def _(arg: ts.ScalarType) -> ts.ScalarType:
     return ts.ScalarType(kind=ts.ScalarKind.BOOL)
 
 
 @_register_builtin_type_synthesizer(
-    fun_names=itir.BINARY_MATH_COMPARISON_BUILTINS | itir.BINARY_LOGICAL_BUILTINS
+    fun_names=builtins.BINARY_MATH_COMPARISON_BUILTINS | builtins.BINARY_LOGICAL_BUILTINS
 )
 def _(lhs: ts.ScalarType, rhs: ts.ScalarType) -> ts.ScalarType | ts.TupleType:
     return ts.ScalarType(kind=ts.ScalarKind.BOOL)
@@ -155,18 +159,18 @@ def if_(pred: ts.ScalarType, true_branch: ts.DataType, false_branch: ts.DataType
 
 
 @_register_builtin_type_synthesizer
-def make_const_list(scalar: ts.ScalarType) -> it_ts.ListType:
+def make_const_list(scalar: ts.ScalarType) -> ts.ListType:
     assert isinstance(scalar, ts.ScalarType)
-    return it_ts.ListType(element_type=scalar)
+    return ts.ListType(element_type=scalar)
 
 
 @_register_builtin_type_synthesizer
-def list_get(index: ts.ScalarType | it_ts.OffsetLiteralType, list_: it_ts.ListType) -> ts.DataType:
+def list_get(index: ts.ScalarType | it_ts.OffsetLiteralType, list_: ts.ListType) -> ts.DataType:
     if isinstance(index, it_ts.OffsetLiteralType):
         assert isinstance(index.value, ts.ScalarType)
         index = index.value
     assert isinstance(index, ts.ScalarType) and type_info.is_integral(index)
-    assert isinstance(list_, it_ts.ListType)
+    assert isinstance(list_, ts.ListType)
     return list_.element_type
 
 
@@ -193,26 +197,26 @@ def make_tuple(*args: ts.DataType) -> ts.TupleType:
 def index(arg: ts.DimensionType) -> ts.FieldType:
     return ts.FieldType(
         dims=[arg.dim],
-        dtype=ts.ScalarType(kind=getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())),
+        dtype=ts.ScalarType(kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper())),
     )
 
 
 @_register_builtin_type_synthesizer
-def neighbors(offset_literal: it_ts.OffsetLiteralType, it: it_ts.IteratorType) -> it_ts.ListType:
+def neighbors(offset_literal: it_ts.OffsetLiteralType, it: it_ts.IteratorType) -> ts.ListType:
     assert (
         isinstance(offset_literal, it_ts.OffsetLiteralType)
         and isinstance(offset_literal.value, common.Dimension)
         and offset_literal.value.kind == common.DimensionKind.LOCAL
     )
     assert isinstance(it, it_ts.IteratorType)
-    return it_ts.ListType(element_type=it.element_type)
+    return ts.ListType(element_type=it.element_type)
 
 
 @_register_builtin_type_synthesizer
 def lift(stencil: TypeSynthesizer) -> TypeSynthesizer:
     @TypeSynthesizer
     def apply_lift(
-        *its: it_ts.IteratorType, offset_provider: common.OffsetProvider
+        *its: it_ts.IteratorType, offset_provider_type: common.OffsetProviderType
     ) -> it_ts.IteratorType:
         assert all(isinstance(it, it_ts.IteratorType) for it in its)
         stencil_args = [
@@ -224,7 +228,7 @@ def lift(stencil: TypeSynthesizer) -> TypeSynthesizer:
             )
             for it in its
         ]
-        stencil_return_type = stencil(*stencil_args, offset_provider=offset_provider)
+        stencil_return_type = stencil(*stencil_args, offset_provider_type=offset_provider_type)
         assert isinstance(stencil_return_type, ts.DataType)
 
         position_dims = its[0].position_dims if its else []
@@ -270,7 +274,7 @@ def _convert_as_fieldop_input_to_iterator(
         else:
             defined_dims.append(dim)
     if is_nb_field:
-        element_type = it_ts.ListType(element_type=element_type)
+        element_type = ts.ListType(element_type=element_type)
 
     return it_ts.IteratorType(
         position_dims=domain.dims, defined_dims=defined_dims, element_type=element_type
@@ -282,7 +286,7 @@ def as_fieldop(
     stencil: TypeSynthesizer,
     domain: Optional[it_ts.DomainType] = None,
     *,
-    offset_provider: common.OffsetProvider,
+    offset_provider_type: common.OffsetProviderType,
 ) -> TypeSynthesizer:
     # In case we don't have a domain argument to `as_fieldop` we can not infer the exact result
     # type. In order to still allow some passes which don't need this information to run before the
@@ -299,12 +303,16 @@ def as_fieldop(
 
     @TypeSynthesizer
     def applied_as_fieldop(*fields) -> ts.FieldType | ts.DeferredType:
-        if any(isinstance(f, ts.DeferredType) for f in fields):
+        if any(
+            isinstance(el, ts.DeferredType)
+            for f in fields
+            for el in type_info.primitive_constituents(f)
+        ):
             return ts.DeferredType(constraint=None)
 
         stencil_return = stencil(
             *(_convert_as_fieldop_input_to_iterator(domain, field) for field in fields),
-            offset_provider=offset_provider,
+            offset_provider_type=offset_provider_type,
         )
         assert isinstance(stencil_return, ts.DataType)
         return type_info.apply_to_primitive_constituents(
@@ -324,8 +332,10 @@ def scan(
     assert isinstance(direction, ts.ScalarType) and direction.kind == ts.ScalarKind.BOOL
 
     @TypeSynthesizer
-    def apply_scan(*its: it_ts.IteratorType, offset_provider: common.OffsetProvider) -> ts.DataType:
-        result = scan_pass(init, *its, offset_provider=offset_provider)
+    def apply_scan(
+        *its: it_ts.IteratorType, offset_provider_type: common.OffsetProviderType
+    ) -> ts.DataType:
+        result = scan_pass(init, *its, offset_provider_type=offset_provider_type)
         assert isinstance(result, ts.DataType)
         return result
 
@@ -336,14 +346,14 @@ def scan(
 def map_(op: TypeSynthesizer) -> TypeSynthesizer:
     @TypeSynthesizer
     def applied_map(
-        *args: it_ts.ListType, offset_provider: common.OffsetProvider
-    ) -> it_ts.ListType:
+        *args: ts.ListType, offset_provider_type: common.OffsetProviderType
+    ) -> ts.ListType:
         assert len(args) > 0
-        assert all(isinstance(arg, it_ts.ListType) for arg in args)
+        assert all(isinstance(arg, ts.ListType) for arg in args)
         arg_el_types = [arg.element_type for arg in args]
-        el_type = op(*arg_el_types, offset_provider=offset_provider)
+        el_type = op(*arg_el_types, offset_provider_type=offset_provider_type)
         assert isinstance(el_type, ts.DataType)
-        return it_ts.ListType(element_type=el_type)
+        return ts.ListType(element_type=el_type)
 
     return applied_map
 
@@ -351,15 +361,17 @@ def map_(op: TypeSynthesizer) -> TypeSynthesizer:
 @_register_builtin_type_synthesizer
 def reduce(op: TypeSynthesizer, init: ts.TypeSpec) -> TypeSynthesizer:
     @TypeSynthesizer
-    def applied_reduce(*args: it_ts.ListType, offset_provider: common.OffsetProvider):
-        assert all(isinstance(arg, it_ts.ListType) for arg in args)
-        return op(init, *(arg.element_type for arg in args), offset_provider=offset_provider)
+    def applied_reduce(*args: ts.ListType, offset_provider_type: common.OffsetProviderType):
+        assert all(isinstance(arg, ts.ListType) for arg in args)
+        return op(
+            init, *(arg.element_type for arg in args), offset_provider_type=offset_provider_type
+        )
 
     return applied_reduce
 
 
 @_register_builtin_type_synthesizer
-def shift(*offset_literals, offset_provider: common.OffsetProvider) -> TypeSynthesizer:
+def shift(*offset_literals, offset_provider_type: common.OffsetProviderType) -> TypeSynthesizer:
     @TypeSynthesizer
     def apply_shift(
         it: it_ts.IteratorType | ts.DeferredType,
@@ -375,19 +387,19 @@ def shift(*offset_literals, offset_provider: common.OffsetProvider) -> TypeSynth
             assert isinstance(offset_axis, it_ts.OffsetLiteralType) and isinstance(
                 offset_axis.value, common.Dimension
             )
-            provider = offset_provider[offset_axis.value.value]  # TODO: naming
-            if isinstance(provider, common.Dimension):
+            type_ = offset_provider_type[offset_axis.value.value]
+            if isinstance(type_, common.Dimension):
                 pass
-            elif isinstance(provider, common.Connectivity):
+            elif isinstance(type_, common.NeighborConnectivityType):
                 found = False
                 for i, dim in enumerate(new_position_dims):
-                    if dim.value == provider.origin_axis.value:
+                    if dim.value == type_.source_dim.value:
                         assert not found
-                        new_position_dims[i] = provider.neighbor_axis
+                        new_position_dims[i] = type_.codomain
                         found = True
                 assert found
             else:
-                raise NotImplementedError()
+                raise NotImplementedError(f"{type_} is not a supported Connectivity type.")
         return it_ts.IteratorType(
             position_dims=new_position_dims,
             defined_dims=it.defined_dims,

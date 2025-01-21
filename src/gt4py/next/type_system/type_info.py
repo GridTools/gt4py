@@ -23,6 +23,8 @@ from typing import (
 )
 
 import numpy as np
+
+
 try:
     import ml_dtypes
 except ModuleNotFoundError:
@@ -82,15 +84,15 @@ def type_class(symbol_type: ts.TypeSpec) -> Type[ts.TypeSpec]:
     >>> type_class(ts.TupleType(types=[])).__name__
     'TupleType'
     """
-    match symbol_type:
-        case ts.DeferredType(constraint):
-            if constraint is None:
-                raise ValueError(f"No type information available for '{symbol_type}'.")
-            elif isinstance(constraint, tuple):
-                raise ValueError(f"Not sufficient type information available for '{symbol_type}'.")
-            return constraint
-        case ts.TypeSpec() as concrete_type:
-            return concrete_type.__class__
+    if isinstance(symbol_type, ts.DeferredType):
+        constraint = symbol_type.constraint
+        if constraint is None:
+            raise ValueError(f"No type information available for '{symbol_type}'.")
+        elif isinstance(constraint, tuple):
+            raise ValueError(f"Not sufficient type information available for '{symbol_type}'.")
+        return constraint
+    if isinstance(symbol_type, ts.TypeSpec):
+        return symbol_type.__class__
     raise ValueError(
         f"Invalid type for TypeInfo: requires '{ts.TypeSpec}', got '{type(symbol_type)}'."
     )
@@ -177,7 +179,7 @@ def apply_to_primitive_constituents(
     ...     with_path_arg=True,
     ...     tuple_constructor=lambda *elements: dict(elements),
     ... )
-    {(0,): ScalarType(kind=<ScalarKind.INT64: 64>, shape=None), (1,): ScalarType(kind=<ScalarKind.INT64: 64>, shape=None)}
+    {(0,): ScalarType(kind=<ScalarKind.INT64: 8>, shape=None), (1,): ScalarType(kind=<ScalarKind.INT64: 8>, shape=None)}
     """
     if isinstance(symbol_types[0], ts.TupleType):
         assert all(isinstance(symbol_type, ts.TupleType) for symbol_type in symbol_types)
@@ -201,7 +203,7 @@ def apply_to_primitive_constituents(
         return fun(*symbol_types)
 
 
-def extract_dtype(symbol_type: ts.TypeSpec) -> ts.ScalarType:
+def extract_dtype(symbol_type: ts.TypeSpec) -> ts.ScalarType | ts.ListType:
     """
     Extract the data type from ``symbol_type`` if it is either `FieldType` or `ScalarType`.
 
@@ -238,9 +240,8 @@ def is_floating_point(symbol_type: ts.TypeSpec) -> bool:
     >>> is_floating_point(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)))
     True
     """
-    return extract_dtype(symbol_type).kind in [
-        ts.ScalarKind.FLOAT16,
-        ts.ScalarKind.BFLOAT16,
+
+    return isinstance(dtype := extract_dtype(symbol_type), ts.ScalarType) and dtype.kind in [
         ts.ScalarKind.FLOAT32,
         ts.ScalarKind.FLOAT64,
     ]
@@ -309,7 +310,10 @@ def is_number(symbol_type: ts.TypeSpec) -> bool:
 
 
 def is_logical(symbol_type: ts.TypeSpec) -> bool:
-    return extract_dtype(symbol_type).kind is ts.ScalarKind.BOOL
+    return (
+        isinstance(dtype := extract_dtype(symbol_type), ts.ScalarType)
+        and dtype.kind is ts.ScalarKind.BOOL
+    )
 
 
 def is_arithmetic(symbol_type: ts.TypeSpec) -> bool:
@@ -333,7 +337,10 @@ def is_arithmetic(symbol_type: ts.TypeSpec) -> bool:
 def arithmetic_bounds(arithmetic_type: ts.ScalarType) -> tuple[np.number, np.number]:
     assert is_arithmetic(arithmetic_type)
     bounds = {  # type: ignore[return-value] # why resolved to `tuple[object, object]`?
-        ts.ScalarKind.FLOAT16: (np.finfo(np.float16).min, np.finfo(np.float16).max),  # todo: cleanup?
+        ts.ScalarKind.FLOAT16: (
+            np.finfo(np.float16).min,
+            np.finfo(np.float16).max,
+        ),  # todo: cleanup?
         ts.ScalarKind.FLOAT32: (np.finfo(np.float32).min, np.finfo(np.float32).max),
         ts.ScalarKind.FLOAT64: (np.finfo(np.float64).min, np.finfo(np.float64).max),
         ts.ScalarKind.INT8: (np.iinfo(np.int8).min, np.iinfo(np.int8).max),
@@ -346,7 +353,10 @@ def arithmetic_bounds(arithmetic_type: ts.ScalarType) -> tuple[np.number, np.num
         ts.ScalarKind.UINT64: (np.iinfo(np.uint64).min, np.iinfo(np.uint64).max),
     }
     if ml_dtypes:
-        bounds[ts.ScalarKind.BFLOAT16] = (ml_dtypes.finfo(ml_dtypes.bfloat16).min, ml_dtypes.finfo(ml_dtypes.bfloat16).max)
+        bounds[ts.ScalarKind.BFLOAT16] = (
+            ml_dtypes.finfo(ml_dtypes.bfloat16).min,
+            ml_dtypes.finfo(ml_dtypes.bfloat16).max,
+        )
     return bounds[arithmetic_type.kind]
 
 
@@ -409,11 +419,10 @@ def extract_dims(symbol_type: ts.TypeSpec) -> list[common.Dimension]:
     >>> extract_dims(ts.FieldType(dims=[I, J], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)))
     [Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)]
     """
-    match symbol_type:
-        case ts.ScalarType():
-            return []
-        case ts.FieldType(dims):
-            return dims
+    if isinstance(symbol_type, ts.ScalarType):
+        return []
+    if isinstance(symbol_type, ts.FieldType):
+        return symbol_type.dims
     raise ValueError(f"Can not extract dimensions from '{symbol_type}'.")
 
 
@@ -483,7 +492,9 @@ def is_concretizable(symbol_type: ts.TypeSpec, to_type: ts.TypeSpec) -> bool:
 
     """
     if isinstance(symbol_type, ts.DeferredType) and (
-        symbol_type.constraint is None or issubclass(type_class(to_type), symbol_type.constraint)
+        symbol_type.constraint is None
+        or (isinstance(to_type, ts.DeferredType) and to_type.constraint is None)
+        or issubclass(type_class(to_type), symbol_type.constraint)
     ):
         return True
     elif is_concrete(symbol_type):
@@ -524,7 +535,9 @@ def promote(
         return types[0]
     elif all(isinstance(type_, (ts.ScalarType, ts.FieldType)) for type_ in types):
         dims = common.promote_dims(*(extract_dims(type_) for type_ in types))
-        dtype = cast(ts.ScalarType, promote(*(extract_dtype(type_) for type_ in types)))
+        extracted_dtypes = [extract_dtype(type_) for type_ in types]
+        assert all(isinstance(dtype, ts.ScalarType) for dtype in extracted_dtypes)
+        dtype = cast(ts.ScalarType, promote(*extracted_dtypes))  # type: ignore[arg-type] # checked is `ScalarType`
 
         return ts.FieldType(dims=dims, dtype=dtype)
     raise TypeError("Expected a 'FieldType' or 'ScalarType'.")

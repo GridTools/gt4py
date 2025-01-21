@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import builtins
 import collections.abc
-import dataclasses
 import functools
 import types
 import typing
@@ -18,6 +17,8 @@ from typing import Any, ForwardRef, Optional
 
 import numpy as np
 import numpy.typing as npt
+
+
 try:
     import ml_dtypes
 except ModuleNotFoundError:
@@ -52,6 +53,7 @@ def get_scalar_kind(dtype: npt.DTypeLike) -> ts.ScalarKind:
                 return getattr(ts.ScalarKind, dt.name.upper())
             case _ if ml_dtypes and dt == ml_dtypes.bfloat16:
                 return ts.ScalarKind.BFLOAT16
+
             case _:
                 raise ValueError(f"Impossible to map '{dtype}' value to a 'ScalarKind'.")
     else:
@@ -105,7 +107,7 @@ def from_type_hint(
                 raise ValueError(f"Unbound tuples '{type_hint}' are not allowed.")
             tuple_types = [recursive_make_symbol(arg) for arg in args]
             assert all(isinstance(elem, ts.DataType) for elem in tuple_types)
-            return ts.TupleType(types=tuple_types)  # type: ignore[arg-type] # checked in assert
+            return ts.TupleType(types=tuple_types)
 
         case common.Field:
             if (n_args := len(args)) != 2:
@@ -168,7 +170,6 @@ def from_type_hint(
     raise ValueError(f"'{type_hint}' type is not supported.")
 
 
-@dataclasses.dataclass(frozen=True)
 class UnknownPythonObject(ts.TypeSpec):
     _object: Any
 
@@ -217,9 +218,9 @@ def from_value(value: Any) -> ts.TypeSpec:
         # not needed anymore.
         elems = [from_value(el) for el in value]
         assert all(isinstance(elem, ts.DataType) for elem in elems)
-        return ts.TupleType(types=elems)  # type: ignore[arg-type] # checked in assert
+        return ts.TupleType(types=elems)
     elif isinstance(value, types.ModuleType):
-        return UnknownPythonObject(_object=value)
+        return UnknownPythonObject(value)
     else:
         type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
         symbol_type = from_type_hint(type_)
@@ -245,9 +246,9 @@ def as_dtype(type_: ts.ScalarType) -> core_defs.DType:
         return core_defs.Int32DType()
     elif type_.kind == ts.ScalarKind.INT64:
         return core_defs.Int64DType()
-    elif type_.kind == ts.ScalarKind.FLOAT16: # TODO
+    elif type_.kind == ts.ScalarKind.FLOAT16:  # TODO
         return core_defs.Float16DType()
-    elif type_.kind == ts.ScalarKind.BFLOAT16: # TODO
+    elif type_.kind == ts.ScalarKind.BFLOAT16:  # TODO
         return core_defs.BFloat16DType()
     elif type_.kind == ts.ScalarKind.FLOAT32:
         return core_defs.Float32DType()
@@ -269,9 +270,9 @@ def from_dtype(dtype: core_defs.DType) -> ts.ScalarType:
         return ts.ScalarType(kind=ts.ScalarKind.INT32)
     elif dtype == core_defs.Int64DType():
         return ts.ScalarType(kind=ts.ScalarKind.INT64)
-    elif dtype == core_defs.Float16DType(): #TODO
+    elif dtype == core_defs.Float16DType():  # TODO
         return ts.ScalarType(kind=ts.ScalarKind.FLOAT16)
-    elif dtype == core_defs.BFloat16DType(): #TODO
+    elif dtype == core_defs.BFloat16DType():  # TODO
         return ts.ScalarType(kind=ts.ScalarKind.BFLOAT16)
     elif dtype == core_defs.Float32DType():
         return ts.ScalarType(kind=ts.ScalarKind.FLOAT32)

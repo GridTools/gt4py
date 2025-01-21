@@ -7,6 +7,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from gt4py.next.iterator.dispatcher import Dispatcher
+
+
 try:
     import ml_dtypes
 except ModuleNotFoundError:
@@ -386,9 +388,11 @@ def float(*args):  # noqa: A001 [builtin-variable-shadowing]
 
 
 if ml_dtypes:
+
     @builtin_dispatch
     def bfloat16(*args):
         raise BackendNotSelectedError()
+
 
 @builtin_dispatch
 def float16(*args):
@@ -411,6 +415,7 @@ def bool(*args):  # noqa: A001 [builtin-variable-shadowing]
 
 
 UNARY_MATH_NUMBER_BUILTINS = {"abs"}
+UNARY_LOGICAL_BUILTINS = {"not_"}
 UNARY_MATH_FP_BUILTINS = {
     "sin",
     "cos",
@@ -434,8 +439,24 @@ UNARY_MATH_FP_BUILTINS = {
     "trunc",
 }
 UNARY_MATH_FP_PREDICATE_BUILTINS = {"isfinite", "isinf", "isnan"}
-BINARY_MATH_NUMBER_BUILTINS = {"minimum", "maximum", "fmod", "power"}
-TYPEBUILTINS = {
+BINARY_MATH_NUMBER_BUILTINS = {
+    "plus",
+    "minus",
+    "multiplies",
+    "divides",
+    "mod",
+    "floordiv",  # TODO see https://github.com/GridTools/gt4py/issues/1136
+    "minimum",
+    "maximum",
+    "fmod",
+}
+BINARY_MATH_COMPARISON_BUILTINS = {"eq", "less", "greater", "greater_equal", "less_equal", "not_eq"}
+BINARY_LOGICAL_BUILTINS = {"and_", "or_", "xor_"}
+
+
+#: builtin / dtype used to construct integer indices, like domain bounds
+INTEGER_INDEX_BUILTIN = "int32"
+INTEGER_TYPE_BUILTINS = {
     "int8",
     "uint8",
     "int16",
@@ -444,58 +465,45 @@ TYPEBUILTINS = {
     "uint32",
     "int64",
     "uint64",
-    "float16",
-    "float32",
-    "float64",
-    "bool",
-}  # TODO(tehrengruber): This list already exists in ir.py; unify.
+}
+FLOATING_POINT_TYPE_BUILTINS = {"float16", "float32", "float64"}
 if ml_dtypes:
-    TYPEBUILTINS.add("bfloat16")
+    FLOATING_POINT_TYPE_BUILTINS.add("bfloat16")
+TYPE_BUILTINS = {*INTEGER_TYPE_BUILTINS, *FLOATING_POINT_TYPE_BUILTINS, "bool"}
 
-MATH_BUILTINS = (
-    UNARY_MATH_NUMBER_BUILTINS
-    | UNARY_MATH_FP_BUILTINS
-    | UNARY_MATH_FP_PREDICATE_BUILTINS
-    | BINARY_MATH_NUMBER_BUILTINS
-    | TYPEBUILTINS
-)
+ARITHMETIC_BUILTINS = {
+    *UNARY_MATH_NUMBER_BUILTINS,
+    *UNARY_LOGICAL_BUILTINS,
+    *UNARY_MATH_FP_BUILTINS,
+    *UNARY_MATH_FP_PREDICATE_BUILTINS,
+    *BINARY_MATH_NUMBER_BUILTINS,
+    "power",
+    *BINARY_MATH_COMPARISON_BUILTINS,
+    *BINARY_LOGICAL_BUILTINS,
+}
+
 BUILTINS = {
-    "deref",
+    "as_fieldop",  # `as_fieldop(stencil, domain)` creates field_operator from stencil (domain is optional, but for now required for embedded execution)
     "can_deref",
-    "shift",
-    "neighbors",
-    "list_get",
-    "make_const_list",
-    "map_",
-    "lift",
-    "reduce",
-    "plus",
-    "minus",
-    "multiplies",
-    "divides",
-    "floordiv",
-    "mod",
-    "make_tuple",
-    "tuple_get",
-    "if_",
-    "cast_",
-    "greater",
-    "less",
-    "less_equal",
-    "greater_equal",
-    "eq",
-    "not_eq",
-    "not_",
-    "and_",
-    "or_",
-    "xor_",
-    "scan",
     "cartesian_domain",
-    "unstructured_domain",
+    "cast_",
+    "deref",
+    "if_",
+    "index",  # `index(dim)` creates a dim-field that has the current index at each point
+    "shift",
+    "list_get",
+    "lift",
+    "make_const_list",
+    "make_tuple",
+    "map_",
     "named_range",
-    "as_fieldop",
-    "index",
-    *MATH_BUILTINS,
+    "neighbors",
+    "reduce",
+    "scan",
+    "tuple_get",
+    "unstructured_domain",
+    *ARITHMETIC_BUILTINS,
+    *TYPE_BUILTINS,
 }
 
 __all__ = [*BUILTINS]

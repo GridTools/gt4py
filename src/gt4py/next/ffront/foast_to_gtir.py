@@ -236,6 +236,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs: Any) -> itir.Expr:
         # TODO(tehrengruber): extend iterator ir to support unary operators
         dtype = type_info.extract_dtype(node.type)
+        assert isinstance(dtype, ts.ScalarType)
         if node.op in [dialect_ast_enums.UnaryOperator.NOT, dialect_ast_enums.UnaryOperator.INVERT]:
             if dtype.kind != ts.ScalarKind.BOOL:
                 raise NotImplementedError(f"'{node.op}' is only supported on 'bool' arguments.")
@@ -359,13 +360,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         obj, new_type = self.visit(node.args[0], **kwargs), node.args[1].id
 
         def create_cast(expr: itir.Expr, t: tuple[ts.TypeSpec]) -> itir.FunCall:
-            if isinstance(t[0], ts.FieldType):
-                return im.as_fieldop(
-                    im.lambda_("__val")(im.call("cast_")(im.deref("__val"), str(new_type)))
-                )(expr)
-            else:
-                assert isinstance(t[0], ts.ScalarType)
-                return im.call("cast_")(expr, str(new_type))
+            return _map(im.lambda_("val")(im.call("cast_")("val", str(new_type))), (expr,), t)
 
         if not isinstance(node.type, ts.TupleType):  # to keep the IR simpler
             return create_cast(obj, (node.args[0].type,))
@@ -423,12 +418,14 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
     def _visit_max_over(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         dtype = type_info.extract_dtype(node.type)
+        assert isinstance(dtype, ts.ScalarType)
         min_value, _ = type_info.arithmetic_bounds(dtype)
         init_expr = self._make_literal(str(min_value), dtype)
         return self._make_reduction_expr(node, "maximum", init_expr, **kwargs)
 
     def _visit_min_over(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         dtype = type_info.extract_dtype(node.type)
+        assert isinstance(dtype, ts.ScalarType)
         _, max_value = type_info.arithmetic_bounds(dtype)
         init_expr = self._make_literal(str(max_value), dtype)
         return self._make_reduction_expr(node, "minimum", init_expr, **kwargs)

@@ -5,6 +5,7 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
+import copy
 
 # TODO: test failure when something is not typed after inference is run
 # TODO: test lift with no args
@@ -15,6 +16,7 @@
 
 import pytest
 
+from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.type_system import (
@@ -23,13 +25,12 @@ from gt4py.next.iterator.type_system import (
 )
 from gt4py.next.type_system import type_specifications as ts
 
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import simple_mesh
-
 from next_tests.integration_tests.cases import (
     C2E,
     E2V,
     V2E,
     E2VDim,
+    Edge,
     IDim,
     Ioff,
     JDim,
@@ -37,17 +38,18 @@ from next_tests.integration_tests.cases import (
     Koff,
     V2EDim,
     Vertex,
-    Edge,
-    mesh_descriptor,
     exec_alloc_descriptor,
+    mesh_descriptor,
     unstructured_case,
 )
+from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import simple_mesh
+
 
 bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
 int_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
 float64_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
-float64_list_type = it_ts.ListType(element_type=float64_type)
-int_list_type = it_ts.ListType(element_type=int_type)
+float64_list_type = ts.ListType(element_type=float64_type)
+int_list_type = ts.ListType(element_type=int_type)
 
 float_i_field = ts.FieldType(dims=[IDim], dtype=float64_type)
 float_vertex_k_field = ts.FieldType(dims=[Vertex, KDim], dtype=float64_type)
@@ -77,10 +79,12 @@ def expression_test_cases():
         (im.deref(im.ref("it", it_on_e_of_e_type)), it_on_e_of_e_type.element_type),
         (im.call("can_deref")(im.ref("it", it_on_e_of_e_type)), bool_type),
         (im.if_(True, 1, 2), int_type),
-        (im.call("make_const_list")(True), it_ts.ListType(element_type=bool_type)),
-        (im.call("list_get")(0, im.ref("l", it_ts.ListType(element_type=bool_type))), bool_type),
+        (im.call("make_const_list")(True), ts.ListType(element_type=bool_type)),
+        (im.call("list_get")(0, im.ref("l", ts.ListType(element_type=bool_type))), bool_type),
         (
-            im.call("named_range")(itir.AxisLiteral(value="Vertex"), 0, 1),
+            im.call("named_range")(
+                itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL), 0, 1
+            ),
             it_ts.NamedRangeType(dim=Vertex),
         ),
         (
@@ -91,7 +95,9 @@ def expression_test_cases():
         ),
         (
             im.call("unstructured_domain")(
-                im.call("named_range")(itir.AxisLiteral(value="Vertex"), 0, 1)
+                im.call("named_range")(
+                    itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL), 0, 1
+                )
             ),
             it_ts.DomainType(dims=[Vertex]),
         ),
@@ -110,7 +116,7 @@ def expression_test_cases():
         # neighbors
         (
             im.neighbors("E2V", im.ref("a", it_on_e_of_e_type)),
-            it_ts.ListType(element_type=it_on_e_of_e_type.element_type),
+            ts.ListType(element_type=it_on_e_of_e_type.element_type),
         ),
         # cast
         (im.call("cast_")(1, "int32"), int_type),
@@ -157,8 +163,14 @@ def expression_test_cases():
                 im.call("as_fieldop")(
                     im.lambda_("it")(im.deref(im.shift("V2E", 0)("it"))),
                     im.call("unstructured_domain")(
-                        im.call("named_range")(itir.AxisLiteral(value="Vertex"), 0, 1),
-                        im.call("named_range")(itir.AxisLiteral(value="KDim"), 0, 1),
+                        im.call("named_range")(
+                            itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL),
+                            0,
+                            1,
+                        ),
+                        im.call("named_range")(
+                            itir.AxisLiteral(value="KDim", kind=common.DimensionKind.VERTICAL), 0, 1
+                        ),
                     ),
                 )
             )(im.ref("inp", float_edge_k_field)),
@@ -218,11 +230,11 @@ def expression_test_cases():
 @pytest.mark.parametrize("test_case", expression_test_cases())
 def test_expression_type(test_case):
     mesh = simple_mesh()
-    offset_provider = {**mesh.offset_provider, "Ioff": IDim, "Joff": JDim, "Koff": KDim}
+    offset_provider_type = {**mesh.offset_provider_type, "Ioff": IDim, "Joff": JDim, "Koff": KDim}
 
     testee, expected_type = test_case
     result = itir_type_inference.infer(
-        testee, offset_provider=offset_provider, allow_undeclared_symbols=True
+        testee, offset_provider_type=offset_provider_type, allow_undeclared_symbols=True
     )
     assert result.type == expected_type
 
@@ -231,14 +243,16 @@ def test_adhoc_polymorphism():
     func = im.lambda_("a")(im.lambda_("b")(im.make_tuple("a", "b")))
     testee = im.call(im.call(func)(im.ref("a_", bool_type)))(im.ref("b_", int_type))
 
-    result = itir_type_inference.infer(testee, offset_provider={}, allow_undeclared_symbols=True)
+    result = itir_type_inference.infer(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True
+    )
 
     assert result.type == ts.TupleType(types=[bool_type, int_type])
 
 
 def test_aliased_function():
     testee = im.let("f", im.lambda_("x")("x"))(im.call("f")(1))
-    result = itir_type_inference.infer(testee, offset_provider={})
+    result = itir_type_inference.infer(testee, offset_provider_type={})
 
     assert result.args[0].type == ts.FunctionType(
         pos_only_args=[int_type], pos_or_kw_args={}, kw_only_args={}, returns=int_type
@@ -253,7 +267,7 @@ def test_late_offset_axis():
     testee = im.call(func)(im.ensure_offset("V2E"))
 
     result = itir_type_inference.infer(
-        testee, offset_provider=mesh.offset_provider, allow_undeclared_symbols=True
+        testee, offset_provider_type=mesh.offset_provider_type, allow_undeclared_symbols=True
     )
     assert result.type == it_on_e_of_e_type
 
@@ -265,101 +279,84 @@ def test_cast_first_arg_inference():
     testee = im.call("cast_")(
         im.plus(im.literal_from_value(1), im.literal_from_value(2)), "float64"
     )
-    result = itir_type_inference.infer(testee, offset_provider={}, allow_undeclared_symbols=True)
+    result = itir_type_inference.infer(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True
+    )
 
     assert result.args[0].type == int_type
     assert result.type == float64_type
 
 
-# TODO(tehrengruber): Rewrite tests to use itir.Program
 def test_cartesian_fencil_definition():
     cartesian_domain = im.call("cartesian_domain")(
         im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
     )
 
-    testee = itir.FencilDefinition(
+    testee = itir.Program(
         id="f",
         function_definitions=[],
         params=[im.sym("inp", float_i_field), im.sym("out", float_i_field)],
-        closures=[
-            itir.StencilClosure(
+        declarations=[],
+        body=[
+            itir.SetAt(
+                expr=im.call(im.call("as_fieldop")(im.ref("deref"), cartesian_domain))(
+                    im.ref("inp")
+                ),
                 domain=cartesian_domain,
-                stencil=im.ref("deref"),
-                output=im.ref("out"),
-                inputs=[im.ref("inp")],
+                target=im.ref("out"),
             ),
         ],
     )
 
-    result = itir_type_inference.infer(testee, offset_provider={"Ioff": IDim})
+    result = itir_type_inference.infer(testee, offset_provider_type={"Ioff": IDim})
 
-    closure_type = it_ts.StencilClosureType(
-        domain=it_ts.DomainType(dims=[IDim]),
-        stencil=ts.FunctionType(
-            pos_only_args=[
-                it_ts.IteratorType(
-                    position_dims=[IDim], defined_dims=[IDim], element_type=float64_type
-                )
-            ],
-            pos_or_kw_args={},
-            kw_only_args={},
-            returns=float64_type,
-        ),
-        output=float_i_field,
-        inputs=[float_i_field],
-    )
-    fencil_type = it_ts.FencilType(
-        params={"inp": float_i_field, "out": float_i_field}, closures=[closure_type]
-    )
-    assert result.type == fencil_type
-    assert result.closures[0].type == closure_type
+    program_type = it_ts.ProgramType(params={"inp": float_i_field, "out": float_i_field})
+    assert result.type == program_type
+    domain_type = it_ts.DomainType(dims=[IDim])
+    assert result.body[0].domain.type == domain_type
+    assert result.body[0].expr.type == float_i_field
+    assert result.body[0].target.type == float_i_field
 
 
 def test_unstructured_fencil_definition():
     mesh = simple_mesh()
     unstructured_domain = im.call("unstructured_domain")(
-        im.call("named_range")(itir.AxisLiteral(value="Vertex"), 0, 1),
-        im.call("named_range")(itir.AxisLiteral(value="KDim"), 0, 1),
+        im.call("named_range")(
+            itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL), 0, 1
+        ),
+        im.call("named_range")(
+            itir.AxisLiteral(value="KDim", kind=common.DimensionKind.VERTICAL), 0, 1
+        ),
     )
 
-    testee = itir.FencilDefinition(
+    testee = itir.Program(
         id="f",
         function_definitions=[],
         params=[im.sym("inp", float_edge_k_field), im.sym("out", float_vertex_k_field)],
-        closures=[
-            itir.StencilClosure(
+        declarations=[],
+        body=[
+            itir.SetAt(
+                expr=im.call(
+                    im.call("as_fieldop")(
+                        im.lambda_("it")(im.deref(im.shift("V2E", 0)("it"))), unstructured_domain
+                    )
+                )(im.ref("inp")),
                 domain=unstructured_domain,
-                stencil=im.lambda_("it")(im.deref(im.shift("V2E", 0)("it"))),
-                output=im.ref("out"),
-                inputs=[im.ref("inp")],
+                target=im.ref("out"),
             ),
         ],
     )
 
-    result = itir_type_inference.infer(testee, offset_provider=mesh.offset_provider)
+    result = itir_type_inference.infer(testee, offset_provider_type=mesh.offset_provider_type)
 
-    closure_type = it_ts.StencilClosureType(
-        domain=it_ts.DomainType(dims=[Vertex, KDim]),
-        stencil=ts.FunctionType(
-            pos_only_args=[
-                it_ts.IteratorType(
-                    position_dims=[Vertex, KDim],
-                    defined_dims=[Edge, KDim],
-                    element_type=float64_type,
-                )
-            ],
-            pos_or_kw_args={},
-            kw_only_args={},
-            returns=float64_type,
-        ),
-        output=float_vertex_k_field,
-        inputs=[float_edge_k_field],
+    program_type = it_ts.ProgramType(
+        params={"inp": float_edge_k_field, "out": float_vertex_k_field}
     )
-    fencil_type = it_ts.FencilType(
-        params={"inp": float_edge_k_field, "out": float_vertex_k_field}, closures=[closure_type]
-    )
-    assert result.type == fencil_type
-    assert result.closures[0].type == closure_type
+    assert result.type == program_type
+    domain_type = it_ts.DomainType(dims=[Vertex, KDim])
+    assert result.body[0].domain.type == domain_type
+    assert result.body[0].expr.type == float_vertex_k_field
+    assert result.body[0].target.type == float_vertex_k_field
 
 
 def test_function_definition():
@@ -367,72 +364,66 @@ def test_function_definition():
         im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
     )
 
-    testee = itir.FencilDefinition(
+    testee = itir.Program(
         id="f",
         function_definitions=[
             itir.FunctionDefinition(id="foo", params=[im.sym("it")], expr=im.deref("it")),
             itir.FunctionDefinition(id="bar", params=[im.sym("it")], expr=im.call("foo")("it")),
         ],
         params=[im.sym("inp", float_i_field), im.sym("out", float_i_field)],
-        closures=[
-            itir.StencilClosure(
+        declarations=[],
+        body=[
+            itir.SetAt(
                 domain=cartesian_domain,
-                stencil=im.ref("bar"),
-                output=im.ref("out"),
-                inputs=[im.ref("inp")],
+                expr=im.call(im.call("as_fieldop")(im.ref("bar"), cartesian_domain))(im.ref("inp")),
+                target=im.ref("out"),
             ),
         ],
     )
 
-    result = itir_type_inference.infer(testee, offset_provider={"Ioff": IDim})
+    result = itir_type_inference.infer(testee, offset_provider_type={"Ioff": IDim})
 
-    closure_type = it_ts.StencilClosureType(
-        domain=it_ts.DomainType(dims=[IDim]),
-        stencil=ts.FunctionType(
-            pos_only_args=[
-                it_ts.IteratorType(
-                    position_dims=[IDim], defined_dims=[IDim], element_type=float64_type
-                )
-            ],
-            pos_or_kw_args={},
-            kw_only_args={},
-            returns=float64_type,
-        ),
-        output=float_i_field,
-        inputs=[float_i_field],
-    )
-    fencil_type = it_ts.FencilType(
-        params={"inp": float_i_field, "out": float_i_field}, closures=[closure_type]
-    )
-    assert result.type == fencil_type
-    assert result.closures[0].type == closure_type
+    program_type = it_ts.ProgramType(params={"inp": float_i_field, "out": float_i_field})
+    assert result.type == program_type
+    assert result.body[0].expr.type == float_i_field
+    assert result.body[0].target.type == float_i_field
 
 
 def test_fencil_with_nb_field_input():
     mesh = simple_mesh()
     unstructured_domain = im.call("unstructured_domain")(
-        im.call("named_range")(itir.AxisLiteral(value="Vertex"), 0, 1),
-        im.call("named_range")(itir.AxisLiteral(value="KDim"), 0, 1),
+        im.call("named_range")(
+            itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL), 0, 1
+        ),
+        im.call("named_range")(
+            itir.AxisLiteral(value="KDim", kind=common.DimensionKind.VERTICAL), 0, 1
+        ),
     )
 
-    testee = itir.FencilDefinition(
+    testee = itir.Program(
         id="f",
         function_definitions=[],
         params=[im.sym("inp", float_vertex_v2e_field), im.sym("out", float_vertex_k_field)],
-        closures=[
-            itir.StencilClosure(
+        declarations=[],
+        body=[
+            itir.SetAt(
                 domain=unstructured_domain,
-                stencil=im.lambda_("it")(im.call(im.call("reduce")("plus", 0.0))(im.deref("it"))),
-                output=im.ref("out"),
-                inputs=[im.ref("inp")],
+                expr=im.call(
+                    im.call("as_fieldop")(
+                        im.lambda_("it")(im.call(im.call("reduce")("plus", 0.0))(im.deref("it"))),
+                        unstructured_domain,
+                    )
+                )(im.ref("inp")),
+                target=im.ref("out"),
             ),
         ],
     )
 
-    result = itir_type_inference.infer(testee, offset_provider=mesh.offset_provider)
+    result = itir_type_inference.infer(testee, offset_provider_type=mesh.offset_provider_type)
 
-    assert result.closures[0].stencil.expr.args[0].type == float64_list_type
-    assert result.closures[0].stencil.type.returns == float64_type
+    stencil = result.body[0].expr.fun.args[0]
+    assert stencil.expr.args[0].type == float64_list_type
+    assert stencil.type.returns == float64_type
 
 
 def test_program_tuple_setat_short_target():
@@ -456,7 +447,7 @@ def test_program_tuple_setat_short_target():
         ],
     )
 
-    result = itir_type_inference.infer(testee, offset_provider={"Ioff": IDim})
+    result = itir_type_inference.infer(testee, offset_provider_type={"Ioff": IDim})
 
     assert (
         isinstance(result.body[0].expr.type, ts.TupleType)
@@ -487,7 +478,7 @@ def test_program_setat_without_domain():
         ],
     )
 
-    result = itir_type_inference.infer(testee, offset_provider={"Ioff": IDim})
+    result = itir_type_inference.infer(testee, offset_provider_type={"Ioff": IDim})
 
     assert (
         isinstance(result.body[0].expr.type, ts.DeferredType)
@@ -512,7 +503,9 @@ def test_if_stmt():
         false_branch=[],
     )
 
-    result = itir_type_inference.infer(testee, offset_provider={}, allow_undeclared_symbols=True)
+    result = itir_type_inference.infer(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True
+    )
     assert result.cond.type == bool_type
     assert result.true_branch[0].expr.type == float_i_field
 
@@ -522,9 +515,27 @@ def test_as_fieldop_without_domain():
         im.ref("inp", float_i_field)
     )
     result = itir_type_inference.infer(
-        testee, offset_provider={"IOff": IDim}, allow_undeclared_symbols=True
+        testee, offset_provider_type={"IOff": IDim}, allow_undeclared_symbols=True
     )
     assert result.type == ts.DeferredType(constraint=ts.FieldType)
     assert result.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
         position_dims="unknown", defined_dims=float_i_field.dims, element_type=float_i_field.dtype
     )
+
+
+def test_reinference():
+    testee = im.make_tuple(im.ref("inp1", float_i_field), im.ref("inp2", float_i_field))
+    result = itir_type_inference.reinfer(copy.deepcopy(testee))
+    assert result.type == ts.TupleType(types=[float_i_field, float_i_field])
+
+
+def test_func_reinference():
+    f_type = ts.FunctionType(
+        pos_only_args=[],
+        pos_or_kw_args={},
+        kw_only_args={},
+        returns=float_i_field,
+    )
+    testee = im.call(im.ref("f", f_type))()
+    result = itir_type_inference.reinfer(copy.deepcopy(testee))
+    assert result.type == float_i_field

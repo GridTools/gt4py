@@ -11,10 +11,7 @@ import pytest
 
 from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
-from gt4py.next import allocators as next_allocators, common, float32
-from gt4py.next.program_processors.runners import roundtrip
-
-from next_tests.integration_tests import cases
+from gt4py.next import allocators as next_allocators, common
 
 
 I = gtx.Dimension("I")
@@ -154,3 +151,12 @@ def test_field_wrong_origin():
 @pytest.mark.xfail(reason="aligned_index not supported yet")
 def test_aligned_index():
     gtx.as_field([I], np.random.rand(sizes[I]).astype(gtx.float32), aligned_index=[I, 0])
+
+
+@pytest.mark.parametrize(
+    "data, skip_value",
+    [([0, 1, 2], None), ([0, 1, common._DEFAULT_SKIP_VALUE], common._DEFAULT_SKIP_VALUE)],
+)
+def test_as_connectivity(nd_array_implementation, data, skip_value):
+    testee = gtx.as_connectivity([I], J, nd_array_implementation.array(data))
+    assert testee.skip_value is skip_value

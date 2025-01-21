@@ -12,7 +12,7 @@ from typing import Any, Optional
 from gt4py.eve import utils as eve_utils
 from gt4py.next.ffront import (
     dialect_ast_enums,
-    foast_to_itir,
+    foast_to_gtir,
     program_ast as past,
     stages as ffront_stages,
     type_specifications as ts_ffront,
@@ -68,7 +68,7 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
         ... def copy(a: gtx.Field[[IDim], gtx.float32]) -> gtx.Field[[IDim], gtx.float32]:
         ...     return a
 
-        >>> op_to_prog = OperatorToProgram(foast_to_itir.adapted_foast_to_itir_factory())
+        >>> op_to_prog = OperatorToProgram(foast_to_gtir.adapted_foast_to_gtir_factory())
 
         >>> compile_time_args = arguments.CompileTimeArgs(
         ...     args=tuple(param.type for param in copy.foast_stage.foast_node.definition.params),
@@ -169,7 +169,7 @@ def operator_to_program_factory(
 ) -> workflow.Workflow[AOT_FOP, AOT_PRG]:
     """Optionally wrap `OperatorToProgram` in a `CachedStep`."""
     wf: workflow.Workflow[AOT_FOP, AOT_PRG] = OperatorToProgram(
-        foast_to_itir_step or foast_to_itir.adapted_foast_to_itir_factory()
+        foast_to_itir_step or foast_to_gtir.adapted_foast_to_gtir_factory()
     )
     if cached:
         wf = workflow.CachedStep(wf, hash_function=ffront_stages.fingerprint_stage)

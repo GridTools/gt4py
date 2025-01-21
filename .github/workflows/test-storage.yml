@@ -4,11 +4,9 @@ on:
   push:
     branches:
     - main
-    - gtir  # TODO(tehrengruber): remove after GTIR refactoring #1582
   pull_request:
     branches:
     - main
-    - gtir  # TODO(tehrengruber): remove after GTIR refactoring #1582
     paths:  # Run when gt4py.storage files (or package settings) are changed
     - "src/gt4py/storage/**"
     - "src/gt4py/cartesian/backend/**"   # For DaCe storages
@@ -23,7 +21,7 @@ jobs:
   test-storage:
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11"]
+        python-version: ["3.10", "3.11"]
         tox-factor: [internal, dace]
         os: ["ubuntu-latest"]
       fail-fast: false

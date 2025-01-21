@@ -14,7 +14,7 @@ import numpy as np
 
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt
-from gt4py.next.iterator import ir as gtir
+from gt4py.next.iterator import builtins, ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 
 
@@ -75,13 +75,18 @@ MATH_BUILTINS_MAPPING = {
 
 def builtin_cast(*args: Any) -> str:
     val, target_type = args
-    assert target_type in gtir.TYPEBUILTINS
+    assert target_type in builtins.TYPE_BUILTINS
     return MATH_BUILTINS_MAPPING[target_type].format(val)
 
 
 def builtin_if(*args: Any) -> str:
     cond, true_val, false_val = args
     return f"{true_val} if {cond} else {false_val}"
+
+
+def builtin_tuple_get(*args: Any) -> str:
+    index, tuple_name = args
+    return f"{tuple_name}_{index}"
 
 
 def make_const_list(arg: str) -> str:
@@ -97,6 +102,7 @@ GENERAL_BUILTIN_MAPPING: dict[str, Callable[[Any], str]] = {
     "cast_": builtin_cast,
     "if_": builtin_if,
     "make_const_list": make_const_list,
+    "tuple_get": builtin_tuple_get,
 }
 
 
@@ -118,29 +124,41 @@ class PythonCodegen(codegen.TemplatedGenerator):
     as in the case of field domain definitions, for sybolic array shape and map range.
     """
 
-    SymRef = as_fmt("{id}")
     Literal = as_fmt("{value}")
 
-    def _visit_deref(self, node: gtir.FunCall) -> str:
-        assert len(node.args) == 1
-        if isinstance(node.args[0], gtir.SymRef):
-            return self.visit(node.args[0])
-        raise NotImplementedError(f"Unexpected deref with arg type '{type(node.args[0])}'.")
-
-    def visit_FunCall(self, node: gtir.FunCall) -> str:
-        if cpm.is_call_to(node, "deref"):
-            return self._visit_deref(node)
+    def visit_FunCall(self, node: gtir.FunCall, args_map: dict[str, gtir.Node]) -> str:
+        if isinstance(node.fun, gtir.Lambda):
+            # update the mapping from lambda parameters to corresponding argument expressions
+            lambda_args_map = args_map | {
+                p.id: arg for p, arg in zip(node.fun.params, node.args, strict=True)
+            }
+            return self.visit(node.fun.expr, args_map=lambda_args_map)
+        elif cpm.is_call_to(node, "deref"):
+            assert len(node.args) == 1
+            if not isinstance(node.args[0], gtir.SymRef):
+                # shift expressions are not expected in this visitor context
+                raise NotImplementedError(f"Unexpected deref with arg type '{type(node.args[0])}'.")
+            return self.visit(node.args[0], args_map=args_map)
         elif isinstance(node.fun, gtir.SymRef):
-            args = self.visit(node.args)
+            args = self.visit(node.args, args_map=args_map)
             builtin_name = str(node.fun.id)
             return format_builtin(builtin_name, *args)
         raise NotImplementedError(f"Unexpected 'FunCall' node ({node}).")
 
+    def visit_SymRef(self, node: gtir.SymRef, args_map: dict[str, gtir.Node]) -> str:
+        symbol = str(node.id)
+        if symbol in args_map:
+            return self.visit(args_map[symbol], args_map=args_map)
+        return symbol
 
-get_source = PythonCodegen.apply
-"""
-Specialized visit method for symbolic expressions.
 
-Returns:
-    A string containing the Python code corresponding to a symbolic expression
-"""
+def get_source(node: gtir.Node) -> str:
+    """
+    Specialized visit method for symbolic expressions.
+
+    The visitor uses `args_map` to map lambda parameters to the corresponding argument expressions.
+
+    Returns:
+        A string containing the Python code corresponding to a symbolic expression
+    """
+    return PythonCodegen.apply(node, args_map={})

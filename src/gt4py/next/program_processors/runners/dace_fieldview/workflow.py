@@ -37,6 +37,7 @@ class DaCeTranslator(
 ):
     device_type: core_defs.DeviceType
     auto_optimize: bool
+    itir_transforms_off: bool = False
 
     def _language_settings(self) -> languages.LanguageSettings:
         return languages.LanguageSettings(
@@ -51,13 +52,21 @@ class DaCeTranslator(
         auto_opt: bool,
         on_gpu: bool,
     ) -> dace.SDFG:
-        ir = itir_transforms.apply_fieldview_transforms(ir, offset_provider=offset_provider)
-        sdfg = gtir_sdfg.build_sdfg_from_gtir(ir, offset_provider=offset_provider)
+        if not self.itir_transforms_off:
+            ir = itir_transforms.apply_fieldview_transforms(ir, offset_provider=offset_provider)
+        sdfg = gtir_sdfg.build_sdfg_from_gtir(
+            ir, common.offset_provider_to_type(offset_provider), column_axis
+        )
 
         if auto_opt:
             gtx_transformations.gt_auto_optimize(sdfg, gpu=on_gpu)
         elif on_gpu:
-            gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=False)
+            # We run simplify to bring the SDFG into a canonical form that the gpu transformations
+            # can handle. This is a workaround for an issue with scalar expressions that are
+            # promoted to symbolic expressions and computed on the host (CPU), but the intermediate
+            # result is written to a GPU global variable (https://github.com/spcl/dace/issues/1773).
+            gtx_transformations.gt_simplify(sdfg)
+            gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)
 
         return sdfg
 
@@ -65,12 +74,12 @@ class DaCeTranslator(
         self, inp: stages.CompilableProgram
     ) -> stages.ProgramSource[languages.SDFG, LanguageSettings]:
         """Generate DaCe SDFG file from the GTIR definition."""
-        program: itir.FencilDefinition | itir.Program = inp.data
+        program: itir.Program = inp.data
         assert isinstance(program, itir.Program)
 
         sdfg = self.generate_sdfg(
             program,
-            inp.args.offset_provider,
+            inp.args.offset_provider,  # TODO(havogt): should be offset_provider_type once the transformation don't require run-time info
             inp.args.column_axis,
             auto_opt=self.auto_optimize,
             on_gpu=(self.device_type == gtx_allocators.CUPY_DEVICE),

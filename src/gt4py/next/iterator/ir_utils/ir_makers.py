@@ -10,9 +10,8 @@ import typing
 from typing import Callable, Optional, Union
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve.extended_typing import Dict, Tuple
 from gt4py.next import common
-from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
@@ -30,7 +29,7 @@ def sym(sym_or_name: Union[str, itir.Sym], type_: str | ts.TypeSpec | None = Non
 
     >>> a = sym("a", "float32")
     >>> a.id, a.type
-    (SymbolName('a'), ScalarType(kind=<ScalarKind.FLOAT32: 1032>, shape=None))
+    (SymbolName('a'), ScalarType(kind=<ScalarKind.FLOAT32: 10>, shape=None))
     """
     if isinstance(sym_or_name, itir.Sym):
         assert not type_
@@ -54,7 +53,7 @@ def ref(
 
     >>> a = ref("a", "float32")
     >>> a.id, a.type
-    (SymbolRef('a'), ScalarType(kind=<ScalarKind.FLOAT32: 1032>, shape=None))
+    (SymbolRef('a'), ScalarType(kind=<ScalarKind.FLOAT32: 10>, shape=None))
     """
     if isinstance(ref_or_name, itir.SymRef):
         assert not type_
@@ -72,7 +71,7 @@ def ensure_expr(literal_or_expr: Union[str, core_defs.Scalar, itir.Expr]) -> iti
     SymRef(id=SymbolRef('a'))
 
     >>> ensure_expr(3)
-    Literal(value='3', type=ScalarType(kind=<ScalarKind.INT32: 32>, shape=None))
+    Literal(value='3', type=ScalarType(kind=<ScalarKind.INT32: 6>, shape=None))
 
     >>> ensure_expr(itir.OffsetLiteral(value="i"))
     OffsetLiteral(value='i')
@@ -135,7 +134,7 @@ class call:
     Examples
     --------
     >>> call("plus")(1, 1)
-    FunCall(fun=SymRef(id=SymbolRef('plus')), args=[Literal(value='1', type=ScalarType(kind=<ScalarKind.INT32: 32>, shape=None)), Literal(value='1', type=ScalarType(kind=<ScalarKind.INT32: 32>, shape=None))])
+    FunCall(fun=SymRef(id=SymbolRef('plus')), args=[Literal(value='1', type=ScalarType(kind=<ScalarKind.INT32: 6>, shape=None)), Literal(value='1', type=ScalarType(kind=<ScalarKind.INT32: 6>, shape=None))])
     """
 
     def __init__(self, expr):
@@ -239,7 +238,7 @@ def make_tuple(*args):
 
 def tuple_get(index: str | int, tuple_expr):
     """Create a tuple_get FunCall, shorthand for ``call("tuple_get")(index, tuple_expr)``."""
-    return call("tuple_get")(literal(str(index), itir.INTEGER_INDEX_BUILTIN), tuple_expr)
+    return call("tuple_get")(literal(str(index), builtins.INTEGER_INDEX_BUILTIN), tuple_expr)
 
 
 def if_(cond, true_val, false_val):
@@ -317,11 +316,11 @@ def literal_from_value(val: core_defs.Scalar) -> itir.Literal:
     Make a literal node from a value.
 
     >>> literal_from_value(1.0)
-    Literal(value='1.0', type=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None))
+    Literal(value='1.0', type=ScalarType(kind=<ScalarKind.FLOAT64: 11>, shape=None))
     >>> literal_from_value(1)
-    Literal(value='1', type=ScalarType(kind=<ScalarKind.INT32: 32>, shape=None))
+    Literal(value='1', type=ScalarType(kind=<ScalarKind.INT32: 6>, shape=None))
     >>> literal_from_value(2147483648)
-    Literal(value='2147483648', type=ScalarType(kind=<ScalarKind.INT64: 64>, shape=None))
+    Literal(value='2147483648', type=ScalarType(kind=<ScalarKind.INT64: 8>, shape=None))
     >>> literal_from_value(True)
     Literal(value='True', type=ScalarType(kind=<ScalarKind.BOOL: 1>, shape=None))
     """
@@ -336,7 +335,7 @@ def literal_from_value(val: core_defs.Scalar) -> itir.Literal:
     assert isinstance(type_spec, ts.ScalarType)
 
     typename = type_spec.kind.name.lower()
-    assert typename in itir.TYPEBUILTINS
+    assert typename in builtins.TYPE_BUILTINS
 
     return literal(str(val), typename)
 
@@ -412,7 +411,7 @@ def promote_to_lifted_stencil(op: str | itir.SymRef | Callable) -> Callable[...,
 
 def domain(
     grid_type: Union[common.GridType, str],
-    ranges: Dict[Union[common.Dimension, str], Tuple[itir.Expr, itir.Expr]],
+    ranges: dict[Union[common.Dimension, str], tuple[itir.Expr, itir.Expr]],
 ) -> itir.FunCall:
     """
     >>> str(
@@ -424,11 +423,11 @@ def domain(
     ...         },
     ...     )
     ... )
-    'c⟨ IDimₕ: [0, 10), JDimₕ: [0, 20) ⟩'
+    'c⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
     >>> str(domain(common.GridType.CARTESIAN, {"IDim": (0, 10), "JDim": (0, 20)}))
-    'c⟨ IDimₕ: [0, 10), JDimₕ: [0, 20) ⟩'
+    'c⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
     >>> str(domain(common.GridType.UNSTRUCTURED, {"IDim": (0, 10), "JDim": (0, 20)}))
-    'u⟨ IDimₕ: [0, 10), JDimₕ: [0, 20) ⟩'
+    'u⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
     """
     if isinstance(grid_type, common.GridType):
         grid_type = f"{grid_type!s}_domain"
@@ -446,7 +445,7 @@ def domain(
     )
 
 
-def as_fieldop(expr: itir.Expr, domain: Optional[itir.Expr] = None) -> call:
+def as_fieldop(expr: itir.Expr | str, domain: Optional[itir.Expr] = None) -> call:
     """
     Create an `as_fieldop` call.
 
@@ -496,6 +495,42 @@ def op_as_fieldop(
         return as_fieldop(lambda_(*args)(op(*[deref(arg) for arg in args])), domain)(*its)
 
     return _impl
+
+
+def cast_as_fieldop(type_: str, domain: Optional[itir.FunCall] = None):
+    """
+    Promotes the function `cast_` to a field_operator.
+
+    Args:
+        type_: the target type to be passed as argument to `cast_` function.
+        domain: the domain of the returned field.
+
+    Returns:
+        A function from Fields to Field.
+
+    Examples:
+        >>> str(cast_as_fieldop("float32")("a"))
+        '(⇑(λ(__arg0) → cast_(·__arg0, float32)))(a)'
+    """
+
+    def _impl(it: itir.Expr) -> itir.FunCall:
+        return op_as_fieldop(lambda v: call("cast_")(v, type_), domain)(it)
+
+    return _impl
+
+
+def index(dim: common.Dimension) -> itir.FunCall:
+    """
+    Create a call to the `index` builtin, shorthand for `call("index")(axis)`,
+    after converting the given dimension to `itir.AxisLiteral`.
+
+    Args:
+        dim: the dimension corresponding to the index axis.
+
+    Returns:
+        A function that constructs a Field of indices in the given dimension.
+    """
+    return call("index")(itir.AxisLiteral(value=dim.value, kind=dim.kind))
 
 
 def map_(op):

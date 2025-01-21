@@ -28,9 +28,9 @@ from gt4py.next.iterator.builtins import (
     reduce,
     tuple_get,
     unstructured_domain,
+    as_fieldop,
 )
-from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
-from gt4py.next.iterator.transforms.pass_manager import LiftMode
+from gt4py.next.iterator.runtime import set_at, fendef, fundef, offset
 
 from next_tests.integration_tests.multi_feature_tests.fvm_nabla_setup import (
     assert_close,
@@ -56,7 +56,8 @@ def compute_zavgS(pp, S_M):
 
 @fendef
 def compute_zavgS_fencil(n_edges, out, pp, S_M):
-    closure(unstructured_domain(named_range(Edge, 0, n_edges)), compute_zavgS, out, [pp, S_M])
+    domain = unstructured_domain(named_range(Edge, 0, n_edges))
+    set_at(as_fieldop(compute_zavgS, domain)(pp, S_M), domain, out)
 
 
 @fundef
@@ -101,36 +102,25 @@ def compute_pnabla2(pp, S_M, sign, vol):
 
 @fendef
 def nabla(n_nodes, out, pp, S_MXX, S_MYY, sign, vol):
-    closure(
-        unstructured_domain(named_range(Vertex, 0, n_nodes)),
-        pnabla,
-        out,
-        [pp, S_MXX, S_MYY, sign, vol],
-    )
+    domain = unstructured_domain(named_range(Vertex, 0, n_nodes))
+    set_at(as_fieldop(pnabla, domain)(pp, S_MXX, S_MYY, sign, vol), domain, out)
 
 
 @pytest.mark.requires_atlas
 def test_compute_zavgS(program_processor):
     program_processor, validate = program_processor
-    setup = nabla_setup()
-
-    pp = gtx.as_field([Vertex], setup.input_field)
-    S_MXX, S_MYY = tuple(map(gtx.as_field.partial([Edge]), setup.S_fields))
+    setup = nabla_setup(allocator=None)
 
     zavgS = gtx.as_field([Edge], np.zeros((setup.edges_size)))
-
-    e2v = gtx.NeighborTableOffsetProvider(
-        AtlasTable(setup.edges2node_connectivity), Edge, Vertex, 2
-    )
 
     run_processor(
         compute_zavgS_fencil,
         program_processor,
         setup.edges_size,
         zavgS,
-        pp,
-        S_MXX,
-        offset_provider={"E2V": e2v},
+        setup.input_field,
+        setup.S_fields[0],
+        offset_provider={"E2V": setup.edges2node_connectivity},
     )
 
     if validate:
@@ -142,9 +132,9 @@ def test_compute_zavgS(program_processor):
         program_processor,
         setup.edges_size,
         zavgS,
-        pp,
-        S_MYY,
-        offset_provider={"E2V": e2v},
+        setup.input_field,
+        setup.S_fields[1],
+        offset_provider={"E2V": setup.edges2node_connectivity},
     )
     if validate:
         assert_close(-1000788897.3202186, np.min(zavgS.asnumpy()))
@@ -153,25 +143,18 @@ def test_compute_zavgS(program_processor):
 
 @fendef
 def compute_zavgS2_fencil(n_edges, out, pp, S_M):
-    closure(unstructured_domain(named_range(Edge, 0, n_edges)), compute_zavgS2, out, [pp, S_M])
+    domain = unstructured_domain(named_range(Edge, 0, n_edges))
+    set_at(as_fieldop(compute_zavgS2, domain)(pp, S_M), domain, out)
 
 
 @pytest.mark.requires_atlas
 def test_compute_zavgS2(program_processor):
     program_processor, validate = program_processor
-    setup = nabla_setup()
-
-    pp = gtx.as_field([Vertex], setup.input_field)
-
-    S = tuple(gtx.as_field([Edge], s) for s in setup.S_fields)
+    setup = nabla_setup(allocator=None)
 
     zavgS = (
         gtx.as_field([Edge], np.zeros((setup.edges_size))),
         gtx.as_field([Edge], np.zeros((setup.edges_size))),
-    )
-
-    e2v = gtx.NeighborTableOffsetProvider(
-        AtlasTable(setup.edges2node_connectivity), Edge, Vertex, 2
     )
 
     run_processor(
@@ -179,9 +162,9 @@ def test_compute_zavgS2(program_processor):
         program_processor,
         setup.edges_size,
         zavgS,
-        pp,
-        S,
-        offset_provider={"E2V": e2v},
+        setup.input_field,
+        setup.S_fields,
+        offset_provider={"E2V": setup.edges2node_connectivity},
     )
 
     if validate:
@@ -196,34 +179,27 @@ def test_compute_zavgS2(program_processor):
 def test_nabla(program_processor):
     program_processor, validate = program_processor
 
-    setup = nabla_setup()
+    setup = nabla_setup(allocator=None)
 
-    sign = gtx.as_field([Vertex, V2EDim], setup.sign_field)
-    pp = gtx.as_field([Vertex], setup.input_field)
-    S_MXX, S_MYY = tuple(map(gtx.as_field.partial([Edge]), setup.S_fields))
-    vol = gtx.as_field([Vertex], setup.vol_field)
+    S_MXX, S_MYY = setup.S_fields
 
     pnabla_MXX = gtx.as_field([Vertex], np.zeros((setup.nodes_size)))
     pnabla_MYY = gtx.as_field([Vertex], np.zeros((setup.nodes_size)))
-
-    e2v = gtx.NeighborTableOffsetProvider(
-        AtlasTable(setup.edges2node_connectivity), Edge, Vertex, 2
-    )
-    v2e = gtx.NeighborTableOffsetProvider(
-        AtlasTable(setup.nodes2edge_connectivity), Vertex, Edge, 7
-    )
 
     run_processor(
         nabla,
         program_processor,
         setup.nodes_size,
         (pnabla_MXX, pnabla_MYY),
-        pp,
+        setup.input_field,
         S_MXX,
         S_MYY,
-        sign,
-        vol,
-        offset_provider={"E2V": e2v, "V2E": v2e},
+        setup.sign_field,
+        setup.vol_field,
+        offset_provider={
+            "E2V": setup.edges2node_connectivity,
+            "V2E": setup.nodes2edge_connectivity,
+        },
     )
 
     if validate:
@@ -235,44 +211,31 @@ def test_nabla(program_processor):
 
 @fendef
 def nabla2(n_nodes, out, pp, S, sign, vol):
-    closure(
-        unstructured_domain(named_range(Vertex, 0, n_nodes)),
-        compute_pnabla2,
-        out,
-        [pp, S, sign, vol],
-    )
+    domain = unstructured_domain(named_range(Vertex, 0, n_nodes))
+    set_at(as_fieldop(compute_pnabla2, domain)(pp, S, sign, vol), domain, out)
 
 
 @pytest.mark.requires_atlas
 def test_nabla2(program_processor):
     program_processor, validate = program_processor
-    setup = nabla_setup()
-
-    sign = gtx.as_field([Vertex, V2EDim], setup.sign_field)
-    pp = gtx.as_field([Vertex], setup.input_field)
-    S_M = tuple(gtx.as_field([Edge], s) for s in setup.S_fields)
-    vol = gtx.as_field([Vertex], setup.vol_field)
+    setup = nabla_setup(allocator=None)
 
     pnabla_MXX = gtx.as_field([Vertex], np.zeros((setup.nodes_size)))
     pnabla_MYY = gtx.as_field([Vertex], np.zeros((setup.nodes_size)))
-
-    e2v = gtx.NeighborTableOffsetProvider(
-        AtlasTable(setup.edges2node_connectivity), Edge, Vertex, 2
-    )
-    v2e = gtx.NeighborTableOffsetProvider(
-        AtlasTable(setup.nodes2edge_connectivity), Vertex, Edge, 7
-    )
 
     run_processor(
         nabla2,
         program_processor,
         setup.nodes_size,
         (pnabla_MXX, pnabla_MYY),
-        pp,
-        S_M,
-        sign,
-        vol,
-        offset_provider={"E2V": e2v, "V2E": v2e},
+        setup.input_field,
+        setup.S_fields,
+        setup.sign_field,
+        setup.vol_field,
+        offset_provider={
+            "E2V": setup.edges2node_connectivity,
+            "V2E": setup.nodes2edge_connectivity,
+        },
     )
 
     if validate:
@@ -308,17 +271,16 @@ def compute_pnabla_sign(pp, S_M, vol, node_index, is_pole_edge):
 @fendef
 def nabla_sign(n_nodes, out_MXX, out_MYY, pp, S_MXX, S_MYY, vol, node_index, is_pole_edge):
     # TODO replace by single stencil which returns tuple
-    closure(
-        unstructured_domain(named_range(Vertex, 0, n_nodes)),
-        compute_pnabla_sign,
+    domain = unstructured_domain(named_range(Vertex, 0, n_nodes))
+    set_at(
+        as_fieldop(compute_pnabla_sign, domain)(pp, S_MXX, vol, node_index, is_pole_edge),
+        domain,
         out_MXX,
-        [pp, S_MXX, vol, node_index, is_pole_edge],
     )
-    closure(
-        unstructured_domain(named_range(Vertex, 0, n_nodes)),
-        compute_pnabla_sign,
+    set_at(
+        as_fieldop(compute_pnabla_sign, domain)(pp, S_MYY, vol, node_index, is_pole_edge),
+        domain,
         out_MYY,
-        [pp, S_MYY, vol, node_index, is_pole_edge],
     )
 
 
@@ -326,22 +288,12 @@ def nabla_sign(n_nodes, out_MXX, out_MYY, pp, S_MXX, S_MYY, vol, node_index, is_
 def test_nabla_sign(program_processor):
     program_processor, validate = program_processor
 
-    setup = nabla_setup()
+    setup = nabla_setup(allocator=None)
 
-    is_pole_edge = gtx.as_field([Edge], setup.is_pole_edge_field)
-    pp = gtx.as_field([Vertex], setup.input_field)
-    S_MXX, S_MYY = tuple(map(gtx.as_field.partial([Edge]), setup.S_fields))
-    vol = gtx.as_field([Vertex], setup.vol_field)
+    S_MXX, S_MYY = setup.S_fields
 
     pnabla_MXX = gtx.as_field([Vertex], np.zeros((setup.nodes_size)))
     pnabla_MYY = gtx.as_field([Vertex], np.zeros((setup.nodes_size)))
-
-    e2v = gtx.NeighborTableOffsetProvider(
-        AtlasTable(setup.edges2node_connectivity), Edge, Vertex, 2
-    )
-    v2e = gtx.NeighborTableOffsetProvider(
-        AtlasTable(setup.nodes2edge_connectivity), Vertex, Edge, 7
-    )
 
     run_processor(
         nabla_sign,
@@ -349,13 +301,16 @@ def test_nabla_sign(program_processor):
         setup.nodes_size,
         pnabla_MXX,
         pnabla_MYY,
-        pp,
+        setup.input_field,
         S_MXX,
         S_MYY,
-        vol,
+        setup.vol_field,
         gtx.index_field(Vertex),
-        is_pole_edge,
-        offset_provider={"E2V": e2v, "V2E": v2e},
+        setup.is_pole_edge_field,
+        offset_provider={
+            "E2V": setup.edges2node_connectivity,
+            "V2E": setup.nodes2edge_connectivity,
+        },
     )
 
     if validate:

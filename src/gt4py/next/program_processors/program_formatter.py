@@ -10,7 +10,7 @@
 Interface for program processors.
 
 Program processors are functions which operate on a program paired with the input
-arguments for the program. Programs are represented by an ``iterator.ir.itir.FencilDefinition``
+arguments for the program. Programs are represented by an ``iterator.ir.Program``
 node. Program processors that execute the program with the given arguments (possibly by generating
 code along the way) are program executors. Those that generate any kind of string based
 on the program and (optionally) input values are program formatters.
@@ -30,14 +30,14 @@ import gt4py.next.iterator.ir as itir
 
 class ProgramFormatter:
     @abc.abstractmethod
-    def __call__(self, program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> str: ...
+    def __call__(self, program: itir.Program, *args: Any, **kwargs: Any) -> str: ...
 
 
 @dataclasses.dataclass(frozen=True)
 class WrappedProgramFormatter(ProgramFormatter):
     formatter: Callable[..., str]
 
-    def __call__(self, program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> str:
+    def __call__(self, program: itir.Program, *args: Any, **kwargs: Any) -> str:
         return self.formatter(program, *args, **kwargs)
 
 
@@ -47,7 +47,7 @@ def program_formatter(func: Callable[..., str]) -> ProgramFormatter:
 
     Examples:
         >>> @program_formatter
-        ... def format_foo(fencil: itir.FencilDefinition, *args, **kwargs) -> str:
+        ... def format_foo(fencil: itir.Program, *args, **kwargs) -> str:
         ...     '''A very useless fencil formatter.'''
         ...     return "foo"
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import ctypes
 import dataclasses
-from typing import Any
+from typing import Any, Sequence
 
 import dace
 import factory
@@ -23,15 +23,16 @@ from gt4py.next.otf.compilation import cache
 from gt4py.next.program_processors.runners.dace_common import dace_backend, utility as dace_utils
 
 
-class CompiledDaceProgram(stages.CompiledProgram):
+class CompiledDaceProgram(stages.ExtendedCompiledProgram):
     sdfg_program: dace.CompiledSDFG
 
     # Sorted list of SDFG arguments as they appear in program ABI and corresponding data type;
     # scalar arguments that are not used in the SDFG will not be present.
     sdfg_arglist: list[tuple[str, dace.dtypes.Data]]
 
-    def __init__(self, program: dace.CompiledSDFG):
+    def __init__(self, program: dace.CompiledSDFG, implicit_domain: bool):
         self.sdfg_program = program
+        self.implicit_domain = implicit_domain
         # `dace.CompiledSDFG.arglist()` returns an ordered dictionary that maps the argument
         # name to its data type, in the same order as arguments appear in the program ABI.
         # This is also the same order of arguments in `dace.CompiledSDFG._lastargs[0]`.
@@ -88,7 +89,7 @@ class DaCeCompiler(
                 dace.config.Config.set("compiler", "cpu", "args", value=compiler_args)
             sdfg_program = sdfg.compile(validate=False)
 
-        return CompiledDaceProgram(sdfg_program)
+        return CompiledDaceProgram(sdfg_program, inp.program_source.implicit_domain)
 
 
 class DaCeCompilationStepFactory(factory.Factory):
@@ -112,11 +113,15 @@ def convert_args(
     ) -> None:
         if out is not None:
             args = (*args, out)
-        if len(sdfg.arg_names) > len(args):
-            args = (*args, *arguments.iter_size_args(args))
+        flat_args: Sequence[Any] = gtx_utils.flatten_nested_tuple(tuple(args))
+        if inp.implicit_domain:
+            # generate implicit domain size arguments only if necessary
+            size_args = arguments.iter_size_args(args)
+            flat_size_args: Sequence[int] = gtx_utils.flatten_nested_tuple(tuple(size_args))
+            flat_args = (*flat_args, *flat_size_args)
 
         if sdfg_program._lastargs:
-            kwargs = dict(zip(sdfg.arg_names, gtx_utils.flatten_nested_tuple(args), strict=True))
+            kwargs = dict(zip(sdfg.arg_names, flat_args, strict=True))
             kwargs.update(dace_backend.get_sdfg_conn_args(sdfg, offset_provider, on_gpu))
 
             use_fast_call = True
@@ -150,9 +155,9 @@ def convert_args(
 
         sdfg_args = dace_backend.get_sdfg_args(
             sdfg,
-            *args,
+            offset_provider,
+            *flat_args,
             check_args=False,
-            offset_provider=offset_provider,
             on_gpu=on_gpu,
             use_field_canonical_representation=use_field_canonical_representation,
         )

@@ -14,6 +14,8 @@ import enum
 import functools
 import math
 import numbers
+
+
 try:
     import ml_dtypes
 except ModuleNotFoundError:
@@ -323,14 +325,19 @@ class Int64DType(SignedIntDType[int64]):
 class FloatingDType(DType[FloatingT]):
     pass
 
-@dataclasses.dataclass(frozen=True) # TODO
+
+@dataclasses.dataclass(frozen=True)  # TODO
 class Float16DType(FloatingDType[float16]):
     scalar_type: Final[Type[float16]] = dataclasses.field(default=float16, init=False)
 
+
 if ml_dtypes:
+
     @dataclasses.dataclass(frozen=True)  # TODO
     class BFloat16DType(FloatingDType[ml_dtypes.bfloat16]):
-        scalar_type: Final[Type[ml_dtypes.bfloat16]] = dataclasses.field(default=ml_dtypes.bfloat16, init=False)
+        scalar_type: Final[Type[ml_dtypes.bfloat16]] = dataclasses.field(
+            default=ml_dtypes.bfloat16, init=False
+        )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -458,11 +465,19 @@ class NDArrayObject(Protocol):
     def shape(self) -> tuple[int, ...]: ...
 
     @property
+    def strides(self) -> tuple[int, ...]: ...
+
+    @property
     def dtype(self) -> Any: ...
+
+    @property
+    def itemsize(self) -> int: ...
 
     def item(self) -> Any: ...
 
     def astype(self, dtype: npt.DTypeLike) -> NDArrayObject: ...
+
+    def any(self) -> bool: ...
 
     def __getitem__(self, item: Any) -> NDArrayObject: ...
 
@@ -514,4 +529,4 @@ class NDArrayObject(Protocol):
 
     def __or__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
 
-    def __xor(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
+    def __xor__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...

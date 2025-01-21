@@ -40,7 +40,7 @@ from .utility import (
 
 _TYPE_MAPPING = {
     "float": dace.float64,
-    "float16": dace.float16, # TODO: bfloat16?
+    "float16": dace.float16,  # TODO: bfloat16?
     "float32": dace.float32,
     "float64": dace.float64,
     "int": dace.int32 if np.dtype(int).itemsize == 4 else dace.int64,
