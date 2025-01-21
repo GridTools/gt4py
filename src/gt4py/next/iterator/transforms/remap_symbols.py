@@ -10,11 +10,12 @@ from typing import Any, Dict, Optional, Set
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor, SymbolTableTrait
 from gt4py.next.iterator import ir
+from gt4py.next.iterator.type_system import inference as type_inference
 
 
 class RemapSymbolRefs(PreserveLocationVisitor, NodeTranslator):
-    # This pass preserves, but doesn't use the `type` and `recorded_shifts` annex.
-    PRESERVED_ANNEX_ATTRS = ("type", "recorded_shifts")
+    # This pass preserves, but doesn't use the `type`, `recorded_shifts`, `domain` annex.
+    PRESERVED_ANNEX_ATTRS = ("type", "recorded_shifts", "domain")
 
     def visit_SymRef(self, node: ir.SymRef, *, symbol_map: Dict[str, ir.Node]):
         return symbol_map.get(str(node.id), node)
@@ -32,8 +33,8 @@ class RemapSymbolRefs(PreserveLocationVisitor, NodeTranslator):
 
 
 class RenameSymbols(PreserveLocationVisitor, NodeTranslator):
-    # This pass preserves, but doesn't use the `type` and `recorded_shifts` annex.
-    PRESERVED_ANNEX_ATTRS = ("type", "recorded_shifts")
+    # This pass preserves, but doesn't use the `type`, `recorded_shifts`, `domain` annex.
+    PRESERVED_ANNEX_ATTRS = ("type", "recorded_shifts", "domain")
 
     def visit_Sym(
         self, node: ir.Sym, *, name_map: Dict[str, str], active: Optional[Set[str]] = None
@@ -46,7 +47,9 @@ class RenameSymbols(PreserveLocationVisitor, NodeTranslator):
         self, node: ir.SymRef, *, name_map: Dict[str, str], active: Optional[Set[str]] = None
     ):
         if active and node.id in active:
-            return ir.SymRef(id=name_map.get(node.id, node.id))
+            new_ref = ir.SymRef(id=name_map.get(node.id, node.id))
+            type_inference.copy_type(from_=node, to=new_ref, allow_untyped=True)
+            return new_ref
         return node
 
     def generic_visit(  # type: ignore[override]

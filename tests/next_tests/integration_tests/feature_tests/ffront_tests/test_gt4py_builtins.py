@@ -29,6 +29,7 @@ from next_tests.integration_tests.cases import (
     Vertex,
     cartesian_case,
     unstructured_case,
+    unstructured_case_3d,
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     exec_alloc_descriptor,
@@ -52,7 +53,7 @@ def test_maxover_execution_(unstructured_case, strategy):
     inp = cases.allocate(unstructured_case, testee, "edge_f", strategy=strategy)()
     out = cases.allocate(unstructured_case, testee, cases.RETURN)()
 
-    v2e_table = unstructured_case.offset_provider["V2E"].table
+    v2e_table = unstructured_case.offset_provider["V2E"].ndarray
     ref = np.max(
         inp.asnumpy()[v2e_table],
         axis=1,
@@ -69,7 +70,7 @@ def test_minover_execution(unstructured_case):
         out = min_over(edge_f(V2E), axis=V2EDim)
         return out
 
-    v2e_table = unstructured_case.offset_provider["V2E"].table
+    v2e_table = unstructured_case.offset_provider["V2E"].ndarray
     cases.verify_with_default_data(
         unstructured_case,
         minover,
@@ -105,10 +106,10 @@ def reduction_ke_field(
 @pytest.mark.parametrize(
     "fop", [reduction_e_field, reduction_ek_field, reduction_ke_field], ids=lambda fop: fop.__name__
 )
-def test_neighbor_sum(unstructured_case, fop):
-    v2e_table = unstructured_case.offset_provider["V2E"].table
+def test_neighbor_sum(unstructured_case_3d, fop):
+    v2e_table = unstructured_case_3d.offset_provider["V2E"].ndarray
 
-    edge_f = cases.allocate(unstructured_case, fop, "edge_f")()
+    edge_f = cases.allocate(unstructured_case_3d, fop, "edge_f")()
 
     local_dim_idx = edge_f.domain.dims.index(Edge) + 1
     adv_indexing = tuple(
@@ -131,10 +132,10 @@ def test_neighbor_sum(unstructured_case, fop):
         where=broadcasted_table != common._DEFAULT_SKIP_VALUE,
     )
     cases.verify(
-        unstructured_case,
+        unstructured_case_3d,
         fop,
         edge_f,
-        out=cases.allocate(unstructured_case, fop, cases.RETURN)(),
+        out=cases.allocate(unstructured_case_3d, fop, cases.RETURN)(),
         ref=ref,
     )
 
@@ -157,7 +158,7 @@ def test_reduction_execution_with_offset(unstructured_case):
     def fencil(edge_f: EKField, out: VKField):
         fencil_op(edge_f, out=out)
 
-    v2e_table = unstructured_case.offset_provider["V2E"].table
+    v2e_table = unstructured_case.offset_provider["V2E"].ndarray
     field = cases.allocate(unstructured_case, fencil, "edge_f", sizes={KDim: 2})()
     out = cases.allocate(unstructured_case, fencil_op, cases.RETURN, sizes={KDim: 1})()
 
@@ -190,7 +191,7 @@ def test_reduction_expression_in_call(unstructured_case):
     def fencil(edge_f: cases.EField, out: cases.VField):
         reduce_expr(edge_f, out=out)
 
-    v2e_table = unstructured_case.offset_provider["V2E"].table
+    v2e_table = unstructured_case.offset_provider["V2E"].ndarray
     cases.verify_with_default_data(
         unstructured_case,
         fencil,
@@ -210,12 +211,100 @@ def test_reduction_with_common_expression(unstructured_case):
     def testee(flux: cases.EField) -> cases.VField:
         return neighbor_sum(flux(V2E) + flux(V2E), axis=V2EDim)
 
-    v2e_table = unstructured_case.offset_provider["V2E"].table
+    v2e_table = unstructured_case.offset_provider["V2E"].ndarray
     cases.verify_with_default_data(
         unstructured_case,
         testee,
         ref=lambda flux: np.sum(
             flux[v2e_table] * 2, axis=1, initial=0, where=v2e_table != common._DEFAULT_SKIP_VALUE
+        ),
+    )
+
+
+@pytest.mark.uses_unstructured_shift
+def test_reduction_expression_with_where(unstructured_case):
+    @gtx.field_operator
+    def testee(mask: cases.VBoolField, inp: cases.EField) -> cases.VField:
+        return neighbor_sum(where(mask, inp(V2E), inp(V2E)), axis=V2EDim)
+
+    v2e_table = unstructured_case.offset_provider["V2E"].ndarray
+
+    mask = unstructured_case.as_field(
+        [Vertex], np.random.choice(a=[False, True], size=unstructured_case.default_sizes[Vertex])
+    )
+    inp = cases.allocate(unstructured_case, testee, "inp")()
+    out = cases.allocate(unstructured_case, testee, cases.RETURN)()
+
+    cases.verify(
+        unstructured_case,
+        testee,
+        mask,
+        inp,
+        out=out,
+        ref=np.sum(
+            inp.asnumpy()[v2e_table],
+            axis=1,
+            initial=0,
+            where=v2e_table != common._DEFAULT_SKIP_VALUE,
+        ),
+    )
+
+
+@pytest.mark.uses_unstructured_shift
+def test_reduction_expression_with_where_and_tuples(unstructured_case):
+    @gtx.field_operator
+    def testee(mask: cases.VBoolField, inp: cases.EField) -> cases.VField:
+        return neighbor_sum(where(mask, (inp(V2E), inp(V2E)), (inp(V2E), inp(V2E)))[1], axis=V2EDim)
+
+    v2e_table = unstructured_case.offset_provider["V2E"].ndarray
+
+    mask = unstructured_case.as_field(
+        [Vertex], np.random.choice(a=[False, True], size=unstructured_case.default_sizes[Vertex])
+    )
+    inp = cases.allocate(unstructured_case, testee, "inp")()
+    out = cases.allocate(unstructured_case, testee, cases.RETURN)()
+
+    cases.verify(
+        unstructured_case,
+        testee,
+        mask,
+        inp,
+        out=out,
+        ref=np.sum(
+            inp.asnumpy()[v2e_table],
+            axis=1,
+            initial=0,
+            where=v2e_table != common._DEFAULT_SKIP_VALUE,
+        ),
+    )
+
+
+@pytest.mark.uses_unstructured_shift
+def test_reduction_expression_with_where_and_scalar(unstructured_case):
+    @gtx.field_operator
+    def testee(mask: cases.VBoolField, inp: cases.EField) -> cases.VField:
+        return neighbor_sum(inp(V2E) + where(mask, inp(V2E), 1), axis=V2EDim)
+
+    v2e_table = unstructured_case.offset_provider["V2E"].ndarray
+
+    mask = unstructured_case.as_field(
+        [Vertex], np.random.choice(a=[False, True], size=unstructured_case.default_sizes[Vertex])
+    )
+    inp = cases.allocate(unstructured_case, testee, "inp")()
+    out = cases.allocate(unstructured_case, testee, cases.RETURN)()
+
+    cases.verify(
+        unstructured_case,
+        testee,
+        mask,
+        inp,
+        out=out,
+        ref=np.sum(
+            inp.asnumpy()[v2e_table]
+            + np.where(np.expand_dims(mask.asnumpy(), 1), inp.asnumpy()[v2e_table], 1),
+            axis=1,
+            initial=0,
+            where=v2e_table != common._DEFAULT_SKIP_VALUE,
         ),
     )
 
@@ -375,11 +464,13 @@ def test_conditional_shifted(cartesian_case):
     )
 
 
-def test_promotion(unstructured_case):
+def test_promotion(unstructured_case_3d):
     @gtx.field_operator
     def promotion(
         inp1: gtx.Field[[Edge, KDim], float64], inp2: gtx.Field[[KDim], float64]
     ) -> gtx.Field[[Edge, KDim], float64]:
         return inp1 / inp2
 
-    cases.verify_with_default_data(unstructured_case, promotion, ref=lambda inp1, inp2: inp1 / inp2)
+    cases.verify_with_default_data(
+        unstructured_case_3d, promotion, ref=lambda inp1, inp2: inp1 / inp2
+    )

@@ -4,7 +4,6 @@ on:
   pull_request:
     branches:
     - main
-    - gtir  # TODO(tehrengruber): remove after GTIR refactoring #1582
     paths:  # Inverse of corresponding workflow
     - "src/gt4py/next/**"
     - "tests/next_tests/**"
@@ -17,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11"]
+        python-version: ["3.10", "3.11"]
         tox-factor: [internal, dace]
 
     steps:

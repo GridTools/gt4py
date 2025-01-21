@@ -28,6 +28,7 @@ from gt4py.next import (
     common,
     constructors,
     field_utils,
+    utils as gt_utils,
 )
 from gt4py.next.ffront import decorator
 from gt4py.next.type_system import type_specifications as ts, type_translation
@@ -55,7 +56,6 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     mesh_descriptor,
 )
 
-from gt4py.next import utils as gt_utils
 
 # mypy does not accept [IDim, ...] as a type
 
@@ -69,6 +69,7 @@ IKFloatField: TypeAlias = gtx.Field[[IDim, KDim], np.float64]  # type: ignore [v
 IJKField: TypeAlias = gtx.Field[[IDim, JDim, KDim], np.int32]  # type: ignore [valid-type]
 IJKFloatField: TypeAlias = gtx.Field[[IDim, JDim, KDim], np.float64]  # type: ignore [valid-type]
 VField: TypeAlias = gtx.Field[[Vertex], np.int32]  # type: ignore [valid-type]
+VBoolField: TypeAlias = gtx.Field[[Vertex], bool]  # type: ignore [valid-type]
 EField: TypeAlias = gtx.Field[[Edge], np.int32]  # type: ignore [valid-type]
 CField: TypeAlias = gtx.Field[[Cell], np.int32]  # type: ignore [valid-type]
 EmptyField: TypeAlias = gtx.Field[[], np.int32]  # type: ignore [valid-type]
@@ -380,6 +381,7 @@ def verify(
     fieldview_prog: decorator.FieldOperator | decorator.Program,
     *args: FieldViewArg,
     ref: ReferenceValue,
+    domain: Optional[dict[common.Dimension, tuple[int, int]]] = None,
     out: Optional[FieldViewInout] = None,
     inout: Optional[FieldViewInout] = None,
     offset_provider: Optional[OffsetProvider] = None,
@@ -404,6 +406,8 @@ def verify(
             or tuple of fields here and they will be compared to ``ref`` under
             the assumption that the fieldview code stores its results in
             them.
+        domain: If given will be passed to the fieldview code as ``domain=``
+            keyword argument.
         offset_provider: An override for the test case's offset_provider.
             Use with care!
         comparison: A comparison function, which will be called as
@@ -413,10 +417,13 @@ def verify(
     used as an argument to the fieldview program and compared against ``ref``.
     Else, ``inout`` will not be passed and compared to ``ref``.
     """
+    kwargs = {}
     if out:
-        run(case, fieldview_prog, *args, out=out, offset_provider=offset_provider)
-    else:
-        run(case, fieldview_prog, *args, offset_provider=offset_provider)
+        kwargs["out"] = out
+    if domain:
+        kwargs["domain"] = domain
+
+    run(case, fieldview_prog, *args, **kwargs, offset_provider=offset_provider)
 
     out_comp = out or inout
     assert out_comp is not None
@@ -498,10 +505,18 @@ def unstructured_case(
             Vertex: mesh_descriptor.num_vertices,
             Edge: mesh_descriptor.num_edges,
             Cell: mesh_descriptor.num_cells,
-            KDim: 10,
         },
         grid_type=common.GridType.UNSTRUCTURED,
         allocator=exec_alloc_descriptor.allocator,
+    )
+
+
+@pytest.fixture
+def unstructured_case_3d(unstructured_case):
+    return dataclasses.replace(
+        unstructured_case,
+        default_sizes={**unstructured_case.default_sizes, KDim: 10},
+        offset_provider={**unstructured_case.offset_provider, "KOff": KDim},
     )
 
 

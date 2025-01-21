@@ -13,7 +13,7 @@ import typing
 import numpy as np
 import pytest
 
-from gt4py.next import errors
+from gt4py.next import errors, common, constructors
 from gt4py.next.ffront.decorator import field_operator, program, scan_operator
 from gt4py.next.ffront.fbuiltins import broadcast, int32
 
@@ -296,3 +296,21 @@ def test_call_bound_program_with_already_bound_arg(cartesian_case, bound_args_te
         )
         is not None
     )
+
+
+@pytest.mark.uses_origin
+def test_direct_fo_call_with_domain_arg(cartesian_case):
+    @field_operator
+    def testee(inp: IField) -> IField:
+        return inp
+
+    size = cartesian_case.default_sizes[IDim]
+    inp = cases.allocate(cartesian_case, testee, "inp").unique()()
+    out = cases.allocate(
+        cartesian_case, testee, cases.RETURN, strategy=cases.ConstInitializer(42)
+    )()
+    ref = inp.array_ns.zeros(size)
+    ref[0] = ref[-1] = 42
+    ref[1:-1] = inp.ndarray[1:-1]
+
+    cases.verify(cartesian_case, testee, inp, out=out, domain={IDim: (1, size - 1)}, ref=ref)

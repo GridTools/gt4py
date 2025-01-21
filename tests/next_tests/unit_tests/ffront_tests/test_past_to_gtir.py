@@ -46,7 +46,6 @@ def test_copy_lowering(copy_program_def, gtir_identity_fundef):
         past_node,
         function_definitions=[gtir_identity_fundef],
         grid_type=gtx.GridType.CARTESIAN,
-        to_gtir=True,
     )
     set_at_pattern = P(
         itir.SetAt,
@@ -59,8 +58,30 @@ def test_copy_lowering(copy_program_def, gtir_identity_fundef):
                     fun=P(itir.SymRef, id=eve.SymbolRef("named_range")),
                     args=[
                         P(itir.AxisLiteral, value="IDim"),
-                        P(itir.Literal, value="0", type=ts.ScalarType(kind=ts.ScalarKind.INT32)),
-                        P(itir.SymRef, id=eve.SymbolRef("__out_size_0")),
+                        P(
+                            itir.FunCall,
+                            fun=P(itir.SymRef, id=eve.SymbolRef("tuple_get")),
+                            args=[
+                                P(
+                                    itir.Literal,
+                                    value="0",
+                                    type=ts.ScalarType(kind=ts.ScalarKind.INT32),
+                                ),
+                                P(itir.SymRef, id=eve.SymbolRef("__out_0_range")),
+                            ],
+                        ),
+                        P(
+                            itir.FunCall,
+                            fun=P(itir.SymRef, id=eve.SymbolRef("tuple_get")),
+                            args=[
+                                P(
+                                    itir.Literal,
+                                    value="1",
+                                    type=ts.ScalarType(kind=ts.ScalarKind.INT32),
+                                ),
+                                P(itir.SymRef, id=eve.SymbolRef("__out_0_range")),
+                            ],
+                        ),
                     ],
                 )
             ],
@@ -78,8 +99,8 @@ def test_copy_lowering(copy_program_def, gtir_identity_fundef):
         params=[
             P(itir.Sym, id=eve.SymbolName("in_field")),
             P(itir.Sym, id=eve.SymbolName("out")),
-            P(itir.Sym, id=eve.SymbolName("__in_field_size_0")),
-            P(itir.Sym, id=eve.SymbolName("__out_size_0")),
+            P(itir.Sym, id=eve.SymbolName("__in_field_0_range")),
+            P(itir.Sym, id=eve.SymbolName("__out_0_range")),
         ],
         body=[set_at_pattern],
     )
@@ -93,7 +114,6 @@ def test_copy_restrict_lowering(copy_restrict_program_def, gtir_identity_fundef)
         past_node,
         function_definitions=[gtir_identity_fundef],
         grid_type=gtx.GridType.CARTESIAN,
-        to_gtir=True,
     )
     set_at_pattern = P(
         itir.SetAt,
@@ -107,18 +127,58 @@ def test_copy_restrict_lowering(copy_restrict_program_def, gtir_identity_fundef)
                     args=[
                         P(itir.AxisLiteral, value="IDim"),
                         P(
-                            itir.Literal,
-                            value="1",
-                            type=ts.ScalarType(
-                                kind=getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())
-                            ),
+                            itir.FunCall,
+                            fun=P(itir.SymRef, id=eve.SymbolRef("plus")),
+                            args=[
+                                P(
+                                    itir.FunCall,
+                                    fun=P(itir.SymRef, id=eve.SymbolRef("tuple_get")),
+                                    args=[
+                                        P(
+                                            itir.Literal,
+                                            value="0",
+                                            type=ts.ScalarType(kind=ts.ScalarKind.INT32),
+                                        ),
+                                        P(itir.SymRef, id=eve.SymbolRef("__out_0_range")),
+                                    ],
+                                ),
+                                P(
+                                    itir.Literal,
+                                    value="1",
+                                    type=ts.ScalarType(
+                                        kind=getattr(
+                                            ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper()
+                                        )
+                                    ),
+                                ),
+                            ],
                         ),
                         P(
-                            itir.Literal,
-                            value="2",
-                            type=ts.ScalarType(
-                                kind=getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())
-                            ),
+                            itir.FunCall,
+                            fun=P(itir.SymRef, id=eve.SymbolRef("plus")),
+                            args=[
+                                P(
+                                    itir.FunCall,
+                                    fun=P(itir.SymRef, id=eve.SymbolRef("tuple_get")),
+                                    args=[
+                                        P(
+                                            itir.Literal,
+                                            value="0",
+                                            type=ts.ScalarType(kind=ts.ScalarKind.INT32),
+                                        ),
+                                        P(itir.SymRef, id=eve.SymbolRef("__out_0_range")),
+                                    ],
+                                ),
+                                P(
+                                    itir.Literal,
+                                    value="2",
+                                    type=ts.ScalarType(
+                                        kind=getattr(
+                                            ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper()
+                                        )
+                                    ),
+                                ),
+                            ],
                         ),
                     ],
                 )
@@ -131,8 +191,8 @@ def test_copy_restrict_lowering(copy_restrict_program_def, gtir_identity_fundef)
         params=[
             P(itir.Sym, id=eve.SymbolName("in_field")),
             P(itir.Sym, id=eve.SymbolName("out")),
-            P(itir.Sym, id=eve.SymbolName("__in_field_size_0")),
-            P(itir.Sym, id=eve.SymbolName("__out_size_0")),
+            P(itir.Sym, id=eve.SymbolName("__in_field_0_range")),
+            P(itir.Sym, id=eve.SymbolName("__out_0_range")),
         ],
         body=[set_at_pattern],
     )
@@ -149,9 +209,7 @@ def test_tuple_constructed_in_out_with_slicing(make_tuple_op):
         make_tuple_op(inp, out=(out1[1:], out2[1:]))
 
     parsed = ProgramParser.apply_to_function(tuple_program)
-    ProgramLowering.apply(
-        parsed, function_definitions=[], grid_type=gtx.GridType.CARTESIAN, to_gtir=True
-    )
+    ProgramLowering.apply(parsed, function_definitions=[], grid_type=gtx.GridType.CARTESIAN)
 
 
 @pytest.mark.xfail(
@@ -166,9 +224,7 @@ def test_tuple_constructed_in_out_with_slicing(make_tuple_op):
         make_tuple_op(inp, out=(out1[1:], out2))
 
     parsed = ProgramParser.apply_to_function(tuple_program)
-    ProgramLowering.apply(
-        parsed, function_definitions=[], grid_type=gtx.GridType.CARTESIAN, to_gtir=True
-    )
+    ProgramLowering.apply(parsed, function_definitions=[], grid_type=gtx.GridType.CARTESIAN)
 
 
 @pytest.mark.xfail
@@ -194,7 +250,6 @@ def test_invalid_call_sig_program(invalid_call_sig_program_def):
             ProgramParser.apply_to_function(invalid_call_sig_program_def),
             function_definitions=[],
             grid_type=gtx.GridType.CARTESIAN,
-            to_gtir=True,
         )
 
     assert exc_info.match("Invalid call to 'identity'")

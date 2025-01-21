@@ -283,10 +283,21 @@ def test_astype():
 
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
 
-    reference = im.as_fieldop(im.lambda_("__val")(im.call("cast_")(im.deref("__val"), "int32")))(
-        "a"
-    )
+    reference = im.cast_as_fieldop("int32")("a")
+
+    assert lowered_inlined.expr == reference
+
+
+def test_astype_local_field():
+    def foo(a: gtx.Field[gtx.Dims[Vertex, V2EDim], float64]):
+        return astype(a, int32)
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.op_as_fieldop(im.map_(im.lambda_("val")(im.call("cast_")("val", "int32"))))("a")
 
     assert lowered.expr == reference
 
@@ -297,10 +308,11 @@ def test_astype_scalar():
 
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
 
     reference = im.call("cast_")("a", "int32")
 
-    assert lowered.expr == reference
+    assert lowered_inlined.expr == reference
 
 
 def test_astype_tuple():
@@ -312,12 +324,8 @@ def test_astype_tuple():
     lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
 
     reference = im.make_tuple(
-        im.as_fieldop(im.lambda_("__val")(im.call("cast_")(im.deref("__val"), "int32")))(
-            im.tuple_get(0, "a")
-        ),
-        im.as_fieldop(im.lambda_("__val")(im.call("cast_")(im.deref("__val"), "int32")))(
-            im.tuple_get(1, "a")
-        ),
+        im.cast_as_fieldop("int32")(im.tuple_get(0, "a")),
+        im.cast_as_fieldop("int32")(im.tuple_get(1, "a")),
     )
 
     assert lowered_inlined.expr == reference
@@ -332,9 +340,7 @@ def test_astype_tuple_scalar_and_field():
     lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
 
     reference = im.make_tuple(
-        im.as_fieldop(im.lambda_("__val")(im.call("cast_")(im.deref("__val"), "int32")))(
-            im.tuple_get(0, "a")
-        ),
+        im.cast_as_fieldop("int32")(im.tuple_get(0, "a")),
         im.call("cast_")(im.tuple_get(1, "a"), "int32"),
     )
 
@@ -356,16 +362,10 @@ def test_astype_nested_tuple():
 
     reference = im.make_tuple(
         im.make_tuple(
-            im.as_fieldop(im.lambda_("__val")(im.call("cast_")(im.deref("__val"), "int32")))(
-                im.tuple_get(0, im.tuple_get(0, "a"))
-            ),
-            im.as_fieldop(im.lambda_("__val")(im.call("cast_")(im.deref("__val"), "int32")))(
-                im.tuple_get(1, im.tuple_get(0, "a"))
-            ),
+            im.cast_as_fieldop("int32")(im.tuple_get(0, im.tuple_get(0, "a"))),
+            im.cast_as_fieldop("int32")(im.tuple_get(1, im.tuple_get(0, "a"))),
         ),
-        im.as_fieldop(im.lambda_("__val")(im.call("cast_")(im.deref("__val"), "int32")))(
-            im.tuple_get(1, "a")
-        ),
+        im.cast_as_fieldop("int32")(im.tuple_get(1, "a")),
     )
 
     assert lowered_inlined.expr == reference
@@ -915,4 +915,15 @@ def test_broadcast():
     lowered = FieldOperatorLowering.apply(parsed)
 
     assert lowered.id == "foo"
-    assert lowered.expr == im.ref("inp")
+    assert lowered.expr == im.as_fieldop("deref")(im.ref("inp"))
+
+
+def test_scalar_broadcast():
+    def foo():
+        return broadcast(1, (UDim, TDim))
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    assert lowered.id == "foo"
+    assert lowered.expr == im.as_fieldop("deref")(1)

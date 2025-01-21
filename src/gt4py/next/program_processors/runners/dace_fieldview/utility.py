@@ -8,57 +8,15 @@
 
 from __future__ import annotations
 
-import itertools
-from typing import Any
+from typing import Dict, TypeVar
 
 import dace
 
 from gt4py import eve
-from gt4py.next import common as gtx_common
+from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
-from gt4py.next.program_processors.runners.dace_fieldview import gtir_python_codegen
+from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_specifications as ts
-
-
-def get_domain(
-    node: gtir.Expr,
-) -> list[tuple[gtx_common.Dimension, dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]]:
-    """
-    Specialized visit method for domain expressions.
-
-    Returns for each domain dimension the corresponding range.
-
-    TODO: Domain expressions will be recurrent in the GTIR program. An interesting idea
-          would be to cache the results of lowering here (e.g. using `functools.lru_cache`)
-    """
-    assert cpm.is_call_to(node, ("cartesian_domain", "unstructured_domain"))
-
-    domain = []
-    for named_range in node.args:
-        assert cpm.is_call_to(named_range, "named_range")
-        assert len(named_range.args) == 3
-        axis = named_range.args[0]
-        assert isinstance(axis, gtir.AxisLiteral)
-        bounds = [
-            dace.symbolic.pystr_to_symbolic(gtir_python_codegen.get_source(arg))
-            for arg in named_range.args[1:3]
-        ]
-        dim = gtx_common.Dimension(axis.value, axis.kind)
-        domain.append((dim, bounds[0], bounds[1]))
-
-    return domain
-
-
-def get_domain_ranges(
-    node: gtir.Expr,
-) -> dict[gtx_common.Dimension, tuple[dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]]:
-    """
-    Returns domain represented in dictionary form.
-    """
-    domain = get_domain(node)
-
-    return {dim: (lb, ub) for dim, lb, ub in domain}
 
 
 def get_map_variable(dim: gtx_common.Dimension) -> str:
@@ -69,79 +27,87 @@ def get_map_variable(dim: gtx_common.Dimension) -> str:
     return f"i_{dim.value}_gtx_{dim.kind}{suffix}"
 
 
-def get_tuple_fields(
-    tuple_name: str, tuple_type: ts.TupleType, flatten: bool = False
-) -> list[tuple[str, ts.DataType]]:
+def make_symbol_tree(tuple_name: str, tuple_type: ts.TupleType) -> tuple[gtir.Sym, ...]:
     """
-    Creates a list of names with the corresponding data type for all elements of the given tuple.
+    Creates a tree representation of the symbols corresponding to the tuple fields.
+    The constructed tree preserves the nested nature of the tuple type, if any.
 
     Examples
     --------
     >>> sty = ts.ScalarType(kind=ts.ScalarKind.INT32)
     >>> fty = ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
     >>> t = ts.TupleType(types=[sty, ts.TupleType(types=[fty, sty])])
-    >>> assert get_tuple_fields("a", t) == [("a_0", sty), ("a_1", ts.TupleType(types=[fty, sty]))]
-    >>> assert get_tuple_fields("a", t, flatten=True) == [
-    ...     ("a_0", sty),
-    ...     ("a_1_0", fty),
-    ...     ("a_1_1", sty),
-    ... ]
+    >>> assert make_symbol_tree("a", t) == (
+    ...     im.sym("a_0", sty),
+    ...     (im.sym("a_1_0", fty), im.sym("a_1_1", sty)),
+    ... )
     """
+    assert all(isinstance(t, ts.DataType) for t in tuple_type.types)
     fields = [(f"{tuple_name}_{i}", field_type) for i, field_type in enumerate(tuple_type.types)]
-    if flatten:
-        expanded_fields = [
-            get_tuple_fields(field_name, field_type)
-            if isinstance(field_type, ts.TupleType)
-            else [(field_name, field_type)]
-            for field_name, field_type in fields
-        ]
-        return list(itertools.chain(*expanded_fields))
-    else:
-        return fields
-
-
-def get_tuple_type(data: tuple[Any, ...]) -> ts.TupleType:
-    """
-    Compute the `ts.TupleType` corresponding to the structure of a tuple of data nodes.
-    """
-    return ts.TupleType(
-        types=[get_tuple_type(d) if isinstance(d, tuple) else d.data_type for d in data]
+    return tuple(
+        make_symbol_tree(field_name, field_type)  # type: ignore[misc]
+        if isinstance(field_type, ts.TupleType)
+        else im.sym(field_name, field_type)
+        for field_name, field_type in fields
     )
 
 
-def patch_gtir(ir: gtir.Program) -> gtir.Program:
+def flatten_tuple_fields(tuple_name: str, tuple_type: ts.TupleType) -> list[gtir.Sym]:
     """
-    Make the IR compliant with the requirements of lowering to SDFG.
+    Creates a list of symbols, annotated with the data type, for all elements of the given tuple.
 
-    Applies canonicalization of as_fieldop expressions as well as some temporary workarounds.
-    This allows to lower the IR to SDFG for some special cases.
+    Examples
+    --------
+    >>> sty = ts.ScalarType(kind=ts.ScalarKind.INT32)
+    >>> fty = ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
+    >>> t = ts.TupleType(types=[sty, ts.TupleType(types=[fty, sty])])
+    >>> assert flatten_tuple_fields("a", t) == [
+    ...     im.sym("a_0", sty),
+    ...     im.sym("a_1_0", fty),
+    ...     im.sym("a_1_1", sty),
+    ... ]
+    """
+    symbol_tree = make_symbol_tree(tuple_name, tuple_type)
+    return list(gtx_utils.flatten_nested_tuple(symbol_tree))
+
+
+def replace_invalid_symbols(ir: gtir.Program) -> gtir.Program:
+    """
+    Ensure that all symbols used in the program IR are valid strings (e.g. no unicode-strings).
+
+    If any invalid symbol present, this function returns a copy of the input IR where
+    the invalid symbols have been replaced with new names. If all symbols are valid,
+    the input IR is returned without copying it.
     """
 
-    class PatchGTIR(eve.PreserveLocationVisitor, eve.NodeTranslator):
-        def visit_FunCall(self, node: gtir.FunCall) -> gtir.Node:
-            if cpm.is_applied_as_fieldop(node):
-                assert isinstance(node.fun, gtir.FunCall)
-                assert isinstance(node.type, ts.FieldType)
+    class ReplaceSymbols(eve.PreserveLocationVisitor, eve.NodeTranslator):
+        T = TypeVar("T", gtir.Sym, gtir.SymRef)
 
-                # Handle the case of fieldop without domain. This case should never happen, but domain
-                # inference currently produces this kind of nodes for unreferenced tuple fields.
-                # TODO(tehrengruber): remove this workaround once domain ineference supports this case
-                if len(node.fun.args) == 1:
-                    return gtir.Literal(value="0", type=node.type.dtype)
+        def _replace_sym(self, node: T, symtable: Dict[str, str]) -> T:
+            sym = str(node.id)
+            return type(node)(id=symtable.get(sym, sym), type=node.type)
 
-                assert len(node.fun.args) == 2
-                stencil = node.fun.args[0]
+        def visit_Sym(self, node: gtir.Sym, *, symtable: Dict[str, str]) -> gtir.Sym:
+            return self._replace_sym(node, symtable)
 
-                # Canonicalize as_fieldop: always expect a lambda expression.
-                # Here we replace the call to deref with a lambda expression and empty arguments list.
-                if cpm.is_ref_to(stencil, "deref"):
-                    node.fun.args[0] = gtir.Lambda(
-                        expr=gtir.FunCall(fun=stencil, args=node.args), params=[]
-                    )
-                    node.args = []
+        def visit_SymRef(self, node: gtir.SymRef, *, symtable: Dict[str, str]) -> gtir.SymRef:
+            return self._replace_sym(node, symtable)
 
-            node.args = [self.visit(arg) for arg in node.args]
-            node.fun = self.visit(node.fun)
-            return node
+    # program arguments are checked separetely, because they cannot be replaced
+    if not all(dace.dtypes.validate_name(str(sym.id)) for sym in ir.params):
+        raise ValueError("Invalid symbol in program parameters.")
 
-    return PatchGTIR().visit(ir)
+    ir_sym_ids = {str(sym.id) for sym in eve.walk_values(ir).if_isinstance(gtir.Sym).to_set()}
+    ir_ssa_uuid = eve.utils.UIDGenerator(prefix="gtir_tmp")
+
+    invalid_symbols_mapping = {
+        sym_id: ir_ssa_uuid.sequential_id()
+        for sym_id in ir_sym_ids
+        if not dace.dtypes.validate_name(sym_id)
+    }
+    if len(invalid_symbols_mapping) == 0:
+        return ir
+
+    # assert that the new symbol names are not used in the IR
+    assert ir_sym_ids.isdisjoint(invalid_symbols_mapping.values())
+    return ReplaceSymbols().visit(ir, symtable=invalid_symbols_mapping)

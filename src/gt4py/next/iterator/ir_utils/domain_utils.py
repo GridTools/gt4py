@@ -10,33 +10,32 @@ from __future__ import annotations
 
 import dataclasses
 import functools
-from typing import Any, Literal, Mapping
+from typing import Any, Literal, Mapping, Optional
 
-import gt4py.next as gtx
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import trace_shifts
+from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 
 
 def _max_domain_sizes_by_location_type(offset_provider: Mapping[str, Any]) -> dict[str, int]:
     """
     Extract horizontal domain sizes from an `offset_provider`.
 
-    Considers the shape of the neighbor table to get the size of each `origin_axis` and the maximum
-    value inside the neighbor table to get the size of each `neighbor_axis`.
+    Considers the shape of the neighbor table to get the size of each `source_dim` and the maximum
+    value inside the neighbor table to get the size of each `codomain`.
     """
     sizes = dict[str, int]()
     for provider in offset_provider.values():
-        if isinstance(provider, gtx.NeighborTableOffsetProvider):
-            assert provider.origin_axis.kind == gtx.DimensionKind.HORIZONTAL
-            assert provider.neighbor_axis.kind == gtx.DimensionKind.HORIZONTAL
-            sizes[provider.origin_axis.value] = max(
-                sizes.get(provider.origin_axis.value, 0), provider.table.shape[0]
+        if common.is_neighbor_connectivity(provider):
+            conn_type = provider.__gt_type__()
+            sizes[conn_type.source_dim.value] = max(
+                sizes.get(conn_type.source_dim.value, 0), provider.ndarray.shape[0]
             )
-            sizes[provider.neighbor_axis.value] = max(
-                sizes.get(provider.neighbor_axis.value, 0),
-                provider.table.max() + 1,  # type: ignore[attr-defined] # TODO(havogt): improve typing for NDArrayObject
+            sizes[conn_type.codomain.value] = max(
+                sizes.get(conn_type.codomain.value, 0),
+                provider.ndarray.max() + 1,  # type: ignore[attr-defined] # TODO(havogt): improve typing for NDArrayObject
             )
     return sizes
 
@@ -93,6 +92,9 @@ class SymbolicDomain:
             ...,
         ],
         offset_provider: common.OffsetProvider,
+        #: A dictionary mapping axes names to their length. See
+        #: func:`gt4py.next.iterator.transforms.infer_domain.infer_expr` for more details.
+        symbolic_domain_sizes: Optional[dict[str, str]] = None,
     ) -> SymbolicDomain:
         dims = list(self.ranges.keys())
         new_ranges = {dim: self.ranges[dim] for dim in dims}
@@ -111,7 +113,7 @@ class SymbolicDomain:
                 new_ranges[current_dim] = SymbolicRange.translate(
                     self.ranges[current_dim], val.value
                 )
-            elif isinstance(nbt_provider, common.Connectivity):
+            elif common.is_neighbor_connectivity(nbt_provider):
                 # unstructured shift
                 assert (
                     isinstance(val, itir.OffsetLiteral) and isinstance(val.value, int)
@@ -119,18 +121,24 @@ class SymbolicDomain:
                     trace_shifts.Sentinel.ALL_NEIGHBORS,
                     trace_shifts.Sentinel.VALUE,
                 ]
-                # note: ugly but cheap re-computation, but should disappear
-                horizontal_sizes = _max_domain_sizes_by_location_type(offset_provider)
+                horizontal_sizes: dict[str, itir.Expr]
+                if symbolic_domain_sizes is not None:
+                    horizontal_sizes = {k: im.ref(v) for k, v in symbolic_domain_sizes.items()}
+                else:
+                    # note: ugly but cheap re-computation, but should disappear
+                    horizontal_sizes = {
+                        k: im.literal(str(v), itir.INTEGER_INDEX_BUILTIN)
+                        for k, v in _max_domain_sizes_by_location_type(offset_provider).items()
+                    }
 
-                old_dim = nbt_provider.origin_axis
-                new_dim = nbt_provider.neighbor_axis
+                old_dim = nbt_provider.__gt_type__().source_dim
+                new_dim = nbt_provider.__gt_type__().codomain
 
                 assert new_dim not in new_ranges or old_dim == new_dim
 
-                # TODO(tehrengruber): Do we need symbolic sizes, e.g., for ICON?
                 new_range = SymbolicRange(
                     im.literal("0", itir.INTEGER_INDEX_BUILTIN),
-                    im.literal(str(horizontal_sizes[new_dim.value]), itir.INTEGER_INDEX_BUILTIN),
+                    horizontal_sizes[new_dim.value],
                 )
                 new_ranges = dict(
                     (dim, range_) if dim != old_dim else (new_dim, new_range)
@@ -140,7 +148,9 @@ class SymbolicDomain:
                 raise AssertionError()
             return SymbolicDomain(self.grid_type, new_ranges)
         elif len(shift) > 2:
-            return self.translate(shift[0:2], offset_provider).translate(shift[2:], offset_provider)
+            return self.translate(shift[0:2], offset_provider, symbolic_domain_sizes).translate(
+                shift[2:], offset_provider, symbolic_domain_sizes
+            )
         else:
             raise AssertionError("Number of shifts must be a multiple of 2.")
 
@@ -159,6 +169,8 @@ def domain_union(*domains: SymbolicDomain) -> SymbolicDomain:
             lambda current_expr, el_expr: im.call("maximum")(current_expr, el_expr),
             [domain.ranges[dim].stop for domain in domains],
         )
+        # constant fold expression to keep the tree small
+        start, stop = ConstantFolding.apply(start), ConstantFolding.apply(stop)  # type: ignore[assignment]  # always an itir.Expr
         new_domain_ranges[dim] = SymbolicRange(start, stop)
 
     return SymbolicDomain(domains[0].grid_type, new_domain_ranges)

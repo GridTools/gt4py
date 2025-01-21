@@ -15,7 +15,7 @@ from typing import Any, Generic
 from gt4py._core import definitions as core_defs
 from gt4py.next import allocators as next_allocators
 from gt4py.next.ffront import (
-    foast_to_itir,
+    foast_to_gtir,
     foast_to_past,
     func_to_foast,
     func_to_past,
@@ -40,7 +40,7 @@ from gt4py.next.otf import arguments, stages, toolchain, workflow
 
 ARGS: typing.TypeAlias = arguments.JITArgs
 CARG: typing.TypeAlias = arguments.CompileTimeArgs
-IT_PRG: typing.TypeAlias = itir.FencilDefinition | itir.Program
+IT_PRG: typing.TypeAlias = itir.Program
 
 
 INPUT_DATA: typing.TypeAlias = DSL_FOP | FOP | DSL_PRG | PRG | IT_PRG
@@ -76,7 +76,7 @@ class Transforms(workflow.MultiWorkflow[INPUT_PAIR, stages.CompilableProgram]):
     )
 
     foast_to_itir: workflow.Workflow[AOT_FOP, itir.Expr] = dataclasses.field(
-        default_factory=foast_to_itir.adapted_foast_to_itir_factory
+        default_factory=foast_to_gtir.adapted_foast_to_gtir_factory
     )
 
     field_view_op_to_prog: workflow.Workflow[AOT_FOP, AOT_PRG] = dataclasses.field(
@@ -92,7 +92,7 @@ class Transforms(workflow.MultiWorkflow[INPUT_PAIR, stages.CompilableProgram]):
     )
 
     past_to_itir: workflow.Workflow[AOT_PRG, stages.CompilableProgram] = dataclasses.field(
-        default_factory=past_to_itir.past_to_itir_factory
+        default_factory=past_to_itir.past_to_gtir_factory
     )
 
     def step_order(self, inp: INPUT_PAIR) -> list[str]:
@@ -125,7 +125,7 @@ class Transforms(workflow.MultiWorkflow[INPUT_PAIR, stages.CompilableProgram]):
                 )
             case PRG():
                 steps.extend(["past_lint", "field_view_prog_args_transform", "past_to_itir"])
-            case itir.FencilDefinition() | itir.Program():
+            case itir.Program():
                 pass
             case _:
                 raise ValueError("Unexpected input.")

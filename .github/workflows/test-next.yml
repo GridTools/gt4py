@@ -4,11 +4,9 @@ on:
   push:
     branches:
     - main
-    - gtir  # TODO(tehrengruber): remove after GTIR refactoring #1582
   pull_request:
     branches:
     - main
-    - gtir  # TODO(tehrengruber): remove after GTIR refactoring #1582
     paths-ignore:  # Skip if only gt4py.cartesian and irrelevant doc files have been updated
     - "src/gt4py/cartesian/**"
     - "tests/cartesian_tests/**"
@@ -27,7 +25,7 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Install C++ libraries
       if: ${{ matrix.os == 'macos-latest' }}
       shell: bash
@@ -39,7 +37,7 @@ jobs:
       run: |
         sudo apt install libboost-dev
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'

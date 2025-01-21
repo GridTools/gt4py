@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, Optional, Union
+from typing import Callable, ClassVar, Optional, Union
 
 from gt4py.eve import Coerced, SymbolName, datamodels
 from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
@@ -96,25 +96,23 @@ class Backend(Node):
     domain: Union[SymRef, CartesianDomain, UnstructuredDomain]
 
 
-def _is_ref_literal_or_tuple_expr_of_ref(expr: Expr) -> bool:
+def _is_tuple_expr_of(pred: Callable[[Expr], bool], expr: Expr) -> bool:
     if (
         isinstance(expr, FunCall)
         and isinstance(expr.fun, SymRef)
         and expr.fun.id == "tuple_get"
         and len(expr.args) == 2
-        and _is_ref_literal_or_tuple_expr_of_ref(expr.args[1])
+        and _is_tuple_expr_of(pred, expr.args[1])
     ):
         return True
     if (
         isinstance(expr, FunCall)
         and isinstance(expr.fun, SymRef)
         and expr.fun.id == "make_tuple"
-        and all(_is_ref_literal_or_tuple_expr_of_ref(arg) for arg in expr.args)
+        and all(_is_tuple_expr_of(pred, arg) for arg in expr.args)
     ):
         return True
-    if isinstance(expr, (SymRef, Literal)):
-        return True
-    return False
+    return pred(expr)
 
 
 class SidComposite(Expr):
@@ -126,12 +124,30 @@ class SidComposite(Expr):
     ) -> None:
         if not all(
             isinstance(el, (SidFromScalar, SidComposite))
-            or _is_ref_literal_or_tuple_expr_of_ref(el)
+            or _is_tuple_expr_of(lambda expr: isinstance(expr, (SymRef, Literal)), el)
             for el in value
         ):
             raise ValueError(
-                "Only 'SymRef', tuple expr of 'SymRef', 'SidFromScalar', or 'SidComposite' allowed."
+                "Only 'SymRef', 'Literal', tuple expr thereof, 'SidFromScalar', or 'SidComposite' allowed."
             )
+
+
+def _might_be_scalar_expr(expr: Expr) -> bool:
+    if isinstance(expr, BinaryExpr):
+        return all(_is_tuple_expr_of(_might_be_scalar_expr, arg) for arg in (expr.lhs, expr.rhs))
+    if isinstance(expr, UnaryExpr):
+        return _is_tuple_expr_of(_might_be_scalar_expr, expr.expr)
+    if (
+        isinstance(expr, FunCall)
+        and isinstance(expr.fun, SymRef)
+        and expr.fun.id in ARITHMETIC_BUILTINS
+    ):
+        return all(_might_be_scalar_expr(arg) for arg in expr.args)
+    if isinstance(expr, CastExpr):
+        return _might_be_scalar_expr(expr.obj_expr)
+    if _is_tuple_expr_of(lambda e: isinstance(e, (SymRef, Literal)), expr):
+        return True
+    return False
 
 
 class SidFromScalar(Expr):
@@ -141,8 +157,10 @@ class SidFromScalar(Expr):
     def _arg_validator(
         self: datamodels.DataModelTP, attribute: datamodels.Attribute, value: Expr
     ) -> None:
-        if not _is_ref_literal_or_tuple_expr_of_ref(value):
-            raise ValueError("Only 'SymRef' or tuple expr of 'SymRef' allowed.")
+        if not _might_be_scalar_expr(value):
+            raise ValueError(
+                "Only 'SymRef', 'Literal', arithmetic op or tuple expr thereof allowed."
+            )
 
 
 class Stmt(Node):
@@ -153,7 +171,25 @@ class StencilExecution(Stmt):
     backend: Backend
     stencil: SymRef
     output: Union[SymRef, SidComposite]
-    inputs: list[Union[SymRef, SidComposite, SidFromScalar]]
+    inputs: list[Union[SymRef, SidComposite, SidFromScalar, FunCall]]
+
+    @datamodels.validator("inputs")
+    def _arg_validator(
+        self: datamodels.DataModelTP, attribute: datamodels.Attribute, inputs: list[Expr]
+    ) -> None:
+        for inp in inputs:
+            if not _is_tuple_expr_of(
+                lambda expr: isinstance(expr, (SymRef, SidComposite, SidFromScalar))
+                or (
+                    isinstance(expr, FunCall)
+                    and isinstance(expr.fun, SymRef)
+                    and expr.fun.id == "index"
+                ),
+                inp,
+            ):
+                raise ValueError(
+                    "Only 'SymRef', 'SidComposite', 'SidFromScalar', 'index' call or tuple expr thereof allowed."
+                )
 
 
 class Scan(Node):
@@ -192,6 +228,7 @@ GTFN_BUILTINS = [
     "unstructured_domain",
     "named_range",
     "reduce",
+    "index",
 ]
 ARITHMETIC_BUILTINS = itir.ARITHMETIC_BUILTINS
 TYPEBUILTINS = itir.TYPEBUILTINS

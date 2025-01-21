@@ -459,7 +459,8 @@ class CallInliner(ast.NodeTransformer):
                     call_args[name] = ast.Constant(value=arg_infos[name])
         except Exception as ex:
             raise GTScriptSyntaxError(
-                message="Invalid call signature", loc=nodes.Location.from_ast_node(node)
+                message=f"Invalid call signature when calling {call_name}",
+                loc=nodes.Location.from_ast_node(node),
             ) from ex
 
         # Rename local names in subroutine to avoid conflicts with caller context names
@@ -1450,14 +1451,6 @@ class IRMaker(ast.NodeVisitor):
                             message="Assignment to non-zero offsets in K is not available in PARALLEL. Choose FORWARD or BACKWARD.",
                             loc=nodes.Location.from_ast_node(t),
                         )
-                    if self.backend_name in ["gt:gpu", "dace:gpu"]:
-                        import cupy as cp
-
-                        if cp.cuda.runtime.runtimeGetVersion() < 12000:
-                            raise GTScriptSyntaxError(
-                                message=f"Assignment to non-zero offsets in K is not available in {self.backend_name} for CUDA<12. Please update CUDA.",
-                                loc=nodes.Location.from_ast_node(t),
-                            )
 
             if not self._is_known(name):
                 if name in self.temp_decls:
