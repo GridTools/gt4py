@@ -28,7 +28,7 @@ from gt4py.next.program_processors.runners.dace import (
     gtir_dataflow,
     gtir_python_codegen,
     gtir_sdfg,
-    utils as dace_utils,
+    gtir_sdfg_utils,
 )
 from gt4py.next.program_processors.runners.dace.gtir_scan_translator import translate_scan
 from gt4py.next.type_system import type_info as ti, type_specifications as ts
@@ -54,7 +54,7 @@ def get_domain_indices(
         as `dace.subsets.Indices`, it should be converted to `dace.subsets.Range` before
         being used in memlet subset because ranges are better supported throughout DaCe.
     """
-    index_variables = [dace.symbolic.SymExpr(dace_utils.get_map_variable(dim)) for dim in dims]
+    index_variables = [dace.symbolic.SymExpr(gtir_sdfg_utils.get_map_variable(dim)) for dim in dims]
     if offsets is None:
         return dace_subsets.Indices(index_variables)
     else:
@@ -158,7 +158,7 @@ def flatten_tuples(name: str, arg: FieldopResult) -> list[tuple[str, FieldopData
     """
     if isinstance(arg, tuple):
         tuple_type = get_tuple_type(arg)
-        tuple_symbols = dace_utils.flatten_tuple_fields(name, tuple_type)
+        tuple_symbols = gtir_sdfg_utils.flatten_tuple_fields(name, tuple_type)
         tuple_data_fields = gtx_utils.flatten_nested_tuple(arg)
         return [
             (str(tsym.id), tfield)
@@ -353,7 +353,7 @@ def _create_field_operator(
         "fieldop",
         state,
         ndrange={
-            dace_utils.get_map_variable(dim): f"{lower_bound}:{upper_bound}"
+            gtir_sdfg_utils.get_map_variable(dim): f"{lower_bound}:{upper_bound}"
             for dim, lower_bound, upper_bound in domain
         },
     )
@@ -372,7 +372,7 @@ def _create_field_operator(
         )
     else:
         # handle tuples of fields
-        output_symbol_tree = dace_utils.make_symbol_tree("x", node_type)
+        output_symbol_tree = gtir_sdfg_utils.make_symbol_tree("x", node_type)
         return gtx_utils.tree_map(
             lambda output_edge, output_sym: _create_field_operator_impl(
                 sdfg_builder, sdfg, state, domain, output_edge, output_sym.type, map_exit
@@ -590,7 +590,7 @@ def translate_index(
     domain = extract_domain(node.annex.domain)
     assert len(domain) == 1
     dim, _, _ = domain[0]
-    dim_index = dace_utils.get_map_variable(dim)
+    dim_index = gtir_sdfg_utils.get_map_variable(dim)
 
     index_data, _ = sdfg_builder.add_temp_scalar(sdfg, INDEX_DTYPE)
     index_node = state.add_access(index_data)
@@ -643,7 +643,7 @@ def _get_data_nodes(
         return sdfg_builder.make_field(data_node, data_type)
 
     elif isinstance(data_type, ts.TupleType):
-        symbol_tree = dace_utils.make_symbol_tree(data_name, data_type)
+        symbol_tree = gtir_sdfg_utils.make_symbol_tree(data_name, data_type)
         return gtx_utils.tree_map(
             lambda sym: _get_data_nodes(sdfg, state, sdfg_builder, sym.id, sym.type)
         )(symbol_tree)

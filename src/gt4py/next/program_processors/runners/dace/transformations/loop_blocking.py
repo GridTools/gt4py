@@ -19,7 +19,7 @@ from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 from dace.transformation import helpers as dace_helpers
 
 from gt4py.next import common as gtx_common
-from gt4py.next.program_processors.runners.dace import utils as gtx_dace_utils
+from gt4py.next.program_processors.runners.dace import gtir_sdfg_utils as gtx_dace_utils
 
 
 @dace_properties.make_properties

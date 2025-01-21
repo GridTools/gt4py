@@ -34,7 +34,7 @@ from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace import (
     gtir_builtin_translators,
     gtir_dace_utils,
-    utils as dace_utils,
+    gtir_sdfg_utils,
 )
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
 
@@ -383,7 +383,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         """
         if isinstance(gt_type, ts.TupleType):
             tuple_fields = []
-            for sym in dace_utils.flatten_tuple_fields(name, gt_type):
+            for sym in gtir_sdfg_utils.flatten_tuple_fields(name, gt_type):
                 assert isinstance(sym.type, ts.DataType)
                 tuple_fields.extend(
                     self._add_storage(sdfg, symbolic_arguments, sym.id, sym.type, transient)
@@ -540,7 +540,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         assert len(self.field_offsets) == 0
 
         sdfg = dace.SDFG(node.id)
-        sdfg.debuginfo = dace_utils.debug_info(node)
+        sdfg.debuginfo = gtir_sdfg_utils.debug_info(node)
 
         # start block of the stateful graph
         entry_state = sdfg.add_state("program_entry", is_start_block=True)
@@ -563,7 +563,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         for i, stmt in enumerate(node.body):
             # include `debuginfo` only for `ir.Program` and `ir.Stmt` nodes: finer granularity would be too messy
             head_state = sdfg.add_state_after(head_state, f"stmt_{i}")
-            head_state._debuginfo = dace_utils.debug_info(stmt, default=sdfg.debuginfo)
+            head_state._debuginfo = gtir_sdfg_utils.debug_info(stmt, default=sdfg.debuginfo)
             head_state = self.visit(stmt, sdfg=sdfg, state=head_state)
 
         # remove unused connectivity tables (by design, arrays are marked as non-transient when they are used)
@@ -760,7 +760,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 elif field_domain_offset := self.field_offsets.get(p_name, None):
                     return {p_name: field_domain_offset}
             elif isinstance(p_type, ts.TupleType):
-                tsyms = dace_utils.flatten_tuple_fields(p_name, p_type)
+                tsyms = gtir_sdfg_utils.flatten_tuple_fields(p_name, p_type)
                 return functools.reduce(
                     lambda field_offsets, sym: (
                         field_offsets | get_field_domain_offset(sym.id, sym.type)  # type: ignore[arg-type]
@@ -777,7 +777,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         # lower let-statement lambda node as a nested SDFG
         nsdfg = dace.SDFG(name=self.unique_nsdfg_name(sdfg, "lambda"))
-        nsdfg.debuginfo = dace_utils.debug_info(node, default=sdfg.debuginfo)
+        nsdfg.debuginfo = gtir_sdfg_utils.debug_info(node, default=sdfg.debuginfo)
         lambda_translator = self.setup_nested_context(
             node.expr, nsdfg, lambda_symbols, lambda_field_offsets
         )
@@ -861,7 +861,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             inputs=set(input_memlets.keys()),
             outputs=lambda_outputs,
             symbol_mapping=nsdfg_symbols_mapping,
-            debuginfo=dace_utils.debug_info(node, default=sdfg.debuginfo),
+            debuginfo=gtir_sdfg_utils.debug_info(node, default=sdfg.debuginfo),
         )
 
         for connector, memlet in input_memlets.items():
@@ -968,7 +968,7 @@ def build_sdfg_from_gtir(
     # such as arrays and scalars. GT4Py uses a unicode symbols ('ᐞ') as name
     # separator in the SSA pass, which generates invalid symbols for DaCe.
     # Here we find new names for invalid symbols present in the IR.
-    ir = dace_utils.replace_invalid_symbols(ir)
+    ir = gtir_sdfg_utils.replace_invalid_symbols(ir)
 
     sdfg_genenerator = GTIRToSDFG(offset_provider_type, column_axis)
     sdfg = sdfg_genenerator.visit(ir)
