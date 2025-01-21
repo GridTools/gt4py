@@ -24,11 +24,11 @@ from gt4py.next.iterator.ir_utils import (
     ir_makers as im,
 )
 from gt4py.next.program_processors.runners.dace import (
-    gtir_dace_utils,
     gtir_dataflow,
     gtir_python_codegen,
     gtir_sdfg,
     gtir_sdfg_utils,
+    utils as gtx_dace_utils,
 )
 from gt4py.next.program_processors.runners.dace.gtir_scan_translator import translate_scan
 from gt4py.next.type_system import type_info as ti, type_specifications as ts
@@ -596,7 +596,7 @@ def translate_index(
     index_node = state.add_access(index_data)
     index_value = gtir_dataflow.ValueExpr(
         dc_node=index_node,
-        gt_dtype=gtir_dace_utils.as_itir_type(INDEX_DTYPE),
+        gt_dtype=gtx_dace_utils.as_itir_type(INDEX_DTYPE),
     )
     index_write_tasklet = sdfg_builder.add_tasklet(
         "index",
@@ -669,7 +669,7 @@ def _get_symbolic_value(
     )
     temp_name, _ = sdfg.add_scalar(
         temp_name or sdfg.temp_data_name(),
-        gtir_dace_utils.as_dace_type(scalar_type),
+        gtx_dace_utils.as_dace_type(scalar_type),
         find_new_name=True,
         transient=True,
     )
@@ -808,7 +808,7 @@ def translate_scalar_expr(
             dace.Memlet(data=arg_node.data, subset="0"),
         )
     # finally, create temporary for the result value
-    temp_name, _ = sdfg_builder.add_temp_scalar(sdfg, gtir_dace_utils.as_dace_type(node.type))
+    temp_name, _ = sdfg_builder.add_temp_scalar(sdfg, gtx_dace_utils.as_dace_type(node.type))
     temp_node = state.add_access(temp_name)
     state.add_edge(
         tasklet_node,

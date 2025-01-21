@@ -33,8 +33,8 @@ from gt4py.next.iterator.transforms import prune_casts as ir_prune_casts, symbol
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace import (
     gtir_builtin_translators,
-    gtir_dace_utils,
     gtir_sdfg_utils,
+    utils as gtx_dace_utils,
 )
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
 
@@ -332,17 +332,17 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             Two lists of symbols, one for the shape and the other for the strides of the array.
         """
         dc_dtype = gtir_builtin_translators.INDEX_DTYPE
-        neighbor_table_types = gtir_dace_utils.filter_connectivity_types(self.offset_provider_type)
+        neighbor_table_types = gtx_dace_utils.filter_connectivity_types(self.offset_provider_type)
         shape = [
             (
                 neighbor_table_types[dim.value].max_neighbors
                 if dim.kind == gtx_common.DimensionKind.LOCAL
-                else dace.symbol(gtir_dace_utils.field_size_symbol_name(name, i), dc_dtype)
+                else dace.symbol(gtx_dace_utils.field_size_symbol_name(name, i), dc_dtype)
             )
             for i, dim in enumerate(dims)
         ]
         strides = [
-            dace.symbol(gtir_dace_utils.field_stride_symbol_name(name, i), dc_dtype)
+            dace.symbol(gtx_dace_utils.field_stride_symbol_name(name, i), dc_dtype)
             for i in range(len(dims))
         ]
         return shape, strides
@@ -397,7 +397,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             if not isinstance(gt_type.dtype, ts.ScalarType):
                 raise ValueError(f"Field type '{gt_type.dtype}' not supported.")
             # handle default case: field with one or more dimensions
-            dc_dtype = gtir_dace_utils.as_dace_type(gt_type.dtype)
+            dc_dtype = gtx_dace_utils.as_dace_type(gt_type.dtype)
             # Use symbolic shape, which allows to invoke the program with fields of different size;
             # and symbolic strides, which enables decoupling the memory layout from generated code.
             sym_shape, sym_strides = self._make_array_shape_and_strides(name, gt_type.dims)
@@ -405,8 +405,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             return [(name, gt_type)]
 
         elif isinstance(gt_type, ts.ScalarType):
-            dc_dtype = gtir_dace_utils.as_dace_type(gt_type)
-            if gtir_dace_utils.is_field_symbol(name) or name in symbolic_arguments:
+            dc_dtype = gtx_dace_utils.as_dace_type(gt_type)
+            if gtx_dace_utils.is_field_symbol(name) or name in symbolic_arguments:
                 if name in sdfg.symbols:
                     # Sometimes, when the field domain is implicitly derived from the
                     # field domain, the gt4py lowering adds the field size as a scalar
@@ -416,7 +416,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     # created by `_make_array_shape_and_strides()`, when allocating
                     # storage for field arguments. We assume that the scalar argument
                     # for field size, if present, always follows the field argument.
-                    assert gtir_dace_utils.is_field_symbol(name)
+                    assert gtx_dace_utils.is_field_symbol(name)
                     if sdfg.symbols[name].dtype != dc_dtype:
                         raise ValueError(
                             f"Type mismatch on argument {name}: got {dc_dtype}, expected {sdfg.symbols[name].dtype}."
@@ -501,7 +501,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             self.global_symbols[pname] = param.type
 
         # add SDFG storage for connectivity tables
-        for offset, connectivity_type in gtir_dace_utils.filter_connectivity_types(
+        for offset, connectivity_type in gtx_dace_utils.filter_connectivity_types(
             self.offset_provider_type
         ).items():
             scalar_type = tt.from_dtype(connectivity_type.dtype)
@@ -516,7 +516,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             self._add_storage(
                 sdfg,
                 symbolic_arguments,
-                gtir_dace_utils.connectivity_identifier(offset),
+                gtx_dace_utils.connectivity_identifier(offset),
                 gt_type,
             )
 
@@ -571,7 +571,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             unused_connectivities = [
                 data
                 for data, datadesc in nsdfg.arrays.items()
-                if gtir_dace_utils.is_connectivity_identifier(data, self.offset_provider_type)
+                if gtx_dace_utils.is_connectivity_identifier(data, self.offset_provider_type)
                 and datadesc.transient
             ]
             for data in unused_connectivities:
@@ -795,8 +795,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         # we they are stored as non-transient array and scalar objects.
         #
         connectivity_arrays = {
-            gtir_dace_utils.connectivity_identifier(offset)
-            for offset in gtir_dace_utils.filter_connectivity_types(self.offset_provider_type)
+            gtx_dace_utils.connectivity_identifier(offset)
+            for offset in gtx_dace_utils.filter_connectivity_types(self.offset_provider_type)
         }
 
         input_memlets = {}
