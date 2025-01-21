@@ -256,7 +256,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         if len(local_dims) == 0:
             # do nothing: the field domain consists of all global dimensions
             field_type = data_type
-            field_origin = dace_utils.get_symbolic_origin(data_node.data, field_type)
         elif len(local_dims) == 1:
             local_dim = local_dims[0]
             local_dim_index = data_type.dims.index(local_dim)
@@ -273,14 +272,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 )
             local_type = ts.ListType(element_type=data_type.dtype, offset_type=local_dim)
             field_type = ts.FieldType(dims=data_type.dims[:local_dim_index], dtype=local_type)
-            field_origin = [
-                *dace_utils.get_symbolic_origin(data_node.data, field_type),
-                dace.symbolic.SymExpr(0),
-            ]
         else:
             raise NotImplementedError(
                 "Fields with more than one local dimension are not supported."
             )
+        field_origin = dace_utils.get_symbolic_origin(data_node.data, field_type)
         return gtir_builtin_translators.FieldopData(data_node, field_type, field_origin)
 
     def get_symbol_type(self, symbol_name: str) -> ts.DataType:
