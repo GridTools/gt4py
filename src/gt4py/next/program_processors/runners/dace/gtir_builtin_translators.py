@@ -111,6 +111,9 @@ class FieldopData:
                 (dim, dace.symbolic.SymExpr(0) if self.offset is None else self.offset[i])
                 for i, dim in enumerate(self.gt_type.dims)
             ]
+            # The property below is ensured by calling `make_field()` to construct `FieldopData`.
+            # The `make_field` constructor ensures that any local dimension, if present, is converted
+            # to `ListType` element type, while the field domain consists of all global dimensions.
             assert all(dim != gtx_common.DimensionKind.LOCAL for dim in self.gt_type.dims)
             return gtir_dataflow.IteratorExpr(
                 self.dc_node, self.gt_type.dtype, field_domain, it_indices
