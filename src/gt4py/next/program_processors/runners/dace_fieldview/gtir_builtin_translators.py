@@ -111,31 +111,13 @@ class FieldopData:
                 (dim, dace.symbolic.SymExpr(0) if self.offset is None else self.offset[i])
                 for i, dim in enumerate(self.gt_type.dims)
             ]
-            local_dims = [
-                dim for dim in self.gt_type.dims if dim.kind == gtx_common.DimensionKind.LOCAL
-            ]
-            if len(local_dims) == 0:
-                return gtir_dataflow.IteratorExpr(
-                    self.dc_node, self.gt_type.dtype, field_domain, it_indices
-                )
-
-            elif len(local_dims) == 1:
-                field_dtype = ts.ListType(
-                    element_type=self.gt_type.dtype, offset_type=local_dims[0]
-                )
-                field_domain = [
-                    (dim, offset)
-                    for dim, offset in field_domain
-                    if dim.kind != gtx_common.DimensionKind.LOCAL
-                ]
-                return gtir_dataflow.IteratorExpr(
-                    self.dc_node, field_dtype, field_domain, it_indices
-                )
-
-            else:
-                raise ValueError(
-                    f"Unexpected data field {self.dc_node.data} with more than one local dimension."
-                )
+            # The property below is ensured by calling `make_field()` to construct `FieldopData`.
+            # The `make_field` constructor ensures that any local dimension, if present, is converted
+            # to `ListType` element type, while the field domain consists of all global dimensions.
+            assert all(dim != gtx_common.DimensionKind.LOCAL for dim in self.gt_type.dims)
+            return gtir_dataflow.IteratorExpr(
+                self.dc_node, self.gt_type.dtype, field_domain, it_indices
+            )
 
         raise NotImplementedError(f"Node type {type(self.gt_type)} not supported.")
 
@@ -305,29 +287,24 @@ def _create_field_operator_impl(
             raise TypeError(
                 f"Type mismatch, expected {output_type.dtype} got {output_edge.result.gt_dtype}."
             )
-        field_dtype = output_edge.result.gt_dtype
-        field_dims, field_shape, field_offset = (domain_dims, domain_shape, domain_offset)
         assert isinstance(dataflow_output_desc, dace.data.Scalar)
+        field_shape = domain_shape
         field_subset = domain_subset
     else:
         assert isinstance(output_type.dtype, ts.ListType)
         assert isinstance(output_edge.result.gt_dtype.element_type, ts.ScalarType)
-        field_dtype = output_edge.result.gt_dtype.element_type
-        if field_dtype != output_type.dtype.element_type:
+        if output_edge.result.gt_dtype.element_type != output_type.dtype.element_type:
             raise TypeError(
-                f"Type mismatch, expected {output_type.dtype.element_type} got {field_dtype}."
+                f"Type mismatch, expected {output_type.dtype.element_type} got {output_edge.result.gt_dtype.element_type}."
             )
         assert isinstance(dataflow_output_desc, dace.data.Array)
         assert len(dataflow_output_desc.shape) == 1
         # extend the array with the local dimensions added by the field operator (e.g. `neighbors`)
         assert output_edge.result.gt_dtype.offset_type is not None
-        field_dims = [*domain_dims, output_edge.result.gt_dtype.offset_type]
         field_shape = [*domain_shape, dataflow_output_desc.shape[0]]
-        field_offset = [*domain_offset, dataflow_output_desc.offset[0]]
         field_subset = domain_subset + dace_subsets.Range.from_array(dataflow_output_desc)
 
     # allocate local temporary storage
-    assert dataflow_output_desc.dtype == dace_utils.as_dace_type(field_dtype)
     field_name, _ = sdfg_builder.add_temp_array(sdfg, field_shape, dataflow_output_desc.dtype)
     field_node = state.add_access(field_name)
 
@@ -336,8 +313,8 @@ def _create_field_operator_impl(
 
     return FieldopData(
         field_node,
-        ts.FieldType(field_dims, field_dtype),
-        offset=(field_offset if set(field_offset) != {0} else None),
+        ts.FieldType(domain_dims, output_edge.result.gt_dtype),
+        offset=(domain_offset if set(domain_offset) != {0} else None),
     )
 
 
