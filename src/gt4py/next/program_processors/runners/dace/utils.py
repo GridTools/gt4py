@@ -73,6 +73,27 @@ def field_stride_symbol_name(field_name: str, axis: int) -> str:
     return field_symbol_name(field_name, axis, "stride")
 
 
+def range_start_symbol(field_name: str, axis: int) -> str:
+    return f"__{field_name}_{axis}_range_0"
+
+
+def range_stop_symbol(field_name: str, axis: int) -> str:
+    return f"__{field_name}_{axis}_range_1"
+
+
+def get_symbolic_origin(field_name: str, type_: ts.FieldType) -> list[dace.symbolic.SymExpr]:
+    return [
+        dace.symbolic.SymExpr(range_start_symbol(field_name, axis))
+        for axis in range(len(type_.dims))
+    ]
+
+
+def get_symbolic_shape(field_name: str, axis: int) -> dace.symbolic.SymExpr:
+    return dace.symbolic.SymExpr(
+        "{} - {}".format(range_stop_symbol(field_name, axis), range_start_symbol(field_name, axis))
+    )
+
+
 def is_field_symbol(name: str) -> bool:
     return FIELD_SYMBOL_RE.match(name) is not None
 

@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import abc
 import dataclasses
-import functools
 import itertools
 import operator
 from typing import Any, Dict, Iterable, List, Optional, Protocol, Sequence, Set, Tuple, Union
@@ -35,6 +34,9 @@ from gt4py.next.program_processors.runners.dace import (
     gtir_builtin_translators,
     gtir_sdfg_utils,
     utils as gtx_dace_utils,
+)
+from gt4py.next.program_processors.runners.dace.transformations import (
+    gt_substitute_compiletime_symbols,
 )
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
 
@@ -142,7 +144,6 @@ class SDFGBuilder(DataflowBuilder, Protocol):
         expr: gtir.Expr,
         sdfg: dace.SDFG,
         global_symbols: dict[str, ts.DataType],
-        field_offsets: dict[str, Optional[list[dace.symbolic.SymExpr]]],
     ) -> SDFGBuilder:
         """
         Create an SDFG context to translate a nested expression, indipendent
@@ -156,7 +157,6 @@ class SDFGBuilder(DataflowBuilder, Protocol):
             expr: The nested expresson to be lowered.
             sdfg: The SDFG where to lower the nested expression.
             global_symbols: Mapping from symbol name to GTIR data type.
-            field_offsets: Mapping from symbol name to field origin, `None` if field origin is 0 in all dimensions.
 
         Returns:
             A visitor object implementing the `SDFGBuilder` protocol.
@@ -217,10 +217,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
     offset_provider_type: gtx_common.OffsetProviderType
     column_axis: Optional[gtx_common.Dimension]
-    global_symbols: dict[str, ts.DataType] = dataclasses.field(default_factory=dict)
-    field_offsets: dict[str, Optional[list[dace.symbolic.SymExpr]]] = dataclasses.field(
-        default_factory=dict
-    )
+    global_symbols: dict[str, ts.DataType]
     map_uids: eve.utils.UIDGenerator = dataclasses.field(
         init=False, repr=False, default_factory=lambda: eve.utils.UIDGenerator(prefix="map")
     )
@@ -253,8 +250,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             The descriptor associated with the SDFG data storage, filled with field origin.
         """
         if isinstance(data_type, ts.ScalarType):
-            return gtir_builtin_translators.FieldopData(data_node, data_type, offset=None)
-        domain_offset = self.field_offsets.get(data_node.data, None)
+            return gtir_builtin_translators.FieldopData(data_node, data_type, origin=None)
         local_dims = [dim for dim in data_type.dims if dim.kind == gtx_common.DimensionKind.LOCAL]
         if len(local_dims) == 0:
             # do nothing: the field domain consists of all global dimensions
@@ -279,7 +275,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             raise NotImplementedError(
                 "Fields with more than one local dimension are not supported."
             )
-        return gtir_builtin_translators.FieldopData(data_node, field_type, domain_offset)
+        field_origin = gtx_dace_utils.get_symbolic_origin(data_node.data, field_type)
+        return gtir_builtin_translators.FieldopData(data_node, field_type, field_origin)
 
     def get_symbol_type(self, symbol_name: str) -> ts.DataType:
         return self.global_symbols[symbol_name]
@@ -293,11 +290,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         expr: gtir.Expr,
         sdfg: dace.SDFG,
         global_symbols: dict[str, ts.DataType],
-        field_offsets: dict[str, Optional[list[dace.symbolic.SymExpr]]],
     ) -> SDFGBuilder:
-        nsdfg_builder = GTIRToSDFG(
-            self.offset_provider_type, self.column_axis, global_symbols, field_offsets
-        )
+        nsdfg_builder = GTIRToSDFG(self.offset_provider_type, self.column_axis, global_symbols)
         nsdfg_params = [
             gtir.Sym(id=p_name, type=p_type) for p_name, p_type in global_symbols.items()
         ]
@@ -321,7 +315,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
     def _make_array_shape_and_strides(
         self, name: str, dims: Sequence[gtx_common.Dimension]
-    ) -> tuple[list[dace.symbol], list[dace.symbol]]:
+    ) -> tuple[list[dace.symbolic.SymExpr], list[dace.symbolic.SymExpr]]:
         """
         Parse field dimensions and allocate symbols for array shape and strides.
 
@@ -331,18 +325,21 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         Returns:
             Two lists of symbols, one for the shape and the other for the strides of the array.
         """
-        dc_dtype = gtir_builtin_translators.INDEX_DTYPE
         neighbor_table_types = gtx_dace_utils.filter_connectivity_types(self.offset_provider_type)
-        shape = [
-            (
-                neighbor_table_types[dim.value].max_neighbors
-                if dim.kind == gtx_common.DimensionKind.LOCAL
-                else dace.symbol(gtx_dace_utils.field_size_symbol_name(name, i), dc_dtype)
-            )
-            for i, dim in enumerate(dims)
-        ]
+        shape = []
+        for i, dim in enumerate(dims):
+            if dim.kind == gtx_common.DimensionKind.LOCAL:
+                shape.append(
+                    dace.symbolic.pystr_to_symbolic(neighbor_table_types[dim.value].max_neighbors)
+                )
+            elif gtx_dace_utils.is_connectivity_identifier(name, self.offset_provider_type):
+                shape.append(
+                    dace.symbolic.pystr_to_symbolic(gtx_dace_utils.field_size_symbol_name(name, i))
+                )
+            else:
+                shape.append(gtx_dace_utils.get_symbolic_shape(name, i))
         strides = [
-            dace.symbol(gtx_dace_utils.field_stride_symbol_name(name, i), dc_dtype)
+            dace.symbolic.pystr_to_symbolic(gtx_dace_utils.field_stride_symbol_name(name, i))
             for i in range(len(dims))
         ]
         return shape, strides
@@ -498,7 +495,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             sdfg_args += self._add_storage(
                 sdfg, symbolic_arguments, pname, param.type, transient=False
             )
-            self.global_symbols[pname] = param.type
 
         # add SDFG storage for connectivity tables
         for offset, connectivity_type in gtx_dace_utils.filter_connectivity_types(
@@ -532,13 +528,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         The temporary data is global, therefore available everywhere in the SDFG
         but not outside. Then, all statements are translated, one after the other.
         """
-        if node.function_definitions:
-            raise NotImplementedError("Functions expected to be inlined as lambda calls.")
-
-        # Since program field arguments are passed to the SDFG as full-shape arrays,
-        # there is no offset that needs to be compensated.
-        assert len(self.field_offsets) == 0
-
         sdfg = dace.SDFG(node.id)
         sdfg.debuginfo = gtir_sdfg_utils.debug_info(node)
 
@@ -627,15 +616,17 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             assert not target_desc.transient
 
             if isinstance(target.gt_type, ts.FieldType):
+                assert target.origin is not None
                 target_subset = ",".join(
-                    f"{domain[dim][0]}:{domain[dim][1]}" for dim in target.gt_type.dims
+                    f"{domain[dim][0] - origin}:{domain[dim][1] - origin}"
+                    for dim, origin in zip(target.gt_type.dims, target.origin, strict=True)
                 )
                 source_subset = (
                     target_subset
-                    if source.offset is None
+                    if source.origin is None
                     else ",".join(
-                        f"{domain[dim][0] - offset}:{domain[dim][1] - offset}"
-                        for dim, offset in zip(target.gt_type.dims, source.offset, strict=True)
+                        f"{domain[dim][0] - origin}:{domain[dim][1] - origin}"
+                        for dim, origin in zip(target.gt_type.dims, source.origin, strict=True)
                     )
                 )
             else:
@@ -725,15 +716,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         i.e. a lambda parameter with the same name as a symbol in scope, the parameter will shadow
         the previous symbol during traversal of the lambda expression.
         """
-        lambda_args_mapping = [
-            (str(param.id), arg) for param, arg in zip(node.params, args, strict=True)
-        ]
-
         lambda_arg_nodes = dict(
             itertools.chain(
                 *[
-                    gtir_builtin_translators.flatten_tuples(pname, arg)
-                    for pname, arg in lambda_args_mapping
+                    gtir_builtin_translators.flatten_tuples(psym.id, arg)
+                    for psym, arg in zip(node.params, args, strict=True)
                 ]
             )
         )
@@ -743,44 +730,16 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             sym: self.global_symbols[sym]
             for sym in symbol_ref_utils.collect_symbol_refs(node.expr, self.global_symbols.keys())
         } | {
-            pname: gtir_builtin_translators.get_tuple_type(arg)
+            psym.id: gtir_builtin_translators.get_tuple_type(arg)
             if isinstance(arg, tuple)
             else arg.gt_type
-            for pname, arg in lambda_args_mapping
+            for psym, arg in zip(node.params, args, strict=True)
         }
-
-        def get_field_domain_offset(
-            p_name: str, p_type: ts.DataType
-        ) -> dict[str, Optional[list[dace.symbolic.SymExpr]]]:
-            if isinstance(p_type, ts.FieldType):
-                if p_name in lambda_arg_nodes:
-                    arg = lambda_arg_nodes[p_name]
-                    assert isinstance(arg, gtir_builtin_translators.FieldopData)
-                    return {p_name: arg.offset}
-                elif field_domain_offset := self.field_offsets.get(p_name, None):
-                    return {p_name: field_domain_offset}
-            elif isinstance(p_type, ts.TupleType):
-                tsyms = gtir_sdfg_utils.flatten_tuple_fields(p_name, p_type)
-                return functools.reduce(
-                    lambda field_offsets, sym: (
-                        field_offsets | get_field_domain_offset(sym.id, sym.type)  # type: ignore[arg-type]
-                    ),
-                    tsyms,
-                    {},
-                )
-            return {}
-
-        # populate mapping from field name to domain offset
-        lambda_field_offsets: dict[str, Optional[list[dace.symbolic.SymExpr]]] = {}
-        for p_name, p_type in lambda_symbols.items():
-            lambda_field_offsets |= get_field_domain_offset(p_name, p_type)
 
         # lower let-statement lambda node as a nested SDFG
         nsdfg = dace.SDFG(name=self.unique_nsdfg_name(sdfg, "lambda"))
         nsdfg.debuginfo = gtir_sdfg_utils.debug_info(node, default=sdfg.debuginfo)
-        lambda_translator = self.setup_nested_context(
-            node.expr, nsdfg, lambda_symbols, lambda_field_offsets
-        )
+        lambda_translator = self.setup_nested_context(node.expr, nsdfg, lambda_symbols)
 
         nstate = nsdfg.add_state("lambda")
         lambda_result = lambda_translator.visit(
@@ -800,7 +759,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         }
 
         input_memlets = {}
-        nsdfg_symbols_mapping = {str(sym): sym for sym in nsdfg.free_symbols}
         for nsdfg_dataname, nsdfg_datadesc in nsdfg.arrays.items():
             if nsdfg_datadesc.transient:
                 continue
@@ -809,15 +767,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 src_node = lambda_arg_nodes[nsdfg_dataname].dc_node
                 dataname = src_node.data
                 datadesc = src_node.desc(sdfg)
-                nsdfg_symbols_mapping |= {
-                    str(nested_symbol): parent_symbol
-                    for nested_symbol, parent_symbol in zip(
-                        [*nsdfg_datadesc.shape, *nsdfg_datadesc.strides],
-                        [*datadesc.shape, *datadesc.strides],
-                        strict=True,
-                    )
-                    if dace.symbolic.issymbolic(nested_symbol)
-                }
             else:
                 dataname = nsdfg_dataname
                 datadesc = sdfg.arrays[nsdfg_dataname]
@@ -854,6 +803,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             for output_data in lambda_output_data
             if output_data.dc_node.desc(nsdfg).transient
         }
+
+        # map free symbols to parent SDFG
+        nsdfg_symbols_mapping = {str(sym): sym for sym in nsdfg.free_symbols}
+        for sym, arg in zip(node.params, args, strict=True):
+            nsdfg_symbols_mapping |= gtir_builtin_translators.get_data_symbol_mapping(
+                sym.id, arg, sdfg
+            )
 
         nsdfg_node = head_state.add_nested_sdfg(
             nsdfg,
@@ -941,10 +897,59 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         return gtir_builtin_translators.translate_symbol_ref(node, sdfg, head_state, self)
 
 
+def _remove_field_origin_symbols(ir: gtir.Program, sdfg: dace.SDFG) -> None:
+    """
+    Helper function to remove the origin symbols used in program field arguments.
+    It will set the start symbol of field domain range to constant value 0,
+    thus removing the corresponding free symbol. These values are also propagated
+    to all nested SDFGs.
+    """
+
+    # collect symbols used as range start for all program arguments
+    range_start_symbols: dict[str, dace.symbolic.SymExpr] = {}
+    for p in ir.params:
+        if isinstance(p.type, ts.TupleType):
+            psymbols = [
+                sym
+                for sym in gtir_sdfg_utils.flatten_tuple_fields(p.id, p.type)
+                if isinstance(sym.type, ts.FieldType)
+            ]
+        elif isinstance(p.type, ts.FieldType):
+            psymbols = [p]
+        else:
+            psymbols = []
+        for psymbol in psymbols:
+            assert isinstance(psymbol.type, ts.FieldType)
+            if len(psymbol.type.dims) == 0:
+                # zero-dimensional field
+                continue
+            dataname = str(psymbol.id)
+            datadesc = sdfg.data(dataname)
+            assert (
+                isinstance(datadesc, dace.data.Array)
+                and len(datadesc.shape) == len(psymbol.type.dims)
+                and not datadesc.transient
+            )
+            # we redefine the array shape assuming that the range always starts from 0
+            new_shape = [
+                dace.symbolic.SymExpr(gtx_dace_utils.range_stop_symbol(dataname, i))
+                for i in range(len(psymbol.type.dims))
+            ]
+            datadesc.set_shape(new_shape, datadesc.strides)
+            # set all range start symbols to constant value 0
+            range_start_symbols |= {
+                gtx_dace_utils.range_start_symbol(dataname, i): 0
+                for i in range(len(psymbol.type.dims))
+            }
+    # we set all range start symbols to 0 in the top-level SDFG and proagate them to nested SDFGs
+    gt_substitute_compiletime_symbols(sdfg, range_start_symbols, validate=True)
+
+
 def build_sdfg_from_gtir(
     ir: gtir.Program,
     offset_provider_type: gtx_common.OffsetProviderType,
     column_axis: Optional[gtx_common.Dimension] = None,
+    disable_field_origin_on_program_arguments: bool = False,
 ) -> dace.SDFG:
     """
     Receives a GTIR program and lowers it to a DaCe SDFG.
@@ -956,10 +961,14 @@ def build_sdfg_from_gtir(
         ir: The GTIR program node to be lowered to SDFG
         offset_provider_type: The definitions of offset providers used by the program node
         column_axis: Vertical dimension used for column scan expressions.
+        disable_field_origin_on_program_arguments: When True, the field range in all dimensions is assumed to start from 0
 
     Returns:
         An SDFG in the DaCe canonical form (simplified)
     """
+
+    if ir.function_definitions:
+        raise NotImplementedError("Functions expected to be inlined as lambda calls.")
 
     ir = gtir_type_inference.infer(ir, offset_provider_type=offset_provider_type)
     ir = ir_prune_casts.PruneCasts().visit(ir)
@@ -970,11 +979,15 @@ def build_sdfg_from_gtir(
     # Here we find new names for invalid symbols present in the IR.
     ir = gtir_sdfg_utils.replace_invalid_symbols(ir)
 
-    sdfg_genenerator = GTIRToSDFG(offset_provider_type, column_axis)
+    global_symbols = {str(p.id): p.type for p in ir.params if isinstance(p.type, ts.DataType)}
+    sdfg_genenerator = GTIRToSDFG(offset_provider_type, column_axis, global_symbols)
     sdfg = sdfg_genenerator.visit(ir)
     assert isinstance(sdfg, dace.SDFG)
 
     # TODO(edopao): remove inlining when DaCe transformations support LoopRegion construct
     dace_sdfg_utils.inline_loop_blocks(sdfg)
+
+    if disable_field_origin_on_program_arguments:
+        _remove_field_origin_symbols(ir, sdfg)
 
     return sdfg
