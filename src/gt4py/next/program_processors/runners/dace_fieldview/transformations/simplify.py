@@ -551,11 +551,17 @@ class DistributedBufferRelocator(dace_transformation.Pass):
             def_locations: list[AccessLocation] = []
             for upstream_state in find_upstream_states(temp_storage_state):
                 if temp_storage_node.data in access_sets[upstream_state][1]:
-                    def_locations.extend(
+                    # NOTE: We do not impose any restriction on `temp_storage`. Thus
+                    #   It could be that we do read from it (we can never write to it)
+                    #   in this state or any other state later.
+                    # TODO(phimuell): Should we require that `temp_storage` is a sink
+                    #   node? It might prevent or allow other optimizations.
+                    new_locations = [
                         (data_node, upstream_state)
                         for data_node in upstream_state.data_nodes()
                         if data_node.data == temp_storage_node.data
-                    )
+                    ]
+                    def_locations.extend(new_locations)
             if len(def_locations) != 0:
                 result_candidates.append((temp_storage, def_locations))
 
@@ -677,7 +683,6 @@ class DistributedBufferRelocator(dace_transformation.Pass):
 
         # Get the location and the state where the temporary is originally defined.
         def_location_of_intermediate, state_to_inspect = target_location
-        assert state_to_inspect.out_degree(def_location_of_intermediate) == 0
 
         # These are all access nodes that refers to the global data, that we want
         #  to move into the state `state_to_inspect`. We need them to do the
@@ -689,6 +694,8 @@ class DistributedBufferRelocator(dace_transformation.Pass):
         #  empty Memlets. This is done because such Memlets are used to induce a
         #  schedule or order in the dataflow graph.
         #  As a byproduct, for the second test, we also collect all of these nodes.
+        # TODO(phimuell): Refine this such that it takes the location of the data
+        #   into account.
         for dnode in state_to_inspect.data_nodes():
             if dnode.data != global_data_name:
                 continue
