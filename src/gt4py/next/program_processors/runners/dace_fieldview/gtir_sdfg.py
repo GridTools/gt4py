@@ -234,11 +234,52 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     def make_field(
         self, data_node: dace.nodes.AccessNode, data_type: ts.FieldType | ts.ScalarType
     ) -> gtir_builtin_translators.FieldopData:
-        if isinstance(data_type, ts.FieldType):
-            domain_offset = self.field_offsets.get(data_node.data, None)
+        """
+        Helper method to build the field data type associated with an access node in the SDFG.
+
+        In case of `ScalarType` data, the descriptor is constructed with `offset=None`.
+        In case of `FieldType` data, the field origin is added to the data descriptor.
+        Besides, if the `FieldType` contains a local dimension, the descriptor is converted
+        to a canonical form where the field domain consists of all global dimensions
+        (the grid axes) and the field data type is `ListType`, with `offset_type` equal
+        to the field local dimension.
+
+        Args:
+            data_node: The access node to the SDFG data storage.
+            data_type: The GT4Py data descriptor, which can either come from a field parameter
+                of an expression node, or from an intermediate field in a previous expression.
+
+        Returns:
+            The descriptor associated with the SDFG data storage, filled with field origin.
+        """
+        if isinstance(data_type, ts.ScalarType):
+            return gtir_builtin_translators.FieldopData(data_node, data_type, offset=None)
+        domain_offset = self.field_offsets.get(data_node.data, None)
+        local_dims = [dim for dim in data_type.dims if dim.kind == gtx_common.DimensionKind.LOCAL]
+        if len(local_dims) == 0:
+            # do nothing: the field domain consists of all global dimensions
+            field_type = data_type
+        elif len(local_dims) == 1:
+            local_dim = local_dims[0]
+            local_dim_index = data_type.dims.index(local_dim)
+            # the local dimension is converted into `ListType` data element
+            if not isinstance(data_type.dtype, ts.ScalarType):
+                raise ValueError(f"Invalid field type {data_type}.")
+            if local_dim_index != (len(data_type.dims) - 1):
+                raise ValueError(
+                    f"Invalid field domain: expected the local dimension to be at the end, found at position {local_dim_index}."
+                )
+            if local_dim.value not in self.offset_provider_type:
+                raise ValueError(
+                    f"The provided local dimension {local_dim} does not match any offset provider type."
+                )
+            local_type = ts.ListType(element_type=data_type.dtype, offset_type=local_dim)
+            field_type = ts.FieldType(dims=data_type.dims[:local_dim_index], dtype=local_type)
         else:
-            domain_offset = None
-        return gtir_builtin_translators.FieldopData(data_node, data_type, domain_offset)
+            raise NotImplementedError(
+                "Fields with more than one local dimension are not supported."
+            )
+        return gtir_builtin_translators.FieldopData(data_node, field_type, domain_offset)
 
     def get_symbol_type(self, symbol_name: str) -> ts.DataType:
         return self.global_symbols[symbol_name]

@@ -131,7 +131,7 @@ def _create_scan_field_operator_impl(
                 f"Type mismatch, expected {output_type.dtype} got {output_edge.result.gt_dtype}."
             )
         field_dtype = output_edge.result.gt_dtype
-        field_dims, field_shape, field_offset = (domain_dims, domain_shape, domain_offset)
+        field_shape = domain_shape
         # the scan field operator computes a column of scalar values
         assert len(dataflow_output_desc.shape) == 1
     else:
@@ -147,15 +147,12 @@ def _create_scan_field_operator_impl(
         assert len(dataflow_output_desc.shape) == 2
         # the lines below extend the array with the local dimension added by the field operator
         assert output_edge.result.gt_dtype.offset_type is not None
-        field_dims = [*domain_dims, output_edge.result.gt_dtype.offset_type]
         field_shape = [*domain_shape, dataflow_output_desc.shape[1]]
-        field_offset = [*domain_offset, dataflow_output_desc.offset[1]]
         field_subset = field_subset + dace_subsets.Range.from_string(
             f"0:{dataflow_output_desc.shape[1]}"
         )
 
     # allocate local temporary storage
-    assert dataflow_output_desc.dtype == dace_utils.as_dace_type(field_dtype)
     field_name, field_desc = sdfg_builder.add_temp_array(
         sdfg, field_shape, dataflow_output_desc.dtype
     )
@@ -173,8 +170,8 @@ def _create_scan_field_operator_impl(
 
     return gtir_translators.FieldopData(
         field_node,
-        ts.FieldType(field_dims, field_dtype),
-        offset=(field_offset if set(field_offset) != {0} else None),
+        ts.FieldType(domain_dims, output_edge.result.gt_dtype),
+        offset=(domain_offset if set(domain_offset) != {0} else None),
     )
 
 
