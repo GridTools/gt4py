@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import abc
 import dataclasses
-import functools
 import itertools
 import operator
 from typing import Any, Dict, Iterable, List, Optional, Protocol, Sequence, Set, Tuple, Union
@@ -719,15 +718,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         i.e. a lambda parameter with the same name as a symbol in scope, the parameter will shadow
         the previous symbol during traversal of the lambda expression.
         """
-        lambda_args_mapping = [
-            (str(param.id), arg) for param, arg in zip(node.params, args, strict=True)
-        ]
+        lambda_args_mapping = zip(node.params, args, strict=True)
 
         lambda_arg_nodes = dict(
             itertools.chain(
                 *[
-                    gtir_builtin_translators.flatten_tuples(pname, arg)
-                    for pname, arg in lambda_args_mapping
+                    gtir_builtin_translators.flatten_tuples(psym.id, arg)
+                    for psym, arg in lambda_args_mapping
                 ]
             )
         )
@@ -737,52 +734,17 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             sym: self.global_symbols[sym]
             for sym in symbol_ref_utils.collect_symbol_refs(node.expr, self.global_symbols.keys())
         } | {
-            pname: gtir_builtin_translators.get_tuple_type(arg)
+            psym.id: gtir_builtin_translators.get_tuple_type(arg)
             if isinstance(arg, tuple)
             else arg.gt_type
-            for pname, arg in lambda_args_mapping
+            for psym, arg in lambda_args_mapping
         }
-
-        def get_field_symbols(p_name: str, p_type: ts.DataType) -> dict[str, dace.symbolic.SymExpr]:
-            if isinstance(p_type, ts.FieldType):
-                if p_name in lambda_arg_nodes:
-                    arg = lambda_arg_nodes[p_name]
-                    assert isinstance(arg, gtir_builtin_translators.FieldopData)
-                    return (
-                        {
-                            gtx_dace_utils.range_start_symbol(p_name, i): 0
-                            if arg.origin is None
-                            else arg.origin[i]
-                            for i in range(len(p_type.dims))
-                        }
-                        | {
-                            gtx_dace_utils.range_stop_symbol(
-                                p_name, i
-                            ): gtx_dace_utils.range_stop_symbol(arg.dc_node.data, i)
-                            for i in range(len(p_type.dims))
-                        }
-                        | {
-                            gtx_dace_utils.field_stride_symbol_name(
-                                p_name, i
-                            ): gtx_dace_utils.field_stride_symbol_name(arg.dc_node.data, i)
-                            for i in range(len(p_type.dims))
-                        }
-                    )
-            elif isinstance(p_type, ts.TupleType):
-                tsyms = gtir_sdfg_utils.flatten_tuple_fields(p_name, p_type)
-                return functools.reduce(
-                    lambda symbols_mapping, sym: (
-                        symbols_mapping | get_field_symbols(sym.id, sym.type)  # type: ignore[arg-type]
-                    ),
-                    tsyms,
-                    {},
-                )
-            return {}
 
         # populate mapping from field name to domain origin
         nsdfg_symbols_mapping: dict[str, dace.symbolic.SymExpr] = {}
-        for p_name, p_type in lambda_symbols.items():
-            nsdfg_symbols_mapping |= get_field_symbols(p_name, p_type)
+        for psym, arg in lambda_args_mapping:
+            assert isinstance(psym.type, ts.DataType)
+            nsdfg_symbols_mapping |= gtir_builtin_translators.get_field_symbols(psym, arg)
 
         # lower let-statement lambda node as a nested SDFG
         nsdfg = dace.SDFG(name=self.unique_nsdfg_name(sdfg, "lambda"))

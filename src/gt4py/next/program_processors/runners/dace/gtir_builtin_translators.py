@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import abc
 import dataclasses
+import functools
 from typing import TYPE_CHECKING, Any, Final, Iterable, Optional, Protocol, Sequence, TypeAlias
 
 import dace
@@ -139,6 +140,44 @@ FieldopResult: TypeAlias = FieldopData | tuple[FieldopData | tuple, ...]
 
 INDEX_DTYPE: Final[dace.typeclass] = dace.dtype_to_typeclass(gtx_fbuiltins.IndexType)
 """Data type used for field indexing."""
+
+
+def get_field_symbols(sym: gtir.Sym, arg: FieldopResult) -> dict[str, dace.symbolic.SymExpr]:
+    if isinstance(sym.type, ts.FieldType):
+        assert isinstance(arg, FieldopData)
+        return (
+            {
+                gtx_dace_utils.range_start_symbol(sym.id, i): 0
+                if arg.origin is None
+                else arg.origin[i]
+                for i in range(len(sym.type.dims))
+            }
+            | {
+                gtx_dace_utils.range_stop_symbol(sym.id, i): gtx_dace_utils.range_stop_symbol(
+                    arg.dc_node.data, i
+                )
+                for i in range(len(sym.type.dims))
+            }
+            | {
+                gtx_dace_utils.field_stride_symbol_name(
+                    sym.id, i
+                ): gtx_dace_utils.field_stride_symbol_name(arg.dc_node.data, i)
+                for i in range(len(sym.type.dims))
+            }
+        )
+    elif isinstance(sym.type, ts.TupleType):
+        assert isinstance(arg, tuple)
+        flat_tuple_types = gtir_sdfg_utils.flatten_tuple_fields(sym.id, sym.type)
+        flat_tuple_elements = [
+            (tsym, targ)
+            for tsym, (_, targ) in zip(flat_tuple_types, flatten_tuples(sym.id, arg), strict=True)
+        ]
+        return functools.reduce(
+            lambda symbols_mapping, x: (symbols_mapping | get_field_symbols(x[0], x[1])),
+            flat_tuple_elements,
+            {},
+        )
+    return {}
 
 
 def get_tuple_type(data: tuple[FieldopResult, ...]) -> ts.TupleType:

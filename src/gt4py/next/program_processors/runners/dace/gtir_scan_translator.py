@@ -22,6 +22,7 @@ This is likely to change in the future, to enable GTIR optimizations for scan.
 
 from __future__ import annotations
 
+import itertools
 from typing import TYPE_CHECKING, Any, Iterable
 
 import dace
@@ -596,18 +597,14 @@ def translate_scan(
     # this must be executed before visiting the lambda expression, in order to populate
     # the data descriptor with the correct field domain offsets for field arguments
     lambda_args = [sdfg_builder.visit(arg, sdfg=sdfg, head_state=state) for arg in node.args]
-    lambda_args_mapping = {
-        _scan_input_name(scan_carry): init_data,
-    } | {
-        str(param.id): arg for param, arg in zip(stencil_expr.params[1:], lambda_args, strict=True)
-    }
+    lambda_args_mapping = [
+        (im.sym(_scan_input_name(scan_carry), scan_carry_type), init_data),
+    ] + [
+        (im.sym(param.id, arg.gt_type), arg)
+        for param, arg in zip(stencil_expr.params[1:], lambda_args, strict=True)
+    ]
 
-    # parse the dataflow input and output symbols
-    lambda_flat_args: dict[str, gtir_translators.FieldopData] = {}
-    # the field offset is set to `None` when it is zero in all dimensions
-    for param, outer_arg in lambda_args_mapping.items():
-        tuple_fields = gtir_translators.flatten_tuples(param, outer_arg)
-        lambda_flat_args |= dict(tuple_fields)
+    # parse the dataflow output symbols
     if isinstance(scan_carry_type, ts.TupleType):
         lambda_flat_outs = {
             str(sym.id): sym.type
@@ -630,9 +627,21 @@ def translate_scan(
         im.sym(scan_carry, scan_carry_type),
     )
 
+    lambda_arg_nodes = dict(
+        itertools.chain(
+            *[gtir_translators.flatten_tuples(psym.id, arg) for psym, arg in lambda_args_mapping]
+        )
+    )
+
+    # populate mapping from field name to domain origin
+    nsdfg_symbols_mapping: dict[str, dace.symbolic.SymExpr] = {}
+    for psym, arg in lambda_args_mapping:
+        assert isinstance(psym.type, ts.DataType)
+        nsdfg_symbols_mapping |= gtir_translators.get_field_symbols(psym, arg)
+
     # build the mapping of symbols from nested SDFG to field operator context
-    nsdfg_symbols_mapping = {str(sym): sym for sym in nsdfg.free_symbols}
-    for inner_dataname, outer_arg in lambda_flat_args.items():
+    nsdfg_symbols_mapping = {str(sym): sym for sym in nsdfg.free_symbols} | nsdfg_symbols_mapping
+    for inner_dataname, outer_arg in lambda_arg_nodes.items():
         inner_desc = nsdfg.data(inner_dataname)
         outer_desc = outer_arg.dc_node.desc(sdfg)
         nsdfg_symbols_mapping |= {
@@ -650,13 +659,13 @@ def translate_scan(
     nsdfg_node = state.add_nested_sdfg(
         nsdfg,
         sdfg,
-        inputs=set(lambda_flat_args.keys()),
+        inputs=set(lambda_arg_nodes.keys()),
         outputs=set(lambda_flat_outs.keys()),
         symbol_mapping=nsdfg_symbols_mapping,
     )
 
     lambda_input_edges = []
-    for input_connector, outer_arg in lambda_flat_args.items():
+    for input_connector, outer_arg in lambda_arg_nodes.items():
         arg_desc = outer_arg.dc_node.desc(sdfg)
         input_subset = dace_subsets.Range.from_array(arg_desc)
         input_edge = gtir_dataflow.MemletInputEdge(
