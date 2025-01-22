@@ -7,8 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
-<<<<<<< HEAD
-from gt4py.next.iterator import embedded, ir
+from gt4py.next.iterator import builtins, embedded, ir
 import functools
 import operator
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
@@ -17,10 +16,6 @@ from gt4py.next.type_system import type_specifications as ts, type_translation
 import dataclasses
 import enum
 from typing import Optional
-=======
-from gt4py.next.iterator import builtins, embedded, ir
-from gt4py.next.iterator.ir_utils import ir_makers as im
->>>>>>> origin-main
 
 
 
