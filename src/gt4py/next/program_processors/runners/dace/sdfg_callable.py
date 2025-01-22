@@ -15,7 +15,7 @@ import numpy as np
 from gt4py._core import definitions as core_defs
 from gt4py.next import common as gtx_common
 
-from . import utility as dace_utils
+from . import utils as gtx_dace_utils
 
 
 try:
@@ -43,11 +43,11 @@ def _get_args(sdfg: dace.SDFG, args: Sequence[Any]) -> dict[str, Any]:
         if domain:
             assert gtx_common.Domain.is_finite(domain)
             range_symbols |= {
-                dace_utils.range_start_symbol(sdfg_param, i): r.start
+                gtx_dace_utils.range_start_symbol(sdfg_param, i): r.start
                 for i, r in enumerate(domain.ranges)
             }
             range_symbols |= {
-                dace_utils.range_stop_symbol(sdfg_param, i): r.stop
+                gtx_dace_utils.range_stop_symbol(sdfg_param, i): r.stop
                 for i, r in enumerate(domain.ranges)
             }
     # sanity check in case range symbols are passed as explicit program arguments
@@ -124,7 +124,7 @@ def get_sdfg_conn_args(
     connectivity_args = {}
     for offset, connectivity in offset_provider.items():
         if gtx_common.is_neighbor_table(connectivity):
-            param = dace_utils.connectivity_identifier(offset)
+            param = gtx_dace_utils.connectivity_identifier(offset)
             if param in sdfg.arrays:
                 connectivity_args[param] = _ensure_is_on_device(connectivity.ndarray, device)
 

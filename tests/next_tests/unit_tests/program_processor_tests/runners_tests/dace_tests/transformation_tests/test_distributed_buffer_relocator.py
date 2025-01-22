@@ -9,7 +9,7 @@
 import pytest
 import numpy as np
 
-from gt4py.next.program_processors.runners.dace_fieldview import (
+from gt4py.next.program_processors.runners.dace import (
     transformations as gtx_transformations,
 )
 
@@ -287,3 +287,63 @@ def test_distributed_buffer_global_memory_data_no_rance2():
     res = gtx_transformations.gt_reduce_distributed_buffering(sdfg)
     assert res[sdfg]["DistributedBufferRelocator"][state2] == {"t"}
     assert state2.number_of_nodes() == 0
+
+
+def _make_distributed_buffer_non_sink_temporary_sdfg() -> (
+    tuple[dace.SDFG, dace.SDFGState, dace.SDFGState]
+):
+    sdfg = dace.SDFG(util.unique_name("distributed_buffer_non_sink_temporary_sdfg"))
+    state = sdfg.add_state(is_start_block=True)
+    wb_state = sdfg.add_state_after(state)
+
+    names = ["a", "b", "c", "t1", "t2"]
+    for name in names:
+        sdfg.add_array(
+            name,
+            shape=(10,),
+            dtype=dace.float64,
+            transient=False,
+        )
+    sdfg.arrays["t1"].transient = True
+    sdfg.arrays["t2"].transient = True
+    t1 = state.add_access("t1")
+
+    state.add_mapped_tasklet(
+        "comp1",
+        map_ranges={"__i": "0:10"},
+        inputs={"__in1": dace.Memlet("a[__i]")},
+        code="__out = __in1 + 10.0",
+        outputs={"__out": dace.Memlet("t1[__i]")},
+        output_nodes={t1},
+        external_edges=True,
+    )
+    state.add_mapped_tasklet(
+        "comp2",
+        map_ranges={"__i": "0:10"},
+        inputs={"__in1": dace.Memlet("t1[__i]")},
+        code="__out = __in1 / 2.0",
+        outputs={"__out": dace.Memlet("t2[__i]")},
+        input_nodes={t1},
+        external_edges=True,
+    )
+
+    wb_state.add_nedge(wb_state.add_access("t1"), wb_state.add_access("b"), dace.Memlet("t1[0:10]"))
+    wb_state.add_nedge(wb_state.add_access("t2"), wb_state.add_access("b"), dace.Memlet("t2[0:10]"))
+
+    sdfg.validate()
+    return sdfg, state, wb_state
+
+
+def test_distributed_buffer_non_sink_temporary():
+    """Tests the transformation if one of the temporaries is not a sink node.
+
+    Note that the SDFG has two temporaries, `t1` is not a sink node and `t2` is
+    a sink node.
+    """
+    sdfg, state, wb_state = _make_distributed_buffer_non_sink_temporary_sdfg()
+    assert wb_state.number_of_nodes() == 4
+
+    res = gtx_transformations.gt_reduce_distributed_buffering(sdfg)
+    sdfg.view()
+    assert res[sdfg]["DistributedBufferRelocator"][wb_state] == {"t1", "t2"}
+    assert wb_state.number_of_nodes() == 0
