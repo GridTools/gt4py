@@ -809,7 +809,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         # map free symbols to parent SDFG
         nsdfg_symbols_mapping = {str(sym): sym for sym in nsdfg.free_symbols}
         for sym, arg in zip(node.params, args, strict=True):
-            # TODO(edopao): type inference does not annotate the type of lambda parameters
+            # TODO(tehrengruber): type inference does not annotate the type of lambda parameters
             if isinstance(arg, gtir_builtin_translators.FieldopData):
                 typed_sym = im.sym(sym.id, arg.gt_type)
             else:
