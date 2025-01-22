@@ -149,7 +149,9 @@ def if_(pred: ts.ScalarType, true_branch: ts.DataType, false_branch: ts.DataType
         )(functools.partial(if_, pred))(true_branch, false_branch)
 
     assert not isinstance(true_branch, ts.TupleType) and not isinstance(false_branch, ts.TupleType)
-    assert isinstance(pred, ts.ScalarType) and pred.kind == ts.ScalarKind.BOOL
+    assert isinstance(pred, ts.DeferredType) or (
+        isinstance(pred, ts.ScalarType) and pred.kind == ts.ScalarKind.BOOL
+    )
     # TODO(tehrengruber): Enable this or a similar check. In case the true- and false-branch are
     #  iterators defined on different positions this fails. For the GTFN backend we also don't
     #  want this, but for roundtrip it is totally fine.
