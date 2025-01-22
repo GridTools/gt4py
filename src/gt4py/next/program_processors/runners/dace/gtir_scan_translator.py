@@ -633,14 +633,11 @@ def translate_scan(
         )
     )
 
-    # populate mapping from field name to domain origin
-    nsdfg_symbols_mapping: dict[str, dace.symbolic.SymExpr] = {}
-    for psym, arg in lambda_args_mapping:
-        assert isinstance(psym.type, ts.DataType)
-        nsdfg_symbols_mapping |= gtir_translators.get_field_symbols(psym, arg, sdfg)
-
     # build the mapping of symbols from nested SDFG to field operator context
-    nsdfg_symbols_mapping = {str(sym): sym for sym in nsdfg.free_symbols} | nsdfg_symbols_mapping
+    nsdfg_symbols_mapping = {str(sym): sym for sym in nsdfg.free_symbols}
+    for psym, arg in lambda_args_mapping:
+        nsdfg_symbols_mapping |= gtir_translators.get_data_symbol_mapping(psym.id, arg, sdfg)
+
     for inner_dataname, outer_arg in lambda_arg_nodes.items():
         inner_desc = nsdfg.data(inner_dataname)
         outer_desc = outer_arg.dc_node.desc(sdfg)

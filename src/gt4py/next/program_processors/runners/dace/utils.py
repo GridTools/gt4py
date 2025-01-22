@@ -88,7 +88,7 @@ def get_symbolic_origin(field_name: str, type_: ts.FieldType) -> list[dace.symbo
     ]
 
 
-def get_symbolic_range(field_name: str, axis: int) -> dace.symbolic.SymExpr:
+def get_symbolic_shape(field_name: str, axis: int) -> dace.symbolic.SymExpr:
     return dace.symbolic.SymExpr(
         "{} - {}".format(range_stop_symbol(field_name, axis), range_start_symbol(field_name, axis))
     )

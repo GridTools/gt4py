@@ -27,7 +27,7 @@ from gt4py import eve
 from gt4py.eve import concepts
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.iterator.transforms import prune_casts as ir_prune_casts, symbol_ref_utils
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace import (
@@ -297,9 +297,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         ]
         domain_symbols = _collect_symbols_in_domain_expressions(expr, nsdfg_params)
         nsdfg_builder._add_sdfg_params(
-            sdfg,
-            node_params=nsdfg_params,
-            symbolic_arguments=domain_symbols,
+            sdfg, node_params=nsdfg_params, symbolic_arguments=domain_symbols
         )
         return nsdfg_builder
 
@@ -331,13 +329,17 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         shape = []
         for i, dim in enumerate(dims):
             if dim.kind == gtx_common.DimensionKind.LOCAL:
-                shape.append(dace.symbolic.SymExpr(neighbor_table_types[dim.value].max_neighbors))
+                shape.append(
+                    dace.symbolic.pystr_to_symbolic(neighbor_table_types[dim.value].max_neighbors)
+                )
             elif gtx_dace_utils.is_connectivity_identifier(name, self.offset_provider_type):
-                shape.append(dace.symbolic.SymExpr(gtx_dace_utils.field_size_symbol_name(name, i)))
+                shape.append(
+                    dace.symbolic.pystr_to_symbolic(gtx_dace_utils.field_size_symbol_name(name, i))
+                )
             else:
-                shape.append(gtx_dace_utils.get_symbolic_range(name, i))
+                shape.append(gtx_dace_utils.get_symbolic_shape(name, i))
         strides = [
-            dace.symbolic.SymExpr(gtx_dace_utils.field_stride_symbol_name(name, i))
+            dace.symbolic.pystr_to_symbolic(gtx_dace_utils.field_stride_symbol_name(name, i))
             for i in range(len(dims))
         ]
         return shape, strides
@@ -491,11 +493,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             pname = str(param.id)
             assert isinstance(param.type, (ts.DataType))
             sdfg_args += self._add_storage(
-                sdfg,
-                symbolic_arguments,
-                pname,
-                param.type,
-                transient=False,
+                sdfg, symbolic_arguments, pname, param.type, transient=False
             )
 
         # add SDFG storage for connectivity tables
@@ -809,13 +807,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         # map free symbols to parent SDFG
         nsdfg_symbols_mapping = {str(sym): sym for sym in nsdfg.free_symbols}
         for sym, arg in zip(node.params, args, strict=True):
-            # TODO(tehrengruber): type inference does not annotate the type of lambda parameters
-            if isinstance(arg, gtir_builtin_translators.FieldopData):
-                typed_sym = im.sym(sym.id, arg.gt_type)
-            else:
-                typed_sym = im.sym(sym.id, gtir_builtin_translators.get_tuple_type(arg))
-            nsdfg_symbols_mapping |= gtir_builtin_translators.get_field_symbols(
-                typed_sym, arg, sdfg
+            nsdfg_symbols_mapping |= gtir_builtin_translators.get_data_symbol_mapping(
+                sym.id, arg, sdfg
             )
 
         nsdfg_node = head_state.add_nested_sdfg(

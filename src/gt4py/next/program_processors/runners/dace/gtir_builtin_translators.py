@@ -122,6 +122,32 @@ class FieldopData:
 
         raise NotImplementedError(f"Node type {type(self.gt_type)} not supported.")
 
+    def get_symbol_mapping(
+        self, dataname: str, sdfg: dace.SDFG
+    ) -> dict[str, dace.symbolic.SymExpr]:
+        """Helper method to create the symbol mapping for array storage in a nested SDFG."""
+        arg_desc = self.dc_node.desc(sdfg)
+        assert isinstance(arg_desc, dace.data.Array)
+        return (
+            {
+                gtx_dace_utils.range_start_symbol(dataname, i): 0
+                if self.origin is None
+                else self.origin[i]
+                for i in range(len(arg_desc.shape))
+            }
+            | {
+                gtx_dace_utils.range_stop_symbol(dataname, i): dace.symbolic.SymExpr(
+                    gtx_dace_utils.range_start_symbol(self.dc_node.data, i)
+                )
+                + size
+                for i, size in enumerate(arg_desc.shape)
+            }
+            | {
+                gtx_dace_utils.field_stride_symbol_name(dataname, i): stride
+                for i, stride in enumerate(arg_desc.strides)
+            }
+        )
+
 
 FieldopDomain: TypeAlias = list[
     tuple[gtx_common.Dimension, dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]
@@ -142,44 +168,20 @@ INDEX_DTYPE: Final[dace.typeclass] = dace.dtype_to_typeclass(gtx_fbuiltins.Index
 """Data type used for field indexing."""
 
 
-def get_field_symbols(
-    sym: gtir.Sym, arg: FieldopResult, sdfg: dace.SDFG
+def get_data_symbol_mapping(
+    dataname: str, arg: FieldopResult, sdfg: dace.SDFG
 ) -> dict[str, dace.symbolic.SymExpr]:
-    if isinstance(sym.type, ts.FieldType):
-        assert isinstance(arg, FieldopData)
-        arg_desc = arg.dc_node.desc(sdfg)
-        assert isinstance(arg_desc, dace.data.Array)
-        assert len(arg_desc.shape) == len(sym.type.dims)
-        return (
-            {
-                gtx_dace_utils.range_start_symbol(sym.id, i): 0
-                if arg.origin is None
-                else arg.origin[i]
-                for i in range(len(sym.type.dims))
-            }
-            | {
-                gtx_dace_utils.range_stop_symbol(sym.id, i): dace.symbolic.SymExpr(
-                    gtx_dace_utils.range_start_symbol(arg.dc_node.data, i)
-                )
-                + size
-                for i, size in enumerate(arg_desc.shape)
-            }
-            | {
-                gtx_dace_utils.field_stride_symbol_name(sym.id, i): stride
-                for i, stride in enumerate(arg_desc.strides)
-            }
-        )
-    elif isinstance(sym.type, ts.TupleType):
-        assert isinstance(arg, tuple)
-        flat_tuple_symbols = [
-            im.sym(f"{sym.id}_{i}", ttype) for i, ttype in enumerate(sym.type.types)
-        ]
+    if isinstance(arg, FieldopData):
+        return arg.get_symbol_mapping(dataname, sdfg)
+    else:
+        tuple_fields = [(f"{dataname}_{i}", elem) for i, elem in enumerate(arg)]
         return functools.reduce(
-            lambda symbols_mapping, x: (symbols_mapping | get_field_symbols(x[0], x[1], sdfg)),
-            zip(flat_tuple_symbols, arg, strict=True),
+            lambda symbols_mapping, x: (
+                symbols_mapping | get_data_symbol_mapping(x[0], x[1], sdfg)
+            ),
+            tuple_fields,
             {},
         )
-    return {}
 
 
 def get_tuple_type(data: tuple[FieldopResult, ...]) -> ts.TupleType:
