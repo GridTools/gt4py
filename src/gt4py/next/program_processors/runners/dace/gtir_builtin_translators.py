@@ -126,6 +126,8 @@ class FieldopData:
         self, dataname: str, sdfg: dace.SDFG
     ) -> dict[str, dace.symbolic.SymExpr]:
         """Helper method to create the symbol mapping for array storage in a nested SDFG."""
+        if isinstance(self.gt_type, ts.ScalarType):
+            return {}
         arg_desc = self.dc_node.desc(sdfg)
         assert isinstance(arg_desc, dace.data.Array)
         return (
@@ -133,7 +135,9 @@ class FieldopData:
                 gtx_dace_utils.range_start_symbol(dataname, i): 0
                 if self.origin is None
                 else self.origin[i]
-                for i in range(len(arg_desc.shape))
+                for i in range(
+                    len(self.gt_type.dims)
+                )  # origin is not needed for `ListType` local dimension
             }
             | {
                 gtx_dace_utils.range_stop_symbol(dataname, i): dace.symbolic.SymExpr(
