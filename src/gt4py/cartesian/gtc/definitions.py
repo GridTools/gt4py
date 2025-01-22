@@ -118,7 +118,7 @@ class NumericTuple(tuple):
         return self._apply(self._broadcast(other), operator.add)
 
     def __sub__(self, other):
-        """Element-wise substraction."""
+        """Element-wise subtraction."""
         return self._apply(self._broadcast(other), operator.sub)
 
     def __mul__(self, other):
@@ -335,7 +335,7 @@ class FrameTuple(tuple):
         return self._apply(self._broadcast(other), lambda a, b: a + b)
 
     def __sub__(self, other):
-        """Element-wise substraction."""
+        """Element-wise subtraction."""
         return self._apply(self._broadcast(other), lambda a, b: a - b)
 
     def __and__(self, other):
