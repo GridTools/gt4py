@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
+<<<<<<< HEAD
 from gt4py.next.iterator import embedded, ir
 import functools
 import operator
@@ -16,6 +17,10 @@ from gt4py.next.type_system import type_specifications as ts, type_translation
 import dataclasses
 import enum
 from typing import Optional
+=======
+from gt4py.next.iterator import builtins, embedded, ir
+from gt4py.next.iterator.ir_utils import ir_makers as im
+>>>>>>> origin-main
 
 
 
@@ -255,7 +260,7 @@ class ConstantFolding(PreserveLocationVisitor, NodeTranslator):
             and all(isinstance(arg, ir.Literal) for arg in node.args)
         ):
             try:
-                if node.fun.id in ir.ARITHMETIC_BUILTINS and not cpm.is_call_to(node, "neg"):
+                if node.fun.id in builtins.ARITHMETIC_BUILTINS and not cpm.is_call_to(node, "neg"):
                     fun = getattr(embedded, str(node.fun.id))
                     arg_values = [
                         getattr(embedded, str(arg.type))(arg.value)

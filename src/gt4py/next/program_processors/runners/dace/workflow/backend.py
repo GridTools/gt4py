@@ -6,17 +6,18 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import factory
 
-import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
+from gt4py._core import definitions as core_defs
 from gt4py.next import backend
-from gt4py.next.otf import workflow
-from gt4py.next.program_processors.runners.dace_fieldview import workflow as dace_fieldview_workflow
-from gt4py.next.program_processors.runners.gtfn import GTFNBackendFactory
+from gt4py.next.otf import stages, workflow
+from gt4py.next.program_processors.runners.dace.workflow.factory import DaCeWorkflowFactory
 
 
-class DaCeFieldviewBackendFactory(GTFNBackendFactory):
+class DaCeBackendFactory(factory.Factory):
     class Meta:
         model = backend.Backend
 
@@ -36,8 +37,9 @@ class DaCeFieldviewBackendFactory(GTFNBackendFactory):
             name_cached="_cached",
         )
         device_type = core_defs.DeviceType.CPU
+        hash_function = stages.compilation_hash
         otf_workflow = factory.SubFactory(
-            dace_fieldview_workflow.DaCeWorkflowFactory,
+            DaCeWorkflowFactory,
             device_type=factory.SelfAttribute("..device_type"),
             auto_optimize=factory.SelfAttribute("..auto_optimize"),
         )
@@ -52,8 +54,8 @@ class DaCeFieldviewBackendFactory(GTFNBackendFactory):
     transforms = backend.DEFAULT_TRANSFORMS
 
 
-run_dace_cpu = DaCeFieldviewBackendFactory(cached=True, auto_optimize=True)
-run_dace_cpu_noopt = DaCeFieldviewBackendFactory(cached=True, auto_optimize=False)
+run_dace_cpu = DaCeBackendFactory(cached=True, auto_optimize=True)
+run_dace_cpu_noopt = DaCeBackendFactory(cached=True, auto_optimize=False)
 
-run_dace_gpu = DaCeFieldviewBackendFactory(gpu=True, cached=True, auto_optimize=True)
-run_dace_gpu_noopt = DaCeFieldviewBackendFactory(gpu=True, cached=True, auto_optimize=False)
+run_dace_gpu = DaCeBackendFactory(gpu=True, cached=True, auto_optimize=True)
+run_dace_gpu_noopt = DaCeBackendFactory(gpu=True, cached=True, auto_optimize=False)

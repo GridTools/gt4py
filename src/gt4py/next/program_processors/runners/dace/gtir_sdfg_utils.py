@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, TypeVar
+from typing import Dict, Optional, TypeVar
 
 import dace
 
@@ -17,6 +17,22 @@ from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_specifications as ts
+
+
+def debug_info(
+    node: gtir.Node, *, default: Optional[dace.dtypes.DebugInfo] = None
+) -> Optional[dace.dtypes.DebugInfo]:
+    """Include the GT4Py node location as debug information in the corresponding SDFG nodes."""
+    location = node.location
+    if location:
+        return dace.dtypes.DebugInfo(
+            start_line=location.line,
+            start_column=location.column if location.column else 0,
+            end_line=location.end_line if location.end_line else -1,
+            end_column=location.end_column if location.end_column else 0,
+            filename=location.filename,
+        )
+    return default
 
 
 def get_map_variable(dim: gtx_common.Dimension) -> str:

@@ -119,17 +119,17 @@ build_py310_image_aarch64:
     SLURM_TIMELIMIT: 15
     NUM_PROCESSES: auto
     VIRTUALENV_SYSTEM_SITE_PACKAGES: 1
-.test_helper_x86_64:
-  extends: [.container-runner-daint-gpu, .test_helper]
-  parallel:
-    matrix:
-    - SUBPACKAGE: [cartesian, storage]
-      VARIANT: [-internal, -dace]
-      SUBVARIANT: [-cuda11x, -cpu]
-    - SUBPACKAGE: eve
-    - SUBPACKAGE: next
-      VARIANT: [-nomesh, -atlas]
-      SUBVARIANT: [-cuda11x, -cpu]
+# .test_helper_x86_64:
+#   extends: [.container-runner-daint-gpu, .test_helper]
+#   parallel:
+#     matrix:
+#     - SUBPACKAGE: [cartesian, storage]
+#       VARIANT: [-internal, -dace]
+#       SUBVARIANT: [-cuda11x, -cpu]
+#     - SUBPACKAGE: eve
+#     - SUBPACKAGE: next
+#       VARIANT: [-nomesh, -atlas]
+#       SUBVARIANT: [-cuda11x, -cpu]
 .test_helper_aarch64:
   extends: [.container-runner-daint-gh200, .test_helper]
   parallel:

@@ -15,9 +15,7 @@ from dace.transformation import dataflow as dace_dataflow
 from dace.transformation.auto import auto_optimize as dace_aoptimize
 
 from gt4py.next import common as gtx_common
-from gt4py.next.program_processors.runners.dace_fieldview import (
-    transformations as gtx_transformations,
-)
+from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
 def gt_auto_optimize(

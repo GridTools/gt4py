@@ -15,6 +15,7 @@ import copy
 import dataclasses
 import itertools
 import math
+import operator
 import sys
 import warnings
 
@@ -85,7 +86,19 @@ FieldAxis: TypeAlias = common.Dimension
 TupleAxis: TypeAlias = type[None]
 Axis: TypeAlias = Union[FieldAxis, TupleAxis]
 Scalar: TypeAlias = (
-    SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64 | np.bool_
+    SupportsInt
+    | SupportsFloat
+    | np.int8
+    | np.uint8
+    | np.int16
+    | np.uint16
+    | np.int32
+    | np.uint32
+    | np.int64
+    | np.uint64
+    | np.float32
+    | np.float64
+    | np.bool_
 )
 
 
@@ -389,27 +402,6 @@ def gamma(a):
     return res.item()
 
 
-@builtins.and_.register(EMBEDDED)
-def and_(a, b):
-    if isinstance(a, Column):
-        return np.logical_and(a, b)
-    return a and b
-
-
-@builtins.or_.register(EMBEDDED)
-def or_(a, b):
-    if isinstance(a, Column):
-        return np.logical_or(a, b)
-    return a or b
-
-
-@builtins.xor_.register(EMBEDDED)
-def xor_(a, b):
-    if isinstance(a, Column):
-        return np.logical_xor(a, b)
-    return a ^ b
-
-
 @builtins.tuple_get.register(EMBEDDED)
 def tuple_get(i, tup):
     if isinstance(tup, Column):
@@ -497,66 +489,6 @@ def named_range(tag: Tag | common.Dimension, start: int, end: int) -> NamedRange
     return (tag, range(start, end))
 
 
-@builtins.minus.register(EMBEDDED)
-def minus(first, second):
-    return first - second
-
-
-@builtins.plus.register(EMBEDDED)
-def plus(first, second):
-    return first + second
-
-
-@builtins.multiplies.register(EMBEDDED)
-def multiplies(first, second):
-    return first * second
-
-
-@builtins.divides.register(EMBEDDED)
-def divides(first, second):
-    return first / second
-
-
-@builtins.floordiv.register(EMBEDDED)
-def floordiv(first, second):
-    return first // second
-
-
-@builtins.mod.register(EMBEDDED)
-def mod(first, second):
-    return first % second
-
-
-@builtins.eq.register(EMBEDDED)
-def eq(first, second):
-    return first == second
-
-
-@builtins.greater.register(EMBEDDED)
-def greater(first, second):
-    return first > second
-
-
-@builtins.less.register(EMBEDDED)
-def less(first, second):
-    return first < second
-
-
-@builtins.less_equal.register(EMBEDDED)
-def less_equal(first, second):
-    return first <= second
-
-
-@builtins.greater_equal.register(EMBEDDED)
-def greater_equal(first, second):
-    return first >= second
-
-
-@builtins.not_eq.register(EMBEDDED)
-def not_eq(first, second):
-    return first != second
-
-
 CompositeOfScalarOrField: TypeAlias = Scalar | common.Field | tuple["CompositeOfScalarOrField", ...]
 
 
@@ -585,11 +517,31 @@ def promote_scalars(val: CompositeOfScalarOrField):
         )
 
 
-for math_builtin_name in builtins.MATH_BUILTINS:
-    python_builtins = {"int": int, "float": float, "bool": bool, "str": str}
+for math_builtin_name in builtins.ARITHMETIC_BUILTINS | builtins.TYPE_BUILTINS:
+    python_builtins: dict[str, Callable] = {
+        "int": int,
+        "float": float,
+        "bool": bool,
+        "str": str,
+        "plus": operator.add,
+        "minus": operator.sub,
+        "multiplies": operator.mul,
+        "divides": operator.truediv,
+        "mod": operator.mod,
+        "floordiv": operator.floordiv,
+        "eq": operator.eq,
+        "less": operator.lt,
+        "greater": operator.gt,
+        "greater_equal": operator.ge,
+        "less_equal": operator.le,
+        "not_eq": operator.ne,
+        "and_": operator.and_,
+        "or_": operator.or_,
+        "xor_": operator.xor,
+    }
     decorator = getattr(builtins, math_builtin_name).register(EMBEDDED)
     impl: Callable
-    if math_builtin_name == "gamma":
+    if math_builtin_name in ["gamma", "not_"]:
         continue  # treated explicitly
     elif math_builtin_name in python_builtins:
         # TODO: Should potentially use numpy fixed size types to be consistent

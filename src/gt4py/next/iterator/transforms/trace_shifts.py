@@ -13,7 +13,7 @@ from typing import Any, Final, Iterable, Literal, Optional
 
 from gt4py import eve
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
-from gt4py.next.iterator import ir
+from gt4py.next.iterator import builtins, ir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
 
@@ -278,9 +278,9 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
     def visit_SymRef(self, node: ir.SymRef, *, ctx: dict[str, Any]) -> Any:
         if node.id in ctx:
             return ctx[node.id]
-        elif node.id in ir.TYPEBUILTINS:
+        elif node.id in builtins.TYPE_BUILTINS:
             return Sentinel.TYPE
-        elif node.id in (ir.ARITHMETIC_BUILTINS | {"list_get", "make_const_list", "cast_"}):
+        elif node.id in (builtins.ARITHMETIC_BUILTINS | {"list_get", "make_const_list", "cast_"}):
             return _combine
         raise ValueError(f"Undefined symbol {node.id}")
 

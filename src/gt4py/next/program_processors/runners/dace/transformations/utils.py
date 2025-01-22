@@ -14,7 +14,7 @@ import dace
 from dace import data as dace_data
 from dace.sdfg import nodes as dace_nodes
 
-from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
+from gt4py.next.program_processors.runners.dace import utils as gtx_dace_utils
 
 
 def gt_make_transients_persistent(
@@ -114,7 +114,7 @@ def gt_find_constant_arguments(
     ret_value: dict[str, Any] = {}
 
     for name, value in call_args.items():
-        if name in include or (dace_utils.is_field_symbol(name) and value == 1):
+        if name in include or (gtx_dace_utils.is_field_symbol(name) and value == 1):
             ret_value[name] = value
 
     return ret_value
