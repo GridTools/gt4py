@@ -637,7 +637,7 @@ def translate_scan(
     nsdfg_symbols_mapping: dict[str, dace.symbolic.SymExpr] = {}
     for psym, arg in lambda_args_mapping:
         assert isinstance(psym.type, ts.DataType)
-        nsdfg_symbols_mapping |= gtir_translators.get_field_symbols(psym, arg)
+        nsdfg_symbols_mapping |= gtir_translators.get_field_symbols(psym, arg, sdfg)
 
     # build the mapping of symbols from nested SDFG to field operator context
     nsdfg_symbols_mapping = {str(sym): sym for sym in nsdfg.free_symbols} | nsdfg_symbols_mapping

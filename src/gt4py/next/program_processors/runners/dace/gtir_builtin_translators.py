@@ -142,9 +142,14 @@ INDEX_DTYPE: Final[dace.typeclass] = dace.dtype_to_typeclass(gtx_fbuiltins.Index
 """Data type used for field indexing."""
 
 
-def get_field_symbols(sym: gtir.Sym, arg: FieldopResult) -> dict[str, dace.symbolic.SymExpr]:
+def get_field_symbols(
+    sym: gtir.Sym, arg: FieldopResult, sdfg: dace.SDFG
+) -> dict[str, dace.symbolic.SymExpr]:
     if isinstance(sym.type, ts.FieldType):
         assert isinstance(arg, FieldopData)
+        arg_desc = arg.dc_node.desc(sdfg)
+        assert isinstance(arg_desc, dace.data.Array)
+        assert len(arg_desc.shape) == len(sym.type.dims)
         return (
             {
                 gtx_dace_utils.range_start_symbol(sym.id, i): 0
@@ -153,28 +158,25 @@ def get_field_symbols(sym: gtir.Sym, arg: FieldopResult) -> dict[str, dace.symbo
                 for i in range(len(sym.type.dims))
             }
             | {
-                gtx_dace_utils.range_stop_symbol(sym.id, i): gtx_dace_utils.range_stop_symbol(
-                    arg.dc_node.data, i
+                gtx_dace_utils.range_stop_symbol(sym.id, i): dace.symbolic.SymExpr(
+                    gtx_dace_utils.range_start_symbol(arg.dc_node.data, i)
                 )
-                for i in range(len(sym.type.dims))
+                + size
+                for i, size in enumerate(arg_desc.shape)
             }
             | {
-                gtx_dace_utils.field_stride_symbol_name(
-                    sym.id, i
-                ): gtx_dace_utils.field_stride_symbol_name(arg.dc_node.data, i)
-                for i in range(len(sym.type.dims))
+                gtx_dace_utils.field_stride_symbol_name(sym.id, i): stride
+                for i, stride in enumerate(arg_desc.strides)
             }
         )
     elif isinstance(sym.type, ts.TupleType):
         assert isinstance(arg, tuple)
-        flat_tuple_types = gtir_sdfg_utils.flatten_tuple_fields(sym.id, sym.type)
-        flat_tuple_elements = [
-            (tsym, targ)
-            for tsym, (_, targ) in zip(flat_tuple_types, flatten_tuples(sym.id, arg), strict=True)
+        flat_tuple_symbols = [
+            im.sym(f"{sym.id}_{i}", ttype) for i, ttype in enumerate(sym.type.types)
         ]
         return functools.reduce(
-            lambda symbols_mapping, x: (symbols_mapping | get_field_symbols(x[0], x[1])),
-            flat_tuple_elements,
+            lambda symbols_mapping, x: (symbols_mapping | get_field_symbols(x[0], x[1], sdfg)),
+            zip(flat_tuple_symbols, arg, strict=True),
             {},
         )
     return {}

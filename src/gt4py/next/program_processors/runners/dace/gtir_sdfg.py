@@ -27,7 +27,7 @@ from gt4py import eve
 from gt4py.eve import concepts
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms import prune_casts as ir_prune_casts, symbol_ref_utils
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace import (
@@ -718,13 +718,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         i.e. a lambda parameter with the same name as a symbol in scope, the parameter will shadow
         the previous symbol during traversal of the lambda expression.
         """
-        lambda_args_mapping = zip(node.params, args, strict=True)
-
         lambda_arg_nodes = dict(
             itertools.chain(
                 *[
                     gtir_builtin_translators.flatten_tuples(psym.id, arg)
-                    for psym, arg in lambda_args_mapping
+                    for psym, arg in zip(node.params, args, strict=True)
                 ]
             )
         )
@@ -737,14 +735,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             psym.id: gtir_builtin_translators.get_tuple_type(arg)
             if isinstance(arg, tuple)
             else arg.gt_type
-            for psym, arg in lambda_args_mapping
+            for psym, arg in zip(node.params, args, strict=True)
         }
-
-        # populate mapping from field name to domain origin
-        nsdfg_symbols_mapping: dict[str, dace.symbolic.SymExpr] = {}
-        for psym, arg in lambda_args_mapping:
-            assert isinstance(psym.type, ts.DataType)
-            nsdfg_symbols_mapping |= gtir_builtin_translators.get_field_symbols(psym, arg)
 
         # lower let-statement lambda node as a nested SDFG
         nsdfg = dace.SDFG(name=self.unique_nsdfg_name(sdfg, "lambda"))
@@ -814,9 +806,18 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             if output_data.dc_node.desc(nsdfg).transient
         }
 
-        nsdfg_symbols_mapping = {
-            str(sym): sym for sym in nsdfg.free_symbols
-        } | nsdfg_symbols_mapping
+        # map free symbols to parent SDFG
+        nsdfg_symbols_mapping = {str(sym): sym for sym in nsdfg.free_symbols}
+        for sym, arg in zip(node.params, args, strict=True):
+            # TODO(edopao): type inference does not annotate the type of lambda parameters
+            if isinstance(arg, gtir_builtin_translators.FieldopData):
+                typed_sym = im.sym(sym.id, arg.gt_type)
+            else:
+                typed_sym = im.sym(sym.id, gtir_builtin_translators.get_tuple_type(arg))
+            nsdfg_symbols_mapping |= gtir_builtin_translators.get_field_symbols(
+                typed_sym, arg, sdfg
+            )
+
         nsdfg_node = head_state.add_nested_sdfg(
             nsdfg,
             parent=sdfg,
