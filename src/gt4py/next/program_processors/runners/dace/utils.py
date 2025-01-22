@@ -9,12 +9,11 @@
 from __future__ import annotations
 
 import re
-from typing import Final, Literal, Optional
+from typing import Final, Literal
 
 import dace
 
 from gt4py.next import common as gtx_common
-from gt4py.next.iterator import ir as gtir
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -76,22 +75,6 @@ def field_stride_symbol_name(field_name: str, axis: int) -> str:
 
 def is_field_symbol(name: str) -> bool:
     return FIELD_SYMBOL_RE.match(name) is not None
-
-
-def debug_info(
-    node: gtir.Node, *, default: Optional[dace.dtypes.DebugInfo] = None
-) -> Optional[dace.dtypes.DebugInfo]:
-    """Include the GT4Py node location as debug information in the corresponding SDFG nodes."""
-    location = node.location
-    if location:
-        return dace.dtypes.DebugInfo(
-            start_line=location.line,
-            start_column=location.column if location.column else 0,
-            end_line=location.end_line if location.end_line else -1,
-            end_column=location.end_column if location.end_column else 0,
-            filename=location.filename,
-        )
-    return default
 
 
 def filter_connectivity_types(

@@ -14,7 +14,7 @@ import pytest
 dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes
 
-from gt4py.next.program_processors.runners.dace_fieldview.transformations import (
+from gt4py.next.program_processors.runners.dace.transformations import (
     gpu_utils as gtx_dace_fieldview_gpu_utils,
 )
 

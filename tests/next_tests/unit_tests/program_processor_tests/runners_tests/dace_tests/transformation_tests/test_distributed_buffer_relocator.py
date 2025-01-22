@@ -9,7 +9,7 @@
 import pytest
 import numpy as np
 
-from gt4py.next.program_processors.runners.dace_fieldview import (
+from gt4py.next.program_processors.runners.dace import (
     transformations as gtx_transformations,
 )
 

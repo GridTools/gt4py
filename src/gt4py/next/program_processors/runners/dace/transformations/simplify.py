@@ -27,9 +27,7 @@ from dace.transformation import (
     passes as dace_passes,
 )
 
-from gt4py.next.program_processors.runners.dace_fieldview import (
-    transformations as gtx_transformations,
-)
+from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
 GT_SIMPLIFY_DEFAULT_SKIP_SET: Final[set[str]] = {"ScalarToSymbolPromotion", "ConstantPropagation"}
@@ -336,7 +334,7 @@ class GT4PyGlobalSelfCopyElimination(dace_transformation.SingleStateTransformati
         write_g: dace_nodes.AccessNode = self.node_write_g
         tmp_node: dace_nodes.AccessNode = self.node_tmp
 
-        return gtx_transformations.util.is_accessed_downstream(
+        return gtx_transformations.utils.is_accessed_downstream(
             start_state=start_state,
             sdfg=sdfg,
             data_to_look=data_to_look,
@@ -591,7 +589,7 @@ class DistributedBufferRelocator(dace_transformation.Pass):
             for def_node, def_state in def_locations:
                 # Test if `temp_storage` is only accessed where it is defined and
                 #  where it is written back.
-                if gtx_transformations.util.is_accessed_downstream(
+                if gtx_transformations.utils.is_accessed_downstream(
                     start_state=def_state,
                     sdfg=sdfg,
                     data_to_look=wb_node.data,
@@ -607,7 +605,7 @@ class DistributedBufferRelocator(dace_transformation.Pass):
                 global_nodes_in_def_state = {
                     dnode for dnode in def_state.data_nodes() if dnode.data == global_data_name
                 }
-                if gtx_transformations.util.is_accessed_downstream(
+                if gtx_transformations.utils.is_accessed_downstream(
                     start_state=def_state,
                     sdfg=sdfg,
                     data_to_look=global_data_name,
@@ -891,7 +889,7 @@ class GT4PyMoveTaskletIntoMap(dace_transformation.SingleStateTransformation):
         # The data is no longer referenced in this state, so we can potentially
         #  remove
         if graph.out_degree(access_node) == 0:
-            if not gtx_transformations.util.is_accessed_downstream(
+            if not gtx_transformations.utils.is_accessed_downstream(
                 start_state=graph,
                 sdfg=sdfg,
                 data_to_look=access_node.data,
@@ -1001,7 +999,7 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
             return False
         if graph.in_degree(tmp_ac) != 1:
             return False
-        if any(gtx_transformations.util.is_view(ac, sdfg) for ac in [tmp_ac, glob_ac]):
+        if any(gtx_transformations.utils.is_view(ac, sdfg) for ac in [tmp_ac, glob_ac]):
             return False
         if len(glob_desc.shape) != len(tmp_desc.shape):
             return False
@@ -1017,7 +1015,7 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
         # Test if `tmp` is only anywhere else, this is important for removing it.
         if graph.out_degree(tmp_ac) != 1:
             return False
-        if gtx_transformations.util.is_accessed_downstream(
+        if gtx_transformations.utils.is_accessed_downstream(
             start_state=graph,
             sdfg=sdfg,
             data_to_look=tmp_ac.data,
@@ -1067,7 +1065,7 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
 
             # Find the source of this data, if it is a view we trace it to
             #  its origin.
-            src_node: dace_nodes.AccessNode = gtx_transformations.util.track_view(
+            src_node: dace_nodes.AccessNode = gtx_transformations.utils.track_view(
                 in_edge.src, state, sdfg
             )
 
@@ -1089,7 +1087,7 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
         # Currently the only test that we do is, if we have a view, then we
         #  are not point wise.
         # TODO(phimuell): Improve/implement this.
-        return any(gtx_transformations.util.is_view(node, sdfg) for node in conflicting_inputs)
+        return any(gtx_transformations.utils.is_view(node, sdfg) for node in conflicting_inputs)
 
     def apply(
         self,
