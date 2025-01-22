@@ -651,7 +651,7 @@ def _gt_find_toplevel_data_accesses(
                 top_level_data[data].append((state, dnode))
                 continue
 
-            elif gtx_transformations.util.is_view(dnode, sdfg):
+            elif gtx_transformations.utils.is_view(dnode, sdfg):
                 # The AccessNode refers to a View so we ignore it anyway.
                 continue
 

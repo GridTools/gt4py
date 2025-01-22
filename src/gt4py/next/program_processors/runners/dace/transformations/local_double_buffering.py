@@ -241,7 +241,7 @@ def _check_if_map_must_be_handled_classify_adjacent_access_node(
 
     # Currently we do not handle view, as they need to be traced.
     #  TODO(phimuell): Implement
-    if gtx_transformations.util.is_view(data_desc, sdfg):
+    if gtx_transformations.utils.is_view(data_desc, sdfg):
         return False
 
     # TODO(phimuell): Check if there is a access node on the inner side, then we do not have to do it.
@@ -355,7 +355,7 @@ def _check_if_map_must_be_handled(
         if (
             len(inner_read_edges) == 1
             and isinstance(inner_read_edges[0].dst, dace_nodes.AccessNode)
-            and not gtx_transformations.util.is_view(inner_read_edges[0].dst, sdfg)
+            and not gtx_transformations.utils.is_view(inner_read_edges[0].dst, sdfg)
         ):
             inout_datas.pop(inout_data_name)
             continue
