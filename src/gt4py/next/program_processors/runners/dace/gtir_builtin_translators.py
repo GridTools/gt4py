@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import abc
 import dataclasses
-import functools
 from typing import TYPE_CHECKING, Any, Final, Iterable, Optional, Protocol, Sequence, TypeAlias
 
 import dace
@@ -80,31 +79,40 @@ class FieldopData:
         dc_node: DaCe access node to the data storage.
         gt_type: GT4Py type definition, which includes the field domain information.
         origin: List of start indices, in each dimension, when the dimension range
-            does not start from zero; assume zero origin, if not set.
+            does not start from zero; assume zero, if origin is not set.
     """
 
     dc_node: dace.nodes.AccessNode
     gt_type: ts.FieldType | ts.ScalarType
     origin: Optional[list[dace.symbolic.SymExpr]]
 
-    def make_copy(
+    def map_to_parent_sdfg(
         self,
-        data_node: dace.nodes.AccessNode,
-        symbol_mapping: Optional[dict[str, dace.symbolic.SymbolicType]] = None,
+        sdfg_builder: gtir_sdfg.SDFGBuilder,
+        inner_sdfg: dace.SDFG,
+        outer_sdfg: dace.SDFG,
+        outer_sdfg_state: dace.SDFGState,
+        symbol_mapping: dict[str, dace.symbolic.SymbolicType],
     ) -> FieldopData:
-        """
-        Create a copy of this data descriptor with a new access node.
+        """Helper method to map a field data container from a nested SDFG to the parent SDFG."""
+        inner_desc = self.dc_node.desc(inner_sdfg)
+        assert inner_desc.transient
+        inner_desc.transient = False
 
-        If the symbol mapping is provided, the new access node is supposed to be
-        in a different SDFG context, e.g. the parent SDFG, and the free symbols
-        of the field origin are replaced based on this mapping.
-        """
-        assert data_node != self.dc_node
-        if self.origin is None or symbol_mapping is None:
-            origin = self.origin
+        outer, outer_desc = sdfg_builder.add_temp_array_like(outer_sdfg, inner_desc)
+        # We cannot use a copy of the inner data descriptor directly, we have to apply the symbol mapping.
+        dace.symbolic.safe_replace(
+            symbol_mapping,
+            lambda m: dace.sdfg.replace_properties_dict(outer_desc, m),
+        )
+        # Same applies to the symbols used as field origin (the domain range start)
+        if self.origin is None:
+            outer_field_origin = self.origin
         else:
-            origin = [val.subs(symbol_mapping) for val in self.origin]
-        return FieldopData(data_node, self.gt_type, origin)
+            outer_field_origin = [val.subs(symbol_mapping) for val in self.origin]
+
+        outer_node = outer_sdfg_state.add_access(outer)
+        return FieldopData(outer_node, self.gt_type, outer_field_origin)
 
     def get_local_view(
         self, domain: FieldopDomain
@@ -148,8 +156,8 @@ class FieldopData:
 
         Returns:
             Mapping from symbols in nested SDFG to the corresponding symbolic values
-            in the parent SDFG. This includes the range start and stop symbols (from
-            which it is possible to calculate the shape of the array) and the strides.
+            in the parent SDFG. This includes the range start and stop symbols (used
+            to calculate the array shape as range 'stop - start') and the strides.
         """
         if isinstance(self.gt_type, ts.ScalarType):
             return {}
@@ -157,16 +165,21 @@ class FieldopData:
         outer_desc = self.dc_node.desc(sdfg)
         assert isinstance(outer_desc, dace.data.Array)
         if self.origin is None:
-            outer_origin = [0] * ndims
+            outer_field_origin = [0] * ndims
         else:
-            outer_origin = self.origin
+            outer_field_origin = self.origin
         # origin and size of the local dimension, in case of a field with `ListType` data,
         # are assumed to be compiled-time values (not symbolic), therefore the start and
         # stop range symbols of the inner field only extend over the global dimensions
         return (
-            {gtx_dace_utils.range_start_symbol(dataname, i): outer_origin[i] for i in range(ndims)}
+            {
+                gtx_dace_utils.range_start_symbol(dataname, i): outer_field_origin[i]
+                for i in range(ndims)
+            }
             | {
-                gtx_dace_utils.range_stop_symbol(dataname, i): outer_origin[i] + outer_desc.shape[i]
+                gtx_dace_utils.range_stop_symbol(dataname, i): (
+                    outer_field_origin[i] + outer_desc.shape[i]
+                )
                 for i in range(ndims)
             }
             | {
@@ -195,20 +208,32 @@ INDEX_DTYPE: Final[dace.typeclass] = dace.dtype_to_typeclass(gtx_fbuiltins.Index
 """Data type used for field indexing."""
 
 
-def get_data_symbol_mapping(
+def get_arg_symbol_mapping(
     dataname: str, arg: FieldopResult, sdfg: dace.SDFG
 ) -> dict[str, dace.symbolic.SymExpr]:
+    """
+    Helper method to build the mapping from inner to outer SDFG of all symbols
+    used for storage of a field or a tuple of fields.
+
+    Args:
+        dataname: The storage name inside the nested SDFG.
+        arg: The argument field in the parent SDFG.
+        sdfg: The parent SDFG where the argument field lives.
+
+
+    Returns:
+        A mapping from inner symbol names to values or symbolic definitions
+        in the parent SDFG.
+    """
     if isinstance(arg, FieldopData):
         return arg.get_symbol_mapping(dataname, sdfg)
-    else:
-        tuple_fields = [(f"{dataname}_{i}", elem) for i, elem in enumerate(arg)]
-        return functools.reduce(
-            lambda symbols_mapping, x: (
-                symbols_mapping | get_data_symbol_mapping(x[0], x[1], sdfg)
-            ),
-            tuple_fields,
-            {},
-        )
+
+    symbol_mapping: dict[str, dace.symbolic.SymExpr] = {}
+    for i, elem in enumerate(arg):
+        dataname_elem = f"{dataname}_{i}"
+        symbol_mapping |= get_arg_symbol_mapping(dataname_elem, elem, sdfg)
+
+    return symbol_mapping
 
 
 def get_tuple_type(data: tuple[FieldopResult, ...]) -> ts.TupleType:
@@ -603,7 +628,7 @@ def translate_if(
         outer, _ = sdfg_builder.add_temp_array_like(sdfg, inner_desc)
         outer_node = state.add_access(outer)
 
-        return inner_data.make_copy(outer_node)
+        return FieldopData(outer_node, inner_data.gt_type, inner_data.origin)
 
     result_temps = gtx_utils.tree_map(construct_output)(true_br_args)
 

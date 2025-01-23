@@ -636,7 +636,7 @@ def translate_scan(
     # build the mapping of symbols from nested SDFG to field operator context
     nsdfg_symbols_mapping = {str(sym): sym for sym in nsdfg.free_symbols}
     for psym, arg in lambda_args_mapping:
-        nsdfg_symbols_mapping |= gtir_translators.get_data_symbol_mapping(psym.id, arg, sdfg)
+        nsdfg_symbols_mapping |= gtir_translators.get_arg_symbol_mapping(psym.id, arg, sdfg)
 
     for inner_dataname, outer_arg in lambda_arg_nodes.items():
         inner_desc = nsdfg.data(inner_dataname)

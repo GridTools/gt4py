@@ -345,14 +345,18 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         shape = []
         for i, dim in enumerate(dims):
             if dim.kind == gtx_common.DimensionKind.LOCAL:
+                # for local dimension, the size is taken from the associated connectivity type
                 shape.append(
                     dace.symbolic.pystr_to_symbolic(neighbor_table_types[dim.value].max_neighbors)
                 )
             elif gtx_dace_utils.is_connectivity_identifier(name, self.offset_provider_type):
+                # we use symbolic size for the global dimension of a connectivity
                 shape.append(
                     dace.symbolic.pystr_to_symbolic(gtx_dace_utils.field_size_symbol_name(name, i))
                 )
             else:
+                # the size of global dimensions for a regular field is the symbolic
+                # expression of domain range 'stop - start'
                 shape.append(gtx_dace_utils.get_symbolic_shape(name, i))
         strides = [
             dace.symbolic.pystr_to_symbolic(gtx_dace_utils.field_stride_symbol_name(name, i))
@@ -483,7 +487,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 head_state.add_nedge(
                     field.dc_node, temp_node, sdfg.make_array_memlet(field.dc_node.data)
                 )
-                return field.make_copy(temp_node)
+                return gtir_builtin_translators.FieldopData(temp_node, field.gt_type, field.origin)
 
         temp_result = gtx_utils.tree_map(make_temps)(result)
         return list(gtx_utils.flatten_nested_tuple((temp_result,)))
@@ -806,7 +810,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         # map free symbols to parent SDFG
         nsdfg_symbols_mapping = {str(sym): sym for sym in nsdfg.free_symbols}
         for sym, arg in zip(node.params, args, strict=True):
-            nsdfg_symbols_mapping |= gtir_builtin_translators.get_data_symbol_mapping(
+            nsdfg_symbols_mapping |= gtir_builtin_translators.get_arg_symbol_mapping(
                 sym.id, arg, sdfg
             )
 
@@ -843,33 +847,34 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             arguments, that are simply returned by the lambda: it can be directly accessed in the parent SDFG.
             """
             inner_desc = inner_data.dc_node.desc(nsdfg)
+            inner_dataname = inner_data.dc_node.data
             if inner_desc.transient:
                 # Transient data nodes only exist within the nested SDFG. In order to return some result data,
                 # the corresponding data container inside the nested SDFG has to be changed to non-transient,
                 # that is externally allocated, as required by the SDFG IR. An output edge will write the result
                 # from the nested-SDFG to a new intermediate data container allocated in the parent SDFG.
-                inner_desc.transient = False
-                outer, outer_desc = self.add_temp_array_like(sdfg, inner_desc)
-                # We cannot use a copy of the inner data descriptor directly, we have to apply the symbol mapping.
-                dace.symbolic.safe_replace(
-                    nsdfg_symbols_mapping,
-                    lambda m: dace.sdfg.replace_properties_dict(outer_desc, m),
+                outer_data = inner_data.map_to_parent_sdfg(
+                    self, nsdfg, sdfg, head_state, nsdfg_symbols_mapping
                 )
-                connector = inner_data.dc_node.data
-                outer_node = head_state.add_access(outer)
                 head_state.add_edge(
-                    nsdfg_node, connector, outer_node, None, sdfg.make_array_memlet(outer)
+                    nsdfg_node,
+                    inner_dataname,
+                    outer_data.dc_node,
+                    None,
+                    sdfg.make_array_memlet(outer_data.dc_node.data),
                 )
-                outer_data = inner_data.make_copy(outer_node, nsdfg_symbols_mapping)
-            elif inner_data.dc_node.data in lambda_arg_nodes:
+            elif inner_dataname in lambda_arg_nodes:
                 # This if branch and the next one handle the non-transient result nodes.
                 # Non-transient nodes are just input nodes that are immediately returned
                 # by the lambda expression. Therefore, these nodes are already available
                 # in the parent context and can be directly accessed there.
-                outer_data = lambda_arg_nodes[inner_data.dc_node.data]
+                outer_data = lambda_arg_nodes[inner_dataname]
             else:
-                outer_node = head_state.add_access(inner_data.dc_node.data)
-                outer_data = inner_data.make_copy(outer_node)
+                # This must be a symbol captured from the lambda parent scope.
+                outer_node = head_state.add_access(inner_dataname)
+                outer_data = gtir_builtin_translators.FieldopData(
+                    outer_node, inner_data.gt_type, inner_data.origin
+                )
             # Isolated access node will make validation fail.
             # Isolated access nodes can be found in the join-state of an if-expression
             # or in lambda expressions that just construct tuples from input arguments.
