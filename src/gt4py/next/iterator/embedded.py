@@ -545,10 +545,11 @@ for math_builtin_name in builtins.ARITHMETIC_BUILTINS | builtins.TYPE_BUILTINS:
         "and_": operator.and_,
         "or_": operator.or_,
         "xor_": operator.xor,
+        "neg": operator.neg,
     }
     decorator = getattr(builtins, math_builtin_name).register(EMBEDDED)
     impl: Callable
-    if math_builtin_name in ["gamma", "not_", "neg"]:
+    if math_builtin_name in ["gamma", "not_"]:
         continue  # treated explicitly
     elif math_builtin_name in python_builtins:
         # TODO: Should potentially use numpy fixed size types to be consistent

@@ -402,7 +402,7 @@ def bool(*args):  # noqa: A001 [builtin-variable-shadowing]
     raise BackendNotSelectedError()
 
 
-UNARY_MATH_NUMBER_BUILTINS = {"abs"}
+UNARY_MATH_NUMBER_BUILTINS = {"abs", "neg"}
 UNARY_LOGICAL_BUILTINS = {"not_"}
 UNARY_MATH_FP_BUILTINS = {
     "sin",
@@ -425,7 +425,6 @@ UNARY_MATH_FP_BUILTINS = {
     "floor",
     "ceil",
     "trunc",
-    "neg",
 }
 UNARY_MATH_FP_PREDICATE_BUILTINS = {"isfinite", "isinf", "isnan"}
 BINARY_MATH_NUMBER_BUILTINS = {

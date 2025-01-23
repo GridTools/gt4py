@@ -23,6 +23,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     _builtins_mapping: Final = {
         "abs": "std::abs",
+        "neg": "std::negate{}",
         "sin": "std::sin",
         "cos": "std::cos",
         "tan": "std::tan",
@@ -76,7 +77,6 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         "xor_": "std::bit_xor{}",
         "mod": "std::modulus{}",
         "not_": "std::logical_not{}",
-        "neg": "std::negate{}",
     }
 
     Sym = as_fmt("{id}")

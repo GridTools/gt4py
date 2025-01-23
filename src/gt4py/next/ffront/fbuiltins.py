@@ -10,6 +10,7 @@ import dataclasses
 import functools
 import inspect
 import math
+import operator
 from builtins import bool, float, int, tuple  # noqa: A004 shadowing a Python built-in
 from typing import Any, Callable, Final, Generic, ParamSpec, Tuple, TypeAlias, TypeVar, Union, cast
 
@@ -203,7 +204,7 @@ def astype(
     return core_defs.dtype(type_).scalar_type(value)
 
 
-_UNARY_MATH_NUMBER_BUILTIN_IMPL: Final = {"abs": abs}
+_UNARY_MATH_NUMBER_BUILTIN_IMPL: Final = {"abs": abs, "neg": operator.neg}
 UNARY_MATH_NUMBER_BUILTIN_NAMES: Final = [*_UNARY_MATH_NUMBER_BUILTIN_IMPL.keys()]
 
 _UNARY_MATH_FP_BUILTIN_IMPL: Final = {
@@ -227,7 +228,6 @@ _UNARY_MATH_FP_BUILTIN_IMPL: Final = {
     "floor": math.floor,
     "ceil": math.ceil,
     "trunc": math.trunc,
-    "neg": np.negative,
 }
 UNARY_MATH_FP_BUILTIN_NAMES: Final = [*_UNARY_MATH_FP_BUILTIN_IMPL.keys()]
 
