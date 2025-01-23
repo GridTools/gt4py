@@ -227,6 +227,7 @@ _UNARY_MATH_FP_BUILTIN_IMPL: Final = {
     "floor": math.floor,
     "ceil": math.ceil,
     "trunc": math.trunc,
+    "neg": np.negative,
 }
 UNARY_MATH_FP_BUILTIN_NAMES: Final = [*_UNARY_MATH_FP_BUILTIN_IMPL.keys()]
 

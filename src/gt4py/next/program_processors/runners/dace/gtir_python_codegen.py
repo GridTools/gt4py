@@ -70,6 +70,7 @@ MATH_BUILTINS_MAPPING = {
     "xor_": "({} ^ {})",
     "mod": "({} % {})",
     "not_": "(not {})",  # ~ is not bitwise in numpy
+    "neg": "(- {})",
 }
 
 

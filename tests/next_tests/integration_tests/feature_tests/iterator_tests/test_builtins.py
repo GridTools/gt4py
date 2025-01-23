@@ -46,6 +46,7 @@ from gt4py.next.iterator.builtins import (
     plus,
     shift,
     xor_,
+    neg,
 )
 from gt4py.next.iterator.runtime import fendef, fundef, offset, set_at
 from gt4py.next.program_processors.runners.gtfn import run_gtfn
@@ -135,6 +136,7 @@ def fencil(builtin, out, *inps, processor, as_column=False):
 def arithmetic_and_logical_test_data():
     return [
         # (builtin, inputs, expected)
+        (neg, [[-1.0, 1.0]], [1.0, -1.0]),
         (plus, [2.0, 3.0], 5.0),
         (minus, [2.0, 3.0], -1.0),
         (multiplies, [2.0, 3.0], 6.0),

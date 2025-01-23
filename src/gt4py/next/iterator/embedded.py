@@ -392,6 +392,13 @@ def not_(a):
     return not a
 
 
+@builtins.neg.register(EMBEDDED)
+def neg(a):
+    if isinstance(a, Column):
+        return np.negative(a)
+    return np.negative(a)
+
+
 @builtins.gamma.register(EMBEDDED)
 def gamma(a):
     gamma_ = np.vectorize(math.gamma)
@@ -541,7 +548,7 @@ for math_builtin_name in builtins.ARITHMETIC_BUILTINS | builtins.TYPE_BUILTINS:
     }
     decorator = getattr(builtins, math_builtin_name).register(EMBEDDED)
     impl: Callable
-    if math_builtin_name in ["gamma", "not_"]:
+    if math_builtin_name in ["gamma", "not_", "neg"]:
         continue  # treated explicitly
     elif math_builtin_name in python_builtins:
         # TODO: Should potentially use numpy fixed size types to be consistent
