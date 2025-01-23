@@ -104,7 +104,6 @@ Examples:
     >>> CustomModel(3, 2)
     Instance 1 == 1.5
     CustomModel(value=1.5)
-
 """
 
 from . import core as core, validators as validators  # imported but unused

@@ -392,6 +392,13 @@ def not_(a):
     return not a
 
 
+@builtins.neg.register(EMBEDDED)
+def neg(a):
+    if isinstance(a, Column):
+        return np.negative(a)
+    return np.negative(a)
+
+
 @builtins.gamma.register(EMBEDDED)
 def gamma(a):
     gamma_ = np.vectorize(math.gamma)
@@ -538,6 +545,7 @@ for math_builtin_name in builtins.ARITHMETIC_BUILTINS | builtins.TYPE_BUILTINS:
         "and_": operator.and_,
         "or_": operator.or_,
         "xor_": operator.xor,
+        "neg": operator.neg,
     }
     decorator = getattr(builtins, math_builtin_name).register(EMBEDDED)
     impl: Callable

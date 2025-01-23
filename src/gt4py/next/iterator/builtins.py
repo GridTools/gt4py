@@ -297,6 +297,11 @@ def neg(*args):
 
 
 @builtin_dispatch
+def neg(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def isfinite(*args):
     raise BackendNotSelectedError()
 
@@ -401,7 +406,7 @@ def bool(*args):  # noqa: A001 [builtin-variable-shadowing]
     raise BackendNotSelectedError()
 
 
-UNARY_MATH_NUMBER_BUILTINS = {"abs"}
+UNARY_MATH_NUMBER_BUILTINS = {"abs", "neg"}
 UNARY_LOGICAL_BUILTINS = {"not_"}
 UNARY_MATH_FP_BUILTINS = {
     "sin",
