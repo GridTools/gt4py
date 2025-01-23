@@ -592,7 +592,7 @@ class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     @classmethod
     def apply(cls, root: LeafNode, **kwargs: Any) -> str:
         if not isinstance(root, cuir.Program):
-            raise ValueError("apply() requires gtcpp.Progam root node")
+            raise ValueError("apply() requires gtcpp.Program root node")
         generated_code = super().apply(root, **kwargs)
         if kwargs.get("format_source", True):
             generated_code = codegen.format_source("cpp", generated_code, style="LLVM")

@@ -60,7 +60,7 @@ class AssignmentKind(eve.StrEnum):
 
 @enum.unique
 class UnaryOperator(eve.StrEnum):
-    """Unary operator indentifier."""
+    """Unary operator identifier."""
 
     POS = "+"
     NEG = "-"

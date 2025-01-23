@@ -33,10 +33,8 @@ from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace import (
     gtir_builtin_translators,
     gtir_sdfg_utils,
+    transformations as gtx_transformations,
     utils as gtx_dace_utils,
-)
-from gt4py.next.program_processors.runners.dace.transformations import (
-    gt_substitute_compiletime_symbols,
 )
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
 
@@ -199,6 +197,24 @@ def _collect_symbols_in_domain_expressions(
         )
         .reduce(operator.add, init=[])
     )
+
+
+def _get_field_doman_subset(
+    domain: gtir_builtin_translators.FieldopDomain, data: gtir_builtin_translators.FieldopData
+) -> dace.subsets.Range:
+    """Helper method to build a memlet subset of a field over the given domain."""
+    # convert domain expression to dictionary to ease access to dimension boundaries
+    domain_ranges = {dim: (lb, ub) for dim, lb, ub in domain}
+    if isinstance(data.gt_type, ts.FieldType):
+        origin = ([0] * len(domain)) if data.origin is None else data.origin
+        subset = ",".join(
+            f"{domain_ranges[dim][0] - origin}:{domain_ranges[dim][1] - origin}"
+            for dim, origin in zip(data.gt_type.dims, origin, strict=True)
+        )
+    else:
+        assert len(domain) == 0
+        subset = "0"
+    return dace.subsets.Range.from_string(subset)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -594,10 +610,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         # in case the statement returns more than one field
         target_fields = self._visit_expression(stmt.target, sdfg, state, use_temp=False)
 
-        # convert domain expression to dictionary to ease access to dimension boundaries
-        domain = {
-            dim: (lb, ub) for dim, lb, ub in gtir_builtin_translators.extract_domain(stmt.domain)
-        }
+        # visit the domain expression
+        domain = gtir_builtin_translators.extract_domain(stmt.domain)
 
         expr_input_args = {
             sym_id
@@ -615,24 +629,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             target_desc = sdfg.arrays[target.dc_node.data]
             assert not target_desc.transient
 
-            if isinstance(target.gt_type, ts.FieldType):
-                assert target.origin is not None
-                target_subset = ",".join(
-                    f"{domain[dim][0] - origin}:{domain[dim][1] - origin}"
-                    for dim, origin in zip(target.gt_type.dims, target.origin, strict=True)
-                )
-                source_subset = (
-                    target_subset
-                    if source.origin is None
-                    else ",".join(
-                        f"{domain[dim][0] - origin}:{domain[dim][1] - origin}"
-                        for dim, origin in zip(target.gt_type.dims, source.origin, strict=True)
-                    )
-                )
-            else:
-                assert len(domain) == 0
-                target_subset = "0"
-                source_subset = "0"
+            assert source.gt_type == target.gt_type
+            source_subset = _get_field_doman_subset(domain, source)
+            target_subset = _get_field_doman_subset(domain, target)
 
             if target.dc_node.data in state_input_data:
                 # if inout argument, write the result in separate next state
@@ -924,25 +923,14 @@ def _remove_field_origin_symbols(ir: gtir.Program, sdfg: dace.SDFG) -> None:
                 # zero-dimensional field
                 continue
             dataname = str(psymbol.id)
-            datadesc = sdfg.data(dataname)
-            assert (
-                isinstance(datadesc, dace.data.Array)
-                and len(datadesc.shape) == len(psymbol.type.dims)
-                and not datadesc.transient
-            )
-            # we redefine the array shape assuming that the range always starts from 0
-            new_shape = [
-                dace.symbolic.SymExpr(gtx_dace_utils.range_stop_symbol(dataname, i))
-                for i in range(len(psymbol.type.dims))
-            ]
-            datadesc.set_shape(new_shape, datadesc.strides)
             # set all range start symbols to constant value 0
             range_start_symbols |= {
                 gtx_dace_utils.range_start_symbol(dataname, i): 0
                 for i in range(len(psymbol.type.dims))
             }
     # we set all range start symbols to 0 in the top-level SDFG and proagate them to nested SDFGs
-    gt_substitute_compiletime_symbols(sdfg, range_start_symbols, validate=True)
+    # TODO(phiumuell): some range start symbols from nested SDFGs are turned into free symbols
+    gtx_transformations.gt_substitute_compiletime_symbols(sdfg, range_start_symbols, validate=True)
 
 
 def build_sdfg_from_gtir(
