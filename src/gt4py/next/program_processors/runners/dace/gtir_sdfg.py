@@ -929,6 +929,7 @@ def _remove_field_origin_symbols(ir: gtir.Program, sdfg: dace.SDFG) -> None:
                 for i in range(len(psymbol.type.dims))
             }
     # we set all range start symbols to 0 in the top-level SDFG and proagate them to nested SDFGs
+    # TODO(phiumuell): some range start symbols from nested SDFGs are turned into free symbols
     gtx_transformations.gt_substitute_compiletime_symbols(sdfg, range_start_symbols, validate=True)
 
 

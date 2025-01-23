@@ -1841,7 +1841,8 @@ def test_gtir_let_lambda_with_cond():
     a = np.random.rand(N)
     for s in [False, True]:
         b = np.empty_like(a)
-        sdfg(a, b, pred=np.bool_(s), **FSYMBOLS)
+        # TODO(phiumuell): a range start symbol from the nested SDFG is turned into a free symbol
+        sdfg(a, b, pred=np.bool_(s), **FSYMBOLS, __x1_0_range_0=0)
         assert np.allclose(b, a if s else a * 2)
 
 
