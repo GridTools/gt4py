@@ -87,10 +87,18 @@ class FieldopData:
     gt_type: ts.FieldType | ts.ScalarType
     origin: Optional[list[dace.symbolic.SymExpr]]
 
-    def make_copy(self, data_node: dace.nodes.AccessNode) -> FieldopData:
+    def make_copy(
+        self,
+        data_node: dace.nodes.AccessNode,
+        symbol_mapping: Optional[dict[str, dace.symbolic.SymbolicType]] = None,
+    ) -> FieldopData:
         """Create a copy of this data descriptor with a different access node."""
         assert data_node != self.dc_node
-        return FieldopData(data_node, self.gt_type, self.origin)
+        if self.origin is None or symbol_mapping is None:
+            origin = self.origin
+        else:
+            origin = [val.subs(symbol_mapping) for val in self.origin]
+        return FieldopData(data_node, self.gt_type, origin)
 
     def get_local_view(
         self, domain: FieldopDomain
