@@ -39,7 +39,6 @@ are replaced by just a few registers.
 Note that filling and flushing k-caches can always be replaced by a local
 (non-filling or flushing) k-cache plus additional filling and flushing
 statements.
-
 """
 
 
@@ -261,7 +260,7 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
     For each cached field, the following actions are performed:
     1. A new locally-k-cached temporary is introduced.
     2. All accesses to the original field are replaced by accesses to this temporary.
-    3. Loop sections are split where necessary to allow single-level loads whereever possible.
+    3. Loop sections are split where necessary to allow single-level loads wherever possible.
     3. Fill statements from the original field to the temporary are introduced.
     4. Flush statements from the temporary to the original field are introduced.
     """
