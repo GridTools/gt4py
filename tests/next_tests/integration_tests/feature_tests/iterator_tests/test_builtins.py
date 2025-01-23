@@ -185,7 +185,7 @@ def test_arithmetic_and_logical_builtins(program_processor, builtin, inputs, exp
 @pytest.mark.parametrize("builtin, inputs, expected", arithmetic_and_logical_test_data())
 def test_arithmetic_and_logical_functors_gtfn(builtin, inputs, expected):
     if builtin == if_ or builtin == abs:
-        pytest.skip("If and abs cannot be used unapplied")
+        pytest.skip("If and abs cannot be used unapplied.")
     inps = field_maker(*array_maker(*inputs))
     out = field_maker((np.zeros_like(*array_maker(expected))))[0]
 
