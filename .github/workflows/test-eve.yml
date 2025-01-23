@@ -50,7 +50,7 @@ jobs:
         tox run -e eve-py${pyversion_no_dot}
     #     mv coverage.json coverage-py${{ matrix.python-version }}-${{ matrix.os }}.json
     # - name: Upload coverage.json artifact
-    #   uses: actions/upload-artifact@v3
+    #   uses: actions/upload-artifact@v4
     #   with:
     #     name: coverage-py${{ matrix.python-version }}-${{ matrix.os }}
     #     path: coverage-py${{ matrix.python-version }}-${{ matrix.os }}.json
@@ -64,7 +64,7 @@ jobs:
     #     echo ${{ github.event.pull_request.head.sha }} >> info.txt
     #     echo ${{ github.run_id }} >> info.txt
     # - name: Upload info artifact
-    #   uses: actions/upload-artifact@v3
+    #   uses: actions/upload-artifact@v4
     #   with:
     #     name: info-py${{ matrix.python-version }}-${{ matrix.os }}
     #     path: info.txt
