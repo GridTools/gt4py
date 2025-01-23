@@ -291,10 +291,6 @@ def ceil(*args):
 def trunc(*args):
     raise BackendNotSelectedError()
 
-@builtin_dispatch
-def neg(*args):
-    raise BackendNotSelectedError()
-
 
 @builtin_dispatch
 def neg(*args):
