@@ -230,9 +230,9 @@ class ObservableTypeSynthesizer(type_synthesizer.TypeSynthesizer):
         *args: type_synthesizer.TypeOrTypeSynthesizer,
         offset_provider_type: common.OffsetProviderType,
     ) -> Union[ts.TypeSpec, ObservableTypeSynthesizer]:
-        assert all(
-            isinstance(arg, (ts.TypeSpec, ObservableTypeSynthesizer)) for arg in args
-        ), "ObservableTypeSynthesizer can only be used with arguments that are TypeSpec or ObservableTypeSynthesizer"
+        assert all(isinstance(arg, (ts.TypeSpec, ObservableTypeSynthesizer)) for arg in args), (
+            "ObservableTypeSynthesizer can only be used with arguments that are TypeSpec or ObservableTypeSynthesizer"
+        )
 
         return_type_or_synthesizer = self.type_synthesizer(
             *args, offset_provider_type=offset_provider_type
@@ -644,7 +644,7 @@ class ITIRTypeInference(eve.NodeTranslator):
         return result
 
     def visit_Node(self, node: itir.Node, **kwargs):
-        raise NotImplementedError(f"No type rule for nodes of type " f"'{type(node).__name__}'.")
+        raise NotImplementedError(f"No type rule for nodes of type '{type(node).__name__}'.")
 
 
 infer = ITIRTypeInference.apply

@@ -566,9 +566,9 @@ def test_domain_replace(index, named_ranges, domain, expected):
         assert new_domain == expected
 
 
-def dimension_promotion_cases() -> (
-    list[tuple[list[list[Dimension]], list[Dimension] | None, None | Pattern]]
-):
+def dimension_promotion_cases() -> list[
+    tuple[list[list[Dimension]], list[Dimension] | None, None | Pattern]
+]:
     raw_list = [
         # list of list of dimensions, expected result, expected error message
         ([["I", "J"], ["I"]], ["I", "J"], None),

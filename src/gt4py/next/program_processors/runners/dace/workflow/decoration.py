@@ -73,9 +73,9 @@ def convert_args(
                         last_call_args[i] = actype(kwargs[arg_name])
                     else:
                         # shape and strides of arrays are supposed not to change, and can therefore be omitted
-                        assert gtx_dace_utils.is_field_symbol(
-                            arg_name
-                        ), f"argument '{arg_name}' not found."
+                        assert gtx_dace_utils.is_field_symbol(arg_name), (
+                            f"argument '{arg_name}' not found."
+                        )
 
             if use_fast_call:
                 return inp.fast_call()

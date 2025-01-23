@@ -275,8 +275,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                     )(current_expr)
                 # `field(Dim + idx)`
                 case foast.BinOp(
-                    op=dialect_ast_enums.BinaryOperator.ADD
-                    | dialect_ast_enums.BinaryOperator.SUB,
+                    op=dialect_ast_enums.BinaryOperator.ADD | dialect_ast_enums.BinaryOperator.SUB,
                     left=foast.Name(id=dimension),  # TODO(tehrengruber): use type of lhs
                     right=foast.Constant(value=offset_index),
                 ):

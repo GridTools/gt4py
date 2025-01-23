@@ -100,7 +100,7 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
             temp = temp_decls[accessor_ref.name]
             data_index = "+".join(
                 [
-                    f"{self.visit(index, in_data_index=True, **kwargs)}*{int(np.prod(temp.data_dims[i+1:], initial=1))}"
+                    f"{self.visit(index, in_data_index=True, **kwargs)}*{int(np.prod(temp.data_dims[i + 1 :], initial=1))}"
                     for i, index in enumerate(accessor_ref.data_index)
                 ]
             )

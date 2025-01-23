@@ -502,9 +502,9 @@ class StencilObject(abc.ABC):
             if field_origin is not None:
                 field_origin_ndim = len(field_origin)
                 if field_origin_ndim != field_info.ndim:
-                    assert (
-                        field_origin_ndim == field_info.domain_ndim
-                    ), f"Invalid origin specification ({field_origin}) for '{name}' field."
+                    assert field_origin_ndim == field_info.domain_ndim, (
+                        f"Invalid origin specification ({field_origin}) for '{name}' field."
+                    )
                     origin[name] = (*field_origin, *((0,) * len(field_info.data_dims)))
 
             elif all_origin is not None:

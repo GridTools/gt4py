@@ -110,9 +110,9 @@ def _make_strides_propagation_level2_sdfg() -> tuple[dace.SDFG, dace_nodes.Neste
     return sdfg, nsdfg
 
 
-def _make_strides_propagation_level1_sdfg() -> (
-    tuple[dace.SDFG, dace_nodes.NestedSDFG, dace_nodes.NestedSDFG]
-):
+def _make_strides_propagation_level1_sdfg() -> tuple[
+    dace.SDFG, dace_nodes.NestedSDFG, dace_nodes.NestedSDFG
+]:
     """Generates the level 1 SDFG (top) SDFG for `test_strides_propagation()`.
 
     Note that the SDFG is valid, but will be indeterminate. The only point of
@@ -186,9 +186,9 @@ def test_strides_propagation_use_symbol_mapping():
             exp_stride = f"{aname}_stride"
             actual_stride = adesc.strides[0]
             assert len(adesc.strides) == 1
-            assert (
-                str(actual_stride) == exp_stride
-            ), f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
+            assert str(actual_stride) == exp_stride, (
+                f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
+            )
 
             nsdfg = sdfg.parent_nsdfg_node
             if nsdfg is not None:
@@ -218,9 +218,9 @@ def test_strides_propagation_use_symbol_mapping():
                 assert original_stride in nsdfg.symbol_mapping
                 assert str(nsdfg.symbol_mapping[original_stride]) == target_symbol
             assert len(adesc.strides) == 1
-            assert (
-                str(adesc.strides[0]) == original_stride
-            ), f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
+            assert str(adesc.strides[0]) == original_stride, (
+                f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
+            )
 
     # Now we also propagate `c` thus now all data descriptors have the same stride
     gtx_transformations.gt_propagate_strides_of(sdfg_level1, "c1", ignore_symbol_mapping=False)
@@ -229,14 +229,14 @@ def test_strides_propagation_use_symbol_mapping():
         for aname, adesc in sdfg.arrays.items():
             nsdfg = sdfg.parent_nsdfg_node
             original_stride = f"{aname}_stride"
-            target_symbol = f"{aname[0]}{level-1}_stride"
+            target_symbol = f"{aname[0]}{level - 1}_stride"
             if nsdfg is not None:
                 assert original_stride in nsdfg.symbol_mapping
                 assert str(nsdfg.symbol_mapping[original_stride]) == target_symbol
             assert len(adesc.strides) == 1
-            assert (
-                str(adesc.strides[0]) == original_stride
-            ), f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
+            assert str(adesc.strides[0]) == original_stride, (
+                f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
+            )
 
 
 def test_strides_propagation_ignore_symbol_mapping():
@@ -249,9 +249,9 @@ def test_strides_propagation_ignore_symbol_mapping():
             exp_stride = f"{aname}_stride"
             actual_stride = adesc.strides[0]
             assert len(adesc.strides) == 1
-            assert (
-                str(actual_stride) == exp_stride
-            ), f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
+            assert str(actual_stride) == exp_stride, (
+                f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
+            )
 
             nsdfg = sdfg.parent_nsdfg_node
             if nsdfg is not None:
@@ -275,9 +275,9 @@ def test_strides_propagation_ignore_symbol_mapping():
             else:
                 exp_stride = f"{aname[0]}1_stride"
             assert len(adesc.strides) == 1
-            assert (
-                str(adesc.strides[0]) == exp_stride
-            ), f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
+            assert str(adesc.strides[0]) == exp_stride, (
+                f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
+            )
 
             nsdfg = sdfg.parent_nsdfg_node
             if nsdfg is not None:
@@ -292,9 +292,9 @@ def test_strides_propagation_ignore_symbol_mapping():
             exp_stride = f"{aname[0]}1_stride"
             original_stride = f"{aname}_stride"
             assert len(adesc.strides) == 1
-            assert (
-                str(adesc.strides[0]) == exp_stride
-            ), f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
+            assert str(adesc.strides[0]) == exp_stride, (
+                f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
+            )
 
             nsdfg = sdfg.parent_nsdfg_node
             if nsdfg is not None:

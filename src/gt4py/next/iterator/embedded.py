@@ -642,9 +642,9 @@ def _is_list_of_complete_offsets(
 def group_offsets(*offsets: OffsetPart) -> list[CompleteOffset]:
     assert len(offsets) % 2 == 0
     complete_offsets = [*zip(offsets[::2], offsets[1::2])]
-    assert _is_list_of_complete_offsets(
-        complete_offsets
-    ), f"Invalid sequence of offset parts: {offsets}"
+    assert _is_list_of_complete_offsets(complete_offsets), (
+        f"Invalid sequence of offset parts: {offsets}"
+    )
     return complete_offsets
 
 

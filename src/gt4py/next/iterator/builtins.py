@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+# ruff: noqa: A005 Module `builtins` shadows a Python standard-library module
+
 from gt4py.next.iterator.dispatcher import Dispatcher
 
 

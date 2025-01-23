@@ -70,9 +70,9 @@ def gt_gpu_transformation(
         - Solve the fusing problem.
         - Currently only one block size for all maps is given, add more options.
     """
-    assert (
-        len(kwargs) == 0
-    ), f"gt_gpu_transformation(): found unknown arguments: {', '.join(arg for arg in kwargs.keys())}"
+    assert len(kwargs) == 0, (
+        f"gt_gpu_transformation(): found unknown arguments: {', '.join(arg for arg in kwargs.keys())}"
+    )
 
     # Turn all global arrays (which we identify as input) into GPU memory.
     #  This way the GPU transformation will not create this copying stuff.

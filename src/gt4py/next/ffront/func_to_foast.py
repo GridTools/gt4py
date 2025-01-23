@@ -317,9 +317,9 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             raise errors.DSLError(self.get_location(node), "Can only assign to names.")
 
         if node.annotation is not None:
-            assert isinstance(
-                node.annotation, ast.Constant
-            ), "Annotations should be ast.Constant(string). Use StringifyAnnotationsPass"
+            assert isinstance(node.annotation, ast.Constant), (
+                "Annotations should be ast.Constant(string). Use StringifyAnnotationsPass"
+            )
             context = {**fbuiltins.BUILTINS, **self.closure_vars}
             annotation = eval(node.annotation.value, context)
             target_type = type_translation.from_type_hint(annotation, globalns=context)

@@ -284,9 +284,9 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
             assert type_info.is_integer(node.args[0].type)
             make_tuple_call = node.args[1]
             idx = int(node.args[0].value)
-            assert idx < len(
-                make_tuple_call.args
-            ), f"Index {idx} is out of bounds for tuple of size {len(make_tuple_call.args)}"
+            assert idx < len(make_tuple_call.args), (
+                f"Index {idx} is out of bounds for tuple of size {len(make_tuple_call.args)}"
+            )
             return node.args[1].args[idx]
         return None
 

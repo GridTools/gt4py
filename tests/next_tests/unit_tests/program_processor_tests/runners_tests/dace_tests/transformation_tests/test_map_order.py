@@ -44,19 +44,19 @@ def _perform_reorder_test(
     new_map_params = map_entry.map.params.copy()
 
     if len(expected_order) == 0:
-        assert (
-            apply_count == 0
-        ), f"Expected that the transformation was not applied. New map order: {map_entry.map.params}"
+        assert apply_count == 0, (
+            f"Expected that the transformation was not applied. New map order: {map_entry.map.params}"
+        )
         return
     else:
-        assert (
-            apply_count > 0
-        ), f"Expected that the transformation was applied. Old map order: {map_entry.map.params}; Expected order: {expected_order}"
+        assert apply_count > 0, (
+            f"Expected that the transformation was applied. Old map order: {map_entry.map.params}; Expected order: {expected_order}"
+        )
         assert len(expected_order) == len(new_map_params)
 
-    assert (
-        expected_order == new_map_params
-    ), f"Expected map order {expected_order} but got {new_map_params} instead."
+    assert expected_order == new_map_params, (
+        f"Expected map order {expected_order} but got {new_map_params} instead."
+    )
 
 
 def _make_test_sdfg(map_params: list[str]) -> dace.SDFG:

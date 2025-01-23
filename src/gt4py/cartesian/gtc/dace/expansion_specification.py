@@ -254,9 +254,9 @@ def _populate_gpu_schedules(expansion_specification: List[ExpansionItem]):
                             tiled = True
                             break
     if not tiled:
-        assert any(
-            isinstance(item, Map) for item in expansion_specification
-        ), "needs at least one map to avoid dereferencing on CPU"
+        assert any(isinstance(item, Map) for item in expansion_specification), (
+            "needs at least one map to avoid dereferencing on CPU"
+        )
         for es in expansion_specification:
             if isinstance(es, Map):
                 if es.schedule is None:

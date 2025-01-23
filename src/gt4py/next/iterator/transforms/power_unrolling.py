@@ -53,18 +53,19 @@ class PowerUnrolling(NodeTranslator):
                 remainder = exponent
 
                 # Build target expression
-                ret = im.ref(f"power_{2 ** pow_max}")
+                ret = im.ref(f"power_{2**pow_max}")
                 remainder -= 2**pow_cur
                 while remainder > 0:
                     pow_cur = _compute_integer_power_of_two(remainder)
                     remainder -= 2**pow_cur
 
-                    ret = im.multiplies_(ret, f"power_{2 ** pow_cur}")
+                    ret = im.multiplies_(ret, f"power_{2**pow_cur}")
 
                 # Nest target expression to avoid multiple redundant evaluations
                 for i in range(pow_max, 0, -1):
                     ret = im.let(
-                        f"power_{2 ** i}", im.multiplies_(f"power_{2**(i-1)}", f"power_{2**(i-1)}")
+                        f"power_{2**i}",
+                        im.multiplies_(f"power_{2 ** (i - 1)}", f"power_{2 ** (i - 1)}"),
                     )(ret)
                 ret = im.let("power_1", base)(ret)
 
