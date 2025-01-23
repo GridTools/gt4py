@@ -92,7 +92,13 @@ class FieldopData:
         data_node: dace.nodes.AccessNode,
         symbol_mapping: Optional[dict[str, dace.symbolic.SymbolicType]] = None,
     ) -> FieldopData:
-        """Create a copy of this data descriptor with a different access node."""
+        """
+        Create a copy of this data descriptor with a new access node.
+
+        If the symbol mapping is provided, the new access node is supposed to be
+        in a different SDFG context, e.g. the parent SDFG, and the free symbols
+        of the field origin are replaced based on this mapping.
+        """
         assert data_node != self.dc_node
         if self.origin is None or symbol_mapping is None:
             origin = self.origin
@@ -133,30 +139,39 @@ class FieldopData:
     def get_symbol_mapping(
         self, dataname: str, sdfg: dace.SDFG
     ) -> dict[str, dace.symbolic.SymExpr]:
-        """Helper method to create the symbol mapping for array storage in a nested SDFG."""
+        """
+        Helper method to create the symbol mapping for array storage in a nested SDFG.
+
+        Args:
+            dataname: Name of the data container insiode the nested SDFG.
+            sdfg: The parent SDFG where the `FieldopData` object lives.
+
+        Returns:
+            Mapping from symbols in nested SDFG to the corresponding symbolic values
+            in the parent SDFG. This includes the range start and stop symbols (from
+            which it is possible to calculate the shape of the array) and the strides.
+        """
         if isinstance(self.gt_type, ts.ScalarType):
             return {}
-        arg_desc = self.dc_node.desc(sdfg)
-        assert isinstance(arg_desc, dace.data.Array)
+        ndims = len(self.gt_type.dims)
+        outer_desc = self.dc_node.desc(sdfg)
+        assert isinstance(outer_desc, dace.data.Array)
+        if self.origin is None:
+            outer_origin = [0] * ndims
+        else:
+            outer_origin = self.origin
+        # origin and size of the local dimension, in case of a field with `ListType` data,
+        # are assumed to be compiled-time values (not symbolic), therefore the start and
+        # stop range symbols of the inner field only extend over the global dimensions
         return (
-            {
-                gtx_dace_utils.range_start_symbol(dataname, i): 0
-                if self.origin is None
-                else self.origin[i]
-                for i in range(
-                    len(self.gt_type.dims)
-                )  # origin is not needed for `ListType` local dimension
-            }
+            {gtx_dace_utils.range_start_symbol(dataname, i): outer_origin[i] for i in range(ndims)}
             | {
-                gtx_dace_utils.range_stop_symbol(dataname, i): dace.symbolic.SymExpr(
-                    gtx_dace_utils.range_start_symbol(self.dc_node.data, i)
-                )
-                + size
-                for i, size in enumerate(arg_desc.shape)
+                gtx_dace_utils.range_stop_symbol(dataname, i): outer_origin[i] + outer_desc.shape[i]
+                for i in range(ndims)
             }
             | {
                 gtx_dace_utils.field_stride_symbol_name(dataname, i): stride
-                for i, stride in enumerate(arg_desc.strides)
+                for i, stride in enumerate(outer_desc.strides)
             }
         )
 
