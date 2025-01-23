@@ -860,7 +860,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 head_state.add_edge(
                     nsdfg_node, connector, outer_node, None, sdfg.make_array_memlet(outer)
                 )
-                outer_data = inner_data.make_copy(outer_node)
+                outer_data = inner_data.make_copy(outer_node, nsdfg_symbols_mapping)
             elif inner_data.dc_node.data in lambda_arg_nodes:
                 # This if branch and the next one handle the non-transient result nodes.
                 # Non-transient nodes are just input nodes that are immediately returned
@@ -929,7 +929,6 @@ def _remove_field_origin_symbols(ir: gtir.Program, sdfg: dace.SDFG) -> None:
                 for i in range(len(psymbol.type.dims))
             }
     # we set all range start symbols to 0 in the top-level SDFG and proagate them to nested SDFGs
-    # TODO(phiumuell): some range start symbols from nested SDFGs are turned into free symbols
     gtx_transformations.gt_substitute_compiletime_symbols(sdfg, range_start_symbols, validate=True)
 
 
