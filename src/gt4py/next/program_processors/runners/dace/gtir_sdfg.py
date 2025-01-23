@@ -205,7 +205,7 @@ def _get_field_doman_subset(
     """Helper method to build a memlet subset of a field over the given domain."""
     # convert domain expression to dictionary to ease access to dimension boundaries
     domain_ranges = {dim: (lb, ub) for dim, lb, ub in domain}
-    if isinstance(data.gt_type, ts.FieldType):
+    if isinstance(data.gt_type, ts.FieldType) and len(data.gt_type.dims) != 0:
         origin = ([0] * len(domain)) if data.origin is None else data.origin
         subset = ",".join(
             f"{domain_ranges[dim][0] - origin}:{domain_ranges[dim][1] - origin}"
