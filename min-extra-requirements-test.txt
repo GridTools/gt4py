@@ -60,7 +60,7 @@ cmake==3.22
 cogapp==3.3
 coverage[toml]==5.0
 cytoolz==0.12.1
-dace==1.0.0
+dace==1.0.1
 darglint==1.6
 deepdiff==5.6.0
 devtools==0.6
