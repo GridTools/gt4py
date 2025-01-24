@@ -972,12 +972,24 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert len(node.args) == 2
         index_arg = self.visit(node.args[0])
         list_arg = self.visit(node.args[1])
-        assert isinstance(list_arg, ValueExpr)
+        if isinstance(list_arg, ValueExpr):
+            list_desc = list_arg.dc_node.desc(self.sdfg)
+            assert len(list_desc.shape) == 1
+            list_size = list_desc.shape[0]
+            list_arg_subset = dace_subsets.Range.from_string(index_arg.value)
+        elif isinstance(list_arg, MemletExpr):
+            list_desc = list_arg.dc_node.desc(self.sdfg)
+            # the array dimension corresponding to the list of values is by design the innermost in shape
+            list_size = list_arg.subset.num_elements()
+            assert list_arg.subset.size()[-1] == list_size
+            list_arg_subset = dace_subsets.Range(
+                list_arg.subset[:-1]
+            ) + dace_subsets.Range.from_string(index_arg.value)
+        else:
+            raise ValueError(f"Unexpected argument {list_arg} to 'list_get' function.")
         assert isinstance(list_arg.gt_dtype, ts.ListType)
         assert isinstance(list_arg.gt_dtype.element_type, ts.ScalarType)
-
-        list_desc = list_arg.dc_node.desc(self.sdfg)
-        assert len(list_desc.shape) == 1
+        assert not dace.symbolic.issymbolic(list_size)
 
         result_dtype = gtx_dace_utils.as_dace_type(list_arg.gt_dtype.element_type)
         result, _ = self.subgraph_builder.add_temp_scalar(self.sdfg, result_dtype)
@@ -985,13 +997,16 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         if isinstance(index_arg, SymbolExpr):
             assert index_arg.dc_dtype in dace.dtypes.INTEGER_TYPES
-            self._add_edge(
-                list_arg.dc_node,
-                None,
-                result_node,
-                None,
-                dace.Memlet(data=list_arg.dc_node.data, subset=index_arg.value),
-            )
+            if isinstance(list_arg, ValueExpr):
+                self._add_edge(
+                    list_arg.dc_node,
+                    None,
+                    result_node,
+                    None,
+                    dace.Memlet(data=list_arg.dc_node.data, subset=list_arg_subset),
+                )
+            else:
+                self._add_input_data_edge(list_arg.dc_node, list_arg_subset, result_node)
         elif isinstance(index_arg, ValueExpr):
             tasklet_node = self._add_tasklet(
                 "list_get", inputs={"index", "list"}, outputs={"value"}, code="value = list[index]"
@@ -1003,13 +1018,29 @@ class LambdaToDataflow(eve.NodeVisitor):
                 "index",
                 dace.Memlet(data=index_arg.dc_node.data, subset="0"),
             )
-            self._add_edge(
-                list_arg.dc_node,
-                None,
-                tasklet_node,
-                "list",
-                self.sdfg.make_array_memlet(list_arg.dc_node.data),
-            )
+            if isinstance(list_arg, ValueExpr):
+                self._add_edge(
+                    list_arg.dc_node,
+                    None,
+                    tasklet_node,
+                    "list",
+                    self.sdfg.make_array_memlet(list_arg.dc_node.data),
+                )
+            else:
+                # we copy the array dimension corresponding to the list into a transient array
+                # in order to ensure stride 1 on the arry input to the tasklet
+                list_data, list_desc = self.subgraph_builder.add_temp_array(
+                    self.sdfg, (list_size,), list_desc.dtype
+                )
+                list_node = self.state.add_access(list_data)
+                self._add_input_data_edge(list_arg.dc_node, list_arg.subset, list_node)
+                self._add_edge(
+                    list_node,
+                    None,
+                    tasklet_node,
+                    "list",
+                    dace.Memlet.from_array(list_data, list_desc),
+                )
             self._add_edge(
                 tasklet_node, "value", result_node, None, dace.Memlet(data=result, subset="0")
             )
