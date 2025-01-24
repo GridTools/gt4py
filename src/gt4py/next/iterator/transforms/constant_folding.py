@@ -25,7 +25,7 @@ class ConstantFolding(eve.PreserveLocationVisitor, eve.NodeTranslator):
         # `symref + funcall` -> `funcall + symref`
         CANONICALIZE_FUNCALL_SYMREF_LITERAL = enum.auto()
 
-        # `minus(arg0, arg1) -> plus(im.call("neg")(arg0), arg1)`
+        # `minus(arg0, arg1) -> plus(im.call("neg")(arg1), arg0)`
         CANONICALIZE_MINUS = enum.auto()
 
         # `maximum(im.call(...)(), maximum(...))` -> `maximum(maximum(...), im.call(...)())`
@@ -117,7 +117,7 @@ class ConstantFolding(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return None
 
     def transform_canonicalize_minus(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
-        # `minus(arg0, arg1) -> plus(im.call("neg")(arg0), arg1)`
+        # `minus(arg0, arg1) -> plus(im.call("neg")(arg1), arg0)`
         if cpm.is_call_to(node, "minus"):
             return self.visit(im.plus(im.call("neg")(node.args[1]), node.args[0]))
         return None
@@ -125,13 +125,14 @@ class ConstantFolding(eve.PreserveLocationVisitor, eve.NodeTranslator):
     def transform_canonicalize_min_max(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
         # `maximum(im.call(...)(), maximum(...))` -> `maximum(maximum(...), im.call(...)())`
         if cpm.is_call_to(node, ("maximum", "minimum")):
-            if not cpm.is_call_to(node.args[0], ("maximum", "minimum")) and cpm.is_call_to(node.args[1], ("maximum", "minimum")):
+            if (isinstance(node.args[0], ir.FunCall) and not cpm.is_call_to(node.args[0], ("maximum", "minimum"))
+                    and cpm.is_call_to(node.args[1], ("maximum", "minimum"))):
                 return self.visit(im.call(node.fun.id)(node.args[1], node.args[0]))
         return None
 
     def transform_canonicalize_tuple_get_plus(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
         # im.call(...)(im.tuple_get(...), im.plus(...)))` -> `im.call(...)( im.plus(...)), im.tuple_get(...))`
-        if isinstance(node, ir.FunCall):
+        if isinstance(node, ir.FunCall) and len(node.args) > 1:
             if cpm.is_call_to(node.args[0], "tuple_get") and cpm.is_call_to(node.args[1], "plus"):
                 return self.visit(im.call(node.fun.id)(node.args[1], node.args[0]))
         return None

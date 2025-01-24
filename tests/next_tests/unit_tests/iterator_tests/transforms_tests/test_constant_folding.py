@@ -505,3 +505,28 @@ def test_minus():
     expected = im.plus(im.call("neg")(sym), im.literal_from_value(2))
     actual = ConstantFolding.apply(testee)
     assert actual == expected
+
+
+def test_fold_min_max_plus():
+    sym = im.ref("sym")
+    testee = im.call("minimum")(im.plus(sym, im.literal_from_value(-1)), sym)
+    expected = im.plus(sym, im.literal_from_value(-1))
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+
+def test_max_tuple_get():
+    sym = im.ref("sym")
+    testee = im.call("maximum")(im.plus(im.tuple_get(1, sym), 1), im.call("maximum")( im.tuple_get(1, sym),im.plus(im.tuple_get(1, sym), 1)))
+    expected = im.plus(im.tuple_get(1, sym), 1)
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+def test_max_syms():
+    sym1 = im.ref("sym1")
+    sym2 = im.ref("sym2")
+    testee = im.call("maximum")( sym1, im.call("maximum")(sym2, sym1))
+    expected = im.call("maximum")(sym2, sym1)
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+>>>>>>> 6b7f2888 (Minor improvements)
