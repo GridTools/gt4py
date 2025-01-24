@@ -745,8 +745,8 @@ class LambdaToDataflow(eve.NodeVisitor):
         the if-condition is represented as the inter-state edge condition.
 
         Exclusive branch execution for local if expressions is meant to be used
-        in iterator view. Iterator view is ONLY required only inside scan field
-        operators. For regular field operators, the fieldview behavior of if-expressions
+        in iterator view. Iterator view is required ONLY inside scan field operators.
+        For regular field operators, the fieldview behavior of if-expressions
         corresponds to a local select, therefore it should be lowered to a tasklet.
         """
 
