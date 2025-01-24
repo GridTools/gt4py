@@ -199,22 +199,22 @@ def _collect_symbols_in_domain_expressions(
     )
 
 
-def _get_field_doman_subset(
+def _make_access_index_for_field(
     domain: gtir_builtin_translators.FieldopDomain, data: gtir_builtin_translators.FieldopData
 ) -> dace.subsets.Range:
     """Helper method to build a memlet subset of a field over the given domain."""
-    # convert domain expression to dictionary to ease access to dimension boundaries
-    domain_ranges = {dim: (lb, ub) for dim, lb, ub in domain}
+    # convert domain expression to dictionary to ease access to the dimensions,
+    # since the access indices have to follow the order of dimensions in field domain
     if isinstance(data.gt_type, ts.FieldType) and len(data.gt_type.dims) != 0:
-        origin = ([0] * len(domain)) if data.origin is None else data.origin
-        subset = ",".join(
-            f"{domain_ranges[dim][0] - origin}:{domain_ranges[dim][1] - origin}"
-            for dim, origin in zip(data.gt_type.dims, origin, strict=True)
+        assert data.origin is not None
+        domain_ranges = {dim: (lb, ub) for dim, lb, ub in domain}
+        return dace.subsets.Range(
+            (domain_ranges[dim][0] - origin, domain_ranges[dim][1] - origin - 1, 1)
+            for dim, origin in zip(data.gt_type.dims, data.origin, strict=True)
         )
     else:
         assert len(domain) == 0
-        subset = "0"
-    return dace.subsets.Range.from_string(subset)
+        return dace.subsets.Range.from_string("0")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -248,9 +248,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         self, data_node: dace.nodes.AccessNode, data_type: ts.FieldType | ts.ScalarType
     ) -> gtir_builtin_translators.FieldopData:
         """
-        Helper method to build the field data type associated with an access node in the SDFG.
+        Helper method to build the field data type associated with an access node
+        to non-transient data in the SDFG.
 
-        In case of `ScalarType` data, the descriptor is constructed with `offset=None`.
+        In case of `ScalarType` data, the descriptor is constructed with `origin=None`.
         In case of `FieldType` data, the field origin is added to the data descriptor.
         Besides, if the `FieldType` contains a local dimension, the descriptor is converted
         to a canonical form where the field domain consists of all global dimensions
@@ -291,7 +292,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             raise NotImplementedError(
                 "Fields with more than one local dimension are not supported."
             )
-        field_origin = gtx_dace_utils.get_symbolic_origin(data_node.data, field_type)
+        field_origin = [
+            dace.symbolic.pystr_to_symbolic(gtx_dace_utils.range_start_symbol(data_node.data, axis))
+            for axis in range(len(field_type.dims))
+        ]
         return gtir_builtin_translators.FieldopData(data_node, field_type, field_origin)
 
     def get_symbol_type(self, symbol_name: str) -> ts.DataType:
@@ -338,6 +342,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         For local dimensions, the size is known at compile-time and therefore
         the corresponding array shape dimension is set to an integer literal value.
 
+        This method is only called for non-transient arrays, which require symbolic
+        memory layout. The memory layout of transient arrays, used for temporary
+        fields, is assigned by DaCe during lowering to SDFG.
+
         Returns:
             Two lists of symbols, one for the shape and the other for the strides of the array.
         """
@@ -357,7 +365,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             else:
                 # the size of global dimensions for a regular field is the symbolic
                 # expression of domain range 'stop - start'
-                shape.append(gtx_dace_utils.get_symbolic_shape(name, i))
+                shape.append(
+                    dace.symbolic.pystr_to_symbolic(
+                        "{} - {}".format(
+                            gtx_dace_utils.range_stop_symbol(name, i),
+                            gtx_dace_utils.range_start_symbol(name, i),
+                        )
+                    )
+                )
         strides = [
             dace.symbolic.pystr_to_symbolic(gtx_dace_utils.field_stride_symbol_name(name, i))
             for i in range(len(dims))
@@ -634,8 +649,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             assert not target_desc.transient
 
             assert source.gt_type == target.gt_type
-            source_subset = _get_field_doman_subset(domain, source)
-            target_subset = _get_field_doman_subset(domain, target)
+            source_subset = _make_access_index_for_field(domain, source)
+            target_subset = _make_access_index_for_field(domain, target)
 
             if target.dc_node.data in state_input_data:
                 # if inout argument, write the result in separate next state
@@ -907,6 +922,9 @@ def _remove_field_origin_symbols(ir: gtir.Program, sdfg: dace.SDFG) -> None:
     It will set the start symbol of field domain range to constant value 0,
     thus removing the corresponding free symbol. These values are also propagated
     to all nested SDFGs.
+
+    This function is only used by `build_sdfg_from_gtir()` when the option flag
+    `disable_field_origin_on_program_arguments` is set to True.
     """
 
     # collect symbols used as range start for all program arguments

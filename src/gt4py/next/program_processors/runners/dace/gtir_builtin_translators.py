@@ -54,16 +54,13 @@ def get_domain_indices(
         as `dace.subsets.Indices`, it should be converted to `dace.subsets.Range` before
         being used in memlet subset because ranges are better supported throughout DaCe.
     """
-    index_variables = [dace.symbolic.SymExpr(gtir_sdfg_utils.get_map_variable(dim)) for dim in dims]
-    if origin is None:
-        return dace_subsets.Indices(index_variables)
-    else:
-        return dace_subsets.Indices(
-            [
-                index - start_index
-                for index, start_index in zip(index_variables, origin, strict=True)
-            ]
-        )
+    index_variables = [
+        dace.symbolic.pystr_to_symbolic(gtir_sdfg_utils.get_map_variable(dim)) for dim in dims
+    ]
+    origin = [0] * len(index_variables) if origin is None else origin
+    return dace_subsets.Indices(
+        [index - start_index for index, start_index in zip(index_variables, origin, strict=True)]
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -78,8 +75,8 @@ class FieldopData:
     Args:
         dc_node: DaCe access node to the data storage.
         gt_type: GT4Py type definition, which includes the field domain information.
-        origin: List of start indices, in each dimension, when the dimension range
-            does not start from zero; assume zero, if origin is not set.
+        origin: List of start indices, in each dimension, for `FieldType` data.
+            Set to `None` only for `ScalarType` data.
     """
 
     dc_node: dace.nodes.AccessNode
@@ -94,25 +91,33 @@ class FieldopData:
         outer_sdfg_state: dace.SDFGState,
         symbol_mapping: dict[str, dace.symbolic.SymbolicType],
     ) -> FieldopData:
-        """Helper method to map a field data container from a nested SDFG to the parent SDFG."""
+        """
+        Make the data descriptor which 'self' refers to, and which is located inside
+        a NestedSDFG, available in its parent SDFG.
+
+        Thus, it turns 'self' into a non-transient array and creates a new data
+        descriptor inside the parent SDFG, with same shape and strides.
+        """
         inner_desc = self.dc_node.desc(inner_sdfg)
         assert inner_desc.transient
         inner_desc.transient = False
 
-        outer, outer_desc = sdfg_builder.add_temp_array_like(outer_sdfg, inner_desc)
-        # We cannot use a copy of the inner data descriptor directly, we have to apply the symbol mapping.
-        dace.symbolic.safe_replace(
-            symbol_mapping,
-            lambda m: dace.sdfg.replace_properties_dict(outer_desc, m),
-        )
-        # Same applies to the symbols used as field origin (the domain range start)
-        if self.origin is None:
-            outer_field_origin = self.origin
+        if isinstance(self.gt_type, ts.ScalarType):
+            outer, outer_desc = sdfg_builder.add_temp_scalar(outer_sdfg, inner_desc.dtype)
+            outer_origin = None
         else:
-            outer_field_origin = [val.subs(symbol_mapping) for val in self.origin]
+            outer, outer_desc = sdfg_builder.add_temp_array_like(outer_sdfg, inner_desc)
+            # We cannot use a copy of the inner data descriptor directly, we have to apply the symbol mapping.
+            dace.symbolic.safe_replace(
+                symbol_mapping,
+                lambda m: dace.sdfg.replace_properties_dict(outer_desc, m),
+            )
+            # Same applies to the symbols used as field origin (the domain range start)
+            assert self.origin is not None
+            outer_origin = [val.subs(symbol_mapping) for val in self.origin]
 
         outer_node = outer_sdfg_state.add_access(outer)
-        return FieldopData(outer_node, self.gt_type, outer_field_origin)
+        return FieldopData(outer_node, self.gt_type, outer_origin)
 
     def get_local_view(
         self, domain: FieldopDomain
@@ -161,24 +166,18 @@ class FieldopData:
         """
         if isinstance(self.gt_type, ts.ScalarType):
             return {}
+        assert self.origin is not None
         ndims = len(self.gt_type.dims)
         outer_desc = self.dc_node.desc(sdfg)
         assert isinstance(outer_desc, dace.data.Array)
-        if self.origin is None:
-            outer_field_origin = [0] * ndims
-        else:
-            outer_field_origin = self.origin
         # origin and size of the local dimension, in case of a field with `ListType` data,
         # are assumed to be compiled-time values (not symbolic), therefore the start and
         # stop range symbols of the inner field only extend over the global dimensions
         return (
-            {
-                gtx_dace_utils.range_start_symbol(dataname, i): outer_field_origin[i]
-                for i in range(ndims)
-            }
+            {gtx_dace_utils.range_start_symbol(dataname, i): self.origin[i] for i in range(ndims)}
             | {
                 gtx_dace_utils.range_stop_symbol(dataname, i): (
-                    outer_field_origin[i] + outer_desc.shape[i]
+                    self.origin[i] + outer_desc.shape[i]
                 )
                 for i in range(ndims)
             }
@@ -219,7 +218,6 @@ def get_arg_symbol_mapping(
         dataname: The storage name inside the nested SDFG.
         arg: The argument field in the parent SDFG.
         sdfg: The parent SDFG where the argument field lives.
-
 
     Returns:
         A mapping from inner symbol names to values or symbolic definitions
@@ -405,9 +403,7 @@ def _create_field_operator_impl(
     output_edge.connect(map_exit, field_node, field_subset)
 
     return FieldopData(
-        field_node,
-        ts.FieldType(field_dims, output_edge.result.gt_dtype),
-        origin=(field_origin if set(field_origin) != {0} else None),
+        field_node, ts.FieldType(field_dims, output_edge.result.gt_dtype), field_origin
     )
 
 

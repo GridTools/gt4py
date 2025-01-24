@@ -168,9 +168,7 @@ def _create_scan_field_operator_impl(
     output_edge.connect(map_exit, field_node, field_subset)
 
     return gtir_translators.FieldopData(
-        field_node,
-        ts.FieldType(field_dims, output_edge.result.gt_dtype),
-        origin=(field_origin if set(field_origin) != {0} else None),
+        field_node, ts.FieldType(field_dims, output_edge.result.gt_dtype), field_origin
     )
 
 
@@ -593,28 +591,6 @@ def translate_scan(
         for p, arg_type in zip(stencil_expr.params, lambda_arg_types, strict=True)
     }
 
-    # visit the arguments to be passed to the lambda expression
-    # this must be executed before visiting the lambda expression, in order to populate
-    # the data descriptor with the correct field domain offsets for field arguments
-    lambda_args = [sdfg_builder.visit(arg, sdfg=sdfg, head_state=state) for arg in node.args]
-    lambda_args_mapping = [
-        (im.sym(_scan_input_name(scan_carry), scan_carry_type), init_data),
-    ] + [
-        (im.sym(param.id, arg.gt_type), arg)
-        for param, arg in zip(stencil_expr.params[1:], lambda_args, strict=True)
-    ]
-
-    # parse the dataflow output symbols
-    if isinstance(scan_carry_type, ts.TupleType):
-        lambda_flat_outs = {
-            str(sym.id): sym.type
-            for sym in gtir_sdfg_utils.flatten_tuple_fields(
-                _scan_output_name(scan_carry), scan_carry_type
-            )
-        }
-    else:
-        lambda_flat_outs = {_scan_output_name(scan_carry): scan_carry_type}
-
     # lower the scan stencil expression in a separate SDFG context
     nsdfg, lambda_output = _lower_lambda_to_nested_sdfg(
         stencil_expr,
@@ -627,29 +603,38 @@ def translate_scan(
         im.sym(scan_carry, scan_carry_type),
     )
 
+    # visit the arguments to be passed to the lambda expression
+    # this must be executed before visiting the lambda expression, in order to populate
+    # the data descriptor with the correct field domain offsets for field arguments
+    lambda_args = [sdfg_builder.visit(arg, sdfg=sdfg, head_state=state) for arg in node.args]
+    lambda_args_mapping = [
+        (im.sym(_scan_input_name(scan_carry), scan_carry_type), init_data),
+    ] + [
+        (im.sym(param.id, arg.gt_type), arg)
+        for param, arg in zip(stencil_expr.params[1:], lambda_args, strict=True)
+    ]
+
     lambda_arg_nodes = dict(
         itertools.chain(
             *[gtir_translators.flatten_tuples(psym.id, arg) for psym, arg in lambda_args_mapping]
         )
     )
 
+    # parse the dataflow output symbols
+    if isinstance(scan_carry_type, ts.TupleType):
+        lambda_flat_outs = {
+            str(sym.id): sym.type
+            for sym in gtir_sdfg_utils.flatten_tuple_fields(
+                _scan_output_name(scan_carry), scan_carry_type
+            )
+        }
+    else:
+        lambda_flat_outs = {_scan_output_name(scan_carry): scan_carry_type}
+
     # build the mapping of symbols from nested SDFG to field operator context
     nsdfg_symbols_mapping = {str(sym): sym for sym in nsdfg.free_symbols}
     for psym, arg in lambda_args_mapping:
         nsdfg_symbols_mapping |= gtir_translators.get_arg_symbol_mapping(psym.id, arg, sdfg)
-
-    for inner_dataname, outer_arg in lambda_arg_nodes.items():
-        inner_desc = nsdfg.data(inner_dataname)
-        outer_desc = outer_arg.dc_node.desc(sdfg)
-        nsdfg_symbols_mapping |= {
-            str(nested_symbol): parent_symbol
-            for nested_symbol, parent_symbol in zip(
-                [*inner_desc.shape, *inner_desc.strides],
-                [*outer_desc.shape, *outer_desc.strides],
-                strict=True,
-            )
-            if dace.symbolic.issymbolic(nested_symbol)
-        }
 
     # the scan nested SDFG is ready: it is instantiated in the field operator context
     # where the map scope over the horizontal domain lives
