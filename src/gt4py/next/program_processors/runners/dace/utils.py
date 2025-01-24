@@ -74,24 +74,13 @@ def field_stride_symbol_name(field_name: str, axis: int) -> str:
 
 
 def range_start_symbol(field_name: str, axis: int) -> str:
+    """Format name of start symbol for domain range, as expected by GTIR."""
     return f"__{field_name}_{axis}_range_0"
 
 
 def range_stop_symbol(field_name: str, axis: int) -> str:
+    """Format name of stop symbol for domain range, as expected by GTIR."""
     return f"__{field_name}_{axis}_range_1"
-
-
-def get_symbolic_origin(field_name: str, type_: ts.FieldType) -> list[dace.symbolic.SymExpr]:
-    return [
-        dace.symbolic.pystr_to_symbolic(range_start_symbol(field_name, axis))
-        for axis in range(len(type_.dims))
-    ]
-
-
-def get_symbolic_shape(field_name: str, axis: int) -> dace.symbolic.SymExpr:
-    return dace.symbolic.pystr_to_symbolic(
-        "{} - {}".format(range_stop_symbol(field_name, axis), range_start_symbol(field_name, axis))
-    )
 
 
 def is_field_symbol(name: str) -> bool:
