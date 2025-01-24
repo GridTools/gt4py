@@ -742,7 +742,12 @@ class LambdaToDataflow(eve.NodeVisitor):
         """
         Lowers an if-expression with exclusive branch execution into a nested SDFG,
         in which each branch is lowered into a dataflow in a separate state and
-        the if-condition is represented as the inter-state edge condtion.
+        the if-condition is represented as the inter-state edge condition.
+
+        Exclusive branch execution for local if expressions is meant to be used
+        in iterator view. Iterator view is ONLY required only inside scan field
+        operators. For regular field operators, the fieldview behavior of if-expressions
+        corresponds to a local select, therefore it should be lowered to a tasklet.
         """
 
         def write_output_of_nested_sdfg_to_temporary(inner_value: ValueExpr) -> ValueExpr:
