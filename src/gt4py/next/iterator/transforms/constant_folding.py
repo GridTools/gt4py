@@ -28,6 +28,12 @@ class ConstantFolding(eve.PreserveLocationVisitor, eve.NodeTranslator):
         # `minus(arg0, arg1) -> plus(im.call("neg")(arg0), arg1)`
         CANONICALIZE_MINUS = enum.auto()
 
+        # `maximum(im.call(...)(), maximum(...))` -> `maximum(maximum(...), im.call(...)())`
+        CANONICALIZE_MIN_MAX = enum.auto()
+
+        # `im.call(...)(im.tuple_get(...), im.plus(...)))` -> `im.call(...)( im.plus(...)), im.tuple_get(...))`
+        CANONICALIZE_TUPLE_GET_PLUS = enum.auto()
+
         # `(sym + 1) + 1` -> `sym + 2`
         FOLD_FUNCALL_LITERAL = enum.auto()
 
@@ -114,6 +120,20 @@ class ConstantFolding(eve.PreserveLocationVisitor, eve.NodeTranslator):
         # `minus(arg0, arg1) -> plus(im.call("neg")(arg0), arg1)`
         if cpm.is_call_to(node, "minus"):
             return self.visit(im.plus(im.call("neg")(node.args[1]), node.args[0]))
+        return None
+
+    def transform_canonicalize_min_max(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
+        # `maximum(im.call(...)(), maximum(...))` -> `maximum(maximum(...), im.call(...)())`
+        if cpm.is_call_to(node, ("maximum", "minimum")):
+            if not cpm.is_call_to(node.args[0], ("maximum", "minimum")) and cpm.is_call_to(node.args[1], ("maximum", "minimum")):
+                return self.visit(im.call(node.fun.id)(node.args[1], node.args[0]))
+        return None
+
+    def transform_canonicalize_tuple_get_plus(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
+        # im.call(...)(im.tuple_get(...), im.plus(...)))` -> `im.call(...)( im.plus(...)), im.tuple_get(...))`
+        if isinstance(node, ir.FunCall):
+            if cpm.is_call_to(node.args[0], "tuple_get") and cpm.is_call_to(node.args[1], "plus"):
+                return self.visit(im.call(node.fun.id)(node.args[1], node.args[0]))
         return None
 
     def transform_fold_funcall_literal(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
