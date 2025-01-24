@@ -125,7 +125,9 @@ class FieldopData:
         """Helper method to access a field in local view, given the compute domain of a field operator."""
         if isinstance(self.gt_type, ts.ScalarType):
             return gtir_dataflow.MemletExpr(
-                dc_node=self.dc_node, gt_dtype=self.gt_type, subset=dace_subsets.Indices([0])
+                dc_node=self.dc_node,
+                gt_dtype=self.gt_type,
+                subset=dace_subsets.Range.from_string("0"),
             )
 
         if isinstance(self.gt_type, ts.FieldType):
