@@ -332,6 +332,7 @@ class LambdaToDataflow(eve.NodeVisitor):
     sdfg: dace.SDFG
     state: dace.SDFGState
     subgraph_builder: gtir_sdfg.DataflowBuilder
+    use_iterator_view: bool
     input_edges: list[DataflowInputEdge] = dataclasses.field(default_factory=lambda: [])
     symbol_map: dict[
         str,
@@ -693,7 +694,12 @@ class LambdaToDataflow(eve.NodeVisitor):
         # visit each branch of the if-statement as if it was a Lambda node
         lambda_node = gtir.Lambda(params=lambda_params, expr=expr)
         input_edges, output_tree = translate_lambda_to_dataflow(
-            if_sdfg, if_branch_state, self.subgraph_builder, lambda_node, args=lambda_args
+            if_sdfg,
+            if_branch_state,
+            self.subgraph_builder,
+            lambda_node,
+            lambda_args,
+            self.use_iterator_view,
         )
 
         for data_node in if_branch_state.data_nodes():
@@ -736,7 +742,12 @@ class LambdaToDataflow(eve.NodeVisitor):
         """
         Lowers an if-expression with exclusive branch execution into a nested SDFG,
         in which each branch is lowered into a dataflow in a separate state and
-        the if-condition is represented as the inter-state edge condtion.
+        the if-condition is represented as the inter-state edge condition.
+
+        Exclusive branch execution for local if expressions is meant to be used
+        in iterator view. Iterator view is required ONLY inside scan field operators.
+        For regular field operators, the fieldview behavior of if-expressions
+        corresponds to a local select, therefore it should be lowered to a tasklet.
         """
 
         def write_output_of_nested_sdfg_to_temporary(inner_value: ValueExpr) -> ValueExpr:
@@ -1648,7 +1659,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         if cpm.is_call_to(node, "deref"):
             return self._visit_deref(node)
 
-        elif cpm.is_call_to(node, "if_"):
+        elif cpm.is_call_to(node, "if_") and self.use_iterator_view:
             return self._visit_if(node)
 
         elif cpm.is_call_to(node, "neighbors"):
@@ -1785,6 +1796,7 @@ def translate_lambda_to_dataflow(
         | ValueExpr
         | tuple[IteratorExpr | MemletExpr | ValueExpr | tuple[Any, ...], ...]
     ],
+    use_iterator_view: bool,
 ) -> tuple[
     list[DataflowInputEdge],
     tuple[DataflowOutputEdge | tuple[Any, ...], ...],
@@ -1803,13 +1815,15 @@ def translate_lambda_to_dataflow(
         sdfg_builder: Helper class to build the dataflow inside the given SDFG.
         node: Lambda node to visit.
         args: Arguments passed to lambda node.
+        use_iterator_view: When true, special behavior of iterator view is enabled,
+            e.g. exclusive if-branch execution.
 
     Returns:
         A tuple of two elements:
         - List of connections for data inputs to the dataflow.
         - Tree representation of output data connections.
     """
-    taskgen = LambdaToDataflow(sdfg, state, sdfg_builder)
+    taskgen = LambdaToDataflow(sdfg, state, sdfg_builder, use_iterator_view)
     lambda_output = taskgen.visit_let(node, args)
 
     if isinstance(lambda_output, DataflowOutputEdge):
