@@ -60,7 +60,7 @@ jobs:
         tox run -e next-py${pyversion_no_dot}-${{ matrix.tox-factor }}-cpu
     #     mv coverage.json coverage-py${{ matrix.python-version }}-${{ matrix.os }}-${{ matrix.tox-env-factor }}-cpu.json
     # - name: Upload coverage.json artifact
-    #   uses: actions/upload-artifact@v3
+    #   uses: actions/upload-artifact@v4
     #   with:
     #     name: coverage-py${{ matrix.python-version }}-${{ matrix.os }}-${{ matrix.tox-env-factor }}-cpu
     #     path: coverage-py${{ matrix.python-version }}-${{ matrix.os }}-${{ matrix.tox-env-factor }}-cpu.json
@@ -74,7 +74,7 @@ jobs:
     #     echo ${{ github.event.pull_request.head.sha }} >> info.txt
     #     echo ${{ github.run_id }} >> info.txt
     # - name: Upload info artifact
-    #   uses: actions/upload-artifact@v3
+    #   uses: actions/upload-artifact@v4
     #   with:
     #     name: info-py${{ matrix.python-version }}-${{ matrix.os }}-${{ matrix.tox-env-factor }}-cpu
     #     path: info.txt
