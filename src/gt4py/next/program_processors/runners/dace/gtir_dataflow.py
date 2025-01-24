@@ -1514,7 +1514,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             shifted_indices[neighbor_dim] = MemletExpr(
                 dc_node=offset_table_node,
                 gt_dtype=it.gt_dtype,
-                subset=dace_subsets.Indices([origin_index.value, offset_expr.value]),
+                subset=dace_subsets.Range.from_string(f"{origin_index.value}, {offset_expr.value}"),
             )
         else:
             # dynamic offset: we cannot use a memlet to retrieve the offset value, use a tasklet node
