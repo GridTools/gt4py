@@ -543,6 +543,11 @@ class LambdaToDataflow(eve.NodeVisitor):
             return self._deref_list(arg_expr, field_desc)
 
     def _deref_scalar(self, arg_expr: IteratorExpr, field_desc: dace.data.Array) -> ValueExpr:
+        """
+        Lower deref of a field of scalar values to a tasklet that perform array access.
+
+        The tasklet allows to use runtime values as access indices.
+        """
         field_offset = [offset for (_, offset) in arg_expr.field_domain]
         field_indices = [(dim, arg_expr.indices[dim]) for dim, _ in arg_expr.field_domain]
 
@@ -564,7 +569,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             for dim, index in field_indices
         )
         deref_node = self._add_tasklet(
-            "runtime_deref",
+            "deref_scalar",
             {"field"} | set(index_connectors),
             {"val"},
             code=f"val = field[{index_internals}]",
@@ -603,6 +608,11 @@ class LambdaToDataflow(eve.NodeVisitor):
         return self._construct_tasklet_result(field_desc.dtype, deref_node, "val")
 
     def _deref_list(self, arg_expr: IteratorExpr, field_desc: dace.data.Array) -> ValueExpr:
+        """
+        Lower deref of a field of lists (a sparse field) to a tasklet that perform array access.
+
+        The tasklet allows to use runtime values as access indices.
+        """
         assert isinstance(arg_expr.gt_dtype, ts.ListType)
         assert arg_expr.gt_dtype.offset_type is not None
         offset_type = arg_expr.gt_dtype.offset_type
@@ -631,7 +641,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             for dim, index in field_indices
         )
         deref_node = self._add_tasklet(
-            "runtime_deref",
+            "deref_list",
             {"field"} | set(index_connectors),
             {"val"},
             code=f"""
