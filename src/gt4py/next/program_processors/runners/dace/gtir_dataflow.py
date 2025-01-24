@@ -113,7 +113,7 @@ class IteratorExpr:
 
     field: dace.nodes.AccessNode
     gt_dtype: ts.ListType | ts.ScalarType
-    field_domain: list[tuple[gtx_common.Dimension, dace.symbolic.SymExpr]]
+    field_domain: list[tuple[gtx_common.Dimension, dace.symbolic.SymbolicType]]
     indices: dict[gtx_common.Dimension, DataExpr]
 
     def get_field_type(self) -> ts.FieldType:
@@ -509,9 +509,6 @@ class LambdaToDataflow(eve.NodeVisitor):
         memlet; otherwise dereferencing is a runtime operation represented in
         the SDFG as a tasklet node.
         """
-        # format used for field index tasklet connector
-        IndexConnectorFmt: Final = "__index_{dim}"
-
         if isinstance(node.type, ts.TupleType):
             raise NotImplementedError("Tuple deref not supported.")
 
@@ -538,8 +535,26 @@ class LambdaToDataflow(eve.NodeVisitor):
         # we use a tasklet to dereference an iterator when one or more indices are the result of some computation,
         # either indirection through connectivity table or dynamic cartesian offset.
         assert all(dim in arg_expr.indices for dim, _ in arg_expr.field_domain)
-        assert len(field_desc.shape) == len(arg_expr.field_domain)
+        if isinstance(arg_expr.gt_dtype, ts.ScalarType):
+            assert len(field_desc.shape) == len(arg_expr.field_domain)
+            return self._deref_scalar(arg_expr, field_desc)
+        else:
+            # expect one extra dimension in dace array for the local list
+            assert len(field_desc.shape) == len(arg_expr.field_domain) + 1
+            return self._deref_list(arg_expr, field_desc)
+
+    def _deref_scalar(self, arg_expr: IteratorExpr, field_desc: dace.data.Array) -> ValueExpr:
+        """
+        Lower deref of a field of scalar values to a tasklet that perform array access.
+
+        The tasklet allows to use runtime values as access indices.
+        """
+        field_offset = [offset for (_, offset) in arg_expr.field_domain]
         field_indices = [(dim, arg_expr.indices[dim]) for dim, _ in arg_expr.field_domain]
+
+        # format used for field index tasklet connector
+        IndexConnectorFmt: Final = "__index_{dim}"
+
         index_connectors = [
             IndexConnectorFmt.format(dim=dim.value)
             for dim, index in field_indices
@@ -555,7 +570,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             for dim, index in field_indices
         )
         deref_node = self._add_tasklet(
-            "runtime_deref",
+            "deref_scalar",
             {"field"} | set(index_connectors),
             {"val"},
             code=f"val = field[{index_internals}]",
@@ -566,7 +581,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             dace_subsets.Range.from_array(field_desc),
             deref_node,
             "field",
-            src_offset=[offset for (_, offset) in arg_expr.field_domain],
+            src_offset=field_offset,
         )
 
         for dim, index_expr in field_indices:
@@ -592,6 +607,92 @@ class LambdaToDataflow(eve.NodeVisitor):
                 assert isinstance(index_expr, SymbolExpr)
 
         return self._construct_tasklet_result(field_desc.dtype, deref_node, "val")
+
+    def _deref_list(self, arg_expr: IteratorExpr, field_desc: dace.data.Array) -> ValueExpr:
+        """
+        Lower deref of a field of lists (a sparse field) to a tasklet that perform array access.
+
+        The tasklet allows to use runtime values as access indices.
+        """
+        assert isinstance(arg_expr.gt_dtype, ts.ListType)
+        assert arg_expr.gt_dtype.offset_type is not None
+        offset_type = arg_expr.gt_dtype.offset_type
+        offset_provider_type = self.subgraph_builder.get_offset_provider_type(offset_type.value)
+        assert isinstance(offset_provider_type, gtx_common.NeighborConnectivityType)
+        list_size = offset_provider_type.max_neighbors
+
+        field_offset = [offset for (_, offset) in arg_expr.field_domain] + [0]
+        field_indices = [(dim, arg_expr.indices[dim]) for dim, _ in arg_expr.field_domain]
+
+        # format used for field index tasklet connector
+        IndexConnectorFmt: Final = "__index_{dim}"
+
+        index_connectors = [
+            IndexConnectorFmt.format(dim=dim.value)
+            for dim, index in field_indices
+            if not isinstance(index, SymbolExpr)
+        ]
+        # here `internals` refer to the names used as index in the tasklet code string:
+        # an index can be either a connector name (for dynamic/indirect indices)
+        # or a symbol value (for literal values and scalar arguments).
+        index_internals = ",".join(
+            str(index.value)
+            if isinstance(index, SymbolExpr)
+            else IndexConnectorFmt.format(dim=dim.value)
+            for dim, index in field_indices
+        )
+        deref_node = self._add_tasklet(
+            "deref_list",
+            {"field"} | set(index_connectors),
+            {"val"},
+            code=f"""
+for i in range({list_size}):
+    val[i] = field[{index_internals}, i]
+""",
+        )
+        # add new termination point for the field parameter
+        self._add_input_data_edge(
+            arg_expr.field,
+            dace_subsets.Range.from_array(field_desc),
+            deref_node,
+            "field",
+            src_offset=field_offset,
+        )
+
+        for dim, index_expr in field_indices:
+            # add termination points for the dynamic iterator indices
+            deref_connector = IndexConnectorFmt.format(dim=dim.value)
+            if isinstance(index_expr, MemletExpr):
+                self._add_input_data_edge(
+                    index_expr.dc_node,
+                    index_expr.subset,
+                    deref_node,
+                    deref_connector,
+                )
+
+            elif isinstance(index_expr, ValueExpr):
+                self._add_edge(
+                    index_expr.dc_node,
+                    None,
+                    deref_node,
+                    deref_connector,
+                    dace.Memlet(data=index_expr.dc_node.data, subset="0"),
+                )
+            else:
+                assert isinstance(index_expr, SymbolExpr)
+
+        result, result_desc = self.subgraph_builder.add_temp_array(
+            self.sdfg, (list_size,), field_desc.dtype
+        )
+        result_node = self.state.add_access(result)
+        self._add_edge(
+            deref_node,
+            "val",
+            result_node,
+            None,
+            dace.Memlet.from_array(result, result_desc),
+        )
+        return ValueExpr(result_node, arg_expr.gt_dtype)
 
     def _visit_if_branch_arg(
         self,
@@ -899,6 +1000,9 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert isinstance(origin_index, SymbolExpr)
         assert all(isinstance(index, SymbolExpr) for index in it.indices.values())
 
+        if isinstance(it.gt_dtype, ts.ListType):
+            raise NotImplementedError("Calling neighbors on a sparse field is not supported.")
+
         field_desc = it.field.desc(self.sdfg)
         connectivity = gtx_dace_utils.connectivity_identifier(offset)
         # initially, the storage for the connectivty tables is created as transient;
@@ -992,12 +1096,24 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert len(node.args) == 2
         index_arg = self.visit(node.args[0])
         list_arg = self.visit(node.args[1])
-        assert isinstance(list_arg, ValueExpr)
+        if isinstance(list_arg, ValueExpr):
+            list_desc = list_arg.dc_node.desc(self.sdfg)
+            assert len(list_desc.shape) == 1
+            list_size = list_desc.shape[0]
+            list_arg_subset = dace_subsets.Range.from_string(index_arg.value)
+        elif isinstance(list_arg, MemletExpr):
+            list_desc = list_arg.dc_node.desc(self.sdfg)
+            # the array dimension corresponding to the list of values is by design the innermost in shape
+            list_size = list_arg.subset.num_elements()
+            assert list_arg.subset.size()[-1] == list_size
+            list_arg_subset = dace_subsets.Range(
+                list_arg.subset[:-1]
+            ) + dace_subsets.Range.from_string(index_arg.value)
+        else:
+            raise ValueError(f"Unexpected argument {list_arg} to 'list_get' function.")
         assert isinstance(list_arg.gt_dtype, ts.ListType)
         assert isinstance(list_arg.gt_dtype.element_type, ts.ScalarType)
-
-        list_desc = list_arg.dc_node.desc(self.sdfg)
-        assert len(list_desc.shape) == 1
+        assert not dace.symbolic.issymbolic(list_size)
 
         result_dtype = gtx_dace_utils.as_dace_type(list_arg.gt_dtype.element_type)
         result, _ = self.subgraph_builder.add_temp_scalar(self.sdfg, result_dtype)
@@ -1005,13 +1121,16 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         if isinstance(index_arg, SymbolExpr):
             assert index_arg.dc_dtype in dace.dtypes.INTEGER_TYPES
-            self._add_edge(
-                list_arg.dc_node,
-                None,
-                result_node,
-                None,
-                dace.Memlet(data=list_arg.dc_node.data, subset=index_arg.value),
-            )
+            if isinstance(list_arg, ValueExpr):
+                self._add_edge(
+                    list_arg.dc_node,
+                    None,
+                    result_node,
+                    None,
+                    dace.Memlet(data=list_arg.dc_node.data, subset=list_arg_subset),
+                )
+            else:
+                self._add_input_data_edge(list_arg.dc_node, list_arg_subset, result_node)
         elif isinstance(index_arg, ValueExpr):
             tasklet_node = self._add_tasklet(
                 "list_get", inputs={"index", "list"}, outputs={"value"}, code="value = list[index]"
@@ -1023,13 +1142,29 @@ class LambdaToDataflow(eve.NodeVisitor):
                 "index",
                 dace.Memlet(data=index_arg.dc_node.data, subset="0"),
             )
-            self._add_edge(
-                list_arg.dc_node,
-                None,
-                tasklet_node,
-                "list",
-                self.sdfg.make_array_memlet(list_arg.dc_node.data),
-            )
+            if isinstance(list_arg, ValueExpr):
+                self._add_edge(
+                    list_arg.dc_node,
+                    None,
+                    tasklet_node,
+                    "list",
+                    self.sdfg.make_array_memlet(list_arg.dc_node.data),
+                )
+            else:
+                # we copy the array dimension corresponding to the list into a transient array
+                # in order to ensure stride 1 on the arry input to the tasklet
+                list_data, list_desc = self.subgraph_builder.add_temp_array(
+                    self.sdfg, (list_size,), list_desc.dtype
+                )
+                list_node = self.state.add_access(list_data)
+                self._add_input_data_edge(list_arg.dc_node, list_arg.subset, list_node)
+                self._add_edge(
+                    list_node,
+                    None,
+                    tasklet_node,
+                    "list",
+                    dace.Memlet.from_array(list_data, list_desc),
+                )
             self._add_edge(
                 tasklet_node, "value", result_node, None, dace.Memlet(data=result, subset="0")
             )
