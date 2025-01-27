@@ -81,28 +81,26 @@ def test_get_partial_offsets(reduction, request):
 
 
 def _expected(red, dim, max_neighbors, has_skip_values, shifted_arg=0):
-    acc = ir.SymRef(id="_acc_1")
-    offset = ir.SymRef(id="_i_2")
-    step = ir.SymRef(id="_step_3")
+    acc, offset, step = "_acc_1", "_i_2", "_step_3"
 
     red_fun, red_init = red.fun.args
 
     elements = [im.list_get(offset, arg) for arg in red.args]
 
-    step_expr = ir.FunCall(fun=red_fun, args=[acc] + elements)
+    step_expr = im.call(red_fun)(acc, *elements)
     if has_skip_values:
         neighbors_offset = red.args[shifted_arg].args[0]
         neighbors_it = red.args[shifted_arg].args[1]
         can_deref = im.can_deref(im.shift(neighbors_offset, offset)(neighbors_it))
 
         step_expr = im.if_(can_deref, step_expr, acc)
-    step_fun = ir.Lambda(params=[ir.Sym(id=acc.id), ir.Sym(id=offset.id)], expr=step_expr)
+    step_fun = im.lambda_(acc, offset)(step_expr)
 
     step_app = red_init
     for i in range(max_neighbors):
-        step_app = ir.FunCall(fun=step, args=[step_app, ir.OffsetLiteral(value=i)])
+        step_app = im.call(step)(step_app, ir.OffsetLiteral(value=i))
 
-    return ir.FunCall(fun=ir.Lambda(params=[ir.Sym(id=step.id)], expr=step_app), args=[step_fun])
+    return im.let(step, step_fun)(step_app)
 
 
 def test_basic(basic_reduction, has_skip_values):

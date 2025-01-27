@@ -102,27 +102,25 @@ class UnrollReduce(PreserveLocationVisitor, NodeTranslator):
         max_neighbors = connectivity_type.max_neighbors
         has_skip_values = connectivity_type.has_skip_values
 
-        acc = itir.SymRef(id=self.uids.sequential_id(prefix="_acc"))
-        offset = itir.SymRef(id=self.uids.sequential_id(prefix="_i"))
-        step = itir.SymRef(id=self.uids.sequential_id(prefix="_step"))
+        acc: str = self.uids.sequential_id(prefix="_acc")
+        offset: str = self.uids.sequential_id(prefix="_i")
+        step: str = self.uids.sequential_id(prefix="_step")
 
         assert isinstance(node.fun, itir.FunCall)
         fun, init = node.fun.args
 
         elems = [im.list_get(offset, arg) for arg in node.args]
-        step_fun: itir.Expr = itir.FunCall(fun=fun, args=[acc, *elems])
+        step_fun: itir.Expr = im.call(fun)(acc, *elems)
         if has_skip_values:
             check_arg = next(_get_neighbors_args(node.args))
             offset_tag, it = check_arg.args
             can_deref = im.can_deref(im.shift(offset_tag, offset)(it))
             step_fun = im.if_(can_deref, step_fun, acc)
-        step_fun = itir.Lambda(params=[itir.Sym(id=acc.id), itir.Sym(id=offset.id)], expr=step_fun)
+        step_fun = im.lambda_(acc, offset)(step_fun)
         expr = init
         for i in range(max_neighbors):
-            expr = itir.FunCall(fun=step, args=[expr, itir.OffsetLiteral(value=i)])
-        expr = itir.FunCall(
-            fun=itir.Lambda(params=[itir.Sym(id=step.id)], expr=expr), args=[step_fun]
-        )
+            expr = im.call(step)(expr, itir.OffsetLiteral(value=i))
+        expr = im.let(step, step_fun)(expr)
 
         return expr
 
