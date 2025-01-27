@@ -466,7 +466,7 @@ class CallInliner(ast.NodeTransformer):
                 loc=nodes.Location.from_ast_node(node),
             ) from ex
 
-        # Inline constant function arguments
+        # Inline constant arguments
         call_ast = copy.deepcopy(call_info["ast"])
         local_context = {
             name: arg_node.value
@@ -541,7 +541,8 @@ class CallInliner(ast.NodeTransformer):
         # Add subroutine sources prepending the required arg assignments
         inlined_stmts = []
         for arg_name, arg_value in call_args.items():
-            if arg_name not in name_mapping:
+            # note(stubbiali): filter out constant arguments (which have been previously inlined)
+            if arg_name not in name_mapping and not isinstance(arg_value, ast.Constant):
                 inlined_stmts.append(
                     ast.Assign(
                         lineno=node.lineno,
