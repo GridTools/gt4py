@@ -8,11 +8,8 @@
 
 import dataclasses
 import enum
-import functools
-import operator
-from typing import Optional, Type
-
 from abc import abstractmethod
+from typing import Optional, Type
 
 from gt4py import eve
 from gt4py.next.iterator import ir
@@ -51,7 +48,7 @@ class FixedPointTransform(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 result = method(node, **kwargs)
                 if result is not None:
                     assert (
-                            result is not node
+                        result is not node
                     )  # transformation should have returned None, since nothing changed
                     itir_type_inference.reinfer(result)
                     return result
