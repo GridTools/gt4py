@@ -290,7 +290,10 @@ def shift(offset, value=None):
     offset = ensure_offset(offset)
     args = [offset]
     if value is not None:
-        value = ensure_offset(value)
+        if isinstance(value, int):
+            value = ensure_offset(value)
+        elif isinstance(value, str):
+            value = ref(value)
         args.append(value)
     return call(call("shift")(*args))
 
@@ -543,12 +546,12 @@ def list_get(list_idx, list_):
 
 def maximum(expr1, expr2):
     """Create a `maximum` call."""
-    call("maximum")(expr1, expr2)
+    return call("maximum")(expr1, expr2)
 
 
 def minimum(expr1, expr2):
     """Create a `minimum` call."""
-    call("minimum")(expr1, expr2)
+    return call("minimum")(expr1, expr2)
 
 
 def cast_(expr, dtype: ts.ScalarType | str):
@@ -560,4 +563,4 @@ def cast_(expr, dtype: ts.ScalarType | str):
 
 def can_deref(expr):
     """Create a `can_deref` call."""
-    call("can_deref")(expr)
+    return call("can_deref")(expr)
