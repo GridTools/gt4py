@@ -148,42 +148,36 @@ def expression_test_cases():
         (im.shift("Ioff", 1)(im.ref("it", it_ijk_type)), it_ijk_type),
         # as_fieldop
         (
-            im.call(
-                im.as_fieldop(
-                    "deref",
-                    im.call("cartesian_domain")(
-                        im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
-                    ),
-                )
+            im.as_fieldop(
+                "deref",
+                im.call("cartesian_domain")(
+                    im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
+                ),
             )(im.ref("inp", float_i_field)),
             float_i_field,
         ),
         (
-            im.call(
-                im.as_fieldop(
-                    im.lambda_("it")(im.deref(im.shift("V2E", 0)("it"))),
-                    im.call("unstructured_domain")(
-                        im.call("named_range")(
-                            itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL),
-                            0,
-                            1,
-                        ),
-                        im.call("named_range")(
-                            itir.AxisLiteral(value="KDim", kind=common.DimensionKind.VERTICAL), 0, 1
-                        ),
+            im.as_fieldop(
+                im.lambda_("it")(im.deref(im.shift("V2E", 0)("it"))),
+                im.call("unstructured_domain")(
+                    im.call("named_range")(
+                        itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL),
+                        0,
+                        1,
                     ),
-                )
+                    im.call("named_range")(
+                        itir.AxisLiteral(value="KDim", kind=common.DimensionKind.VERTICAL), 0, 1
+                    ),
+                ),
             )(im.ref("inp", float_edge_k_field)),
             float_vertex_k_field,
         ),
         (
-            im.call(
-                im.as_fieldop(
-                    im.lambda_("a", "b")(im.make_tuple(im.deref("a"), im.deref("b"))),
-                    im.call("cartesian_domain")(
-                        im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
-                    ),
-                )
+            im.as_fieldop(
+                im.lambda_("a", "b")(im.make_tuple(im.deref("a"), im.deref("b"))),
+                im.call("cartesian_domain")(
+                    im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
+                ),
             )(im.ref("inp1", float_i_field), im.ref("inp2", float_i_field)),
             ts.TupleType(types=[float_i_field, float_i_field]),
         ),
@@ -197,21 +191,17 @@ def expression_test_cases():
         (
             im.if_(
                 False,
-                im.call(
-                    im.as_fieldop(
-                        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-                        im.call("cartesian_domain")(
-                            im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
-                        ),
-                    )
+                im.as_fieldop(
+                    im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+                    im.call("cartesian_domain")(
+                        im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
+                    ),
                 )(im.ref("inp", float_i_field), 1.0),
-                im.call(
-                    im.as_fieldop(
-                        "deref",
-                        im.call("cartesian_domain")(
-                            im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
-                        ),
-                    )
+                im.as_fieldop(
+                    "deref",
+                    im.call("cartesian_domain")(
+                        im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
+                    ),
                 )(im.ref("inp", float_i_field)),
             ),
             float_i_field,
@@ -297,7 +287,7 @@ def test_cartesian_fencil_definition():
         declarations=[],
         body=[
             itir.SetAt(
-                expr=im.call(im.as_fieldop(im.ref("deref"), cartesian_domain))(im.ref("inp")),
+                expr=im.as_fieldop(im.ref("deref"), cartesian_domain)(im.ref("inp")),
                 domain=cartesian_domain,
                 target=im.ref("out"),
             ),
@@ -332,10 +322,8 @@ def test_unstructured_fencil_definition():
         declarations=[],
         body=[
             itir.SetAt(
-                expr=im.call(
-                    im.as_fieldop(
-                        im.lambda_("it")(im.deref(im.shift("V2E", 0)("it"))), unstructured_domain
-                    )
+                expr=im.as_fieldop(
+                    im.lambda_("it")(im.deref(im.shift("V2E", 0)("it"))), unstructured_domain
                 )(im.ref("inp")),
                 domain=unstructured_domain,
                 target=im.ref("out"),
@@ -371,7 +359,7 @@ def test_function_definition():
         body=[
             itir.SetAt(
                 domain=cartesian_domain,
-                expr=im.call(im.as_fieldop(im.ref("bar"), cartesian_domain))(im.ref("inp")),
+                expr=im.as_fieldop(im.ref("bar"), cartesian_domain)(im.ref("inp")),
                 target=im.ref("out"),
             ),
         ],
@@ -404,11 +392,9 @@ def test_fencil_with_nb_field_input():
         body=[
             itir.SetAt(
                 domain=unstructured_domain,
-                expr=im.call(
-                    im.as_fieldop(
-                        im.lambda_("it")(im.call(im.reduce("plus", 0.0))(im.deref("it"))),
-                        unstructured_domain,
-                    )
+                expr=im.as_fieldop(
+                    im.lambda_("it")(im.call(im.reduce("plus", 0.0))(im.deref("it"))),
+                    unstructured_domain,
                 )(im.ref("inp")),
                 target=im.ref("out"),
             ),
@@ -434,9 +420,7 @@ def test_program_tuple_setat_short_target():
         declarations=[],
         body=[
             itir.SetAt(
-                expr=im.call(
-                    im.as_fieldop(im.lambda_()(im.make_tuple(1.0, 2.0)), cartesian_domain)
-                )(),
+                expr=im.as_fieldop(im.lambda_()(im.make_tuple(1.0, 2.0)), cartesian_domain)(),
                 domain=cartesian_domain,
                 target=im.make_tuple("out"),
             )
