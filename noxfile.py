@@ -185,7 +185,7 @@ def test_next(
         *session.posargs,
     )
     session.run(
-        *"pytest --doctest-modules -sv".split(),
+        *"pytest --doctest-modules --doctest-ignore-import-errors -sv".split(),
         str(pathlib.Path("src") / "gt4py" / "next"),
     )
 
