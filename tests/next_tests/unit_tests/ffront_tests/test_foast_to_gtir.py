@@ -761,11 +761,9 @@ def test_reduction_lowering_neighbor_sum():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.op_as_fieldop(
-        im.call(
-            im.reduce(
-                "plus",
-                im.literal(value="0", typename="float64"),
-            )
+        im.reduce(
+            "plus",
+            im.literal(value="0", typename="float64"),
         )
     )(im.as_fieldop_neighbors("V2E", "edge_f"))
 
@@ -780,11 +778,9 @@ def test_reduction_lowering_max_over():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.op_as_fieldop(
-        im.call(
-            im.reduce(
-                "maximum",
-                im.literal(value=str(np.finfo(np.float64).min), typename="float64"),
-            )
+        im.reduce(
+            "maximum",
+            im.literal(value=str(np.finfo(np.float64).min), typename="float64"),
         )
     )(im.as_fieldop_neighbors("V2E", "edge_f"))
 
@@ -799,11 +795,9 @@ def test_reduction_lowering_min_over():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.op_as_fieldop(
-        im.call(
-            im.reduce(
-                "minimum",
-                im.literal(value=str(np.finfo(np.float64).max), typename="float64"),
-            )
+        im.reduce(
+            "minimum",
+            im.literal(value=str(np.finfo(np.float64).max), typename="float64"),
         )
     )(im.as_fieldop_neighbors("V2E", "edge_f"))
 
@@ -828,11 +822,9 @@ def test_reduction_lowering_expr():
         im.as_fieldop_neighbors("V2E", "e1"),
     )(
         im.op_as_fieldop(
-            im.call(
-                im.reduce(
-                    "plus",
-                    im.literal(value="0", typename="float64"),
-                )
+            im.reduce(
+                "plus",
+                im.literal(value="0", typename="float64"),
             )
         )(mapped)
     )

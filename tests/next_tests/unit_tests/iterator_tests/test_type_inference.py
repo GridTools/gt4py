@@ -128,18 +128,16 @@ def expression_test_cases():
             int_list_type,
         ),
         # reduce
-        (im.call(im.reduce("plus", 0))(im.ref("l", int_list_type)), int_type),
+        (im.reduce("plus", 0)(im.ref("l", int_list_type)), int_type),
         (
-            im.call(
-                im.reduce(
-                    im.lambda_("acc", "a", "b")(
-                        im.make_tuple(
-                            im.plus(im.tuple_get(0, "acc"), "a"),
-                            im.plus(im.tuple_get(1, "acc"), "b"),
-                        )
-                    ),
-                    im.make_tuple(0, 0.0),
-                )
+            im.reduce(
+                im.lambda_("acc", "a", "b")(
+                    im.make_tuple(
+                        im.plus(im.tuple_get(0, "acc"), "a"),
+                        im.plus(im.tuple_get(1, "acc"), "b"),
+                    )
+                ),
+                im.make_tuple(0, 0.0),
             )(im.ref("la", int_list_type), im.ref("lb", float64_list_type)),
             ts.TupleType(types=[int_type, float64_type]),
         ),
@@ -393,7 +391,7 @@ def test_fencil_with_nb_field_input():
             itir.SetAt(
                 domain=unstructured_domain,
                 expr=im.as_fieldop(
-                    im.lambda_("it")(im.call(im.reduce("plus", 0.0))(im.deref("it"))),
+                    im.lambda_("it")(im.reduce("plus", 0.0)(im.deref("it"))),
                     unstructured_domain,
                 )(im.ref("inp")),
                 target=im.ref("out"),

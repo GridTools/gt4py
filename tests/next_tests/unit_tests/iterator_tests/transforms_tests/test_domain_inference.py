@@ -180,13 +180,11 @@ def test_deref(offset_provider):
 def test_multi_length_shift(offset_provider):
     stencil = im.lambda_("arg0")(
         im.deref(
-            im.call(
-                im.shift(
-                    im.ensure_offset("Ioff"),
-                    im.ensure_offset(1),
-                    im.ensure_offset("Ioff"),
-                    im.ensure_offset(2),
-                )
+            im.shift(
+                im.ensure_offset("Ioff"),
+                im.ensure_offset(1),
+                im.ensure_offset("Ioff"),
+                im.ensure_offset(2),
             )("arg0")
         )
     )

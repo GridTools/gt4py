@@ -35,25 +35,25 @@ def has_skip_values(request):
 @pytest.fixture
 def basic_reduction():
     UIDs.reset_sequence()
-    return im.call(im.reduce("foo", 0.0))(im.neighbors("Dim", "x"))
+    return im.reduce("foo", 0.0)(im.neighbors("Dim", "x"))
 
 
 @pytest.fixture
 def reduction_with_shift_on_second_arg():
     UIDs.reset_sequence()
-    return im.call(im.reduce("foo", 0.0))("x", im.neighbors("Dim", "y"))
+    return im.reduce("foo", 0.0)("x", im.neighbors("Dim", "y"))
 
 
 @pytest.fixture
 def reduction_with_incompatible_shifts():
     UIDs.reset_sequence()
-    return im.call(im.reduce("foo", 0.0))(im.neighbors("Dim", "x"), im.neighbors("Dim2", "y"))
+    return im.reduce("foo", 0.0)(im.neighbors("Dim", "x"), im.neighbors("Dim2", "y"))
 
 
 @pytest.fixture
 def reduction_with_irrelevant_full_shift():
     UIDs.reset_sequence()
-    return im.call(im.reduce("foo", 0.0))(
+    return im.reduce("foo", 0.0)(
         im.neighbors("Dim", im.shift("IrrelevantDim", 0)("x")), im.neighbors("Dim", "y")
     )
 
@@ -61,7 +61,7 @@ def reduction_with_irrelevant_full_shift():
 @pytest.fixture
 def reduction_if():
     UIDs.reset_sequence()
-    return im.call(im.reduce("foo", 0.0))(im.if_(True, im.neighbors("Dim", "x"), "y"))
+    return im.reduce("foo", 0.0)(im.if_(True, im.neighbors("Dim", "x"), "y"))
 
 
 @pytest.mark.parametrize(

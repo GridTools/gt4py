@@ -409,7 +409,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         # TODO(havogt): deal with nested reductions of the form neighbor_sum(neighbor_sum(field(off1)(off2)))
         it = self.visit(node.args[0], **kwargs)
         assert isinstance(node.kwargs["axis"].type, ts.DimensionType)
-        val = im.call(im.reduce(op, init_expr))
+        val = im.reduce(op, init_expr)
         return im.op_as_fieldop(val)(it)
 
     def _visit_neighbor_sum(self, node: foast.Call, **kwargs: Any) -> itir.Expr:

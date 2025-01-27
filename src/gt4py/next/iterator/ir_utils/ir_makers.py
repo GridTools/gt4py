@@ -528,7 +528,7 @@ def map_(op):
 
 def reduce(op, expr):
     """Create a `reduce` call."""
-    return call("reduce")(op, expr)
+    return call(call("reduce")(op, expr))
 
 
 def scan(expr, forward, init):
