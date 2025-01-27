@@ -98,7 +98,7 @@ class CollapseTuple(FixedPointTransformation):
     # TODO(tehrengruber): This Flag mechanism is a little low level. What we actually want
     #   is something like a pass manager, where for each pattern we have a corresponding
     #   transformation, etc.
-    class Flag(enum.Flag):
+    class Transformation(enum.Flag):
         #: `make_tuple(tuple_get(0, t), tuple_get(1, t), ..., tuple_get(N-1,t))` -> `t`
         COLLAPSE_MAKE_TUPLE_TUPLE_GET = enum.auto()
         #: `tuple_get(i, make_tuple(e_0, e_1, ..., e_i, ..., e_N))` -> `e_i`
@@ -137,12 +137,12 @@ class CollapseTuple(FixedPointTransformation):
         INLINE_TRIVIAL_LET = enum.auto()
 
         @classmethod
-        def all(self) -> CollapseTuple.Flag:
+        def all(self) -> CollapseTuple.Transformation:
             return functools.reduce(operator.or_, self.__members__.values())
 
     uids: eve_utils.UIDGenerator
     ignore_tuple_size: bool
-    flags: Flag = Flag.all()  # noqa: RUF009 [function-call-in-dataclass-default-argument]
+    enabled_transformations: Transformation = Transformation.all()  # noqa: RUF009 [function-call-in-dataclass-default-argument]
 
     PRESERVED_ANNEX_ATTRS = ("type",)
 
@@ -155,8 +155,8 @@ class CollapseTuple(FixedPointTransformation):
         remove_letified_make_tuple_elements: bool = True,
         offset_provider_type: Optional[common.OffsetProviderType] = None,
         within_stencil: Optional[bool] = None,
-        # manually passing flags is mostly for allowing separate testing of the modes
-        flags: Optional[Flag] = None,
+        # manually passing enabled transformations is mostly for allowing separate testing of the modes
+        enabled_transformations: Optional[Transformation] = None,
         # allow sym references without a symbol declaration, mostly for testing
         allow_undeclared_symbols: bool = False,
         uids: Optional[eve_utils.UIDGenerator] = None,
@@ -174,7 +174,7 @@ class CollapseTuple(FixedPointTransformation):
                 to remove left-overs from `LETIFY_MAKE_TUPLE_ELEMENTS` transformation.
                 `(λ(_tuple_el_1, _tuple_el_2) → {_tuple_el_1, _tuple_el_2})(1, 2)` -> {1, 2}`
         """
-        flags = flags or cls.flags
+        enabled_transformations = enabled_transformations or cls.enabled_transformations
         offset_provider_type = offset_provider_type or {}
         uids = uids or eve_utils.UIDGenerator()
 
@@ -194,7 +194,7 @@ class CollapseTuple(FixedPointTransformation):
 
         new_node = cls(
             ignore_tuple_size=ignore_tuple_size,
-            flags=flags,
+            enabled_transformations=enabled_transformations,
             uids=uids,
         ).visit(node, within_stencil=within_stencil)
 
@@ -210,12 +210,11 @@ class CollapseTuple(FixedPointTransformation):
 
         return new_node
 
-    def visit_FunCall(self, node: ir.FunCall, **kwargs) -> ir.Node:
+    def visit(self, node: ir.Node, **kwargs) -> ir.Node:
         if cpm.is_call_to(node, "as_fieldop"):
             kwargs = {**kwargs, "within_stencil": True}
 
-        node = self.generic_visit(node, **kwargs)
-        return self.fp_transform(node, **kwargs)
+        return super().visit(node, **kwargs)
 
     def transform_collapse_make_tuple_tuple_get(
         self, node: ir.FunCall, **kwargs
