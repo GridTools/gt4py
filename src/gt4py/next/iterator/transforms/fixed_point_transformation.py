@@ -29,9 +29,9 @@ class FixedPointTransformation(eve.PreserveLocationVisitor, eve.NodeTranslator):
     #: Usually the default value is chosen to be all transformations.
     enabled_transformations: enum.Flag
 
-    def visit(self, node: ir.Node, **kwargs) -> ir.Node:
+    def visit(self, node, **kwargs):
         node = super().visit(node, **kwargs)
-        return self.fp_transform(node, **kwargs)
+        return self.fp_transform(node, **kwargs) if isinstance(node, ir.Node) else node
 
     def fp_transform(self, node: ir.Node, **kwargs) -> ir.Node:
         """
