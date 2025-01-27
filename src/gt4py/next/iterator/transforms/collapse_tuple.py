@@ -14,7 +14,6 @@ import functools
 import operator
 from typing import Optional
 
-from gt4py import eve
 from gt4py.eve import utils as eve_utils
 from gt4py.next import common
 from gt4py.next.iterator import ir
@@ -23,6 +22,7 @@ from gt4py.next.iterator.ir_utils import (
     ir_makers as im,
     misc as ir_misc,
 )
+from gt4py.next.iterator.transforms.fixed_point_transform import FixedPointTransform
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas, inline_lambda
 from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.type_system import type_info, type_specifications as ts
@@ -87,7 +87,7 @@ def _is_trivial_or_tuple_thereof_expr(node: ir.Node) -> bool:
 #  reads a little convoluted and is also different to how we write other transformations. We
 #  should revisit the pattern here and try to find a more general mechanism.
 @dataclasses.dataclass(frozen=True)
-class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
+class CollapseTuple(FixedPointTransform):
     """
     Simplifies `make_tuple`, `tuple_get` calls.
 
@@ -216,32 +216,6 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
         node = self.generic_visit(node, **kwargs)
         return self.fp_transform(node, **kwargs)
-
-    def fp_transform(self, node: ir.Node, **kwargs) -> ir.Node:
-        while True:
-            new_node = self.transform(node, **kwargs)
-            if new_node is None:
-                break
-            assert new_node != node
-            node = new_node
-        return node
-
-    def transform(self, node: ir.Node, **kwargs) -> Optional[ir.Node]:
-        if not isinstance(node, ir.FunCall):
-            return None
-
-        for transformation in self.Flag:
-            if self.flags & transformation:
-                assert isinstance(transformation.name, str)
-                method = getattr(self, f"transform_{transformation.name.lower()}")
-                result = method(node, **kwargs)
-                if result is not None:
-                    assert (
-                        result is not node
-                    )  # transformation should have returned None, since nothing changed
-                    itir_type_inference.reinfer(result)
-                    return result
-        return None
 
     def transform_collapse_make_tuple_tuple_get(
         self, node: ir.FunCall, **kwargs

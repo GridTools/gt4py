@@ -12,13 +12,18 @@ import functools
 import operator
 from typing import Optional
 
-from gt4py import eve
 from gt4py.next.iterator import builtins, embedded, ir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
+from gt4py.next.iterator.transforms.fixed_point_transform import FixedPointTransform
 
 
 @dataclasses.dataclass(frozen=True)
-class ConstantFolding(eve.PreserveLocationVisitor, eve.NodeTranslator):
+class ConstantFolding(FixedPointTransform):
+    PRESERVED_ANNEX_ATTRS = (
+        "type",
+        "domain",
+    )
+
     class Flag(enum.Flag):
         # e.g. `literal + symref` -> `symref + literal` and
         # `literal + funcall` -> `funcall + literal` and
@@ -75,31 +80,6 @@ class ConstantFolding(eve.PreserveLocationVisitor, eve.NodeTranslator):
         node = self.generic_visit(node, **kwargs)
         return self.fp_transform(node, **kwargs)
 
-    def fp_transform(self, node: ir.Node, **kwargs) -> ir.Node:
-        while True:
-            new_node = self.transform(node, **kwargs)
-            if new_node is None:
-                break
-            assert new_node != node
-            node = new_node
-        return node
-
-    def transform(self, node: ir.Node, **kwargs) -> Optional[ir.Node]:
-        if not isinstance(node, ir.FunCall):
-            return None
-
-        for transformation in self.Flag:
-            if transformation:
-                assert isinstance(transformation.name, str)
-                method = getattr(self, f"transform_{transformation.name.lower()}")
-                result = method(node)
-                if result is not None:
-                    assert (
-                        result is not node
-                    )  # transformation should have returned None, since nothing changed
-                    return result
-        return None
-
     def transform_canonicalize_funcall_symref_literal(
         self, node: ir.FunCall, **kwargs
     ) -> Optional[ir.Node]:
@@ -125,14 +105,20 @@ class ConstantFolding(eve.PreserveLocationVisitor, eve.NodeTranslator):
     def transform_canonicalize_min_max(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
         # `maximum(im.call(...)(), maximum(...))` -> `maximum(maximum(...), im.call(...)())`
         if cpm.is_call_to(node, ("maximum", "minimum")):
-            if (isinstance(node.args[0], ir.FunCall) and not cpm.is_call_to(node.args[0], ("maximum", "minimum"))
-                    and cpm.is_call_to(node.args[1], ("maximum", "minimum"))):
+            if (
+                isinstance(node.args[0], ir.FunCall)
+                and isinstance(node.fun, ir.SymRef)
+                and not cpm.is_call_to(node.args[0], ("maximum", "minimum"))
+                and cpm.is_call_to(node.args[1], ("maximum", "minimum"))
+            ):
                 return self.visit(im.call(node.fun.id)(node.args[1], node.args[0]))
         return None
 
-    def transform_canonicalize_tuple_get_plus(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
+    def transform_canonicalize_tuple_get_plus(
+        self, node: ir.FunCall, **kwargs
+    ) -> Optional[ir.Node]:
         # im.call(...)(im.tuple_get(...), im.plus(...)))` -> `im.call(...)( im.plus(...)), im.tuple_get(...))`
-        if isinstance(node, ir.FunCall) and len(node.args) > 1:
+        if isinstance(node, ir.FunCall) and isinstance(node.fun, ir.SymRef) and len(node.args) > 1:
             if cpm.is_call_to(node.args[0], "tuple_get") and cpm.is_call_to(node.args[1], "plus"):
                 return self.visit(im.call(node.fun.id)(node.args[1], node.args[0]))
         return None
