@@ -55,7 +55,7 @@ Ready to start contributing? We use a [fork and pull request](https://www.atlass
 3. Follow instructions in the [README.md](README.md) file to set up an environment for local development. For example:
 
    ```bash
-   $ tox --devenv .venv
+   $ uv sync --extra all
    $ source .venv/bin/activate
    ```
 
@@ -67,11 +67,11 @@ Ready to start contributing? We use a [fork and pull request](https://www.atlass
 
    Now you can make your changes locally. Make sure you follow the project code style documented in [CODING_GUIDELINES.md](CODING_GUIDELINES.md).
 
-5. When you're done making changes, check that your code complies with the project code style and other quality assurance (QA) practices using `pre-commit`. Additionally, make sure that unit and regression tests pass for all supported Python versions by running `tox`:
+5. When you're done making changes, check that your code complies with the project code style and other quality assurance (QA) practices using `pre-commit`. Additionally, make sure that unit and regression tests pass for all supported Python versions by running `nox`:
 
    ```bash
    $ pre-commit run
-   $ tox
+   $ nox
    ```
 
    Read [Testing](#testing) section below for further details.
@@ -143,21 +143,21 @@ pytest -v -l -s tests/
 
 Check `pytest` documentation (`pytest --help`) for all the options to select and execute tests.
 
-We recommended you to use `tox` for most development-related tasks, like running the complete test suite in different environments. `tox` runs the package installation script in properly isolated environments to run tests (or other tasks) in a reproducible way. A simple way to start with tox could be:
+We recommended you to use `nox` for running the test suite in different environments. `nox` runs the package installation script in properly isolated environments to run tests in a reproducible way. A simple way to start with `nox` would be:
 
 ```bash
 # List all the available task environments
-tox list
+nox list
 
 # Run a specific task environment
-tox run -e cartesian-py38-internal-cpu
+nox run -e cartesian-py38-internal-cpu
 ```
 
-Check `tox` documentation (`tox --help`) for the complete reference.
+Check `nox` documentation (`nox --help`) for the complete reference.
 
 <!--
 TODO: add test coverage instructions
-Additionally, `tox` is configured to generate HTML test coverage reports in `tests/_reports/coverage_html/` at the end. -->
+Additionally, `nox` is configured to generate HTML test coverage reports in `tests/_reports/coverage_html/` at the end. -->
 
 ## Pull Requests (PRs) and Merge Guidelines
 
@@ -175,27 +175,29 @@ Before submitting a pull request, check that it meets the following criteria:
 
 As mentioned above, we use several tools to help us write high-quality code. New tools could be added in the future, especially if they do not add a large overhead to our workflow and they bring extra benefits to keep our codebase in shape. The most important ones which we currently rely on are:
 
-- [ruff][ruff] for style enforcement and code linting.
+- [nox][nox] for testing and task automation with different environments.
 - [pre-commit][pre-commit] for automating the execution of QA tools.
 - [pytest][pytest] for writing readable tests, extended with:
   - [Coverage.py][coverage] and [pytest-cov][pytest-cov] for test coverage reports.
   - [pytest-xdist][pytest-xdist] for running tests in parallel.
-- [tox][tox] for testing and task automation with different environments.
+- [ruff][ruff] for style enforcement and code linting.
 - [sphinx][sphinx] for generating documentation, extended with:
   - [sphinx-autodoc][sphinx-autodoc] and [sphinx-napoleon][sphinx-napoleon] for extracting API documentation from docstrings.
   - [jupytext][jupytext] for writing new user documentation with code examples.
+- [uv][uv] for managing dependencies and environments.
 
 <!-- Reference links -->
 
 [conventional-commits]: https://www.conventionalcommits.org/en/v1.0.0/#summary
 [coverage]: https://coverage.readthedocs.io/
-[ruff]: https://astral.sh/ruff
 [jupytext]: https://jupytext.readthedocs.io/
+[nox]: https://nox.thea.codes/en/stable/
 [pre-commit]: https://pre-commit.com/
 [pytest]: https://docs.pytest.org/
 [pytest-cov]: https://pypi.org/project/pytest-cov/
 [pytest-xdist]: https://pytest-xdist.readthedocs.io/en/latest/
+[ruff]: https://astral.sh/ruff
 [sphinx]: https://www.sphinx-doc.org
 [sphinx-autodoc]: https://www.sphinx-doc.org/en/master/usage/extensions/autodoc.html
 [sphinx-napoleon]: https://sphinxcontrib-napoleon.readthedocs.io/en/latest/index.html
-[tox]: https://tox.wiki/en/latest/
+[uv]: https://docs.astral.sh/uv/

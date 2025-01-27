@@ -5,19 +5,22 @@ on:
   - cron: '0 4 * * *'
   workflow_dispatch:
 
-  # # COMMENTED OUT: only for testing CI action changes.
-  # # It only works for PRs to `main` branch from branches in the same gt4py repo.
-  # pull_request:
-  #   branches:
-  #   - main
-  # # END
+  # COMMENTED OUT: only for testing CI action changes.
+  # It only works for PRs to `main` branch from branches in the same gt4py repo.
+  pull_request:
+    branches:
+    - main
+  # END
 
 jobs:
   daily-ci:
     strategy:
       matrix:
-        dependencies-factor: ["lowest-direct", "highest"]
-        module-factor: ["cartesian", "eve", "next", "storage"]
+        # dependencies-strategy -> The strategy that `uv lock` should use to select
+        # between the different compatible versions for a given package requirement
+        # [arg: --resolution, env: UV_RESOLUTION=]
+        dependencies-strategy: ["lowest-direct", "highest"]
+        gt4py-module: ["cartesian", "eve", "next", "storage"]
         os: ["ubuntu-latest", "macos-latest"]
         python-version: ["3.10", "3.11"]
       fail-fast: false
@@ -43,11 +46,11 @@ jobs:
         cache-dependency-glob: "uv.lock"
         python-version: ${{ matrix.python-version }}
 
-    - name: Run CPU tests for '${{ matrix.module-factor }}' with '${{ matrix.dependencies-factor }}' resolution strategy
+    - name: Run CPU tests for '${{ matrix.gt4py-module }}' with '${{ matrix.dependencies-strategy }}' resolution strategy
       env:
         NUM_PROCESSES: auto
-        UV_RESOLUTION: ${{ matrix.dependencies-factor }}
-      run: uv run nox -s 'test_${{ matrix.module-factor }}-${{ matrix.python-version }}' -t 'cpu'
+        UV_RESOLUTION: ${{ matrix.dependencies-strategy }}
+      run: uv run nox -s 'test_${{ matrix.gt4py-module }}-${{ matrix.python-version }}' -t 'cpu'
 
     - name: Notify slack
       if: ${{ failure() }}
@@ -58,13 +61,13 @@ jobs:
         channel-id: ${{ vars.SLACK_BOT_CHANNEL_TEST }}
         payload: |
           {
-            "text": "Failed tests for ${{ github.workflow }} with (component='${{ matrix.module-factor }} (CPU)', python='${{ matrix.python-version }}, [https://github.com/GridTools/gt4py/actions/runs/${{ github.run_id }}].",            
+            "text": "Failed tests for ${{ github.workflow }} (dependencies-strategy='${{ matrix.dependencies-strategy }}', python=${{ matrix.python-version }}, component='${{ matrix.gt4py-module }} (CPU)') [https://github.com/GridTools/gt4py/actions/runs/${{ github.run_id }}].",
             "blocks": [
               {
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "Failed tests: <https://github.com/GridTools/gt4py/actions/runs/${{ github.run_id }}|${{ github.workflow }}: **${{ matrix.module-factor }} (CPU)** for **Python-${{ matrix.python-version }}**>"
+                  "text": "Failed tests: <https://github.com/GridTools/gt4py/actions/runs/${{ github.run_id }}|${{ github.workflow }}: **${{ matrix.gt4py-module }} (CPU)** for **Python-${{ matrix.python-version }}** with **'${{ matrix.dependencies-strategy }}' uv resolution strategy**." >"
                 }
               }
             ]
@@ -75,7 +78,7 @@ jobs:
       run: echo "day_of_week=$(date +'%u')" >> $GITHUB_OUTPUT
 
     - name: Weekly notification
-      if: "env.DAY_OF_WEEK == 4"
+      if: "env.DAY_OF_WEEK == 1"
       env:
         DAY_OF_WEEK: ${{ steps.get_day_of_the_week.outputs.day_of_week }}
         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}

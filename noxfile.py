@@ -16,12 +16,9 @@ from typing import Final, Literal, TypeAlias
 
 import nox
 
-try:
-    import pytest
-
-    NO_TESTS_COLLECTED_EXIT_CODE = pytest.ExitCode.NO_TESTS_COLLECTED
-except ImportError:
-    NO_TESTS_COLLECTED_EXIT_CODE = 5
+#: This should just be `pytest.ExitCode.NO_TESTS_COLLECTED` but `pytest`
+#: is not guaranteed to be available in the venv running `nox`.
+NO_TESTS_COLLECTED_EXIT_CODE: Final = 5
 
 # -- nox configuration --
 nox.options.default_venv_backend = "uv"

@@ -18,7 +18,6 @@ repos:
   hooks:
   - id: pretty-format-ini
     args: [--autofix]
-    exclude: tox.ini
   - id: pretty-format-toml
     args: [--autofix]
     exclude: tach.toml
@@ -51,9 +50,8 @@ repos:
   rev: v0.8.6
   hooks:
   - id: ruff
-    files: ^src/
+    files: ^src/  # TODO(egparedes): also add the `tests` folder here
     args: [--fix]
-    # TODO: include `tests` here
   - id: ruff-format
 
 - repo: https://github.com/gauge-sh/tach-pre-commit

@@ -47,8 +47,7 @@ test = [
   'pytest-cov>=5.0.0',
   'pytest-factoryboy>=2.6.1',
   'pytest-instafail>=0.5.0',
-  'pytest-xdist[psutil]>=3.5.0',
-  'tox>=4.4.0'
+  'pytest-xdist[psutil]>=3.5.0'
 ]
 typing = [
   'mypy[faster-cache]>=1.13.0',
@@ -175,7 +174,7 @@ filename = 'src/gt4py/__about__.py'
 directory = 'tests/_reports/coverage_html'
 
 [tool.coverage.paths]
-source = ['src/', '.tox/py*/lib/python3.*/site-packages/']
+source = ['src/', '.nox/py*/lib/python3.*/site-packages/']
 
 [tool.coverage.report]
 # Regexes for lines to exclude from consideration
