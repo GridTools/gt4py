@@ -14,9 +14,8 @@ from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
-from gt4py.next.iterator.ir_utils import ir_makers as im
 
 
 def _is_neighbors(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
@@ -87,23 +86,25 @@ def _get_connectivity(
 
 
 def _make_shift(offsets: list[itir.Expr], iterator: itir.Expr) -> itir.FunCall:
-    return im.shift(offsets, iterator) # TODO: location?  # TODO test_unroll_reduce failing because of offsets
+    return im.shift(
+        offsets, iterator
+    )  # TODO: location?  # TODO test_unroll_reduce failing because of offsets
 
 
 def _make_deref(iterator: itir.Expr) -> itir.FunCall:
-    return im.deref(iterator) # TODO: location
+    return im.deref(iterator)  # TODO: location
 
 
 def _make_can_deref(iterator: itir.Expr) -> itir.FunCall:
-    return im.can_deref(iterator) # TODO: location? # TODO test_unroll_reduce failing
+    return im.can_deref(iterator)  # TODO: location? # TODO test_unroll_reduce failing
 
 
 def _make_if(cond: itir.Expr, true_expr: itir.Expr, false_expr: itir.Expr) -> itir.FunCall:
-    return im.if_(cond, true_expr, false_expr) # TODO: location?
+    return im.if_(cond, true_expr, false_expr)  # TODO: location?
 
 
 def _make_list_get(offset: itir.Expr, expr: itir.Expr) -> itir.FunCall:
-    return im.list_get(offset, expr) # TODO: location?
+    return im.list_get(offset, expr)  # TODO: location?
 
 
 @dataclasses.dataclass(frozen=True)

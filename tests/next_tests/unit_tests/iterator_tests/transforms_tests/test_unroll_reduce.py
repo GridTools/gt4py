@@ -47,9 +47,7 @@ def reduction_with_shift_on_second_arg():
 @pytest.fixture
 def reduction_with_incompatible_shifts():
     UIDs.reset_sequence()
-    return im.call(im.reduce("foo", 0.0))(
-        im.neighbors("Dim", "x"), im.neighbors("Dim2", "y")
-    )
+    return im.call(im.reduce("foo", 0.0))(im.neighbors("Dim", "x"), im.neighbors("Dim2", "y"))
 
 
 @pytest.fixture
@@ -96,10 +94,10 @@ def _expected(red, dim, max_neighbors, has_skip_values, shifted_arg=0):
         neighbors_offset = red.args[shifted_arg].args[0]
         neighbors_it = red.args[shifted_arg].args[1]
         can_deref = im.can_deref(
-                ir.FunCall(
-                    fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=[neighbors_offset, offset]),
-                    args=[neighbors_it],
-                )
+            ir.FunCall(
+                fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=[neighbors_offset, offset]),
+                args=[neighbors_it],
+            )
         )
         step_expr = ir.FunCall(fun=ir.SymRef(id="if_"), args=[can_deref, step_expr, acc])
     step_fun = ir.Lambda(params=[ir.Sym(id=acc.id), ir.Sym(id=offset.id)], expr=step_expr)

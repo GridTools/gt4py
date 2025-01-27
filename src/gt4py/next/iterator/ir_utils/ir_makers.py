@@ -536,9 +536,9 @@ def scan(expr, forward, init):
     return call("scan")(expr, forward, init)
 
 
-def list_get(list_idx, list):
+def list_get(list_idx, list_):
     """Create a `list_get` call."""
-    return call("list_get")(list_idx, list)
+    return call("list_get")(list_idx, list_)
 
 
 def maximum(expr1, expr2):

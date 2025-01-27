@@ -276,9 +276,7 @@ def test_cast_first_arg_inference():
     # since cast_ is a grammar builtin whose return type is given by its second argument it is
     # easy to forget inferring the types of the first argument and its children. Simply check
     # if the first argument has a type inferred correctly here.
-    testee = im.cast_(
-        im.plus(im.literal_from_value(1), im.literal_from_value(2)), "float64"
-    )
+    testee = im.cast_(im.plus(im.literal_from_value(1), im.literal_from_value(2)), "float64")
     result = itir_type_inference.infer(
         testee, offset_provider_type={}, allow_undeclared_symbols=True
     )
@@ -299,9 +297,7 @@ def test_cartesian_fencil_definition():
         declarations=[],
         body=[
             itir.SetAt(
-                expr=im.call(im.as_fieldop(im.ref("deref"), cartesian_domain))(
-                    im.ref("inp")
-                ),
+                expr=im.call(im.as_fieldop(im.ref("deref"), cartesian_domain))(im.ref("inp")),
                 domain=cartesian_domain,
                 target=im.ref("out"),
             ),

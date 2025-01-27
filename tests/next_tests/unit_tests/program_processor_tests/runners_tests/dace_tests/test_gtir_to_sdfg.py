@@ -1296,9 +1296,7 @@ def test_gtir_reduce():
     stencil_fieldview = im.call(
         im.as_fieldop(
             im.lambda_("it")(
-                im.call(im.reduce("plus", im.literal_from_value(init_value)))(
-                    im.deref("it")
-                )
+                im.call(im.reduce("plus", im.literal_from_value(init_value)))(im.deref("it"))
             ),
             vertex_domain,
         )
@@ -1362,9 +1360,7 @@ def test_gtir_reduce_with_skip_values():
     stencil_fieldview = im.call(
         im.as_fieldop(
             im.lambda_("it")(
-                im.call(im.reduce("plus", im.literal_from_value(init_value)))(
-                    im.deref("it")
-                )
+                im.call(im.reduce("plus", im.literal_from_value(init_value)))(im.deref("it"))
             ),
             vertex_domain,
         )
