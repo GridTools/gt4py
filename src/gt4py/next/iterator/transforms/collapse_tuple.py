@@ -220,8 +220,7 @@ class CollapseTuple(FixedPointTransformation):
         self, node: ir.FunCall, **kwargs
     ) -> Optional[ir.Node]:
         if cpm.is_call_to(node, "make_tuple") and all(
-            isinstance(arg, ir.FunCall) and arg.fun == ir.SymRef(id="tuple_get")
-            for arg in node.args
+            cpm.is_call_to(arg, "tuple_get") for arg in node.args
         ):
             # `make_tuple(tuple_get(0, t), tuple_get(1, t), ..., tuple_get(N-1,t))` -> `t`
             assert isinstance(node.args[0], ir.FunCall)
@@ -267,7 +266,7 @@ class CollapseTuple(FixedPointTransformation):
             # TODO(tehrengruber): extend to general symbols as long as the tail call in the let
             #   does not capture
             # `tuple_get(i, let(...)(make_tuple()))` -> `let(...)(tuple_get(i, make_tuple()))`
-            if isinstance(node, ir.FunCall) and cpm.is_let(node.args[1]):
+            if cpm.is_let(node.args[1]):
                 idx, let_expr = node.args
                 return im.call(
                     im.lambda_(*let_expr.fun.params)(  # type: ignore[attr-defined]  # ensured by is_let
@@ -286,8 +285,8 @@ class CollapseTuple(FixedPointTransformation):
                 )
         return None
 
-    def transform_letify_make_tuple_elements(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
-        if isinstance(node, ir.FunCall) and node.fun == ir.SymRef(id="make_tuple"):
+    def transform_letify_make_tuple_elements(self, node: ir.Node, **kwargs) -> Optional[ir.Node]:
+        if cpm.is_call_to(node, "make_tuple"):
             # `make_tuple(expr1, expr1)`
             # -> `let((_tuple_el_1, expr1), (_tuple_el_2, expr2))(make_tuple(_tuple_el_1, _tuple_el_2))`
             bound_vars: dict[ir.Sym, ir.Expr] = {}
@@ -306,8 +305,8 @@ class CollapseTuple(FixedPointTransformation):
                 )
         return None
 
-    def transform_inline_trivial_make_tuple(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
-        if isinstance(node, ir.FunCall) and cpm.is_let(node):
+    def transform_inline_trivial_make_tuple(self, node: ir.Node, **kwargs) -> Optional[ir.Node]:
+        if cpm.is_let(node):
             # `let(tup, make_tuple(trivial_expr1, trivial_expr2))(foo(tup))`
             #  -> `foo(make_tuple(trivial_expr1, trivial_expr2))`
             eligible_params = [_is_trivial_make_tuple_call(arg) for arg in node.args]
@@ -436,7 +435,7 @@ class CollapseTuple(FixedPointTransformation):
         return None
 
     def transform_propagate_nested_let(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
-        if isinstance(node, ir.FunCall) and cpm.is_let(node):
+        if cpm.is_let(node):
             # `let((a, let(b, 1)(a_val)))(a)`-> `let(b, 1)(let(a, a_val)(a))`
             outer_vars = {}
             inner_vars = {}
@@ -462,7 +461,7 @@ class CollapseTuple(FixedPointTransformation):
         return None
 
     def transform_inline_trivial_let(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
-        if isinstance(node, ir.FunCall) and cpm.is_let(node):
+        if cpm.is_let(node):
             if isinstance(node.fun.expr, ir.SymRef):  # type: ignore[attr-defined]  # ensured by is_let
                 # `let(a, 1)(a)` -> `1`
                 for arg_sym, arg in zip(node.fun.params, node.args):  # type: ignore[attr-defined]  # ensured by is_let
