@@ -27,8 +27,3 @@ def common_dace_config() -> Generator[None, None, None]:
         dace.Config.set("optimizer", "match_exception", value=True)
         dace.Config.set("compiler", "allow_view_arguments", value=True)
         yield
-
-
-def pytest_collection_modifyitems(items):
-    for item in items:
-        item.add_marker(pytest.mark.usefixtures("common_dace_config"))

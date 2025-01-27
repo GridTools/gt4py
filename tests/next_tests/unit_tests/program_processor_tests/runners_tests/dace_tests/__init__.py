@@ -9,4 +9,5 @@
 import pytest
 
 
-pytestmark = pytest.mark.requires_dace
+package_pytestmarks = [pytest.mark.requires_dace]
+
