@@ -100,8 +100,8 @@ class ConstantFolding(FixedPointTransform):
 
     def transform_canonicalize_minus(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
         # `minus(arg0, arg1) -> plus(im.call("neg")(arg1), arg0)`
-        if cpm.is_call_to(node, "minus"):
-            return self.visit(im.plus(im.call("neg")(node.args[1]), node.args[0]))
+        if isinstance(node, ir.FunCall) and cpm.is_call_to(node, "minus"):
+            return im.plus(self.fp_transform(im.call("neg")(node.args[1])), node.args[0])
         return None
 
     def transform_canonicalize_min_max(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
@@ -113,7 +113,7 @@ class ConstantFolding(FixedPointTransform):
                 and not cpm.is_call_to(node.args[0], ("maximum", "minimum"))
                 and cpm.is_call_to(node.args[1], ("maximum", "minimum"))
             ):
-                return self.visit(im.call(node.fun.id)(node.args[1], node.args[0]))
+                return im.call(node.fun.id)(node.args[1], node.args[0])
         return None
 
     def transform_canonicalize_tuple_get_plus(
@@ -122,19 +122,27 @@ class ConstantFolding(FixedPointTransform):
         # im.call(...)(im.tuple_get(...), im.plus(...)))` -> `im.call(...)( im.plus(...)), im.tuple_get(...))`
         if isinstance(node, ir.FunCall) and isinstance(node.fun, ir.SymRef) and len(node.args) > 1:
             if cpm.is_call_to(node.args[0], "tuple_get") and cpm.is_call_to(node.args[1], "plus"):
-                return self.visit(im.call(node.fun.id)(node.args[1], node.args[0]))
+                return im.call(node.fun.id)(node.args[1], node.args[0])
         return None
 
     def transform_fold_funcall_literal(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
         # `(sym + 1) + 1` -> `sym + 2`
         if cpm.is_call_to(node, "plus"):
-            if cpm.is_call_to(node.args[0], "plus") and isinstance(node.args[1], ir.Literal):
+            if (
+                isinstance(node.args[0], ir.FunCall)
+                and cpm.is_call_to(node.args[0], "plus")
+                and isinstance(node.args[1], ir.Literal)
+            ):
                 fun_call, literal = node.args
                 if (
-                    isinstance(fun_call.args[0], (ir.SymRef, ir.FunCall))  # type: ignore[attr-defined] # assured by if above
-                    and isinstance(fun_call.args[1], ir.Literal)  # type: ignore[attr-defined] # assured by if above
+                    isinstance(fun_call, ir.FunCall)
+                    and isinstance(fun_call.args[0], (ir.SymRef, ir.FunCall))
+                    and isinstance(fun_call.args[1], ir.Literal)
                 ):
-                    return self.visit(im.plus(fun_call.args[0], im.plus(fun_call.args[1], literal)))  # type: ignore[attr-defined] # assured by if above
+                    return im.plus(
+                        fun_call.args[0],
+                        self.fp_transform(im.plus(fun_call.args[1], literal)),
+                    )
         return None
 
     def transform_fold_min_max_funcall_symref_literal(
@@ -149,9 +157,9 @@ class ConstantFolding(FixedPointTransform):
             if cpm.is_call_to(node.args[0], ("maximum", "minimum")):
                 fun_call, arg1 = node.args
                 if arg1 == fun_call.args[0]:  # type: ignore[attr-defined] # assured by if above
-                    return self.visit(im.call(fun_call.fun.id)(fun_call.args[1], arg1))  # type: ignore[attr-defined] # assured by if above
+                    return im.call(fun_call.fun.id)(fun_call.args[1], arg1)  # type: ignore[attr-defined] # assured by if above
                 if arg1 == fun_call.args[1]:  # type: ignore[attr-defined] # assured by if above
-                    return self.visit(im.call(fun_call.fun.id)(fun_call.args[0], arg1))  # type: ignore[attr-defined] # assured by if above
+                    return im.call(fun_call.fun.id)(fun_call.args[0], arg1)  # type: ignore[attr-defined] # assured by if above
         return None
 
     def transform_fold_min_max_plus(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
@@ -164,13 +172,17 @@ class ConstantFolding(FixedPointTransform):
             # `maximum(plus(sym, 1), sym)` -> `plus(sym, 1)`
             if cpm.is_call_to(arg0, "plus"):
                 if arg0.args[0] == arg1:
-                    return self.visit(im.plus(arg0.args[0], im.call(node.fun.id)(arg0.args[1], 0)))
+                    return im.plus(
+                        arg0.args[0], self.fp_transform(im.call(node.fun.id)(arg0.args[1], 0))
+                    )
             # `maximum(plus(sym, 1), plus(sym, -1))` -> `plus(sym, 1)`
             if cpm.is_call_to(arg0, "plus") and cpm.is_call_to(arg1, "plus"):
                 if arg0.args[0] == arg1.args[0]:
-                    return self.visit(
-                        im.plus(arg0.args[0], im.call(node.fun.id)(arg0.args[1], arg1.args[1]))
+                    return im.plus(
+                        arg0.args[0],
+                        self.fp_transform(im.call(node.fun.id)(arg0.args[1], arg1.args[1])),
                     )
+
         return None
 
     def transform_fold_symref_plus_zero(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
@@ -195,11 +207,9 @@ class ConstantFolding(FixedPointTransform):
                 and isinstance(node.args[0].args[1], ir.Literal)
                 and isinstance(node.args[1].args[1], ir.Literal)
             ):
-                return self.visit(
-                    im.plus(
-                        im.plus(node.args[0].args[0], node.args[1].args[0]),
-                        im.plus(node.args[0].args[1], node.args[1].args[1]),
-                    )
+                return im.plus(
+                    self.fp_transform(im.plus(node.args[0].args[0], node.args[1].args[0])),
+                    self.fp_transform(im.plus(node.args[0].args[1], node.args[1].args[1])),
                 )
         return None
 
