@@ -8,25 +8,17 @@
 
 import dataclasses
 import enum
-from abc import abstractmethod
-from typing import Optional, Type
+from typing import ClassVar, Optional, Type
 
 from gt4py import eve
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.type_system import inference as itir_type_inference
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, kw_only=True)
 class FixedPointTransform(eve.PreserveLocationVisitor, eve.NodeTranslator):
-    @property
-    @abstractmethod
-    def Flag(self) -> Type[enum.Flag]:
-        pass
-
-    @property
-    @abstractmethod
-    def flags(self) -> enum.Flag:
-        pass
+    Flag: ClassVar[Type[enum.Flag]]
+    flags: enum.Flag
 
     def fp_transform(self, node: ir.Node, **kwargs) -> ir.Node:
         while True:
@@ -38,9 +30,6 @@ class FixedPointTransform(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return node
 
     def transform(self, node: ir.Node, **kwargs) -> Optional[ir.Node]:
-        if not isinstance(node, ir.FunCall):
-            return None
-
         for transformation in self.Flag:
             if self.flags & transformation:
                 assert isinstance(transformation.name, str)

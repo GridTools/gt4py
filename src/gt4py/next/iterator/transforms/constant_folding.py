@@ -17,7 +17,7 @@ from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_maker
 from gt4py.next.iterator.transforms.fixed_point_transform import FixedPointTransform
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, kw_only=True)
 class ConstantFolding(FixedPointTransform):
     PRESERVED_ANNEX_ATTRS = (
         "type",
@@ -86,8 +86,10 @@ class ConstantFolding(FixedPointTransform):
         # e.g. `literal + symref` -> `symref + literal` and
         # `literal + funcall` -> `funcall + literal` and
         # `symref + funcall` -> `funcall + symref`
-        if isinstance(node.fun, ir.SymRef) and cpm.is_call_to(
-            node, ("plus", "multiplies", "minimum", "maximum")
+        if (
+            isinstance(node, ir.FunCall)
+            and isinstance(node.fun, ir.SymRef)
+            and cpm.is_call_to(node, ("plus", "multiplies", "minimum", "maximum"))
         ):
             if (
                 isinstance(node.args[1], (ir.SymRef, ir.FunCall))
@@ -139,7 +141,11 @@ class ConstantFolding(FixedPointTransform):
         self, node: ir.FunCall, **kwargs
     ) -> Optional[ir.Node]:
         # `maximum(maximum(sym, 1), sym)` -> `maximum(sym, 1)`
-        if isinstance(node.fun, ir.SymRef) and cpm.is_call_to(node, ("minimum", "maximum")):
+        if (
+            isinstance(node, ir.FunCall)
+            and isinstance(node.fun, ir.SymRef)
+            and cpm.is_call_to(node, ("minimum", "maximum"))
+        ):
             if cpm.is_call_to(node.args[0], ("maximum", "minimum")):
                 fun_call, arg1 = node.args
                 if arg1 == fun_call.args[0]:  # type: ignore[attr-defined] # assured by if above
@@ -149,7 +155,11 @@ class ConstantFolding(FixedPointTransform):
         return None
 
     def transform_fold_min_max_plus(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
-        if isinstance(node.fun, ir.SymRef) and cpm.is_call_to(node, ("minimum", "maximum")):
+        if (
+            isinstance(node, ir.FunCall)
+            and isinstance(node.fun, ir.SymRef)
+            and cpm.is_call_to(node, ("minimum", "maximum"))
+        ):
             arg0, arg1 = node.args
             # `maximum(plus(sym, 1), sym)` -> `plus(sym, 1)`
             if cpm.is_call_to(arg0, "plus"):
