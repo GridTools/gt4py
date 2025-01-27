@@ -14,6 +14,7 @@ import functools
 import operator
 from typing import Optional
 
+from gt4py import eve
 from gt4py.eve import utils as eve_utils
 from gt4py.next import common
 from gt4py.next.iterator import ir
@@ -22,7 +23,7 @@ from gt4py.next.iterator.ir_utils import (
     ir_makers as im,
     misc as ir_misc,
 )
-from gt4py.next.iterator.transforms.fixed_point_transformation import FixedPointTransformation
+from gt4py.next.iterator.transforms import fixed_point_transformation
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas, inline_lambda
 from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.type_system import type_info, type_specifications as ts
@@ -87,7 +88,9 @@ def _is_trivial_or_tuple_thereof_expr(node: ir.Node) -> bool:
 #  reads a little convoluted and is also different to how we write other transformations. We
 #  should revisit the pattern here and try to find a more general mechanism.
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class CollapseTuple(FixedPointTransformation):
+class CollapseTuple(
+    fixed_point_transformation.FixedPointTransformation, eve.PreserveLocationVisitor
+):
     """
     Simplifies `make_tuple`, `tuple_get` calls.
 

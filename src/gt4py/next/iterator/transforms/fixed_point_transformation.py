@@ -16,7 +16,7 @@ from gt4py.next.iterator.type_system import inference as itir_type_inference
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class FixedPointTransformation(eve.PreserveLocationVisitor, eve.NodeTranslator):
+class FixedPointTransformation(eve.NodeTranslator):
     """
     Transformation pass that transforms until no transformation is applicable anymore.
     """
