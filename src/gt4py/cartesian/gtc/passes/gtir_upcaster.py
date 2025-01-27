@@ -24,7 +24,7 @@ def _upcast_node(target_dtype: DataType, node: Expr) -> Expr:
 
 def _upcast_nodes(*exprs: Expr, upcasting_rule: Callable) -> Iterator[Expr]:
     assert all(e.dtype for e in exprs)
-    dtypes: List[DataType] = [e.dtype for e in exprs]  # type: ignore # guaranteed to be not None
+    dtypes: List[DataType] = [e.dtype for e in exprs]  # guaranteed to be not None
     target_dtypes = upcasting_rule(*dtypes)
     return iter(_upcast_node(target_dtype, arg) for target_dtype, arg in zip(target_dtypes, exprs))
 
