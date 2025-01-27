@@ -462,14 +462,14 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     def visit_Constant(self, node: foast.Constant, **kwargs: Any) -> itir.Expr:
         return self._make_literal(node.value, node.type)
 
-    def _lower_and_map(self, op: itir.Expr | str, *args: Any, **kwargs: Any) -> itir.FunCall:
+    def _lower_and_map(self, op: itir.Lambda | str, *args: Any, **kwargs: Any) -> itir.FunCall:
         return _map(
             op, tuple(self.visit(arg, **kwargs) for arg in args), tuple(arg.type for arg in args)
         )
 
 
 def _map(
-    op: itir.Expr | str,
+    op: itir.Lambda | str,
     lowered_args: tuple,
     original_arg_types: tuple[ts.TypeSpec, ...],
 ) -> itir.FunCall:
@@ -489,7 +489,7 @@ def _map(
         )
         op = im.map_(op)
 
-    return im.op_as_fieldop(im.call(op))(*lowered_args)
+    return im.op_as_fieldop(op)(*lowered_args)
 
 
 class FieldOperatorLoweringError(Exception): ...

@@ -460,7 +460,7 @@ def as_fieldop(expr: itir.Expr | str, domain: Optional[itir.Expr] = None) -> cal
 
 
 def op_as_fieldop(
-    op: str | itir.SymRef | Callable, domain: Optional[itir.FunCall] = None
+    op: str | itir.SymRef | itir.Lambda | Callable, domain: Optional[itir.FunCall] = None
 ) -> Callable[..., itir.FunCall]:
     """
     Promotes a function `op` to a field_operator.
