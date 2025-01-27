@@ -169,18 +169,6 @@ def divides_(left, right):
     return call("divides")(left, right)
 
 
-def floordiv_(left, right):
-    """Create a floor division FunCall, shorthand for ``call("floordiv")(left, right)``."""
-    # TODO(tehrengruber): Use int(floor(left/right)) as soon as we support integer casting
-    #  and remove the `floordiv` builtin again.
-    return call("floordiv")(left, right)
-
-
-def mod(left, right):
-    """Create a modulo FunCall, shorthand for ``call("mod")(left, right)``."""
-    return call("mod")(left, right)
-
-
 def and_(left, right):
     """Create an and_ FunCall, shorthand for ``call("and_")(left, right)``."""
     return call("and_")(left, right)
@@ -536,3 +524,40 @@ def index(dim: common.Dimension) -> itir.FunCall:
 def map_(op):
     """Create a `map_` call."""
     return call(call("map_")(op))
+
+
+def reduce(op, expr):
+    """Create a `reduce` call."""
+    return call("reduce")(op, expr)
+
+
+def scan(expr, forward, init):
+    """Create a `scan` call."""
+    return call("scan")(expr, forward, init)
+
+
+def list_get(list_idx, list):
+    """Create a `list_get` call."""
+    return call("list_get")(list_idx, list)
+
+
+def maximum(expr1, expr2):
+    """Create a `maximum` call."""
+    call("maximum")(expr1, expr2)
+
+
+def minimum(expr1, expr2):
+    """Create a `minimum` call."""
+    call("minimum")(expr1, expr2)
+
+
+def cast_(expr, dtype: ts.ScalarType | str):
+    """Create a `cast_` call."""
+    if isinstance(dtype, ts.ScalarType):
+        dtype = dtype.kind.name.lower()
+    return call("cast_")(expr, dtype)
+
+
+def can_deref(expr):
+    """Create a `can_deref` call."""
+    call("can_deref")(expr)

@@ -44,7 +44,7 @@ def test_neighbors():
 
 def test_reduce():
     # λ(inp) → reduce(plus, 0.)(·inp)
-    testee = im.lambda_("inp")(im.call(im.call("reduce")("plus", 0.0))(im.deref("inp")))
+    testee = im.lambda_("inp")(im.call(im.reduce("plus", 0.0))(im.deref("inp")))
     expected = [{()}]
 
     actual = TraceShifts.trace_stencil(testee)

@@ -35,19 +35,19 @@ def has_skip_values(request):
 @pytest.fixture
 def basic_reduction():
     UIDs.reset_sequence()
-    return im.call(im.call("reduce")("foo", 0.0))(im.neighbors("Dim", "x"))
+    return im.call(im.reduce("foo", 0.0))(im.neighbors("Dim", "x"))
 
 
 @pytest.fixture
 def reduction_with_shift_on_second_arg():
     UIDs.reset_sequence()
-    return im.call(im.call("reduce")("foo", 0.0))("x", im.neighbors("Dim", "y"))
+    return im.call(im.reduce("foo", 0.0))("x", im.neighbors("Dim", "y"))
 
 
 @pytest.fixture
 def reduction_with_incompatible_shifts():
     UIDs.reset_sequence()
-    return im.call(im.call("reduce")("foo", 0.0))(
+    return im.call(im.reduce("foo", 0.0))(
         im.neighbors("Dim", "x"), im.neighbors("Dim2", "y")
     )
 
@@ -55,7 +55,7 @@ def reduction_with_incompatible_shifts():
 @pytest.fixture
 def reduction_with_irrelevant_full_shift():
     UIDs.reset_sequence()
-    return im.call(im.call("reduce")("foo", 0.0))(
+    return im.call(im.reduce("foo", 0.0))(
         im.neighbors("Dim", im.shift("IrrelevantDim", 0)("x")), im.neighbors("Dim", "y")
     )
 
@@ -63,7 +63,7 @@ def reduction_with_irrelevant_full_shift():
 @pytest.fixture
 def reduction_if():
     UIDs.reset_sequence()
-    return im.call(im.call("reduce")("foo", 0.0))(im.if_(True, im.neighbors("Dim", "x"), "y"))
+    return im.call(im.reduce("foo", 0.0))(im.if_(True, im.neighbors("Dim", "x"), "y"))
 
 
 @pytest.mark.parametrize(
@@ -95,14 +95,11 @@ def _expected(red, dim, max_neighbors, has_skip_values, shifted_arg=0):
     if has_skip_values:
         neighbors_offset = red.args[shifted_arg].args[0]
         neighbors_it = red.args[shifted_arg].args[1]
-        can_deref = ir.FunCall(
-            fun=ir.SymRef(id="can_deref"),
-            args=[
+        can_deref = im.can_deref(
                 ir.FunCall(
                     fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=[neighbors_offset, offset]),
                     args=[neighbors_it],
                 )
-            ],
         )
         step_expr = ir.FunCall(fun=ir.SymRef(id="if_"), args=[can_deref, step_expr, acc])
     step_fun = ir.Lambda(params=[ir.Sym(id=acc.id), ir.Sym(id=offset.id)], expr=step_expr)

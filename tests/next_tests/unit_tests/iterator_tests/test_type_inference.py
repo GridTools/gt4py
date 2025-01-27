@@ -77,10 +77,10 @@ def expression_test_cases():
         (im.plus(1, 2), int_type),
         (im.eq(1, 2), bool_type),
         (im.deref(im.ref("it", it_on_e_of_e_type)), it_on_e_of_e_type.element_type),
-        (im.call("can_deref")(im.ref("it", it_on_e_of_e_type)), bool_type),
+        (im.can_deref(im.ref("it", it_on_e_of_e_type)), bool_type),
         (im.if_(True, 1, 2), int_type),
         (im.call("make_const_list")(True), ts.ListType(element_type=bool_type)),
-        (im.call("list_get")(0, im.ref("l", ts.ListType(element_type=bool_type))), bool_type),
+        (im.list_get(0, im.ref("l", ts.ListType(element_type=bool_type))), bool_type),
         (
             im.call("named_range")(
                 itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL), 0, 1
@@ -119,7 +119,7 @@ def expression_test_cases():
             ts.ListType(element_type=it_on_e_of_e_type.element_type),
         ),
         # cast
-        (im.call("cast_")(1, "int32"), int_type),
+        (im.cast_(1, int_type), int_type),
         # TODO: lift
         # TODO: scan
         # map
@@ -128,10 +128,10 @@ def expression_test_cases():
             int_list_type,
         ),
         # reduce
-        (im.call(im.call("reduce")("plus", 0))(im.ref("l", int_list_type)), int_type),
+        (im.call(im.reduce("plus", 0))(im.ref("l", int_list_type)), int_type),
         (
             im.call(
-                im.call("reduce")(
+                im.reduce(
                     im.lambda_("acc", "a", "b")(
                         im.make_tuple(
                             im.plus(im.tuple_get(0, "acc"), "a"),
@@ -149,7 +149,7 @@ def expression_test_cases():
         # as_fieldop
         (
             im.call(
-                im.call("as_fieldop")(
+                im.as_fieldop(
                     "deref",
                     im.call("cartesian_domain")(
                         im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
@@ -160,7 +160,7 @@ def expression_test_cases():
         ),
         (
             im.call(
-                im.call("as_fieldop")(
+                im.as_fieldop(
                     im.lambda_("it")(im.deref(im.shift("V2E", 0)("it"))),
                     im.call("unstructured_domain")(
                         im.call("named_range")(
@@ -178,7 +178,7 @@ def expression_test_cases():
         ),
         (
             im.call(
-                im.call("as_fieldop")(
+                im.as_fieldop(
                     im.lambda_("a", "b")(im.make_tuple(im.deref("a"), im.deref("b"))),
                     im.call("cartesian_domain")(
                         im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
@@ -198,7 +198,7 @@ def expression_test_cases():
             im.if_(
                 False,
                 im.call(
-                    im.call("as_fieldop")(
+                    im.as_fieldop(
                         im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
                         im.call("cartesian_domain")(
                             im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
@@ -206,7 +206,7 @@ def expression_test_cases():
                     )
                 )(im.ref("inp", float_i_field), 1.0),
                 im.call(
-                    im.call("as_fieldop")(
+                    im.as_fieldop(
                         "deref",
                         im.call("cartesian_domain")(
                             im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
@@ -276,7 +276,7 @@ def test_cast_first_arg_inference():
     # since cast_ is a grammar builtin whose return type is given by its second argument it is
     # easy to forget inferring the types of the first argument and its children. Simply check
     # if the first argument has a type inferred correctly here.
-    testee = im.call("cast_")(
+    testee = im.cast_(
         im.plus(im.literal_from_value(1), im.literal_from_value(2)), "float64"
     )
     result = itir_type_inference.infer(
@@ -299,7 +299,7 @@ def test_cartesian_fencil_definition():
         declarations=[],
         body=[
             itir.SetAt(
-                expr=im.call(im.call("as_fieldop")(im.ref("deref"), cartesian_domain))(
+                expr=im.call(im.as_fieldop(im.ref("deref"), cartesian_domain))(
                     im.ref("inp")
                 ),
                 domain=cartesian_domain,
@@ -337,7 +337,7 @@ def test_unstructured_fencil_definition():
         body=[
             itir.SetAt(
                 expr=im.call(
-                    im.call("as_fieldop")(
+                    im.as_fieldop(
                         im.lambda_("it")(im.deref(im.shift("V2E", 0)("it"))), unstructured_domain
                     )
                 )(im.ref("inp")),
@@ -375,7 +375,7 @@ def test_function_definition():
         body=[
             itir.SetAt(
                 domain=cartesian_domain,
-                expr=im.call(im.call("as_fieldop")(im.ref("bar"), cartesian_domain))(im.ref("inp")),
+                expr=im.call(im.as_fieldop(im.ref("bar"), cartesian_domain))(im.ref("inp")),
                 target=im.ref("out"),
             ),
         ],
@@ -409,8 +409,8 @@ def test_fencil_with_nb_field_input():
             itir.SetAt(
                 domain=unstructured_domain,
                 expr=im.call(
-                    im.call("as_fieldop")(
-                        im.lambda_("it")(im.call(im.call("reduce")("plus", 0.0))(im.deref("it"))),
+                    im.as_fieldop(
+                        im.lambda_("it")(im.call(im.reduce("plus", 0.0))(im.deref("it"))),
                         unstructured_domain,
                     )
                 )(im.ref("inp")),
@@ -439,7 +439,7 @@ def test_program_tuple_setat_short_target():
         body=[
             itir.SetAt(
                 expr=im.call(
-                    im.call("as_fieldop")(im.lambda_()(im.make_tuple(1.0, 2.0)), cartesian_domain)
+                    im.as_fieldop(im.lambda_()(im.make_tuple(1.0, 2.0)), cartesian_domain)
                 )(),
                 domain=cartesian_domain,
                 target=im.make_tuple("out"),

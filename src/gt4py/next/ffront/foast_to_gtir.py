@@ -138,7 +138,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
         definition = itir.Lambda(params=func_definition.params, expr=new_body)
 
-        body = im.as_fieldop(im.call("scan")(definition, forward, init))(*stencil_args)
+        body = im.as_fieldop(im.scan(definition, forward, init))(*stencil_args)
 
         return itir.FunctionDefinition(id=node.id, params=definition.params[1:], expr=body)
 
@@ -360,7 +360,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         obj, new_type = self.visit(node.args[0], **kwargs), node.args[1].id
 
         def create_cast(expr: itir.Expr, t: tuple[ts.TypeSpec]) -> itir.FunCall:
-            return _map(im.lambda_("val")(im.call("cast_")("val", str(new_type))), (expr,), t)
+            return _map(im.lambda_("val")(im.cast_("val", str(new_type))), (expr,), t)
 
         if not isinstance(node.type, ts.TupleType):  # to keep the IR simpler
             return create_cast(obj, (node.args[0].type,))
@@ -409,7 +409,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         # TODO(havogt): deal with nested reductions of the form neighbor_sum(neighbor_sum(field(off1)(off2)))
         it = self.visit(node.args[0], **kwargs)
         assert isinstance(node.kwargs["axis"].type, ts.DimensionType)
-        val = im.call(im.call("reduce")(op, init_expr))
+        val = im.call(im.reduce(op, init_expr))
         return im.op_as_fieldop(val)(it)
 
     def _visit_neighbor_sum(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
@@ -487,7 +487,7 @@ def _map(
             promote_to_list(arg_type)(larg)
             for arg_type, larg in zip(original_arg_types, lowered_args)
         )
-        op = im.call("map_")(op)
+        op = im.map_(op)
 
     return im.op_as_fieldop(im.call(op))(*lowered_args)
 

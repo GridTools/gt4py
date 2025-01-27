@@ -181,7 +181,7 @@ def test_multi_length_shift(offset_provider):
     stencil = im.lambda_("arg0")(
         im.deref(
             im.call(
-                im.call("shift")(
+                im.shift(
                     im.ensure_offset("Ioff"),
                     im.ensure_offset(1),
                     im.ensure_offset("Ioff"),
@@ -1028,10 +1028,10 @@ def test_arithmetic_builtin(offset_provider):
 def test_scan(offset_provider):
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     testee = im.as_fieldop(
-        im.call("scan")(im.lambda_("init", "it")(im.deref(im.shift("Ioff", 1)("it"))), True, 0.0)
+        im.scan(im.lambda_("init", "it")(im.deref(im.shift("Ioff", 1)("it"))), True, 0.0)
     )("a")
     expected = im.as_fieldop(
-        im.call("scan")(im.lambda_("init", "it")(im.deref(im.shift("Ioff", 1)("it"))), True, 0.0),
+        im.scan(im.lambda_("init", "it")(im.deref(im.shift("Ioff", 1)("it"))), True, 0.0),
         domain,
     )("a")
 

@@ -91,7 +91,7 @@ def test_scalar_arg_only():
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.call("multiplies")("alpha", "bar")
+    reference = im.multiplies_("alpha", "bar")
 
     assert lowered.expr == reference
 
@@ -297,7 +297,7 @@ def test_astype_local_field():
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.op_as_fieldop(im.map_(im.lambda_("val")(im.call("cast_")("val", "int32"))))("a")
+    reference = im.op_as_fieldop(im.map_(im.lambda_("val")(im.cast_("val", "int32"))))("a")
 
     assert lowered.expr == reference
 
@@ -310,7 +310,7 @@ def test_astype_scalar():
     lowered = FieldOperatorLowering.apply(parsed)
     lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
 
-    reference = im.call("cast_")("a", "int32")
+    reference = im.cast_("a", "int32")
 
     assert lowered_inlined.expr == reference
 
@@ -341,7 +341,7 @@ def test_astype_tuple_scalar_and_field():
 
     reference = im.make_tuple(
         im.cast_as_fieldop("int32")(im.tuple_get(0, "a")),
-        im.call("cast_")(im.tuple_get(1, "a"), "int32"),
+        im.cast_(im.tuple_get(1, "a"), "int32"),
     )
 
     assert lowered_inlined.expr == reference
@@ -551,7 +551,7 @@ def test_add_scalar_literals():
 
     reference = im.let(
         ssa.unique_name("tmp", 0),
-        im.call("plus")(
+        im.plus(
             im.literal("1", "int32"),
             im.literal("1", "int32"),
         ),
@@ -656,7 +656,7 @@ def test_compare_scalars():
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.call("greater")(
+    reference = im.greater(
         im.literal("3", "int32"),
         im.literal("4", "int32"),
     )
@@ -762,7 +762,7 @@ def test_reduction_lowering_neighbor_sum():
 
     reference = im.op_as_fieldop(
         im.call(
-            im.call("reduce")(
+            im.reduce(
                 "plus",
                 im.literal(value="0", typename="float64"),
             )
@@ -781,7 +781,7 @@ def test_reduction_lowering_max_over():
 
     reference = im.op_as_fieldop(
         im.call(
-            im.call("reduce")(
+            im.reduce(
                 "maximum",
                 im.literal(value=str(np.finfo(np.float64).min), typename="float64"),
             )
@@ -800,7 +800,7 @@ def test_reduction_lowering_min_over():
 
     reference = im.op_as_fieldop(
         im.call(
-            im.call("reduce")(
+            im.reduce(
                 "minimum",
                 im.literal(value=str(np.finfo(np.float64).max), typename="float64"),
             )
@@ -829,7 +829,7 @@ def test_reduction_lowering_expr():
     )(
         im.op_as_fieldop(
             im.call(
-                im.call("reduce")(
+                im.reduce(
                     "plus",
                     im.literal(value="0", typename="float64"),
                 )

@@ -72,7 +72,7 @@ def is_call_to(node: Any, fun: str | Iterable[str]) -> TypeGuard[itir.FunCall]:
     attribute which can be anything.
 
     >>> from gt4py.next.iterator.ir_utils import ir_makers as im
-    >>> node = im.call("plus")(1, 2)
+    >>> node = im.plus(1, 2)
     >>> is_call_to(node, "plus")
     True
     >>> is_call_to(node, "minus")
