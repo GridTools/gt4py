@@ -4,11 +4,9 @@ on:
   push:
     branches:
     - main
-    - gtir  # TODO(tehrengruber): remove after GTIR refactoring #1582
   pull_request:
     branches:
     - main
-    - gtir  # TODO(tehrengruber): remove after GTIR refactoring #1582
     paths-ignore:  # Skip if only gt4py.cartesian and irrelevant doc files have been updated
     - "src/gt4py/cartesian/**"
     - "tests/cartesian_tests/**"
@@ -62,7 +60,7 @@ jobs:
         tox run -e next-py${pyversion_no_dot}-${{ matrix.tox-factor }}-cpu
     #     mv coverage.json coverage-py${{ matrix.python-version }}-${{ matrix.os }}-${{ matrix.tox-env-factor }}-cpu.json
     # - name: Upload coverage.json artifact
-    #   uses: actions/upload-artifact@v3
+    #   uses: actions/upload-artifact@v4
     #   with:
     #     name: coverage-py${{ matrix.python-version }}-${{ matrix.os }}-${{ matrix.tox-env-factor }}-cpu
     #     path: coverage-py${{ matrix.python-version }}-${{ matrix.os }}-${{ matrix.tox-env-factor }}-cpu.json
@@ -76,7 +74,7 @@ jobs:
     #     echo ${{ github.event.pull_request.head.sha }} >> info.txt
     #     echo ${{ github.run_id }} >> info.txt
     # - name: Upload info artifact
-    #   uses: actions/upload-artifact@v3
+    #   uses: actions/upload-artifact@v4
     #   with:
     #     name: info-py${{ matrix.python-version }}-${{ matrix.os }}-${{ matrix.tox-env-factor }}-cpu
     #     path: info.txt

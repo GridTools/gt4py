@@ -14,7 +14,7 @@ import numpy as np
 
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt
-from gt4py.next.iterator import ir as gtir
+from gt4py.next.iterator import builtins, ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 
 
@@ -75,13 +75,18 @@ MATH_BUILTINS_MAPPING = {
 
 def builtin_cast(*args: Any) -> str:
     val, target_type = args
-    assert target_type in gtir.TYPEBUILTINS
+    assert target_type in builtins.TYPE_BUILTINS
     return MATH_BUILTINS_MAPPING[target_type].format(val)
 
 
 def builtin_if(*args: Any) -> str:
     cond, true_val, false_val = args
     return f"{true_val} if {cond} else {false_val}"
+
+
+def builtin_tuple_get(*args: Any) -> str:
+    index, tuple_name = args
+    return f"{tuple_name}_{index}"
 
 
 def make_const_list(arg: str) -> str:
@@ -97,6 +102,7 @@ GENERAL_BUILTIN_MAPPING: dict[str, Callable[[Any], str]] = {
     "cast_": builtin_cast,
     "if_": builtin_if,
     "make_const_list": make_const_list,
+    "tuple_get": builtin_tuple_get,
 }
 
 

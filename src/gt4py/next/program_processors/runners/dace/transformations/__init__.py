@@ -42,7 +42,7 @@ from .strides import (
     gt_propagate_strides_from_access_node,
     gt_propagate_strides_of,
 )
-from .util import gt_find_constant_arguments, gt_make_transients_persistent
+from .utils import gt_find_constant_arguments, gt_make_transients_persistent
 
 
 __all__ = [

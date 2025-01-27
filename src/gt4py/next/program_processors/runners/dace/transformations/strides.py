@@ -12,9 +12,7 @@ import dace
 from dace import data as dace_data
 from dace.sdfg import nodes as dace_nodes
 
-from gt4py.next.program_processors.runners.dace_fieldview import (
-    transformations as gtx_transformations,
-)
+from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
 PropagatedStrideRecord: TypeAlias = tuple[str, dace_nodes.NestedSDFG]
@@ -498,31 +496,42 @@ def _gt_map_strides_into_nested_sdfg(
     inner_shape = inner_desc.shape
     inner_strides_init = inner_desc.strides
 
+    outer_shape = outer_desc.shape
     outer_strides = outer_desc.strides
     outer_inflow = outer_subset.size()
 
-    new_strides: list = []
-    for dim_ostride, dim_oinflow in zip(outer_strides, outer_inflow, strict=True):
-        if dim_oinflow == 1:
-            # This is the case of implicit slicing along one dimension.
-            pass
-        else:
-            # There is inflow into the SDFG, so we need the stride.
-            new_strides.append(dim_ostride)
-        assert len(new_strides) <= len(inner_shape)
-
-    # If we have a scalar on the inside, then there is nothing to adjust.
-    #  We could have performed the test above, but doing it here, gives us
-    #  the chance of validating it.
     if isinstance(inner_desc, dace_data.Scalar):
-        if len(new_strides) != 0:
-            raise ValueError(f"Dimensional error for '{inner_data}' in '{nsdfg_node.label}'.")
+        # A scalar does not have a stride that must be propagated.
         return
 
-    if not isinstance(inner_desc, dace_data.Array):
-        raise TypeError(
-            f"Expected that '{inner_data}' is an 'Array' but it is '{type(inner_desc).__name__}'."
-        )
+    # Now determine the new stride that is needed on the inside.
+    new_strides: list = []
+    if len(outer_shape) == len(inner_shape):
+        # The inner and the outer descriptor have the same dimensionality.
+        #  We now have to decide if we should take the stride from the outside,
+        #  which happens for example in case of `A[0:N, 0:M] -> B[N, M]`, or if we
+        #  must take 1, which happens if we do `A[0:N, i] -> B[N, 1]`, we detect that
+        #  based on the volume that flows in.
+        for dim_ostride, dim_oinflow in zip(outer_strides, outer_inflow, strict=True):
+            new_strides.append(1 if dim_oinflow == 1 else dim_ostride)
+
+    elif len(inner_shape) < len(outer_shape):
+        # There are less dimensions on the inside than on the outside. This means
+        #  that some were sliced away. We detect this case by checking if the Memlet
+        #  subset in that dimension has size 1.
+        #  NOTE: That this is not always correct as it might be possible that there
+        #   are some explicit size 1 dimensions at several places.
+        new_strides = []
+        for dim_ostride, dim_oinflow in zip(outer_strides, outer_inflow, strict=True):
+            if dim_oinflow == 1:
+                pass
+            else:
+                new_strides.append(dim_ostride)
+            assert len(new_strides) <= len(inner_shape)
+    else:
+        # The case that we have more dimensions on the inside than on the outside.
+        #  This is currently not supported.
+        raise NotImplementedError("NestedSDFGs can not be used to increase the rank.")
 
     if len(new_strides) != len(inner_shape):
         raise ValueError("Failed to compute the inner strides.")
@@ -642,7 +651,7 @@ def _gt_find_toplevel_data_accesses(
                 top_level_data[data].append((state, dnode))
                 continue
 
-            elif gtx_transformations.util.is_view(dnode, sdfg):
+            elif gtx_transformations.utils.is_view(dnode, sdfg):
                 # The AccessNode refers to a View so we ignore it anyway.
                 continue
 

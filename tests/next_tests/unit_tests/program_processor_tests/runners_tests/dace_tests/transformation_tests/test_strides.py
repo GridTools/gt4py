@@ -14,7 +14,7 @@ dace = pytest.importorskip("dace")
 from dace import symbolic as dace_symbolic
 from dace.sdfg import nodes as dace_nodes
 
-from gt4py.next.program_processors.runners.dace_fieldview import (
+from gt4py.next.program_processors.runners.dace import (
     transformations as gtx_transformations,
 )
 
@@ -539,3 +539,99 @@ def test_strides_propagation_shared_symbols_sdfg():
     ref(**ref_args)
     sdfg_level1(**res_args)
     assert np.allclose(ref_args["b1"], res_args["b1"])
+
+
+def _make_strides_propagation_stride_1_nsdfg() -> dace.SDFG:
+    sdfg_level1 = dace.SDFG(util.unique_name("strides_propagation_stride_1_nsdfg"))
+    state = sdfg_level1.add_state(is_start_block=True)
+
+    a_stride_sym = dace.symbol("a_stride", dtype=dace.uint64)
+    b_stride_sym = dace.symbol("b_stride", dtype=dace.uint64)
+    stride_syms = {"a": a_stride_sym, "b": b_stride_sym}
+
+    for name in ["a", "b"]:
+        sdfg_level1.add_array(
+            name,
+            shape=(10, 1),
+            strides=(stride_syms[name], 1),
+            dtype=dace.float64,
+            transient=False,
+        )
+
+    state.add_mapped_tasklet(
+        "computation",
+        map_ranges={"__i": "0:10"},
+        inputs={"__in": dace.Memlet("a[__i, 0]")},
+        code="__out = __in + 10",
+        outputs={"__out": dace.Memlet("b[__i, 0]")},
+        external_edges=True,
+    )
+    sdfg_level1.validate()
+    return sdfg_level1
+
+
+def _make_strides_propagation_stride_1_sdfg() -> tuple[dace.SDFG, dace_nodes.NestedSDFG]:
+    sdfg = dace.SDFG(util.unique_name("strides_propagation_stride_1_sdfg"))
+    state = sdfg.add_state(is_start_block=True)
+
+    a_stride_sym = dace.symbol("a_stride", dtype=dace.uint64)
+    b_stride_sym = dace.symbol("b_stride", dtype=dace.uint64)
+    stride_syms = {"a": a_stride_sym, "b": b_stride_sym}
+
+    for name in ["a", "b"]:
+        sdfg.add_array(
+            name,
+            shape=(10, 10),
+            strides=(stride_syms[name], 1),
+            dtype=dace.float64,
+            transient=False,
+        )
+
+    # Now get the nested SDFG.
+    sdfg_level1 = _make_strides_propagation_stride_1_nsdfg()
+
+    nsdfg = state.add_nested_sdfg(
+        parent=sdfg,
+        sdfg=sdfg_level1,
+        inputs={"a"},
+        outputs={"b"},
+        symbol_mapping=None,
+    )
+
+    state.add_edge(state.add_access("a"), None, nsdfg, "a", dace.Memlet("a[0:10, 3]"))
+    state.add_edge(nsdfg, "b", state.add_access("b"), None, dace.Memlet("b[0:10, 2]"))
+    sdfg.validate()
+    return sdfg, nsdfg
+
+
+def test_strides_propagation_stride_1():
+    def ref(a, b):
+        for i in range(10):
+            b[i, 2] = a[i, 3] + 10.0
+
+    sdfg, nsdfg = _make_strides_propagation_stride_1_sdfg()
+
+    outer_desc_a = sdfg.arrays["a"]
+    inner_desc_a = nsdfg.sdfg.arrays["a"]
+    assert outer_desc_a.strides == inner_desc_a.strides
+
+    # Now switch the strides of `a` on the top level.
+    #  Essentially going from `C` to FORTRAN order.
+    stride_outer_a_0, stride_outer_a_1 = outer_desc_a.strides
+    outer_desc_a.set_shape(outer_desc_a.shape, (stride_outer_a_1, stride_outer_a_0))
+
+    # Now we propagate the data into it.
+    gtx_transformations.gt_propagate_strides_of(sdfg=sdfg, data_name="a")
+
+    # Because of the propagation it must now been changed to `(1, 1)` on the inside.
+    assert inner_desc_a.strides == (1, 1)
+
+    res_args = {
+        "a": np.array(np.random.rand(10, 10), order="F", dtype=np.float64, copy=True),
+        "b": np.array(np.random.rand(10, 10), order="C", dtype=np.float64, copy=True),
+    }
+    ref_args = copy.deepcopy(res_args)
+
+    sdfg(**res_args, a_stride=10, b_stride=10)
+    ref(**ref_args)
+    assert np.allclose(ref_args["b"], res_args["b"])
