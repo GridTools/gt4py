@@ -378,7 +378,7 @@ def test_unary_minus():
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.op_as_fieldop("minus")(im.literal("0", "float64"), "inp")
+    reference = im.op_as_fieldop("neg")("inp")
 
     assert lowered.expr == reference
 
@@ -390,7 +390,7 @@ def test_unary_plus():
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.op_as_fieldop("plus")(im.literal("0", "float64"), "inp")
+    reference = im.ref("inp")
 
     assert lowered.expr == reference
 

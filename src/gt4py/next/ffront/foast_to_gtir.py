@@ -241,12 +241,12 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
             if dtype.kind != ts.ScalarKind.BOOL:
                 raise NotImplementedError(f"'{node.op}' is only supported on 'bool' arguments.")
             return self._lower_and_map("not_", node.operand)
-
-        return self._lower_and_map(
-            node.op.value,
-            foast.Constant(value="0", type=dtype, location=node.location),
-            node.operand,
-        )
+        if node.op in [dialect_ast_enums.UnaryOperator.USUB]:
+            return self._lower_and_map("neg", node.operand)
+        if node.op in [dialect_ast_enums.UnaryOperator.UADD]:
+            return self.visit(node.operand)
+        else:
+            raise NotImplementedError(f"Unary operator '{node.op}' is not supported.")
 
     def visit_BinOp(self, node: foast.BinOp, **kwargs: Any) -> itir.FunCall:
         return self._lower_and_map(node.op.value, node.left, node.right)
