@@ -23,6 +23,7 @@ from gt4py.next.iterator.ir_utils import (
     ir_makers as im,
     misc as ir_misc,
 )
+from gt4py.next.iterator.transforms import fixed_point_transformation
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas, inline_lambda
 from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.type_system import type_info, type_specifications as ts
@@ -86,8 +87,10 @@ def _is_trivial_or_tuple_thereof_expr(node: ir.Node) -> bool:
 #  go through all available transformation and apply them. However the final result here still
 #  reads a little convoluted and is also different to how we write other transformations. We
 #  should revisit the pattern here and try to find a more general mechanism.
-@dataclasses.dataclass(frozen=True)
-class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class CollapseTuple(
+    fixed_point_transformation.FixedPointTransformation, eve.PreserveLocationVisitor
+):
     """
     Simplifies `make_tuple`, `tuple_get` calls.
 
@@ -98,7 +101,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
     # TODO(tehrengruber): This Flag mechanism is a little low level. What we actually want
     #   is something like a pass manager, where for each pattern we have a corresponding
     #   transformation, etc.
-    class Flag(enum.Flag):
+    class Transformation(enum.Flag):
         #: `make_tuple(tuple_get(0, t), tuple_get(1, t), ..., tuple_get(N-1,t))` -> `t`
         COLLAPSE_MAKE_TUPLE_TUPLE_GET = enum.auto()
         #: `tuple_get(i, make_tuple(e_0, e_1, ..., e_i, ..., e_N))` -> `e_i`
@@ -137,12 +140,12 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         INLINE_TRIVIAL_LET = enum.auto()
 
         @classmethod
-        def all(self) -> CollapseTuple.Flag:
+        def all(self) -> CollapseTuple.Transformation:
             return functools.reduce(operator.or_, self.__members__.values())
 
     uids: eve_utils.UIDGenerator
     ignore_tuple_size: bool
-    flags: Flag = Flag.all()  # noqa: RUF009 [function-call-in-dataclass-default-argument]
+    enabled_transformations: Transformation = Transformation.all()  # noqa: RUF009 [function-call-in-dataclass-default-argument]
 
     PRESERVED_ANNEX_ATTRS = ("type", "domain")
 
@@ -155,8 +158,8 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         remove_letified_make_tuple_elements: bool = True,
         offset_provider_type: Optional[common.OffsetProviderType] = None,
         within_stencil: Optional[bool] = None,
-        # manually passing flags is mostly for allowing separate testing of the modes
-        flags: Optional[Flag] = None,
+        # manually passing enabled transformations is mostly for allowing separate testing of the modes
+        enabled_transformations: Optional[Transformation] = None,
         # allow sym references without a symbol declaration, mostly for testing
         allow_undeclared_symbols: bool = False,
         uids: Optional[eve_utils.UIDGenerator] = None,
@@ -174,7 +177,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 to remove left-overs from `LETIFY_MAKE_TUPLE_ELEMENTS` transformation.
                 `(λ(_tuple_el_1, _tuple_el_2) → {_tuple_el_1, _tuple_el_2})(1, 2)` -> {1, 2}`
         """
-        flags = flags or cls.flags
+        enabled_transformations = enabled_transformations or cls.enabled_transformations
         offset_provider_type = offset_provider_type or {}
         uids = uids or eve_utils.UIDGenerator()
 
@@ -194,7 +197,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
         new_node = cls(
             ignore_tuple_size=ignore_tuple_size,
-            flags=flags,
+            enabled_transformations=enabled_transformations,
             uids=uids,
         ).visit(node, within_stencil=within_stencil)
 
@@ -210,45 +213,17 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
         return new_node
 
-    def visit_FunCall(self, node: ir.FunCall, **kwargs) -> ir.Node:
+    def visit(self, node, **kwargs):
         if cpm.is_call_to(node, "as_fieldop"):
             kwargs = {**kwargs, "within_stencil": True}
 
-        node = self.generic_visit(node, **kwargs)
-        return self.fp_transform(node, **kwargs)
-
-    def fp_transform(self, node: ir.Node, **kwargs) -> ir.Node:
-        while True:
-            new_node = self.transform(node, **kwargs)
-            if new_node is None:
-                break
-            assert new_node != node
-            node = new_node
-        return node
-
-    def transform(self, node: ir.Node, **kwargs) -> Optional[ir.Node]:
-        if not isinstance(node, ir.FunCall):
-            return None
-
-        for transformation in self.Flag:
-            if self.flags & transformation:
-                assert isinstance(transformation.name, str)
-                method = getattr(self, f"transform_{transformation.name.lower()}")
-                result = method(node, **kwargs)
-                if result is not None:
-                    assert (
-                        result is not node
-                    )  # transformation should have returned None, since nothing changed
-                    itir_type_inference.reinfer(result)
-                    return result
-        return None
+        return super().visit(node, **kwargs)
 
     def transform_collapse_make_tuple_tuple_get(
         self, node: ir.FunCall, **kwargs
     ) -> Optional[ir.Node]:
-        if node.fun == ir.SymRef(id="make_tuple") and all(
-            isinstance(arg, ir.FunCall) and arg.fun == ir.SymRef(id="tuple_get")
-            for arg in node.args
+        if cpm.is_call_to(node, "make_tuple") and all(
+            cpm.is_call_to(arg, "tuple_get") for arg in node.args
         ):
             # `make_tuple(tuple_get(0, t), tuple_get(1, t), ..., tuple_get(N-1,t))` -> `t`
             assert isinstance(node.args[0], ir.FunCall)
@@ -276,10 +251,9 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         self, node: ir.FunCall, **kwargs
     ) -> Optional[ir.Node]:
         if (
-            node.fun == ir.SymRef(id="tuple_get")
-            and isinstance(node.args[1], ir.FunCall)
-            and node.args[1].fun == ir.SymRef(id="make_tuple")
+            cpm.is_call_to(node, "tuple_get")
             and isinstance(node.args[0], ir.Literal)
+            and cpm.is_call_to(node.args[1], "make_tuple")
         ):
             # `tuple_get(i, make_tuple(e_0, e_1, ..., e_i, ..., e_N))` -> `e_i`
             assert not node.args[0].type or type_info.is_integer(node.args[0].type)
@@ -292,7 +266,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return None
 
     def transform_propagate_tuple_get(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
-        if node.fun == ir.SymRef(id="tuple_get") and isinstance(node.args[0], ir.Literal):
+        if cpm.is_call_to(node, "tuple_get") and isinstance(node.args[0], ir.Literal):
             # TODO(tehrengruber): extend to general symbols as long as the tail call in the let
             #   does not capture
             # `tuple_get(i, let(...)(make_tuple()))` -> `let(...)(tuple_get(i, make_tuple()))`
@@ -315,8 +289,8 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 )
         return None
 
-    def transform_letify_make_tuple_elements(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
-        if node.fun == ir.SymRef(id="make_tuple"):
+    def transform_letify_make_tuple_elements(self, node: ir.Node, **kwargs) -> Optional[ir.Node]:
+        if cpm.is_call_to(node, "make_tuple"):
             # `make_tuple(expr1, expr1)`
             # -> `let((_tuple_el_1, expr1), (_tuple_el_2, expr2))(make_tuple(_tuple_el_1, _tuple_el_2))`
             bound_vars: dict[ir.Sym, ir.Expr] = {}
@@ -335,7 +309,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 )
         return None
 
-    def transform_inline_trivial_make_tuple(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
+    def transform_inline_trivial_make_tuple(self, node: ir.Node, **kwargs) -> Optional[ir.Node]:
         if cpm.is_let(node):
             # `let(tup, make_tuple(trivial_expr1, trivial_expr2))(foo(tup))`
             #  -> `foo(make_tuple(trivial_expr1, trivial_expr2))`
@@ -350,7 +324,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
             #  in local-view for now. Revisit.
             return None
 
-        if not cpm.is_call_to(node, "if_"):
+        if isinstance(node, ir.FunCall) and not cpm.is_call_to(node, "if_"):
             # TODO(tehrengruber): Only inline if type of branch value is a tuple.
             # Examples:
             # `(if cond then {1, 2} else {3, 4})[0]` -> `if cond then {1, 2}[0] else {3, 4}[0]`
@@ -392,7 +366,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         # `if True then {2, 1} else {4, 3}`. The examples in the comments below all refer to this
         # tuple reordering example here.
 
-        if cpm.is_call_to(node, "if_"):
+        if not isinstance(node, ir.FunCall) or cpm.is_call_to(node, "if_"):
             return None
 
         # The first argument that is eligible also transforms all remaining args (They will be
