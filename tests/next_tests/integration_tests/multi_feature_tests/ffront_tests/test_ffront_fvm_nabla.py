@@ -63,11 +63,9 @@ def pnabla(
 
 
 def test_ffront_compute_zavgS(exec_alloc_descriptor):
-    _, allocator = exec_alloc_descriptor.executor, exec_alloc_descriptor.allocator
+    setup = nabla_setup(allocator=exec_alloc_descriptor.allocator)
 
-    setup = nabla_setup(allocator=allocator)
-
-    zavgS = gtx.zeros({Edge: setup.edges_size}, allocator=allocator)
+    zavgS = gtx.zeros({Edge: setup.edges_size}, allocator=exec_alloc_descriptor.allocator)
 
     compute_zavgS.with_backend(
         None if exec_alloc_descriptor.executor is None else exec_alloc_descriptor
@@ -83,12 +81,10 @@ def test_ffront_compute_zavgS(exec_alloc_descriptor):
 
 
 def test_ffront_nabla(exec_alloc_descriptor):
-    _, allocator = exec_alloc_descriptor.executor, exec_alloc_descriptor.allocator
+    setup = nabla_setup(allocator=exec_alloc_descriptor.allocator)
 
-    setup = nabla_setup(allocator=allocator)
-
-    pnabla_MXX = gtx.zeros({Vertex: setup.nodes_size}, allocator=allocator)
-    pnabla_MYY = gtx.zeros({Vertex: setup.nodes_size}, allocator=allocator)
+    pnabla_MXX = gtx.zeros({Vertex: setup.nodes_size}, allocator=exec_alloc_descriptor.allocator)
+    pnabla_MYY = gtx.zeros({Vertex: setup.nodes_size}, allocator=exec_alloc_descriptor.allocator)
 
     pnabla.with_backend(None if exec_alloc_descriptor.executor is None else exec_alloc_descriptor)(
         setup.input_field,
