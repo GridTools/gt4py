@@ -38,6 +38,7 @@ lint = [
 test = [
   'atlas4py>=0.35',
   'coverage[toml]>=7.5.0',
+  'hypothesis>=6.0.0',
   'nbmake>=1.4.6',
   'nox>=2024.10.9',
   'pytest>=8.0.1',

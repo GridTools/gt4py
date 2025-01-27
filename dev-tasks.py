@@ -90,7 +90,7 @@ def update_versions() -> None:
 def update_all() -> None:
     """Update all project dependencies and pre-commit hooks."""
     update_versions()
-    sync_precommit()
+    update_precommit()
 
 
 if __name__ == "__main__":

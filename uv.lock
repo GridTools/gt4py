@@ -1315,6 +1315,7 @@ dev = [
     { name = "coverage", extra = ["toml"] },
     { name = "cython" },
     { name = "esbonio" },
+    { name = "hypothesis" },
     { name = "jupytext" },
     { name = "matplotlib" },
     { name = "mypy", extra = ["faster-cache"] },
@@ -1363,6 +1364,7 @@ lint = [
 test = [
     { name = "atlas4py" },
     { name = "coverage", extra = ["toml"] },
+    { name = "hypothesis" },
     { name = "nbmake" },
     { name = "nox" },
     { name = "pytest" },
@@ -1441,6 +1443,7 @@ dev = [
     { name = "coverage", extras = ["toml"], specifier = ">=7.5.0" },
     { name = "cython", specifier = ">=3.0.0" },
     { name = "esbonio", specifier = ">=0.16.0" },
+    { name = "hypothesis", specifier = ">=6.0.0" },
     { name = "jupytext", specifier = ">=1.14" },
     { name = "matplotlib", specifier = ">=3.3" },
     { name = "mypy", extras = ["faster-cache"], specifier = ">=1.13.0" },
@@ -1489,6 +1492,7 @@ lint = [
 test = [
     { name = "atlas4py", specifier = ">=0.35", index = "https://test.pypi.org/simple/" },
     { name = "coverage", extras = ["toml"], specifier = ">=7.5.0" },
+    { name = "hypothesis", specifier = ">=6.0.0" },
     { name = "nbmake", specifier = ">=1.4.6" },
     { name = "nox", specifier = ">=2024.10.9" },
     { name = "pytest", specifier = ">=8.0.1" },
