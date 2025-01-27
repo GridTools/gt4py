@@ -138,7 +138,7 @@ def arithmetic_and_logical_test_data():
     return [
         # (builtin, inputs, expected)
         (abs, [[-1.0, 1.0]], [1.0, 1.0]),
-        (neg, [[-1.0, 1.0]], [1.0, -1.0]),
+        (neg, [[-1.0, 1.0, -1, 1]], [1.0, -1.0, -1, 1]),
         (plus, [2.0, 3.0], 5.0),
         (minus, [2.0, 3.0], -1.0),
         (multiplies, [2.0, 3.0], 6.0),
