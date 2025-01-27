@@ -121,7 +121,9 @@ class SDFGBuilder(DataflowBuilder, Protocol):
 
     @abc.abstractmethod
     def make_field(
-        self, data_node: dace.nodes.AccessNode, data_type: ts.FieldType | ts.ScalarType
+        self,
+        data_node: dace.nodes.AccessNode,
+        data_type: ts.FieldType | ts.ScalarType,
     ) -> gtir_builtin_translators.FieldopData:
         """Retrieve the field data descriptor including the domain offset information."""
         ...
@@ -245,13 +247,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         return self.offset_provider_type[offset]
 
     def make_field(
-        self, data_node: dace.nodes.AccessNode, data_type: ts.FieldType | ts.ScalarType
+        self,
+        data_node: dace.nodes.AccessNode,
+        data_type: ts.FieldType | ts.ScalarType,
     ) -> gtir_builtin_translators.FieldopData:
         """
-        Helper method to build the field data type associated with an access node
-        to non-transient data in the SDFG.
+        Helper method to build the field data type associated with a data access node.
 
-        In case of `ScalarType` data, the descriptor is constructed with `origin=None`.
+        In case of `ScalarType` data, the `FieldopData` is constructed with `origin=None`.
         In case of `FieldType` data, the field origin is added to the data descriptor.
         Besides, if the `FieldType` contains a local dimension, the descriptor is converted
         to a canonical form where the field domain consists of all global dimensions
@@ -344,7 +347,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         This method is only called for non-transient arrays, which require symbolic
         memory layout. The memory layout of transient arrays, used for temporary
-        fields, is assigned by DaCe during lowering to SDFG.
+        fields, is left to the DaCe default (row major, not necessarily the optimal
+        one) and might be changed during optimization.
 
         Returns:
             Two lists of symbols, one for the shape and the other for the strides of the array.

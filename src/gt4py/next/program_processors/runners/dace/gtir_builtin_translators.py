@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 
 
 def get_domain_indices(
-    dims: Sequence[gtx_common.Dimension], origin: Optional[Sequence[dace.symbolic.SymExpr]] = None
+    dims: Sequence[gtx_common.Dimension], origin: Optional[Sequence[dace.symbolic.SymExpr]]
 ) -> dace_subsets.Indices:
     """
     Helper function to construct the list of indices for a field domain, applying
@@ -47,7 +47,7 @@ def get_domain_indices(
 
     Args:
         dims: The field dimensions.
-        origin: The domain start index in each dimension.
+        origin: The domain start index in each dimension. If set to `None`, assume all zeros.
 
     Returns:
         A list of indices for field access in dace arrays. As this list is returned
@@ -76,12 +76,21 @@ class FieldopData:
         dc_node: DaCe access node to the data storage.
         gt_type: GT4Py type definition, which includes the field domain information.
         origin: List of start indices, in each dimension, for `FieldType` data.
-            Set to `None` only for `ScalarType` data.
+            Has to be `None` only for `ScalarType` data. For fields it is assumed
+            to be all zeros if not given.
     """
 
     dc_node: dace.nodes.AccessNode
     gt_type: ts.FieldType | ts.ScalarType
     origin: Optional[list[dace.symbolic.SymExpr]]
+
+    def __post_init__(self) -> None:
+        """Implements a sanity check on the constructed data type."""
+        assert (
+            (self.origin is None)
+            if isinstance(self.gt_type, ts.ScalarType)
+            else (self.origin is not None)
+        )
 
     def map_to_parent_sdfg(
         self,
@@ -113,8 +122,7 @@ class FieldopData:
                 lambda m: dace.sdfg.replace_properties_dict(outer_desc, m),
             )
             # Same applies to the symbols used as field origin (the domain range start)
-            assert self.origin is not None
-            outer_origin = [val.subs(symbol_mapping) for val in self.origin]
+            outer_origin = [val.subs(symbol_mapping) for val in self.origin]  # type: ignore[union-attr]  # origin is checked at construction
 
         outer_node = outer_sdfg_state.add_access(outer)
         return FieldopData(outer_node, self.gt_type, outer_origin)
@@ -132,7 +140,7 @@ class FieldopData:
 
         if isinstance(self.gt_type, ts.FieldType):
             domain_dims = [dim for dim, _, _ in domain]
-            domain_indices = get_domain_indices(domain_dims)
+            domain_indices = get_domain_indices(domain_dims, origin=None)
             it_indices: dict[gtx_common.Dimension, gtir_dataflow.DataExpr] = {
                 dim: gtir_dataflow.SymbolExpr(index, INDEX_DTYPE)
                 for dim, index in zip(domain_dims, domain_indices)
@@ -168,7 +176,6 @@ class FieldopData:
         """
         if isinstance(self.gt_type, ts.ScalarType):
             return {}
-        assert self.origin is not None
         ndims = len(self.gt_type.dims)
         outer_desc = self.dc_node.desc(sdfg)
         assert isinstance(outer_desc, dace.data.Array)
@@ -176,10 +183,15 @@ class FieldopData:
         # are assumed to be compiled-time values (not symbolic), therefore the start and
         # stop range symbols of the inner field only extend over the global dimensions
         return (
-            {gtx_dace_utils.range_start_symbol(dataname, i): self.origin[i] for i in range(ndims)}
+            {
+                gtx_dace_utils.range_start_symbol(dataname, i): (
+                    self.origin[i]  # type: ignore[index]  # origin is checked at construction
+                )
+                for i in range(ndims)
+            }
             | {
                 gtx_dace_utils.range_stop_symbol(dataname, i): (
-                    self.origin[i] + outer_desc.shape[i]
+                    self.origin[i] + outer_desc.shape[i]  # type: ignore[index]  # origin is checked at construction
                 )
                 for i in range(ndims)
             }
