@@ -210,7 +210,7 @@ class CollapseTuple(FixedPointTransformation):
 
         return new_node
 
-    def visit(self, node: ir.Node, **kwargs) -> ir.Node:
+    def visit(self, node, **kwargs):
         if cpm.is_call_to(node, "as_fieldop"):
             kwargs = {**kwargs, "within_stencil": True}
 
@@ -219,13 +219,9 @@ class CollapseTuple(FixedPointTransformation):
     def transform_collapse_make_tuple_tuple_get(
         self, node: ir.FunCall, **kwargs
     ) -> Optional[ir.Node]:
-        if (
-            isinstance(node, ir.FunCall)
-            and node.fun == ir.SymRef(id="make_tuple")
-            and all(
-                isinstance(arg, ir.FunCall) and arg.fun == ir.SymRef(id="tuple_get")
-                for arg in node.args
-            )
+        if cpm.is_call_to(node, "make_tuple") and all(
+            isinstance(arg, ir.FunCall) and arg.fun == ir.SymRef(id="tuple_get")
+            for arg in node.args
         ):
             # `make_tuple(tuple_get(0, t), tuple_get(1, t), ..., tuple_get(N-1,t))` -> `t`
             assert isinstance(node.args[0], ir.FunCall)
@@ -252,11 +248,9 @@ class CollapseTuple(FixedPointTransformation):
         self, node: ir.FunCall, **kwargs
     ) -> Optional[ir.Node]:
         if (
-            isinstance(node, ir.FunCall)
-            and node.fun == ir.SymRef(id="tuple_get")
-            and isinstance(node.args[1], ir.FunCall)
-            and node.args[1].fun == ir.SymRef(id="make_tuple")
+            cpm.is_call_to(node, "tuple_get")
             and isinstance(node.args[0], ir.Literal)
+            and cpm.is_call_to(node.args[1], "make_tuple")
         ):
             # `tuple_get(i, make_tuple(e_0, e_1, ..., e_i, ..., e_N))` -> `e_i`
             assert type_info.is_integer(node.args[0].type)
@@ -269,11 +263,7 @@ class CollapseTuple(FixedPointTransformation):
         return None
 
     def transform_propagate_tuple_get(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
-        if (
-            isinstance(node, ir.FunCall)
-            and node.fun == ir.SymRef(id="tuple_get")
-            and isinstance(node.args[0], ir.Literal)
-        ):
+        if cpm.is_call_to(node, "tuple_get") and isinstance(node.args[0], ir.Literal):
             # TODO(tehrengruber): extend to general symbols as long as the tail call in the let
             #   does not capture
             # `tuple_get(i, let(...)(make_tuple()))` -> `let(...)(tuple_get(i, make_tuple()))`
