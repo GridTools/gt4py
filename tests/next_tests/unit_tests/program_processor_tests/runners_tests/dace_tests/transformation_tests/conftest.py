@@ -12,7 +12,7 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
-def set_dace_settings() -> Generator[None, None, None]:
+def common_dace_config() -> Generator[None, None, None]:
     """Sets the common DaCe settings for the tests.
 
     The function will modify the following settings:
@@ -27,3 +27,8 @@ def set_dace_settings() -> Generator[None, None, None]:
         dace.Config.set("optimizer", "match_exception", value=True)
         dace.Config.set("compiler", "allow_view_arguments", value=True)
         yield
+
+
+def pytest_collection_modifyitems(items):
+    for item in items:
+        item.add_marker(pytest.mark.usefixtures("common_dace_config"))
