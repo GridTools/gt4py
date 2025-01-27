@@ -93,12 +93,8 @@ def _expected(red, dim, max_neighbors, has_skip_values, shifted_arg=0):
     if has_skip_values:
         neighbors_offset = red.args[shifted_arg].args[0]
         neighbors_it = red.args[shifted_arg].args[1]
-        can_deref = im.can_deref(
-            ir.FunCall(
-                fun=im.shift(neighbors_offset, offset),
-                args=[neighbors_it],
-            )
-        )
+        can_deref = im.can_deref(im.shift(neighbors_offset, offset)(neighbors_it))
+
         step_expr = im.if_(can_deref, step_expr, acc)
     step_fun = ir.Lambda(params=[ir.Sym(id=acc.id), ir.Sym(id=offset.id)], expr=step_expr)
 

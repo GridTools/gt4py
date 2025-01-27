@@ -85,28 +85,6 @@ def _get_connectivity(
     return connectivities[0]
 
 
-def _make_shift(offsets: list[itir.Expr], iterator: itir.Expr) -> itir.FunCall:
-    return im.shift(
-        offsets, iterator
-    )  # TODO: location?  # TODO test_unroll_reduce failing because of offsets
-
-
-def _make_deref(iterator: itir.Expr) -> itir.FunCall:
-    return im.deref(iterator)  # TODO: location
-
-
-def _make_can_deref(iterator: itir.Expr) -> itir.FunCall:
-    return im.can_deref(iterator)  # TODO: location? # TODO test_unroll_reduce failing
-
-
-def _make_if(cond: itir.Expr, true_expr: itir.Expr, false_expr: itir.Expr) -> itir.FunCall:
-    return im.if_(cond, true_expr, false_expr)  # TODO: location?
-
-
-def _make_list_get(offset: itir.Expr, expr: itir.Expr) -> itir.FunCall:
-    return im.list_get(offset, expr)  # TODO: location?
-
-
 @dataclasses.dataclass(frozen=True)
 class UnrollReduce(PreserveLocationVisitor, NodeTranslator):
     # we use one UID generator per instance such that the generated ids are
@@ -131,13 +109,13 @@ class UnrollReduce(PreserveLocationVisitor, NodeTranslator):
         assert isinstance(node.fun, itir.FunCall)
         fun, init = node.fun.args
 
-        elems = [_make_list_get(offset, arg) for arg in node.args]
+        elems = [im.list_get(offset, arg) for arg in node.args]
         step_fun: itir.Expr = itir.FunCall(fun=fun, args=[acc, *elems])
         if has_skip_values:
             check_arg = next(_get_neighbors_args(node.args))
             offset_tag, it = check_arg.args
-            can_deref = _make_can_deref(_make_shift([offset_tag, offset], it))
-            step_fun = _make_if(can_deref, step_fun, acc)
+            can_deref = im.can_deref(im.shift(offset_tag, offset)(it))
+            step_fun = im.if_(can_deref, step_fun, acc)
         step_fun = itir.Lambda(params=[itir.Sym(id=acc.id), itir.Sym(id=offset.id)], expr=step_fun)
         expr = init
         for i in range(max_neighbors):
