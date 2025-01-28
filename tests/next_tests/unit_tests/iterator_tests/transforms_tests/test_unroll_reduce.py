@@ -35,27 +35,25 @@ def has_skip_values(request):
 @pytest.fixture
 def basic_reduction():
     UIDs.reset_sequence()
-    return im.call(im.call("reduce")("foo", 0.0))(im.neighbors("Dim", "x"))
+    return im.reduce("foo", 0.0)(im.neighbors("Dim", "x"))
 
 
 @pytest.fixture
 def reduction_with_shift_on_second_arg():
     UIDs.reset_sequence()
-    return im.call(im.call("reduce")("foo", 0.0))("x", im.neighbors("Dim", "y"))
+    return im.reduce("foo", 0.0)("x", im.neighbors("Dim", "y"))
 
 
 @pytest.fixture
 def reduction_with_incompatible_shifts():
     UIDs.reset_sequence()
-    return im.call(im.call("reduce")("foo", 0.0))(
-        im.neighbors("Dim", "x"), im.neighbors("Dim2", "y")
-    )
+    return im.reduce("foo", 0.0)(im.neighbors("Dim", "x"), im.neighbors("Dim2", "y"))
 
 
 @pytest.fixture
 def reduction_with_irrelevant_full_shift():
     UIDs.reset_sequence()
-    return im.call(im.call("reduce")("foo", 0.0))(
+    return im.reduce("foo", 0.0)(
         im.neighbors("Dim", im.shift("IrrelevantDim", 0)("x")), im.neighbors("Dim", "y")
     )
 
@@ -63,7 +61,7 @@ def reduction_with_irrelevant_full_shift():
 @pytest.fixture
 def reduction_if():
     UIDs.reset_sequence()
-    return im.call(im.call("reduce")("foo", 0.0))(im.if_(True, im.neighbors("Dim", "x"), "y"))
+    return im.reduce("foo", 0.0)(im.if_(True, im.neighbors("Dim", "x"), "y"))
 
 
 @pytest.mark.parametrize(
@@ -83,35 +81,26 @@ def test_get_partial_offsets(reduction, request):
 
 
 def _expected(red, dim, max_neighbors, has_skip_values, shifted_arg=0):
-    acc = ir.SymRef(id="_acc_1")
-    offset = ir.SymRef(id="_i_2")
-    step = ir.SymRef(id="_step_3")
+    acc, offset, step = "_acc_1", "_i_2", "_step_3"
 
     red_fun, red_init = red.fun.args
 
-    elements = [ir.FunCall(fun=ir.SymRef(id="list_get"), args=[offset, arg]) for arg in red.args]
+    elements = [im.list_get(offset, arg) for arg in red.args]
 
-    step_expr = ir.FunCall(fun=red_fun, args=[acc] + elements)
+    step_expr = im.call(red_fun)(acc, *elements)
     if has_skip_values:
         neighbors_offset = red.args[shifted_arg].args[0]
         neighbors_it = red.args[shifted_arg].args[1]
-        can_deref = ir.FunCall(
-            fun=ir.SymRef(id="can_deref"),
-            args=[
-                ir.FunCall(
-                    fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=[neighbors_offset, offset]),
-                    args=[neighbors_it],
-                )
-            ],
-        )
-        step_expr = ir.FunCall(fun=ir.SymRef(id="if_"), args=[can_deref, step_expr, acc])
-    step_fun = ir.Lambda(params=[ir.Sym(id=acc.id), ir.Sym(id=offset.id)], expr=step_expr)
+        can_deref = im.can_deref(im.shift(neighbors_offset, offset)(neighbors_it))
+
+        step_expr = im.if_(can_deref, step_expr, acc)
+    step_fun = im.lambda_(acc, offset)(step_expr)
 
     step_app = red_init
     for i in range(max_neighbors):
-        step_app = ir.FunCall(fun=step, args=[step_app, ir.OffsetLiteral(value=i)])
+        step_app = im.call(step)(step_app, ir.OffsetLiteral(value=i))
 
-    return ir.FunCall(fun=ir.Lambda(params=[ir.Sym(id=step.id)], expr=step_app), args=[step_fun])
+    return im.let(step, step_fun)(step_app)
 
 
 def test_basic(basic_reduction, has_skip_values):
