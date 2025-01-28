@@ -9,4 +9,5 @@
 import pytest
 
 
+#: Attribute defining package-level marks used by a custom pytest hook.
 package_pytestmarks = [pytest.mark.requires_dace]
