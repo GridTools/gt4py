@@ -216,6 +216,7 @@ class CollapseTuple(
     def visit(self, node, **kwargs):
         if cpm.is_call_to(node, "as_fieldop"):
             kwargs = {**kwargs, "within_stencil": True}
+
         return super().visit(node, **kwargs)
 
     def transform_collapse_make_tuple_tuple_get(
