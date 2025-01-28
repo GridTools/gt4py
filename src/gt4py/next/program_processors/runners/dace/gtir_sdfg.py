@@ -121,7 +121,9 @@ class SDFGBuilder(DataflowBuilder, Protocol):
 
     @abc.abstractmethod
     def make_field(
-        self, data_node: dace.nodes.AccessNode, data_type: ts.FieldType | ts.ScalarType
+        self,
+        data_node: dace.nodes.AccessNode,
+        data_type: ts.FieldType | ts.ScalarType,
     ) -> gtir_builtin_translators.FieldopData:
         """Retrieve the field data descriptor including the domain offset information."""
         ...
@@ -245,18 +247,22 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         return self.offset_provider_type[offset]
 
     def make_field(
-        self, data_node: dace.nodes.AccessNode, data_type: ts.FieldType | ts.ScalarType
+        self,
+        data_node: dace.nodes.AccessNode,
+        data_type: ts.FieldType | ts.ScalarType,
     ) -> gtir_builtin_translators.FieldopData:
         """
-        Helper method to build the field data type associated with an access node
-        to non-transient data in the SDFG.
+        Helper method to build the field data type associated with a data access node.
 
-        In case of `ScalarType` data, the descriptor is constructed with `origin=None`.
+        In case of `ScalarType` data, the `FieldopData` is constructed with `origin=None`.
         In case of `FieldType` data, the field origin is added to the data descriptor.
         Besides, if the `FieldType` contains a local dimension, the descriptor is converted
         to a canonical form where the field domain consists of all global dimensions
         (the grid axes) and the field data type is `ListType`, with `offset_type` equal
         to the field local dimension.
+
+        TODO(edoapo): consider refactoring this method and moving it to a type module
+            close to the `FieldopData` type declaration.
 
         Args:
             data_node: The access node to the SDFG data storage.
@@ -335,7 +341,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
     def _make_array_shape_and_strides(
         self, name: str, dims: Sequence[gtx_common.Dimension]
-    ) -> tuple[list[dace.symbolic.SymExpr], list[dace.symbolic.SymExpr]]:
+    ) -> tuple[list[dace.symbolic.SymbolicType], list[dace.symbolic.SymbolicType]]:
         """
         Parse field dimensions and allocate symbols for array shape and strides.
 
@@ -344,7 +350,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         This method is only called for non-transient arrays, which require symbolic
         memory layout. The memory layout of transient arrays, used for temporary
-        fields, is assigned by DaCe during lowering to SDFG.
+        fields, is left to the DaCe default (row major, not necessarily the optimal
+        one) and might be changed during optimization.
 
         Returns:
             Two lists of symbols, one for the shape and the other for the strides of the array.
@@ -354,9 +361,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         for i, dim in enumerate(dims):
             if dim.kind == gtx_common.DimensionKind.LOCAL:
                 # for local dimension, the size is taken from the associated connectivity type
-                shape.append(
-                    dace.symbolic.pystr_to_symbolic(neighbor_table_types[dim.value].max_neighbors)
-                )
+                shape.append(neighbor_table_types[dim.value].max_neighbors)
             elif gtx_dace_utils.is_connectivity_identifier(name, self.offset_provider_type):
                 # we use symbolic size for the global dimension of a connectivity
                 shape.append(
@@ -918,10 +923,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
 def _remove_field_origin_symbols(ir: gtir.Program, sdfg: dace.SDFG) -> None:
     """
-    Helper function to remove the origin symbols used in program field arguments.
-    It will set the start symbol of field domain range to constant value 0,
-    thus removing the corresponding free symbol. These values are also propagated
-    to all nested SDFGs.
+    Helper function to remove the origin symbols used in program field arguments,
+    that is only for non-transient data descriptors in the top-level SDFG.
+    The start symbol of field domain range is set to constant value 0, thus removing
+    the corresponding free symbol. These values are propagated to all nested SDFGs.
 
     This function is only used by `build_sdfg_from_gtir()` when the option flag
     `disable_field_origin_on_program_arguments` is set to True.
