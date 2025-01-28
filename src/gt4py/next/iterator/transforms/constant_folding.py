@@ -20,6 +20,43 @@ from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_maker
 from gt4py.next.iterator.transforms import fixed_point_transformation
 
 
+class UndoCanonicalizeMinus(eve.NodeTranslator):
+    def generic_visit(self, node, **kwargs) -> ir.Node:
+        node = super().generic_visit(node, **kwargs)
+        return self.undo_canonicalize_minus(node, **kwargs)
+
+    def undo_canonicalize_minus(self, node: ir.FunCall, **kwargs) -> ir.Node:
+        # `a + (-b)` -> `a - b` , `-a + b` -> `b - a`, `-a + (-b)` -> `-a - b`
+        if cpm.is_call_to(node, "plus"):
+            if cpm.is_call_to(node.args[1], "neg"):
+                return im.minus(node.args[0], node.args[1].args[0])
+            if (
+                isinstance(node.args[1], ir.Literal)
+                and node.args[1].value
+                < im.literal("0", typename=node.args[1].type.kind.name.lower()).value
+            ):
+                return im.minus(
+                    node.args[0],
+                    ConstantFolding.transform_fold_arithmetic_builtins(
+                        im.multiplies_(node.args[1], -1)
+                    ),
+                )
+            if cpm.is_call_to(node.args[0], "neg"):
+                return im.minus(node.args[1], node.args[0].args[0])
+            if (
+                isinstance(node.args[0], ir.Literal)
+                and node.args[0].value
+                < im.literal("0", typename=node.args[0].type.kind.name.lower()).value
+            ):
+                return im.minus(
+                    node.args[1],
+                    ConstantFolding.transform_fold_arithmetic_builtins(
+                        im.multiplies_(node.args[0], -1)
+                    ),
+                )
+        return node
+
+
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class ConstantFolding(
     fixed_point_transformation.FixedPointTransformation, eve.PreserveLocationVisitor
@@ -73,7 +110,7 @@ class ConstantFolding(
     @classmethod
     def apply(cls, node: ir.Node) -> ir.Node:
         node = cls().visit(node)
-        return node
+        return UndoCanonicalizeMinus().generic_visit(node)
 
     def transform_canonicalize_op_funcall_symref_literal(
         self, node: ir.FunCall, **kwargs
@@ -170,6 +207,7 @@ class ConstantFolding(
             return node.args[0]
         return None
 
+    @classmethod
     def transform_fold_arithmetic_builtins(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
         # `1 + 1` -> `2`
         if (
