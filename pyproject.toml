@@ -172,7 +172,6 @@ allow_incomplete_defs = true
 allow_untyped_defs = true
 follow_imports = 'silent'
 module = 'gt4py.cartesian.*'
-warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
 ignore_errors = true

@@ -38,14 +38,14 @@ class GTCPreconditionError(eve.exceptions.EveError, RuntimeError):
     message_template = "GTC pass precondition error: [{info}]"
 
     def __init__(self, *, expected: str, **kwargs: Any) -> None:
-        super().__init__(expected=expected, **kwargs)  # type: ignore
+        super().__init__(expected=expected, **kwargs)
 
 
 class GTCPostconditionError(eve.exceptions.EveError, RuntimeError):
     message_template = "GTC pass postcondition error: [{info}]"
 
     def __init__(self, *, expected: str, **kwargs: Any) -> None:
-        super().__init__(expected=expected, **kwargs)  # type: ignore
+        super().__init__(expected=expected, **kwargs)
 
 
 class AssignmentKind(eve.StrEnum):
@@ -267,7 +267,7 @@ def verify_and_get_common_dtype(
 ) -> Optional[DataType]:
     assert len(exprs) > 0
     if all(e.dtype is not DataType.AUTO for e in exprs):
-        dtypes: List[DataType] = [e.dtype for e in exprs]  # type: ignore # guaranteed to be not None
+        dtypes: List[DataType] = [e.dtype for e in exprs]  # guaranteed to be not None
         dtype = dtypes[0]
         if strict:
             if all(dt == dtype for dt in dtypes):
@@ -908,7 +908,7 @@ def op_to_ufunc(
 @functools.lru_cache(maxsize=None)
 def typestr_to_data_type(typestr: str) -> DataType:
     if not isinstance(typestr, str) or len(typestr) < 3 or not typestr[2:].isnumeric():
-        return DataType.INVALID  # type: ignore
+        return DataType.INVALID
     table = {
         ("b", 1): DataType.BOOL,
         ("i", 1): DataType.INT8,
@@ -919,4 +919,4 @@ def typestr_to_data_type(typestr: str) -> DataType:
         ("f", 8): DataType.FLOAT64,
     }
     key = (typestr[1], int(typestr[2:]))
-    return table.get(key, DataType.INVALID)  # type: ignore
+    return table.get(key, DataType.INVALID)
