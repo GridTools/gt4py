@@ -1376,8 +1376,8 @@ requires-dist = [
     { name = "cmake", specifier = ">=3.22" },
     { name = "cupy-cuda11x", marker = "extra == 'cuda11'", specifier = ">=12.0" },
     { name = "cupy-cuda12x", marker = "extra == 'cuda12'", specifier = ">=12.0" },
-    { name = "cupy-rocm-4-3", marker = "extra == 'rocm4-3'" },
-    { name = "cupy-rocm-5-0", marker = "extra == 'rocm5-0'" },
+    { name = "cupy-rocm-4-3", marker = "extra == 'rocm4-3'", specifier = ">=13.3.0" },
+    { name = "cupy-rocm-5-0", marker = "extra == 'rocm5-0'", specifier = ">=13.3.0" },
     { name = "cytoolz", specifier = ">=0.12.1" },
     { name = "dace", marker = "extra == 'dace'", specifier = ">=1.0.0,<1.1.0" },
     { name = "deepdiff", specifier = ">=5.6.0" },
@@ -1414,7 +1414,7 @@ build = [
     { name = "bump-my-version", specifier = ">=0.16.0" },
     { name = "cython", specifier = ">=3.0.0" },
     { name = "pip", specifier = ">=22.1.1" },
-    { name = "setuptools", specifier = ">=69.0.3" },
+    { name = "setuptools", specifier = ">=70.0.0" },
     { name = "wheel", specifier = ">=0.33.6" },
 ]
 dev = [
@@ -1441,15 +1441,15 @@ dev = [
     { name = "pytest-instafail", specifier = ">=0.5.0" },
     { name = "pytest-xdist", extras = ["psutil"], specifier = ">=3.5.0" },
     { name = "ruff", specifier = ">=0.8.0" },
-    { name = "setuptools", specifier = ">=69.0.3" },
+    { name = "setuptools", specifier = ">=70.0.0" },
     { name = "sphinx", specifier = ">=7.3.7" },
     { name = "sphinx-rtd-theme", specifier = ">=3.0.1" },
     { name = "sphinx-toolbox", specifier = ">=3.8.1" },
     { name = "tach", specifier = ">=0.16.0" },
-    { name = "types-decorator" },
-    { name = "types-docutils" },
-    { name = "types-pytz" },
-    { name = "types-pyyaml" },
+    { name = "types-decorator", specifier = ">=5.1.8" },
+    { name = "types-docutils", specifier = ">=0.21.0" },
+    { name = "types-pytz", specifier = ">=2024.2.0" },
+    { name = "types-pyyaml", specifier = ">=6.0.10" },
     { name = "types-tabulate", specifier = ">=0.8.10" },
     { name = "wheel", specifier = ">=0.33.6" },
 ]
@@ -1484,10 +1484,10 @@ test = [
 ]
 typing = [
     { name = "mypy", extras = ["faster-cache"], specifier = ">=1.13.0" },
-    { name = "types-decorator" },
-    { name = "types-docutils" },
-    { name = "types-pytz" },
-    { name = "types-pyyaml" },
+    { name = "types-decorator", specifier = ">=5.1.8" },
+    { name = "types-docutils", specifier = ">=0.21.0" },
+    { name = "types-pytz", specifier = ">=2024.2.0" },
+    { name = "types-pyyaml", specifier = ">=6.0.10" },
     { name = "types-tabulate", specifier = ">=0.8.10" },
 ]
 

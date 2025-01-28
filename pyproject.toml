@@ -2,7 +2,7 @@
 
 [build-system]
 build-backend = 'setuptools.build_meta'
-requires = ['setuptools>=69.0.3', 'wheel>=0.33.6', 'cython>=3.0.0']
+requires = ['setuptools>=70.0.0', 'wheel>=0.33.6', 'cython>=3.0.0']
 
 # -- Dependency groups --
 [dependency-groups]
@@ -10,7 +10,7 @@ build = [
   'bump-my-version>=0.16.0',
   'cython>=3.0.0',
   'pip>=22.1.1',
-  'setuptools>=69.0.3',
+  'setuptools>=70.0.0',
   'wheel>=0.33.6'
 ]
 dev = [
@@ -52,10 +52,10 @@ test = [
 typing = [
   'mypy[faster-cache]>=1.13.0',
   'types-tabulate>=0.8.10',
-  'types-PyYAML',
-  'types-decorator',
-  'types-docutils',
-  'types-pytz'
+  'types-PyYAML>=6.0.10',
+  'types-decorator>=5.1.8',
+  'types-docutils>=0.21.0',
+  'types-pytz>=2024.2.0'
 ]
 
 # -- Standard project description options (PEP 621) --
@@ -133,8 +133,8 @@ formatting = ['clang-format>=9.0']
 jax = ['jax>=0.4.26']
 jax-cuda12 = ['jax[cuda12_local]>=0.4.26', 'gt4py[cuda12]']
 performance = ['scipy>=1.9.2']
-rocm4_3 = ['cupy-rocm-4-3']
-rocm5_0 = ['cupy-rocm-5-0']
+rocm4_3 = ['cupy-rocm-4-3>=13.3.0']
+rocm5_0 = ['cupy-rocm-5-0>=13.3.0']
 testing = ['hypothesis>=6.0.0', 'pytest>=7.0']
 
 [project.scripts]
