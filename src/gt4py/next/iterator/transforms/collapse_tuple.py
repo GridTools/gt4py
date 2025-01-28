@@ -463,7 +463,7 @@ class CollapseTuple(
         return None
 
     def transform_inline_trivial_let(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
-        if isinstance(node, ir.FunCall) and cpm.is_let(node):
+        if cpm.is_let(node):
             if isinstance(node.fun.expr, ir.SymRef):  # type: ignore[attr-defined]  # ensured by is_let
                 # `let(a, 1)(a)` -> `1`
                 for arg_sym, arg in zip(node.fun.params, node.args):  # type: ignore[attr-defined]  # ensured by is_let
