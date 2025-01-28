@@ -58,7 +58,7 @@ jobs:
         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
       uses: slackapi/slack-github-action@v1.23.0
       with:
-        channel-id: ${{ vars.SLACK_BOT_CHANNEL_TEST }}
+        channel-id: ${{ vars.SLACK_BOT_CHANNEL_TEST }}  # Use SLACK_BOT_CHANNEL_TEST for testing
         payload: |
           {
             "text": "Failed tests for ${{ github.workflow }} (dependencies-strategy=${{ matrix.dependencies-strategy }}, python=${{ matrix.python-version }}, component=${{ matrix.gt4py-module }}) [https://github.com/GridTools/gt4py/actions/runs/${{ github.run_id }}].",
@@ -73,18 +73,21 @@ jobs:
             ]
           }
 
+  weekly-reminder:
+    runs-on: ubuntu-latest
+    steps:
     - id: get_day_of_the_week
       name: Get day of the week
       run: echo "day_of_week=$(date +'%u')" >> $GITHUB_OUTPUT
 
     - name: Weekly notification
-      if: ${{ (env.DAY_OF_WEEK =='2') && (matrix.python-version == '3.10') && (matrix.gt4py-module == 'next') && (matrix.dependencies-strategy == 'highest') }}
+      if: ${{ env.DAY_OF_WEEK == 2 }}
       env:
         DAY_OF_WEEK: ${{ steps.get_day_of_the_week.outputs.day_of_week }}
         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
       uses: slackapi/slack-github-action@v1.23.0
       with:
-        channel-id: ${{ vars.SLACK_BOT_CHANNEL_TEST }}
+        channel-id: ${{ vars.SLACK_BOT_CHANNEL_TEST }}  # Use SLACK_BOT_CHANNEL_TEST for testing
         payload: |
           {
             "text": "Weekly reminder to check the latest runs of the GT4Py Daily CI workflow at the GitHub Actions dashboard [https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml].",

@@ -99,7 +99,7 @@ def test_cartesian(
 
 
 @nox.session(python=["3.10", "3.11"])
-def test_docs(session: nox.Session) -> None:
+def test_examples(session: nox.Session) -> None:
     """Run and test documentation workflows."""
 
     _install_session_venv(session, extras=["testing"], groups=["docs", "test"])

@@ -1,4 +1,4 @@
-name: "Test Jupyter Notebooks"
+name: "Test examples in documentation"
 
 on:
   push:
@@ -41,4 +41,4 @@ jobs:
       env:
         NUM_PROCESSES: auto
       shell: bash
-      run: uv run nox -s 'test_docs-${{ matrix.python-version }}'
+      run: uv run nox -s 'test_examples-${{ matrix.python-version }}'
