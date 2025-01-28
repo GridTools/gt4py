@@ -9,6 +9,11 @@
 from gt4py.next.iterator.dispatcher import Dispatcher
 
 
+try:
+    import ml_dtypes
+except ModuleNotFoundError:
+    ml_dtypes = None
+
 builtin_dispatch = Dispatcher()
 
 
@@ -387,6 +392,18 @@ def float(*args):  # noqa: A001 [builtin-variable-shadowing]
     raise BackendNotSelectedError()
 
 
+if ml_dtypes:
+
+    @builtin_dispatch
+    def bfloat16(*args):
+        raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def float16(*args):
+    raise BackendNotSelectedError()
+
+
 @builtin_dispatch
 def float32(*args):
     raise BackendNotSelectedError()
@@ -454,7 +471,9 @@ INTEGER_TYPE_BUILTINS = {
     "int64",
     "uint64",
 }
-FLOATING_POINT_TYPE_BUILTINS = {"float32", "float64"}
+FLOATING_POINT_TYPE_BUILTINS = {"float16", "float32", "float64"}
+if ml_dtypes:
+    FLOATING_POINT_TYPE_BUILTINS.add("bfloat16")
 TYPE_BUILTINS = {*INTEGER_TYPE_BUILTINS, *FLOATING_POINT_TYPE_BUILTINS, "bool"}
 
 ARITHMETIC_BUILTINS = {

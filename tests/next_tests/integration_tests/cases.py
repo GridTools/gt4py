@@ -18,6 +18,11 @@ from typing import Any, Callable, Literal, Optional, Protocol, TypeAlias
 import numpy as np
 import pytest
 
+try:
+    import ml_dtypes
+except ModuleNotFoundError:
+    ml_dtypes = None
+
 import gt4py.next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
@@ -61,6 +66,9 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 IField: TypeAlias = gtx.Field[[IDim], np.int32]  # type: ignore [valid-type]
 IFloatField: TypeAlias = gtx.Field[[IDim], np.float64]  # type: ignore [valid-type]
+IHalfField: TypeAlias = gtx.Field[[IDim], np.float16]  # type: ignore [valid-type]
+if ml_dtypes:
+    IBFloatField: TypeAlias = gtx.Field[[IDim], ml_dtypes.bfloat16]  # type: ignore [valid-type]
 IBoolField: TypeAlias = gtx.Field[[IDim], bool]  # type: ignore [valid-type]
 KField: TypeAlias = gtx.Field[[KDim], np.int32]  # type: ignore [valid-type]
 IJField: TypeAlias = gtx.Field[[IDim, JDim], np.int32]  # type: ignore [valid-type]
@@ -429,6 +437,11 @@ def verify(
     assert out_comp is not None
     out_comp_ndarray = field_utils.asnumpy(out_comp)
     ref_ndarray = field_utils.asnumpy(ref)
+
+    if ml_dtypes and out_comp_ndarray.dtype == ml_dtypes.bfloat16:
+        out_comp_ndarray = out_comp_ndarray.astype(np.float32)
+        ref_ndarray = ref_ndarray.astype(np.float32)
+
     assert comparison(ref_ndarray, out_comp_ndarray), (
         f"Verification failed:\n"
         f"\tcomparison={comparison.__name__}(ref, out)\n"

@@ -8,6 +8,12 @@
 
 from typing import Any, Collection, Final, Union
 
+
+try:
+    import ml_dtypes
+except ModuleNotFoundError:
+    ml_dtypes = None
+
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from gt4py.next import common
@@ -51,6 +57,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         "maximum": "std::max",
         "fmod": "std::fmod",
         "power": "std::pow",
+        "float16": "std::float16_t",
         "float32": "float",
         "float64": "double",
         "int8": "std::int8_t",
@@ -78,6 +85,8 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         "mod": "std::modulus<>{}",
         "not_": "std::logical_not<>{}",
     }
+    if ml_dtypes:
+        _builtins_mapping["bfloat16"] = "std::bfloat16_t"
 
     Sym = as_fmt("{id}")
 
@@ -108,6 +117,14 @@ class GTFNCodegen(codegen.TemplatedGenerator):
                 return self.asfloat(node.value) + "f"
             case "double":
                 return self.asfloat(node.value)
+            case "std::float16_t":
+                return (
+                    "std::float16_t(" + self.asfloat(node.value) + ")"
+                )  # TODO: this is not a proper solution
+            case "std::bfloat16_t":
+                return (
+                    "std::bfloat16_t(" + self.asfloat(node.value) + ")"
+                )  # TODO: this is not a proper solution
             case "bool":
                 return node.value.lower()
             case _:
@@ -267,6 +284,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         """
     #include <cmath>
     #include <cstdint>
+    #include <stdfloat>
     #include <functional>
     #include <gridtools/fn/${grid_type_str}.hpp>
     #include <gridtools/fn/sid_neighbor_table.hpp>

@@ -24,6 +24,12 @@ from typing import (
 
 import numpy as np
 
+
+try:
+    import ml_dtypes
+except ModuleNotFoundError:
+    ml_dtypes = None
+
 from gt4py.eve.utils import XIterable, xiter
 from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts
@@ -234,7 +240,10 @@ def is_floating_point(symbol_type: ts.TypeSpec) -> bool:
     >>> is_floating_point(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)))
     True
     """
+
     return isinstance(dtype := extract_dtype(symbol_type), ts.ScalarType) and dtype.kind in [
+        ts.ScalarKind.FLOAT16,
+        ts.ScalarKind.BFLOAT16,
         ts.ScalarKind.FLOAT32,
         ts.ScalarKind.FLOAT64,
     ]
@@ -329,7 +338,11 @@ def is_arithmetic(symbol_type: ts.TypeSpec) -> bool:
 
 def arithmetic_bounds(arithmetic_type: ts.ScalarType) -> tuple[np.number, np.number]:
     assert is_arithmetic(arithmetic_type)
-    return {  # type: ignore[return-value] # why resolved to `tuple[object, object]`?
+    bounds = {
+        ts.ScalarKind.FLOAT16: (
+            np.finfo(np.float16).min,
+            np.finfo(np.float16).max,
+        ),  # todo: cleanup?
         ts.ScalarKind.FLOAT32: (np.finfo(np.float32).min, np.finfo(np.float32).max),
         ts.ScalarKind.FLOAT64: (np.finfo(np.float64).min, np.finfo(np.float64).max),
         ts.ScalarKind.INT8: (np.iinfo(np.int8).min, np.iinfo(np.int8).max),
@@ -340,7 +353,13 @@ def arithmetic_bounds(arithmetic_type: ts.ScalarType) -> tuple[np.number, np.num
         ts.ScalarKind.UINT32: (np.iinfo(np.uint32).min, np.iinfo(np.uint32).max),
         ts.ScalarKind.INT64: (np.iinfo(np.int64).min, np.iinfo(np.int64).max),
         ts.ScalarKind.UINT64: (np.iinfo(np.uint64).min, np.iinfo(np.uint64).max),
-    }[arithmetic_type.kind]
+    }
+    if ml_dtypes:
+        bounds[ts.ScalarKind.BFLOAT16] = (
+            ml_dtypes.finfo(ml_dtypes.bfloat16).min,
+            ml_dtypes.finfo(ml_dtypes.bfloat16).max,
+        )
+    return bounds[arithmetic_type.kind]
 
 
 def is_type_or_tuple_of_type(type_: ts.TypeSpec, expected_type: type | tuple) -> bool:

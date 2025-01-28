@@ -18,6 +18,11 @@ from gt4py.next.iterator.builtins import BUILTINS
 from gt4py.next.type_system import type_specifications as ts
 
 
+try:
+    import ml_dtypes
+except ModuleNotFoundError:
+    ml_dtypes = None
+
 DimensionKind = common.DimensionKind
 
 

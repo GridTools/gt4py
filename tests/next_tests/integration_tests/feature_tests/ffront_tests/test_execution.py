@@ -9,6 +9,15 @@
 from functools import reduce
 import numpy as np
 import pytest
+
+try:
+    from ml_dtypes import bfloat16
+except ModuleNotFoundError:
+    bfloat16 = None
+import diskcache
+from gt4py.eve import SymbolName
+
+
 import gt4py.next as gtx
 from gt4py.next import (
     astype,
@@ -1235,4 +1244,42 @@ def test_constant_closure_vars(cartesian_case):
 
     cases.verify_with_default_data(
         cartesian_case, consume_constants, ref=lambda input: constants.PI * constants.E * input
+    )
+
+
+@pytest.mark.uses_half_precision
+def test_float16(cartesian_case):
+    dtype = np.float16
+
+    @gtx.field_operator
+    def multiply_by_two(
+        input: cases.IHalfField, input2: cases.IFloatField, scalar: np.float16
+    ) -> cases.IHalfField:
+        return (
+            dtype(2) * input * astype(input2, dtype) * scalar ** dtype(1.0)
+        )  # TODO fails with 0.5
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        multiply_by_two,
+        ref=lambda input, input2, scalar: dtype(2) * input * input2 * scalar ** dtype(1.0),
+    )
+
+
+@pytest.mark.uses_half_precision
+def test_bfloat16(cartesian_case):
+    dtype = bfloat16
+
+    @gtx.field_operator
+    def multiply_by_two(
+        input: cases.IBFloatField, input2: cases.IBFloatField, scalar: bfloat16
+    ) -> cases.IBFloatField:
+        return (
+            dtype(2) * input * astype(input2, dtype) * scalar ** dtype(1.0)
+        )  # TODO fails with 0.5
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        multiply_by_two,
+        ref=lambda input, input2, scalar: dtype(2) * input * input2 * scalar ** dtype(1.0),
     )

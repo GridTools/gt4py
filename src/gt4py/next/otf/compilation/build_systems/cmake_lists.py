@@ -69,7 +69,8 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
         # Targets
         add_library({{project_name}} MODULE)
 
-        target_compile_features({{project_name}} PRIVATE cxx_std_17)
+        #target_compile_features({{project_name}} PRIVATE cxx_std_17)
+        target_compile_features({{project_name}} PRIVATE cxx_std_23)
         set_target_properties({{project_name}} PROPERTIES PREFIX "" SUFFIX ".{{bin_output_suffix}}")
 
         target_sources({{project_name}}

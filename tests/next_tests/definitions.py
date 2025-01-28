@@ -119,6 +119,7 @@ USES_MAX_OVER = "uses_max_over"
 USES_MESH_WITH_SKIP_VALUES = "uses_mesh_with_skip_values"
 USES_SCALAR_IN_DOMAIN_AND_FO = "uses_scalar_in_domain_and_fo"
 CHECKS_SPECIFIC_ERROR = "checks_specific_error"
+USES_HALF_PRECISION = "uses_half_precision"
 
 # Skip messages (available format keys: 'marker', 'backend')
 UNSUPPORTED_MESSAGE = "'{marker}' tests not supported by '{backend}' backend"
@@ -150,6 +151,7 @@ DACE_SKIP_TEST_LIST = (
         (USES_SCAN_IN_STENCIL, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
         (USES_SPARSE_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_TUPLE_ITERATOR, XFAIL, UNSUPPORTED_MESSAGE),
+        (USES_HALF_PRECISION, XFAIL, UNSUPPORTED_MESSAGE),
     ]
 )
 EMBEDDED_SKIP_LIST = [

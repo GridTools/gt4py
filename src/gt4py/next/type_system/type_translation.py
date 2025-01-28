@@ -18,6 +18,12 @@ from typing import Any, ForwardRef, Optional
 import numpy as np
 import numpy.typing as npt
 
+
+try:
+    import ml_dtypes
+except ModuleNotFoundError:
+    ml_dtypes = None
+
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
@@ -45,6 +51,9 @@ def get_scalar_kind(dtype: npt.DTypeLike) -> ts.ScalarKind:
                 return ts.ScalarKind.STRING
             case np.dtype():
                 return getattr(ts.ScalarKind, dt.name.upper())
+            case _ if ml_dtypes and dt == ml_dtypes.bfloat16:
+                return ts.ScalarKind.BFLOAT16
+
             case _:
                 raise ValueError(f"Impossible to map '{dtype}' value to a 'ScalarKind'.")
     else:
@@ -237,6 +246,10 @@ def as_dtype(type_: ts.ScalarType) -> core_defs.DType:
         return core_defs.Int32DType()
     elif type_.kind == ts.ScalarKind.INT64:
         return core_defs.Int64DType()
+    elif type_.kind == ts.ScalarKind.FLOAT16:  # TODO
+        return core_defs.Float16DType()
+    elif type_.kind == ts.ScalarKind.BFLOAT16:  # TODO
+        return core_defs.BFloat16DType()
     elif type_.kind == ts.ScalarKind.FLOAT32:
         return core_defs.Float32DType()
     elif type_.kind == ts.ScalarKind.FLOAT64:
@@ -257,6 +270,10 @@ def from_dtype(dtype: core_defs.DType) -> ts.ScalarType:
         return ts.ScalarType(kind=ts.ScalarKind.INT32)
     elif dtype == core_defs.Int64DType():
         return ts.ScalarType(kind=ts.ScalarKind.INT64)
+    elif dtype == core_defs.Float16DType():  # TODO
+        return ts.ScalarType(kind=ts.ScalarKind.FLOAT16)
+    elif dtype == core_defs.BFloat16DType():  # TODO
+        return ts.ScalarType(kind=ts.ScalarKind.BFLOAT16)
     elif dtype == core_defs.Float32DType():
         return ts.ScalarType(kind=ts.ScalarKind.FLOAT32)
     elif dtype == core_defs.Float64DType():

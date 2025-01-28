@@ -72,6 +72,8 @@ class ScalarKind(eve_types.IntEnum):
     FLOAT32 = 10
     FLOAT64 = 11
     STRING = 12
+    FLOAT16 = 13
+    BFLOAT16 = 14
 
 
 class ScalarType(DataType):
