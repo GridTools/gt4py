@@ -110,7 +110,8 @@ build_py310_image_aarch64:
   image: $CSCS_REGISTRY_PATH/public/$ARCH/gt4py/gt4py-ci:$CI_COMMIT_SHA-$PYVERSION
   script:
   - cd /gt4py.src
-  - nox -e test_$SUBPACKAGE-${PYVERSION:0:4}$VARIANT$SUBVARIANT$DETAIL
+  - NOX_PARAMS="${VARIANT:+($VARIANT}${SUBVARIANT:+, $SUBVARIANT}${DETAIL:+, $DETAIL}${VARIANT:+)}"
+  - nox -e test_$SUBPACKAGE-${PYVERSION:0:4}${NOX_PARAMS}
   variables:
     CRAY_CUDA_MPS: 1
     SLURM_JOB_NUM_NODES: 1
@@ -134,15 +135,15 @@ build_py310_image_aarch64:
   parallel:
     matrix:
     - SUBPACKAGE: [cartesian]
-      VARIANT: ['(internal, ', '(dace, ']
-      SUBVARIANT: ['cuda12)', 'cpu)']
+      VARIANT: ['internal', 'dace']
+      SUBVARIANT: ['cuda12', 'cpu']
     - SUBPACKAGE: eve
     - SUBPACKAGE: next
-      VARIANT: ['(internal, ', '(dace, ']
-      SUBVARIANT: ['cuda12, ', 'cpu, ']
-      DETAIL: ['nomesh)', 'atlas)']
+      VARIANT: ['internal', 'dace']
+      SUBVARIANT: ['cuda12, ', 'cpu']
+      DETAIL: ['nomesh', 'atlas']
     - SUBPACKAGE: [storage]
-      VARIANT: ['(cuda12)', '(cpu)']
+      VARIANT: ['cuda12', 'cpu']
   variables:
     # Grace-Hopper gpu architecture is not enabled by default in CUDA build
     CUDAARCHS: "90"
