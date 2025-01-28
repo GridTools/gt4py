@@ -76,7 +76,7 @@ def apply_common_transforms(
     # required in order to get rid of expressions without a domain (e.g. when a tuple element is never accessed)
     ir = CollapseTuple.apply(
         ir,
-        flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
+        enabled_transformations=~CollapseTuple.Transformation.PROPAGATE_TO_IF_ON_TUPLES,
         uids=collapse_tuple_uids,
         offset_provider_type=offset_provider_type,
     )  # type: ignore[assignment]  # always an itir.Program
@@ -98,7 +98,7 @@ def apply_common_transforms(
         # is constant-folded the surrounding tuple_get calls can be removed.
         inlined = CollapseTuple.apply(
             inlined,
-            flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
+            enabled_transformations=~CollapseTuple.Transformation.PROPAGATE_TO_IF_ON_TUPLES,
             uids=collapse_tuple_uids,
             offset_provider_type=offset_provider_type,
         )  # type: ignore[assignment]  # always an itir.Program
@@ -136,7 +136,7 @@ def apply_common_transforms(
             ir,
             ignore_tuple_size=True,
             uids=collapse_tuple_uids,
-            flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
+            enabled_transformations=~CollapseTuple.Transformation.PROPAGATE_TO_IF_ON_TUPLES,
             offset_provider_type=offset_provider_type,
         )  # type: ignore[assignment]  # always an itir.Program
 
@@ -176,7 +176,7 @@ def apply_fieldview_transforms(
     ir = InlineLambdas.apply(ir, opcount_preserving=True, force_inline_lambda_args=True)
     ir = CollapseTuple.apply(
         ir,
-        flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
+        enabled_transformations=~CollapseTuple.Transformation.PROPAGATE_TO_IF_ON_TUPLES,
         offset_provider_type=common.offset_provider_to_type(offset_provider),
     )  # type: ignore[assignment] # type is still `itir.Program`
     ir = inline_dynamic_shifts.InlineDynamicShifts.apply(
