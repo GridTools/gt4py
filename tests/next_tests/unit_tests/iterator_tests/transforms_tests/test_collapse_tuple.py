@@ -19,7 +19,7 @@ def test_simple_make_tuple_tuple_get():
     actual = CollapseTuple.apply(
         testee,
         remove_letified_make_tuple_elements=False,
-        flags=CollapseTuple.Flag.COLLAPSE_MAKE_TUPLE_TUPLE_GET,
+        enabled_transformations=CollapseTuple.Transformation.COLLAPSE_MAKE_TUPLE_TUPLE_GET,
         allow_undeclared_symbols=True,
         within_stencil=False,
     )
@@ -37,7 +37,7 @@ def test_nested_make_tuple_tuple_get():
     actual = CollapseTuple.apply(
         testee,
         remove_letified_make_tuple_elements=False,
-        flags=CollapseTuple.Flag.COLLAPSE_MAKE_TUPLE_TUPLE_GET,
+        enabled_transformations=CollapseTuple.Transformation.COLLAPSE_MAKE_TUPLE_TUPLE_GET,
         allow_undeclared_symbols=True,
         within_stencil=False,
     )
@@ -53,7 +53,7 @@ def test_different_tuples_make_tuple_tuple_get():
     actual = CollapseTuple.apply(
         testee,
         remove_letified_make_tuple_elements=False,
-        flags=CollapseTuple.Flag.COLLAPSE_MAKE_TUPLE_TUPLE_GET,
+        enabled_transformations=CollapseTuple.Transformation.COLLAPSE_MAKE_TUPLE_TUPLE_GET,
         allow_undeclared_symbols=True,
         within_stencil=False,
     )
@@ -67,7 +67,7 @@ def test_incompatible_order_make_tuple_tuple_get():
     actual = CollapseTuple.apply(
         testee,
         remove_letified_make_tuple_elements=False,
-        flags=CollapseTuple.Flag.COLLAPSE_MAKE_TUPLE_TUPLE_GET,
+        enabled_transformations=CollapseTuple.Transformation.COLLAPSE_MAKE_TUPLE_TUPLE_GET,
         allow_undeclared_symbols=True,
         within_stencil=False,
     )
@@ -79,7 +79,7 @@ def test_incompatible_size_make_tuple_tuple_get():
     actual = CollapseTuple.apply(
         testee,
         remove_letified_make_tuple_elements=False,
-        flags=CollapseTuple.Flag.COLLAPSE_MAKE_TUPLE_TUPLE_GET,
+        enabled_transformations=CollapseTuple.Transformation.COLLAPSE_MAKE_TUPLE_TUPLE_GET,
         allow_undeclared_symbols=True,
         within_stencil=False,
     )
@@ -91,7 +91,7 @@ def test_merged_with_smaller_outer_size_make_tuple_tuple_get():
     actual = CollapseTuple.apply(
         testee,
         ignore_tuple_size=True,
-        flags=CollapseTuple.Flag.COLLAPSE_MAKE_TUPLE_TUPLE_GET,
+        enabled_transformations=CollapseTuple.Transformation.COLLAPSE_MAKE_TUPLE_TUPLE_GET,
         allow_undeclared_symbols=True,
         within_stencil=False,
     )
@@ -104,7 +104,7 @@ def test_simple_tuple_get_make_tuple():
     actual = CollapseTuple.apply(
         testee,
         remove_letified_make_tuple_elements=False,
-        flags=CollapseTuple.Flag.COLLAPSE_TUPLE_GET_MAKE_TUPLE,
+        enabled_transformations=CollapseTuple.Transformation.COLLAPSE_TUPLE_GET_MAKE_TUPLE,
         allow_undeclared_symbols=True,
         within_stencil=False,
     )
@@ -117,7 +117,7 @@ def test_propagate_tuple_get():
     actual = CollapseTuple.apply(
         testee,
         remove_letified_make_tuple_elements=False,
-        flags=CollapseTuple.Flag.PROPAGATE_TUPLE_GET,
+        enabled_transformations=CollapseTuple.Transformation.PROPAGATE_TUPLE_GET,
         allow_undeclared_symbols=True,
         within_stencil=False,
     )
@@ -135,7 +135,7 @@ def test_letify_make_tuple_elements():
     actual = CollapseTuple.apply(
         testee,
         remove_letified_make_tuple_elements=False,
-        flags=CollapseTuple.Flag.LETIFY_MAKE_TUPLE_ELEMENTS,
+        enabled_transformations=CollapseTuple.Transformation.LETIFY_MAKE_TUPLE_ELEMENTS,
         allow_undeclared_symbols=True,
         within_stencil=False,
     )
@@ -149,7 +149,7 @@ def test_letify_make_tuple_with_trivial_elements():
     actual = CollapseTuple.apply(
         testee,
         remove_letified_make_tuple_elements=False,
-        flags=CollapseTuple.Flag.LETIFY_MAKE_TUPLE_ELEMENTS,
+        enabled_transformations=CollapseTuple.Transformation.LETIFY_MAKE_TUPLE_ELEMENTS,
         allow_undeclared_symbols=True,
         within_stencil=False,
     )
@@ -163,7 +163,7 @@ def test_inline_trivial_make_tuple():
     actual = CollapseTuple.apply(
         testee,
         remove_letified_make_tuple_elements=False,
-        flags=CollapseTuple.Flag.INLINE_TRIVIAL_MAKE_TUPLE,
+        enabled_transformations=CollapseTuple.Transformation.INLINE_TRIVIAL_MAKE_TUPLE,
         allow_undeclared_symbols=True,
         within_stencil=False,
     )
@@ -182,7 +182,7 @@ def test_propagate_to_if_on_tuples():
     actual = CollapseTuple.apply(
         testee,
         remove_letified_make_tuple_elements=False,
-        flags=CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
+        enabled_transformations=CollapseTuple.Transformation.PROPAGATE_TO_IF_ON_TUPLES,
         allow_undeclared_symbols=True,
         within_stencil=False,
     )
@@ -199,8 +199,8 @@ def test_propagate_to_if_on_tuples_with_let():
     actual = CollapseTuple.apply(
         testee,
         remove_letified_make_tuple_elements=True,
-        flags=CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES
-        | CollapseTuple.Flag.LETIFY_MAKE_TUPLE_ELEMENTS,
+        enabled_transformations=CollapseTuple.Transformation.PROPAGATE_TO_IF_ON_TUPLES
+        | CollapseTuple.Transformation.LETIFY_MAKE_TUPLE_ELEMENTS,
         allow_undeclared_symbols=True,
         within_stencil=False,
     )
@@ -213,7 +213,7 @@ def test_propagate_nested_lift():
     actual = CollapseTuple.apply(
         testee,
         remove_letified_make_tuple_elements=False,
-        flags=CollapseTuple.Flag.PROPAGATE_NESTED_LET,
+        enabled_transformations=CollapseTuple.Transformation.PROPAGATE_NESTED_LET,
         allow_undeclared_symbols=True,
         within_stencil=False,
     )
@@ -249,7 +249,7 @@ def test_if_make_tuple_reorder_cps():
     expected = im.if_(True, im.make_tuple(2, 1), im.make_tuple(4, 3))
     actual = CollapseTuple.apply(
         testee,
-        flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
+        enabled_transformations=~CollapseTuple.Transformation.PROPAGATE_TO_IF_ON_TUPLES,
         allow_undeclared_symbols=True,
         within_stencil=False,
     )
@@ -275,7 +275,7 @@ def test_nested_if_make_tuple_reorder_cps():
     )
     actual = CollapseTuple.apply(
         testee,
-        flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
+        enabled_transformations=~CollapseTuple.Transformation.PROPAGATE_TO_IF_ON_TUPLES,
         allow_undeclared_symbols=True,
         within_stencil=False,
     )
@@ -291,7 +291,7 @@ def test_if_make_tuple_reorder_cps_nested():
     expected = im.if_(True, im.make_tuple(2, 1, 1), im.make_tuple(4, 3, 3))
     actual = CollapseTuple.apply(
         testee,
-        flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
+        enabled_transformations=~CollapseTuple.Transformation.PROPAGATE_TO_IF_ON_TUPLES,
         allow_undeclared_symbols=True,
         within_stencil=False,
     )
@@ -306,7 +306,7 @@ def test_if_make_tuple_reorder_cps_external():
     expected = im.if_(True, im.make_tuple(external_ref, 2, 1), im.make_tuple(external_ref, 4, 3))
     actual = CollapseTuple.apply(
         testee,
-        flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
+        enabled_transformations=~CollapseTuple.Transformation.PROPAGATE_TO_IF_ON_TUPLES,
         allow_undeclared_symbols=True,
         within_stencil=False,
     )

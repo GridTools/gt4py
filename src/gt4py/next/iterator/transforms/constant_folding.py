@@ -12,19 +12,22 @@ import functools
 import operator
 from typing import Optional
 
+from gt4py import eve
 from gt4py.next.iterator import builtins, embedded, ir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
-from gt4py.next.iterator.transforms.fixed_point_transform import FixedPointTransform
+from gt4py.next.iterator.transforms import fixed_point_transformation
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class ConstantFolding(FixedPointTransform):
+class ConstantFolding(
+    fixed_point_transformation.FixedPointTransformation, eve.PreserveLocationVisitor
+):
     PRESERVED_ANNEX_ATTRS = (
         "type",
         "domain",
     )
 
-    class Flag(enum.Flag):
+    class Transformation(enum.Flag):
         # e.g. `literal + symref` -> `symref + literal` and
         # `literal + funcall` -> `funcall + literal` and
         # `symref + funcall` -> `funcall + symref`
@@ -68,7 +71,7 @@ class ConstantFolding(FixedPointTransform):
         def all(self):  # TODO -> ConstantFolding.Flag:
             return functools.reduce(operator.or_, self.__members__.values())
 
-    flags: Flag = Flag.all()  # noqa: RUF009 [function-call-in-dataclass-default-argument]
+    enabled_transformations: Transformation = Transformation.all()  # noqa: RUF009 [function-call-in-dataclass-default-argument]
 
     @classmethod
     def apply(cls, node: ir.Node) -> ir.Node:
@@ -78,7 +81,7 @@ class ConstantFolding(FixedPointTransform):
     def visit_FunCall(self, node: ir.FunCall, **kwargs):
         # visit depth-first such that nested constant expressions (e.g. `(1+2)+3`) are properly folded
         node = self.generic_visit(node, **kwargs)
-        return self.fp_transform(node, **kwargs)
+        return self.fp_transform(node, **kwargs)  # TODO: is that as intended?
 
     def transform_canonicalize_funcall_symref_literal(
         self, node: ir.FunCall, **kwargs
