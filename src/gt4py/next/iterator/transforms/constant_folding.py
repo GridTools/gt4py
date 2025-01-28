@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import dataclasses
 import enum
 import functools
@@ -68,7 +70,7 @@ class ConstantFolding(
         FOLD_IF = enum.auto()
 
         @classmethod
-        def all(self):  # TODO -> ConstantFolding.Flag:
+        def all(self) -> ConstantFolding.Transformation:
             return functools.reduce(operator.or_, self.__members__.values())
 
     enabled_transformations: Transformation = Transformation.all()  # noqa: RUF009 [function-call-in-dataclass-default-argument]
@@ -77,11 +79,6 @@ class ConstantFolding(
     def apply(cls, node: ir.Node) -> ir.Node:
         node = cls().visit(node)
         return node
-
-    def visit_FunCall(self, node: ir.FunCall, **kwargs):
-        # visit depth-first such that nested constant expressions (e.g. `(1+2)+3`) are properly folded
-        node = self.generic_visit(node, **kwargs)
-        return self.fp_transform(node, **kwargs)  # TODO: is that as intended?
 
     def transform_canonicalize_funcall_symref_literal(
         self, node: ir.FunCall, **kwargs
