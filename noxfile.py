@@ -181,10 +181,12 @@ def test_next(
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "next_tests"),
         *session.posargs,
+        success_codes=[NO_TESTS_COLLECTED_EXIT_CODE],
     )
     session.run(
         *"pytest --doctest-modules --doctest-ignore-import-errors -sv".split(),
         str(pathlib.Path("src") / "gt4py" / "next"),
+        success_codes=[NO_TESTS_COLLECTED_EXIT_CODE],
     )
 
 
