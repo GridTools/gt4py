@@ -60,7 +60,7 @@ def program_example():
         declarations=[],
         body=[
             itir.SetAt(
-                expr=im.call(im.call("as_fieldop")(itir.SymRef(id="stencil"), domain))(
+                expr=im.as_fieldop(itir.SymRef(id="stencil"), domain)(
                     itir.SymRef(id="buf"), itir.SymRef(id="sc")
                 ),
                 domain=domain,
