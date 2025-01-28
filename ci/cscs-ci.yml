@@ -111,7 +111,7 @@ build_py310_image_aarch64:
   script:
   - cd /gt4py.src
   - NOX_PARAMS="${VARIANT:+($VARIANT}${SUBVARIANT:+, $SUBVARIANT}${DETAIL:+, $DETAIL}${VARIANT:+)}"
-  - nox -e test_$SUBPACKAGE-${PYVERSION:0:4}${NOX_PARAMS}
+  - nox -e "'test_$SUBPACKAGE-${PYVERSION:0:4}${NOX_PARAMS}'"
   variables:
     CRAY_CUDA_MPS: 1
     SLURM_JOB_NUM_NODES: 1
