@@ -17,7 +17,7 @@ from typing import Final, Literal, TypeAlias
 import nox
 
 #: This should just be `pytest.ExitCode.NO_TESTS_COLLECTED` but `pytest`
-#: is not guaranteed to be available in the venv running `nox`.
+#: is not guaranteed to be available in the venv where `nox` is running.
 NO_TESTS_COLLECTED_EXIT_CODE: Final = 5
 
 # -- nox configuration --

@@ -150,7 +150,7 @@ We recommended you to use `nox` for running the test suite in different environm
 nox list
 
 # Run a specific task environment
-nox run -e cartesian-py38-internal-cpu
+nox -e cartesian-py38-internal-cpu
 ```
 
 Check `nox` documentation (`nox --help`) for the complete reference.
