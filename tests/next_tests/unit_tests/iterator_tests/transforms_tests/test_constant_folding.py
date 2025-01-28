@@ -371,10 +371,6 @@ def test_constant_folding_complex():
     assert actual == expected
 
 
-# ( (min(1 - sym, 1 + sym) + (max(max(1 - sym, 1 + sym),1 - sym)  + max(1 - sym, 1 - sym)))))) - 2
-# max(sym, 1 + sym) + (max(1, max(1,  sym)) + (sym - 1 + (1 + (sym + 1) + 1))) - 2
-
-
 def test_constant_folding_complex_1():
     sym = im.ref("sym")
     # maximum(sym, 1 + sym) + (maximum(1, maximum(1, sym)) + (sym - 1 + (1 + (sym + 1) + 1))) - 2
@@ -396,13 +392,15 @@ def test_constant_folding_complex_1():
         ),
         im.literal_from_value(2),
     )
-    # sym + 1 + (maximum(sym, 1) + (sym + sym + 2)) + -2
+    # sym + 1 + (maximum(sym, 1) + (sym + -1 + (sym + 3))) + -2
     expected = im.plus(
         im.plus(
             im.plus(sym, 1),
             im.plus(
                 im.call("maximum")(sym, im.literal_from_value(1)),
-                im.plus(im.plus(sym, sym), im.literal_from_value(2)),
+                im.plus(
+                    im.plus(sym, im.literal_from_value(-1)), im.plus(sym, im.literal_from_value(3))
+                ),
             ),
         ),
         im.literal_from_value(-2),
@@ -430,7 +428,7 @@ def test_constant_folding_complex_3():
             ),
         ),
     )
-    # minimum(neg(sym) + 1, sym + 1) + (maximum(sym + 1, neg(sym) + 1) + (neg(sym) + 1))
+    # minimum(neg(sym) + 1, sym + 1) + (maximum(neg(sym) + 1, sym + 1) + (neg(sym) + 1))
     expected = im.plus(
         im.call("minimum")(
             im.plus(im.call("neg")(sym), im.literal_from_value(1)),
@@ -438,8 +436,8 @@ def test_constant_folding_complex_3():
         ),
         im.plus(
             im.call("maximum")(
-                im.plus(sym, im.literal_from_value(1)),
                 im.plus(im.call("neg")(sym), im.literal_from_value(1)),
+                im.plus(sym, im.literal_from_value(1)),
             ),
             im.plus(im.call("neg")(sym), im.literal_from_value(1)),
         ),
@@ -466,7 +464,9 @@ def test_constant_folding_complex_2():
     testee = im.plus(
         im.plus(sym, im.literal_from_value(-1)), im.plus(sym, im.literal_from_value(3))
     )
-    expected = im.plus(im.plus(sym, sym), im.literal_from_value(2))
+    expected = im.plus(
+        im.plus(sym, im.literal_from_value(-1)), im.plus(sym, im.literal_from_value(3))
+    )
     actual = ConstantFolding.apply(testee)
     assert actual == expected
 
@@ -531,5 +531,13 @@ def test_max_syms():
     sym2 = im.ref("sym2")
     testee = im.call("maximum")(sym1, im.call("maximum")(sym2, sym1))
     expected = im.call("maximum")(sym2, sym1)
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+
+def test_max_min():
+    sym = im.ref("sym1")
+    testee = im.call("maximum")(im.call("minimum")(sym, 1), sym)
+    expected = im.call("maximum")(im.call("minimum")(sym, 1), sym)
     actual = ConstantFolding.apply(testee)
     assert actual == expected
