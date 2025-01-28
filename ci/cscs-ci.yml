@@ -4,7 +4,6 @@ include:
 .py311: &py311
   PYVERSION_PREFIX: py311
   PYVERSION: 3.11.9
-
 .py310: &py310
   PYVERSION_PREFIX: py310
   PYVERSION: 3.10.9
@@ -118,6 +117,7 @@ build_py310_image_aarch64:
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 15
     NUM_PROCESSES: auto
+    PYENV_VERSION: $PYVERSION
     VIRTUALENV_SYSTEM_SITE_PACKAGES: 1
 # .test_helper_x86_64:
 #   extends: [.container-runner-daint-gpu, .test_helper]
@@ -136,12 +136,12 @@ build_py310_image_aarch64:
     matrix:
     - SUBPACKAGE: [cartesian]
       VARIANT: ['(internal', '(dace']
-      SUBVARIANT: [', cuda12)', ', cpu)']
+      SUBVARIANT: ['cuda12)', 'cpu)']
     - SUBPACKAGE: eve
     - SUBPACKAGE: next
       VARIANT: ['(internal', '(dace']
-      SUBVARIANT: [', cuda12', ', cpu']
-      DETAIL: [', nomesh)', ', atlas)']
+      SUBVARIANT: ['cuda12', 'cpu']
+      DETAIL: ['nomesh)', 'atlas)']
     - SUBPACKAGE: [storage]
       VARIANT: ['(cuda12)', '(cpu)']
   variables:

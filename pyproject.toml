@@ -116,7 +116,7 @@ keywords = [
   'portable',
   'hpc'
 ]
-license = {text = 'BSD-3 License'}
+license = {text = 'BSD-3 License'}  # TODO: waiting for PEP 639 being implemented by setuptools (https://github.com/codecov/codecov-cli/issues/605)
 name = 'gt4py'
 readme = 'README.md'
 requires-python = '>=3.10'
