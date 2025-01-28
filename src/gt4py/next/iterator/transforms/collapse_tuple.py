@@ -268,7 +268,7 @@ class CollapseTuple(
             # TODO(tehrengruber): extend to general symbols as long as the tail call in the let
             #   does not capture
             # `tuple_get(i, let(...)(make_tuple()))` -> `let(...)(tuple_get(i, make_tuple()))`
-            if isinstance(node, ir.FunCall) and cpm.is_let(node.args[1]):
+            if cpm.is_let(node.args[1]):
                 idx, let_expr = node.args
                 return im.call(
                     im.lambda_(*let_expr.fun.params)(  # type: ignore[attr-defined]  # ensured by is_let
@@ -437,7 +437,7 @@ class CollapseTuple(
         return None
 
     def transform_propagate_nested_let(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
-        if isinstance(node, ir.FunCall) and cpm.is_let(node):
+        if cpm.is_let(node):
             # `let((a, let(b, 1)(a_val)))(a)`-> `let(b, 1)(let(a, a_val)(a))`
             outer_vars = {}
             inner_vars = {}
@@ -463,7 +463,7 @@ class CollapseTuple(
         return None
 
     def transform_inline_trivial_let(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
-        if isinstance(node, ir.FunCall) and cpm.is_let(node):
+        if cpm.is_let(node):
             if isinstance(node.fun.expr, ir.SymRef):  # type: ignore[attr-defined]  # ensured by is_let
                 # `let(a, 1)(a)` -> `1`
                 for arg_sym, arg in zip(node.fun.params, node.args):  # type: ignore[attr-defined]  # ensured by is_let
