@@ -437,7 +437,7 @@ class CollapseTuple(
         return None
 
     def transform_propagate_nested_let(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
-        if isinstance(node, ir.FunCall) and cpm.is_let(node):
+        if cpm.is_let(node):
             # `let((a, let(b, 1)(a_val)))(a)`-> `let(b, 1)(let(a, a_val)(a))`
             outer_vars = {}
             inner_vars = {}
