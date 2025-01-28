@@ -986,12 +986,14 @@ def test_gtir_connectivity_shift():
     stencil2 = im.as_fieldop(
         im.lambda_("it")(
             im.deref(
-                im.shift(
-                    im.ensure_offset("E2V"),
-                    im.ensure_offset(E2V_neighbor_idx),
-                    im.ensure_offset("C2E"),
-                    im.ensure_offset(C2E_neighbor_idx),
-                )("it")
+                im.call(
+                    im.shift(
+                        im.ensure_offset("E2V"),
+                        im.ensure_offset(E2V_neighbor_idx),
+                        im.ensure_offset("C2E"),
+                        im.ensure_offset(C2E_neighbor_idx),
+                    )("it")
+                )
             )
         ),
         ce_domain,
