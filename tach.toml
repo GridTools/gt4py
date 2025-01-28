@@ -4,6 +4,8 @@ source_roots = [
 ]
 exact = true
 # forbid_circular_dependencies = true
+# TODO(egparedes): try to solve the circular dependencies between
+#   gt4py.cartesian and gt4py.storage
 
 [[modules]]
 path = "gt4py._core"

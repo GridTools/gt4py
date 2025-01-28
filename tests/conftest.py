@@ -26,7 +26,7 @@ _PKG_MARKS_ATTR_NAME: Final = "package_pytestmarks"
 
 @functools.cache
 def _get_pkg_marks(module_name: str) -> list[pytest.Mark | str]:
-    """Collect markers in a `package_pytestmarks` module attribute (and recursively from its parents)."""
+    """Collect markers in the `package_pytestmarks` module attribute (and recursively from its parents)."""
     module = sys.modules[module_name]
     pkg_markers = getattr(module, _PKG_MARKS_ATTR_NAME, [])
     assert isinstance(
@@ -47,10 +47,10 @@ def pytest_collection_modifyitems(
     See: https://docs.pytest.org/en/stable/reference/reference.html#pytest.hookspec.pytest_collection_modifyitems
     """
     for item in items:
-        # Visit the test item parents chain in reverse order, until we get to
-        # the module object where the test function (or class) has been defined.
-        # At that point, processthe custom package-level marks attribute if it
-        # is present, and move to the next collected item in the list.
+        # Visit the chain of parents of the current test item in reverse order,
+        # until we get to the module object where the test function (or class)
+        # has been defined. At that point, process the custom package-level marks
+        # attribute if present, and move to the next collected item in the list.
         for node in item.listchain()[-2::-1]:
             if not (obj := getattr(node, "obj", None)):
                 break
