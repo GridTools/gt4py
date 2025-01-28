@@ -268,7 +268,7 @@ class CollapseTuple(
             # TODO(tehrengruber): extend to general symbols as long as the tail call in the let
             #   does not capture
             # `tuple_get(i, let(...)(make_tuple()))` -> `let(...)(tuple_get(i, make_tuple()))`
-            if isinstance(node, ir.FunCall) and cpm.is_let(node.args[1]):
+            if cpm.is_let(node.args[1]):
                 idx, let_expr = node.args
                 return im.call(
                     im.lambda_(*let_expr.fun.params)(  # type: ignore[attr-defined]  # ensured by is_let
