@@ -235,8 +235,8 @@ class DataflowOutputEdge:
         last_node = self.state.in_edges(self.result.dc_node)[0].src
         if isinstance(last_node, dace.nodes.Tasklet):
             # the last transient node can be deleted
-            # Note that it could also be applied when `last_node` is a NestedSDFG,
-            # but an exception would be when the inner write to global data is a
+            # Note that it could also be applied when `last_node` is a NestedSDFG,
+            # but an exception would be when the inner write to global data is a
             # WCR memlet, because that prevents fusion of the outer map. This case
             # happens for the reduce with skip values, which uses a map with WCR.
             last_node_connector = self.state.in_edges(self.result.dc_node)[0].src_conn
