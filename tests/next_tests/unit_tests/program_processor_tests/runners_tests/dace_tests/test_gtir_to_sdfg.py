@@ -1192,9 +1192,7 @@ def test_gtir_neighbors_as_input():
             gtir.SetAt(
                 expr=im.as_fieldop(
                     im.lambda_("it")(
-                        im.call(im.call("reduce")("plus", im.literal_from_value(init_value)))(
-                            im.deref("it")
-                        )
+                        im.reduce("plus", im.literal_from_value(init_value))(im.deref("it"))
                     ),
                     vertex_domain,
                 )(
@@ -1292,25 +1290,15 @@ def test_gtir_neighbors_as_output():
 def test_gtir_reduce():
     init_value = np.random.rand()
     vertex_domain = im.domain(gtx_common.GridType.UNSTRUCTURED, ranges={Vertex: (0, "nvertices")})
-    stencil_inlined = im.call(
-        im.call("as_fieldop")(
-            im.lambda_("it")(
-                im.call(im.call("reduce")("plus", im.literal_from_value(init_value)))(
-                    im.neighbors("V2E", "it")
-                )
-            ),
-            vertex_domain,
-        )
+    stencil_inlined = im.as_fieldop(
+        im.lambda_("it")(
+            im.reduce("plus", im.literal_from_value(init_value))(im.neighbors("V2E", "it"))
+        ),
+        vertex_domain,
     )("edges")
-    stencil_fieldview = im.call(
-        im.call("as_fieldop")(
-            im.lambda_("it")(
-                im.call(im.call("reduce")("plus", im.literal_from_value(init_value)))(
-                    im.deref("it")
-                )
-            ),
-            vertex_domain,
-        )
+    stencil_fieldview = im.as_fieldop(
+        im.lambda_("it")(im.reduce("plus", im.literal_from_value(init_value))(im.deref("it"))),
+        vertex_domain,
     )(im.as_fieldop_neighbors("V2E", "edges", vertex_domain))
 
     connectivity_V2E = SIMPLE_MESH.offset_provider["V2E"]
@@ -1358,25 +1346,15 @@ def test_gtir_reduce():
 def test_gtir_reduce_with_skip_values():
     init_value = np.random.rand()
     vertex_domain = im.domain(gtx_common.GridType.UNSTRUCTURED, ranges={Vertex: (0, "nvertices")})
-    stencil_inlined = im.call(
-        im.call("as_fieldop")(
-            im.lambda_("it")(
-                im.call(im.call("reduce")("plus", im.literal_from_value(init_value)))(
-                    im.neighbors("V2E", "it")
-                )
-            ),
-            vertex_domain,
-        )
+    stencil_inlined = im.as_fieldop(
+        im.lambda_("it")(
+            im.reduce("plus", im.literal_from_value(init_value))(im.neighbors("V2E", "it"))
+        ),
+        vertex_domain,
     )("edges")
-    stencil_fieldview = im.call(
-        im.call("as_fieldop")(
-            im.lambda_("it")(
-                im.call(im.call("reduce")("plus", im.literal_from_value(init_value)))(
-                    im.deref("it")
-                )
-            ),
-            vertex_domain,
-        )
+    stencil_fieldview = im.as_fieldop(
+        im.lambda_("it")(im.reduce("plus", im.literal_from_value(init_value))(im.deref("it"))),
+        vertex_domain,
     )(im.as_fieldop_neighbors("V2E", "edges", vertex_domain))
 
     connectivity_V2E = SKIP_VALUE_MESH.offset_provider["V2E"]
@@ -1459,15 +1437,11 @@ def test_gtir_reduce_dot_product():
         declarations=[],
         body=[
             gtir.SetAt(
-                expr=im.call(
-                    im.call("as_fieldop")(
-                        im.lambda_("it")(
-                            im.call(im.call("reduce")("plus", im.literal_from_value(init_value)))(
-                                im.deref("it")
-                            )
-                        ),
-                        vertex_domain,
-                    )
+                expr=im.as_fieldop(
+                    im.lambda_("it")(
+                        im.reduce("plus", im.literal_from_value(init_value))(im.deref("it"))
+                    ),
+                    vertex_domain,
                 )(
                     im.op_as_fieldop(im.map_("plus"), vertex_domain)(
                         im.op_as_fieldop(im.map_("multiplies"), vertex_domain)(
@@ -1517,9 +1491,7 @@ def test_gtir_reduce_with_cond_neighbors():
             gtir.SetAt(
                 expr=im.as_fieldop(
                     im.lambda_("it")(
-                        im.call(im.call("reduce")("plus", im.literal_from_value(init_value)))(
-                            im.deref("it")
-                        )
+                        im.reduce("plus", im.literal_from_value(init_value))(im.deref("it"))
                     ),
                     vertex_domain,
                 )(
@@ -1967,8 +1939,8 @@ def test_gtir_if_scalars():
                                     "f",
                                     im.if_(
                                         "pred",
-                                        im.call("cast_")("y_0", "float64"),
-                                        im.call("cast_")("y_1", "float64"),
+                                        im.cast_("y_0", "float64"),
+                                        im.cast_("y_1", "float64"),
                                     ),
                                 )
                             )

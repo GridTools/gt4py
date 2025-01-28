@@ -135,7 +135,7 @@ def test_if_can_deref_no_extraction(offset_provider_type):
 
     # if can_deref(⟪Iₒ, 1ₒ⟫(it)) then ·⟪Iₒ, 1ₒ⟫(it) + ·⟪Iₒ, 1ₒ⟫(it) else 1
     testee = im.if_(
-        im.call("can_deref")(im.shift("I", 1)("it")),
+        im.can_deref(im.shift("I", 1)("it")),
         im.plus(im.deref(im.shift("I", 1)("it")), im.deref(im.shift("I", 1)("it"))),
         # use something more involved where a subexpression can still be eliminated
         im.literal("1", "int32"),
@@ -143,7 +143,7 @@ def test_if_can_deref_no_extraction(offset_provider_type):
     # (λ(_cs_1) → if can_deref(_cs_1) then (λ(_cs_2) → _cs_2 + _cs_2)(·_cs_1) else 1)(⟪Iₒ, 1ₒ⟫(it))
     expected = im.let("_cs_1", im.shift("I", 1)("it"))(
         im.if_(
-            im.call("can_deref")("_cs_1"),
+            im.can_deref("_cs_1"),
             im.let("_cs_2", im.deref("_cs_1"))(im.plus("_cs_2", "_cs_2")),
             im.literal("1", "int32"),
         )
@@ -159,14 +159,14 @@ def test_if_can_deref_eligible_extraction(offset_provider_type):
 
     # if can_deref(⟪Iₒ, 1ₒ⟫(it)) then ·⟪Iₒ, 1ₒ⟫(it) else ·⟪Iₒ, 1ₒ⟫(it) + ·⟪Iₒ, 1ₒ⟫(it)
     testee = im.if_(
-        im.call("can_deref")(im.shift("I", 1)("it")),
+        im.can_deref(im.shift("I", 1)("it")),
         im.deref(im.shift("I", 1)("it")),
         im.plus(im.deref(im.shift("I", 1)("it")), im.deref(im.shift("I", 1)("it"))),
     )
     # (λ(_cs_3) → (λ(_cs_1) → if can_deref(_cs_3) then _cs_1 else _cs_1 + _cs_1)(·_cs_3))(⟪Iₒ, 1ₒ⟫(it))
     expected = im.let("_cs_3", im.shift("I", 1)("it"))(
         im.let("_cs_1", im.deref("_cs_3"))(
-            im.if_(im.call("can_deref")("_cs_3"), "_cs_1", im.plus("_cs_1", "_cs_1"))
+            im.if_(im.can_deref("_cs_3"), "_cs_1", im.plus("_cs_1", "_cs_1"))
         )
     )
 
