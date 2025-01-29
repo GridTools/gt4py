@@ -1192,7 +1192,7 @@ requires-dist = [
     { name = "pybind11", specifier = ">=2.10.1" },
     { name = "pytest", marker = "extra == 'testing'", specifier = ">=7.0" },
     { name = "scipy", marker = "extra == 'performance'", specifier = ">=1.9.2" },
-    { name = "setuptools", specifier = ">=65.5.0" },
+    { name = "setuptools", specifier = ">=70.0.0" },
     { name = "tabulate", specifier = ">=0.8.10" },
     { name = "toolz", specifier = ">=0.12.1" },
     { name = "typing-extensions", specifier = ">=4.11.0" },
