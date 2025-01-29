@@ -160,20 +160,20 @@ def test_next(
 
     codegen_settings = CodeGenTestSettings[codegen]
     device_settings = DeviceTestSettings[device]
-    mesh_markers = []
-    custom_pkgs = []
+    groups: list[str] = ["test"]
+    mesh_markers: list[str] = []
+
     match meshlib:
         case "nomesh":
             mesh_markers.append("not requires_atlas")
         case "atlas":
             mesh_markers.append("requires_atlas")
-            custom_pkgs.append(["--extra-index-url", "https://test.pypi.org/simple/", "atlas4py"])
+            groups.append("frameworks")
 
     _install_session_venv(
         session,
-        *custom_pkgs,
         extras=["performance", "testing", *codegen_settings["extras"], *device_settings["extras"]],
-        groups=["test"],
+        groups=groups,
     )
 
     num_processes = session.env.get("NUM_PROCESSES", "auto")
