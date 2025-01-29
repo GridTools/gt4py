@@ -1081,6 +1081,7 @@ build = [
     { name = "wheel" },
 ]
 dev = [
+    { name = "atlas4py" },
     { name = "bump-my-version" },
     { name = "coverage", extra = ["toml"] },
     { name = "cython" },
@@ -1208,6 +1209,7 @@ build = [
     { name = "wheel", specifier = ">=0.33.6" },
 ]
 dev = [
+    { name = "atlas4py", specifier = ">=0.35", index = "https://test.pypi.org/simple/" },
     { name = "bump-my-version", specifier = ">=0.16.0" },
     { name = "coverage", extras = ["toml"], specifier = ">=7.5.0" },
     { name = "cython", specifier = ">=3.0.0" },
