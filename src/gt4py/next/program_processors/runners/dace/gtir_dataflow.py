@@ -1660,7 +1660,6 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert cpm.is_call_to(node, "if_")
         assert len(node.args) == 3
 
-        # first, check if any argument contains shift expressions that depend on the condition variables
         condition_vars = (
             eve.walk_values(node.args[0])
             .if_isinstance(gtir.SymRef)
@@ -1668,6 +1667,8 @@ class LambdaToDataflow(eve.NodeVisitor):
             .filter(lambda x: x in self.symbol_map)
             .to_set()
         )
+
+        # first, check if any argument contains shift expressions that depend on the condition variables
         for arg in node.args[1:3]:
             shift_nodes = (
                 eve.walk_values(arg).filter(lambda node: cpm.is_applied_shift(node)).to_set()
@@ -1689,6 +1690,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         # secondly, check whether the `if_` branches access different sets of fields
         # and this happens inside a scan field operator
         if self.scan_carry_symbol is not None:
+            # the `if_` node is inside a scan stencil expression
             scan_carry_var = str(self.scan_carry_symbol.id)
             if scan_carry_var in condition_vars:
                 br1_vars, br2_vars = (
