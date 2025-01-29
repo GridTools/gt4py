@@ -11,6 +11,7 @@
 import dataclasses
 import enum
 import importlib
+from typing import Final
 
 import pytest
 
@@ -53,11 +54,17 @@ class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
 
 @dataclasses.dataclass(frozen=True)
 class EmbeddedDummyBackend:
+    name: str
     allocator: next_allocators.FieldBufferAllocatorProtocol
+    executor: Final = None
 
 
-numpy_execution = EmbeddedDummyBackend(next_allocators.StandardCPUFieldBufferAllocator())
-cupy_execution = EmbeddedDummyBackend(next_allocators.StandardGPUFieldBufferAllocator())
+numpy_execution = EmbeddedDummyBackend(
+    "EmbeddedNumPy", next_allocators.StandardCPUFieldBufferAllocator()
+)
+cupy_execution = EmbeddedDummyBackend(
+    "EmbeddedCuPy", next_allocators.StandardGPUFieldBufferAllocator()
+)
 
 
 class EmbeddedIds(_PythonObjectIdMixin, str, enum.Enum):

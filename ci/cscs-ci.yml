@@ -4,7 +4,6 @@ include:
 .py311: &py311
   PYVERSION_PREFIX: py311
   PYVERSION: 3.11.9
-
 .py310: &py310
   PYVERSION_PREFIX: py310
   PYVERSION: 3.10.9
@@ -111,13 +110,14 @@ build_py310_image_aarch64:
   image: $CSCS_REGISTRY_PATH/public/$ARCH/gt4py/gt4py-ci:$CI_COMMIT_SHA-$PYVERSION
   script:
   - cd /gt4py.src
-  - python -c "import cupy"
-  - tox run -e $SUBPACKAGE-$PYVERSION_PREFIX$VARIANT$SUBVARIANT
+  - NOX_SESSION_ARGS="${VARIANT:+($VARIANT}${SUBVARIANT:+, $SUBVARIANT}${DETAIL:+, $DETAIL}${VARIANT:+)}"
+  - nox -e "test_$SUBPACKAGE-${PYVERSION:0:4}$NOX_SESSION_ARGS"
   variables:
     CRAY_CUDA_MPS: 1
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 15
     NUM_PROCESSES: auto
+    PYENV_VERSION: $PYVERSION
     VIRTUALENV_SYSTEM_SITE_PACKAGES: 1
 # .test_helper_x86_64:
 #   extends: [.container-runner-daint-gpu, .test_helper]
@@ -134,13 +134,16 @@ build_py310_image_aarch64:
   extends: [.container-runner-daint-gh200, .test_helper]
   parallel:
     matrix:
-    - SUBPACKAGE: [cartesian, storage]
-      VARIANT: [-internal, -dace]
-      SUBVARIANT: [-cuda12x, -cpu]
+    - SUBPACKAGE: [cartesian]
+      VARIANT: ['internal', 'dace']
+      SUBVARIANT: ['cuda12', 'cpu']
     - SUBPACKAGE: eve
     - SUBPACKAGE: next
-      VARIANT: [-nomesh, -atlas]
-      SUBVARIANT: [-cuda12x, -cpu]
+      VARIANT: ['internal', 'dace']
+      SUBVARIANT: ['cuda12', 'cpu']
+      DETAIL: ['nomesh', 'atlas']
+    - SUBPACKAGE: [storage]
+      VARIANT: ['cuda12', 'cpu']
   variables:
     # Grace-Hopper gpu architecture is not enabled by default in CUDA build
     CUDAARCHS: "90"

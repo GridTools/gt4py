@@ -23,18 +23,9 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 )
 
 
-try:
-    import dace
+dace = pytest.importorskip("dace")
 
-    from gt4py.next.program_processors.runners import dace as dace_backends
-except ImportError:
-    from types import ModuleType
-    from typing import Optional
-
-    from gt4py.next import backend as next_backend
-
-    dace: Optional[ModuleType] = None
-    dace_backends: Optional[ModuleType] = None
+from gt4py.next.program_processors.runners import dace as dace_backends
 
 
 @pytest.fixture(
