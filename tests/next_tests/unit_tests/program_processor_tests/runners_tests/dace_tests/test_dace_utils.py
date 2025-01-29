@@ -10,10 +10,9 @@
 
 import pytest
 
-from gt4py.next.program_processors.runners.dace import utils as gtx_dace_utils
-
-
 dace = pytest.importorskip("dace")
+
+from gt4py.next.program_processors.runners.dace import utils as gtx_dace_utils
 
 
 def test_safe_replace_symbolic():
