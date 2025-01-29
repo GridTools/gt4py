@@ -763,9 +763,6 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         assert len(node.args) == 3
 
-        # TODO(edopao): enable once supported in next DaCe release
-        use_conditional_block: Final[bool] = False
-
         # evaluate the if-condition that will write to a boolean scalar node
         condition_value = self.visit(node.args[0])
         assert (
@@ -781,26 +778,18 @@ class LambdaToDataflow(eve.NodeVisitor):
         nsdfg.debuginfo = gtir_sdfg_utils.debug_info(node, default=self.sdfg.debuginfo)
 
         # create states inside the nested SDFG for the if-branches
-        if use_conditional_block:
-            if_region = dace.sdfg.state.ConditionalBlock("if")
-            nsdfg.add_node(if_region)
-            entry_state = nsdfg.add_state("entry", is_start_block=True)
-            nsdfg.add_edge(entry_state, if_region, dace.InterstateEdge())
+        if_region = dace.sdfg.state.ConditionalBlock("if")
+        nsdfg.add_node(if_region)
+        entry_state = nsdfg.add_state("entry", is_start_block=True)
+        nsdfg.add_edge(entry_state, if_region, dace.InterstateEdge())
 
-            then_body = dace.sdfg.state.ControlFlowRegion("then_body", sdfg=nsdfg)
-            tstate = then_body.add_state("true_branch", is_start_block=True)
-            if_region.add_branch(dace.sdfg.state.CodeBlock("__cond"), then_body)
+        then_body = dace.sdfg.state.ControlFlowRegion("then_body", sdfg=nsdfg)
+        tstate = then_body.add_state("true_branch", is_start_block=True)
+        if_region.add_branch(dace.sdfg.state.CodeBlock("__cond"), then_body)
 
-            else_body = dace.sdfg.state.ControlFlowRegion("else_body", sdfg=nsdfg)
-            fstate = else_body.add_state("false_branch", is_start_block=True)
-            if_region.add_branch(dace.sdfg.state.CodeBlock("not (__cond)"), else_body)
-
-        else:
-            entry_state = nsdfg.add_state("entry", is_start_block=True)
-            tstate = nsdfg.add_state("true_branch")
-            nsdfg.add_edge(entry_state, tstate, dace.InterstateEdge(condition="__cond"))
-            fstate = nsdfg.add_state("false_branch")
-            nsdfg.add_edge(entry_state, fstate, dace.InterstateEdge(condition="not (__cond)"))
+        else_body = dace.sdfg.state.ControlFlowRegion("else_body", sdfg=nsdfg)
+        fstate = else_body.add_state("false_branch", is_start_block=True)
+        if_region.add_branch(dace.sdfg.state.CodeBlock("not (__cond)"), else_body)
 
         input_memlets: dict[str, MemletExpr | ValueExpr] = {}
 
