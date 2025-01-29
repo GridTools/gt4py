@@ -3147,7 +3147,7 @@ wheels = [
 
 [[package]]
 name = "tach"
-version = "0.23.0"
+version = "0.24.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "gitpython" },
@@ -3159,18 +3159,18 @@ dependencies = [
     { name = "tomli" },
     { name = "tomli-w" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d9/4b/de2e7ad0a22e63fbed979064381da1290391dd623a3fd80d0728ea72d545/tach-0.23.0.tar.gz", hash = "sha256:ae123491231ab0712417d579b9a3259014d713d72626805ff64552955e43e912", size = 482218 }
+sdist = { url = "https://files.pythonhosted.org/packages/c2/00/f085444f77ce5158073e4227b71304303a6dced16e336ba066b956cdb3a6/tach-0.24.0.tar.gz", hash = "sha256:77cb0bc8eccf5bd8083d5fd89559528e1376631475581dfac0ce162a5e09090a", size = 490266 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c3/87/9aa4142dc31314500af0003f406851a212b589a7e680e78c39751fc26681/tach-0.23.0-cp37-abi3-macosx_10_12_x86_64.whl", hash = "sha256:aa30db4158e48694154d346def14d3a096672381fa09e3cf09eae190ff9066f0", size = 3240516 },
-    { url = "https://files.pythonhosted.org/packages/b3/db/3d856d856a688b024470494785dc8d177e1728904e180aa9394e80d8787e/tach-0.23.0-cp37-abi3-macosx_11_0_arm64.whl", hash = "sha256:2e54365a3101c08a35d51357007e37723cd86c8bf464b73a3b43401edd2053d8", size = 3095903 },
-    { url = "https://files.pythonhosted.org/packages/19/c9/1302175f5b350891727356c03bfdbffb884323db3c30cc34b2c7e93c932b/tach-0.23.0-cp37-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:d0af6be9328ec907deac141165b43b7db58f055bc20ea46b65b82b10fed72cd3", size = 3373159 },
-    { url = "https://files.pythonhosted.org/packages/af/3d/ad4a2f4e2142b789085886a3acbb2f8e1a99068014303c7aa1166350aa38/tach-0.23.0-cp37-abi3-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:1b8205440863f61389b29a9baf2e2cd171d87c6931f3d6baf69eda69092440df", size = 3325828 },
-    { url = "https://files.pythonhosted.org/packages/ab/87/4114a20e97f9a8652865bdf541d7b3121a731d6539d7f6b7d6bb70a86f46/tach-0.23.0-cp37-abi3-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:9b783d0f121c579f761dad7bf6ceeddec8f901e3778ed29a2db57c1c17804577", size = 3627127 },
-    { url = "https://files.pythonhosted.org/packages/b5/cd/88b4f103eea5d2a3b0696265131f43f07e5bf9b1b81ccc0471512121ceae/tach-0.23.0-cp37-abi3-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:625403b59430eee9b5c2c05dff9575c8623ea88bcf58728e55b843fdbf04031d", size = 3623389 },
-    { url = "https://files.pythonhosted.org/packages/12/77/3be44b77ad3ab8a6f05c245e399ff1e9f48df6be5e706c34b0863eaa4bdc/tach-0.23.0-cp37-abi3-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:0c9671d4be806f9aa6a714a38ac26b455704ac01019555f2441445335e749fb5", size = 3884923 },
-    { url = "https://files.pythonhosted.org/packages/d7/8b/d7f9c9a1cb6a0f6745a1c4cdb824bc1abbac2a4f9fa30e57de37b7a223b9/tach-0.23.0-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:caede4e23800d412c83b96288c7f03845971f6ea10dcfff40a026d294db1996f", size = 3483408 },
-    { url = "https://files.pythonhosted.org/packages/48/8e/930460944b5cddeff297de774981ce8ffd1e80c59ea5f0616ade89a6871b/tach-0.23.0-cp37-abi3-win32.whl", hash = "sha256:828a59f7e2effdac3802025177b1a83e53b27ee54b00ef6305a0e36cec448e55", size = 2725999 },
-    { url = "https://files.pythonhosted.org/packages/ea/01/4e4c9b551fa9ffd0db74e14966c393928aefa59019b6d5bd8a9a645ee714/tach-0.23.0-cp37-abi3-win_amd64.whl", hash = "sha256:5dc03ef01d1a2e9d39fa238c271e9a4f8d9db2459212425ceb05b8ed0547000f", size = 2930346 },
+    { url = "https://files.pythonhosted.org/packages/f9/a0/5d26e796a045f7acf727b62e73a68b36580005df7157d562faa599674420/tach-0.24.0-cp37-abi3-macosx_10_12_x86_64.whl", hash = "sha256:8a262de9dbdee2142d7edcbbf1b50203d37ce6c7791bba2f6bc6064138a7122d", size = 3391150 },
+    { url = "https://files.pythonhosted.org/packages/af/fa/e11ec9a55663e4e84ff8a1f2b20990a2075375b8cd32b0c244eb6e67abb8/tach-0.24.0-cp37-abi3-macosx_11_0_arm64.whl", hash = "sha256:83c570c7b0bdb64cce8b3f2f3820a5ffe417e4baff606e71cf0b1628c0c46d67", size = 3252283 },
+    { url = "https://files.pythonhosted.org/packages/f2/c6/37837fbc978db73c2e71a06a0680b2eded3d55ce7038bd3963f8082a6539/tach-0.24.0-cp37-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:5c2184f954790c6a64700107c1ee84a8ee99598c209bb26f8db32257075c6196", size = 3536688 },
+    { url = "https://files.pythonhosted.org/packages/1e/82/f9f9fcb31e14da4c2e4603bcf950403f8e1bde3387082c1acad356850b7f/tach-0.24.0-cp37-abi3-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:8c856d78e4850616c9542f161d4abc0f20dee3b941771215d07ce08b2c4deff4", size = 3495633 },
+    { url = "https://files.pythonhosted.org/packages/04/71/f78824c5bf6b4bc0d4eebc2520d3d992f222ab0481a6d2bba5424daab961/tach-0.24.0-cp37-abi3-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:1f63487be758665a4575ed65625063342d8eb1a70c7ca962d8f7be0b484c4349", size = 3811629 },
+    { url = "https://files.pythonhosted.org/packages/6c/28/eb0b3e0d5708d2bd28b4be6e521041abaddaf2bd79637d47d86ba711c26a/tach-0.24.0-cp37-abi3-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:d37a91a027e7781e35e9ea7e0d3e4f2da1cef61d9f467b40c3c836fbab2c0317", size = 3786406 },
+    { url = "https://files.pythonhosted.org/packages/96/a2/f0dfe3e0c695006d36906be86db08034b8fbcc9bc9430573d83f083d7057/tach-0.24.0-cp37-abi3-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:8e495dd4c5d3887f1805cc5aabe742e608c6e0c7e816795e6437e5a0219845d8", size = 4057595 },
+    { url = "https://files.pythonhosted.org/packages/48/b9/b6e43157ebc4f02e527b5dd70c6f4e65d46d05cdb91df6b7442138050f1e/tach-0.24.0-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:18c64ea7c962643e2d9c37a753e83392d2bc52a4c120e762227047a59c03e957", size = 3656957 },
+    { url = "https://files.pythonhosted.org/packages/30/13/1492096585b4c1fd9401255dea80e5fe6f4381caf2f36e5bc6e9376a18b2/tach-0.24.0-cp37-abi3-win32.whl", hash = "sha256:96958f499f60b9ef3e423127f79fb450550743830078e158c3bb3bfe5253bb7d", size = 2870360 },
+    { url = "https://files.pythonhosted.org/packages/dd/25/59d402f9d3c60c8d45493560507816073ef2faad330bf045fe3d92b563a9/tach-0.24.0-cp37-abi3-win_amd64.whl", hash = "sha256:0ea694a3da279539525359b431c5bf5db4e85dce8a7b6bab82fe0cb380d2dde5", size = 3075675 },
 ]
 
 [[package]]
