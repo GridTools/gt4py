@@ -128,6 +128,14 @@ def test_unary_neg(cartesian_case):
     cases.verify_with_default_data(cartesian_case, uneg, ref=lambda inp1: -inp1)
 
 
+def test_unary_pos(cartesian_case):
+    @gtx.field_operator
+    def upos(inp: cases.IField) -> cases.IField:
+        return +inp
+
+    cases.verify_with_default_data(cartesian_case, upos, ref=lambda inp1: inp1)
+
+
 def test_unary_neg_float_conversion(cartesian_case):
     @gtx.field_operator
     def uneg_float() -> cases.IFloatField:

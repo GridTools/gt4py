@@ -20,6 +20,7 @@ from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 
 MATH_BUILTINS_MAPPING = {
     "abs": "abs({})",
+    "neg": "(- {})",
     "sin": "math.sin({})",
     "cos": "math.cos({})",
     "tan": "math.tan({})",
