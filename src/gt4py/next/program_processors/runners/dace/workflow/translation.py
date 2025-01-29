@@ -9,20 +9,18 @@
 from __future__ import annotations
 
 import dataclasses
-import functools
 from typing import Optional
 
 import dace
 import factory
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import allocators as gtx_allocators, common, config
+from gt4py.next import allocators as gtx_allocators, common
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
-from gt4py.next.otf import languages, recipes, stages, step_types, workflow
+from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.languages import LanguageSettings
-from gt4py.next.program_processors.runners.dace_common import workflow as dace_workflow
-from gt4py.next.program_processors.runners.dace_fieldview import (
+from gt4py.next.program_processors.runners.dace import (
     gtir_sdfg,
     transformations as gtx_transformations,
 )
@@ -55,7 +53,7 @@ class DaCeTranslator(
         if not self.itir_transforms_off:
             ir = itir_transforms.apply_fieldview_transforms(ir, offset_provider=offset_provider)
         sdfg = gtir_sdfg.build_sdfg_from_gtir(
-            ir, offset_provider_type=common.offset_provider_to_type(offset_provider)
+            ir, common.offset_provider_to_type(offset_provider), column_axis
         )
 
         if auto_opt:
@@ -106,37 +104,3 @@ class DaCeTranslator(
 class DaCeTranslationStepFactory(factory.Factory):
     class Meta:
         model = DaCeTranslator
-
-
-def _no_bindings(inp: stages.ProgramSource) -> stages.CompilableSource:
-    return stages.CompilableSource(program_source=inp, binding_source=None)
-
-
-class DaCeWorkflowFactory(factory.Factory):
-    class Meta:
-        model = recipes.OTFCompileWorkflow
-
-    class Params:
-        device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
-        cmake_build_type: config.CMakeBuildType = factory.LazyFunction(
-            lambda: config.CMAKE_BUILD_TYPE
-        )
-        auto_optimize: bool = False
-
-    translation = factory.SubFactory(
-        DaCeTranslationStepFactory,
-        device_type=factory.SelfAttribute("..device_type"),
-        auto_optimize=factory.SelfAttribute("..auto_optimize"),
-    )
-    bindings = _no_bindings
-    compilation = factory.SubFactory(
-        dace_workflow.DaCeCompilationStepFactory,
-        cache_lifetime=factory.LazyFunction(lambda: config.BUILD_CACHE_LIFETIME),
-        cmake_build_type=factory.SelfAttribute("..cmake_build_type"),
-    )
-    decoration = factory.LazyAttribute(
-        lambda o: functools.partial(
-            dace_workflow.convert_args,
-            device=o.device_type,
-        )
-    )

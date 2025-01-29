@@ -14,12 +14,13 @@ import numpy as np
 
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt
-from gt4py.next.iterator import ir as gtir
+from gt4py.next.iterator import builtins, ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 
 
 MATH_BUILTINS_MAPPING = {
     "abs": "abs({})",
+    "neg": "(- {})",
     "sin": "math.sin({})",
     "cos": "math.cos({})",
     "tan": "math.tan({})",
@@ -75,7 +76,7 @@ MATH_BUILTINS_MAPPING = {
 
 def builtin_cast(*args: Any) -> str:
     val, target_type = args
-    assert target_type in gtir.TYPEBUILTINS
+    assert target_type in builtins.TYPE_BUILTINS
     return MATH_BUILTINS_MAPPING[target_type].format(val)
 
 

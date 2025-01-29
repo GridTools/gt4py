@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
-from gt4py.next.iterator import embedded, ir
+from gt4py.next.iterator import builtins, embedded, ir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 
 
@@ -74,7 +74,7 @@ class ConstantFolding(PreserveLocationVisitor, NodeTranslator):
             and all(isinstance(arg, ir.Literal) for arg in new_node.args)
         ):  # `1 + 1` -> `2`
             try:
-                if new_node.fun.id in ir.ARITHMETIC_BUILTINS:
+                if new_node.fun.id in builtins.ARITHMETIC_BUILTINS:
                     fun = getattr(embedded, str(new_node.fun.id))
                     arg_values = [
                         getattr(embedded, str(arg.type))(arg.value)  # type: ignore[attr-defined] # arg type already established in if condition

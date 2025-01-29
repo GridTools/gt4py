@@ -4,11 +4,9 @@ on:
   push:
     branches:
     - main
-    - gtir  # TODO(tehrengruber): remove after GTIR refactoring #1582
   pull_request:
     branches:
     - main
-    - gtir  # TODO(tehrengruber): remove after GTIR refactoring #1582
 
 jobs:
   test-notebooks:

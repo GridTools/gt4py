@@ -417,12 +417,10 @@ class DaCeIRBuilder(eve.NodeTranslator):
         global_ctx: DaCeIRBuilder.GlobalContext,
         iteration_ctx: DaCeIRBuilder.IterationContext,
         symbol_collector: DaCeIRBuilder.SymbolCollector,
-        loop_order,
         k_interval,
         **kwargs: Any,
     ):
-        # skip type checking due to https://github.com/python/mypy/issues/5485
-        extent = global_ctx.library_node.get_extents(node)  # type: ignore
+        extent = global_ctx.library_node.get_extents(node)
         decls = [self.visit(decl, **kwargs) for decl in node.declarations]
         targets: Set[str] = set()
         stmts = [
@@ -522,7 +520,6 @@ class DaCeIRBuilder(eve.NodeTranslator):
         self,
         node: oir.VerticalLoopSection,
         *,
-        loop_order,
         iteration_ctx: DaCeIRBuilder.IterationContext,
         global_ctx: DaCeIRBuilder.GlobalContext,
         symbol_collector: DaCeIRBuilder.SymbolCollector,
@@ -546,7 +543,6 @@ class DaCeIRBuilder(eve.NodeTranslator):
             iteration_ctx=iteration_ctx,
             global_ctx=global_ctx,
             symbol_collector=symbol_collector,
-            loop_order=loop_order,
             k_interval=node.interval,
             **kwargs,
         )
@@ -723,7 +719,6 @@ class DaCeIRBuilder(eve.NodeTranslator):
         scope_nodes,
         item: Loop,
         *,
-        global_ctx: DaCeIRBuilder.GlobalContext,
         iteration_ctx: DaCeIRBuilder.IterationContext,
         symbol_collector: DaCeIRBuilder.SymbolCollector,
         **kwargs: Any,
@@ -840,7 +835,6 @@ class DaCeIRBuilder(eve.NodeTranslator):
         sections = flatten_list(
             self.generic_visit(
                 node.sections,
-                loop_order=node.loop_order,
                 global_ctx=global_ctx,
                 iteration_ctx=iteration_ctx,
                 symbol_collector=symbol_collector,

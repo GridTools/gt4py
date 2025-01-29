@@ -12,9 +12,7 @@ import dace
 from dace import data as dace_data
 from dace.sdfg import nodes as dace_nodes
 
-from gt4py.next.program_processors.runners.dace_fieldview import (
-    transformations as gtx_transformations,
-)
+from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
 PropagatedStrideRecord: TypeAlias = tuple[str, dace_nodes.NestedSDFG]
@@ -653,7 +651,7 @@ def _gt_find_toplevel_data_accesses(
                 top_level_data[data].append((state, dnode))
                 continue
 
-            elif gtx_transformations.util.is_view(dnode, sdfg):
+            elif gtx_transformations.utils.is_view(dnode, sdfg):
                 # The AccessNode refers to a View so we ignore it anyway.
                 continue
 

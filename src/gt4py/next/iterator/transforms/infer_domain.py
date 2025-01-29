@@ -15,7 +15,7 @@ from gt4py import eve
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Callable, Optional, TypeAlias, Unpack
 from gt4py.next import common
-from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import (
     common_pattern_matcher as cpm,
     domain_utils,
@@ -415,8 +415,8 @@ def _infer_expr(
     elif cpm.is_call_to(expr, "concat_where"):
         return _infer_concat_where(expr, domain, **kwargs)
     elif (
-        cpm.is_call_to(expr, itir.ARITHMETIC_BUILTINS)
-        or cpm.is_call_to(expr, itir.TYPEBUILTINS)
+        cpm.is_call_to(expr, builtins.ARITHMETIC_BUILTINS)
+        or cpm.is_call_to(expr, builtins.TYPE_BUILTINS)
         or cpm.is_call_to(expr, ("cast_", "index", "unstructured_domain", "cartesian_domain"))
     ):
         return expr, {}
