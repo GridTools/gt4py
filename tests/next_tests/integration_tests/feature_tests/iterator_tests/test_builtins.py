@@ -46,6 +46,8 @@ from gt4py.next.iterator.builtins import (
     plus,
     shift,
     xor_,
+    neg,
+    abs,
 )
 from gt4py.next.iterator.runtime import fendef, fundef, offset, set_at
 from gt4py.next.program_processors.runners.gtfn import run_gtfn
@@ -135,6 +137,8 @@ def fencil(builtin, out, *inps, processor, as_column=False):
 def arithmetic_and_logical_test_data():
     return [
         # (builtin, inputs, expected)
+        (abs, [[-1.0, 1.0]], [1.0, 1.0]),
+        (neg, [[-1.0, 1.0, -1, 1]], [1.0, -1.0, 1, -1]),
         (plus, [2.0, 3.0], 5.0),
         (minus, [2.0, 3.0], -1.0),
         (multiplies, [2.0, 3.0], 6.0),
@@ -180,8 +184,8 @@ def test_arithmetic_and_logical_builtins(program_processor, builtin, inputs, exp
 
 @pytest.mark.parametrize("builtin, inputs, expected", arithmetic_and_logical_test_data())
 def test_arithmetic_and_logical_functors_gtfn(builtin, inputs, expected):
-    if builtin == if_:
-        pytest.skip("If cannot be used unapplied")
+    if builtin == if_ or builtin == abs:
+        pytest.skip("If and abs cannot be used unapplied.")
     inps = field_maker(*array_maker(*inputs))
     out = field_maker((np.zeros_like(*array_maker(expected))))[0]
 

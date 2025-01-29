@@ -23,19 +23,19 @@ from gt4py.next.iterator.ir_utils import (
     domain_utils,
     ir_makers as im,
 )
-from gt4py.next.program_processors.runners.dace_common import utility as dace_utils
-from gt4py.next.program_processors.runners.dace_fieldview import (
+from gt4py.next.program_processors.runners.dace import (
     gtir_dataflow,
     gtir_python_codegen,
     gtir_sdfg,
-    utility as dace_gtir_utils,
+    gtir_sdfg_utils,
+    utils as gtx_dace_utils,
 )
-from gt4py.next.program_processors.runners.dace_fieldview.gtir_scan_translator import translate_scan
+from gt4py.next.program_processors.runners.dace.gtir_scan_translator import translate_scan
 from gt4py.next.type_system import type_info as ti, type_specifications as ts
 
 
 if TYPE_CHECKING:
-    from gt4py.next.program_processors.runners.dace_fieldview import gtir_sdfg
+    from gt4py.next.program_processors.runners.dace import gtir_sdfg
 
 
 def get_domain_indices(
@@ -54,7 +54,7 @@ def get_domain_indices(
         as `dace.subsets.Indices`, it should be converted to `dace.subsets.Range` before
         being used in memlet subset because ranges are better supported throughout DaCe.
     """
-    index_variables = [dace.symbolic.SymExpr(dace_gtir_utils.get_map_variable(dim)) for dim in dims]
+    index_variables = [dace.symbolic.SymExpr(gtir_sdfg_utils.get_map_variable(dim)) for dim in dims]
     if offsets is None:
         return dace_subsets.Indices(index_variables)
     else:
@@ -111,31 +111,13 @@ class FieldopData:
                 (dim, dace.symbolic.SymExpr(0) if self.offset is None else self.offset[i])
                 for i, dim in enumerate(self.gt_type.dims)
             ]
-            local_dims = [
-                dim for dim in self.gt_type.dims if dim.kind == gtx_common.DimensionKind.LOCAL
-            ]
-            if len(local_dims) == 0:
-                return gtir_dataflow.IteratorExpr(
-                    self.dc_node, self.gt_type.dtype, field_domain, it_indices
-                )
-
-            elif len(local_dims) == 1:
-                field_dtype = ts.ListType(
-                    element_type=self.gt_type.dtype, offset_type=local_dims[0]
-                )
-                field_domain = [
-                    (dim, offset)
-                    for dim, offset in field_domain
-                    if dim.kind != gtx_common.DimensionKind.LOCAL
-                ]
-                return gtir_dataflow.IteratorExpr(
-                    self.dc_node, field_dtype, field_domain, it_indices
-                )
-
-            else:
-                raise ValueError(
-                    f"Unexpected data field {self.dc_node.data} with more than one local dimension."
-                )
+            # The property below is ensured by calling `make_field()` to construct `FieldopData`.
+            # The `make_field` constructor ensures that any local dimension, if present, is converted
+            # to `ListType` element type, while the field domain consists of all global dimensions.
+            assert all(dim != gtx_common.DimensionKind.LOCAL for dim in self.gt_type.dims)
+            return gtir_dataflow.IteratorExpr(
+                self.dc_node, self.gt_type.dtype, field_domain, it_indices
+            )
 
         raise NotImplementedError(f"Node type {type(self.gt_type)} not supported.")
 
@@ -176,7 +158,7 @@ def flatten_tuples(name: str, arg: FieldopResult) -> list[tuple[str, FieldopData
     """
     if isinstance(arg, tuple):
         tuple_type = get_tuple_type(arg)
-        tuple_symbols = dace_gtir_utils.flatten_tuple_fields(name, tuple_type)
+        tuple_symbols = gtir_sdfg_utils.flatten_tuple_fields(name, tuple_type)
         tuple_data_fields = gtx_utils.flatten_nested_tuple(arg)
         return [
             (str(tsym.id), tfield)
@@ -305,29 +287,24 @@ def _create_field_operator_impl(
             raise TypeError(
                 f"Type mismatch, expected {output_type.dtype} got {output_edge.result.gt_dtype}."
             )
-        field_dtype = output_edge.result.gt_dtype
-        field_dims, field_shape, field_offset = (domain_dims, domain_shape, domain_offset)
         assert isinstance(dataflow_output_desc, dace.data.Scalar)
+        field_shape = domain_shape
         field_subset = domain_subset
     else:
         assert isinstance(output_type.dtype, ts.ListType)
         assert isinstance(output_edge.result.gt_dtype.element_type, ts.ScalarType)
-        field_dtype = output_edge.result.gt_dtype.element_type
-        if field_dtype != output_type.dtype.element_type:
+        if output_edge.result.gt_dtype.element_type != output_type.dtype.element_type:
             raise TypeError(
-                f"Type mismatch, expected {output_type.dtype.element_type} got {field_dtype}."
+                f"Type mismatch, expected {output_type.dtype.element_type} got {output_edge.result.gt_dtype.element_type}."
             )
         assert isinstance(dataflow_output_desc, dace.data.Array)
         assert len(dataflow_output_desc.shape) == 1
         # extend the array with the local dimensions added by the field operator (e.g. `neighbors`)
         assert output_edge.result.gt_dtype.offset_type is not None
-        field_dims = [*domain_dims, output_edge.result.gt_dtype.offset_type]
         field_shape = [*domain_shape, dataflow_output_desc.shape[0]]
-        field_offset = [*domain_offset, dataflow_output_desc.offset[0]]
         field_subset = domain_subset + dace_subsets.Range.from_array(dataflow_output_desc)
 
     # allocate local temporary storage
-    assert dataflow_output_desc.dtype == dace_utils.as_dace_type(field_dtype)
     field_name, _ = sdfg_builder.add_temp_array(sdfg, field_shape, dataflow_output_desc.dtype)
     field_node = state.add_access(field_name)
 
@@ -336,8 +313,8 @@ def _create_field_operator_impl(
 
     return FieldopData(
         field_node,
-        ts.FieldType(field_dims, field_dtype),
-        offset=(field_offset if set(field_offset) != {0} else None),
+        ts.FieldType(domain_dims, output_edge.result.gt_dtype),
+        offset=(domain_offset if set(domain_offset) != {0} else None),
     )
 
 
@@ -376,7 +353,7 @@ def _create_field_operator(
         "fieldop",
         state,
         ndrange={
-            dace_gtir_utils.get_map_variable(dim): f"{lower_bound}:{upper_bound}"
+            gtir_sdfg_utils.get_map_variable(dim): f"{lower_bound}:{upper_bound}"
             for dim, lower_bound, upper_bound in domain
         },
     )
@@ -395,7 +372,7 @@ def _create_field_operator(
         )
     else:
         # handle tuples of fields
-        output_symbol_tree = dace_gtir_utils.make_symbol_tree("x", node_type)
+        output_symbol_tree = gtir_sdfg_utils.make_symbol_tree("x", node_type)
         return gtx_utils.tree_map(
             lambda output_edge, output_sym: _create_field_operator_impl(
                 sdfg_builder, sdfg, state, domain, output_edge, output_sym.type, map_exit
@@ -613,13 +590,13 @@ def translate_index(
     domain = extract_domain(node.annex.domain)
     assert len(domain) == 1
     dim, _, _ = domain[0]
-    dim_index = dace_gtir_utils.get_map_variable(dim)
+    dim_index = gtir_sdfg_utils.get_map_variable(dim)
 
     index_data, _ = sdfg_builder.add_temp_scalar(sdfg, INDEX_DTYPE)
     index_node = state.add_access(index_data)
     index_value = gtir_dataflow.ValueExpr(
         dc_node=index_node,
-        gt_dtype=dace_utils.as_itir_type(INDEX_DTYPE),
+        gt_dtype=gtx_dace_utils.as_itir_type(INDEX_DTYPE),
     )
     index_write_tasklet = sdfg_builder.add_tasklet(
         "index",
@@ -666,7 +643,7 @@ def _get_data_nodes(
         return sdfg_builder.make_field(data_node, data_type)
 
     elif isinstance(data_type, ts.TupleType):
-        symbol_tree = dace_gtir_utils.make_symbol_tree(data_name, data_type)
+        symbol_tree = gtir_sdfg_utils.make_symbol_tree(data_name, data_type)
         return gtx_utils.tree_map(
             lambda sym: _get_data_nodes(sdfg, state, sdfg_builder, sym.id, sym.type)
         )(symbol_tree)
@@ -692,7 +669,7 @@ def _get_symbolic_value(
     )
     temp_name, _ = sdfg.add_scalar(
         temp_name or sdfg.temp_data_name(),
-        dace_utils.as_dace_type(scalar_type),
+        gtx_dace_utils.as_dace_type(scalar_type),
         find_new_name=True,
         transient=True,
     )
@@ -831,7 +808,7 @@ def translate_scalar_expr(
             dace.Memlet(data=arg_node.data, subset="0"),
         )
     # finally, create temporary for the result value
-    temp_name, _ = sdfg_builder.add_temp_scalar(sdfg, dace_utils.as_dace_type(node.type))
+    temp_name, _ = sdfg_builder.add_temp_scalar(sdfg, gtx_dace_utils.as_dace_type(node.type))
     temp_node = state.add_access(temp_name)
     state.add_edge(
         tasklet_node,

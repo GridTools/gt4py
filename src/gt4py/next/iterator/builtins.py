@@ -293,6 +293,11 @@ def trunc(*args):
 
 
 @builtin_dispatch
+def neg(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def isfinite(*args):
     raise BackendNotSelectedError()
 
@@ -338,12 +343,42 @@ def int(*args):  # noqa: A001 [builtin-variable-shadowing]
 
 
 @builtin_dispatch
+def int8(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def uint8(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def int16(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def uint16(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def int32(*args):
     raise BackendNotSelectedError()
 
 
 @builtin_dispatch
+def uint32(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def int64(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def uint64(*args):
     raise BackendNotSelectedError()
 
 
@@ -367,7 +402,8 @@ def bool(*args):  # noqa: A001 [builtin-variable-shadowing]
     raise BackendNotSelectedError()
 
 
-UNARY_MATH_NUMBER_BUILTINS = {"abs"}
+UNARY_MATH_NUMBER_BUILTINS = {"abs", "neg"}
+UNARY_LOGICAL_BUILTINS = {"not_"}
 UNARY_MATH_FP_BUILTINS = {
     "sin",
     "cos",
@@ -391,52 +427,69 @@ UNARY_MATH_FP_BUILTINS = {
     "trunc",
 }
 UNARY_MATH_FP_PREDICATE_BUILTINS = {"isfinite", "isinf", "isnan"}
-BINARY_MATH_NUMBER_BUILTINS = {"minimum", "maximum", "fmod", "power"}
-TYPEBUILTINS = {"int32", "int64", "float32", "float64", "bool"}
-MATH_BUILTINS = (
-    UNARY_MATH_NUMBER_BUILTINS
-    | UNARY_MATH_FP_BUILTINS
-    | UNARY_MATH_FP_PREDICATE_BUILTINS
-    | BINARY_MATH_NUMBER_BUILTINS
-    | TYPEBUILTINS
-)
-BUILTINS = {
-    "deref",
-    "can_deref",
-    "shift",
-    "neighbors",
-    "list_get",
-    "make_const_list",
-    "map_",
-    "lift",
-    "reduce",
+BINARY_MATH_NUMBER_BUILTINS = {
     "plus",
     "minus",
     "multiplies",
     "divides",
-    "floordiv",
     "mod",
-    "make_tuple",
-    "tuple_get",
-    "if_",
-    "cast_",
-    "greater",
-    "less",
-    "less_equal",
-    "greater_equal",
-    "eq",
-    "not_eq",
-    "not_",
-    "and_",
-    "or_",
-    "xor_",
-    "scan",
+    "floordiv",  # TODO see https://github.com/GridTools/gt4py/issues/1136
+    "minimum",
+    "maximum",
+    "fmod",
+}
+BINARY_MATH_COMPARISON_BUILTINS = {"eq", "less", "greater", "greater_equal", "less_equal", "not_eq"}
+BINARY_LOGICAL_BUILTINS = {"and_", "or_", "xor_"}
+
+
+#: builtin / dtype used to construct integer indices, like domain bounds
+INTEGER_INDEX_BUILTIN = "int32"
+INTEGER_TYPE_BUILTINS = {
+    "int8",
+    "uint8",
+    "int16",
+    "uint16",
+    "int32",
+    "uint32",
+    "int64",
+    "uint64",
+}
+FLOATING_POINT_TYPE_BUILTINS = {"float32", "float64"}
+TYPE_BUILTINS = {*INTEGER_TYPE_BUILTINS, *FLOATING_POINT_TYPE_BUILTINS, "bool"}
+
+ARITHMETIC_BUILTINS = {
+    *UNARY_MATH_NUMBER_BUILTINS,
+    *UNARY_LOGICAL_BUILTINS,
+    *UNARY_MATH_FP_BUILTINS,
+    *UNARY_MATH_FP_PREDICATE_BUILTINS,
+    *BINARY_MATH_NUMBER_BUILTINS,
+    "power",
+    *BINARY_MATH_COMPARISON_BUILTINS,
+    *BINARY_LOGICAL_BUILTINS,
+}
+
+BUILTINS = {
+    "as_fieldop",  # `as_fieldop(stencil, domain)` creates field_operator from stencil (domain is optional, but for now required for embedded execution)
+    "can_deref",
     "cartesian_domain",
-    "unstructured_domain",
+    "cast_",
+    "deref",
+    "if_",
+    "index",  # `index(dim)` creates a dim-field that has the current index at each point
+    "shift",
+    "list_get",
+    "lift",
+    "make_const_list",
+    "make_tuple",
+    "map_",
     "named_range",
-    "as_fieldop",
-    "index",
-    *MATH_BUILTINS,
+    "neighbors",
+    "reduce",
+    "scan",
+    "tuple_get",
+    "unstructured_domain",
+    *ARITHMETIC_BUILTINS,
+    *TYPE_BUILTINS,
 }
 
 __all__ = [*BUILTINS]
