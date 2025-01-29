@@ -18,7 +18,7 @@ from gt4py.next.program_processors.runners.dace.transformations import (
     gpu_utils as gtx_dace_fieldview_gpu_utils,
 )
 
-from . import pytestmark
+
 from . import util
 
 

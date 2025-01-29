@@ -420,8 +420,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
         k_interval,
         **kwargs: Any,
     ):
-        # skip type checking due to https://github.com/python/mypy/issues/5485
-        extent = global_ctx.library_node.get_extents(node)  # type: ignore
+        extent = global_ctx.library_node.get_extents(node)
         decls = [self.visit(decl, **kwargs) for decl in node.declarations]
         targets: Set[str] = set()
         stmts = [

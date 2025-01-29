@@ -6,19 +6,18 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import pytest
 import numpy as np
+
+dace = pytest.importorskip("dace")
 
 from gt4py.next.program_processors.runners.dace import (
     transformations as gtx_transformations,
 )
 
 from . import util
-
-
-# dace = pytest.importorskip("dace")
-from dace.sdfg import nodes as dace_nodes
-import dace
 
 
 def _mk_distributed_buffer_sdfg() -> tuple[dace.SDFG, dace.SDFGState, dace.SDFGState]:
