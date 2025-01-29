@@ -29,7 +29,7 @@ from gt4py.cartesian.backend.dace_lazy_stencil import (  # noqa: E402 [import-sh
 )
 
 
-pytestmark = pytest.mark.usefixtures("dace_env")
+pytestmark = [pytest.mark.requires_dace, pytest.mark.usefixtures("dace_env")]
 
 
 @pytest.fixture(scope="module")
