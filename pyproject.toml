@@ -457,4 +457,4 @@ url = 'https://test.pypi.org/simple/'
 
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
-dace = {git = "https://github.com/spcl/dace", branch = "main", extra = "dace-dev"}
+dace = {git = "https://github.com/edopao/dace", branch = "fix-submodule", extra = "dace-dev"}
