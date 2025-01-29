@@ -20,6 +20,10 @@ from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_maker
 from gt4py.next.iterator.transforms import fixed_point_transformation
 
 
+def get_value_from_literal(literal: ir.Literal):
+    return getattr(embedded, str(literal.type))(literal.value)
+
+
 class UndoCanonicalizeMinus(eve.NodeTranslator):
     def generic_visit(self, node, **kwargs) -> ir.Node:
         node = super().generic_visit(node, **kwargs)
@@ -30,30 +34,12 @@ class UndoCanonicalizeMinus(eve.NodeTranslator):
         if cpm.is_call_to(node, "plus"):
             if cpm.is_call_to(node.args[1], "neg"):
                 return im.minus(node.args[0], node.args[1].args[0])
-            if (
-                isinstance(node.args[1], ir.Literal)
-                and node.args[1].value
-                < im.literal("0", typename=node.args[1].type.kind.name.lower()).value
-            ):
-                return im.minus(
-                    node.args[0],
-                    ConstantFolding.transform_fold_arithmetic_builtins(
-                        im.multiplies_(node.args[1], -1)
-                    ),
-                )
+            if isinstance(node.args[1], ir.Literal) and get_value_from_literal(node.args[1]) < 0:
+                return im.minus(node.args[0], -get_value_from_literal(node.args[1]))
             if cpm.is_call_to(node.args[0], "neg"):
                 return im.minus(node.args[1], node.args[0].args[0])
-            if (
-                isinstance(node.args[0], ir.Literal)
-                and node.args[0].value
-                < im.literal("0", typename=node.args[0].type.kind.name.lower()).value
-            ):
-                return im.minus(
-                    node.args[1],
-                    ConstantFolding.transform_fold_arithmetic_builtins(
-                        im.multiplies_(node.args[0], -1)
-                    ),
-                )
+            if isinstance(node.args[0], ir.Literal) and get_value_from_literal(node.args[0]) < 0:
+                return im.minus(node.args[1], -get_value_from_literal(node.args[0]))
         return node
 
 
@@ -220,7 +206,7 @@ class ConstantFolding(
                 if node.fun.id in builtins.ARITHMETIC_BUILTINS:
                     fun = getattr(embedded, str(node.fun.id))
                     arg_values = [
-                        getattr(embedded, str(arg.type))(arg.value)  # type: ignore[attr-defined] # arg type already established in if condition
+                        get_value_from_literal(arg)  # type: ignore[arg-type] # arg type already established in if condition
                         for arg in node.args
                     ]
                     return im.literal_from_value(fun(*arg_values))
