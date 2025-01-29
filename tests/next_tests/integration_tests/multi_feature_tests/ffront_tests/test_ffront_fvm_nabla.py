@@ -62,6 +62,7 @@ def pnabla(
     return compute_pnabla(pp, S_M[0], sign, vol), compute_pnabla(pp, S_M[1], sign, vol)
 
 
+@pytest.mark.requires_atlas
 def test_ffront_compute_zavgS(exec_alloc_descriptor):
     setup = nabla_setup(allocator=exec_alloc_descriptor.allocator)
 
@@ -80,6 +81,7 @@ def test_ffront_compute_zavgS(exec_alloc_descriptor):
     assert_close(388241977.58389181, np.max(zavgS.asnumpy()))
 
 
+@pytest.mark.requires_atlas
 def test_ffront_nabla(exec_alloc_descriptor):
     setup = nabla_setup(allocator=exec_alloc_descriptor.allocator)
 
