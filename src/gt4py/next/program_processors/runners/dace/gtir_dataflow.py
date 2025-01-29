@@ -332,7 +332,6 @@ class LambdaToDataflow(eve.NodeVisitor):
     sdfg: dace.SDFG
     state: dace.SDFGState
     subgraph_builder: gtir_sdfg.DataflowBuilder
-    use_iterator_view: bool
     input_edges: list[DataflowInputEdge] = dataclasses.field(default_factory=lambda: [])
     symbol_map: dict[
         str,
@@ -694,12 +693,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         # visit each branch of the if-statement as if it was a Lambda node
         lambda_node = gtir.Lambda(params=lambda_params, expr=expr)
         input_edges, output_tree = translate_lambda_to_dataflow(
-            if_sdfg,
-            if_branch_state,
-            self.subgraph_builder,
-            lambda_node,
-            lambda_args,
-            self.use_iterator_view,
+            if_sdfg, if_branch_state, self.subgraph_builder, lambda_node, lambda_args
         )
 
         for data_node in if_branch_state.data_nodes():
@@ -743,11 +737,6 @@ class LambdaToDataflow(eve.NodeVisitor):
         Lowers an if-expression with exclusive branch execution into a nested SDFG,
         in which each branch is lowered into a dataflow in a separate state and
         the if-condition is represented as the inter-state edge condition.
-
-        Exclusive branch execution for local if expressions is meant to be used
-        in iterator view. Iterator view is required ONLY inside scan field operators.
-        For regular field operators, the fieldview behavior of if-expressions
-        corresponds to a local select, therefore it should be lowered to a tasklet.
         """
 
         def write_output_of_nested_sdfg_to_temporary(inner_value: ValueExpr) -> ValueExpr:
@@ -1644,13 +1633,55 @@ class LambdaToDataflow(eve.NodeVisitor):
         tuple_fields = self.visit(node.args[1])
         return tuple_fields[index]
 
+    def requires_exclusive_if(self, node: gtir.FunCall) -> bool:
+        """
+        The meaning of `if_` builtin function is unclear in GTIR.
+        In some context, it corresponds to a ternary operator where, depending on
+        the condition result, one branch or the other can be invalid. The typical
+        case is the use of `if_` to decide whether it is possible or not to shift
+        an interator.
+        A different usage is that of selecting one argument value or the other,
+        where both arguments are defined on the output domain, therefore valid.
+        In order to simplify the SDFG and facilitate the optimization stage, we
+        try to avoid the ternary operator form when not needed. The reason is that
+        exclusive branch execution is represented in the SDFG as a conditional
+        state transition, which prevents fusion.
+        """
+        assert cpm.is_call_to(node, "if_")
+        assert len(node.args) == 3
+        condition_vars = (
+            eve.walk_values(node.args[0])
+            .if_isinstance(gtir.SymRef)
+            .map(lambda node: str(node.id))
+            .filter(lambda x: x in self.symbol_map)
+            .to_set()
+        )
+        for arg in node.args[1:3]:
+            shift_nodes = (
+                eve.walk_values(arg).filter(lambda node: cpm.is_applied_shift(node)).to_set()
+            )
+            for shift_node in shift_nodes:
+                shift_vars = (
+                    eve.walk_values(shift_node)
+                    .if_isinstance(gtir.SymRef)
+                    .map(lambda node: str(node.id))
+                    .filter(lambda x: x in self.symbol_map)
+                    .to_set()
+                )
+                # require exclusive branch execution if any shift expression one of
+                # the if branches accesses a variable used in the condition expression
+                depend_vars = condition_vars.intersection(shift_vars)
+                if len(depend_vars) != 0:
+                    return True
+        return False
+
     def visit_FunCall(
         self, node: gtir.FunCall
     ) -> IteratorExpr | DataExpr | tuple[IteratorExpr | DataExpr | tuple[Any, ...], ...]:
         if cpm.is_call_to(node, "deref"):
             return self._visit_deref(node)
 
-        elif cpm.is_call_to(node, "if_") and self.use_iterator_view:
+        elif cpm.is_call_to(node, "if_") and self.requires_exclusive_if(node):
             return self._visit_if(node)
 
         elif cpm.is_call_to(node, "neighbors"):
@@ -1787,7 +1818,6 @@ def translate_lambda_to_dataflow(
         | ValueExpr
         | tuple[IteratorExpr | MemletExpr | ValueExpr | tuple[Any, ...], ...]
     ],
-    use_iterator_view: bool,
 ) -> tuple[
     list[DataflowInputEdge],
     tuple[DataflowOutputEdge | tuple[Any, ...], ...],
@@ -1806,15 +1836,13 @@ def translate_lambda_to_dataflow(
         sdfg_builder: Helper class to build the dataflow inside the given SDFG.
         node: Lambda node to visit.
         args: Arguments passed to lambda node.
-        use_iterator_view: When true, special behavior of iterator view is enabled,
-            e.g. exclusive if-branch execution.
 
     Returns:
         A tuple of two elements:
         - List of connections for data inputs to the dataflow.
         - Tree representation of output data connections.
     """
-    taskgen = LambdaToDataflow(sdfg, state, sdfg_builder, use_iterator_view)
+    taskgen = LambdaToDataflow(sdfg, state, sdfg_builder)
     lambda_output = taskgen.visit_let(node, args)
 
     if isinstance(lambda_output, DataflowOutputEdge):
