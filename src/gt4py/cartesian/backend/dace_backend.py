@@ -12,7 +12,6 @@ import copy
 import os
 import pathlib
 import re
-import textwrap
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type
 
 import dace
@@ -432,20 +431,20 @@ class DaCeExtGenerator(BackendCodegen):
 
 class DaCeComputationCodegen:
     template = as_mako(
-        """
-        auto ${name}(const std::array<gt::uint_t, 3>& domain) {
-            return [domain](${",".join(functor_args)}) {
-                const int __I = domain[0];
-                const int __J = domain[1];
-                const int __K = domain[2];
-                ${name}${state_suffix} dace_handle;
-                ${backend_specifics}
-                auto allocator = gt::sid::cached_allocator(&${allocator}<char[]>);
-                ${"\\n".join(tmp_allocs)}
-                __program_${name}(${",".join(["&dace_handle", *dace_args])});
-            };
-        }
-        """
+        """\
+auto ${name}(const std::array<gt::uint_t, 3>& domain) {
+    return [domain](${",".join(functor_args)}) {
+        const int __I = domain[0];
+        const int __J = domain[1];
+        const int __K = domain[2];
+        ${name}${state_suffix} dace_handle;
+        ${backend_specifics}
+        auto allocator = gt::sid::cached_allocator(&${allocator}<char[]>);
+        ${"\\n".join(tmp_allocs)}
+        __program_${name}(${",".join(["&dace_handle", *dace_args])});
+    };
+}
+"""
     )
 
     def generate_tmp_allocs(self, sdfg):
@@ -563,17 +562,18 @@ class DaCeComputationCodegen:
             allocator="gt::cuda_util::cuda_malloc" if is_gpu else "std::make_unique",
             state_suffix=dace.Config.get("compiler.codegen_state_struct_suffix"),
         )
-        generated_code = textwrap.dedent(
-            f"""#include <gridtools/sid/sid_shift_origin.hpp>
-                             #include <gridtools/sid/allocator.hpp>
-                             #include <gridtools/stencil/cartesian.hpp>
-                             {"#include <gridtools/common/cuda_util.hpp>" if is_gpu else omp_header}
-                             namespace gt = gridtools;
-                             {computations}
+        generated_code = f"""\
+#include <gridtools/sid/sid_shift_origin.hpp>
+#include <gridtools/sid/allocator.hpp>
+#include <gridtools/stencil/cartesian.hpp>
+{"#include <gridtools/common/cuda_util.hpp>" if is_gpu else omp_header}
+namespace gt = gridtools;
 
-                             {interface}
-                             """
-        )
+{computations}
+
+{interface}
+"""
+
         if builder.options.format_source:
             generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
 
