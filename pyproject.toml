@@ -133,7 +133,7 @@ cuda11 = ['cupy-cuda11x>=12.0']
 cuda12 = ['cupy-cuda12x>=12.0']
 # features
 dace = ['dace>=1.0.1,<1.1.0']  # v1.x will contain breaking changes, see https://github.com/spcl/dace/milestone/4
-dace-dev = ['dace==1.0.0']  # still using old tag on dace development branch
+dace-dev = ['dace']  # latest version will be pulled from the git repository
 formatting = ['clang-format>=9.0']
 jax = ['jax>=0.4.26']
 jax-cuda12 = ['jax[cuda12_local]>=0.4.26', 'gt4py[cuda12]']
