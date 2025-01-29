@@ -121,7 +121,9 @@ class FieldopData:
                 lambda m: dace.sdfg.replace_properties_dict(outer_desc, m),
             )
             # Same applies to the symbols used as field origin (the domain range start)
-            outer_origin = [val.subs(symbol_mapping) for val in self.origin]
+            outer_origin = [
+                gtx_dace_utils.safe_replace_symbolic(val, symbol_mapping) for val in self.origin
+            ]
 
         outer_node = outer_sdfg_state.add_access(outer)
         return FieldopData(outer_node, self.gt_type, tuple(outer_origin))

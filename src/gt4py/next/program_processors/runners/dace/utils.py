@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import re
-from typing import Final, Literal
+from typing import Final, Literal, Mapping, Union
 
 import dace
 
@@ -100,3 +100,26 @@ def filter_connectivity_types(
         for offset, conn in offset_provider_type.items()
         if isinstance(conn, gtx_common.NeighborConnectivityType)
     }
+
+
+def safe_replace_symbolic(
+    val: dace.symbolic.SymbolicType,
+    symbol_mapping: Mapping[
+        Union[dace.symbolic.SymbolicType, str], Union[dace.symbolic.SymbolicType, str]
+    ],
+) -> dace.symbolic.SymbolicType:
+    """
+    Replace free symbols in a dace symbolic expression, using `safe_replace()`
+    in order to avoid clashes in case the new symbol value is also a free symbol
+    in the original exoression.
+
+    Args:
+        val: The symbolic expression where to apply the replacement.
+        symbol_mapping: The mapping table for symbol replacement.
+
+    Returns:
+        A new symbolic expression as result of symbol replacement.
+    """
+    x = [val]
+    dace.symbolic.safe_replace(symbol_mapping, lambda m, xx=x: xx.append(xx[-1].subs(m)))
+    return x[-1]
