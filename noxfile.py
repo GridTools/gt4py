@@ -62,8 +62,7 @@ CodeGenTestSettings: Final[dict[str, dict[str, Sequence]]] = {
     "dace": {"extras": ["dace"], "markers": ["requires_dace"]},
 }
 # Use dace-dev extra for GT4Py-next, which will pull dace from git repository
-CodeGenNextTestSettings: Final[dict[str, dict[str, Sequence]]] = {
-    "internal": {"extras": [], "markers": ["not requires_dace"]},
+CodeGenNextTestSettings = CodeGenTestSettings | {
     "dace": {"extras": ["dace-dev"], "markers": ["requires_dace"]},
 }
 
