@@ -794,7 +794,7 @@ class DaceCPUBackend(BaseDaceBackend):
     options = BaseGTBackend.GT_BACKEND_OPTS
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
-        return self.make_extension(stencil_ir=self.builder.gtir, uses_cuda=False)
+        return self.make_extension(uses_cuda=False)
 
 
 @register
@@ -815,4 +815,4 @@ class DaceGPUBackend(BaseDaceBackend):
     options = {**BaseGTBackend.GT_BACKEND_OPTS, "device_sync": {"versioning": True, "type": bool}}
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
-        return self.make_extension(stencil_ir=self.builder.gtir, uses_cuda=True)
+        return self.make_extension(uses_cuda=True)
