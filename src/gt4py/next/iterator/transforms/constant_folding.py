@@ -20,26 +20,24 @@ from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_maker
 from gt4py.next.iterator.transforms import fixed_point_transformation
 
 
-def get_value_from_literal(literal: ir.Literal):
+def value_from_literal(literal: ir.Literal):
     return getattr(embedded, str(literal.type))(literal.value)
 
 
 class UndoCanonicalizeMinus(eve.NodeTranslator):
-    def generic_visit(self, node, **kwargs) -> ir.Node:
+    def visit_FunCall(self, node: ir.FunCall, **kwargs) -> ir.Node:
         node = super().generic_visit(node, **kwargs)
-        return self.undo_canonicalize_minus(node, **kwargs)
-
-    def undo_canonicalize_minus(self, node: ir.FunCall, **kwargs) -> ir.Node:
         # `a + (-b)` -> `a - b` , `-a + b` -> `b - a`, `-a + (-b)` -> `-a - b`
         if cpm.is_call_to(node, "plus"):
-            if cpm.is_call_to(node.args[1], "neg"):
-                return im.minus(node.args[0], node.args[1].args[0])
-            if isinstance(node.args[1], ir.Literal) and get_value_from_literal(node.args[1]) < 0:
-                return im.minus(node.args[0], -get_value_from_literal(node.args[1]))
-            if cpm.is_call_to(node.args[0], "neg"):
-                return im.minus(node.args[1], node.args[0].args[0])
-            if isinstance(node.args[0], ir.Literal) and get_value_from_literal(node.args[0]) < 0:
-                return im.minus(node.args[1], -get_value_from_literal(node.args[0]))
+            a, b = node.args
+            if cpm.is_call_to(b, "neg"):
+                return im.minus(a, b.args[0])
+            if isinstance(b, ir.Literal) and value_from_literal(b) < 0:
+                return im.minus(a, -value_from_literal(b))
+            if cpm.is_call_to(a, "neg"):
+                return im.minus(b, a.args[0])
+            if isinstance(a, ir.Literal) and value_from_literal(a) < 0:
+                return im.minus(b, -value_from_literal(a))
         return node
 
 
@@ -96,7 +94,7 @@ class ConstantFolding(
     @classmethod
     def apply(cls, node: ir.Node) -> ir.Node:
         node = cls().visit(node)
-        return UndoCanonicalizeMinus().generic_visit(node)
+        return UndoCanonicalizeMinus().visit(node)
 
     def transform_canonicalize_op_funcall_symref_literal(
         self, node: ir.FunCall, **kwargs
@@ -206,7 +204,7 @@ class ConstantFolding(
                 if node.fun.id in builtins.ARITHMETIC_BUILTINS:
                     fun = getattr(embedded, str(node.fun.id))
                     arg_values = [
-                        get_value_from_literal(arg)  # type: ignore[arg-type] # arg type already established in if condition
+                        value_from_literal(arg)  # type: ignore[arg-type] # arg type already established in if condition
                         for arg in node.args
                     ]
                     return im.literal_from_value(fun(*arg_values))
