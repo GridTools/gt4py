@@ -510,7 +510,7 @@ auto ${name}(const std::array<gt::uint_t, 3>& domain) {
                     lines = lines[0:i] + cuda_code.split("\n") + lines[i + 1 :]
                     break
 
-        def keep_line(line):
+        def keep_line(line: str) -> bool:
             line = line.strip()
             if line == '#include "../../include/hash.h"':
                 return False
@@ -520,11 +520,7 @@ auto ${name}(const std::array<gt::uint_t, 3>& domain) {
                 return False
             return True
 
-        lines = filter(keep_line, lines)
-        generated_code = "\n".join(lines)
-        if builder.options.format_source:
-            generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
-        return generated_code
+        return "\n".join(filter(keep_line, lines))
 
     @classmethod
     def apply(cls, stencil_ir: gtir.Stencil, builder: StencilBuilder, sdfg: dace.SDFG):
