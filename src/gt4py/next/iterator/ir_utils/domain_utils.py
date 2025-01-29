@@ -162,11 +162,11 @@ def domain_union(*domains: SymbolicDomain) -> SymbolicDomain:
     assert all(domain.ranges.keys() == domains[0].ranges.keys() for domain in domains)
     for dim in domains[0].ranges.keys():
         start = functools.reduce(
-            lambda current_expr, el_expr: im.call("minimum")(current_expr, el_expr),
+            lambda current_expr, el_expr: im.minimum(current_expr, el_expr),
             [domain.ranges[dim].start for domain in domains],
         )
         stop = functools.reduce(
-            lambda current_expr, el_expr: im.call("maximum")(current_expr, el_expr),
+            lambda current_expr, el_expr: im.maximum(current_expr, el_expr),
             [domain.ranges[dim].stop for domain in domains],
         )
         # constant fold expression to keep the tree small

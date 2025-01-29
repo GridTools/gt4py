@@ -58,10 +58,7 @@ class StencilBuilder:
         frontend: Optional[Type[FrontendType]] = None,
     ):
         self._definition = definition_func
-        # type ignore explanation: Attribclass generated init not recognized by mypy
-        self.options = options or BuildOptions(  # type: ignore
-            **self.default_options_dict(definition_func)
-        )
+        self.options = options or BuildOptions(**self.default_options_dict(definition_func))
         backend = backend or "numpy"
         backend = gt4pyc.backend.from_name(backend) if isinstance(backend, str) else backend
         if backend is None:

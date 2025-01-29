@@ -760,7 +760,7 @@ class DaCeCUDAPyExtModuleGenerator(DaCePyExtModuleGenerator, CUDAPyExtModuleGene
 
 class BaseDaceBackend(BaseGTBackend, CLIBackendMixin):
     GT_BACKEND_T = "dace"
-    PYEXT_GENERATOR_CLASS = DaCeExtGenerator  # type: ignore
+    PYEXT_GENERATOR_CLASS = DaCeExtGenerator
 
     def generate(self) -> Type[StencilObject]:
         self.check_options(self.builder.options)
