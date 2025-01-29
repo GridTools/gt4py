@@ -86,7 +86,6 @@ def convert_args(
             *flat_args,
             check_args=False,
             on_gpu=on_gpu,
-            use_field_canonical_representation=use_field_canonical_representation,
         )
 
         with dace.config.temporary_config():
