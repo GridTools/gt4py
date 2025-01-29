@@ -167,7 +167,7 @@ def test_next(
             mesh_markers.append("not requires_atlas")
         case "atlas":
             mesh_markers.append("requires_atlas")
-            custom_pkgs.append(["--index-url", "https://test.pypi.org/simple/", "atlas4py"])
+            custom_pkgs.append(["--extra-index-url", "https://test.pypi.org/simple/", "atlas4py"])
 
     _install_session_venv(
         session,
