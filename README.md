@@ -65,7 +65,7 @@ Follow the installation instructions below to initialize a development virtual e
 
 ### Development Environment Installation using `uv`
 
-GT4Py uses the [`uv`](https://docs.astral.sh/uv/) project manager for the development workflow. `uv` is a versatile tool that consolidates functionality usually distributed across different applications into subcommands.
+GT4Py uses the [`uv`](https://docs.astral.sh/uv/) project manager (`uv>=0.5.25`) for the development workflow. `uv` is a versatile tool that consolidates functionality usually distributed across different applications into subcommands.
 
 - The `uv pip` subcommand provides a _fast_ Python package manager, emulating [`pip`](https://pip.pypa.io/en/stable/).
 - The `uv export | lock | sync` subcommands manage dependency versions in a manner similar to the [`pip-tools`](https://pip-tools.readthedocs.io/en/stable/) command suite.
@@ -111,7 +111,7 @@ Recurrent development tasks like bumping versions of used development tools or r
 GT4Py uses the Sphinx tool for the documentation. To build browseable HTML documentation, install the required tools provided in the `docs` dependency group:
 
 ```bash
-uv install --group docs --extra all  # or --group dev
+uv sync --group docs --extra all  # or --group dev
 ```
 
 (Note that most likely these tools are already installed in your development environment, since the `docs` group is included in the `dev` group, which installed by default by `uv sync` if no dependency groups are specified.)
