@@ -100,15 +100,13 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
                 python_executable = sys.executable
 
                 # Get Python library path
-                python_library = sysconfig.get_config_var('LIBDIR') + '/' + sysconfig.get_config_var('LDLIBRARY')
+                python_library = f"{sysconfig.get_config_var('LIBDIR')}/{sysconfig.get_config_var('LDLIBRARY')}"
 
                 # Get Python include directory path
                 python_include_dir = sysconfig.get_path('include')
 
                 py = f"""
                 set(Python_EXECUTABLE {python_executable})
-                #set(Python_LIBRARY {python_library})
-                #set(Python_INCLUDE_DIR {python_include_dir})
 
                 find_package(Python COMPONENTS Interpreter Development REQUIRED)
                 """
