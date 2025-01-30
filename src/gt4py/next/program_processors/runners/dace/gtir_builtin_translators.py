@@ -76,12 +76,12 @@ class FieldopData:
         dc_node: DaCe access node to the data storage.
         gt_type: GT4Py type definition, which includes the field domain information.
         origin: Tuple of start indices, in each dimension, for `FieldType` data.
-            Default to empty tuple for `ScalarType` data.
+            Pass an empty tuple for `ScalarType` data or zero-dimensional fields.
     """
 
     dc_node: dace.nodes.AccessNode
     gt_type: ts.FieldType | ts.ScalarType
-    origin: tuple[dace.symbolic.SymbolicType, ...] = tuple()
+    origin: tuple[dace.symbolic.SymbolicType, ...]
 
     def __post_init__(self) -> None:
         """Implements a sanity check on the constructed data type."""
@@ -795,7 +795,7 @@ def translate_literal(
     data_type = node.type
     data_node = _get_symbolic_value(sdfg, state, sdfg_builder, node.value, data_type)
 
-    return FieldopData(data_node, data_type)
+    return FieldopData(data_node, data_type, origin=())
 
 
 def translate_make_tuple(
@@ -917,7 +917,7 @@ def translate_scalar_expr(
         dace.Memlet(data=temp_name, subset="0"),
     )
 
-    return FieldopData(temp_node, node.type)
+    return FieldopData(temp_node, node.type, origin=())
 
 
 def translate_symbol_ref(

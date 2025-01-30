@@ -273,7 +273,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             The descriptor associated with the SDFG data storage, filled with field origin.
         """
         if isinstance(data_type, ts.ScalarType):
-            return gtir_builtin_translators.FieldopData(data_node, data_type)
+            return gtir_builtin_translators.FieldopData(data_node, data_type, origin=())
         local_dims = [dim for dim in data_type.dims if dim.kind == gtx_common.DimensionKind.LOCAL]
         if len(local_dims) == 0:
             # do nothing: the field domain consists of all global dimensions
