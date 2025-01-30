@@ -26,37 +26,49 @@ class ConstantFolding(PreserveLocationVisitor, NodeTranslator):
         ):  # `minimum(a, a)` -> `a`
             return new_node.args[0]
 
-        if cpm.is_call_to(new_node, "minimum"):  # TODO: add tests
+        if cpm.is_call_to(new_node, "minimum"):
             # `minimum(neg_inf, neg_inf)` -> `neg_inf`
-            if cpm.is_ref_to(new_node.args[0], "neg_inf") or cpm.is_ref_to(
-                new_node.args[1], "neg_inf"
+            if isinstance(new_node.args[0], ir.NegInfinityLiteral) or isinstance(
+                new_node.args[1], ir.NegInfinityLiteral
             ):
-                return im.ref("neg_inf")
+                return ir.NegInfinityLiteral()
             # `minimum(inf, a)` -> `a`
-            elif cpm.is_ref_to(new_node.args[0], "inf"):
+            elif isinstance(new_node.args[0], ir.InfinityLiteral):
                 return new_node.args[1]
             # `minimum(a, inf)` -> `a`
-            elif cpm.is_ref_to(new_node.args[1], "inf"):
+            elif isinstance(new_node.args[1], ir.InfinityLiteral):
                 return new_node.args[0]
 
-        if cpm.is_call_to(new_node, "maximum"):  # TODO: add tests
+        if cpm.is_call_to(new_node, "maximum"):
             # `minimum(inf, inf)` -> `inf`
-            if cpm.is_ref_to(new_node.args[0], "inf") or cpm.is_ref_to(new_node.args[1], "inf"):
-                return im.ref("inf")
+            if isinstance(new_node.args[0], ir.InfinityLiteral) or isinstance(
+                new_node.args[1], ir.InfinityLiteral
+            ):
+                return ir.InfinityLiteral()
             # `minimum(neg_inf, a)` -> `a`
-            elif cpm.is_ref_to(new_node.args[0], "neg_inf"):
+            elif isinstance(new_node.args[0], ir.NegInfinityLiteral):
                 return new_node.args[1]
             # `minimum(a, neg_inf)` -> `a`
-            elif cpm.is_ref_to(new_node.args[1], "neg_inf"):
+            elif isinstance(new_node.args[1], ir.NegInfinityLiteral):
                 return new_node.args[0]
-        if cpm.is_call_to(new_node, ("less", "less_equal")) and cpm.is_ref_to(
-            new_node.args[0], "neg_inf"
-        ):
-            return im.literal_from_value(True)  # TODO: add tests
-        if cpm.is_call_to(new_node, ("greater", "greater_equal")) and cpm.is_ref_to(
-            new_node.args[0], "inf"
-        ):
-            return im.literal_from_value(True)  # TODO: add tests
+        if cpm.is_call_to(new_node, ("less", "less_equal")):
+            if isinstance(new_node.args[0], ir.NegInfinityLiteral) or isinstance(
+                new_node.args[1], ir.InfinityLiteral
+            ):
+                return im.literal_from_value(True)
+            if isinstance(new_node.args[0], ir.InfinityLiteral) or isinstance(
+                new_node.args[1], ir.NegInfinityLiteral
+            ):
+                return im.literal_from_value(False)
+        if cpm.is_call_to(new_node, ("greater", "greater_equal")):
+            if isinstance(new_node.args[0], ir.NegInfinityLiteral) or isinstance(
+                new_node.args[1], ir.InfinityLiteral
+            ):
+                return im.literal_from_value(False)
+            if isinstance(new_node.args[0], ir.InfinityLiteral) or isinstance(
+                new_node.args[1], ir.NegInfinityLiteral
+            ):
+                return im.literal_from_value(True)
         if (
             isinstance(new_node.fun, ir.SymRef)
             and new_node.fun.id == "if_"

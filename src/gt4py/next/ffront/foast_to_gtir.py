@@ -251,7 +251,28 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
             raise NotImplementedError(f"Unary operator '{node.op}' is not supported.")
 
     def visit_BinOp(self, node: foast.BinOp, **kwargs: Any) -> itir.FunCall:
-        return self._lower_and_map(node.op.value, node.left, node.right)
+        if (
+            node.op == dialect_ast_enums.BinaryOperator.BIT_AND
+            and isinstance(node.left.type, ts.DomainType)
+            and isinstance(node.right.type, ts.DomainType)
+        ):
+            return im.and_(self.visit(node.left), self.visit(node.right))
+        if (
+            node.op == dialect_ast_enums.BinaryOperator.BIT_OR
+            and isinstance(node.left.type, ts.DomainType)
+            and isinstance(node.right.type, ts.DomainType)
+        ):
+            return im.or_(self.visit(node.left), self.visit(node.right))
+        if (
+            node.op == dialect_ast_enums.BinaryOperator.BIT_XOR
+            and isinstance(node.left.type, ts.DomainType)
+            and isinstance(node.right.type, ts.DomainType)
+        ):
+            raise NotImplementedError(
+                f"Binary operator '{node.op}' is not supported for '{node.right.type}' and '{node.right.type}'."
+            )
+        else:
+            return self._lower_and_map(node.op.value, node.left, node.right)
 
     def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs: Any) -> itir.FunCall:
         assert (

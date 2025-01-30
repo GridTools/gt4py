@@ -490,8 +490,6 @@ BUILTINS = {
     "unstructured_domain",
     "concat_where",
     "in",
-    "inf",  # TODO: discuss
-    "neg_inf",  # TODO: discuss
     *ARITHMETIC_BUILTINS,
     *TYPE_BUILTINS,
 }

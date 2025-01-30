@@ -9,8 +9,13 @@
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next import common
-from gt4py.next.iterator import ir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
+from gt4py.next.iterator import builtins, ir
+from gt4py.next.iterator.ir_utils import (
+    common_pattern_matcher as cpm,
+    domain_utils,
+    ir_makers as im,
+)
+from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 
 
 class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
@@ -19,11 +24,16 @@ class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
         return cls().visit(node)
 
     def visit_FunCall(self, node: ir.FunCall) -> ir.FunCall:
-        if cpm.is_call_to(node, ir.BINARY_MATH_COMPARISON_BUILTINS):  # TODO: add tests
+        node = self.generic_visit(node)
+        if (
+            cpm.is_call_to(node, builtins.BINARY_MATH_COMPARISON_BUILTINS)
+            and any(isinstance(arg, ir.AxisLiteral) for arg in node.args)
+            and any(isinstance(arg, ir.Literal) for arg in node.args)
+        ):  # TODO: add tests
             arg1, arg2 = node.args
             fun = node.fun
             if isinstance(arg1, ir.AxisLiteral) and isinstance(arg2, ir.Literal):
-                dim = common.Dimension(value=arg2.value, kind=common.DimensionKind.VERTICAL)
+                dim = common.Dimension(value=arg1.value, kind=common.DimensionKind.VERTICAL)
                 value = int(arg2.value)
                 reverse = False
             elif isinstance(arg1, ir.Literal) and isinstance(arg2, ir.AxisLiteral):
@@ -33,44 +43,44 @@ class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
             else:
                 raise ValueError(f"{node.args} need to be a 'ir.AxisLiteral' and an 'ir.Literal'.")
             assert isinstance(fun, ir.SymRef)
-            min_: int | str
-            max_: int | str
+            min_: int | ir.NegInfinityLiteral
+            max_: int | ir.InfinityLiteral
             match fun.id:
                 case ir.SymbolRef("less"):
                     if reverse:
                         min_ = value + 1
-                        max_ = "inf"
+                        max_ = ir.InfinityLiteral()
                     else:
-                        min_ = "neg_inf"
+                        min_ = ir.NegInfinityLiteral()
                         max_ = value - 1
                 case ir.SymbolRef("less_equal"):
                     if reverse:
                         min_ = value
-                        max_ = "inf"
+                        max_ = ir.InfinityLiteral()
                     else:
-                        min_ = "neg_inf"
+                        min_ = ir.NegInfinityLiteral()
                         max_ = value
                 case ir.SymbolRef("greater"):
                     if reverse:
-                        min_ = "neg_inf"
+                        min_ = ir.NegInfinityLiteral()
                         max_ = value - 1
                     else:
                         min_ = value + 1
-                        max_ = "inf"
+                        max_ = ir.InfinityLiteral()
                 case ir.SymbolRef("greater_equal"):
                     if reverse:
-                        min_ = "neg_inf"
+                        min_ = ir.NegInfinityLiteral()
                         max_ = value
                     else:
                         min_ = value
-                        max_ = "inf"
+                        max_ = ir.InfinityLiteral()
                 case ir.SymbolRef("eq"):
                     min_ = max_ = value
                 case ir.SymbolRef("not_eq"):
-                    min1 = "neg_inf"
+                    min1 = ir.NegInfinityLiteral()
                     max1 = value - 1
                     min2 = value + 1
-                    max2 = "inf"
+                    max2 = ir.InfinityLiteral()
                     return im.call("and_")(
                         im.domain(common.GridType.CARTESIAN, {dim: (min1, max1)}),
                         im.domain(common.GridType.CARTESIAN, {dim: (min2, max2)}),
@@ -78,6 +88,24 @@ class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
                 case _:
                     raise NotImplementedError
 
-            return im.domain(common.GridType.CARTESIAN, {dim: (min_, max_)})
+            return im.domain(
+                common.GridType.CARTESIAN,
+                {dim: (min_, max_ + 1)}
+                if not isinstance(max_, ir.InfinityLiteral)
+                else {dim: (min_, max_)},
+            )
+        if cpm.is_call_to(node, builtins.BINARY_LOGICAL_BUILTINS) and all(
+            isinstance(arg, (ir.Literal, ir.FunCall)) for arg in node.args
+        ):
+            if cpm.is_call_to(node, "and_"):
+                # TODO: domain promotion
+                return ConstantFolding.apply(
+                    domain_utils.domain_intersection(
+                        *[domain_utils.SymbolicDomain.from_expr(arg) for arg in node.args]
+                    ).as_expr()
+                )
+
+            else:
+                raise NotImplementedError
 
         return self.generic_visit(node)

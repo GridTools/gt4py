@@ -109,16 +109,28 @@ def _(arg: ts.ScalarType) -> ts.ScalarType:
     return ts.ScalarType(kind=ts.ScalarKind.BOOL)
 
 
-@_register_builtin_type_synthesizer(
-    fun_names=builtins.BINARY_MATH_COMPARISON_BUILTINS | builtins.BINARY_LOGICAL_BUILTINS
-)
-def _(lhs, rhs) -> ts.ScalarType | ts.TupleType | ts.DomainType:
+def synthesize_binary_math_comparison_builtins(
+    lhs, rhs
+) -> ts.ScalarType | ts.TupleType | ts.DomainType:
     if isinstance(lhs, ts.ScalarType) and isinstance(rhs, ts.DimensionType):
         return ts.DomainType(dims=[rhs.dim])
     if isinstance(lhs, ts.DimensionType) and isinstance(rhs, ts.ScalarType):
         return ts.DomainType(dims=[lhs.dim])
     assert isinstance(lhs, ts.ScalarType) and isinstance(rhs, ts.ScalarType)
     return ts.ScalarType(kind=ts.ScalarKind.BOOL)
+
+
+@_register_builtin_type_synthesizer(fun_names=builtins.BINARY_MATH_COMPARISON_BUILTINS)
+def _(lhs, rhs) -> ts.ScalarType | ts.TupleType | ts.DomainType:
+    return synthesize_binary_math_comparison_builtins(lhs, rhs)
+
+
+@_register_builtin_type_synthesizer(fun_names=builtins.BINARY_LOGICAL_BUILTINS)
+def _(lhs, rhs) -> ts.ScalarType | ts.TupleType | ts.DomainType:
+    if isinstance(lhs, ts.DomainType) and isinstance(rhs, ts.DomainType):
+        return ts.DomainType(dims=common.promote_dims(lhs.dims, rhs.dims))
+    else:
+        return synthesize_binary_math_comparison_builtins(lhs, rhs)
 
 
 @_register_builtin_type_synthesizer

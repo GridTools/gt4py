@@ -9,7 +9,7 @@
 import numpy as np
 from typing import Tuple
 import pytest
-from next_tests.integration_tests.cases import KDim, cartesian_case
+from next_tests.integration_tests.cases import KDim, IDim, cartesian_case
 from gt4py import next as gtx
 from gt4py.next.ffront.experimental import concat_where
 from next_tests.integration_tests import cases
@@ -42,7 +42,7 @@ def test_dimension(cartesian_case):
     def testee(
         k: cases.KField, interior: cases.IJKField, boundary: cases.IJKField
     ) -> cases.IJKField:
-        return concat_where(KDim <= 2, boundary, interior)
+        return concat_where(KDim >= 2, boundary, interior)
 
     k = cases.allocate(cartesian_case, testee, "k", strategy=cases.IndexInitializer())()
     interior = cases.allocate(cartesian_case, testee, "interior")()
@@ -50,10 +50,58 @@ def test_dimension(cartesian_case):
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
     ref = np.where(
-        k.asnumpy()[np.newaxis, np.newaxis, :] <= 0, boundary.asnumpy(), interior.asnumpy()
+        k.asnumpy()[np.newaxis, np.newaxis, :] >= 2, boundary.asnumpy(), interior.asnumpy()
     )
+    cases.verify(cartesian_case, testee, k, interior, boundary, out=out, ref=ref)
 
-    cases.verify(cartesian_case, testee, k, interior, boundary, out=out, ref=ref)  # TODO
+
+def test_dimension_two_nested_conditions(cartesian_case):
+    @gtx.field_operator
+    def testee(
+        k: cases.KField, interior: cases.IJKField, boundary: cases.IJKField
+    ) -> cases.IJKField:
+        return concat_where((KDim < 2), boundary, concat_where((KDim >= 5), boundary, interior))
+
+    k = cases.allocate(cartesian_case, testee, "k", strategy=cases.IndexInitializer())()
+    interior = cases.allocate(cartesian_case, testee, "interior")()
+    boundary = cases.allocate(cartesian_case, testee, "boundary")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+
+    ref = np.where(
+        (k.asnumpy()[np.newaxis, np.newaxis, :] < 2)
+        | (k.asnumpy()[np.newaxis, np.newaxis, :] >= 5),
+        boundary.asnumpy(),
+        interior.asnumpy(),
+    )
+    cases.verify(cartesian_case, testee, k, interior, boundary, out=out, ref=ref)
+
+
+def test_dimension_two_conditions_and(cartesian_case):
+    @gtx.field_operator
+    def testee(k: cases.KField, interior: cases.KField, boundary: cases.KField) -> cases.KField:
+        return concat_where(((KDim > 2) & (KDim <= 5)), interior, boundary)
+
+    k = cases.allocate(cartesian_case, testee, "k", strategy=cases.IndexInitializer())()
+    interior = cases.allocate(cartesian_case, testee, "interior")()
+    boundary = cases.allocate(cartesian_case, testee, "boundary")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+
+    ref = np.where((k.asnumpy() > 2) & (k.asnumpy() <= 5), interior.asnumpy(), boundary.asnumpy())
+    cases.verify(cartesian_case, testee, k, interior, boundary, out=out, ref=ref)
+
+
+def test_dimension_two_conditions_or(cartesian_case):
+    @gtx.field_operator
+    def testee(k: cases.KField, interior: cases.KField, boundary: cases.KField) -> cases.KField:
+        return concat_where(((KDim < 2) | (KDim >= 5)), boundary, interior)
+
+    k = cases.allocate(cartesian_case, testee, "k", strategy=cases.IndexInitializer())()
+    interior = cases.allocate(cartesian_case, testee, "interior")()
+    boundary = cases.allocate(cartesian_case, testee, "boundary")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+
+    ref = np.where((k.asnumpy() < 2) | (k.asnumpy() >= 5), boundary.asnumpy(), interior.asnumpy())
+    cases.verify(cartesian_case, testee, k, interior, boundary, out=out, ref=ref)
 
 
 def test_boundary_horizontal_slice(cartesian_case):

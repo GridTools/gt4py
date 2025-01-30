@@ -15,8 +15,7 @@ from gt4py.next.iterator.ir_utils import (
 )
 
 
-class TransformConcatWhere(PreserveLocationVisitor, NodeTranslator):
-    PRESERVED_ANNEX_ATTRS = ("domain",)
+class NestConcatWheres(PreserveLocationVisitor, NodeTranslator):
 
     @classmethod
     def apply(cls, node: ir.Node):
@@ -26,13 +25,12 @@ class TransformConcatWhere(PreserveLocationVisitor, NodeTranslator):
         node = self.generic_visit(node)
         if cpm.is_call_to(node, "concat_where"):
             cond_expr, field_a, field_b = node.args
-            cond = domain_utils.SymbolicDomain.from_expr(cond_expr).ranges.keys()
-            dims = [im.call("index")(ir.AxisLiteral(value=k.value, kind=k.kind)) for k in cond]
-            return im.as_fieldop(
-                im.lambda_("pos", "a", "b")(
-                    im.if_(im.call("in")(im.deref("pos"), cond_expr), im.deref("a"), im.deref("b"))
-                ),
-                node.annex.domain.as_expr(),
-            )(im.make_tuple(*dims), field_a, field_b)
+            if cpm.is_call_to(cond_expr, ("and_")):
+                conds = cond_expr.args
+                return im.concat_where(conds[0], im.concat_where(conds[1],field_a, field_b), field_b)
+            if cpm.is_call_to(cond_expr, ("or_")):
+                conds = cond_expr.args
+                return im.concat_where(conds[0], field_a, im.concat_where(conds[1],field_a, field_b))
+
 
         return self.generic_visit(node)

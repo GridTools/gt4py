@@ -579,6 +579,12 @@ class ITIRTypeInference(eve.NodeTranslator):
         assert isinstance(node.type, ts.ScalarType)
         return node.type
 
+    def visit_InfinityLiteral(self, node: itir.InfinityLiteral, **kwargs) -> ts.ScalarType:
+        return ts.ScalarType(kind=ts.ScalarKind.INT32)
+
+    def visit_NegInfinityLiteral(self, node: itir.InfinityLiteral, **kwargs) -> ts.ScalarType:
+        return ts.ScalarType(kind=ts.ScalarKind.INT32)
+
     def visit_SymRef(
         self, node: itir.SymRef, *, ctx: dict[str, ts.TypeSpec]
     ) -> ts.TypeSpec | type_synthesizer.TypeSynthesizer:
