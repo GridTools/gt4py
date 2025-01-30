@@ -39,31 +39,28 @@ if TYPE_CHECKING:
 
 
 def get_domain_indices(
-    dims: Sequence[gtx_common.Dimension], offsets: Optional[Sequence[dace.symbolic.SymExpr]] = None
+    dims: Sequence[gtx_common.Dimension], origin: Optional[Sequence[dace.symbolic.SymExpr]]
 ) -> dace_subsets.Indices:
     """
     Helper function to construct the list of indices for a field domain, applying
-    an optional offset in each dimension as start index.
+    an optional origin in each dimension as start index.
 
     Args:
         dims: The field dimensions.
-        offsets: The range start index in each dimension.
+        origin: The domain start index in each dimension. If set to `None`, assume all zeros.
 
     Returns:
         A list of indices for field access in dace arrays. As this list is returned
         as `dace.subsets.Indices`, it should be converted to `dace.subsets.Range` before
         being used in memlet subset because ranges are better supported throughout DaCe.
     """
-    index_variables = [dace.symbolic.SymExpr(gtir_sdfg_utils.get_map_variable(dim)) for dim in dims]
-    if offsets is None:
-        return dace_subsets.Indices(index_variables)
-    else:
-        return dace_subsets.Indices(
-            [
-                index - offset if offset != 0 else index
-                for index, offset in zip(index_variables, offsets, strict=True)
-            ]
-        )
+    index_variables = [
+        dace.symbolic.pystr_to_symbolic(gtir_sdfg_utils.get_map_variable(dim)) for dim in dims
+    ]
+    origin = [0] * len(index_variables) if origin is None else origin
+    return dace_subsets.Indices(
+        [index - start_index for index, start_index in zip(index_variables, origin, strict=True)]
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -78,18 +75,58 @@ class FieldopData:
     Args:
         dc_node: DaCe access node to the data storage.
         gt_type: GT4Py type definition, which includes the field domain information.
-        offset: List of index offsets, in each dimension, when the dimension range
-            does not start from zero; assume zero offset, if not set.
+        origin: Tuple of start indices, in each dimension, for `FieldType` data.
+            Pass an empty tuple for `ScalarType` data or zero-dimensional fields.
     """
 
     dc_node: dace.nodes.AccessNode
     gt_type: ts.FieldType | ts.ScalarType
-    offset: Optional[list[dace.symbolic.SymExpr]]
+    origin: tuple[dace.symbolic.SymbolicType, ...]
 
-    def make_copy(self, data_node: dace.nodes.AccessNode) -> FieldopData:
-        """Create a copy of this data descriptor with a different access node."""
-        assert data_node != self.dc_node
-        return FieldopData(data_node, self.gt_type, self.offset)
+    def __post_init__(self) -> None:
+        """Implements a sanity check on the constructed data type."""
+        assert (
+            len(self.origin) == 0
+            if isinstance(self.gt_type, ts.ScalarType)
+            else len(self.origin) == len(self.gt_type.dims)
+        )
+
+    def map_to_parent_sdfg(
+        self,
+        sdfg_builder: gtir_sdfg.SDFGBuilder,
+        inner_sdfg: dace.SDFG,
+        outer_sdfg: dace.SDFG,
+        outer_sdfg_state: dace.SDFGState,
+        symbol_mapping: dict[str, dace.symbolic.SymbolicType],
+    ) -> FieldopData:
+        """
+        Make the data descriptor which 'self' refers to, and which is located inside
+        a NestedSDFG, available in its parent SDFG.
+
+        Thus, it turns 'self' into a non-transient array and creates a new data
+        descriptor inside the parent SDFG, with same shape and strides.
+        """
+        inner_desc = self.dc_node.desc(inner_sdfg)
+        assert inner_desc.transient
+        inner_desc.transient = False
+
+        if isinstance(self.gt_type, ts.ScalarType):
+            outer, outer_desc = sdfg_builder.add_temp_scalar(outer_sdfg, inner_desc.dtype)
+            outer_origin = []
+        else:
+            outer, outer_desc = sdfg_builder.add_temp_array_like(outer_sdfg, inner_desc)
+            # We cannot use a copy of the inner data descriptor directly, we have to apply the symbol mapping.
+            dace.symbolic.safe_replace(
+                symbol_mapping,
+                lambda m: dace.sdfg.replace_properties_dict(outer_desc, m),
+            )
+            # Same applies to the symbols used as field origin (the domain range start)
+            outer_origin = [
+                gtx_dace_utils.safe_replace_symbolic(val, symbol_mapping) for val in self.origin
+            ]
+
+        outer_node = outer_sdfg_state.add_access(outer)
+        return FieldopData(outer_node, self.gt_type, tuple(outer_origin))
 
     def get_local_view(
         self, domain: FieldopDomain
@@ -97,18 +134,20 @@ class FieldopData:
         """Helper method to access a field in local view, given the compute domain of a field operator."""
         if isinstance(self.gt_type, ts.ScalarType):
             return gtir_dataflow.MemletExpr(
-                dc_node=self.dc_node, gt_dtype=self.gt_type, subset=dace_subsets.Indices([0])
+                dc_node=self.dc_node,
+                gt_dtype=self.gt_type,
+                subset=dace_subsets.Range.from_string("0"),
             )
 
         if isinstance(self.gt_type, ts.FieldType):
             domain_dims = [dim for dim, _, _ in domain]
-            domain_indices = get_domain_indices(domain_dims)
+            domain_indices = get_domain_indices(domain_dims, origin=None)
             it_indices: dict[gtx_common.Dimension, gtir_dataflow.DataExpr] = {
                 dim: gtir_dataflow.SymbolExpr(index, INDEX_DTYPE)
                 for dim, index in zip(domain_dims, domain_indices)
             }
-            field_domain = [
-                (dim, dace.symbolic.SymExpr(0) if self.offset is None else self.offset[i])
+            field_origin = [
+                (dim, dace.symbolic.SymExpr(0) if self.origin is None else self.origin[i])
                 for i, dim in enumerate(self.gt_type.dims)
             ]
             # The property below is ensured by calling `make_field()` to construct `FieldopData`.
@@ -116,10 +155,47 @@ class FieldopData:
             # to `ListType` element type, while the field domain consists of all global dimensions.
             assert all(dim != gtx_common.DimensionKind.LOCAL for dim in self.gt_type.dims)
             return gtir_dataflow.IteratorExpr(
-                self.dc_node, self.gt_type.dtype, field_domain, it_indices
+                self.dc_node, self.gt_type.dtype, field_origin, it_indices
             )
 
         raise NotImplementedError(f"Node type {type(self.gt_type)} not supported.")
+
+    def get_symbol_mapping(
+        self, dataname: str, sdfg: dace.SDFG
+    ) -> dict[str, dace.symbolic.SymExpr]:
+        """
+        Helper method to create the symbol mapping for array storage in a nested SDFG.
+
+        Args:
+            dataname: Name of the data container insiode the nested SDFG.
+            sdfg: The parent SDFG where the `FieldopData` object lives.
+
+        Returns:
+            Mapping from symbols in nested SDFG to the corresponding symbolic values
+            in the parent SDFG. This includes the range start and stop symbols (used
+            to calculate the array shape as range 'stop - start') and the strides.
+        """
+        if isinstance(self.gt_type, ts.ScalarType):
+            return {}
+        ndims = len(self.gt_type.dims)
+        outer_desc = self.dc_node.desc(sdfg)
+        assert isinstance(outer_desc, dace.data.Array)
+        # origin and size of the local dimension, in case of a field with `ListType` data,
+        # are assumed to be compiled-time values (not symbolic), therefore the start and
+        # stop range symbols of the inner field only extend over the global dimensions
+        return (
+            {gtx_dace_utils.range_start_symbol(dataname, i): (self.origin[i]) for i in range(ndims)}
+            | {
+                gtx_dace_utils.range_stop_symbol(dataname, i): (
+                    self.origin[i] + outer_desc.shape[i]
+                )
+                for i in range(ndims)
+            }
+            | {
+                gtx_dace_utils.field_stride_symbol_name(dataname, i): stride
+                for i, stride in enumerate(outer_desc.strides)
+            }
+        )
 
 
 FieldopDomain: TypeAlias = list[
@@ -139,6 +215,33 @@ FieldopResult: TypeAlias = FieldopData | tuple[FieldopData | tuple, ...]
 
 INDEX_DTYPE: Final[dace.typeclass] = dace.dtype_to_typeclass(gtx_fbuiltins.IndexType)
 """Data type used for field indexing."""
+
+
+def get_arg_symbol_mapping(
+    dataname: str, arg: FieldopResult, sdfg: dace.SDFG
+) -> dict[str, dace.symbolic.SymExpr]:
+    """
+    Helper method to build the mapping from inner to outer SDFG of all symbols
+    used for storage of a field or a tuple of fields.
+
+    Args:
+        dataname: The storage name inside the nested SDFG.
+        arg: The argument field in the parent SDFG.
+        sdfg: The parent SDFG where the argument field lives.
+
+    Returns:
+        A mapping from inner symbol names to values or symbolic definitions
+        in the parent SDFG.
+    """
+    if isinstance(arg, FieldopData):
+        return arg.get_symbol_mapping(dataname, sdfg)
+
+    symbol_mapping: dict[str, dace.symbolic.SymExpr] = {}
+    for i, elem in enumerate(arg):
+        dataname_elem = f"{dataname}_{i}"
+        symbol_mapping |= get_arg_symbol_mapping(dataname_elem, elem, sdfg)
+
+    return symbol_mapping
 
 
 def get_tuple_type(data: tuple[FieldopResult, ...]) -> ts.TupleType:
@@ -239,7 +342,7 @@ def get_field_layout(
     Returns:
         A tuple of three lists containing:
             - the domain dimensions
-            - the domain offset in each dimension
+            - the domain origin, that is the start indices in all dimensions
             - the domain size in each dimension
     """
     domain_dims, domain_lbs, domain_ubs = zip(*domain)
@@ -278,9 +381,9 @@ def _create_field_operator_impl(
     dataflow_output_desc = output_edge.result.dc_node.desc(sdfg)
 
     # the memory layout of the output field follows the field operator compute domain
-    domain_dims, domain_offset, domain_shape = get_field_layout(domain)
-    domain_indices = get_domain_indices(domain_dims, domain_offset)
-    domain_subset = dace_subsets.Range.from_indices(domain_indices)
+    field_dims, field_origin, field_shape = get_field_layout(domain)
+    field_indices = get_domain_indices(field_dims, field_origin)
+    field_subset = dace_subsets.Range.from_indices(field_indices)
 
     if isinstance(output_edge.result.gt_dtype, ts.ScalarType):
         if output_edge.result.gt_dtype != output_type.dtype:
@@ -288,8 +391,6 @@ def _create_field_operator_impl(
                 f"Type mismatch, expected {output_type.dtype} got {output_edge.result.gt_dtype}."
             )
         assert isinstance(dataflow_output_desc, dace.data.Scalar)
-        field_shape = domain_shape
-        field_subset = domain_subset
     else:
         assert isinstance(output_type.dtype, ts.ListType)
         assert isinstance(output_edge.result.gt_dtype.element_type, ts.ScalarType)
@@ -301,8 +402,8 @@ def _create_field_operator_impl(
         assert len(dataflow_output_desc.shape) == 1
         # extend the array with the local dimensions added by the field operator (e.g. `neighbors`)
         assert output_edge.result.gt_dtype.offset_type is not None
-        field_shape = [*domain_shape, dataflow_output_desc.shape[0]]
-        field_subset = domain_subset + dace_subsets.Range.from_array(dataflow_output_desc)
+        field_shape = [*field_shape, dataflow_output_desc.shape[0]]
+        field_subset = field_subset + dace_subsets.Range.from_array(dataflow_output_desc)
 
     # allocate local temporary storage
     field_name, _ = sdfg_builder.add_temp_array(sdfg, field_shape, dataflow_output_desc.dtype)
@@ -312,9 +413,7 @@ def _create_field_operator_impl(
     output_edge.connect(map_exit, field_node, field_subset)
 
     return FieldopData(
-        field_node,
-        ts.FieldType(domain_dims, output_edge.result.gt_dtype),
-        offset=(domain_offset if set(domain_offset) != {0} else None),
+        field_node, ts.FieldType(field_dims, output_edge.result.gt_dtype), tuple(field_origin)
     )
 
 
@@ -535,7 +634,7 @@ def translate_if(
         outer, _ = sdfg_builder.add_temp_array_like(sdfg, inner_desc)
         outer_node = state.add_access(outer)
 
-        return inner_data.make_copy(outer_node)
+        return FieldopData(outer_node, inner_data.gt_type, inner_data.origin)
 
     result_temps = gtx_utils.tree_map(construct_output)(true_br_args)
 
@@ -696,7 +795,7 @@ def translate_literal(
     data_type = node.type
     data_node = _get_symbolic_value(sdfg, state, sdfg_builder, node.value, data_type)
 
-    return FieldopData(data_node, data_type, offset=None)
+    return FieldopData(data_node, data_type, origin=())
 
 
 def translate_make_tuple(
@@ -818,7 +917,7 @@ def translate_scalar_expr(
         dace.Memlet(data=temp_name, subset="0"),
     )
 
-    return FieldopData(temp_node, node.type, offset=None)
+    return FieldopData(temp_node, node.type, origin=())
 
 
 def translate_symbol_ref(

@@ -141,7 +141,7 @@ class CudaBackend(BaseGTBackend, CLIBackendMixin):
     GT_BACKEND_T = "gpu"
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
-        return self.make_extension(stencil_ir=self.builder.gtir, uses_cuda=True)
+        return self.make_extension(uses_cuda=True)
 
     def generate(self) -> Type[StencilObject]:
         self.check_options(self.builder.options)

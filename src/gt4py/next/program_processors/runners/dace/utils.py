@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import re
-from typing import Final, Literal
+from typing import Final, Literal, Mapping, Union
 
 import dace
 
@@ -73,6 +73,16 @@ def field_stride_symbol_name(field_name: str, axis: int) -> str:
     return field_symbol_name(field_name, axis, "stride")
 
 
+def range_start_symbol(field_name: str, axis: int) -> str:
+    """Format name of start symbol for domain range, as expected by GTIR."""
+    return f"__{field_name}_{axis}_range_0"
+
+
+def range_stop_symbol(field_name: str, axis: int) -> str:
+    """Format name of stop symbol for domain range, as expected by GTIR."""
+    return f"__{field_name}_{axis}_range_1"
+
+
 def is_field_symbol(name: str) -> bool:
     return FIELD_SYMBOL_RE.match(name) is not None
 
@@ -90,3 +100,29 @@ def filter_connectivity_types(
         for offset, conn in offset_provider_type.items()
         if isinstance(conn, gtx_common.NeighborConnectivityType)
     }
+
+
+def safe_replace_symbolic(
+    val: dace.symbolic.SymbolicType,
+    symbol_mapping: Mapping[
+        Union[dace.symbolic.SymbolicType, str], Union[dace.symbolic.SymbolicType, str]
+    ],
+) -> dace.symbolic.SymbolicType:
+    """
+    Replace free symbols in a dace symbolic expression, using `safe_replace()`
+    in order to avoid clashes in case the new symbol value is also a free symbol
+    in the original exoression.
+
+    Args:
+        val: The symbolic expression where to apply the replacement.
+        symbol_mapping: The mapping table for symbol replacement.
+
+    Returns:
+        A new symbolic expression as result of symbol replacement.
+    """
+    # The list `x` is needed because `subs()` returns a new object and can not handle
+    # replacement dicts of the form `{'x': 'y', 'y': 'x'}`.
+    # The utility `safe_replace()` will call `subs()` twice in case of such dicts.
+    x = [val]
+    dace.symbolic.safe_replace(symbol_mapping, lambda m, xx=x: xx.append(xx[-1].subs(m)))
+    return x[-1]
