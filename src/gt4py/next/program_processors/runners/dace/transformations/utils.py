@@ -50,6 +50,7 @@ def gt_make_transients_persistent(
         not_modify_lifetime: set[str] = set()
 
         for state in nsdfg.states():
+            scope_dict = state.scope_dict()
             for dnode in state.data_nodes():
                 if dnode.data in not_modify_lifetime:
                     continue
@@ -67,6 +68,15 @@ def gt_make_transients_persistent(
                     continue
 
                 if desc.lifetime == dace.AllocationLifetime.External:
+                    not_modify_lifetime.add(dnode.data)
+                    continue
+
+                # If the data is referenced inside a scope, such as a map, it might be possible
+                #  that it is only used inside that scope. If we would make it persistent, then
+                #  it would essentially be allocated outside and be shared among the different
+                #  map iterations. So we can not make it persistent.
+                #  The downside is, that we might have to perform dynamic allocation.
+                if scope_dict[dnode] is not None:
                     not_modify_lifetime.add(dnode.data)
                     continue
 

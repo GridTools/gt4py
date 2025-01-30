@@ -129,15 +129,23 @@ def get_sdfg_args(
     *args: Any,
     check_args: bool = False,
     on_gpu: bool = False,
-    **kwargs: Any,
 ) -> dict[str, Any]:
     """Extracts the arguments needed to call the SDFG.
 
-    This function can handle the same arguments that are passed to dace runner.
+    This function can handle the arguments that are passed to the dace runner
+    and that end up in the decoration stage of the dace backend workflow.
 
     Args:
         sdfg:               The SDFG for which we want to get the arguments.
-        offset_provider:    Offset provider.
+        offset_provider:    The offset provider.
+        args:               The list of arguments passed to the dace runner.
+        check_args:         If True, return only the arguments that are expected
+                            according to the SDFG signature.
+        on_gpu:             If True, this method ensures that the arrays for the
+                            connectivity tables are allocated in GPU memory.
+
+    Returns:
+        A dictionary of keyword arguments to be passed in the SDFG call.
     """
 
     dace_args = _get_args(sdfg, args)
