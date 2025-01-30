@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """
 GTScript import machinery.
@@ -29,14 +23,14 @@ Usage Example
     gtscript_imports.enable(
         search_path=[<path1>, <path2>, ...],  # for allowing only in search_path
         generate_path=<mybuildpath>,  # for generating python modules in a specific dir
-        in_source=False,  # set True to generate python modules next to gtscfipt files
+        in_source=False,  # set True to generate python modules next to gtscript files
     )
 
     # scoped usage
     with gtscript_imports.enabled():
         import ...
-
 """
+
 import importlib
 import importlib.abc
 import pathlib
@@ -234,11 +228,7 @@ def enabled(**kwargs: Any) -> Iterator:
 
         import some_other_stencil  # in the same directory as some_stencil.gt.py raises error
     """
-    backup_import_system = (
-        sys.path.copy(),
-        sys.meta_path.copy(),
-        sys.modules.copy(),
-    )
+    backup_import_system = (sys.path.copy(), sys.meta_path.copy(), sys.modules.copy())
     try:
         yield enable(**kwargs)
     finally:

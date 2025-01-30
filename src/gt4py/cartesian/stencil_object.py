@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -92,7 +86,7 @@ def _extract_array_infos(
 
 
 def _extract_stencil_arrays(
-    array_infos: Dict[str, Optional[ArgsInfo]]
+    array_infos: Dict[str, Optional[ArgsInfo]],
 ) -> Dict[str, Optional[FieldType]]:
     return {name: info.array if info is not None else None for name, info in array_infos.items()}
 
@@ -101,7 +95,7 @@ def _extract_stencil_arrays(
 class FrozenStencil:
     """Stencil with pre-computed domain and origin for each field argument."""
 
-    stencil_object: "StencilObject"
+    stencil_object: StencilObject
     origin: Dict[str, Tuple[int, ...]]
     domain: Tuple[int, ...]
 
@@ -283,7 +277,7 @@ class StencilObject(abc.ABC):
 
     @staticmethod
     def _make_origin_dict(
-        origin: Union[Dict[str, Tuple[int, ...]], Tuple[int, ...], int, None]
+        origin: Union[Dict[str, Tuple[int, ...]], Tuple[int, ...], int, None],
     ) -> Dict[str, Tuple[int, ...]]:
         try:
             if isinstance(origin, dict):
@@ -349,7 +343,7 @@ class StencilObject(abc.ABC):
         else:
             return max_domain
 
-    def _validate_args(  # noqa: C901  # Function is too complex
+    def _validate_args(  # Function is too complex
         self,
         arg_infos: Dict[str, Optional[ArgsInfo]],
         param_args: Dict[str, Any],
@@ -376,8 +370,8 @@ class StencilObject(abc.ABC):
 
         try:
             domain = Shape(domain)
-        except Exception:
-            raise ValueError("Invalid 'domain' value ({})".format(domain))
+        except Exception as ex:
+            raise ValueError("Invalid 'domain' value ({})".format(domain)) from ex
 
         if not domain > Shape.zeros(domain_ndim):
             raise ValueError(f"Compute domain contains zero sizes '{domain}')")
@@ -420,7 +414,8 @@ class StencilObject(abc.ABC):
                     warnings.warn(
                         f"The layout of the field '{name}' is not recommended for this backend."
                         f"This may lead to performance degradation. Please consider using the"
-                        f"provided allocators in `gt4py.storage`."
+                        f"provided allocators in `gt4py.storage`.",
+                        stacklevel=2,
                     )
 
                 field_dtype = self.field_info[name].dtype
@@ -518,7 +513,7 @@ class StencilObject(abc.ABC):
                     *((0,) * len(field_info.data_dims)),
                 )
             elif (info_origin := getattr(array_infos.get(name), "origin", None)) is not None:
-                origin[name] = info_origin  # type: ignore
+                origin[name] = info_origin
             else:
                 origin[name] = (0,) * field_info.ndim
 
@@ -599,7 +594,7 @@ class StencilObject(abc.ABC):
             exec_info["call_run_end_time"] = time.perf_counter()
 
     def freeze(
-        self: "StencilObject", *, origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]
+        self: StencilObject, *, origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]
     ) -> FrozenStencil:
         """Return a StencilObject wrapper with a fixed domain and origin for each argument.
 
@@ -626,7 +621,7 @@ class StencilObject(abc.ABC):
         """
         return FrozenStencil(self, origin, domain)
 
-    def clean_call_args_cache(self: "StencilObject") -> None:
+    def clean_call_args_cache(self: StencilObject) -> None:
         """Clean the argument cache.
 
         Returns

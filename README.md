@@ -14,7 +14,7 @@
 
 GT4Py is a Python library for generating high performance implementations of stencil kernels from a high-level definition using regular Python functions. GT4Py is part of the GridTools framework, a set of libraries and utilities to develop performance portable applications in the area of weather and climate modeling.
 
-**NOTE:** The `gt4py.next` subpackage contains a new version of GT4Py which is not compatible with the current _stable_ version defined in `gt4py.cartesian`. The new version is highly experimental, it only works with unstructured meshes and it requires `python >= 3.10`.
+**NOTE:** The `gt4py.next` subpackage contains a new version of GT4Py which is not compatible with the current _stable_ version defined in `gt4py.cartesian`. The new version is still experimental.
 
 ## 📃 Description
 
@@ -38,7 +38,7 @@ The following backends are supported:
 
 GT4Py can be installed as a regular Python package using `pip` (or any other PEP-517 frontend). As usual, we strongly recommended to create a new virtual environment to work on this project.
 
-The performance backends also require the `Boost <https://www.boost.org/>`\_\_ library, a dependency of [GridTools C++](https://github.com/GridTools/gridtools), which needs to be installed by the user.
+The performance backends also require the [Boost](https://www.boost.org) library, a dependency of [GridTools C++](https://github.com/GridTools/gridtools), which needs to be installed by the user.
 
 ## ⚙ Configuration
 
@@ -54,7 +54,7 @@ Other commonly used environment variables are:
 - `GT_CACHE_DIR_NAME`: Name of the compiler's cache directory (defaults to `.gt_cache`)
 - `GT_CACHE_ROOT`: Path to the compiler cache (defaults to `./`)
 
-More options and details are available in [`config.py`](https://github.com/GridTools/gt4py/blob/main/src/gt4py/cartesian/config.py>).
+More options and details are available in [`config.py`](https://github.com/GridTools/gt4py/blob/main/src/gt4py/cartesian/config.py).
 
 ## 📖 Documentation
 
@@ -121,4 +121,4 @@ pip install -e .
 
 ## ⚖️ License
 
-GT4Py is licensed under the terms of the [GPLv3](https://github.com/GridTools/gt4py/blob/main/LICENSE.txt).
+GT4Py is licensed under the terms of the [BSD-3-Clause](https://github.com/GridTools/gt4py/blob/main/LICENSE.txt).

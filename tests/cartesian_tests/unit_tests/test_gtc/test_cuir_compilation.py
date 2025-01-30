@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from pathlib import Path
 
@@ -33,12 +27,7 @@ def build_gridtools_test(tmp_path: Path, code: str):
     opts = pyext_builder.get_gt_pyext_build_opts(uses_cuda=True)
     assert isinstance(opts["include_dirs"], list)
     opts["include_dirs"].append(gridtools_cpp.get_include_dir())
-    ext_module = setuptools.Extension(
-        "test",
-        [str(tmp_src.absolute())],
-        language="c++",
-        **opts,
-    )
+    ext_module = setuptools.Extension("test", [str(tmp_src.absolute())], language="c++", **opts)
     args = [
         "build_ext",
         "--build-temp=" + str(tmp_src.parent),
@@ -47,9 +36,7 @@ def build_gridtools_test(tmp_path: Path, code: str):
     ]
     setuptools.setup(
         name="test",
-        ext_modules=[
-            ext_module,
-        ],
+        ext_modules=[ext_module],
         script_args=args,
         cmdclass={"build_ext": pyext_builder.CUDABuildExtension},
     )

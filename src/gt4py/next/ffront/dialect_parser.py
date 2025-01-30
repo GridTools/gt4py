@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import ast
 import textwrap
@@ -39,14 +33,18 @@ def parse_source_definition(source_definition: SourceDefinition) -> ast.AST:
             line=err.lineno + source_definition.line_offset,
             column=err.offset + source_definition.column_offset,
             filename=source_definition.filename,
-            end_line=err.end_lineno + source_definition.line_offset
-            if err.end_lineno is not None
-            else None,
-            end_column=err.end_offset + source_definition.column_offset
-            if err.end_offset is not None
-            else None,
+            end_line=(
+                err.end_lineno + source_definition.line_offset
+                if err.end_lineno is not None
+                else None
+            ),
+            end_column=(
+                err.end_offset + source_definition.column_offset
+                if err.end_offset is not None
+                else None
+            ),
         )
-        raise errors.DSLError(loc, err.msg).with_traceback(err.__traceback__)
+        raise errors.DSLError(loc, err.msg).with_traceback(err.__traceback__) from err
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -80,7 +78,7 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         return output_ast
 
     @classmethod
-    def apply_to_function(cls, function: Callable):
+    def apply_to_function(cls, function: Callable) -> DialectRootT:
         src = SourceDefinition.from_function(function)
         closure_vars = get_closure_vars_from_function(function)
         annotations = typing.get_type_hints(function)
@@ -106,9 +104,14 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         line_offset = self.source_definition.line_offset
         col_offset = self.source_definition.column_offset
 
-        line = node.lineno + line_offset if node.lineno is not None else None
+        # `FixMissingLocations` ensures that all nodes have the location attributes
+        assert hasattr(node, "lineno")
+        line = node.lineno + line_offset
+        assert hasattr(node, "end_lineno")
         end_line = node.end_lineno + line_offset if node.end_lineno is not None else None
-        column = 1 + node.col_offset + col_offset if node.col_offset is not None else None
+        assert hasattr(node, "col_offset")
+        column = 1 + node.col_offset + col_offset
+        assert hasattr(node, "end_col_offset")
         end_column = (
             1 + node.end_col_offset + col_offset if node.end_col_offset is not None else None
         )

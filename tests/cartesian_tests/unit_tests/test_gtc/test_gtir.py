@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import pytest
 
@@ -94,11 +88,7 @@ def test_symbolref_without_decl():
         lambda: VerticalLoopFactory(
             body=[
                 ParAssignStmtFactory(
-                    right=BinaryOpFactory(
-                        left__name="foo",
-                        right__name="foo",
-                        right__offset__i=1,
-                    )
+                    right=BinaryOpFactory(left__name="foo", right__name="foo", right__offset__i=1)
                 ),
                 ParAssignStmtFactory(left__name="foo"),
             ]
@@ -106,10 +96,7 @@ def test_symbolref_without_decl():
         # offset access in condition
         lambda: VerticalLoopFactory(
             body=[
-                FieldIfStmtFactory(
-                    cond__name="foo",
-                    cond__offset__i=1,
-                ),
+                FieldIfStmtFactory(cond__name="foo", cond__offset__i=1),
                 ParAssignStmtFactory(left__name="foo"),
             ]
         ),
@@ -157,10 +144,7 @@ def test_while_with_accumulated_extents():
     ):
         WhileFactory(
             cond=BinaryOpFactory(
-                left__name="a",
-                right__name="b",
-                op=ComparisonOperator.LT,
-                dtype=DataType.BOOL,
+                left__name="a", right__name="b", op=ComparisonOperator.LT, dtype=DataType.BOOL
             ),
             body=[
                 ParAssignStmtFactory(left__name="a", right__name="b", right__offset__i=1),

@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
@@ -143,7 +137,7 @@ class OnTheFlyMerging(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     """Merges consecutive horizontal executions inside parallel vertical loops by introducing redundant computations.
 
     Limitations:
-    * Works on the level of whole horizontal executions, no full dependency analysis is performed (common subexpression and dead code eliminitation at a later stage can work around this limitation).
+    * Works on the level of whole horizontal executions, no full dependency analysis is performed (common subexpression and dead code elimination at a later stage can work around this limitation).
     * The chosen default merge limits are totally arbitrary.
     """
 
@@ -256,7 +250,7 @@ class OnTheFlyMerging(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             or first_has_variable_access()
             or first_has_horizontal_restriction()
         ):
-            return [first] + self._merge(others, symtable, new_symbol_name, protected_fields)
+            return [first, *self._merge(others, symtable, new_symbol_name, protected_fields)]
 
         first_scalars = {decl.name for decl in first.declarations}
         writes = first_accesses.write_fields()
@@ -322,10 +316,7 @@ class OnTheFlyMerging(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             for offset in read_offsets:
                 merged.body = (
                     self.visit(
-                        first.body,
-                        shift=offset,
-                        offset_symbol_map=offset_symbol_map,
-                        scalar_map={},
+                        first.body, shift=offset, offset_symbol_map=offset_symbol_map, scalar_map={}
                     )
                     + merged.body
                 )

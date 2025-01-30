@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 # TODO(tehrengruber): All field operators and programs should be executable
 #  as is at some point. Adopt tests to also run on the regular python objects.
@@ -20,9 +14,16 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
+from gt4py.next import errors, constructors, common
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import IDim, Ioff, JDim, cartesian_case, fieldview_backend
+from next_tests.integration_tests.cases import (
+    IDim,
+    Ioff,
+    JDim,
+    cartesian_case,
+    exec_alloc_descriptor,
+)
 from next_tests.past_common_fixtures import (
     copy_program_def,
     copy_restrict_program_def,
@@ -123,9 +124,7 @@ def test_calling_fo_from_fo_execution(cartesian_case):
         pow_three(in_field, out=out)
 
     cases.verify_with_default_data(
-        cartesian_case,
-        fo_from_fo_program,
-        ref=lambda in_field: in_field**3,
+        cartesian_case, fo_from_fo_program, ref=lambda in_field: in_field**3
     )
 
 
@@ -222,14 +221,14 @@ def test_wrong_argument_type(cartesian_case, copy_program_def):
     inp = cartesian_case.as_field([JDim], np.ones((cartesian_case.default_sizes[JDim],)))
     out = cases.allocate(cartesian_case, copy_program, "out").strategy(cases.ConstInitializer(1))()
 
-    with pytest.raises(TypeError) as exc_info:
+    with pytest.raises(errors.DSLError) as exc_info:
         # program is defined on Field[[IDim], ...], but we call with
         #  Field[[JDim], ...]
         copy_program(inp, out, offset_provider={})
 
     msgs = [
-        r"- Expected argument `in_field` to be of type `Field\[\[IDim], float64\]`,"
-        r" but got `Field\[\[JDim\], float64\]`.",
+        r"- Expected argument 'in_field' to be of type 'Field\[\[IDim], float64\]',"
+        r" got 'Field\[\[JDim\], float64\]'."
     ]
     for msg in msgs:
         assert re.search(msg, exc_info.value.__cause__.args[0]) is not None
@@ -249,7 +248,45 @@ def test_dimensions_domain(cartesian_case):
     out_field = cases.allocate(cartesian_case, empty_domain_program, "out_field")()
 
     with pytest.raises(
-        ValueError,
-        match=(r"Dimensions in out field and field domain are not equivalent"),
+        ValueError, match=(r"Dimensions in out field and field domain are not equivalent")
     ):
         cases.run(cartesian_case, empty_domain_program, a, out_field, offset_provider={})
+
+
+@pytest.mark.uses_origin
+def test_out_field_arg_with_non_zero_domain_start(cartesian_case, copy_program_def):
+    copy_program = gtx.program(copy_program_def, backend=cartesian_case.backend)
+
+    size = cartesian_case.default_sizes[IDim]
+
+    inp = cases.allocate(cartesian_case, copy_program, "in_field").unique()()
+    out = constructors.empty(
+        common.domain({IDim: (1, size - 2)}),
+        allocator=cartesian_case.allocator,
+    )
+    ref = inp.ndarray[1:-2]
+
+    cases.verify(cartesian_case, copy_program, inp, out=out, ref=ref)
+
+
+@pytest.mark.uses_origin
+def test_in_field_arg_with_non_zero_domain_start(cartesian_case, copy_program_def):
+    @gtx.field_operator
+    def identity(a: cases.IField) -> cases.IField:
+        return a
+
+    @gtx.program
+    def copy_program(a: cases.IField, out: cases.IField):
+        identity(a, out=out, domain={IDim: (1, 9)})
+
+    inp = constructors.empty(
+        common.domain({IDim: (1, 9)}),
+        dtype=np.int32,
+        allocator=cartesian_case.allocator,
+    )
+    inp.ndarray[...] = 42
+    out = cases.allocate(cartesian_case, copy_program, "out", sizes={IDim: 10})()
+    ref = out.asnumpy().copy()  # ensure we are not writing to `out` outside the domain
+    ref[1:9] = inp.asnumpy()
+
+    cases.verify(cartesian_case, copy_program, inp, out=out, ref=ref)

@@ -1,22 +1,16 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
 import enum
 import textwrap
-from typing import Final, TypeAlias, Union
+from typing import Any, Final, TypeAlias, Union
 
 import gt4py.next.ffront.field_operator_ast as foast
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako, TemplatedGenerator
@@ -71,8 +65,6 @@ PRECEDENCE: Final[dict[PropertyIdentifier, int]] = {
     (foast.Compare, "greater_equal"): 7,
     (foast.Compare, "not_eq"): 7,
     (foast.Compare, "eq"): 7,
-    # Boolean NOT
-    (foast.UnaryOp, "not_"): 6,
     # Boolean AND
     (foast.BinOp, "and_"): 5,
     # Boolean OR
@@ -106,11 +98,11 @@ def _property_identifier(node: foast.LocatedNode) -> PropertyIdentifier:
 
 class _PrettyPrinter(TemplatedGenerator):
     @classmethod
-    def apply(cls, node: foast.LocatedNode, **kwargs) -> str:  # type: ignore[override]
+    def apply(cls, node: foast.LocatedNode, **kwargs: Any) -> str:  # type: ignore[override]
         node_type_name = type(node).__name__
         if not hasattr(cls, node_type_name) and not hasattr(cls, f"visit_{node_type_name}"):
             raise NotImplementedError(
-                f"Pretty printer does not support nodes of type " f"`{node_type_name}`."
+                f"Pretty printer does not support nodes of type '{node_type_name}'."
             )
         return cls().visit(node, **kwargs)
 
@@ -128,30 +120,41 @@ class _PrettyPrinter(TemplatedGenerator):
 
     UnaryOp = as_fmt("{op}{operand}")
 
-    def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> str:
+    IfStmt = as_fmt(
+        textwrap.dedent(
+            """
+            if {condition}:
+                {true_branch}
+            else:
+                {false_branch}
+            """
+        ).strip()
+    )
+
+    def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs: Any) -> str:
         if node.op is dialect_ast_enums.UnaryOperator.NOT:
             op = "not "
         else:
             op = str(node.op)
         return f"{op}{node.operand}"
 
-    def visit_BinOp(self, node: foast.BinOp, **kwargs) -> str:
+    def visit_BinOp(self, node: foast.BinOp, **kwargs: Any) -> str:
         left = self._parenthesize(node.left, node, Group.LEFT)
         right = self._parenthesize(node.right, node, Group.RIGHT)
         return f"{left} {node.op} {right}"
 
-    def visit_Compare(self, node: foast.Compare, **kwargs) -> str:
+    def visit_Compare(self, node: foast.Compare, **kwargs: Any) -> str:
         left = self._parenthesize(node.left, node, Group.LEFT)
         right = self._parenthesize(node.right, node, Group.RIGHT)
         return f"{left} {node.op} {right}"
 
-    def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs) -> str:
+    def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs: Any) -> str:
         cond = self.visit(node.condition)
         true_expr = self._parenthesize(node.true_expr, node, Group.LEFT)
         false_expr = self._parenthesize(node.false_expr, node, Group.RIGHT)
         return f"{true_expr} if {cond} else {false_expr}"
 
-    def visit_Call(self, node: foast.Call, **kwargs):
+    def visit_Call(self, node: foast.Call, **kwargs: Any) -> str:
         args = self.visit(node.args, **kwargs)
         for k, v in node.kwargs.items():
             args.append(f"{self.visit(k, **kwargs)}={self.visit(v, **kwargs)}")
@@ -172,7 +175,7 @@ class _PrettyPrinter(TemplatedGenerator):
         ).strip()
     )
 
-    def visit_FunctionDefinition(self, node: foast.FunctionDefinition, **kwargs):
+    def visit_FunctionDefinition(self, node: foast.FunctionDefinition, **kwargs: Any) -> str:
         params = self.visit(node.params)
         types = [
             str(param.type) if not isinstance(param.type, ts.DeferredType) else None
@@ -185,12 +188,14 @@ class _PrettyPrinter(TemplatedGenerator):
             f" -> {node.type.returns}" if not isinstance(node.type, ts.DeferredType) else ""
         )
         indented_body = textwrap.indent(self.visit(node.body), INDENTATION_PREFIX)
-        return self.generic_visit(
+        res = self.generic_visit(
             node,
             indented_body=indented_body,
             params_annotated=params_annotated,
             return_type=return_type,
         )
+        assert isinstance(res, str)
+        return res
 
     FieldOperator = as_fmt("@field_operator\n{definition}")
 
@@ -234,7 +239,7 @@ def pretty_format(node: foast.LocatedNode) -> str:
     >>> @field_operator
     ... def field_op(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
     ...     return a + 1.0
-    >>> print(pretty_format(field_op.foast_node))
+    >>> print(pretty_format(field_op.foast_stage.foast_node))
     @field_operator
     def field_op(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
       return a + 1.0

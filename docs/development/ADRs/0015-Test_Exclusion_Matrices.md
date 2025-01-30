@@ -1,5 +1,5 @@
 ---
-tags: []
+tags: [testing]
 ---
 
 # Test-Exclusion Matrices
@@ -7,7 +7,7 @@ tags: []
 - **Status**: valid
 - **Authors**: Edoardo Paone (@edopao), Enrique G. Paredes (@egparedes)
 - **Created**: 2023-09-21
-- **Updated**: 2023-09-21
+- **Updated**: 2024-01-25
 
 In the context of Field View testing, lacking support for specific ITIR features while a certain backend
 is being developed, we decided to use `pytest` fixtures to exclude unsupported tests.
@@ -22,7 +22,7 @@ the supported backends, while keeping the test code clean.
 ## Decision
 
 It was decided to apply fixtures and markers from `pytest` module. The fixture is the same used to execute the test
-on different backends (`fieldview_backend` and `program_processor`), but it is extended with a check on the available feature markers.
+on different backends (`exec_alloc_descriptor` and `program_processor`), but it is extended with a check on the available feature markers.
 If a test is annotated with a feature marker, the fixture will check if this feature is supported on the selected backend.
 If no marker is specified, the test is supposed to run on all backends.
 
@@ -33,7 +33,7 @@ In the example below, `test_offset_field` requires the backend to support dynami
 def test_offset_field(cartesian_case):
 ```
 
-In order to selectively enable the backends, the dictionary `next_tests.exclusion_matrices.BACKEND_SKIP_TEST_MATRIX`
+In order to selectively enable the backends, the dictionary `next_tests.definitions.BACKEND_SKIP_TEST_MATRIX`
 lists for each backend the features that are not supported.
 The fixture will check if the annotated feature is present in the exclusion-matrix for the selected backend.
 If so, the exclusion matrix will also specify the action `pytest` should take (e.g. `SKIP` or `XFAIL`).
@@ -47,11 +47,11 @@ by calling `next_tests.get_processor_id()`, which returns the so-called processo
 The following backend processors are defined:
 
 ```python
-DACE_CPU = "dace_iterator.run_dace_cpu"
-DACE_GPU = "dace_iterator.run_dace_gpu"
-GTFN_CPU = "otf_compile_executor.run_gtfn"
-GTFN_CPU_IMPERATIVE = "otf_compile_executor.run_gtfn_imperative"
-GTFN_CPU_WITH_TEMPORARIES = "otf_compile_executor.run_gtfn_with_temporaries"
+DACE_CPU = "gt4py.next.program_processors.runners.dace.run_dace_cpu"
+DACE_GPU = "gt4py.next.program_processors.runners.dace.run_dace_gpu"
+GTFN_CPU = "gt4py.next.program_processors.runners.gtfn.run_gtfn"
+GTFN_CPU_IMPERATIVE = "gt4py.next.program_processors.runners.gtfn.run_gtfn_imperative"
+GTFN_CPU_WITH_TEMPORARIES = "gt4py.next.program_processors.runners.gtfn.run_gtfn_with_temporaries"
 GTFN_GPU = "gt4py.next.program_processors.runners.gtfn.run_gtfn_gpu"
 ```
 

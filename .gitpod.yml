@@ -5,7 +5,7 @@ image:
 tasks:
 - name: Setup venv and dev tools
   init: |
-    ln -s /workspace/gt4py/.gitpod/.vscode /workspace/gt4py/.vscode
+    ln -sfn /workspace/gt4py/.gitpod/.vscode /workspace/gt4py/.vscode
     python -m venv .venv
     source .venv/bin/activate
     pip install --upgrade pip setuptools wheel

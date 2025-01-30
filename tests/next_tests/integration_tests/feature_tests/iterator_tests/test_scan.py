@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import numpy as np
 import pytest
@@ -20,11 +14,13 @@ from gt4py.next.iterator.builtins import cartesian_domain, deref, named_range, s
 from gt4py.next.iterator.runtime import fundef, offset
 
 from next_tests.integration_tests.cases import IDim, KDim
-from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
+from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
 @pytest.mark.uses_index_fields
-def test_scan_in_stencil(program_processor, lift_mode):
+@pytest.mark.uses_scan_in_stencil
+def test_scan_in_stencil(program_processor):
+    # FIXME[#1582](tehrengruber): Remove test after scan is reworked.
     program_processor, validate = program_processor
 
     isize = 1
@@ -54,7 +50,6 @@ def test_scan_in_stencil(program_processor, lift_mode):
         program_processor,
         inp,
         out=out,
-        lift_mode=lift_mode,
         offset_provider={"Koff": KDim},
         column_axis=KDim,
     )

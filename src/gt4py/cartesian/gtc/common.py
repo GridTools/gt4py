@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -44,14 +38,14 @@ class GTCPreconditionError(eve.exceptions.EveError, RuntimeError):
     message_template = "GTC pass precondition error: [{info}]"
 
     def __init__(self, *, expected: str, **kwargs: Any) -> None:
-        super().__init__(expected=expected, **kwargs)  # type: ignore
+        super().__init__(expected=expected, **kwargs)
 
 
 class GTCPostconditionError(eve.exceptions.EveError, RuntimeError):
     message_template = "GTC pass postcondition error: [{info}]"
 
     def __init__(self, *, expected: str, **kwargs: Any) -> None:
-        super().__init__(expected=expected, **kwargs)  # type: ignore
+        super().__init__(expected=expected, **kwargs)
 
 
 class AssignmentKind(eve.StrEnum):
@@ -66,7 +60,7 @@ class AssignmentKind(eve.StrEnum):
 
 @enum.unique
 class UnaryOperator(eve.StrEnum):
-    """Unary operator indentifier."""
+    """Unary operator identifier."""
 
     POS = "+"
     NEG = "-"
@@ -184,7 +178,7 @@ class NativeFunction(eve.StrEnum):
     CEIL = "ceil"
     TRUNC = "trunc"
 
-    IR_OP_TO_NUM_ARGS: ClassVar[Dict["NativeFunction", int]]
+    IR_OP_TO_NUM_ARGS: ClassVar[Dict[NativeFunction, int]]
 
     @property
     def arity(self) -> int:
@@ -235,8 +229,8 @@ class LevelMarker(eve.StrEnum):
 
 @enum.unique
 class ExprKind(eve.IntEnum):
-    SCALAR: "ExprKind" = typing.cast("ExprKind", enum.auto())
-    FIELD: "ExprKind" = typing.cast("ExprKind", enum.auto())
+    SCALAR = typing.cast("ExprKind", enum.auto())
+    FIELD = typing.cast("ExprKind", enum.auto())
 
 
 class LocNode(eve.Node):
@@ -273,7 +267,7 @@ def verify_and_get_common_dtype(
 ) -> Optional[DataType]:
     assert len(exprs) > 0
     if all(e.dtype is not DataType.AUTO for e in exprs):
-        dtypes: List[DataType] = [e.dtype for e in exprs]  # type: ignore # guaranteed to be not None
+        dtypes: List[DataType] = [e.dtype for e in exprs]  # guaranteed to be not None
         dtype = dtypes[0]
         if strict:
             if all(dt == dtype for dt in dtypes):
@@ -317,7 +311,7 @@ class CartesianOffset(eve.Node):
     k: int
 
     @classmethod
-    def zero(cls) -> "CartesianOffset":
+    def zero(cls) -> CartesianOffset:
         return cls(i=0, j=0, k=0)
 
     def to_dict(self) -> Dict[str, int]:
@@ -349,7 +343,7 @@ class FieldAccess(eve.GenericNode, Generic[ExprT, VariableKOffsetT]):
     kind: ExprKind = ExprKind.FIELD
 
     @classmethod
-    def centered(cls, *, name: str, loc: Optional[eve.SourceLocation] = None) -> "FieldAccess":
+    def centered(cls, *, name: str, loc: Optional[eve.SourceLocation] = None) -> FieldAccess:
         return cls(name=name, loc=loc, offset=CartesianOffset.zero())
 
     @datamodels.validator("data_index")
@@ -406,10 +400,7 @@ def _make_root_validator(impl: datamodels.RootValidator) -> datamodels.RootValid
 
 
 def assign_stmt_dtype_validation(*, strict: bool) -> datamodels.RootValidator:
-    def _impl(
-        cls: Type[datamodels.DataModel],
-        instance: datamodels.DataModel,
-    ) -> None:
+    def _impl(cls: Type[datamodels.DataModel], instance: datamodels.DataModel) -> None:
         assert isinstance(instance, AssignStmt)
         verify_and_get_common_dtype(cls, [instance.left, instance.right], strict=strict)
 
@@ -589,7 +580,7 @@ def validate_dtype_is_set() -> datamodels.RootValidator:
 
 class _LvalueDimsValidator(eve.VisitorWithSymbolTableTrait):
     def __init__(self, vertical_loop_type: Type[eve.Node], decl_type: Type[eve.Node]) -> None:
-        if not vertical_loop_type.__annotations__.get("loop_order") is LoopOrder:
+        if vertical_loop_type.__annotations__.get("loop_order") is not LoopOrder:
             raise ValueError(
                 f"Vertical loop type {vertical_loop_type} has no `loop_order` attribute"
             )
@@ -730,7 +721,7 @@ class HorizontalInterval(eve.Node):
     end: Optional[AxisBound]
 
     @classmethod
-    def compute_domain(cls, start_offset: int = 0, end_offset: int = 0) -> "HorizontalInterval":
+    def compute_domain(cls, start_offset: int = 0, end_offset: int = 0) -> HorizontalInterval:
         return cls(start=AxisBound.start(start_offset), end=AxisBound.end(end_offset))
 
     @classmethod
@@ -740,7 +731,7 @@ class HorizontalInterval(eve.Node):
     @classmethod
     def at_endpt(
         cls, level: LevelMarker, start_offset: int, end_offset: Optional[int] = None
-    ) -> "HorizontalInterval":
+    ) -> HorizontalInterval:
         if end_offset is None:
             end_offset = start_offset + 1
         return cls(
@@ -865,10 +856,7 @@ OP_TO_UFUNC_NAME: Final[
         ComparisonOperator.EQ: "equal",
         ComparisonOperator.NE: "not_equal",
     },
-    LogicalOperator: {
-        LogicalOperator.AND: "logical_and",
-        LogicalOperator.OR: "logical_or",
-    },
+    LogicalOperator: {LogicalOperator.AND: "logical_and", LogicalOperator.OR: "logical_or"},
     NativeFunction: {
         NativeFunction.ABS: "abs",
         NativeFunction.MIN: "minimum",
@@ -906,7 +894,7 @@ OP_TO_UFUNC_NAME: Final[
 def op_to_ufunc(
     op: Union[
         UnaryOperator, ArithmeticOperator, ComparisonOperator, LogicalOperator, NativeFunction
-    ]
+    ],
 ) -> np.ufunc:
     if not isinstance(
         op, (UnaryOperator, ArithmeticOperator, ComparisonOperator, LogicalOperator, NativeFunction)
@@ -920,7 +908,7 @@ def op_to_ufunc(
 @functools.lru_cache(maxsize=None)
 def typestr_to_data_type(typestr: str) -> DataType:
     if not isinstance(typestr, str) or len(typestr) < 3 or not typestr[2:].isnumeric():
-        return DataType.INVALID  # type: ignore
+        return DataType.INVALID
     table = {
         ("b", 1): DataType.BOOL,
         ("i", 1): DataType.INT8,
@@ -931,4 +919,4 @@ def typestr_to_data_type(typestr: str) -> DataType:
         ("f", 8): DataType.FLOAT64,
     }
     key = (typestr[1], int(typestr[2:]))
-    return table.get(key, DataType.INVALID)  # type: ignore
+    return table.get(key, DataType.INVALID)

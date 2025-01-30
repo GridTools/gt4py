@@ -1,50 +1,102 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 import operator
 from typing import Optional, Pattern
 
 import pytest
 
+import gt4py.next.common as common
 from gt4py.next.common import (
     Dimension,
     DimensionKind,
     Domain,
     Infinity,
-    NamedRange,
     UnitRange,
     domain,
     named_range,
+    NamedRange,
     promote_dims,
     unit_range,
 )
 
 
-IDim = Dimension("IDim")
 ECDim = Dimension("ECDim")
+IDim = Dimension("IDim")
 JDim = Dimension("JDim")
 KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
 
 
 @pytest.fixture
 def a_domain():
-    return Domain((IDim, UnitRange(0, 10)), (JDim, UnitRange(5, 15)), (KDim, UnitRange(20, 30)))
+    return Domain(
+        NamedRange(IDim, UnitRange(0, 10)),
+        NamedRange(JDim, UnitRange(5, 15)),
+        NamedRange(KDim, UnitRange(20, 30)),
+    )
 
 
-def test_empty_range():
+@pytest.fixture(params=[Infinity.POSITIVE, Infinity.NEGATIVE])
+def unbounded(request):
+    yield request.param
+
+
+def test_unbounded_add_sub(unbounded):
+    assert unbounded + 1 == unbounded
+    assert unbounded - 1 == unbounded
+
+
+@pytest.mark.parametrize("value", [-1, 0, 1])
+@pytest.mark.parametrize("op", [operator.le, operator.lt])
+def test_unbounded_comparison_less(value, op):
+    assert not op(Infinity.POSITIVE, value)
+    assert op(value, Infinity.POSITIVE)
+
+    assert op(Infinity.NEGATIVE, value)
+    assert not op(value, Infinity.NEGATIVE)
+
+    assert op(Infinity.NEGATIVE, Infinity.POSITIVE)
+
+
+@pytest.mark.parametrize("value", [-1, 0, 1])
+@pytest.mark.parametrize("op", [operator.ge, operator.gt])
+def test_unbounded_comparison_greater(value, op):
+    assert op(Infinity.POSITIVE, value)
+    assert not op(value, Infinity.POSITIVE)
+
+    assert not op(Infinity.NEGATIVE, value)
+    assert op(value, Infinity.NEGATIVE)
+
+    assert not op(Infinity.NEGATIVE, Infinity.POSITIVE)
+
+
+def test_unbounded_eq(unbounded):
+    assert unbounded == unbounded
+    assert unbounded <= unbounded
+    assert unbounded >= unbounded
+    assert not unbounded < unbounded
+    assert not unbounded > unbounded
+
+
+@pytest.mark.parametrize("value", [-1, 0, 1])
+def test_unbounded_max_min(value):
+    assert max(Infinity.POSITIVE, value) == Infinity.POSITIVE
+    assert min(Infinity.POSITIVE, value) == value
+    assert max(Infinity.NEGATIVE, value) == value
+    assert min(Infinity.NEGATIVE, value) == Infinity.NEGATIVE
+
+
+@pytest.mark.parametrize("empty_range", [UnitRange(1, 0), UnitRange(1, -1)])
+def test_empty_range(empty_range):
     expected = UnitRange(0, 0)
-    assert UnitRange(1, 1) == expected
-    assert UnitRange(1, -1) == expected
+
+    assert empty_range == expected
+    assert empty_range.is_empty()
 
 
 @pytest.fixture
@@ -58,9 +110,20 @@ def test_unit_range_length(rng):
     assert len(rng) == 10
 
 
-@pytest.mark.parametrize("rng_like", [(2, 4), range(2, 4), UnitRange(2, 4)])
-def test_unit_range_like(rng_like):
-    assert unit_range(rng_like) == UnitRange(2, 4)
+@pytest.mark.parametrize(
+    "rng_like, expected",
+    [
+        ((2, 4), UnitRange(2, 4)),
+        (range(2, 4), UnitRange(2, 4)),
+        (UnitRange(2, 4), UnitRange(2, 4)),
+        ((None, None), UnitRange(Infinity.NEGATIVE, Infinity.POSITIVE)),
+        ((2, None), UnitRange(2, Infinity.POSITIVE)),
+        ((None, 4), UnitRange(Infinity.NEGATIVE, 4)),
+        (None, UnitRange(Infinity.NEGATIVE, Infinity.POSITIVE)),
+    ],
+)
+def test_unit_range_like(rng_like, expected):
+    assert unit_range(rng_like) == expected
 
 
 def test_unit_range_repr(rng):
@@ -94,13 +157,6 @@ def test_unit_range_slice_error(rng):
         rng[1:2:5]
 
 
-def test_unit_range_set_intersection(rng):
-    with pytest.raises(
-        NotImplementedError, match="Can only find the intersection between UnitRange instances."
-    ):
-        rng & {1, 5}
-
-
 @pytest.mark.parametrize(
     "rng1, rng2, expected",
     [
@@ -121,46 +177,65 @@ def test_unit_range_intersection(rng1, rng2, expected):
 @pytest.mark.parametrize(
     "rng1, rng2, expected",
     [
-        (UnitRange(20, Infinity.positive()), UnitRange(10, 15), UnitRange(0, 0)),
-        (UnitRange(Infinity.negative(), 0), UnitRange(5, 10), UnitRange(0, 0)),
-        (UnitRange(Infinity.negative(), 0), UnitRange(-10, 0), UnitRange(-10, 0)),
-        (UnitRange(0, Infinity.positive()), UnitRange(Infinity.negative(), 5), UnitRange(0, 5)),
+        (UnitRange(20, Infinity.POSITIVE), UnitRange(10, 15), UnitRange(0, 0)),
+        (UnitRange(Infinity.NEGATIVE, 0), UnitRange(5, 10), UnitRange(0, 0)),
+        (UnitRange(Infinity.NEGATIVE, 0), UnitRange(-10, 0), UnitRange(-10, 0)),
+        (UnitRange(0, Infinity.POSITIVE), UnitRange(Infinity.NEGATIVE, 5), UnitRange(0, 5)),
         (
-            UnitRange(Infinity.negative(), 0),
-            UnitRange(Infinity.negative(), 5),
-            UnitRange(Infinity.negative(), 0),
+            UnitRange(Infinity.NEGATIVE, 0),
+            UnitRange(Infinity.NEGATIVE, 5),
+            UnitRange(Infinity.NEGATIVE, 0),
         ),
         (
-            UnitRange(Infinity.negative(), Infinity.positive()),
-            UnitRange(Infinity.negative(), Infinity.positive()),
-            UnitRange(Infinity.negative(), Infinity.positive()),
+            UnitRange(Infinity.NEGATIVE, Infinity.POSITIVE),
+            UnitRange(Infinity.NEGATIVE, Infinity.POSITIVE),
+            UnitRange(Infinity.NEGATIVE, Infinity.POSITIVE),
         ),
     ],
 )
-def test_unit_range_infinite_intersection(rng1, rng2, expected):
+def test_unit_range_unbounded_intersection(rng1, rng2, expected):
     result = rng1 & rng2
     assert result == expected
 
 
-def test_positive_infinity_range():
-    pos_inf_range = UnitRange(Infinity.positive(), Infinity.positive())
-    assert len(pos_inf_range) == 0
+@pytest.mark.parametrize(
+    "rng",
+    [
+        UnitRange(Infinity.NEGATIVE, 0),
+        UnitRange(0, Infinity.POSITIVE),
+        UnitRange(Infinity.NEGATIVE, Infinity.POSITIVE),
+    ],
+)
+def test_positive_infinite_range_len(rng):
+    with pytest.raises(ValueError, match=r".*open.*"):
+        len(rng)
 
 
-def test_mixed_infinity_range():
-    mixed_inf_range = UnitRange(Infinity.negative(), Infinity.positive())
-    assert len(mixed_inf_range) == Infinity.positive()
+def test_range_contains():
+    assert 1 in UnitRange(0, 2)
+    assert 1 not in UnitRange(0, 1)
+    assert 1 in UnitRange(0, Infinity.POSITIVE)
+    assert 1 in UnitRange(Infinity.NEGATIVE, 2)
+    assert 1 in UnitRange(Infinity.NEGATIVE, Infinity.POSITIVE)
+    assert "s" not in UnitRange(Infinity.NEGATIVE, Infinity.POSITIVE)
 
 
 @pytest.mark.parametrize(
     "op, rng1, rng2, expected",
     [
         (operator.le, UnitRange(-1, 2), UnitRange(-2, 3), True),
-        (operator.le, UnitRange(-1, 2), {-1, 0, 1}, True),
-        (operator.le, UnitRange(-1, 2), {-1, 0}, False),
-        (operator.le, UnitRange(-1, 2), {-2, -1, 0, 1, 2}, True),
-        (operator.le, UnitRange(Infinity.negative(), 2), UnitRange(Infinity.negative(), 3), True),
-        (operator.le, UnitRange(Infinity.negative(), 2), {1, 2, 3}, False),
+        (operator.le, UnitRange(Infinity.NEGATIVE, 2), UnitRange(Infinity.NEGATIVE, 3), True),
+        (operator.ge, UnitRange(-2, 3), UnitRange(-1, 2), True),
+        (operator.ge, UnitRange(Infinity.NEGATIVE, 3), UnitRange(Infinity.NEGATIVE, 2), True),
+        (operator.lt, UnitRange(-1, 2), UnitRange(-2, 2), True),
+        (operator.lt, UnitRange(-2, 1), UnitRange(-2, 2), True),
+        (operator.lt, UnitRange(Infinity.NEGATIVE, 2), UnitRange(Infinity.NEGATIVE, 3), True),
+        (operator.gt, UnitRange(-2, 2), UnitRange(-1, 2), True),
+        (operator.gt, UnitRange(-2, 2), UnitRange(-2, 1), True),
+        (operator.gt, UnitRange(Infinity.NEGATIVE, 3), UnitRange(Infinity.NEGATIVE, 2), True),
+        (operator.eq, UnitRange(Infinity.NEGATIVE, 2), UnitRange(Infinity.NEGATIVE, 2), True),
+        (operator.ne, UnitRange(Infinity.NEGATIVE, 2), UnitRange(Infinity.NEGATIVE, 3), True),
+        (operator.ne, UnitRange(Infinity.NEGATIVE, 2), UnitRange(Infinity.NEGATIVE, 2), False),
     ],
 )
 def test_range_comparison(op, rng1, rng2, expected):
@@ -168,12 +243,7 @@ def test_range_comparison(op, rng1, rng2, expected):
 
 
 @pytest.mark.parametrize(
-    "named_rng_like",
-    [
-        (IDim, (2, 4)),
-        (IDim, range(2, 4)),
-        (IDim, UnitRange(2, 4)),
-    ],
+    "named_rng_like", [(IDim, (2, 4)), (IDim, range(2, 4)), (IDim, UnitRange(2, 4))]
 )
 def test_named_range_like(named_rng_like):
     assert named_range(named_rng_like) == (IDim, UnitRange(2, 4))
@@ -181,6 +251,20 @@ def test_named_range_like(named_rng_like):
 
 def test_domain_length(a_domain):
     assert len(a_domain) == 3
+
+
+@pytest.mark.parametrize(
+    "empty_domain, expected",
+    [
+        (Domain(), False),
+        (Domain(NamedRange(IDim, UnitRange(0, 10))), False),
+        (Domain(NamedRange(IDim, UnitRange(0, 0))), True),
+        (Domain(NamedRange(IDim, UnitRange(0, 0)), NamedRange(JDim, UnitRange(0, 1))), True),
+        (Domain(NamedRange(IDim, UnitRange(0, 1)), NamedRange(JDim, UnitRange(0, 0))), True),
+    ],
+)
+def test_empty_domain(empty_domain, expected):
+    assert empty_domain.is_empty() == expected
 
 
 @pytest.mark.parametrize(
@@ -280,11 +364,7 @@ def test_domain_slice_indexing(a_domain, slice_obj, expected):
 
 
 @pytest.mark.parametrize(
-    "index, expected_result",
-    [
-        (JDim, (JDim, UnitRange(5, 15))),
-        (KDim, (KDim, UnitRange(20, 30))),
-    ],
+    "index, expected_result", [(JDim, (JDim, UnitRange(5, 15))), (KDim, (KDim, UnitRange(20, 30)))]
 )
 def test_domain_dimension_indexing(a_domain, index, expected_result):
     result = a_domain[index]
@@ -320,6 +400,41 @@ def test_domain_dims_ranges_length_mismatch():
         Domain(dims=dims, ranges=ranges)
 
 
+def test_domain_slice_at():
+    # Create a sample domain
+    domain = Domain(
+        NamedRange(IDim, UnitRange(0, 10)),
+        NamedRange(JDim, UnitRange(5, 15)),
+        NamedRange(KDim, UnitRange(20, 30)),
+    )
+
+    # Test indexing with slices
+    result = domain.slice_at[slice(2, 5), slice(5, 7), slice(7, 10)]
+    expected_result = Domain(
+        NamedRange(IDim, UnitRange(2, 5)),
+        NamedRange(JDim, UnitRange(10, 12)),
+        NamedRange(KDim, UnitRange(27, 30)),
+    )
+    assert result == expected_result
+
+    # Test indexing with out-of-range slices
+    result = domain.slice_at[slice(2, 15), slice(5, 7), slice(7, 10)]
+    expected_result = Domain(
+        NamedRange(IDim, UnitRange(2, 10)),
+        NamedRange(JDim, UnitRange(10, 12)),
+        NamedRange(KDim, UnitRange(27, 30)),
+    )
+    assert result == expected_result
+
+    # Test indexing with incorrect types
+    with pytest.raises(TypeError):
+        domain.slice_at["a", 7, 25]
+
+    # Test indexing with incorrect number of indices
+    with pytest.raises(ValueError, match="not match the number of dimensions"):
+        domain.slice_at[slice(2, 5), slice(7, 10)]
+
+
 def test_domain_dim_index():
     dims = [Dimension("X"), Dimension("Y"), Dimension("Z")]
     ranges = [UnitRange(0, 1), UnitRange(0, 1), UnitRange(0, 1)]
@@ -348,89 +463,92 @@ def test_domain_pop():
         # Valid index and named ranges
         (
             0,
-            [(Dimension("X"), UnitRange(100, 110))],
+            [NamedRange(Dimension("X"), UnitRange(100, 110))],
             Domain(
-                (Dimension("I"), UnitRange(0, 10)),
-                (Dimension("J"), UnitRange(0, 10)),
-                (Dimension("K"), UnitRange(0, 10)),
+                NamedRange(Dimension("I"), UnitRange(0, 10)),
+                NamedRange(Dimension("J"), UnitRange(0, 10)),
+                NamedRange(Dimension("K"), UnitRange(0, 10)),
             ),
             Domain(
-                (Dimension("X"), UnitRange(100, 110)),
-                (Dimension("J"), UnitRange(0, 10)),
-                (Dimension("K"), UnitRange(0, 10)),
+                NamedRange(Dimension("X"), UnitRange(100, 110)),
+                NamedRange(Dimension("J"), UnitRange(0, 10)),
+                NamedRange(Dimension("K"), UnitRange(0, 10)),
             ),
         ),
         (
             1,
-            [(Dimension("X"), UnitRange(100, 110))],
+            [NamedRange(Dimension("X"), UnitRange(100, 110))],
             Domain(
-                (Dimension("I"), UnitRange(0, 10)),
-                (Dimension("J"), UnitRange(0, 10)),
-                (Dimension("K"), UnitRange(0, 10)),
+                NamedRange(Dimension("I"), UnitRange(0, 10)),
+                NamedRange(Dimension("J"), UnitRange(0, 10)),
+                NamedRange(Dimension("K"), UnitRange(0, 10)),
             ),
             Domain(
-                (Dimension("I"), UnitRange(0, 10)),
-                (Dimension("X"), UnitRange(100, 110)),
-                (Dimension("K"), UnitRange(0, 10)),
+                NamedRange(Dimension("I"), UnitRange(0, 10)),
+                NamedRange(Dimension("X"), UnitRange(100, 110)),
+                NamedRange(Dimension("K"), UnitRange(0, 10)),
             ),
         ),
         (
             -1,
-            [(Dimension("X"), UnitRange(100, 110))],
+            [NamedRange(Dimension("X"), UnitRange(100, 110))],
             Domain(
-                (Dimension("I"), UnitRange(0, 10)),
-                (Dimension("J"), UnitRange(0, 10)),
-                (Dimension("K"), UnitRange(0, 10)),
+                NamedRange(Dimension("I"), UnitRange(0, 10)),
+                NamedRange(Dimension("J"), UnitRange(0, 10)),
+                NamedRange(Dimension("K"), UnitRange(0, 10)),
             ),
             Domain(
-                (Dimension("I"), UnitRange(0, 10)),
-                (Dimension("J"), UnitRange(0, 10)),
-                (Dimension("X"), UnitRange(100, 110)),
+                NamedRange(Dimension("I"), UnitRange(0, 10)),
+                NamedRange(Dimension("J"), UnitRange(0, 10)),
+                NamedRange(Dimension("X"), UnitRange(100, 110)),
             ),
         ),
         (
             Dimension("J"),
-            [(Dimension("X"), UnitRange(100, 110)), (Dimension("Z"), UnitRange(100, 110))],
+            [
+                NamedRange(Dimension("X"), UnitRange(100, 110)),
+                NamedRange(Dimension("Z"), UnitRange(100, 110)),
+            ],
             Domain(
-                (Dimension("I"), UnitRange(0, 10)),
-                (Dimension("J"), UnitRange(0, 10)),
-                (Dimension("K"), UnitRange(0, 10)),
+                NamedRange(Dimension("I"), UnitRange(0, 10)),
+                NamedRange(Dimension("J"), UnitRange(0, 10)),
+                NamedRange(Dimension("K"), UnitRange(0, 10)),
             ),
             Domain(
-                (Dimension("I"), UnitRange(0, 10)),
-                (Dimension("X"), UnitRange(100, 110)),
-                (Dimension("Z"), UnitRange(100, 110)),
-                (Dimension("K"), UnitRange(0, 10)),
+                NamedRange(Dimension("I"), UnitRange(0, 10)),
+                NamedRange(Dimension("X"), UnitRange(100, 110)),
+                NamedRange(Dimension("Z"), UnitRange(100, 110)),
+                NamedRange(Dimension("K"), UnitRange(0, 10)),
             ),
         ),
         # Invalid indices
         (
             3,
-            [(Dimension("X"), UnitRange(100, 110))],
+            [NamedRange(Dimension("X"), UnitRange(100, 110))],
             Domain(
-                (Dimension("I"), UnitRange(0, 10)),
-                (Dimension("J"), UnitRange(0, 10)),
-                (Dimension("K"), UnitRange(0, 10)),
+                NamedRange(Dimension("I"), UnitRange(0, 10)),
+                NamedRange(Dimension("J"), UnitRange(0, 10)),
+                NamedRange(Dimension("K"), UnitRange(0, 10)),
             ),
             IndexError,
         ),
         (
             -4,
-            [(Dimension("X"), UnitRange(100, 110))],
+            [NamedRange(Dimension("X"), UnitRange(100, 110))],
             Domain(
-                (Dimension("I"), UnitRange(0, 10)),
-                (Dimension("J"), UnitRange(0, 10)),
-                (Dimension("K"), UnitRange(0, 10)),
+                NamedRange(Dimension("I"), UnitRange(0, 10)),
+                NamedRange(Dimension("J"), UnitRange(0, 10)),
+                NamedRange(Dimension("K"), UnitRange(0, 10)),
             ),
             IndexError,
         ),
         (
             Dimension("Foo"),
-            [(Dimension("X"), UnitRange(100, 110))],
+            [NamedRange(Dimension("X"), UnitRange(100, 110))],
             Domain(
-                (Dimension("I"), UnitRange(0, 10)),
-                (Dimension("J"), UnitRange(0, 10)),
-                (Dimension("K"), UnitRange(0, 10)),
+                NamedRange(Dimension("I"), UnitRange(0, 10)),
+                NamedRange(Dimension("J"), UnitRange(0, 10)),
+                NamedRange(Dimension("K"), UnitRange(0, 10)),
             ),
             ValueError,
         ),
@@ -491,3 +609,25 @@ def test_dimension_promotion(
             promote_dims(*dim_list)
 
         assert exc_info.match(expected_error_msg)
+
+
+class TestCartesianConnectivity:
+    def test_for_translation(self):
+        offset = 5
+        I = common.Dimension("I")
+
+        result = common.CartesianConnectivity.for_translation(I, offset)
+        assert isinstance(result, common.CartesianConnectivity)
+        assert result.domain_dim == I
+        assert result.codomain == I
+        assert result.offset == offset
+
+    def test_for_relocation(self):
+        I = common.Dimension("I")
+        I_half = common.Dimension("I_half")
+
+        result = common.CartesianConnectivity.for_relocation(I, I_half)
+        assert isinstance(result, common.CartesianConnectivity)
+        assert result.domain_dim == I_half
+        assert result.codomain == I
+        assert result.offset == 0

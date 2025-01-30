@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -28,13 +22,27 @@ import gt4py.next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import Self
-from gt4py.next import common, constructors, utils
+from gt4py.next import (
+    allocators as next_allocators,
+    backend as next_backend,
+    common,
+    constructors,
+    field_utils,
+    utils as gt_utils,
+)
 from gt4py.next.ffront import decorator
-from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (  # noqa: F401 #  fixture and aliases
+from next_tests import definitions as test_definitions
+from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (  # noqa: F401 [unused-import]
+    C2E,
+    C2V,
+    E2V,
+    V2E,
+    C2EDim,
+    C2VDim,
     Cell,
+    E2VDim,
     Edge,
     IDim,
     Ioff,
@@ -42,9 +50,10 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     Joff,
     KDim,
     Koff,
+    V2EDim,
     Vertex,
-    fieldview_backend,
-    reduction_setup,
+    exec_alloc_descriptor,
+    mesh_descriptor,
 )
 
 
@@ -60,19 +69,10 @@ IKFloatField: TypeAlias = gtx.Field[[IDim, KDim], np.float64]  # type: ignore [v
 IJKField: TypeAlias = gtx.Field[[IDim, JDim, KDim], np.int32]  # type: ignore [valid-type]
 IJKFloatField: TypeAlias = gtx.Field[[IDim, JDim, KDim], np.float64]  # type: ignore [valid-type]
 VField: TypeAlias = gtx.Field[[Vertex], np.int32]  # type: ignore [valid-type]
+VBoolField: TypeAlias = gtx.Field[[Vertex], bool]  # type: ignore [valid-type]
 EField: TypeAlias = gtx.Field[[Edge], np.int32]  # type: ignore [valid-type]
 CField: TypeAlias = gtx.Field[[Cell], np.int32]  # type: ignore [valid-type]
 EmptyField: TypeAlias = gtx.Field[[], np.int32]  # type: ignore [valid-type]
-
-# TODO(ricoh): unify the following with the `ffront_test_utils.reduction_setup`
-#   fixture if `ffront_test_utils.reduction_setup` is not completely superseded
-#   by `unstructured_case`.
-V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
-E2VDim = gtx.Dimension("E2V", kind=gtx.DimensionKind.LOCAL)
-C2EDim = gtx.Dimension("C2E", kind=common.DimensionKind.LOCAL)
-V2E = gtx.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
-E2V = gtx.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
-C2E = gtx.FieldOffset("C2E", source=Edge, target=(Cell, C2EDim))
 
 ScalarValue: TypeAlias = core_defs.Scalar
 FieldValue: TypeAlias = gtx.Field
@@ -94,8 +94,7 @@ RETURN = "return"
 
 class DataInitializer(Protocol):
     @property
-    def scalar_value(self) -> ScalarValue:
-        ...
+    def scalar_value(self) -> ScalarValue: ...
 
     def scalar(self, dtype: np.typing.DTypeLike) -> ScalarValue:
         # some unlikely numpy dtypes are picky about arguments
@@ -103,11 +102,10 @@ class DataInitializer(Protocol):
 
     def field(
         self,
-        backend: ppi.ProgramProcessor,
+        allocator: next_allocators.FieldBufferAllocatorProtocol,
         sizes: dict[gtx.Dimension, int],
         dtype: np.typing.DTypeLike,
-    ) -> FieldValue:
-        ...
+    ) -> FieldValue: ...
 
     def from_case(
         self: Self,
@@ -127,7 +125,7 @@ class ConstInitializer(DataInitializer):
     def __init__(self, value: ScalarValue):
         if not core_defs.is_scalar_type(value):
             raise ValueError(
-                "`ConstInitializer` can not be used with non-scalars. Use `Case.as_field` instead."
+                "'ConstInitializer' can not be used with non-scalars. Use 'Case.as_field' instead."
             )
         self.value = value
 
@@ -137,15 +135,12 @@ class ConstInitializer(DataInitializer):
 
     def field(
         self,
-        backend: ppi.ProgramExecutor,
+        allocator: next_allocators.FieldBufferAllocatorProtocol,
         sizes: dict[gtx.Dimension, int],
         dtype: np.typing.DTypeLike,
     ) -> FieldValue:
         return constructors.full(
-            domain=common.domain(sizes),
-            fill_value=self.value,
-            dtype=dtype,
-            allocator=backend,
+            domain=common.domain(sizes), fill_value=self.value, dtype=dtype, allocator=allocator
         )
 
 
@@ -162,21 +157,21 @@ class IndexInitializer(DataInitializer):
 
     @property
     def scalar_value(self) -> ScalarValue:
-        raise AttributeError("`scalar_value` not supported in `IndexInitializer`.")
+        raise AttributeError("'scalar_value' not supported in 'IndexInitializer'.")
 
     def field(
         self,
-        backend: ppi.ProgramExecutor,
+        allocator: next_allocators.FieldBufferAllocatorProtocol,
         sizes: dict[gtx.Dimension, int],
         dtype: np.typing.DTypeLike,
     ) -> FieldValue:
         if len(sizes) > 1:
             raise ValueError(
-                f"`IndexInitializer` only supports fields with a single `Dimension`, got {sizes}."
+                f"'IndexInitializer' only supports fields with a single 'Dimension', got {sizes}."
             )
         n_data = list(sizes.values())[0]
         return constructors.as_field(
-            domain=common.domain(sizes), data=np.arange(0, n_data, dtype=dtype), allocator=backend
+            domain=common.domain(sizes), data=np.arange(0, n_data, dtype=dtype), allocator=allocator
         )
 
     def from_case(
@@ -197,17 +192,17 @@ class UniqueInitializer(DataInitializer):
     data containers.
     """
 
-    start: int = 0
+    start: int = 1
 
     @property
     def scalar_value(self) -> ScalarValue:
         start = self.start
         self.start += 1
-        return np.int64(start)
+        return start
 
     def field(
         self,
-        backend: ppi.ProgramProcessor,
+        allocator: next_allocators.FieldBufferAllocatorProtocol,
         sizes: dict[gtx.Dimension, int],
         dtype: np.typing.DTypeLike,
     ) -> FieldValue:
@@ -218,7 +213,7 @@ class UniqueInitializer(DataInitializer):
         return constructors.as_field(
             common.domain(sizes),
             np.arange(start, start + n_data, dtype=dtype).reshape(svals),
-            allocator=backend,
+            allocator=allocator,
         )
 
     def from_case(
@@ -244,26 +239,23 @@ class Builder:
         return self.partial(*args, **kwargs)
 
     def __getattr__(self, name: str) -> Any:
-        raise AttributeError(f"No setter for argument {name}.")
+        raise AttributeError(f"No setter for argument '{name}'.")
 
 
 @typing.overload
-def make_builder(*args: Callable) -> Callable[..., Builder]:
-    ...
+def make_builder(*args: Callable) -> Callable[..., Builder]: ...
 
 
 @typing.overload
 def make_builder(
     *args: Literal[None], **kwargs: dict[str, Any]
-) -> Callable[[Callable], Callable[..., Builder]]:
-    ...
+) -> Callable[[Callable], Callable[..., Builder]]: ...
 
 
 @typing.overload
 def make_builder(
     *args: Optional[Callable], **kwargs: dict[str, Any]
-) -> Callable[[Callable], Callable[..., Builder]] | Callable[..., Builder]:
-    ...
+) -> Callable[[Callable], Callable[..., Builder]] | Callable[..., Builder]: ...
 
 
 # TODO(ricoh): Think about improving the type hints using `typing.ParamSpec`.
@@ -304,8 +296,7 @@ def make_builder(
         argspec = inspect.getfullargspec(func)
 
         @dataclasses.dataclass(frozen=True)
-        class NewBuilder(Builder):
-            ...
+        class NewBuilder(Builder): ...
 
         for argname in argspec.args + argspec.kwonlyargs:
             setattr(NewBuilder, argname, make_setter(argname))
@@ -323,7 +314,7 @@ def make_builder(
     if 0 < len(args) <= 1 and args[0] is not None:
         return make_builder_inner(args[0])
     if len(args) > 1:
-        raise ValueError(f"make_builder takes only one positional argument, {len(args)} received!")
+        raise ValueError(f"make_builder takes only one positional argument, {len(args)} received.")
     return make_builder_inner
 
 
@@ -390,6 +381,7 @@ def verify(
     fieldview_prog: decorator.FieldOperator | decorator.Program,
     *args: FieldViewArg,
     ref: ReferenceValue,
+    domain: Optional[dict[common.Dimension, tuple[int, int]]] = None,
     out: Optional[FieldViewInout] = None,
     inout: Optional[FieldViewInout] = None,
     offset_provider: Optional[OffsetProvider] = None,
@@ -414,6 +406,8 @@ def verify(
             or tuple of fields here and they will be compared to ``ref`` under
             the assumption that the fieldview code stores its results in
             them.
+        domain: If given will be passed to the fieldview code as ``domain=``
+            keyword argument.
         offset_provider: An override for the test case's offset_provider.
             Use with care!
         comparison: A comparison function, which will be called as
@@ -423,21 +417,18 @@ def verify(
     used as an argument to the fieldview program and compared against ``ref``.
     Else, ``inout`` will not be passed and compared to ``ref``.
     """
+    kwargs = {}
     if out:
-        run(
-            case,
-            fieldview_prog,
-            *args,
-            out=out,
-            offset_provider=offset_provider,
-        )
-    else:
-        run(case, fieldview_prog, *args, offset_provider=offset_provider)
+        kwargs["out"] = out
+    if domain:
+        kwargs["domain"] = domain
+
+    run(case, fieldview_prog, *args, **kwargs, offset_provider=offset_provider)
 
     out_comp = out or inout
     assert out_comp is not None
-    out_comp_ndarray = utils.asnumpy(out_comp)
-    ref_ndarray = utils.asnumpy(ref)
+    out_comp_ndarray = field_utils.asnumpy(out_comp)
+    ref_ndarray = field_utils.asnumpy(ref)
     assert comparison(ref_ndarray, out_comp_ndarray), (
         f"Verification failed:\n"
         f"\tcomparison={comparison.__name__}(ref, out)\n"
@@ -467,7 +458,9 @@ def verify_with_default_data(
             ``comparison(ref, <out | inout>)`` and should return a boolean.
     """
     inps, kwfields = get_default_data(case, fieldop)
-    ref_args = tuple(i.asnumpy() if common.is_field(i) else i for i in inps)
+    ref_args: tuple = gt_utils.tree_map(
+        lambda x: x.asnumpy() if isinstance(x, common.Field) else x
+    )(inps)
     verify(
         case,
         fieldop,
@@ -480,27 +473,50 @@ def verify_with_default_data(
 
 
 @pytest.fixture
-def cartesian_case(fieldview_backend):  # noqa: F811 # fixtures
+def cartesian_case(
+    exec_alloc_descriptor: test_definitions.EmbeddedDummyBackend | next_backend.Backend,
+):
     yield Case(
-        fieldview_backend,
-        offset_provider={"Ioff": IDim, "Joff": JDim, "Koff": KDim},
+        None
+        if isinstance(exec_alloc_descriptor, test_definitions.EmbeddedDummyBackend)
+        else exec_alloc_descriptor,
+        offset_provider={
+            "Ioff": IDim,
+            "Joff": JDim,
+            "Koff": KDim,
+        },
         default_sizes={IDim: 10, JDim: 10, KDim: 10},
         grid_type=common.GridType.CARTESIAN,
+        allocator=exec_alloc_descriptor.allocator,
     )
 
 
 @pytest.fixture
-def unstructured_case(reduction_setup, fieldview_backend):  # noqa: F811 # fixtures
+def unstructured_case(
+    mesh_descriptor,
+    exec_alloc_descriptor: test_definitions.EmbeddedDummyBackend | next_backend.Backend,
+):
     yield Case(
-        fieldview_backend,
-        offset_provider=reduction_setup.offset_provider,
+        None
+        if isinstance(exec_alloc_descriptor, test_definitions.EmbeddedDummyBackend)
+        else exec_alloc_descriptor,
+        offset_provider=mesh_descriptor.offset_provider,
         default_sizes={
-            Vertex: reduction_setup.num_vertices,
-            Edge: reduction_setup.num_edges,
-            Cell: reduction_setup.num_cells,
-            KDim: reduction_setup.k_levels,
+            Vertex: mesh_descriptor.num_vertices,
+            Edge: mesh_descriptor.num_edges,
+            Cell: mesh_descriptor.num_cells,
         },
         grid_type=common.GridType.UNSTRUCTURED,
+        allocator=exec_alloc_descriptor.allocator,
+    )
+
+
+@pytest.fixture
+def unstructured_case_3d(unstructured_case):
+    return dataclasses.replace(
+        unstructured_case,
+        default_sizes={**unstructured_case.default_sizes, KDim: 10},
+        offset_provider={**unstructured_case.offset_provider, "KOff": KDim},
     )
 
 
@@ -516,7 +532,7 @@ def _allocate_from_type(
     match arg_type:
         case ts.FieldType(dims=dims, dtype=arg_dtype):
             return strategy.field(
-                backend=case.backend,
+                allocator=case.allocator,
                 sizes={dim: sizes[dim] for dim in dims},
                 dtype=dtype or arg_dtype.kind.name.lower(),
             )
@@ -533,7 +549,7 @@ def _allocate_from_type(
             )
         case _:
             raise TypeError(
-                f"Can not allocate for type {arg_type} with initializer {strategy or 'default'}"
+                f"Can not allocate for type '{arg_type}' with initializer '{strategy or 'default'}'."
             )
 
 
@@ -542,7 +558,7 @@ def get_param_types(
 ) -> dict[str, ts.TypeSpec]:
     if fieldview_prog.definition is None:
         raise ValueError(
-            f"test cases do not support {type(fieldview_prog)} with empty .definition attribute (as you would get from .as_program())!"
+            f"test cases do not support '{type(fieldview_prog)}' with empty .definition attribute (as you would get from .as_program())."
         )
     annotations = xtyping.get_type_hints(fieldview_prog.definition)
     return {
@@ -559,12 +575,11 @@ def get_param_size(param_type: ts.TypeSpec, sizes: dict[gtx.Dimension, int]) -> 
         case ts.TupleType(types):
             return sum([get_param_size(t, sizes=sizes) for t in types])
         case _:
-            raise TypeError(f"Can not get size for parameter of type {param_type}")
+            raise TypeError(f"Can not get size for parameter of type '{param_type}'.")
 
 
 def extend_sizes(
-    sizes: dict[gtx.Dimension, int],
-    extend: Optional[dict[gtx.Dimension, tuple[int, int]]] = None,
+    sizes: dict[gtx.Dimension, int], extend: Optional[dict[gtx.Dimension, tuple[int, int]]] = None
 ) -> dict[gtx.Dimension, int]:
     """Calculate the sizes per dimension given a set of extensions."""
     sizes = sizes.copy()
@@ -575,8 +590,7 @@ def extend_sizes(
 
 
 def get_default_data(
-    case: Case,
-    fieldview_prog: decorator.FieldOperator | decorator.Program,
+    case: Case, fieldview_prog: decorator.FieldOperator | decorator.Program
 ) -> tuple[tuple[gtx.Field | ScalarValue | tuple, ...], dict[str, gtx.Field]]:
     """
     Allocate default data for a fieldview code object given a test case.
@@ -601,11 +615,12 @@ def get_default_data(
 class Case:
     """Parametrizable components for single feature integration tests."""
 
-    backend: ppi.ProgramProcessor
+    backend: Optional[next_backend.Backend]
     offset_provider: dict[str, common.Connectivity | gtx.Dimension]
     default_sizes: dict[gtx.Dimension, int]
     grid_type: common.GridType
+    allocator: next_allocators.FieldBufferAllocatorFactoryProtocol
 
     @property
     def as_field(self):
-        return constructors.as_field.partial(allocator=self.backend)
+        return constructors.as_field.partial(allocator=self.allocator)

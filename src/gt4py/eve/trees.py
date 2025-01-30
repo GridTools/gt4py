@@ -1,19 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """Iterator utils."""
-
 
 from __future__ import annotations
 
@@ -38,14 +31,6 @@ from .extended_typing import (
 from .type_definitions import Enum
 
 
-try:
-    # For perfomance reasons, try to use cytoolz when possible (using cython)
-    import cytoolz as toolz
-except ModuleNotFoundError:
-    # Fall back to pure Python toolz
-    import toolz  # noqa: F401  # imported but unused
-
-
 TreeKey = Union[int, str]
 
 
@@ -53,7 +38,7 @@ if TYPE_CHECKING:
     TreeLike = Any
 else:
 
-    class TreeLike(abc.ABC):  # noqa: B024
+    class TreeLike(abc.ABC):  # noqa: B024 [abstract-base-class-without-abstract-method]
         ...
 
 
@@ -62,12 +47,10 @@ TreeLikeT = TypeVar("TreeLikeT", bound=TreeLike)
 
 class Tree(Protocol):
     @abc.abstractmethod
-    def iter_children_values(self) -> Iterable:
-        ...
+    def iter_children_values(self) -> Iterable: ...
 
     @abc.abstractmethod
-    def iter_children_items(self) -> Iterable[Tuple[TreeKey, Any]]:
-        ...
+    def iter_children_items(self) -> Iterable[Tuple[TreeKey, Any]]: ...
 
 
 TreeLike.register(Tree)
@@ -133,7 +116,7 @@ def _pre_walk_items(
         yield from _pre_walk_items(child, __key__=key)
 
 
-def _pre_walk_values(node: TreeLike) -> Iterable[Tuple[Any]]:
+def _pre_walk_values(node: TreeLike) -> Iterable:
     """Create a pre-order tree traversal iterator of values."""
     yield node
     for child in iter_children_values(node):
@@ -153,7 +136,7 @@ def _post_walk_items(
     yield __key__, node
 
 
-def _post_walk_values(node: TreeLike) -> Iterable[Tuple[Any]]:
+def _post_walk_values(node: TreeLike) -> Iterable:
     """Create a post-order tree traversal iterator of values."""
     if (iter_children_values := getattr(node, "iter_children_values", None)) is not None:
         for child in iter_children_values():

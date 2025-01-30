@@ -2,6 +2,65 @@
 
 Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
+## [1.0.4] - 2024-09-20
+
+### License
+
+GT4Py is now licensed under the BSD license. SPDX-License-Identifier: BSD-3-Clause
+
+### Cartesian
+
+- Introduced a `GlobalTable` which is a data dimensions only Field. Access is provided via `.A` which also becomes a way to access data dimensions on regular Field.
+- Added an error message if a non existing backend is selected.
+- Allow setting compiler optimization level and flags on a per stencil basis
+- Added `GT4PY_EXTRA_COMPILE_ARGS`, `GT4PY_EXTRA_LINK_ARGS` and `DACE_DEFAULT_BLOCK_SIZE` environment variables
+- Fixes for the DaCe backend
+- Various style modernizations
+
+#### Deprecation
+
+- The `cuda` backend is deprecated (enable by setting environment variable `GT4PY_GTC_CUDA_USE=1`), use `gt:gpu` or `dace:gpu` instead.
+
+### Development
+
+- Replaced flake8, black with ruff
+- Added CI plan with GH200 GPUs
+
+### Next
+
+See commit history.
+
+## [1.0.3] - 2024-02-07
+
+### General
+
+- Support for Python 3.11 and updated dependencies
+
+### Testing
+
+- Testing of Jupyter notebooks in CI
+
+### Next
+
+See commit history.
+
+## [1.0.2] - 2024-01-24
+
+### Cartesian
+
+- Compatibility of `gt4py.next` Fields with `gt4py.cartesian` computations.
+- Fixes for DaCe 0.15.1 compatibility.
+- Added `log10` as native function.
+- Make `scipy` optional: get `scipy` by installing `gt4py[full]` for best performance with `numpy` backend.
+
+### Storage
+
+- Refactored low-level storage allocation.
+
+### Next
+
+See commit history.
+
 ## [1.0.1] - 2023-02-20
 
 First version including the experimental `gt4py.next` aka _Declarative GT4Py_. The `gt4py.next` package is excluded from semantic versioning.

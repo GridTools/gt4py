@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -18,6 +12,9 @@ import dataclasses
 import pathlib
 from typing import Protocol, TypeVar
 
+import factory
+
+from gt4py.next import config
 from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.compilation import build_data, cache, importer
 from gt4py.next.otf.step_types import LS, SrcL, TgtL
@@ -40,9 +37,8 @@ class BuildSystemProjectGenerator(Protocol[SrcL, LS, TgtL]):
     def __call__(
         self,
         source: stages.CompilableSource[SrcL, LS, TgtL],
-        cache_strategy: cache.Strategy,
-    ) -> stages.BuildSystemProject[SrcL, LS, TgtL]:
-        ...
+        cache_lifetime: config.BuildCacheLifetime,
+    ) -> stages.BuildSystemProject[SrcL, LS, TgtL]: ...
 
 
 @dataclasses.dataclass(frozen=True)
@@ -59,7 +55,7 @@ class Compiler(
 ):
     """Use any build system (via configured factory) to compile a GT4Py program to a ``gt4py.next.otf.stages.CompiledProgram``."""
 
-    cache_strategy: cache.Strategy
+    cache_lifetime: config.BuildCacheLifetime
     builder_factory: BuildSystemProjectGenerator[
         SourceLanguageType, LanguageSettingsType, languages.Python
     ]
@@ -68,25 +64,36 @@ class Compiler(
     def __call__(
         self,
         inp: stages.CompilableSource[SourceLanguageType, LanguageSettingsType, languages.Python],
-    ) -> stages.CompiledProgram:
-        src_dir = cache.get_cache_folder(inp, self.cache_strategy)
+    ) -> stages.ExtendedCompiledProgram:
+        src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
 
         data = build_data.read_data(src_dir)
 
         if not data or not is_compiled(data) or self.force_recompile:
-            self.builder_factory(inp, self.cache_strategy).build()
+            self.builder_factory(inp, self.cache_lifetime).build()
 
         new_data = build_data.read_data(src_dir)
 
         if not new_data or not is_compiled(new_data) or not module_exists(new_data, src_dir):
             raise CompilationError(
-                "On-the-fly compilation unsuccessful for {inp.source_module.entry_point.name}!"
+                f"On-the-fly compilation unsuccessful for '{inp.program_source.entry_point.name}'."
             )
 
-        return getattr(
+        compiled_prog = getattr(
             importer.import_from_path(src_dir / new_data.module), new_data.entry_point_name
         )
 
+        @dataclasses.dataclass(frozen=True)
+        class Wrapper(stages.ExtendedCompiledProgram):
+            implicit_domain: bool = inp.program_source.implicit_domain
+            __call__: stages.CompiledProgram = compiled_prog
 
-class CompilationError(RuntimeError):
-    ...
+        return Wrapper()
+
+
+class CompilerFactory(factory.Factory):
+    class Meta:
+        model = Compiler
+
+
+class CompilationError(RuntimeError): ...

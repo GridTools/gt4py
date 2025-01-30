@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """
 The list of exception classes used in the library.
@@ -61,7 +55,7 @@ class UnsupportedPythonFeatureError(DSLError):
     feature: str
 
     def __init__(self, location: Optional[SourceLocation], feature: str) -> None:
-        super().__init__(location, f"unsupported Python syntax: '{feature}'")
+        super().__init__(location, f"Unsupported Python syntax: '{feature}'.")
         self.feature = feature
 
 
@@ -69,7 +63,7 @@ class UndefinedSymbolError(DSLError):
     sym_name: str
 
     def __init__(self, location: Optional[SourceLocation], name: str) -> None:
-        super().__init__(location, f"name '{name}' is not defined")
+        super().__init__(location, f"Name '{name}' is not defined.")
         self.sym_name = name
 
 
@@ -77,8 +71,20 @@ class MissingAttributeError(DSLError):
     attr_name: str
 
     def __init__(self, location: Optional[SourceLocation], attr_name: str) -> None:
-        super().__init__(location, f"object does not have attribute '{attr_name}'")
+        super().__init__(location, f"Object does not have attribute '{attr_name}'.")
         self.attr_name = attr_name
+
+
+class MissingArgumentError(DSLError):
+    arg_name: str
+    is_kwarg: bool
+
+    def __init__(self, location: Optional[SourceLocation], arg_name: str, is_kwarg: bool) -> None:
+        super().__init__(
+            location, f"Expected {'keyword-' if is_kwarg else ''}argument '{arg_name}'."
+        )
+        self.attr_name = arg_name
+        self.is_kwarg = is_kwarg
 
 
 class TypeError_(DSLError):
@@ -90,7 +96,7 @@ class MissingParameterAnnotationError(TypeError_):
     param_name: str
 
     def __init__(self, location: Optional[SourceLocation], param_name: str) -> None:
-        super().__init__(location, f"parameter '{param_name}' is missing type annotations")
+        super().__init__(location, f"Parameter '{param_name}' is missing type annotations.")
         self.param_name = param_name
 
 
@@ -100,7 +106,7 @@ class InvalidParameterAnnotationError(TypeError_):
 
     def __init__(self, location: Optional[SourceLocation], param_name: str, type_: Any) -> None:
         super().__init__(
-            location, f"parameter '{param_name}' has invalid type annotation '{type_}'"
+            location, f"Parameter '{param_name}' has invalid type annotation '{type_}'."
         )
         self.param_name = param_name
         self.annotated_type = type_

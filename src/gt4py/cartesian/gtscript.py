@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """Implementation of GTScript: an embedded DSL in Python for stencil computations.
 
@@ -22,7 +16,7 @@ import collections
 import inspect
 import numbers
 import types
-from typing import Callable, Dict, Optional, Type
+from typing import Callable, Dict, Type
 
 import numpy as np
 
@@ -94,7 +88,7 @@ builtins = {
 
 IGNORE_WHEN_INLINING = {*MATH_BUILTINS, "compile_assert"}
 
-__all__ = list(builtins) + ["function", "stencil", "lazy_stencil"]
+__all__ = [*list(builtins), "function", "stencil", "lazy_stencil"]
 
 __externals__ = "Placeholder"
 __gtscript__ = "Placeholder"
@@ -485,7 +479,7 @@ class AxisIndex:
     def __eq__(self, other):
         return repr(self) == repr(other)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.axis}[{self.index}] + {self.offset}"
 
     def __add__(self, offset: int):
@@ -516,7 +510,7 @@ class AxisInterval:
     def __repr__(self):
         return f"AxisInterval(axis={self.axis}, start={self.start}, end={self.end})"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.axis}[{self.start}:{self.end}]"
 
     def __len__(self):
@@ -532,7 +526,7 @@ class ShiftedAxis:
     def __repr__(self):
         return f"ShiftedAxis(name={self.name}, shift={self.shift})"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.name}+{self.shift}"
 
     def __add__(self, shift):
@@ -559,7 +553,7 @@ class Axis:
     def __repr__(self):
         return f"Axis(name={self.name})"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
     def __getitem__(self, interval):
@@ -581,7 +575,7 @@ class Axis:
         return ShiftedAxis(self.name, -shift)
 
 
-I = Axis("I")
+I = Axis("I")  # noqa: E741 [ambiguous name]
 """I axes (parallel)."""
 
 J = Axis("J")
@@ -634,8 +628,8 @@ class _FieldDescriptor:
                     data_dims = dtype.shape
                 if dtype not in _VALID_DATA_TYPES:
                     raise ValueError("Invalid data type descriptor")
-            except:
-                raise ValueError("Invalid data type descriptor")
+            except ValueError as ex:
+                raise ValueError("Invalid data type descriptor") from ex
             self.dtype = np.dtype(dtype)
         self.axes = axes if isinstance(axes, collections.abc.Collection) else [axes]
         if data_dims:
@@ -651,10 +645,10 @@ class _FieldDescriptor:
         return None
 
     def __repr__(self):
-        args = f"dtype={repr(self.dtype)}, axes={repr(self.axes)}, data_dims={repr(self.data_dims)}"
+        args = f"dtype={self.dtype!r}, axes={self.axes!r}, data_dims={self.data_dims!r}"
         return f"_FieldDescriptor({args})"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return (
             f"Field<[{', '.join(str(ax) for ax in self.axes)}], ({self.dtype}, {self.data_dims})>"
         )
@@ -663,10 +657,8 @@ class _FieldDescriptor:
 class _FieldDescriptorMaker:
     @staticmethod
     def _is_axes_spec(spec) -> bool:
-        return (
-            isinstance(spec, Axis)
-            or isinstance(spec, collections.abc.Collection)
-            and all(isinstance(i, Axis) for i in spec)
+        return isinstance(spec, Axis) or (
+            isinstance(spec, collections.abc.Collection) and all(isinstance(i, Axis) for i in spec)
         )
 
     def __getitem__(self, field_spec):
@@ -674,14 +666,14 @@ class _FieldDescriptorMaker:
         data_dims = ()
 
         if isinstance(field_spec, str) or not isinstance(field_spec, collections.abc.Collection):
-            # Field[dtype]
+            # Field[dtype] # noqa: ERA001 [commented-out-code]
             dtype = field_spec
         elif _FieldDescriptorMaker._is_axes_spec(field_spec[0]):
-            # Field[axes, dtype]
+            # Field[axes, dtype] # noqa: ERA001 [commented-out-code]
             assert len(field_spec) == 2
             axes, dtype = field_spec
         elif len(field_spec) == 2 and not _FieldDescriptorMaker._is_axes_spec(field_spec[1]):
-            # Field[high_dimensional_dtype]
+            # Field[high_dimensional_dtype] # noqa: ERA001 [commented-out-code]
             dtype = field_spec
         else:
             raise ValueError("Invalid field type descriptor")
@@ -694,9 +686,22 @@ class _FieldDescriptorMaker:
         return _FieldDescriptor(dtype, axes, data_dims)
 
 
+class _GlobalTableDescriptorMaker(_FieldDescriptorMaker):
+    def __getitem__(self, field_spec):
+        if not isinstance(field_spec, collections.abc.Collection) and not len(field_spec) == 2:
+            raise ValueError("GlobalTable is defined by a tuple (type, [axes_size..])")
+
+        dtype, data_dims = field_spec
+
+        return _FieldDescriptor(dtype, [], data_dims)
+
+
 # GTScript builtins: variable annotations
 Field = _FieldDescriptorMaker()
 """Field descriptor."""
+
+GlobalTable = _GlobalTableDescriptorMaker()
+"""Data array with no spatial dimension descriptor."""
 
 
 class _SequenceDescriptor:
@@ -765,17 +770,17 @@ def compile_assert(expr):
 
 
 # GTScript builtins: math functions
-def abs(x):
+def abs(x):  # noqa: A001 [builtin-variable-shadowing]
     """Return the absolute value of the argument"""
     pass
 
 
-def min(x, y):
+def min(x, y):  # noqa: A001 [builtin-variable-shadowing]
     """Return the smallest of two or more arguments."""
     pass
 
 
-def max(x, y):
+def max(x, y):  # noqa: A001 [builtin-variable-shadowing]
     """Return the largest of two or more arguments."""
     pass
 

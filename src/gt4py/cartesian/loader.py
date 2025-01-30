@@ -1,22 +1,18 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """Implementation of stencil functions defined with symbolic Python functions.
 
 This module contains functions to generate callable objects implementing
 a high-level stencil function definition using a specific code generating backend.
 """
+
+from __future__ import annotations
 
 import types
 from typing import TYPE_CHECKING, Any, Dict, Type
@@ -37,8 +33,8 @@ def load_stencil(
     definition_func: StencilFunc,
     externals: Dict[str, Any],
     dtypes: Dict[Type, Type],
-    build_options: "BuildOptions",
-) -> Type["StencilObject"]:
+    build_options: BuildOptions,
+) -> Type[StencilObject]:
     """Generate a new class object implementing the provided definition."""
     # Load components
     backend_cls = gt_backend.from_name(backend_name)
@@ -63,10 +59,10 @@ def load_stencil(
 def gtscript_loader(
     definition_func: StencilFunc,
     backend: str,
-    build_options: "BuildOptions",
+    build_options: BuildOptions,
     externals: Dict[str, Any],
     dtypes: Dict[Type, Type],
-) -> "StencilObject":
+) -> StencilObject:
     if not isinstance(definition_func, types.FunctionType):
         raise ValueError("Invalid stencil definition object ({obj})".format(obj=definition_func))
 

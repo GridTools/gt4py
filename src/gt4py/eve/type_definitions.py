@@ -1,29 +1,22 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """Definitions of useful field and general types."""
-
 
 from __future__ import annotations
 
 import abc
 import re
 import sys
-from enum import Enum as Enum, IntEnum as IntEnum  # noqa: F401  # imported but unused
+from enum import Enum as Enum, IntEnum as IntEnum
 
-from boltons.typeutils import classproperty as classproperty  # noqa: F401
-from frozendict import frozendict as _frozendict  # noqa: F401
+from boltons.typeutils import classproperty as classproperty
+from frozendict import frozendict as _frozendict
 
 from .extended_typing import (
     Any,
@@ -43,7 +36,7 @@ _T = TypeVar("_T")
 _Tc = TypeVar("_Tc", covariant=True)
 
 
-class FrozenList(Tuple[_Tc, ...], metaclass=abc.ABCMeta):  # noqa: B024   # no abstract methods
+class FrozenList(Tuple[_Tc, ...], metaclass=abc.ABCMeta):
     """Tuple subtype which works as an alias of ``Tuple[_Tc, ...]``."""
 
     __slots__ = ()
@@ -98,7 +91,8 @@ class ConstrainedStr(str):
     class keyword argument or as class variable.
 
     Examples:
-        >>> class OnlyLetters(ConstrainedStr, regex=re.compile(r"^[a-zA-Z]*$")): pass
+        >>> class OnlyLetters(ConstrainedStr, regex=re.compile(r"^[a-zA-Z]*$")):
+        ...     pass
         >>> OnlyLetters("aabbCC")
         OnlyLetters('aabbCC')
 

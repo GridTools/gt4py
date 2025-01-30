@@ -1,60 +1,46 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
 import dataclasses
-import enum
 import pathlib
 import subprocess
 from typing import Optional
 
+from gt4py.next import config
 from gt4py.next.otf import languages, stages
 from gt4py.next.otf.compilation import build_data, cache, common, compiler
 from gt4py.next.otf.compilation.build_systems import cmake_lists
 
 
-class BuildType(enum.Enum):
-    def _generate_next_value_(name, start, count, last_values):
-        return "".join(part.capitalize() for part in name.split("_"))
-
-    DEBUG = enum.auto()
-    RELEASE = enum.auto()
-    REL_WITH_DEB_INFO = enum.auto()
-    MIN_SIZE_REL = enum.auto()
-
-
 @dataclasses.dataclass
 class CMakeFactory(
     compiler.BuildSystemProjectGenerator[
-        languages.Cpp | languages.Cuda, languages.LanguageWithHeaderFilesSettings, languages.Python
+        languages.CPP | languages.CUDA | languages.HIP,
+        languages.LanguageWithHeaderFilesSettings,
+        languages.Python,
     ]
 ):
     """Create a CMakeProject from a ``CompilableSource`` stage object with given CMake settings."""
 
     cmake_generator_name: str = "Ninja"
-    cmake_build_type: BuildType = BuildType.DEBUG
+    cmake_build_type: config.CMakeBuildType = config.CMakeBuildType.DEBUG
     cmake_extra_flags: Optional[list[str]] = None
 
     def __call__(
         self,
         source: stages.CompilableSource[
-            languages.Cpp | languages.Cuda,
+            languages.CPP | languages.CUDA | languages.HIP,
             languages.LanguageWithHeaderFilesSettings,
             languages.Python,
         ],
-        cache_strategy: cache.Strategy,
+        cache_lifetime: config.BuildCacheLifetime,
     ) -> CMakeProject:
         if not source.binding_source:
             raise NotImplementedError(
@@ -64,16 +50,13 @@ class CMakeFactory(
         header_name = f"{name}.{source.program_source.language_settings.header_extension}"
         bindings_name = f"{name}_bindings.{source.program_source.language_settings.file_extension}"
         cmake_languages = [cmake_lists.Language(name="CXX")]
-        if source.program_source.language is languages.Cuda:
-            cmake_languages = [*cmake_languages, cmake_lists.Language(name="CUDA")]
+        if (src_lang := source.program_source.language) in [languages.CUDA, languages.HIP]:
+            cmake_languages = [*cmake_languages, cmake_lists.Language(name=src_lang.__name__)]
         cmake_lists_src = cmake_lists.generate_cmakelists_source(
-            name,
-            source.library_deps,
-            [header_name, bindings_name],
-            languages=cmake_languages,
+            name, source.library_deps, [header_name, bindings_name], languages=cmake_languages
         )
         return CMakeProject(
-            root_path=cache.get_cache_folder(source, cache_strategy),
+            root_path=cache.get_cache_folder(source, cache_lifetime),
             source_files={
                 header_name: source.program_source.source_code,
                 bindings_name: source.binding_source.source_code,
@@ -89,7 +72,7 @@ class CMakeFactory(
 @dataclasses.dataclass
 class CMakeProject(
     stages.BuildSystemProject[
-        languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python
+        languages.CPP, languages.LanguageWithHeaderFilesSettings, languages.Python
     ]
 ):
     """
@@ -105,15 +88,15 @@ class CMakeProject(
     source_files: dict[str, str]
     program_name: str
     generator_name: str = "Ninja"
-    build_type: BuildType = BuildType.DEBUG
+    build_type: config.CMakeBuildType = config.CMakeBuildType.DEBUG
     extra_cmake_flags: list[str] = dataclasses.field(default_factory=list)
 
-    def build(self):
+    def build(self) -> None:
         self._write_files()
         self._run_config()
         self._run_build()
 
-    def _write_files(self):
+    def _write_files(self) -> None:
         for name, content in self.source_files.items():
             (self.root_path / name).write_text(content, encoding="utf-8")
 
@@ -128,7 +111,7 @@ class CMakeProject(
             self.root_path,
         )
 
-    def _run_config(self):
+    def _run_config(self) -> None:
         logfile = self.root_path / "log_config.txt"
         with logfile.open(mode="w") as log_file_pointer:
             subprocess.check_call(
@@ -149,7 +132,7 @@ class CMakeProject(
 
         build_data.update_status(new_status=build_data.BuildStatus.CONFIGURED, path=self.root_path)
 
-    def _run_build(self):
+    def _run_build(self) -> None:
         logfile = self.root_path / "log_build.txt"
         with logfile.open(mode="w") as log_file_pointer:
             subprocess.check_call(

@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import functools
 from typing import Any, Callable, Dict, Iterator, List, TypeVar
@@ -30,7 +24,7 @@ def _upcast_node(target_dtype: DataType, node: Expr) -> Expr:
 
 def _upcast_nodes(*exprs: Expr, upcasting_rule: Callable) -> Iterator[Expr]:
     assert all(e.dtype for e in exprs)
-    dtypes: List[DataType] = [e.dtype for e in exprs]  # type: ignore # guaranteed to be not None
+    dtypes: List[DataType] = [e.dtype for e in exprs]  # guaranteed to be not None
     target_dtypes = upcasting_rule(*dtypes)
     return iter(_upcast_node(target_dtype, arg) for target_dtype, arg in zip(target_dtypes, exprs))
 

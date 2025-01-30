@@ -1,18 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
-from gt4py.eve import NodeTranslator
+from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next.iterator import ir
 
 
@@ -24,7 +18,7 @@ def _is_scan(node: ir.Node):
     )
 
 
-class ScanEtaReduction(NodeTranslator):
+class ScanEtaReduction(PreserveLocationVisitor, NodeTranslator):
     """Applies eta-reduction-like transformation involving scans.
 
     Simplifies `λ(x, y) → scan(λ(state, param_y, param_x) → ..., ...)(y, x)` to `scan(λ(state, param_x, param_y) → ..., ...)`.
@@ -55,9 +49,8 @@ class ScanEtaReduction(NodeTranslator):
                     original_scanpass.params[i + 1] for i in new_scanpass_params_idx
                 ]
                 new_scanpass = ir.Lambda(params=new_scanpass_params, expr=original_scanpass.expr)
-                result = ir.FunCall(
+                return ir.FunCall(
                     fun=ir.SymRef(id="scan"), args=[new_scanpass, *node.expr.fun.args[1:]]
                 )
-                return result
 
         return self.generic_visit(node)

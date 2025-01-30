@@ -1,18 +1,22 @@
 name: Deploy Python Distribution
 
 on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
   release:
     types: [published]
   workflow_dispatch:
 
 jobs:
-  build-n-publish:
-    name: Build and publish Python distribution
+  build:
+    name: Build Python distribution
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v4
     - name: Set up Python 3.10
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@v5
       with:
         python-version: "3.10"
     - name: Install pypa/build
@@ -21,14 +25,46 @@ jobs:
     - name: Build a wheel and a source tarball
       run: |
         python -m build --sdist --wheel --outdir dist/
-    - name: Publish distribution to Test PyPI
-      if: ${{ github.event_name == 'release' }}
-      uses: pypa/gh-action-pypi-publish@release/v1
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
       with:
-        password: ${{ secrets.TEST_PYPI_API_TOKEN }}
-        repository_url: https://test.pypi.org/legacy/
+        name: gt4py-dist
+        path: ./dist/**
+  publish-pypi:
+    name: Publish Python distribution to pypi.org
+    runs-on: ubuntu-latest
+    needs: build
+    if: ${{ github.event_name == 'workflow_dispatch' }} # the action was triggered manually
+    environment:
+      name: pypi
+      url: https://pypi.org/project/gt4py
+    permissions:
+      id-token: write
+    steps:
+    - name: Download wheel
+      uses: actions/download-artifact@v4
+      with:
+        name: gt4py-dist
+        path: dist
     - name: Publish distribution to PyPI
-      if: ${{ github.event_name == 'workflow_dispatch' }}
+      uses: pypa/gh-action-pypi-publish@release/v1
+  publish-test-pypi:
+    name: Publish Python distribution to test.pypi.org
+    runs-on: ubuntu-latest
+    needs: build
+    if: ${{ github.event_name == 'release' }} # triggered by releasing on github, test first before manually triggering the deployment to PyPI (see release documentation)
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/project/gt4py/
+    permissions:
+      id-token: write
+    steps:
+    - name: Download wheel
+      uses: actions/download-artifact@v4
+      with:
+        name: gt4py-dist
+        path: dist
+    - name: Publish distribution to Test PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
-        password: ${{ secrets.PYPI_API_TOKEN }}
+        repository-url: https://test.pypi.org/legacy/

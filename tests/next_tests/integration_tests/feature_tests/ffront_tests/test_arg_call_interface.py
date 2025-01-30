@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import itertools
 import re
@@ -19,14 +13,14 @@ import typing
 import numpy as np
 import pytest
 
-from gt4py.next import errors
+from gt4py.next import errors, common, constructors
 from gt4py.next.ffront.decorator import field_operator, program, scan_operator
 from gt4py.next.ffront.fbuiltins import broadcast, int32
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import IDim, IField, IJKFloatField, KDim, cartesian_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    fieldview_backend,
+    exec_alloc_descriptor,
 )
 
 
@@ -124,13 +118,7 @@ def test_call_field_operator_from_program(cartesian_case):
 
     @program
     def testee(
-        a: IField,
-        b: IField,
-        c: IField,
-        out1: IField,
-        out2: IField,
-        out3: IField,
-        out4: IField,
+        a: IField, b: IField, c: IField, out1: IField, out2: IField, out3: IField, out4: IField
     ):
         foo(a, b, c, out=out1)
         foo(a, y=b, z=c, out=out2)
@@ -143,7 +131,7 @@ def test_call_field_operator_from_program(cartesian_case):
         for name in ("out1", "out2", "out3", "out4")
     )
 
-    ref = np.asarray(a) + 2 * np.asarray(b) + 3 * np.asarray(c)
+    ref = a + 2 * b + 3 * c
 
     cases.verify(
         cartesian_case,
@@ -226,13 +214,11 @@ def test_call_scan_operator_from_program(cartesian_case):
 def test_scan_wrong_return_type(cartesian_case):
     with pytest.raises(
         errors.DSLError,
-        match=(r"Argument `init` to scan operator `testee_scan` must have same type as its return"),
+        match=(r"Argument 'init' to scan operator 'testee_scan' must have same type as its return"),
     ):
 
         @scan_operator(axis=KDim, forward=True, init=0)
-        def testee_scan(
-            state: int32,
-        ) -> float:
+        def testee_scan(state: int32) -> float:
             return 1.0
 
         @program
@@ -245,14 +231,12 @@ def test_scan_wrong_state_type(cartesian_case):
     with pytest.raises(
         errors.DSLError,
         match=(
-            r"Argument `init` to scan operator `testee_scan` must have same type as `state` argument"
+            r"Argument 'init' to scan operator 'testee_scan' must have same type as 'state' argument"
         ),
     ):
 
         @scan_operator(axis=KDim, forward=True, init=0)
-        def testee_scan(
-            state: float,
-        ) -> int32:
+        def testee_scan(state: float) -> int32:
             return 1
 
         @program
@@ -276,7 +260,7 @@ def bound_args_testee():
 
 def test_bind_invalid_arg(cartesian_case, bound_args_testee):
     with pytest.raises(
-        TypeError, match="Keyword argument `inexistent_arg` is not a valid program parameter."
+        TypeError, match="Keyword argument 'inexistent_arg' is not a valid program parameter."
     ):
         bound_args_testee.with_bound_args(inexistent_arg=1)
 
@@ -286,7 +270,7 @@ def test_call_bound_program_with_wrong_args(cartesian_case, bound_args_testee):
     out = cases.allocate(cartesian_case, bound_args_testee, "out")()
 
     with pytest.raises(TypeError) as exc_info:
-        program_with_bound_arg(out, offset_provider={})
+        program_with_bound_arg.with_backend(cartesian_case.backend)(out, offset_provider={})
 
     assert (
         re.search(
@@ -302,11 +286,31 @@ def test_call_bound_program_with_already_bound_arg(cartesian_case, bound_args_te
     out = cases.allocate(cartesian_case, bound_args_testee, "out")()
 
     with pytest.raises(TypeError) as exc_info:
-        program_with_bound_arg(True, out, arg2=True, offset_provider={})
+        program_with_bound_arg.with_backend(cartesian_case.backend)(
+            True, out, arg2=True, offset_provider={}
+        )
 
     assert (
         re.search(
-            "Parameter `arg2` already set as a bound argument.", exc_info.value.__cause__.args[0]
+            "Parameter 'arg2' already set as a bound argument.", exc_info.value.__cause__.args[0]
         )
         is not None
     )
+
+
+@pytest.mark.uses_origin
+def test_direct_fo_call_with_domain_arg(cartesian_case):
+    @field_operator
+    def testee(inp: IField) -> IField:
+        return inp
+
+    size = cartesian_case.default_sizes[IDim]
+    inp = cases.allocate(cartesian_case, testee, "inp").unique()()
+    out = cases.allocate(
+        cartesian_case, testee, cases.RETURN, strategy=cases.ConstInitializer(42)
+    )()
+    ref = inp.array_ns.zeros(size)
+    ref[0] = ref[-1] = 42
+    ref[1:-1] = inp.ndarray[1:-1]
+
+    cases.verify(cartesian_case, testee, inp, out=out, domain={IDim: (1, size - 1)}, ref=ref)

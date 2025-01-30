@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """Integration tests for StencilObjects."""
 
@@ -33,7 +27,7 @@ def test_stencil_object_cache(backend: str):
     @typing.no_type_check
     def stencil(in_field: Field[float], out_field: Field[float], *, offset: float):
         with computation(PARALLEL), interval(...):
-            out_field = (  # noqa: F841 # local variable 'out_field' is assigned to but never used
+            out_field = (  # noqa: F841 [unused-variable]
                 in_field + offset
             )
 
@@ -81,4 +75,4 @@ def test_warning_for_unsupported_backend_option(backend):
         @gtscript.stencil(backend=backend, **{"this_option_is_not_supported": "foo"})
         def foo(f: Field[float]):
             with computation(PARALLEL), interval(...):  # type: ignore
-                f = 42.0  # noqa F841
+                f = 42.0  # noqa: F841 [unused-variable]

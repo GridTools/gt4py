@@ -1,16 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+from __future__ import annotations
 
 import numbers
 import textwrap
@@ -255,7 +251,7 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     NativeFuncCall = as_fmt("{func}({', '.join(arg for arg in args)}{mask_arg})")
 
     def visit_VectorAssign(
-        self, node: npir.VectorAssign, *, ctx: "BlockContext", **kwargs: Any
+        self, node: npir.VectorAssign, *, ctx: BlockContext, **kwargs: Any
     ) -> Union[str, Collection[str]]:
         left = self.visit(node.left, horizontal_mask=node.horizontal_mask, **kwargs)
         right = self.visit(node.right, horizontal_mask=node.horizontal_mask, **kwargs)

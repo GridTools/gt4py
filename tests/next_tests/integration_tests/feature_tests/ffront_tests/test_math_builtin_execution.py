@@ -1,33 +1,32 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import math
-from typing import Callable
+from typing import Callable, Optional
 
 import numpy as np
 import pytest
 
-import gt4py.next as gtx
-from gt4py.next.ffront import dialect_ast_enums, fbuiltins, field_operator_ast as foast
-from gt4py.next.ffront.decorator import FieldOperator
+from gt4py.next.ffront import (
+    decorator,
+    dialect_ast_enums,
+    fbuiltins,
+    field_operator_ast as foast,
+    stages as ffront_stages,
+)
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
+from gt4py.next import backend as next_backend
 from gt4py.next.type_system import type_translation
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import IDim, cartesian_case, unstructured_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    fieldview_backend,
+    exec_alloc_descriptor,
 )
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
 
@@ -39,7 +38,7 @@ from next_tests.integration_tests.feature_tests.math_builtin_test_data import ma
 #  becomes easier.
 
 
-def make_builtin_field_operator(builtin_name: str):
+def make_builtin_field_operator(builtin_name: str, backend: Optional[next_backend.Backend]):
     # TODO(tehrengruber): creating a field operator programmatically should be
     #  easier than what we need to do here.
     # construct annotation dictionary containing the input argument and return
@@ -57,7 +56,7 @@ def make_builtin_field_operator(builtin_name: str):
             "return": cases.IFloatField,
         }
     else:
-        raise AssertionError(f"Unknown builtin `{builtin_name}`")
+        raise AssertionError(f"Unknown builtin '{builtin_name}'.")
 
     closure_vars = {"IDim": IDim, builtin_name: getattr(fbuiltins, builtin_name)}
 
@@ -106,11 +105,14 @@ def make_builtin_field_operator(builtin_name: str):
     )
     typed_foast_node = FieldOperatorTypeDeduction.apply(foast_node)
 
-    return FieldOperator(
-        foast_node=typed_foast_node,
-        closure_vars=closure_vars,
-        backend=None,
-        definition=None,
+    return decorator.FieldOperatorFromFoast(
+        definition_stage=None,
+        foast_stage=ffront_stages.FoastOperatorDefinition(
+            foast_node=typed_foast_node,
+            closure_vars=closure_vars,
+            grid_type=None,
+        ),
+        backend=backend,
     )
 
 
@@ -129,9 +131,7 @@ def test_math_function_builtins_execution(cartesian_case, builtin_name: str, inp
     expected = ref_impl(*inputs)
     out = cartesian_case.as_field([IDim], np.zeros_like(expected))
 
-    builtin_field_op = make_builtin_field_operator(builtin_name).with_backend(
-        cartesian_case.backend
-    )
+    builtin_field_op = make_builtin_field_operator(builtin_name, cartesian_case.backend)
 
     builtin_field_op(*inps, out=out, offset_provider={})
 

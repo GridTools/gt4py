@@ -1,16 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+from __future__ import annotations
 
 import copy
 from typing import TYPE_CHECKING, Dict, List
@@ -21,7 +17,7 @@ import dace.library
 import dace.subsets
 import sympy
 
-from gt4py.cartesian.gtc import daceir as dcir
+from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.dace.expansion.daceir_builder import DaCeIRBuilder
 from gt4py.cartesian.gtc.dace.expansion.sdfg_builder import StencilComputationSDFGBuilder
 
@@ -71,14 +67,13 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
 
     @staticmethod
     def _fix_context(
-        nsdfg, node: "StencilComputation", parent_state: dace.SDFGState, daceir: dcir.NestedSDFG
+        nsdfg, node: StencilComputation, parent_state: dace.SDFGState, daceir: dcir.NestedSDFG
     ):
         """Apply changes to StencilComputation and the SDFG it is embedded in to satisfy post-expansion constraints.
 
         * change connector names to match inner array name (before expansion prefixed to satisfy uniqueness)
         * change in- and out-edges' subsets so that they have the same shape as the corresponding array inside
         * determine the domain size based on edges to StencilComputation
-
         """
         # change connector names
         for in_edge in parent_state.in_edges(node):
@@ -126,7 +121,7 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
 
     @staticmethod
     def _get_parent_arrays(
-        node: "StencilComputation", parent_state: dace.SDFGState, parent_sdfg: dace.SDFG
+        node: StencilComputation, parent_state: dace.SDFGState, parent_sdfg: dace.SDFG
     ) -> Dict[str, dace.data.Data]:
         parent_arrays: Dict[str, dace.data.Data] = {}
         for edge in (e for e in parent_state.in_edges(node) if e.dst_conn is not None):
@@ -137,7 +132,7 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
 
     @staticmethod
     def expansion(
-        node: "StencilComputation", parent_state: dace.SDFGState, parent_sdfg: dace.SDFG
+        node: StencilComputation, parent_state: dace.SDFGState, parent_sdfg: dace.SDFG
     ) -> dace.nodes.NestedSDFG:
         """Expand the coarse SDFG in parent_sdfg to a NestedSDFG with all the states."""
         split_horizontal_executions_regions(node)

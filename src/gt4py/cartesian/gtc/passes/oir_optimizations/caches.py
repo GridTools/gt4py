@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import collections
 from dataclasses import dataclass
@@ -45,7 +39,6 @@ are replaced by just a few registers.
 Note that filling and flushing k-caches can always be replaced by a local
 (non-filling or flushing) k-cache plus additional filling and flushing
 statements.
-
 """
 
 
@@ -74,10 +67,7 @@ class IJCacheDetection(eve.NodeTranslator):
             oir.IJCache(name=field) for field in cacheable
         ]
         return oir.VerticalLoop(
-            sections=node.sections,
-            loop_order=node.loop_order,
-            caches=caches,
-            loc=node.loc,
+            sections=node.sections, loop_order=node.loop_order, caches=caches, loc=node.loc
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
@@ -149,10 +139,7 @@ class KCacheDetection(eve.NodeTranslator):
             oir.KCache(name=field, fill=True, flush=True) for field in cacheable
         ]
         return oir.VerticalLoop(
-            loop_order=node.loop_order,
-            sections=node.sections,
-            caches=caches,
-            loc=node.loc,
+            loop_order=node.loop_order, sections=node.sections, caches=caches, loc=node.loc
         )
 
 
@@ -273,7 +260,7 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
     For each cached field, the following actions are performed:
     1. A new locally-k-cached temporary is introduced.
     2. All accesses to the original field are replaced by accesses to this temporary.
-    3. Loop sections are split where necessary to allow single-level loads whereever possible.
+    3. Loop sections are split where necessary to allow single-level loads wherever possible.
     3. Fill statements from the original field to the temporary are introduced.
     4. Flush statements from the temporary to the original field are introduced.
     """
@@ -459,9 +446,7 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
             lmin = max(lmin, first_unfilled.get(field, lmin))
             for offset in range(lmin, lmax + 1):
                 k_offset = common.CartesianOffset(
-                    i=0,
-                    j=0,
-                    k=offset if loop_order == common.LoopOrder.FORWARD else -offset,
+                    i=0, j=0, k=offset if loop_order == common.LoopOrder.FORWARD else -offset
                 )
                 fill_stmts.append(
                     oir.AssignStmt(
@@ -586,10 +571,7 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
         ]
 
         return oir.VerticalLoop(
-            loop_order=node.loop_order,
-            sections=sections,
-            caches=caches,
-            loc=node.loc,
+            loop_order=node.loop_order, sections=sections, caches=caches, loc=node.loc
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:

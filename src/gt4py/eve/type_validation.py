@@ -1,19 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """Generic interface and implementations of run-time type validation for arbitrary values."""
-
 
 from __future__ import annotations
 
@@ -21,7 +14,9 @@ import abc
 import collections.abc
 import dataclasses
 import functools
-import typing as _typing
+import sys
+import types
+import typing
 
 from . import exceptions, extended_typing as xtyping, utils
 from .extended_typing import (
@@ -79,11 +74,7 @@ class TypeValidator(Protocol):
 
 class FixedTypeValidator(Protocol):
     @abc.abstractmethod
-    def __call__(
-        self,
-        value: Any,
-        **kwargs: Any,
-    ) -> None:
+    def __call__(self, value: Any, **kwargs: Any) -> None:
         """Protocol for callables checking that ``value`` matches a fixed type_annotation.
 
         Arguments:
@@ -110,11 +101,10 @@ class TypeValidatorFactory(Protocol):
         globalns: Optional[Dict[str, Any]] = None,
         localns: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
-    ) -> FixedTypeValidator:
-        ...
+    ) -> FixedTypeValidator: ...
 
     @overload
-    def __call__(  # noqa: F811  # redefinion of unused member
+    def __call__(
         self,
         type_annotation: TypeAnnotation,
         name: Optional[str] = None,
@@ -123,11 +113,10 @@ class TypeValidatorFactory(Protocol):
         globalns: Optional[Dict[str, Any]] = None,
         localns: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
-    ) -> Optional[FixedTypeValidator]:
-        ...
+    ) -> Optional[FixedTypeValidator]: ...
 
     @abc.abstractmethod
-    def __call__(  # noqa: F811  # redefinion of unused member
+    def __call__(
         self,
         type_annotation: TypeAnnotation,
         name: Optional[str] = None,
@@ -169,11 +158,10 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
         globalns: Optional[Dict[str, Any]] = None,
         localns: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
-    ) -> FixedTypeValidator:
-        ...
+    ) -> FixedTypeValidator: ...
 
     @overload
-    def __call__(  # noqa: F811  # redefinion of unused member
+    def __call__(
         self,
         type_annotation: TypeAnnotation,
         name: Optional[str] = None,
@@ -182,10 +170,9 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
         globalns: Optional[Dict[str, Any]] = None,
         localns: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
-    ) -> Optional[FixedTypeValidator]:
-        ...
+    ) -> Optional[FixedTypeValidator]: ...
 
-    def __call__(  # noqa: F811,C901  # redefinion of unused member / complex but well organized in cases
+    def __call__(
         self,
         type_annotation: TypeAnnotation,
         name: Optional[str] = None,
@@ -208,6 +195,12 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
             if type_annotation is None:
                 type_annotation = type(None)
 
+            if sys.version_info >= (3, 10):
+                if isinstance(
+                    type_annotation, types.UnionType
+                ):  # see https://github.com/python/cpython/issues/105499
+                    type_annotation = typing.Union[type_annotation.__args__]
+
             # Non-generic types
             if xtyping.is_actual_type(type_annotation):
                 assert not xtyping.get_args(type_annotation)
@@ -216,7 +209,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
                 else:
                     return self.make_is_instance_of(name, type_annotation)
 
-            if isinstance(type_annotation, _typing.TypeVar):
+            if isinstance(type_annotation, typing.TypeVar):
                 if type_annotation.__bound__:
                     return self.make_is_instance_of(name, type_annotation.__bound__)
                 else:
@@ -234,7 +227,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
             origin_type = xtyping.get_origin(type_annotation)
             type_args = xtyping.get_args(type_annotation)
 
-            if origin_type is Literal:
+            if origin_type in {typing.Literal, xtyping.Literal}:
                 if len(type_args) == 1:
                     return self.make_is_literal(name, type_args[0])
                 else:
@@ -292,6 +285,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
 
                 if issubclass(origin_type, (collections.abc.Sequence, collections.abc.Set)):
                     assert len(type_args) == 1
+                    make_recursive(type_args[0])
                     if (member_validator := make_recursive(type_args[0])) is None:
                         raise exceptions.EveValueError(
                             f"{type_args[0]} type annotation is not supported."
@@ -326,7 +320,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
                 #          ...
                 #
                 # Since this can be an arbitrary type (not something regular like a collection) there is
-                # no way to check if the type parameter is verifed in the actual instance.
+                # no way to check if the type parameter is verified in the actual instance.
                 # The only check can be done at run-time is to verify that the value is an instance of
                 # the original type, completely ignoring the annotation. Ideally, the static type checker
                 # can do a better job to try figure out if the type parameter is ok ...
@@ -490,8 +484,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
 
 
 simple_type_validator_factory: Final = cast(
-    TypeValidatorFactory,
-    utils.optional_lru_cache(SimpleTypeValidatorFactory(), typed=True),
+    TypeValidatorFactory, utils.optional_lru_cache(SimpleTypeValidatorFactory(), typed=True)
 )
 """Public (with optional cache) entry point for :class:`SimpleTypeValidatorFactory`."""
 

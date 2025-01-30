@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import collections
 import enum
@@ -23,11 +17,11 @@ from gt4py.cartesian.gtc.utils import filter_mask, interpolate_mask
 class CartesianSpace:
     @enum.unique
     class Axis(enum.Enum):
-        I = 0  # noqa: E741  # Do not use variables named 'I', 'O', or 'l'
+        I = 0  # noqa: E741 [ambiguous-variable-name]
         J = 1
         K = 2
 
-        def __str__(self):
+        def __str__(self) -> str:
             return self.name
 
     names = [ax.name for ax in Axis]
@@ -124,7 +118,7 @@ class NumericTuple(tuple):
         return self._apply(self._broadcast(other), operator.add)
 
     def __sub__(self, other):
-        """Element-wise substraction."""
+        """Element-wise subtraction."""
         return self._apply(self._broadcast(other), operator.sub)
 
     def __mul__(self, other):
@@ -191,7 +185,7 @@ class NumericTuple(tuple):
     def __hash__(self):
         return tuple.__hash__(self)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return tuple.__repr__(self)
 
     @property
@@ -341,7 +335,7 @@ class FrameTuple(tuple):
         return self._apply(self._broadcast(other), lambda a, b: a + b)
 
     def __sub__(self, other):
-        """Element-wise substraction."""
+        """Element-wise subtraction."""
         return self._apply(self._broadcast(other), lambda a, b: a - b)
 
     def __and__(self, other):
@@ -384,7 +378,7 @@ class FrameTuple(tuple):
     def __hash__(self):
         return tuple.__hash__(self)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return tuple.__repr__(self)
 
     @property
@@ -462,7 +456,7 @@ class FrameTuple(tuple):
 class Boundary(FrameTuple):
     """Frame size around one central origin (pairs of integers).
 
-    Negative numbers represent a boundary region substracting from
+    Negative numbers represent a boundary region subtracting from
     the wrapped area.
     """
 

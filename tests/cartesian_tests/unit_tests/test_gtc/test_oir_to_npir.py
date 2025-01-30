@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from typing import Type
 
@@ -34,6 +28,7 @@ from .oir_utils import (
     StencilFactory,
     VerticalLoopFactory,
     VerticalLoopSectionFactory,
+    WhileFactory,
 )
 
 
@@ -41,14 +36,8 @@ def test_stencil_to_computation() -> None:
     stencil = StencilFactory(
         name="stencil",
         params=[
-            FieldDeclFactory(
-                name="a",
-                dtype=common.DataType.FLOAT64,
-            ),
-            oir.ScalarDecl(
-                name="b",
-                dtype=common.DataType.INT32,
-            ),
+            FieldDeclFactory(name="a", dtype=common.DataType.FLOAT64),
+            oir.ScalarDecl(name="b", dtype=common.DataType.INT32),
         ],
         vertical_loops__0__sections__0__horizontal_executions__0__body=[
             AssignStmtFactory(
@@ -58,9 +47,7 @@ def test_stencil_to_computation() -> None:
     )
     computation = OirToNpir().visit(stencil)
 
-    assert set(d.name for d in computation.api_field_decls) == {
-        "a",
-    }
+    assert set(d.name for d in computation.api_field_decls) == {"a"}
     assert set(computation.arguments) == {"a", "b"}
     assert len(computation.vertical_passes) == 1
 
@@ -90,6 +77,18 @@ def test_mask_stmt_to_assigns() -> None:
     assign_stmts = OirToNpir().visit(mask_stmt, extent=Extent.zeros(ndims=2))
     assert isinstance(assign_stmts[0].right.cond, npir.FieldSlice)
     assert len(assign_stmts) == 1
+
+
+def test_mask_stmt_to_while() -> None:
+    mask_oir = MaskStmtFactory(body=[WhileFactory()])
+    statements = OirToNpir().visit(mask_oir, extent=Extent.zeros(ndims=2))
+    assert len(statements) == 1
+    assert isinstance(statements[0], npir.While)
+    condition = statements[0].cond
+    assert isinstance(condition, npir.VectorLogic)
+    assert condition.op == common.LogicalOperator.AND
+    mask_npir = OirToNpir().visit(mask_oir.mask)
+    assert condition.left == mask_npir or condition.right == mask_npir
 
 
 def test_mask_propagation() -> None:

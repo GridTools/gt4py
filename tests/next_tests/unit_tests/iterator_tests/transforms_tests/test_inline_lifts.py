@@ -1,20 +1,14 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import pytest
 
-from gt4py.next.iterator import ir_makers as im
+from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.inline_lifts import InlineLifts
 
 
@@ -33,15 +27,15 @@ def inline_lift_test_data():
         ),
         (
             # can_deref(lift(f)(args...)) -> and(can_deref(arg[0]), and(can_deref(arg[1]), ...))
-            im.call("can_deref")(im.lift("f")("arg1", "arg2")),
-            im.and_(im.call("can_deref")("arg1"), im.call("can_deref")("arg2")),
+            im.can_deref(im.lift("f")("arg1", "arg2")),
+            im.and_(im.can_deref("arg1"), im.can_deref("arg2")),
         ),
         (
             # can_deref(shift(...)(lift(f)(args...)) -> and(can_deref(shift(...)(arg[0])), and(can_deref(shift(...)(arg[1])), ...))
-            im.call("can_deref")(im.shift("I", 1)(im.lift("f")("arg1", "arg2"))),
+            im.can_deref(im.shift("I", 1)(im.lift("f")("arg1", "arg2"))),
             im.and_(
-                im.call("can_deref")(im.shift("I", 1)("arg1")),
-                im.call("can_deref")(im.shift("I", 1)("arg2")),
+                im.can_deref(im.shift("I", 1)("arg1")),
+                im.can_deref(im.shift("I", 1)("arg2")),
             ),
         ),
         (

@@ -1,17 +1,10 @@
-# -*- coding: utf-8 -*-
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from functools import reduce
 
@@ -40,7 +33,7 @@ from next_tests.integration_tests.cases import (
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     Cell,
-    fieldview_backend,
+    exec_alloc_descriptor,
     size,
 )
 
@@ -63,15 +56,13 @@ def test_simple_if(condition, cartesian_case):
     cases.verify(cartesian_case, simple_if, a, b, condition, out=out, ref=a if condition else b)
 
 
+# TODO(tehrengruber): test with fields on different domains
 @pytest.mark.parametrize("condition1, condition2", [[True, False], [True, False]])
 @pytest.mark.uses_if_stmts
 def test_simple_if_conditional(condition1, condition2, cartesian_case):
     @field_operator
     def simple_if(
-        a: cases.IField,
-        b: cases.IField,
-        condition1: bool,
-        condition2: bool,
+        a: cases.IField, b: cases.IField, condition1: bool, condition2: bool
     ) -> cases.IField:
         if condition1:
             result1 = a
@@ -241,10 +232,10 @@ def test_nested_if_stmt_conditional(cartesian_case, condition1, condition2):
     out = cases.allocate(cartesian_case, nested_if_conditional_return, cases.RETURN)()
 
     ref = {
-        (True, True): np.asarray(inp) + 1,
-        (True, False): np.asarray(inp) + 2,
-        (False, True): np.asarray(inp) + 3,
-        (False, False): np.asarray(inp) + 3,
+        (True, True): inp.asnumpy() + 1,
+        (True, False): inp.asnumpy() + 2,
+        (False, True): inp.asnumpy() + 3,
+        (False, False): inp.asnumpy() + 3,
     }
 
     cases.verify(
@@ -289,7 +280,7 @@ def test_nested_if(cartesian_case, condition):
         b,
         condition,
         out=out,
-        ref=np.asarray(a) + 1 if condition else np.asarray(b) + 5,
+        ref=a.asnumpy() + 1 if condition else b.asnumpy() + 5,
     )
 
 
@@ -334,7 +325,7 @@ def test_if_without_else(cartesian_case, condition1, condition2):
 
 
 def test_if_non_scalar_condition():
-    with pytest.raises(errors.DSLError, match="Condition for `if` must be scalar."):
+    with pytest.raises(errors.DSLError, match="Condition for 'if' must be scalar"):
 
         @field_operator
         def if_non_scalar_condition(
@@ -347,7 +338,7 @@ def test_if_non_scalar_condition():
 
 
 def test_if_non_boolean_condition():
-    with pytest.raises(errors.DSLError, match="Condition for `if` must be of boolean type."):
+    with pytest.raises(errors.DSLError, match="Condition for 'if' must be of boolean type"):
 
         @field_operator
         def if_non_boolean_condition(
@@ -362,8 +353,7 @@ def test_if_non_boolean_condition():
 
 def test_if_inconsistent_types():
     with pytest.raises(
-        errors.DSLError,
-        match="Inconsistent types between two branches for variable",
+        errors.DSLError, match="Inconsistent types between two branches for variable"
     ):
 
         @field_operator

@@ -1,16 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+from __future__ import annotations
 
 import enum
 from typing import Any, List, Tuple, Union
@@ -35,11 +31,11 @@ class Offset(common.CartesianOffset):
     pass
 
 
-class Literal(common.Literal, Expr):  # type: ignore
+class Literal(common.Literal, Expr):
     pass
 
 
-class LocalAccess(common.ScalarAccess, Expr):  # type: ignore
+class LocalAccess(common.ScalarAccess, Expr):
     pass
 
 
@@ -47,7 +43,7 @@ class VariableKOffset(common.VariableKOffset[Expr]):
     pass
 
 
-class AccessorRef(common.FieldAccess[Expr, VariableKOffset], Expr):  # type: ignore
+class AccessorRef(common.FieldAccess[Expr, VariableKOffset], Expr):
     pass
 
 
@@ -92,7 +88,7 @@ class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
     _dtype_propagation = common.native_func_call_dtype_propagation(strict=True)
 
 
-class Cast(common.Cast[Expr], Expr):  # type: ignore
+class Cast(common.Cast[Expr], Expr):
     pass
 
 
@@ -140,10 +136,10 @@ class GTExtent(LocNode):
     k: Tuple[int, int]
 
     @classmethod
-    def zero(cls) -> "GTExtent":
+    def zero(cls) -> GTExtent:
         return cls(i=(0, 0), j=(0, 0), k=(0, 0))
 
-    def __add__(self, offset: Union[common.CartesianOffset, VariableKOffset]) -> "GTExtent":
+    def __add__(self, offset: Union[common.CartesianOffset, VariableKOffset]) -> GTExtent:
         if isinstance(offset, common.CartesianOffset):
             return GTExtent(
                 i=(min(self.i[0], offset.i), max(self.i[1], offset.i)),
@@ -159,7 +155,7 @@ class GTExtent(LocNode):
 
 class GTAccessor(LocNode):
     name: eve.Coerced[eve.SymbolName]
-    id: int  # noqa: A003  # shadowing python builtin
+    id: int  # shadowing python builtin
     intent: Intent
     extent: GTExtent
     ndim: int = 3

@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import collections
 import inspect
@@ -392,10 +386,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
 
         .. code-block:: python
 
-                    {
-                        'float_symbols' : (np.float32, np.float64),
-                        'int_symbols' : (int, np.int_, np.int64)
-                    }
+                    {"float_symbols": (np.float32, np.float64), "int_symbols": (int, np.int_, np.int64)}
 
     domain_range : `Sequence` of pairs like `((int, int), (int, int) ... )`
         Required class attribute.
@@ -473,7 +464,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
         test["implementations"].append(implementation)
 
     @classmethod
-    def _run_test_implementation(cls, parameters_dict, implementation):  # noqa: C901  # too complex
+    def _run_test_implementation(cls, parameters_dict, implementation):  # too complex
         input_data, exec_info = parameters_dict
 
         origin = cls.origin
@@ -543,7 +534,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
         # call implementation
         implementation(**test_values, origin=origin, domain=domain, exec_info=exec_info)
 
-        # for validation data, data is cropped to actually touched domain, so that origin offseting
+        # for validation data, data is cropped to actually touched domain, so that origin offsetting
         # does not have to be implemented for every test suite. This is done based on info
         # specified in test suite
         cropped_validation_values = {}

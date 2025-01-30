@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """Text and templating utilities."""
 
@@ -53,7 +47,7 @@ class Joiner:
             self.joiner = joiner
             self.index = index
 
-        def __str__(self):
+        def __str__(self) -> str:
             return self.joiner.joiner_str if self.index < self.joiner.n_items - 1 else ""
 
     def __init__(self, joiner_str):
@@ -138,5 +132,5 @@ class TextBlock:
     def __len__(self):
         return len(self.lines)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.text
