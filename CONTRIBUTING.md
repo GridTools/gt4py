@@ -146,11 +146,11 @@ Check `pytest` documentation (`pytest --help`) for all the options to select and
 We recommended you to use `nox` for running the test suite in different environments. `nox` runs the package installation script in properly isolated environments to run tests in a reproducible way. A simple way to start with `nox` would be:
 
 ```bash
-# List all the available task environments
-nox list
+# List all available sessions
+nox --list
 
-# Run a specific task environment
-nox -e cartesian-py38-internal-cpu
+# Run a specific session
+nox -s "test_cartesian-3.10(internal, cpu)"
 ```
 
 Check `nox` documentation (`nox --help`) for the complete reference.
