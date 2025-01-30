@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Optional, TypeVar, cast
+from typing import Any, Optional, TypeAlias, TypeVar, cast
 
 import gt4py.next.ffront.field_operator_ast as foast
 from gt4py.eve import NodeTranslator, NodeVisitor, traits
@@ -48,7 +48,7 @@ def with_altered_scalar_kind(
     if isinstance(type_spec, ts.FieldType):
         return ts.FieldType(
             dims=type_spec.dims,
-            dtype=ts.ScalarType(kind=new_scalar_kind, shape=type_spec.dtype.shape),
+            dtype=with_altered_scalar_kind(type_spec.dtype, new_scalar_kind),
         )
     elif isinstance(type_spec, ts.ScalarType):
         return ts.ScalarType(kind=new_scalar_kind, shape=type_spec.shape)
@@ -68,13 +68,18 @@ def construct_tuple_type(
     >>> mask_type = ts.FieldType(
     ...     dims=[Dimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL)
     ... )
-    >>> true_branch_types = [ts.ScalarType(kind=ts.ScalarKind), ts.ScalarType(kind=ts.ScalarKind)]
+    >>> true_branch_types = [
+    ...     ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
+    ...     ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
+    ... ]
     >>> false_branch_types = [
-    ...     ts.FieldType(dims=[Dimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind)),
-    ...     ts.ScalarType(kind=ts.ScalarKind),
+    ...     ts.FieldType(
+    ...         dims=[Dimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    ...     ),
+    ...     ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
     ... ]
     >>> print(construct_tuple_type(true_branch_types, false_branch_types, mask_type))
-    [FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<enum 'ScalarKind'>, shape=None)), FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<enum 'ScalarKind'>, shape=None))]
+    [FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 11>, shape=None)), FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 11>, shape=None))]
     """
     element_types_new = true_branch_types
     for i, element in enumerate(true_branch_types):
@@ -105,16 +110,16 @@ def promote_to_mask_type(
     >>> I, J = (Dimension(value=dim) for dim in ["I", "J"])
     >>> bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
     >>> dtype = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
-    >>> promote_to_mask_type(ts.FieldType(dims=[I, J], dtype=bool_type), ts.ScalarType(kind=dtype))
-    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None), shape=None))
+    >>> promote_to_mask_type(ts.FieldType(dims=[I, J], dtype=bool_type), dtype)
+    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 11>, shape=None))
     >>> promote_to_mask_type(
     ...     ts.FieldType(dims=[I, J], dtype=bool_type), ts.FieldType(dims=[I], dtype=dtype)
     ... )
-    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None))
+    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 11>, shape=None))
     >>> promote_to_mask_type(
     ...     ts.FieldType(dims=[I], dtype=bool_type), ts.FieldType(dims=[I, J], dtype=dtype)
     ... )
-    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None))
+    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 11>, shape=None))
     """
     if isinstance(input_type, ts.ScalarType) or not all(
         item in input_type.dims for item in mask_type.dims
@@ -360,7 +365,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def visit_TupleTargetAssign(
         self, node: foast.TupleTargetAssign, **kwargs: Any
     ) -> foast.TupleTargetAssign:
-        TargetType = list[foast.Starred | foast.Symbol]
+        TargetType: TypeAlias = list[foast.Starred | foast.Symbol]
         values = self.visit(node.value, **kwargs)
 
         if isinstance(values.type, ts.TupleType):
@@ -374,7 +379,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 )
 
             new_targets: TargetType = []
-            new_type: ts.TupleType | ts.DataType
+            new_type: ts.DataType
             for i, index in enumerate(indices):
                 old_target = targets[i]
 
@@ -391,7 +396,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                         location=old_target.location,
                     )
                 else:
-                    new_type = values.type.types[index]
+                    new_type = values.type.types[index]  # type: ignore[assignment] # see check in next line
+                    assert isinstance(new_type, ts.DataType)
                     new_target = self.visit(
                         old_target, refine_type=new_type, location=old_target.location, **kwargs
                     )

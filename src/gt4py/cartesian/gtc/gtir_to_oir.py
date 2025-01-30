@@ -22,7 +22,6 @@ def validate_stencil_memory_accesses(node: oir.Stencil) -> oir.Stencil:
     at the OIR level. This is similar to the check at the gtir level for read-with-offset
     and writes, but more complete because it involves extent analysis, so it catches
     indirect read-with-offset through temporaries.
-
     """
 
     def _writes(node: oir.Stencil) -> Set[str]:

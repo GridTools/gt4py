@@ -18,6 +18,7 @@ from gt4py.next.iterator.builtins import (
     index,
     named_range,
     shift,
+    INTEGER_INDEX_BUILTIN,
 )
 from gt4py.next.iterator.runtime import fendef, fundef, set_at
 
@@ -68,7 +69,7 @@ def test_index_builtin(program_processor):
     program_processor, validate = program_processor
 
     isize = 10
-    out = gtx.as_field([I], np.zeros(shape=(isize,)), dtype=getattr(np, itir.INTEGER_INDEX_BUILTIN))
+    out = gtx.as_field([I], np.zeros(shape=(isize,)), dtype=getattr(np, INTEGER_INDEX_BUILTIN))
 
     run_processor(index_program_simple, program_processor, out, isize, offset_provider={})
     if validate:
@@ -91,7 +92,7 @@ def test_index_builtin_shift(program_processor):
     program_processor, validate = program_processor
 
     isize = 10
-    out = gtx.as_field([I], np.zeros(shape=(isize,)), dtype=getattr(np, itir.INTEGER_INDEX_BUILTIN))
+    out = gtx.as_field([I], np.zeros(shape=(isize,)), dtype=getattr(np, INTEGER_INDEX_BUILTIN))
 
     run_processor(index_program_shift, program_processor, out, isize, offset_provider={"Ioff": I})
     if validate:

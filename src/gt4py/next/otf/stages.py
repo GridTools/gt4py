@@ -11,6 +11,8 @@ from __future__ import annotations
 import dataclasses
 from typing import Any, Generic, Optional, Protocol, TypeAlias, TypeVar
 
+from gt4py.eve import utils
+from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import arguments, languages, toolchain
 from gt4py.next.otf.binding import interface
@@ -27,6 +29,44 @@ SettingT_co = TypeVar("SettingT_co", bound=languages.LanguageSettings, covariant
 
 
 CompilableProgram: TypeAlias = toolchain.CompilableProgram[itir.Program, arguments.CompileTimeArgs]
+
+
+def compilation_hash(otf_closure: CompilableProgram) -> int:
+    """Given closure compute a hash uniquely determining if we need to recompile."""
+    offset_provider = otf_closure.args.offset_provider
+    return hash(
+        (
+            otf_closure.data,
+            # As the frontend types contain lists they are not hashable. As a workaround we just
+            # use content_hash here.
+            utils.content_hash(tuple(arg for arg in otf_closure.args.args)),
+            # Directly using the `id` of the offset provider is not possible as the decorator adds
+            # the implicitly defined ones (i.e. to allow the `TDim + 1` syntax) resulting in a
+            # different `id` every time. Instead use the `id` of each individual offset provider.
+            tuple((k, id(v)) for (k, v) in offset_provider.items()) if offset_provider else None,
+            otf_closure.args.column_axis,
+        )
+    )
+
+
+def fingerprint_compilable_program(inp: CompilableProgram) -> str:
+    """
+    Generates a unique hash string for a stencil source program representing
+    the program, sorted offset_provider, and column_axis.
+    """
+    program: itir.Program = inp.data
+    offset_provider: common.OffsetProvider = inp.args.offset_provider
+    column_axis: Optional[common.Dimension] = inp.args.column_axis
+
+    program_hash = utils.content_hash(
+        (
+            program,
+            sorted(offset_provider.items(), key=lambda el: el[0]),
+            column_axis,
+        )
+    )
+
+    return program_hash
 
 
 @dataclasses.dataclass(frozen=True)

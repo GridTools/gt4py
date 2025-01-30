@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from gt4py import eve
-from gt4py.next.iterator import ir
+from gt4py.next.iterator import builtins, ir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.type_system import type_specifications as ts
 
@@ -31,7 +31,7 @@ class PruneCasts(eve.NodeTranslator):
             assert (
                 value.type
                 and isinstance(type_constructor, ir.SymRef)
-                and (type_constructor.id in ir.TYPEBUILTINS)
+                and (type_constructor.id in builtins.TYPE_BUILTINS)
             )
             dtype = ts.ScalarType(kind=getattr(ts.ScalarKind, type_constructor.id.upper()))
 

@@ -6,21 +6,13 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from dataclasses import dataclass
 from typing import Iterator, Optional, Sequence, Union
 
-from gt4py.eve.type_definitions import IntEnum
-from gt4py.eve.utils import content_hash
-from gt4py.next import common as func_common
+from gt4py.eve import datamodels as eve_datamodels, type_definitions as eve_types
+from gt4py.next import common
 
 
-@dataclass(frozen=True)
-class TypeSpec:
-    def __hash__(self) -> int:
-        return hash(content_hash(self))
-
-    def __init_subclass__(cls) -> None:
-        cls.__hash__ = TypeSpec.__hash__  # type: ignore[method-assign]
+class TypeSpec(eve_datamodels.DataModel, kw_only=False, frozen=True): ...  # type: ignore[call-arg]
 
 
 class DataType(TypeSpec):
@@ -40,14 +32,12 @@ class CallableType:
     """
 
 
-@dataclass(frozen=True)
 class DeferredType(TypeSpec):
     """Dummy used to represent a type not yet inferred."""
 
     constraint: Optional[type[TypeSpec] | tuple[type[TypeSpec], ...]]
 
 
-@dataclass(frozen=True)
 class VoidType(TypeSpec):
     """
     Return type of a function without return values.
@@ -56,31 +46,34 @@ class VoidType(TypeSpec):
     """
 
 
-@dataclass(frozen=True)
 class DimensionType(TypeSpec):
-    dim: func_common.Dimension
+    dim: common.Dimension
 
 
-@dataclass(frozen=True)
 class OffsetType(TypeSpec):
     # TODO(havogt): replace by ConnectivityType
-    source: func_common.Dimension
-    target: tuple[func_common.Dimension] | tuple[func_common.Dimension, func_common.Dimension]
+    source: common.Dimension
+    target: tuple[common.Dimension] | tuple[common.Dimension, common.Dimension]
 
     def __str__(self) -> str:
         return f"Offset[{self.source}, {self.target}]"
 
 
-class ScalarKind(IntEnum):
+class ScalarKind(eve_types.IntEnum):
     BOOL = 1
-    INT32 = 32
-    INT64 = 64
-    FLOAT32 = 1032
-    FLOAT64 = 1064
-    STRING = 3001
+    INT8 = 2
+    UINT8 = 3
+    INT16 = 4
+    UINT16 = 5
+    INT32 = 6
+    UINT32 = 7
+    INT64 = 8
+    UINT64 = 9
+    FLOAT32 = 10
+    FLOAT64 = 11
+    STRING = 12
 
 
-@dataclass(frozen=True)
 class ScalarType(DataType):
     kind: ScalarKind
     shape: Optional[list[int]] = None
@@ -92,31 +85,43 @@ class ScalarType(DataType):
         return f"{kind_str}{self.shape}"
 
 
-@dataclass(frozen=True)
-class TupleType(DataType):
-    types: list[DataType]
+class ListType(DataType):
+    """Represents a neighbor list in the ITIR representation.
 
-    def __str__(self) -> str:
-        return f"tuple[{', '.join(map(str, self.types))}]"
+    Note: not used in the frontend. The concept is represented as Field with local Dimension.
+    """
 
-    def __iter__(self) -> Iterator[DataType]:
-        yield from self.types
-
-    def __len__(self) -> int:
-        return len(self.types)
+    element_type: DataType
+    # TODO(havogt): the `offset_type` is not yet used in type_inference,
+    # it is meant to describe the neighborhood (via the local dimension)
+    offset_type: Optional[common.Dimension] = None
 
 
-@dataclass(frozen=True)
 class FieldType(DataType, CallableType):
-    dims: list[func_common.Dimension]
-    dtype: ScalarType
+    dims: list[common.Dimension]
+    dtype: ScalarType | ListType
 
     def __str__(self) -> str:
         dims = "..." if self.dims is Ellipsis else f"[{', '.join(dim.value for dim in self.dims)}]"
         return f"Field[{dims}, {self.dtype}]"
 
 
-@dataclass(frozen=True)
+class TupleType(DataType):
+    # TODO(tehrengruber): Remove `DeferredType` again. This was erroneously
+    #  introduced before we checked the annotations at runtime. All attributes of
+    #  a type that are types themselves must be concrete.
+    types: list[DataType | DimensionType | DeferredType]
+
+    def __str__(self) -> str:
+        return f"tuple[{', '.join(map(str, self.types))}]"
+
+    def __iter__(self) -> Iterator[DataType | DimensionType | DeferredType]:
+        yield from self.types
+
+    def __len__(self) -> int:
+        return len(self.types)
+
+
 class FunctionType(TypeSpec, CallableType):
     pos_only_args: Sequence[TypeSpec]
     pos_or_kw_args: dict[str, TypeSpec]

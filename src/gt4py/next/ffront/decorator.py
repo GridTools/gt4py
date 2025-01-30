@@ -80,7 +80,9 @@ class Program:
 
     definition_stage: ffront_stages.ProgramDefinition
     backend: Optional[next_backend.Backend]
-    connectivities: Optional[common.OffsetProviderType] = None
+    connectivities: Optional[common.OffsetProvider] = (
+        None  # TODO(ricoh): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
+    )
 
     @classmethod
     def from_function(
@@ -304,7 +306,7 @@ class FrozenProgram:
 
 
 try:
-    from gt4py.next.program_processors.runners.dace_iterator import Program
+    from gt4py.next.program_processors.runners.dace.program import Program
 except ImportError:
     pass
 
@@ -592,6 +594,10 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             if "out" not in kwargs:
                 raise errors.MissingArgumentError(None, "out", True)
             out = kwargs.pop("out")
+            if "domain" in kwargs:
+                domain = common.domain(kwargs.pop("domain"))
+                out = out[domain]
+
             args, kwargs = type_info.canonicalize_arguments(
                 self.foast_stage.foast_node.type, args, kwargs
             )

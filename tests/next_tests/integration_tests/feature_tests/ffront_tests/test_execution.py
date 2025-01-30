@@ -318,7 +318,9 @@ def test_double_use_scalar(cartesian_case):
         # not inlined
         return tmp2 * tmp2 * c
 
-    cases.verify_with_default_data(cartesian_case, testee, ref=lambda a, b, c: a * b * a * b * c)
+    cases.verify_with_default_data(
+        cartesian_case, testee, ref=lambda a, b, c: a * b * a * b * a * b * a * b * c
+    )
 
 
 @pytest.mark.uses_scalar_in_domain_and_fo
@@ -360,6 +362,7 @@ def test_scalar_scan(cartesian_case):
 
 @pytest.mark.uses_scan
 @pytest.mark.uses_scan_in_field_operator
+@pytest.mark.uses_tuple_iterator
 def test_tuple_scalar_scan(cartesian_case):
     @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
     def testee_scan(
@@ -818,6 +821,7 @@ def test_ternary_builtin_neighbor_sum(unstructured_case):
 
 
 @pytest.mark.uses_scan
+@pytest.mark.uses_scan_1d_field
 def test_ternary_scan(cartesian_case):
     @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
     def simple_scan_operator(carry: float, a: float) -> float:
@@ -867,8 +871,9 @@ def test_scan_nested_tuple_output(forward, cartesian_case):
     )
 
 
-@pytest.mark.uses_tuple_args
 @pytest.mark.uses_scan
+@pytest.mark.uses_tuple_args
+@pytest.mark.uses_tuple_iterator
 def test_scan_nested_tuple_input(cartesian_case):
     init = 1.0
     k_size = cartesian_case.default_sizes[KDim]
@@ -897,6 +902,7 @@ def test_scan_nested_tuple_input(cartesian_case):
 
 
 @pytest.mark.uses_scan
+@pytest.mark.uses_tuple_iterator
 def test_scan_different_domain_in_tuple(cartesian_case):
     init = 1.0
     i_size = cartesian_case.default_sizes[IDim]
@@ -936,6 +942,7 @@ def test_scan_different_domain_in_tuple(cartesian_case):
 
 
 @pytest.mark.uses_scan
+@pytest.mark.uses_tuple_iterator
 def test_scan_tuple_field_scalar_mixed(cartesian_case):
     init = 1.0
     i_size = cartesian_case.default_sizes[IDim]
@@ -994,7 +1001,7 @@ def test_domain(cartesian_case):
     a = cases.allocate(cartesian_case, program_domain, "a")()
     out = cases.allocate(cartesian_case, program_domain, "out")()
 
-    ref = out.asnumpy().copy()  # ensure we are not overwriting out outside of the domain
+    ref = out.asnumpy().copy()  # ensure we are not writing to out outside the domain
     ref[1:9] = a.asnumpy()[1:9] * 2
 
     cases.verify(cartesian_case, program_domain, a, out, inout=out, ref=ref)
@@ -1121,7 +1128,7 @@ def test_zero_dims_fields(cartesian_case):
     inp = cases.allocate(cartesian_case, implicit_broadcast_scalar, "inp")()
     out = cases.allocate(cartesian_case, implicit_broadcast_scalar, "inp")()
 
-    cases.verify(cartesian_case, implicit_broadcast_scalar, inp, out=out, ref=np.array(0))
+    cases.verify(cartesian_case, implicit_broadcast_scalar, inp, out=out, ref=np.array(1))
 
 
 def test_implicit_broadcast_mixed_dim(cartesian_case):

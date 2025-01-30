@@ -28,6 +28,7 @@ from gt4py.next import (
     common,
     constructors,
     field_utils,
+    utils as gt_utils,
 )
 from gt4py.next.ffront import decorator
 from gt4py.next.type_system import type_specifications as ts, type_translation
@@ -55,7 +56,6 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     mesh_descriptor,
 )
 
-from gt4py.next import utils as gt_utils
 
 # mypy does not accept [IDim, ...] as a type
 
@@ -192,13 +192,13 @@ class UniqueInitializer(DataInitializer):
     data containers.
     """
 
-    start: int = 0
+    start: int = 1
 
     @property
     def scalar_value(self) -> ScalarValue:
         start = self.start
         self.start += 1
-        return np.int64(start)
+        return start
 
     def field(
         self,
@@ -381,6 +381,7 @@ def verify(
     fieldview_prog: decorator.FieldOperator | decorator.Program,
     *args: FieldViewArg,
     ref: ReferenceValue,
+    domain: Optional[dict[common.Dimension, tuple[int, int]]] = None,
     out: Optional[FieldViewInout] = None,
     inout: Optional[FieldViewInout] = None,
     offset_provider: Optional[OffsetProvider] = None,
@@ -405,6 +406,8 @@ def verify(
             or tuple of fields here and they will be compared to ``ref`` under
             the assumption that the fieldview code stores its results in
             them.
+        domain: If given will be passed to the fieldview code as ``domain=``
+            keyword argument.
         offset_provider: An override for the test case's offset_provider.
             Use with care!
         comparison: A comparison function, which will be called as
@@ -414,10 +417,13 @@ def verify(
     used as an argument to the fieldview program and compared against ``ref``.
     Else, ``inout`` will not be passed and compared to ``ref``.
     """
+    kwargs = {}
     if out:
-        run(case, fieldview_prog, *args, out=out, offset_provider=offset_provider)
-    else:
-        run(case, fieldview_prog, *args, offset_provider=offset_provider)
+        kwargs["out"] = out
+    if domain:
+        kwargs["domain"] = domain
+
+    run(case, fieldview_prog, *args, **kwargs, offset_provider=offset_provider)
 
     out_comp = out or inout
     assert out_comp is not None

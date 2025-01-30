@@ -197,11 +197,11 @@ class InlineLifts(
                 if len(args) == 0:
                     return im.literal_from_value(True)
 
-                res = ir.FunCall(fun=ir.SymRef(id="can_deref"), args=[args[0]])
+                res = im.can_deref(args[0])
                 for arg in args[1:]:
                     res = ir.FunCall(
                         fun=ir.SymRef(id="and_"),
-                        args=[res, ir.FunCall(fun=ir.SymRef(id="can_deref"), args=[arg])],
+                        args=[res, im.can_deref(arg)],
                     )
                 return res
         elif (

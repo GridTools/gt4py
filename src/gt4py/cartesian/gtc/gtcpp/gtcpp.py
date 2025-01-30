@@ -31,11 +31,11 @@ class Offset(common.CartesianOffset):
     pass
 
 
-class Literal(common.Literal, Expr):  # type: ignore
+class Literal(common.Literal, Expr):
     pass
 
 
-class LocalAccess(common.ScalarAccess, Expr):  # type: ignore
+class LocalAccess(common.ScalarAccess, Expr):
     pass
 
 
@@ -43,7 +43,7 @@ class VariableKOffset(common.VariableKOffset[Expr]):
     pass
 
 
-class AccessorRef(common.FieldAccess[Expr, VariableKOffset], Expr):  # type: ignore
+class AccessorRef(common.FieldAccess[Expr, VariableKOffset], Expr):
     pass
 
 
@@ -88,7 +88,7 @@ class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
     _dtype_propagation = common.native_func_call_dtype_propagation(strict=True)
 
 
-class Cast(common.Cast[Expr], Expr):  # type: ignore
+class Cast(common.Cast[Expr], Expr):
     pass
 
 

@@ -14,7 +14,7 @@ from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
 
 
@@ -85,34 +85,6 @@ def _get_connectivity(
     return connectivities[0]
 
 
-def _make_shift(offsets: list[itir.Expr], iterator: itir.Expr) -> itir.FunCall:
-    return itir.FunCall(
-        fun=itir.FunCall(fun=itir.SymRef(id="shift"), args=offsets),
-        args=[iterator],
-        location=iterator.location,
-    )
-
-
-def _make_deref(iterator: itir.Expr) -> itir.FunCall:
-    return itir.FunCall(fun=itir.SymRef(id="deref"), args=[iterator], location=iterator.location)
-
-
-def _make_can_deref(iterator: itir.Expr) -> itir.FunCall:
-    return itir.FunCall(
-        fun=itir.SymRef(id="can_deref"), args=[iterator], location=iterator.location
-    )
-
-
-def _make_if(cond: itir.Expr, true_expr: itir.Expr, false_expr: itir.Expr) -> itir.FunCall:
-    return itir.FunCall(
-        fun=itir.SymRef(id="if_"), args=[cond, true_expr, false_expr], location=cond.location
-    )
-
-
-def _make_list_get(offset: itir.Expr, expr: itir.Expr) -> itir.FunCall:
-    return itir.FunCall(fun=itir.SymRef(id="list_get"), args=[offset, expr], location=expr.location)
-
-
 @dataclasses.dataclass(frozen=True)
 class UnrollReduce(PreserveLocationVisitor, NodeTranslator):
     # we use one UID generator per instance such that the generated ids are
@@ -130,27 +102,25 @@ class UnrollReduce(PreserveLocationVisitor, NodeTranslator):
         max_neighbors = connectivity_type.max_neighbors
         has_skip_values = connectivity_type.has_skip_values
 
-        acc = itir.SymRef(id=self.uids.sequential_id(prefix="_acc"))
-        offset = itir.SymRef(id=self.uids.sequential_id(prefix="_i"))
-        step = itir.SymRef(id=self.uids.sequential_id(prefix="_step"))
+        acc: str = self.uids.sequential_id(prefix="_acc")
+        offset: str = self.uids.sequential_id(prefix="_i")
+        step: str = self.uids.sequential_id(prefix="_step")
 
         assert isinstance(node.fun, itir.FunCall)
         fun, init = node.fun.args
 
-        elems = [_make_list_get(offset, arg) for arg in node.args]
-        step_fun: itir.Expr = itir.FunCall(fun=fun, args=[acc, *elems])
+        elems = [im.list_get(offset, arg) for arg in node.args]
+        step_fun: itir.Expr = im.call(fun)(acc, *elems)
         if has_skip_values:
             check_arg = next(_get_neighbors_args(node.args))
             offset_tag, it = check_arg.args
-            can_deref = _make_can_deref(_make_shift([offset_tag, offset], it))
-            step_fun = _make_if(can_deref, step_fun, acc)
-        step_fun = itir.Lambda(params=[itir.Sym(id=acc.id), itir.Sym(id=offset.id)], expr=step_fun)
+            can_deref = im.can_deref(im.shift(offset_tag, offset)(it))
+            step_fun = im.if_(can_deref, step_fun, acc)
+        step_fun = im.lambda_(acc, offset)(step_fun)
         expr = init
         for i in range(max_neighbors):
-            expr = itir.FunCall(fun=step, args=[expr, itir.OffsetLiteral(value=i)])
-        expr = itir.FunCall(
-            fun=itir.Lambda(params=[itir.Sym(id=step.id)], expr=expr), args=[step_fun]
-        )
+            expr = im.call(step)(expr, itir.OffsetLiteral(value=i))
+        expr = im.let(step, step_fun)(expr)
 
         return expr
 

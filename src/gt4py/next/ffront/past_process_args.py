@@ -83,40 +83,47 @@ def _process_args(
             # TODO(tehrengruber): Previously this function was called with the actual arguments
             #  not their type. The check using the shape here is not functional anymore and
             #  should instead be placed in a proper location.
-            shapes_and_dims = [*_field_constituents_shape_and_dims(args[param_idx], param.type)]
+            ranges_and_dims = [*_field_constituents_range_and_dims(args[param_idx], param.type)]
             # check that all non-scalar like constituents have the same shape and dimension, e.g.
             # for `(scalar, (field1, field2))` the two fields need to have the same shape and
             # dimension
-            if shapes_and_dims:
-                shape, dims = shapes_and_dims[0]
+            if ranges_and_dims:
+                range_, dims = ranges_and_dims[0]
                 if not all(
-                    el_shape == shape and el_dims == dims for (el_shape, el_dims) in shapes_and_dims
+                    el_range == range_ and el_dims == dims
+                    for (el_range, el_dims) in ranges_and_dims
                 ):
                     raise ValueError(
                         "Constituents of composite arguments (e.g. the elements of a"
                         " tuple) need to have the same shape and dimensions."
                     )
+                index_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
                 size_args.extend(
-                    shape if shape else [ts.ScalarType(kind=ts.ScalarKind.INT32)] * len(dims)  # type: ignore[arg-type]  # shape is always empty
+                    range_ if range_ else [ts.TupleType(types=[index_type, index_type])] * len(dims)  # type: ignore[arg-type]  # shape is always empty
                 )
     return tuple(rewritten_args), tuple(size_args), kwargs
 
 
-def _field_constituents_shape_and_dims(
+def _field_constituents_range_and_dims(
     arg: Any,  # TODO(havogt): improve typing
     arg_type: ts.DataType,
-) -> Iterator[tuple[tuple[int, ...], list[common.Dimension]]]:
+) -> Iterator[tuple[tuple[tuple[int, int], ...], list[common.Dimension]]]:
     match arg_type:
         case ts.TupleType():
             for el, el_type in zip(arg, arg_type.types):
-                yield from _field_constituents_shape_and_dims(el, el_type)
+                assert isinstance(el_type, ts.DataType)
+                yield from _field_constituents_range_and_dims(el, el_type)
         case ts.FieldType():
             dims = type_info.extract_dims(arg_type)
             if isinstance(arg, ts.TypeSpec):  # TODO
                 yield (tuple(), dims)
             elif dims:
-                assert hasattr(arg, "shape") and len(arg.shape) == len(dims)
-                yield (arg.shape, dims)
+                assert (
+                    hasattr(arg, "domain")
+                    and isinstance(arg.domain, common.Domain)
+                    and len(arg.domain.dims) == len(dims)
+                )
+                yield (tuple((r.start, r.stop) for r in arg.domain.ranges), dims)
             else:
                 yield from []  # ignore 0-dim fields
         case ts.ScalarType():

@@ -136,7 +136,7 @@ class CudaBackend(BaseGTBackend, CLIBackendMixin):
     }
     languages = {"computation": "cuda", "bindings": ["python"]}
     storage_info = gt_storage.layout.CUDALayout
-    PYEXT_GENERATOR_CLASS = CudaExtGenerator  # type: ignore
+    PYEXT_GENERATOR_CLASS = CudaExtGenerator
     MODULE_GENERATOR_CLASS = CUDAPyExtModuleGenerator
     GT_BACKEND_T = "gpu"
 

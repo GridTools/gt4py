@@ -74,7 +74,6 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
         * change connector names to match inner array name (before expansion prefixed to satisfy uniqueness)
         * change in- and out-edges' subsets so that they have the same shape as the corresponding array inside
         * determine the domain size based on edges to StencilComputation
-
         """
         # change connector names
         for in_edge in parent_state.in_edges(node):

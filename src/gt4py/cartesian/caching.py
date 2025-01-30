@@ -61,7 +61,7 @@ class CachingStrategy(abc.ABC):
         """
         Generate the cache info dict.
 
-        Backend specific additions can be added via a hook propery on the backend instance.
+        Backend specific additions can be added via a hook properly on the backend instance.
         Override :py:meth:`gt4py.backend.base.Backend.extra_cache_info` to store extra
         info.
         """

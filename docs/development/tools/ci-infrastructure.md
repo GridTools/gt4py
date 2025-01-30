@@ -1,6 +1,6 @@
 # CI infrastructure
 
-Any test job that runs on CI is encoded in automation tools like **tox** and **pre-commit** and can be run locally instead.
+Any test job that runs on CI is encoded in automation tools like **nox** and **pre-commit** and can be run locally instead.
 
 ## GitHub Workflows
 

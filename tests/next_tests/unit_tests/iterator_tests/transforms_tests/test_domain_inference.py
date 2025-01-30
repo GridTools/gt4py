@@ -1028,10 +1028,10 @@ def test_arithmetic_builtin(offset_provider):
 def test_scan(offset_provider):
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     testee = im.as_fieldop(
-        im.call("scan")(im.lambda_("init", "it")(im.deref(im.shift("Ioff", 1)("it"))), True, 0.0)
+        im.scan(im.lambda_("init", "it")(im.deref(im.shift("Ioff", 1)("it"))), True, 0.0)
     )("a")
     expected = im.as_fieldop(
-        im.call("scan")(im.lambda_("init", "it")(im.deref(im.shift("Ioff", 1)("it"))), True, 0.0),
+        im.scan(im.lambda_("init", "it")(im.deref(im.shift("Ioff", 1)("it"))), True, 0.0),
         domain,
     )("a")
 

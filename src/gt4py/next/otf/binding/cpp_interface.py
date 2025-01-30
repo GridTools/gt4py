@@ -8,7 +8,7 @@
 
 from typing import Final, Sequence
 
-from gt4py.next.otf import languages
+from gt4py.next.otf import cpp_utils, languages
 from gt4py.next.otf.binding import interface
 from gt4py.next.type_system import type_info as ti, type_specifications as ts
 
@@ -18,32 +18,12 @@ CPP_DEFAULT: Final = languages.LanguageWithHeaderFilesSettings(
 )
 
 
-def render_scalar_type(scalar_type: ts.ScalarType) -> str:
-    match scalar_type.kind:
-        case ts.ScalarKind.BOOL:
-            return "bool"
-        case ts.ScalarKind.INT32:
-            return "std::int32_t"
-        case ts.ScalarKind.INT64:
-            return "std::int64_t"
-        case ts.ScalarKind.FLOAT32:
-            return "float"
-        case ts.ScalarKind.FLOAT64:
-            return "double"
-        case ts.ScalarKind.STRING:
-            return "std::string"
-        case _:
-            raise AssertionError(
-                f"Scalar kind '{scalar_type}' is not implemented when it should be."
-            )
-
-
 def render_function_declaration(function: interface.Function, body: str) -> str:
     template_params: list[str] = []
     rendered_params: list[str] = []
     for index, param in enumerate(function.parameters):
         if isinstance(param.type_, ts.ScalarType):
-            rendered_params.append(f"{render_scalar_type(param.type_)} {param.name}")
+            rendered_params.append(f"{cpp_utils.pytype_to_cpptype(param.type_)} {param.name}")
         elif ti.is_type_or_tuple_of_type(param.type_, (ts.FieldType, ts.ScalarType)):
             template_param = f"ArgT{index}"
             template_params.append(f"class {template_param}")

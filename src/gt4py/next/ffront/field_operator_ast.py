@@ -180,7 +180,7 @@ class IfStmt(Stmt):
     @datamodels.root_validator
     @classmethod
     def _collect_common_symbols(cls: type[IfStmt], instance: IfStmt) -> None:
-        common_symbol_names = (
+        common_symbol_names = sorted(  # sort is required to get stable results across runs
             instance.true_branch.annex.symtable.keys() & instance.false_branch.annex.symtable.keys()
         )
         instance.annex.propagated_symbols = {

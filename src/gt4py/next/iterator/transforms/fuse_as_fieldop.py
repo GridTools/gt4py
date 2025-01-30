@@ -20,10 +20,7 @@ from gt4py.next.iterator.transforms import (
     inline_lifts,
     trace_shifts,
 )
-from gt4py.next.iterator.type_system import (
-    inference as type_inference,
-    type_specifications as it_ts,
-)
+from gt4py.next.iterator.type_system import inference as type_inference
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
@@ -140,7 +137,7 @@ def fuse_as_fieldop(
             if arg.type and not isinstance(arg.type, ts.DeferredType):
                 assert isinstance(arg.type, ts.TypeSpec)
                 dtype = type_info.apply_to_primitive_constituents(type_info.extract_dtype, arg.type)
-                assert not isinstance(dtype, it_ts.ListType)
+                assert not isinstance(dtype, ts.ListType)
             new_param: str
             if isinstance(
                 arg, itir.SymRef
@@ -246,7 +243,7 @@ class FuseAsFieldOp(eve.NodeTranslator):
                             )
                             or cpm.is_call_to(arg, "if_")
                         )
-                        and (isinstance(dtype, it_ts.ListType) or len(arg_shifts) <= 1)
+                        and (isinstance(dtype, ts.ListType) or len(arg_shifts) <= 1)
                     )
                 )
 

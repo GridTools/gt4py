@@ -771,7 +771,7 @@ class TernaryOp(common.TernaryOp[Expr], Expr):
     _dtype_propagation = common.ternary_op_dtype_propagation(strict=True)
 
 
-class Cast(common.Cast[Expr], Expr):  # type: ignore
+class Cast(common.Cast[Expr], Expr):
     pass
 
 

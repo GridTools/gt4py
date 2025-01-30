@@ -43,7 +43,7 @@ class BlockStmt(common.BlockStmt[Stmt], Stmt):
     pass
 
 
-class Literal(common.Literal, Expr):  # type: ignore
+class Literal(common.Literal, Expr):
     pass
 
 
@@ -51,11 +51,11 @@ class VariableKOffset(common.VariableKOffset[Expr]):
     pass
 
 
-class ScalarAccess(common.ScalarAccess, Expr):  # type: ignore
+class ScalarAccess(common.ScalarAccess, Expr):
     pass
 
 
-class FieldAccess(common.FieldAccess[Expr, VariableKOffset], Expr):  # type: ignore
+class FieldAccess(common.FieldAccess[Expr, VariableKOffset], Expr):
     pass
 
 
@@ -163,7 +163,7 @@ class TernaryOp(common.TernaryOp[Expr], Expr):
     _dtype_propagation = common.ternary_op_dtype_propagation(strict=False)
 
 
-class Cast(common.Cast[Expr], Expr):  # type: ignore
+class Cast(common.Cast[Expr], Expr):
     pass
 
 

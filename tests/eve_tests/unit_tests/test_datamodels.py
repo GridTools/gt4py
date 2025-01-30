@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import enum
 import numbers
+import sys
 import types
 import typing
-from typing import Set  # noqa: F401 [unused-import] used in exec() context
 from typing import (
     Any,
     Callable,
@@ -26,6 +26,7 @@ from typing import (
     MutableSequence,
     Optional,
     Sequence,
+    Set,  # noqa: F401 [unused-import] used in exec() context
     Tuple,
     Type,
     TypeVar,
@@ -555,6 +556,18 @@ SAMPLE_TYPE_DATA: Final = [
     ("typing.MutableSequence[int]", ([1, 2, 3], []), ((1, 2, 3), tuple(), 1, [1.0], {1})),
     ("typing.Set[int]", ({1, 2, 3}, set()), (1, [1], (1,), {1: None})),
     ("typing.Union[int, float, str]", [1, 3.0, "one"], [[1], [], 1j]),
+    pytest.param(
+        "int | float | str",
+        [1, 3.0, "one"],
+        [[1], [], 1j],
+        marks=pytest.mark.skipif(sys.version_info < (3, 10), reason="| union syntax not supported"),
+    ),
+    pytest.param(
+        "typing.List[int|float]",
+        [[1, 2.0], []],
+        [1, 2.0, [1, "2.0"]],
+        marks=pytest.mark.skipif(sys.version_info < (3, 10), reason="| union syntax not supported"),
+    ),
     ("typing.Optional[int]", [1, None], [[1], [], 1j]),
     (
         "typing.Dict[Union[int, float, str], Union[Tuple[int, Optional[float]], Set[int]]]",

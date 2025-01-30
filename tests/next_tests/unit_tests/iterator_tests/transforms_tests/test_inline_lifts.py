@@ -27,15 +27,15 @@ def inline_lift_test_data():
         ),
         (
             # can_deref(lift(f)(args...)) -> and(can_deref(arg[0]), and(can_deref(arg[1]), ...))
-            im.call("can_deref")(im.lift("f")("arg1", "arg2")),
-            im.and_(im.call("can_deref")("arg1"), im.call("can_deref")("arg2")),
+            im.can_deref(im.lift("f")("arg1", "arg2")),
+            im.and_(im.can_deref("arg1"), im.can_deref("arg2")),
         ),
         (
             # can_deref(shift(...)(lift(f)(args...)) -> and(can_deref(shift(...)(arg[0])), and(can_deref(shift(...)(arg[1])), ...))
-            im.call("can_deref")(im.shift("I", 1)(im.lift("f")("arg1", "arg2"))),
+            im.can_deref(im.shift("I", 1)(im.lift("f")("arg1", "arg2"))),
             im.and_(
-                im.call("can_deref")(im.shift("I", 1)("arg1")),
-                im.call("can_deref")(im.shift("I", 1)("arg2")),
+                im.can_deref(im.shift("I", 1)("arg1")),
+                im.can_deref(im.shift("I", 1)("arg2")),
             ),
         ),
         (

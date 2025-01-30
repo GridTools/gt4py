@@ -23,13 +23,12 @@ Usage Example
     gtscript_imports.enable(
         search_path=[<path1>, <path2>, ...],  # for allowing only in search_path
         generate_path=<mybuildpath>,  # for generating python modules in a specific dir
-        in_source=False,  # set True to generate python modules next to gtscfipt files
+        in_source=False,  # set True to generate python modules next to gtscript files
     )
 
     # scoped usage
     with gtscript_imports.enabled():
         import ...
-
 """
 
 import importlib

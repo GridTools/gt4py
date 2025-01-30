@@ -27,8 +27,8 @@ class CollapseListGet(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 cond, true_val, false_val = node.args[1].args
                 return im.if_(
                     cond,
-                    self.visit(im.call("list_get")(list_idx, true_val)),
-                    self.visit(im.call("list_get")(list_idx, false_val)),
+                    self.visit(im.list_get(list_idx, true_val)),
+                    self.visit(im.list_get(list_idx, false_val)),
                 )
             if cpm.is_call_to(node.args[1], "neighbors"):
                 offset_tag = node.args[1].args[0]

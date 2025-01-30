@@ -582,16 +582,10 @@ def test_K_offset_write(backend):
     # Cuda generates bad code for the K offset
     if backend == "cuda":
         pytest.skip("cuda K-offset write generates bad code")
-    if backend in ["dace:gpu"]:
-        import cupy as cp
 
-        if cp.cuda.runtime.runtimeGetVersion() < 12000:
-            pytest.skip(
-                f"{backend} backend with CUDA 11 and/or GCC 10.3 is not capable of K offset write, update CUDA/GCC if possible"
-            )
-    if backend in ["gt:gpu"]:
+    if backend in ["gt:gpu", "dace:gpu"]:
         pytest.skip(
-            f"{backend} backend is not capable of K offset write, bug remains unsolved: https://github.com/GridTools/gt4py/issues/1754"
+            f"{backend} backend is not capable of K offset write, bug remains unsolved: https://github.com/GridTools/gt4py/issues/1684"
         )
 
     arraylib = get_array_library(backend)
@@ -664,17 +658,6 @@ def test_K_offset_write(backend):
 def test_K_offset_write_conditional(backend):
     if backend == "cuda":
         pytest.skip("Cuda backend is not capable of K offset write")
-    if backend in ["dace:gpu"]:
-        import cupy as cp
-
-        if cp.cuda.runtime.runtimeGetVersion() < 12000:
-            pytest.skip(
-                f"{backend} backend with CUDA 11 and/or GCC 10.3 is not capable of K offset write, update CUDA/GCC if possible"
-            )
-    if backend in ["gt:gpu"]:
-        pytest.skip(
-            f"{backend} backend is not capable of K offset write, bug remains unsolved: https://github.com/GridTools/gt4py/issues/1754"
-        )
 
     arraylib = get_array_library(backend)
     array_shape = (1, 1, 4)
@@ -682,7 +665,7 @@ def test_K_offset_write_conditional(backend):
 
     @gtscript.stencil(backend=backend)
     def column_physics_conditional(A: Field[np.float64], B: Field[np.float64], scalar: np.float64):
-        with computation(BACKWARD), interval(1, None):
+        with computation(BACKWARD), interval(1, -1):
             if A > 0 and B > 0:
                 A[0, 0, -1] = scalar
                 B[0, 0, 1] = A
@@ -700,6 +683,42 @@ def test_K_offset_write_conditional(backend):
         backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
     )
     column_physics_conditional(A, B, 2.0)
+    # Manual unroll of the above
+    # Starts with
+    # - A[...] = [40, 41, 42, 43]
+    # - B[...] = [1, 1, 1, 1]
+    # Now in-stencil
+    # ITERATION k = 2 of [2:1]
+    # if condition
+    # - A[2] == 42 && B[2] == 1 => True
+    # - A[1] = 2.0
+    # - B[3] = A[2] = 42
+    # while
+    # - lev = 1
+    # - A[2] == 42 && B[2] == 1 => True
+    # - A[3] = -1
+    # - B[2] = -1
+    # - lev = 2
+    # - A[2] == 42 && B[2] == -1 => False
+    # End of iteration state
+    # - A[...] = A[40, 2.0, 2.0, -1]
+    # - B[...] = A[1, 1, -1, 42]
+    # ITERATION k = 1 of [2:1]
+    # if condition
+    # - A[1] == 2.0 && B[1] == 1 => True
+    # - A[0] = 2.0
+    # - B[2] = A[1] = 2.0
+    # while
+    # - lev = 1
+    # - A[1] == 2.0 && B[1] == 1 => True
+    # - A[2] = -1
+    # - B[1] = -1
+    # - lev = 2
+    # - A[1] == 2.0 && B[2] == -1 => False
+    # End of stencil state
+    # - A[...] = A[2.0, 2.0, -1, -1]
+    # - B[...] = A[1, -1, 2.0, 42]
+
     assert (A[0, 0, :] == arraylib.array([2, 2, -1, -1])).all()
     assert (B[0, 0, :] == arraylib.array([1, -1, 2, 42])).all()
 

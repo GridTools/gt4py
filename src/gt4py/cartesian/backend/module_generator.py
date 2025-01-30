@@ -62,8 +62,6 @@ _args_data_cache: Dict[StencilID, ModuleData] = {}
 def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
     """
     Compute module data containing information about stencil arguments from gtir.
-
-    This is no longer compatible with the legacy backends.
     """
     if pipeline.stencil_id in _args_data_cache:
         return _args_data_cache[pipeline.stencil_id]
@@ -142,7 +140,7 @@ class BaseModuleGenerator(abc.ABC):
         """
         Generate source code for a Python module containing a StencilObject.
 
-        A possible reaosn for extending is processing additional kwargs,
+        A possible reason for extending is processing additional kwargs,
         using a different template might require completely overriding.
         """
         if builder:

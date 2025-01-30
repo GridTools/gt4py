@@ -534,7 +534,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
         # call implementation
         implementation(**test_values, origin=origin, domain=domain, exec_info=exec_info)
 
-        # for validation data, data is cropped to actually touched domain, so that origin offseting
+        # for validation data, data is cropped to actually touched domain, so that origin offsetting
         # does not have to be implemented for every test suite. This is done based on info
         # specified in test suite
         cropped_validation_values = {}

@@ -31,7 +31,7 @@ def test_constant_folding_math_op():
 
 
 def test_constant_folding_if():
-    expected = im.call("plus")("a", 2)
+    expected = im.plus("a", 2)
     testee = im.if_(
         im.literal_from_value(True),
         im.plus(im.ref("a"), im.literal_from_value(2)),
@@ -42,7 +42,7 @@ def test_constant_folding_if():
 
 
 def test_constant_folding_minimum():
-    testee = im.call("minimum")("a", "a")
+    testee = im.minimum("a", "a")
     expected = im.ref("a")
     actual = ConstantFolding.apply(testee)
     assert actual == expected
@@ -56,7 +56,7 @@ def test_constant_folding_literal():
 
 
 def test_constant_folding_literal_maximum():
-    testee = im.call("maximum")(im.literal_from_value(1), im.literal_from_value(2))
+    testee = im.maximum(im.literal_from_value(1), im.literal_from_value(2))
     expected = im.literal_from_value(2)
     actual = ConstantFolding.apply(testee)
     assert actual == expected
