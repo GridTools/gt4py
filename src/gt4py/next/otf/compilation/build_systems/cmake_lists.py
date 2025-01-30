@@ -89,6 +89,7 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
         match dep.name:
             case "nanobind":
                 import sys
+
                 import nanobind
 
                 py = f"""
