@@ -120,6 +120,9 @@ def safe_replace_symbolic(
     Returns:
         A new symbolic expression as result of symbol replacement.
     """
+    # The list `x` is needed because `subs()` returns a new object and can not handle
+    # replacement dicts of the form `{'x': 'y', 'y': 'x'}`.
+    # The utility `safe_replace()` will call `subs()` twice in case of such dicts.
     x = [val]
     dace.symbolic.safe_replace(symbol_mapping, lambda m, xx=x: xx.append(xx[-1].subs(m)))
     return x[-1]
