@@ -132,7 +132,8 @@ all = ['gt4py[dace,formatting,jax,performance,testing]']
 cuda11 = ['cupy-cuda11x>=12.0']
 cuda12 = ['cupy-cuda12x>=12.0']
 # features
-dace = ['dace>=1.0.0,<1.1.0']  # v1.x will contain breaking changes, see https://github.com/spcl/dace/milestone/4
+dace = ['dace>=1.0.1,<1.1.0']  # v1.x will contain breaking changes, see https://github.com/spcl/dace/milestone/4
+dace-next = ['dace==1.0.0']  # TODO(edopao): pull latest dace version from the git repository
 formatting = ['clang-format>=9.0']
 jax = ['jax>=0.4.26']
 jax-cuda12 = ['jax[cuda12_local]>=0.4.26', 'gt4py[cuda12]']
@@ -438,6 +439,14 @@ conflicts = [
     {extra = 'jax-cuda12'},
     {extra = 'rocm4_3'},
     {extra = 'rocm5_0'}
+  ],
+  [
+    {extra = 'dace'},
+    {extra = 'dace-next'}
+  ],
+  [
+    {extra = 'all'},
+    {extra = 'dace-next'}
   ]
 ]
 
