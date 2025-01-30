@@ -61,10 +61,6 @@ CodeGenTestSettings: Final[dict[str, dict[str, Sequence]]] = {
     "internal": {"extras": [], "markers": ["not requires_dace"]},
     "dace": {"extras": ["dace"], "markers": ["requires_dace"]},
 }
-# Use dace-next for GT4Py-next, to install a different dace version than in cartesian
-CodeGenNextTestSettings = CodeGenTestSettings | {
-    "dace": {"extras": ["dace-next"], "markers": ["requires_dace"]},
-}
 
 
 # -- nox sessions --
@@ -162,7 +158,7 @@ def test_next(
 ) -> None:
     """Run selected 'gt4py.next' tests."""
 
-    codegen_settings = CodeGenNextTestSettings[codegen]
+    codegen_settings = CodeGenTestSettings[codegen]
     device_settings = DeviceTestSettings[device]
     groups: list[str] = ["test"]
     mesh_markers: list[str] = []
