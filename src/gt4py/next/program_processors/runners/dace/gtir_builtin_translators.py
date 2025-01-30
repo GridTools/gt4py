@@ -75,21 +75,20 @@ class FieldopData:
     Args:
         dc_node: DaCe access node to the data storage.
         gt_type: GT4Py type definition, which includes the field domain information.
-        origin: List of start indices, in each dimension, for `FieldType` data.
-            Has to be `None` only for `ScalarType` data. For fields it is assumed
-            to be all zeros if not given.
+        origin: Tuple of start indices, in each dimension, for `FieldType` data.
+            Pass an empty tuple for `ScalarType` data or zero-dimensional fields.
     """
 
     dc_node: dace.nodes.AccessNode
     gt_type: ts.FieldType | ts.ScalarType
-    origin: Optional[list[dace.symbolic.SymExpr]]
+    origin: tuple[dace.symbolic.SymbolicType, ...]
 
     def __post_init__(self) -> None:
         """Implements a sanity check on the constructed data type."""
         assert (
-            (self.origin is None)
+            len(self.origin) == 0
             if isinstance(self.gt_type, ts.ScalarType)
-            else (self.origin is not None)
+            else len(self.origin) == len(self.gt_type.dims)
         )
 
     def map_to_parent_sdfg(
@@ -113,7 +112,7 @@ class FieldopData:
 
         if isinstance(self.gt_type, ts.ScalarType):
             outer, outer_desc = sdfg_builder.add_temp_scalar(outer_sdfg, inner_desc.dtype)
-            outer_origin = None
+            outer_origin = []
         else:
             outer, outer_desc = sdfg_builder.add_temp_array_like(outer_sdfg, inner_desc)
             # We cannot use a copy of the inner data descriptor directly, we have to apply the symbol mapping.
@@ -122,10 +121,12 @@ class FieldopData:
                 lambda m: dace.sdfg.replace_properties_dict(outer_desc, m),
             )
             # Same applies to the symbols used as field origin (the domain range start)
-            outer_origin = [val.subs(symbol_mapping) for val in self.origin]  # type: ignore[union-attr]  # origin is checked at construction
+            outer_origin = [
+                gtx_dace_utils.safe_replace_symbolic(val, symbol_mapping) for val in self.origin
+            ]
 
         outer_node = outer_sdfg_state.add_access(outer)
-        return FieldopData(outer_node, self.gt_type, outer_origin)
+        return FieldopData(outer_node, self.gt_type, tuple(outer_origin))
 
     def get_local_view(
         self, domain: FieldopDomain
@@ -183,15 +184,10 @@ class FieldopData:
         # are assumed to be compiled-time values (not symbolic), therefore the start and
         # stop range symbols of the inner field only extend over the global dimensions
         return (
-            {
-                gtx_dace_utils.range_start_symbol(dataname, i): (
-                    self.origin[i]  # type: ignore[index]  # origin is checked at construction
-                )
-                for i in range(ndims)
-            }
+            {gtx_dace_utils.range_start_symbol(dataname, i): (self.origin[i]) for i in range(ndims)}
             | {
                 gtx_dace_utils.range_stop_symbol(dataname, i): (
-                    self.origin[i] + outer_desc.shape[i]  # type: ignore[index]  # origin is checked at construction
+                    self.origin[i] + outer_desc.shape[i]
                 )
                 for i in range(ndims)
             }
@@ -417,7 +413,7 @@ def _create_field_operator_impl(
     output_edge.connect(map_exit, field_node, field_subset)
 
     return FieldopData(
-        field_node, ts.FieldType(field_dims, output_edge.result.gt_dtype), field_origin
+        field_node, ts.FieldType(field_dims, output_edge.result.gt_dtype), tuple(field_origin)
     )
 
 
@@ -799,7 +795,7 @@ def translate_literal(
     data_type = node.type
     data_node = _get_symbolic_value(sdfg, state, sdfg_builder, node.value, data_type)
 
-    return FieldopData(data_node, data_type, origin=None)
+    return FieldopData(data_node, data_type, origin=())
 
 
 def translate_make_tuple(
@@ -921,7 +917,7 @@ def translate_scalar_expr(
         dace.Memlet(data=temp_name, subset="0"),
     )
 
-    return FieldopData(temp_node, node.type, origin=None)
+    return FieldopData(temp_node, node.type, origin=())
 
 
 def translate_symbol_ref(

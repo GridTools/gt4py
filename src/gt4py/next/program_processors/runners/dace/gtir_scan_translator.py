@@ -168,7 +168,7 @@ def _create_scan_field_operator_impl(
     output_edge.connect(map_exit, field_node, field_subset)
 
     return gtir_translators.FieldopData(
-        field_node, ts.FieldType(field_dims, output_edge.result.gt_dtype), field_origin
+        field_node, ts.FieldType(field_dims, output_edge.result.gt_dtype), tuple(field_origin)
     )
 
 
@@ -467,7 +467,7 @@ def _lower_lambda_to_nested_sdfg(
         )
 
         output_type = ts.FieldType(dims=[scan_dim], dtype=scan_result.gt_dtype)
-        return gtir_translators.FieldopData(output_node, output_type, origin=scan_lower_bound)
+        return gtir_translators.FieldopData(output_node, output_type, origin=(scan_lower_bound,))
 
     # write the stencil result (value on one vertical level) into a 1D field
     # with full vertical shape representing one column

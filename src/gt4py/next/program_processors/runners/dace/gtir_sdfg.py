@@ -273,7 +273,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             The descriptor associated with the SDFG data storage, filled with field origin.
         """
         if isinstance(data_type, ts.ScalarType):
-            return gtir_builtin_translators.FieldopData(data_node, data_type, origin=None)
+            return gtir_builtin_translators.FieldopData(data_node, data_type, origin=())
         local_dims = [dim for dim in data_type.dims if dim.kind == gtx_common.DimensionKind.LOCAL]
         if len(local_dims) == 0:
             # do nothing: the field domain consists of all global dimensions
@@ -298,10 +298,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             raise NotImplementedError(
                 "Fields with more than one local dimension are not supported."
             )
-        field_origin = [
+        field_origin = tuple(
             dace.symbolic.pystr_to_symbolic(gtx_dace_utils.range_start_symbol(data_node.data, axis))
             for axis in range(len(field_type.dims))
-        ]
+        )
         return gtir_builtin_translators.FieldopData(data_node, field_type, field_origin)
 
     def get_symbol_type(self, symbol_name: str) -> ts.DataType:
