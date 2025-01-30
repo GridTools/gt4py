@@ -79,7 +79,7 @@ def test_generate_bindings(backend, tmp_path):
         )
     else:
         # assumption: only gt backends support python bindings for other languages than python
-        result = builder.backend.generate_bindings("python", stencil_ir=builder.gtir)
+        result = builder.backend.generate_bindings("python")
         assert "init_1_src" in result
-        srcs = result["init_1_src"]
-        assert "bindings.cpp" in srcs or "bindings.cu" in srcs
+        sources = result["init_1_src"]
+        assert "bindings.cpp" in sources or "bindings.cu" in sources
