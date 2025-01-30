@@ -16,10 +16,6 @@ from typing import Final, Literal, TypeAlias
 
 import nox
 
-#: This should just be `pytest.ExitCode.NO_TESTS_COLLECTED` but `pytest`
-#: is not guaranteed to be available in the venv where `nox` is running.
-NO_TESTS_COLLECTED_EXIT_CODE: Final = 5
-
 # -- nox configuration --
 nox.options.default_venv_backend = "uv"
 nox.options.sessions = [
@@ -64,6 +60,11 @@ CodeGenTestSettings: Final[dict[str, dict[str, Sequence]]] = {
 
 
 # -- nox sessions --
+#: This should just be `pytest.ExitCode.NO_TESTS_COLLECTED` but `pytest`
+#: is not guaranteed to be available in the venv where `nox` is running.
+NO_TESTS_COLLECTED_EXIT_CODE: Final = 5
+
+
 @nox.session(python=["3.10", "3.11"], tags=["cartesian"])
 @nox.parametrize("device", [DeviceNoxParam.cpu, DeviceNoxParam.cuda12])
 @nox.parametrize("codegen", [CodeGenNoxParam.internal, CodeGenNoxParam.dace])
@@ -231,6 +232,7 @@ def _install_session_venv(
     groups: Sequence[str] = (),
 ) -> None:
     """Install session packages using uv."""
+    env = dict(os.environ.items()) | {"UV_PROJECT_ENVIRONMENT": session.virtualenv.location}
     session.run_install(
         "uv",
         "sync",
@@ -238,8 +240,7 @@ def _install_session_venv(
         "--no-dev",
         *(f"--extra={e}" for e in extras),
         *(f"--group={g}" for g in groups),
-        env={key: value for key, value in os.environ.items()}
-        | {"UV_PROJECT_ENVIRONMENT": session.virtualenv.location},
+        env=env,
     )
     for item in args:
         session.run_install(
@@ -247,5 +248,5 @@ def _install_session_venv(
             "pip",
             "install",
             *((item,) if isinstance(item, str) else item),
-            env={"UV_PROJECT_ENVIRONMENT": session.virtualenv.location},
+            env=env,
         )
