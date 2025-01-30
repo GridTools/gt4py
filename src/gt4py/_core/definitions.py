@@ -76,7 +76,7 @@ BoolT = TypeVar("BoolT", bound=BoolScalar)
 BOOL_TYPES: Final[Tuple[type, ...]] = cast(Tuple[type, ...], BoolScalar.__args__)  # type: ignore[attr-defined]
 
 
-IntScalar: TypeAlias = Union[int8, int16, int32, int64, np.longlong, int]
+IntScalar: TypeAlias = Union[int8, int16, int32, int64, int]
 IntT = TypeVar("IntT", bound=IntScalar)
 INT_TYPES: Final[Tuple[type, ...]] = cast(Tuple[type, ...], IntScalar.__args__)  # type: ignore[attr-defined]
 
