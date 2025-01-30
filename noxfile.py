@@ -61,7 +61,7 @@ CodeGenTestSettings: Final[dict[str, dict[str, Sequence]]] = {
     "internal": {"extras": [], "markers": ["not requires_dace"]},
     "dace": {"extras": ["dace"], "markers": ["requires_dace"]},
 }
-# Use dace-next extra for GT4Py-next, to install a different dace version than in cartesian
+# Use dace-next for GT4Py-next, to install a different dace version than in cartesian
 CodeGenNextTestSettings = CodeGenTestSettings | {
     "dace": {"extras": ["dace-next"], "markers": ["requires_dace"]},
 }
