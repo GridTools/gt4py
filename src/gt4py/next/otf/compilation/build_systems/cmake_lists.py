@@ -88,22 +88,11 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
         #   Instead, design this to be extensible (refer to ADR-0016).
         match dep.name:
             case "nanobind":
+                import sys
                 import nanobind
 
-                import sys
-                import sysconfig
-
-                # Get Python executable path
-                python_executable = sys.executable
-
-                # Get Python library path
-                python_library = f"{sysconfig.get_config_var('LIBDIR')}/{sysconfig.get_config_var('LDLIBRARY')}"
-
-                # Get Python include directory path
-                python_include_dir = sysconfig.get_path('include')
-
                 py = f"""
-                set(Python_EXECUTABLE {python_executable})
+                set(Python_EXECUTABLE {sys.executable})
 
                 find_package(Python COMPONENTS Interpreter Development REQUIRED)
                 """
