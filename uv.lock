@@ -677,7 +677,7 @@ wheels = [
 [[package]]
 name = "dace"
 version = "1.0.0"
-source = { git = "https://github.com/edopao/dace?branch=fix-submodule#789b764985440ffb296fadb6e4a01b5c6d8f5553" }
+source = { git = "https://github.com/spcl/dace?branch=main#01c01cfd64baa9ac2449ee39d23703c86d7fc5df" }
 resolution-markers = [
     "python_full_version >= '3.11'",
     "python_full_version < '3.11'",
@@ -1080,7 +1080,7 @@ dace = [
     { name = "dace", version = "1.0.1", source = { registry = "https://pypi.org/simple" } },
 ]
 dace-dev = [
-    { name = "dace", version = "1.0.0", source = { git = "https://github.com/edopao/dace?branch=fix-submodule#789b764985440ffb296fadb6e4a01b5c6d8f5553" } },
+    { name = "dace", version = "1.0.0", source = { git = "https://github.com/spcl/dace?branch=main#01c01cfd64baa9ac2449ee39d23703c86d7fc5df" } },
 ]
 formatting = [
     { name = "clang-format" },
@@ -1205,7 +1205,7 @@ requires-dist = [
     { name = "cupy-rocm-5-0", marker = "extra == 'rocm5-0'", specifier = ">=13.3.0" },
     { name = "cytoolz", specifier = ">=0.12.1" },
     { name = "dace", marker = "extra == 'dace'", specifier = ">=1.0.1,<1.1.0" },
-    { name = "dace", marker = "extra == 'dace-dev'", git = "https://github.com/edopao/dace?branch=fix-submodule" },
+    { name = "dace", marker = "extra == 'dace-dev'", git = "https://github.com/spcl/dace?branch=main" },
     { name = "deepdiff", specifier = ">=5.6.0" },
     { name = "devtools", specifier = ">=0.6" },
     { name = "diskcache", specifier = ">=5.6.3" },
