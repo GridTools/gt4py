@@ -104,7 +104,7 @@ def test_halo_exchange_helper_attrs(unstructured):
     rows = dace.symbol("rows")
     cols = dace.symbol("cols")
 
-    @dace.program(recreate_sdfg=True)
+    @dace.program
     def testee_dace(
         a: dace.data.Array(dtype=dace.int64, shape=(rows, cols), storage=dace_storage_type),
         b: dace.data.Array(dtype=dace.int64, shape=(rows, cols), storage=dace_storage_type),
