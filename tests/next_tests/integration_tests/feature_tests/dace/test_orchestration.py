@@ -33,7 +33,6 @@ from next_tests.integration_tests.multi_feature_tests.ffront_tests.test_laplacia
 dace = pytest.importorskip("dace")
 
 
-@pytest.mark.serial  # parallel dace build fails to load the sdfgConvertible .so file
 def test_sdfgConvertible_laplap(cartesian_case):  # noqa: F811
     if not cartesian_case.backend or "dace" not in cartesian_case.backend.name:
         pytest.skip("DaCe-related test: Test SDFGConvertible interface for GT4Py programs")
@@ -46,7 +45,7 @@ def test_sdfgConvertible_laplap(cartesian_case):  # noqa: F811
     xp = in_field.array_ns
 
     # Test DaCe closure support
-    @dace.program
+    @dace.program(recreate_sdfg=True)
     def sdfg():
         tmp_field = xp.empty_like(out_field)
         lap_program.with_grid_type(cartesian_case.grid_type).with_backend(
@@ -78,7 +77,6 @@ def testee(a: gtx.Field[gtx.Dims[Vertex], gtx.float64], b: gtx.Field[gtx.Dims[Ed
     _testee(a, out=b)
 
 
-@pytest.mark.serial  # parallel dace build fails to load the sdfgConvertible .so file
 @pytest.mark.uses_unstructured_shift
 def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
     if not unstructured_case.backend or "dace" not in unstructured_case.backend.name:
@@ -111,7 +109,7 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
 
     testee2 = testee.with_backend(backend).with_connectivities({"E2V": e2v})
 
-    @dace.program
+    @dace.program(recreate_sdfg=True)
     def sdfg(
         a: dace.data.Array(dtype=dace.float64, shape=(rows,), storage=dace_storage_type),
         out: dace.data.Array(dtype=dace.float64, shape=(rows,), storage=dace_storage_type),
