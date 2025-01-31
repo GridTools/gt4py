@@ -77,12 +77,8 @@ def unstructured(request, gtir_dace_backend, mesh_descriptor):  # noqa: F811
     )
 
 
-@pytest.mark.skipif(dace is None, reason="DaCe not found")
 def test_halo_exchange_helper_attrs(unstructured):
     local_int = gtx.int
-
-    # TODO(edopao): add support for range symbols in field domain and re-enable this test
-    pytest.skip("Requires support for field domain range.")
 
     @gtx.field_operator(backend=unstructured.backend)
     def testee_op(
