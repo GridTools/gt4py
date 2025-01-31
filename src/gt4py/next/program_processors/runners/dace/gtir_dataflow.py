@@ -233,8 +233,12 @@ class DataflowOutputEdge:
     ) -> None:
         # retrieve the node which writes the result
         last_node = self.state.in_edges(self.result.dc_node)[0].src
-        if isinstance(last_node, (dace.nodes.Tasklet, dace.nodes.NestedSDFG)):
+        if isinstance(last_node, dace.nodes.Tasklet):
             # the last transient node can be deleted
+            # Note that it could also be applied when `last_node` is a NestedSDFG,
+            # but an exception would be when the inner write to global data is a
+            # WCR memlet, because that prevents fusion of the outer map. This case
+            # happens for the reduce with skip values, which uses a map with WCR.
             last_node_connector = self.state.in_edges(self.result.dc_node)[0].src_conn
             self.state.remove_node(self.result.dc_node)
         else:
@@ -792,6 +796,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         if_region.add_branch(dace.sdfg.state.CodeBlock("not (__cond)"), else_body)
 
         input_memlets: dict[str, MemletExpr | ValueExpr] = {}
+        nsdfg_symbols_mapping: Optional[dict[str, dace.symbol]] = None
 
         # define scalar or symbol for the condition value inside the nested SDFG
         if isinstance(condition_value, SymbolExpr):
@@ -830,12 +835,16 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         outputs = {outval.dc_node.data for outval in gtx_utils.flatten_nested_tuple((result,))}
 
+        # all free symbols are mapped to the symbols available in parent SDFG
+        nsdfg_symbols_mapping = {str(sym): sym for sym in nsdfg.free_symbols}
+        if isinstance(condition_value, SymbolExpr):
+            nsdfg_symbols_mapping["__cond"] = condition_value.value
         nsdfg_node = self.state.add_nested_sdfg(
             nsdfg,
             self.sdfg,
             inputs=set(input_memlets.keys()),
             outputs=outputs,
-            symbol_mapping=None,  # implicitly map all free symbols to the symbols available in parent SDFG
+            symbol_mapping=nsdfg_symbols_mapping,
         )
 
         for inner, input_expr in input_memlets.items():
@@ -1489,7 +1498,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             shifted_indices[neighbor_dim] = MemletExpr(
                 dc_node=offset_table_node,
                 gt_dtype=it.gt_dtype,
-                subset=dace_subsets.Indices([origin_index.value, offset_expr.value]),
+                subset=dace_subsets.Range.from_string(f"{origin_index.value}, {offset_expr.value}"),
             )
         else:
             # dynamic offset: we cannot use a memlet to retrieve the offset value, use a tasklet node
