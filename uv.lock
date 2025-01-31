@@ -998,6 +998,7 @@ wheels = [
 
 [[package]]
 name = "gt4py"
+version = "1.0.4"
 source = { editable = "." }
 dependencies = [
     { name = "attrs" },
