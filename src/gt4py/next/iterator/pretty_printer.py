@@ -137,7 +137,7 @@ class PrettyPrinter(NodeTranslator):
         return ["INF"]
 
     def visit_NegInfinityLiteral(self, node: ir.Literal, *, prec: int) -> list[str]:
-        return ["NEG"]
+        return ["-INF"]
 
     def visit_OffsetLiteral(self, node: ir.OffsetLiteral, *, prec: int) -> list[str]:
         return [str(node.value) + "ₒ"]

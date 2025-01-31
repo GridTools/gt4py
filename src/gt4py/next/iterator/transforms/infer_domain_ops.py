@@ -23,7 +23,7 @@ class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
     def apply(cls, node: ir.Node):
         return cls().visit(node)
 
-    def visit_FunCall(self, node: ir.FunCall) -> ir.FunCall:
+    def visit_FunCall(self, node: ir.FunCall) -> ir.Node:
         node = self.generic_visit(node)
         if (
             cpm.is_call_to(node, builtins.BINARY_MATH_COMPARISON_BUILTINS)
@@ -33,11 +33,11 @@ class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
             arg1, arg2 = node.args
             fun = node.fun
             if isinstance(arg1, ir.AxisLiteral) and isinstance(arg2, ir.Literal):
-                dim = common.Dimension(value=arg1.value, kind=common.DimensionKind.VERTICAL)
+                dim = common.Dimension(value=arg1.value, kind=arg1.kind)
                 value = int(arg2.value)
                 reverse = False
             elif isinstance(arg1, ir.Literal) and isinstance(arg2, ir.AxisLiteral):
-                dim = common.Dimension(value=arg2.value, kind=common.DimensionKind.VERTICAL)
+                dim = common.Dimension(value=arg2.value, kind=arg2.kind)
                 value = int(arg1.value)
                 reverse = True
             else:

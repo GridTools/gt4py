@@ -16,7 +16,7 @@ class ConstantFolding(PreserveLocationVisitor, NodeTranslator):
     def apply(cls, node: ir.Node) -> ir.Node:
         return cls().visit(node)
 
-    def visit_FunCall(self, node: ir.FunCall):
+    def visit_FunCall(self, node: ir.FunCall) -> ir.Node:
         # visit depth-first such that nested constant expressions (e.g. `(1+2)+3`) are properly folded
         new_node = self.generic_visit(node)
 

@@ -224,8 +224,7 @@ def concat_where(
     true_field: ts.FieldType | ts.TupleType,
     false_field: ts.FieldType | ts.TupleType,
 ) -> ts.FieldType | ts.TupleType:
-    assert true_field == false_field
-    return true_field
+    return type_info.promote(true_field, false_field)
 
 
 @_register_builtin_type_synthesizer
