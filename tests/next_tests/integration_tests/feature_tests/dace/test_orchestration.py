@@ -59,7 +59,9 @@ def test_sdfgConvertible_laplap(cartesian_case):  # noqa: F811
             tmp_field, out_field
         )
 
-    sdfg()
+    # use unique cache name based on process id to avoid clashes between parallel pytest workers
+    with dace.config.set_temporary("cache", value="unique"):
+        sdfg()
 
     assert np.allclose(
         gtx.field_utils.asnumpy(out_field)[2:-2, 2:-2],
@@ -133,16 +135,18 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
         # DaCe strides: number of elements to jump
         return arg.strides[axis] // arg.itemsize
 
-    cSDFG(
-        a,
-        out,
-        offset_provider,
-        rows=3,
-        cols=2,
-        connectivity_E2V=e2v,
-        __connectivity_E2V_stride_0=get_stride_from_numpy_to_dace(e2v.ndarray, 0),
-        __connectivity_E2V_stride_1=get_stride_from_numpy_to_dace(e2v.ndarray, 1),
-    )
+    # use unique cache name based on process id to avoid clashes between parallel pytest workers
+    with dace.config.set_temporary("cache", value="unique"):
+        cSDFG(
+            a,
+            out,
+            offset_provider,
+            rows=3,
+            cols=2,
+            connectivity_E2V=e2v,
+            __connectivity_E2V_stride_0=get_stride_from_numpy_to_dace(e2v.ndarray, 0),
+            __connectivity_E2V_stride_1=get_stride_from_numpy_to_dace(e2v.ndarray, 1),
+        )
 
     e2v_np = e2v.asnumpy()
     assert np.allclose(out.asnumpy(), a.asnumpy()[e2v_np[:, 0]])
@@ -154,8 +158,8 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
         allocator=allocator,
     )
     offset_provider = OffsetProvider_t.dtype._typeclass.as_ctypes()(E2V=e2v.data_ptr())
-    with dace.config.temporary_config():
-        dace.config.Config.set("compiler", "allow_view_arguments", value=True)
+    # use unique cache name based on process id to avoid clashes between parallel pytest workers
+    with dace.config.set_temporary("cache", value="unique"):
         cSDFG(
             a,
             out,
