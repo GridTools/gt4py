@@ -13,6 +13,7 @@ import pytest
 
 pytest.importorskip("atlas4py")
 
+import gt4py._core.definitions as core_defs
 from gt4py import next as gtx
 from gt4py.next import allocators, neighbor_sum
 from gt4py.next.iterator import atlas_utils
@@ -62,12 +63,15 @@ def pnabla(
     return compute_pnabla(pp, S_M[0], sign, vol), compute_pnabla(pp, S_M[1], sign, vol)
 
 
+@pytest.mark.requires_atlas
 def test_ffront_compute_zavgS(exec_alloc_descriptor):
-    _, allocator = exec_alloc_descriptor.executor, exec_alloc_descriptor.allocator
+    # TODO(havogt): fix nabla setup to work with GPU
+    if exec_alloc_descriptor.allocator.device_type != core_defs.DeviceType.CPU:
+        pytest.skip("This test is only supported on CPU devices yet")
 
-    setup = nabla_setup(allocator=allocator)
+    setup = nabla_setup(allocator=exec_alloc_descriptor.allocator)
 
-    zavgS = gtx.zeros({Edge: setup.edges_size}, allocator=allocator)
+    zavgS = gtx.zeros({Edge: setup.edges_size}, allocator=exec_alloc_descriptor.allocator)
 
     compute_zavgS.with_backend(
         None if exec_alloc_descriptor.executor is None else exec_alloc_descriptor
@@ -82,13 +86,16 @@ def test_ffront_compute_zavgS(exec_alloc_descriptor):
     assert_close(388241977.58389181, np.max(zavgS.asnumpy()))
 
 
+@pytest.mark.requires_atlas
 def test_ffront_nabla(exec_alloc_descriptor):
-    _, allocator = exec_alloc_descriptor.executor, exec_alloc_descriptor.allocator
+    # TODO(havogt): fix nabla setup to work with GPU
+    if exec_alloc_descriptor.allocator.device_type != core_defs.DeviceType.CPU:
+        pytest.skip("This test is only supported on CPU devices yet")
 
-    setup = nabla_setup(allocator=allocator)
+    setup = nabla_setup(allocator=exec_alloc_descriptor.allocator)
 
-    pnabla_MXX = gtx.zeros({Vertex: setup.nodes_size}, allocator=allocator)
-    pnabla_MYY = gtx.zeros({Vertex: setup.nodes_size}, allocator=allocator)
+    pnabla_MXX = gtx.zeros({Vertex: setup.nodes_size}, allocator=exec_alloc_descriptor.allocator)
+    pnabla_MYY = gtx.zeros({Vertex: setup.nodes_size}, allocator=exec_alloc_descriptor.allocator)
 
     pnabla.with_backend(None if exec_alloc_descriptor.executor is None else exec_alloc_descriptor)(
         setup.input_field,

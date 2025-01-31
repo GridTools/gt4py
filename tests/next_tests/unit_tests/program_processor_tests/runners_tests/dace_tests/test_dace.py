@@ -27,8 +27,6 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     mesh_descriptor,
 )
 
-from . import pytestmark
-
 
 dace = pytest.importorskip("dace")
 

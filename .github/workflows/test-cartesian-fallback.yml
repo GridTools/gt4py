@@ -13,11 +13,11 @@ on:
 
 jobs:
   test-cartesian:
-    runs-on: ubuntu-latest
     strategy:
       matrix:
+        codegen-factor: [internal, dace]
+        os: ["ubuntu-latest"]
         python-version: ["3.10", "3.11"]
-        tox-factor: [internal, dace]
-
+    runs-on: ${{ matrix.os }}
     steps:
     - run: 'echo "No build required"'
