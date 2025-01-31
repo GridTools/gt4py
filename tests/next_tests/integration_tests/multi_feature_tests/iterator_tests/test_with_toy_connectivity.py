@@ -357,7 +357,6 @@ def sparse_shifted_stencil(inp):
 
 
 @pytest.mark.uses_sparse_fields
-@pytest.mark.uses_unstructured_shift_with_sparse_fields
 def test_shift_sparse_input_field(program_processor):
     program_processor, validate = program_processor
     inp = gtx.as_field([Vertex, V2VDim], v2v_arr)
@@ -386,9 +385,7 @@ def shift_sparse_stencil2(inp):
     return list_get(1, list_get(3, neighbors(V2E, inp)))
 
 
-@pytest.mark.uses_composite_shifts
 @pytest.mark.uses_sparse_fields
-@pytest.mark.uses_unstructured_shift_with_sparse_fields
 def test_shift_sparse_input_field2(program_processor):
     program_processor, validate = program_processor
     if program_processor in [

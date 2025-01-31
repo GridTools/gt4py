@@ -97,7 +97,6 @@ USES_CAN_DEREF = "uses_can_deref"
 USES_COMPOSITE_SHIFTS = "uses_composite_shifts"
 USES_CONSTANT_FIELDS = "uses_constant_fields"
 USES_DYNAMIC_OFFSETS = "uses_dynamic_offsets"
-USES_EXCLUSIVE_LOCAL_IF = "uses_exclusive_local_if"
 USES_FLOORDIV = "uses_floordiv"
 USES_IF_STMTS = "uses_if_stmts"
 USES_IR_IF_STMTS = "uses_ir_if_stmts"
@@ -123,7 +122,6 @@ USES_TUPLE_RETURNS = "uses_tuple_returns"
 USES_ZERO_DIMENSIONAL_FIELDS = "uses_zero_dimensional_fields"
 USES_CARTESIAN_SHIFT = "uses_cartesian_shift"
 USES_UNSTRUCTURED_SHIFT = "uses_unstructured_shift"
-USES_UNSTRUCTURED_SHIFT_WITH_SPARSE_FIELDS = "uses_unstructured_shift_with_sparse_fields"
 USES_MAX_OVER = "uses_max_over"
 USES_MESH_WITH_SKIP_VALUES = "uses_mesh_with_skip_values"
 USES_SCALAR_IN_DOMAIN_AND_FO = "uses_scalar_in_domain_and_fo"
@@ -153,12 +151,11 @@ DACE_SKIP_TEST_LIST = (
     + [
         (USES_CAN_DEREF, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_COMPOSITE_SHIFTS, XFAIL, UNSUPPORTED_MESSAGE),
-        (USES_EXCLUSIVE_LOCAL_IF, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_LIFT, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_REDUCE_WITH_LAMBDA, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_SCAN_IN_STENCIL, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
+        (USES_SPARSE_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_TUPLE_ITERATOR, XFAIL, UNSUPPORTED_MESSAGE),
-        (USES_UNSTRUCTURED_SHIFT_WITH_SPARSE_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
     ]
 )
 EMBEDDED_SKIP_LIST = [
