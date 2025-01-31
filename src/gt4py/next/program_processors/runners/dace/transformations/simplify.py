@@ -440,7 +440,7 @@ class DistributedBufferRelocator(dace_transformation.Pass):
         ][sdfg.cfg_id]
         access_sets: dict[dace.SDFGState, tuple[set[str], set[str]]] = pipeline_results[
             "AccessSets"
-        ][sdfg.cfg_id]
+        ]
         result: dict[dace.SDFGState, set[str]] = collections.defaultdict(set)
 
         to_relocate = self._find_candidates(sdfg, reachable, access_sets)
