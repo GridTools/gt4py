@@ -20,7 +20,11 @@ from gt4py import eve
 from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.dace.nodes import StencilComputation
 from gt4py.cartesian.gtc.dace.symbol_utils import data_type_to_dace_typeclass
-from gt4py.cartesian.gtc.dace.utils import compute_dcir_access_infos, make_dace_subset
+from gt4py.cartesian.gtc.dace.utils import (
+    compute_dcir_access_infos,
+    get_dace_debuginfo,
+    make_dace_subset,
+)
 from gt4py.cartesian.gtc.definitions import Extent
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import (
     AccessCollector,
@@ -115,7 +119,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
         access_collection = AccessCollector.apply(node)
 
         for field in access_collection.read_fields():
-            access_node = state.add_access(field, debuginfo=dace.DebugInfo(0))
+            access_node = state.add_access(field, debuginfo=get_dace_debuginfo(declarations[field]))
             library_node.add_in_connector("__in_" + field)
             subset = ctx.make_input_dace_subset(node, field)
             state.add_edge(
@@ -123,7 +127,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
             )
 
         for field in access_collection.write_fields():
-            access_node = state.add_access(field, debuginfo=dace.DebugInfo(0))
+            access_node = state.add_access(field, debuginfo=get_dace_debuginfo(declarations[field]))
             library_node.add_out_connector("__out_" + field)
             subset = ctx.make_output_dace_subset(node, field)
             state.add_edge(
@@ -146,7 +150,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
                     ],
                     dtype=data_type_to_dace_typeclass(param.dtype),
                     transient=False,
-                    debuginfo=dace.DebugInfo(0),
+                    debuginfo=get_dace_debuginfo(param),
                 )
             else:
                 ctx.sdfg.add_symbol(param.name, stype=data_type_to_dace_typeclass(param.dtype))
@@ -164,7 +168,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
                 ],
                 dtype=data_type_to_dace_typeclass(decl.dtype),
                 transient=True,
-                debuginfo=dace.DebugInfo(0),
+                debuginfo=get_dace_debuginfo(decl),
             )
         self.generic_visit(node, ctx=ctx)
         ctx.sdfg.validate()

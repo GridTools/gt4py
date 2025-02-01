@@ -20,9 +20,8 @@ import dace.subsets
 from gt4py import eve
 from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.dace.expansion.tasklet_codegen import TaskletCodegen
-from gt4py.cartesian.gtc.dace.expansion.utils import get_dace_debuginfo
 from gt4py.cartesian.gtc.dace.symbol_utils import data_type_to_dace_typeclass
-from gt4py.cartesian.gtc.dace.utils import make_dace_subset
+from gt4py.cartesian.gtc.dace.utils import get_dace_debuginfo, make_dace_subset
 
 
 class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
@@ -268,13 +267,13 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
             for memlet in computation.read_memlets:
                 if memlet.field not in read_acc_and_conn:
                     read_acc_and_conn[memlet.field] = (
-                        sdfg_ctx.state.add_access(memlet.field, debuginfo=dace.DebugInfo(0)),
+                        sdfg_ctx.state.add_access(memlet.field),
                         None,
                     )
             for memlet in computation.write_memlets:
                 if memlet.field not in write_acc_and_conn:
                     write_acc_and_conn[memlet.field] = (
-                        sdfg_ctx.state.add_access(memlet.field, debuginfo=dace.DebugInfo(0)),
+                        sdfg_ctx.state.add_access(memlet.field),
                         None,
                     )
             node_ctx = StencilComputationSDFGBuilder.NodeContext(
@@ -298,7 +297,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
             dtype=data_type_to_dace_typeclass(node.dtype),
             storage=node.storage.to_dace_storage(),
             transient=node.name not in non_transients,
-            debuginfo=dace.DebugInfo(0),
+            debuginfo=get_dace_debuginfo(node),
         )
 
     def visit_SymbolDecl(
@@ -343,7 +342,6 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
                 inputs=node.input_connectors,
                 outputs=node.output_connectors,
                 symbol_mapping=symbol_mapping,
-                debuginfo=dace.DebugInfo(0),
             )
             self.visit(
                 node.read_memlets,
