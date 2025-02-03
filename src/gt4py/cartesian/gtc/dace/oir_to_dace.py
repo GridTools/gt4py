@@ -171,6 +171,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
                 ],
                 dtype=data_type_to_dace_typeclass(decl.dtype),
                 transient=True,
+                lifetime=dace.AllocationLifetime.Persistent,
                 debuginfo=get_dace_debuginfo(decl),
             )
         self.generic_visit(node, ctx=ctx)
