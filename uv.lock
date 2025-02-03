@@ -677,7 +677,7 @@ wheels = [
 [[package]]
 name = "dace"
 version = "1.0.0"
-source = { git = "https://github.com/spcl/dace?branch=main#01c01cfd64baa9ac2449ee39d23703c86d7fc5df" }
+source = { git = "https://github.com/edopao/dace?branch=fix-prune_connectors#7fb58de0752a0f86939a89a2f282871ef15efa90" }
 resolution-markers = [
     "python_full_version >= '3.11'",
     "python_full_version < '3.11'",
@@ -1080,7 +1080,7 @@ dace = [
     { name = "dace", version = "1.0.1", source = { registry = "https://pypi.org/simple" } },
 ]
 dace-next = [
-    { name = "dace", version = "1.0.0", source = { git = "https://github.com/spcl/dace?branch=main#01c01cfd64baa9ac2449ee39d23703c86d7fc5df" } },
+    { name = "dace", version = "1.0.0", source = { git = "https://github.com/edopao/dace?branch=fix-prune_connectors#7fb58de0752a0f86939a89a2f282871ef15efa90" } },
 ]
 formatting = [
     { name = "clang-format" },
@@ -1205,7 +1205,7 @@ requires-dist = [
     { name = "cupy-rocm-5-0", marker = "extra == 'rocm5-0'", specifier = ">=13.3.0" },
     { name = "cytoolz", specifier = ">=0.12.1" },
     { name = "dace", marker = "extra == 'dace'", specifier = ">=1.0.1,<1.1.0" },
-    { name = "dace", marker = "extra == 'dace-next'", git = "https://github.com/spcl/dace?branch=main" },
+    { name = "dace", marker = "extra == 'dace-next'", git = "https://github.com/edopao/dace?branch=fix-prune_connectors" },
     { name = "deepdiff", specifier = ">=5.6.0" },
     { name = "devtools", specifier = ">=0.6" },
     { name = "diskcache", specifier = ">=5.6.3" },
