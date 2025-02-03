@@ -15,7 +15,7 @@ import pytest
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
-from gt4py.next.common import Dimension, Domain, NamedIndex, NamedRange, UnitRange
+from gt4py.next.common import Dimension, DimensionKind, Domain, NamedIndex, NamedRange, UnitRange
 from gt4py.next.embedded import exceptions as embedded_exceptions, nd_array_field
 from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
 from gt4py.next.ffront import fbuiltins
@@ -405,6 +405,94 @@ def test_remapping_premap():
     expected = common._field(
         -0.1 * np.arange(V_START, V_STOP),
         domain=common.Domain(dims=(E,), ranges=(UnitRange(V_START, V_STOP),)),
+    )
+
+    assert result.domain == expected.domain
+    assert np.all(result.ndarray == expected.ndarray)
+
+
+def test_remapping_premap_multineighbor():
+    V = Dimension("V")
+    E = Dimension("E")
+    E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
+
+    # TODO
+
+    # V_START, V_STOP = 2, 7
+    # E_START, E_STOP = 0, 10
+    # v_field = common._field(
+    #     -0.1 * np.arange(V_START, V_STOP),
+    #     domain=common.Domain(dims=(V,), ranges=(UnitRange(V_START, V_STOP),)),
+    # )
+    # e2v_conn = common._connectivity(
+    #     np.arange(E_START, E_STOP),
+    #     domain=common.Domain(dims=(E,), ranges=[UnitRange(E_START, E_STOP)]),
+    #     codomain=V,
+    # )
+
+    # result = v_field.premap(e2v_conn)
+    # expected = common._field(
+    #     -0.1 * np.arange(V_START, V_STOP),
+    #     domain=common.Domain(dims=(E,), ranges=(UnitRange(V_START, V_STOP),)),
+    # )
+
+    # assert result.domain == expected.domain
+    # assert np.all(result.ndarray == expected.ndarray)
+
+
+def test_remapping_premap_same_dim():
+    # TODO add case where connectivity and premapped field have different size
+    V = Dimension("V")
+
+    V_START, V_STOP = 2, 7
+    v_field = common._field(
+        -0.1 * np.arange(V_START, V_STOP),
+        domain=common.Domain(dims=(V,), ranges=(UnitRange(V_START, V_STOP),)),
+    )
+    v2v_conn = common._connectivity(
+        np.roll(np.arange(V_START, V_STOP), 1),
+        domain=common.Domain(dims=(V,), ranges=[UnitRange(V_START, V_STOP)]),
+        codomain=V,
+    )
+
+    result = v_field.premap(v2v_conn)
+    expected = common._field(
+        -0.1 * np.roll(np.arange(V_START, V_STOP), 1),
+        domain=common.Domain(dims=(V,), ranges=(UnitRange(V_START, V_STOP),)),
+    )
+
+    assert result.domain == expected.domain
+    assert np.all(result.ndarray == expected.ndarray)
+
+
+def test_remapping_premap_same_dim_multineighbor():
+    V = Dimension("V")
+    V2V = Dimension("V2V", kind=DimensionKind.LOCAL)
+
+    V_START, V_STOP = 2, 7
+    v_field = common._field(
+        -0.1 * np.arange(V_START, V_STOP),
+        domain=common.Domain(dims=(V,), ranges=(UnitRange(V_START, V_STOP),)),
+    )
+    v2v_conn = common._connectivity(
+        np.stack(
+            [np.roll(np.arange(V_START, V_STOP), 1), np.roll(np.arange(V_START, V_STOP), -1)],
+            axis=1,
+        ),
+        domain=common.Domain(dims=(V, V2V), ranges=[UnitRange(V_START, V_STOP), UnitRange(0, 2)]),
+        codomain=V,
+    )
+
+    result = v_field.premap(v2v_conn)
+    expected = common._field(
+        np.stack(
+            [
+                -0.1 * np.roll(np.arange(V_START, V_STOP), 1),
+                -0.1 * np.roll(np.arange(V_START, V_STOP), -1),
+            ],
+            axis=1,
+        ),
+        domain=common.Domain(dims=(V, V2V), ranges=(UnitRange(V_START, V_STOP), UnitRange(0, 2))),
     )
 
     assert result.domain == expected.domain

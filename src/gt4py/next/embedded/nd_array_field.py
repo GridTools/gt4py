@@ -497,7 +497,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
                 common.ConnectivityKind.ALTER_STRUCT
                 | (
                     common.ConnectivityKind.ALTER_DIMS
-                    if self.domain.dim_index(self.codomain) is None
+                    if any(dim.kind == common.DimensionKind.LOCAL for dim in self.domain.dims)
                     else common.ConnectivityKind(0)
                 ),
             )
@@ -657,7 +657,9 @@ def _reshuffling_premap(
             conn_map[dim] = _identity_connectivity(new_domain, dim, cls=type(connectivity))
 
     # Take data
-    take_indices = tuple(conn_map[dim].ndarray for dim in data.domain.dims)
+    take_indices = tuple(
+        conn_map[dim].ndarray - data.domain[dim].unit_range.start for dim in data.domain.dims
+    )
     new_buffer = data._ndarray.__getitem__(take_indices)
 
     return data.__class__.from_array(
