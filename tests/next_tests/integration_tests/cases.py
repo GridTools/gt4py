@@ -62,6 +62,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 IField: TypeAlias = gtx.Field[[IDim], np.int32]  # type: ignore [valid-type]
 IFloatField: TypeAlias = gtx.Field[[IDim], np.float64]  # type: ignore [valid-type]
 IBoolField: TypeAlias = gtx.Field[[IDim], bool]  # type: ignore [valid-type]
+JField: TypeAlias = gtx.Field[[JDim], np.int32]  # type: ignore [valid-type]
 KField: TypeAlias = gtx.Field[[KDim], np.int32]  # type: ignore [valid-type]
 IJField: TypeAlias = gtx.Field[[IDim, JDim], np.int32]  # type: ignore [valid-type]
 IKField: TypeAlias = gtx.Field[[IDim, KDim], np.int32]  # type: ignore [valid-type]

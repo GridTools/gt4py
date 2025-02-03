@@ -305,7 +305,8 @@ def is_number(symbol_type: ts.TypeSpec) -> bool:
 
 def is_logical(symbol_type: ts.TypeSpec) -> bool:
     return (
-        isinstance(dtype := extract_dtype(symbol_type), ts.ScalarType)
+        isinstance(symbol_type, (ts.FieldType, ts.ScalarType))
+        and isinstance(dtype := extract_dtype(symbol_type), ts.ScalarType)
         and dtype.kind is ts.ScalarKind.BOOL
     )
 

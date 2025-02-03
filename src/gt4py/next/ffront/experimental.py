@@ -20,7 +20,7 @@ def as_offset(offset_: FieldOffset, field: common.Field, /) -> common.Connectivi
 
 @WhereBuiltinFunction
 def concat_where(
-    mask: common.Field,
+    mask: common.Domain,
     true_field: common.Field | core_defs.ScalarT | Tuple,
     false_field: common.Field | core_defs.ScalarT | Tuple,
     /,

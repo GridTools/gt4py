@@ -66,6 +66,8 @@ def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSp
         return ts.OffsetType
     elif t is core_defs.ScalarT:
         return ts.ScalarType
+    elif t is common.Domain:
+        return ts.DomainType
     elif t is type:
         return (
             ts.FunctionType
@@ -135,7 +137,7 @@ class BuiltInFunction(Generic[_R, _P]):
         )
 
 
-MaskT = TypeVar("MaskT", bound=common.Field)
+MaskT = TypeVar("MaskT", bound=Union[common.Field, common.Domain])
 FieldT = TypeVar("FieldT", bound=Union[common.Field, core_defs.Scalar, Tuple])
 
 

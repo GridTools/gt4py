@@ -109,11 +109,28 @@ def _(arg: ts.ScalarType) -> ts.ScalarType:
     return ts.ScalarType(kind=ts.ScalarKind.BOOL)
 
 
-@_register_builtin_type_synthesizer(
-    fun_names=builtins.BINARY_MATH_COMPARISON_BUILTINS | builtins.BINARY_LOGICAL_BUILTINS
-)
-def _(lhs: ts.ScalarType, rhs: ts.ScalarType) -> ts.ScalarType | ts.TupleType:
+def synthesize_binary_math_comparison_builtins(
+    lhs, rhs
+) -> ts.ScalarType | ts.TupleType | ts.DomainType:
+    if isinstance(lhs, ts.ScalarType) and isinstance(rhs, ts.DimensionType):
+        return ts.DomainType(dims=[rhs.dim])
+    if isinstance(lhs, ts.DimensionType) and isinstance(rhs, ts.ScalarType):
+        return ts.DomainType(dims=[lhs.dim])
+    assert isinstance(lhs, ts.ScalarType) and isinstance(rhs, ts.ScalarType)
     return ts.ScalarType(kind=ts.ScalarKind.BOOL)
+
+
+@_register_builtin_type_synthesizer(fun_names=builtins.BINARY_MATH_COMPARISON_BUILTINS)
+def _(lhs, rhs) -> ts.ScalarType | ts.TupleType | ts.DomainType:
+    return synthesize_binary_math_comparison_builtins(lhs, rhs)
+
+
+@_register_builtin_type_synthesizer(fun_names=builtins.BINARY_LOGICAL_BUILTINS)
+def _(lhs, rhs) -> ts.ScalarType | ts.TupleType | ts.DomainType:
+    if isinstance(lhs, ts.DomainType) and isinstance(rhs, ts.DomainType):
+        return ts.DomainType(dims=common.promote_dims(lhs.dims, rhs.dims))
+    else:
+        return synthesize_binary_math_comparison_builtins(lhs, rhs)
 
 
 @_register_builtin_type_synthesizer
@@ -183,9 +200,9 @@ def named_range(
 
 
 @_register_builtin_type_synthesizer(fun_names=["cartesian_domain", "unstructured_domain"])
-def _(*args: it_ts.NamedRangeType) -> it_ts.DomainType:
+def _(*args: it_ts.NamedRangeType) -> ts.DomainType:
     assert all(isinstance(arg, it_ts.NamedRangeType) for arg in args)
-    return it_ts.DomainType(dims=[arg.dim for arg in args])
+    return ts.DomainType(dims=[arg.dim for arg in args])
 
 
 @_register_builtin_type_synthesizer
@@ -199,6 +216,15 @@ def index(arg: ts.DimensionType) -> ts.FieldType:
         dims=[arg.dim],
         dtype=ts.ScalarType(kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper())),
     )
+
+
+@_register_builtin_type_synthesizer
+def concat_where(
+    domain: ts.DomainType,
+    true_field: ts.FieldType | ts.TupleType,
+    false_field: ts.FieldType | ts.TupleType,
+) -> ts.FieldType | ts.TupleType:
+    return type_info.promote(true_field, false_field)
 
 
 @_register_builtin_type_synthesizer
@@ -244,7 +270,7 @@ def lift(stencil: TypeSynthesizer) -> TypeSynthesizer:
 
 
 def _convert_as_fieldop_input_to_iterator(
-    domain: it_ts.DomainType, input_: ts.TypeSpec
+    domain: ts.DomainType, input_: ts.TypeSpec
 ) -> it_ts.IteratorType:
     # get the dimensions of all non-zero-dimensional field inputs and check they agree
     all_input_dims = (
@@ -284,7 +310,7 @@ def _convert_as_fieldop_input_to_iterator(
 @_register_builtin_type_synthesizer
 def as_fieldop(
     stencil: TypeSynthesizer,
-    domain: Optional[it_ts.DomainType] = None,
+    domain: Optional[ts.DomainType] = None,
     *,
     offset_provider_type: common.OffsetProviderType,
 ) -> TypeSynthesizer:
@@ -299,7 +325,7 @@ def as_fieldop(
     #   `as_fieldop(it1, it2 -> deref(it1) + deref(it2))(i_field, j_field)`
     # it is unclear if the result has dimension I, J or J, I.
     if domain is None:
-        domain = it_ts.DomainType(dims="unknown")
+        domain = ts.DomainType(dims="unknown")
 
     @TypeSynthesizer
     def applied_as_fieldop(*fields) -> ts.FieldType | ts.DeferredType:

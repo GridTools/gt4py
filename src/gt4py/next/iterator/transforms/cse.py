@@ -86,7 +86,21 @@ def _is_collectable_expr(node: itir.Node) -> bool:
         #  conceptual problems (other parts of the tool chain rely on the arguments being present directly
         #  on the reduce FunCall node (connectivity deduction)), as well as problems with the imperative backend
         #  backend (single pass eager depth first visit approach)
-        if isinstance(node.fun, itir.SymRef) and node.fun.id in ["lift", "shift", "reduce", "map_"]:
+        # do also not collect index nodes because otherwise the right hand side of SetAts becomes a let statement
+        #  instead of an as_fieldop
+        if isinstance(node.fun, itir.SymRef) and node.fun.id in [
+            "lift",
+            "shift",
+            "reduce",
+            "map_",
+            "index",
+        ]:
+            return False
+        # do also not collect make_tuple(index) nodes because otherwise the right hand side of SetAts becomes a let statement
+        #  instead of an as_fieldop
+        if cpm.is_call_to(node, "make_tuple") and all(
+            cpm.is_call_to(arg, "index") for arg in node.args
+        ):
             return False
         return True
     elif isinstance(node, itir.Lambda):
