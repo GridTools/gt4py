@@ -576,6 +576,80 @@ def translate_as_fieldop(
     )
 
 
+def translate_concat_where(
+    node: gtir.Node,
+    sdfg: dace.SDFG,
+    state: dace.SDFGState,
+    sdfg_builder: gtir_sdfg.SDFGBuilder,
+) -> FieldopResult:
+    """Lowers a `concat_where` expression to a dataflow where two memlets write disjoint subsets on one data access node."""
+    assert cpm.is_call_to(node, "concat_where")
+    assert len(node.args) == 3
+
+    # First argument should be the domain expression to infer the domain of next
+    # two arguments: it is used by the domain inference pass and just ignored here.
+    assert cpm.is_call_to(node.args[0], "cartesian_domain")
+
+    f1, f2 = (sdfg_builder.visit(node.args[i], sdfg=sdfg, head_state=state) for i in [1, 2])
+
+    def concatenate_inputs(inp1: FieldopData, inp2: FieldopData) -> FieldopData:
+        assert inp1.gt_type == inp2.gt_type
+        inp1_desc, inp2_desc = (inp.dc_node.desc(sdfg) for inp in [inp1, inp2])
+        assert inp1_desc.dtype == inp2_desc.dtype
+        out_shape = tuple(s1 + s2 for s1, s2 in zip(inp1_desc.shape, inp2_desc.shape, strict=True))
+        output, output_desc = sdfg_builder.add_temp_array(sdfg, out_shape, inp1_desc.dtype)
+        output_node = state.add_access(output)
+
+        # the subset closest to the field origin is considered below as left-hand side (lhs)
+        if any(orig2 > orig1 for orig1, orig2 in zip(inp1.origin, inp2.origin, strict=True)):
+            assert inp2.origin == tuple(
+                inp1_origin + inp1_size
+                for inp1_origin, inp1_size in zip(inp1.origin, inp1_desc.shape, strict=True)
+            )
+            lhs, lhs_desc = inp1, inp1_desc
+            rhs, rhs_desc = inp2, inp2_desc
+            out_origin = inp1.origin
+        else:
+            assert inp1.origin == tuple(
+                inp2_origin + inp2_size
+                for inp2_origin, inp2_size in zip(inp2.origin, inp2_desc.shape, strict=True)
+            )
+            lhs, lhs_desc = inp2, inp2_desc
+            rhs, rhs_desc = inp1, inp1_desc
+            out_origin = inp2.origin
+
+        # we write the full shape of the lhs node into the output array starting from the origin
+        state.add_nedge(
+            lhs.dc_node,
+            output_node,
+            dace.Memlet(data=lhs.dc_node.data, subset=dace_subsets.Range.from_array(lhs_desc)),
+        )
+        # the full shape of the rhs node is also written, but the destination subset start index
+        # is not the field origin: we write to the right-hand side of the previous subset
+        output_subset = dace_subsets.Range(
+            [
+                (origin, size - 1, 1)
+                for origin, size in zip(lhs_desc.shape, output_desc.shape, strict=True)
+            ]
+        )
+        state.add_nedge(
+            rhs.dc_node,
+            output_node,
+            dace.Memlet(
+                data=rhs.dc_node.data,
+                subset=dace_subsets.Range.from_array(rhs_desc),
+                other_subset=output_subset,
+            ),
+        )
+        return FieldopData(output_node, inp1.gt_type, origin=out_origin)
+
+    return (
+        concatenate_inputs(f1, f2)
+        if isinstance(node.type, ts.FieldType)
+        else gtx_utils.tree_map(concatenate_inputs)(f1, f2)
+    )
+
+
 def translate_if(
     node: gtir.Node,
     sdfg: dace.SDFG,
@@ -943,6 +1017,7 @@ if TYPE_CHECKING:
     # Use type-checking to assert that all translator functions implement the `PrimitiveTranslator` protocol
     __primitive_translators: list[PrimitiveTranslator] = [
         translate_as_fieldop,
+        translate_concat_where,
         translate_if,
         translate_index,
         translate_literal,

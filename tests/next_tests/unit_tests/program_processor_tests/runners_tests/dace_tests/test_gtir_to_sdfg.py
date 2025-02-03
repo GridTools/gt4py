@@ -2049,3 +2049,57 @@ def test_gtir_index():
 
     sdfg(v, **FSYMBOLS)
     np.allclose(v, ref)
+
+
+def test_concat_where():
+    SUBSET_SIZE = 5
+    assert SUBSET_SIZE < N
+    domain = im.domain(gtx_common.GridType.CARTESIAN, {IDim: (0, N)})
+    domain_cond_lhs = im.domain(
+        gtx_common.GridType.CARTESIAN, {IDim: (gtir.NegInfinityLiteral(), N - SUBSET_SIZE)}
+    )
+    domain_cond_rhs = im.domain(
+        gtx_common.GridType.CARTESIAN, {IDim: (SUBSET_SIZE, gtir.InfinityLiteral())}
+    )
+    domain_lhs = im.domain(gtx_common.GridType.CARTESIAN, {IDim: (0, N - SUBSET_SIZE)})
+    domain_rhs = im.domain(gtx_common.GridType.CARTESIAN, {IDim: (N - SUBSET_SIZE, N)})
+
+    concat_expr_lhs = im.concat_where(
+        domain_cond_lhs,
+        im.as_fieldop("deref", domain_lhs)("x"),
+        im.as_fieldop("deref", domain_rhs)("y"),
+    )
+    concat_expr_rhs = im.concat_where(
+        domain_cond_rhs,
+        im.as_fieldop("deref", domain_rhs)("y"),
+        im.as_fieldop("deref", domain_lhs)("x"),
+    )
+
+    a = np.random.rand(N)
+    b = np.random.rand(N)
+    ref = np.concatenate((a[:SUBSET_SIZE], b[SUBSET_SIZE:]))
+
+    for concat_expr, suffix in [(concat_expr_lhs, "lhs"), (concat_expr_rhs, "rhs")]:
+        testee = gtir.Program(
+            id=f"gtir_concat_where_{suffix}",
+            function_definitions=[],
+            params=[
+                gtir.Sym(id="x", type=ts.FieldType(dims=[IDim], dtype=SIZE_TYPE)),
+                gtir.Sym(id="y", type=ts.FieldType(dims=[IDim], dtype=SIZE_TYPE)),
+                gtir.Sym(id="z", type=ts.FieldType(dims=[IDim], dtype=SIZE_TYPE)),
+            ],
+            declarations=[],
+            body=[
+                gtir.SetAt(
+                    expr=concat_expr,
+                    domain=domain,
+                    target=gtir.SymRef(id="z"),
+                )
+            ],
+        )
+
+        sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
+        c = np.empty_like(a)
+
+        sdfg(a, b, c, **FSYMBOLS)
+        np.allclose(c, ref)

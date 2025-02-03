@@ -690,7 +690,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         head_state: dace.SDFGState,
     ) -> gtir_builtin_translators.FieldopResult:
         # use specialized dataflow builder classes for each builtin function
-        if cpm.is_call_to(node, "if_"):
+        if cpm.is_call_to(node, "concat_where"):
+            return gtir_builtin_translators.translate_concat_where(node, sdfg, head_state, self)
+        elif cpm.is_call_to(node, "if_"):
             return gtir_builtin_translators.translate_if(node, sdfg, head_state, self)
         elif cpm.is_call_to(node, "index"):
             return gtir_builtin_translators.translate_index(node, sdfg, head_state, self)
