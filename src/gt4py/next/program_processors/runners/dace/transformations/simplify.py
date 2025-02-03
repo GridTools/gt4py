@@ -149,19 +149,15 @@ def gt_inline_nested_sdfg(
         validate_all: Performs extensive validation.
     """
     first_iteration = True
-    do_preproccess: Final[bool] = False
     nb_preproccess_total = 0
     nb_inlines_total = 0
     while True:
-        if do_preproccess:
-            nb_preproccess = sdfg.apply_transformations_repeated(
-                [dace_dataflow.PruneSymbols, dace_dataflow.PruneConnectors],
-                validate=False,
-                validate_all=validate_all,
-            )
-            nb_preproccess_total += nb_preproccess
-        else:
-            nb_preproccess = 0
+        nb_preproccess = sdfg.apply_transformations_repeated(
+            [dace_dataflow.PruneSymbols, dace_dataflow.PruneConnectors],
+            validate=False,
+            validate_all=validate_all,
+        )
+        nb_preproccess_total += nb_preproccess
         if (nb_preproccess == 0) and (not first_iteration):
             break
 
