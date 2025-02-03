@@ -441,6 +441,7 @@ def test_remapping_premap_multineighbor():
 
 
 def test_remapping_premap_same_dim():
+    # TODO this is actually doing reshuffling, is that ok?
     # TODO add case where connectivity and premapped field have different size
     V = Dimension("V")
 
