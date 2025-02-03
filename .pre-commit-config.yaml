@@ -63,7 +63,7 @@ repos:
   hooks:
   - id: mypy
     name: mypy static type checker
-    entry: uv run mypy --no-install-types src/
+    entry: uv run --frozen mypy --no-install-types src/
     language: system
     types_or: [python, pyi]
     pass_filenames: false
