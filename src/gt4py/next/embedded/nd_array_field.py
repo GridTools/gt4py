@@ -658,7 +658,8 @@ def _reshuffling_premap(
 
     # Take data
     take_indices = tuple(
-        conn_map[dim].ndarray - data.domain[dim].unit_range.start for dim in data.domain.dims
+        conn_map[dim].ndarray - data.domain[dim].unit_range.start  # shift to 0-based indexing
+        for dim in data.domain.dims
     )
     new_buffer = data._ndarray.__getitem__(take_indices)
 
