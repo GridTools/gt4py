@@ -132,16 +132,6 @@ def _set_tile_sizes(sdfg: dace.SDFG):
             node.tile_sizes_interpretation = "strides"
 
 
-def _to_device(sdfg: dace.SDFG, device: str) -> None:
-    """Update sdfg in place."""
-    if device == "gpu":
-        for array in sdfg.arrays.values():
-            array.storage = dace.StorageType.GPU_Global
-        for node, _ in sdfg.all_nodes_recursive():
-            if isinstance(node, StencilComputation):
-                node.device = dace.DeviceType.GPU
-
-
 def _pre_expand_transformations(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map):
     args_data = make_args_data_from_gtir(gtir_pipeline)
 
@@ -347,9 +337,10 @@ class SDFGManager:
                     "oir_pipeline", DefaultPipeline()
                 )
                 oir_node = oir_pipeline.run(base_oir)
-                sdfg = OirSDFGBuilder().visit(oir_node)
+                sdfg = OirSDFGBuilder().visit(
+                    oir_node, device=self.builder.backend.storage_info["device"]
+                )
 
-                _to_device(sdfg, self.builder.backend.storage_info["device"])
                 _pre_expand_transformations(
                     self.builder.gtir_pipeline,
                     sdfg,

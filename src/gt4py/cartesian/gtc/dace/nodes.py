@@ -119,6 +119,7 @@ class StencilComputation(library.LibraryNode):
         extents: Optional[Dict[int, Extent]] = None,
         declarations: Optional[Dict[str, Decl]] = None,
         expansion_order=None,
+        device: Optional[dace.DeviceType] = None,
         *args,
         **kwargs,
     ):
@@ -137,6 +138,7 @@ class StencilComputation(library.LibraryNode):
             self.oir_node = typing.cast(PickledDataclassProperty, oir_node)
             self.extents = extents_dict  # type: ignore
             self.declarations = declarations  # type: ignore
+            self.device = device
             self.symbol_mapping = {
                 decl.name: dace.symbol(
                     decl.name,

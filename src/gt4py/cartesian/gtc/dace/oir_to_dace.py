@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict
+from typing import Dict, Literal
 
 import dace
 import dace.properties
@@ -31,6 +31,17 @@ from gt4py.cartesian.gtc.passes.oir_optimizations.utils import (
     AccessCollector,
     compute_horizontal_block_extents,
 )
+
+
+transient_storage_per_device: Dict[Literal["cpu", "gpu"], dace.StorageType] = {
+    "cpu": dace.StorageType.Default,
+    "gpu": dace.StorageType.GPU_Global,
+}
+
+device_type_per_device: Dict[Literal["cpu", "gpu"], dace.DeviceType] = {
+    "cpu": dace.DeviceType.CPU,
+    "gpu": dace.DeviceType.GPU,
+}
 
 
 class OirSDFGBuilder(eve.NodeVisitor):
@@ -98,7 +109,13 @@ class OirSDFGBuilder(eve.NodeVisitor):
                 global_access_info, local_access_info, self.decls[field].data_dims
             )
 
-    def visit_VerticalLoop(self, node: oir.VerticalLoop, *, ctx: OirSDFGBuilder.SDFGContext):
+    def visit_VerticalLoop(
+        self,
+        node: oir.VerticalLoop,
+        *,
+        ctx: OirSDFGBuilder.SDFGContext,
+        device: Literal["cpu", "gpu"],
+    ) -> None:
         declarations = {
             acc.name: ctx.decls[acc.name]
             for acc in node.walk_values().if_isinstance(oir.FieldAccess, oir.ScalarAccess)
@@ -109,6 +126,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
             extents=ctx.block_extents,
             declarations=declarations,
             oir_node=node,
+            device=device_type_per_device[device],
         )
 
         state = ctx.sdfg.add_state()
@@ -137,8 +155,8 @@ class OirSDFGBuilder(eve.NodeVisitor):
                 library_node, connector_name, access_node, None, dace.Memlet(field, subset=subset)
             )
 
-    def visit_Stencil(self, node: oir.Stencil):
-        ctx = OirSDFGBuilder.SDFGContext(stencil=node)
+    def visit_Stencil(self, node: oir.Stencil, *, device: Literal["cpu", "gpu"]) -> dace.SDFG:
+        ctx = OirSDFGBuilder.SDFGContext(node)
         for param in node.params:
             if isinstance(param, oir.FieldDecl):
                 dim_strs = [d for i, d in enumerate("IJK") if param.dimensions[i]] + [
@@ -153,6 +171,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
                     ],
                     dtype=data_type_to_dace_typeclass(param.dtype),
                     transient=False,
+                    storage=transient_storage_per_device[device],
                     debuginfo=get_dace_debuginfo(param),
                 )
             else:
@@ -172,8 +191,9 @@ class OirSDFGBuilder(eve.NodeVisitor):
                 dtype=data_type_to_dace_typeclass(decl.dtype),
                 transient=True,
                 lifetime=dace.AllocationLifetime.Persistent,
+                storage=transient_storage_per_device[device],
                 debuginfo=get_dace_debuginfo(decl),
             )
-        self.generic_visit(node, ctx=ctx)
+        self.generic_visit(node, ctx=ctx, device=device)
         ctx.sdfg.validate()
         return ctx.sdfg
