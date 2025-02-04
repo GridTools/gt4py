@@ -11,6 +11,7 @@
 import collections
 import copy
 import uuid
+import warnings
 from typing import Any, Final, Iterable, Optional, TypeAlias
 
 import dace
@@ -273,6 +274,9 @@ class GT4PyGlobalSelfCopyElimination(dace_transformation.SingleStateTransformati
     def expressions(cls) -> Any:
         return [dace.sdfg.utils.node_path_graph(cls.node_read_g, cls.node_tmp, cls.node_write_g)]
 
+    def depends_on(self) -> set[type[dace_transformation.Pass]]:
+        return {dace_transformation.passes.StateReachability}
+
     def can_be_applied(
         self,
         graph: dace.SDFGState | dace.SDFG,
@@ -334,9 +338,18 @@ class GT4PyGlobalSelfCopyElimination(dace_transformation.SingleStateTransformati
         write_g: dace_nodes.AccessNode = self.node_write_g
         tmp_node: dace_nodes.AccessNode = self.node_tmp
 
+        reachable_states: Optional[dict[dace.SDFGState, set[dace.SDFGState]]] = None
+        if self._pipeline_results and "StateReachability" in self._pipeline_results:
+            warnings.warn(
+                "The 'StateReachability' analysis pass was not part of the pipeline results.",
+                stacklevel=0,
+            )
+            reachable_states = self._pipeline_results["StateReachability"]
+
         return gtx_transformations.utils.is_accessed_downstream(
             start_state=start_state,
             sdfg=sdfg,
+            reachable_states=reachable_states,
             data_to_look=data_to_look,
             nodes_to_ignore={read_g, write_g, tmp_node},
         )
@@ -429,7 +442,7 @@ class DistributedBufferRelocator(dace_transformation.Pass):
     def depends_on(self) -> set[type[dace_transformation.Pass]]:
         return {
             dace_transformation.passes.StateReachability,
-            dace_transformation.passes.AccessSets,
+            dace_transformation.passes.FindAccessStates,
         }
 
     def apply_pass(
@@ -438,12 +451,17 @@ class DistributedBufferRelocator(dace_transformation.Pass):
         reachable: dict[dace.SDFGState, set[dace.SDFGState]] = pipeline_results[
             "StateReachability"
         ][sdfg.cfg_id]
-        access_sets: dict[dace.SDFGState, tuple[set[str], set[str]]] = pipeline_results[
-            "AccessSets"
-        ][sdfg.cfg_id]
+
+        # NOTE: We can not use `AccessSets` because this pass operates on
+        #  `ControlFlowBlock`s, which might consists of multiple states. Thus we are
+        #  using `FindAccessStates` which has this `SDFGState` granularity. However,
+        #  we have to determine if it is a write or not.
+        access_states: dict[str, set[dace.SDFGState]] = pipeline_results["FindAccessStates"][
+            sdfg.cfg_id
+        ]
         result: dict[dace.SDFGState, set[str]] = collections.defaultdict(set)
 
-        to_relocate = self._find_candidates(sdfg, reachable, access_sets)
+        to_relocate = self._find_candidates(sdfg, reachable, access_states)
         if len(to_relocate) == 0:
             return None
         self._relocate_write_backs(sdfg, to_relocate)
@@ -485,7 +503,7 @@ class DistributedBufferRelocator(dace_transformation.Pass):
         self,
         sdfg: dace.SDFG,
         reachable: dict[dace.SDFGState, set[dace.SDFGState]],
-        access_sets: dict[dace.SDFGState, tuple[set[str], set[str]]],
+        access_states: dict[str, set[dace.SDFGState]],
     ) -> list[tuple[AccessLocation, list[AccessLocation]]]:
         """Determines all temporaries that have to be relocated.
 
@@ -515,9 +533,7 @@ class DistributedBufferRelocator(dace_transformation.Pass):
             if len(candidate_dst_nodes) == 0:
                 continue
 
-            for temp_storage in state.source_nodes():
-                if not isinstance(temp_storage, dace_nodes.AccessNode):
-                    continue
+            for temp_storage in state.data_nodes():
                 if not temp_storage.desc(sdfg).transient:
                     continue
                 if state.out_degree(temp_storage) != 1:
@@ -548,7 +564,11 @@ class DistributedBufferRelocator(dace_transformation.Pass):
             temp_storage_node, temp_storage_state = temp_storage
             def_locations: list[AccessLocation] = []
             for upstream_state in find_upstream_states(temp_storage_state):
-                if temp_storage_node.data in access_sets[upstream_state][1]:
+                if self._is_written_to_in_state(
+                    data=temp_storage_node.data,
+                    state=upstream_state,
+                    access_states=access_states,
+                ):
                     # NOTE: We do not impose any restriction on `temp_storage`. Thus
                     #   It could be that we do read from it (we can never write to it)
                     #   in this state or any other state later.
@@ -592,11 +612,13 @@ class DistributedBufferRelocator(dace_transformation.Pass):
                 if gtx_transformations.utils.is_accessed_downstream(
                     start_state=def_state,
                     sdfg=sdfg,
+                    reachable_states=reachable,
                     data_to_look=wb_node.data,
                     nodes_to_ignore={def_node, wb_node},
                 ):
                     break
-                # check if the global data is not used between the definition of
+
+                # Check if the global data is not used between the definition of
                 #  `dest_storage` and where its written back. However, we ignore
                 #  the state were `temp_storage` is defined. The checks if these
                 #  checks are performed by the `_check_read_write_dependency()`
@@ -605,9 +627,14 @@ class DistributedBufferRelocator(dace_transformation.Pass):
                 global_nodes_in_def_state = {
                     dnode for dnode in def_state.data_nodes() if dnode.data == global_data_name
                 }
+
+                # The `is_accessed_downstream()` function has some odd behaviour
+                #  regarding `states_to_ignore`. Because of the special SDFGs we have
+                #  this should not be an issue.
                 if gtx_transformations.utils.is_accessed_downstream(
                     start_state=def_state,
                     sdfg=sdfg,
+                    reachable_states=reachable,
                     data_to_look=global_data_name,
                     nodes_to_ignore=global_nodes_in_def_state,
                     states_to_ignore={wb_state},
@@ -619,6 +646,36 @@ class DistributedBufferRelocator(dace_transformation.Pass):
                 result.append((wb_location, def_locations))
 
         return result
+
+    def _is_written_to_in_state(
+        self,
+        data: str,
+        state: dace.SDFGState,
+        access_states: dict[str, set[dace.SDFGState]],
+    ) -> bool:
+        """This function determines if there is a write to data `data` in state `state`.
+
+        Args:
+            data: Name of the data descriptor that should be tested.
+            state: The state that should be examined.
+            access_states: The set of state that writes to a specific data.
+        """
+        assert data in access_states, f"Did not found '{data}' in 'access_states'."
+
+        # According to `access_states` `data` is not accessed inside `state`.
+        #  Therefore there is no write.
+        if state not in access_states[data]:
+            return False
+
+        # There is an AccessNode for `data` inside `state`. Now we have to find the
+        #  node and determine if it is a write or not.
+        for dnode in state.data_nodes():
+            if dnode.data != data:
+                continue
+            if state.in_degree(dnode) > 0:
+                return True
+
+        return False
 
     def _check_read_write_dependency(
         self,
@@ -771,6 +828,9 @@ class GT4PyMoveTaskletIntoMap(dace_transformation.SingleStateTransformation):
     def expressions(cls) -> Any:
         return [dace.sdfg.utils.node_path_graph(cls.tasklet, cls.access_node, cls.map_entry)]
 
+    def depends_on(self) -> set[type[dace_transformation.Pass]]:
+        return {dace_transformation.passes.StateReachability}
+
     def can_be_applied(
         self,
         graph: dace.SDFGState | dace.SDFG,
@@ -889,9 +949,18 @@ class GT4PyMoveTaskletIntoMap(dace_transformation.SingleStateTransformation):
         # The data is no longer referenced in this state, so we can potentially
         #  remove
         if graph.out_degree(access_node) == 0:
+            reachable_states: Optional[dict[dace.SDFGState, set[dace.SDFGState]]] = None
+            if self._pipeline_results and "StateReachability" in self._pipeline_results:
+                warnings.warn(
+                    "The 'StateReachability' analysis pass was not part of the pipeline results.",
+                    stacklevel=0,
+                )
+                reachable_states = self._pipeline_results["StateReachability"]
+
             if not gtx_transformations.utils.is_accessed_downstream(
                 start_state=graph,
                 sdfg=sdfg,
+                reachable_states=reachable_states,
                 data_to_look=access_node.data,
                 nodes_to_ignore={access_node},
             ):
@@ -979,7 +1048,10 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
         return [dace.sdfg.utils.node_path_graph(cls.map_exit, cls.tmp_ac, cls.glob_ac)]
 
     def depends_on(self) -> set[type[dace_transformation.Pass]]:
-        return {dace_transformation.passes.ConsolidateEdges}
+        return {
+            dace_transformation.passes.ConsolidateEdges,
+            dace_transformation.passes.analysis.StateReachability,
+        }
 
     def can_be_applied(
         self,
@@ -988,6 +1060,14 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
         sdfg: dace.SDFG,
         permissive: bool = False,
     ) -> bool:
+        reachable_states: Optional[dict[dace.SDFGState, set[dace.SDFGState]]] = None
+        if self._pipeline_results and "StateReachability" in self._pipeline_results:
+            warnings.warn(
+                "The 'StateReachability' analysis pass was not part of the pipeline results.",
+                stacklevel=0,
+            )
+            reachable_states = self._pipeline_results["StateReachability"]
+
         tmp_ac: dace_nodes.AccessNode = self.tmp_ac
         glob_ac: dace_nodes.AccessNode = self.glob_ac
         tmp_desc: dace_data.Data = tmp_ac.desc(sdfg)
@@ -1018,6 +1098,7 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
         if gtx_transformations.utils.is_accessed_downstream(
             start_state=graph,
             sdfg=sdfg,
+            reachable_states=reachable_states,
             data_to_look=tmp_ac.data,
             nodes_to_ignore={tmp_ac},
         ):
