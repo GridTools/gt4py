@@ -164,58 +164,57 @@ def gt_gpu_transform_non_standard_memlet(
 
     # This code is is copied from DaCe's code generator.
     for e, state in list(sdfg.all_edges_recursive()):
-        nsdfg = state.parent
-        if (
-            isinstance(e.src, dace_nodes.AccessNode)
-            and isinstance(e.dst, dace_nodes.AccessNode)
-            and e.src.desc(nsdfg).storage == dace_dtypes.StorageType.GPU_Global
-            and e.dst.desc(nsdfg).storage == dace_dtypes.StorageType.GPU_Global
-        ):
-            a: dace_nodes.AccessNode = e.src
-            b: dace_nodes.AccessNode = e.dst
+        if isinstance(e.src, dace_nodes.AccessNode) and isinstance(e.dst, dace_nodes.AccessNode):
+            nsdfg = state.parent
+            if (
+                e.src.desc(nsdfg).storage == dace_dtypes.StorageType.GPU_Global
+                and e.dst.desc(nsdfg).storage == dace_dtypes.StorageType.GPU_Global
+            ):
+                a: dace_nodes.AccessNode = e.src
+                b: dace_nodes.AccessNode = e.dst
 
-            copy_shape, src_strides, dst_strides, _, _ = dace_cpp.memlet_copy_to_absolute_strides(
-                None, nsdfg, state, e, a, b
-            )
-            dims = len(copy_shape)
-            if dims == 1:
-                continue
-            elif dims == 2:
-                if src_strides[-1] != 1 or dst_strides[-1] != 1:
-                    try:
-                        is_src_cont = src_strides[0] / src_strides[1] == copy_shape[1]
-                        is_dst_cont = dst_strides[0] / dst_strides[1] == copy_shape[1]
-                    except (TypeError, ValueError):
-                        is_src_cont = False
-                        is_dst_cont = False
-                    if is_src_cont and is_dst_cont:
-                        continue
-                else:
-                    continue
-            elif dims > 2:
-                if not (src_strides[-1] != 1 or dst_strides[-1] != 1):
-                    continue
-
-            # For identifying the new map, we first store all neighbors of `a`.
-            old_neighbors_of_a: list[dace_nodes.AccessNode] = [
-                edge.dst for edge in state.out_edges(a)
-            ]
-
-            # Turn unsupported copy to a map
-            try:
-                dace_transformation.dataflow.CopyToMap.apply_to(
-                    nsdfg, save=False, annotate=False, a=a, b=b
+                copy_shape, src_strides, dst_strides, _, _ = (
+                    dace_cpp.memlet_copy_to_absolute_strides(None, nsdfg, state, e, a, b)
                 )
-            except ValueError:  # If transformation doesn't match, continue normally
-                continue
+                dims = len(copy_shape)
+                if dims == 1:
+                    continue
+                elif dims == 2:
+                    if src_strides[-1] != 1 or dst_strides[-1] != 1:
+                        try:
+                            is_src_cont = src_strides[0] / src_strides[1] == copy_shape[1]
+                            is_dst_cont = dst_strides[0] / dst_strides[1] == copy_shape[1]
+                        except (TypeError, ValueError):
+                            is_src_cont = False
+                            is_dst_cont = False
+                        if is_src_cont and is_dst_cont:
+                            continue
+                    else:
+                        continue
+                elif dims > 2:
+                    if not (src_strides[-1] != 1 or dst_strides[-1] != 1):
+                        continue
 
-            # We find the new map by comparing the new neighborhood of `a` with the old one.
-            new_nodes: set[dace_nodes.MapEntry] = {
-                edge.dst for edge in state.out_edges(a) if edge.dst not in old_neighbors_of_a
-            }
-            assert any(isinstance(new_node, dace_nodes.MapEntry) for new_node in new_nodes)
-            assert len(new_nodes) == 1
-            new_maps.update(new_nodes)
+                # For identifying the new map, we first store all neighbors of `a`.
+                old_neighbors_of_a: list[dace_nodes.AccessNode] = [
+                    edge.dst for edge in state.out_edges(a)
+                ]
+
+                # Turn unsupported copy to a map
+                try:
+                    dace_transformation.dataflow.CopyToMap.apply_to(
+                        nsdfg, save=False, annotate=False, a=a, b=b
+                    )
+                except ValueError:  # If transformation doesn't match, continue normally
+                    continue
+
+                # We find the new map by comparing the new neighborhood of `a` with the old one.
+                new_nodes: set[dace_nodes.MapEntry] = {
+                    edge.dst for edge in state.out_edges(a) if edge.dst not in old_neighbors_of_a
+                }
+                assert any(isinstance(new_node, dace_nodes.MapEntry) for new_node in new_nodes)
+                assert len(new_nodes) == 1
+                new_maps.update(new_nodes)
 
     # If there are no Memlets that are translated to copy-Maps, then we have nothing to do.
     if len(new_maps) == 0:
