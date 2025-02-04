@@ -65,6 +65,8 @@ MATH_BUILTINS = {
     "f64",
 }
 
+REDUCTION_BUILTINS = {"reduce", "add"}
+
 builtins = {
     "I",
     "J",
@@ -89,9 +91,10 @@ builtins = {
     "compile_assert",
     "range",
     *MATH_BUILTINS,
+    *REDUCTION_BUILTINS,
 }
 
-IGNORE_WHEN_INLINING = {*MATH_BUILTINS, "compile_assert", "range"}
+IGNORE_WHEN_INLINING = {*MATH_BUILTINS, *REDUCTION_BUILTINS, "compile_assert", "range"}
 
 __all__ = [*list(builtins), "function", "stencil", "lazy_stencil"]
 
@@ -918,4 +921,16 @@ def ceil(x):
 
 def trunc(x):
     """Return the Real value x truncated to an Integral (usually an integer)"""
+    pass
+
+
+# GTScript builtins: reductions
+def reduce(op, generator, initial=None):
+    """Apply the binary operator `op` cumulatively to all elements of `generator` with
+    initial value `initial` (optional)."""
+    pass
+
+
+def add(x, y):
+    """Placeholder for sum reduction operator."""
     pass

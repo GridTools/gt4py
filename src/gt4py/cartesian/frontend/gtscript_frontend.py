@@ -407,10 +407,9 @@ class CallInliner(ast.NodeTransformer):
         return node
 
     def visit_Assign(self, node: ast.Assign):
-        if (
-            isinstance(node.value, ast.Call)
-            and gt_meta.get_qualified_name_from_node(node.value.func) not in gtscript.MATH_BUILTINS
-        ):
+        if isinstance(node.value, ast.Call) and gt_meta.get_qualified_name_from_node(
+            node.value.func
+        ) not in gtscript.MATH_BUILTINS.union(gtscript.REDUCTION_BUILTINS):
             assert len(node.targets) == 1
             self.visit(node.value, target_node=node.targets[0])
             # This node can be now removed since the trivial assignment has been already done
@@ -646,7 +645,7 @@ class CompiledIfInliner(ast.NodeTransformer):
         return node if node else None
 
 
-class DataDimLoopIndexReplacer(ast.NodeTransformer):
+class LoopIndexReplacer(ast.NodeTransformer):
     def __init__(self, name: str, value: int) -> None:
         self.name = name
         self.value = value
@@ -656,6 +655,94 @@ class DataDimLoopIndexReplacer(ast.NodeTransformer):
             return ast.Constant(self.value, ctx=node.ctx)
         else:
             return node
+
+
+def _get_loop_index_values(
+    node: Union[ast.Call, ast.List, ast.Tuple], context: dict
+) -> Optional[Union[list, range]]:
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "range":
+        range_args = [eval(ast.unparse(arg), context) for arg in node.args]
+        assert 1 <= len(range_args) <= 3
+        if len(range_args) == 1:
+            start, stop, step = 0, *range_args, 1
+        elif len(range_args) == 2:
+            start, stop, step = *range_args, 1
+        else:
+            start, stop, step = range_args
+        index_values = range(start, stop, step)
+    elif isinstance(node, (ast.List, ast.Tuple)):
+        index_values = [eval(ast.unparse(elt), context) for elt in node.elts]
+    else:
+        index_values = None
+    return index_values
+
+
+class ReductionUnroller(ast.NodeTransformer):
+    REDUCTION_OP_TO_AST_OP = {"add": ast.Add}
+
+    @classmethod
+    def apply(cls, func_node: ast.FunctionDef, context: dict):
+        unroller = cls(context)
+        unroller(func_node)
+
+    def __init__(self, context: dict) -> None:
+        self.context = context
+
+    def __call__(self, func_node: ast.FunctionDef) -> None:
+        self.visit(func_node)
+
+    def visit_Call(self, node: ast.Call) -> Union[ast.Call, ast.BinOp]:
+        if isinstance(node.func, ast.Name) and node.func.id == "reduce":
+            return self._unroll_reduction(node)
+        else:
+            return node
+
+    def _unroll_reduction(self, node: ast.Call) -> ast.BinOp:
+        param_names = ["op", "generator", "initial"][len(args := node.args) :]
+        for kwarg in node.keywords:
+            if kwarg.arg in param_names:
+                args.append(kwarg.value)
+            else:
+                raise GTScriptSyntaxError(f"Reduce: unknown argument `{kwarg.arg}`.")
+
+        if not 2 <= len(args) <= 3:
+            raise GTScriptSyntaxError("Reduce: the function takes 2 to 3 arguments.")
+
+        if isinstance(args[0], ast.Name) and (op_id := args[0].id) in self.REDUCTION_OP_TO_AST_OP:
+            op = self.REDUCTION_OP_TO_AST_OP[op_id]()
+        else:
+            raise GTScriptSyntaxError("Reduce: invalid reduction operator.")
+
+        if isinstance((generator_expr := args[1]), ast.GeneratorExp):
+            template_item = generator_expr.elt
+            index_name = generator_expr.generators[0].target.id
+            index_values = list(
+                _get_loop_index_values(generator_expr.generators[0].iter, self.context)
+            )
+        else:
+            raise GTScriptSyntaxError("Reduce: second argument should be a generator expression.")
+
+        initial_value = args[2] if len(node.args) == 3 else None
+
+        return self._get_binary_node(
+            op, template_item, index_name, index_values, left=initial_value
+        )
+
+    def _get_binary_node(self, op, template_item, index_name, index_values, left=None) -> ast.BinOp:
+        if left is None:
+            assert len(index_values) > 1
+            left = LoopIndexReplacer(index_name, index_values[0]).visit(
+                copy.deepcopy(template_item)
+            )
+            index_values = index_values[1:]
+
+        assert len(index_values) > 0
+        if len(index_values) == 1:
+            right = LoopIndexReplacer(index_name, index_values[0]).visit(template_item)
+        else:
+            right = self._get_binary_node(op, template_item, index_name, index_values)
+
+        return ast.BinOp(left=left, op=op, right=right)
 
 
 class DataDimLoopUnroller(ast.NodeTransformer):
@@ -668,38 +755,20 @@ class DataDimLoopUnroller(ast.NodeTransformer):
         self.context = context
         self.prefix = ""
 
-    def __call__(self, func_node: ast.FunctionDef):
+    def __call__(self, func_node: ast.FunctionDef) -> None:
         self.visit(func_node)
 
     def visit_For(self, node: ast.For) -> Union[ast.For, list[ast.AST]]:
         super().generic_visit(node)
 
-        index_values: Optional[Union[list, range]] = None
-        if (
-            isinstance(node.iter, ast.Call)
-            and isinstance(node.iter.func, ast.Name)
-            and node.iter.func.id == "range"
-        ):
-            range_args = [eval(ast.unparse(arg), self.context) for arg in node.iter.args]
-            assert 1 <= len(range_args) <= 3
-            if len(range_args) == 1:
-                start, stop, step = 0, *range_args, 1
-            elif len(range_args) == 2:
-                start, stop, step = *range_args, 1
-            else:
-                start, stop, step = range_args
-            index_values = range(start, stop, step)
-        elif isinstance(node.iter, (ast.List, ast.Tuple)):
-            index_values = [eval(ast.unparse(elt), self.context) for elt in node.iter.elts]
-
-        if index_values is not None:
+        if (index_values := _get_loop_index_values(node.iter, self.context)) is not None:
             assert isinstance(node.target, ast.Name)
             index_name = node.target.id
 
             new_body = []
             for index_value in index_values:
                 body = copy.deepcopy(node.body)
-                transformer = DataDimLoopIndexReplacer(index_name, index_value)
+                transformer = LoopIndexReplacer(index_name, index_value)
                 new_body_item = [transformer.visit(stmt) for stmt in body]
                 new_body += new_body_item
 
@@ -2145,6 +2214,8 @@ class GTScriptParser(ast.NodeVisitor):
         )
 
         ValueInliner.apply(main_func_node, context=local_context)
+
+        ReductionUnroller.apply(main_func_node, context=local_context)
 
         # unroll loops over data dimensions
         # note(stubbiali): address the case of a function called within a for-loop
