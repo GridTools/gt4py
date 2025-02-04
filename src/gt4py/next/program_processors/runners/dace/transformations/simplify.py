@@ -152,6 +152,12 @@ def gt_inline_nested_sdfg(
     nb_preproccess_total = 0
     nb_inlines_total = 0
     while True:
+        # TODO(edopao): we call `reset_cfg_list()` as temporary workaround for a
+        # dace issue with pattern matching. Any time the SDFG's CFG-tree is modified,
+        # i.e. a loop is added/removed or something similar, the CFG list needs
+        # to be updated accordingly. Otherwise, all ID-based accesses are not going
+        # to work (which is what pattern matching attempts to do).
+        sdfg.reset_cfg_list()
         nb_preproccess = sdfg.apply_transformations_repeated(
             [dace_dataflow.PruneSymbols, dace_dataflow.PruneConnectors],
             validate=False,
