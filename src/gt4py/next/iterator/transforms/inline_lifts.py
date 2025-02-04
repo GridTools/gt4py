@@ -83,7 +83,7 @@ def _transform_and_extract_lift_args(
             sym = ir.Sym(id=arg.id)
             assert sym not in extracted_args or extracted_args[sym] == arg
             extracted_args[sym] = arg
-            new_args.append(arg)
+            new_args.append(arg)  # TODO: type?
         else:
             new_symbol = _generate_unique_symbol(
                 desired_name=(inner_stencil, i),
@@ -92,7 +92,7 @@ def _transform_and_extract_lift_args(
             )
             assert new_symbol not in extracted_args
             extracted_args[new_symbol] = arg
-            new_args.append(ir.SymRef(id=new_symbol.id))
+            new_args.append(ir.SymRef(id=new_symbol.id))  # TODO: type?
 
     itir_node = im.lift(inner_stencil)(*new_args)
     itir_node.location = node.location
@@ -159,6 +159,7 @@ class InlineLifts(
 
         if self.flags & self.Flag.PROPAGATE_SHIFT and _is_shift_lift(node):
             shift = node.fun
+            shift.type = None
             assert len(node.args) == 1
             lift_call = node.args[0]
             new_args = [
