@@ -80,10 +80,11 @@ def _transform_and_extract_lift_args(
     new_args = []
     for i, arg in enumerate(node.args):
         if isinstance(arg, ir.SymRef):
+            # TODO(tehrengruber): Is it possible to reinfer the type if it is not inherited here?
             sym = ir.Sym(id=arg.id)
             assert sym not in extracted_args or extracted_args[sym] == arg
             extracted_args[sym] = arg
-            new_args.append(arg)  # TODO: type?
+            new_args.append(arg)
         else:
             new_symbol = _generate_unique_symbol(
                 desired_name=(inner_stencil, i),
@@ -92,7 +93,8 @@ def _transform_and_extract_lift_args(
             )
             assert new_symbol not in extracted_args
             extracted_args[new_symbol] = arg
-            new_args.append(ir.SymRef(id=new_symbol.id))  # TODO: type?
+            # TODO(tehrengruber): Is it possible to reinfer the type if it is not inherited here?
+            new_args.append(ir.SymRef(id=new_symbol.id))
 
     itir_node = im.lift(inner_stencil)(*new_args)
     itir_node.location = node.location
@@ -159,6 +161,8 @@ class InlineLifts(
 
         if self.flags & self.Flag.PROPAGATE_SHIFT and _is_shift_lift(node):
             shift = node.fun
+            # This transformation does not preserve the type (the position dims of the iterator
+            # change). Delete type to avoid errors.
             shift.type = None
             assert len(node.args) == 1
             lift_call = node.args[0]

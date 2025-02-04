@@ -328,7 +328,7 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
     @classmethod
     def trace_stencil(
         cls, stencil: ir.Expr, *, num_args: Optional[int] = None, save_to_annex: bool = False
-    ):
+    ) -> list[set[tuple[ir.OffsetLiteral, ...]]]:
         # If we get a lambda we can deduce the number of arguments.
         if isinstance(stencil, ir.Lambda):
             assert num_args is None or num_args == len(stencil.params)
