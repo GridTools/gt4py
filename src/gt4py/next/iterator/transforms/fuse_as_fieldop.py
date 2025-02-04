@@ -349,13 +349,6 @@ class FuseAsFieldOp(
             node, within_set_at_expr=within_set_at_expr
         )
 
-    def visit_SetAt(self, node: itir.SetAt, **kwargs):
-        return itir.SetAt(
-            expr=self.visit(node.expr, **kwargs | {"within_set_at_expr": True}),
-            domain=node.domain,
-            target=node.target,
-        )
-
     def transform_fuse_make_tuple(self, node: itir.Node, **kwargs):
         if not cpm.is_call_to(node, "make_tuple"):
             return None
@@ -448,7 +441,8 @@ class FuseAsFieldOp(
 
     def generic_visit(self, node, **kwargs):
         if cpm.is_applied_as_fieldop(node):  # don't descend in stencil
-            return im.as_fieldop(*node.fun.args)(*self.generic_visit(node.args, **kwargs))
+            return im.as_fieldop(*node.fun.args)(*self.visit(node.args, **kwargs))
+
         # TODO(tehrengruber): This is a common pattern that should be absorbed in
         #  `FixedPointTransformation`.
         if kwargs.get("recurse", True):
@@ -457,8 +451,17 @@ class FuseAsFieldOp(
             return node
 
     def visit(self, node, **kwargs):
+        if isinstance(node, itir.SetAt):
+            return itir.SetAt(
+                expr=self.visit(node.expr, **kwargs | {"within_set_at_expr": True}),
+                # rest doesn't need to be visited
+                domain=node.domain,
+                target=node.target,
+            )
+
+        # don't execute transformations unless inside `SetAt` node
         if not kwargs.get("within_set_at_expr"):
-            return node
+            return self.generic_visit(node, **kwargs)
 
         # inline all fields with list dtype. This needs to happen before the children are visited
         # such that the `as_fieldop` can be fused.
