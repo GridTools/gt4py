@@ -345,12 +345,12 @@ def test_inline_as_fieldop_with_list_dtype():
         dims=[IDim], dtype=ts.ListType(element_type=ts.ScalarType(kind=ts.ScalarKind.INT32))
     )
     d = im.domain("cartesian_domain", {IDim: (0, 1)})
-    testee = im.as_fieldop(im.lambda_("inp")(im.call("reduce")(im.deref("inp"), 0)), d)(
-        im.as_fieldop("deref")(im.ref("inp", list_field_type))
-    )
-    expected = im.as_fieldop(im.lambda_("inp")(im.call("reduce")(im.deref("inp"), 0)), d)(
-        im.ref("inp", list_field_type)
-    )
+    testee = im.as_fieldop(
+        im.lambda_("inp")(im.call(im.call("reduce")("plus", 0))(im.deref("inp"))), d
+    )(im.as_fieldop("deref")(im.ref("inp", list_field_type)))
+    expected = im.as_fieldop(
+        im.lambda_("inp")(im.call(im.call("reduce")("plus", 0))(im.deref("inp"))), d
+    )(im.ref("inp", list_field_type))
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
         testee, offset_provider_type={}, allow_undeclared_symbols=True
     )
