@@ -236,19 +236,15 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
     def generate_computation(self) -> Dict[str, Union[str, Dict]]:
         dir_name = f"{self.builder.options.name}_src"
-        src_files = self.make_extension_sources(stencil_ir=self.builder.gtir)
+        src_files = self._make_extension_sources()
         return {dir_name: src_files["computation"]}
 
-    def generate_bindings(
-        self, language_name: str, *, stencil_ir: Optional[gtir.Stencil] = None
-    ) -> Dict[str, Union[str, Dict]]:
-        if not stencil_ir:
-            stencil_ir = self.builder.gtir
-        assert stencil_ir is not None
+    def generate_bindings(self, language_name: str) -> Dict[str, Union[str, Dict]]:
         if language_name != "python":
             return super().generate_bindings(language_name)
+
         dir_name = f"{self.builder.options.name}_src"
-        src_files = self.make_extension_sources(stencil_ir=stencil_ir)
+        src_files = self._make_extension_sources()
         return {dir_name: src_files["bindings"]}
 
     @abc.abstractmethod
@@ -260,31 +256,25 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
         """
         pass
 
-    def make_extension(
-        self, *, stencil_ir: Optional[gtir.Stencil] = None, uses_cuda: bool = False
-    ) -> Tuple[str, str]:
+    def make_extension(self, *, uses_cuda: bool = False) -> Tuple[str, str]:
         build_info = self.builder.options.build_info
         if build_info is not None:
             start_time = time.perf_counter()
 
-        if not stencil_ir:
-            stencil_ir = self.builder.gtir
-        assert stencil_ir is not None
-
         # Generate source
         gt_pyext_files: Dict[str, Any]
         gt_pyext_sources: Dict[str, Any]
-        if not self.builder.options._impl_opts.get("disable-code-generation", False):
-            gt_pyext_files = self.make_extension_sources(stencil_ir=stencil_ir)
-            gt_pyext_sources = {
-                **gt_pyext_files["computation"],
-                **gt_pyext_files["bindings"],
-            }
-        else:
+        if self.builder.options._impl_opts.get("disable-code-generation", False):
             # Pass NOTHING to the self.builder means try to reuse the source code files
             gt_pyext_files = {}
             gt_pyext_sources = {
                 key: gt_utils.NOTHING for key in self.PYEXT_GENERATOR_CLASS.TEMPLATE_FILES.keys()
+            }
+        else:
+            gt_pyext_files = self._make_extension_sources()
+            gt_pyext_sources = {
+                **gt_pyext_files["computation"],
+                **gt_pyext_files["bindings"],
             }
 
         if build_info is not None:
@@ -317,10 +307,11 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
         return result
 
-    def make_extension_sources(self, *, stencil_ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
+    def _make_extension_sources(self) -> Dict[str, Dict[str, str]]:
         """Generate the source for the stencil independently from use case."""
         if "computation_src" in self.builder.backend_data:
             return self.builder.backend_data["computation_src"]
+
         class_name = self.pyext_class_name if self.builder.stencil_id else self.builder.options.name
         module_name = (
             self.pyext_module_name
@@ -328,7 +319,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
             else f"{self.builder.options.name}_pyext"
         )
         gt_pyext_generator = self.PYEXT_GENERATOR_CLASS(class_name, module_name, self)
-        gt_pyext_sources = gt_pyext_generator(stencil_ir)
+        gt_pyext_sources = gt_pyext_generator(self.builder.gtir)
         final_ext = ".cu" if self.languages and self.languages["computation"] == "cuda" else ".cpp"
         comp_src = gt_pyext_sources["computation"]
         for key in [k for k in comp_src.keys() if k.endswith(".src")]:

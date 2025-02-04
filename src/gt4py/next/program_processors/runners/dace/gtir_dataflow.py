@@ -233,8 +233,12 @@ class DataflowOutputEdge:
     ) -> None:
         # retrieve the node which writes the result
         last_node = self.state.in_edges(self.result.dc_node)[0].src
-        if isinstance(last_node, (dace.nodes.Tasklet, dace.nodes.NestedSDFG)):
+        if isinstance(last_node, dace.nodes.Tasklet):
             # the last transient node can be deleted
+            # Note that it could also be applied when `last_node` is a NestedSDFG,
+            # but an exception would be when the inner write to global data is a
+            # WCR memlet, because that prevents fusion of the outer map. This case
+            # happens for the reduce with skip values, which uses a map with WCR.
             last_node_connector = self.state.in_edges(self.result.dc_node)[0].src_conn
             self.state.remove_node(self.result.dc_node)
         else:
@@ -332,6 +336,7 @@ class LambdaToDataflow(eve.NodeVisitor):
     sdfg: dace.SDFG
     state: dace.SDFGState
     subgraph_builder: gtir_sdfg.DataflowBuilder
+    scan_carry_symbol: Optional[gtir.Sym]
     input_edges: list[DataflowInputEdge] = dataclasses.field(default_factory=lambda: [])
     symbol_map: dict[
         str,
@@ -693,7 +698,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         # visit each branch of the if-statement as if it was a Lambda node
         lambda_node = gtir.Lambda(params=lambda_params, expr=expr)
         input_edges, output_tree = translate_lambda_to_dataflow(
-            if_sdfg, if_branch_state, self.subgraph_builder, lambda_node, args=lambda_args
+            if_sdfg, if_branch_state, self.subgraph_builder, lambda_node, lambda_args
         )
 
         for data_node in if_branch_state.data_nodes():
@@ -736,7 +741,12 @@ class LambdaToDataflow(eve.NodeVisitor):
         """
         Lowers an if-expression with exclusive branch execution into a nested SDFG,
         in which each branch is lowered into a dataflow in a separate state and
-        the if-condition is represented as the inter-state edge condtion.
+        the if-condition is represented as the inter-state edge condition.
+
+        Exclusive branch execution for local if expressions is meant to be used
+        in iterator view. Iterator view is required ONLY inside scan field operators.
+        For regular field operators, the fieldview behavior of if-expressions
+        corresponds to a local select, therefore it should be lowered to a tasklet.
         """
 
         def write_output_of_nested_sdfg_to_temporary(inner_value: ValueExpr) -> ValueExpr:
@@ -797,6 +807,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             nsdfg.add_edge(entry_state, fstate, dace.InterstateEdge(condition="not (__cond)"))
 
         input_memlets: dict[str, MemletExpr | ValueExpr] = {}
+        nsdfg_symbols_mapping: Optional[dict[str, dace.symbol]] = None
 
         # define scalar or symbol for the condition value inside the nested SDFG
         if isinstance(condition_value, SymbolExpr):
@@ -835,12 +846,16 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         outputs = {outval.dc_node.data for outval in gtx_utils.flatten_nested_tuple((result,))}
 
+        # all free symbols are mapped to the symbols available in parent SDFG
+        nsdfg_symbols_mapping = {str(sym): sym for sym in nsdfg.free_symbols}
+        if isinstance(condition_value, SymbolExpr):
+            nsdfg_symbols_mapping["__cond"] = condition_value.value
         nsdfg_node = self.state.add_nested_sdfg(
             nsdfg,
             self.sdfg,
             inputs=set(input_memlets.keys()),
             outputs=outputs,
-            symbol_mapping=None,  # implicitly map all free symbols to the symbols available in parent SDFG
+            symbol_mapping=nsdfg_symbols_mapping,
         )
 
         for inner, input_expr in input_memlets.items():
@@ -1494,7 +1509,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             shifted_indices[neighbor_dim] = MemletExpr(
                 dc_node=offset_table_node,
                 gt_dtype=it.gt_dtype,
-                subset=dace_subsets.Indices([origin_index.value, offset_expr.value]),
+                subset=dace_subsets.Range.from_string(f"{origin_index.value}, {offset_expr.value}"),
             )
         else:
             # dynamic offset: we cannot use a memlet to retrieve the offset value, use a tasklet node
@@ -1633,13 +1648,87 @@ class LambdaToDataflow(eve.NodeVisitor):
         tuple_fields = self.visit(node.args[1])
         return tuple_fields[index]
 
+    def requires_exclusive_if(self, node: gtir.FunCall) -> bool:
+        """
+        The meaning of `if_` builtin function is unclear in GTIR.
+        In some context, it corresponds to a ternary operator where, depending on
+        the condition result, only one branch or the other should be executed,
+        because one of them is invalid. The typical case is the use of `if_` to
+        decide whether it is possible or not to access a shifted iterator, for
+        example when the condition expression calls `can_deref`.
+        The ternary operator is also used in iterator view, where the field arguments
+        are not necessarily both defined on the entire output domain (this behavior
+        should not appear in field view, because there the user code should use
+        `concat_where` instead of `where` for such cases). It is difficult to catch
+        such behavior, because it would require to know the exact domain of all
+        fields, which is not known at compile time. However, the iterator view
+        behavior should only appear inside scan field operators.
+        A different usage of `if_` expressions is selecting one argument value or
+        the other, where both arguments are defined on the output domain, therefore
+        always valid.
+        In order to simplify the SDFG and facilitate the optimization stage, we
+        try to avoid the ternary operator form when not needed. The reason is that
+        exclusive branch execution is represented in the SDFG as a conditional
+        state transition, which prevents fusion.
+        """
+        assert cpm.is_call_to(node, "if_")
+        assert len(node.args) == 3
+
+        condition_vars = (
+            eve.walk_values(node.args[0])
+            .if_isinstance(gtir.SymRef)
+            .map(lambda node: str(node.id))
+            .filter(lambda x: x in self.symbol_map)
+            .to_set()
+        )
+
+        # first, check if any argument contains shift expressions that depend on the condition variables
+        for arg in node.args[1:3]:
+            shift_nodes = (
+                eve.walk_values(arg).filter(lambda node: cpm.is_applied_shift(node)).to_set()
+            )
+            for shift_node in shift_nodes:
+                shift_vars = (
+                    eve.walk_values(shift_node)
+                    .if_isinstance(gtir.SymRef)
+                    .map(lambda node: str(node.id))
+                    .filter(lambda x: x in self.symbol_map)
+                    .to_set()
+                )
+                # require exclusive branch execution if any shift expression one of
+                # the if branches accesses a variable used in the condition expression
+                depend_vars = condition_vars.intersection(shift_vars)
+                if len(depend_vars) != 0:
+                    return True
+
+        # secondly, check whether the `if_` branches access different sets of fields
+        # and this happens inside a scan field operator
+        if self.scan_carry_symbol is not None:
+            # the `if_` node is inside a scan stencil expression
+            scan_carry_var = str(self.scan_carry_symbol.id)
+            if scan_carry_var in condition_vars:
+                br1_vars, br2_vars = (
+                    eve.walk_values(arg)
+                    .if_isinstance(gtir.SymRef)
+                    .map(lambda node: str(node.id))
+                    .filter(lambda x: isinstance(self.symbol_map.get(x, None), MemletExpr))
+                    .to_set()
+                    for arg in node.args[1:3]
+                )
+                if br1_vars != br2_vars:
+                    # the two branches of the `if_` expression access different sets of fields,
+                    # depending on the scan carry value
+                    return True
+
+        return False
+
     def visit_FunCall(
         self, node: gtir.FunCall
     ) -> IteratorExpr | DataExpr | tuple[IteratorExpr | DataExpr | tuple[Any, ...], ...]:
         if cpm.is_call_to(node, "deref"):
             return self._visit_deref(node)
 
-        elif cpm.is_call_to(node, "if_"):
+        elif cpm.is_call_to(node, "if_") and self.requires_exclusive_if(node):
             return self._visit_if(node)
 
         elif cpm.is_call_to(node, "neighbors"):
@@ -1776,6 +1865,7 @@ def translate_lambda_to_dataflow(
         | ValueExpr
         | tuple[IteratorExpr | MemletExpr | ValueExpr | tuple[Any, ...], ...]
     ],
+    scan_carry_symbol: Optional[gtir.Sym] = None,
 ) -> tuple[
     list[DataflowInputEdge],
     tuple[DataflowOutputEdge | tuple[Any, ...], ...],
@@ -1794,13 +1884,15 @@ def translate_lambda_to_dataflow(
         sdfg_builder: Helper class to build the dataflow inside the given SDFG.
         node: Lambda node to visit.
         args: Arguments passed to lambda node.
+        scan_carry_symbol: When set, the lowering of `if_` expression will consider
+            using the ternary operator form with exclusive branch execution.
 
     Returns:
         A tuple of two elements:
         - List of connections for data inputs to the dataflow.
         - Tree representation of output data connections.
     """
-    taskgen = LambdaToDataflow(sdfg, state, sdfg_builder)
+    taskgen = LambdaToDataflow(sdfg, state, sdfg_builder, scan_carry_symbol)
     lambda_output = taskgen.visit_let(node, args)
 
     if isinstance(lambda_output, DataflowOutputEdge):
