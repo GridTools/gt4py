@@ -182,11 +182,12 @@ def is_accessed_downstream(
     #  data in `reachable_state` as immutable, so we have to do it this way.
     # TODO(phimuell): Go back to a trivial scan of the graph.
     if start_state not in reachable_states:
-        # This means there was only one state to begin with.
-        assert sdfg.number_of_nodes() == 1
-        assert len(reachable_states) == 0
+        # This can mean different things, either there was only one state to begin
+        #  with or `start_state` is the last one. In this case the `states_to_scan`
+        #  set consists only of the `start_state` because we have to process it.
         states_to_scan = {start_state}
     else:
+        # Ensure that `start_state` is scanned.
         states_to_scan = reachable_states[start_state].union([start_state])
 
     # In the first version we explored the state machine and if we encountered a
