@@ -141,7 +141,9 @@ def can_deref(it: it_ts.IteratorType | ts.DeferredType) -> ts.ScalarType:
 
 
 @_register_builtin_type_synthesizer
-def if_(pred: ts.ScalarType, true_branch: ts.DataType, false_branch: ts.DataType) -> ts.DataType:
+def if_(
+    pred: ts.ScalarType | ts.DeferredType, true_branch: ts.DataType, false_branch: ts.DataType
+) -> ts.DataType:
     if isinstance(true_branch, ts.TupleType) and isinstance(false_branch, ts.TupleType):
         return tree_map(
             collection_type=ts.TupleType,
