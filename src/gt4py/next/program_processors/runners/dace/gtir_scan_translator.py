@@ -312,6 +312,7 @@ def _lower_lambda_to_nested_sdfg(
     # the lambda expression, i.e. body of the scan, will be created inside a nested SDFG.
     nsdfg = dace.SDFG(sdfg_builder.unique_nsdfg_name(sdfg, "scan"))
     nsdfg.debuginfo = gtir_sdfg_utils.debug_info(lambda_node, default=sdfg.debuginfo)
+    nsdfg.using_explicit_control_flow = True
     lambda_translator = sdfg_builder.setup_nested_context(lambda_node, nsdfg, lambda_symbols)
 
     # use the vertical dimension in the domain as scan dimension
