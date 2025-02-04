@@ -82,7 +82,7 @@ class MapFusionHelper(transformation.SingleStateTransformation):
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
-        self._shared_data = {}
+        self._shared_data = {}  # type: ignore[var-annotated]
         self._apply_fusion_callback = None
         if only_toplevel_maps is not None:
             self.only_toplevel_maps = bool(only_toplevel_maps)
@@ -413,7 +413,7 @@ class MapFusionHelper(transformation.SingleStateTransformation):
         data: nodes.AccessNode,
         state: dace.SDFGState,
         sdfg: dace.SDFG,
-    ) -> None:
+    ) -> bool:
         """Scans `sdfg` to determine if `data` is shared.
 
         Essentially, this function determine, if the intermediate AccessNode `data` is
