@@ -179,6 +179,7 @@ def fuse_as_fieldop(
             if cpm.is_applied_as_fieldop(arg):
                 pass
             elif cpm.is_call_to(arg, "if_"):
+                # transform scalar `if` into per-grid-point `if`
                 # TODO(tehrengruber): revisit if we want to inline if_
                 arg = im.op_as_fieldop("if_")(*arg.args)
             elif _is_tuple_expr_of_literals(arg):
