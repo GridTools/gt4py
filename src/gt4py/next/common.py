@@ -1117,6 +1117,34 @@ class GridType(StrEnum):
     UNSTRUCTURED = "unstructured"
 
 
+def promote_dims_new(*dims_list: Sequence[Dimension]) -> list[Dimension]:
+    """
+    Find a sorted ordering of multiple lists of dimensions.
+
+    The resulting list contains all unique dimensions from the input lists,
+    sorted first by dimension kind (HORIZONTAL < VERTICAL < LOCAL) and then
+    lexicographically by dimension value.
+
+    Examples:
+        >>> from gt4py.next.common import Dimension
+        >>> I = Dimension("I", DimensionKind.HORIZONTAL)
+        >>> J = Dimension("J", DimensionKind.HORIZONTAL)
+        >>> K = Dimension("K", DimensionKind.VERTICAL)
+        >>> E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
+        >>> E2C = Dimension("E2C", kind=DimensionKind.LOCAL)
+        >>> promote_dims_new([K, J], [I, K]) == [I, J, K]
+        True
+        >>> promote_dims_new([K, I], [E2C, E2V]) == [I, K, E2C, E2V]
+        True
+    """
+
+    unique_dims = {dim for dims in dims_list for dim in dims}
+
+    kind_order = {DimensionKind.HORIZONTAL: 1, DimensionKind.VERTICAL: 2, DimensionKind.LOCAL: 3}
+
+    return sorted(unique_dims, key=lambda dim: (kind_order[dim.kind], dim.value))
+
+
 def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
     """
     Find a unique ordering of multiple (individually ordered) lists of dimensions.

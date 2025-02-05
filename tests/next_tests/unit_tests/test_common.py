@@ -11,6 +11,7 @@ from typing import Optional, Pattern
 
 import pytest
 
+from gt4py import next as gtx
 import gt4py.next.common as common
 from gt4py.next.common import (
     Dimension,
@@ -22,10 +23,18 @@ from gt4py.next.common import (
     named_range,
     NamedRange,
     promote_dims,
+    promote_dims_new,
     unit_range,
 )
 
-
+I = gtx.Dimension("I")
+J = gtx.Dimension("J")
+K = gtx.Dimension("K", kind=DimensionKind.VERTICAL)
+C2E = Dimension("C2E", kind=DimensionKind.LOCAL)
+V2E = Dimension("V2E", kind=DimensionKind.LOCAL)
+E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
+E2C = Dimension("E2C", kind=DimensionKind.LOCAL)
+E2C2V = Dimension("E2C2V", kind=DimensionKind.LOCAL)
 ECDim = Dimension("ECDim")
 IDim = Dimension("IDim")
 JDim = Dimension("JDim")
@@ -594,6 +603,46 @@ def dimension_promotion_cases() -> (
         )
         for args, result, msg in raw_list
     ]
+
+
+def dimension_promotion_cases_new() -> list[tuple[list[list[Dimension]], list[Dimension]]]:  #TODO: rename and remove promote_dims
+    raw_list = [
+        # list of list of dimensions, expected result
+        ([[I, J], [I]], [I, J]),
+        ([[J], [I, J]], [I, J]),
+        ([[J, K], [I, J]], [I, J, K]),
+        (
+            [[I, J], [J, I]],
+            [I, J],
+        ),
+        (
+            [[K, J], [I, K]],
+            [I, J, K],
+        ),
+        (
+            [[K, J], [I, K]],
+            [I, J, K],
+        ),
+        (
+            [[V2E, C2E, J], [K, I, E2C2V], [E2C, E2V]],
+            [I, J, K, C2E, E2C, E2C2V, E2V, V2E],
+        ),
+    ]
+    return [
+        (
+            [[el for el in arg] for arg in args],
+            [el for el in result] if result else result,
+        )
+        for args, result in raw_list
+    ]
+
+
+@pytest.mark.parametrize("dim_list,expected_result", dimension_promotion_cases_new())
+def test_new_dimension_promotion(  #TODO: rename and remove promote_dims
+    dim_list: list[list[Dimension]],
+    expected_result: Optional[list[Dimension]],
+):
+    assert promote_dims_new(*dim_list) == expected_result
 
 
 @pytest.mark.parametrize("dim_list,expected_result,expected_error_msg", dimension_promotion_cases())
