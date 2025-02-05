@@ -416,7 +416,7 @@ class MapFusionHelper(transformation.SingleStateTransformation):
     ) -> bool:
         """Scans `sdfg` to determine if `data` is shared.
 
-        Essentially, this function determine, if the intermediate AccessNode `data` is
+        Essentially, this function determines if the intermediate AccessNode `data`
         can be removed or if it has to be restored as output of the Map.
         A data descriptor is classified as shared if any of the following is true:
         - `data` is non transient data.

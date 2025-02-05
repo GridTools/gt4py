@@ -29,7 +29,7 @@ from dace import subsets as dace_subsets
 
 from gt4py import eve
 from gt4py.next import common as gtx_common, utils as gtx_utils
-from gt4py.next.iterator import builtins, ir as gtir
+from gt4py.next.iterator import builtins as gtir_builtins, ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms import symbol_ref_utils
 from gt4py.next.program_processors.runners.dace import (
@@ -602,6 +602,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         if_branch_state: dace.SDFGState,
         param_name: str,
         arg: IteratorExpr | DataExpr,
+        is_shifted_iterator: bool,
         if_sdfg_input_memlets: dict[str, MemletExpr | ValueExpr],
     ) -> IteratorExpr | ValueExpr:
         """
@@ -612,35 +613,53 @@ class LambdaToDataflow(eve.NodeVisitor):
             if_branch_state: The state inside the nested SDFG where the if branch is lowered.
             param_name: The parameter name of the input argument.
             arg: The input argument expression.
+            is_shifted_iterator: When True, the given argument is an iterator and it is shifted inside the branch expression.
             if_sdfg_input_memlets: The memlets that provide input data to the nested SDFG, will be update inside this function.
         """
+        use_full_shape = False
         if isinstance(arg, (MemletExpr, ValueExpr)):
+            assert not is_shifted_iterator  # the argument is not an iterator
+            arg_desc = arg.dc_node.desc(self.sdfg)
             arg_expr = arg
-            arg_node = arg.dc_node
-            arg_desc = arg_node.desc(self.sdfg)
-            if isinstance(arg, MemletExpr):
-                assert arg.subset.num_elements() == 1
-                arg_desc = dace.data.Scalar(arg_desc.dtype)
-            else:
-                assert isinstance(arg_desc, dace.data.Scalar)
         elif isinstance(arg, IteratorExpr):
-            arg_node = arg.field
-            arg_desc = arg_node.desc(self.sdfg)
-            arg_expr = MemletExpr(arg_node, arg.gt_dtype, dace_subsets.Range.from_array(arg_desc))
+            arg_desc = arg.field.desc(self.sdfg)
+            if is_shifted_iterator:
+                # In order to shift the iterator inside the branch dataflow,
+                # we have to pass the full array shape.
+                arg_expr = MemletExpr(
+                    arg.field, arg.gt_dtype, dace_subsets.Range.from_array(arg_desc)
+                )
+                use_full_shape = True
+            else:
+                # If the iterator is just dereferenced, inside the branch state,
+                # we can access the array data outside and just pass the local data.
+                # This approach increases the chances of applying map fusion.
+                memlet_subset = arg.get_memlet_subset(self.sdfg)
+                arg_expr = MemletExpr(arg.field, arg.gt_dtype, memlet_subset)
         else:
             raise TypeError(f"Unexpected {arg} as input argument.")
 
         if param_name in if_sdfg.arrays:
-            inner_desc = if_sdfg.data(param_name)
-            assert not inner_desc.transient
+            assert not if_sdfg.data(param_name).transient
         else:
-            inner_desc = arg_desc.clone()
-            inner_desc.transient = False
+            if use_full_shape:
+                inner_desc = arg_desc.clone()
+                inner_desc.transient = False
+            elif isinstance(arg.gt_dtype, ts.ScalarType):
+                inner_desc = dace.data.Scalar(arg_desc.dtype)
+            else:
+                # for list of values, we retrieve the local size from the corresponding offset
+                assert arg.gt_dtype.offset_type is not None
+                offset_provider_type = self.subgraph_builder.get_offset_provider_type(
+                    arg.gt_dtype.offset_type.value
+                )
+                assert isinstance(offset_provider_type, gtx_common.NeighborConnectivityType)
+                inner_desc = dace.data.Array(arg_desc.dtype, [offset_provider_type.max_neighbors])
             if_sdfg.add_datadesc(param_name, inner_desc)
             if_sdfg_input_memlets[param_name] = arg_expr
 
         inner_node = if_branch_state.add_access(param_name)
-        if isinstance(arg, IteratorExpr):
+        if isinstance(arg, IteratorExpr) and use_full_shape:
             return IteratorExpr(inner_node, arg.gt_dtype, arg.field_domain, arg.indices)
         else:
             return ValueExpr(inner_node, arg.gt_dtype)
@@ -673,6 +692,17 @@ class LambdaToDataflow(eve.NodeVisitor):
         """
         assert if_branch_state in if_sdfg.states()
 
+        # collect all field iterators that are shifted inside the branch expression
+        shifted_iterators = set()
+        for shift_node in eve.walk_values(expr).filter(lambda x: cpm.is_applied_shift(x)):
+            shifted_iterators |= (
+                eve.walk_values(shift_node)
+                .if_isinstance(gtir.SymRef)
+                .map(lambda x: str(x.id))
+                .filter(lambda x: isinstance(self.symbol_map.get(x, None), IteratorExpr))
+                .to_set()
+            )
+
         lambda_args = []
         lambda_params = []
         for pname in symbol_ref_utils.collect_symbol_refs(expr, self.symbol_map.keys()):
@@ -681,15 +711,22 @@ class LambdaToDataflow(eve.NodeVisitor):
                 ptype = get_tuple_type(arg)  # type: ignore[arg-type]
                 psymbol = im.sym(pname, ptype)
                 psymbol_tree = gtir_sdfg_utils.make_symbol_tree(pname, ptype)
+                is_shifted_iterator = pname in shifted_iterators
                 inner_arg = gtx_utils.tree_map(
-                    lambda tsym, targ: self._visit_if_branch_arg(
-                        if_sdfg, if_branch_state, tsym.id, targ, if_sdfg_input_memlets
+                    lambda tsym, targ, is_shifted=is_shifted_iterator: self._visit_if_branch_arg(
+                        if_sdfg,
+                        if_branch_state,
+                        tsym.id,
+                        targ,
+                        is_shifted,
+                        if_sdfg_input_memlets,
                     )
                 )(psymbol_tree, arg)
             else:
                 psymbol = im.sym(pname, arg.gt_dtype)  # type: ignore[union-attr]
+                is_shifted_iterator = pname in shifted_iterators
                 inner_arg = self._visit_if_branch_arg(
-                    if_sdfg, if_branch_state, pname, arg, if_sdfg_input_memlets
+                    if_sdfg, if_branch_state, pname, arg, is_shifted_iterator, if_sdfg_input_memlets
                 )
             lambda_args.append(inner_arg)
             lambda_params.append(psymbol)
@@ -1505,7 +1542,7 @@ class LambdaToDataflow(eve.NodeVisitor):
     def _visit_shift(self, node: gtir.FunCall) -> IteratorExpr:
         # convert builtin-index type to dace type
         IndexDType: Final = gtx_dace_utils.as_dace_type(
-            ts.ScalarType(kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper()))
+            ts.ScalarType(kind=getattr(ts.ScalarKind, gtir_builtins.INTEGER_INDEX_BUILTIN.upper()))
         )
 
         assert isinstance(node.fun, gtir.FunCall)
