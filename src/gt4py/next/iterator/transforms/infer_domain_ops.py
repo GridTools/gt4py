@@ -28,18 +28,24 @@ class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
         if (
             cpm.is_call_to(node, builtins.BINARY_MATH_COMPARISON_BUILTINS)
             and any(isinstance(arg, ir.AxisLiteral) for arg in node.args)
-            and any(isinstance(arg, ir.Literal) for arg in node.args)
+            and any(isinstance(arg, (ir.Literal, ir.SymRef)) for arg in node.args)
         ):  # TODO: add tests
             arg1, arg2 = node.args
             fun = node.fun
-            if isinstance(arg1, ir.AxisLiteral) and isinstance(arg2, ir.Literal):
+            if isinstance(arg1, ir.AxisLiteral):
                 dim = common.Dimension(value=arg1.value, kind=arg1.kind)
-                value = int(arg2.value)
                 reverse = False
-            elif isinstance(arg1, ir.Literal) and isinstance(arg2, ir.AxisLiteral):
+                if isinstance(arg2, ir.Literal):
+                    value = int(arg2.value)
+                elif isinstance(arg2, ir.SymRef):
+                    value = arg2
+            elif isinstance(arg2, ir.AxisLiteral):
                 dim = common.Dimension(value=arg2.value, kind=arg2.kind)
-                value = int(arg1.value)
                 reverse = True
+                if isinstance(arg1, ir.Literal):
+                    value = int(arg1.value)
+                elif isinstance(arg1, ir.SymRef):
+                    value = arg1
             else:
                 raise ValueError(f"{node.args} need to be a 'ir.AxisLiteral' and an 'ir.Literal'.")
             assert isinstance(fun, ir.SymRef)
@@ -48,11 +54,11 @@ class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
             match fun.id:
                 case ir.SymbolRef("less"):
                     if reverse:
-                        min_ = value + 1
+                        min_ = im.plus(value, 1)
                         max_ = ir.InfinityLiteral()
                     else:
                         min_ = ir.NegInfinityLiteral()
-                        max_ = value - 1
+                        max_ = im.minus(value, 1)
                 case ir.SymbolRef("less_equal"):
                     if reverse:
                         min_ = value
@@ -63,9 +69,9 @@ class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
                 case ir.SymbolRef("greater"):
                     if reverse:
                         min_ = ir.NegInfinityLiteral()
-                        max_ = value - 1
+                        max_ = im.minus(value, 1)
                     else:
-                        min_ = value + 1
+                        min_ = im.plus(value, 1)
                         max_ = ir.InfinityLiteral()
                 case ir.SymbolRef("greater_equal"):
                     if reverse:
@@ -78,8 +84,8 @@ class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
                     min_ = max_ = value
                 case ir.SymbolRef("not_eq"):
                     min1 = ir.NegInfinityLiteral()
-                    max1 = value - 1
-                    min2 = value + 1
+                    max1 = im.minus(value, 1)
+                    min2 = im.plus(value, 1)
                     max2 = ir.InfinityLiteral()
                     return im.call("and_")(
                         im.domain(common.GridType.CARTESIAN, {dim: (min1, max1)}),
@@ -87,10 +93,9 @@ class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
                     )
                 case _:
                     raise NotImplementedError
-
             return im.domain(
                 common.GridType.CARTESIAN,
-                {dim: (min_, max_ + 1)}
+                {dim: (min_, im.plus(max_, 1))}
                 if not isinstance(max_, ir.InfinityLiteral)
                 else {dim: (min_, max_)},
             )
