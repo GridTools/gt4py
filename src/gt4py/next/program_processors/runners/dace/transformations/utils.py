@@ -188,7 +188,7 @@ def is_accessed_downstream(
     ign_states: set[dace.SDFGState] = states_to_ignore or set()
 
     # NOTE: We have to include `start_state`, however, we must also consider the
-    #  data in `reachable_state` as immutable, so we have to do it this way.
+    #  data in `reachable_states` as immutable, so we have to do it this way.
     # TODO(phimuell): Go back to a trivial scan of the graph.
     if start_state not in reachable_states:
         # This can mean different things, either there was only one state to begin
