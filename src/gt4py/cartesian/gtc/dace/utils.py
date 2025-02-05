@@ -364,7 +364,7 @@ class TaskletAccessInfoCollector(eve.NodeVisitor):
         self.grid_subset = grid_subset
 
     def visit_CodeBlock(self, _node: oir.CodeBlock, **_kwargs):
-        raise RuntimeError("We shouldn't reach cod blocks anymore")
+        raise RuntimeError("We shouldn't reach code blocks anymore")
 
     def visit_AssignStmt(self, node: oir.AssignStmt, **kwargs):
         self.visit(node.right, is_write=False, **kwargs)
@@ -384,7 +384,9 @@ class TaskletAccessInfoCollector(eve.NodeVisitor):
 
     @staticmethod
     def _global_grid_subset(
-        region: common.HorizontalMask, he_grid: dcir.GridSubset, offset: List[Optional[int]]
+        region: Optional[common.HorizontalMask],
+        he_grid: dcir.GridSubset,
+        offset: List[Optional[int]],
     ):
         res: Dict[
             dcir.Axis, Union[dcir.DomainInterval, dcir.TileInterval, dcir.IndexWithExtent]
@@ -419,7 +421,7 @@ class TaskletAccessInfoCollector(eve.NodeVisitor):
         self,
         offset_node: Union[CartesianOffset, oir.VariableKOffset],
         axes,
-        region,
+        region: Optional[common.HorizontalMask],
     ) -> dcir.FieldAccessInfo:
         # Check we have expression offsets in K
         offset = [offset_node.to_dict()[k] for k in "ijk"]
@@ -442,7 +444,8 @@ class TaskletAccessInfoCollector(eve.NodeVisitor):
         return dcir.FieldAccessInfo(
             grid_subset=dcir.GridSubset(intervals=intervals),
             global_grid_subset=global_subset,
-            dynamic_access=False,
+            # Field access inside horizontal regions might or might not happen
+            dynamic_access=region is not None,
             variable_offset_axes=variable_offset_axes,
         )
 
@@ -451,7 +454,7 @@ class TaskletAccessInfoCollector(eve.NodeVisitor):
         node: oir.FieldAccess,
         *,
         is_write: bool,
-        region=None,
+        region: Optional[common.HorizontalMask] = None,
         ctx: TaskletAccessInfoCollector.Context,
         **kwargs,
     ):
