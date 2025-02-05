@@ -221,9 +221,11 @@ def index(arg: ts.DimensionType) -> ts.FieldType:
 @_register_builtin_type_synthesizer
 def concat_where(
     domain: ts.DomainType,
-    true_field: ts.FieldType | ts.TupleType,
-    false_field: ts.FieldType | ts.TupleType,
-) -> ts.FieldType | ts.TupleType:
+    true_field: ts.FieldType | ts.TupleType | ts.DeferredType,
+    false_field: ts.FieldType | ts.TupleType | ts.DeferredType,
+) -> ts.FieldType | ts.TupleType | ts.DeferredType:
+    if isinstance(true_field, ts.DeferredType) or isinstance(false_field, ts.DeferredType):
+        return ts.DeferredType(constraint=None)
     return type_info.promote(true_field, false_field)
 
 
