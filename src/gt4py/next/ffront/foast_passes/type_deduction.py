@@ -11,7 +11,7 @@ from typing import Any, Optional, TypeAlias, TypeVar, cast
 import gt4py.next.ffront.field_operator_ast as foast
 from gt4py.eve import NodeTranslator, NodeVisitor, traits
 from gt4py.next import errors
-from gt4py.next.common import DimensionKind
+from gt4py.next.common import DimensionKind, promote_dims
 from gt4py.next.ffront import (  # noqa
     dialect_ast_enums,
     experimental,
@@ -20,6 +20,7 @@ from gt4py.next.ffront import (  # noqa
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.foast_passes.utils import compute_assign_indices
+from gt4py.next.iterator import builtins
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
@@ -570,6 +571,36 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         self, node: foast.Compare, *, left: foast.Expr, right: foast.Expr, **kwargs: Any
     ) -> Optional[ts.TypeSpec]:
         # check both types compatible
+        left_t, right_t = left.type, right.type
+        integer_kind = getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper())
+        if (
+            isinstance(left_t, ts.DimensionType)
+            and isinstance(right_t, ts.ScalarType)
+            and right_t.kind == integer_kind
+        ):
+            return ts.DomainType(dims=[left_t.dim])
+        if (
+            isinstance(right_t, ts.DimensionType)
+            and isinstance(left_t, ts.ScalarType)
+            and left_t.kind == integer_kind
+        ):
+            return ts.DomainType(dims=[right_t.dim])
+        if (
+            isinstance(left_t, ts.OffsetType)
+            and left.op == dialect_ast_enums.BinaryOperator.MOD
+            and isinstance(right_t, ts.ScalarType)
+            and right_t.kind == integer_kind
+        ) or (
+            isinstance(right_t, ts.OffsetType)
+            and right.op == dialect_ast_enums.BinaryOperator.MOD
+            and isinstance(left_t, ts.ScalarType)
+            and left_t.kind == integer_kind
+        ):
+            raise errors.DSLError(
+                left.location, "Type 'ts.OffsetType' can not be used in operator 'mod'."
+            )
+
+        # TODO
         for arg in (left, right):
             if not type_info.is_arithmetic(arg.type):
                 raise errors.DSLError(
@@ -582,13 +613,13 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             # transform operands to have bool dtype and use regular promotion
             #  mechanism to handle dimension promotion
             return type_info.promote(
-                with_altered_scalar_kind(left.type, ts.ScalarKind.BOOL),
-                with_altered_scalar_kind(right.type, ts.ScalarKind.BOOL),
+                with_altered_scalar_kind(left_t, ts.ScalarKind.BOOL),
+                with_altered_scalar_kind(right_t, ts.ScalarKind.BOOL),
             )
         except ValueError as ex:
             raise errors.DSLError(
                 node.location,
-                f"Could not promote '{left.type}' and '{right.type}' to common type"
+                f"Could not promote '{left_t}' and '{right_t}' to common type"
                 f" in call to '{node.op}'.",
             ) from ex
 
@@ -612,7 +643,11 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             dialect_ast_enums.BinaryOperator.BIT_OR,
             dialect_ast_enums.BinaryOperator.BIT_XOR,
         }
-        is_compatible = type_info.is_logical if node.op in logical_ops else type_info.is_arithmetic
+
+        def is_logical_or_domain(arg: ts.TypeSpec) -> bool:
+            return type_info.is_logical(arg) or isinstance(arg, ts.DomainType)
+
+        is_compatible = is_logical_or_domain if node.op in logical_ops else type_info.is_arithmetic
 
         # check both types compatible
         for arg in (left, right):
@@ -620,29 +655,32 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 raise errors.DSLError(
                     arg.location, f"Type '{arg.type}' can not be used in operator '{node.op}'."
                 )
-
-        left_type = cast(ts.FieldType | ts.ScalarType, left.type)
-        right_type = cast(ts.FieldType | ts.ScalarType, right.type)
-
-        if node.op == dialect_ast_enums.BinaryOperator.POW:
-            return left_type
-
-        if node.op == dialect_ast_enums.BinaryOperator.MOD and not type_info.is_integral(
-            right_type
+        if isinstance(left.type, (ts.ScalarType, ts.FieldType)) and isinstance(
+            right.type, (ts.ScalarType, ts.FieldType)
         ):
-            raise errors.DSLError(
-                arg.location,
-                f"Type '{right_type}' can not be used in operator '{node.op}', it only accepts 'int'.",
-            )
+            if node.op == dialect_ast_enums.BinaryOperator.POW:
+                return left.type
 
-        try:
-            return type_info.promote(left_type, right_type)
-        except ValueError as ex:
-            raise errors.DSLError(
-                node.location,
-                f"Could not promote '{left_type}' and '{right_type}' to common type"
-                f" in call to '{node.op}'.",
-            ) from ex
+            if node.op == dialect_ast_enums.BinaryOperator.MOD and not type_info.is_integral(
+                right.type
+            ):
+                raise errors.DSLError(
+                    arg.location,
+                    f"Type '{right.type}' can not be used in operator '{node.op}', it only accepts 'int'.",
+                )
+
+            try:
+                return type_info.promote(left.type, right.type)
+            except ValueError as ex:
+                raise errors.DSLError(
+                    node.location,
+                    f"Could not promote '{left.type}' and '{right.type}' to common type"
+                    f" in call to '{node.op}'.",
+                ) from ex
+        elif isinstance(left.type, ts.DomainType) and isinstance(right.type, ts.DomainType):
+            return ts.DomainType(dims=promote_dims(left.type.dims, right.type.dims))
+        else:
+            raise ValueError("TODO")
 
     def _check_operand_dtypes_match(
         self, node: foast.BinOp | foast.Compare, left: foast.Expr, right: foast.Expr
@@ -908,6 +946,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
 
         try:
+            # TODO(tehrengruber): the construct_tuple_type function doesn't look correct
             if isinstance(true_branch_type, ts.TupleType) and isinstance(
                 false_branch_type, ts.TupleType
             ):
@@ -943,7 +982,21 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             location=node.location,
         )
 
-    _visit_concat_where = _visit_where
+    def _visit_concat_where(self, node: foast.Call, **kwargs: Any) -> foast.Call:
+        true_branch_type = node.args[1].type
+        false_branch_type = node.args[2].type
+        true_branch_fieldtype = cast(ts.FieldType, true_branch_type)
+        false_branch_fieldtype = cast(ts.FieldType, false_branch_type)
+        promoted_type = type_info.promote(true_branch_fieldtype, false_branch_fieldtype)
+        return_type = promoted_type
+
+        return foast.Call(
+            func=node.func,
+            args=node.args,
+            kwargs=node.kwargs,
+            type=return_type,
+            location=node.location,
+        )
 
     def _visit_broadcast(self, node: foast.Call, **kwargs: Any) -> foast.Call:
         arg_type = cast(ts.FieldType | ts.ScalarType, node.args[0].type)

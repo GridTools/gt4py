@@ -488,6 +488,8 @@ BUILTINS = {
     "scan",
     "tuple_get",
     "unstructured_domain",
+    "concat_where",
+    "in",
     *ARITHMETIC_BUILTINS,
     *TYPE_BUILTINS,
 }
