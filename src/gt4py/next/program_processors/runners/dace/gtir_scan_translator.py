@@ -411,12 +411,7 @@ def _lower_lambda_to_nested_sdfg(
     # stil inside the 'compute' state, generate the dataflow representing the stencil
     # to be applied on the horizontal domain
     lambda_input_edges, lambda_result = gtir_dataflow.translate_lambda_to_dataflow(
-        nsdfg,
-        compute_state,
-        lambda_translator,
-        lambda_node,
-        stencil_args,
-        scan_carry_symbol=scan_carry_symbol,
+        nsdfg, compute_state, lambda_translator, lambda_node, stencil_args
     )
     # connect the dataflow input directly to the source data nodes, without passing through a map node;
     # the reason is that the map for horizontal domain is outside the scan loop region
