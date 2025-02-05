@@ -605,7 +605,9 @@ def dimension_promotion_cases() -> (
     ]
 
 
-def dimension_promotion_cases_new() -> list[tuple[list[list[Dimension]], list[Dimension]]]:  #TODO: rename and remove promote_dims
+def dimension_promotion_cases_new() -> (
+    list[tuple[list[list[Dimension]], list[Dimension]]]
+):  # TODO: rename and remove promote_dims
     raw_list = [
         # list of list of dimensions, expected result
         ([[I, J], [I]], [I, J]),
@@ -638,7 +640,7 @@ def dimension_promotion_cases_new() -> list[tuple[list[list[Dimension]], list[Di
 
 
 @pytest.mark.parametrize("dim_list,expected_result", dimension_promotion_cases_new())
-def test_new_dimension_promotion(  #TODO: rename and remove promote_dims
+def test_new_dimension_promotion(  # TODO: rename and remove promote_dims
     dim_list: list[list[Dimension]],
     expected_result: Optional[list[Dimension]],
 ):

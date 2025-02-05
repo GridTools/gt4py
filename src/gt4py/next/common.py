@@ -1122,8 +1122,8 @@ def promote_dims_new(*dims_list: Sequence[Dimension]) -> list[Dimension]:
     Find a sorted ordering of multiple lists of dimensions.
 
     The resulting list contains all unique dimensions from the input lists,
-    sorted first by dimension kind (HORIZONTAL < VERTICAL < LOCAL) and then
-    lexicographically by dimension value.
+    sorted first by `Dimension.kind` (`HORIZONTAL` < `VERTICAL` < `LOCAL`) and then
+    lexicographically by `Dimension.value`.
 
     Examples:
         >>> from gt4py.next.common import Dimension
