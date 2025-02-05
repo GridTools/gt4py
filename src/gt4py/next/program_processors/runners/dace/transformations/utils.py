@@ -171,9 +171,18 @@ def is_accessed_downstream(
             `reachable_states` argument.
         - Fix the behaviour for `states_to_ignore`.
     """
+    # After DaCe 1 switched to a hierarchical version of the state machine. Thus
+    #  it is no longer possible in a simple way to traverse the SDFG. As a temporary
+    #  solution we use the `StateReachability` pass. However, this has some issues,
+    #  see the note about `states_to_ignore`.
     if reachable_states is None:
         state_reachability_pass = dace_analysis.StateReachability()
         reachable_states = state_reachability_pass.apply_pass(sdfg, None)[sdfg.cfg_id]
+    else:
+        # Ensures that the externally generated result was passed properly.
+        assert all(
+            isinstance(state, dace.SDFGState) and state.sdfg is sdfg for state in reachable_states
+        )
 
     ign_dnodes: set[dace_nodes.AccessNode] = nodes_to_ignore or set()
     ign_states: set[dace.SDFGState] = states_to_ignore or set()

@@ -11,7 +11,6 @@
 import collections
 import copy
 import uuid
-import warnings
 from typing import Any, Final, Iterable, Optional, TypeAlias
 
 import dace
@@ -210,12 +209,15 @@ def gt_substitute_compiletime_symbols(
         repl: Maps the name of the symbol to the value it should be replaced with.
         validate: Perform validation at the end of the function.
         validate_all: Perform validation also on intermediate steps.
+
+    Todo: This function needs improvement.
     """
 
     # We will use the `replace` function of the top SDFG, however, lower levels
     #  are handled using ConstantPropagation.
     sdfg.replace_dict(repl)
 
+    # TODO(phimuell): Get rid of the `ConstantPropagation`
     const_prop = dace_passes.ConstantPropagation()
     const_prop.recursive = True
     const_prop.progress = False
@@ -280,9 +282,6 @@ class GT4PyGlobalSelfCopyElimination(dace_transformation.SingleStateTransformati
     def expressions(cls) -> Any:
         return [dace.sdfg.utils.node_path_graph(cls.node_read_g, cls.node_tmp, cls.node_write_g)]
 
-    def depends_on(self) -> set[type[dace_transformation.Pass]]:
-        return {dace_transformation.passes.StateReachability}
-
     def can_be_applied(
         self,
         graph: dace.SDFGState | dace.SDFG,
@@ -344,18 +343,12 @@ class GT4PyGlobalSelfCopyElimination(dace_transformation.SingleStateTransformati
         write_g: dace_nodes.AccessNode = self.node_write_g
         tmp_node: dace_nodes.AccessNode = self.node_tmp
 
-        reachable_states: Optional[dict[dace.SDFGState, set[dace.SDFGState]]] = None
-        if self._pipeline_results and "StateReachability" in self._pipeline_results:
-            warnings.warn(
-                "The 'StateReachability' analysis pass was not part of the pipeline results.",
-                stacklevel=0,
-            )
-            reachable_states = self._pipeline_results["StateReachability"]
-
+        # TODO(phimuell): Run the `StateReachability` pass in a pipeline and use
+        #  the `_pipeline_results` member to access the data.
         return gtx_transformations.utils.is_accessed_downstream(
             start_state=start_state,
             sdfg=sdfg,
-            reachable_states=reachable_states,
+            reachable_states=None,
             data_to_look=data_to_look,
             nodes_to_ignore={read_g, write_g, tmp_node},
         )
@@ -454,17 +447,20 @@ class DistributedBufferRelocator(dace_transformation.Pass):
     def apply_pass(
         self, sdfg: dace.SDFG, pipeline_results: dict[str, Any]
     ) -> Optional[dict[dace.SDFGState, set[str]]]:
+        # NOTE: We can not use `AccessSets` because this pass operates on
+        #  `ControlFlowBlock`s, which might consists of multiple states. Thus we are
+        #  using `FindAccessStates` which has this `SDFGState` granularity. The downside
+        #  is, however, that we have to determine if the access in that state is a
+        #  write or not, which means we have to find it first.
+        access_states: dict[str, set[dace.SDFGState]] = pipeline_results["FindAccessStates"][
+            sdfg.cfg_id
+        ]
+
+        # For speeding up the `is_accessed_downstream()` calls.
         reachable: dict[dace.SDFGState, set[dace.SDFGState]] = pipeline_results[
             "StateReachability"
         ][sdfg.cfg_id]
 
-        # NOTE: We can not use `AccessSets` because this pass operates on
-        #  `ControlFlowBlock`s, which might consists of multiple states. Thus we are
-        #  using `FindAccessStates` which has this `SDFGState` granularity. However,
-        #  we have to determine if it is a write or not.
-        access_states: dict[str, set[dace.SDFGState]] = pipeline_results["FindAccessStates"][
-            sdfg.cfg_id
-        ]
         result: dict[dace.SDFGState, set[str]] = collections.defaultdict(set)
 
         to_relocate = self._find_candidates(sdfg, reachable, access_states)
@@ -834,9 +830,6 @@ class GT4PyMoveTaskletIntoMap(dace_transformation.SingleStateTransformation):
     def expressions(cls) -> Any:
         return [dace.sdfg.utils.node_path_graph(cls.tasklet, cls.access_node, cls.map_entry)]
 
-    def depends_on(self) -> set[type[dace_transformation.Pass]]:
-        return {dace_transformation.passes.StateReachability}
-
     def can_be_applied(
         self,
         graph: dace.SDFGState | dace.SDFG,
@@ -955,18 +948,11 @@ class GT4PyMoveTaskletIntoMap(dace_transformation.SingleStateTransformation):
         # The data is no longer referenced in this state, so we can potentially
         #  remove
         if graph.out_degree(access_node) == 0:
-            reachable_states: Optional[dict[dace.SDFGState, set[dace.SDFGState]]] = None
-            if self._pipeline_results and "StateReachability" in self._pipeline_results:
-                warnings.warn(
-                    "The 'StateReachability' analysis pass was not part of the pipeline results.",
-                    stacklevel=0,
-                )
-                reachable_states = self._pipeline_results["StateReachability"]
-
+            # TODO(phimuell): Use the pipeline to run `StateReachability` once.
             if not gtx_transformations.utils.is_accessed_downstream(
                 start_state=graph,
                 sdfg=sdfg,
-                reachable_states=reachable_states,
+                reachable_states=None,
                 data_to_look=access_node.data,
                 nodes_to_ignore={access_node},
             ):
@@ -1027,6 +1013,7 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
 
     Todo:
         - Implement a real pointwise test.
+        - Run this inside a pipeline.
     """
 
     map_exit = dace_transformation.PatternNode(dace_nodes.MapExit)
@@ -1054,10 +1041,7 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
         return [dace.sdfg.utils.node_path_graph(cls.map_exit, cls.tmp_ac, cls.glob_ac)]
 
     def depends_on(self) -> set[type[dace_transformation.Pass]]:
-        return {
-            dace_transformation.passes.ConsolidateEdges,
-            dace_transformation.passes.analysis.StateReachability,
-        }
+        return {dace_transformation.passes.ConsolidateEdges}
 
     def can_be_applied(
         self,
@@ -1066,14 +1050,6 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
         sdfg: dace.SDFG,
         permissive: bool = False,
     ) -> bool:
-        reachable_states: Optional[dict[dace.SDFGState, set[dace.SDFGState]]] = None
-        if self._pipeline_results and "StateReachability" in self._pipeline_results:
-            warnings.warn(
-                "The 'StateReachability' analysis pass was not part of the pipeline results.",
-                stacklevel=0,
-            )
-            reachable_states = self._pipeline_results["StateReachability"]
-
         tmp_ac: dace_nodes.AccessNode = self.tmp_ac
         glob_ac: dace_nodes.AccessNode = self.glob_ac
         tmp_desc: dace_data.Data = tmp_ac.desc(sdfg)
@@ -1101,10 +1077,12 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
         # Test if `tmp` is only anywhere else, this is important for removing it.
         if graph.out_degree(tmp_ac) != 1:
             return False
+        # TODO(phimuell): Use the pipeline system to run the `StateReachability` pass
+        #  only once. Taking care of DaCe issue 1911.
         if gtx_transformations.utils.is_accessed_downstream(
             start_state=graph,
             sdfg=sdfg,
-            reachable_states=reachable_states,
+            reachable_states=None,
             data_to_look=tmp_ac.data,
             nodes_to_ignore={tmp_ac},
         ):
