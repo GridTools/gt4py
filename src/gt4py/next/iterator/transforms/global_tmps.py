@@ -177,7 +177,7 @@ def _transform_stmt(
 def create_global_tmps(
     program: itir.Program,
     offset_provider: common.OffsetProvider,
-    symbolic_domain_sizes: Optional[dict[str, str]],
+    symbolic_domain_sizes: Optional[dict[str, str]] = None,
     *,
     uids: Optional[eve_utils.UIDGenerator] = None,
 ) -> itir.Program:
