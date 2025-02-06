@@ -595,6 +595,7 @@ def translate_concat_where(
         raise NotImplementedError("Expected `concat_where` along single axis.")
     concat_dim, _, _ = concat_domain[0]
 
+    # we visit the field arguments
     f1, f2 = (sdfg_builder.visit(node.args[i], sdfg=sdfg, head_state=state) for i in [1, 2])
 
     def concatenate_inputs(inp1: FieldopData, inp2: FieldopData) -> FieldopData:
@@ -602,7 +603,13 @@ def translate_concat_where(
         assert inp1.gt_type == inp2.gt_type
         inp1_desc, inp2_desc = (inp.dc_node.desc(sdfg) for inp in [inp1, inp2])
         assert inp1_desc.dtype == inp2_desc.dtype
+
         concat_dim_index = inp1.gt_type.dims.index(concat_dim)
+        assert all(
+            s1 == s2
+            for dim_index, (s1, s2) in enumerate(zip(inp1_desc.shape, inp2_desc.shape, strict=True))
+            if dim_index != concat_dim_index
+        )
 
         # the subset closest to the field origin is considered below as left-hand side (lhs)
         if inp2.origin[concat_dim_index] > inp1.origin[concat_dim_index]:
@@ -622,11 +629,6 @@ def translate_concat_where(
             rhs, rhs_desc = inp1, inp1_desc
             out_origin = inp2.origin
 
-        assert all(
-            s1 == s2
-            for dim_index, (s1, s2) in enumerate(zip(inp1_desc.shape, inp2_desc.shape, strict=True))
-            if dim_index != concat_dim_index
-        )
         out_shape = tuple(
             s1 + s2 if dim_index == concat_dim_index else s1
             for dim_index, (s1, s2) in enumerate(zip(inp1_desc.shape, inp2_desc.shape, strict=True))
@@ -645,8 +647,9 @@ def translate_concat_where(
                 other_subset=output_subset_lhs,
             ),
         )
-        # the full shape of the rhs node is also written, but the destination subset start index
-        # is not the field origin: we write to the right-hand side of the previous subset
+        # the full shape of the rhs node is also written, but the start index of
+        # the destination subset is not the field origin: we write to the right-hand
+        # side of the previous subset in the concat dimension
         output_subset_rhs = dace_subsets.Range(
             [
                 (origin, size - 1, 1) if dim_index == concat_dim_index else (0, size - 1, 1)
