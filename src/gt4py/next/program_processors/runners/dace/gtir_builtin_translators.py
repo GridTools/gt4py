@@ -589,47 +589,72 @@ def translate_concat_where(
     # First argument should be the domain expression to infer the domain of next
     # two arguments: it is used by the domain inference pass and just ignored here.
     assert cpm.is_call_to(node.args[0], "cartesian_domain")
+    if len(node.args[0].args) != 1:
+        raise NotImplementedError("Expected `concat_where` along single axis.")
+    assert cpm.is_call_to(node.args[0].args[0], "named_range")
+    assert len(node.args[0].args[0].args) == 3
+    axis_arg = node.args[0].args[0].args[0]
+    assert isinstance(axis_arg, gtir.AxisLiteral)
+    concat_dim = gtx_common.Dimension(axis_arg.value, axis_arg.kind)
 
     f1, f2 = (sdfg_builder.visit(node.args[i], sdfg=sdfg, head_state=state) for i in [1, 2])
 
     def concatenate_inputs(inp1: FieldopData, inp2: FieldopData) -> FieldopData:
+        assert isinstance(inp1.gt_type, ts.FieldType)
         assert inp1.gt_type == inp2.gt_type
         inp1_desc, inp2_desc = (inp.dc_node.desc(sdfg) for inp in [inp1, inp2])
         assert inp1_desc.dtype == inp2_desc.dtype
-        out_shape = tuple(s1 + s2 for s1, s2 in zip(inp1_desc.shape, inp2_desc.shape, strict=True))
-        output, output_desc = sdfg_builder.add_temp_array(sdfg, out_shape, inp1_desc.dtype)
-        output_node = state.add_access(output)
+        concat_dim_index = inp1.gt_type.dims.index(concat_dim)
 
         # the subset closest to the field origin is considered below as left-hand side (lhs)
-        if any(orig2 > orig1 for orig1, orig2 in zip(inp1.origin, inp2.origin, strict=True)):
-            assert inp2.origin == tuple(
-                inp1_origin + inp1_size
-                for inp1_origin, inp1_size in zip(inp1.origin, inp1_desc.shape, strict=True)
+        if inp2.origin[concat_dim_index] > inp1.origin[concat_dim_index]:
+            assert (
+                inp2.origin[concat_dim_index]
+                == inp1.origin[concat_dim_index] + inp1_desc.shape[concat_dim_index]
             )
             lhs, lhs_desc = inp1, inp1_desc
             rhs, rhs_desc = inp2, inp2_desc
             out_origin = inp1.origin
         else:
-            assert inp1.origin == tuple(
-                inp2_origin + inp2_size
-                for inp2_origin, inp2_size in zip(inp2.origin, inp2_desc.shape, strict=True)
+            assert (
+                inp1.origin[concat_dim_index]
+                == inp2.origin[concat_dim_index] + inp2_desc.shape[concat_dim_index]
             )
             lhs, lhs_desc = inp2, inp2_desc
             rhs, rhs_desc = inp1, inp1_desc
             out_origin = inp2.origin
 
+        assert all(
+            s1 == s2
+            for dim_index, (s1, s2) in enumerate(zip(inp1_desc.shape, inp2_desc.shape, strict=True))
+            if dim_index != concat_dim_index
+        )
+        out_shape = tuple(
+            s1 + s2 if dim_index == concat_dim_index else s1
+            for dim_index, (s1, s2) in enumerate(zip(inp1_desc.shape, inp2_desc.shape, strict=True))
+        )
+        output, output_desc = sdfg_builder.add_temp_array(sdfg, out_shape, inp1_desc.dtype)
+        output_node = state.add_access(output)
+
         # we write the full shape of the lhs node into the output array starting from the origin
+        output_subset_lhs = dace_subsets.Range.from_array(lhs_desc)
         state.add_nedge(
             lhs.dc_node,
             output_node,
-            dace.Memlet(data=lhs.dc_node.data, subset=dace_subsets.Range.from_array(lhs_desc)),
+            dace.Memlet(
+                data=lhs.dc_node.data,
+                subset=dace_subsets.Range.from_array(lhs_desc),
+                other_subset=output_subset_lhs,
+            ),
         )
         # the full shape of the rhs node is also written, but the destination subset start index
         # is not the field origin: we write to the right-hand side of the previous subset
-        output_subset = dace_subsets.Range(
+        output_subset_rhs = dace_subsets.Range(
             [
-                (origin, size - 1, 1)
-                for origin, size in zip(lhs_desc.shape, output_desc.shape, strict=True)
+                (origin, size - 1, 1) if dim_index == concat_dim_index else (0, size - 1, 1)
+                for dim_index, (origin, size) in enumerate(
+                    zip(lhs_desc.shape, output_desc.shape, strict=True)
+                )
             ]
         )
         state.add_nedge(
@@ -638,7 +663,7 @@ def translate_concat_where(
             dace.Memlet(
                 data=rhs.dc_node.data,
                 subset=dace_subsets.Range.from_array(rhs_desc),
-                other_subset=output_subset,
+                other_subset=output_subset_rhs,
             ),
         )
         return FieldopData(output_node, inp1.gt_type, origin=out_origin)

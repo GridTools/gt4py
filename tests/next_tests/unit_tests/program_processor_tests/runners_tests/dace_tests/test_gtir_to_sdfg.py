@@ -28,6 +28,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     Cell,
     Edge,
     IDim,
+    JDim,
     MeshDescriptor,
     V2EDim,
     Vertex,
@@ -2051,7 +2052,7 @@ def test_gtir_index():
     np.allclose(v, ref)
 
 
-def test_concat_where():
+def test_gtir_concat_where():
     SUBSET_SIZE = 5
     assert SUBSET_SIZE < N
     domain = im.domain(gtx_common.GridType.CARTESIAN, {IDim: (0, N)})
@@ -2103,3 +2104,73 @@ def test_concat_where():
 
         sdfg(a, b, c, **FSYMBOLS)
         np.allclose(c, ref)
+
+
+def test_gtir_concat_where_two_dimensions():
+    M, N = (30, 20)
+    domain = im.domain(gtx_common.GridType.CARTESIAN, {IDim: (0, 30), JDim: (0, 20)})
+    domain_cond1 = im.domain(gtx_common.GridType.CARTESIAN, {JDim: (10, gtir.InfinityLiteral())})
+    domain_cond2 = im.domain(gtx_common.GridType.CARTESIAN, {IDim: (gtir.NegInfinityLiteral(), 20)})
+    domain1 = im.domain(gtx_common.GridType.CARTESIAN, {IDim: (0, 20), JDim: (10, 20)})
+    domain2 = im.domain(gtx_common.GridType.CARTESIAN, {IDim: (20, 30), JDim: (10, 20)})
+    domain3 = im.domain(gtx_common.GridType.CARTESIAN, {IDim: (0, 30), JDim: (0, 10)})
+
+    testee = gtir.Program(
+        id=f"gtir_concat_where_two_dimensions",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="x", type=ts.FieldType(dims=[IDim, JDim], dtype=FLOAT_TYPE)),
+            gtir.Sym(id="y", type=ts.FieldType(dims=[IDim, JDim], dtype=FLOAT_TYPE)),
+            gtir.Sym(id="w", type=ts.FieldType(dims=[IDim, JDim], dtype=FLOAT_TYPE)),
+            gtir.Sym(id="z", type=ts.FieldType(dims=[IDim, JDim], dtype=FLOAT_TYPE)),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.concat_where(
+                    domain_cond1,  # 0, 30; 10,20
+                    im.concat_where(
+                        domain_cond2,
+                        im.as_fieldop("deref", domain1)("x"),
+                        im.as_fieldop("deref", domain2)("y"),
+                    ),
+                    im.as_fieldop("deref", domain3)("w"),
+                ),
+                domain=domain,
+                target=gtir.SymRef(id="z"),
+            )
+        ],
+    )
+
+    a = np.random.rand(M, N)
+    b = np.random.rand(M, N)
+    c = np.random.rand(M, N)
+    d = np.empty_like(a)
+    ref = np.concatenate(
+        (c[:, :10], np.concatenate((a[:20, :], b[20:, :]), axis=0)[:, 10:]), axis=1
+    )
+
+    field_symbols = {
+        "__x_0_range_1": a.shape[0],
+        "__x_1_range_1": a.shape[1],
+        "__x_stride_0": a.strides[0] // a.itemsize,
+        "__x_stride_1": a.strides[1] // a.itemsize,
+        "__y_0_range_1": b.shape[0],
+        "__y_1_range_1": b.shape[1],
+        "__y_stride_0": b.strides[0] // b.itemsize,
+        "__y_stride_1": b.strides[1] // b.itemsize,
+        "__w_0_range_1": c.shape[0],
+        "__w_1_range_1": c.shape[1],
+        "__w_stride_0": c.strides[0] // c.itemsize,
+        "__w_stride_1": c.strides[1] // c.itemsize,
+        "__z_0_range_1": d.shape[0],
+        "__z_1_range_1": d.shape[1],
+        "__z_stride_0": d.strides[0] // d.itemsize,
+        "__z_stride_1": d.strides[1] // d.itemsize,
+    }
+
+    sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
+
+    sdfg(a, b, c, d, **field_symbols)
+
+    np.allclose(d, ref)
