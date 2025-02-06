@@ -167,7 +167,7 @@ class SuiteMeta(type):
                             generation_strategy=composite_strategy_factory(
                                 d, generation_strategy_factories
                             ),
-                            implementations=[],
+                            implementation=None,
                             test_id=len(cls_dict["tests"]),
                             definition=annotate_function(
                                 function=cls_dict["definition"],
@@ -199,14 +199,19 @@ class SuiteMeta(type):
 
         for test in cls_dict["tests"]:
             if test["suite"] == cls_name:
-                marks = test["marks"]
-                if gt4pyc.backend.from_name(test["backend"]).storage_info["device"] == "gpu":
-                    marks.append(pytest.mark.requires_gpu)
                 name = test["backend"]
                 name += "".join(f"_{key}_{value}" for key, value in test["constants"].items())
                 name += "".join(
                     "_{}_{}".format(key, value.name) for key, value in test["dtypes"].items()
                 )
+
+                marks = test["marks"].copy()
+                if gt4pyc.backend.from_name(test["backend"]).storage_info["device"] == "gpu":
+                    marks.append(pytest.mark.requires_gpu)
+                # Run generation and implementation tests in the same group to ensure
+                # (thread-) safe parallelization of stencil tests.
+                marks.append(pytest.mark.xdist_group(name=f"{cls_name}_{name}"))
+
                 param = pytest.param(test, marks=marks, id=name)
                 pytest_params.append(param)
 
@@ -228,14 +233,19 @@ class SuiteMeta(type):
         runtime_pytest_params = []
         for test in cls_dict["tests"]:
             if test["suite"] == cls_name:
-                marks = test["marks"]
-                if gt4pyc.backend.from_name(test["backend"]).storage_info["device"] == "gpu":
-                    marks.append(pytest.mark.requires_gpu)
                 name = test["backend"]
                 name += "".join(f"_{key}_{value}" for key, value in test["constants"].items())
                 name += "".join(
                     "_{}_{}".format(key, value.name) for key, value in test["dtypes"].items()
                 )
+
+                marks = test["marks"].copy()
+                if gt4pyc.backend.from_name(test["backend"]).storage_info["device"] == "gpu":
+                    marks.append(pytest.mark.requires_gpu)
+                # Run generation and implementation tests in the same group to ensure
+                # (thread-) safe parallelization of stencil tests.
+                marks.append(pytest.mark.xdist_group(name=f"{cls_name}_{name}"))
+
                 runtime_pytest_params.append(
                     pytest.param(
                         test,
@@ -434,8 +444,11 @@ class StencilTestSuite(metaclass=SuiteMeta):
     def _test_generation(cls, test, externals_dict):
         """Test source code generation for all *backends* and *stencil suites*.
 
-        The generated implementations are cached in a :class:`utils.ImplementationsDB`
-        instance, to avoid duplication of (potentially expensive) compilations.
+        The generated implementation is cached in the test context, to avoid duplication
+        of (potentially expensive) compilation.
+        Note: This caching introduces a dependency between tests, which is captured by an
+        `xdist_group` marker in combination with `--dist loadgroup` to ensure safe parallel
+        test execution.
         """
         backend_slug = gt_utils.slugify(test["backend"], valid_symbols="")
         implementation = gtscript.stencil(
@@ -461,7 +474,8 @@ class StencilTestSuite(metaclass=SuiteMeta):
                     or ax == "K"
                     or field_info.boundary[i] >= cls.global_boundaries[name][i]
                 )
-        test["implementations"].append(implementation)
+        assert test["implementation"] is None
+        test["implementation"] = implementation
 
     @classmethod
     def _run_test_implementation(cls, parameters_dict, implementation):  # too complex
@@ -585,16 +599,16 @@ class StencilTestSuite(metaclass=SuiteMeta):
     def _test_implementation(cls, test, parameters_dict):
         """Test computed values for implementations generated for all *backends* and *stencil suites*.
 
-        The generated implementations are reused from previous tests by means of a
-        :class:`utils.ImplementationsDB` instance shared at module scope.
+        The generated implementation was cached in the test context, to avoid duplication
+        of (potentially expensive) compilation.
+        Note: This caching introduces a dependency between tests, which is captured by an
+        `xdist_group` marker in combination with `--dist loadgroup` to ensure safe parallel
+        test execution.
         """
-        implementation_list = test["implementations"]
-        if not implementation_list:
-            pytest.skip(
-                "Cannot perform validation tests, since there are no valid implementations."
-            )
-        for implementation in implementation_list:
-            if not isinstance(implementation, StencilObject):
-                raise RuntimeError("Wrong function got from implementations_db cache!")
+        implementation = test["implementation"]
+        assert (
+            implementation is not None
+        ), "Stencil not yet generated. Did you attempt to run stencil tests in parallel?"
+        assert isinstance(implementation, StencilObject)
 
-            cls._run_test_implementation(parameters_dict, implementation)
+        cls._run_test_implementation(parameters_dict, implementation)

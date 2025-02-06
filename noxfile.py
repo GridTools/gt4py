@@ -91,7 +91,7 @@ def test_cartesian(
     markers = " and ".join(codegen_settings["markers"] + device_settings["markers"])
 
     session.run(
-        *f"pytest --cache-clear -sv -n {num_processes}".split(),
+        *f"pytest --cache-clear -sv -n {num_processes} --dist loadgroup".split(),
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "cartesian_tests"),
         *session.posargs,
