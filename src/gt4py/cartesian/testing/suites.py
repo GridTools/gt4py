@@ -608,7 +608,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
         implementation = test["implementation"]
         assert (
             implementation is not None
-        ), "Stencil not yet generated. Did you attempt to run stencil tests in parallel?"
+        ), "Stencil implementation not found. This usually means code generation failed."
         assert isinstance(implementation, StencilObject)
 
         cls._run_test_implementation(parameters_dict, implementation)
